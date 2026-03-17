@@ -3,7 +3,9 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 from openai import OpenAI
 import os
+import json
 import tempfile
+from typing import List, Dict
 from pydantic import BaseModel
 from analyze_answer import analyze_answer
 import shutil
@@ -19,7 +21,7 @@ import tempfile
 from openai import OpenAI
 import requests
 from pydantic import BaseModel
-from database import conn, cursor
+from mongo_db import candidates_collection, interviews_collection, answers_collection, admins_collection, interview_sessions_collection
 from datetime import datetime
 
 
@@ -66,19 +68,17 @@ def get_client():
         api_key=api_key
     )
 
-def get_or_create_candidate(name: str) -> int:
-    cursor.execute("SELECT id FROM candidates WHERE name = ?", (name,))
-    row = cursor.fetchone()
+def get_or_create_candidate(name: str) -> str:
+    row = candidates_collection.find_one({"name": name})
 
     if row:
-        return row[0]
+        return str(row["_id"])
 
-    cursor.execute(
-        "INSERT INTO candidates (name, created_at) VALUES (?, ?)",
-        (name, datetime.now().isoformat())
-    )
-    conn.commit()
-    return cursor.lastrowid
+    result = candidates_collection.insert_one({
+        "name": name,
+        "created_at": datetime.now().isoformat()
+    })
+    return str(result.inserted_id)
 
 
 def extract_skills(text: str) -> List[str]:
@@ -94,7 +94,7 @@ def extract_skills(text: str) -> List[str]:
         # Cloud & DevOps
         "AWS", "Azure", "Google Cloud", "Docker", "Kubernetes", "Terraform", "Ansible", "Jenkins", "Git", "CI/CD",
         # Data Science
-        "Machine Learning", "Deep Learning", "Data Analysis", "Pandas", "NumPy", "TensorFlow", "PyTorch", "scikit-learn",
+        "Data Science", "Machine Learning", "Deep Learning", "Data Analysis", "Pandas", "NumPy", "TensorFlow", "PyTorch", "scikit-learn",
         # Other
         "REST API", "GraphQL", "Microservices", "Agile", "Scrum", "TDD", "OOP", "Functional Programming"
     ]
@@ -855,8 +855,10 @@ def api_gen_next_question(req: NextQuestionRequest):
         interview["questions"].insert(current_idx + 1, new_question)
         
         # Update DB with new question list
-        cursor.execute("UPDATE interviews SET questions = ? WHERE id = ?", (json.dumps(interview["questions"]), req.interview_id))
-        conn.commit()
+        interviews_collection.update_one(
+            {"id": req.interview_id}, 
+            {"$set": {"questions": json.dumps(interview["questions"])}}
+        )
         
         return new_question
     
@@ -906,17 +908,13 @@ async def upload_resume(
 
         # Store interview data (DB)
         try:
-            cursor.execute("""
-                INSERT INTO interviews (id, source, profile_text, questions, created_at)
-                VALUES (?, ?, ?, ?, ?)
-            """, (
-                interview_id, 
-                source, 
-                content_str[:5000], 
-                json.dumps(questions), 
-                datetime.now().isoformat()
-            ))
-            conn.commit()
+            interviews_collection.insert_one({
+                "id": interview_id,
+                "source": source,
+                "profile_text": content_str[:5000],
+                "questions": json.dumps(questions),
+                "created_at": datetime.now().isoformat()
+            })
         except Exception as db_e:
             print(f"⚠️ DB Save Error: {db_e}")
 
@@ -966,17 +964,13 @@ async def start_interview(
 
         # Store interview data (DB)
         try:
-            cursor.execute("""
-                INSERT INTO interviews (id, source, profile_text, questions, created_at)
-                VALUES (?, ?, ?, ?, ?)
-            """, (
-                interview_id, 
-                source, 
-                content[:5000], 
-                json.dumps(questions), 
-                datetime.now().isoformat()
-            ))
-            conn.commit()
+            interviews_collection.insert_one({
+                "id": interview_id,
+                "source": source,
+                "profile_text": content[:5000],
+                "questions": json.dumps(questions),
+                "created_at": datetime.now().isoformat()
+            })
         except Exception as db_e:
             print(f"⚠️ DB Save Error: {db_e}")
 
@@ -993,19 +987,18 @@ async def start_interview(
 async def get_question(interview_id: str, question_id: int):
     # Restore from DB if not in RAM
     if interview_id not in interviews:
-        cursor.execute("SELECT source, profile_text, questions, created_at FROM interviews WHERE id = ?", (interview_id,))
-        row = cursor.fetchone()
+        row = interviews_collection.find_one({"id": interview_id})
         if row:
             print(f"🔄 Restoring interview {interview_id} from DB...")
             try:
-                loaded_questions = json.loads(row[2])
+                loaded_questions = json.loads(row.get("questions", "[]"))
                 interviews[interview_id] = {
                     "id": interview_id,
-                    "source": row[0],
-                    "profile_text": row[1],
+                    "source": row.get("source"),
+                    "profile_text": row.get("profile_text"),
                     "questions": loaded_questions,
                     "answers": {},
-                    "created_at": row[3]
+                    "created_at": row.get("created_at")
                 }
             except Exception as e:
                 print(f"Restore failed: {e}")
@@ -1137,12 +1130,9 @@ async def save_answer(
     else:
         # Try DB
         try:
-            cursor.execute("SELECT profile_text, source FROM interviews WHERE id = ?", (interview_id,))
-            row = cursor.fetchone()
+            row = interviews_collection.find_one({"id": interview_id})
             if row:
-                context = f"Candidate's {row[1]}: {row[0]}"
-                # Optional: Restore to RAM for next time
-                # interviews[interview_id] = { "profile_text": row[0], "source": row[1] } 
+                context = f"Candidate's {row.get('source')}: {row.get('profile_text')}"
         except Exception as e:
             print(f"⚠️ Context fetch error: {e}")
 
@@ -1157,34 +1147,20 @@ async def save_answer(
         keywords_str = str(keywords)
 
     # Delete any existing answer for this question in this interview to avoid duplicates
-    cursor.execute("DELETE FROM answers WHERE interview_id = ? AND question_id = ?", (interview_id, question_id))
+    answers_collection.delete_many({"interview_id": interview_id, "question_id": question_id})
     
-    cursor.execute("""
-        INSERT INTO answers (
-            interview_id,
-            question_id,
-            question_text,
-            answer_text,
-            ai_score,
-            ai_feedback,
-            ai_keywords,
-            corrected_answer,
-            created_at
-        )
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
-    """, (
-        interview_id,
-        question_id,
-        question_text,
-        answer_text,
-        ai_result.get("overall_score", 0),
-        ai_result.get("feedback", "No feedback"),
-        keywords_str,
-        ai_result.get("corrected_answer", "N/A"),
-        datetime.now().isoformat()
-    ))
+    answers_collection.insert_one({
+        "interview_id": interview_id,
+        "question_id": question_id,
+        "question_text": question_text,
+        "answer_text": answer_text,
+        "ai_score": ai_result.get("overall_score", 0),
+        "ai_feedback": ai_result.get("feedback", "No feedback"),
+        "ai_keywords": keywords_str,
+        "corrected_answer": ai_result.get("corrected_answer", "N/A"),
+        "created_at": datetime.now().isoformat()
+    })
 
-    conn.commit()
     print("✅ Answer saved to DB.")
 
     return {
@@ -1210,28 +1186,18 @@ class BehavioralData(BaseModel):
 def save_behavioral_data(data: BehavioralData):
     """Saves per-question behavioral and proctoring metrics"""
     try:
-        cursor.execute("""
-            UPDATE answers SET
-                wpm = ?,
-                pause_count = ?,
-                filler_count = ?,
-                time_spent_seconds = ?,
-                keyword_match_pct = ?,
-                tab_switches = ?,
-                face_alerts = ?
-            WHERE interview_id = ? AND question_id = ?
-        """, (
-            data.wpm,
-            data.pause_count,
-            data.filler_count,
-            data.time_spent_seconds,
-            data.keyword_match_pct,
-            data.tab_switches,
-            data.face_alerts,
-            data.interview_id,
-            data.question_id
-        ))
-        conn.commit()
+        answers_collection.update_many(
+            {"interview_id": data.interview_id, "question_id": data.question_id},
+            {"$set": {
+                "wpm": data.wpm,
+                "pause_count": data.pause_count,
+                "filler_count": data.filler_count,
+                "time_spent_seconds": data.time_spent_seconds,
+                "keyword_match_pct": data.keyword_match_pct,
+                "tab_switches": data.tab_switches,
+                "face_alerts": data.face_alerts
+            }}
+        )
         return {"status": "ok"}
     except Exception as e:
         print(f"Behavioral save error: {e}")
@@ -1239,12 +1205,8 @@ def save_behavioral_data(data: BehavioralData):
 
 @app.get("/interview/{interview_id}/ai-summary")
 def interview_ai_summary(interview_id: str):
-    cursor.execute("""
-        SELECT ai_score FROM answers
-        WHERE interview_id = ? AND ai_score IS NOT NULL
-    """, (interview_id,))
-    
-    scores = [row[0] for row in cursor.fetchall()]
+    answers = answers_collection.find({"interview_id": interview_id, "ai_score": {"$ne": None}})
+    scores = [a.get("ai_score", 0) for a in answers]
     avg_score = round(sum(scores) / len(scores), 2) if scores else 0
 
     return {
@@ -1317,33 +1279,34 @@ Please respond in JSON with exactly three keys:
 @app.get("/admin/interview/{link_id}")
 def get_interview_details(link_id: str):
     # 1. Fetch session metadata
-    cursor.execute("""
-        SELECT candidate_name, created_at, job_description, interview_id,
-               overall_recommendation, strengths_summary, weaknesses_summary, avg_score, status, candidate_email
-        FROM interview_sessions WHERE link_id = ?
-    """, (link_id,))
-    session_data = cursor.fetchone()
+    session_data = interview_sessions_collection.find_one({"link_id": link_id})
     if not session_data:
         raise HTTPException(status_code=404, detail="Session not found")
 
-    candidate_name, created_at, jd, actual_interview_id, saved_rec, saved_str, saved_wk, saved_avg, current_status, candidate_email = session_data
+    candidate_name = session_data.get("candidate_name")
+    created_at = session_data.get("created_at")
+    jd = session_data.get("job_description")
+    actual_interview_id = session_data.get("interview_id")
+    saved_rec = session_data.get("overall_recommendation")
+    saved_str = session_data.get("strengths_summary")
+    saved_wk = session_data.get("weaknesses_summary")
+    saved_avg = session_data.get("avg_score")
+    current_status = session_data.get("status")
+    candidate_email = session_data.get("candidate_email")
 
     # Fallback: If results exist but status is still 'started', mark as 'completed'
     if current_status == 'started' and actual_interview_id:
-        cursor.execute("SELECT 1 FROM answers WHERE interview_id = ? LIMIT 1", (actual_interview_id,))
-        if cursor.fetchone():
+        if answers_collection.find_one({"interview_id": actual_interview_id}):
             print(f"🔄 Fallback: Marking session {link_id} as completed because results exist.")
-            cursor.execute("UPDATE interview_sessions SET status = 'completed' WHERE link_id = ?", (link_id,))
-            conn.commit()
+            interview_sessions_collection.update_one({"link_id": link_id}, {"$set": {"status": "completed"}})
 
     # Fetch recording path from interviews table
     recording_url = None
     if actual_interview_id:
-        cursor.execute("SELECT recording_path FROM interviews WHERE id = ?", (actual_interview_id,))
-        rec_row = cursor.fetchone()
-        if rec_row and rec_row[0]:
+        rec_row = interviews_collection.find_one({"id": actual_interview_id})
+        if rec_row and rec_row.get("recording_path"):
             # Convert absolute path to a relative URL path
-            raw_path = rec_row[0].replace("\\", "/")
+            raw_path = rec_row["recording_path"].replace("\\", "/")
             # Extract the part starting with "uploads/"
             idx = raw_path.find("uploads/")
             if idx != -1:
@@ -1355,35 +1318,27 @@ def get_interview_details(link_id: str):
     total_time = 0
 
     if actual_interview_id:
-        cursor.execute("""
-            SELECT question_id, question_text, answer_text, ai_score, ai_feedback, corrected_answer,
-                   wpm, pause_count, filler_count, time_spent_seconds, keyword_match_pct,
-                   tab_switches, face_alerts
-            FROM answers
-            WHERE interview_id = ?
-            ORDER BY question_id ASC
-        """, (actual_interview_id,))
-        rows = cursor.fetchall()
+        rows = answers_collection.find({"interview_id": actual_interview_id}).sort("question_id", 1)
 
         for row in rows:
-            tab_sw = row[11] or 0
-            face_al = row[12] or 0
+            tab_sw = row.get("tab_switches") or 0
+            face_al = row.get("face_alerts") or 0
             total_tab_switches += tab_sw
             total_face_alerts += face_al
-            total_time += (row[9] or 0)
+            total_time += (row.get("time_spent_seconds") or 0)
 
             results.append({
-                "question_id": row[0],
-                "question_text": row[1],
-                "answer_text": row[2] or "(No answer yet)",
-                "ai_score": row[3],
-                "ai_feedback": row[4] or "No feedback provided",
-                "corrected_answer": row[5] or "N/A",
-                "wpm": round(row[6] or 0, 1),
-                "pause_count": row[7] or 0,
-                "filler_count": row[8] or 0,
-                "time_spent_seconds": row[9] or 0,
-                "keyword_match_pct": round(row[10] or 0, 1),
+                "question_id": row.get("question_id"),
+                "question_text": row.get("question_text"),
+                "answer_text": row.get("answer_text") or "(No answer yet)",
+                "ai_score": row.get("ai_score"),
+                "ai_feedback": row.get("ai_feedback") or "No feedback provided",
+                "corrected_answer": row.get("corrected_answer") or "N/A",
+                "wpm": round(row.get("wpm") or 0, 1),
+                "pause_count": row.get("pause_count") or 0,
+                "filler_count": row.get("filler_count") or 0,
+                "time_spent_seconds": row.get("time_spent_seconds") or 0,
+                "keyword_match_pct": round(row.get("keyword_match_pct") or 0, 1),
                 "tab_switches": tab_sw,
                 "face_alerts": face_al
             })
@@ -1406,12 +1361,15 @@ def get_interview_details(link_id: str):
         weaknesses = summary.get("weaknesses", "")
         # Cache in DB
         try:
-            cursor.execute("""
-                UPDATE interview_sessions
-                SET overall_recommendation=?, strengths_summary=?, weaknesses_summary=?, avg_score=?
-                WHERE link_id=?
-            """, (recommendation, strengths, weaknesses, avg_score, link_id))
-            conn.commit()
+            interview_sessions_collection.update_one(
+                {"link_id": link_id},
+                {"$set": {
+                    "overall_recommendation": recommendation,
+                    "strengths_summary": strengths,
+                    "weaknesses_summary": weaknesses,
+                    "avg_score": avg_score
+                }}
+            )
         except Exception as e:
             print(f"Summary cache error: {e}")
 
@@ -1443,7 +1401,7 @@ class AnalyzeRequest(BaseModel):
 class DecisionRequest(BaseModel):
     link_id: str
     decision: str # 'selected' or 'rejected'
-    admin_id: Optional[int] = None
+    admin_id: Optional[str] = None
 
 @app.post("/analyze-answer")
 def analyze(req: AnalyzeRequest):
@@ -1457,28 +1415,21 @@ def analyze(req: AnalyzeRequest):
     result = analyze_answer(req.question, req.answer, context)
 
     # Delete existing to avoid duplicates
-    cursor.execute("DELETE FROM answers WHERE interview_id = ? AND question_id = ?", (req.interview_id, req.question_id))
+    answers_collection.delete_many({"interview_id": req.interview_id, "question_id": req.question_id})
 
     # Store in DB
     try:
-        cursor.execute("""
-            INSERT INTO answers (
-                interview_id, question_id, question_text, answer_text, 
-                ai_score, ai_feedback, ai_keywords, corrected_answer, created_at
-            )
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
-        """, (
-            req.interview_id,
-            req.question_id,
-            req.question,
-            req.answer,
-            result.get("overall_score", 0),
-            result.get("feedback", ""),
-            json.dumps(result.get("keywords", [])),
-            result.get("corrected_answer", ""),
-            datetime.now().isoformat()
-        ))
-        conn.commit()
+        answers_collection.insert_one({
+            "interview_id": req.interview_id,
+            "question_id": req.question_id,
+            "question_text": req.question,
+            "answer_text": req.answer,
+            "ai_score": result.get("overall_score", 0),
+            "ai_feedback": result.get("feedback", ""),
+            "ai_keywords": json.dumps(result.get("keywords", [])),
+            "corrected_answer": result.get("corrected_answer", ""),
+            "created_at": datetime.now().isoformat()
+        })
     except Exception as e:
         print(f"⚠️ Failed to save answer to DB: {e}")
 
@@ -1503,12 +1454,10 @@ async def upload_full_recording(
             shutil.copyfileobj(file.file, buffer)
             
         # Update database
-        cursor.execute("""
-            UPDATE interviews
-            SET recording_path = ?
-            WHERE id = ?
-        """, (file_path, interview_id))
-        conn.commit()
+        interviews_collection.update_one(
+            {"id": interview_id},
+            {"$set": {"recording_path": file_path}}
+        )
         
         return {"status": "success", "file_path": file_path}
     except Exception as e:
@@ -1526,21 +1475,17 @@ from fastapi.responses import FileResponse
 @app.get("/generate-report/{interview_id}")
 def generate_report(interview_id: str):
     # Fetch interview data
-    cursor.execute("SELECT source, created_at, profile_text FROM interviews WHERE id = ?", (interview_id,))
-    interview_data = cursor.fetchone()
+    interview_data = interviews_collection.find_one({"id": interview_id})
     if not interview_data:
         raise HTTPException(status_code=404, detail="Interview not found")
     
-    source, date, profile_text = interview_data
+    source = interview_data.get("source")
+    date = interview_data.get("created_at")
+    profile_text = interview_data.get("profile_text")
     
     # Fetch Q&A data
-    cursor.execute("""
-        SELECT question_text, answer_text, ai_score, ai_feedback, corrected_answer 
-        FROM answers 
-        WHERE interview_id = ? 
-        ORDER BY question_id ASC
-    """, (interview_id,))
-    answers = cursor.fetchall()
+    answers_cursor = answers_collection.find({"interview_id": interview_id}).sort("question_id", 1)
+    answers = [(a.get("question_text"), a.get("answer_text"), a.get("ai_score"), a.get("ai_feedback"), a.get("corrected_answer")) for a in answers_cursor]
     
     # Generate PDF
     pdf_filename = f"Interview_Report_{interview_id}.pdf"
@@ -1635,7 +1580,7 @@ class CreateSession(BaseModel):
     candidate_email: str
     resume_text: str
     job_description: str
-    admin_id: int
+    admin_id: str
     interview_duration: int = 30  # minutes
 
 class ForgotPasswordRequest(BaseModel):
@@ -1652,7 +1597,7 @@ class ResetPasswordRequest(BaseModel):
     new_password: str
 
 class UpdateProfileRequest(BaseModel):
-    admin_id: int
+    admin_id: str
     email: str
 
 def hash_password(password: str) -> str:
@@ -1732,39 +1677,35 @@ def send_interview_email(candidate_email: str, candidate_name: str, link_url: st
 def startup_event():
     # Create default admin if not exists
     try:
-        cursor.execute("SELECT * FROM admins WHERE username = ?", ("admin",))
-        row = cursor.fetchone()
+        row = admins_collection.find_one({"username": "admin"})
         if not row:
             hashed_pw = hash_password("admin123")
-            # Use BREVO_SENDER_EMAIL as default email
             default_email = os.getenv("BREVO_SENDER_EMAIL", "oragantisagar041@gmail.com")
-            cursor.execute(
-                "INSERT INTO admins (username, password, email, created_at) VALUES (?, ?, ?, ?)",
-                ("admin", hashed_pw, default_email, datetime.now().isoformat())
-            )
-            conn.commit()
+            admins_collection.insert_one({
+                "username": "admin",
+                "password": hashed_pw,
+                "email": default_email,
+                "created_at": datetime.now().isoformat()
+            })
             print(f"Default admin created: admin / admin123 (Email: {default_email})")
         else:
             # Update email if missing
-            if not row[4] if len(row) > 4 else True: # assuming email is at index 4
+            if not row.get("email"):
                 default_email = os.getenv("BREVO_SENDER_EMAIL", "oragantisagar041@gmail.com")
-                cursor.execute("UPDATE admins SET email = ? WHERE username = ?", (default_email, "admin"))
-                conn.commit()
+                admins_collection.update_one({"username": "admin"}, {"$set": {"email": default_email}})
     except Exception as e:
         print(f"Error checking/creating admin: {e}")
 
 @app.post("/admin/forgot-password")
 async def forgot_password(data: ForgotPasswordRequest):
-    cursor.execute("SELECT id, email FROM admins WHERE username = ? AND email = ?", (data.username, data.email))
-    user = cursor.fetchone()
+    user = admins_collection.find_one({"username": data.username, "email": data.email})
     if not user:
         raise HTTPException(status_code=404, detail="Username and email do not match our records.")
     
     otp = "".join([str(random.randint(0, 9)) for _ in range(6)])
     expiry = (datetime.now() + timedelta(minutes=10)).isoformat()
     
-    cursor.execute("UPDATE admins SET otp = ?, otp_expiry = ? WHERE id = ?", (otp, expiry, user[0]))
-    conn.commit()
+    admins_collection.update_one({"_id": user["_id"]}, {"$set": {"otp": otp, "otp_expiry": expiry}})
     
     # Send OTP email
     email_sent = send_otp_email(data.email, data.username, otp)
@@ -1775,12 +1716,12 @@ async def forgot_password(data: ForgotPasswordRequest):
 
 @app.post("/admin/verify-otp")
 async def verify_otp(data: VerifyOTPRequest):
-    cursor.execute("SELECT id, otp, otp_expiry FROM admins WHERE username = ?", (data.username,))
-    row = cursor.fetchone()
-    if not row or not row[1]:
+    row = admins_collection.find_one({"username": data.username})
+    if not row or not row.get("otp"):
         raise HTTPException(status_code=400, detail="No OTP found for this user.")
     
-    db_otp, expiry_str = row[1], row[2]
+    db_otp = row.get("otp")
+    expiry_str = row.get("otp_expiry")
     if db_otp != data.otp:
         raise HTTPException(status_code=401, detail="Invalid OTP code.")
     
@@ -1793,18 +1734,16 @@ async def verify_otp(data: VerifyOTPRequest):
 @app.post("/admin/reset-password")
 async def reset_password(data: ResetPasswordRequest):
     # Verify OTP one last time for safety
-    cursor.execute("SELECT id, otp, otp_expiry FROM admins WHERE username = ?", (data.username,))
-    row = cursor.fetchone()
-    if not row or row[1] != data.otp:
+    row = admins_collection.find_one({"username": data.username})
+    if not row or row.get("otp") != data.otp:
         raise HTTPException(status_code=401, detail="Invalid session. Please restart the process.")
     
-    expiry = datetime.fromisoformat(row[2])
+    expiry = datetime.fromisoformat(row.get("otp_expiry"))
     if datetime.now() > expiry:
         raise HTTPException(status_code=401, detail="Session expired.")
     
     hashed_pw = hash_password(data.new_password)
-    cursor.execute("UPDATE admins SET password = ?, otp = NULL, otp_expiry = NULL WHERE id = ?", (hashed_pw, row[0]))
-    conn.commit()
+    admins_collection.update_one({"_id": row["_id"]}, {"$set": {"password": hashed_pw, "otp": None, "otp_expiry": None}})
     
     return {"status": "success", "message": "Password updated successfully. You can now login."}
 
@@ -1845,22 +1784,18 @@ def send_otp_email(email: str, name: str, otp: str):
 @app.post("/admin/login")
 async def admin_login(data: AdminLogin):
     hashed_pw = hash_password(data.password)
-    cursor.execute("SELECT id, username FROM admins WHERE username = ? AND password = ?", (data.username, hashed_pw))
-    user = cursor.fetchone()
+    user = admins_collection.find_one({"username": data.username, "password": hashed_pw})
     if user:
-        # Fetch email too
-        cursor.execute("SELECT email FROM admins WHERE id = ?", (user[0],))
-        email_row = cursor.fetchone()
-        email = email_row[0] if email_row else ""
-        return {"status": "success", "admin_id": user[0], "username": user[1], "email": email}
+        email = user.get("email", "")
+        return {"status": "success", "admin_id": str(user["_id"]), "username": user["username"], "email": email}
     else:
         raise HTTPException(status_code=401, detail="Invalid credentials")
 
 @app.post("/admin/profile")
 async def update_profile(data: UpdateProfileRequest):
     try:
-        cursor.execute("UPDATE admins SET email = ? WHERE id = ?", (data.email, data.admin_id))
-        conn.commit()
+        from bson import ObjectId
+        admins_collection.update_one({"_id": ObjectId(str(data.admin_id))}, {"$set": {"email": data.email}})
         return {"status": "success", "message": "Profile updated successfully."}
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Database error: {e}")
@@ -1905,13 +1840,18 @@ async def create_session(data: CreateSession):
     now = datetime.now()
     expires_at = (now + timedelta(hours=24)).isoformat()
     
-    cursor.execute(
-        """INSERT INTO interview_sessions 
-           (link_id, candidate_name, candidate_email, resume_text, job_description, created_by, created_at, expires_at, interview_duration) 
-           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)""",
-        (link_id, data.candidate_name, data.candidate_email, data.resume_text, data.job_description, data.admin_id, now.isoformat(), expires_at, data.interview_duration)
-    )
-    conn.commit()
+    interview_sessions_collection.insert_one({
+        "link_id": link_id,
+        "candidate_name": data.candidate_name,
+        "candidate_email": data.candidate_email,
+        "resume_text": data.resume_text,
+        "job_description": data.job_description,
+        "created_by": data.admin_id,
+        "created_at": now.isoformat(),
+        "expires_at": expires_at,
+        "interview_duration": data.interview_duration,
+        "status": "pending"
+    })
     
     link_url = f"/index.html?session_id={link_id}"
     
@@ -1933,10 +1873,9 @@ async def create_session(data: CreateSession):
 
 @app.get("/session/{link_id}")
 async def get_session(link_id: str):
-    cursor.execute("SELECT candidate_name, resume_text, job_description, status, interview_duration, expires_at FROM interview_sessions WHERE link_id = ?", (link_id,))
-    row = cursor.fetchone()
+    row = interview_sessions_collection.find_one({"link_id": link_id})
     if row:
-        candidate_name, resume_text, job_description, status, interview_duration, expires_at = row
+        expires_at = row.get("expires_at")
         
         # Check if the link has expired
         is_expired = False
@@ -1950,11 +1889,11 @@ async def get_session(link_id: str):
                 
         return {
             "status": "success",
-            "candidate_name": candidate_name,
-            "resume_text": resume_text,
-            "job_description": job_description,
-            "session_status": status,
-            "interview_duration": interview_duration or 30,
+            "candidate_name": row.get("candidate_name"),
+            "resume_text": row.get("resume_text"),
+            "job_description": row.get("job_description"),
+            "session_status": row.get("status"),
+            "interview_duration": row.get("interview_duration") or 30,
             "is_expired": is_expired
         }
     else:
@@ -1962,55 +1901,53 @@ async def get_session(link_id: str):
 from typing import Optional
 
 @app.get("/admin/sessions")
-async def get_all_sessions(admin_id: int, start_date: Optional[str] = None, end_date: Optional[str] = None, sort_by: str = "score"):
-    query = """
-        SELECT link_id, candidate_name, status, created_at, interview_duration, interview_id, avg_score, overall_recommendation, decision
-        FROM interview_sessions 
-        WHERE created_by = ?
-    """
-    params = [admin_id]
+async def get_all_sessions(admin_id: str, start_date: Optional[str] = None, end_date: Optional[str] = None, sort_by: str = "score"):
+    query_filter = {"created_by": admin_id}
     
-    if start_date:
-        query += " AND date(created_at) >= date(?)"
-        params.append(start_date)
-    if end_date:
-        query += " AND date(created_at) <= date(?)"
-        params.append(end_date)
-        
-    if sort_by == "date":
-        query += " ORDER BY created_at DESC"
-    else:
-        query += " ORDER BY avg_score DESC, created_at DESC" # Highest score first
+    if start_date or end_date:
+        date_filter = {}
+        if start_date:
+            date_filter["$gte"] = start_date
+        if end_date:
+            date_filter["$lte"] = end_date + "T23:59:59"
+        query_filter["created_at"] = date_filter
     
-    cursor.execute(query, tuple(params))
-    rows = cursor.fetchall()
+    sort_field = [("created_at", -1)] if sort_by == "date" else [("avg_score", -1), ("created_at", -1)]
+    
+    rows = interview_sessions_collection.find(query_filter).sort(sort_field)
     
     sessions = []
     for row in rows:
         sessions.append({
-            "link_id": row[0],
-            "candidate_name": row[1],
-            "status": row[2],
-            "created_at": row[3],
-            "interview_duration": row[4],
-            "interview_id": row[5],
-            "avg_score": row[6],
-            "recommendation": row[7],
-            "decision": row[8]
+            "link_id": row.get("link_id"),
+            "candidate_name": row.get("candidate_name"),
+            "status": row.get("status"),
+            "created_at": row.get("created_at"),
+            "interview_duration": row.get("interview_duration"),
+            "interview_id": row.get("interview_id"),
+            "avg_score": row.get("avg_score"),
+            "recommendation": row.get("overall_recommendation"),
+            "decision": row.get("decision")
         })
         
     return {"status": "success", "sessions": sessions}
 
 @app.post("/start-session-interview")
 async def start_session_interview(link_id: str = Form(...)):
-    cursor.execute("SELECT candidate_name, candidate_email, resume_text, job_description, status, num_questions, interview_duration, interview_id, expires_at FROM interview_sessions WHERE link_id = ?", (link_id,))
-    row = cursor.fetchone()
+    row = interview_sessions_collection.find_one({"link_id": link_id})
     
     if not row:
         raise HTTPException(status_code=404, detail="Session not found")
         
-    candidate_name, candidate_email, resume_text, job_description, status, num_questions, interview_duration, existing_interview_id, expires_at = row
-    interview_duration = interview_duration or 30  # fallback to 30 min
+    candidate_name = row.get("candidate_name")
+    candidate_email = row.get("candidate_email")
+    resume_text = row.get("resume_text")
+    job_description = row.get("job_description")
+    status = row.get("status")
+    num_questions = row.get("num_questions")
+    interview_duration = row.get("interview_duration") or 30
+    existing_interview_id = row.get("interview_id")
+    expires_at = row.get("expires_at")
     
     # Check if the link has expired
     if expires_at:
@@ -2034,15 +1971,13 @@ async def start_session_interview(link_id: str = Form(...)):
             "interview_duration": interview_duration
         }
     
-    # Generate a larger pool of questions based on duration, e.g., 1 question per 2 minutes, min 4, max 20
+    # Generate a larger pool of questions based on duration
     num_questions_to_generate = max(4, min(20, interview_duration // 2))
     
     # Generate Questions
-    # source priority: JD if exists, else Resume
     source = "job_description" if job_description and len(job_description) > 50 else "resume"
     content_str = job_description if source == "job_description" else resume_text
     
-    # We also want to analyze the profile
     profile_analysis = analyze_resume_or_jd(content_str)
     
     questions = generate_mock_questions(content_str, source, num_questions=num_questions_to_generate, resume_text=resume_text, jd_text=job_description)
@@ -2063,25 +1998,24 @@ async def start_session_interview(link_id: str = Form(...)):
         "created_at": datetime.now().isoformat(),
         "candidate_name": candidate_name,
         "candidate_email": candidate_email,
-        "status": status # current status from DB
+        "status": status
     }
     
     # Store interview data (DB)
     try:
-        cursor.execute("""
-            INSERT INTO interviews (id, source, profile_text, questions, created_at)
-            VALUES (?, ?, ?, ?, ?)
-        """, (
-            interview_id, 
-            source, 
-            content_str[:5000], 
-            json.dumps(questions), 
-            datetime.now().isoformat()
-        ))
+        interviews_collection.insert_one({
+            "id": interview_id,
+            "source": source,
+            "profile_text": content_str[:5000],
+            "questions": json.dumps(questions),
+            "created_at": datetime.now().isoformat()
+        })
         
         # Update session status
-        cursor.execute("UPDATE interview_sessions SET status = 'started', interview_id = ? WHERE link_id = ?", (interview_id, link_id))
-        conn.commit()
+        interview_sessions_collection.update_one(
+            {"link_id": link_id},
+            {"$set": {"status": "started", "interview_id": interview_id}}
+        )
     except Exception as db_e:
         print(f"⚠️ DB Save Error: {db_e}")
         
@@ -2099,18 +2033,18 @@ async def update_decision(data: DecisionRequest):
     print(f"🚀 Decision Update Request: link_id={data.link_id}, decision={data.decision}")
     try:
         # 1. Fetch candidate details for email
-        cursor.execute("SELECT candidate_name, candidate_email, job_description FROM interview_sessions WHERE link_id = ?", (data.link_id,))
-        row = cursor.fetchone()
+        row = interview_sessions_collection.find_one({"link_id": data.link_id})
         if not row:
             print(f"❌ Session NOT found for link_id: {data.link_id}")
             raise HTTPException(status_code=404, detail="Session not found")
         
-        name, email, jd = row
+        name = row.get("candidate_name")
+        email = row.get("candidate_email")
+        jd = row.get("job_description")
         print(f"👤 Candidate: {name}, Email: {email}")
         
         # 2. Update DB
-        cursor.execute("UPDATE interview_sessions SET decision = ? WHERE link_id = ?", (data.decision, data.link_id))
-        conn.commit()
+        interview_sessions_collection.update_one({"link_id": data.link_id}, {"$set": {"decision": data.decision}})
         print(f"✅ DB Updated for {data.link_id}")
         
         # 3. Send Email
@@ -2181,8 +2115,7 @@ def send_decision_email(email: str, name: str, decision: str, jd: str):
 async def complete_session(link_id: str):
     """Mark a session as completed so it can't be restarted."""
     try:
-        cursor.execute("UPDATE interview_sessions SET status = 'completed' WHERE link_id = ?", (link_id,))
-        conn.commit()
+        interview_sessions_collection.update_one({"link_id": link_id}, {"$set": {"status": "completed"}})
         return {"status": "success"}
     except Exception as e:
         print(f"Error completing session: {e}")
