@@ -1513,7 +1513,9 @@
 
         // 1. ADD THESE GLOBAL VARIABLES AT THE TOP OF YOUR SCRIPT
         let chunks = []; // Stores the audio/video data
-        const API_BASE = "https://localhost:8000"; // Your FastAPI URL
+        const API_BASE = (window.location.hostname === "127.0.0.1" || window.location.hostname === "localhost")
+            ? "https://localhost:8000"
+            : "https://ai-adaptive-interview.onrender.com";
 
         // Start recording using VideoRecorder class
         async function startRecording() {
