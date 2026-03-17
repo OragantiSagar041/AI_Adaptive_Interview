@@ -1633,8 +1633,8 @@ def send_interview_email(candidate_email: str, candidate_name: str, link_url: st
     }
 
     # Construct the base URL for the interview link
-    # We use HTTPS by default as the provided server script (https_server.py) uses SSL.
-    base_url = os.getenv("FRONTEND_URL", "https://localhost:3000")
+    # On Render, FRONTEND_URL should be set to your Vercel URL
+    base_url = os.getenv("FRONTEND_URL", "https://ai-adaptive-interview.vercel.app")
     full_link = f"{base_url}{link_url}"
 
     html_content = f"""
