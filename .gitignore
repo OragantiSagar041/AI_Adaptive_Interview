@@ -97,3 +97,8 @@ yarn-error.log*
 *cert.pem
 *secret*
 *password*
+
+uploads/
+backend/uploads/
+*.webm
+*.db
