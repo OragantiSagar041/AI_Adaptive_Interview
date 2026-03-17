@@ -1,0 +1,2588 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Admin Panel — Mock Interview</title>
+    <link rel="icon"
+        href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><path d='M50 5L10 25v30c0 25 40 40 40 40s40-15 40-40V25L50 5z' fill='%236366f1'/></svg>">
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&display=swap"
+        rel="stylesheet">
+    <style>
+        *,
+        *::before,
+        *::after {
+            box-sizing: border-box;
+            margin: 0;
+            padding: 0;
+        }
+
+        :root {
+            --primary: #6366f1;
+            --primary-dark: #4f46e5;
+            --primary-light: #818cf8;
+            --primary-glow: rgba(99, 102, 241, 0.25);
+            --accent: #06d6a0;
+            --accent-dark: #05b384;
+            --danger: #f43f5e;
+            --success: #10b981;
+            --warning: #f59e0b;
+            --bg-dark: #0f0f1a;
+            --bg-card: #1a1a2e;
+            --bg-card-hover: #1f1f35;
+            --bg-input: #16162a;
+            --border: #2d2d4a;
+            --border-focus: #6366f1;
+            --text-primary: #f1f1f8;
+            --text-secondary: #9ca3af;
+            --text-muted: #6b7280;
+            --gradient-1: linear-gradient(135deg, #6366f1, #8b5cf6, #a855f7);
+            --gradient-2: linear-gradient(135deg, #06d6a0, #22d3ee);
+            --shadow-sm: 0 1px 3px rgba(0, 0, 0, 0.3);
+            --shadow-md: 0 4px 20px rgba(0, 0, 0, 0.4);
+            --shadow-lg: 0 8px 40px rgba(0, 0, 0, 0.5);
+            --shadow-glow: 0 0 30px rgba(99, 102, 241, 0.15);
+            --radius-sm: 8px;
+            --radius-md: 12px;
+            --radius-lg: 16px;
+            --radius-xl: 24px;
+        }
+
+        [data-theme="light"] {
+            --bg-dark: #eef2f6;
+            --bg-card: #ffffff;
+            --bg-card-hover: #f8fafc;
+            --bg-input: #f8fafc;
+            --border: #e2e8f0;
+            --border-focus: #6366f1;
+            --text-primary: #0f172a;
+            --text-secondary: #475569;
+            --text-muted: #94a3b8;
+            --shadow-sm: 0 1px 3px rgba(0, 0, 0, 0.05);
+            --shadow-md: 0 4px 20px rgba(0, 0, 0, 0.08);
+            --shadow-lg: 0 8px 40px rgba(0, 0, 0, 0.1);
+            --shadow-glow: 0 0 30px rgba(99, 102, 241, 0.2);
+            --primary-glow: rgba(99, 102, 241, 0.15);
+        }
+
+        /* Adjust animated orbs for light mode */
+        [data-theme="light"] body::before {
+            background: rgba(99, 102, 241, 0.15);
+        }
+
+        [data-theme="light"] body::after {
+            background: rgba(6, 214, 160, 0.12);
+        }
+
+        body {
+            font-family: 'Inter', system-ui, -apple-system, sans-serif;
+            background: var(--bg-dark);
+            color: var(--text-primary);
+            min-height: 100vh;
+            overflow-x: hidden;
+        }
+
+        /* --- Background Animated Orbs --- */
+        body::before,
+        body::after {
+            content: '';
+            position: fixed;
+            border-radius: 50%;
+            filter: blur(100px);
+            z-index: 0;
+            pointer-events: none;
+            animation: float 15s ease-in-out infinite alternate;
+        }
+
+        body::before {
+            width: 500px;
+            height: 500px;
+            background: rgba(99, 102, 241, 0.08);
+            top: -100px;
+            right: -100px;
+        }
+
+        body::after {
+            width: 400px;
+            height: 400px;
+            background: rgba(6, 214, 160, 0.06);
+            bottom: -100px;
+            left: -100px;
+            animation-delay: -5s;
+        }
+
+        @keyframes float {
+            0% {
+                transform: translate(0, 0) scale(1);
+            }
+
+            50% {
+                transform: translate(30px, -30px) scale(1.1);
+            }
+
+            100% {
+                transform: translate(-20px, 20px) scale(0.95);
+            }
+        }
+
+        @keyframes fadeInUp {
+            from {
+                opacity: 0;
+                transform: translateY(30px);
+            }
+
+            to {
+                opacity: 1;
+                transform: translateY(0);
+            }
+        }
+
+        @keyframes slideIn {
+            from {
+                opacity: 0;
+                transform: translateX(-20px);
+            }
+
+            to {
+                opacity: 1;
+                transform: translateX(0);
+            }
+        }
+
+        @keyframes pulse {
+
+            0%,
+            100% {
+                opacity: 1;
+            }
+
+            50% {
+                opacity: 0.6;
+            }
+        }
+
+        @keyframes spin {
+            to {
+                transform: rotate(360deg);
+            }
+        }
+
+        @keyframes shimmer {
+            0% {
+                background-position: -200% center;
+            }
+
+            100% {
+                background-position: 200% center;
+            }
+        }
+
+        @keyframes shake {
+
+            0%,
+            100% {
+                transform: translateX(0);
+            }
+
+            25% {
+                transform: translateX(-8px);
+            }
+
+            50% {
+                transform: translateX(8px);
+            }
+
+            75% {
+                transform: translateX(-8px);
+            }
+        }
+
+        .forgot-password {
+            text-align: right;
+            margin-top: -1rem;
+            margin-bottom: 1.5rem;
+        }
+
+        .forgot-password a {
+            color: var(--primary-light);
+            font-size: 0.85rem;
+            text-decoration: none;
+            cursor: pointer;
+            font-weight: 500;
+        }
+
+        .forgot-password a:hover {
+            color: var(--primary);
+            text-decoration: underline;
+        }
+
+        /* Reset Password Modal */
+        .modal-overlay {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: rgba(0, 0, 0, 0.7);
+            backdrop-filter: blur(5px);
+            z-index: 2000;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            animation: fadeIn 0.3s ease-out;
+        }
+
+        .modal-card {
+            background: var(--bg-card);
+            border: 1px solid var(--border);
+            border-radius: var(--radius-lg);
+            padding: 2.5rem;
+            width: 100%;
+            max-width: 450px;
+            box-shadow: var(--shadow-lg);
+            position: relative;
+            animation: fadeInUp 0.4s ease-out;
+        }
+
+        .modal-close {
+            position: absolute;
+            top: 1.5rem;
+            right: 1.5rem;
+            background: transparent;
+            border: none;
+            color: var(--text-muted);
+            font-size: 1.25rem;
+            cursor: pointer;
+        }
+
+        @keyframes fadeIn {
+            from {
+                opacity: 0;
+            }
+
+            to {
+                opacity: 1;
+            }
+        }
+
+        .hidden {
+            display: none !important;
+        }
+
+        /* ==================== LOGIN SECTION ==================== */
+        #loginSection {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            min-height: 100vh;
+            padding: 2rem;
+            position: relative;
+            z-index: 1;
+        }
+
+        .login-card {
+            width: 100%;
+            max-width: 420px;
+            background: var(--bg-card);
+            border: 1px solid var(--border);
+            border-radius: var(--radius-xl);
+            padding: 3rem 2.5rem;
+            box-shadow: var(--shadow-lg), var(--shadow-glow);
+            animation: fadeInUp 0.6s ease-out;
+            position: relative;
+            overflow: hidden;
+        }
+
+        .login-card::before {
+            content: '';
+            position: absolute;
+            top: 0;
+            left: 0;
+            right: 0;
+            height: 3px;
+            background: var(--gradient-1);
+        }
+
+        .login-logo {
+            text-align: center;
+            margin-bottom: 2rem;
+        }
+
+        .login-logo .icon {
+            width: 64px;
+            height: 64px;
+            background: var(--gradient-1);
+            border-radius: var(--radius-lg);
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 1.8rem;
+            margin-bottom: 1rem;
+            box-shadow: 0 8px 24px rgba(99, 102, 241, 0.3);
+        }
+
+        .login-logo h1 {
+            font-size: 1.6rem;
+            font-weight: 700;
+            color: var(--text-primary);
+            margin-bottom: 0.3rem;
+        }
+
+        .login-logo p {
+            color: var(--text-secondary);
+            font-size: 0.9rem;
+        }
+
+        .form-group {
+            margin-bottom: 1.5rem;
+        }
+
+        .form-group label {
+            display: block;
+            margin-bottom: 0.5rem;
+            font-size: 0.85rem;
+            font-weight: 600;
+            color: var(--text-secondary);
+            text-transform: uppercase;
+            letter-spacing: 0.05em;
+        }
+
+        .input-wrapper {
+            position: relative;
+        }
+
+        .input-wrapper .input-icon {
+            position: absolute;
+            top: 50%;
+            left: 14px;
+            transform: translateY(-50%);
+            color: var(--text-muted);
+            font-size: 1.1rem;
+            pointer-events: none;
+            transition: color 0.2s;
+        }
+
+        .input-wrapper input {
+            width: 100%;
+            padding: 0.85rem 1rem 0.85rem 2.8rem;
+            background: var(--bg-input);
+            border: 1.5px solid var(--border);
+            border-radius: var(--radius-md);
+            color: var(--text-primary);
+            font-size: 0.95rem;
+            font-family: inherit;
+            transition: all 0.25s ease;
+            outline: none;
+        }
+
+        .input-wrapper input:focus {
+            border-color: var(--border-focus);
+            box-shadow: 0 0 0 3px var(--primary-glow);
+        }
+
+        .input-wrapper input:focus~.input-icon {
+            color: var(--primary-light);
+        }
+
+        .input-wrapper input::placeholder {
+            color: var(--text-muted);
+        }
+
+        /* Eye Toggle Button */
+        .eye-toggle {
+            position: absolute;
+            top: 50%;
+            right: 12px;
+            transform: translateY(-50%);
+            background: none;
+            border: none;
+            color: var(--text-muted);
+            cursor: pointer;
+            font-size: 1.15rem;
+            padding: 4px;
+            border-radius: 6px;
+            transition: all 0.2s;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+
+        .eye-toggle:hover {
+            color: var(--primary-light);
+            background: rgba(99, 102, 241, 0.1);
+        }
+
+        .btn-login {
+            width: 100%;
+            padding: 0.9rem;
+            background: var(--gradient-1);
+            color: white;
+            font-size: 1rem;
+            font-weight: 600;
+            border: none;
+            border-radius: var(--radius-md);
+            cursor: pointer;
+            transition: all 0.3s ease;
+            font-family: inherit;
+            position: relative;
+            overflow: hidden;
+        }
+
+        .btn-login:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 6px 25px rgba(99, 102, 241, 0.4);
+        }
+
+        .btn-login:active {
+            transform: translateY(0);
+        }
+
+        .btn-login:disabled {
+            opacity: 0.7;
+            cursor: not-allowed;
+            transform: none;
+        }
+
+        .btn-login .spinner {
+            display: inline-block;
+            width: 18px;
+            height: 18px;
+            border: 2px solid rgba(255, 255, 255, 0.3);
+            border-top-color: white;
+            border-radius: 50%;
+            animation: spin 0.6s linear infinite;
+            vertical-align: middle;
+            margin-right: 8px;
+        }
+
+        .login-error {
+            background: rgba(244, 63, 94, 0.1);
+            border: 1px solid rgba(244, 63, 94, 0.3);
+            color: var(--danger);
+            padding: 0.75rem 1rem;
+            border-radius: var(--radius-sm);
+            font-size: 0.85rem;
+            text-align: center;
+            margin-top: 1rem;
+            animation: fadeInUp 0.3s ease;
+        }
+
+        /* ==================== DASHBOARD SECTION ==================== */
+        #dashboardSection {
+            max-width: 900px;
+            margin: 0 auto;
+            padding: 2rem 1.5rem;
+            position: relative;
+            z-index: 1;
+            animation: fadeInUp 0.5s ease-out;
+        }
+
+        /* Top Navigation Bar */
+        .top-bar {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            padding: 1rem 1.5rem;
+            background: var(--bg-card);
+            border: 1px solid var(--border);
+            border-radius: var(--radius-lg);
+            margin-bottom: 2rem;
+            box-shadow: var(--shadow-sm);
+        }
+
+        .top-bar .brand {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+        }
+
+        .top-bar .brand-icon {
+            width: 40px;
+            height: 40px;
+            background: var(--gradient-1);
+            border-radius: var(--radius-sm);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 1.2rem;
+        }
+
+        .top-bar .brand-text h2 {
+            font-size: 1.1rem;
+            font-weight: 700;
+            color: var(--text-primary);
+            line-height: 1.2;
+        }
+
+        .top-bar .brand-text span {
+            font-size: 0.75rem;
+            color: var(--text-muted);
+        }
+
+        .btn-logout {
+            padding: 0.5rem 1.2rem;
+            background: rgba(244, 63, 94, 0.1);
+            color: var(--danger);
+            border: 1px solid rgba(244, 63, 94, 0.25);
+            border-radius: var(--radius-sm);
+            font-size: 0.85rem;
+            font-weight: 600;
+            cursor: pointer;
+            font-family: inherit;
+            transition: all 0.2s;
+        }
+
+        .btn-logout:hover {
+            background: rgba(244, 63, 94, 0.2);
+            border-color: rgba(244, 63, 94, 0.4);
+        }
+
+        /* Section Card */
+        .section-card {
+            background: var(--bg-card);
+            border: 1px solid var(--border);
+            border-radius: var(--radius-lg);
+            padding: 2rem;
+            margin-bottom: 1.5rem;
+            box-shadow: var(--shadow-sm);
+            transition: box-shadow 0.3s;
+        }
+
+        .section-card:hover {
+            box-shadow: var(--shadow-md);
+        }
+
+        .section-header {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            margin-bottom: 1.5rem;
+            padding-bottom: 1rem;
+            border-bottom: 1px solid var(--border);
+        }
+
+        .section-header .header-icon {
+            width: 40px;
+            height: 40px;
+            border-radius: var(--radius-sm);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 1.2rem;
+        }
+
+        .section-header .header-icon.purple {
+            background: rgba(99, 102, 241, 0.15);
+        }
+
+        .section-header .header-icon.green {
+            background: rgba(6, 214, 160, 0.15);
+        }
+
+        .section-header h3 {
+            font-size: 1.15rem;
+            font-weight: 700;
+        }
+
+        .section-header p {
+            font-size: 0.8rem;
+            color: var(--text-muted);
+        }
+
+        /* Dashboard Form Inputs */
+        .dash-input,
+        .dash-textarea,
+        .dash-file-input {
+            width: 100%;
+            padding: 0.8rem 1rem;
+            background: var(--bg-input);
+            border: 1.5px solid var(--border);
+            border-radius: var(--radius-sm);
+            color: var(--text-primary);
+            font-size: 0.9rem;
+            font-family: inherit;
+            outline: none;
+            transition: all 0.25s ease;
+        }
+
+        .dash-input:focus,
+        .dash-textarea:focus {
+            border-color: var(--border-focus);
+            box-shadow: 0 0 0 3px var(--primary-glow);
+        }
+
+        .dash-input::placeholder,
+        .dash-textarea::placeholder {
+            color: var(--text-muted);
+        }
+
+        .dash-textarea {
+            min-height: 120px;
+            resize: vertical;
+        }
+
+        .dash-label {
+            display: block;
+            margin-bottom: 0.5rem;
+            font-size: 0.85rem;
+            font-weight: 600;
+            color: var(--text-secondary);
+        }
+
+        .dash-form-group {
+            margin-bottom: 1.25rem;
+        }
+
+        /* File Upload Area */
+        .file-upload-area {
+            border: 2px dashed var(--border);
+            border-radius: var(--radius-md);
+            padding: 1.5rem;
+            text-align: center;
+            cursor: pointer;
+            transition: all 0.3s;
+            background: var(--bg-input);
+        }
+
+        .file-upload-area:hover {
+            border-color: var(--primary);
+            background: rgba(99, 102, 241, 0.05);
+        }
+
+        .file-upload-area .upload-icon {
+            font-size: 2rem;
+            margin-bottom: 0.5rem;
+        }
+
+        .file-upload-area p {
+            font-size: 0.85rem;
+            color: var(--text-muted);
+        }
+
+        .file-upload-area .file-name {
+            color: var(--accent);
+            font-weight: 600;
+        }
+
+        .file-status {
+            font-size: 0.8rem;
+            margin-top: 0.5rem;
+            padding: 0.4rem 0.8rem;
+            border-radius: var(--radius-sm);
+            display: inline-block;
+        }
+
+        .file-status.success {
+            background: rgba(6, 214, 160, 0.1);
+            color: var(--accent);
+        }
+
+        .file-status.error {
+            background: rgba(244, 63, 94, 0.1);
+            color: var(--danger);
+        }
+
+        .file-status.loading {
+            background: rgba(245, 158, 11, 0.1);
+            color: var(--warning);
+            animation: pulse 1.5s infinite;
+        }
+
+        /* Generate Button */
+        .btn-generate {
+            width: 100%;
+            padding: 0.9rem;
+            background: var(--gradient-2);
+            color: var(--bg-dark);
+            font-size: 1rem;
+            font-weight: 700;
+            border: none;
+            border-radius: var(--radius-md);
+            cursor: pointer;
+            font-family: inherit;
+            transition: all 0.3s ease;
+            margin-top: 0.5rem;
+        }
+
+        .btn-generate:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 6px 25px rgba(6, 214, 160, 0.3);
+        }
+
+        .btn-generate:active {
+            transform: translateY(0);
+        }
+
+        .btn-generate:disabled {
+            opacity: 0.6;
+            cursor: not-allowed;
+            transform: none;
+        }
+
+        .btn-generate .spinner {
+            display: inline-block;
+            width: 18px;
+            height: 18px;
+            border: 2px solid rgba(15, 15, 26, 0.3);
+            border-top-color: var(--bg-dark);
+            border-radius: 50%;
+            animation: spin 0.6s linear infinite;
+            vertical-align: middle;
+            margin-right: 8px;
+        }
+
+        /* Session Link Items */
+        .session-item {
+            background: var(--bg-input);
+            border: 1px solid var(--border);
+            border-radius: var(--radius-md);
+            padding: 1.25rem;
+            margin-bottom: 1rem;
+            animation: slideIn 0.4s ease-out;
+            transition: border-color 0.2s;
+        }
+
+        .session-item:hover {
+            border-color: var(--primary);
+        }
+
+        .session-item-header {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            margin-bottom: 0.75rem;
+        }
+
+        .session-item-header .candidate-name {
+            font-weight: 600;
+            color: var(--primary-light);
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+
+        .session-item-header .candidate-name span.dot {
+            width: 8px;
+            height: 8px;
+            border-radius: 50%;
+            background: var(--accent);
+            display: inline-block;
+        }
+
+        .session-item-header .timestamp {
+            font-size: 0.75rem;
+            color: var(--text-muted);
+        }
+
+        .link-display {
+            background: var(--bg-dark);
+            border: 1px solid var(--border);
+            border-radius: var(--radius-sm);
+            padding: 0.6rem 0.8rem;
+            font-family: 'Courier New', monospace;
+            font-size: 0.78rem;
+            color: var(--text-secondary);
+            word-break: break-all;
+            line-height: 1.5;
+        }
+
+        .btn-copy {
+            margin-top: 0.75rem;
+            padding: 0.5rem 1.2rem;
+            background: rgba(6, 214, 160, 0.1);
+            color: var(--accent);
+            border: 1px solid rgba(6, 214, 160, 0.25);
+            border-radius: var(--radius-sm);
+            font-size: 0.85rem;
+            font-weight: 600;
+            cursor: pointer;
+            font-family: inherit;
+            transition: all 0.2s;
+        }
+
+        .btn-copy:hover {
+            background: rgba(6, 214, 160, 0.2);
+            border-color: rgba(6, 214, 160, 0.4);
+        }
+
+        .btn-copy.copied {
+            background: rgba(6, 214, 160, 0.25);
+            color: white;
+        }
+
+        .empty-state {
+            text-align: center;
+            padding: 2.5rem 1rem;
+            color: var(--text-muted);
+        }
+
+        .empty-state .empty-icon {
+            font-size: 2.5rem;
+            margin-bottom: 0.75rem;
+            opacity: 0.5;
+        }
+
+        .empty-state p {
+            font-size: 0.9rem;
+        }
+
+        /* Toast Notification */
+        .toast {
+            position: fixed;
+            bottom: 2rem;
+            right: 2rem;
+            background: var(--bg-card);
+            border: 1px solid var(--border);
+            border-radius: var(--radius-md);
+            padding: 1rem 1.5rem;
+            box-shadow: var(--shadow-lg);
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            z-index: 1000;
+            animation: slideIn 0.4s ease-out;
+            font-size: 0.9rem;
+        }
+
+        .toast.success {
+            border-color: rgba(6, 214, 160, 0.4);
+        }
+
+        .toast.error {
+            border-color: rgba(244, 63, 94, 0.4);
+        }
+
+        /* Theme Toggle Button */
+        .theme-toggle {
+            position: absolute;
+            top: 1.5rem;
+            right: 1.5rem;
+            background: var(--bg-card);
+            border: 1px solid var(--border);
+            color: var(--text-primary);
+            width: 45px;
+            height: 45px;
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            cursor: pointer;
+            z-index: 1000;
+            box-shadow: var(--shadow-sm);
+            transition: all 0.3s ease;
+            font-size: 1.2rem;
+            outline: none;
+        }
+
+        .theme-toggle:hover {
+            transform: scale(1.1);
+            box-shadow: var(--shadow-md);
+            border-color: var(--primary);
+        }
+
+        /* --- Dashboard Layout & Sidebar --- */
+        #dashboardSection {
+            max-width: 1200px;
+            margin: 0 auto;
+            padding: 2rem 1.5rem;
+            position: relative;
+            z-index: 1;
+            animation: fadeInUp 0.5s ease-out;
+        }
+
+        .dashboard-layout {
+            display: flex;
+            gap: 2rem;
+            align-items: flex-start;
+        }
+
+        .sidebar-nav {
+            width: 250px;
+            flex-shrink: 0;
+            display: flex;
+            flex-direction: column;
+            gap: 0.4rem;
+            background: var(--bg-card);
+            padding: 1rem;
+            border-radius: var(--radius-lg);
+            border: 1px solid var(--border);
+            box-shadow: var(--shadow-sm);
+        }
+
+        .nav-btn {
+            padding: 0.8rem 1rem;
+            background: transparent;
+            color: var(--text-secondary);
+            border: none;
+            border-radius: var(--radius-sm);
+            text-align: left;
+            font-size: 0.95rem;
+            font-weight: 500;
+            cursor: pointer;
+            transition: all 0.2s;
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+
+        .nav-btn:hover {
+            background: rgba(99, 102, 241, 0.05);
+            color: var(--text-primary);
+        }
+
+        .nav-btn.active {
+            background: rgba(99, 102, 241, 0.1);
+            color: var(--primary-light);
+            font-weight: 600;
+            border-left: 3px solid var(--primary);
+        }
+
+        .main-content {
+            flex: 1;
+            min-width: 0;
+        }
+
+        .view-panel {
+            animation: slideIn 0.3s ease-out;
+        }
+
+        /* Table Styles */
+        .dash-table {
+            width: 100%;
+            border-collapse: collapse;
+            text-align: left;
+        }
+
+        .dash-table th {
+            font-weight: 600;
+            padding: 1rem 0.5rem;
+            border-bottom: 1px solid var(--border);
+            color: var(--text-secondary);
+            font-size: 0.85rem;
+            text-transform: uppercase;
+        }
+
+        .dash-table td {
+            padding: 1rem 0.5rem;
+            border-bottom: 1px solid var(--border);
+            font-size: 0.9rem;
+            color: var(--text-primary);
+        }
+
+        .dash-table tr:hover {
+            background: rgba(255, 255, 255, 0.02);
+        }
+
+        [data-theme="light"] .dash-table tr:hover {
+            background: rgba(0, 0, 0, 0.02);
+        }
+
+        .status-badge {
+            padding: 0.3rem 0.6rem;
+            border-radius: 20px;
+            font-size: 0.75rem;
+            font-weight: 600;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+            display: inline-block;
+        }
+
+        .status-badge.pending {
+            background: rgba(245, 158, 11, 0.1);
+            color: var(--warning);
+        }
+
+        .status-badge.started {
+            background: rgba(99, 102, 241, 0.1);
+            color: var(--primary-light);
+        }
+
+        .status-badge.completed {
+            background: rgba(6, 214, 160, 0.1);
+            color: var(--accent);
+        }
+
+        /* Responsive */
+        @media (max-width: 600px) {
+            .login-card {
+                padding: 2rem 1.5rem;
+            }
+
+            #dashboardSection {
+                padding: 1rem;
+            }
+
+            .section-card {
+                padding: 1.25rem;
+            }
+
+            .top-bar {
+                flex-direction: column;
+                gap: 1rem;
+                text-align: center;
+            }
+        }
+    </style>
+</head>
+
+<body>
+    <!-- Script to prevent FOUC (Flash of Unstyled Content) -->
+    <script>
+        (function () {
+            const savedTheme = localStorage.getItem('adminTheme');
+            const prefersLight = window.matchMedia && window.matchMedia('(prefers-color-scheme: light)').matches;
+            if (savedTheme === 'light' || (!savedTheme && prefersLight)) {
+                document.documentElement.setAttribute('data-theme', 'light');
+            }
+        })();
+    </script>
+
+    <!-- Dark/Light Mode Toggle -->
+    <button class="theme-toggle" id="themeToggle" onclick="toggleTheme()" title="Toggle Theme">
+        <span id="themeIcon" style="display:inline-block; transition: transform 0.3s ease;"><i
+                class="fas fa-sun"></i></span>
+    </button>
+
+    <!-- ==================== LOGIN SECTION ==================== -->
+    <div id="loginSection">
+        <div class="login-card">
+            <div class="login-logo">
+                <div class="icon"><i class="fas fa-shield-halved"></i></div>
+                <h1>Admin Console</h1>
+                <p>Mock Interview Management</p>
+            </div>
+
+            <div class="form-group">
+                <label for="username">Username</label>
+                <div class="input-wrapper">
+                    <span class="input-icon"><i class="fas fa-user"></i></span>
+                    <input type="text" id="username" placeholder="Enter username" autocomplete="username">
+                </div>
+            </div>
+
+            <div class="form-group">
+                <label for="password">Password</label>
+                <div class="input-wrapper">
+                    <span class="input-icon"><i class="fas fa-lock"></i></span>
+                    <input type="password" id="password" placeholder="Enter password" autocomplete="current-password">
+                    <button type="button" class="eye-toggle" id="eyeToggle" onclick="togglePassword()"
+                        title="Show/Hide password">
+                        <svg id="eyeOpen" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+                            stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                            <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z" />
+                            <circle cx="12" cy="12" r="3" />
+                        </svg>
+                        <svg id="eyeClosed" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+                            stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="display:none;">
+                            <path
+                                d="M17.94 17.94A10.07 10.07 0 0 1 12 20c-7 0-11-8-11-8a18.45 18.45 0 0 1 5.06-5.94M9.9 4.24A9.12 9.12 0 0 1 12 4c7 0 11 8 11 8a18.5 18.5 0 0 1-2.16 3.19m-6.72-1.07a3 3 0 1 1-4.24-4.24" />
+                            <line x1="1" y1="1" x2="23" y2="23" />
+                        </svg>
+                    </button>
+                </div>
+            </div>
+
+            <div class="forgot-password">
+                <a onclick="openResetModal()">Forgot Password?</a>
+            </div>
+
+            <button class="btn-login" id="loginBtn" onclick="login()">
+                Sign In
+            </button>
+
+            <div id="loginError" class="login-error hidden"></div>
+        </div>
+    </div>
+
+    <!-- ==================== DASHBOARD SECTION ==================== -->
+    <div id="dashboardSection" class="hidden">
+
+        <!-- Top Bar -->
+        <div class="top-bar">
+            <div class="brand">
+                <div class="brand-icon"><i class="fas fa-shield-halved"></i></div>
+                <div class="brand-text">
+                    <h2>Admin Console</h2>
+                    <span>Welcome back, <strong id="adminName">Admin</strong></span>
+                </div>
+            </div>
+            <button class="btn-logout" onclick="logout()"><i class="fas fa-power-off"></i> Logout</button>
+        </div>
+
+        <!-- Dashboard Layout Wrapper -->
+        <div class="dashboard-layout">
+
+            <!-- Sidebar Navigation -->
+            <div class="sidebar-nav">
+                <button class="nav-btn active" onclick="switchView('overview')" id="nav-btn-overview"><i
+                        class="fas fa-chart-pie"></i> Overview Dashboard</button>
+                <button class="nav-btn" onclick="switchView('qualified')" id="nav-btn-qualified"><i
+                        class="fas fa-user-check"></i> Qualified Candidates</button>
+                <button class="nav-btn" onclick="switchView('unqualified')" id="nav-btn-unqualified"><i
+                        class="fas fa-user-slash"></i> Rejected Candidates</button>
+                <button class="nav-btn" onclick="switchView('create')" id="nav-btn-create"><i
+                        class="fas fa-plus-circle"></i> Create Interview</button>
+                <button class="nav-btn" onclick="switchView('settings')" id="nav-btn-settings"><i
+                        class="fas fa-cog"></i> Profile Settings</button>
+                <button class="nav-btn" onclick="switchView('results')" id="nav-btn-results" style="display: none;"><i
+                        class="fas fa-broadcast-tower"></i> Live Results</button>
+            </div>
+
+            <!-- Main Content Area -->
+            <div class="main-content">
+
+                <!-- VIEW 1: OVERVIEW DASHBOARD -->
+                <div id="view-overview" class="view-panel">
+                    <div class="section-card">
+                        <div class="section-header" style="justify-content: space-between; align-items: flex-end;">
+                            <div style="display: flex; gap: 12px; align-items: center;">
+                                <div class="header-icon purple" style="background: rgba(99, 102, 241, 0.15);"><i
+                                        class="fas fa-table-list"></i></div>
+                                <div>
+                                    <h3>Dashboard Overview</h3>
+                                    <p>Track ongoing and completed interviews (Sorted by Score)</p>
+                                </div>
+                            </div>
+
+                            <!-- Date Filters -->
+                            <div class="date-filter" style="display: flex; gap: 0.5rem; align-items: center;">
+                                <div id="dashboardFilters" style="display: flex; gap: 0.5rem; align-items: center;">
+                                    <div style="display: flex; flex-direction: column;">
+                                        <label
+                                            style="font-size: 0.7rem; color: var(--text-muted); margin-bottom: 2px;">From</label>
+                                        <input type="date" id="filterStartDate" class="dash-input"
+                                            style="padding: 0.4rem; font-size: 0.85rem; width: auto; min-width: 130px;">
+                                    </div>
+                                    <div style="display: flex; flex-direction: column;">
+                                        <label
+                                            style="font-size: 0.7rem; color: var(--text-muted); margin-bottom: 2px;">To</label>
+                                        <input type="date" id="filterEndDate" class="dash-input"
+                                            style="padding: 0.4rem; font-size: 0.85rem; width: auto; min-width: 130px;">
+                                    </div>
+                                    <div style="display: flex; flex-direction: column;">
+                                        <label
+                                            style="font-size: 0.7rem; color: var(--text-muted); margin-bottom: 2px;">Sort
+                                            By</label>
+                                        <select id="sortBy" class="dash-input"
+                                            style="padding: 0.4rem; font-size: 0.85rem; width: auto; min-width: 100px;">
+                                            <option value="score">Top Score</option>
+                                            <option value="date">Newest First</option>
+                                        </select>
+                                    </div>
+                                    <button onclick="loadDashboardSessions()" class="btn-copy"
+                                        style="margin-top: 15px; padding: 0.45rem 1rem;">Apply</button>
+                                    <button onclick="clearFilters()" class="btn-copy"
+                                        style="margin-top: 15px; padding: 0.45rem 0.6rem; background: rgba(244, 63, 94, 0.1); color: var(--danger); border-color: rgba(244, 63, 94, 0.2);"
+                                        title="Clear Filters">
+                                        <i class="fas fa-times"></i>
+                                    </button>
+                                </div>
+                            </div>
+                        </div>
+
+                        <div style="overflow-x: auto;">
+                            <table class="dash-table">
+                                <thead>
+                                    <tr>
+                                        <th>Candidate</th>
+                                        <th>Date Created</th>
+                                        <th>Status</th>
+                                        <th>Score</th>
+                                        <th style="text-align: right;">Action</th>
+                                    </tr>
+                                </thead>
+                                <tbody id="dashboardTableBody">
+                                    <tr>
+                                        <td colspan="5"
+                                            style="text-align: center; padding: 2rem; color: var(--text-muted);">Loading
+                                            sessions...</td>
+                                    </tr>
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- VIEW: QUALIFIED CANDIDATES -->
+                <div id="view-qualified" class="view-panel hidden">
+                    <div class="section-card">
+                        <div class="section-header">
+                            <div class="header-icon green"><i class="fas fa-check-double"></i></div>
+                            <div>
+                                <h3>Qualified Candidates</h3>
+                                <p>Shortlisted for next rounds</p>
+                            </div>
+                        </div>
+                        <div style="overflow-x: auto;">
+                            <table class="dash-table">
+                                <thead>
+                                    <tr>
+                                        <th>Candidate</th>
+                                        <th>Date Created</th>
+                                        <th>Score</th>
+                                        <th style="text-align: right;">Details</th>
+                                    </tr>
+                                </thead>
+                                <tbody id="qualifiedTableBody">
+                                    <tr>
+                                        <td colspan="4"
+                                            style="text-align: center; padding: 2rem; color: var(--text-muted);">No
+                                            qualified candidates found.</td>
+                                    </tr>
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- VIEW: REJECTED CANDIDATES -->
+                <div id="view-unqualified" class="view-panel hidden">
+                    <div class="section-card">
+                        <div class="section-header">
+                            <div class="header-icon purple"
+                                style="background: rgba(244, 63, 94, 0.15); color: var(--danger);"><i
+                                    class="fas fa-circle-xmark"></i></div>
+                            <div>
+                                <h3>Rejected Candidates</h3>
+                                <p>Unsuccessful applications</p>
+                            </div>
+                        </div>
+                        <div style="overflow-x: auto;">
+                            <table class="dash-table">
+                                <thead>
+                                    <tr>
+                                        <th>Candidate</th>
+                                        <th>Date Created</th>
+                                        <th>Score</th>
+                                        <th style="text-align: right;">Details</th>
+                                    </tr>
+                                </thead>
+                                <tbody id="unqualifiedTableBody">
+                                    <tr>
+                                        <td colspan="4"
+                                            style="text-align: center; padding: 2rem; color: var(--text-muted);">No
+                                            rejected candidates found.</td>
+                                    </tr>
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- VIEW 2: CREATE INTERVIEW -->
+                <div id="view-create" class="view-panel hidden">
+                    <!-- Create Session Card -->
+                    <div class="section-card">
+                        <div class="section-header">
+                            <div class="header-icon purple"><i class="fas fa-bullseye"></i></div>
+                            <div>
+                                <h3>Create Interview Session</h3>
+                                <p>Generate a unique link for each candidate <span
+                                        style="color: var(--warning); margin-left: 10px; font-weight: 600; font-size: 0.75rem;"><i
+                                            class="fas fa-clock"></i> Valid for 24 hours</span></p>
+                            </div>
+                        </div>
+
+                        <div class="dash-form-group">
+                            <label class="dash-label">Candidate Name</label>
+                            <input type="text" class="dash-input" id="candidateName" placeholder="e.g. John Doe">
+                        </div>
+
+                        <div class="dash-form-group">
+                            <label class="dash-label">Candidate Email</label>
+                            <input type="email" class="dash-input" id="candidateEmail"
+                                placeholder="e.g. john@example.com">
+                        </div>
+
+                        <div class="dash-form-group">
+                            <label class="dash-label">Upload Resume (PDF / DOCX / TXT)</label>
+                            <div class="file-upload-area" id="fileDropZone"
+                                onclick="document.getElementById('resumeFile').click()">
+                                <div class="upload-icon"><i class="fas fa-file-invoice"></i></div>
+                                <p id="fileLabel">Click to upload or drag and drop</p>
+                                <p style="font-size:0.75rem; color:var(--text-muted); margin-top:4px;">PDF, DOCX, TXT —
+                                    Max 5MB</p>
+                            </div>
+                            <input type="file" id="resumeFile" accept=".pdf,.docx,.doc,.txt"
+                                onchange="handleFileSelect()" style="display:none;">
+                            <div id="fileStatus"></div>
+                        </div>
+
+                        <input type="hidden" id="resumeText" value="">
+
+                        <div class="dash-form-group">
+                            <label class="dash-label">Job Description</label>
+                            <textarea class="dash-textarea" id="jobDescription"
+                                placeholder="Paste the job description here..."></textarea>
+                        </div>
+
+                        <div class="dash-form-group">
+                            <label class="dash-label">Interview Duration (Minutes)</label>
+                            <input type="number" class="dash-input" id="interviewDuration" min="5" max="120" value="30"
+                                placeholder="Enter duration in minutes" style="padding: 0.7rem 1rem;">
+                            <p style="font-size: 0.75rem; color: var(--text-muted); margin-top: 4px;">
+                                Enter any value between 5–120 minutes. Interview ends automatically when time expires.
+                            </p>
+                        </div>
+
+                        <button class="btn-generate" id="createBtn" onclick="createSession()">
+                            <i class="fas fa-bolt"></i> Generate Interview Link
+                        </button>
+                    </div>
+
+                    <!-- Generated Links Card -->
+                    <div class="section-card">
+                        <div class="section-header">
+                            <div class="header-icon green"><i class="fas fa-link"></i></div>
+                            <div>
+                                <h3>Generated Links</h3>
+                                <p>Share these with candidates to start interviews</p>
+                            </div>
+                        </div>
+
+                        <div id="linksList">
+                            <div class="empty-state">
+                                <div class="empty-icon"><i class="fas fa-inbox"></i></div>
+                                <p>No interview links generated yet.</p>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- VIEW 3: LIVE RESULTS -->
+                <div id="view-results" class="view-panel hidden">
+                    <div class="section-card">
+                        <div class="section-header" style="justify-content: space-between;">
+                            <div style="display: flex; gap: 12px; align-items: center;">
+                                <div class="header-icon green"><i class="fas fa-chart-line"></i></div>
+                                <div>
+                                    <h3>Live Interview Results</h3>
+                                    <p>Deep-dive into candidate performance</p>
+                                </div>
+                            </div>
+                            <button class="btn-copy" onclick="switchView('overview')"
+                                style="margin: 0; padding: 0.5rem 1rem;"><i class="fas fa-arrow-left"></i> Back to
+                                Dashboard</button>
+                        </div>
+
+                        <div id="liveResultsContent" style="min-height: 300px;">
+                            <div class="empty-state">
+                                <div class="empty-icon"><i class="fas fa-folder-open"></i></div>
+                                <p>Select a session from the Dashboard to view live results here.</p>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- VIEW 4: PROFILE SETTINGS -->
+                <div id="view-settings" class="view-panel hidden">
+                    <div class="section-card">
+                        <div class="section-header">
+                            <div class="header-icon purple"><i class="fas fa-user-gear"></i></div>
+                            <div>
+                                <h3>Profile Settings</h3>
+                                <p>Manage your account information</p>
+                            </div>
+                        </div>
+
+                        <div class="dash-form-group" style="max-width: 500px;">
+                            <label class="dash-label">Admin Email Address</label>
+                            <input type="email" id="adminEmailInput" class="dash-input"
+                                placeholder="Enter new email address">
+                            <p style="font-size: 0.75rem; color: var(--text-muted); margin-top: 5px;">This email will be
+                                used for OTP verification during password resets.</p>
+                        </div>
+
+                        <button onclick="updateProfile()" id="updateProfileBtn" class="btn-generate"
+                            style="max-width: 200px;">Update Profile</button>
+                    </div>
+                </div>
+
+            </div>
+        </div>
+    </div>
+
+    <!-- Toast Container -->
+    <div id="toastContainer"></div>
+
+    <script>
+        // CONFIGURATION: Match this with index.html
+        const API_BASE = (window.location.hostname === "127.0.0.1" || window.location.hostname === "localhost")
+            ? "https://localhost:8000"
+            : "https://ai-powered-mock-interview-cpck.onrender.com";
+
+        let adminId = null;
+        let adminEmail = "";
+
+        // --- PASSWORD TOGGLE ---
+        function togglePassword() {
+            const pwInput = document.getElementById('password');
+            const eyeOpen = document.getElementById('eyeOpen');
+            const eyeClosed = document.getElementById('eyeClosed');
+
+            if (pwInput.type === 'password') {
+                pwInput.type = 'text';
+                eyeOpen.style.display = 'none';
+                eyeClosed.style.display = 'block';
+            } else {
+                pwInput.type = 'password';
+                eyeOpen.style.display = 'block';
+                eyeClosed.style.display = 'none';
+            }
+        }
+
+        // --- ENTER KEY SUPPORT ---
+        document.getElementById('password').addEventListener('keypress', (e) => {
+            if (e.key === 'Enter') login();
+        });
+        document.getElementById('username').addEventListener('keypress', (e) => {
+            if (e.key === 'Enter') document.getElementById('password').focus();
+        });
+
+        // --- LOGIN ---
+        async function login() {
+            const username = document.getElementById('username').value.trim();
+            const password = document.getElementById('password').value;
+            const errorDiv = document.getElementById('loginError');
+            const loginBtn = document.getElementById('loginBtn');
+
+            if (!username || !password) {
+                errorDiv.textContent = "Please enter both username and password.";
+                errorDiv.classList.remove('hidden');
+                return;
+            }
+
+            // Show loading state
+            loginBtn.disabled = true;
+            loginBtn.innerHTML = '<span class="spinner"></span> Signing in...';
+            errorDiv.classList.add('hidden');
+
+            try {
+                const controller = new AbortController();
+                const timeout = setTimeout(() => controller.abort(), 15000); // 15s timeout
+
+                const response = await fetch(`${API_BASE}/admin/login`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ username, password }),
+                    signal: controller.signal
+                });
+
+                clearTimeout(timeout);
+
+                if (response.ok) {
+                    const data = await response.json();
+                    adminId = data.admin_id;
+                    adminEmail = data.email || "";
+                    document.getElementById('adminName').textContent = data.username || username;
+                    document.getElementById('adminEmailInput').value = adminEmail;
+
+                    // Smooth transition
+                    document.getElementById('loginSection').style.opacity = '0';
+                    document.getElementById('loginSection').style.transform = 'scale(0.95)';
+                    document.getElementById('loginSection').style.transition = 'all 0.3s ease';
+
+                    setTimeout(() => {
+                        document.getElementById('loginSection').classList.add('hidden');
+                        document.getElementById('dashboardSection').classList.remove('hidden');
+                        loadDashboardSessions();
+                    }, 300);
+
+                } else {
+                    errorDiv.textContent = "Invalid username or password.";
+                    errorDiv.classList.remove('hidden');
+                    // Shake animation
+                    const card = document.querySelector('.login-card');
+                    card.style.animation = 'none';
+                    void card.offsetWidth;
+                    card.style.animation = 'shake 0.4s ease';
+                }
+            } catch (error) {
+                if (error.name === 'AbortError') {
+                    errorDiv.textContent = "Request timed out. Server may be starting up — try again.";
+                } else {
+                    errorDiv.textContent = "Cannot connect to server. Please check if backend is running.";
+                }
+                errorDiv.classList.remove('hidden');
+            } finally {
+                loginBtn.disabled = false;
+                loginBtn.innerHTML = 'Sign In';
+            }
+        }
+
+        // --- LOGOUT ---
+        function logout() {
+            location.reload();
+        }
+
+        // --- FILE HANDLING with Drag & Drop ---
+        const dropZone = document.getElementById('fileDropZone');
+
+        dropZone.addEventListener('dragover', (e) => {
+            e.preventDefault();
+            dropZone.style.borderColor = 'var(--primary)';
+            dropZone.style.background = 'rgba(99, 102, 241, 0.08)';
+        });
+
+        dropZone.addEventListener('dragleave', () => {
+            dropZone.style.borderColor = 'var(--border)';
+            dropZone.style.background = 'var(--bg-input)';
+        });
+
+        dropZone.addEventListener('drop', (e) => {
+            e.preventDefault();
+            dropZone.style.borderColor = 'var(--border)';
+            dropZone.style.background = 'var(--bg-input)';
+
+            const files = e.dataTransfer.files;
+            if (files.length > 0) {
+                document.getElementById('resumeFile').files = files;
+                handleFileSelect();
+            }
+        });
+
+        async function handleFileSelect() {
+            const fileInput = document.getElementById('resumeFile');
+            const file = fileInput.files[0];
+            const statusDiv = document.getElementById('fileStatus');
+            const textArea = document.getElementById('resumeText');
+            const fileLabel = document.getElementById('fileLabel');
+
+            if (!file) return;
+
+            fileLabel.innerHTML = `<span class="file-name">${file.name}</span>`;
+            statusDiv.innerHTML = '<span class="file-status loading">⏳ Parsing resume...</span>';
+            textArea.value = "";
+
+            const formData = new FormData();
+            formData.append('file', file);
+
+            try {
+                const response = await fetch(`${API_BASE}/admin/parse-resume`, {
+                    method: 'POST',
+                    body: formData
+                });
+
+                if (response.ok) {
+                    const data = await response.json();
+                    textArea.value = data.text;
+
+                    // Populate name and email if found
+                    if (data.name) document.getElementById('candidateName').value = data.name;
+                    if (data.email) document.getElementById('candidateEmail').value = data.email;
+
+                    statusDiv.innerHTML = '<span class="file-status success">✅ Parsed successfully</span>';
+                } else {
+                    statusDiv.innerHTML = '<span class="file-status error">❌ Failed to parse file</span>';
+                }
+            } catch (error) {
+                console.error(error);
+                statusDiv.innerHTML = '<span class="file-status error">❌ Server connection error</span>';
+            }
+        }
+
+        // --- CREATE SESSION ---
+        async function createSession() {
+            const name = document.getElementById('candidateName').value.trim();
+            const email = document.getElementById('candidateEmail').value.trim();
+            const resume = document.getElementById('resumeText').value.trim();
+            const jd = document.getElementById('jobDescription').value.trim();
+            const duration = parseInt(document.getElementById('interviewDuration').value) || 30;
+            const createBtn = document.getElementById('createBtn');
+
+            if (!name || !email || !resume || !jd) {
+                showToast("Please fill in all fields (including candidate email).", "error");
+                return;
+            }
+
+            createBtn.disabled = true;
+            createBtn.innerHTML = '<span class="spinner"></span> Generating & Sending Email...';
+
+            try {
+                const response = await fetch(`${API_BASE}/admin/create-session`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        candidate_name: name,
+                        candidate_email: email,
+                        resume_text: resume,
+                        job_description: jd,
+                        admin_id: adminId,
+                        interview_duration: duration
+                    })
+                });
+
+                if (response.ok) {
+                    const data = await response.json();
+
+                    if (data.email_sent) {
+                        showToast(`Link created & email sent to ${email}!`, "success");
+                    } else {
+                        showToast(`Link created, but email failed to send.`, "warning");
+                    }
+
+                    addSessionToUI(name, data.link_url, data.link_id);
+
+                    // Clear form
+                    document.getElementById('candidateName').value = '';
+                    document.getElementById('candidateEmail').value = '';
+                    document.getElementById('resumeFile').value = '';
+                    document.getElementById('resumeText').value = '';
+                    document.getElementById('jobDescription').value = '';
+                    document.getElementById('fileLabel').textContent = 'Click to upload or drag and drop';
+                    document.getElementById('fileStatus').innerHTML = '';
+
+                } else {
+                    showToast("Failed to create session.", "error");
+                }
+            } catch (error) {
+                console.error(error);
+                showToast("Server connection failed.", "error");
+            } finally {
+                createBtn.disabled = false;
+                createBtn.innerHTML = '<i class="fas fa-bolt"></i> Generate Interview Link';
+            }
+        }
+
+        // --- ADD SESSION TO UI ---
+        function addSessionToUI(name, relativeUrl, id) {
+            const list = document.getElementById('linksList');
+            // Ensure fullUrl points correctly to the root/index.html with the relative params
+            const fullUrl = `${window.location.protocol}//${window.location.host}${relativeUrl}`;
+
+            // Remove empty state placeholder
+            const emptyState = list.querySelector('.empty-state');
+            if (emptyState) emptyState.remove();
+
+            const now = new Date().toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' });
+
+            const item = document.createElement('div');
+            item.className = 'session-item';
+            item.innerHTML = `
+                <div class="session-item-header">
+                    <div class="candidate-name"><span class="dot"></span>${name}</div>
+                    <div class="timestamp">${now}</div>
+                </div>
+                <div class="link-display">${fullUrl}</div>
+                <div style="display: flex; gap: 10px; margin-top: 10px;">
+                    <button class="btn-copy" onclick="copyLink(this, '${fullUrl}')"><i class="fas fa-copy"></i> Copy Link</button>
+                    <button class="btn-copy" style="background: var(--primary); color: white;" onclick="viewResults('${id}')"><i class="fas fa-eye"></i> Live Results</button>
+                </div>
+            `;
+            list.prepend(item);
+        }
+
+        // --- COPY LINK ---
+        function copyLink(btn, url) {
+            navigator.clipboard.writeText(url).then(() => {
+                btn.innerHTML = '<i class="fas fa-check"></i> Copied!';
+                btn.classList.add('copied');
+                setTimeout(() => {
+                    btn.innerHTML = '<i class="fas fa-copy"></i> Copy Link';
+                    btn.classList.remove('copied');
+                }, 2000);
+            });
+        }
+
+        // --- TOAST NOTIFICATIONS ---
+        function showToast(message, type = "success") {
+            const container = document.getElementById('toastContainer');
+            const toast = document.createElement('div');
+            toast.className = `toast ${type}`;
+            toast.innerHTML = `${type === 'success' ? '<i class="fas fa-check-circle"></i>' : '<i class="fas fa-circle-exclamation"></i>'} ${message}`;
+            container.appendChild(toast);
+
+            setTimeout(() => {
+                toast.style.opacity = '0';
+                toast.style.transform = 'translateX(30px)';
+                toast.style.transition = 'all 0.3s ease';
+                setTimeout(() => toast.remove(), 300);
+            }, 3000);
+        }
+
+        // --- DASHBOARD LAYOUT LOGIC ---
+        function switchView(viewId) {
+            document.querySelectorAll('.view-panel').forEach(p => p.classList.add('hidden'));
+            document.querySelectorAll('.nav-btn').forEach(b => b.classList.remove('active'));
+
+            document.getElementById('view-' + viewId).classList.remove('hidden');
+
+            // Activate button
+            const btn = document.getElementById('nav-btn-' + viewId);
+            if (btn) btn.classList.add('active');
+
+            if (viewId === 'overview' || viewId === 'qualified' || viewId === 'unqualified') {
+                loadDashboardSessions();
+                if (viewId === 'overview') document.getElementById('nav-btn-results').style.display = 'none';
+            }
+            if (viewId === 'settings') {
+                document.getElementById('adminEmailInput').value = adminEmail;
+            }
+        }
+
+        async function updateProfile() {
+            const newEmail = document.getElementById('adminEmailInput').value;
+            const btn = document.getElementById('updateProfileBtn');
+
+            if (!newEmail) {
+                showToast('❌ Please enter an email address.', 'error');
+                return;
+            }
+
+            btn.disabled = true;
+            btn.innerHTML = '<span class="spinner"></span> Updating...';
+
+            try {
+                const res = await fetch(`${API_BASE}/admin/profile`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ admin_id: adminId, email: newEmail })
+                });
+                if (res.ok) {
+                    adminEmail = newEmail;
+                    showToast('Profile updated successfully!', 'success');
+                } else {
+                    showToast('Failed to update profile.', 'error');
+                }
+            } catch (e) {
+                showToast('Connection error.', 'error');
+            } finally {
+                btn.disabled = false;
+                btn.innerHTML = 'Update Profile';
+            }
+        }
+
+        async function loadDashboardSessions() {
+            if (!adminId) return;
+            const tbody = document.getElementById('dashboardTableBody');
+            tbody.innerHTML = '<tr><td colspan="5" style="text-align: center; padding: 2rem; color: var(--text-muted);"><span class="spinner" style="border-color:var(--primary); border-bottom-color:transparent; width:20px; height:20px;"></span> Loading...</td></tr>';
+
+            const startDate = document.getElementById('filterStartDate').value;
+            const endDate = document.getElementById('filterEndDate').value;
+            const sortBy = document.getElementById('sortBy').value;
+
+            let url = `${API_BASE}/admin/sessions?admin_id=${adminId}&sort_by=${sortBy}`;
+            if (startDate) url += `&start_date=${startDate}`;
+            if (endDate) url += `&end_date=${endDate}`;
+
+            try {
+                const res = await fetch(url);
+                if (res.ok) {
+                    const data = await res.json();
+                    renderDashboardTable(data.sessions);
+                } else {
+                    tbody.innerHTML = '<tr><td colspan="5" style="text-align: center; color: var(--danger);">Failed to load sessions.</td></tr>';
+                }
+            } catch (e) {
+                console.error(e);
+                tbody.innerHTML = '<tr><td colspan="5" style="text-align: center; color: var(--danger);">Error connecting to server.</td></tr>';
+            }
+        }
+
+        function clearFilters() {
+            document.getElementById('filterStartDate').value = '';
+            document.getElementById('filterEndDate').value = '';
+            document.getElementById('sortBy').value = 'score';
+            loadDashboardSessions();
+        }
+
+        function renderDashboardTable(sessions) {
+            const tbody = document.getElementById('dashboardTableBody');
+            const qualifiedBody = document.getElementById('qualifiedTableBody');
+            const unqualifiedBody = document.getElementById('unqualifiedTableBody');
+
+            if (!sessions || sessions.length === 0) {
+                tbody.innerHTML = '<tr><td colspan="5" style="text-align: center; padding: 2.5rem; color: var(--text-muted);">No sessions found.</td></tr>';
+                return;
+            }
+
+            let mainHtml = '';
+            let qualHtml = '';
+            let unqualHtml = '';
+
+            const baseUrl = window.location.href.substring(0, window.location.href.lastIndexOf('/'));
+
+            sessions.forEach(s => {
+                const dateObj = new Date(s.created_at);
+                const dateStr = dateObj.toLocaleDateString() + ' ' + dateObj.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+
+                let statusClass = 'pending';
+                if (s.status === 'started') statusClass = 'started';
+                if (s.status === 'completed') statusClass = 'completed';
+
+                let decisionTag = '';
+                if (s.decision === 'selected') decisionTag = '<span style="font-size: 0.65rem; background: var(--accent); color: #fff; padding: 1px 5px; border-radius: 4px; border:none; margin-left:5px;">SELECTED</span>';
+                if (s.decision === 'rejected') decisionTag = '<span style="font-size: 0.65rem; background: var(--danger); color: #fff; padding: 1px 5px; border-radius: 4px; border:none; margin-left:5px;">REJECTED</span>';
+
+                let scoreText = '—';
+                if (s.status === 'completed' && s.avg_score != null) {
+                    const color = s.avg_score >= 60 ? 'var(--accent)' : 'var(--danger)';
+                    scoreText = `<span style="color:${color}; font-weight:700;">${s.avg_score.toFixed(1)}/100</span>`;
+                }
+
+                const linkUrl = `${baseUrl}/index.html?session_id=${s.link_id}`;
+
+                let actionBtn = `<button class="btn-copy" onclick="copyLink(this, '${linkUrl}')" style="margin:0; padding:0.4rem 0.8rem; font-size:0.75rem;">Copy Link</button>`;
+
+                if (s.status === 'completed') {
+                    actionBtn = `<button class="btn-copy" onclick="openLiveResults('${s.link_id}', '${s.candidate_name.replace(/'/g, "\\'")}')" style="margin:0; padding:0.4rem 0.8rem; font-size:0.75rem; background: #10b981; color: white; border: none; border-radius: 6px; cursor: pointer; transition: opacity 0.2s; font-weight: 600;">View Results</button>`;
+                } else if (s.status === 'started') {
+                    actionBtn = `<button class="btn-copy" onclick="openLiveResults('${s.link_id}', '${s.candidate_name.replace(/'/g, "\\'")}')" style="margin:0; padding:0.4rem 0.8rem; font-size:0.75rem; background: #6366f1; color: white; border: none; border-radius: 6px; cursor: pointer; transition: opacity 0.2s; font-weight: 600;">Live Results</button>`;
+                }
+
+                const rowHtml = `
+                    <tr>
+                        <td style="font-weight: 500;">
+                            ${s.candidate_name} ${decisionTag}
+                            <div style="font-size: 0.75rem; color: var(--text-muted); font-weight: normal; margin-top: 2px;">
+                                ${s.interview_duration} min interview
+                            </div>
+                        </td>
+                        <td>${dateStr}</td>
+                        <td><span class="status-badge ${statusClass}">${s.status}</span></td>
+                        <td>${scoreText}</td>
+                        <td style="text-align: right;">${actionBtn}</td>
+                    </tr>
+                `;
+
+                mainHtml += rowHtml;
+                if (s.decision === 'selected') {
+                    qualHtml += `
+                         <tr>
+                            <td style="font-weight: 500;">
+                                <a href="javascript:void(0)" onclick="openLiveResults('${s.link_id}', '${s.candidate_name.replace(/'/g, "\\'")}')" style="color: var(--primary-light); text-decoration: none; border-bottom: 1px dashed var(--primary-light);">
+                                    ${s.candidate_name}
+                                </a>
+                            </td>
+                            <td>${dateStr}</td>
+                            <td>${scoreText}</td>
+                            <td style="text-align: right;">
+                                <button class="btn-copy" onclick="openLiveResults('${s.link_id}', '${s.candidate_name.replace(/'/g, "\\'")}')" style="background:#10b981; color:white; border:none; padding:0.4rem 0.8rem; font-size:0.75rem; border-radius:6px; cursor:pointer; font-weight: 600;">
+                                    <i class="fas fa-eye"></i> View Details
+                                </button>
+                            </td>
+                        </tr>
+                    `;
+                }
+                if (s.decision === 'rejected') {
+                    unqualHtml += `
+                         <tr>
+                            <td style="font-weight: 500;">
+                                <a href="javascript:void(0)" onclick="openLiveResults('${s.link_id}', '${s.candidate_name.replace(/'/g, "\\'")}')" style="color: var(--text-muted); text-decoration: none; border-bottom: 1px dashed var(--text-muted);">
+                                    ${s.candidate_name}
+                                </a>
+                            </td>
+                            <td>${dateStr}</td>
+                            <td>${scoreText}</td>
+                            <td style="text-align: right;">
+                                <button class="btn-copy" onclick="openLiveResults('${s.link_id}', '${s.candidate_name.replace(/'/g, "\\'")}')" style="background:var(--danger); color:white; border:none; padding:0.4rem 0.8rem; font-size:0.75rem; border-radius:6px; cursor:pointer;">
+                                    <i class="fas fa-eye"></i> View Details
+                                </button>
+                            </td>
+                        </tr>
+                    `;
+                }
+            });
+            tbody.innerHTML = mainHtml;
+            qualifiedBody.innerHTML = qualHtml || '<tr><td colspan="4" style="text-align: center; padding: 2rem; color: var(--text-muted);">No qualified candidates yet.</td></tr>';
+            unqualifiedBody.innerHTML = unqualHtml || '<tr><td colspan="4" style="text-align: center; padding: 2rem; color: var(--text-muted);">No rejected candidates yet.</td></tr>';
+        }
+
+        function openLiveResults(linkId, candidateName) {
+            document.getElementById('nav-btn-results').style.display = 'block';
+            switchView('results');
+            document.getElementById('liveResultsContent').innerHTML = `
+                <div style="text-align: center; padding: 3rem;">
+                    <div class="spinner" style="border-color:var(--primary); border-bottom-color:transparent; width:30px; height:30px; display:inline-block;"></div>
+                    <p style="margin-top: 1rem; color: var(--text-muted);">Loading live results for ${candidateName}...</p>
+                </div>
+            `;
+
+            // Wait for DOM to update slightly before fetching
+            setTimeout(() => {
+                currentViewId = linkId;
+                refreshLiveResults(linkId);
+            }, 100);
+        }
+
+        async function refreshLiveResults(interviewId) {
+            const container = document.getElementById('liveResultsContent');
+            try {
+                const response = await fetch(`${API_BASE}/admin/interview/${interviewId}`);
+                if (!response.ok) throw new Error("Failed to fetch");
+
+                const data = await response.json();
+
+                if (!data.answers || data.answers.length === 0) {
+                    container.innerHTML = '<div style="text-align: center; color: var(--text-muted); padding: 3rem;">No answers recorded yet. The candidate has not started answering questions.</div>';
+                    return;
+                }
+
+                // AI overview calculation
+                let totalScore = 0;
+                let answeredCount = 0;
+                let totalTimeSeconds = 0;
+                let totalTabSwitches = 0;
+                let totalFaceAlerts = 0;
+
+                data.answers.forEach(a => {
+                    if (a.ai_score != null) {
+                        totalScore += a.ai_score;
+                        answeredCount++;
+                    }
+                    totalTimeSeconds += (a.time_spent_seconds || 0);
+                    totalTabSwitches += (a.tab_switches || 0);
+                    totalFaceAlerts += (a.face_alerts || 0);
+                });
+
+                const avgScore = answeredCount > 0 ? (totalScore / answeredCount).toFixed(1) : 0;
+                const scoreColor = avgScore >= 60 ? 'var(--accent)' : 'var(--danger)';
+                const mins = Math.floor(totalTimeSeconds / 60);
+
+                let riskText = "🟢 Clean Session";
+                if (totalTabSwitches > 2 || totalFaceAlerts > 5) riskText = "🟡 Moderate Risk";
+                if (totalTabSwitches > 5 || totalFaceAlerts > 10) riskText = "🔴 High Risk";
+
+                let html = `
+                    <div style="margin-bottom: 2rem;">
+                        <h2 style="color: var(--primary-light); margin-bottom: 0.5rem; font-size: 1.5rem;">${data.candidate_name || 'Candidate'}</h2>
+                        <p style="color: var(--text-muted); font-size: 0.9rem;">
+                            Session ID: ${interviewId}
+                        </p>
+                    </div>
+
+                    <!-- STATISTICS WIDGETS -->
+                    <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 1rem; margin-bottom: 2rem;">
+                        <div style="background: var(--bg-card); padding: 1.5rem; border-radius: var(--radius-sm); border: 1px solid var(--border);">
+                            <div style="font-size: 0.8rem; color: var(--text-muted); text-transform: uppercase;">Average Score</div>
+                            <div style="font-size: 2rem; font-weight: 800; color: ${scoreColor}; margin-top: 0.5rem;">${avgScore}<span style="font-size: 1rem;">/100</span></div>
+                        </div>
+                        <div style="background: var(--bg-card); padding: 1.5rem; border-radius: var(--radius-sm); border: 1px solid var(--border);">
+                            <div style="font-size: 0.8rem; color: var(--text-muted); text-transform: uppercase;">Questions Answered</div>
+                            <div style="font-size: 2rem; font-weight: 800; color: var(--text-primary); margin-top: 0.5rem;">${answeredCount}</div>
+                        </div>
+                        <div style="background: var(--bg-card); padding: 1.5rem; border-radius: var(--radius-sm); border: 1px solid var(--border);">
+                            <div style="font-size: 0.8rem; color: var(--text-muted); text-transform: uppercase;">Time Taken</div>
+                            <div style="font-size: 2rem; font-weight: 800; color: var(--text-primary); margin-top: 0.5rem;">${mins}<span style="font-size: 1rem;">m</span></div>
+                        </div>
+                    </div>
+
+                    <!-- Proctoring Risk Widget -->
+                    <div style="background: var(--bg-card); padding: 1.5rem; border-radius: var(--radius-sm); border: 1px solid var(--border); margin-bottom: 2rem; display: flex; align-items: center; justify-content: space-between;">
+                        <div>
+                            <strong style="color: var(--text-secondary); font-size: 0.85rem; text-transform: uppercase; letter-spacing: 1px;">🛡️ Integrity & Proctoring Summary</strong>
+                            <div style="margin-top: 0.5rem; font-size: 1.1rem; font-weight: 700;">${riskText}</div>
+                        </div>
+                        <div style="text-align: right; color: var(--text-muted); font-size: 0.9rem;">
+                            <div>Tab Switches: <span style="color: var(--text-primary); font-weight: 700;">${totalTabSwitches}</span></div>
+                            <div>Face Alerts: <span style="color: var(--text-primary); font-weight: 700;">${totalFaceAlerts}</span></div>
+                        </div>
+                    </div>
+
+                    <!-- Recording & Downloads -->
+                    <div style="display: flex; gap: 1rem; flex-wrap: wrap; margin-bottom: 2rem;">
+                        <div style="flex: 1; min-width: 300px; background: var(--bg-card); border: 1px solid var(--border); border-radius: var(--radius-sm); padding: 1.25rem;">
+                            <strong style="color: var(--text-secondary); font-size: 0.85rem; text-transform: uppercase; letter-spacing: 1px;"><i class="fas fa-cog"></i> Recruitment Decision</strong>
+                            <div style="margin-top: 1rem; display: flex; gap: 0.75rem;">
+                                <button onclick="setCandidateDecision('${interviewId}', 'selected')" style="flex:1; background: var(--accent); color:#fff; border:none; padding:0.7rem; border-radius:8px; font-weight:700; cursor:pointer; transition: 0.2s; opacity: ${data.decision === 'selected' ? '0.5' : '1'}; pointer-events: ${data.decision === 'selected' ? 'none' : 'auto'};">
+                                    <i class="fas fa-check-circle"></i> ${data.decision === 'selected' ? 'SELECTED' : 'SELECT CANDIDATE'}
+                                </button>
+                                <button onclick="setCandidateDecision('${interviewId}', 'rejected')" style="flex:1; background: var(--danger); color:#fff; border:none; padding:0.7rem; border-radius:8px; font-weight:700; cursor:pointer; transition: 0.2s; opacity: ${data.decision === 'rejected' ? '0.5' : '1'}; pointer-events: ${data.decision === 'rejected' ? 'none' : 'auto'};">
+                                    <i class="fas fa-times-circle"></i> ${data.decision === 'rejected' ? 'REJECTED' : 'REJECT CANDIDATE'}
+                                </button>
+                            </div>
+                            <p style="font-size: 0.7rem; color: var(--text-muted); margin-top: 0.5rem; text-align: center;">Clicking will update status and auto-send notification email.</p>
+                        </div>
+
+                        ${data.recording_url ? `
+                        <div style="flex: 1; min-width: 300px; background: var(--bg-card); border: 1px solid var(--border); border-radius: var(--radius-sm); padding: 1.25rem;">
+                            <strong style="color: var(--text-secondary); font-size: 0.85rem; text-transform: uppercase; letter-spacing: 1px;"><i class="fas fa-video"></i> Interview Recording</strong>
+                            <video controls style="width: 100%; max-height: 200px; border-radius: 8px; margin-top: 0.75rem; background: #000;">
+                                <source src="${API_BASE}/${data.recording_url}" type="video/webm">
+                            </video>
+                        </div>
+                        ` : ''}
+
+                        <div style="flex: 0 0 auto; min-width: 250px; background: var(--bg-card); border: 1px solid var(--border); border-radius: var(--radius-sm); padding: 1.25rem;">
+                            <strong style="color: var(--text-secondary); font-size: 0.85rem; text-transform: uppercase; letter-spacing: 1px;"><i class="fas fa-file-pdf"></i> Interview Report</strong>
+                            <div style="margin-top: 1rem;">
+                                ${data.actual_interview_id ? `
+                                <a href="${API_BASE}/generate-report/${data.actual_interview_id}" target="_blank"
+                                   style="padding: 0.6rem 1.2rem; background: var(--primary); color: #fff; border-radius: 8px; text-decoration: none; font-size: 0.9rem; font-weight: 600; text-align: center; display: block;">
+                                    <i class="fas fa-download"></i> Download PDF Report
+                                </a>
+                                ` : `
+                                <p style="color: var(--text-muted); font-size: 0.9rem;">PDF Report not available yet.</p>
+                                `}
+                            </div>
+                        </div>
+                    </div>
+                `;
+
+                // Questions breakdown
+                html += '<strong style="color: var(--text-secondary); font-size: 0.85rem; text-transform: uppercase; letter-spacing: 1px;"><i class="fas fa-list-check"></i> Detailed Breakdown</strong>';
+                html += '<div style="display: flex; flex-direction: column; gap: 1rem; margin-top: 1rem;">';
+
+                // Helper
+                function wpmLabel(wpm) {
+                    if (!wpm) return '<span style="color:var(--text-muted)">N/A</span>';
+                    if (wpm < 100) return `<span style="color:var(--warning)"><i class="fas fa-gauge-simple"></i> ${wpm} WPM (Slow)</span>`;
+                    if (wpm > 160) return `<span style="color:var(--danger)"><i class="fas fa-gauge-high"></i> ${wpm} WPM (Fast)</span>`;
+                    return `<span style="color:var(--accent)"><i class="fas fa-gauge"></i> ${wpm} WPM (Good)</span>`;
+                };
+
+                data.answers.forEach(ans => {
+                    const score = ans.ai_score ?? '—';
+                    const sColor = (ans.ai_score || 0) >= 60 ? 'var(--accent)' : 'var(--danger)';
+                    const timeStr = `${Math.floor((ans.time_spent_seconds || 0) / 60)}m ${(ans.time_spent_seconds || 0) % 60}s`;
+                    const tabWarn = (ans.tab_switches || 0) > 0 ? `<span style="color:var(--danger);"><i class="fas fa-face-angry"></i> ${ans.tab_switches} tab switch(es)</span>` : `<span style="color:var(--accent);"><i class="fas fa-circle-check"></i> No switches</span>`;
+                    const faceWarn = (ans.face_alerts || 0) > 0 ? `<span style="color:var(--danger);"><i class="fas fa-face-frown"></i> ${ans.face_alerts} face alert(s)</span>` : `<span style="color:var(--accent);"><i class="fas fa-face-smile"></i> Visible</span>`;
+
+                    html += `
+                        <div style="background: var(--bg-card); padding: 1.5rem; border-radius: var(--radius-sm); border: 1px solid var(--border);">
+                            <div style="display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 1rem;">
+                                <h4 style="color: var(--text-primary); margin: 0; flex: 1; font-size: 1.1rem;">Q${ans.question_id}: ${ans.question_text}</h4>
+                                <span style="font-size: 1.5rem; font-weight: 700; color: ${sColor}; margin-left: 1rem;">${score}/100</span>
+                            </div>
+
+                            <div style="display: flex; flex-wrap: wrap; gap: 0.75rem; margin-bottom: 1rem; font-size: 0.85rem;">
+                                <span style="background: rgba(100,100,255,0.1); border-radius: 6px; padding: 4px 10px;"><i class="fas fa-clock"></i> ${timeStr}</span>
+                                <span style="background: rgba(100,100,255,0.1); border-radius: 6px; padding: 4px 10px;">${wpmLabel(ans.wpm || 0)}</span>
+                                <span style="background: rgba(100,100,255,0.1); border-radius: 6px; padding: 4px 10px;"><i class="fas fa-comment-dots"></i> ${ans.filler_count || 0} filler(s)</span>
+                                <span style="background: rgba(100,100,255,0.1); border-radius: 6px; padding: 4px 10px;"><i class="fas fa-stopwatch"></i> ${ans.pause_count || 0} pause(s)</span>
+                            </div>
+
+                            <div style="display: flex; gap: 1rem; margin-bottom: 1rem; font-size: 0.85rem;">
+                                ${tabWarn} · ${faceWarn}
+                            </div>
+
+                            <div style="margin-bottom: 1rem;">
+                                <strong style="color: var(--text-secondary); font-size: 0.85rem;">Candidate's Answer</strong>
+                                <p style="color: var(--text-muted); margin-top: 0.4rem; line-height: 1.6; font-size: 0.95rem;">${ans.answer_text}</p>
+                            </div>
+
+                            ${ans.corrected_answer ? `
+                            <div style="margin-bottom: 1rem; background: rgba(120,70,255,0.06); padding: 0.75rem; border-radius: 6px; border-left: 3px solid var(--primary);">
+                                <strong style="color: var(--primary-light); font-size: 0.85rem;">💡 Suggested Answer</strong>
+                                <p style="color: var(--text-muted); margin-top: 0.4rem; font-style: italic; font-size: 0.9rem; line-height: 1.5;">${ans.corrected_answer}</p>
+                            </div>` : ''}
+
+                            <div style="background: rgba(6,214,160,0.06); padding: 0.75rem; border-radius: 6px; border-left: 3px solid var(--accent);">
+                                <strong style="color: var(--accent); font-size: 0.85rem;">🤖 AI Feedback</strong>
+                                <p style="color: var(--text-primary); margin-top: 0.4rem; font-size: 0.9rem; line-height: 1.5;">${ans.ai_feedback}</p>
+                            </div>
+                        </div>
+                    `;
+                });
+
+                html += '</div>'; // End questions container
+
+                container.innerHTML = html;
+
+            } catch (err) {
+                console.error(err);
+                container.innerHTML = '<div style="text-align: center; color: var(--danger); padding: 2rem;">Failed to load live results.</div>';
+            }
+        }
+
+        async function setCandidateDecision(linkId, decision) {
+            if (!confirm(`Are you sure you want to mark this candidate as ${decision.toUpperCase()}? Official email will be sent.`)) return;
+            const targetUrl = `${API_BASE}/admin/update-decision`;
+            console.log(`📡 Sending decision to: ${targetUrl}`);
+            try {
+                const response = await fetch(targetUrl, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        link_id: linkId,
+                        decision: decision,
+                        admin_id: typeof adminId === 'number' ? adminId : null
+                    })
+                });
+                if (response.ok) {
+                    const data = await response.json();
+                    let msg = `Candidate ${decision} successfully.`;
+                    if (data.email_sent) {
+                        showToast(`${msg} Email sent!`, 'success');
+                    } else {
+                        showToast(`${msg} Email NOT sent: ${data.email_reason}`, 'warning');
+                    }
+
+                    // Refresh current view
+                    if (document.getElementById('liveResultsContent')) {
+                        refreshLiveResults(linkId);
+                    }
+                    if (typeof currentViewId !== 'undefined' && currentViewId === linkId) {
+                        refreshResults(linkId);
+                    }
+
+                    // Also reload dashboard to update badges
+                    loadDashboardSessions();
+                } else {
+                    const errData = await response.json().catch(() => ({}));
+                    showToast(`Failed: ${errData.detail || "Server error"}`, "error");
+                }
+            } catch (err) {
+                console.error(err);
+                showToast("Connection error. Check backend.", "error");
+            }
+        }
+
+        // --- THEME TOGGLE ---
+        function initThemeIcon() {
+            const currentTheme = document.documentElement.getAttribute('data-theme');
+            const icon = document.getElementById('themeIcon');
+            if (currentTheme === 'light') {
+                icon.innerHTML = '<i class="fas fa-moon"></i>';
+            } else {
+                icon.innerHTML = '<i class="fas fa-sun"></i>';
+            }
+        }
+
+        function toggleTheme() {
+            const currentTheme = document.documentElement.getAttribute('data-theme');
+            let newTheme = 'dark';
+
+            if (currentTheme !== 'light') {
+                newTheme = 'light';
+            }
+
+            document.documentElement.setAttribute('data-theme', newTheme);
+            localStorage.setItem('adminTheme', newTheme);
+
+            const icon = document.getElementById('themeIcon');
+            icon.style.transform = 'scale(0) rotate(180deg)';
+
+            setTimeout(() => {
+                icon.innerHTML = newTheme === 'light' ? '<i class="fas fa-moon"></i>' : '<i class="fas fa-sun"></i>';
+                icon.style.transform = 'scale(1) rotate(0deg)';
+            }, 150);
+        }
+
+        // Set initial icon on load
+        document.addEventListener('DOMContentLoaded', initThemeIcon);
+
+        // --- VIEW RESULTS MODAL ---
+        let currentViewId = null;
+
+        async function viewResults(interviewId) {
+            if (!interviewId) {
+                showToast("Interview ID not found", "error");
+                return;
+            }
+            currentViewId = interviewId;
+            document.getElementById('resultsModal').classList.remove('hidden');
+            await refreshResults(interviewId);
+        }
+
+        async function refreshResults(interviewId) {
+            const container = document.getElementById('modalContent');
+            container.innerHTML = '<div style="text-align: center; color: var(--text-muted); padding: 2rem;"><i class="fas fa-spinner fa-spin"></i> Loading results & AI analysis...</div>';
+
+            try {
+                const response = await fetch(`${API_BASE}/admin/interview/${interviewId}`);
+                if (!response.ok) throw new Error("Failed to fetch");
+
+                const data = await response.json();
+
+                document.getElementById('modalCandidateName').textContent = `${data.candidate_name} — Interview Results`;
+                document.getElementById('modalSource').textContent = `${data.source} · ${new Date(data.date).toLocaleDateString('en-IN', { year: 'numeric', month: 'short', day: 'numeric' })}`;
+
+                if (!data.answers || data.answers.length === 0) {
+                    container.innerHTML = '<div style="text-align: center; color: var(--text-muted); padding: 2rem;">No answers recorded yet. Ask candidate to answer a question first.</div>';
+                    return;
+                }
+
+                // ── Recommendation Color ─────────────────────────────────────────
+                const recColors = {
+                    "Strong Hire": "#06d6a0",
+                    "Hire": "#4ec9b0",
+                    "Borderline": "#f9a825",
+                    "No Hire": "#ef4444",
+                    "No Data": "#6b7280"
+                };
+                const rec = data.overall_recommendation || "No Data";
+                const recColor = recColors[rec] || "#6b7280";
+
+                // ── WPM category helper ──────────────────────────────────────────
+                function wpmLabel(wpm) {
+                    if (wpm === 0) return '<span style="color:#6b7280;">N/A</span>';
+                    if (wpm < 90) return `<span style="color:#f9a825;">${wpm} wpm (Slow)</span>`;
+                    if (wpm > 180) return `<span style="color:#f9a825;">${wpm} wpm (Fast)</span>`;
+                    return `<span style="color:#06d6a0;">${wpm} wpm (Good)</span>`;
+                }
+
+                const integ = data.integrity || {};
+                const totalTabSw = integ.total_tab_switches || 0;
+                const totalFace = integ.total_face_alerts || 0;
+                const totalMins = integ.total_time_minutes || 0;
+                const integrityRisk = totalTabSw > 2 || totalFace > 10 ? '<i class="fas fa-circle-exclamation" style="color:var(--danger)"></i> High Risk' : totalTabSw > 0 || totalFace > 3 ? '<i class="fas fa-triangle-exclamation" style="color:var(--warning)"></i> Moderate' : '<i class="fas fa-circle-check" style="color:var(--accent)"></i> Clean';
+
+                // Build sections
+                let html = `
+                    <!-- SECTION 1: Overall Summary -->
+                    <div style="background: var(--bg-input); border: 1px solid var(--border); border-radius: var(--radius-sm); padding: 1.5rem;">
+                        <div style="display: flex; align-items: center; gap: 1rem; margin-bottom: 1rem; flex-wrap: wrap;">
+                            <div style="background: ${recColor}22; border: 2px solid ${recColor}; color: ${recColor}; padding: 0.4rem 1rem; border-radius: 999px; font-weight: 700; font-size: 1rem;">
+                                ${rec}
+                            </div>
+                            <div style="font-size: 1.5rem; font-weight: 700; color: ${(data.avg_score || 0) >= 60 ? 'var(--accent)' : 'var(--danger)'};">
+                                ${data.avg_score || 0} / 100
+                            </div>
+                            <span style="color: var(--text-muted); font-size: 0.85rem;">Average Score across ${data.answers.length} questions</span>
+                        </div>
+                        <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 1rem;">
+                            <div>
+                                <strong style="color: var(--accent); font-size: 0.85rem; text-transform: uppercase; letter-spacing: 1px;"><i class="fas fa-plus-circle"></i> Strengths</strong>
+                                <p style="color: var(--text-primary); margin-top: 0.5rem; font-size: 0.95rem; line-height: 1.6;">${data.strengths_summary || '—'}</p>
+                            </div>
+                            <div>
+                                <strong style="color: var(--danger); font-size: 0.85rem; text-transform: uppercase; letter-spacing: 1px;"><i class="fas fa-minus-circle"></i> Weaknesses</strong>
+                                <p style="color: var(--text-primary); margin-top: 0.5rem; font-size: 0.95rem; line-height: 1.6;">${data.weaknesses_summary || '—'}</p>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- SECTION 2: Integrity / Proctoring Summary -->
+                    <div style="background: var(--bg-input); border: 1px solid var(--border); border-radius: var(--radius-sm); padding: 1.25rem;">
+                        <strong style="color: var(--text-secondary); font-size: 0.85rem; text-transform: uppercase; letter-spacing: 1px;"><i class="fas fa-shield-halved"></i> Integrity Report</strong>
+                        <div style="display: flex; gap: 1.5rem; margin-top: 0.75rem; flex-wrap: wrap; align-items: center;">
+                            <span>Risk Level: <strong>${integrityRisk}</strong></span>
+                            <span style="color: var(--text-muted);">Tab Switches: <strong style="color: ${totalTabSw > 0 ? 'var(--danger)' : 'var(--accent)'};">${totalTabSw}</strong></span>
+                            <span style="color: var(--text-muted);">Face Alerts: <strong style="color: ${totalFace > 3 ? 'var(--danger)' : 'var(--accent)'};">${totalFace}</strong></span>
+                            <span style="color: var(--text-muted);">Total Time: <strong>${totalMins} min</strong></span>
+                        </div>
+                    </div>
+
+                    <div style="display: flex; gap: 1rem; flex-wrap: wrap;">
+                        ${data.recording_url ? `
+                        <div style="flex: 1; min-width: 300px; background: var(--bg-input); border: 1px solid var(--border); border-radius: var(--radius-sm); padding: 1.25rem;">
+                            <strong style="color: var(--text-secondary); font-size: 0.85rem; text-transform: uppercase; letter-spacing: 1px;"><i class="fas fa-video"></i> Interview Recording</strong>
+                            <video controls style="width: 100%; max-height: 360px; border-radius: 8px; margin-top: 0.75rem; background: #000;">
+                                <source src="${API_BASE}/${data.recording_url}" type="video/webm">
+                                Your browser does not support the video tag.
+                            </video>
+                            <div style="margin-top: 0.75rem; display: flex; gap: 0.5rem;">
+                                <a href="${API_BASE}/${data.recording_url}" download="interview_${data.candidate_name || 'recording'}.webm"
+                                   style="padding: 0.4rem 1rem; background: var(--primary); color: #fff; border-radius: 6px; text-decoration: none; font-size: 0.85rem; font-weight: 600;">
+                                    <i class="fas fa-download"></i> Download Video
+                                </a>
+                            </div>
+                        </div>
+                        ` : `
+                        <div style="flex: 1; min-width: 300px; background: var(--bg-input); border: 1px solid var(--border); border-radius: var(--radius-sm); padding: 1.25rem;">
+                            <strong style="color: var(--text-secondary); font-size: 0.85rem; text-transform: uppercase; letter-spacing: 1px;"><i class="fas fa-video-slash"></i> Interview Recording</strong>
+                            <p style="color: var(--text-muted); margin-top: 0.75rem; font-size: 0.9rem;">No recording available for this interview.</p>
+                        </div>
+                        `}
+
+                        <div style="flex: 0 0 auto; min-width: 200px; background: var(--bg-input); border: 1px solid var(--border); border-radius: var(--radius-sm); padding: 1.25rem; display: flex; flex-direction: column; gap: 0.75rem;">
+                            <strong style="color: var(--text-secondary); font-size: 0.85rem; text-transform: uppercase; letter-spacing: 1px;"><i class="fas fa-file-pdf"></i> Interview Report</strong>
+                            ${data.actual_interview_id ? `
+                            <a href="${API_BASE}/generate-report/${data.actual_interview_id}" target="_blank"
+                               style="padding: 0.6rem 1.2rem; background: linear-gradient(135deg, var(--primary), var(--primary-light)); color: #fff; border-radius: 8px; text-decoration: none; font-size: 0.9rem; font-weight: 600; text-align: center; transition: transform 0.2s; display: inline-block;"
+                               onmouseover="this.style.transform='scale(1.05)'" onmouseout="this.style.transform='scale(1)'">
+                                <i class="fas fa-file-pdf"></i> Download PDF Report
+                            </a>
+                            ` : `
+                            <p style="color: var(--text-muted); font-size: 0.9rem;">Report not available yet.</p>
+                            `}
+                        </div>
+                    </div>
+
+                    <!-- SECTION 3–5: Per-question breakdown -->
+                    <strong style="color: var(--text-secondary); font-size: 0.85rem; text-transform: uppercase; letter-spacing: 1px;"><i class="fas fa-list-ul"></i> Question-by-Question Breakdown</strong>
+                `;
+
+                html += data.answers.map(ans => {
+                    const score = ans.ai_score ?? '—';
+                    const scoreColor = (ans.ai_score || 0) >= 60 ? 'var(--accent)' : 'var(--danger)';
+                    const mins = Math.floor((ans.time_spent_seconds || 0) / 60);
+                    const secs = (ans.time_spent_seconds || 0) % 60;
+                    const timeStr = `${mins}m ${secs}s`;
+                    const tabWarn = (ans.tab_switches || 0) > 0 ? `<span style="color:var(--danger);"><i class="fas fa-face-angry"></i> ${ans.tab_switches} tab switch(es)</span>` : `<span style="color:var(--accent);"><i class="fas fa-circle-check"></i> No switches</span>`;
+                    const faceWarn = (ans.face_alerts || 0) > 0 ? `<span style="color:var(--danger);"><i class="fas fa-face-frown"></i> ${ans.face_alerts} face alert(s)</span>` : `<span style="color:var(--accent);"><i class="fas fa-face-smile"></i> Visible</span>`;
+
+                    return `
+                        <div style="background: var(--bg-input); padding: 1.5rem; border-radius: var(--radius-sm); border: 1px solid var(--border);">
+                            <div style="display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 1rem;">
+                                <h4 style="color: var(--text-primary); margin: 0; flex: 1;">Q${ans.question_id}: ${ans.question_text}</h4>
+                                <span style="font-size: 1.5rem; font-weight: 700; color: ${scoreColor}; margin-left: 1rem;">${score}/100</span>
+                            </div>
+
+                            <!-- Behavioral Metrics Row -->
+                            <div style="display: flex; flex-wrap: wrap; gap: 0.75rem; margin-bottom: 1rem; font-size: 0.85rem;">
+                                <span style="background: rgba(100,100,255,0.1); border-radius: 6px; padding: 4px 10px;"><i class="fas fa-clock"></i> ${timeStr}</span>
+                                <span style="background: rgba(100,100,255,0.1); border-radius: 6px; padding: 4px 10px;">${wpmLabel(ans.wpm || 0)}</span>
+                                <span style="background: rgba(100,100,255,0.1); border-radius: 6px; padding: 4px 10px;"><i class="fas fa-comment-dots"></i> ${ans.filler_count || 0} filler word(s)</span>
+                                <span style="background: rgba(100,100,255,0.1); border-radius: 6px; padding: 4px 10px;"><i class="fas fa-microphone-slash"></i> ${ans.pause_count || 0} pause(s)</span>
+                                <span style="background: rgba(100,100,255,0.1); border-radius: 6px; padding: 4px 10px;"><i class="fas fa-key"></i> ${ans.keyword_match_pct || 0}% keywords</span>
+                            </div>
+
+                            <!-- Proctoring Row -->
+                            <div style="display: flex; gap: 1rem; margin-bottom: 1rem; font-size: 0.85rem; flex-wrap: wrap;">
+                                ${tabWarn} · ${faceWarn}
+                            </div>
+
+                            <!-- Candidate Answer -->
+                            <div style="margin-bottom: 1rem;">
+                                <strong style="color: var(--text-secondary); font-size: 0.85rem;">Candidate's Answer</strong>
+                                <p style="color: var(--text-muted); margin-top: 0.4rem; line-height: 1.6; font-size: 0.95rem;">${ans.answer_text}</p>
+                            </div>
+
+                            <!-- Suggested Answer -->
+                            <div style="margin-bottom: 1rem; background: rgba(120,70,255,0.06); padding: 0.75rem; border-radius: 6px; border-left: 3px solid var(--primary);">
+                                <strong style="color: var(--primary-light); font-size: 0.85rem;"><i class="fas fa-lightbulb"></i> Suggested Answer</strong>
+                                <p style="color: var(--text-muted); margin-top: 0.4rem; font-style: italic; font-size: 0.9rem; line-height: 1.5;">${ans.corrected_answer}</p>
+                            </div>
+
+                            <!-- AI Feedback -->
+                            <div style="background: rgba(6,214,160,0.06); padding: 0.75rem; border-radius: 6px; border-left: 3px solid var(--accent);">
+                                <strong style="color: var(--accent); font-size: 0.85rem;"><i class="fas fa-robot"></i> AI Feedback</strong>
+                                <p style="color: var(--text-primary); margin-top: 0.4rem; font-size: 0.9rem; line-height: 1.5;">${ans.ai_feedback}</p>
+                            </div>
+                        </div>
+                    `;
+                }).join("");
+
+                container.innerHTML = html;
+
+            } catch (err) {
+                console.error(err);
+                container.innerHTML = '<div style="text-align: center; color: var(--danger); padding: 2rem;">Failed to load results. Please check your network connection and try refreshing.</div>';
+            }
+        }
+
+    </script>
+
+    <style>
+        @keyframes shake {
+
+            0%,
+            100% {
+                transform: translateX(0);
+            }
+
+            20% {
+                transform: translateX(-8px);
+            }
+
+            40% {
+                transform: translateX(8px);
+            }
+
+            60% {
+                transform: translateX(-5px);
+            }
+
+            80% {
+                transform: translateX(5px);
+            }
+        }
+    </style>
+
+    <!-- Results Modal HTML -->
+    <div id="resultsModal" class="hidden"
+        style="position: fixed; top: 0; left: 0; width: 100vw; height: 100vh; background: rgba(15, 15, 26, 0.85); backdrop-filter: blur(4px); z-index: 2000; overflow-y: auto;">
+        <div
+            style="background: var(--bg-card); max-width: 800px; margin: 3rem auto; padding: 2.5rem; border-radius: var(--radius-md); position: relative; border: 1px solid var(--border); box-shadow: var(--shadow-lg);">
+            <button onclick="document.getElementById('resultsModal').classList.add('hidden')"
+                style="position: absolute; top: 1.5rem; right: 1.5rem; background: transparent; border: none; color: var(--text-muted); font-size: 1.5rem; cursor: pointer; transition: color 0.3s;"
+                onmouseover="this.style.color='var(--danger)'" onmouseout="this.style.color='var(--text-muted)'"><i
+                    class="fas fa-times"></i></button>
+
+            <h2 id="modalCandidateName" style="margin-bottom: 0.5rem; color: var(--primary-light);">Candidate Results
+            </h2>
+            <p id="modalSource" style="color: var(--text-muted); margin-bottom: 2rem; font-size: 0.9rem;">Source: -</p>
+
+            <div id="modalContent" style="display: flex; flex-direction: column; gap: 1.5rem;">
+                <!-- Answers injected here dynamically -->
+            </div>
+
+            <div
+                style="margin-top: 2rem; display: flex; justify-content: space-between; align-items: center; border-top: 1px solid var(--border); padding-top: 1.5rem;">
+                <p style="color: var(--text-muted); font-size: 0.9rem;">Results fetch automatically when you click
+                    refresh. AI evaluates live behind the scenes.</p>
+                <button class="btn-generate" onclick="refreshResults(currentViewId)"
+                    style="width: auto; padding: 0.75rem 1.5rem; font-size: 0.95rem;"><i class="fas fa-sync-alt"></i>
+                    Refresh Results</button>
+            </div>
+        </div>
+    </div>
+    <!-- ==================== RESET PASSWORD MODAL ==================== -->
+    <div id="resetModal" class="modal-overlay hidden">
+        <div class="modal-card">
+            <button class="modal-close" onclick="closeResetModal()"><i class="fas fa-times"></i></button>
+            <div id="step-identify" class="reset-step">
+                <h2 style="margin-bottom: 0.5rem;">Reset Password</h2>
+                <p style="color: var(--text-secondary); font-size: 0.9rem; margin-bottom: 2rem;">Verify your admin
+                    account to receive an OTP.</p>
+
+                <div class="dash-form-group">
+                    <label class="dash-label">Username</label>
+                    <input type="text" id="resetUser" class="dash-input" placeholder="Enter your username">
+                </div>
+                <div class="dash-form-group">
+                    <label class="dash-label">Email Address</label>
+                    <input type="email" id="resetEmail" class="dash-input" placeholder="Enter registered email">
+                </div>
+                <button onclick="sendOTP()" id="sendOtpBtn" class="btn-generate">Send OTP Code</button>
+            </div>
+
+            <div id="step-verify" class="reset-step hidden">
+                <h2 style="margin-bottom: 0.5rem;">Verify OTP</h2>
+                <p style="color: var(--text-secondary); font-size: 0.9rem; margin-bottom: 2rem;">Enter the 6-digit code
+                    sent to your email.</p>
+
+                <div class="dash-form-group">
+                    <label class="dash-label">OTP Code</label>
+                    <input type="text" id="resetOTP" class="dash-input" placeholder="6-digit code" maxlength="6"
+                        style="text-align: center; font-size: 1.5rem; letter-spacing: 10px;">
+                </div>
+                <button onclick="verifyOTP()" id="verifyOtpBtn" class="btn-generate">Verify & Continue</button>
+                <p style="text-align: center; margin-top: 1.5rem; font-size: 0.85rem; color: var(--text-muted);">
+                    Didn't get code? <a href="#" onclick="sendOTP()" style="color: var(--primary-light);">Resend</a>
+                </p>
+            </div>
+
+            <div id="step-final" class="reset-step hidden">
+                <h2 style="margin-bottom: 0.5rem;">New Password</h2>
+                <p style="color: var(--text-secondary); font-size: 0.9rem; margin-bottom: 2rem;">Choose a strong new
+                    password for your account.</p>
+
+                <div class="dash-form-group">
+                    <label class="dash-label">New Password</label>
+                    <input type="password" id="newPassword" class="dash-input" placeholder="Minimum 6 characters">
+                </div>
+                <button onclick="finalizeReset()" id="finalizeResetBtn" class="btn-generate">Update Password</button>
+            </div>
+
+            <div id="resetError" class="login-error hidden" style="margin-top: 1.5rem;"></div>
+        </div>
+    </div>
+
+    <script>
+        function openResetModal() {
+            document.getElementById('resetModal').classList.remove('hidden');
+            document.querySelectorAll('.reset-step').forEach(s => s.classList.add('hidden'));
+            document.getElementById('step-identify').classList.remove('hidden');
+            document.getElementById('resetError').classList.add('hidden');
+        }
+
+        function closeResetModal() {
+            document.getElementById('resetModal').classList.add('hidden');
+        }
+
+        async function sendOTP() {
+            const user = document.getElementById('resetUser').value;
+            const email = document.getElementById('resetEmail').value;
+            const btn = document.getElementById('sendOtpBtn');
+            const err = document.getElementById('resetError');
+
+            if (!user || !email) {
+                err.textContent = "Please fill in all fields.";
+                err.classList.remove('hidden');
+                return;
+            }
+
+            err.classList.add('hidden');
+            btn.disabled = true;
+            btn.innerHTML = '<span class="spinner"></span> Sending...';
+
+            try {
+                const res = await fetch(`${API_BASE}/admin/forgot-password`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ username: user, email: email })
+                });
+                const data = await res.json();
+                if (res.ok) {
+                    showToast('OTP sent successfully!', 'success');
+                    document.getElementById('step-identify').classList.add('hidden');
+                    document.getElementById('step-verify').classList.remove('hidden');
+                } else {
+                    err.textContent = data.detail || "Error sending OTP.";
+                    err.classList.remove('hidden');
+                }
+            } catch (e) {
+                err.textContent = "Network error. Try again.";
+                err.classList.remove('hidden');
+            } finally {
+                btn.disabled = false;
+                btn.innerHTML = 'Send OTP Code';
+            }
+        }
+
+        async function verifyOTP() {
+            const user = document.getElementById('resetUser').value;
+            const otp = document.getElementById('resetOTP').value;
+            const btn = document.getElementById('verifyOtpBtn');
+            const err = document.getElementById('resetError');
+
+            if (!otp) return;
+
+            btn.disabled = true;
+            try {
+                const res = await fetch(`${API_BASE}/admin/verify-otp`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ username: user, otp: otp })
+                });
+                const data = await res.json();
+                if (res.ok) {
+                    document.getElementById('step-verify').classList.add('hidden');
+                    document.getElementById('step-final').classList.remove('hidden');
+                } else {
+                    err.textContent = data.detail || "Invalid OTP.";
+                    err.classList.remove('hidden');
+                }
+            } catch (e) {
+                err.textContent = "Network error. Try again.";
+                err.classList.remove('hidden');
+            } finally {
+                btn.disabled = false;
+            }
+        }
+
+        async function finalizeReset() {
+            const user = document.getElementById('resetUser').value;
+            const otp = document.getElementById('resetOTP').value;
+            const pass = document.getElementById('newPassword').value;
+            const btn = document.getElementById('finalizeResetBtn');
+            const err = document.getElementById('resetError');
+
+            if (pass.length < 6) {
+                err.textContent = "Password must be at least 6 characters.";
+                err.classList.remove('hidden');
+                return;
+            }
+
+            btn.disabled = true;
+            try {
+                const res = await fetch(`${API_BASE}/admin/reset-password`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ username: user, otp: otp, new_password: pass })
+                });
+                if (res.ok) {
+                    showToast('Password updated! Please sign in.', 'success');
+                    closeResetModal();
+                } else {
+                    const data = await res.json();
+                    err.textContent = data.detail || "Failed to update password.";
+                    err.classList.remove('hidden');
+                }
+            } catch (e) {
+                err.textContent = "Network error.";
+                err.classList.remove('hidden');
+            } finally {
+                btn.disabled = false;
+            }
+        }
+    </script>
+</body>
+
+</html>
