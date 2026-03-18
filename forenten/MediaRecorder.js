@@ -259,7 +259,9 @@ class VideoRecorder {
         formData.append('interview_id', interviewId);
         formData.append('question_id', questionId);
 
-        const response = await fetch('http://127.0.0.1:8000/transcribe', {
+        // Use the globally defined API_BASE_URL if available, else fallback to localhost
+        const baseUrl = window.API_BASE_URL || "https://localhost:8000";
+        const response = await fetch(`${baseUrl}/transcribe`, {
             method: 'POST',
             body: formData
         });

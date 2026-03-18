@@ -1019,9 +1019,37 @@
             <p style="font-size: 1.1rem; color: #4b5563; max-width: 500px; margin: 0 auto 2.5rem;">
                 Your recording has been safe-stored. You may now safely close this window or exit the browser. 
             </p>
-            <button onclick="window.close()" class="btn" style="background: #1e293b; color: white; padding: 1rem 2.5rem; border-radius: 12px; font-weight: 600; cursor: pointer; transition: all 0.2s;">
+            <button id="finalExitBtn" onclick="tryCloseWindow()" class="btn" style="background: #1e293b; color: white; padding: 1rem 2.5rem; border-radius: 12px; font-weight: 600; cursor: pointer; transition: all 0.2s;">
                 Exit Now
             </button>
+            <script>
+                function tryCloseWindow() {
+                    // 1. Explicitly exit full screen if active
+                    if (document.fullscreenElement) {
+                        try { document.exitFullscreen(); } catch (e) {}
+                    }
+                    
+                    // 2. Try to close the tab
+                    window.close();
+                    
+                    // 3. Common workaround for browsers that block window.close()
+                    setTimeout(() => {
+                        window.open('', '_self', ''); 
+                        window.close();
+                    }, 100);
+
+                    // 4. Final Fallback: Redirect if tab is still open after 1 second
+                    setTimeout(() => {
+                        const message = "Thanks! Your interview is complete. You can now close this tab safely.";
+                        document.body.innerHTML = `
+                            <div style="display:flex; flex-direction:column; align-items:center; justify-content:center; height:100vh; font-family:sans-serif; text-align:center;">
+                                <h1 style="color:#6366f1;">All Done!</h1>
+                                <p style="font-size:1.2rem; color:#4b5563;">${message}</p>
+                            </div>
+                        `;
+                    }, 500);
+                }
+            </script>
         </div>
     </div>
 
@@ -1305,9 +1333,10 @@
 
         // CONFIGURATION: Change this to your Render URL after deployment
         // e.g. "https://your-app-name.onrender.com"
-        const API_BASE_URL = window.location.hostname === "127.0.0.1" || window.location.hostname === "localhost"
+        window.API_BASE_URL = window.location.hostname === "127.0.0.1" || window.location.hostname === "localhost"
             ? "https://localhost:8000"
-            : "https://ai-powered-mock-interview-cpck.onrender.com";
+            : "https://ai-adaptive-interview.onrender.com";
+        const API_BASE_URL = window.API_BASE_URL; // Keep local name too for convenience
 
         // ─── Mic Status Indicator ────────────────────────────────────────────────
         // States: 'waiting' | 'listening' | 'processing'
@@ -1664,7 +1693,7 @@
 
                     // Add a 25-second timeout (handles Render cold starts)
                     const controller = new AbortController();
-                    const timeoutId = setTimeout(() => controller.abort(), 25000);
+                    const timeoutId = setTimeout(() => controller.abort(), 60000);
 
                     const response = await fetch(`${API_BASE_URL}/start-session-interview`, {
                         method: 'POST',
@@ -2070,9 +2099,7 @@
 
         // 1. ADD THESE GLOBAL VARIABLES AT THE TOP OF YOUR SCRIPT
         let chunks = []; // Stores the audio/video data
-        const API_BASE = (window.location.hostname === "127.0.0.1" || window.location.hostname === "localhost")
-            ? "https://localhost:8000"
-            : "https://ai-adaptive-interview.onrender.com";
+
 
         // Start recording using VideoRecorder class
         async function startRecording() {
@@ -2276,67 +2303,76 @@
             // Interview complete
             showStatus('Ending interview and saving results...', 'info');
 
-            // Save current answer if any and not already saved
-            if (!alreadySaved) {
-                const currentAnswer = document.getElementById('transcriptionBox').value.trim();
-                if (currentAnswer) {
-                    await saveCurrentAnswer();
-                    await saveBehavioralData(currentInterviewId, currentQuestionId, currentAnswer);
-                }
-            }
-
-            // Stop any active recording
-            if (videoRecorder && videoRecorder.isRecording) {
-                await videoRecorder.stopRecording();
-            }
-
-            // --- CRITICAL: Mark session as completed BEFORE starting large video upload ---
-            try {
-                const urlParams = new URLSearchParams(window.location.search);
-                const sessionId = urlParams.get('session_id') || urlParams.get('session');
-                if (sessionId) {
-                    console.log("Marking session as completed in DB...");
-                    await fetch(`${API_BASE_URL}/complete-session/${sessionId}`, { method: 'POST' });
-                }
-            } catch (e) {
-                console.error('Failed to mark session complete:', e);
-            }
-
-            // Hide interview and system status area to avoid confusion
+            // --- UI TRANSITION ---
+            // Move this UP so the user immediately sees the end screen
             document.getElementById('interviewSection').classList.add('hidden');
             document.getElementById('status').classList.add('hidden'); // Hide the generic status bar
             document.getElementById('resultsSection').classList.remove('hidden');
             updateProgress(100);
             document.getElementById('globalCountdown').textContent = '00:00';
 
-            // Stop and save full session recording in background
-            if (currentInterviewId) {
-                showStatus('Uploading video recording... please do not close the tab yet.', 'info');
-                try {
-                    await stopAndSaveFullSessionRecording(currentInterviewId);
-                    // SUCCESS
-                    document.getElementById('uploadStatusContainer').classList.add('hidden');
-                    document.getElementById('finalClosureMessage').classList.remove('hidden');
-                    showStatus('Recording saved successfully!', 'success');
-                } catch (e) {
-                    console.error("Video upload failed but interview data saved", e);
-                    document.getElementById('uploadStatusContainer').innerHTML = `
-                        <p style="color: var(--danger-color); font-weight: bold;">
-                            ⚠️ Note: There was an issue saving the video recording, but your interview responses have been submitted successfully.
-                        </p>
-                        <p>You may now close the window.</p>
-                    `;
-                }
-            } else {
-                // If no recording id, just show the final message
-                document.getElementById('uploadStatusContainer').classList.add('hidden');
-                document.getElementById('finalClosureMessage').classList.remove('hidden');
-            }
-
+            // Disable controls
             document.getElementById('nextButton').disabled = true;
             document.getElementById('startButton').disabled = true;
             document.getElementById('stopButton').disabled = true;
             if (document.getElementById('skipButton')) document.getElementById('skipButton').style.display = 'none';
+
+            // Perform remaining tasks IN THE BACKGROUND (don't block the screen)
+            (async () => {
+                // Save current answer if any and not already saved
+                if (!alreadySaved) {
+                    const currentAnswer = document.getElementById('transcriptionBox').value.trim();
+                    if (currentAnswer) {
+                        try {
+                           await saveCurrentAnswer();
+                           await saveBehavioralData(currentInterviewId, currentQuestionId, currentAnswer);
+                        } catch (e) {
+                           console.error('Error saving final data:', e);
+                        }
+                    }
+                }
+
+                // Stop any active recording
+                if (videoRecorder && videoRecorder.isRecording) {
+                    try { await videoRecorder.stopRecording(); } catch (e) { console.error('Error stopping recorder:', e); }
+                }
+
+                // --- CRITICAL: Mark session as completed ---
+                try {
+                    const urlParams = new URLSearchParams(window.location.search);
+                    const sessionId = urlParams.get('session_id') || urlParams.get('session');
+                    if (sessionId) {
+                        console.log("Marking session as completed in DB...");
+                        await fetch(`${API_BASE_URL}/complete-session/${sessionId}`, { method: 'POST' });
+                    }
+                } catch (e) {
+                    console.error('Failed to mark session complete:', e);
+                }
+
+                // Stop and save full session recording in background
+                if (currentInterviewId) {
+                    showStatus('Uploading video recording... please do not close the tab yet.', 'info');
+                    try {
+                        await stopAndSaveFullSessionRecording(currentInterviewId);
+                        // SUCCESS
+                        document.getElementById('uploadStatusContainer').classList.add('hidden');
+                        document.getElementById('finalClosureMessage').classList.remove('hidden');
+                        showStatus('Recording saved successfully!', 'success');
+                    } catch (e) {
+                        console.error("Video upload failed but interview data saved", e);
+                        document.getElementById('uploadStatusContainer').innerHTML = `
+                            <p style="color: var(--danger-color); font-weight: bold;">
+                                ⚠️ Note: There was an issue saving the video recording, but your interview responses have been submitted successfully.
+                            </p>
+                            <p>You may now close the window.</p>
+                        `;
+                    }
+                } else {
+                    // If no recording id, just show the final message
+                    document.getElementById('uploadStatusContainer').classList.add('hidden');
+                    document.getElementById('finalClosureMessage').classList.remove('hidden');
+                }
+            })();
         }
 
         function updateProgress(percent) {
