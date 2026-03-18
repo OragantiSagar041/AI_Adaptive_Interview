@@ -50,8 +50,8 @@ app.add_middleware(
         "http://localhost:8000",
         "http://127.0.0.1:8000",
         "https://ai-adaptive-interview.vercel.app",
-        "https://ai-adaptive-interview-41jaiumab-oragantisagar041s-projects.vercel.app"
     ],
+    allow_origin_regex=r"https://ai-adaptive-interview-.*-oragantisagar041s-projects\.vercel\.app",
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
