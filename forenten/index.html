@@ -45,66 +45,434 @@
             font-size: 2.5rem;
         }
 
-        /* Layout Grid for Interview Section */
+        /* ─── Google Fonts ─── */
+        @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap');
+
+        /* ─── Interview Panel Layout ─── */
         #interviewSection {
             display: grid;
-            grid-template-columns: 1fr 1fr;
-            gap: 2rem;
+            grid-template-columns: 380px 1fr;
+            gap: 1.5rem;
             align-items: start;
         }
 
-        /* Responsive Design / Adaptability */
-        @media (max-width: 1024px) {
-            .container {
-                max-width: 100vw;
-                padding: 1rem;
-            }
+        /* ─── Left Column ─── */
+        .ip-left {
+            display: flex;
+            flex-direction: column;
+            gap: 1rem;
         }
 
+        /* AI Avatar Card */
+        .ip-avatar-card {
+            background: #fff;
+            border-radius: 16px;
+            overflow: hidden;
+            box-shadow: 0 4px 20px rgba(0,0,0,0.08);
+            position: relative;
+        }
+        .ip-avatar-card .live-badge {
+            position: absolute;
+            bottom: 12px;
+            left: 12px;
+            background: #ef4444;
+            color: #fff;
+            font-size: 0.7rem;
+            font-weight: 700;
+            letter-spacing: 0.08em;
+            padding: 3px 10px;
+            border-radius: 20px;
+            display: flex;
+            align-items: center;
+            gap: 5px;
+        }
+        .ip-avatar-card .live-badge::before {
+            content: '';
+            width: 7px;
+            height: 7px;
+            background: #fff;
+            border-radius: 50%;
+            display: inline-block;
+            animation: livePulse 1.2s infinite;
+        }
+        @keyframes livePulse {
+            0%,100% { opacity: 1; }
+            50% { opacity: 0.3; }
+        }
+        .ip-avatar-card video,
+        .ip-avatar-card img {
+            width: 100%;
+            height: 230px;
+            object-fit: cover;
+            display: block;
+        }
+
+        /* AI Analyzing Card */
+        .ip-analyzing-card {
+            background: #fff;
+            border-radius: 14px;
+            padding: 0.9rem 1.1rem;
+            box-shadow: 0 2px 12px rgba(0,0,0,0.07);
+            display: flex;
+            align-items: center;
+            gap: 0.9rem;
+        }
+        .ip-analyzing-icon {
+            width: 40px;
+            height: 40px;
+            border-radius: 50%;
+            background: linear-gradient(135deg,#6366f1,#8b5cf6);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            flex-shrink: 0;
+        }
+        .ip-analyzing-icon svg { color: #fff; }
+        .ip-analyzing-text h4 {
+            margin: 0;
+            font-size: 0.92rem;
+            font-weight: 700;
+            color: #1f2937;
+        }
+        .ip-analyzing-text p {
+            margin: 2px 0 0;
+            font-size: 0.78rem;
+            color: #6b7280;
+        }
+        .ip-audio-bars {
+            margin-left: auto;
+            display: flex;
+            align-items: flex-end;
+            gap: 3px;
+            height: 24px;
+        }
+        .ip-audio-bars span {
+            width: 4px;
+            border-radius: 2px;
+            background: #10b981;
+            animation: audioBar 0.8s ease-in-out infinite alternate;
+        }
+        .ip-audio-bars span:nth-child(1) { height: 8px;  animation-delay: 0s; }
+        .ip-audio-bars span:nth-child(2) { height: 18px; animation-delay: 0.15s; }
+        .ip-audio-bars span:nth-child(3) { height: 12px; animation-delay: 0.3s; }
+        .ip-audio-bars span:nth-child(4) { height: 22px; animation-delay: 0.1s; }
+        @keyframes audioBar {
+            from { transform: scaleY(0.4); }
+            to   { transform: scaleY(1); }
+        }
+
+        /* Timer Card */
+        .ip-timer-card {
+            background: #fff;
+            border-radius: 14px;
+            padding: 1.2rem;
+            box-shadow: 0 2px 12px rgba(0,0,0,0.07);
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            gap: 1rem;
+        }
+        .ip-timer-ring {
+            position: relative;
+            width: 110px;
+            height: 110px;
+        }
+        .ip-timer-ring svg {
+            transform: rotate(-90deg);
+        }
+        .ip-timer-ring circle.track {
+            fill: none;
+            stroke: #e5e7eb;
+            stroke-width: 8;
+        }
+        .ip-timer-ring circle.fill {
+            fill: none;
+            stroke: url(#timerGradient);
+            stroke-width: 8;
+            stroke-linecap: round;
+            stroke-dasharray: 295.3;
+            stroke-dashoffset: 0;
+            transition: stroke-dashoffset 1s linear;
+        }
+        .ip-timer-label {
+            position: absolute;
+            inset: 0;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+        }
+        .ip-timer-label #globalCountdown {
+            font-size: 1.25rem;
+            font-weight: 800;
+            color: #1f2937;
+            font-family: monospace;
+            line-height: 1;
+        }
+        .ip-timer-label span.remaining-lbl {
+            font-size: 0.6rem;
+            color: #9ca3af;
+            text-transform: uppercase;
+            letter-spacing: 0.05em;
+            margin-top: 2px;
+        }
+        .ip-end-btn {
+            display: inline-flex;
+            align-items: center;
+            gap: 0.5rem;
+            background: #1f2937;
+            color: #fff;
+            border: none;
+            border-radius: 30px;
+            padding: 0.6rem 1.4rem;
+            font-size: 0.88rem;
+            font-weight: 600;
+            cursor: pointer;
+            transition: background 0.2s, transform 0.15s;
+        }
+        .ip-end-btn:hover {
+            background: #111827;
+            transform: translateY(-1px);
+        }
+
+        /* AI Insights Card */
+        .ip-insights-card {
+            background: #fff;
+            border-radius: 14px;
+            padding: 1.1rem 1.2rem;
+            box-shadow: 0 2px 12px rgba(0,0,0,0.07);
+        }
+        .ip-insights-card h4 {
+            margin: 0 0 0.9rem;
+            font-size: 0.95rem;
+            font-weight: 700;
+            color: #1f2937;
+        }
+        .insight-row {
+            margin-bottom: 0.75rem;
+        }
+        .insight-row-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 4px;
+        }
+        .insight-label {
+            font-size: 0.72rem;
+            font-weight: 700;
+            letter-spacing: 0.05em;
+            color: #374151;
+        }
+        .insight-value {
+            font-size: 0.78rem;
+            font-weight: 700;
+        }
+        .insight-bar-track {
+            height: 7px;
+            background: #e5e7eb;
+            border-radius: 999px;
+            overflow: hidden;
+        }
+        .insight-bar-fill {
+            height: 100%;
+            border-radius: 999px;
+            transition: width 1s ease;
+        }
+        .insight-bar-fill.clarity    { background: linear-gradient(90deg,#10b981,#34d399); }
+        .insight-bar-fill.techDepth  { background: linear-gradient(90deg,#6366f1,#818cf8); }
+        .insight-bar-fill.confidence { background: linear-gradient(90deg,#f59e0b,#fcd34d); }
+
+        .ip-ai-tip {
+            margin-top: 0.85rem;
+            background: #eef2ff;
+            border-radius: 8px;
+            padding: 0.65rem 0.85rem;
+            font-size: 0.78rem;
+            color: #4338ca;
+            line-height: 1.5;
+        }
+        .ip-ai-tip strong { color: #4338ca; }
+
+        /* ─── Right Column ─── */
+        .ip-right {
+            display: flex;
+            flex-direction: column;
+            gap: 1rem;
+        }
+
+        /* Question Card */
+        .ip-question-card {
+            background: #fff;
+            border-radius: 16px;
+            padding: 1.4rem 1.5rem;
+            box-shadow: 0 4px 20px rgba(0,0,0,0.07);
+        }
+        .ip-question-meta {
+            display: flex;
+            gap: 0.5rem;
+            justify-content: flex-end;
+            margin-bottom: 0.9rem;
+        }
+        .ip-tag {
+            padding: 0.25rem 0.85rem;
+            border-radius: 999px;
+            font-size: 0.78rem;
+            font-weight: 500;
+        }
+        .ip-tag.type    { background: #e0e7ff; color: #4338ca; }
+        .ip-tag.difficulty { background: #dcfce7; color: #166534; }
+
+        .ip-question-body {
+            display: flex;
+            gap: 0.8rem;
+            align-items: flex-start;
+        }
+        .ip-question-body .q-bar {
+            width: 4px;
+            min-height: 60px;
+            border-radius: 2px;
+            background: #6366f1;
+            flex-shrink: 0;
+        }
+        .ip-question-body #questionText {
+            flex: 1;
+            font-size: 1.08rem;
+            font-weight: 500;
+            color: #111827;
+            line-height: 1.65;
+            margin: 0;
+        }
+        .ip-mute-btn {
+            background: none;
+            border: none;
+            cursor: pointer;
+            padding: 6px;
+            border-radius: 50%;
+            color: #6b7280;
+            transition: color 0.2s;
+            flex-shrink: 0;
+        }
+        .ip-mute-btn:hover { color: #ef4444; }
+
+        /* Live Transcript Card */
+        .ip-transcript-card {
+            background: #fff;
+            border-radius: 16px;
+            padding: 1.2rem 1.4rem;
+            box-shadow: 0 4px 20px rgba(0,0,0,0.07);
+        }
+        .ip-transcript-header {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            margin-bottom: 0.85rem;
+        }
+        .ip-transcript-title {
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+            font-size: 0.95rem;
+            font-weight: 700;
+            color: #1f2937;
+        }
+        .ip-recording-badge {
+            display: flex;
+            align-items: center;
+            gap: 5px;
+            background: #fff1f2;
+            border: 1px solid #fecaca;
+            color: #ef4444;
+            font-size: 0.72rem;
+            font-weight: 700;
+            padding: 3px 10px;
+            border-radius: 20px;
+            letter-spacing: 0.06em;
+        }
+        .ip-recording-badge .rec-dot {
+            width: 7px;
+            height: 7px;
+            background: #ef4444;
+            border-radius: 50%;
+            animation: livePulse 1s infinite;
+        }
+        .ip-transcript-box {
+            background: #f8fafc;
+            border: 1px solid #e5e7eb;
+            border-radius: 10px;
+            padding: 0.85rem 1rem;
+            min-height: 90px;
+            font-size: 0.9rem;
+            color: #374151;
+            font-family: inherit;
+            resize: vertical;
+            width: 100%;
+            box-sizing: border-box;
+        }
+
+        /* Nav Buttons */
+        .ip-nav-row {
+            display: flex;
+            align-items: center;
+            gap: 0.6rem;
+        }
+        .ip-btn-prev {
+            background: #f3f4f6;
+            color: #374151;
+            border: none;
+            border-radius: 8px;
+            padding: 0.6rem 1.1rem;
+            font-weight: 600;
+            font-size: 0.9rem;
+            cursor: pointer;
+            transition: background 0.2s;
+        }
+        .ip-btn-prev:hover:not(:disabled)  { background: #e5e7eb; }
+        .ip-btn-next {
+            background: #10b981;
+            color: #fff;
+            border: none;
+            border-radius: 8px;
+            padding: 0.6rem 1.5rem;
+            font-weight: 700;
+            font-size: 0.9rem;
+            cursor: pointer;
+            flex: 1;
+            transition: background 0.2s, transform 0.15s;
+        }
+        .ip-btn-next:hover:not(:disabled)  { background: #059669; transform: translateY(-1px); }
+        .ip-btn-skip {
+            background: #1f2937;
+            color: #fff;
+            border: none;
+            border-radius: 8px;
+            padding: 0.6rem 1.1rem;
+            font-weight: 600;
+            font-size: 0.9rem;
+            cursor: pointer;
+            transition: background 0.2s;
+            margin-left: auto;
+        }
+        .ip-btn-skip:hover:not(:disabled) { background: #374151; }
+        button:disabled { opacity: 0.45; cursor: not-allowed; }
+
+        /* Status bar under mic */
+        .ip-mic-status-bar {
+            display: flex;
+            align-items: center;
+            gap: 0.6rem;
+            font-size: 0.85rem;
+            color: #6b7280;
+            font-weight: 500;
+        }
+
+        /* Responsive */
+        @media (max-width: 1024px) {
+            #interviewSection { grid-template-columns: 320px 1fr; }
+        }
         @media (max-width: 768px) {
-
-            /* Mobile & Tablet Portrait */
-            h1 {
-                font-size: 1.75rem;
-                margin-bottom: 1.5rem;
-            }
-
-            #interviewSection {
-                grid-template-columns: 1fr;
-                /* Stack columns */
-                gap: 1.5rem;
-            }
-
-            .card {
-                padding: 1rem;
-            }
-
-            /* Make buttons touch-friendly */
-            .btn {
-                padding: 12px 16px;
-                flex: 1;
-                /* Stretch buttons */
-                font-size: 0.95rem;
-            }
-
-            .controls {
-                flex-wrap: wrap;
-                gap: 0.8rem;
-            }
-
-            /* Adjust header for small screens */
-            .question-header {
-                flex-direction: column;
-                align-items: flex-start;
-                gap: 0.5rem;
-            }
-
-            /* Ensure video doesn't overflow */
-            .video-container {
-                width: 100%;
-                max-height: 60vh;
-                /* Prevent taking up too much vertical space */
-            }
+            h1 { font-size: 1.75rem; }
+            #interviewSection { grid-template-columns: 1fr; }
+            .ip-avatar-card video, .ip-avatar-card img { height: 200px; }
         }
 
         .card,
@@ -435,110 +803,179 @@
         </div>
         <!-- Interview Section (initially hidden) -->
         <div id="interviewSection" class="hidden">
-            <!-- Left Column: Question & Content -->
-            <div class="card">
-                <div class="question-header"
-                    style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 1rem;">
-                    <h3 style="margin:0;">Question <span id="questionNumber">1</span> of <span
-                            id="totalQuestions">?</span></h3>
-                    <div class="question-meta">
-                        <span class="question-type" id="questionType">General</span>
-                        <span class="question-difficulty" id="questionDifficulty">Medium</span>
+
+            <!-- SVG gradient for the timer ring -->
+            <svg width="0" height="0" style="position:absolute">
+                <defs>
+                    <linearGradient id="timerGradient" x1="0%" y1="0%" x2="100%" y2="0%">
+                        <stop offset="0%"   stop-color="#6366f1"/>
+                        <stop offset="100%" stop-color="#8b5cf6"/>
+                    </linearGradient>
+                </defs>
+            </svg>
+
+            <!-- ═══ LEFT COLUMN ═══ -->
+            <div class="ip-left">
+
+                <!-- AI Avatar (user webcam) -->
+                <div class="ip-avatar-card">
+                    <video id="videoPreview" autoplay muted playsinline></video>
+                    <button id="cameraFallbackBtn" onclick="startCameraManual()" class="btn btn-primary"
+                        style="position:absolute;top:50%;left:50%;transform:translate(-50%,-50%);z-index:2;display:none;">
+                        Enable Camera
+                    </button>
+                    <div id="cameraLoading" style="position:absolute;top:50%;left:50%;transform:translate(-50%,-50%);color:#fff;z-index:0;font-size:0.85rem;">Waiting for camera...</div>
+                    <div class="live-badge">LIVE</div>
+
+                    <!-- Face Detection Warning -->
+                    <div id="faceWarning"
+                        style="position:absolute;top:0;left:0;width:100%;height:100%;background:rgba(0,0,0,0.8);color:#ef4444;display:none;align-items:center;justify-content:center;z-index:10;font-size:1.2rem;font-weight:bold;flex-direction:column;text-align:center;padding:20px;">
+                        <span style="font-size:3rem;margin-bottom:10px;">⚠️</span>
+                        <div>YOUR FACE IS NOT VISIBLE</div>
+                        <div style="font-size:0.9rem;color:#ccc;margin-top:5px;font-weight:normal;">Please adjust your camera</div>
                     </div>
                 </div>
 
-                <div class="question-display"
-                    style="display: flex; gap: 10px; align-items: flex-start; margin-bottom: 20px;">
-                    <p id="questionText" style="flex: 1; margin: 0; font-size: 1.1rem;">Loading question...</p>
-                    <button id="toggleSpeechBtn" onclick="toggleSpeech()" class="btn"
-                        style="background:none; border: 1px solid #ccc; color: #333; padding: 5px; border-radius: 50%; width: 40px; height: 40px; display: flex; align-items: center; justify-content: center; cursor: pointer;"
-                        title="Read Question Aloud">
-                        <svg id="speechIcon" xmlns="http://www.w3.org/2000/svg" width="20" height="20"
-                            viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
-                            stroke-linecap="round" stroke-linejoin="round">
-                            <polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5"></polygon>
-                            <path d="M15.54 8.46a5 5 0 0 1 0 7.07"></path>
-                            <path d="M19.07 4.93a10 10 0 0 1 0 14.14"></path>
+                <!-- AI Analyzing Status -->
+                <div class="ip-analyzing-card">
+                    <div class="ip-analyzing-icon">
+                        <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="white" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                            <circle cx="12" cy="8" r="4"/><path d="M6 20v-2a6 6 0 0 1 12 0v2"/>
                         </svg>
+                    </div>
+                    <div class="ip-analyzing-text">
+                        <h4>AI Analyzing</h4>
+                        <p id="micStatusText">Listening Keywords</p>
+                    </div>
+                    <div class="ip-audio-bars">
+                        <span></span><span></span><span></span><span></span>
+                    </div>
+                </div>
+
+                <!-- Circular Timer -->
+                <div class="ip-timer-card">
+                    <div class="ip-timer-ring">
+                        <svg width="110" height="110" viewBox="0 0 110 110">
+                            <circle class="track" cx="55" cy="55" r="47"/>
+                            <circle class="fill" id="timerRingFill" cx="55" cy="55" r="47"/>
+                        </svg>
+                        <div class="ip-timer-label">
+                            <span id="globalCountdown">--:--</span>
+                            <span class="remaining-lbl">Remaining</span>
+                        </div>
+                    </div>
+                    <button class="ip-end-btn" onclick="endInterview()">
+                        ⏹ End Interview
                     </button>
                 </div>
 
-                <div class="transcription-container" id="transcriptionContainer"
-                    style="margin-top: 15px; border: 1px solid #ddd; padding: 10px; border-radius: 8px; background: #f9fafb;">
-                    <h4 style="margin: 0 0 10px 0; font-size: 0.9rem; color: #666;"><i class="fas fa-circle" style="color: #ef4444; font-size: 0.7rem; vertical-align: middle; margin-top: -2px;"></i> Live Transcript</h4>
-                    <div
-                        style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 5px;">
-                        <div id="transcription" style="font-style: italic; color: #2563eb; font-size: 0.8rem;"></div>
-                        <canvas id="audioVisualizer" width="100" height="20"
-                            style="background: #e5e7eb; border-radius: 4px;"></canvas>
+                <!-- AI Insights -->
+                <div class="ip-insights-card">
+                    <h4>AI Insights</h4>
+
+                    <div class="insight-row">
+                        <div class="insight-row-header">
+                            <span class="insight-label">CLARITY</span>
+                            <span class="insight-value" id="insightClarity" style="color:#10b981;">--</span>
+                        </div>
+                        <div class="insight-bar-track">
+                            <div class="insight-bar-fill clarity" id="insightClarityBar" style="width:0%"></div>
+                        </div>
                     </div>
-                    <textarea id="transcriptionBox"
-                        style="width: 100%; height: 100px; padding: 8px; border: 1px solid #e5e7eb; border-radius: 6px; resize: vertical; font-family: inherit;"
+
+                    <div class="insight-row">
+                        <div class="insight-row-header">
+                            <span class="insight-label">TECHNICAL DEPTH</span>
+                            <span class="insight-value" id="insightTech" style="color:#6366f1;">--</span>
+                        </div>
+                        <div class="insight-bar-track">
+                            <div class="insight-bar-fill techDepth" id="insightTechBar" style="width:0%"></div>
+                        </div>
+                    </div>
+
+                    <div class="insight-row">
+                        <div class="insight-row-header">
+                            <span class="insight-label">CONFIDENCE</span>
+                            <span class="insight-value" id="insightConf" style="color:#f59e0b;">--</span>
+                        </div>
+                        <div class="insight-bar-track">
+                            <div class="insight-bar-fill confidence" id="insightConfBar" style="width:0%"></div>
+                        </div>
+                    </div>
+
+                    <div class="ip-ai-tip" id="aiTipBox">
+                        <strong>AI Tip:</strong> Speak clearly and structure your answer with a beginning, middle, and conclusion.
+                    </div>
+                </div>
+
+                <!-- Hidden stubs so existing JS still works -->
+                <button id="startButton" style="display:none;"></button>
+                <button id="stopButton" style="display:none;"></button>
+                <!-- Hidden mic pulse dot for existing setMicState() JS -->
+                <span id="micPulse" style="display:none;"></span>
+                <!-- Timer display kept for stopRecordingTimer() CSS resets -->
+                <div id="timerDisplay" style="display:none;">00:00</div>
+                <!-- Audio visualizer canvas (kept hidden, used by audio code) -->
+                <canvas id="audioVisualizer" width="100" height="20" style="display:none;"></canvas>
+                <!-- Transcription interim text (kept for JS) -->
+                <div id="transcription" style="display:none;"></div>
+            </div>
+
+            <!-- ═══ RIGHT COLUMN ═══ -->
+            <div class="ip-right">
+
+                <!-- Question Card -->
+                <div class="ip-question-card">
+                    <!-- Question number info (subtle) -->
+                    <div style="font-size:0.78rem;color:#9ca3af;font-weight:600;margin-bottom:0.5rem;">
+                        Question <span id="questionNumber">1</span> of <span id="totalQuestions">?</span>
+                    </div>
+
+                    <!-- Type / Difficulty badges -->
+                    <div class="ip-question-meta">
+                        <span class="ip-tag type" id="questionType">General</span>
+                        <span class="ip-tag difficulty" id="questionDifficulty">Medium</span>
+                    </div>
+
+                    <!-- Question text + mute button -->
+                    <div class="ip-question-body">
+                        <div class="q-bar"></div>
+                        <p id="questionText">Loading question...</p>
+                        <button id="toggleSpeechBtn" class="ip-mute-btn" onclick="toggleSpeech()" title="Toggle question audio">
+                            <svg id="speechIcon" xmlns="http://www.w3.org/2000/svg" width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                                <line x1="1" y1="1" x2="23" y2="23"/>
+                                <path d="M9 9v3a3 3 0 0 0 5.12 2.12M15 9.34V4a3 3 0 0 0-5.94-.6"/>
+                                <path d="M17 16.95A7 7 0 0 1 5 12v-2m14 0v2a7 7 0 0 1-.11 1.23"/>
+                                <line x1="12" y1="19" x2="12" y2="23"/>
+                                <line x1="8" y1="23" x2="16" y2="23"/>
+                            </svg>
+                        </button>
+                    </div>
+                </div>
+
+                <!-- Live Transcript Card -->
+                <div class="ip-transcript-card" id="transcriptionContainer">
+                    <div class="ip-transcript-header">
+                        <div class="ip-transcript-title">
+                            🎙 Live Transcript
+                        </div>
+                        <div class="ip-recording-badge" id="recordingStatusBar">
+                            <div class="rec-dot"></div>
+                            RECORDING
+                        </div>
+                    </div>
+                    <textarea id="transcriptionBox" class="ip-transcript-box"
                         placeholder="Your speech will appear here automatically..." readonly></textarea>
                 </div>
 
+                <!-- Navigation -->
+                <div class="ip-nav-row">
+                    <button id="prevButton" onclick="prevQuestion()" class="ip-btn-prev">← Prev</button>
+                    <button id="nextButton" onclick="nextQuestion()" class="ip-btn-next" disabled>Next →</button>
+                    <button id="skipButton" class="ip-btn-skip">Skip</button>
+                </div>
+
             </div>
-
-            <!-- Right Column: Recording & Interaction -->
-            <div class="card">
-                <h3><i class="fas fa-video"></i> Your Response</h3>
-
-                <div class="video-container"
-                    style="background: #000; position: relative; display: flex; align-items: center; justify-content: center;">
-                    <video id="videoPreview" autoplay muted playsinline
-                        style="width: 100%; height: 100%; object-fit: cover; z-index: 1;"></video>
-                    <button id="cameraFallbackBtn" onclick="startCameraManual()" class="btn btn-primary"
-                        style="position: absolute; z-index: 2; display: none;">
-                        <i class="fas fa-camera"></i> Enable Camera
-                    </button>
-                    <div id="cameraLoading" style="position: absolute; color: white; z-index: 0;">Waiting for camera...
-                    </div>
-
-                    <!-- Face Detection Warning Overlay -->
-                    <div id="faceWarning"
-                        style="position: absolute; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.8); color: #ef4444; display: none; align-items: center; justify-content: center; z-index: 10; font-size: 1.5rem; font-weight: bold; flex-direction: column; text-align: center; padding: 20px;">
-                        <span style="font-size: 4rem; margin-bottom: 10px;"><i class="fas fa-exclamation-triangle"></i></span>
-                        <div>YOUR FACE IS NOT VISIBLE</div>
-                        <div style="font-size: 1rem; color: #ccc; margin-top: 5px; font-weight: normal;">Please adjust
-                            your camera</div>
-                    </div>
-
-                </div>
-
-                <!-- Auto-Recording Status Bar -->
-                <div id="recordingStatusBar"
-                    style="display: flex; align-items: center; justify-content: center; gap: 1rem; margin-top: 1rem; padding: 1rem; background: #ffffff; border-radius: 12px; box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);">
-                    <div id="micIndicator" style="display: flex; align-items: center; gap: 0.6rem;">
-                        <span id="micPulse" style="
-                            display: inline-block; width: 14px; height: 14px;
-                            border-radius: 50%; background: #9ca3af;
-                            transition: background 0.3s;
-                        "></span>
-                        <span id="micStatusText" style="font-size: 0.95rem; color: #6b7280; font-weight: 500;">
-                            <i class="fas fa-robot"></i> Waiting for AI...
-                        </span>
-                    </div>
-                    <div id="timerDisplay"
-                        style="font-size: 1.4rem; font-weight: bold; color: #374151; font-family: monospace; border: 2px solid #e5e7eb; padding: 4px 12px; border-radius: 6px; background: #f9fafb;">
-                        00:00
-                    </div>
-                </div>
-                <!-- Hidden stubs — IDs kept so existing JS still works -->
-                <button id="startButton" style="display:none;"></button>
-                <button id="stopButton" style="display:none;"></button>
-
-                <div style="display: flex; gap: 0.5rem; margin-top: 1rem;">
-                    <button id="prevButton" onclick="prevQuestion()" class="btn"
-                        style="background: #9ca3af; color: white;"><i class="fas fa-arrow-left"></i> Prev</button>
-                    <button id="skipButton" class="btn btn-skip">Skip</button>
-                    <button id="nextButton" onclick="nextQuestion()" class="btn" disabled
-                        style="background: var(--success-color); color: white; flex: 1;">
-                        Next <i class="fas fa-arrow-right"></i>
-                    </button>
-                </div>
-            </div>
-
-            <!-- Empty (Transcript Box was moved to the left card) -->
 
         </div> <!-- End of interviewSection -->
 
@@ -877,25 +1314,88 @@
         function setMicState(state) {
             const dot = document.getElementById('micPulse');
             const text = document.getElementById('micStatusText');
-            if (!dot || !text) return;
+            if (!text) return;
 
-            dot.classList.remove('mic-active', 'mic-waiting');
+            const bars = document.querySelector('.ip-audio-bars');
 
             if (state === 'listening') {
-                dot.classList.add('mic-active');
-                text.style.color = '#ef4444';
-                text.innerHTML = '🎤 Listening — speak your answer';
+                if (dot) { dot.classList.remove('mic-active','mic-waiting'); dot.classList.add('mic-active'); }
+                text.textContent = 'Listening Keywords';
+                text.style.color = '#10b981';
+                if (bars) bars.style.opacity = '1';
+                updateInsights(); // refresh bars
             } else if (state === 'processing') {
-                dot.classList.add('mic-waiting');
+                if (dot) { dot.classList.remove('mic-active','mic-waiting'); dot.classList.add('mic-waiting'); }
+                text.textContent = 'Saving Your Answer...';
                 text.style.color = '#f59e0b';
-                text.innerHTML = '⏳ Saving your answer...';
+                if (bars) bars.style.opacity = '0.4';
             } else {
                 // 'waiting' — AI is speaking
-                dot.classList.add('mic-waiting');
+                if (dot) { dot.classList.remove('mic-active','mic-waiting'); dot.classList.add('mic-waiting'); }
+                text.textContent = 'AI is Reading the Question...';
                 text.style.color = '#6b7280';
-                text.innerHTML = '🔊 AI is reading the question...';
+                if (bars) bars.style.opacity = '0.5';
             }
         }
+        // ────────────────────────────────────────────────────────────────────────
+
+        // ─── AI Insights bar updater ─────────────────────────────────────────────
+        const AI_TIPS = [
+            'Speak clearly and structure your answer with a beginning, middle, and conclusion.',
+            'Use specific examples from your experience to strengthen your answers.',
+            'Mention relevant technologies and frameworks you have worked with.',
+            'Take a brief pause before answering to organise your thoughts.',
+            'Quantify your achievements — numbers make answers more persuasive.',
+        ];
+        let _tipIndex = 0;
+
+        function updateInsights() {
+            // Derive pseudo-metrics from behavioral tracking state
+            const wc  = (_qTrack && _qTrack.wordCount)   || 0;
+            const fc  = (_qTrack && _qTrack.fillerCount)  || 0;
+            const pc  = (_qTrack && _qTrack.pauseCount)   || 0;
+            const fa  = (_qTrack && _qTrack.faceAlerts)   || 0;
+            const ts  = (_qTrack && _qTrack.tabSwitches)  || 0;
+
+            // Clarity: penalise filler words and pauses
+            const clarityRaw = Math.max(0, Math.min(100, 60 + wc * 0.5 - fc * 5 - pc * 3));
+            // Technical depth: driven by word count growth
+            const techRaw    = Math.max(0, Math.min(100, 30 + wc * 0.8));
+            // Confidence: penalise face alerts & tab switches
+            const confRaw    = Math.max(0, Math.min(100, 80 - fa * 8 - ts * 10 + (wc > 20 ? 10 : 0)));
+
+            const clarity = Math.round(clarityRaw);
+            const tech    = Math.round(techRaw);
+            const conf    = Math.round(confRaw);
+
+            const cEl = document.getElementById('insightClarity');
+            const tEl = document.getElementById('insightTech');
+            const kEl = document.getElementById('insightConf');
+            const cBar = document.getElementById('insightClarityBar');
+            const tBar = document.getElementById('insightTechBar');
+            const kBar = document.getElementById('insightConfBar');
+
+            if (cEl)  cEl.textContent  = clarity + '%';
+            if (tEl)  tEl.textContent  = tech + '%';
+            if (kEl)  kEl.textContent  = conf + '%';
+            if (cBar) cBar.style.width = clarity + '%';
+            if (tBar) tBar.style.width = tech + '%';
+            if (kBar) kBar.style.width = conf + '%';
+
+            // Rotate AI tips
+            const tipBox = document.getElementById('aiTipBox');
+            if (tipBox) {
+                tipBox.innerHTML = `<strong>AI Tip:</strong> ${AI_TIPS[_tipIndex % AI_TIPS.length]}`;
+            }
+        }
+
+        // Periodically refresh insights while interview is active
+        setInterval(() => {
+            if (currentInterviewId && !document.getElementById('interviewSection').classList.contains('hidden')) {
+                _tipIndex++;
+                updateInsights();
+            }
+        }, 8000);
         // ────────────────────────────────────────────────────────────────────────
 
 
@@ -1108,7 +1608,17 @@
             } else if (globalTimeRemaining <= 120) {
                 el.style.color = '#f59e0b';
             } else {
-                el.style.color = 'var(--primary-color, #7c3aed)';
+                el.style.color = '#1f2937';
+            }
+
+            // Animate the SVG ring: circumference = 2*pi*47 ≈ 295.3 (matches stroke-dasharray: 314 for r=50 => recalc for r=47)
+            const circumference = 2 * Math.PI * 47; // r=47 => ~295.3
+            const ring = document.getElementById('timerRingFill');
+            if (ring && globalTotalTime > 0) {
+                const ratio = globalTimeRemaining / globalTotalTime;
+                const dashOffset = circumference * (1 - ratio);
+                ring.style.strokeDasharray  = circumference;
+                ring.style.strokeDashoffset = dashOffset;
             }
         }
 
@@ -1135,7 +1645,15 @@
 
                 const statusDiv = document.getElementById('status');
                 if (statusDiv) {
-                    statusDiv.textContent = 'Loading interview session...';
+                    statusDiv.innerHTML = `
+                        <div style="text-align:center; padding: 2rem;">
+                            <div style="font-size:2rem; margin-bottom:1rem;">⏳</div>
+                            <div style="font-size:1.1rem; font-weight:600; color:#4f46e5;">Loading your interview session...</div>
+                            <div style="font-size:0.85rem; color:#6b7280; margin-top:0.5rem;">Please wait while we prepare your questions</div>
+                            <div id="sessionLoadProgress" style="margin-top:1rem; height:4px; background:#e5e7eb; border-radius:999px; overflow:hidden; max-width:300px; margin-left:auto; margin-right:auto;">
+                                <div style="height:100%; background:linear-gradient(90deg,#6366f1,#8b5cf6); border-radius:999px; animation:shimmer 1.5s infinite linear; background-size:200% 100%; background-image:linear-gradient(90deg,#6366f1 0%,#818cf8 50%,#6366f1 100%);"></div>
+                            </div>
+                        </div>`;
                     statusDiv.className = 'status info';
                     statusDiv.style.display = 'block';
                 }
@@ -1144,19 +1662,32 @@
                     const formData = new FormData();
                     formData.append('link_id', sessionId);
 
+                    // Add a 25-second timeout (handles Render cold starts)
+                    const controller = new AbortController();
+                    const timeoutId = setTimeout(() => controller.abort(), 25000);
+
                     const response = await fetch(`${API_BASE_URL}/start-session-interview`, {
                         method: 'POST',
-                        body: formData
+                        body: formData,
+                        signal: controller.signal
                     });
+                    clearTimeout(timeoutId);
+
+                    console.log('Session API response status:', response.status);
 
                     if (response.ok) {
                         const data = await response.json();
-                        console.log('Session response:', data);
+                        console.log('Session response data:', JSON.stringify(data));
 
                         // Check if the link is expired
                         if (data.is_expired) {
                             if (statusDiv) {
-                                statusDiv.textContent = data.message || 'This interview link has expired.';
+                                statusDiv.innerHTML = `
+                                    <div style="text-align:center; padding:2rem;">
+                                        <div style="font-size:2.5rem; margin-bottom:1rem;">⏰</div>
+                                        <div style="font-size:1.1rem; font-weight:700; color:#ef4444;">This interview link has expired.</div>
+                                        <div style="font-size:0.88rem; color:#6b7280; margin-top:0.5rem;">${data.message || 'Please contact the recruiter for a new link.'}</div>
+                                    </div>`;
                                 statusDiv.className = 'status error';
                                 statusDiv.style.display = 'block';
                             }
@@ -1177,6 +1708,11 @@
                             return;
                         }
 
+                        // Missing required fields guard
+                        if (!data.interview_id || !data.first_question) {
+                            throw new Error(`Unexpected server response: ${JSON.stringify(data)}`);
+                        }
+
                         currentInterviewId = data.interview_id;
                         currentQuestionId = data.first_question.id;
                         totalQuestions = data.total_questions;
@@ -1185,21 +1721,42 @@
                         window.currentInterviewId = currentInterviewId;
                         window.currentQuestionId = currentQuestionId;
 
-                        // personalized welcome
+                        // Personalized welcome
                         if (data.candidate_name) {
                             const header = document.querySelector('h1');
                             if (header) header.textContent = `Welcome, ${data.candidate_name}`;
                         }
 
+                        // Hide the loading status
+                        if (statusDiv) statusDiv.style.display = 'none';
+
                         // Show Disclaimer
                         document.getElementById('disclaimerModal').classList.remove('hidden');
+
                     } else {
-                        throw new Error("Invalid or expired link");
+                        const errText = await response.text().catch(() => '');
+                        console.error('Session API error:', response.status, errText);
+                        throw new Error(`Server returned ${response.status}. ${errText || 'Invalid or expired link.'}`);
                     }
                 } catch (e) {
-                    console.error(e);
-                    alert("Error loading session: " + e.message);
-                    document.getElementById('uploadSection').classList.remove('hidden');
+                    console.error('Session load error:', e);
+                    const isTimeout = e.name === 'AbortError';
+                    const msg = isTimeout
+                        ? 'The server took too long to respond. It may be waking up — please retry in a moment.'
+                        : (e.message || 'Failed to load session.');
+                    if (statusDiv) {
+                        statusDiv.innerHTML = `
+                            <div style="text-align:center; padding:2rem;">
+                                <div style="font-size:2.5rem; margin-bottom:1rem;">❌</div>
+                                <div style="font-size:1.05rem; font-weight:700; color:#ef4444;">Could not load your interview</div>
+                                <div style="font-size:0.85rem; color:#6b7280; margin-top:0.5rem; max-width:400px; margin-left:auto; margin-right:auto;">${msg}</div>
+                                <button onclick="location.reload()" style="margin-top:1.2rem; background:#4f46e5; color:#fff; border:none; border-radius:8px; padding:0.6rem 1.6rem; font-size:0.95rem; font-weight:600; cursor:pointer;">
+                                    🔄 Try Again
+                                </button>
+                            </div>`;
+                        statusDiv.className = 'status error';
+                        statusDiv.style.display = 'block';
+                    }
                 }
             }
 
