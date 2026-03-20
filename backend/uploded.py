@@ -35,6 +35,12 @@ from fastapi.staticfiles import StaticFiles
 
 app = FastAPI()
 
+# Health check for keeping Render awake
+@app.get("/")
+@app.get("/health")
+def health_check():
+    return {"status": "ok", "timestamp": datetime.now().isoformat()}
+
 # Mount uploads folder to serve files
 app.mount("/uploads", StaticFiles(directory="uploads"), name="uploads")
 
@@ -1456,12 +1462,13 @@ async def upload_full_recording(
             shutil.copyfileobj(file.file, buffer)
             
         # Update database
+        normalized_path = file_path.replace("\\", "/")
         interviews_collection.update_one(
             {"id": interview_id},
-            {"$set": {"recording_path": file_path}}
+            {"$set": {"recording_path": normalized_path}}
         )
         
-        return {"status": "success", "file_path": file_path}
+        return {"status": "success", "file_path": normalized_path}
     except Exception as e:
         print(f"Error saving full recording: {e}")
         raise HTTPException(status_code=500, detail=str(e))

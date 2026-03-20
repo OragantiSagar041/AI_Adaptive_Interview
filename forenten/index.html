@@ -2740,23 +2740,33 @@
         console.log("Stopping full session recording...");
         stopFaceDetection(); // Stop detection loop
 
-        if (!fullSessionRecorder || fullSessionRecorder.state === "inactive") {
-            console.warn("Recorder not active, skipping save.");
+        if (!fullSessionRecorder) {
+            console.warn("No recorder found, skipping save.");
             return;
         }
 
         return new Promise((resolve, reject) => {
-            fullSessionRecorder.onstop = async () => {
+            // If already stopped, just process chunks
+            if (fullSessionRecorder.state === "inactive") {
+                processAndUpload();
+                return;
+            }
+
+            async function processAndUpload() {
                 try {
-                    console.log("Recorder stopped, preparing blob...");
+                    if (fullSessionChunks.length === 0) {
+                        console.warn("No video chunks captured.");
+                        resolve();
+                        return;
+                    }
+
+                    console.log("Preparing video blob...");
                     const blob = new Blob(fullSessionChunks, { type: 'video/webm' });
                     console.log(`Blob size: ${blob.size} bytes`);
 
                     const formData = new FormData();
                     formData.append('file', blob, 'full_interview.webm');
                     formData.append('interview_id', interviewId);
-
-                    // showStatus("Uploading full interview video... Please wait.", "info");
 
                     const response = await fetch(`${API_BASE_URL}/upload-full-recording`, {
                         method: 'POST',
@@ -2766,34 +2776,26 @@
                     if (response.ok) {
                         const data = await response.json();
                         console.log("Full recording saved:", data);
-
-                        // Show the video
+                        
                         const normalizedPath = data.file_path.replace(/\\/g, '/');
-                        // Ensure path starts with 'uploads/' (it should, based on backend)
-                        // Backend returns 'uploads/recordings/...'
                         const videoUrl = `${API_BASE_URL}/${normalizedPath}`;
                         console.log("Video available statically at:", videoUrl);
-
-                        // Switch views
-                        document.getElementById('interviewSection').classList.add('hidden');
-                        document.getElementById('resultsSection').classList.remove('hidden');
-
-                        // Clean up video stream traces to avoid lingering webcam light
-                        if (stream) {
-                            stream.getTracks().forEach(track => track.stop());
+                        
+                        // Clean up video stream traces
+                        if (window.stream) {
+                            window.stream.getTracks().forEach(track => track.stop());
                         }
                     } else {
                         throw new Error(`Upload failed: ${response.statusText}`);
                     }
-
                     resolve();
                 } catch (e) {
                     console.error("Error uploading full recording:", e);
-                    // showStatus("Failed to save video: " + e.message, "error");
-                    resolve(); // Resolve anyway to not block UI
+                    resolve(); // Resolve to avoid blocking
                 }
-            };
+            }
 
+            fullSessionRecorder.onstop = processAndUpload;
             fullSessionRecorder.stop();
         });
     }
