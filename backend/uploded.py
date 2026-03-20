@@ -51,7 +51,7 @@ app.add_middleware(
         "http://127.0.0.1:8000",
         "https://ai-adaptive-interview.vercel.app",
     ],
-    allow_origin_regex=r"https://ai-adaptive-interview-.*-oragantisagar041s-projects\.vercel\.app",
+    allow_origin_regex=r"https://.*\.vercel\.app",
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
@@ -143,7 +143,7 @@ def extract_experiences(text: str) -> List[Dict]:
     
     for i, line in enumerate(lines):
         line_lower = line.lower()
-        if any(role in line_lower for role in ['developer', 'engineer', 'analyst', 'specialist', 'manager', 'designer', 'researcher']):
+        if any(role in line_lower for role in ['developer', 'engineer', 'analyst', 'specialist', 'manager', 'designer', 'researcher', 'scientist']):
             exp = {
                 "title": line,
                 "company": lines[i+1] if i+1 < len(lines) and len(lines[i+1]) < 50 else "a company"
