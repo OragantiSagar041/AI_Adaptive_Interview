@@ -9,6 +9,7 @@
         href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><path d='M50 5L10 25v30c0 25 40 40 40 40s40-15 40-40V25L50 5z' fill='%236366f1'/></svg>">
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <script src="https://cdn.sheetjs.com/xlsx-0.20.1/package/dist/xlsx.full.min.js"></script>
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&display=swap"
         rel="stylesheet">
     <style>
@@ -1137,19 +1138,19 @@
                 <!-- VIEW 1: OVERVIEW DASHBOARD -->
                 <div id="view-overview" class="view-panel">
                     <div class="section-card">
-                        <div class="section-header" style="justify-content: space-between; align-items: flex-end;">
-                            <div style="display: flex; gap: 12px; align-items: center;">
+                        <div class="section-header" style="justify-content: space-between; align-items: flex-start; flex-wrap: wrap; gap: 1rem;">
+                            <div style="display: flex; gap: 12px; align-items: center; flex: 1 1 250px;">
                                 <div class="header-icon purple" style="background: rgba(99, 102, 241, 0.15);"><i
                                         class="fas fa-table-list"></i></div>
                                 <div>
-                                    <h3>Dashboard Overview</h3>
-                                    <p>Track ongoing and completed interviews (Sorted by Score)</p>
+                                    <h3 style="white-space: nowrap;">Dashboard Overview</h3>
+                                    <p>Track ongoing and completed interviews</p>
                                 </div>
                             </div>
 
                             <!-- Date Filters -->
-                            <div class="date-filter" style="display: flex; gap: 0.5rem; align-items: center;">
-                                <div id="dashboardFilters" style="display: flex; gap: 0.5rem; align-items: center;">
+                            <div class="date-filter" style="display: flex; overflow-x: auto; padding-bottom: 5px; flex: 1 1 auto; max-width: 100%;">
+                                <div id="dashboardFilters" style="display: flex; gap: 0.5rem; align-items: center; white-space: nowrap; margin-left: auto;">
                                     <div style="display: flex; flex-direction: column;">
                                         <label
                                             style="font-size: 0.7rem; color: var(--text-muted); margin-bottom: 2px;">From</label>
@@ -1161,6 +1162,17 @@
                                             style="font-size: 0.7rem; color: var(--text-muted); margin-bottom: 2px;">To</label>
                                         <input type="date" id="filterEndDate" class="dash-input"
                                             style="padding: 0.4rem; font-size: 0.85rem; width: auto; min-width: 130px;">
+                                    </div>
+                                    <div style="display: flex; flex-direction: column;">
+                                        <label
+                                            style="font-size: 0.7rem; color: var(--text-muted); margin-bottom: 2px;">Status</label>
+                                        <select id="filterStatus" class="dash-input"
+                                            style="padding: 0.4rem; font-size: 0.85rem; width: auto; min-width: 130px;">
+                                            <option value="">All Statuses</option>
+                                            <option value="completed">Completed</option>
+                                            <option value="pending">Pending</option>
+                                            <option value="expired">Not Attended (Expired)</option>
+                                        </select>
                                     </div>
                                     <div style="display: flex; flex-direction: column;">
                                         <label
@@ -1274,82 +1286,187 @@
 
                 <!-- VIEW 2: CREATE INTERVIEW -->
                 <div id="view-create" class="view-panel hidden">
-                    <!-- Create Session Card -->
-                    <div class="section-card">
-                        <div class="section-header">
-                            <div class="header-icon purple"><i class="fas fa-bullseye"></i></div>
-                            <div>
-                                <h3>Create Interview Session</h3>
-                                <p>Generate a unique link for each candidate <span
-                                        style="color: var(--warning); margin-left: 10px; font-weight: 600; font-size: 0.75rem;"><i
-                                            class="fas fa-clock"></i> Valid for 24 hours</span></p>
-                            </div>
-                        </div>
 
-                        <div class="dash-form-group">
-                            <label class="dash-label">Candidate Name</label>
-                            <input type="text" class="dash-input" id="candidateName" placeholder="e.g. John Doe">
-                        </div>
-
-                        <div class="dash-form-group">
-                            <label class="dash-label">Candidate Email</label>
-                            <input type="email" class="dash-input" id="candidateEmail"
-                                placeholder="e.g. john@example.com">
-                        </div>
-
-                        <div class="dash-form-group">
-                            <label class="dash-label">Upload Resume (PDF / DOCX / TXT)</label>
-                            <div class="file-upload-area" id="fileDropZone"
-                                onclick="document.getElementById('resumeFile').click()">
-                                <div class="upload-icon"><i class="fas fa-file-invoice"></i></div>
-                                <p id="fileLabel">Click to upload or drag and drop</p>
-                                <p style="font-size:0.75rem; color:var(--text-muted); margin-top:4px;">PDF, DOCX, TXT —
-                                    Max 5MB</p>
-                            </div>
-                            <input type="file" id="resumeFile" accept=".pdf,.docx,.doc,.txt"
-                                onchange="handleFileSelect()" style="display:none;">
-                            <div id="fileStatus"></div>
-                        </div>
-
-                        <input type="hidden" id="resumeText" value="">
-
-                        <div class="dash-form-group">
-                            <label class="dash-label">Job Description</label>
-                            <textarea class="dash-textarea" id="jobDescription"
-                                placeholder="Paste the job description here..."></textarea>
-                        </div>
-
-                        <div class="dash-form-group">
-                            <label class="dash-label">Interview Duration (Minutes)</label>
-                            <input type="number" class="dash-input" id="interviewDuration" min="5" max="120" value="30"
-                                placeholder="Enter duration in minutes" style="padding: 0.7rem 1rem;">
-                            <p style="font-size: 0.75rem; color: var(--text-muted); margin-top: 4px;">
-                                Enter any value between 5–120 minutes. Interview ends automatically when time expires.
-                            </p>
-                        </div>
-
-                        <button class="btn-generate" id="createBtn" onclick="createSession()">
-                            <i class="fas fa-bolt"></i> Generate Interview Link
+                    <!-- Tab Switcher -->
+                    <div style="display:flex; gap:8px; margin-bottom:1.5rem;">
+                        <button id="tab-single" onclick="switchCreateTab('single')" style="flex:1; padding:0.75rem; background:var(--primary); color:white; border:none; border-radius:var(--radius-md); font-weight:700; font-size:0.95rem; cursor:pointer; font-family:inherit; transition:all 0.2s;">
+                            <i class="fas fa-user"></i> Single Candidate
+                        </button>
+                        <button id="tab-bulk" onclick="switchCreateTab('bulk')" style="flex:1; padding:0.75rem; background:var(--bg-card); color:var(--text-secondary); border:1px solid var(--border); border-radius:var(--radius-md); font-weight:700; font-size:0.95rem; cursor:pointer; font-family:inherit; transition:all 0.2s;">
+                            <i class="fas fa-users"></i> Bulk Send
                         </button>
                     </div>
 
-                    <!-- Generated Links Card -->
-                    <div class="section-card">
-                        <div class="section-header">
-                            <div class="header-icon green"><i class="fas fa-link"></i></div>
-                            <div>
-                                <h3>Generated Links</h3>
-                                <p>Share these with candidates to start interviews</p>
+                    <!-- ══ SINGLE CANDIDATE PANEL ══ -->
+                    <div id="panel-single">
+                        <!-- Create Session Card -->
+                        <div class="section-card">
+                            <div class="section-header">
+                                <div class="header-icon purple"><i class="fas fa-bullseye"></i></div>
+                                <div>
+                                    <h3>Create Interview Session</h3>
+                                    <p>Generate a unique link for each candidate <span
+                                            style="color: var(--warning); margin-left: 10px; font-weight: 600; font-size: 0.75rem;"><i
+                                                class="fas fa-clock"></i> Valid for 24 hours</span></p>
+                                </div>
                             </div>
+
+                            <div class="dash-form-group">
+                                <label class="dash-label">Candidate Name</label>
+                                <input type="text" class="dash-input" id="candidateName" placeholder="e.g. John Doe">
+                            </div>
+
+                            <div class="dash-form-group">
+                                <label class="dash-label">Candidate Email</label>
+                                <input type="email" class="dash-input" id="candidateEmail"
+                                    placeholder="e.g. john@example.com">
+                            </div>
+
+                            <div class="dash-form-group">
+                                <label class="dash-label">Upload Resume (PDF / DOCX / TXT)</label>
+                                <div class="file-upload-area" id="fileDropZone"
+                                    onclick="document.getElementById('resumeFile').click()">
+                                    <div class="upload-icon"><i class="fas fa-file-invoice"></i></div>
+                                    <p id="fileLabel">Click to upload or drag and drop</p>
+                                    <p style="font-size:0.75rem; color:var(--text-muted); margin-top:4px;">PDF, DOCX, TXT —
+                                        Max 5MB</p>
+                                </div>
+                                <input type="file" id="resumeFile" accept=".pdf,.docx,.doc,.txt"
+                                    onchange="handleFileSelect()" style="display:none;">
+                                <div id="fileStatus"></div>
+                            </div>
+
+                            <input type="hidden" id="resumeText" value="">
+
+                            <div class="dash-form-group">
+                                <label class="dash-label">Job Description</label>
+                                <textarea class="dash-textarea" id="jobDescription"
+                                    placeholder="Paste the job description here..."></textarea>
+                            </div>
+
+                            <div class="dash-form-group">
+                                <label class="dash-label">Interview Duration (Minutes)</label>
+                                <input type="number" class="dash-input" id="interviewDuration" min="5" max="120" value="30"
+                                    placeholder="Enter duration in minutes" style="padding: 0.7rem 1rem;">
+                                <p style="font-size: 0.75rem; color: var(--text-muted); margin-top: 4px;">
+                                    Enter any value between 5–120 minutes. Interview ends automatically when time expires.
+                                </p>
+                            </div>
+
+                            <button class="btn-generate" id="createBtn" onclick="createSession()">
+                                <i class="fas fa-bolt"></i> Generate Interview Link
+                            </button>
                         </div>
 
-                        <div id="linksList">
-                            <div class="empty-state">
-                                <div class="empty-icon"><i class="fas fa-inbox"></i></div>
-                                <p>No interview links generated yet.</p>
+                        <!-- Generated Links Card -->
+                        <div class="section-card">
+                            <div class="section-header">
+                                <div class="header-icon green"><i class="fas fa-link"></i></div>
+                                <div>
+                                    <h3>Generated Links</h3>
+                                    <p>Share these with candidates to start interviews</p>
+                                </div>
+                            </div>
+
+                            <div id="linksList">
+                                <div class="empty-state">
+                                    <div class="empty-icon"><i class="fas fa-inbox"></i></div>
+                                    <p>No interview links generated yet.</p>
+                                </div>
                             </div>
                         </div>
                     </div>
+
+                    <!-- ══ BULK SEND PANEL ══ -->
+                    <div id="panel-bulk" style="display:none;">
+                        <div class="section-card">
+                            <div class="section-header">
+                                <div class="header-icon purple" style="background:rgba(99,102,241,0.15);"><i class="fas fa-users"></i></div>
+                                <div>
+                                    <h3>Bulk Send Interviews</h3>
+                                    <p>Send interview links to multiple candidates at once &nbsp;<span style="color:var(--warning);font-weight:600;font-size:0.75rem;"><i class="fas fa-clock"></i> Valid 24 hours each</span></p>
+                                </div>
+                            </div>
+
+                            <!-- JD + Duration (shared) -->
+                            <div class="dash-form-group">
+                                <label class="dash-label">Job Description <span style="color:var(--danger);">*</span></label>
+                                <textarea class="dash-textarea" id="bulkJobDescription" placeholder="Paste the job description used for ALL candidates..." style="min-height:100px;"></textarea>
+                            </div>
+                            <div class="dash-form-group">
+                                <label class="dash-label">Interview Duration (Minutes)</label>
+                                <input type="number" class="dash-input" id="bulkDuration" min="5" max="120" value="30" style="padding:0.7rem 1rem;">
+                            </div>
+
+                            <!-- File Upload: Excel + CSV -->
+                            <div class="dash-form-group">
+                                <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:0.5rem;">
+                                    <label class="dash-label" style="margin:0;">Upload Excel or CSV <span style="color:var(--text-muted); font-weight:400;">(.xlsx, .xls, .csv)</span></label>
+                                    <button onclick="downloadExcelTemplate()" title="Download Excel template" style="display:flex;align-items:center;gap:6px;background:rgba(16,185,129,0.1);color:var(--success);border:1px solid rgba(16,185,129,0.3);padding:0.3rem 0.75rem;border-radius:var(--radius-sm);cursor:pointer;font-size:0.8rem;font-weight:600;font-family:inherit;transition:all 0.2s;" onmouseover="this.style.background='rgba(16,185,129,0.2)'" onmouseout="this.style.background='rgba(16,185,129,0.1)'">
+                                        <i class="fas fa-file-arrow-down"></i> Template
+                                    </button>
+                                </div>
+                                <div class="file-upload-area" id="csvDropZone" onclick="document.getElementById('csvFile').click()" style="border-color:rgba(99,102,241,0.4);">
+                                    <div class="upload-icon" style="color:var(--primary-light);"><i class="fas fa-file-excel"></i></div>
+                                    <p id="csvLabel">Click to upload or drag and drop</p>
+                                    <p style="font-size:0.75rem;color:var(--text-muted);margin-top:4px;">Excel (.xlsx, .xls) or CSV (.csv) &mdash; columns: <code style="background:var(--bg-dark);padding:2px 6px;border-radius:4px;">Name, Email</code></p>
+                                </div>
+                                <input type="file" id="csvFile" accept=".csv,.xlsx,.xls,.txt" onchange="handleFileUpload(event)" style="display:none;">
+                            </div>
+
+                            <!-- Manual Add Row -->
+                            <div class="dash-form-group">
+                                <label class="dash-label">Or Add Manually</label>
+                                <div style="display:flex; gap:8px; align-items:center;">
+                                    <input type="text" class="dash-input" id="bulkName" placeholder="Candidate Name" style="flex:1;">
+                                    <input type="email" class="dash-input" id="bulkEmail" placeholder="candidate@email.com" style="flex:1;">
+                                    <button onclick="addBulkRow()" style="padding:0.7rem 1rem; background:var(--primary); color:white; border:none; border-radius:var(--radius-sm); cursor:pointer; font-weight:600; white-space:nowrap; font-family:inherit; transition:all 0.2s;" onmouseover="this.style.background='var(--primary-dark)'" onmouseout="this.style.background='var(--primary)'">
+                                        <i class="fas fa-plus"></i> Add
+                                    </button>
+                                </div>
+                            </div>
+
+                            <!-- Candidate Preview Table -->
+                            <div id="bulkCandidatePreview" style="display:none; margin-bottom:1.25rem;">
+                                <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:0.75rem;">
+                                    <label class="dash-label" style="margin:0;">Candidates to Send (<span id="bulkCount">0</span>)</label>
+                                    <button onclick="clearBulkList()" style="background:rgba(244,63,94,0.1);color:var(--danger);border:1px solid rgba(244,63,94,0.25);padding:0.3rem 0.8rem;border-radius:var(--radius-sm);cursor:pointer;font-size:0.8rem;font-family:inherit;">
+                                        <i class="fas fa-trash"></i> Clear All
+                                    </button>
+                                </div>
+                                <div style="overflow-x:auto; border-radius:var(--radius-md); border:1px solid var(--border);">
+                                    <table style="width:100%; border-collapse:collapse; font-size:0.85rem;">
+                                        <thead>
+                                            <tr style="background:var(--bg-dark);">
+                                                <th style="padding:0.6rem 1rem; text-align:left; color:var(--text-muted); font-weight:600;">#</th>
+                                                <th style="padding:0.6rem 1rem; text-align:left; color:var(--text-muted); font-weight:600;">Name</th>
+                                                <th style="padding:0.6rem 1rem; text-align:left; color:var(--text-muted); font-weight:600;">Email</th>
+                                                <th style="padding:0.6rem 1rem; text-align:right; color:var(--text-muted); font-weight:600;">Action</th>
+                                            </tr>
+                                        </thead>
+                                        <tbody id="bulkCandidateTable"></tbody>
+                                    </table>
+                                </div>
+                            </div>
+
+                            <button class="btn-generate" id="bulkSendBtn" onclick="sendBulkInterviews()" style="background:linear-gradient(135deg,#6366f1,#8b5cf6);">
+                                <i class="fas fa-paper-plane"></i> Send to All Candidates
+                            </button>
+                        </div>
+
+                        <!-- Bulk Results Panel -->
+                        <div class="section-card" id="bulkResultsCard" style="display:none;">
+                            <div class="section-header">
+                                <div class="header-icon green"><i class="fas fa-check-circle"></i></div>
+                                <div>
+                                    <h3>Bulk Send Results</h3>
+                                    <p id="bulkResultsSummary">Processing...</p>
+                                </div>
+                            </div>
+                            <div id="bulkResultsList"></div>
+                        </div>
+                    </div>
+
                 </div>
 
                 <!-- VIEW 3: LIVE RESULTS -->
@@ -1413,6 +1530,11 @@
         const API_BASE = (window.location.hostname === "127.0.0.1" || window.location.hostname === "localhost")
             ? "https://localhost:8000"
             : "https://ai-adaptive-interview.onrender.com";
+
+        const FRONTEND_BASE = (window.location.hostname === "127.0.0.1" || window.location.hostname === "localhost")
+            ? "https://localhost:3000"
+            : "https://ai-adaptive-interview.vercel.app";
+
 
         let adminId = null;
         let adminEmail = "";
@@ -1649,9 +1771,9 @@
 
         // --- ADD SESSION TO UI ---
         function addSessionToUI(name, relativeUrl, id) {
+            // Ensure fullUrl uses the correct production base URL
+            const fullUrl = `${FRONTEND_BASE}${relativeUrl}`;
             const list = document.getElementById('linksList');
-            // Ensure fullUrl points correctly to the root/index.html with the relative params
-            const fullUrl = `${window.location.protocol}//${window.location.host}${relativeUrl}`;
 
             // Remove empty state placeholder
             const emptyState = list.querySelector('.empty-state');
@@ -1763,6 +1885,7 @@
             const startDate = document.getElementById('filterStartDate').value;
             const endDate = document.getElementById('filterEndDate').value;
             const sortBy = document.getElementById('sortBy').value;
+            const filterStatus = document.getElementById('filterStatus') ? document.getElementById('filterStatus').value : '';
 
             let url = `${API_BASE}/admin/sessions?admin_id=${adminId}&sort_by=${sortBy}`;
             if (startDate) url += `&start_date=${startDate}`;
@@ -1772,7 +1895,7 @@
                 const res = await fetch(url);
                 if (res.ok) {
                     const data = await res.json();
-                    renderDashboardTable(data.sessions);
+                    renderDashboardTable(data.sessions, filterStatus);
                 } else {
                     tbody.innerHTML = '<tr><td colspan="5" style="text-align: center; color: var(--danger);">Failed to load sessions.</td></tr>';
                 }
@@ -1782,14 +1905,31 @@
             }
         }
 
+        async function deleteSession(linkId) {
+            if (!confirm("Are you sure you want to delete this candidate's interview session? This cannot be undone.")) return;
+            
+            try {
+                const res = await fetch(`${API_BASE}/admin/sessions/${linkId}`, { method: 'DELETE' });
+                if (res.ok) {
+                    showToast("Session deleted successfully", "success");
+                    loadDashboardSessions();
+                } else {
+                    showToast("Failed to delete session", "error");
+                }
+            } catch (error) {
+                showToast("Server error deleting session", "error");
+            }
+        }
+
         function clearFilters() {
             document.getElementById('filterStartDate').value = '';
             document.getElementById('filterEndDate').value = '';
             document.getElementById('sortBy').value = 'score';
+            if (document.getElementById('filterStatus')) document.getElementById('filterStatus').value = '';
             loadDashboardSessions();
         }
 
-        function renderDashboardTable(sessions) {
+        function renderDashboardTable(sessions, filterStatus) {
             const tbody = document.getElementById('dashboardTableBody');
             const qualifiedBody = document.getElementById('qualifiedTableBody');
             const unqualifiedBody = document.getElementById('unqualifiedTableBody');
@@ -1805,20 +1945,37 @@
 
             const baseUrl = window.location.href.substring(0, window.location.href.lastIndexOf('/'));
 
+            let count = 0;
             sessions.forEach(s => {
+                let currentStatus = s.status || 'pending';
+                if (currentStatus === 'pending' && s.expires_at) {
+                    if (new Date() > new Date(s.expires_at)) {
+                        currentStatus = 'expired';
+                    }
+                }
+
+                if (filterStatus && filterStatus !== currentStatus) {
+                    return; // skip if doesn't match filter
+                }
+                count++;
+
                 const dateObj = new Date(s.created_at);
-                const dateStr = dateObj.toLocaleDateString() + ' ' + dateObj.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+                const dateStr = dateObj.toLocaleString('en-IN', { timeZone: 'Asia/Kolkata', year: 'numeric', month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit', hour12: true });
 
                 let statusClass = 'pending';
-                if (s.status === 'started') statusClass = 'started';
-                if (s.status === 'completed') statusClass = 'completed';
+                if (currentStatus === 'started') statusClass = 'started';
+                if (currentStatus === 'completed') statusClass = 'completed';
+                if (currentStatus === 'expired') statusClass = 'pending'; // or custom
+
+                let statusLabel = currentStatus.toUpperCase();
+                if (currentStatus === 'expired') statusLabel = 'NOT ATTENDED'; 
 
                 let decisionTag = '';
                 if (s.decision === 'selected') decisionTag = '<span style="font-size: 0.65rem; background: var(--accent); color: #fff; padding: 1px 5px; border-radius: 4px; border:none; margin-left:5px;">SELECTED</span>';
                 if (s.decision === 'rejected') decisionTag = '<span style="font-size: 0.65rem; background: var(--danger); color: #fff; padding: 1px 5px; border-radius: 4px; border:none; margin-left:5px;">REJECTED</span>';
 
                 let scoreText = '—';
-                if (s.status === 'completed' && s.avg_score != null) {
+                if (currentStatus === 'completed' && s.avg_score != null) {
                     const color = s.avg_score >= 60 ? 'var(--accent)' : 'var(--danger)';
                     scoreText = `<span style="color:${color}; font-weight:700;">${s.avg_score.toFixed(1)}/100</span>`;
                 }
@@ -1827,11 +1984,14 @@
 
                 let actionBtn = `<button class="btn-copy" onclick="copyLink(this, '${linkUrl}')" style="margin:0; padding:0.4rem 0.8rem; font-size:0.75rem;">Copy Link</button>`;
 
-                if (s.status === 'completed') {
+                if (currentStatus === 'completed') {
                     actionBtn = `<button class="btn-copy" onclick="openLiveResults('${s.link_id}', '${s.candidate_name.replace(/'/g, "\\'")}')" style="margin:0; padding:0.4rem 0.8rem; font-size:0.75rem; background: #10b981; color: white; border: none; border-radius: 6px; cursor: pointer; transition: opacity 0.2s; font-weight: 600;">View Results</button>`;
-                } else if (s.status === 'started') {
+                } else if (currentStatus === 'started') {
                     actionBtn = `<button class="btn-copy" onclick="openLiveResults('${s.link_id}', '${s.candidate_name.replace(/'/g, "\\'")}')" style="margin:0; padding:0.4rem 0.8rem; font-size:0.75rem; background: #6366f1; color: white; border: none; border-radius: 6px; cursor: pointer; transition: opacity 0.2s; font-weight: 600;">Live Results</button>`;
                 }
+                
+                // Add Delete Icon Button
+                const deleteBtn = `<button onclick="deleteSession('${s.link_id}')" style="background: none; border: none; color: var(--danger); cursor: pointer; padding: 4px; border-radius: 4px; transition: 0.2s; margin-left: 8px;" title="Remove Candidate"><i class="fas fa-times"></i></button>`;
 
                 const rowHtml = `
                     <tr>
@@ -1842,9 +2002,9 @@
                             </div>
                         </td>
                         <td>${dateStr}</td>
-                        <td><span class="status-badge ${statusClass}">${s.status}</span></td>
+                        <td><span class="status-badge ${statusClass}">${statusLabel}</span></td>
                         <td>${scoreText}</td>
-                        <td style="text-align: right;">${actionBtn}</td>
+                        <td style="text-align: right; white-space: nowrap;">${actionBtn} ${deleteBtn}</td>
                     </tr>
                 `;
 
@@ -1886,6 +2046,9 @@
                     `;
                 }
             });
+            if (count === 0) {
+                mainHtml = '<tr><td colspan="5" style="text-align: center; padding: 2.5rem; color: var(--text-muted);">No sessions match the selected filter.</td></tr>';
+            }
             tbody.innerHTML = mainHtml;
             qualifiedBody.innerHTML = qualHtml || '<tr><td colspan="4" style="text-align: center; padding: 2rem; color: var(--text-muted);">No qualified candidates yet.</td></tr>';
             unqualifiedBody.innerHTML = unqualHtml || '<tr><td colspan="4" style="text-align: center; padding: 2rem; color: var(--text-muted);">No rejected candidates yet.</td></tr>';
@@ -2581,6 +2744,249 @@
             } finally {
                 btn.disabled = false;
             }
+        }
+
+        // ══════════════════════════════════════════════════
+        //  BULK SEND — state & helpers
+        // ══════════════════════════════════════════════════
+        let bulkCandidates = [];   // [{name, email}]
+
+        function switchCreateTab(tab) {
+            const isSingle = tab === 'single';
+            document.getElementById('panel-single').style.display = isSingle ? 'block' : 'none';
+            document.getElementById('panel-bulk').style.display   = isSingle ? 'none'  : 'block';
+
+            const tSingle = document.getElementById('tab-single');
+            const tBulk   = document.getElementById('tab-bulk');
+
+            if (isSingle) {
+                tSingle.style.cssText = 'flex:1;padding:0.75rem;background:var(--primary);color:white;border:none;border-radius:var(--radius-md);font-weight:700;font-size:0.95rem;cursor:pointer;font-family:inherit;transition:all 0.2s;';
+                tBulk.style.cssText   = 'flex:1;padding:0.75rem;background:var(--bg-card);color:var(--text-secondary);border:1px solid var(--border);border-radius:var(--radius-md);font-weight:700;font-size:0.95rem;cursor:pointer;font-family:inherit;transition:all 0.2s;';
+            } else {
+                tBulk.style.cssText   = 'flex:1;padding:0.75rem;background:var(--primary);color:white;border:none;border-radius:var(--radius-md);font-weight:700;font-size:0.95rem;cursor:pointer;font-family:inherit;transition:all 0.2s;';
+                tSingle.style.cssText = 'flex:1;padding:0.75rem;background:var(--bg-card);color:var(--text-secondary);border:1px solid var(--border);border-radius:var(--radius-md);font-weight:700;font-size:0.95rem;cursor:pointer;font-family:inherit;transition:all 0.2s;';
+            }
+        }
+
+        // ── Parse uploaded Excel or CSV → add rows to bulkCandidates ──────────
+        function handleFileUpload(event) {
+            const file = event.target.files[0];
+            if (!file) return;
+
+            const ext = file.name.split('.').pop().toLowerCase();
+            const label = document.getElementById('csvLabel');
+            label.textContent = `⏳ Reading ${file.name}…`;
+
+            const reader = new FileReader();
+
+            if (ext === 'xlsx' || ext === 'xls') {
+                // ── Excel path: read as ArrayBuffer, parse with SheetJS ──
+                reader.onload = function(e) {
+                    try {
+                        const workbook  = XLSX.read(e.target.result, { type: 'array' });
+                        const sheet     = workbook.Sheets[workbook.SheetNames[0]];
+                        const rows      = XLSX.utils.sheet_to_json(sheet, { header: 1, defval: '' });
+
+                        let added = 0;
+                        rows.forEach((row, idx) => {
+                            const rawName  = String(row[0] || '').trim();
+                            const rawEmail = String(row[1] || '').trim();
+                            // Skip blank rows, header rows, and invalid emails
+                            if (!rawName || !rawEmail) return;
+                            if (rawName.toLowerCase() === 'name' && rawEmail.toLowerCase() === 'email') return;
+                            if (!rawEmail.includes('@')) return;
+                            if (!bulkCandidates.find(c => c.email === rawEmail)) {
+                                bulkCandidates.push({ name: rawName, email: rawEmail });
+                                added++;
+                            }
+                        });
+
+                        label.textContent = `✅ ${file.name} — ${added} candidates imported`;
+                        renderBulkTable();
+                        showToast(`${added} candidates imported from Excel`, 'success');
+                    } catch(err) {
+                        label.textContent = '❌ Could not read Excel file';
+                        showToast('Error reading Excel: ' + err.message, 'error');
+                    }
+                };
+                reader.readAsArrayBuffer(file);
+
+            } else {
+                // ── CSV / TXT path: read as text, split by comma ──
+                reader.onload = function(e) {
+                    const lines = e.target.result.split('\n').map(l => l.trim()).filter(Boolean);
+                    let added = 0;
+                    lines.forEach(line => {
+                        const parts = line.split(',');
+                        if (parts.length >= 2) {
+                            const name  = parts[0].trim().replace(/^["']|["']$/g, '');
+                            const email = parts[1].trim().replace(/^["']|["']$/g, '');
+                            if (!name || !email || !email.includes('@')) return;
+                            if (name.toLowerCase() === 'name' && email.toLowerCase() === 'email') return;
+                            if (!bulkCandidates.find(c => c.email === email)) {
+                                bulkCandidates.push({ name, email });
+                                added++;
+                            }
+                        }
+                    });
+                    label.textContent = `✅ ${file.name} — ${added} candidates imported`;
+                    renderBulkTable();
+                    showToast(`${added} candidates imported from CSV`, 'success');
+                };
+                reader.readAsText(file);
+            }
+        }
+
+        // ── Download an Excel template with Name / Email headers ──────────────
+        function downloadExcelTemplate() {
+            const ws   = XLSX.utils.aoa_to_sheet([['Name', 'Email'], ['John Doe', 'john@example.com'], ['Jane Smith', 'jane@example.com']]);
+
+            // Style the header row (column widths)
+            ws['!cols'] = [{ wch: 24 }, { wch: 32 }];
+
+            const wb = XLSX.utils.book_new();
+            XLSX.utils.book_append_sheet(wb, ws, 'Candidates');
+            XLSX.writeFile(wb, 'interview_candidates_template.xlsx');
+            showToast('Template downloaded!', 'success');
+        }
+
+
+        // Add a manually typed row
+        function addBulkRow() {
+            const name  = document.getElementById('bulkName').value.trim();
+            const email = document.getElementById('bulkEmail').value.trim();
+            if (!name || !email) { showToast('Please enter both name and email', 'error'); return; }
+            if (!email.includes('@')) { showToast('Invalid email address', 'error'); return; }
+            if (bulkCandidates.find(c => c.email === email)) { showToast('Candidate already in list', 'error'); return; }
+            bulkCandidates.push({ name, email });
+            document.getElementById('bulkName').value  = '';
+            document.getElementById('bulkEmail').value = '';
+            renderBulkTable();
+        }
+
+        // Remove a single row
+        function removeBulkRow(email) {
+            bulkCandidates = bulkCandidates.filter(c => c.email !== email);
+            renderBulkTable();
+        }
+
+        // Clear the whole list
+        function clearBulkList() {
+            bulkCandidates = [];
+            renderBulkTable();
+        }
+
+        // Render the preview table
+        function renderBulkTable() {
+            const tbody   = document.getElementById('bulkCandidateTable');
+            const preview = document.getElementById('bulkCandidatePreview');
+            document.getElementById('bulkCount').textContent = bulkCandidates.length;
+
+            if (bulkCandidates.length === 0) {
+                preview.style.display = 'none';
+                return;
+            }
+            preview.style.display = 'block';
+            tbody.innerHTML = bulkCandidates.map((c, i) => `
+                <tr style="border-top:1px solid var(--border); transition:background 0.15s;" onmouseover="this.style.background='var(--bg-card-hover)'" onmouseout="this.style.background='transparent'">
+                    <td style="padding:0.6rem 1rem; color:var(--text-muted);">${i+1}</td>
+                    <td style="padding:0.6rem 1rem; font-weight:500;">${c.name}</td>
+                    <td style="padding:0.6rem 1rem; color:var(--primary-light);">${c.email}</td>
+                    <td style="padding:0.6rem 1rem; text-align:right;">
+                        <button onclick="removeBulkRow('${c.email}')" style="background:rgba(244,63,94,0.1);color:var(--danger);border:1px solid rgba(244,63,94,0.2);padding:0.25rem 0.6rem;border-radius:6px;cursor:pointer;font-size:0.8rem;font-family:inherit;">
+                            <i class="fas fa-times"></i>
+                        </button>
+                    </td>
+                </tr>`).join('');
+        }
+
+        // Send all — calls /admin/bulk-create-sessions
+        async function sendBulkInterviews() {
+            const jd       = document.getElementById('bulkJobDescription').value.trim();
+            const duration = parseInt(document.getElementById('bulkDuration').value) || 30;
+
+            if (!jd)               { showToast('Please enter a Job Description', 'error'); return; }
+            if (bulkCandidates.length === 0) { showToast('Add at least one candidate', 'error'); return; }
+
+            const btn = document.getElementById('bulkSendBtn');
+            btn.disabled = true;
+            btn.innerHTML = '<span class="spinner" style="display:inline-block;width:16px;height:16px;border:2px solid rgba(255,255,255,0.3);border-top-color:white;border-radius:50%;animation:spin 0.6s linear infinite;vertical-align:middle;margin-right:8px;"></span> Sending…';
+
+            try {
+                const res = await fetch(`${API_BASE}/admin/bulk-create-sessions`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        candidates: bulkCandidates.map(c => ({
+                            candidate_name: c.name,
+                            candidate_email: c.email,
+                            resume_text: ''
+                        })),
+                        job_description: jd,
+                        admin_id: adminId,
+                        interview_duration: duration
+                    })
+                });
+
+                const data = await res.json();
+                if (!res.ok) throw new Error(data.detail || 'Server error');
+
+                renderBulkResults(data);
+                showToast(`✅ ${data.successful}/${data.total} interviews sent!`, 'success');
+
+            } catch (err) {
+                showToast('Error: ' + err.message, 'error');
+            } finally {
+                btn.disabled = false;
+                btn.innerHTML = '<i class="fas fa-paper-plane"></i> Send to All Candidates';
+            }
+        }
+
+        // Render the per-candidate results panel
+        function renderBulkResults(data) {
+            const card    = document.getElementById('bulkResultsCard');
+            const list    = document.getElementById('bulkResultsList');
+            const summary = document.getElementById('bulkResultsSummary');
+            const base = (window.location.hostname === "127.0.0.1" || window.location.hostname === "localhost")
+                ? "https://localhost:3000"
+                : "https://ai-adaptive-interview.vercel.app";
+
+
+            card.style.display = 'block';
+            summary.textContent = `${data.successful} sent successfully, ${data.failed} failed — out of ${data.total} total candidates.`;
+
+            list.innerHTML = data.results.map(r => {
+                const isOk  = r.status === 'success';
+                const color = isOk ? 'var(--success)' : 'var(--danger)';
+                const icon  = isOk ? 'fa-check-circle' : 'fa-times-circle';
+                const emailBadge = r.email_sent
+                    ? `<span style="background:rgba(16,185,129,0.1);color:var(--success);padding:2px 8px;border-radius:4px;font-size:0.75rem;"><i class="fas fa-envelope-circle-check"></i> Email Sent</span>`
+                    : `<span style="background:rgba(244,63,94,0.1);color:var(--danger);padding:2px 8px;border-radius:4px;font-size:0.75rem;"><i class="fas fa-envelope"></i> Email Failed</span>`;
+
+                const linkHtml = isOk ? `
+                    <div style="display:flex;align-items:center;gap:8px;margin-top:6px;">
+                        <div class="link-display" style="flex:1;font-size:0.75rem;">${base}${r.link_url}</div>
+                        <button onclick="navigator.clipboard.writeText('${base}${r.link_url}').then(()=>showToast('Copied!','success'))"
+                            style="background:rgba(6,214,160,0.1);color:var(--accent);border:1px solid rgba(6,214,160,0.25);padding:0.35rem 0.7rem;border-radius:6px;cursor:pointer;font-family:inherit;font-size:0.8rem;">
+                            <i class="fas fa-copy"></i>
+                        </button>
+                    </div>` : `<p style="color:var(--danger);font-size:0.82rem;margin-top:4px;">${r.error || 'Unknown error'}</p>`;
+
+                return `
+                <div style="display:flex;flex-direction:column;gap:4px;padding:0.9rem 1rem;border:1px solid var(--border);border-radius:var(--radius-md);margin-bottom:0.75rem;background:var(--bg-input);animation:slideIn 0.3s ease-out;">
+                    <div style="display:flex;justify-content:space-between;align-items:center;">
+                        <div style="display:flex;align-items:center;gap:8px;">
+                            <i class="fas ${icon}" style="color:${color};"></i>
+                            <strong>${r.candidate_name}</strong>
+                            <span style="color:var(--text-muted);font-size:0.82rem;">${r.candidate_email}</span>
+                        </div>
+                        ${emailBadge}
+                    </div>
+                    ${linkHtml}
+                </div>`;
+            }).join('');
+
+            card.scrollIntoView({ behavior: 'smooth', block: 'start' });
         }
     </script>
 </body>

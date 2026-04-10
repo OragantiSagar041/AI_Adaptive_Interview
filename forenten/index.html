@@ -475,6 +475,393 @@
             .ip-avatar-card video, .ip-avatar-card img { height: 200px; }
         }
 
+        .coding-round-shell {
+            background: #f8fafc;
+            border: 1px solid #dbe2ea;
+            border-radius: 18px;
+            box-shadow: 0 12px 30px rgba(15, 23, 42, 0.08);
+            padding: 1rem;
+            margin-top: 1.5rem;
+        }
+
+        .coding-round-header {
+            display: flex;
+            justify-content: space-between;
+            gap: 1rem;
+            align-items: center;
+            margin-bottom: 1rem;
+            padding: 0.35rem 0.25rem 0.75rem;
+        }
+
+        .coding-round-kicker {
+            margin: 0 0 0.35rem;
+            text-transform: uppercase;
+            letter-spacing: 0.08em;
+            font-size: 0.72rem;
+            font-weight: 700;
+            color: #2563eb;
+        }
+
+        .coding-round-header h2,
+        .coding-feedback-header h4,
+        .coding-problem-card h3 {
+            margin: 0;
+        }
+
+        .coding-round-actions {
+            display: flex;
+            gap: 0.75rem;
+            flex-wrap: wrap;
+            justify-content: flex-end;
+        }
+
+        .coding-round-grid {
+            display: grid;
+            grid-template-columns: minmax(360px, 0.95fr) minmax(520px, 1.25fr);
+            gap: 0.9rem;
+            min-height: 78vh;
+        }
+
+        .coding-problem-card,
+        .coding-editor-card,
+        .coding-feedback-card,
+        .coding-pane-card {
+            border: 1px solid #dbe2ea;
+            border-radius: 16px;
+            background: #ffffff;
+        }
+
+        .coding-problem-card {
+            padding: 0;
+            overflow: hidden;
+            display: flex;
+            flex-direction: column;
+            min-height: 0;
+        }
+
+        .coding-editor-card {
+            padding: 0;
+            display: grid;
+            grid-template-rows: auto auto minmax(0, 1fr) auto;
+            min-height: 0;
+            overflow: hidden;
+        }
+
+        .coding-problem-scroll {
+            padding: 1.1rem 1.15rem 1.2rem;
+            overflow: auto;
+        }
+
+        .coding-problem-topbar,
+        .coding-editor-topbar {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            gap: 0.75rem;
+            padding: 0.9rem 1rem;
+            border-bottom: 1px solid #e5e7eb;
+            background: #fbfdff;
+        }
+
+        .coding-problem-tabs,
+        .coding-right-tabs {
+            display: flex;
+            gap: 0.45rem;
+            align-items: center;
+            flex-wrap: wrap;
+        }
+
+        .coding-tab-pill {
+            border: 1px solid #dbe2ea;
+            background: #ffffff;
+            color: #475569;
+            border-radius: 999px;
+            padding: 0.4rem 0.8rem;
+            font-size: 0.82rem;
+            font-weight: 600;
+        }
+
+        .coding-right-tab {
+            border: none;
+            background: transparent;
+            color: #64748b;
+            padding: 0.55rem 0.7rem;
+            border-bottom: 2px solid transparent;
+            font-weight: 700;
+            cursor: pointer;
+        }
+
+        .coding-right-tab.active {
+            color: #0f172a;
+            border-bottom-color: #2563eb;
+        }
+
+        .coding-pane-body {
+            padding: 1rem;
+            overflow: auto;
+        }
+
+        .coding-problem-meta {
+            display: flex;
+            gap: 0.5rem;
+            margin-bottom: 0.85rem;
+        }
+
+        .coding-problem-section {
+            margin-top: 1rem;
+        }
+
+        .coding-problem-section h4,
+        .coding-label,
+        .coding-feedback-card h5 {
+            margin: 0 0 0.45rem;
+            font-size: 0.88rem;
+            color: #1f2937;
+        }
+
+        .coding-list {
+            margin: 0;
+            padding-left: 1.2rem;
+            color: #374151;
+        }
+
+        .coding-example {
+            background: #0f172a;
+            color: #e2e8f0;
+            padding: 0.9rem;
+            border-radius: 10px;
+            overflow: auto;
+            white-space: pre-wrap;
+        }
+
+        .coding-toolbar {
+            display: flex;
+            gap: 0.75rem;
+            align-items: center;
+            flex-wrap: wrap;
+            padding: 1rem 1rem 0.85rem;
+            border-bottom: 1px solid #e5e7eb;
+            background: #ffffff;
+        }
+
+        .coding-toolbar select {
+            width: auto;
+            min-width: 150px;
+            margin-top: 0;
+        }
+
+        .coding-textarea,
+        .coding-codebox {
+            width: 100%;
+            border: 1px solid #cbd5e1;
+            border-radius: 12px;
+            padding: 0.9rem;
+            box-sizing: border-box;
+            background: #ffffff;
+        }
+
+        .coding-textarea {
+            min-height: 120px;
+            margin-bottom: 1rem;
+        }
+
+        .coding-codebox {
+            min-height: 320px;
+            font-family: "Courier New", monospace;
+            resize: vertical;
+            margin-bottom: 1rem;
+        }
+
+        .coding-editor-wrap {
+            display: flex;
+            flex-direction: column;
+            min-height: 0;
+            padding: 0 1rem 1rem;
+        }
+
+        .coding-editor-header {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            gap: 0.75rem;
+            padding: 0.85rem 0 0.75rem;
+        }
+
+        .coding-editor-header h4,
+        .coding-pane-card h4 {
+            margin: 0;
+        }
+
+        .coding-editor-status {
+            font-size: 0.8rem;
+            color: #64748b;
+            font-weight: 600;
+        }
+
+        .coding-editor-container {
+            flex: 1;
+            min-height: 420px;
+            border: 1px solid #cbd5e1;
+            border-radius: 12px 12px 0 0;
+            overflow: hidden;
+            background: #0f172a;
+        }
+
+        .coding-console-shell {
+            border: 1px solid #cbd5e1;
+            border-top: none;
+            border-radius: 0 0 12px 12px;
+            background: #ffffff;
+            min-height: 210px;
+            overflow: hidden;
+            display: flex;
+            flex-direction: column;
+        }
+
+        .coding-console-tabs {
+            display: flex;
+            gap: 0.25rem;
+            padding: 0.45rem 0.55rem 0;
+            border-bottom: 1px solid #e5e7eb;
+            background: #f8fafc;
+        }
+
+        .coding-console-tab {
+            border: none;
+            background: transparent;
+            color: #64748b;
+            padding: 0.6rem 0.8rem;
+            font-weight: 700;
+            cursor: pointer;
+            border-bottom: 2px solid transparent;
+        }
+
+        .coding-console-tab.active {
+            color: #111827;
+            border-bottom-color: #2563eb;
+        }
+
+        .coding-console-pane {
+            display: none;
+            padding: 1rem;
+            overflow: auto;
+        }
+
+        .coding-console-pane.active {
+            display: block;
+        }
+
+        .coding-intent-box,
+        .coding-interviewer-box {
+            border-radius: 10px;
+            padding: 0.85rem 1rem;
+            margin-bottom: 0.75rem;
+        }
+
+        .coding-intent-box {
+            background: #eff6ff;
+            color: #1d4ed8;
+        }
+
+        .coding-interviewer-box {
+            background: #111827;
+            color: #f8fafc;
+            font-weight: 600;
+        }
+
+        .coding-runtime {
+            background: #fef2f2;
+            border: 1px solid #fecaca;
+            color: #b91c1c;
+            padding: 0.85rem 1rem;
+            border-radius: 10px;
+            margin-bottom: 1rem;
+            white-space: pre-wrap;
+            font-family: "Courier New", monospace;
+        }
+
+        .coding-test-item {
+            border: 1px solid #dbeafe;
+            background: #f8fbff;
+            border-radius: 12px;
+            padding: 0.9rem;
+            margin-bottom: 0.75rem;
+        }
+
+        .coding-test-item.pass {
+            border-color: #bbf7d0;
+            background: #f0fdf4;
+        }
+
+        .coding-test-item.fail {
+            border-color: #fecaca;
+            background: #fff7f7;
+        }
+
+        .coding-test-item pre {
+            white-space: pre-wrap;
+            margin: 0.5rem 0 0;
+            font-family: "Courier New", monospace;
+            color: #334155;
+        }
+
+        .coding-feedback-card {
+            padding: 1rem;
+            background: #ffffff;
+        }
+
+        .coding-feedback-header {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            gap: 1rem;
+            margin-bottom: 0.85rem;
+        }
+
+        .coding-feedback-columns {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 1rem;
+        }
+
+        .coding-score-grid {
+            display: grid;
+            grid-template-columns: repeat(4, 1fr);
+            gap: 0.75rem;
+            margin-top: 1rem;
+        }
+
+        .coding-score-grid div {
+            background: #eff6ff;
+            border-radius: 10px;
+            padding: 0.85rem;
+            text-align: center;
+        }
+
+        .coding-score-grid span {
+            display: block;
+            font-size: 0.75rem;
+            color: #64748b;
+            margin-bottom: 0.25rem;
+        }
+
+        .coding-score-grid strong {
+            font-size: 1.1rem;
+            color: #1d4ed8;
+        }
+
+        @media (max-width: 900px) {
+            .coding-round-grid {
+                grid-template-columns: 1fr;
+                min-height: auto;
+            }
+
+            .coding-feedback-columns,
+            .coding-score-grid {
+                grid-template-columns: 1fr 1fr;
+            }
+        }
+
         .card,
         #uploadSection {
             background: var(--card-bg);
@@ -979,6 +1366,159 @@
 
         </div> <!-- End of interviewSection -->
 
+        <div id="codingRoundSection" class="hidden coding-round-shell">
+            <div class="coding-round-header">
+                <div>
+                    <p class="coding-round-kicker">Round 2</p>
+                    <h2>Live Coding Test</h2>
+                    <p id="codingRoundSubtitle">Read the prompt, explain your logic to the AI, and write your solution.</p>
+                </div>
+                <div class="coding-round-actions">
+                    <button id="codingCheckpointBtn" class="btn btn-primary" type="button">Get AI Feedback</button>
+                    <button id="codingSubmitBtn" class="btn btn-danger" type="button">Submit Coding Round</button>
+                </div>
+            </div>
+
+            <div class="coding-round-grid">
+                <div class="coding-problem-card">
+                    <div class="coding-problem-topbar">
+                        <div class="coding-problem-tabs">
+                            <span class="coding-tab-pill">Description</span>
+                            <span class="coding-tab-pill">Editorial Disabled</span>
+                        </div>
+                        <div class="coding-problem-meta">
+                            <span id="codingDifficultyTag" class="question-difficulty">Medium</span>
+                            <span id="codingLanguageHint" class="question-type">Python</span>
+                        </div>
+                    </div>
+                    <div class="coding-problem-scroll">
+                        <h3 id="codingTaskTitle">Loading coding task...</h3>
+                        <p id="codingTaskDescription"></p>
+                        <div class="coding-problem-section">
+                            <h4>Input</h4>
+                            <p id="codingInputFormat"></p>
+                        </div>
+                        <div class="coding-problem-section">
+                            <h4>Output</h4>
+                            <p id="codingOutputFormat"></p>
+                        </div>
+                        <div class="coding-problem-section">
+                            <h4>Constraints</h4>
+                            <ul id="codingConstraintsList" class="coding-list"></ul>
+                        </div>
+                        <div class="coding-problem-section">
+                            <h4>Example</h4>
+                            <pre id="codingExampleBox" class="coding-example"></pre>
+                        </div>
+                        <div class="coding-problem-section">
+                            <h4>Evaluation Focus</h4>
+                            <ul id="codingFocusList" class="coding-list"></ul>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="coding-editor-card">
+                    <div class="coding-editor-topbar">
+                        <div class="coding-right-tabs">
+                            <button class="coding-right-tab active" type="button">Code</button>
+                            <button class="coding-right-tab" type="button">Testcase</button>
+                            <button class="coding-right-tab" type="button">Result</button>
+                        </div>
+                        <div class="coding-round-actions">
+                            <button id="codingCheckpointBtn" class="btn btn-primary" type="button">Get AI Feedback</button>
+                            <button id="codingSubmitBtn" class="btn btn-danger" type="button">Submit</button>
+                        </div>
+                    </div>
+
+                    <div class="coding-toolbar">
+                        <label for="codingLanguageSelect">Language</label>
+                        <select id="codingLanguageSelect">
+                            <option value="python">Python</option>
+                            <option value="javascript">JavaScript</option>
+                            <option value="java">Java</option>
+                            <option value="c">C</option>
+                        </select>
+                        <button id="codingVoiceBtn" class="btn btn-primary" type="button">Start Voice Notes</button>
+                        <button id="codingRunBtn" class="btn btn-primary" type="button">Run Code</button>
+                    </div>
+
+                    <div class="coding-editor-wrap">
+                        <div class="coding-editor-header">
+                            <div>
+                                <h4>Editor</h4>
+                                <div class="coding-editor-status">Write your solution in the IDE below.</div>
+                            </div>
+                            <div class="coding-editor-status">Autosave by language</div>
+                        </div>
+                        <div id="codingEditorContainer" class="coding-editor-container"></div>
+                        <textarea id="codingCodeBox" class="coding-codebox" spellcheck="false" placeholder="Write your solution here..."></textarea>
+
+                        <div class="coding-console-shell">
+                            <div class="coding-console-tabs">
+                                <button class="coding-console-tab active" type="button" data-pane="tests">Test Results</button>
+                                <button class="coding-console-tab" type="button" data-pane="console">Console</button>
+                                <button class="coding-console-tab" type="button" data-pane="ai">AI Review</button>
+                            </div>
+                            <div id="codingTestsPane" class="coding-console-pane active">
+                                <div class="coding-feedback-header">
+                                    <h4>Test Results</h4>
+                                    <span id="codingHiddenSummary">3 visible cases, 4 hidden cases</span>
+                                </div>
+                                <div id="codingVisibleTests"></div>
+                            </div>
+                            <div id="codingConsolePane" class="coding-console-pane">
+                                <div id="codingRuntimeError" class="coding-runtime hidden"></div>
+                                <div class="coding-pane-card">
+                                    <div class="coding-pane-body">
+                                        <h4>Execution Output</h4>
+                                        <p id="codingConsoleText">Run the code to see compiler errors, runtime errors, or pass/fail updates.</p>
+                                    </div>
+                                </div>
+                            </div>
+                            <div id="codingAiPane" class="coding-console-pane">
+                                <div class="coding-pane-card">
+                                    <div class="coding-pane-body">
+                                        <h4>AI Interviewer</h4>
+                                        <p id="codingInterviewerIntent" class="coding-intent-box">The AI will infer what the candidate is trying to build and ask for the logic behind it.</p>
+                                        <div id="codingInterviewerPrompt" class="coding-interviewer-box">Tell me the approach you are planning before you start coding.</div>
+                                        <label class="coding-label" for="codingExplanationBox">Explain your current logic to the AI</label>
+                                        <textarea id="codingExplanationBox" class="coding-textarea" placeholder="Say or type what approach you are taking, what data structure you chose, and what edge cases you are considering."></textarea>
+                                    </div>
+                                </div>
+                                <div class="coding-feedback-card">
+                                    <div class="coding-feedback-header">
+                                        <h4>AI Coding Coach</h4>
+                                        <span id="codingFeedbackMeta">Waiting for your first checkpoint</span>
+                                    </div>
+                                    <p id="codingCoachMessage">The AI will review only a compact summary plus your latest explanation and code snapshot to keep token usage efficient.</p>
+                                    <div class="coding-feedback-columns">
+                                        <div>
+                                            <h5>Strengths</h5>
+                                            <ul id="codingStrengths" class="coding-list"></ul>
+                                        </div>
+                                        <div>
+                                            <h5>Risks</h5>
+                                            <ul id="codingRisks" class="coding-list"></ul>
+                                        </div>
+                                    </div>
+                                    <div>
+                                        <h5>Next Steps</h5>
+                                        <ul id="codingNextSteps" class="coding-list"></ul>
+                                    </div>
+                                    <div class="coding-score-grid">
+                                        <div><span>Understanding</span><strong id="codingScoreUnderstanding">--</strong></div>
+                                        <div><span>Implementation</span><strong id="codingScoreImplementation">--</strong></div>
+                                        <div><span>Communication</span><strong id="codingScoreCommunication">--</strong></div>
+                                        <div><span>Overall</span><strong id="codingScoreOverall">--</strong></div>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
         <div id="status" class="status"></div>
 
         <div class="progress">
@@ -1330,6 +1870,22 @@
         let totalQuestions = 0;
         let videoRecorder = null;
         let isSkipping = false;
+        let codingRoundState = null;
+        let codingRoundStarted = false;
+        let codingVoiceRecognition = null;
+        let codingVoiceListening = false;
+        let interviewPhase = 'verbal';
+        let totalInterviewMinutes = 30;
+        let verbalRoundMinutes = 15;
+        let codingRoundMinutes = 15;
+        let codingSubmitInProgress = false;
+        let codingEditor = null;
+        let codingObservationTimer = null;
+        let codingObservationCooldownUntil = 0;
+        const codingDraftsByLanguage = {};
+        let backgroundNoiseAlerts = 0;
+        let backgroundNoiseFrameCount = 0;
+        let backgroundNoiseCooldownUntil = 0;
 
         // CONFIGURATION: Change this to your Render URL after deployment
         // e.g. "https://your-app-name.onrender.com"
@@ -1467,6 +2023,50 @@
             _qTrack.faceAlerts++;
         }
 
+        function showNoiseAlertBanner(message) {
+            const banner = document.getElementById('noiseAlertBanner');
+            const text = document.getElementById('noiseAlertText');
+            if (!banner || !text) return;
+            text.textContent = message;
+            banner.classList.remove('hidden');
+            clearTimeout(showNoiseAlertBanner._timer);
+            showNoiseAlertBanner._timer = setTimeout(() => {
+                banner.classList.add('hidden');
+            }, 3500);
+        }
+
+        async function forceExitInterviewDueToNoise() {
+            stopBackgroundNoiseMonitor();
+            try {
+                if (videoRecorder && videoRecorder.isRecording) {
+                    await videoRecorder.stopRecording();
+                }
+            } catch (e) {
+                console.error('Error stopping recorder during noise exit:', e);
+            }
+
+            try {
+                const urlParams = new URLSearchParams(window.location.search);
+                const sessionId = urlParams.get('session_id') || urlParams.get('session');
+                if (sessionId) {
+                    await fetch(`${API_BASE_URL}/complete-session/${sessionId}`, { method: 'POST' });
+                }
+            } catch (e) {
+                console.error('Error marking session complete during noise exit:', e);
+            }
+
+            alert('Interview ended automatically because background noise alerts reached 20.');
+            location.reload();
+        }
+
+        function recordBackgroundNoiseAlert() {
+            backgroundNoiseAlerts++;
+            showNoiseAlertBanner(`Noise detected near the microphone. Alerts: ${backgroundNoiseAlerts} / 20`);
+            if (backgroundNoiseAlerts >= 20) {
+                forceExitInterviewDueToNoise();
+            }
+        }
+
         // Count filler words in a text
         function countFillers(text) {
             if (!text) return 0;
@@ -1566,9 +2166,13 @@
                 }
             }
 
-            // Start the global interview countdown timer
+            // Full duration for interview
             const duration = window.interviewDuration || 30;
-            startGlobalCountdown(duration);
+            totalInterviewMinutes = Math.max(2, Number(duration));
+            backgroundNoiseAlerts = 0;
+            backgroundNoiseFrameCount = 0;
+            backgroundNoiseCooldownUntil = 0;
+            startGlobalCountdown(totalInterviewMinutes, 'verbal');
 
             // Load first question
             if (currentInterviewId && currentQuestionId) {
@@ -1584,7 +2188,15 @@
         let globalTimeRemaining = 0; // seconds
         let globalTotalTime = 0; // seconds
 
-        function startGlobalCountdown(durationMinutes) {
+        function configureInterviewPhases(durationMinutes) {
+            totalInterviewMinutes = Math.max(2, Number(durationMinutes) || 30);
+            verbalRoundMinutes = Math.max(1, Math.floor(totalInterviewMinutes / 2));
+            codingRoundMinutes = Math.max(1, totalInterviewMinutes - verbalRoundMinutes);
+        }
+
+        function startGlobalCountdown(durationMinutes, phase = 'verbal') {
+            stopGlobalCountdown();
+            interviewPhase = phase;
             globalTotalTime = durationMinutes * 60;
             globalTimeRemaining = globalTotalTime;
             updateCountdownDisplay();
@@ -1600,18 +2212,19 @@
 
                 // Warning at 2 minutes
                 if (globalTimeRemaining === 120) {
-                    showStatus('<i class="fas fa-exclamation-triangle"></i> 2 minutes remaining! Please wrap up your answer.', 'error');
+                    const phaseLabel = 'interview';
+                    showStatus(`<i class="fas fa-exclamation-triangle"></i> 2 minutes remaining in the ${phaseLabel}.`, 'error');
                 }
                 // Warning at 30 seconds
                 if (globalTimeRemaining === 30) {
-                    showStatus('<i class="fas fa-clock"></i> 30 seconds remaining! Interview will end soon.', 'error');
+                    const phaseLabel = 'interview';
+                    showStatus(`<i class="fas fa-clock"></i> 30 seconds remaining in the ${phaseLabel}.`, 'error');
                 }
 
                 if (globalTimeRemaining <= 0) {
                     clearInterval(globalCountdownInterval);
                     globalCountdownInterval = null;
-                    // Auto-end the interview
-                    showStatus('<i class="fas fa-clock"></i> Time is up! Ending interview...', 'info');
+                    showStatus('<i class="fas fa-clock"></i> Interview time is up. Submitting your responses...', 'info');
                     endInterview();
                 }
             }, 1000);
@@ -1630,6 +2243,10 @@
             const mins = Math.floor(globalTimeRemaining / 60);
             const secs = globalTimeRemaining % 60;
             el.textContent = `${String(mins).padStart(2, '0')}:${String(secs).padStart(2, '0')}`;
+            const subtitle = document.getElementById('codingRoundSubtitle');
+            if (subtitle && !document.getElementById('codingRoundSection').classList.contains('hidden')) {
+                subtitle.textContent = `Round 2 has ${String(mins).padStart(2, '0')}:${String(secs).padStart(2, '0')} remaining. Explain your logic to the AI while you code.`;
+            }
 
             // Color coding: green > 2min, orange 1-2min, red < 1min
             if (globalTimeRemaining <= 60) {
@@ -1896,6 +2513,20 @@
             document.getElementById('stopButton').addEventListener('click', stopRecording);
             document.getElementById('nextButton').addEventListener('click', nextQuestion);
             document.getElementById('prevButton').addEventListener('click', prevQuestion);
+            document.getElementById('codingCheckpointBtn').addEventListener('click', () => requestCodingCheckpoint(false));
+            document.getElementById('codingSubmitBtn').addEventListener('click', () => requestCodingCheckpoint(true));
+            document.getElementById('codingVoiceBtn').addEventListener('click', toggleCodingVoiceNotes);
+            document.getElementById('codingRunBtn').addEventListener('click', runCodingCode);
+            document.getElementById('codingLanguageSelect').addEventListener('change', handleCodingLanguageChange);
+            document.getElementById('codingExplanationBox').addEventListener('input', scheduleCodingObservation);
+            document.querySelectorAll('.coding-console-tab').forEach(btn => {
+                btn.addEventListener('click', () => switchCodingPane(btn.dataset.pane));
+            });
+            document.querySelectorAll('.coding-right-tab').forEach((btn, index) => {
+                const mapped = index === 0 ? 'ai' : index === 1 ? 'tests' : 'console';
+                btn.addEventListener('click', () => switchCodingPane(mapped));
+            });
+            initializeCodingVoiceNotes();
         });
 
         async function startInterview(formData) {
@@ -2084,8 +2715,7 @@
                 if (currentQuestionId < totalQuestions) {
                     await loadQuestion(currentInterviewId, currentQuestionId + 1, true);
                 } else {
-                    // If it's the last question, end the interview
-                    await endInterview(true); // true means skip saving answer because we just did it
+                    await launchCodingRound();
                 }
             } catch (error) {
                 console.error('Error skipping question:', error);
@@ -2253,7 +2883,7 @@
             if (nextQuestionId <= totalQuestions) {
                 await loadQuestion(currentInterviewId, nextQuestionId);
             } else {
-                await endInterview(true); // true means skip saving answer because we just did it
+                await endInterview();
             }
         }
 
@@ -2293,9 +2923,537 @@
             }
         }
 
+        function getCodingCode() {
+            if (codingEditor) {
+                return codingEditor.getValue();
+            }
+            return document.getElementById('codingCodeBox').value;
+        }
+
+        function setCodingCode(value) {
+            if (codingEditor) {
+                codingEditor.setValue(value || '');
+            }
+            document.getElementById('codingCodeBox').value = value || '';
+        }
+
+        function getStarterCode(task, language) {
+            const functionName = (task && task.function_name) || 'solve';
+            const pythonSignature = (task && task.starter_function_signature) || `def ${functionName}(value):`;
+            const templates = {
+                python: `${pythonSignature}\n    pass`,
+                javascript: `function ${functionName}(value) {\n  return null;\n}`,
+                java: `import java.util.*;\n\npublic class Solution {\n    public static Object ${functionName}(Object value) {\n        return null;\n    }\n}`,
+                c: `#include <stdio.h>\n\nint ${functionName}(int value) {\n    return 0;\n}`
+            };
+            return templates[language] || templates.python;
+        }
+
+        function syncEditorLanguage(language) {
+            if (codingEditor && window.monaco) {
+                window.monaco.editor.setModelLanguage(codingEditor.getModel(), language === 'javascript' ? 'javascript' : language);
+            }
+        }
+
+        function scheduleCodingObservation() {
+            if (!codingRoundStarted) return;
+            if (codingObservationTimer) {
+                clearTimeout(codingObservationTimer);
+            }
+            codingObservationTimer = setTimeout(() => {
+                requestCodingObservation();
+            }, 8000);
+        }
+
+        async function initializeCodingEditor() {
+            const textarea = document.getElementById('codingCodeBox');
+            const container = document.getElementById('codingEditorContainer');
+            if (codingEditor || !container) {
+                return;
+            }
+
+            const onChange = () => {
+                textarea.value = getCodingCode();
+                scheduleCodingObservation();
+            };
+
+            const loadMonaco = () => new Promise((resolve, reject) => {
+                if (window.monaco && window.require) {
+                    resolve();
+                    return;
+                }
+                const script = document.createElement('script');
+                script.src = 'https://cdnjs.cloudflare.com/ajax/libs/monaco-editor/0.52.2/min/vs/loader.min.js';
+                script.onload = () => resolve();
+                script.onerror = () => reject(new Error('Failed to load Monaco editor'));
+                document.head.appendChild(script);
+            });
+
+            try {
+                await loadMonaco();
+                window.require.config({ paths: { vs: 'https://cdnjs.cloudflare.com/ajax/libs/monaco-editor/0.52.2/min/vs' } });
+                window.require(['vs/editor/editor.main'], () => {
+                    codingEditor = window.monaco.editor.create(container, {
+                        value: textarea.value || '',
+                        language: document.getElementById('codingLanguageSelect').value || 'python',
+                        theme: 'vs-dark',
+                        automaticLayout: true,
+                        minimap: { enabled: false },
+                        fontSize: 14,
+                    });
+                    textarea.classList.add('hidden');
+                    codingEditor.onDidChangeModelContent(onChange);
+                });
+            } catch (error) {
+                console.warn('Monaco editor unavailable, using textarea fallback.', error);
+                container.classList.add('hidden');
+                textarea.classList.remove('hidden');
+                textarea.addEventListener('input', scheduleCodingObservation);
+            }
+        }
+
+        function renderCodingList(elementId, items) {
+            const el = document.getElementById(elementId);
+            if (!el) return;
+            el.innerHTML = '';
+            (items || []).forEach(item => {
+                const li = document.createElement('li');
+                li.textContent = item;
+                el.appendChild(li);
+            });
+            if (!el.children.length) {
+                const li = document.createElement('li');
+                li.textContent = 'No details yet.';
+                el.appendChild(li);
+            }
+        }
+
+        function formatCodingValue(value) {
+            if (typeof value === 'string') {
+                return value;
+            }
+            try {
+                return JSON.stringify(value, null, 2);
+            } catch (error) {
+                return String(value);
+            }
+        }
+
+        function renderCodingFeedback(feedback, isFinal = false) {
+            if (!feedback) return;
+            document.getElementById('codingCoachMessage').textContent = feedback.coach_message || 'Feedback unavailable.';
+            document.getElementById('codingFeedbackMeta').textContent = isFinal
+                ? (feedback.final_recommendation || 'Final review completed')
+                : 'Latest checkpoint review';
+
+            renderCodingList('codingStrengths', feedback.strengths || []);
+            renderCodingList('codingRisks', feedback.risks || []);
+            renderCodingList('codingNextSteps', feedback.next_steps || []);
+
+            const scorecard = feedback.scorecard || {};
+            document.getElementById('codingScoreUnderstanding').textContent = scorecard.problem_understanding ?? '--';
+            document.getElementById('codingScoreImplementation').textContent = scorecard.implementation ?? '--';
+            document.getElementById('codingScoreCommunication').textContent = scorecard.communication ?? '--';
+            document.getElementById('codingScoreOverall').textContent = scorecard.overall ?? '--';
+        }
+
+        function switchCodingPane(paneName) {
+            document.querySelectorAll('.coding-console-tab').forEach(btn => {
+                btn.classList.toggle('active', btn.dataset.pane === paneName);
+            });
+            document.querySelectorAll('.coding-console-pane').forEach(pane => {
+                const isActive = pane.id === `coding${paneName.charAt(0).toUpperCase()}${paneName.slice(1)}Pane`;
+                pane.classList.toggle('active', isActive);
+            });
+            document.querySelectorAll('.coding-right-tab').forEach((btn, index) => {
+                const mapped = index === 0 ? 'ai' : index === 1 ? 'tests' : 'console';
+                btn.classList.toggle('active', mapped === paneName);
+            });
+        }
+
+        function renderVisibleTests(runResult = null, tests = null) {
+            const host = document.getElementById('codingVisibleTests');
+            const runtimeBox = document.getElementById('codingRuntimeError');
+            const summary = document.getElementById('codingHiddenSummary');
+            const consoleText = document.getElementById('codingConsoleText');
+            if (!host) return;
+            host.innerHTML = '';
+
+            const visibleCases = (tests && tests.visible_cases) || [];
+            visibleCases.forEach((testCase) => {
+                const result = runResult ? (runResult.visible_results || []).find(item => item.id === testCase.id) : null;
+                const card = document.createElement('div');
+                card.className = `coding-test-item ${result ? (result.passed ? 'pass' : 'fail') : ''}`;
+                const statusLabel = result ? (result.passed ? 'Pass' : 'Fail') : 'Pending';
+                const resultBlock = result && result.error ? `\nRuntime Error: ${result.error}` : '';
+                card.innerHTML = `
+                    <strong>Test ${testCase.id}: ${statusLabel}</strong>
+                    <pre>Input: ${formatCodingValue(testCase.input)}
+Output: ${formatCodingValue(testCase.output)}${resultBlock}</pre>
+                `;
+                host.appendChild(card);
+            });
+
+            if (summary && tests) {
+                if (runResult && runResult.hidden_summary) {
+                    summary.textContent = `${visibleCases.length} visible cases, ${runResult.hidden_summary.total} hidden cases. Hidden passed: ${runResult.hidden_summary.passed}/${runResult.hidden_summary.total}`;
+                } else {
+                    summary.textContent = `${visibleCases.length} visible cases, ${tests.hidden_case_count} hidden cases`;
+                }
+            }
+
+            if (runtimeBox) {
+                if (runResult && runResult.runtime_error) {
+                    runtimeBox.textContent = runResult.runtime_error;
+                    runtimeBox.classList.remove('hidden');
+                    if (consoleText) {
+                        consoleText.textContent = 'A compiler/runtime error occurred. Review the message above and update your code.';
+                    }
+                } else {
+                    runtimeBox.textContent = '';
+                    runtimeBox.classList.add('hidden');
+                    if (consoleText) {
+                        consoleText.textContent = runResult
+                            ? 'Execution completed. Visible tests were updated and hidden tests were evaluated privately.'
+                            : 'Run the code to see compiler errors, runtime errors, or pass/fail updates.';
+                    }
+                }
+            }
+        }
+
+        function renderCodingObservation(observation) {
+            if (!observation) return;
+            document.getElementById('codingInterviewerIntent').textContent = observation.inferred_intent || 'The AI is reviewing the draft.';
+            document.getElementById('codingInterviewerPrompt').textContent = observation.interviewer_prompt || 'Explain what you are implementing.';
+        }
+
+        function renderCodingTask(codingRound) {
+            const task = codingRound.task || {};
+            codingRoundState = codingRound;
+            document.getElementById('codingTaskTitle').textContent = task.title || 'Live coding problem';
+            document.getElementById('codingTaskDescription').textContent = task.description || '';
+            document.getElementById('codingInputFormat').textContent = task.input_format || '';
+            document.getElementById('codingOutputFormat').textContent = task.output_format || '';
+            document.getElementById('codingDifficultyTag').textContent = task.difficulty || 'Medium';
+            const selectedLanguage = codingRound.language || task.recommended_language || 'python';
+            document.getElementById('codingLanguageHint').textContent = selectedLanguage.toUpperCase();
+            document.getElementById('codingLanguageSelect').value = selectedLanguage;
+            syncEditorLanguage(selectedLanguage);
+
+            renderCodingList('codingConstraintsList', task.constraints || []);
+            renderCodingList('codingFocusList', task.evaluation_focus || []);
+
+            const example = (task.examples || [])[0] || {};
+            document.getElementById('codingExampleBox').textContent =
+                `Input:\n${formatCodingValue(example.input || '')}\n\nOutput:\n${formatCodingValue(example.output || '')}\n\nExplanation:\n${example.explanation || ''}`;
+
+            const starterCode = codingRound.latest_code || codingDraftsByLanguage[selectedLanguage] || getStarterCode(task, selectedLanguage);
+            if (!getCodingCode() || codingRound.latest_code) {
+                setCodingCode(starterCode);
+            }
+            if (codingRound.latest_code) {
+                setCodingCode(codingRound.latest_code);
+            }
+            if (codingRound.latest_explanation) {
+                document.getElementById('codingExplanationBox').value = codingRound.latest_explanation;
+            }
+            if (codingRound.latest_feedback) {
+                renderCodingFeedback(codingRound.latest_feedback, codingRound.status === 'completed');
+            }
+            if (codingRound.last_observation) {
+                renderCodingObservation(codingRound.last_observation);
+            }
+            renderVisibleTests(codingRound.latest_run || null, buildCodingTestsState(codingRound));
+        }
+
+        function buildCodingTestsState(codingRound) {
+            const task = codingRound.task || {};
+            const testCases = task.test_cases || [];
+            return {
+                visible_cases: testCases.filter(item => item.visible).slice(0, 3).map(item => ({
+                    id: item.id,
+                    input: item.input,
+                    output: item.expected
+                })),
+                hidden_case_count: testCases.filter(item => !item.visible).length,
+            };
+        }
+
+        async function launchCodingRound() {
+            if (codingSubmitInProgress) {
+                return;
+            }
+            if (codingRoundStarted) {
+                document.getElementById('interviewSection').classList.add('hidden');
+                document.getElementById('codingRoundSection').classList.remove('hidden');
+                return;
+            }
+
+            codingRoundStarted = true;
+            stopGlobalCountdown();
+            if (window.speechSynthesis) window.speechSynthesis.cancel();
+
+            if (videoRecorder && videoRecorder.isRecording) {
+                try {
+                    await videoRecorder.stopRecording();
+                } catch (error) {
+                    console.error('Error stopping recorder before coding round:', error);
+                }
+            }
+
+            const currentAnswer = document.getElementById('transcriptionBox').value.trim();
+            if (currentAnswer) {
+                try {
+                    await saveCurrentAnswer();
+                    await saveBehavioralData(currentInterviewId, currentQuestionId, currentAnswer);
+                } catch (error) {
+                    console.error('Error saving final verbal answer before coding round:', error);
+                }
+            }
+
+            document.getElementById('interviewSection').classList.add('hidden');
+            document.getElementById('codingRoundSection').classList.remove('hidden');
+            showStatus('Preparing your live coding round...', 'info');
+            await initializeCodingEditor();
+
+            try {
+                const response = await fetch(`${API_BASE_URL}/coding-round/start`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ interview_id: currentInterviewId })
+                });
+                const data = await response.json();
+                if (!response.ok) {
+                    throw new Error(data.detail || 'Failed to start coding round');
+                }
+
+                renderCodingTask(data.coding_round);
+                renderVisibleTests(data.coding_round.latest_run || null, data.tests);
+                switchCodingPane('ai');
+                startGlobalCountdown(codingRoundMinutes, 'coding');
+                showStatus('Coding round is ready. Explain your logic while you code, then ask AI for feedback.', 'success');
+                requestCodingObservation(true);
+            } catch (error) {
+                codingRoundStarted = false;
+                console.error('Coding round start error:', error);
+                showStatus(`Could not prepare coding round: ${error.message}`, 'error');
+            }
+        }
+
+        async function requestCodingCheckpoint(finalSubmit = false) {
+            if (finalSubmit && codingSubmitInProgress) {
+                return;
+            }
+            const code = getCodingCode().trim();
+            const explanation = document.getElementById('codingExplanationBox').value.trim();
+            const language = document.getElementById('codingLanguageSelect').value;
+            const endpoint = finalSubmit ? 'submit' : 'checkpoint';
+            const button = document.getElementById(finalSubmit ? 'codingSubmitBtn' : 'codingCheckpointBtn');
+            const originalText = button.textContent;
+            if (finalSubmit) {
+                codingSubmitInProgress = true;
+            }
+            button.disabled = true;
+            button.textContent = finalSubmit ? 'Submitting...' : 'Reviewing...';
+
+            try {
+                const response = await fetch(`${API_BASE_URL}/coding-round/${endpoint}`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        interview_id: currentInterviewId,
+                        code,
+                        explanation,
+                        language
+                    })
+                });
+                const data = await response.json();
+                if (!response.ok) {
+                    throw new Error(data.detail || 'Coding round request failed');
+                }
+
+                codingRoundState = data.coding_round;
+                renderCodingFeedback(data.feedback, finalSubmit);
+                showStatus(
+                    finalSubmit
+                        ? 'Coding round submitted. Finalizing your interview...'
+                        : (data.cached ? 'Showing the latest saved feedback for this draft.' : 'AI coding feedback updated.'),
+                    'success'
+                );
+
+                if (finalSubmit) {
+                    await endInterview(true);
+                }
+            } catch (error) {
+                console.error('Coding round feedback error:', error);
+                showStatus(`Coding round error: ${error.message}`, 'error');
+            } finally {
+                if (!finalSubmit) {
+                    button.disabled = false;
+                    button.textContent = originalText;
+                } else {
+                    codingSubmitInProgress = false;
+                }
+            }
+        }
+
+        async function runCodingCode() {
+            const code = getCodingCode().trim();
+            const explanation = document.getElementById('codingExplanationBox').value.trim();
+            const button = document.getElementById('codingRunBtn');
+            const originalText = button.textContent;
+            button.disabled = true;
+            button.textContent = 'Running...';
+
+            try {
+                const response = await fetch(`${API_BASE_URL}/coding-round/run`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        interview_id: currentInterviewId,
+                        code,
+                        explanation,
+                        language: document.getElementById('codingLanguageSelect').value
+                    })
+                });
+                const data = await response.json();
+                if (!response.ok) {
+                    throw new Error(data.detail || 'Failed to run code');
+                }
+                renderVisibleTests(data.run_result, data.tests);
+                switchCodingPane(data.run_result.runtime_error ? 'console' : 'tests');
+                showStatus(
+                    data.run_result.runtime_error
+                        ? 'Runtime error shown below.'
+                        : 'Code executed. Visible tests updated and hidden tests summarized.',
+                    data.run_result.runtime_error ? 'error' : 'success'
+                );
+            } catch (error) {
+                console.error('Run code error:', error);
+                showStatus(`Run failed: ${error.message}`, 'error');
+            } finally {
+                button.disabled = false;
+                button.textContent = originalText;
+            }
+        }
+
+        async function requestCodingObservation(forceSpeak = false) {
+            if (!codingRoundStarted) return;
+            const now = Date.now();
+            if (!forceSpeak && now < codingObservationCooldownUntil) {
+                return;
+            }
+            try {
+                const response = await fetch(`${API_BASE_URL}/coding-round/observe`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        interview_id: currentInterviewId,
+                        code: getCodingCode(),
+                        explanation: document.getElementById('codingExplanationBox').value.trim(),
+                        language: document.getElementById('codingLanguageSelect').value
+                    })
+                });
+                const data = await response.json();
+                if (!response.ok) {
+                    throw new Error(data.detail || 'Observation failed');
+                }
+                renderCodingObservation(data.observation);
+                switchCodingPane('ai');
+                codingObservationCooldownUntil = Date.now() + 25000;
+                if (!window.speechSynthesis.speaking || forceSpeak) {
+                    speakText(data.observation.interviewer_prompt || 'Explain what you are implementing right now.');
+                }
+            } catch (error) {
+                console.warn('Coding observation error:', error);
+            }
+        }
+
+        function handleCodingLanguageChange() {
+            const select = document.getElementById('codingLanguageSelect');
+            const nextLanguage = select.value;
+            const task = (codingRoundState && codingRoundState.task) || {};
+            const currentLanguage = codingRoundState && codingRoundState.language ? codingRoundState.language : 'python';
+            codingDraftsByLanguage[currentLanguage] = getCodingCode();
+            const nextDraft = codingDraftsByLanguage[nextLanguage] || getStarterCode(task, nextLanguage);
+            if (codingRoundState) {
+                codingRoundState.language = nextLanguage;
+            }
+            document.getElementById('codingLanguageHint').textContent = nextLanguage.toUpperCase();
+            setCodingCode(nextDraft);
+            syncEditorLanguage(nextLanguage);
+        }
+
+        function initializeCodingVoiceNotes() {
+            if (!('webkitSpeechRecognition' in window || 'SpeechRecognition' in window)) {
+                return;
+            }
+            const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
+            codingVoiceRecognition = new SpeechRecognition();
+            codingVoiceRecognition.continuous = true;
+            codingVoiceRecognition.interimResults = true;
+            codingVoiceRecognition.lang = 'en-IN';
+
+            codingVoiceRecognition.onresult = (event) => {
+                const explanationBox = document.getElementById('codingExplanationBox');
+                let finalChunk = '';
+                for (let i = event.resultIndex; i < event.results.length; i++) {
+                    if (event.results[i].isFinal) {
+                        finalChunk += event.results[i][0].transcript + ' ';
+                    }
+                }
+                if (finalChunk) {
+                    explanationBox.value += finalChunk;
+                    explanationBox.scrollTop = explanationBox.scrollHeight;
+                    scheduleCodingObservation();
+                }
+            };
+
+            codingVoiceRecognition.onend = () => {
+                if (!codingVoiceListening) return;
+                try {
+                    codingVoiceRecognition.start();
+                } catch (e) {
+                    console.warn('Coding voice restart failed:', e);
+                }
+            };
+
+            codingVoiceRecognition.onerror = (event) => {
+                console.warn('Coding voice notes error:', event.error);
+            };
+        }
+
+        function toggleCodingVoiceNotes() {
+            const btn = document.getElementById('codingVoiceBtn');
+            if (!codingVoiceRecognition) {
+                initializeCodingVoiceNotes();
+            }
+            if (!codingVoiceRecognition) {
+                showStatus('Voice notes are not supported in this browser.', 'error');
+                return;
+            }
+
+            if (codingVoiceListening) {
+                codingVoiceListening = false;
+                codingVoiceRecognition.stop();
+                btn.textContent = 'Start Voice Notes';
+                showStatus('Voice notes stopped.', 'info');
+            } else {
+                codingVoiceListening = true;
+                codingVoiceRecognition.start();
+                btn.textContent = 'Stop Voice Notes';
+                showStatus('Voice notes active. Speak your logic while you code.', 'info');
+            }
+        }
+
         async function endInterview(alreadySaved = false) {
             // Stop the global countdown timer
             stopGlobalCountdown();
+
+            if (codingVoiceListening && codingVoiceRecognition) {
+                codingVoiceListening = false;
+                try { codingVoiceRecognition.stop(); } catch (e) { console.warn(e); }
+            }
 
             // Stop speech if AI is reading
             if (window.speechSynthesis) window.speechSynthesis.cancel();
@@ -2306,6 +3464,7 @@
             // --- UI TRANSITION ---
             // Move this UP so the user immediately sees the end screen
             document.getElementById('interviewSection').classList.add('hidden');
+            document.getElementById('codingRoundSection').classList.add('hidden');
             document.getElementById('status').classList.add('hidden'); // Hide the generic status bar
             document.getElementById('resultsSection').classList.remove('hidden');
             updateProgress(100);
@@ -2479,6 +3638,11 @@
     </button>
 </div>
 
+<div id="noiseAlertBanner" class="hidden" style="position:fixed;top:18px;right:18px;z-index:10001;background:#fff7ed;border:1px solid #fdba74;color:#9a3412;padding:12px 14px;border-radius:12px;box-shadow:0 10px 28px rgba(15,23,42,0.14);min-width:260px;">
+    <div style="font-weight:800;margin-bottom:4px;">Background Noise Alert</div>
+    <div id="noiseAlertText" style="font-size:0.9rem;line-height:1.45;">Noise detected near the microphone. Alerts: 0 / 20</div>
+</div>
+
 <script>
     function enableFullscreen() {
         const elem = document.documentElement;
@@ -2603,6 +3767,7 @@
 
                 // START FACE DETECTION
                 startFaceDetection(videoPreview);
+                startBackgroundNoiseMonitor(stream);
 
             } else {
                 console.error("Video preview element not found!");
@@ -2739,6 +3904,7 @@
     async function stopAndSaveFullSessionRecording(interviewId) {
         console.log("Stopping full session recording...");
         stopFaceDetection(); // Stop detection loop
+        stopBackgroundNoiseMonitor();
 
         if (!fullSessionRecorder) {
             console.warn("No recorder found, skipping save.");
@@ -2845,6 +4011,68 @@
     let analyser = null;
     let dataArray = null;
     let visualizerFrame = null;
+    let noiseAudioContext = null;
+    let noiseAnalyser = null;
+    let noiseDataArray = null;
+    let noiseMonitorFrame = null;
+
+    function startBackgroundNoiseMonitor(stream) {
+        if (!stream || stream.getAudioTracks().length === 0) return;
+        if (noiseMonitorFrame) return;
+
+        noiseAudioContext = new (window.AudioContext || window.webkitAudioContext)();
+        const source = noiseAudioContext.createMediaStreamSource(stream);
+        noiseAnalyser = noiseAudioContext.createAnalyser();
+        noiseAnalyser.fftSize = 256;
+        source.connect(noiseAnalyser);
+        noiseDataArray = new Uint8Array(noiseAnalyser.frequencyBinCount);
+
+        const tick = () => {
+            noiseMonitorFrame = requestAnimationFrame(tick);
+            noiseAnalyser.getByteTimeDomainData(noiseDataArray);
+
+            let sumSquares = 0;
+            for (let i = 0; i < noiseDataArray.length; i++) {
+                const normalized = (noiseDataArray[i] - 128) / 128;
+                sumSquares += normalized * normalized;
+            }
+            const rms = Math.sqrt(sumSquares / noiseDataArray.length);
+            const now = Date.now();
+            const isInterviewVisible =
+                !document.getElementById('interviewSection').classList.contains('hidden') ||
+                !document.getElementById('codingRoundSection').classList.contains('hidden');
+            const candidateRecentlySpoke = (now - ((_qTrack && _qTrack.lastSpeechTime) || 0)) < 1500;
+            const aiTalking = window.speechSynthesis && window.speechSynthesis.speaking;
+
+            if (isInterviewVisible && !candidateRecentlySpoke && !aiTalking && rms > 0.16) {
+                backgroundNoiseFrameCount++;
+            } else {
+                backgroundNoiseFrameCount = Math.max(0, backgroundNoiseFrameCount - 2);
+            }
+
+            if (backgroundNoiseFrameCount >= 18 && now > backgroundNoiseCooldownUntil) {
+                backgroundNoiseCooldownUntil = now + 5000;
+                backgroundNoiseFrameCount = 0;
+                recordBackgroundNoiseAlert();
+            }
+        };
+
+        tick();
+    }
+
+    function stopBackgroundNoiseMonitor() {
+        if (noiseMonitorFrame) {
+            cancelAnimationFrame(noiseMonitorFrame);
+            noiseMonitorFrame = null;
+        }
+        backgroundNoiseFrameCount = 0;
+        if (noiseAudioContext) {
+            try { noiseAudioContext.close(); } catch (e) {}
+            noiseAudioContext = null;
+        }
+        noiseAnalyser = null;
+        noiseDataArray = null;
+    }
 
     function startAudioVisualizer(stream) {
         const canvas = document.getElementById("audioVisualizer");
@@ -2901,14 +4129,15 @@
         draw();
     }
 
-    function stopAudioVisualizer() {
-        if (visualizerFrame) {
-            cancelAnimationFrame(visualizerFrame);
-            visualizerFrame = null;
-        }
-        const canvas = document.getElementById("audioVisualizer");
-        if (canvas) {
-            const ctx = canvas.getContext("2d");
+        function stopAudioVisualizer() {
+            if (visualizerFrame) {
+                cancelAnimationFrame(visualizerFrame);
+                visualizerFrame = null;
+            }
+            backgroundNoiseFrameCount = 0;
+            const canvas = document.getElementById("audioVisualizer");
+            if (canvas) {
+                const ctx = canvas.getContext("2d");
             ctx.fillStyle = "#e5e7eb";
             ctx.fillRect(0, 0, canvas.width, canvas.height); // Reset to blank/bg
         }

@@ -5,9 +5,11 @@ from openai import OpenAI
 import os
 import json
 import tempfile
-from typing import List, Dict
+import sys
+from typing import Any, Dict, List, Optional
 from pydantic import BaseModel
 from analyze_answer import analyze_answer
+from coding_graph import generate_coding_task, observe_coding_intent, run_coding_round
 import shutil
 import uuid
 import random
@@ -18,6 +20,7 @@ from docx import Document
 import io
 import subprocess
 import tempfile
+import shutil as py_shutil
 from openai import OpenAI
 import requests
 from pydantic import BaseModel
@@ -87,6 +90,401 @@ def get_or_create_candidate(name: str) -> str:
         "created_at": datetime.now().isoformat()
     })
     return str(result.inserted_id)
+
+
+def load_interview_from_db(interview_id: str) -> Optional[Dict[str, Any]]:
+    row = interviews_collection.find_one({"id": interview_id})
+    if not row:
+        return None
+
+    try:
+        loaded_questions = json.loads(row.get("questions", "[]"))
+    except Exception:
+        loaded_questions = []
+
+    interview = {
+        "id": interview_id,
+        "source": row.get("source"),
+        "profile_text": row.get("profile_text", ""),
+        "questions": loaded_questions,
+        "answers": {},
+        "created_at": row.get("created_at"),
+        "coding_round": row.get("coding_round"),
+    }
+    interviews[interview_id] = interview
+    return interview
+
+
+def get_interview_or_404(interview_id: str) -> Dict[str, Any]:
+    interview = interviews.get(interview_id) or load_interview_from_db(interview_id)
+    if not interview:
+        raise HTTPException(status_code=404, detail="Interview not found")
+    return interview
+
+
+def get_answer_history(interview_id: str) -> List[Dict[str, Any]]:
+    return list(answers_collection.find({"interview_id": interview_id}).sort("question_id", 1))
+
+
+def build_answer_summary(answers_data: List[Dict[str, Any]]) -> str:
+    if not answers_data:
+        return "No completed verbal answers were found."
+
+    blocks = []
+    for item in answers_data[-5:]:
+        answer_text = (item.get("answer_text") or "").strip()
+        if len(answer_text) > 280:
+            answer_text = answer_text[:280].rstrip() + "..."
+        blocks.append(
+            f"Question: {item.get('question_text', '')}\n"
+            f"Answer: {answer_text}\n"
+            f"AI Score: {item.get('ai_score', 0)}"
+        )
+    return "\n\n".join(blocks)
+
+
+def persist_coding_round(interview_id: str, coding_round: Dict[str, Any]) -> None:
+    if interview_id in interviews:
+        interviews[interview_id]["coding_round"] = coding_round
+    interviews_collection.update_one(
+        {"id": interview_id},
+        {"$set": {"coding_round": coding_round}},
+        upsert=False,
+    )
+
+
+def build_coding_test_payload(coding_round: Dict[str, Any]) -> Dict[str, Any]:
+    task = coding_round.get("task", {})
+    test_cases = task.get("test_cases", [])
+    visible = [case for case in test_cases if case.get("visible")]
+    hidden = [case for case in test_cases if not case.get("visible")]
+    return {
+        "visible_cases": [
+            {
+                "id": case.get("id"),
+                "input": case.get("input"),
+                "output": case.get("expected"),
+            }
+            for case in visible[:3]
+        ],
+        "hidden_case_count": len(hidden[:4]),
+        "total_case_count": len(test_cases[:7]),
+    }
+
+
+def _runner_error(message: str) -> Dict[str, Any]:
+    return {
+        "status": "error",
+        "runtime_error": message,
+        "visible_results": [],
+        "hidden_summary": {"passed": 0, "total": 4},
+    }
+
+
+def _collect_runner_output(result: subprocess.CompletedProcess) -> Dict[str, Any]:
+    if result.returncode != 0:
+        return _runner_error((result.stderr or result.stdout or "Unknown execution error").strip())
+
+    try:
+        all_results = json.loads(result.stdout.strip() or "[]")
+    except Exception:
+        return _runner_error("The runner returned an invalid response.")
+
+    visible_results = [row for row in all_results if row.get("visible")]
+    hidden_results = [row for row in all_results if not row.get("visible")]
+    return {
+        "status": "ok",
+        "runtime_error": None,
+        "visible_results": visible_results,
+        "hidden_summary": {
+            "passed": sum(1 for row in hidden_results if row.get("passed")),
+            "total": len(hidden_results),
+        },
+        "all_passed": all(row.get("passed") for row in all_results) if all_results else False,
+    }
+
+
+def _supports_simple_multilang(value: Any) -> bool:
+    if isinstance(value, (int, float, str, bool)) or value is None:
+        return True
+    if isinstance(value, list):
+        return all(_supports_simple_multilang(item) for item in value)
+    return False
+
+
+def _js_literal(value: Any) -> str:
+    return json.dumps(value)
+
+
+def _java_literal(value: Any) -> str:
+    if isinstance(value, bool):
+        return "true" if value else "false"
+    if isinstance(value, int):
+        return str(value)
+    if isinstance(value, float):
+        return str(value)
+    if isinstance(value, str):
+        return json.dumps(value)
+    if isinstance(value, list):
+        if not value:
+            return "new int[]{}"
+        if all(isinstance(item, int) for item in value):
+            return "new int[]{" + ", ".join(str(item) for item in value) + "}"
+        if all(isinstance(item, str) for item in value):
+            return "new String[]{" + ", ".join(json.dumps(item) for item in value) + "}"
+    raise ValueError("This test input is not supported for Java execution.")
+
+
+def _java_type(value: Any) -> str:
+    if isinstance(value, bool):
+        return "boolean"
+    if isinstance(value, int):
+        return "int"
+    if isinstance(value, float):
+        return "double"
+    if isinstance(value, str):
+        return "String"
+    if isinstance(value, list):
+        if not value:
+            return "int[]"
+        if all(isinstance(item, int) for item in value):
+            return "int[]"
+        if all(isinstance(item, str) for item in value):
+            return "String[]"
+    raise ValueError("Unsupported Java argument type.")
+
+
+def _c_literal(value: Any) -> str:
+    if isinstance(value, bool):
+        return "1" if value else "0"
+    if isinstance(value, int):
+        return str(value)
+    if isinstance(value, str):
+        return json.dumps(value)
+    raise ValueError("This test input is not supported for C execution.")
+
+
+def _c_type(value: Any) -> str:
+    if isinstance(value, bool):
+        return "int"
+    if isinstance(value, int):
+        return "int"
+    if isinstance(value, str):
+        return "const char*"
+    raise ValueError("Unsupported C argument type.")
+
+
+def run_code_against_tests(code: str, task: Dict[str, Any], language: str) -> Dict[str, Any]:
+    function_name = task.get("function_name") or "solve"
+    tests = task.get("test_cases", [])
+    language = (language or "python").lower()
+
+    if not code.strip():
+        return _runner_error("No code was provided.")
+
+    if language == "python":
+        payload = {"function_name": function_name, "tests": tests}
+        harness = f"""
+import json
+candidate_ns = {{}}
+payload = json.loads({json.dumps(json.dumps(payload))})
+code = {json.dumps(code)}
+exec(code, candidate_ns)
+func = candidate_ns.get(payload["function_name"])
+if not callable(func):
+    raise NameError(f"Function '{{payload['function_name']}}' was not found in the submitted code.")
+results = []
+for case in payload["tests"]:
+    try:
+        actual = func(*case["input"])
+        passed = actual == case["expected"]
+        results.append({{"id": case["id"], "visible": case["visible"], "passed": passed, "error": None}})
+    except Exception as exc:
+        results.append({{"id": case["id"], "visible": case["visible"], "passed": False, "error": f"{{type(exc).__name__}}: {{exc}}"}})
+print(json.dumps(results))
+"""
+        with tempfile.TemporaryDirectory() as tmpdir:
+            script_path = os.path.join(tmpdir, "runner.py")
+            with open(script_path, "w", encoding="utf-8") as handle:
+                handle.write(harness)
+            try:
+                result = subprocess.run([sys.executable, script_path], capture_output=True, text=True, timeout=8)
+            except subprocess.TimeoutExpired:
+                return _runner_error("Execution timed out after 8 seconds.")
+        return _collect_runner_output(result)
+
+    if language == "javascript":
+        if not py_shutil.which("node"):
+            return _runner_error("JavaScript runtime is not installed on the server.")
+        if not all(_supports_simple_multilang(case.get("expected")) and all(_supports_simple_multilang(arg) for arg in case.get("input", [])) for case in tests):
+            return _runner_error("This task uses inputs that are not supported for JavaScript execution in the current runner.")
+        payload = {"function_name": function_name, "tests": tests}
+        harness = f"""
+const payload = JSON.parse({json.dumps(json.dumps(payload))});
+{code}
+const fn = globalThis[payload.function_name];
+if (typeof fn !== 'function') {{
+  throw new Error(`Function ${{payload.function_name}} was not found in the submitted code.`);
+}}
+const results = [];
+for (const testCase of payload.tests) {{
+  try {{
+    const actual = fn(...testCase.input);
+    const passed = JSON.stringify(actual) === JSON.stringify(testCase.expected);
+    results.push({{ id: testCase.id, visible: testCase.visible, passed, error: null }});
+  }} catch (err) {{
+    results.push({{ id: testCase.id, visible: testCase.visible, passed: false, error: String(err) }});
+  }}
+}}
+console.log(JSON.stringify(results));
+"""
+        with tempfile.TemporaryDirectory() as tmpdir:
+            script_path = os.path.join(tmpdir, "runner.js")
+            with open(script_path, "w", encoding="utf-8") as handle:
+                handle.write(harness)
+            try:
+                result = subprocess.run(["node", script_path], capture_output=True, text=True, timeout=8)
+            except subprocess.TimeoutExpired:
+                return _runner_error("Execution timed out after 8 seconds.")
+        return _collect_runner_output(result)
+
+    if language == "java":
+        if not py_shutil.which("javac") or not py_shutil.which("java"):
+            return _runner_error("Java compiler/runtime is not installed on the server.")
+        try:
+            runner_cases = []
+            for case in tests:
+                args = ", ".join(_java_literal(arg) for arg in case.get("input", []))
+                expected = _java_literal(case.get("expected"))
+                runner_cases.append((case["id"], case["visible"], args, expected))
+        except ValueError as exc:
+            return _runner_error(str(exc))
+        method_name = function_name
+        runner_body = "\n".join(
+            f"""
+        try {{
+            boolean passed = java.util.Objects.deepEquals(Solution.{method_name}({args}), {expected});
+            results.add(new Result({case_id}, {str(visible).lower()}, passed, null));
+        }} catch (Throwable err) {{
+            results.add(new Result({case_id}, {str(visible).lower()}, false, err.toString()));
+        }}
+"""
+            for case_id, visible, args, expected in runner_cases
+        )
+        runner = f"""
+import java.util.*;
+
+class Runner {{
+    static class Result {{
+        int id;
+        boolean visible;
+        boolean passed;
+        String error;
+        Result(int id, boolean visible, boolean passed, String error) {{
+            this.id = id;
+            this.visible = visible;
+            this.passed = passed;
+            this.error = error;
+        }}
+    }}
+
+    public static void main(String[] args) {{
+        List<Result> results = new ArrayList<>();
+{runner_body}
+        StringBuilder out = new StringBuilder("[");
+        for (int i = 0; i < results.size(); i++) {{
+            Result r = results.get(i);
+            if (i > 0) out.append(",");
+            out.append("{{\\"id\\":").append(r.id)
+               .append(",\\"visible\\":").append(r.visible)
+               .append(",\\"passed\\":").append(r.passed)
+               .append(",\\"error\\":");
+            if (r.error == null) out.append("null");
+            else out.append("\\"").append(r.error.replace("\\\\", "\\\\\\\\").replace("\\"", "\\\\\\"")).append("\\"");
+            out.append("}}");
+        }}
+        out.append("]");
+        System.out.println(out.toString());
+    }}
+}}
+"""
+        with tempfile.TemporaryDirectory() as tmpdir:
+            solution_path = os.path.join(tmpdir, "Solution.java")
+            runner_path = os.path.join(tmpdir, "Runner.java")
+            with open(solution_path, "w", encoding="utf-8") as handle:
+                handle.write(code)
+            with open(runner_path, "w", encoding="utf-8") as handle:
+                handle.write(runner)
+            compile_result = subprocess.run(["javac", solution_path, runner_path], capture_output=True, text=True, cwd=tmpdir, timeout=12)
+            if compile_result.returncode != 0:
+                return _runner_error((compile_result.stderr or compile_result.stdout).strip())
+            try:
+                result = subprocess.run(["java", "Runner"], capture_output=True, text=True, cwd=tmpdir, timeout=8)
+            except subprocess.TimeoutExpired:
+                return _runner_error("Execution timed out after 8 seconds.")
+        return _collect_runner_output(result)
+
+    if language == "c":
+        if not py_shutil.which("gcc"):
+            return _runner_error("C compiler is not installed on the server.")
+        if not all(
+            isinstance(case.get("expected"), (int, bool, str))
+            and all(isinstance(arg, (int, bool, str)) for arg in case.get("input", []))
+            for case in tests
+        ):
+            return _runner_error("This task uses inputs that are not supported for C execution in the current runner.")
+        try:
+            call_blocks = []
+            for case in tests:
+                args = ", ".join(_c_literal(arg) for arg in case.get("input", []))
+                expected = _c_literal(case.get("expected"))
+                if isinstance(case.get("expected"), str):
+                    compare = f'strcmp({function_name}({args}), {expected}) == 0'
+                else:
+                    compare = f'{function_name}({args}) == {expected}'
+                call_blocks.append(
+                    f"""
+    results[index++] = (struct Result){{{case["id"]}, {1 if case["visible"] else 0}, ({compare}), NULL}};
+"""
+                )
+        except ValueError as exc:
+            return _runner_error(str(exc))
+        harness = f"""
+#include <stdio.h>
+#include <string.h>
+{code}
+struct Result {{ int id; int visible; int passed; const char* error; }};
+int main() {{
+    struct Result results[{len(tests)}];
+    int index = 0;
+{''.join(call_blocks)}
+    printf("[");
+    for (int i = 0; i < index; i++) {{
+        if (i > 0) printf(",");
+        printf("{{\\"id\\":%d,\\"visible\\":%s,\\"passed\\":%s,\\"error\\":null}}",
+            results[i].id,
+            results[i].visible ? "true" : "false",
+            results[i].passed ? "true" : "false");
+    }}
+    printf("]");
+    return 0;
+}}
+"""
+        with tempfile.TemporaryDirectory() as tmpdir:
+            c_path = os.path.join(tmpdir, "runner.c")
+            exe_path = os.path.join(tmpdir, "runner.exe")
+            with open(c_path, "w", encoding="utf-8") as handle:
+                handle.write(harness)
+            compile_result = subprocess.run(["gcc", c_path, "-o", exe_path], capture_output=True, text=True, timeout=12)
+            if compile_result.returncode != 0:
+                return _runner_error((compile_result.stderr or compile_result.stdout).strip())
+            try:
+                result = subprocess.run([exe_path], capture_output=True, text=True, timeout=8)
+            except subprocess.TimeoutExpired:
+                return _runner_error("Execution timed out after 8 seconds.")
+        return _collect_runner_output(result)
+
+    return _runner_error(f"Language '{language}' is not supported.")
 
 
 def extract_skills(text: str) -> List[str]:
@@ -477,17 +875,13 @@ def generate_jd_questions(jd_text: str) -> List[Dict[str, str]]:
 def generate_mock_questions(text: str, source: str, num_questions: int = 6, resume_text: str = None, jd_text: str = None) -> List[Dict[str, str]]:
     """
     Generate structured interview questions.
-    Structure: Self-Intro (1-2) → Technical Middle (N-4) → Closing (2-3)
+    Structure: Self-Intro → Technical Middle → Closing
     
     When API is available: calls AI to generate dynamic middle questions.
-    When API is down:     uses smart keyword-extraction from resume/JD to build questions offline.
+    When API is down: uses smart keyword-extraction from resume/JD to build questions offline.
     """
-    # Ensure num_questions is at least 4 (intro + at least 1 middle + closing)
     num_questions = max(4, num_questions)
     
-    # ════════════════════════════════════════════════════════════════════
-    # PHASE 1: Opening Questions (Self Introduction) — always 1 question
-    # ════════════════════════════════════════════════════════════════════
     opening = [
         {
             "id": 1,
@@ -498,9 +892,6 @@ def generate_mock_questions(text: str, source: str, num_questions: int = 6, resu
         }
     ]
     
-    # ════════════════════════════════════════════════════════════════════
-    # PHASE 3: Closing Questions — always last 2-3
-    # ════════════════════════════════════════════════════════════════════
     closing = [
         {
             "question": "What do you consider your biggest strengths and weaknesses?",
@@ -515,8 +906,7 @@ def generate_mock_questions(text: str, source: str, num_questions: int = 6, resu
             "category": "Future Plans"
         }
     ]
-    # Add a 3rd closing question if we have enough slots
-    if num_questions >= 8:
+    if num_questions >= 10:
         closing.append({
             "question": "Do you have any questions for us about the team, the role, or the company?",
             "difficulty": "Easy",
@@ -524,58 +914,39 @@ def generate_mock_questions(text: str, source: str, num_questions: int = 6, resu
             "category": "Candidate Questions"
         })
     
-    # ════════════════════════════════════════════════════════════════════
-    # PHASE 2: Technical Middle Questions — fill remaining slots
-    # ════════════════════════════════════════════════════════════════════
     middle_count = num_questions - len(opening) - len(closing)
     middle_count = max(1, middle_count)
     
     middle_questions = []
     
-    # Try generating with AI first
     try:
         if "resume" in source.lower():
             ai_questions = generate_resume_questions(text)
         else:
             ai_questions = generate_jd_questions(text)
         
-        # Strip the intro/closing from AI-generated questions (keep only technical ones)
         for q in ai_questions:
             qtype = q.get("type", "").lower()
             qcat = q.get("category", "").lower()
-            # Skip intro-type and closing-type questions
             if any(x in qtype for x in ["self-intro", "introduction", "career", "future"]):
                 continue
             if any(x in qcat for x in ["basic", "background", "future goals", "closing"]):
                 continue
             middle_questions.append(q)
-        
+            
         print(f"✅ AI generated {len(middle_questions)} technical questions")
-        
     except Exception as e:
         print(f"⚠️ AI question generation failed: {e}")
         print("📋 Falling back to smart offline question generator...")
     
-    # ── OFFLINE FALLBACK: Extract skills/projects from resume+JD and build questions ──
+    # ── OFFLINE FALLBACK: Extract skills/projects and build timeline-based questions ──
     if len(middle_questions) < middle_count:
-        combined_text = ""
-        if resume_text:
-            combined_text += resume_text + " "
-        if jd_text:
-            combined_text += jd_text + " "
-        if not combined_text.strip():
-            combined_text = text
-        
-        offline_questions = _generate_offline_questions(combined_text, middle_count - len(middle_questions))
+        offline_questions = _generate_offline_questions(resume_text or "", jd_text or text, num_questions)
         middle_questions.extend(offline_questions)
         print(f"📋 Offline generator added {len(offline_questions)} questions")
     
-    # Trim to requested middle count
     middle_questions = middle_questions[:middle_count]
     
-    # ════════════════════════════════════════════════════════════════════
-    # ASSEMBLE: Opening → Middle → Closing with sequential IDs
-    # ════════════════════════════════════════════════════════════════════
     all_questions = []
     idx = 1
     
@@ -583,30 +954,30 @@ def generate_mock_questions(text: str, source: str, num_questions: int = 6, resu
         q["id"] = idx
         all_questions.append(q)
         idx += 1
-    
     for q in middle_questions:
         q["id"] = idx
         all_questions.append(q)
         idx += 1
-    
     for q in closing:
         q["id"] = idx
         all_questions.append(q)
         idx += 1
     
-    print(f"📝 Total questions assembled: {len(all_questions)} (Opening: {len(opening)}, Middle: {len(middle_questions)}, Closing: {len(closing)})")
     return all_questions
 
 
-def _generate_offline_questions(text: str, count: int) -> List[Dict[str, str]]:
+def _generate_offline_questions(resume_text: str, jd_text: str, total_count: int) -> List[Dict[str, str]]:
     """
-    Smart offline question generator. Extracts skills, projects, and experiences
-    from resume/JD text using regex and keyword matching, then builds targeted questions.
+    Intelligent Interview Coach Offline Generator
+    Adapts based on Total Time (total_count) and Presence of Resume (Single vs Bulk).
+    Ensures a continuous flow of questions spanning Self-Intro, Skills, Projects, JD, and HR.
     """
     import re
-    
-    text_lower = text.lower()
     questions = []
+    
+    has_resume = bool(resume_text and len(resume_text.strip()) > 50)
+    text_to_parse = (resume_text + " " + jd_text).lower()
+    jd_lower = jd_text.lower()
     
     # ── 1. Extract Technical Skills ──
     tech_keywords = [
@@ -618,128 +989,94 @@ def _generate_offline_questions(text: str, count: int) -> List[Dict[str, str]]:
         "Machine Learning", "Deep Learning", "TensorFlow", "PyTorch", "NLP", "Computer Vision",
         "REST API", "GraphQL", "Microservices", "System Design", "Data Structures",
         "Algorithms", "HTML", "CSS", "Tailwind", "Bootstrap", "Git", "Linux",
-        "Agile", "Scrum", "JIRA", "Figma", "Power BI", "Tableau", "Excel",
-        "Selenium", "Jest", "Pytest", "JUnit", "Cypress", "Pandas", "NumPy",
-        "Apache Kafka", "RabbitMQ", "WebSocket", "OAuth", "JWT", "Firebase",
-        "Salesforce", "SAP", "ServiceNow", "Hadoop", "Spark", "Databricks"
+        "Agile", "Scrum", "JIRA", "Figma"
     ]
     
-    found_skills = []
-    for kw in tech_keywords:
-        if kw.lower() in text_lower:
-            found_skills.append(kw)
+    resume_skills = [kw for kw in tech_keywords if kw.lower() in resume_text.lower()] if has_resume else []
+    jd_skills = [kw for kw in tech_keywords if kw.lower() in jd_lower]
     
-    # ── 2. Extract Project Names (look for patterns like "Project: XYZ" or "built XYZ") ──
-    project_patterns = [
-        r'(?:project|built|developed|created|designed)\s*[:\-]?\s*([A-Z][A-Za-z0-9\s\-]{3,30})',
-        r'(?:title|name)\s*[:\-]\s*([A-Za-z0-9\s\-]{3,40})'
-    ]
-    found_projects = []
-    for pattern in project_patterns:
-        matches = re.findall(pattern, text, re.IGNORECASE)
-        found_projects.extend([m.strip() for m in matches if len(m.strip()) > 3])
-    found_projects = list(set(found_projects))[:3]  # Limit to 3
-    
-    # ── 3. Extract Company Names (look for "at XYZ" or "Company: XYZ") ──
-    company_patterns = [
-        r'(?:at|@|company|organization|employer)\s*[:\-]?\s*([A-Z][A-Za-z0-9\s&\.\,]{2,30})',
-    ]
-    found_companies = []
-    for pattern in company_patterns:
-        matches = re.findall(pattern, text)
-        found_companies.extend([m.strip().rstrip('.,:') for m in matches if len(m.strip()) > 2])
-    found_companies = list(set(found_companies))[:2]
-    
-    # ── 4. Build questions from extracted data ──
-    difficulty_cycle = ["Easy", "Medium", "Medium", "Hard", "Medium", "Hard", "Medium"]
-    
-    # Skill-based questions
-    skill_templates = [
-        ("How would you rate your proficiency in {skill}? Can you describe a project where you used it?", "Technical", "{skill} Basics"),
-        ("Can you explain a complex problem you solved using {skill}? Walk us through your approach.", "Technical", "{skill} Deep Dive"),
-        ("How does {skill} compare to alternative technologies you've used? When would you choose it over others?", "Comparison", "{skill} Analysis"),
-        ("What best practices do you follow when working with {skill}?", "Technical", "{skill} Best Practices"),
+    generic_skills = ["programming fundamentals", "system architecture", "version control", "database design", "debugging"]
+    hr_questions = [
+        "Tell me about a time you faced a difficult challenge at work and how you overcame it.",
+        "How do you handle tight deadlines or stressful situations?",
+        "Describe a situation where you had a conflict with a team member. How was it resolved?",
+        "What motivates you the most in your professional career?",
+        "How do you prioritize your tasks when you have multiple urgent requests?",
+        "Tell me about a time you had to learn a new concept quickly.",
+        "What is your proudest professional achievement?",
+        "Describe a time you failed or made a mistake. What did you learn from it?",
+        "How do you ensure you stay updated with industry trends?",
+        "Can you share an example of how you successfully worked in a remote or distributed team?"
     ]
     
-    for i, skill in enumerate(found_skills):
-        if len(questions) >= count:
-            break
-        template = skill_templates[i % len(skill_templates)]
-        questions.append({
-            "question": template[0].format(skill=skill),
-            "difficulty": difficulty_cycle[i % len(difficulty_cycle)],
-            "type": template[1],
-            "category": template[2].format(skill=skill)
-        })
+    # We apportion the questions to ensure an endless stream depending on total_count
+    target = max(10, total_count + 15) # Generate significantly more to ensure an endless flow
     
-    # Project-based questions
-    for proj in found_projects:
-        if len(questions) >= count:
-            break
-        questions.append({
-            "question": f"Tell me about your project '{proj}'. What was your role, what challenges did you face, and what technologies did you use?",
-            "difficulty": "Medium",
-            "type": "Project",
-            "category": "Projects"
-        })
+    # --- PHASE 1: SELF-INTRO / BACKGROUND ---
+    if has_resume:
+        questions.append({"question": "Can you briefly walk me through your professional journey and what led you to apply for this role?", "difficulty": "Easy", "type": "Background", "category": "Experience"})
+        questions.append({"question": "What specifically caught your eye about this firm and the job description we posted?", "difficulty": "Easy", "type": "Motivation", "category": "Motivation"})
+    else:
+        questions.append({"question": "Could you provide a high-level overview of your background and your core expertise?", "difficulty": "Easy", "type": "Background", "category": "Experience"})
+        questions.append({"question": "What is the single most important skill you bring to the table that aligns with this role?", "difficulty": "Easy", "type": "Motivation", "category": "Skills"})
+        
+    # --- PHASE 2: SKILLS ---
+    skills_to_ask = resume_skills if resume_skills else jd_skills
+    if not skills_to_ask: skills_to_ask = generic_skills
+    skills_count = max(3, int(target * 0.25))
     
-    # Experience-based questions
-    for comp in found_companies:
-        if len(questions) >= count:
-            break
-        questions.append({
-            "question": f"Can you describe your key responsibilities and achievements while working at {comp}?",
-            "difficulty": "Medium",
-            "type": "Experience",
-            "category": "Work History"
-        })
-    
-    # Fill remaining with generic high-quality technical questions
-    generic_questions = [
-        {
-            "question": "Can you walk us through your most significant technical achievement? What made it challenging?",
-            "difficulty": "Medium",
-            "type": "Technical",
-            "category": "Achievement"
-        },
-        {
-            "question": "How do you approach debugging a complex issue in production? Walk us through your process.",
-            "difficulty": "Hard",
-            "type": "Problem-Solving",
-            "category": "Debugging"
-        },
-        {
-            "question": "Describe a time when you had to learn a new technology quickly for a project. How did you approach it?",
-            "difficulty": "Medium",
-            "type": "Behavioral",
-            "category": "Learning Ability"
-        },
-        {
-            "question": "How do you ensure code quality in your projects? What tools and practices do you follow?",
-            "difficulty": "Medium",
-            "type": "Technical",
-            "category": "Best Practices"
-        },
-        {
-            "question": "Tell me about a time you disagreed with a technical decision on your team. How did you handle it?",
-            "difficulty": "Medium",
-            "type": "Behavioral",
-            "category": "Teamwork"
-        },
-        {
-            "question": "If you had to design a scalable system from scratch for this role, what architecture would you choose and why?",
-            "difficulty": "Hard",
-            "type": "System Design",
-            "category": "Architecture"
-        }
-    ]
-    
-    for gq in generic_questions:
-        if len(questions) >= count:
-            break
-        questions.append(gq)
-    
-    return questions[:count]
+    for i in range(skills_count):
+        skill = skills_to_ask[i % len(skills_to_ask)]
+        if i % 3 == 0:
+            q = f"How would you rate your proficiency with {skill}? Can you describe a significant project where you utilized it to solve a complex problem?"
+        elif i % 3 == 1:
+            q = f"What are some common pitfalls or challenges you encounter when working with {skill}, and how do you mitigate them?"
+        else:
+            q = f"If you were to mentor a junior developer on {skill}, what core principles would you emphasize?"
+        questions.append({"question": q, "difficulty": "Medium", "type": "Technical", "category": f"{skill} Deep-Dive"})
+
+    # --- PHASE 3: PROJECTS & EXPERIENCE ---
+    projects_count = max(3, int(target * 0.25))
+    if has_resume:
+        project_patterns = [r'(?:project|built|developed|created|designed)\s*[:\-]?\s*([A-Z][A-Za-z0-9\s\-]{3,30})']
+        found_projects = []
+        for pattern in project_patterns:
+            found_projects.extend([m.strip() for m in re.findall(pattern, resume_text, re.IGNORECASE) if len(m.strip()) > 3])
+        found_projects = list(set(found_projects))
+        
+        for i in range(projects_count):
+            proj = found_projects[i % len(found_projects)] if found_projects else "your most complex technical project"
+            if i % 2 == 0:
+                q = f"Let's discuss {proj}. Walk me through the architecture and the major technical decisions you made."
+            else:
+                q = f"Regarding {proj}, what was the most difficult bug or bottleneck you encountered and how did you resolve it?"
+            questions.append({"question": q, "difficulty": "Hard", "type": "Project", "category": "Architecture"})
+    else:
+        for i in range(projects_count):
+            if i % 2 == 0:
+                q = "Tell me about the most impactful project you have delivered in your career. What was your specific contribution?"
+            else:
+                q = "Walk me through a project where the requirements were vague or constantly changing. How did you manage it?"
+            questions.append({"question": q, "difficulty": "Medium", "type": "Project", "category": "Execution"})
+
+    # --- PHASE 4: JOB DESCRIPTION COMPLIANCE ---
+    jd_count = max(3, int(target * 0.25))
+    jd_focus = jd_skills if jd_skills else ["the core tools required for this position", "our tech stack"]
+    for i in range(jd_count):
+        focus = jd_focus[i % len(jd_focus)]
+        if i % 2 == 0:
+            q = f"This role heavily involves {focus}. Could you share an experience that demonstrates your readiness for this?"
+        else:
+            q = f"In the context of the job description requiring strong {focus} expertise, how do you handle scalable architectures?"
+        questions.append({"question": q, "difficulty": "Hard", "type": "Role Fit", "category": "JD Requirement"})
+
+    # --- PHASE 5: HR / BEHAVIORAL ---
+    hr_count = max(5, int(target * 0.25))
+    for i in range(hr_count):
+        q = hr_questions[i % len(hr_questions)]
+        questions.append({"question": q, "difficulty": "Medium", "type": "Behavioral", "category": "HR/Culture"})
+
+    return questions
 
 def score_answer(question: str, answer: str):
     prompt = f"""
@@ -782,30 +1119,51 @@ class NextQuestionRequest(BaseModel):
     current_question_id: int
     answer_text: str
 
-def generate_followup_question(answer_text: str, resume_context: str, current_q_id: int) -> Dict:
-    prompt = f"""
-    You are an intelligent technical interviewer.
-    
-    Context:
-    - Candidate Resume Summary: {resume_context[:1000]}...
-    - Candidate's Last Answer: "{answer_text}"
-    
-    Task:
-    Generate ONE follow-up interview question (JSON) to dig deeper into what the candidate just said.
-    - Act as a human interviewer making a natural conversation. 
-    - NEVER say "You mentioned in your answer" or "Based on your answer". Ask directly!
-    - If they mentioned a Project, ask about architectural decisions or challenges in THAT project.
-    - If they mentioned a specific Tech Stack (e.g., React, Python), ask a conceptual question about it.
-    - If their answer was vague, ask them to clarify specific examples.
-    
-    Return STRICT JSON:
-    {{
-        "question": "The actual question string...",
-        "difficulty": "Medium",
-        "type": "Follow-up",
-        "category": "Deep Dive"
-    }}
-    """
+def generate_followup_question(answer_text: str, resume_context: str, jd_text: str, current_q_id: int, followup_streak: int) -> Dict:
+    if followup_streak < 3:
+        prompt = f"""
+        You are an intelligent technical interviewer.
+        
+        Context:
+        - Candidate Resume Summary: {resume_context[:1000]}...
+        - Candidate's Last Answer: "{answer_text}"
+        
+        Task:
+        Generate ONE follow-up interview question (JSON) to dig deeper into what the candidate just said.
+        - Act as a human interviewer making a natural conversation. 
+        - NEVER say "You mentioned in your answer" or "Based on your answer". Ask directly!
+        - If they mentioned a Project, ask about architectural decisions or challenges in THAT project.
+        - If they mentioned a specific Tech Stack (e.g., React, Python), ask a conceptual question about it.
+        - If their answer was vague, ask them to clarify specific examples.
+        
+        Return STRICT JSON:
+        {{
+            "question": "The actual question string...",
+            "difficulty": "Medium",
+            "type": "Follow-up",
+            "category": "Deep Dive"
+        }}
+        """
+    else:
+        prompt = f"""
+        You are an intelligent technical interviewer.
+        
+        Context:
+        - Job Description: {jd_text[:1000]}...
+        
+        Task:
+        Change the topic and ask ONE new interview question (JSON) based strictly on the Job Description.
+        - Act as a human interviewer making a natural conversation.
+        - Frame the question based on the skills, requirements, or responsibilities mentioned in the JD.
+        
+        Return STRICT JSON:
+        {{
+            "question": "The actual question string...",
+            "difficulty": "Medium",
+            "type": "JD-Based",
+            "category": "Role Requirement"
+        }}
+        """
     
     try:
         response = get_client().chat.completions.create(
@@ -831,14 +1189,23 @@ def api_gen_next_question(req: NextQuestionRequest):
         raise HTTPException(status_code=404, detail="Interview not found")
         
     interview = interviews[req.interview_id]
+    followup_streak = interview.get("followup_streak", 0)
     
     try:
         # Generate the question
         new_question = generate_followup_question(
             req.answer_text, 
             interview.get("profile_text", ""),
-            req.current_question_id
+            interview.get("job_description", ""),
+            req.current_question_id,
+            followup_streak
         )
+        
+        if followup_streak >= 3:
+            interview["followup_streak"] = 0
+        else:
+            interview["followup_streak"] = followup_streak + 1
+
     except Exception as e:
         # If API fails, return a 503 so frontend catches it and moves to next pre-generated question
         raise HTTPException(status_code=503, detail="AI generation failed")
@@ -1210,6 +1577,189 @@ def save_behavioral_data(data: BehavioralData):
     except Exception as e:
         print(f"Behavioral save error: {e}")
         raise HTTPException(status_code=500, detail=str(e))
+
+
+class CodingRoundStartRequest(BaseModel):
+    interview_id: str
+
+
+class CodingRoundCheckpointRequest(BaseModel):
+    interview_id: str
+    code: str = ""
+    explanation: str = ""
+    language: str = "python"
+
+
+class CodingRoundSubmitRequest(CodingRoundCheckpointRequest):
+    pass
+
+
+class CodingRoundRunRequest(CodingRoundCheckpointRequest):
+    pass
+
+
+class CodingRoundObserveRequest(CodingRoundCheckpointRequest):
+    pass
+
+
+@app.post("/coding-round/start")
+def start_coding_round(req: CodingRoundStartRequest):
+    interview = get_interview_or_404(req.interview_id)
+    answers_data = get_answer_history(req.interview_id)
+
+    existing_round = interview.get("coding_round") or {}
+    if existing_round.get("task"):
+        return {
+            "interview_id": req.interview_id,
+            "coding_round": existing_round,
+            "tests": build_coding_test_payload(existing_round),
+            "resumed": True,
+        }
+
+    profile_text = interview.get("profile_text", "")
+    task = generate_coding_task(profile_text, answers_data)
+    coding_round = {
+        "status": "active",
+        "task": task,
+        "answer_summary": build_answer_summary(answers_data),
+        "language": task.get("recommended_language", "python"),
+        "latest_code": "",
+        "latest_explanation": "",
+        "latest_feedback": "",
+        "checkpoints": [],
+        "started_at": datetime.now().isoformat(),
+        "updated_at": datetime.now().isoformat(),
+    }
+    persist_coding_round(req.interview_id, coding_round)
+    return {
+        "interview_id": req.interview_id,
+        "coding_round": coding_round,
+        "tests": build_coding_test_payload(coding_round),
+        "resumed": False,
+    }
+
+
+@app.get("/coding-round/{interview_id}")
+def get_coding_round(interview_id: str):
+    interview = get_interview_or_404(interview_id)
+    coding_round = interview.get("coding_round")
+    if not coding_round:
+        raise HTTPException(status_code=404, detail="Coding round not started")
+    return {"interview_id": interview_id, "coding_round": coding_round, "tests": build_coding_test_payload(coding_round)}
+
+
+def _run_coding_feedback(req: CodingRoundCheckpointRequest, feedback_mode: str) -> Dict[str, Any]:
+    interview = get_interview_or_404(req.interview_id)
+    coding_round = interview.get("coding_round")
+    if not coding_round or not coding_round.get("task"):
+        raise HTTPException(status_code=400, detail="Coding round not started")
+
+    latest_code = req.code or ""
+    latest_explanation = req.explanation or ""
+    unchanged = (
+        latest_code.strip() == (coding_round.get("latest_code", "") or "").strip()
+        and latest_explanation.strip() == (coding_round.get("latest_explanation", "") or "").strip()
+        and coding_round.get("latest_feedback")
+        and feedback_mode == "checkpoint"
+    )
+    if unchanged:
+        return {
+            "interview_id": req.interview_id,
+            "coding_round": coding_round,
+            "feedback": coding_round.get("latest_feedback"),
+            "cached": True,
+        }
+
+    feedback = run_coding_round(
+        task=coding_round["task"],
+        answer_summary=coding_round.get("answer_summary", ""),
+        code=latest_code,
+        explanation=latest_explanation,
+        language=req.language,
+        prior_feedback=coding_round.get("latest_feedback", ""),
+        feedback_mode=feedback_mode,
+    )
+
+    checkpoint = {
+        "at": datetime.now().isoformat(),
+        "language": req.language,
+        "code_length": len(latest_code),
+        "explanation_length": len(latest_explanation),
+        "feedback": feedback,
+        "mode": feedback_mode,
+    }
+
+    coding_round["latest_code"] = latest_code
+    coding_round["latest_explanation"] = latest_explanation
+    coding_round["language"] = req.language
+    coding_round["latest_feedback"] = feedback
+    coding_round["updated_at"] = checkpoint["at"]
+    coding_round.setdefault("checkpoints", []).append(checkpoint)
+    if feedback_mode == "final":
+        coding_round["status"] = "completed"
+        coding_round["final_evaluation"] = feedback
+        coding_round["completed_at"] = checkpoint["at"]
+
+    persist_coding_round(req.interview_id, coding_round)
+    return {
+        "interview_id": req.interview_id,
+        "coding_round": coding_round,
+        "feedback": feedback,
+        "cached": False,
+    }
+
+
+@app.post("/coding-round/checkpoint")
+def coding_round_checkpoint(req: CodingRoundCheckpointRequest):
+    return _run_coding_feedback(req, "checkpoint")
+
+
+@app.post("/coding-round/submit")
+def coding_round_submit(req: CodingRoundSubmitRequest):
+    return _run_coding_feedback(req, "final")
+
+
+@app.post("/coding-round/run")
+def coding_round_run(req: CodingRoundRunRequest):
+    interview = get_interview_or_404(req.interview_id)
+    coding_round = interview.get("coding_round")
+    if not coding_round or not coding_round.get("task"):
+        raise HTTPException(status_code=400, detail="Coding round not started")
+    result = run_code_against_tests(req.code or "", coding_round["task"], req.language or "python")
+    coding_round["latest_code"] = req.code or ""
+    coding_round["latest_explanation"] = req.explanation or coding_round.get("latest_explanation", "")
+    coding_round["language"] = req.language or "python"
+    coding_round["latest_run"] = {
+        "at": datetime.now().isoformat(),
+        **result,
+    }
+    persist_coding_round(req.interview_id, coding_round)
+    return {
+        "interview_id": req.interview_id,
+        "run_result": result,
+        "tests": build_coding_test_payload(coding_round),
+    }
+
+
+@app.post("/coding-round/observe")
+def coding_round_observe(req: CodingRoundObserveRequest):
+    interview = get_interview_or_404(req.interview_id)
+    coding_round = interview.get("coding_round")
+    if not coding_round or not coding_round.get("task"):
+        raise HTTPException(status_code=400, detail="Coding round not started")
+
+    observation = observe_coding_intent(
+        task=coding_round["task"],
+        code=req.code or "",
+        explanation=req.explanation or "",
+        language=req.language or "python",
+    )
+    coding_round["last_observation"] = {
+        "at": datetime.now().isoformat(),
+        **observation,
+    }
+    persist_coding_round(req.interview_id, coding_round)
+    return {"interview_id": req.interview_id, "observation": observation}
 
 @app.get("/interview/{interview_id}/ai-summary")
 def interview_ai_summary(interview_id: str):
@@ -1880,6 +2430,91 @@ async def create_session(data: CreateSession):
         "email_sent": email_sent
     }
 
+
+# ── Bulk Session Models ────────────────────────────────────────────────────────
+class BulkCandidate(BaseModel):
+    candidate_name: str
+    candidate_email: str
+    resume_text: str = ""
+
+class BulkCreateSession(BaseModel):
+    candidates: List[BulkCandidate]
+    job_description: str
+    admin_id: str
+    interview_duration: int = 30
+
+@app.post("/admin/bulk-create-sessions")
+async def bulk_create_sessions(data: BulkCreateSession):
+    """
+    Create interview sessions for multiple candidates at once.
+    Each candidate gets their own unique link and receives an email invitation.
+    Returns a per-candidate result list with link_id, link_url, and email_sent status.
+    """
+    if not data.candidates:
+        raise HTTPException(status_code=400, detail="No candidates provided")
+
+    results = []
+    now = datetime.now()
+    expires_at = (now + timedelta(hours=24)).isoformat()
+
+    for candidate in data.candidates:
+        link_id = str(uuid.uuid4())
+        link_url = f"/index.html?session_id={link_id}"
+        candidate_error = None
+
+        try:
+            interview_sessions_collection.insert_one({
+                "link_id": link_id,
+                "candidate_name": candidate.candidate_name,
+                "candidate_email": candidate.candidate_email,
+                "resume_text": candidate.resume_text,
+                "job_description": data.job_description,
+                "created_by": data.admin_id,
+                "created_at": now.isoformat(),
+                "expires_at": expires_at,
+                "interview_duration": data.interview_duration,
+                "status": "pending"
+            })
+        except Exception as db_err:
+            print(f"⚠️ DB Error for {candidate.candidate_email}: {db_err}")
+            candidate_error = f"DB error: {db_err}"
+
+        # Send email invitation
+        email_sent = False
+        if not candidate_error:
+            try:
+                email_sent = send_interview_email(
+                    candidate_email=candidate.candidate_email,
+                    candidate_name=candidate.candidate_name,
+                    link_url=link_url,
+                    duration=data.interview_duration,
+                    job_description=data.job_description
+                )
+            except Exception as email_err:
+                print(f"⚠️ Email Error for {candidate.candidate_email}: {email_err}")
+
+        results.append({
+            "candidate_name": candidate.candidate_name,
+            "candidate_email": candidate.candidate_email,
+            "link_id": link_id if not candidate_error else None,
+            "link_url": link_url if not candidate_error else None,
+            "email_sent": email_sent,
+            "status": "error" if candidate_error else "success",
+            "error": candidate_error
+        })
+
+    successful = sum(1 for r in results if r["status"] == "success")
+    print(f"✅ Bulk sessions created: {successful}/{len(results)}")
+
+    return {
+        "status": "success",
+        "total": len(results),
+        "successful": successful,
+        "failed": len(results) - successful,
+        "results": results
+    }
+
+
 @app.get("/session/{link_id}")
 async def get_session(link_id: str):
     row = interview_sessions_collection.find_one({"link_id": link_id})
@@ -1932,6 +2567,7 @@ async def get_all_sessions(admin_id: str, start_date: Optional[str] = None, end_
             "candidate_name": row.get("candidate_name"),
             "status": row.get("status"),
             "created_at": row.get("created_at"),
+            "expires_at": row.get("expires_at"),
             "interview_duration": row.get("interview_duration"),
             "interview_id": row.get("interview_id"),
             "avg_score": row.get("avg_score"),
@@ -1940,6 +2576,25 @@ async def get_all_sessions(admin_id: str, start_date: Optional[str] = None, end_
         })
         
     return {"status": "success", "sessions": sessions}
+
+@app.delete("/admin/sessions/{link_id}")
+async def delete_session(link_id: str):
+    row = interview_sessions_collection.find_one({"link_id": link_id})
+    if not row:
+        raise HTTPException(status_code=404, detail="Session not found")
+        
+    # Delete from interview tracking
+    interview_id = row.get("interview_id")
+    if interview_id:
+        interviews_collection.delete_one({"id": interview_id})
+        answers_collection.delete_many({"interview_id": interview_id})
+        if interview_id in interviews:
+            del interviews[interview_id]
+            
+    # Delete the session link
+    interview_sessions_collection.delete_one({"link_id": link_id})
+    
+    return {"status": "success", "message": "Session deleted"}
 
 @app.post("/start-session-interview")
 async def start_session_interview(link_id: str = Form(...)):
