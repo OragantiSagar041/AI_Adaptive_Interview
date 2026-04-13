@@ -1353,6 +1353,11 @@
                                 </p>
                             </div>
 
+                            <div class="dash-form-group" style="display: flex; align-items: center; gap: 0.5rem; margin-bottom: 1.5rem;">
+                                <input type="checkbox" id="recordVideo" checked style="width: 18px; height: 18px; cursor: pointer;">
+                                <label for="recordVideo" class="dash-label" style="margin: 0; cursor: pointer;">Record Interview Video</label>
+                            </div>
+
                             <button class="btn-generate" id="createBtn" onclick="createSession()">
                                 <i class="fas fa-bolt"></i> Generate Interview Link
                             </button>
@@ -1396,6 +1401,11 @@
                             <div class="dash-form-group">
                                 <label class="dash-label">Interview Duration (Minutes)</label>
                                 <input type="number" class="dash-input" id="bulkDuration" min="5" max="120" value="30" style="padding:0.7rem 1rem;">
+                            </div>
+
+                            <div class="dash-form-group" style="display: flex; align-items: center; gap: 0.5rem; margin-bottom: 1.5rem;">
+                                <input type="checkbox" id="bulkRecordVideo" checked style="width: 18px; height: 18px; cursor: pointer;">
+                                <label for="bulkRecordVideo" class="dash-label" style="margin: 0; cursor: pointer;">Record Interview Video for all candidates</label>
                             </div>
 
                             <!-- File Upload: Excel + CSV -->
@@ -1713,6 +1723,7 @@
             const resume = document.getElementById('resumeText').value.trim();
             const jd = document.getElementById('jobDescription').value.trim();
             const duration = parseInt(document.getElementById('interviewDuration').value) || 30;
+            const recordVideo = document.getElementById('recordVideo').checked;
             const createBtn = document.getElementById('createBtn');
 
             if (!name || !email || !resume || !jd) {
@@ -1733,7 +1744,8 @@
                         resume_text: resume,
                         job_description: jd,
                         admin_id: adminId,
-                        interview_duration: duration
+                        interview_duration: duration,
+                        record_video: recordVideo
                     })
                 });
 
@@ -1993,10 +2005,15 @@
                 // Add Delete Icon Button
                 const deleteBtn = `<button onclick="deleteSession('${s.link_id}')" style="background: none; border: none; color: var(--danger); cursor: pointer; padding: 4px; border-radius: 4px; transition: 0.2s; margin-left: 8px;" title="Remove Candidate"><i class="fas fa-times"></i></button>`;
 
+                // Video Icon Logic: Only show solid icon if video is actually stored
+                const videoIcon = s.has_video 
+                    ? `<i class="fas fa-video" style="color: #6366f1; margin-left: 8px; font-size: 0.85rem;" title="Video Available"></i>` 
+                    : '';
+
                 const rowHtml = `
                     <tr>
                         <td style="font-weight: 500;">
-                            ${s.candidate_name} ${decisionTag}
+                            ${s.candidate_name} ${videoIcon} ${decisionTag}
                             <div style="font-size: 0.75rem; color: var(--text-muted); font-weight: normal; margin-top: 2px;">
                                 ${s.interview_duration} min interview
                             </div>
@@ -2924,7 +2941,8 @@
                         })),
                         job_description: jd,
                         admin_id: adminId,
-                        interview_duration: duration
+                        interview_duration: duration,
+                        record_video: recordVideo
                     })
                 });
 

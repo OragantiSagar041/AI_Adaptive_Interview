@@ -2363,6 +2363,7 @@
                         currentQuestionId = data.first_question.id;
                         totalQuestions = data.total_questions;
                         window.interviewDuration = data.interview_duration || 30;
+                        window.recordVideo = data.record_video !== false; // default true
 
                         window.currentInterviewId = currentInterviewId;
                         window.currentQuestionId = currentQuestionId;
@@ -3773,17 +3774,21 @@ Output: ${formatCodingValue(testCase.output)}${resultBlock}</pre>
                 console.error("Video preview element not found!");
             }
 
-            // Re-initialize recorder
-            fullSessionRecorder = new MediaRecorder(stream, { mimeType: 'video/webm;codecs=vp8,opus' });
-            fullSessionChunks = [];
+            if (window.recordVideo !== false) {
+                // Re-initialize recorder
+                fullSessionRecorder = new MediaRecorder(stream, { mimeType: 'video/webm;codecs=vp8,opus' });
+                fullSessionChunks = [];
 
-            fullSessionRecorder.ondataavailable = e => {
-                if (e.data.size > 0) fullSessionChunks.push(e.data);
-            };
+                fullSessionRecorder.ondataavailable = e => {
+                    if (e.data.size > 0) fullSessionChunks.push(e.data);
+                };
 
-            // Start recording
-            fullSessionRecorder.start(1000);
-            console.log("Full session recording STARTED ✅");
+                // Start recording
+                fullSessionRecorder.start(1000);
+                console.log("Full session recording STARTED ✅");
+            } else {
+                console.log("Full session recording skipped (record_video=false) 🛑");
+            }
             return true; // SUCCESS
 
         } catch (err) {
@@ -3905,6 +3910,12 @@ Output: ${formatCodingValue(testCase.output)}${resultBlock}</pre>
         console.log("Stopping full session recording...");
         stopFaceDetection(); // Stop detection loop
         stopBackgroundNoiseMonitor();
+
+        if (!fullSessionRecorder && window.recordVideo === false) {
+            console.log("Skipping save: video recording was disabled for this session.");
+            if (window.stream) window.stream.getTracks().forEach(track => track.stop());
+            return;
+        }
 
         if (!fullSessionRecorder) {
             console.warn("No recorder found, skipping save.");

@@ -2141,6 +2141,7 @@ class CreateSession(BaseModel):
     job_description: str
     admin_id: str
     interview_duration: int = 30  # minutes
+    record_video: bool = True
 
 class ForgotPasswordRequest(BaseModel):
     username: str
@@ -2409,6 +2410,7 @@ async def create_session(data: CreateSession):
         "created_at": now.isoformat(),
         "expires_at": expires_at,
         "interview_duration": data.interview_duration,
+        "record_video": data.record_video,
         "status": "pending"
     })
     
@@ -2442,6 +2444,7 @@ class BulkCreateSession(BaseModel):
     job_description: str
     admin_id: str
     interview_duration: int = 30
+    record_video: bool = True
 
 @app.post("/admin/bulk-create-sessions")
 async def bulk_create_sessions(data: BulkCreateSession):
@@ -2473,6 +2476,7 @@ async def bulk_create_sessions(data: BulkCreateSession):
                 "created_at": now.isoformat(),
                 "expires_at": expires_at,
                 "interview_duration": data.interview_duration,
+                "record_video": data.record_video,
                 "status": "pending"
             })
         except Exception as db_err:
@@ -2562,6 +2566,13 @@ async def get_all_sessions(admin_id: str, start_date: Optional[str] = None, end_
     
     sessions = []
     for row in rows:
+        has_video = False
+        interview_id = row.get("interview_id")
+        if interview_id:
+            interview_doc = interviews_collection.find_one({"id": interview_id}, {"recording_path": 1})
+            if interview_doc and interview_doc.get("recording_path"):
+                has_video = True
+
         sessions.append({
             "link_id": row.get("link_id"),
             "candidate_name": row.get("candidate_name"),
@@ -2569,10 +2580,12 @@ async def get_all_sessions(admin_id: str, start_date: Optional[str] = None, end_
             "created_at": row.get("created_at"),
             "expires_at": row.get("expires_at"),
             "interview_duration": row.get("interview_duration"),
-            "interview_id": row.get("interview_id"),
+            "interview_id": interview_id,
             "avg_score": row.get("avg_score"),
             "recommendation": row.get("overall_recommendation"),
-            "decision": row.get("decision")
+            "decision": row.get("decision"),
+            "has_video": has_video,
+            "record_video": row.get("record_video", True)
         })
         
     return {"status": "success", "sessions": sessions}
@@ -2688,7 +2701,8 @@ async def start_session_interview(link_id: str = Form(...)):
         "total_questions": len(questions),
         "first_question": questions[0],
         "candidate_name": candidate_name,
-        "interview_duration": interview_duration
+        "interview_duration": interview_duration,
+        "record_video": row.get("record_video", True)
     }
 
 @app.post("/admin/update-decision")
