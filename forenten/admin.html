@@ -1537,13 +1537,8 @@
 
     <script>
         // CONFIGURATION: Match this with index.html
-        const API_BASE = (window.location.hostname === "127.0.0.1" || window.location.hostname === "localhost")
-            ? "https://localhost:8000"
-            : "https://ai-adaptive-interview.onrender.com";
-
-        const FRONTEND_BASE = (window.location.hostname === "127.0.0.1" || window.location.hostname === "localhost")
-            ? "https://localhost:3000"
-            : "https://ai-adaptive-interview.vercel.app";
+        const API_BASE = "https://ai-adaptive-interview.onrender.com";
+        const FRONTEND_BASE = "https://ai-adaptive-interview.vercel.app";
 
 
         let adminId = null;
@@ -2921,6 +2916,7 @@
         async function sendBulkInterviews() {
             const jd       = document.getElementById('bulkJobDescription').value.trim();
             const duration = parseInt(document.getElementById('bulkDuration').value) || 30;
+            const recordVideo = document.getElementById('bulkRecordVideo').checked;
 
             if (!jd)               { showToast('Please enter a Job Description', 'error'); return; }
             if (bulkCandidates.length === 0) { showToast('Add at least one candidate', 'error'); return; }
@@ -2965,9 +2961,7 @@
             const card    = document.getElementById('bulkResultsCard');
             const list    = document.getElementById('bulkResultsList');
             const summary = document.getElementById('bulkResultsSummary');
-            const base = (window.location.hostname === "127.0.0.1" || window.location.hostname === "localhost")
-                ? "https://localhost:3000"
-                : "https://ai-adaptive-interview.vercel.app";
+            const base = "https://ai-adaptive-interview.vercel.app";
 
 
             card.style.display = 'block';
