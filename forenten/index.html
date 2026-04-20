@@ -2274,6 +2274,65 @@
         const statusDiv = document.getElementById('status');
         const uploadStatus = document.getElementById('uploadStatus');
 
+        function renderExpiredSessionState(targetStatusDiv, message) {
+            if (!targetStatusDiv) return;
+
+            targetStatusDiv.innerHTML = `
+                <div style="text-align:center; padding:2rem;">
+                    <div style="font-size:2.5rem; margin-bottom:1rem;">⏰</div>
+                    <div style="font-size:1.1rem; font-weight:700; color:#ef4444;">This interview link has expired.</div>
+                    <div style="font-size:0.88rem; color:#6b7280; margin-top:0.5rem;">${message || 'Please contact the recruiter for a new link.'}</div>
+                </div>`;
+            targetStatusDiv.className = 'status error';
+            targetStatusDiv.style.display = 'block';
+        }
+
+        function renderScheduledSessionState(targetStatusDiv, scheduledStart, scheduledEnd) {
+            if (!targetStatusDiv || !scheduledStart) return;
+
+            let startStr = scheduledStart;
+            const startTime = new Date(startStr);
+
+            let endTimeStr = '';
+            if (scheduledEnd) {
+                let endStr = scheduledEnd;
+                endTimeStr = new Date(endStr).toLocaleTimeString('en-IN', { hour: '2-digit', minute: '2-digit', hour12: true });
+            }
+
+            targetStatusDiv.innerHTML = `
+                <div style="text-align:center; padding:2.5rem;">
+                    <div style="font-size:3rem; margin-bottom:1rem;">🗓️</div>
+                    <div style="font-size:1.15rem; font-weight:700; color:#f59e0b;">Your interview is scheduled</div>
+                    <div style="font-size:1.5rem; font-weight:800; color:#4f46e5; margin:1rem 0;">${startTime.toLocaleDateString('en-IN', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' })}</div>
+                    <div style="font-size:1.8rem; font-weight:800; color:#1f2937; margin-bottom:0.75rem;">${startTime.toLocaleTimeString('en-IN', { hour: '2-digit', minute: '2-digit', hour12: true })}${endTimeStr ? ' - ' + endTimeStr : ''}</div>
+                    <div style="background:#fef3c7; border-radius:12px; padding:1rem 1.5rem; margin:1.5rem auto; max-width:400px; border:1px solid #fcd34d;">
+                        <div style="font-size:0.82rem; color:#92400e; font-weight:600;">⏱️ Time until your interview:</div>
+                        <div id="scheduleCountdown" style="font-size:2rem; font-weight:800; color:#d97706; font-family:monospace; margin-top:0.5rem;">--:--:--</div>
+                    </div>
+                    <div style="font-size:0.82rem; color:#6b7280; margin-top:1rem;">This page will auto-refresh when the interview window opens.</div>
+                </div>`;
+            targetStatusDiv.className = 'status info';
+            targetStatusDiv.style.display = 'block';
+
+            const countdownEl = document.getElementById('scheduleCountdown');
+            const scheduleTimer = setInterval(() => {
+                const now = new Date();
+                const diff = startTime - now;
+                if (diff <= 0) {
+                    clearInterval(scheduleTimer);
+                    location.reload();
+                    return;
+                }
+
+                const h = Math.floor(diff / 3600000);
+                const m = Math.floor((diff % 3600000) / 60000);
+                const s = Math.floor((diff % 60000) / 1000);
+                if (countdownEl) {
+                    countdownEl.textContent = `${String(h).padStart(2,'0')}:${String(m).padStart(2,'0')}:${String(s).padStart(2,'0')}`;
+                }
+            }, 1000);
+        }
+
 
 
         // Event Listeners
@@ -2303,6 +2362,26 @@
                 }
 
                 try {
+                    const sessionInfoResponse = await fetch(`${API_BASE_URL}/session/${encodeURIComponent(sessionId)}`);
+
+                    if (!sessionInfoResponse.ok) {
+                        const errText = await sessionInfoResponse.text().catch(() => '');
+                        throw new Error(`Session lookup failed with ${sessionInfoResponse.status}. ${errText || 'Invalid or expired link.'}`);
+                    }
+
+                    const sessionInfo = await sessionInfoResponse.json();
+                    console.log('Session info response:', JSON.stringify(sessionInfo));
+
+                    if (sessionInfo.is_expired) {
+                        renderExpiredSessionState(statusDiv, 'This interview window has ended. Please contact the recruiter for a new link.');
+                        return;
+                    }
+
+                    if (sessionInfo.is_before_schedule && sessionInfo.scheduled_start) {
+                        renderScheduledSessionState(statusDiv, sessionInfo.scheduled_start, sessionInfo.scheduled_end);
+                        return;
+                    }
+
                     const formData = new FormData();
                     formData.append('link_id', sessionId);
 
@@ -2338,17 +2417,82 @@
                             return;
                         }
 
-                        // If interview was already started or completed, show Thank You
+                        // Task 4: Check if interview is before scheduled time
+                        if (data.is_before_schedule && data.scheduled_start) {
+                            let startStr = data.scheduled_start;
+                            if (!startStr.endsWith('Z') && !startStr.includes('+')) startStr += 'Z';
+                            const startTime = new Date(startStr);
+                            
+                            let endTimeStr = '';
+                            if (data.scheduled_end) {
+                                let endStr = data.scheduled_end;
+                                if (!endStr.endsWith('Z') && !endStr.includes('+')) endStr += 'Z';
+                                endTimeStr = new Date(endStr).toLocaleTimeString('en-IN', { hour: '2-digit', minute: '2-digit', hour12: true });
+                            }
+                            
+                            if (statusDiv) {
+                                statusDiv.innerHTML = `
+                                    <div style="text-align:center; padding:2.5rem;">
+                                        <div style="font-size:3rem; margin-bottom:1rem;">🗓️</div>
+                                        <div style="font-size:1.15rem; font-weight:700; color:#f59e0b;">Your interview is scheduled</div>
+                                        <div style="font-size:1.5rem; font-weight:800; color:#4f46e5; margin:1rem 0;">${startTime.toLocaleDateString('en-IN', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' })}</div>
+                                        <div style="font-size:1.8rem; font-weight:800; color:#1f2937; margin-bottom:0.75rem;">${startTime.toLocaleTimeString('en-IN', { hour: '2-digit', minute: '2-digit', hour12: true })}${endTimeStr ? ' — ' + endTimeStr : ''}</div>
+                                        <div style="background:#fef3c7; border-radius:12px; padding:1rem 1.5rem; margin:1.5rem auto; max-width:400px; border:1px solid #fcd34d;">
+                                            <div style="font-size:0.82rem; color:#92400e; font-weight:600;">⏱️ Time until your interview:</div>
+                                            <div id="scheduleCountdown" style="font-size:2rem; font-weight:800; color:#d97706; font-family:monospace; margin-top:0.5rem;">--:--:--</div>
+                                        </div>
+                                        <div style="font-size:0.82rem; color:#6b7280; margin-top:1rem;">This page will auto-refresh when the interview window opens.</div>
+                                    </div>`;
+                                statusDiv.className = 'status info';
+                                statusDiv.style.display = 'block';
+
+                                // Countdown timer
+                                const countdownEl = document.getElementById('scheduleCountdown');
+                                const scheduleTimer = setInterval(() => {
+                                    const now = new Date();
+                                    const diff = startTime - now;
+                                    if (diff <= 0) {
+                                        clearInterval(scheduleTimer);
+                                        location.reload(); // Auto-refresh when window opens
+                                        return;
+                                    }
+                                    const h = Math.floor(diff / 3600000);
+                                    const m = Math.floor((diff % 3600000) / 60000);
+                                    const s = Math.floor((diff % 60000) / 1000);
+                                    countdownEl.textContent = `${String(h).padStart(2,'0')}:${String(m).padStart(2,'0')}:${String(s).padStart(2,'0')}`;
+                                }, 1000);
+                            }
+                            return;
+                        }
+
+                        // Only completed interviews should land on the Thank You screen.
+                        // A merely "started" session should not look like a successful submission.
                         if (data.already_started) {
                             console.log('Interview already taken. Status:', data.session_status);
                             const header = document.querySelector('h1');
                             if (header && data.candidate_name) {
                                 header.textContent = `Welcome, ${data.candidate_name}`;
                             }
-                            // Show Thank You page directly
-                            document.getElementById('interviewSection').classList.add('hidden');
-                            document.getElementById('resultsSection').classList.remove('hidden');
-                            if (statusDiv) statusDiv.style.display = 'none';
+
+                            if (data.session_status === 'completed') {
+                                document.getElementById('interviewSection').classList.add('hidden');
+                                document.getElementById('resultsSection').classList.remove('hidden');
+                                if (statusDiv) statusDiv.style.display = 'none';
+                                return;
+                            }
+
+                            if (statusDiv) {
+                                statusDiv.innerHTML = `
+                                    <div style="text-align:center; padding:2rem;">
+                                        <div style="font-size:2.5rem; margin-bottom:1rem;">⏳</div>
+                                        <div style="font-size:1.05rem; font-weight:700; color:#4f46e5;">This interview session is already active.</div>
+                                        <div style="font-size:0.85rem; color:#6b7280; margin-top:0.5rem; max-width:440px; margin-left:auto; margin-right:auto;">
+                                            Please continue using the original interview tab. If this happened before your scheduled time, the backend likely needs a restart so the latest scheduling rules are loaded.
+                                        </div>
+                                    </div>`;
+                                statusDiv.className = 'status info';
+                                statusDiv.style.display = 'block';
+                            }
                             return;
                         }
 
@@ -2898,6 +3042,8 @@
                 .trim();
         }
 
+        // Task 7: Enhanced save with retry and local backup
+        let _saveRetryQueue = [];
         async function saveCurrentAnswer() {
             const answerText = document.getElementById("transcriptionBox").value.trim();
             if (!answerText) return;
@@ -2912,14 +3058,45 @@
             );
             formData.append("answer_text", answerText);
 
+            // Local backup for resilience
             try {
-                await fetch(`${API_BASE_URL}/save-answer`, {
-                    method: "POST",
-                    body: formData
-                });
-            } catch (e) {
-                console.error("Failed to save answer silently", e);
+                const backupKey = `answer_backup_${currentInterviewId}_${currentQuestionId}`;
+                localStorage.setItem(backupKey, JSON.stringify({
+                    interview_id: currentInterviewId,
+                    question_id: currentQuestionId,
+                    question_text: document.getElementById("questionText").innerText,
+                    answer_text: answerText,
+                    timestamp: Date.now()
+                }));
+            } catch(e) { /* localStorage may not be available */ }
+
+            // Retry logic (up to 3 attempts)
+            let attempts = 0;
+            const maxAttempts = 3;
+            while (attempts < maxAttempts) {
+                try {
+                    const controller = new AbortController();
+                    const timeout = setTimeout(() => controller.abort(), 15000);
+                    await fetch(`${API_BASE_URL}/save-answer`, {
+                        method: "POST",
+                        body: formData,
+                        signal: controller.signal
+                    });
+                    clearTimeout(timeout);
+                    // Success — remove local backup
+                    try {
+                        localStorage.removeItem(`answer_backup_${currentInterviewId}_${currentQuestionId}`);
+                    } catch(e) {}
+                    return; // Success
+                } catch (e) {
+                    attempts++;
+                    console.warn(`Save answer attempt ${attempts}/${maxAttempts} failed:`, e.message);
+                    if (attempts < maxAttempts) {
+                        await new Promise(r => setTimeout(r, 1000 * attempts)); // Exponential backoff
+                    }
+                }
             }
+            console.error("Failed to save answer after all retries. Answer backed up locally.");
         }
 
         function getCodingCode() {

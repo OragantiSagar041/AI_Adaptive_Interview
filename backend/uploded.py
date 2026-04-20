@@ -23,9 +23,17 @@ import tempfile
 import shutil as py_shutil
 from openai import OpenAI
 import requests
+import threading
+import time
+import base64
+import html
+import textwrap
 from pydantic import BaseModel
 from mongo_db import candidates_collection, interviews_collection, answers_collection, admins_collection, interview_sessions_collection
 from datetime import datetime
+from reportlab.lib.pagesizes import A4
+from reportlab.pdfgen import canvas
+from reportlab.lib.utils import simpleSplit
 
 
 load_dotenv()
@@ -2142,6 +2150,9 @@ class CreateSession(BaseModel):
     admin_id: str
     interview_duration: int = 30  # minutes
     record_video: bool = True
+    custom_email_html: str = ""  # Task 1: Admin-editable email content
+    scheduled_start: str = ""  # Task 4: ISO datetime for scheduled start
+    scheduled_end: str = ""    # Task 4: ISO datetime for scheduled end
 
 class ForgotPasswordRequest(BaseModel):
     username: str
@@ -2163,7 +2174,178 @@ class UpdateProfileRequest(BaseModel):
 def hash_password(password: str) -> str:
     return hashlib.sha256(password.encode()).hexdigest()
 
-def send_interview_email(candidate_email: str, candidate_name: str, link_url: str, duration: int, job_description: str):
+EMAIL_SCHEDULER_STARTED = False
+JOB_DESCRIPTION_PDF_THRESHOLD = 900
+
+def parse_iso_datetime(value: str) -> Optional[datetime]:
+    if not value:
+        return None
+    try:
+        normalized = value.replace("Z", "+00:00") if value.endswith("Z") else value
+        parsed = datetime.fromisoformat(normalized)
+        if parsed.tzinfo is not None:
+            parsed = parsed.astimezone().replace(tzinfo=None)
+        return parsed
+    except Exception:
+        return None
+
+def should_attach_job_description_pdf(job_description: str) -> bool:
+    text = (job_description or "").strip()
+    return len(text) > JOB_DESCRIPTION_PDF_THRESHOLD or text.count("\n") > 12
+
+def generate_job_description_pdf_base64(job_description: str) -> str:
+    buffer = io.BytesIO()
+    pdf = canvas.Canvas(buffer, pagesize=A4)
+    width, height = A4
+    left_margin = 50
+    top = height - 60
+    line_height = 16
+
+    pdf.setTitle("Job Description")
+    pdf.setFont("Helvetica-Bold", 16)
+    pdf.drawString(left_margin, top, "Job Description")
+    y = top - 28
+
+    pdf.setFont("Helvetica", 10)
+    for paragraph in (job_description or "").splitlines() or [""]:
+        wrapped_lines = simpleSplit(paragraph or " ", "Helvetica", 10, width - (left_margin * 2))
+        for line in wrapped_lines:
+            if y < 60:
+                pdf.showPage()
+                pdf.setFont("Helvetica", 10)
+                y = height - 60
+            pdf.drawString(left_margin, y, line)
+            y -= line_height
+        y -= 6
+
+    pdf.save()
+    buffer.seek(0)
+    return base64.b64encode(buffer.read()).decode("utf-8")
+
+def build_job_description_block(job_description: str) -> str:
+    text = (job_description or "").strip()
+    if not text:
+        return '<p style="margin: 0; color: #64748b; font-size: 14px; line-height: 1.5;">Job description will be shared separately.</p>'
+
+    if should_attach_job_description_pdf(text):
+        summary = html.escape(textwrap.shorten(" ".join(text.split()), width=260, placeholder="..."))
+        return (
+            '<p style="margin: 0 0 8px; color: #64748b; font-size: 14px; line-height: 1.6;">'
+            f'{summary}</p>'
+            '<p style="margin: 0; color: #475569; font-size: 13px; line-height: 1.5;">'
+            'The full job description is attached as a PDF so the email stays clean and easy to read.'
+            '</p>'
+        )
+
+    formatted_jd = "<br/>".join(html.escape(line) for line in text.splitlines()) or html.escape(text)
+    return f'<p style="margin: 0; color: #64748b; font-size: 14px; line-height: 1.5;">{formatted_jd}</p>'
+
+def build_schedule_block(scheduled_start: str = "", scheduled_end: str = "") -> str:
+    if not scheduled_start:
+        return ""
+
+    start_dt = parse_iso_datetime(scheduled_start)
+    if not start_dt:
+        return ""
+
+    schedule_block = f'<p><b>Scheduled Time:</b> {start_dt.strftime("%d %b %Y, %I:%M %p")}'
+    end_dt = parse_iso_datetime(scheduled_end) if scheduled_end else None
+    if end_dt:
+        schedule_block += f' — {end_dt.strftime("%I:%M %p")}'
+    schedule_block += '</p>'
+    schedule_block += (
+        '<p style="color: #e74c3c;"><b>Important:</b> '
+        'This interview can only be accessed during the scheduled timeline, and the invitation email is sent 15 minutes before the start time.'
+        '</p>'
+    )
+    return schedule_block
+
+def build_default_interview_email_html(candidate_name: str, duration: int, job_description: str, full_link: str, scheduled_start: str = "", scheduled_end: str = "") -> str:
+    schedule_block = build_schedule_block(scheduled_start, scheduled_end)
+    job_description_block = build_job_description_block(job_description)
+
+    return f"""
+    <html>
+    <body style="font-family: 'Segoe UI', Arial, sans-serif; max-width: 600px; margin: 0 auto; padding: 20px; background-color: #f8fafc;">
+        <div style="background: linear-gradient(135deg, #6366f1, #8b5cf6); border-radius: 12px 12px 0 0; padding: 30px; text-align: center;">
+            <h1 style="color: white; margin: 0; font-size: 24px;">Interview Invitation</h1>
+        </div>
+        <div style="background: white; border-radius: 0 0 12px 12px; padding: 30px; border: 1px solid #e2e8f0; border-top: none;">
+            <p style="font-size: 16px; color: #334155;">Dear <b>{html.escape(candidate_name)}</b>,</p>
+            <p style="color: #475569; line-height: 1.6;">You have been invited to an AI-powered interview by <b style="color: #6366f1;">Arah Info Tech</b>.</p>
+            <div style="background: #f1f5f9; border-radius: 8px; padding: 15px; margin: 15px 0; border-left: 4px solid #6366f1;">
+                <p style="margin: 0 0 5px; font-weight: 600; color: #334155;">Role Details:</p>
+                {job_description_block}
+            </div>
+            <p style="color: #475569;"><b>Duration:</b> {duration} minutes</p>
+            {schedule_block}
+            <div style="text-align: center; margin: 25px 0;">
+                <a href="{full_link}" style="background: linear-gradient(135deg, #6366f1, #8b5cf6); color: white; padding: 14px 32px; text-decoration: none; border-radius: 8px; font-weight: bold; font-size: 16px; display: inline-block; box-shadow: 0 4px 12px rgba(99,102,241,0.3);">
+                    Start Interview
+                </a>
+            </div>
+            <div style="background: #fef3c7; border-radius: 8px; padding: 12px; margin-top: 15px;">
+                <p style="margin: 0; color: #92400e; font-size: 13px;"><b>Important:</b> Please join only during the scheduled time window. If no schedule is set, the link remains valid for 24 hours.</p>
+            </div>
+            <hr style="border: none; border-top: 1px solid #e2e8f0; margin: 20px 0;">
+            <p style="color: #94a3b8; font-size: 13px; margin: 0;">Best regards,<br/><b style="color: #6366f1;">Arah Info Tech Pvt Ltd</b></p>
+        </div>
+    </body>
+    </html>
+    """
+
+def compute_invite_send_at(scheduled_start: str = "") -> Optional[datetime]:
+    start_dt = parse_iso_datetime(scheduled_start)
+    if not start_dt:
+        return None
+    return start_dt - timedelta(minutes=15)
+
+def queue_or_send_interview_email(session_doc: Dict[str, Any], link_url: str) -> Dict[str, Any]:
+    scheduled_start = session_doc.get("scheduled_start", "")
+    send_at = compute_invite_send_at(scheduled_start)
+    now = datetime.now()
+
+    if send_at and send_at > now:
+        interview_sessions_collection.update_one(
+            {"_id": session_doc["_id"]},
+            {"$set": {
+                "invite_email_status": "pending",
+                "invite_email_send_at": send_at.isoformat(),
+                "invite_email_sent_at": None
+            }}
+        )
+        return {
+            "email_sent": False,
+            "email_scheduled": True,
+            "email_send_at": send_at.isoformat()
+        }
+
+    email_sent = send_interview_email(
+        candidate_email=session_doc.get("candidate_email", ""),
+        candidate_name=session_doc.get("candidate_name", ""),
+        link_url=link_url,
+        duration=session_doc.get("interview_duration", 30),
+        job_description=session_doc.get("job_description", ""),
+        custom_html=session_doc.get("custom_email_html", ""),
+        scheduled_start=session_doc.get("scheduled_start", ""),
+        scheduled_end=session_doc.get("scheduled_end", "")
+    )
+
+    interview_sessions_collection.update_one(
+        {"_id": session_doc["_id"]},
+        {"$set": {
+            "invite_email_status": "sent" if email_sent else "failed",
+            "invite_email_send_at": (send_at.isoformat() if send_at else now.isoformat()),
+            "invite_email_sent_at": (now.isoformat() if email_sent else None)
+        }}
+    )
+    return {
+        "email_sent": email_sent,
+        "email_scheduled": False,
+        "email_send_at": (send_at.isoformat() if send_at else now.isoformat())
+    }
+
+def send_interview_email(candidate_email: str, candidate_name: str, link_url: str, duration: int, job_description: str, custom_html: str = "", scheduled_start: str = "", scheduled_end: str = ""):
     import os
     import requests
     from dotenv import load_dotenv
@@ -2195,21 +2377,51 @@ def send_interview_email(candidate_email: str, candidate_name: str, link_url: st
     base_url = os.getenv("FRONTEND_URL", "https://ai-adaptive-interview.vercel.app")
     full_link = f"{base_url}{link_url}"
 
-    html_content = f"""
+    # Task 4: Build schedule info block
+    schedule_block = ""
+    if scheduled_start:
+        try:
+            from datetime import datetime as dt_parse
+            start_dt = dt_parse.fromisoformat(scheduled_start)
+            schedule_block = f'<p><b>Scheduled Time:</b> {start_dt.strftime("%d %b %Y, %I:%M %p")}'
+            if scheduled_end:
+                end_dt = dt_parse.fromisoformat(scheduled_end)
+                schedule_block += f' — {end_dt.strftime("%I:%M %p")}'
+            schedule_block += '</p>'
+            schedule_block += '<p style="color: #e74c3c;"><b>⚠️ Important:</b> This link will only be accessible during the scheduled time window. It will be sent 15 minutes before the start time.</p>'
+        except Exception:
+            pass
+
+    # Task 1: Use custom HTML if provided by admin, else use default template
+    if custom_html and custom_html.strip():
+        html_content = custom_html
+    else:
+        html_content = f"""
     <html>
-    <body>
-        <h2>Interview Invitation</h2>
-        <p>Dear {candidate_name},</p>
-        <p>You have been invited to an AI-powered mock interview by <b>Arah</b>.</p>
-        <p><b>Role Details:</b><br/>{formatted_jd}</p>
-        <p><b>Interview Duration:</b> {duration} minutes</p>
-        <div style="margin: 20px 0;">
-            <a href="{full_link}" style="background-color: #6366f1; color: white; padding: 10px 20px; text-decoration: none; border-radius: 5px; font-weight: bold;">
-                Start Interview Now
-            </a>
+    <body style="font-family: 'Segoe UI', Arial, sans-serif; max-width: 600px; margin: 0 auto; padding: 20px; background-color: #f8fafc;">
+        <div style="background: linear-gradient(135deg, #6366f1, #8b5cf6); border-radius: 12px 12px 0 0; padding: 30px; text-align: center;">
+            <h1 style="color: white; margin: 0; font-size: 24px;">Interview Invitation</h1>
         </div>
-        <p><b>Important Note:</b> This interview link will expire in exactly <b>24 hours</b>.</p>
-        <p>Best regards,<br/>Arah Team</p>
+        <div style="background: white; border-radius: 0 0 12px 12px; padding: 30px; border: 1px solid #e2e8f0; border-top: none;">
+            <p style="font-size: 16px; color: #334155;">Dear <b>{candidate_name}</b>,</p>
+            <p style="color: #475569; line-height: 1.6;">You have been invited to an AI-powered interview by <b style="color: #6366f1;">Arah Info Tech</b>.</p>
+            <div style="background: #f1f5f9; border-radius: 8px; padding: 15px; margin: 15px 0; border-left: 4px solid #6366f1;">
+                <p style="margin: 0 0 5px; font-weight: 600; color: #334155;">📋 Role Details:</p>
+                <p style="margin: 0; color: #64748b; font-size: 14px; line-height: 1.5;">{formatted_jd}</p>
+            </div>
+            <p style="color: #475569;"><b>⏱️ Duration:</b> {duration} minutes</p>
+            {schedule_block}
+            <div style="text-align: center; margin: 25px 0;">
+                <a href="{full_link}" style="background: linear-gradient(135deg, #6366f1, #8b5cf6); color: white; padding: 14px 32px; text-decoration: none; border-radius: 8px; font-weight: bold; font-size: 16px; display: inline-block; box-shadow: 0 4px 12px rgba(99,102,241,0.3);">
+                    🚀 Start Interview Now
+                </a>
+            </div>
+            <div style="background: #fef3c7; border-radius: 8px; padding: 12px; margin-top: 15px;">
+                <p style="margin: 0; color: #92400e; font-size: 13px;">⚠️ <b>Important:</b> This interview link will expire in exactly <b>24 hours</b>. Ensure a stable internet connection and a quiet environment.</p>
+            </div>
+            <hr style="border: none; border-top: 1px solid #e2e8f0; margin: 20px 0;">
+            <p style="color: #94a3b8; font-size: 13px; margin: 0;">Best regards,<br/><b style="color: #6366f1;">Arah Info Tech Pvt Ltd</b></p>
+        </div>
     </body>
     </html>
     """
@@ -2220,7 +2432,7 @@ def send_interview_email(candidate_email: str, candidate_name: str, link_url: st
             "email": sender_email
         },
         "to": [{"email": candidate_email, "name": candidate_name}],
-        "subject": "Interview Invitation by Arah",
+        "subject": "Interview Invitation by Arah Info Tech",
         "htmlContent": html_content
     }
 
@@ -2233,8 +2445,395 @@ def send_interview_email(candidate_email: str, candidate_name: str, link_url: st
         print(f"Failed to send email to {candidate_email}: {e}")
         return False
 
+
+# ── Task 1: Email Preview Endpoint ──────────────────────────────────────────
+def send_interview_email(candidate_email: str, candidate_name: str, link_url: str, duration: int, job_description: str, custom_html: str = "", scheduled_start: str = "", scheduled_end: str = ""):
+    import os
+    import requests
+    from dotenv import load_dotenv
+
+    load_dotenv(r"c:\Users\sagar\Downloads\mock-interview\backend\.env", override=True)
+    brevo_api_key = os.getenv("BREVO_API_KEY")
+    sender_name = os.getenv("BREVO_SENDER_NAME", "Arah Info Tech Pvt ltd")
+    sender_email = os.getenv("BREVO_SENDER_EMAIL", "oragantisagar041@gmail.com")
+
+    if not brevo_api_key:
+        print("Warning: BREVO_API_KEY not found in environment")
+        return False
+
+    base_url = os.getenv("FRONTEND_URL", "https://ai-adaptive-interview.vercel.app")
+    full_link = f"{base_url}{link_url}"
+
+    html_content = custom_html.strip() if custom_html and custom_html.strip() else build_default_interview_email_html(
+        candidate_name=candidate_name,
+        duration=duration,
+        job_description=job_description,
+        full_link=full_link,
+        scheduled_start=scheduled_start,
+        scheduled_end=scheduled_end
+    )
+
+    payload = {
+        "sender": {"name": sender_name, "email": sender_email},
+        "to": [{"email": candidate_email, "name": candidate_name}],
+        "subject": "Interview Invitation by Arah Info Tech",
+        "htmlContent": html_content
+    }
+
+    if should_attach_job_description_pdf(job_description):
+        payload["attachment"] = [{
+            "name": "job_description.pdf",
+            "content": generate_job_description_pdf_base64(job_description)
+        }]
+
+    try:
+        response = requests.post(
+            "https://api.brevo.com/v3/smtp/email",
+            json=payload,
+            headers={
+                "accept": "application/json",
+                "api-key": brevo_api_key,
+                "content-type": "application/json"
+            }
+        )
+        response.raise_for_status()
+        print(f"Email successfully sent to {candidate_email}")
+        return True
+    except Exception as e:
+        print(f"Failed to send email to {candidate_email}: {e}")
+        return False
+
+
+class EmailPreviewRequest(BaseModel):
+    candidate_name: str
+    candidate_email: str
+    job_description: str
+    duration: int = 30
+    scheduled_start: str = ""
+    scheduled_end: str = ""
+
+@app.post("/admin/preview-email")
+def preview_email(data: EmailPreviewRequest):
+    """Return the default email HTML for admin to edit before sending."""
+    formatted_jd = data.job_description.replace("\n", "<br/>")
+    base_url = os.getenv("FRONTEND_URL", "https://ai-adaptive-interview.vercel.app")
+    
+    schedule_block = ""
+    if data.scheduled_start:
+        try:
+            start_dt = datetime.fromisoformat(data.scheduled_start)
+            schedule_block = f'<p><b>Scheduled Time:</b> {start_dt.strftime("%d %b %Y, %I:%M %p")}'
+            if data.scheduled_end:
+                end_dt = datetime.fromisoformat(data.scheduled_end)
+                schedule_block += f' — {end_dt.strftime("%I:%M %p")}'
+            schedule_block += '</p>'
+        except Exception:
+            pass
+    
+    html = f"""
+<html>
+<body style="font-family: 'Segoe UI', Arial, sans-serif; max-width: 600px; margin: 0 auto; padding: 20px; background-color: #f8fafc;">
+    <div style="background: linear-gradient(135deg, #6366f1, #8b5cf6); border-radius: 12px 12px 0 0; padding: 30px; text-align: center;">
+        <h1 style="color: white; margin: 0; font-size: 24px;">Interview Invitation</h1>
+    </div>
+    <div style="background: white; border-radius: 0 0 12px 12px; padding: 30px; border: 1px solid #e2e8f0; border-top: none;">
+        <p style="font-size: 16px; color: #334155;">Dear <b>{data.candidate_name}</b>,</p>
+        <p style="color: #475569; line-height: 1.6;">You have been invited to an AI-powered interview by <b style="color: #6366f1;">Arah Info Tech</b>.</p>
+        <div style="background: #f1f5f9; border-radius: 8px; padding: 15px; margin: 15px 0; border-left: 4px solid #6366f1;">
+            <p style="margin: 0 0 5px; font-weight: 600; color: #334155;">📋 Role Details:</p>
+            <p style="margin: 0; color: #64748b; font-size: 14px; line-height: 1.5;">{formatted_jd}</p>
+        </div>
+        <p style="color: #475569;"><b>⏱️ Duration:</b> {data.duration} minutes</p>
+        {schedule_block}
+        <div style="text-align: center; margin: 25px 0;">
+            <a href="{{INTERVIEW_LINK}}" style="background: linear-gradient(135deg, #6366f1, #8b5cf6); color: white; padding: 14px 32px; text-decoration: none; border-radius: 8px; font-weight: bold; font-size: 16px; display: inline-block; box-shadow: 0 4px 12px rgba(99,102,241,0.3);">
+                🚀 Start Interview Now
+            </a>
+        </div>
+        <div style="background: #fef3c7; border-radius: 8px; padding: 12px; margin-top: 15px;">
+            <p style="margin: 0; color: #92400e; font-size: 13px;">⚠️ <b>Important:</b> This interview link will expire in exactly <b>24 hours</b>.</p>
+        </div>
+        <hr style="border: none; border-top: 1px solid #e2e8f0; margin: 20px 0;">
+        <p style="color: #94a3b8; font-size: 13px; margin: 0;">Best regards,<br/><b style="color: #6366f1;">Arah Info Tech Pvt Ltd</b></p>
+    </div>
+</body>
+</html>"""
+    return {"html": html}
+
+
+# ── Task 3: Submission Notification Email ────────────────────────────────────
+def preview_email_v2(data: EmailPreviewRequest):
+    return {
+        "html": build_default_interview_email_html(
+            candidate_name=data.candidate_name,
+            duration=data.duration,
+            job_description=data.job_description,
+            full_link="{{INTERVIEW_LINK}}",
+            scheduled_start=data.scheduled_start,
+            scheduled_end=data.scheduled_end
+        )
+    }
+
+for _route in app.routes:
+    if getattr(_route, "path", "") == "/admin/preview-email" and "POST" in getattr(_route, "methods", set()):
+        _route.endpoint = preview_email_v2
+        break
+
+def send_submission_notification(candidate_email: str, candidate_name: str, admin_email: str, avg_score: float, total_questions: int):
+    """Send test submission notification to both admin and candidate."""
+    load_dotenv(r"c:\Users\sagar\Downloads\mock-interview\backend\.env", override=True)
+    api_key = os.getenv("BREVO_API_KEY")
+    sender_name = os.getenv("BREVO_SENDER_NAME", "Arah Info Tech Pvt ltd")
+    sender_email_addr = os.getenv("BREVO_SENDER_EMAIL")
+    if not api_key:
+        return False
+
+    # Email to candidate
+    candidate_html = f"""
+    <html><body style="font-family: 'Segoe UI', Arial, sans-serif; max-width: 600px; margin: 0 auto; padding: 20px;">
+        <div style="background: linear-gradient(135deg, #10b981, #059669); border-radius: 12px 12px 0 0; padding: 25px; text-align: center;">
+            <h2 style="color: white; margin: 0;">✅ Interview Submitted Successfully</h2>
+        </div>
+        <div style="background: white; border-radius: 0 0 12px 12px; padding: 25px; border: 1px solid #e2e8f0;">
+            <p>Dear <b>{candidate_name}</b>,</p>
+            <p>Thank you for completing your AI-powered interview. Your responses have been successfully submitted and are now being reviewed.</p>
+            <div style="background: #f0fdf4; border-radius: 8px; padding: 15px; margin: 15px 0; text-align: center;">
+                <p style="margin: 0; color: #166534; font-size: 14px;">📊 <b>Questions Answered:</b> {total_questions}</p>
+            </div>
+            <p style="color: #64748b;">Our recruitment team will review your performance and get back to you shortly. Please keep an eye on your email for further updates.</p>
+            <p style="color: #94a3b8; font-size: 13px;">Best regards,<br/><b style="color: #6366f1;">Arah Info Tech Pvt Ltd</b></p>
+        </div>
+    </body></html>
+    """
+
+    # Email to admin
+    score_color = "#10b981" if avg_score >= 60 else "#ef4444"
+    admin_html = f"""
+    <html><body style="font-family: 'Segoe UI', Arial, sans-serif; max-width: 600px; margin: 0 auto; padding: 20px;">
+        <div style="background: linear-gradient(135deg, #6366f1, #8b5cf6); border-radius: 12px 12px 0 0; padding: 25px; text-align: center;">
+            <h2 style="color: white; margin: 0;">📋 New Interview Submission</h2>
+        </div>
+        <div style="background: white; border-radius: 0 0 12px 12px; padding: 25px; border: 1px solid #e2e8f0;">
+            <p>A candidate has completed their interview:</p>
+            <div style="background: #f1f5f9; border-radius: 8px; padding: 15px; margin: 15px 0;">
+                <p style="margin: 5px 0;"><b>👤 Candidate:</b> {candidate_name}</p>
+                <p style="margin: 5px 0;"><b>📧 Email:</b> {candidate_email}</p>
+                <p style="margin: 5px 0;"><b>📊 Questions Answered:</b> {total_questions}</p>
+                <p style="margin: 5px 0;"><b>🏆 Average Score:</b> <span style="color: {score_color}; font-weight: 700; font-size: 18px;">{avg_score:.1f}/100</span></p>
+            </div>
+            <p style="color: #64748b;">Login to the admin panel to review the full results, video recording, and AI analysis.</p>
+            <p style="color: #94a3b8; font-size: 13px;">— AI Interview System</p>
+        </div>
+    </body></html>
+    """
+
+    results = []
+    url = "https://api.brevo.com/v3/smtp/email"
+    headers = {"api-key": api_key, "content-type": "application/json"}
+
+    # Send to candidate
+    try:
+        res = requests.post(url, json={
+            "sender": {"name": sender_name, "email": sender_email_addr},
+            "to": [{"email": candidate_email, "name": candidate_name}],
+            "subject": "Your Interview Has Been Submitted — Arah Info Tech",
+            "htmlContent": candidate_html
+        }, headers=headers)
+        results.append(res.status_code < 300)
+    except Exception:
+        results.append(False)
+
+    # Send to admin
+    if admin_email:
+        try:
+            res = requests.post(url, json={
+                "sender": {"name": sender_name, "email": sender_email_addr},
+                "to": [{"email": admin_email, "name": "Admin"}],
+                "subject": f"Interview Submitted: {candidate_name}",
+                "htmlContent": admin_html
+            }, headers=headers)
+            results.append(res.status_code < 300)
+        except Exception:
+            results.append(False)
+
+    return all(results)
+
+
+# ── Task 8: Dashboard Stats Endpoint ────────────────────────────────────────
+@app.get("/admin/dashboard-stats")
+def get_dashboard_stats(admin_id: str):
+    """Return aggregated stats for the admin dashboard."""
+    try:
+        all_sessions = list(interview_sessions_collection.find({"created_by": admin_id}))
+        now = datetime.now()
+        
+        total = len(all_sessions)
+        pending = 0
+        completed = 0
+        started = 0
+        expired = 0
+        selected = 0
+        rejected = 0
+        total_score = 0
+        scored_count = 0
+        today_count = 0
+        week_count = 0
+        
+        for s in all_sessions:
+            status = s.get("status", "pending")
+            if status == "pending" and s.get("expires_at"):
+                try:
+                    if now > datetime.fromisoformat(s["expires_at"]):
+                        status = "expired"
+                except Exception:
+                    pass
+            
+            if status == "completed":
+                completed += 1
+            elif status == "started":
+                started += 1
+            elif status == "expired":
+                expired += 1
+            else:
+                pending += 1
+            
+            if s.get("decision") == "selected":
+                selected += 1
+            elif s.get("decision") == "rejected":
+                rejected += 1
+            
+            if s.get("avg_score") is not None:
+                total_score += s["avg_score"]
+                scored_count += 1
+            
+            try:
+                created = datetime.fromisoformat(s.get("created_at", ""))
+                if created.date() == now.date():
+                    today_count += 1
+                if (now - created).days <= 7:
+                    week_count += 1
+            except Exception:
+                pass
+        
+        avg_score = round(total_score / scored_count, 1) if scored_count > 0 else 0
+        
+        return {
+            "total": total,
+            "pending": pending,
+            "completed": completed,
+            "started": started,
+            "expired": expired,
+            "selected": selected,
+            "rejected": rejected,
+            "avg_score": avg_score,
+            "today": today_count,
+            "this_week": week_count
+        }
+    except Exception as e:
+        return {"error": str(e)}
+
+
+# ── Task 2: Export Sessions Data Endpoint ───────────────────────────────────
+@app.get("/admin/export-sessions")
+async def export_sessions(admin_id: str, status_filter: str = ""):
+    """Return session data for Excel export, filtered by status."""
+    query = {"created_by": admin_id}
+    rows = list(interview_sessions_collection.find(query).sort("created_at", -1))
+    now = datetime.now()
+    
+    export_data = []
+    for row in rows:
+        current_status = row.get("status", "pending")
+        if current_status == "pending" and row.get("expires_at"):
+            try:
+                if now > datetime.fromisoformat(row["expires_at"]):
+                    current_status = "expired"
+            except Exception:
+                pass
+        
+        decision = row.get("decision", "")
+        
+        # Apply status filter
+        if status_filter:
+            if status_filter == "selected" and decision != "selected":
+                continue
+            elif status_filter == "rejected" and decision != "rejected":
+                continue
+            elif status_filter in ["pending", "completed", "started", "expired"] and current_status != status_filter:
+                continue
+        
+        export_data.append({
+            "candidate_name": row.get("candidate_name", ""),
+            "candidate_email": row.get("candidate_email", ""),
+            "status": current_status,
+            "decision": decision or "Pending Review",
+            "score": row.get("avg_score", ""),
+            "recommendation": row.get("overall_recommendation", ""),
+            "interview_duration": row.get("interview_duration", 30),
+            "created_at": row.get("created_at", ""),
+            "expires_at": row.get("expires_at", "")
+        })
+    
+    return {"data": export_data}
+
+def preview_email_v2(data: EmailPreviewRequest):
+    return {
+        "html": build_default_interview_email_html(
+            candidate_name=data.candidate_name,
+            duration=data.duration,
+            job_description=data.job_description,
+            full_link="{{INTERVIEW_LINK}}",
+            scheduled_start=data.scheduled_start,
+            scheduled_end=data.scheduled_end
+        )
+    }
+
+def process_pending_invitation_emails():
+    now = datetime.now().isoformat()
+    due_sessions = list(interview_sessions_collection.find({
+        "invite_email_status": {"$in": ["pending", "failed"]},
+        "invite_email_send_at": {"$lte": now}
+    }).limit(25))
+
+    for session in due_sessions:
+        claimed = interview_sessions_collection.update_one(
+            {"_id": session["_id"], "invite_email_status": {"$in": ["pending", "failed"]}},
+            {"$set": {"invite_email_status": "sending"}}
+        )
+        if claimed.modified_count == 0:
+            continue
+
+        link_url = f"/index.html?session_id={session['link_id']}"
+        sent = send_interview_email(
+            candidate_email=session.get("candidate_email", ""),
+            candidate_name=session.get("candidate_name", ""),
+            link_url=link_url,
+            duration=session.get("interview_duration", 30),
+            job_description=session.get("job_description", ""),
+            custom_html=session.get("custom_email_html", ""),
+            scheduled_start=session.get("scheduled_start", ""),
+            scheduled_end=session.get("scheduled_end", "")
+        )
+
+        interview_sessions_collection.update_one(
+            {"_id": session["_id"]},
+            {"$set": {
+                "invite_email_status": "sent" if sent else "failed",
+                "invite_email_sent_at": datetime.now().isoformat() if sent else None
+            }}
+        )
+
+def invitation_email_scheduler_loop():
+    while True:
+        try:
+            process_pending_invitation_emails()
+        except Exception as e:
+            print(f"Email scheduler error: {e}")
+        time.sleep(30)
+
 @app.on_event("startup")
 def startup_event():
+    global EMAIL_SCHEDULER_STARTED
     # Create default admin if not exists
     try:
         row = admins_collection.find_one({"username": "admin"})
@@ -2255,6 +2854,15 @@ def startup_event():
                 admins_collection.update_one({"username": "admin"}, {"$set": {"email": default_email}})
     except Exception as e:
         print(f"Error checking/creating admin: {e}")
+
+    for route in app.routes:
+        if getattr(route, "path", "") == "/admin/preview-email" and "POST" in getattr(route, "methods", set()):
+            route.endpoint = preview_email_v2
+            break
+
+    if not EMAIL_SCHEDULER_STARTED:
+        threading.Thread(target=invitation_email_scheduler_loop, daemon=True).start()
+        EMAIL_SCHEDULER_STARTED = True
 
 @app.post("/admin/forgot-password")
 async def forgot_password(data: ForgotPasswordRequest):
@@ -2398,38 +3006,51 @@ from datetime import timedelta
 async def create_session(data: CreateSession):
     link_id = str(uuid.uuid4())
     now = datetime.now()
-    expires_at = (now + timedelta(hours=24)).isoformat()
     
-    interview_sessions_collection.insert_one({
+    # Task 4: If scheduled, use scheduled_end as expiry; otherwise 24h
+    if data.scheduled_end:
+        try:
+            expires_at = datetime.fromisoformat(data.scheduled_end).isoformat()
+        except Exception:
+            expires_at = (now + timedelta(hours=24)).isoformat()
+    else:
+        expires_at = (now + timedelta(hours=24)).isoformat()
+    
+    session_doc = {
         "link_id": link_id,
         "candidate_name": data.candidate_name,
         "candidate_email": data.candidate_email,
         "resume_text": data.resume_text,
         "job_description": data.job_description,
+        "custom_email_html": data.custom_email_html,
         "created_by": data.admin_id,
         "created_at": now.isoformat(),
         "expires_at": expires_at,
         "interview_duration": data.interview_duration,
         "record_video": data.record_video,
         "status": "pending"
-    })
+    }
+    
+    # Task 4: Store scheduled time window
+    if data.scheduled_start:
+        session_doc["scheduled_start"] = data.scheduled_start
+    if data.scheduled_end:
+        session_doc["scheduled_end"] = data.scheduled_end
+    
+    interview_sessions_collection.insert_one(session_doc)
+    session_doc["_id"] = interview_sessions_collection.find_one({"link_id": link_id}, {"_id": 1})["_id"]
     
     link_url = f"/index.html?session_id={link_id}"
     
-    # Send email
-    email_sent = send_interview_email(
-        candidate_email=data.candidate_email,
-        candidate_name=data.candidate_name,
-        link_url=link_url,
-        duration=data.interview_duration,
-        job_description=data.job_description
-    )
+    email_result = queue_or_send_interview_email(session_doc, link_url)
     
     return {
         "status": "success", 
         "link_id": link_id, 
         "link_url": link_url,
-        "email_sent": email_sent
+        "email_sent": email_result["email_sent"],
+        "email_scheduled": email_result["email_scheduled"],
+        "email_send_at": email_result["email_send_at"]
     }
 
 
@@ -2438,13 +3059,17 @@ class BulkCandidate(BaseModel):
     candidate_name: str
     candidate_email: str
     resume_text: str = ""
+    record_video: bool = True  # Task 5: Per-candidate video toggle
 
 class BulkCreateSession(BaseModel):
     candidates: List[BulkCandidate]
     job_description: str
     admin_id: str
     interview_duration: int = 30
-    record_video: bool = True
+    record_video: bool = True  # Global default
+    custom_email_html: str = ""  # Task 1: Optional admin-edited email
+    scheduled_start: str = ""  # Task 4
+    scheduled_end: str = ""    # Task 4
 
 @app.post("/admin/bulk-create-sessions")
 async def bulk_create_sessions(data: BulkCreateSession):
@@ -2458,7 +3083,6 @@ async def bulk_create_sessions(data: BulkCreateSession):
 
     results = []
     now = datetime.now()
-    expires_at = (now + timedelta(hours=24)).isoformat()
 
     for candidate in data.candidates:
         link_id = str(uuid.uuid4())
@@ -2466,34 +3090,41 @@ async def bulk_create_sessions(data: BulkCreateSession):
         candidate_error = None
 
         try:
-            interview_sessions_collection.insert_one({
+            scheduled_expiry = parse_iso_datetime(data.scheduled_end)
+            session_doc = {
                 "link_id": link_id,
                 "candidate_name": candidate.candidate_name,
                 "candidate_email": candidate.candidate_email,
                 "resume_text": candidate.resume_text,
                 "job_description": data.job_description,
+                "custom_email_html": data.custom_email_html,
                 "created_by": data.admin_id,
                 "created_at": now.isoformat(),
-                "expires_at": expires_at,
+                "expires_at": (scheduled_expiry.isoformat() if scheduled_expiry else (now + timedelta(hours=24)).isoformat()),
                 "interview_duration": data.interview_duration,
-                "record_video": data.record_video,
+                "record_video": candidate.record_video,  # Task 5: Per-candidate video
                 "status": "pending"
-            })
+            }
+            if data.scheduled_start:
+                session_doc["scheduled_start"] = data.scheduled_start
+            if data.scheduled_end:
+                session_doc["scheduled_end"] = data.scheduled_end
+            insert_result = interview_sessions_collection.insert_one(session_doc)
+            session_doc["_id"] = insert_result.inserted_id
         except Exception as db_err:
             print(f"⚠️ DB Error for {candidate.candidate_email}: {db_err}")
             candidate_error = f"DB error: {db_err}"
 
         # Send email invitation
         email_sent = False
+        email_scheduled = False
+        email_send_at = ""
         if not candidate_error:
             try:
-                email_sent = send_interview_email(
-                    candidate_email=candidate.candidate_email,
-                    candidate_name=candidate.candidate_name,
-                    link_url=link_url,
-                    duration=data.interview_duration,
-                    job_description=data.job_description
-                )
+                email_result = queue_or_send_interview_email(session_doc, link_url)
+                email_sent = email_result["email_sent"]
+                email_scheduled = email_result["email_scheduled"]
+                email_send_at = email_result["email_send_at"]
             except Exception as email_err:
                 print(f"⚠️ Email Error for {candidate.candidate_email}: {email_err}")
 
@@ -2503,6 +3134,8 @@ async def bulk_create_sessions(data: BulkCreateSession):
             "link_id": link_id if not candidate_error else None,
             "link_url": link_url if not candidate_error else None,
             "email_sent": email_sent,
+            "email_scheduled": email_scheduled,
+            "email_send_at": email_send_at,
             "status": "error" if candidate_error else "success",
             "error": candidate_error
         })
@@ -2524,16 +3157,36 @@ async def get_session(link_id: str):
     row = interview_sessions_collection.find_one({"link_id": link_id})
     if row:
         expires_at = row.get("expires_at")
+        now = datetime.now()
         
         # Check if the link has expired
         is_expired = False
         if expires_at:
             try:
-                expiration_time = datetime.fromisoformat(expires_at)
-                if datetime.now() > expiration_time:
+                expiration_time = parse_iso_datetime(expires_at)
+                if now > expiration_time:
                     is_expired = True
             except Exception as e:
                 print(f"Error parsing expiration time: {e}")
+        
+        # Task 4: Check if interview is within scheduled time window
+        is_before_schedule = False
+        scheduled_start = row.get("scheduled_start", "")
+        scheduled_end = row.get("scheduled_end", "")
+        if scheduled_start:
+            try:
+                start_time = parse_iso_datetime(scheduled_start)
+                if now < start_time:
+                    is_before_schedule = True
+            except Exception:
+                pass
+        if scheduled_end:
+            try:
+                end_time = parse_iso_datetime(scheduled_end)
+                if now > end_time:
+                    is_expired = True
+            except Exception:
+                pass
                 
         return {
             "status": "success",
@@ -2542,7 +3195,11 @@ async def get_session(link_id: str):
             "job_description": row.get("job_description"),
             "session_status": row.get("status"),
             "interview_duration": row.get("interview_duration") or 30,
-            "is_expired": is_expired
+            "is_expired": is_expired,
+            "is_before_schedule": is_before_schedule,
+            "scheduled_start": scheduled_start,
+            "scheduled_end": scheduled_end,
+            "record_video": row.get("record_video", True)
         }
     else:
         raise HTTPException(status_code=404, detail="Session not found")
@@ -2629,7 +3286,7 @@ async def start_session_interview(link_id: str = Form(...)):
     # Check if the link has expired
     if expires_at:
         try:
-            expiration_time = datetime.fromisoformat(expires_at)
+            expiration_time = parse_iso_datetime(expires_at)
             if datetime.now() > expiration_time:
                 return {
                     "is_expired": True,
@@ -2637,6 +3294,32 @@ async def start_session_interview(link_id: str = Form(...)):
                 }
         except Exception as e:
             print(f"Error parsing expiration time in start_session_interview: {e}")
+            
+    # Check scheduled restrictions (Task 4)
+    scheduled_start = row.get("scheduled_start")
+    scheduled_end = row.get("scheduled_end")
+    if scheduled_start:
+        try:
+            start_time = parse_iso_datetime(scheduled_start)
+            if datetime.now() < start_time:
+                return {
+                    "is_before_schedule": True,
+                    "scheduled_start": scheduled_start,
+                    "scheduled_end": scheduled_end
+                }
+        except Exception as e:
+            print(f"Error parsing scheduled_start time in start_session_interview: {e}")
+
+    if scheduled_end:
+        try:
+            end_time = parse_iso_datetime(scheduled_end)
+            if datetime.now() > end_time:
+                return {
+                    "is_expired": True,
+                    "message": "This interview window has ended. Please contact your administrator."
+                }
+        except Exception as e:
+            print(f"Error parsing scheduled_end time in start_session_interview: {e}")
     
     # If session was already started or completed, don't restart — return status
     if status in ('started', 'completed') and existing_interview_id:
@@ -2791,9 +3474,58 @@ def send_decision_email(email: str, name: str, decision: str, jd: str):
 
 @app.post("/complete-session/{link_id}")
 async def complete_session(link_id: str):
-    """Mark a session as completed so it can't be restarted."""
+    """Mark a session as completed and send notification emails (Task 3)."""
     try:
         interview_sessions_collection.update_one({"link_id": link_id}, {"$set": {"status": "completed"}})
+        
+        # Task 3: Send submission notification to admin and candidate
+        try:
+            session = interview_sessions_collection.find_one({"link_id": link_id})
+            if session:
+                candidate_name = session.get("candidate_name", "Candidate")
+                candidate_email = session.get("candidate_email", "")
+                interview_id = session.get("interview_id", "")
+                admin_id = session.get("created_by", "")
+                
+                # Get admin email
+                admin_email = ""
+                if admin_id:
+                    try:
+                        from bson import ObjectId
+                        admin = admins_collection.find_one({"_id": ObjectId(admin_id)})
+                        if admin:
+                            admin_email = admin.get("email", "")
+                    except Exception:
+                        pass
+                
+                # Calculate score
+                avg_score = 0
+                total_q = 0
+                if interview_id:
+                    answers = list(answers_collection.find({"interview_id": interview_id}))
+                    total_q = len(answers)
+                    scores = [a.get("ai_score", 0) for a in answers if a.get("ai_score") is not None]
+                    avg_score = sum(scores) / len(scores) if scores else 0
+                    
+                    # Cache avg_score for dashboard
+                    interview_sessions_collection.update_one(
+                        {"link_id": link_id},
+                        {"$set": {"avg_score": round(avg_score, 1)}}
+                    )
+                
+                # Send notifications
+                if candidate_email:
+                    send_submission_notification(
+                        candidate_email=candidate_email,
+                        candidate_name=candidate_name,
+                        admin_email=admin_email,
+                        avg_score=avg_score,
+                        total_questions=total_q
+                    )
+                    print(f"✅ Submission notification sent for {candidate_name}")
+        except Exception as notify_err:
+            print(f"⚠️ Submission notification error: {notify_err}")
+        
         return {"status": "success"}
     except Exception as e:
         print(f"Error completing session: {e}")
