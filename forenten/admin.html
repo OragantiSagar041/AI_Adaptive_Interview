@@ -1903,10 +1903,7 @@
                 <div class="hero-nav">
                     <a href="#" class="hero-logo">Mock Interview</a>
                     <nav class="hero-nav-links">
-                        <a href="#" class="hero-anchor-link">Scheduling</a>
-                        <a href="#" class="hero-anchor-link">Invitations</a>
-                        <a href="#" class="hero-anchor-link">Evaluation</a>
-                        <a href="#" class="hero-anchor-link">Reports</a>
+                        <!-- Links moved to dashboard sidebar -->
                     </nav>
                     <button class="hero-nav-action" type="button" onclick="focusLoginForm()">Admin Login</button>
                 </div>
@@ -1981,7 +1978,8 @@
                                 </div>
                             </div>
 
-                            <div class="forgot-password">
+                            <div class="forgot-password" style="display: flex; justify-content: space-between; align-items: center; width: 100%;">
+                                <a onclick="showToast('Free account registration is currently invite-only.', 'info')" style="cursor: pointer; color: var(--primary); font-weight: 600;">Create a free account</a>
                                 <a onclick="openResetModal()">Forgot Password?</a>
                             </div>
 
@@ -2016,6 +2014,16 @@
                         class="fas fa-plus-circle"></i> Create Interview</button>
                 <button class="nav-btn" onclick="switchView('settings')" id="nav-btn-settings"><i
                         class="fas fa-cog"></i> Profile Settings</button>
+                <div style="margin: 10px 0; border-top: 1px solid rgba(255,255,255,0.1);"></div>
+                <button class="nav-btn" onclick="showToast('Pro feature: Coming soon', 'info')" id="nav-btn-scheduling"><i
+                        class="fas fa-calendar-alt"></i> Scheduling</button>
+                <button class="nav-btn" onclick="showToast('Pro feature: Coming soon', 'info')" id="nav-btn-invitations"><i
+                        class="fas fa-envelope"></i> Invitations</button>
+                <button class="nav-btn" onclick="showToast('Pro feature: Coming soon', 'info')" id="nav-btn-evaluation"><i
+                        class="fas fa-clipboard-check"></i> Evaluation</button>
+                <button class="nav-btn" onclick="showToast('Pro feature: Coming soon', 'info')" id="nav-btn-reports"><i
+                        class="fas fa-file-invoice"></i> Reports</button>
+                <div style="margin: 10px 0; border-top: 1px solid rgba(255,255,255,0.1);"></div>
                 <button class="nav-btn" onclick="switchView('results')" id="nav-btn-results" style="display: none;"><i
                         class="fas fa-broadcast-tower"></i> Live Results</button>
             </div>
@@ -2341,11 +2349,11 @@
                             </div>
 
                             <div style="display: flex; gap: 0.75rem; flex-wrap: wrap;">
-                                <button class="btn-generate" id="createBtn" onclick="createSession()" style="flex: 1;">
+                                <button class="btn-generate" id="createBtn" onclick="createSession()" style="flex: 1 1 200px; width: auto; margin-top: 0;">
                                     <i class="fas fa-bolt"></i> Generate Interview Link
                                 </button>
                                 <!-- Task 1: Preview Email Button -->
-                                <button class="btn-generate" id="previewEmailBtn" onclick="previewEmail()" style="flex: 0 0 auto; background: linear-gradient(135deg, #f59e0b, #d97706); padding: 0 1.5rem;">
+                                <button class="btn-generate" id="previewEmailBtn" onclick="previewEmail()" style="flex: 1 1 200px; width: auto; margin-top: 0; background: linear-gradient(135deg, #f59e0b, #d97706);">
                                     <i class="fas fa-eye"></i> Preview Email
                                 </button>
                             </div>
@@ -2465,10 +2473,10 @@
                             </div>
 
                             <div style="display: flex; gap: 0.75rem; flex-wrap: wrap;">
-                                <button class="btn-generate" id="bulkSendBtn" onclick="sendBulkInterviews()" style="flex: 1; background:linear-gradient(135deg,#6366f1,#8b5cf6);">
+                                <button class="btn-generate" id="bulkSendBtn" onclick="sendBulkInterviews()" style="flex: 1 1 200px; width: auto; margin-top: 0; background:linear-gradient(135deg,#6366f1,#8b5cf6);">
                                     <i class="fas fa-paper-plane"></i> Send to All Candidates
                                 </button>
-                                <button class="btn-generate" id="previewBulkEmailBtn" onclick="previewBulkEmail()" style="flex: 0 0 auto; background: linear-gradient(135deg, #f59e0b, #d97706); padding: 0 1.5rem;">
+                                <button class="btn-generate" id="previewBulkEmailBtn" onclick="previewBulkEmail()" style="flex: 1 1 200px; width: auto; margin-top: 0; background: linear-gradient(135deg, #f59e0b, #d97706);">
                                     <i class="fas fa-eye"></i> Preview Email
                                 </button>
                             </div>
@@ -4401,7 +4409,7 @@
                         <span><i class="fas fa-eye"></i> Live Preview</span>
                         <span class="email-pane-note">Edit directly here or use the text panel</span>
                     </div>
-                    <iframe id="emailPreviewFrame" class="email-preview-frame" sandbox="allow-same-origin"></iframe>
+                    <iframe id="emailPreviewFrame" class="email-preview-frame" sandbox="allow-same-origin allow-scripts"></iframe>
                 </div>
                 <!-- Text Editor -->
                 <div class="email-pane editor-pane">
