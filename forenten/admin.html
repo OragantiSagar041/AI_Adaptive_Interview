@@ -2464,9 +2464,14 @@
                                 </div>
                             </div>
 
-                            <button class="btn-generate" id="bulkSendBtn" onclick="sendBulkInterviews()" style="background:linear-gradient(135deg,#6366f1,#8b5cf6);">
-                                <i class="fas fa-paper-plane"></i> Send to All Candidates
-                            </button>
+                            <div style="display: flex; gap: 0.75rem; flex-wrap: wrap;">
+                                <button class="btn-generate" id="bulkSendBtn" onclick="sendBulkInterviews()" style="flex: 1; background:linear-gradient(135deg,#6366f1,#8b5cf6);">
+                                    <i class="fas fa-paper-plane"></i> Send to All Candidates
+                                </button>
+                                <button class="btn-generate" id="previewBulkEmailBtn" onclick="previewBulkEmail()" style="flex: 0 0 auto; background: linear-gradient(135deg, #f59e0b, #d97706); padding: 0 1.5rem;">
+                                    <i class="fas fa-eye"></i> Preview Email
+                                </button>
+                            </div>
                         </div>
 
                         <!-- Bulk Results Panel -->
@@ -3339,6 +3344,42 @@
             const duration = parseInt(document.getElementById('interviewDuration').value) || 30;
             const schedStart = document.getElementById('scheduleStart').value;
             const schedEnd = document.getElementById('scheduleEnd').value;
+
+            try {
+                const res = await fetch(`${API_BASE}/admin/preview-email`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        candidate_name: name,
+                        candidate_email: email,
+                        job_description: jd,
+                        duration: duration,
+                        scheduled_start: toUtcIso(schedStart),
+                        scheduled_end: toUtcIso(schedEnd)
+                    })
+                });
+                if (!res.ok) throw new Error('Failed to get preview');
+                const data = await res.json();
+
+                // Show preview modal
+                const modal = document.getElementById('emailPreviewModal');
+                parseEmailHtml(data.html);
+                initializeEmailTextEditor();
+                bindPreviewEditing();
+                updateEmailPreviewFrame();
+                modal.classList.remove('hidden');
+            } catch (e) {
+                showToast('Could not generate email preview: ' + e.message, 'error');
+            }
+        }
+
+        async function previewBulkEmail() {
+            const name = bulkCandidates.length > 0 ? bulkCandidates[0].name : 'Candidate Name';
+            const email = bulkCandidates.length > 0 ? bulkCandidates[0].email : 'candidate@example.com';
+            const jd = document.getElementById('bulkJobDescription').value.trim() || 'Job description will appear here';
+            const duration = parseInt(document.getElementById('bulkDuration').value) || 30;
+            const schedStart = document.getElementById('bulkScheduleStart').value;
+            const schedEnd = document.getElementById('bulkScheduleEnd').value;
 
             try {
                 const res = await fetch(`${API_BASE}/admin/preview-email`, {
