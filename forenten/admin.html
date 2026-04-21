@@ -2547,6 +2547,18 @@
             : "https://ai-adaptive-interview.onrender.com";
         const FRONTEND_BASE = "https://ai-adaptive-interview.vercel.app";
 
+        /**
+         * Convert a datetime-local input value (local ISO, no timezone) to a UTC ISO
+         * string. Pass-through if already has Z/offset, or if empty.
+         */
+        function toUtcIso(localDatetimeValue) {
+            if (!localDatetimeValue) return '';
+            if (localDatetimeValue.endsWith('Z') || localDatetimeValue.includes('+')) return localDatetimeValue;
+            const d = new Date(localDatetimeValue);  // browser interprets as LOCAL time
+            if (isNaN(d.getTime())) return localDatetimeValue;
+            return d.toISOString();
+        }
+
         let adminId = null;
         let adminEmail = "";
 
@@ -2783,8 +2795,8 @@
                         interview_duration: duration,
                         record_video: recordVideo,
                         custom_email_html: window._customEmailHtml || "",
-                        scheduled_start: scheduleStart,
-                        scheduled_end: scheduleEnd
+                        scheduled_start: toUtcIso(scheduleStart),
+                        scheduled_end: toUtcIso(scheduleEnd)
                     })
                 });
 
@@ -3337,8 +3349,8 @@
                         candidate_email: email,
                         job_description: jd,
                         duration: duration,
-                        scheduled_start: schedStart,
-                        scheduled_end: schedEnd
+                        scheduled_start: toUtcIso(schedStart),
+                        scheduled_end: toUtcIso(schedEnd)
                     })
                 });
                 if (!res.ok) throw new Error('Failed to get preview');
@@ -4258,8 +4270,8 @@
                         interview_duration: duration,
                         record_video: recordVideo,
                         custom_email_html: window._customEmailHtml || "",
-                        scheduled_start: schedStart,
-                        scheduled_end: schedEnd
+                        scheduled_start: toUtcIso(schedStart),
+                        scheduled_end: toUtcIso(schedEnd)
                     })
                 });
 
