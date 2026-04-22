@@ -39,6 +39,8 @@ load_dotenv()
 
 # Configuration
 UPLOAD_FOLDER = "uploads"
+os.makedirs(UPLOAD_FOLDER, exist_ok=True)
+
 from fastapi.staticfiles import StaticFiles
 
 FRONTEND_URL = "https://ai-adaptive-interview.vercel.app"
