@@ -1542,9 +1542,10 @@
             <div style="background: #fee2e2; color: #dc2626; padding: 12px; border-radius: 8px; font-weight: 700; display: inline-flex; align-items: center; gap: 8px;">
                 <i class="fas fa-exclamation-triangle"></i> PLEASE DO NOT CLOSE THIS TAB
             </div>
-            <div style="margin-top: 1.5rem; width: 100%; height: 6px; background: #e2e8f0; border-radius: 3px; overflow: hidden;">
-                <div style="width: 100%; height: 100%; background: #6366f1; animation: shimmer 2s infinite linear; background-size: 200% 100%; background-image: linear-gradient(90deg, #6366f1 0%, #818cf8 50%, #6366f1 100%);"></div>
+            <div style="margin-top: 1.5rem; width: 100%; height: 10px; background: #e2e8f0; border-radius: 5px; overflow: hidden; position: relative;">
+                <div id="uploadProgressBar" style="width: 0%; height: 100%; background: #6366f1; transition: width 0.3s ease;"></div>
             </div>
+            <div id="uploadPercentageText" style="margin-top: 0.5rem; font-size: 0.85rem; color: #6366f1; font-weight: 700;">Preparing upload...</div>
         </div>
 
         <div id="finalClosureMessage" class="hidden" style="animation: fadeInUp 0.6s ease-out;">
@@ -1880,6 +1881,8 @@
         let backgroundNoiseAlerts = 0;
         let backgroundNoiseFrameCount = 0;
         let backgroundNoiseCooldownUntil = 0;
+        let interviewActive = false;
+        let tabViolationCount = 0;
 
         // CONFIGURATION: Change this to your Render URL after deployment
         // e.g. "https://your-app-name.onrender.com"
@@ -2143,6 +2146,7 @@
 
             // Enforce Fullscreen
             enableFullscreen();
+            interviewActive = true;
 
             // Reset recording controls
             document.getElementById('startButton').disabled = false;
@@ -3656,6 +3660,7 @@ Output: ${formatCodingValue(testCase.output)}${resultBlock}</pre>
         async function endInterview(alreadySaved = false) {
             // Stop the global countdown timer
             stopGlobalCountdown();
+            interviewActive = false;
 
             if (codingVoiceListening && codingVoiceRecognition) {
                 codingVoiceListening = false;
@@ -3674,6 +3679,10 @@ Output: ${formatCodingValue(testCase.output)}${resultBlock}</pre>
             document.getElementById('codingRoundSection').classList.add('hidden');
             document.getElementById('status').classList.add('hidden'); // Hide the generic status bar
             document.getElementById('resultsSection').classList.remove('hidden');
+            
+            // Hide the Welcome Name header
+            const header = document.querySelector('h1');
+            if (header) header.style.display = 'none';
             updateProgress(100);
             document.getElementById('globalCountdown').textContent = '00:00';
 
@@ -4151,30 +4160,49 @@ Output: ${formatCodingValue(testCase.output)}${resultBlock}</pre>
                     formData.append('file', blob, 'full_interview.webm');
                     formData.append('interview_id', interviewId);
 
-                    const response = await fetch(`${API_BASE_URL}/upload-full-recording`, {
-                        method: 'POST',
-                        body: formData
+                    const progressText = document.getElementById('uploadPercentageText');
+                    const progressBar = document.getElementById('uploadProgressBar');
+
+                    await new Promise((uploadResolve, uploadReject) => {
+                        const xhr = new XMLHttpRequest();
+                        xhr.open('POST', `${API_BASE_URL}/upload-full-recording`, true);
+
+                        xhr.upload.onprogress = (e) => {
+                            if (e.lengthComputable) {
+                                const percent = Math.round((e.loaded / e.total) * 100);
+                                if (progressBar) progressBar.style.width = percent + '%';
+                                if (progressText) progressText.textContent = `Uploading... ${percent}%`;
+                            }
+                        };
+
+                        xhr.onload = () => {
+                            if (xhr.status === 200) {
+                                try {
+                                    const data = JSON.parse(xhr.responseText);
+                                    console.log("Full recording saved:", data);
+                                    const normalizedPath = data.file_path.replace(/\\/g, '/');
+                                    if (window.stream) {
+                                        window.stream.getTracks().forEach(track => track.stop());
+                                    }
+                                    uploadResolve();
+                                } catch (e) {
+                                    uploadReject(new Error("Failed to parse server response"));
+                                }
+                            } else {
+                                uploadReject(new Error(`Upload failed: ${xhr.statusText}`));
+                            }
+                        };
+
+                        xhr.onerror = () => uploadReject(new Error("Network error during upload"));
+                        xhr.send(formData);
                     });
 
-                    if (response.ok) {
-                        const data = await response.json();
-                        console.log("Full recording saved:", data);
-                        
-                        const normalizedPath = data.file_path.replace(/\\/g, '/');
-                        const videoUrl = `${API_BASE_URL}/${normalizedPath}`;
-                        console.log("Video available statically at:", videoUrl);
-                        
-                        // Clean up video stream traces
-                        if (window.stream) {
-                            window.stream.getTracks().forEach(track => track.stop());
-                        }
-                    } else {
-                        throw new Error(`Upload failed: ${response.statusText}`);
-                    }
                     resolve();
                 } catch (e) {
                     console.error("Error uploading full recording:", e);
-                    resolve(); // Resolve to avoid blocking
+                    const progressText = document.getElementById('uploadPercentageText');
+                    if (progressText) progressText.textContent = "Upload failed. Please contact support.";
+                    resolve(); // Resolve to avoid blocking UI
                 }
             }
 
@@ -4387,7 +4415,32 @@ Output: ${formatCodingValue(testCase.output)}${resultBlock}</pre>
             console.error(error);
             showStatus("Error generating report: " + error.message, "error");
         }
+        }
     }
+
+    // ── Anti-Cheating: Tab Switch Detection ──
+    document.addEventListener('visibilitychange', () => {
+        if (document.hidden && interviewActive) {
+            tabViolationCount++;
+            console.warn(`Tab switched ${tabViolationCount} times!`);
+            
+            // Immediately alert the user (this pauses JS execution until dismissed)
+            alert(`⚠️ WARNING: Tab switching is strictly prohibited during the interview. \n\nViolation #${tabViolationCount} has been recorded. Repeated violations may lead to disqualification.`);
+            
+            // Log violation to backend
+            if (currentInterviewId) {
+                fetch(`${API_BASE_URL}/session/${currentInterviewId}/violation`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        type: 'tab_switch',
+                        count: tabViolationCount,
+                        timestamp: new Date().toISOString()
+                    })
+                }).catch(err => console.error('Error logging violation:', err));
+            }
+        }
+    });
 </script>
 
 </html>

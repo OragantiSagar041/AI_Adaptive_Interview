@@ -1127,6 +1127,11 @@ class NextQuestionRequest(BaseModel):
     current_question_id: int
     answer_text: str
 
+class ViolationRequest(BaseModel):
+    type: str
+    count: int
+    timestamp: str
+
 def generate_followup_question(answer_text: str, resume_context: str, jd_text: str, current_q_id: int, followup_streak: int) -> Dict:
     if followup_streak < 3:
         prompt = f"""
@@ -3406,14 +3411,21 @@ async def start_session_interview(link_id: str = Form(...)):
     except Exception as db_e:
         print(f"⚠️ DB Save Error: {db_e}")
         
-    return {
-        "interview_id": interview_id,
-        "total_questions": len(questions),
-        "first_question": questions[0],
-        "candidate_name": candidate_name,
-        "interview_duration": interview_duration,
         "record_video": row.get("record_video", True)
     }
+
+@app.post("/session/{interview_id}/violation")
+async def log_violation(interview_id: str, violation: ViolationRequest):
+    print(f"⚠️ VIOLATION detected for session {interview_id}: {violation.type} (#{violation.count}) at {violation.timestamp}")
+    try:
+        interview_sessions_collection.update_one(
+            {"interview_id": interview_id},
+            {"$push": {"violations": violation.dict()}}
+        )
+        return {"status": "success"}
+    except Exception as e:
+        print(f"❌ Error logging violation: {e}")
+        return {"status": "error", "message": str(e)}
 
 @app.post("/admin/update-decision")
 @app.post("/admin/update_decision")
