@@ -2140,6 +2140,12 @@
                                         title="Export to Excel">
                                         <i class="fas fa-file-excel"></i> Export
                                     </button>
+                                    <!-- Bulk Delete Button -->
+                                    <button id="bulkDeleteBtn" onclick="deleteSelectedSessions()" class="btn-copy"
+                                        style="margin-top: 15px; padding: 0.45rem 1rem; background: rgba(244, 63, 94, 0.1); color: var(--danger); border-color: rgba(244, 63, 94, 0.2); display: none;"
+                                        title="Delete Selected">
+                                        <i class="fas fa-trash-alt"></i> Delete Selected
+                                    </button>
                                 </div>
                             </div>
                         </div>
@@ -2148,6 +2154,7 @@
                             <table class="dash-table">
                                 <thead>
                                     <tr>
+                                        <th style="width: 40px; padding-left: 1.5rem;"><input type="checkbox" id="selectAllCheckbox" onclick="toggleSelectAll(this)" style="cursor: pointer;"></th>
                                         <th>Candidate</th>
                                         <th>Date Created</th>
                                         <th>Status</th>
@@ -2157,7 +2164,7 @@
                                 </thead>
                                 <tbody id="dashboardTableBody">
                                     <tr>
-                                        <td colspan="5"
+                                        <td colspan="6"
                                             style="text-align: center; padding: 2rem; color: var(--text-muted);">Loading
                                             sessions...</td>
                                     </tr>
@@ -2194,12 +2201,18 @@
                                 <button onclick="exportCurrentStatus('selected')" class="btn-copy btn-export-accent" title="Export selected candidates">
                                     <i class="fas fa-file-excel"></i> Export
                                 </button>
+                                <button id="bulkDeleteQualifiedBtn" onclick="deleteSelectedSessions('qualified')" class="btn-copy"
+                                    style="padding: 0.45rem 1rem; background: rgba(244, 63, 94, 0.1); color: var(--danger); border-color: rgba(244, 63, 94, 0.2); display: none;"
+                                    title="Delete Selected">
+                                    <i class="fas fa-trash-alt"></i> Delete Selected
+                                </button>
                             </div>
                         </div>
                         <div style="overflow-x: auto;">
                             <table class="dash-table">
                                 <thead>
                                     <tr>
+                                        <th style="width: 40px; padding-left: 1.5rem;"><input type="checkbox" id="selectAllQualified" onclick="toggleSelectAllItems('qualified', this)" style="cursor: pointer;"></th>
                                         <th>Candidate</th>
                                         <th>Date Created</th>
                                         <th>Score</th>
@@ -2208,7 +2221,7 @@
                                 </thead>
                                 <tbody id="qualifiedTableBody">
                                     <tr>
-                                        <td colspan="4"
+                                        <td colspan="5"
                                             style="text-align: center; padding: 2rem; color: var(--text-muted);">No
                                             qualified candidates found.</td>
                                     </tr>
@@ -2220,6 +2233,7 @@
 
                 <!-- VIEW: REJECTED CANDIDATES -->
                 <div id="view-unqualified" class="view-panel hidden">
+                    <!-- ... similar content as qualified ... -->
                     <div class="section-card">
                         <div class="section-header">
                             <div class="header-icon purple"
@@ -2234,12 +2248,18 @@
                                 <button onclick="exportCurrentStatus('rejected')" class="btn-copy btn-export-accent" title="Export rejected candidates">
                                     <i class="fas fa-file-excel"></i> Export
                                 </button>
+                                <button id="bulkDeleteUnqualifiedBtn" onclick="deleteSelectedSessions('unqualified')" class="btn-copy"
+                                    style="padding: 0.45rem 1rem; background: rgba(244, 63, 94, 0.1); color: var(--danger); border-color: rgba(244, 63, 94, 0.2); display: none;"
+                                    title="Delete Selected">
+                                    <i class="fas fa-trash-alt"></i> Delete Selected
+                                </button>
                             </div>
                         </div>
                         <div style="overflow-x: auto;">
                             <table class="dash-table">
                                 <thead>
                                     <tr>
+                                        <th style="width: 40px; padding-left: 1.5rem;"><input type="checkbox" id="selectAllUnqualified" onclick="toggleSelectAllItems('unqualified', this)" style="cursor: pointer;"></th>
                                         <th>Candidate</th>
                                         <th>Date Created</th>
                                         <th>Score</th>
@@ -2248,7 +2268,7 @@
                                 </thead>
                                 <tbody id="unqualifiedTableBody">
                                     <tr>
-                                        <td colspan="4"
+                                        <td colspan="5"
                                             style="text-align: center; padding: 2rem; color: var(--text-muted);">No
                                             rejected candidates found.</td>
                                     </tr>
@@ -2257,6 +2277,8 @@
                         </div>
                     </div>
                 </div>
+
+
 
                 <!-- VIEW 2: CREATE INTERVIEW -->
                 <div id="view-create" class="view-panel hidden">
@@ -2970,7 +2992,7 @@
         async function loadDashboardSessions() {
             if (!adminId) return;
             const tbody = document.getElementById('dashboardTableBody');
-            tbody.innerHTML = '<tr><td colspan="5" style="text-align: center; padding: 2rem; color: var(--text-muted);"><span class="spinner" style="border-color:var(--primary); border-bottom-color:transparent; width:20px; height:20px;"></span> Loading...</td></tr>';
+            tbody.innerHTML = '<tr><td colspan="6" style="text-align: center; padding: 2rem; color: var(--text-muted);"><span class="spinner" style="border-color:var(--primary); border-bottom-color:transparent; width:20px; height:20px;"></span> Loading...</td></tr>';
 
             const startDate = document.getElementById('filterStartDate').value;
             const endDate = document.getElementById('filterEndDate').value;
@@ -2995,6 +3017,28 @@
             }
         }
 
+        async function toggleSessionActive(linkId, currentlyDeactivated) {
+            const action = currentlyDeactivated ? 'activate' : 'deactivate';
+            const confirmMsg = `Are you sure you want to ${action} this interview link? ${currentlyDeactivated ? 'The candidate will be able to access the interview again.' : 'The candidate will no longer be able to access the interview.'}`;
+            
+            if (!confirm(confirmMsg)) return;
+
+            try {
+                const res = await fetch(`${API_BASE}/admin/sessions/${encodeURIComponent(linkId)}/${currentlyDeactivated ? 'activate' : 'deactivate'}`, {
+                    method: 'POST'
+                });
+                if (res.ok) {
+                    showToast(`Session ${action}d successfully`, "success");
+                    loadDashboardSessions();
+                } else {
+                    showToast(`Failed to ${action} session`, "error");
+                }
+            } catch (error) {
+                console.error(`Error ${action}ing session:`, error);
+                showToast(`Error ${action}ing session`, "error");
+            }
+        }
+
         async function deleteSession(linkId) {
             if (!confirm("Are you sure you want to delete this candidate's interview session? This cannot be undone.")) return;
             
@@ -3011,6 +3055,113 @@
             }
         }
 
+        function toggleSelectAll(master) {
+            const checkboxes = document.querySelectorAll('#dashboardTableBody .session-checkbox');
+            checkboxes.forEach(cb => cb.checked = master.checked);
+            updateBulkDeleteBtn();
+        }
+
+        function toggleSelectAllItems(type, master) {
+            let selector = '';
+            if (type === 'qualified') selector = '#qualifiedTableBody .session-checkbox';
+            else if (type === 'unqualified') selector = '#unqualifiedTableBody .session-checkbox';
+            else if (type === 'deactivated') selector = '#deactivatedTableBody .session-checkbox';
+            
+            const checkboxes = document.querySelectorAll(selector);
+            checkboxes.forEach(cb => cb.checked = master.checked);
+            updateTableBulkDeleteBtn(type);
+        }
+
+        function updateBulkDeleteBtn() {
+            const checked = document.querySelectorAll('#dashboardTableBody .session-checkbox:checked').length;
+            const btn = document.getElementById('bulkDeleteBtn');
+            if (btn) {
+                btn.style.display = checked > 0 ? 'inline-block' : 'none';
+                if (checked > 0) {
+                    btn.innerHTML = `<i class="fas fa-trash-alt"></i> Delete Selected (${checked})`;
+                }
+            }
+        }
+
+        function updateTableBulkDeleteBtn(type) {
+            let selector = '';
+            let btnId = '';
+            if (type === 'qualified') {
+                selector = '#qualifiedTableBody .session-checkbox:checked';
+                btnId = 'bulkDeleteQualifiedBtn';
+            } else if (type === 'unqualified') {
+                selector = '#unqualifiedTableBody .session-checkbox:checked';
+                btnId = 'bulkDeleteUnqualifiedBtn';
+            } else if (type === 'deactivated') {
+                selector = '#deactivatedTableBody .session-checkbox:checked';
+                btnId = 'bulkDeleteDeactivatedBtn';
+            }
+            
+            const checked = document.querySelectorAll(selector).length;
+            const btn = document.getElementById(btnId);
+            if (btn) {
+                btn.style.display = checked > 0 ? 'inline-block' : 'none';
+                if (checked > 0) {
+                    btn.innerHTML = `<i class="fas fa-trash-alt"></i> Delete Selected (${checked})`;
+                }
+            }
+        }
+
+        async function deleteSelectedSessions(source = 'dashboard') {
+            let selector = '#dashboardTableBody .session-checkbox:checked';
+            let btnId = 'bulkDeleteBtn';
+            
+            if (source === 'qualified') {
+                selector = '#qualifiedTableBody .session-checkbox:checked';
+                btnId = 'bulkDeleteQualifiedBtn';
+            } else if (source === 'unqualified') {
+                selector = '#unqualifiedTableBody .session-checkbox:checked';
+                btnId = 'bulkDeleteUnqualifiedBtn';
+            } else if (source === 'deactivated') {
+                selector = '#deactivatedTableBody .session-checkbox:checked';
+                btnId = 'bulkDeleteDeactivatedBtn';
+            }
+
+            const checkedBoxes = document.querySelectorAll(selector);
+            const linkIds = Array.from(checkedBoxes).map(cb => cb.value);
+            
+            if (linkIds.length === 0) return;
+            if (!confirm(`Are you sure you want to delete ${linkIds.length} selected interview sessions? This cannot be undone.`)) return;
+            
+            const btn = document.getElementById(btnId);
+            const originalHtml = btn.innerHTML;
+            btn.disabled = true;
+            btn.innerHTML = '<span class="spinner" style="width:14px; height:14px; border-width:2px; margin-right:5px;"></span> Deleting...';
+
+            let successCount = 0;
+            let failCount = 0;
+
+            try {
+                const promises = linkIds.map(id => 
+                    fetch(`${API_BASE}/admin/sessions/${id}`, { method: 'DELETE' })
+                        .then(res => { if (res.ok) successCount++; else failCount++; })
+                        .catch(() => failCount++)
+                );
+                
+                await Promise.all(promises);
+                
+                if (successCount > 0) {
+                    showToast(`Deleted ${successCount} sessions successfully`, "success");
+                    loadDashboardSessions(source === 'deactivated');
+                }
+                if (failCount > 0) {
+                    showToast(`Failed to delete ${failCount} sessions`, "error");
+                }
+            } catch (error) {
+                showToast("Error during bulk deletion", "error");
+            } finally {
+                btn.disabled = false;
+                btn.innerHTML = originalHtml;
+                if (source === 'dashboard') updateBulkDeleteBtn();
+                else updateTableBulkDeleteBtn(source);
+            }
+        }
+
         function clearFilters() {
             document.getElementById('filterStartDate').value = '';
             document.getElementById('filterEndDate').value = '';
@@ -3023,9 +3174,21 @@
             const tbody = document.getElementById('dashboardTableBody');
             const qualifiedBody = document.getElementById('qualifiedTableBody');
             const unqualifiedBody = document.getElementById('unqualifiedTableBody');
+            
+            // Reset select all checkbox
+            const selectAllCheck = document.getElementById('selectAllCheckbox');
+            if (selectAllCheck) selectAllCheck.checked = false;
+            const selectAllQual = document.getElementById('selectAllQualified');
+            if (selectAllQual) selectAllQual.checked = false;
+            const selectAllUnqual = document.getElementById('selectAllUnqualified');
+            if (selectAllUnqual) selectAllUnqual.checked = false;
+
+            updateBulkDeleteBtn();
+            updateTableBulkDeleteBtn('qualified');
+            updateTableBulkDeleteBtn('unqualified');
 
             if (!sessions || sessions.length === 0) {
-                tbody.innerHTML = '<tr><td colspan="5" style="text-align: center; padding: 2.5rem; color: var(--text-muted);">No sessions found.</td></tr>';
+                tbody.innerHTML = '<tr><td colspan="6" style="text-align: center; padding: 2.5rem; color: var(--text-muted);">No sessions found.</td></tr>';
                 document.getElementById('paginationInfo').textContent = '';
                 document.getElementById('prevPageBtn').disabled = true;
                 document.getElementById('nextPageBtn').disabled = true;
@@ -3054,7 +3217,6 @@
                 allFilteredSessions.push({...s, _computedStatus: currentStatus});
 
                 // Build qualified/unqualified tables
-                // Fix naive UTC parse bug to ensure correct IST conversion
                 let utcDateStr = s.created_at;
                 if (utcDateStr && !utcDateStr.endsWith('Z') && !utcDateStr.includes('+')) {
                     utcDateStr += 'Z';
@@ -3068,10 +3230,22 @@
                 }
 
                 if (s.decision === 'selected') {
-                    qualHtml += `<tr><td style="font-weight: 500;"><a href="javascript:void(0)" onclick="openLiveResults('${s.link_id}', '${s.candidate_name.replace(/'/g, "\\'")}')" style="color: var(--primary-light); text-decoration: none; border-bottom: 1px dashed var(--primary-light);">${s.candidate_name}</a></td><td>${dateStr}</td><td>${scoreText}</td><td style="text-align: right;"><button class="btn-copy" onclick="openLiveResults('${s.link_id}', '${s.candidate_name.replace(/'/g, "\\'")}')" style="background:#10b981; color:white; border:none; padding:0.4rem 0.8rem; font-size:0.75rem; border-radius:6px; cursor:pointer; font-weight:600;"><i class="fas fa-eye"></i> View</button></td></tr>`;
+                    qualHtml += `<tr>
+                        <td style="padding-left: 1.5rem;"><input type="checkbox" class="session-checkbox" value="${s.link_id}" onclick="updateTableBulkDeleteBtn('qualified')" style="cursor: pointer;"></td>
+                        <td style="font-weight: 500;"><a href="javascript:void(0)" onclick="openLiveResults('${s.link_id}', '${s.candidate_name.replace(/'/g, "\\'")}')" style="color: var(--primary-light); text-decoration: none; border-bottom: 1px dashed var(--primary-light);">${s.candidate_name}</a></td>
+                        <td>${dateStr}</td>
+                        <td>${scoreText}</td>
+                        <td style="text-align: right;"><button class="btn-copy" onclick="openLiveResults('${s.link_id}', '${s.candidate_name.replace(/'/g, "\\'")}')" style="background:#10b981; color:white; border:none; padding:0.4rem 0.8rem; font-size:0.75rem; border-radius:6px; cursor:pointer; font-weight:600;"><i class="fas fa-eye"></i> View</button></td>
+                    </tr>`;
                 }
                 if (s.decision === 'rejected') {
-                    unqualHtml += `<tr><td style="font-weight: 500;"><a href="javascript:void(0)" onclick="openLiveResults('${s.link_id}', '${s.candidate_name.replace(/'/g, "\\'")}')" style="color: var(--text-muted); text-decoration: none; border-bottom: 1px dashed var(--text-muted);">${s.candidate_name}</a></td><td>${dateStr}</td><td>${scoreText}</td><td style="text-align: right;"><button class="btn-copy" onclick="openLiveResults('${s.link_id}', '${s.candidate_name.replace(/'/g, "\\'")}')" style="background:var(--danger); color:white; border:none; padding:0.4rem 0.8rem; font-size:0.75rem; border-radius:6px; cursor:pointer;"><i class="fas fa-eye"></i> View</button></td></tr>`;
+                    unqualHtml += `<tr>
+                        <td style="padding-left: 1.5rem;"><input type="checkbox" class="session-checkbox" value="${s.link_id}" onclick="updateTableBulkDeleteBtn('unqualified')" style="cursor: pointer;"></td>
+                        <td style="font-weight: 500;"><a href="javascript:void(0)" onclick="openLiveResults('${s.link_id}', '${s.candidate_name.replace(/'/g, "\\'")}')" style="color: var(--text-muted); text-decoration: none; border-bottom: 1px dashed var(--text-muted);">${s.candidate_name}</a></td>
+                        <td>${dateStr}</td>
+                        <td>${scoreText}</td>
+                        <td style="text-align: right;"><button class="btn-copy" onclick="openLiveResults('${s.link_id}', '${s.candidate_name.replace(/'/g, "\\'")}')" style="background:var(--danger); color:white; border:none; padding:0.4rem 0.8rem; font-size:0.75rem; border-radius:6px; cursor:pointer;"><i class="fas fa-eye"></i> View</button></td>
+                    </tr>`;
                 }
             });
 
@@ -3105,6 +3279,10 @@
 
                 let statusLabel = currentStatus.toUpperCase();
                 if (currentStatus === 'expired') statusLabel = 'NOT ATTENDED';
+                if (s.is_deactivated) {
+                    statusClass = 'pending';
+                    statusLabel = 'DEACTIVATED';
+                }
 
                 let decisionTag = '';
                 if (s.decision === 'selected') decisionTag = '<span style="font-size: 0.65rem; background: var(--accent); color: #fff; padding: 1px 5px; border-radius: 4px; border:none; margin-left:5px;">SELECTED</span>';
@@ -3125,18 +3303,26 @@
                 }
 
                 const deleteBtn = `<button onclick="deleteSession('${s.link_id}')" style="background: none; border: none; color: var(--danger); cursor: pointer; padding: 4px; border-radius: 4px; transition: 0.2s; margin-left: 8px;" title="Remove Candidate"><i class="fas fa-times"></i></button>`;
+                const deactivateBtn = `<button onclick="toggleSessionActive('${s.link_id}', ${s.is_deactivated})" style="background: none; border: none; color: ${s.is_deactivated ? 'var(--success)' : 'var(--warning)'}; cursor: pointer; padding: 4px; border-radius: 4px; transition: 0.2s; margin-left: 4px;" title="${s.is_deactivated ? 'Activate' : 'Deactivate'} Link"><i class="fas fa-power-off"></i></button>`;
                 const videoIcon = s.has_video ? `<i class="fas fa-video" style="color: #6366f1; margin-left: 8px; font-size: 0.85rem;" title="Video Available"></i>` : '';
 
-                mainHtml += `<tr><td style="font-weight: 500;">${s.candidate_name} ${videoIcon} ${decisionTag}<div style="font-size: 0.75rem; color: var(--text-muted); font-weight: normal; margin-top: 2px;">${s.interview_duration} min interview</div></td><td>${dateStr}</td><td><span class="status-badge ${statusClass}">${statusLabel}</span></td><td>${scoreText}</td><td style="text-align: right; white-space: nowrap;">${actionBtn} ${deleteBtn}</td></tr>`;
+                mainHtml += `<tr>
+                    <td style="padding-left: 1.5rem;"><input type="checkbox" class="session-checkbox" value="${s.link_id}" onclick="updateBulkDeleteBtn()" style="cursor: pointer;"></td>
+                    <td style="font-weight: 500;">${s.candidate_name} ${videoIcon} ${decisionTag}<div style="font-size: 0.75rem; color: var(--text-muted); font-weight: normal; margin-top: 2px;">${s.interview_duration} min interview</div></td>
+                    <td>${dateStr}</td>
+                    <td><span class="status-badge ${statusClass}">${statusLabel}</span></td>
+                    <td>${scoreText}</td>
+                    <td style="text-align: right; white-space: nowrap;">${actionBtn} ${deactivateBtn} ${deleteBtn}</td>
+                </tr>`;
             });
 
             if (totalItems === 0) {
-                mainHtml = '<tr><td colspan="5" style="text-align: center; padding: 2.5rem; color: var(--text-muted);">No sessions match the selected filter.</td></tr>';
+                mainHtml = '<tr><td colspan="6" style="text-align: center; padding: 2.5rem; color: var(--text-muted);">No sessions match the selected filter.</td></tr>';
             }
 
             tbody.innerHTML = mainHtml;
-            qualifiedBody.innerHTML = qualHtml || '<tr><td colspan="4" style="text-align: center; padding: 2rem; color: var(--text-muted);">No qualified candidates yet.</td></tr>';
-            unqualifiedBody.innerHTML = unqualHtml || '<tr><td colspan="4" style="text-align: center; padding: 2rem; color: var(--text-muted);">No rejected candidates yet.</td></tr>';
+            qualifiedBody.innerHTML = qualHtml || '<tr><td colspan="5" style="text-align: center; padding: 2rem; color: var(--text-muted);">No qualified candidates yet.</td></tr>';
+            unqualifiedBody.innerHTML = unqualHtml || '<tr><td colspan="5" style="text-align: center; padding: 2rem; color: var(--text-muted);">No rejected candidates yet.</td></tr>';
 
             // Task 6: Update pagination controls
             document.getElementById('paginationInfo').textContent = totalItems > 0 ? `Showing ${startIdx + 1}–${endIdx} of ${totalItems}` : '';
@@ -3154,6 +3340,11 @@
             if (currentPage < 1) currentPage = 1;
             if (currentPage > totalPages) currentPage = totalPages;
 
+            // Reset select all checkbox
+            const selectAllCheck = document.getElementById('selectAllCheckbox');
+            if (selectAllCheck) selectAllCheck.checked = false;
+            updateBulkDeleteBtn();
+
             const startIdx = (currentPage - 1) * PAGE_SIZE;
             const endIdx = Math.min(startIdx + PAGE_SIZE, allFilteredSessions.length);
             const pageItems = allFilteredSessions.slice(startIdx, endIdx);
@@ -3169,25 +3360,52 @@
                 }
                 const dateObj = new Date(utcDateStr);
                 const dateStr = dateObj.toLocaleString('en-IN', { timeZone: 'Asia/Kolkata', year: 'numeric', month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit', hour12: true });
-                let statusClass = currentStatus === 'started' ? 'started' : currentStatus === 'completed' ? 'completed' : 'pending';
-                let statusLabel = currentStatus === 'expired' ? 'NOT ATTENDED' : currentStatus.toUpperCase();
+                
+                let statusClass = 'pending';
+                if (currentStatus === 'started') statusClass = 'started';
+                if (currentStatus === 'completed') statusClass = 'completed';
+                if (currentStatus === 'expired') statusClass = 'pending';
+
+                let statusLabel = currentStatus.toUpperCase();
+                if (currentStatus === 'expired') statusLabel = 'NOT ATTENDED';
+                if (s.is_deactivated) {
+                    statusClass = 'pending';
+                    statusLabel = 'DEACTIVATED';
+                }
+
                 let decisionTag = '';
-                if (s.decision === 'selected') decisionTag = '<span style="font-size:0.65rem;background:var(--accent);color:#fff;padding:1px 5px;border-radius:4px;margin-left:5px;">SELECTED</span>';
-                if (s.decision === 'rejected') decisionTag = '<span style="font-size:0.65rem;background:var(--danger);color:#fff;padding:1px 5px;border-radius:4px;margin-left:5px;">REJECTED</span>';
+                if (s.decision === 'selected') decisionTag = '<span style="font-size: 0.65rem; background: var(--accent); color: #fff; padding: 1px 5px; border-radius: 4px; border:none; margin-left:5px;">SELECTED</span>';
+                if (s.decision === 'rejected') decisionTag = '<span style="font-size: 0.65rem; background: var(--danger); color: #fff; padding: 1px 5px; border-radius: 4px; border:none; margin-left:5px;">REJECTED</span>';
+
                 let scoreText = '—';
                 if (currentStatus === 'completed' && s.avg_score != null) {
-                    scoreText = `<span style="color:${s.avg_score >= 60 ? 'var(--accent)' : 'var(--danger)'}; font-weight:700;">${s.avg_score.toFixed(1)}/100</span>`;
+                    const color = s.avg_score >= 60 ? 'var(--accent)' : 'var(--danger)';
+                    scoreText = `<span style="color:${color}; font-weight:700;">${s.avg_score.toFixed(1)}/100</span>`;
                 }
+
                 const linkUrl = `${baseUrl}/index.html?session_id=${s.link_id}`;
-                let actionBtn = `<button class="btn-copy" onclick="copyLink(this, '${linkUrl}')" style="margin:0;padding:0.4rem 0.8rem;font-size:0.75rem;">Copy Link</button>`;
-                if (currentStatus === 'completed') actionBtn = `<button class="btn-copy" onclick="openLiveResults('${s.link_id}','${s.candidate_name.replace(/'/g,"\\'")}')" style="margin:0;padding:0.4rem 0.8rem;font-size:0.75rem;background:#10b981;color:white;border:none;border-radius:6px;cursor:pointer;font-weight:600;">View Results</button>`;
-                else if (currentStatus === 'started') actionBtn = `<button class="btn-copy" onclick="openLiveResults('${s.link_id}','${s.candidate_name.replace(/'/g,"\\'")}')" style="margin:0;padding:0.4rem 0.8rem;font-size:0.75rem;background:#6366f1;color:white;border:none;border-radius:6px;cursor:pointer;font-weight:600;">Live Results</button>`;
-                const deleteBtn = `<button onclick="deleteSession('${s.link_id}')" style="background:none;border:none;color:var(--danger);cursor:pointer;padding:4px;border-radius:4px;margin-left:8px;" title="Remove"><i class="fas fa-times"></i></button>`;
-                const videoIcon = s.has_video ? `<i class="fas fa-video" style="color:#6366f1;margin-left:8px;font-size:0.85rem;" title="Video Available"></i>` : '';
-                mainHtml += `<tr><td style="font-weight:500;">${s.candidate_name} ${videoIcon} ${decisionTag}<div style="font-size:0.75rem;color:var(--text-muted);font-weight:normal;margin-top:2px;">${s.interview_duration} min interview</div></td><td>${dateStr}</td><td><span class="status-badge ${statusClass}">${statusLabel}</span></td><td>${scoreText}</td><td style="text-align:right;white-space:nowrap;">${actionBtn} ${deleteBtn}</td></tr>`;
+                let actionBtn = `<button class="btn-copy" onclick="copyLink(this, '${linkUrl}')" style="margin:0; padding:0.4rem 0.8rem; font-size:0.75rem;">Copy Link</button>`;
+                if (currentStatus === 'completed') {
+                    actionBtn = `<button class="btn-copy" onclick="openLiveResults('${s.link_id}', '${s.candidate_name.replace(/'/g, "\\'")}')" style="margin:0; padding:0.4rem 0.8rem; font-size:0.75rem; background: #10b981; color: white; border: none; border-radius: 6px; cursor: pointer; transition: opacity 0.2s; font-weight: 600;">View Results</button>`;
+                } else if (currentStatus === 'started') {
+                    actionBtn = `<button class="btn-copy" onclick="openLiveResults('${s.link_id}', '${s.candidate_name.replace(/'/g, "\\'")}')" style="margin:0; padding:0.4rem 0.8rem; font-size:0.75rem; background: #6366f1; color: white; border: none; border-radius: 6px; cursor: pointer; transition: opacity 0.2s; font-weight: 600;">Live Results</button>`;
+                }
+
+                const deleteBtn = `<button onclick="deleteSession('${s.link_id}')" style="background: none; border: none; color: var(--danger); cursor: pointer; padding: 4px; border-radius: 4px; transition: 0.2s; margin-left: 8px;" title="Remove Candidate"><i class="fas fa-times"></i></button>`;
+                const deactivateBtn = `<button onclick="toggleSessionActive('${s.link_id}', ${s.is_deactivated})" style="background: none; border: none; color: ${s.is_deactivated ? 'var(--success)' : 'var(--warning)'}; cursor: pointer; padding: 4px; border-radius: 4px; transition: 0.2s; margin-left: 4px;" title="${s.is_deactivated ? 'Activate' : 'Deactivate'} Link"><i class="fas fa-power-off"></i></button>`;
+                const videoIcon = s.has_video ? `<i class="fas fa-video" style="color: #6366f1; margin-left: 8px; font-size: 0.85rem;" title="Video Available"></i>` : '';
+
+                mainHtml += `<tr>
+                    <td style="padding-left: 1.5rem;"><input type="checkbox" class="session-checkbox" value="${s.link_id}" onclick="updateBulkDeleteBtn()" style="cursor: pointer;"></td>
+                    <td style="font-weight: 500;">${s.candidate_name} ${videoIcon} ${decisionTag}<div style="font-size: 0.75rem; color: var(--text-muted); font-weight: normal; margin-top: 2px;">${s.interview_duration} min interview</div></td>
+                    <td>${dateStr}</td>
+                    <td><span class="status-badge ${statusClass}">${statusLabel}</span></td>
+                    <td>${scoreText}</td>
+                    <td style="text-align: right; white-space: nowrap;">${actionBtn} ${deactivateBtn} ${deleteBtn}</td>
+                </tr>`;
             });
             tbody.innerHTML = mainHtml;
-            document.getElementById('paginationInfo').textContent = allFilteredSessions.length > 0 ? `Showing ${startIdx+1}–${endIdx} of ${allFilteredSessions.length}` : '';
+            document.getElementById('paginationInfo').textContent = allFilteredSessions.length > 0 ? `Showing ${startIdx + 1}–${endIdx} of ${allFilteredSessions.length}` : '';
             document.getElementById('prevPageBtn').disabled = (currentPage <= 1);
             document.getElementById('nextPageBtn').disabled = (currentPage >= totalPages);
         }
@@ -3361,7 +3579,7 @@
                         candidate_name: name,
                         candidate_email: email,
                         job_description: jd,
-                        duration: duration,
+                        interview_duration: duration,
                         scheduled_start: toUtcIso(schedStart),
                         scheduled_end: toUtcIso(schedEnd)
                     })
@@ -3397,7 +3615,7 @@
                         candidate_name: name,
                         candidate_email: email,
                         job_description: jd,
-                        duration: duration,
+                        interview_duration: duration,
                         scheduled_start: toUtcIso(schedStart),
                         scheduled_end: toUtcIso(schedEnd)
                     })

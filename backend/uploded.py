@@ -3016,6 +3016,17 @@ async def create_session(data: CreateSession):
     else:
         expires_at = (now + timedelta(hours=24)).isoformat()
     
+    interview_duration = data.interview_duration
+    if data.scheduled_start and data.scheduled_end:
+        try:
+            s_start = datetime.fromisoformat(data.scheduled_start.replace('Z', '+00:00'))
+            s_end = datetime.fromisoformat(data.scheduled_end.replace('Z', '+00:00'))
+            diff_minutes = int((s_end - s_start).total_seconds() / 60)
+            if diff_minutes > 0:
+                interview_duration = diff_minutes
+        except Exception:
+            pass
+
     session_doc = {
         "link_id": link_id,
         "candidate_name": data.candidate_name,
@@ -3026,7 +3037,7 @@ async def create_session(data: CreateSession):
         "created_by": data.admin_id,
         "created_at": now.isoformat(),
         "expires_at": expires_at,
-        "interview_duration": data.interview_duration,
+        "interview_duration": interview_duration,
         "record_video": data.record_video,
         "status": "pending"
     }
@@ -3091,6 +3102,17 @@ async def bulk_create_sessions(data: BulkCreateSession):
 
         try:
             scheduled_expiry = parse_iso_datetime(data.scheduled_end)
+            interview_duration = data.interview_duration
+            if data.scheduled_start and data.scheduled_end:
+                try:
+                    s_start = parse_iso_datetime(data.scheduled_start)
+                    s_end = parse_iso_datetime(data.scheduled_end)
+                    diff_minutes = int((s_end - s_start).total_seconds() / 60)
+                    if diff_minutes > 0:
+                        interview_duration = diff_minutes
+                except Exception:
+                    pass
+
             session_doc = {
                 "link_id": link_id,
                 "candidate_name": candidate.candidate_name,
@@ -3101,7 +3123,7 @@ async def bulk_create_sessions(data: BulkCreateSession):
                 "created_by": data.admin_id,
                 "created_at": now.isoformat(),
                 "expires_at": (scheduled_expiry.isoformat() if scheduled_expiry else (now + timedelta(hours=24)).isoformat()),
-                "interview_duration": data.interview_duration,
+                "interview_duration": interview_duration,
                 "record_video": candidate.record_video,  # Task 5: Per-candidate video
                 "status": "pending"
             }
@@ -3199,15 +3221,21 @@ async def get_session(link_id: str):
             "is_before_schedule": is_before_schedule,
             "scheduled_start": scheduled_start,
             "scheduled_end": scheduled_end,
-            "record_video": row.get("record_video", True)
+            "record_video": row.get("record_video", True),
+            "is_deactivated": row.get("is_deactivated", False)
         }
     else:
         raise HTTPException(status_code=404, detail="Session not found")
 from typing import Optional
 
 @app.get("/admin/sessions")
-async def get_all_sessions(admin_id: str, start_date: Optional[str] = None, end_date: Optional[str] = None, sort_by: str = "score"):
-    query_filter = {"created_by": admin_id}
+async def get_all_sessions(admin_id: str, start_date: Optional[str] = None, end_date: Optional[str] = None, sort_by: str = "score", deactivated: bool = False):
+    query_filter = {"created_by": admin_id, "is_deactivated": deactivated}
+    if not deactivated:
+        # Also include sessions where is_deactivated is not set (legacy)
+        query_filter = {"created_by": admin_id, "$or": [{"is_deactivated": False}, {"is_deactivated": {"$exists": False}}]}
+    else:
+        query_filter = {"created_by": admin_id, "is_deactivated": True}
     
     if start_date or end_date:
         date_filter = {}
@@ -3242,7 +3270,8 @@ async def get_all_sessions(admin_id: str, start_date: Optional[str] = None, end_
             "recommendation": row.get("overall_recommendation"),
             "decision": row.get("decision"),
             "has_video": has_video,
-            "record_video": row.get("record_video", True)
+            "record_video": row.get("record_video", True),
+            "is_deactivated": row.get("is_deactivated", False)
         })
         
     return {"status": "success", "sessions": sessions}
@@ -3266,6 +3295,20 @@ async def delete_session(link_id: str):
     
     return {"status": "success", "message": "Session deleted"}
 
+@app.post("/admin/sessions/{link_id}/deactivate")
+async def deactivate_session(link_id: str):
+    result = interview_sessions_collection.update_one({"link_id": link_id}, {"$set": {"is_deactivated": True}})
+    if result.matched_count == 0:
+        raise HTTPException(status_code=404, detail="Session not found")
+    return {"status": "success"}
+
+@app.post("/admin/sessions/{link_id}/activate")
+async def activate_session(link_id: str):
+    result = interview_sessions_collection.update_one({"link_id": link_id}, {"$set": {"is_deactivated": False}})
+    if result.matched_count == 0:
+        raise HTTPException(status_code=404, detail="Session not found")
+    return {"status": "success"}
+
 @app.post("/start-session-interview")
 async def start_session_interview(link_id: str = Form(...)):
     row = interview_sessions_collection.find_one({"link_id": link_id})
@@ -3283,6 +3326,18 @@ async def start_session_interview(link_id: str = Form(...)):
     existing_interview_id = row.get("interview_id")
     expires_at = row.get("expires_at")
     
+    # Task: Cap interview_duration to the time remaining until scheduled_end
+    scheduled_end_str = row.get("scheduled_end")
+    if scheduled_end_str:
+        try:
+            end_dt = parse_iso_datetime(scheduled_end_str)
+            now = datetime.now(end_dt.tzinfo) if end_dt.tzinfo else datetime.now()
+            time_left_minutes = int((end_dt - now).total_seconds() / 60)
+            if time_left_minutes > 0 and time_left_minutes < interview_duration:
+                interview_duration = time_left_minutes
+        except Exception as e:
+            print(f"Error capping duration based on scheduled_end: {e}")
+
     # Check if the link has expired
     if expires_at:
         try:
