@@ -2505,7 +2505,7 @@
                         if (data.already_started) {
                             console.log('Interview already taken. Status:', data.session_status);
                             const header = document.querySelector('h1');
-                            if (header && data.candidate_name) {
+                            if (header && data.candidate_name && data.session_status !== 'completed') {
                                 header.textContent = `Welcome, ${data.candidate_name}`;
                             }
 
@@ -2513,6 +2513,8 @@
                                 document.getElementById('interviewSection').classList.add('hidden');
                                 document.getElementById('resultsSection').classList.remove('hidden');
                                 if (statusDiv) statusDiv.style.display = 'none';
+                                const h1 = document.querySelector('h1');
+                                if (h1) h1.classList.add('hidden');
                                 return;
                             }
 
@@ -2546,7 +2548,7 @@
                         window.currentQuestionId = currentQuestionId;
 
                         // Personalized welcome
-                        if (data.candidate_name) {
+                        if (data.candidate_name && data.session_status !== 'completed') {
                             const header = document.querySelector('h1');
                             if (header) header.textContent = `Welcome, ${data.candidate_name}`;
                         }
@@ -3678,11 +3680,12 @@ Output: ${formatCodingValue(testCase.output)}${resultBlock}</pre>
             document.getElementById('interviewSection').classList.add('hidden');
             document.getElementById('codingRoundSection').classList.add('hidden');
             document.getElementById('status').classList.add('hidden'); // Hide the generic status bar
-            document.getElementById('resultsSection').classList.remove('hidden');
-            
-            // Hide the Welcome Name header
             const header = document.querySelector('h1');
-            if (header) header.style.display = 'none';
+            if (header) {
+                header.classList.add('hidden');
+                header.style.display = 'none';
+                header.textContent = '';
+            }
             updateProgress(100);
             document.getElementById('globalCountdown').textContent = '00:00';
 

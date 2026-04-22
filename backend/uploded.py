@@ -3416,7 +3416,12 @@ async def start_session_interview(link_id: str = Form(...)):
         )
     except Exception as db_e:
         print(f"⚠️ DB Save Error: {db_e}")
-        
+    return {
+        "status": "started",
+        "interview_id": interview_id,
+        "questions": questions,
+        "candidate_name": candidate_name,
+        "interview_duration": interview_duration,
         "record_video": row.get("record_video", True)
     }
 
