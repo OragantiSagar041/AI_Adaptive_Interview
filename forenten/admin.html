@@ -3258,6 +3258,27 @@
                     return;
                 }
 
+                // If deactivated, ONLY add to deactivated table and skip other processing
+                if (s.is_deactivated) {
+                    let utcDateStr = s.created_at;
+                    if (utcDateStr && !utcDateStr.endsWith('Z') && !utcDateStr.includes('+')) {
+                        utcDateStr += 'Z';
+                    }
+                    const dateObj = new Date(utcDateStr);
+                    const dateStr = dateObj.toLocaleString('en-IN', { timeZone: 'Asia/Kolkata', year: 'numeric', month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit', hour12: true });
+                    
+                    deactivatedHtml += `<tr>
+                        <td style="padding-left: 1.5rem;"><input type="checkbox" class="session-checkbox" value="${s.link_id}" onclick="updateTableBulkDeleteBtn('deactivated')" style="cursor: pointer;"></td>
+                        <td style="font-weight: 500;">${s.candidate_name}</td>
+                        <td>${dateStr}</td>
+                        <td><span class="status-badge pending" style="background:rgba(107,114,128,0.1); color:#6b7280;">DEACTIVATED</span></td>
+                        <td style="text-align: right;">
+                            <button class="btn-copy" onclick="toggleSessionActive('${s.link_id}', true)" style="background:var(--success); color:white; border:none; padding:0.4rem 0.8rem; font-size:0.75rem; border-radius:6px; cursor:pointer;">Activate</button>
+                        </td>
+                    </tr>`;
+                    return; // Skip adding to main table and qualified/rejected lists
+                }
+
                 allFilteredSessions.push({...s, _computedStatus: currentStatus});
 
                 // Build qualified/unqualified tables
@@ -3289,17 +3310,6 @@
                         <td>${dateStr}</td>
                         <td>${scoreText}</td>
                         <td style="text-align: right;"><button class="btn-copy" onclick="openLiveResults('${s.link_id}', '${s.candidate_name.replace(/'/g, "\\'")}')" style="background:var(--danger); color:white; border:none; padding:0.4rem 0.8rem; font-size:0.75rem; border-radius:6px; cursor:pointer;"><i class="fas fa-eye"></i> View</button></td>
-                    </tr>`;
-                }
-                if (s.is_deactivated) {
-                    deactivatedHtml += `<tr>
-                        <td style="padding-left: 1.5rem;"><input type="checkbox" class="session-checkbox" value="${s.link_id}" onclick="updateTableBulkDeleteBtn('deactivated')" style="cursor: pointer;"></td>
-                        <td style="font-weight: 500;">${s.candidate_name}</td>
-                        <td>${dateStr}</td>
-                        <td><span class="status-badge pending" style="background:rgba(107,114,128,0.1); color:#6b7280;">DEACTIVATED</span></td>
-                        <td style="text-align: right;">
-                            <button class="btn-copy" onclick="toggleSessionActive('${s.link_id}', true)" style="background:var(--success); color:white; border:none; padding:0.4rem 0.8rem; font-size:0.75rem; border-radius:6px; cursor:pointer;">Activate</button>
-                        </td>
                     </tr>`;
                 }
             });
