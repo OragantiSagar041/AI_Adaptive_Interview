@@ -2010,6 +2010,8 @@
                         class="fas fa-user-check"></i> Qualified Candidates</button>
                 <button class="nav-btn" onclick="switchView('unqualified')" id="nav-btn-unqualified"><i
                         class="fas fa-user-slash"></i> Rejected Candidates</button>
+                <button class="nav-btn" onclick="switchView('deactivated')" id="nav-btn-deactivated"><i
+                        class="fas fa-user-minus"></i> Deactivated Candidates</button>
                 <button class="nav-btn" onclick="switchView('create')" id="nav-btn-create"><i
                         class="fas fa-plus-circle"></i> Create Interview</button>
                 <button class="nav-btn" onclick="switchView('settings')" id="nav-btn-settings"><i
@@ -2271,6 +2273,46 @@
                                         <td colspan="5"
                                             style="text-align: center; padding: 2rem; color: var(--text-muted);">No
                                             rejected candidates found.</td>
+                                    </tr>
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+                </div>
+                
+                <!-- VIEW: DEACTIVATED CANDIDATES -->
+                <div id="view-deactivated" class="view-panel hidden">
+                    <div class="section-card">
+                        <div class="section-header">
+                            <div class="header-icon" style="background: rgba(107, 114, 128, 0.15); color: #6b7280;"><i class="fas fa-user-minus"></i></div>
+                            <div>
+                                <h3>Deactivated Candidates</h3>
+                                <p>Sessions with disabled links</p>
+                            </div>
+                            <div class="section-header-actions">
+                                <span class="section-subcopy">Manage deactivated sessions</span>
+                                <button onclick="exportCurrentStatus('deactivated')" class="btn-copy btn-export-accent">
+                                    <i class="fas fa-file-excel"></i> Export
+                                </button>
+                                <button id="bulkDeleteDeactivatedBtn" onclick="deleteSelectedSessions('deactivated')" class="btn-copy" style="padding: 0.45rem 1rem; background: rgba(244, 63, 94, 0.1); color: var(--danger); border-color: rgba(244, 63, 94, 0.2); display: none;">
+                                    <i class="fas fa-trash-alt"></i> Delete Selected
+                                </button>
+                            </div>
+                        </div>
+                        <div style="overflow-x: auto;">
+                            <table class="dash-table">
+                                <thead>
+                                    <tr>
+                                        <th style="width: 40px; padding-left: 1.5rem;"><input type="checkbox" id="selectAllDeactivated" onclick="toggleSelectAllItems('deactivated', this)" style="cursor: pointer;"></th>
+                                        <th>Candidate</th>
+                                        <th>Date Created</th>
+                                        <th>Status</th>
+                                        <th style="text-align: right;">Action</th>
+                                    </tr>
+                                </thead>
+                                <tbody id="deactivatedTableBody">
+                                    <tr>
+                                        <td colspan="5" style="text-align: center; padding: 2rem; color: var(--text-muted);">No deactivated candidates found.</td>
                                     </tr>
                                 </tbody>
                             </table>
@@ -2947,7 +2989,7 @@
             const btn = document.getElementById('nav-btn-' + viewId);
             if (btn) btn.classList.add('active');
 
-            if (viewId === 'overview' || viewId === 'qualified' || viewId === 'unqualified') {
+            if (viewId === 'overview' || viewId === 'qualified' || viewId === 'unqualified' || viewId === 'deactivated') {
                 loadDashboardSessions();
                 loadDashboardStats(); // Task 8
                 if (viewId === 'overview') document.getElementById('nav-btn-results').style.display = 'none';
@@ -3174,6 +3216,7 @@
             const tbody = document.getElementById('dashboardTableBody');
             const qualifiedBody = document.getElementById('qualifiedTableBody');
             const unqualifiedBody = document.getElementById('unqualifiedTableBody');
+            const deactivatedBody = document.getElementById('deactivatedTableBody');
             
             // Reset select all checkbox
             const selectAllCheck = document.getElementById('selectAllCheckbox');
@@ -3197,6 +3240,7 @@
 
             let qualHtml = '';
             let unqualHtml = '';
+            let deactivatedHtml = '';
 
             const baseUrl = window.location.href.substring(0, window.location.href.lastIndexOf('/'));
 
@@ -3245,6 +3289,17 @@
                         <td>${dateStr}</td>
                         <td>${scoreText}</td>
                         <td style="text-align: right;"><button class="btn-copy" onclick="openLiveResults('${s.link_id}', '${s.candidate_name.replace(/'/g, "\\'")}')" style="background:var(--danger); color:white; border:none; padding:0.4rem 0.8rem; font-size:0.75rem; border-radius:6px; cursor:pointer;"><i class="fas fa-eye"></i> View</button></td>
+                    </tr>`;
+                }
+                if (s.is_deactivated) {
+                    deactivatedHtml += `<tr>
+                        <td style="padding-left: 1.5rem;"><input type="checkbox" class="session-checkbox" value="${s.link_id}" onclick="updateTableBulkDeleteBtn('deactivated')" style="cursor: pointer;"></td>
+                        <td style="font-weight: 500;">${s.candidate_name}</td>
+                        <td>${dateStr}</td>
+                        <td><span class="status-badge pending" style="background:rgba(107,114,128,0.1); color:#6b7280;">DEACTIVATED</span></td>
+                        <td style="text-align: right;">
+                            <button class="btn-copy" onclick="toggleDeactivate('${s.link_id}', false)" style="background:var(--success); color:white; border:none; padding:0.4rem 0.8rem; font-size:0.75rem; border-radius:6px; cursor:pointer;">Activate</button>
+                        </td>
                     </tr>`;
                 }
             });
@@ -3323,6 +3378,7 @@
             tbody.innerHTML = mainHtml;
             qualifiedBody.innerHTML = qualHtml || '<tr><td colspan="5" style="text-align: center; padding: 2rem; color: var(--text-muted);">No qualified candidates yet.</td></tr>';
             unqualifiedBody.innerHTML = unqualHtml || '<tr><td colspan="5" style="text-align: center; padding: 2rem; color: var(--text-muted);">No rejected candidates yet.</td></tr>';
+            if (deactivatedBody) deactivatedBody.innerHTML = deactivatedHtml || '<tr><td colspan="5" style="text-align: center; padding: 2rem; color: var(--text-muted);">No deactivated candidates found.</td></tr>';
 
             // Task 6: Update pagination controls
             document.getElementById('paginationInfo').textContent = totalItems > 0 ? `Showing ${startIdx + 1}–${endIdx} of ${totalItems}` : '';

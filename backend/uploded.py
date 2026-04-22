@@ -13,7 +13,7 @@ from coding_graph import generate_coding_task, observe_coding_intent, run_coding
 import shutil
 import uuid
 import random
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from dotenv import load_dotenv
 import PyPDF2
 from docx import Document
@@ -30,7 +30,6 @@ import html
 import textwrap
 from pydantic import BaseModel
 from mongo_db import candidates_collection, interviews_collection, answers_collection, admins_collection, interview_sessions_collection
-from datetime import datetime
 from reportlab.lib.pagesizes import A4
 from reportlab.pdfgen import canvas
 from reportlab.lib.utils import simpleSplit
@@ -50,7 +49,7 @@ app = FastAPI()
 @app.get("/")
 @app.get("/health")
 def health_check():
-    return {"status": "ok", "timestamp": datetime.now().isoformat()}
+    return {"status": "ok", "timestamp": datetime.now(timezone.utc).isoformat()}
 
 # Mount uploads folder to serve files
 app.mount("/uploads", StaticFiles(directory="uploads"), name="uploads")
@@ -95,7 +94,7 @@ def get_or_create_candidate(name: str) -> str:
 
     result = candidates_collection.insert_one({
         "name": name,
-        "created_at": datetime.now().isoformat()
+        "created_at": datetime.now(timezone.utc).isoformat()
     })
     return str(result.inserted_id)
 
@@ -1272,7 +1271,7 @@ async def upload_resume(
             raise HTTPException(status_code=400, detail="No readable text found in the file")
 
         # Generate interview ID
-        interview_id = f"int_{int(datetime.now().timestamp())}_{uuid.uuid4().hex[:8]}"
+        interview_id = f"int_{int(datetime.now(timezone.utc).timestamp())}_{uuid.uuid4().hex[:8]}"
 
         # Analyze the resume
         profile_analysis = analyze_resume_or_jd(content_str)
@@ -1291,7 +1290,7 @@ async def upload_resume(
             "profile_analysis": profile_analysis,
             "questions": questions,
             "answers": {},
-            "created_at": datetime.now().isoformat()
+            "created_at": datetime.now(timezone.utc).isoformat()
         }
 
         # Store interview data (DB)
@@ -1301,7 +1300,7 @@ async def upload_resume(
                 "source": source,
                 "profile_text": content_str[:5000],
                 "questions": json.dumps(questions),
-                "created_at": datetime.now().isoformat()
+                "created_at": datetime.now(timezone.utc).isoformat()
             })
         except Exception as db_e:
             print(f"⚠️ DB Save Error: {db_e}")
@@ -1328,7 +1327,7 @@ async def start_interview(
     try:
         print(f"Starting interview with source: {source}")
 
-        interview_id = f"int_{int(datetime.now().timestamp())}_{uuid.uuid4().hex[:8]}"
+        interview_id = f"int_{int(datetime.now(timezone.utc).timestamp())}_{uuid.uuid4().hex[:8]}"
 
         # ✅ STEP-3.2 → AI ANALYSIS (CORRECT PLACE)
         profile_analysis = analyze_resume_or_jd(content)
@@ -1347,7 +1346,7 @@ async def start_interview(
             "profile_analysis": profile_analysis,
             "questions": questions,
             "answers": {},
-            "created_at": datetime.now().isoformat()
+            "created_at": datetime.now(timezone.utc).isoformat()
         }
 
         # Store interview data (DB)
@@ -1357,7 +1356,7 @@ async def start_interview(
                 "source": source,
                 "profile_text": content[:5000],
                 "questions": json.dumps(questions),
-                "created_at": datetime.now().isoformat()
+                "created_at": datetime.now(timezone.utc).isoformat()
             })
         except Exception as db_e:
             print(f"⚠️ DB Save Error: {db_e}")
@@ -1546,7 +1545,7 @@ async def save_answer(
         "ai_feedback": ai_result.get("feedback", "No feedback"),
         "ai_keywords": keywords_str,
         "corrected_answer": ai_result.get("corrected_answer", "N/A"),
-        "created_at": datetime.now().isoformat()
+        "created_at": datetime.now(timezone.utc).isoformat()
     })
 
     print("✅ Answer saved to DB.")
@@ -1640,8 +1639,8 @@ def start_coding_round(req: CodingRoundStartRequest):
         "latest_explanation": "",
         "latest_feedback": "",
         "checkpoints": [],
-        "started_at": datetime.now().isoformat(),
-        "updated_at": datetime.now().isoformat(),
+        "started_at": datetime.now(timezone.utc).isoformat(),
+        "updated_at": datetime.now(timezone.utc).isoformat(),
     }
     persist_coding_round(req.interview_id, coding_round)
     return {
@@ -1694,7 +1693,7 @@ def _run_coding_feedback(req: CodingRoundCheckpointRequest, feedback_mode: str) 
     )
 
     checkpoint = {
-        "at": datetime.now().isoformat(),
+        "at": datetime.now(timezone.utc).isoformat(),
         "language": req.language,
         "code_length": len(latest_code),
         "explanation_length": len(latest_explanation),
@@ -1743,7 +1742,7 @@ def coding_round_run(req: CodingRoundRunRequest):
     coding_round["latest_explanation"] = req.explanation or coding_round.get("latest_explanation", "")
     coding_round["language"] = req.language or "python"
     coding_round["latest_run"] = {
-        "at": datetime.now().isoformat(),
+        "at": datetime.now(timezone.utc).isoformat(),
         **result,
     }
     persist_coding_round(req.interview_id, coding_round)
@@ -1768,7 +1767,7 @@ def coding_round_observe(req: CodingRoundObserveRequest):
         language=req.language or "python",
     )
     coding_round["last_observation"] = {
-        "at": datetime.now().isoformat(),
+        "at": datetime.now(timezone.utc).isoformat(),
         **observation,
     }
     persist_coding_round(req.interview_id, coding_round)
@@ -1999,7 +1998,7 @@ def analyze(req: AnalyzeRequest):
             "ai_feedback": result.get("feedback", ""),
             "ai_keywords": json.dumps(result.get("keywords", [])),
             "corrected_answer": result.get("corrected_answer", ""),
-            "created_at": datetime.now().isoformat()
+            "created_at": datetime.now(timezone.utc).isoformat()
         })
     except Exception as e:
         print(f"⚠️ Failed to save answer to DB: {e}")
@@ -2188,8 +2187,10 @@ def parse_iso_datetime(value: str) -> Optional[datetime]:
     try:
         normalized = value.replace("Z", "+00:00") if value.endswith("Z") else value
         parsed = datetime.fromisoformat(normalized)
-        if parsed.tzinfo is not None:
-            parsed = parsed.astimezone().replace(tzinfo=None)
+        if parsed.tzinfo is None:
+            parsed = parsed.replace(tzinfo=timezone.utc)
+        else:
+            parsed = parsed.astimezone(timezone.utc)
         return parsed
     except Exception:
         return None
@@ -2308,7 +2309,7 @@ def compute_invite_send_at(scheduled_start: str = "") -> Optional[datetime]:
 def queue_or_send_interview_email(session_doc: Dict[str, Any], link_url: str) -> Dict[str, Any]:
     scheduled_start = session_doc.get("scheduled_start", "")
     send_at = compute_invite_send_at(scheduled_start)
-    now = datetime.now()
+    now = datetime.now(timezone.utc)
 
     if send_at and send_at > now:
         interview_sessions_collection.update_one(
@@ -2670,7 +2671,7 @@ def get_dashboard_stats(admin_id: str):
     """Return aggregated stats for the admin dashboard."""
     try:
         all_sessions = list(interview_sessions_collection.find({"created_by": admin_id}))
-        now = datetime.now()
+        now = datetime.now(timezone.utc)
         
         total = len(all_sessions)
         pending = 0
@@ -2744,7 +2745,7 @@ async def export_sessions(admin_id: str, status_filter: str = ""):
     """Return session data for Excel export, filtered by status."""
     query = {"created_by": admin_id}
     rows = list(interview_sessions_collection.find(query).sort("created_at", -1))
-    now = datetime.now()
+    now = datetime.now(timezone.utc)
     
     export_data = []
     for row in rows:
@@ -2794,7 +2795,7 @@ def preview_email_v2(data: EmailPreviewRequest):
     }
 
 def process_pending_invitation_emails():
-    now = datetime.now().isoformat()
+    now = datetime.now(timezone.utc).isoformat()
     due_sessions = list(interview_sessions_collection.find({
         "invite_email_status": {"$in": ["pending", "failed"]},
         "invite_email_send_at": {"$lte": now}
@@ -2824,7 +2825,7 @@ def process_pending_invitation_emails():
             {"_id": session["_id"]},
             {"$set": {
                 "invite_email_status": "sent" if sent else "failed",
-                "invite_email_sent_at": datetime.now().isoformat() if sent else None
+                "invite_email_sent_at": datetime.now(timezone.utc).isoformat() if sent else None
             }}
         )
 
@@ -2849,7 +2850,7 @@ def startup_event():
                 "username": "admin",
                 "password": hashed_pw,
                 "email": default_email,
-                "created_at": datetime.now().isoformat()
+                "created_at": datetime.now(timezone.utc).isoformat()
             })
             print(f"Default admin created: admin / admin123 (Email: {default_email})")
         else:
@@ -2876,7 +2877,7 @@ async def forgot_password(data: ForgotPasswordRequest):
         raise HTTPException(status_code=404, detail="Username and email do not match our records.")
     
     otp = "".join([str(random.randint(0, 9)) for _ in range(6)])
-    expiry = (datetime.now() + timedelta(minutes=10)).isoformat()
+    expiry = (datetime.now(timezone.utc) + timedelta(minutes=10)).isoformat()
     
     admins_collection.update_one({"_id": user["_id"]}, {"$set": {"otp": otp, "otp_expiry": expiry}})
     
@@ -2899,7 +2900,7 @@ async def verify_otp(data: VerifyOTPRequest):
         raise HTTPException(status_code=401, detail="Invalid OTP code.")
     
     expiry = datetime.fromisoformat(expiry_str)
-    if datetime.now() > expiry:
+    if datetime.now(timezone.utc) > expiry:
         raise HTTPException(status_code=401, detail="OTP has expired.")
     
     return {"status": "success", "message": "OTP verified successfully."}
@@ -2912,7 +2913,7 @@ async def reset_password(data: ResetPasswordRequest):
         raise HTTPException(status_code=401, detail="Invalid session. Please restart the process.")
     
     expiry = datetime.fromisoformat(row.get("otp_expiry"))
-    if datetime.now() > expiry:
+    if datetime.now(timezone.utc) > expiry:
         raise HTTPException(status_code=401, detail="Session expired.")
     
     hashed_pw = hash_password(data.new_password)
@@ -3010,7 +3011,7 @@ from datetime import timedelta
 @app.post("/admin/create-session")
 async def create_session(data: CreateSession):
     link_id = str(uuid.uuid4())
-    now = datetime.now()
+    now = datetime.now(timezone.utc)
     
     # Task 4: If scheduled, use scheduled_end as expiry; otherwise 24h
     if data.scheduled_end:
@@ -3087,7 +3088,7 @@ async def bulk_create_sessions(data: BulkCreateSession):
         raise HTTPException(status_code=400, detail="No candidates provided")
 
     results = []
-    now = datetime.now()
+    now = datetime.now(timezone.utc)
 
     for candidate in data.candidates:
         link_id = str(uuid.uuid4())
@@ -3162,7 +3163,7 @@ async def get_session(link_id: str):
     row = interview_sessions_collection.find_one({"link_id": link_id})
     if row:
         expires_at = row.get("expires_at")
-        now = datetime.now()
+        now = datetime.now(timezone.utc)
         
         # Check if the link has expired
         is_expired = False
@@ -3318,7 +3319,7 @@ async def start_session_interview(link_id: str = Form(...)):
     if expires_at:
         try:
             expiration_time = parse_iso_datetime(expires_at)
-            if datetime.now() > expiration_time:
+            if datetime.now(timezone.utc) > expiration_time:
                 return {
                     "is_expired": True,
                     "message": "This interview link has expired. Please contact your administrator."
@@ -3332,7 +3333,7 @@ async def start_session_interview(link_id: str = Form(...)):
     if scheduled_start:
         try:
             start_time = parse_iso_datetime(scheduled_start)
-            if datetime.now() < start_time:
+            if datetime.now(timezone.utc) < start_time:
                 return {
                     "is_before_schedule": True,
                     "scheduled_start": scheduled_start,
@@ -3344,7 +3345,7 @@ async def start_session_interview(link_id: str = Form(...)):
     if scheduled_end:
         try:
             end_time = parse_iso_datetime(scheduled_end)
-            if datetime.now() > end_time:
+            if datetime.now(timezone.utc) > end_time:
                 return {
                     "is_expired": True,
                     "message": "This interview window has ended. Please contact your administrator."
@@ -3377,7 +3378,7 @@ async def start_session_interview(link_id: str = Form(...)):
     if not questions:
         raise HTTPException(status_code=400, detail="Failed to generate questions")
 
-    interview_id = f"int_{int(datetime.now().timestamp())}_{uuid.uuid4().hex[:8]}"
+    interview_id = f"int_{int(datetime.now(timezone.utc).timestamp())}_{uuid.uuid4().hex[:8]}"
 
     # Store interview data (RAM)
     interviews[interview_id] = {
@@ -3387,7 +3388,7 @@ async def start_session_interview(link_id: str = Form(...)):
         "profile_analysis": profile_analysis,
         "questions": questions,
         "answers": {},
-        "created_at": datetime.now().isoformat(),
+        "created_at": datetime.now(timezone.utc).isoformat(),
         "candidate_name": candidate_name,
         "candidate_email": candidate_email,
         "status": status
@@ -3400,7 +3401,7 @@ async def start_session_interview(link_id: str = Form(...)):
             "source": source,
             "profile_text": content_str[:5000],
             "questions": json.dumps(questions),
-            "created_at": datetime.now().isoformat()
+            "created_at": datetime.now(timezone.utc).isoformat()
         })
         
         # Update session status
