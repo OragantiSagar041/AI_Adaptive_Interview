@@ -3041,7 +3041,7 @@
             const sortBy = document.getElementById('sortBy').value;
             const filterStatus = document.getElementById('filterStatus') ? document.getElementById('filterStatus').value : '';
 
-            let url = `${API_BASE}/admin/sessions?admin_id=${adminId}&sort_by=${sortBy}`;
+            let url = `${API_BASE}/admin/sessions?admin_id=${adminId}&sort_by=${sortBy}&deactivated=all`;
             if (startDate) url += `&start_date=${startDate}`;
             if (endDate) url += `&end_date=${endDate}`;
 

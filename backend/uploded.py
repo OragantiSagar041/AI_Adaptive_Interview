@@ -2673,7 +2673,8 @@ def get_dashboard_stats(admin_id: str):
         all_sessions = list(interview_sessions_collection.find({"created_by": admin_id}))
         now = datetime.now(timezone.utc)
         
-        total = len(all_sessions)
+        active_sessions = [s for s in all_sessions if not s.get("is_deactivated", False)]
+        total = len(active_sessions)
         pending = 0
         completed = 0
         started = 0
@@ -2686,6 +2687,9 @@ def get_dashboard_stats(admin_id: str):
         week_count = 0
         
         for s in all_sessions:
+            if s.get("is_deactivated", False):
+                continue
+                
             status = s.get("status", "pending")
             if status == "pending" and s.get("expires_at"):
                 try:
@@ -3213,13 +3217,14 @@ async def get_session(link_id: str):
 from typing import Optional
 
 @app.get("/admin/sessions")
-async def get_all_sessions(admin_id: str, start_date: Optional[str] = None, end_date: Optional[str] = None, sort_by: str = "score", deactivated: bool = False):
-    query_filter = {"created_by": admin_id, "is_deactivated": deactivated}
-    if not deactivated:
-        # Also include sessions where is_deactivated is not set (legacy)
-        query_filter = {"created_by": admin_id, "$or": [{"is_deactivated": False}, {"is_deactivated": {"$exists": False}}]}
-    else:
+async def get_all_sessions(admin_id: str, start_date: Optional[str] = None, end_date: Optional[str] = None, sort_by: str = "score", deactivated: str = "false"):
+    if deactivated == "all":
+        query_filter = {"created_by": admin_id}
+    elif deactivated == "true":
         query_filter = {"created_by": admin_id, "is_deactivated": True}
+    else:
+        # Default: only active
+        query_filter = {"created_by": admin_id, "$or": [{"is_deactivated": False}, {"is_deactivated": {"$exists": False}}]}
     
     if start_date or end_date:
         date_filter = {}
