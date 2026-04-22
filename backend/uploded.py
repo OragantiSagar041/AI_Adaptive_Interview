@@ -3301,6 +3301,7 @@ async def start_session_interview(link_id: str = Form(...)):
     status = row.get("status")
     num_questions = row.get("num_questions")
     interview_duration = row.get("interview_duration") or 30
+    print(f"[TIMER DEBUG] link_id={link_id}, raw interview_duration from DB={row.get('interview_duration')}, used={interview_duration}")
     existing_interview_id = row.get("interview_id")
     expires_at = row.get("expires_at")
     
@@ -3352,8 +3353,9 @@ async def start_session_interview(link_id: str = Form(...)):
             "interview_duration": interview_duration
         }
     
-    # Generate a larger pool of questions based on duration
-    num_questions_to_generate = max(4, min(20, interview_duration // 2))
+    # Always generate a full pool of questions — interview is time-based,
+    # candidates answer as many as they can within the interview_duration timer
+    num_questions_to_generate = 20
     
     # Generate Questions
     source = "job_description" if job_description and len(job_description) > 50 else "resume"
