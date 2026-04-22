@@ -39,9 +39,9 @@ load_dotenv()
 
 # Configuration
 UPLOAD_FOLDER = "uploads"
-os.makedirs(UPLOAD_FOLDER, exist_ok=True)
-
 from fastapi.staticfiles import StaticFiles
+
+FRONTEND_URL = "https://ai-adaptive-interview.vercel.app"
 
 app = FastAPI()
 
@@ -2074,7 +2074,7 @@ def generate_report(interview_id: str):
     # Meta Info
     normal_style = styles['Normal']
     story.append(Paragraph(f"<b>Interview ID:</b> {interview_id}", normal_style))
-    story.append(Paragraph(f"<b>Date:</b> {date}", normal_style))
+    story.append(Paragraph(f"<b>Date:</b> {format_datetime_for_display(date)}", normal_style))
     story.append(Paragraph(f"<b>Source:</b> {source}", normal_style))
     story.append(Spacer(1, 12))
     
@@ -2195,6 +2195,16 @@ def parse_iso_datetime(value: str) -> Optional[datetime]:
     except Exception:
         return None
 
+def format_datetime_for_display(value: str) -> str:
+    """Parse ISO datetime and return a formatted IST string."""
+    dt = parse_iso_datetime(value)
+    if not dt:
+        return value
+    # Convert to IST (UTC+5:30)
+    ist_offset = timezone(timedelta(hours=5, minutes=30))
+    ist_dt = dt.astimezone(ist_offset)
+    return ist_dt.strftime("%d %b %Y, %I:%M %p")
+
 def should_attach_job_description_pdf(job_description: str) -> bool:
     text = (job_description or "").strip()
     return len(text) > JOB_DESCRIPTION_PDF_THRESHOLD or text.count("\n") > 12
@@ -2250,14 +2260,15 @@ def build_schedule_block(scheduled_start: str = "", scheduled_end: str = "") -> 
     if not scheduled_start:
         return ""
 
-    start_dt = parse_iso_datetime(scheduled_start)
-    if not start_dt:
-        return ""
-
-    schedule_block = f'<p><b>Scheduled Time:</b> {start_dt.strftime("%d %b %Y, %I:%M %p")}'
+    schedule_block = f'<p><b>Scheduled Time:</b> {format_datetime_for_display(scheduled_start)}'
     end_dt = parse_iso_datetime(scheduled_end) if scheduled_end else None
     if end_dt:
-        schedule_block += f' — {end_dt.strftime("%I:%M %p")}'
+        # For the end time, we just need the time part in IST
+        ist_offset = timezone(timedelta(hours=5, minutes=30))
+        ist_end_dt = end_dt.astimezone(ist_offset)
+        schedule_block += f' - {ist_end_dt.strftime("%I:%M %p")} (IST)'
+    else:
+        schedule_block += ' (IST)'
     schedule_block += '</p>'
     schedule_block += (
         '<p style="color: #e74c3c;"><b>Important:</b> '
@@ -2521,50 +2532,16 @@ class EmailPreviewRequest(BaseModel):
 @app.post("/admin/preview-email")
 def preview_email(data: EmailPreviewRequest):
     """Return the default email HTML for admin to edit before sending."""
-    formatted_jd = data.job_description.replace("\n", "<br/>")
-    base_url = os.getenv("FRONTEND_URL", "https://ai-adaptive-interview.vercel.app")
-    
-    schedule_block = ""
-    if data.scheduled_start:
-        try:
-            start_dt = datetime.fromisoformat(data.scheduled_start)
-            schedule_block = f'<p><b>Scheduled Time:</b> {start_dt.strftime("%d %b %Y, %I:%M %p")}'
-            if data.scheduled_end:
-                end_dt = datetime.fromisoformat(data.scheduled_end)
-                schedule_block += f' — {end_dt.strftime("%I:%M %p")}'
-            schedule_block += '</p>'
-        except Exception:
-            pass
-    
-    html = f"""
-<html>
-<body style="font-family: 'Segoe UI', Arial, sans-serif; max-width: 600px; margin: 0 auto; padding: 20px; background-color: #f8fafc;">
-    <div style="background: linear-gradient(135deg, #6366f1, #8b5cf6); border-radius: 12px 12px 0 0; padding: 30px; text-align: center;">
-        <h1 style="color: white; margin: 0; font-size: 24px;">Interview Invitation</h1>
-    </div>
-    <div style="background: white; border-radius: 0 0 12px 12px; padding: 30px; border: 1px solid #e2e8f0; border-top: none;">
-        <p style="font-size: 16px; color: #334155;">Dear <b>{data.candidate_name}</b>,</p>
-        <p style="color: #475569; line-height: 1.6;">You have been invited to an AI-powered interview by <b style="color: #6366f1;">Arah Info Tech</b>.</p>
-        <div style="background: #f1f5f9; border-radius: 8px; padding: 15px; margin: 15px 0; border-left: 4px solid #6366f1;">
-            <p style="margin: 0 0 5px; font-weight: 600; color: #334155;">📋 Role Details:</p>
-            <p style="margin: 0; color: #64748b; font-size: 14px; line-height: 1.5;">{formatted_jd}</p>
-        </div>
-        <p style="color: #475569;"><b>⏱️ Duration:</b> {data.duration} minutes</p>
-        {schedule_block}
-        <div style="text-align: center; margin: 25px 0;">
-            <a href="{{INTERVIEW_LINK}}" style="background: linear-gradient(135deg, #6366f1, #8b5cf6); color: white; padding: 14px 32px; text-decoration: none; border-radius: 8px; font-weight: bold; font-size: 16px; display: inline-block; box-shadow: 0 4px 12px rgba(99,102,241,0.3);">
-                🚀 Start Interview Now
-            </a>
-        </div>
-        <div style="background: #fef3c7; border-radius: 8px; padding: 12px; margin-top: 15px;">
-            <p style="margin: 0; color: #92400e; font-size: 13px;">⚠️ <b>Important:</b> This interview link will expire in exactly <b>24 hours</b>.</p>
-        </div>
-        <hr style="border: none; border-top: 1px solid #e2e8f0; margin: 20px 0;">
-        <p style="color: #94a3b8; font-size: 13px; margin: 0;">Best regards,<br/><b style="color: #6366f1;">Arah Info Tech Pvt Ltd</b></p>
-    </div>
-</body>
-</html>"""
-    return {"html": html}
+    return {
+        "html": build_default_interview_email_html(
+            candidate_name=data.candidate_name,
+            duration=data.duration,
+            job_description=data.job_description,
+            full_link="{{INTERVIEW_LINK}}",
+            scheduled_start=data.scheduled_start,
+            scheduled_end=data.scheduled_end
+        )
+    }
 
 
 # ── Task 3: Submission Notification Email ────────────────────────────────────
@@ -2786,17 +2763,7 @@ async def export_sessions(admin_id: str, status_filter: str = ""):
     
     return {"data": export_data}
 
-def preview_email_v2(data: EmailPreviewRequest):
-    return {
-        "html": build_default_interview_email_html(
-            candidate_name=data.candidate_name,
-            duration=data.duration,
-            job_description=data.job_description,
-            full_link="{{INTERVIEW_LINK}}",
-            scheduled_start=data.scheduled_start,
-            scheduled_end=data.scheduled_end
-        )
-    }
+# Redundant v2 removed as v1 unified above.
 
 def process_pending_invitation_emails():
     now = datetime.now(timezone.utc).isoformat()
@@ -2813,7 +2780,7 @@ def process_pending_invitation_emails():
         if claimed.modified_count == 0:
             continue
 
-        link_url = f"/index.html?session_id={session['link_id']}"
+        link_url = f"{FRONTEND_URL}/index.html?session_id={session['link_id']}"
         sent = send_interview_email(
             candidate_email=session.get("candidate_email", ""),
             candidate_name=session.get("candidate_name", ""),
@@ -2864,11 +2831,6 @@ def startup_event():
                 admins_collection.update_one({"username": "admin"}, {"$set": {"email": default_email}})
     except Exception as e:
         print(f"Error checking/creating admin: {e}")
-
-    for route in app.routes:
-        if getattr(route, "path", "") == "/admin/preview-email" and "POST" in getattr(route, "methods", set()):
-            route.endpoint = preview_email_v2
-            break
 
     if not EMAIL_SCHEDULER_STARTED:
         threading.Thread(target=invitation_email_scheduler_loop, daemon=True).start()
@@ -3050,7 +3012,7 @@ async def create_session(data: CreateSession):
     interview_sessions_collection.insert_one(session_doc)
     session_doc["_id"] = interview_sessions_collection.find_one({"link_id": link_id}, {"_id": 1})["_id"]
     
-    link_url = f"/index.html?session_id={link_id}"
+    link_url = f"{FRONTEND_URL}/index.html?session_id={link_id}"
     
     email_result = queue_or_send_interview_email(session_doc, link_url)
     
@@ -3096,7 +3058,7 @@ async def bulk_create_sessions(data: BulkCreateSession):
 
     for candidate in data.candidates:
         link_id = str(uuid.uuid4())
-        link_url = f"/index.html?session_id={link_id}"
+        link_url = f"{FRONTEND_URL}/index.html?session_id={link_id}"
         candidate_error = None
 
         try:

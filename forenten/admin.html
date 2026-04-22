@@ -2096,6 +2096,14 @@
                             <div class="date-filter" style="display: flex; overflow-x: auto; padding-bottom: 5px; flex: 1 1 auto; max-width: 100%;">
                                 <div id="dashboardFilters" style="display: flex; gap: 0.5rem; align-items: center; white-space: nowrap; margin-left: auto;">
                                     <div style="display: flex; flex-direction: column;">
+                                        <label style="font-size: 0.7rem; color: var(--text-muted); margin-bottom: 2px;">Search Candidate</label>
+                                        <div style="position: relative;">
+                                            <input type="text" id="searchCandidate" class="dash-input" placeholder="Name or Email..." oninput="renderCurrentSessions()" 
+                                                style="padding: 0.4rem 0.4rem 0.4rem 2rem; font-size: 0.85rem; width: 180px;">
+                                            <i class="fas fa-search" style="position: absolute; left: 0.7rem; top: 50%; transform: translateY(-50%); color: var(--text-muted); font-size: 0.8rem;"></i>
+                                        </div>
+                                    </div>
+                                    <div style="display: flex; flex-direction: column;">
                                         <label
                                             style="font-size: 0.7rem; color: var(--text-muted); margin-bottom: 2px;">From</label>
                                         <input type="date" id="filterStartDate" class="dash-input"
@@ -3049,6 +3057,7 @@
                 const res = await fetch(url);
                 if (res.ok) {
                     const data = await res.json();
+                    window._lastFetchedSessions = data.sessions; // Cache for live search
                     renderDashboardTable(data.sessions, filterStatus);
                 } else {
                     tbody.innerHTML = '<tr><td colspan="5" style="text-align: center; color: var(--danger);">Failed to load sessions.</td></tr>';
@@ -3207,9 +3216,18 @@
         function clearFilters() {
             document.getElementById('filterStartDate').value = '';
             document.getElementById('filterEndDate').value = '';
+            document.getElementById('searchCandidate').value = '';
             document.getElementById('sortBy').value = 'score';
             if (document.getElementById('filterStatus')) document.getElementById('filterStatus').value = '';
             loadDashboardSessions();
+        }
+
+        // Helper to re-render without network request for live search
+        function renderCurrentSessions() {
+            const filterStatus = document.getElementById('filterStatus') ? document.getElementById('filterStatus').value : '';
+            if (window._lastFetchedSessions) {
+                renderDashboardTable(window._lastFetchedSessions, filterStatus);
+            }
         }
 
         function renderDashboardTable(sessions, filterStatus) {
@@ -3244,9 +3262,20 @@
 
             const baseUrl = window.location.href.substring(0, window.location.href.lastIndexOf('/'));
 
+            const searchVal = document.getElementById('searchCandidate')?.value.toLowerCase() || '';
+
             // Build filtered list
             allFilteredSessions = [];
             sessions.forEach(s => {
+                // Live Search Filter
+                if (searchVal) {
+                    const name = (s.candidate_name || "").toLowerCase();
+                    const email = (s.candidate_email || "").toLowerCase();
+                    if (!name.includes(searchVal) && !email.includes(searchVal)) {
+                        return;
+                    }
+                }
+
                 let currentStatus = s.status || 'pending';
                 if (currentStatus === 'pending' && s.expires_at) {
                     if (new Date() > new Date(s.expires_at)) {
