@@ -3016,17 +3016,6 @@ async def create_session(data: CreateSession):
     else:
         expires_at = (now + timedelta(hours=24)).isoformat()
     
-    interview_duration = data.interview_duration
-    if data.scheduled_start and data.scheduled_end:
-        try:
-            s_start = datetime.fromisoformat(data.scheduled_start.replace('Z', '+00:00'))
-            s_end = datetime.fromisoformat(data.scheduled_end.replace('Z', '+00:00'))
-            diff_minutes = int((s_end - s_start).total_seconds() / 60)
-            if diff_minutes > 0:
-                interview_duration = diff_minutes
-        except Exception:
-            pass
-
     session_doc = {
         "link_id": link_id,
         "candidate_name": data.candidate_name,
@@ -3037,7 +3026,7 @@ async def create_session(data: CreateSession):
         "created_by": data.admin_id,
         "created_at": now.isoformat(),
         "expires_at": expires_at,
-        "interview_duration": interview_duration,
+        "interview_duration": data.interview_duration,
         "record_video": data.record_video,
         "status": "pending"
     }
@@ -3102,17 +3091,6 @@ async def bulk_create_sessions(data: BulkCreateSession):
 
         try:
             scheduled_expiry = parse_iso_datetime(data.scheduled_end)
-            interview_duration = data.interview_duration
-            if data.scheduled_start and data.scheduled_end:
-                try:
-                    s_start = parse_iso_datetime(data.scheduled_start)
-                    s_end = parse_iso_datetime(data.scheduled_end)
-                    diff_minutes = int((s_end - s_start).total_seconds() / 60)
-                    if diff_minutes > 0:
-                        interview_duration = diff_minutes
-                except Exception:
-                    pass
-
             session_doc = {
                 "link_id": link_id,
                 "candidate_name": candidate.candidate_name,
@@ -3123,7 +3101,7 @@ async def bulk_create_sessions(data: BulkCreateSession):
                 "created_by": data.admin_id,
                 "created_at": now.isoformat(),
                 "expires_at": (scheduled_expiry.isoformat() if scheduled_expiry else (now + timedelta(hours=24)).isoformat()),
-                "interview_duration": interview_duration,
+                "interview_duration": data.interview_duration,
                 "record_video": candidate.record_video,  # Task 5: Per-candidate video
                 "status": "pending"
             }
@@ -3326,18 +3304,6 @@ async def start_session_interview(link_id: str = Form(...)):
     existing_interview_id = row.get("interview_id")
     expires_at = row.get("expires_at")
     
-    # Task: Cap interview_duration to the time remaining until scheduled_end
-    scheduled_end_str = row.get("scheduled_end")
-    if scheduled_end_str:
-        try:
-            end_dt = parse_iso_datetime(scheduled_end_str)
-            now = datetime.now(end_dt.tzinfo) if end_dt.tzinfo else datetime.now()
-            time_left_minutes = int((end_dt - now).total_seconds() / 60)
-            if time_left_minutes > 0 and time_left_minutes < interview_duration:
-                interview_duration = time_left_minutes
-        except Exception as e:
-            print(f"Error capping duration based on scheduled_end: {e}")
-
     # Check if the link has expired
     if expires_at:
         try:
