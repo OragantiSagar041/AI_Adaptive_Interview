@@ -1546,6 +1546,12 @@
                 <div id="uploadProgressBar" style="width: 0%; height: 100%; background: #6366f1; transition: width 0.3s ease;"></div>
             </div>
             <div id="uploadPercentageText" style="margin-top: 0.5rem; font-size: 0.85rem; color: #6366f1; font-weight: 700;">Preparing upload...</div>
+            
+            <!-- Skip Option -->
+            <div id="skipUploadContainer" style="margin-top: 1.5rem; font-size: 0.8rem; color: #64748b; border-top: 1px solid #f1f5f9; padding-top: 1rem;">
+                Taking too long? <a href="javascript:void(0)" onclick="skipAndFinish()" style="color: #6366f1; text-decoration: underline; font-weight: 600;">Finish & Exit anyway</a>
+                <div style="font-size: 0.75rem; margin-top: 4px; color: #94a3b8;">(Your interview responses are already safely submitted)</div>
+            </div>
         </div>
 
         <div id="finalClosureMessage" class="hidden" style="animation: fadeInUp 0.6s ease-out;">
@@ -1558,6 +1564,14 @@
                 Exit Now
             </button>
             <script>
+                function skipAndFinish() {
+                    if (confirm("Your video recording is still uploading, but your interview responses are already saved. Do you want to close this window now?")) {
+                        document.getElementById('uploadStatusContainer').classList.add('hidden');
+                        document.getElementById('finalClosureMessage').classList.remove('hidden');
+                        showStatus('Interview submitted (Video upload skipped)', 'info');
+                    }
+                }
+
                 function tryCloseWindow() {
                     // 1. Explicitly exit full screen if active
                     if (document.fullscreenElement) {
@@ -1886,7 +1900,9 @@
 
         // CONFIGURATION: Change this to your Render URL after deployment
         // e.g. "https://your-app-name.onrender.com"
-        window.API_BASE_URL = "https://ai-adaptive-interview.onrender.com";
+        window.API_BASE_URL = window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1'
+            ? 'http://127.0.0.1:8000'
+            : 'https://ai-adaptive-interview.onrender.com';
         const API_BASE_URL = window.API_BASE_URL; // Keep local name too for convenience
 
         // ─── Mic Status Indicator ────────────────────────────────────────────────
