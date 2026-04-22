@@ -2161,6 +2161,9 @@
             // Full duration for interview
             const duration = window.interviewDuration || 30;
             totalInterviewMinutes = Math.max(2, Number(duration));
+            console.log('[TIMER DEBUG] window.interviewDuration =', window.interviewDuration);
+            console.log('[TIMER DEBUG] duration used =', duration);
+            console.log('[TIMER DEBUG] totalInterviewMinutes =', totalInterviewMinutes);
             backgroundNoiseAlerts = 0;
             backgroundNoiseFrameCount = 0;
             backgroundNoiseCooldownUntil = 0;
@@ -2195,29 +2198,36 @@
 
             globalCountdownInterval = setInterval(() => {
                 globalTimeRemaining--;
-                updateCountdownDisplay();
 
-                // Update progress bar based on time elapsed
-                const elapsed = globalTotalTime - globalTimeRemaining;
-                const pct = Math.round((elapsed / globalTotalTime) * 100);
-                updateProgress(pct);
+                // CRITICAL: Check time-up FIRST, before any display code that could throw
+                if (globalTimeRemaining <= 0) {
+                    globalTimeRemaining = 0;
+                    clearInterval(globalCountdownInterval);
+                    globalCountdownInterval = null;
+                    try { updateCountdownDisplay(); } catch(e) { console.error('Display error:', e); }
+                    showStatus('<i class="fas fa-clock"></i> Interview time is up. Submitting your responses...', 'info');
+                    endInterview();
+                    return;
+                }
+
+                try {
+                    updateCountdownDisplay();
+
+                    // Update progress bar based on time elapsed
+                    const elapsed = globalTotalTime - globalTimeRemaining;
+                    const pct = Math.round((elapsed / globalTotalTime) * 100);
+                    updateProgress(pct);
+                } catch(e) {
+                    console.error('Timer display error:', e);
+                }
 
                 // Warning at 2 minutes
                 if (globalTimeRemaining === 120) {
-                    const phaseLabel = 'interview';
-                    showStatus(`<i class="fas fa-exclamation-triangle"></i> 2 minutes remaining in the ${phaseLabel}.`, 'error');
+                    showStatus(`<i class="fas fa-exclamation-triangle"></i> 2 minutes remaining in the interview.`, 'error');
                 }
                 // Warning at 30 seconds
                 if (globalTimeRemaining === 30) {
-                    const phaseLabel = 'interview';
-                    showStatus(`<i class="fas fa-clock"></i> 30 seconds remaining in the ${phaseLabel}.`, 'error');
-                }
-
-                if (globalTimeRemaining <= 0) {
-                    clearInterval(globalCountdownInterval);
-                    globalCountdownInterval = null;
-                    showStatus('<i class="fas fa-clock"></i> Interview time is up. Submitting your responses...', 'info');
-                    endInterview();
+                    showStatus(`<i class="fas fa-clock"></i> 30 seconds remaining in the interview.`, 'error');
                 }
             }, 1000);
         }
@@ -2365,6 +2375,28 @@
 
                     const sessionInfo = await sessionInfoResponse.json();
                     console.log('Session info response:', JSON.stringify(sessionInfo));
+
+                    if (sessionInfo.is_deactivated) {
+                        if (statusDiv) {
+                            statusDiv.innerHTML = `
+                                <div style="text-align:center; padding:2.5rem;">
+                                    <div style="font-size:3rem; margin-bottom:1.5rem;">🔒</div>
+                                    <div style="font-size:1.25rem; font-weight:700; color:#1f2937;">Interview Link Inactive</div>
+                                    <div style="font-size:0.95rem; color:#6b7280; margin-top:0.75rem; max-width:400px; margin-left:auto; margin-right:auto;">
+                                        This interview link has been temporarily deactivated by the administrator. 
+                                        Please contact your recruiter for more information.
+                                    </div>
+                                    <div style="margin-top:2rem; padding-top:1.5rem; border-top:1px solid #e5e7eb;">
+                                        <button onclick="location.reload()" style="background:#4f46e5; color:white; border:none; padding:0.6rem 1.2rem; border-radius:8px; font-weight:600; cursor:pointer;">
+                                            <i class="fas fa-sync-alt"></i> Check Again
+                                        </button>
+                                    </div>
+                                </div>`;
+                            statusDiv.className = 'status info';
+                            statusDiv.style.display = 'block';
+                        }
+                        return;
+                    }
 
                     if (sessionInfo.is_expired) {
                         renderExpiredSessionState(statusDiv, 'This interview window has ended. Please contact the recruiter for a new link.');
