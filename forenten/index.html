@@ -2158,9 +2158,12 @@
                 }
             }
 
-            // Full duration for interview
-            const duration = window.interviewDuration || 30;
-            totalInterviewMinutes = Math.max(2, Number(duration));
+            // Use the duration explicitly set by admin — never derive it from the schedule window
+            const duration = (window.interviewDuration && Number(window.interviewDuration) > 0)
+                ? Number(window.interviewDuration)
+                : 30;
+            totalInterviewMinutes = Math.max(2, duration);
+            console.log('[TIMER DEBUG] Final totalInterviewMinutes =', totalInterviewMinutes);
             console.log('[TIMER DEBUG] window.interviewDuration =', window.interviewDuration);
             console.log('[TIMER DEBUG] duration used =', duration);
             console.log('[TIMER DEBUG] totalInterviewMinutes =', totalInterviewMinutes);
@@ -2192,7 +2195,8 @@
         function startGlobalCountdown(durationMinutes, phase = 'verbal') {
             stopGlobalCountdown();
             interviewPhase = phase;
-            globalTotalTime = durationMinutes * 60;
+            const safeDuration = Math.max(1, Number(durationMinutes) || 1);
+            globalTotalTime = safeDuration * 60;
             globalTimeRemaining = globalTotalTime;
             updateCountdownDisplay();
 
@@ -2242,8 +2246,9 @@
         function updateCountdownDisplay() {
             const el = document.getElementById('globalCountdown');
             if (!el) return;
-            const mins = Math.floor(globalTimeRemaining / 60);
-            const secs = globalTimeRemaining % 60;
+            const safeRemaining = Math.max(0, globalTimeRemaining);
+            const mins = Math.floor(safeRemaining / 60);
+            const secs = safeRemaining % 60;
             el.textContent = `${String(mins).padStart(2, '0')}:${String(secs).padStart(2, '0')}`;
             const subtitle = document.getElementById('codingRoundSubtitle');
             if (subtitle && !document.getElementById('codingRoundSection').classList.contains('hidden')) {

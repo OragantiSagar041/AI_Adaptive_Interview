@@ -3194,7 +3194,7 @@ async def get_session(link_id: str):
             "resume_text": row.get("resume_text"),
             "job_description": row.get("job_description"),
             "session_status": row.get("status"),
-            "interview_duration": row.get("interview_duration") or 30,
+            "interview_duration": int(row.get("interview_duration") or 30) if row.get("interview_duration") else 30,
             "is_expired": is_expired,
             "is_before_schedule": is_before_schedule,
             "scheduled_start": scheduled_start,
@@ -3300,7 +3300,11 @@ async def start_session_interview(link_id: str = Form(...)):
     job_description = row.get("job_description")
     status = row.get("status")
     num_questions = row.get("num_questions")
-    interview_duration = row.get("interview_duration") or 30
+    raw_duration = row.get("interview_duration")
+    try:
+        interview_duration = int(raw_duration) if raw_duration and int(raw_duration) > 0 else 30
+    except (ValueError, TypeError):
+        interview_duration = 30
     print(f"[TIMER DEBUG] link_id={link_id}, raw interview_duration from DB={row.get('interview_duration')}, used={interview_duration}")
     existing_interview_id = row.get("interview_id")
     expires_at = row.get("expires_at")
