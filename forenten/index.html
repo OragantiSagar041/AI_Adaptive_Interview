@@ -32,6 +32,10 @@
             line-height: 1.6;
         }
 
+        html.session-link-mode #uploadSection {
+            display: none !important;
+        }
+
         .container {
             max-width: 98vw;
             margin: 0 auto;
@@ -1253,6 +1257,19 @@
     <!-- Face Detection Scripts -->
     <script src="https://cdn.jsdelivr.net/npm/@tensorflow/tfjs"></script>
     <script src="https://cdn.jsdelivr.net/npm/@tensorflow-models/blazeface"></script>
+    <script>
+        (function () {
+            try {
+                const params = new URLSearchParams(window.location.search);
+                const sessionId = params.get('session_id') || params.get('session');
+                if (sessionId) {
+                    document.documentElement.classList.add('session-link-mode');
+                }
+            } catch (e) {
+                console.warn('Session bootstrap precheck failed:', e);
+            }
+        })();
+    </script>
 </head>
 
 <body>
@@ -1787,7 +1804,6 @@
                     btn.style.borderColor = '#ccc';
                     icon.innerHTML = '<polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5"></polygon><path d="M15.54 8.46a5 5 0 0 1 0 7.07"></path><path d="M19.07 4.93a10 10 0 0 1 0 14.14"></path>';
                 }
-            }
         }
 
         function speakText(text, onEndCallback = null) {
@@ -2470,6 +2486,60 @@
             };
         }
 
+        function getSessionIdFromUrl() {
+            const params = new URLSearchParams(window.location.search);
+            return params.get('session_id') || params.get('session') || '';
+        }
+
+        function setSessionLinkMode(isActive) {
+            document.documentElement.classList.toggle('session-link-mode', Boolean(isActive));
+            if (uploadSection) {
+                uploadSection.classList.toggle('hidden', Boolean(isActive));
+            }
+        }
+
+        function showSessionLoadingState(targetStatusDiv) {
+            if (!targetStatusDiv) return;
+
+            targetStatusDiv.innerHTML = `
+                <div style="text-align:center; padding: 2rem;">
+                    <div style="font-size:2rem; margin-bottom:1rem;"><i class="fas fa-spinner fa-spin"></i></div>
+                    <div style="font-size:1.1rem; font-weight:600; color:#4f46e5;">Loading your interview session...</div>
+                    <div style="font-size:0.85rem; color:#6b7280; margin-top:0.5rem;">Please wait while we prepare your questions</div>
+                    <div id="sessionLoadProgress" style="margin-top:1rem; height:4px; background:#e5e7eb; border-radius:999px; overflow:hidden; max-width:300px; margin-left:auto; margin-right:auto;">
+                        <div style="height:100%; background:linear-gradient(90deg,#6366f1,#8b5cf6); border-radius:999px; animation:shimmer 1.5s infinite linear; background-size:200% 100%; background-image:linear-gradient(90deg,#6366f1 0%,#818cf8 50%,#6366f1 100%);"></div>
+                    </div>
+                </div>`;
+            targetStatusDiv.className = 'status info';
+            targetStatusDiv.style.display = 'block';
+        }
+
+        function hydrateSessionInterviewData(data, targetStatusDiv) {
+            if (!data.interview_id || !data.first_question) {
+                throw new Error(`Unexpected server response: ${JSON.stringify(data)}`);
+            }
+
+            currentInterviewId = data.interview_id;
+            currentQuestionId = Number(data.first_question.id) || 1;
+            totalQuestions = Number(data.total_questions) || 0;
+            window.interviewDuration = Number(data.interview_duration) > 0 ? Number(data.interview_duration) : 30;
+            window.recordVideo = data.record_video !== false;
+
+            window.currentInterviewId = currentInterviewId;
+            window.currentQuestionId = currentQuestionId;
+
+            if (data.candidate_name) {
+                const header = document.querySelector('h1');
+                if (header) header.textContent = `Welcome, ${data.candidate_name}`;
+            }
+
+            if (targetStatusDiv) {
+                targetStatusDiv.style.display = 'none';
+            }
+
+            document.getElementById('disclaimerModal').classList.remove('hidden');
+        }
+
         function renderExpiredSessionState(targetStatusDiv, message) {
             if (!targetStatusDiv) return;
 
@@ -2535,15 +2605,15 @@
         document.addEventListener('DOMContentLoaded', async () => {
 
             // --- SESSION LINK HANDLER ---
-            const urlParams = new URLSearchParams(window.location.search);
-            const sessionId = urlParams.get('session_id') || urlParams.get('session');
+            const sessionId = getSessionIdFromUrl();
 
             if (sessionId) {
                 console.log("Found session ID:", sessionId);
-                document.getElementById('uploadSection').classList.add('hidden');
+                setSessionLinkMode(true);
 
                 const statusDiv = document.getElementById('status');
-                if (statusDiv) {
+                showSessionLoadingState(statusDiv);
+                if (false && statusDiv) {
                     statusDiv.innerHTML = `
                         <div style="text-align:center; padding: 2rem;">
                             <div style="font-size:2rem; margin-bottom:1rem;">⏳</div>
@@ -2684,9 +2754,39 @@
                             return;
                         }
 
+                        if (data.session_status === 'completed') {
+                            document.getElementById('interviewSection').classList.add('hidden');
+                            document.getElementById('resultsSection').classList.remove('hidden');
+                            if (statusDiv) statusDiv.style.display = 'none';
+                            const h1 = document.querySelector('h1');
+                            if (h1) h1.classList.add('hidden');
+                            return;
+                        }
+
+                        if (data.already_started && !data.first_question) {
+                            if (statusDiv) {
+                                statusDiv.innerHTML = `
+                                    <div style="text-align:center; padding:2rem;">
+                                        <div style="font-size:2.5rem; margin-bottom:1rem;"><i class="fas fa-clock"></i></div>
+                                        <div style="font-size:1.05rem; font-weight:700; color:#4f46e5;">
+                                            This interview session is already active.
+                                        </div>
+                                        <div style="font-size:0.85rem; color:#6b7280; margin-top:0.5rem; max-width:440px; margin-left:auto; margin-right:auto;">
+                                            Please continue in the original tab, or refresh this page to reconnect if you lost the earlier session.
+                                        </div>
+                                    </div>`;
+                                statusDiv.className = 'status info';
+                                statusDiv.style.display = 'block';
+                            }
+                            return;
+                        }
+
+                        hydrateSessionInterviewData(data, statusDiv);
+                        return;
+
                         // Only completed interviews should land on the Thank You screen.
                         // A merely "started" session should not look like a successful submission.
-                        if (data.already_started) {
+                        if (false && data.already_started) {
                             console.log('Interview already taken. Status:', data.session_status);
                             const header = document.querySelector('h1');
                             if (header && data.candidate_name && data.session_status !== 'completed') {
@@ -2775,6 +2875,9 @@
                         statusDiv.style.display = 'block';
                     }
                 }
+            } else {
+                setSessionLinkMode(false);
+                if (statusDiv) statusDiv.style.display = 'none';
             }
 
             // Skip button click handler

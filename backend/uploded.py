@@ -3316,7 +3316,7 @@ async def start_session_interview(link_id: str = Form(...)):
                 return {
                     "is_expired": True,
                     "message": "This interview window has ended. Please contact your administrator."
-                }
+                }   
         except Exception as e:
             print(f"Error parsing scheduled_end time in start_session_interview: {e}")
     

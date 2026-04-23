@@ -2824,6 +2824,24 @@
         const PAGE_SIZE = 20;
         let allFilteredSessions = []; // Holds current filtered data for pagination
 
+        function normalizeFrontendUrl(url) {
+            if (!url) return '';
+
+            const trimmed = String(url).trim();
+            const frontendBase = FRONTEND_BASE.replace(/\/+$/, '');
+
+            if (/^https?:\/\//i.test(trimmed)) {
+                const duplicateBase = `${frontendBase}${frontendBase}`;
+                if (trimmed.startsWith(duplicateBase)) {
+                    return trimmed.slice(frontendBase.length);
+                }
+                return trimmed;
+            }
+
+            const relative = trimmed.startsWith('/') ? trimmed : `/${trimmed}`;
+            return `${frontendBase}${relative}`;
+        }
+
         function focusLoginForm() {
             const loginCard = document.getElementById('loginCard');
             const usernameInput = document.getElementById('username');
@@ -3111,8 +3129,7 @@
 
         // --- ADD SESSION TO UI ---
         function addSessionToUI(name, relativeUrl, id) {
-            // Ensure fullUrl uses the correct production base URL
-            const fullUrl = `${FRONTEND_BASE}${relativeUrl}`;
+            const fullUrl = normalizeFrontendUrl(relativeUrl);
             const list = document.getElementById('linksList');
 
             // Remove empty state placeholder
@@ -3567,7 +3584,7 @@
                     scoreText = `<span style="color:${color}; font-weight:700;">${s.avg_score.toFixed(1)}/100</span>`;
                 }
 
-                const linkUrl = `${baseUrl}/index.html?session_id=${s.link_id}`;
+                const linkUrl = normalizeFrontendUrl(`/index.html?session_id=${s.link_id}`);
                 let actionBtn = `<button class="btn-copy" onclick="copyLink(this, '${linkUrl}')" style="margin:0; padding:0.4rem 0.8rem; font-size:0.75rem;">Copy Link</button>`;
                 if (currentStatus === 'completed') {
                     actionBtn = `<button class="btn-copy" onclick="openLiveResults('${s.link_id}', '${s.candidate_name.replace(/'/g, "\\'")}')" style="margin:0; padding:0.4rem 0.8rem; font-size:0.75rem; background: #10b981; color: white; border: none; border-radius: 6px; cursor: pointer; transition: opacity 0.2s; font-weight: 600;">View Results</button>`;
@@ -3657,7 +3674,7 @@
                     scoreText = `<span style="color:${color}; font-weight:700;">${s.avg_score.toFixed(1)}/100</span>`;
                 }
 
-                const linkUrl = `${baseUrl}/index.html?session_id=${s.link_id}`;
+                const linkUrl = normalizeFrontendUrl(`/index.html?session_id=${s.link_id}`);
                 let actionBtn = `<button class="btn-copy" onclick="copyLink(this, '${linkUrl}')" style="margin:0; padding:0.4rem 0.8rem; font-size:0.75rem;">Copy Link</button>`;
                 if (currentStatus === 'completed') {
                     actionBtn = `<button class="btn-copy" onclick="openLiveResults('${s.link_id}', '${s.candidate_name.replace(/'/g, "\\'")}')" style="margin:0; padding:0.4rem 0.8rem; font-size:0.75rem; background: #10b981; color: white; border: none; border-radius: 6px; cursor: pointer; transition: opacity 0.2s; font-weight: 600;">View Results</button>`;
@@ -4842,7 +4859,6 @@
             const card = document.getElementById('bulkResultsCard');
             const list = document.getElementById('bulkResultsList');
             const summary = document.getElementById('bulkResultsSummary');
-            const base = "https://ai-adaptive-interview.vercel.app";
 
 
             card.style.display = 'block';
@@ -4855,11 +4871,12 @@
                 const emailBadge = r.email_sent
                     ? `<span style="background:rgba(16,185,129,0.1);color:var(--success);padding:2px 8px;border-radius:4px;font-size:0.75rem;"><i class="fas fa-envelope-circle-check"></i> Email Sent</span>`
                     : `<span style="background:rgba(244,63,94,0.1);color:var(--danger);padding:2px 8px;border-radius:4px;font-size:0.75rem;"><i class="fas fa-envelope"></i> Email Failed</span>`;
+                const fullUrl = normalizeFrontendUrl(r.link_url);
 
                 const linkHtml = isOk ? `
                     <div style="display:flex;align-items:center;gap:8px;margin-top:6px;">
-                        <div class="link-display" style="flex:1;font-size:0.75rem;">${base}${r.link_url}</div>
-                        <button onclick="navigator.clipboard.writeText('${base}${r.link_url}').then(()=>showToast('Copied!','success'))"
+                        <div class="link-display" style="flex:1;font-size:0.75rem;">${fullUrl}</div>
+                        <button onclick="navigator.clipboard.writeText('${fullUrl}').then(()=>showToast('Copied!','success'))"
                             style="background:rgba(6,214,160,0.1);color:var(--accent);border:1px solid rgba(6,214,160,0.25);padding:0.35rem 0.7rem;border-radius:6px;cursor:pointer;font-family:inherit;font-size:0.8rem;">
                             <i class="fas fa-copy"></i>
                         </button>
