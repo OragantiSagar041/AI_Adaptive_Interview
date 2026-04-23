@@ -2783,74 +2783,7 @@
                         }
 
                         hydrateSessionInterviewData(data, statusDiv);
-                        return;
-
-                        // Only completed interviews should land on the Thank You screen.
-                        // A merely "started" session should not look like a successful submission.
-                        if (false && data.already_started) {
-                            console.log('Interview already taken. Status:', data.session_status);
-                            const header = document.querySelector('h1');
-                            if (header && data.candidate_name && data.session_status !== 'completed') {
-                                header.textContent = `Welcome, ${data.candidate_name}`;
-                            }
-
-                        if (data.already_started || data.session_status === 'started') {
-                            console.log('Interview already taken. Status:', data.session_status);
-                            
-                            if (data.session_status === 'completed') {
-                                document.getElementById('interviewSection').classList.add('hidden');
-                                document.getElementById('resultsSection').classList.remove('hidden');
-                                if (statusDiv) statusDiv.style.display = 'none';
-                                const h1 = document.querySelector('h1');
-                                if (h1) h1.classList.add('hidden');
-                                return;
-                            }
-
-                            // For 'started' status — show a resume message
-                            if (statusDiv) {
-                                statusDiv.innerHTML = `
-                                    <div style="text-align:center; padding:2rem;">
-                                        <div style="font-size:2.5rem; margin-bottom:1rem;">⏳</div>
-                                        <div style="font-size:1.05rem; font-weight:700; color:#4f46e5;">
-                                            This interview session was already started.
-                                        </div>
-                                        <div style="font-size:0.85rem; color:#6b7280; margin-top:0.5rem; max-width:440px; margin-left:auto; margin-right:auto;">
-                                            Please use the original interview tab. If you closed it by mistake, 
-                                            <a href="javascript:location.reload()" style="color:#4f46e5;">click here to retry</a>.
-                                        </div>
-                                    </div>`;
-                                statusDiv.className = 'status info';
-                                statusDiv.style.display = 'block';
-                            }
-                            return;
-                        }
-
-                        // Missing required fields guard
-                        if (!data.interview_id || !data.first_question) {
-                            throw new Error(`Unexpected server response: ${JSON.stringify(data)}`);
-                        }
-
-                        currentInterviewId = data.interview_id;
-                        currentQuestionId = data.first_question.id;
-                        totalQuestions = data.total_questions;
-                        window.interviewDuration = data.interview_duration || 30;
-                        window.recordVideo = data.record_video !== false; // default true
-
-                        window.currentInterviewId = currentInterviewId;
-                        window.currentQuestionId = currentQuestionId;
-
-                        // Personalized welcome
-                        if (data.candidate_name && data.session_status !== 'completed') {
-                            const header = document.querySelector('h1');
-                            if (header) header.textContent = `Welcome, ${data.candidate_name}`;
-                        }
-
-                        // Hide the loading status
-                        if (statusDiv) statusDiv.style.display = 'none';
-
-                        // Show Disclaimer
                         document.getElementById('disclaimerModal').classList.remove('hidden');
-
                     } else {
                         const errText = await response.text().catch(() => '');
                         console.error('Session API error:', response.status, errText);
@@ -4094,8 +4027,6 @@ Output: ${formatCodingValue(testCase.output)}${resultBlock}</pre>
                 alert("Camera or microphone permission denied");
             }
         }
-
-    });
     </script>
 
     <script>
