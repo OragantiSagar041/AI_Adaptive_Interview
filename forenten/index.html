@@ -3916,6 +3916,8 @@ Output: ${formatCodingValue(testCase.output)}${resultBlock}</pre>
             document.getElementById('interviewSection').classList.add('hidden');
             document.getElementById('codingRoundSection').classList.add('hidden');
             document.getElementById('status').classList.add('hidden'); // Hide the generic status bar
+            document.getElementById('resultsSection').classList.remove('hidden'); // UNHIDE THE END SCREEN
+            document.getElementById('uploadStatusContainer').classList.remove('hidden'); // SHOW UPLOAD STATUS
             const header = document.querySelector('h1');
             if (header) {
                 header.classList.add('hidden');
