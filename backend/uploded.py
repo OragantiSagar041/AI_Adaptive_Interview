@@ -2393,8 +2393,7 @@ def send_interview_email(candidate_email: str, candidate_name: str, link_url: st
 
     # Construct the base URL for the interview link
     # On Render, FRONTEND_URL should be set to your Vercel URL
-    base_url = os.getenv("FRONTEND_URL", "https://ai-adaptive-interview.vercel.app")
-    full_link = f"{base_url}{link_url}"
+    full_link = link_url if link_url.startswith("http") else f"{os.getenv('FRONTEND_URL', 'https://ai-adaptive-interview.vercel.app')}{link_url}"
 
     # Task 4: Build schedule info block
     schedule_block = ""
@@ -2480,8 +2479,7 @@ def send_interview_email(candidate_email: str, candidate_name: str, link_url: st
         print("Warning: BREVO_API_KEY not found in environment")
         return False
 
-    base_url = os.getenv("FRONTEND_URL", "https://ai-adaptive-interview.vercel.app")
-    full_link = f"{base_url}{link_url}"
+    full_link = link_url if link_url.startswith("http") else f"{os.getenv('FRONTEND_URL', 'https://ai-adaptive-interview.vercel.app')}{link_url}"
 
     html_content = custom_html.strip() if custom_html and custom_html.strip() else build_default_interview_email_html(
         candidate_name=candidate_name,
@@ -3324,6 +3322,48 @@ async def start_session_interview(link_id: str = Form(...)):
     
     # If session was already started or completed, don't restart — return status
     if status in ('started', 'completed') and existing_interview_id:
+        if status == 'completed':
+            return {
+                "already_started": True,
+                "session_status": status,
+                "candidate_name": candidate_name,
+                "interview_id": existing_interview_id,
+                "interview_duration": interview_duration
+            }
+        
+        # Status is 'started' — reload the existing interview and return first question
+        existing = interviews.get(existing_interview_id)
+        if not existing:
+            row2 = interviews_collection.find_one({"id": existing_interview_id})
+            if row2:
+                try:
+                    loaded_questions = json.loads(row2.get("questions", "[]"))
+                    existing = {
+                        "id": existing_interview_id,
+                        "source": row2.get("source"),
+                        "profile_text": row2.get("profile_text", ""),
+                        "questions": loaded_questions,
+                        "answers": {},
+                        "created_at": row2.get("created_at")
+                    }
+                    interviews[existing_interview_id] = existing
+                except Exception:
+                    existing = None
+        
+        if existing and existing.get("questions"):
+            questions = existing["questions"]
+            return {
+                "status": "started",
+                "interview_id": existing_interview_id,
+                "questions": questions,
+                "first_question": questions[0],
+                "total_questions": len(questions),
+                "candidate_name": candidate_name,
+                "interview_duration": interview_duration,
+                "record_video": row.get("record_video", True)
+            }
+        
+        # Fallback: regenerate if questions lost
         return {
             "already_started": True,
             "session_status": status,
@@ -3384,6 +3424,8 @@ async def start_session_interview(link_id: str = Form(...)):
         "status": "started",
         "interview_id": interview_id,
         "questions": questions,
+        "first_question": questions[0] if questions else None,
+        "total_questions": len(questions),
         "candidate_name": candidate_name,
         "interview_duration": interview_duration,
         "record_video": row.get("record_video", True)

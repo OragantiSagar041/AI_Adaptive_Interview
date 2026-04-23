@@ -1,9 +1,13 @@
 import re
 import sys
+import os
+
+_BACKEND_DIR = os.path.dirname(os.path.abspath(__file__))
+_UPLODED_PATH = os.path.join(_BACKEND_DIR, 'uploded.py')
 
 def rewrite():
     try:
-        with open('c:/Users/sagar/Downloads/mock-interview/backend/uploded.py', 'r', encoding='utf-8') as f:
+        with open(_UPLODED_PATH, 'r', encoding='utf-8') as f:
             content = f.read()
     except Exception as e:
         print(f"Error reading: {e}")
@@ -227,7 +231,7 @@ def _generate_offline_questions(resume_text: str, jd_text: str, total_count: int
 '''
 
     try:
-        with open('c:/Users/sagar/Downloads/mock-interview/backend/uploded.py', 'w', encoding='utf-8') as f:
+        with open(_UPLODED_PATH, 'w', encoding='utf-8') as f:
             f.write(content[:start_idx] + new_block + content[end_idx:])
         print("Done rewrite")
     except Exception as e:

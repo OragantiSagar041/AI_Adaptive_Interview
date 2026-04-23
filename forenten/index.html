@@ -68,9 +68,10 @@
             background: #fff;
             border-radius: 16px;
             overflow: hidden;
-            box-shadow: 0 4px 20px rgba(0,0,0,0.08);
+            box-shadow: 0 4px 20px rgba(0, 0, 0, 0.08);
             position: relative;
         }
+
         .ip-avatar-card .live-badge {
             position: absolute;
             bottom: 12px;
@@ -86,6 +87,7 @@
             align-items: center;
             gap: 5px;
         }
+
         .ip-avatar-card .live-badge::before {
             content: '';
             width: 7px;
@@ -95,10 +97,19 @@
             display: inline-block;
             animation: livePulse 1.2s infinite;
         }
+
         @keyframes livePulse {
-            0%,100% { opacity: 1; }
-            50% { opacity: 0.3; }
+
+            0%,
+            100% {
+                opacity: 1;
+            }
+
+            50% {
+                opacity: 0.3;
+            }
         }
+
         .ip-avatar-card video,
         .ip-avatar-card img {
             width: 100%;
@@ -112,33 +123,40 @@
             background: #fff;
             border-radius: 14px;
             padding: 0.9rem 1.1rem;
-            box-shadow: 0 2px 12px rgba(0,0,0,0.07);
+            box-shadow: 0 2px 12px rgba(0, 0, 0, 0.07);
             display: flex;
             align-items: center;
             gap: 0.9rem;
         }
+
         .ip-analyzing-icon {
             width: 40px;
             height: 40px;
             border-radius: 50%;
-            background: linear-gradient(135deg,#6366f1,#8b5cf6);
+            background: linear-gradient(135deg, #6366f1, #8b5cf6);
             display: flex;
             align-items: center;
             justify-content: center;
             flex-shrink: 0;
         }
-        .ip-analyzing-icon svg { color: #fff; }
+
+        .ip-analyzing-icon svg {
+            color: #fff;
+        }
+
         .ip-analyzing-text h4 {
             margin: 0;
             font-size: 0.92rem;
             font-weight: 700;
             color: #1f2937;
         }
+
         .ip-analyzing-text p {
             margin: 2px 0 0;
             font-size: 0.78rem;
             color: #6b7280;
         }
+
         .ip-audio-bars {
             margin-left: auto;
             display: flex;
@@ -146,19 +164,42 @@
             gap: 3px;
             height: 24px;
         }
+
         .ip-audio-bars span {
             width: 4px;
             border-radius: 2px;
             background: #10b981;
             animation: audioBar 0.8s ease-in-out infinite alternate;
         }
-        .ip-audio-bars span:nth-child(1) { height: 8px;  animation-delay: 0s; }
-        .ip-audio-bars span:nth-child(2) { height: 18px; animation-delay: 0.15s; }
-        .ip-audio-bars span:nth-child(3) { height: 12px; animation-delay: 0.3s; }
-        .ip-audio-bars span:nth-child(4) { height: 22px; animation-delay: 0.1s; }
+
+        .ip-audio-bars span:nth-child(1) {
+            height: 8px;
+            animation-delay: 0s;
+        }
+
+        .ip-audio-bars span:nth-child(2) {
+            height: 18px;
+            animation-delay: 0.15s;
+        }
+
+        .ip-audio-bars span:nth-child(3) {
+            height: 12px;
+            animation-delay: 0.3s;
+        }
+
+        .ip-audio-bars span:nth-child(4) {
+            height: 22px;
+            animation-delay: 0.1s;
+        }
+
         @keyframes audioBar {
-            from { transform: scaleY(0.4); }
-            to   { transform: scaleY(1); }
+            from {
+                transform: scaleY(0.4);
+            }
+
+            to {
+                transform: scaleY(1);
+            }
         }
 
         /* Timer Card */
@@ -166,25 +207,29 @@
             background: #fff;
             border-radius: 14px;
             padding: 1.2rem;
-            box-shadow: 0 2px 12px rgba(0,0,0,0.07);
+            box-shadow: 0 2px 12px rgba(0, 0, 0, 0.07);
             display: flex;
             flex-direction: column;
             align-items: center;
             gap: 1rem;
         }
+
         .ip-timer-ring {
             position: relative;
             width: 110px;
             height: 110px;
         }
+
         .ip-timer-ring svg {
             transform: rotate(-90deg);
         }
+
         .ip-timer-ring circle.track {
             fill: none;
             stroke: #e5e7eb;
             stroke-width: 8;
         }
+
         .ip-timer-ring circle.fill {
             fill: none;
             stroke: url(#timerGradient);
@@ -194,6 +239,7 @@
             stroke-dashoffset: 0;
             transition: stroke-dashoffset 1s linear;
         }
+
         .ip-timer-label {
             position: absolute;
             inset: 0;
@@ -202,6 +248,7 @@
             align-items: center;
             justify-content: center;
         }
+
         .ip-timer-label #globalCountdown {
             font-size: 1.25rem;
             font-weight: 800;
@@ -209,6 +256,7 @@
             font-family: monospace;
             line-height: 1;
         }
+
         .ip-timer-label span.remaining-lbl {
             font-size: 0.6rem;
             color: #9ca3af;
@@ -216,6 +264,7 @@
             letter-spacing: 0.05em;
             margin-top: 2px;
         }
+
         .ip-end-btn {
             display: inline-flex;
             align-items: center;
@@ -230,6 +279,7 @@
             cursor: pointer;
             transition: background 0.2s, transform 0.15s;
         }
+
         .ip-end-btn:hover {
             background: #111827;
             transform: translateY(-1px);
@@ -240,47 +290,63 @@
             background: #fff;
             border-radius: 14px;
             padding: 1.1rem 1.2rem;
-            box-shadow: 0 2px 12px rgba(0,0,0,0.07);
+            box-shadow: 0 2px 12px rgba(0, 0, 0, 0.07);
         }
+
         .ip-insights-card h4 {
             margin: 0 0 0.9rem;
             font-size: 0.95rem;
             font-weight: 700;
             color: #1f2937;
         }
+
         .insight-row {
             margin-bottom: 0.75rem;
         }
+
         .insight-row-header {
             display: flex;
             justify-content: space-between;
             align-items: center;
             margin-bottom: 4px;
         }
+
         .insight-label {
             font-size: 0.72rem;
             font-weight: 700;
             letter-spacing: 0.05em;
             color: #374151;
         }
+
         .insight-value {
             font-size: 0.78rem;
             font-weight: 700;
         }
+
         .insight-bar-track {
             height: 7px;
             background: #e5e7eb;
             border-radius: 999px;
             overflow: hidden;
         }
+
         .insight-bar-fill {
             height: 100%;
             border-radius: 999px;
             transition: width 1s ease;
         }
-        .insight-bar-fill.clarity    { background: linear-gradient(90deg,#10b981,#34d399); }
-        .insight-bar-fill.techDepth  { background: linear-gradient(90deg,#6366f1,#818cf8); }
-        .insight-bar-fill.confidence { background: linear-gradient(90deg,#f59e0b,#fcd34d); }
+
+        .insight-bar-fill.clarity {
+            background: linear-gradient(90deg, #10b981, #34d399);
+        }
+
+        .insight-bar-fill.techDepth {
+            background: linear-gradient(90deg, #6366f1, #818cf8);
+        }
+
+        .insight-bar-fill.confidence {
+            background: linear-gradient(90deg, #f59e0b, #fcd34d);
+        }
 
         .ip-ai-tip {
             margin-top: 0.85rem;
@@ -291,7 +357,10 @@
             color: #4338ca;
             line-height: 1.5;
         }
-        .ip-ai-tip strong { color: #4338ca; }
+
+        .ip-ai-tip strong {
+            color: #4338ca;
+        }
 
         /* ─── Right Column ─── */
         .ip-right {
@@ -305,28 +374,39 @@
             background: #fff;
             border-radius: 16px;
             padding: 1.4rem 1.5rem;
-            box-shadow: 0 4px 20px rgba(0,0,0,0.07);
+            box-shadow: 0 4px 20px rgba(0, 0, 0, 0.07);
         }
+
         .ip-question-meta {
             display: flex;
             gap: 0.5rem;
             justify-content: flex-end;
             margin-bottom: 0.9rem;
         }
+
         .ip-tag {
             padding: 0.25rem 0.85rem;
             border-radius: 999px;
             font-size: 0.78rem;
             font-weight: 500;
         }
-        .ip-tag.type    { background: #e0e7ff; color: #4338ca; }
-        .ip-tag.difficulty { background: #dcfce7; color: #166534; }
+
+        .ip-tag.type {
+            background: #e0e7ff;
+            color: #4338ca;
+        }
+
+        .ip-tag.difficulty {
+            background: #dcfce7;
+            color: #166534;
+        }
 
         .ip-question-body {
             display: flex;
             gap: 0.8rem;
             align-items: flex-start;
         }
+
         .ip-question-body .q-bar {
             width: 4px;
             min-height: 60px;
@@ -334,6 +414,7 @@
             background: #6366f1;
             flex-shrink: 0;
         }
+
         .ip-question-body #questionText {
             flex: 1;
             font-size: 1.08rem;
@@ -342,6 +423,7 @@
             line-height: 1.65;
             margin: 0;
         }
+
         .ip-mute-btn {
             background: none;
             border: none;
@@ -352,21 +434,26 @@
             transition: color 0.2s;
             flex-shrink: 0;
         }
-        .ip-mute-btn:hover { color: #ef4444; }
+
+        .ip-mute-btn:hover {
+            color: #ef4444;
+        }
 
         /* Live Transcript Card */
         .ip-transcript-card {
             background: #fff;
             border-radius: 16px;
             padding: 1.2rem 1.4rem;
-            box-shadow: 0 4px 20px rgba(0,0,0,0.07);
+            box-shadow: 0 4px 20px rgba(0, 0, 0, 0.07);
         }
+
         .ip-transcript-header {
             display: flex;
             align-items: center;
             justify-content: space-between;
             margin-bottom: 0.85rem;
         }
+
         .ip-transcript-title {
             display: flex;
             align-items: center;
@@ -375,6 +462,7 @@
             font-weight: 700;
             color: #1f2937;
         }
+
         .ip-recording-badge {
             display: flex;
             align-items: center;
@@ -388,6 +476,7 @@
             border-radius: 20px;
             letter-spacing: 0.06em;
         }
+
         .ip-recording-badge .rec-dot {
             width: 7px;
             height: 7px;
@@ -395,6 +484,7 @@
             border-radius: 50%;
             animation: livePulse 1s infinite;
         }
+
         .ip-transcript-box {
             background: #f8fafc;
             border: 1px solid #e5e7eb;
@@ -415,6 +505,7 @@
             align-items: center;
             gap: 0.6rem;
         }
+
         .ip-btn-prev {
             background: #f3f4f6;
             color: #374151;
@@ -426,7 +517,11 @@
             cursor: pointer;
             transition: background 0.2s;
         }
-        .ip-btn-prev:hover:not(:disabled)  { background: #e5e7eb; }
+
+        .ip-btn-prev:hover:not(:disabled) {
+            background: #e5e7eb;
+        }
+
         .ip-btn-next {
             background: #10b981;
             color: #fff;
@@ -439,7 +534,12 @@
             flex: 1;
             transition: background 0.2s, transform 0.15s;
         }
-        .ip-btn-next:hover:not(:disabled)  { background: #059669; transform: translateY(-1px); }
+
+        .ip-btn-next:hover:not(:disabled) {
+            background: #059669;
+            transform: translateY(-1px);
+        }
+
         .ip-btn-skip {
             background: #1f2937;
             color: #fff;
@@ -452,8 +552,15 @@
             transition: background 0.2s;
             margin-left: auto;
         }
-        .ip-btn-skip:hover:not(:disabled) { background: #374151; }
-        button:disabled { opacity: 0.45; cursor: not-allowed; }
+
+        .ip-btn-skip:hover:not(:disabled) {
+            background: #374151;
+        }
+
+        button:disabled {
+            opacity: 0.45;
+            cursor: not-allowed;
+        }
 
         /* Status bar under mic */
         .ip-mic-status-bar {
@@ -467,12 +574,24 @@
 
         /* Responsive */
         @media (max-width: 1024px) {
-            #interviewSection { grid-template-columns: 320px 1fr; }
+            #interviewSection {
+                grid-template-columns: 320px 1fr;
+            }
         }
+
         @media (max-width: 768px) {
-            h1 { font-size: 1.75rem; }
-            #interviewSection { grid-template-columns: 1fr; }
-            .ip-avatar-card video, .ip-avatar-card img { height: 200px; }
+            h1 {
+                font-size: 1.75rem;
+            }
+
+            #interviewSection {
+                grid-template-columns: 1fr;
+            }
+
+            .ip-avatar-card video,
+            .ip-avatar-card img {
+                height: 200px;
+            }
         }
 
         .coding-round-shell {
@@ -1195,8 +1314,8 @@
             <svg width="0" height="0" style="position:absolute">
                 <defs>
                     <linearGradient id="timerGradient" x1="0%" y1="0%" x2="100%" y2="0%">
-                        <stop offset="0%"   stop-color="#6366f1"/>
-                        <stop offset="100%" stop-color="#8b5cf6"/>
+                        <stop offset="0%" stop-color="#6366f1" />
+                        <stop offset="100%" stop-color="#8b5cf6" />
                     </linearGradient>
                 </defs>
             </svg>
@@ -1211,7 +1330,9 @@
                         style="position:absolute;top:50%;left:50%;transform:translate(-50%,-50%);z-index:2;display:none;">
                         Enable Camera
                     </button>
-                    <div id="cameraLoading" style="position:absolute;top:50%;left:50%;transform:translate(-50%,-50%);color:#fff;z-index:0;font-size:0.85rem;">Waiting for camera...</div>
+                    <div id="cameraLoading"
+                        style="position:absolute;top:50%;left:50%;transform:translate(-50%,-50%);color:#fff;z-index:0;font-size:0.85rem;">
+                        Waiting for camera...</div>
                     <div class="live-badge">LIVE</div>
 
                     <!-- Face Detection Warning -->
@@ -1219,15 +1340,18 @@
                         style="position:absolute;top:0;left:0;width:100%;height:100%;background:rgba(0,0,0,0.8);color:#ef4444;display:none;align-items:center;justify-content:center;z-index:10;font-size:1.2rem;font-weight:bold;flex-direction:column;text-align:center;padding:20px;">
                         <span style="font-size:3rem;margin-bottom:10px;">⚠️</span>
                         <div>YOUR FACE IS NOT VISIBLE</div>
-                        <div style="font-size:0.9rem;color:#ccc;margin-top:5px;font-weight:normal;">Please adjust your camera</div>
+                        <div style="font-size:0.9rem;color:#ccc;margin-top:5px;font-weight:normal;">Please adjust your
+                            camera</div>
                     </div>
                 </div>
 
                 <!-- AI Analyzing Status -->
                 <div class="ip-analyzing-card">
                     <div class="ip-analyzing-icon">
-                        <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="white" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-                            <circle cx="12" cy="8" r="4"/><path d="M6 20v-2a6 6 0 0 1 12 0v2"/>
+                        <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none"
+                            stroke="white" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                            <circle cx="12" cy="8" r="4" />
+                            <path d="M6 20v-2a6 6 0 0 1 12 0v2" />
                         </svg>
                     </div>
                     <div class="ip-analyzing-text">
@@ -1243,8 +1367,8 @@
                 <div class="ip-timer-card">
                     <div class="ip-timer-ring">
                         <svg width="110" height="110" viewBox="0 0 110 110">
-                            <circle class="track" cx="55" cy="55" r="47"/>
-                            <circle class="fill" id="timerRingFill" cx="55" cy="55" r="47"/>
+                            <circle class="track" cx="55" cy="55" r="47" />
+                            <circle class="fill" id="timerRingFill" cx="55" cy="55" r="47" />
                         </svg>
                         <div class="ip-timer-label">
                             <span id="globalCountdown">--:--</span>
@@ -1291,7 +1415,8 @@
                     </div>
 
                     <div class="ip-ai-tip" id="aiTipBox">
-                        <strong>AI Tip:</strong> Speak clearly and structure your answer with a beginning, middle, and conclusion.
+                        <strong>AI Tip:</strong> Speak clearly and structure your answer with a beginning, middle, and
+                        conclusion.
                     </div>
                 </div>
 
@@ -1328,13 +1453,16 @@
                     <div class="ip-question-body">
                         <div class="q-bar"></div>
                         <p id="questionText">Loading question...</p>
-                        <button id="toggleSpeechBtn" class="ip-mute-btn" onclick="toggleSpeech()" title="Toggle question audio">
-                            <svg id="speechIcon" xmlns="http://www.w3.org/2000/svg" width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-                                <line x1="1" y1="1" x2="23" y2="23"/>
-                                <path d="M9 9v3a3 3 0 0 0 5.12 2.12M15 9.34V4a3 3 0 0 0-5.94-.6"/>
-                                <path d="M17 16.95A7 7 0 0 1 5 12v-2m14 0v2a7 7 0 0 1-.11 1.23"/>
-                                <line x1="12" y1="19" x2="12" y2="23"/>
-                                <line x1="8" y1="23" x2="16" y2="23"/>
+                        <button id="toggleSpeechBtn" class="ip-mute-btn" onclick="toggleSpeech()"
+                            title="Toggle question audio">
+                            <svg id="speechIcon" xmlns="http://www.w3.org/2000/svg" width="22" height="22"
+                                viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
+                                stroke-linecap="round" stroke-linejoin="round">
+                                <line x1="1" y1="1" x2="23" y2="23" />
+                                <path d="M9 9v3a3 3 0 0 0 5.12 2.12M15 9.34V4a3 3 0 0 0-5.94-.6" />
+                                <path d="M17 16.95A7 7 0 0 1 5 12v-2m14 0v2a7 7 0 0 1-.11 1.23" />
+                                <line x1="12" y1="19" x2="12" y2="23" />
+                                <line x1="8" y1="23" x2="16" y2="23" />
                             </svg>
                         </button>
                     </div>
@@ -1371,7 +1499,8 @@
                 <div>
                     <p class="coding-round-kicker">Round 2</p>
                     <h2>Live Coding Test</h2>
-                    <p id="codingRoundSubtitle">Read the prompt, explain your logic to the AI, and write your solution.</p>
+                    <p id="codingRoundSubtitle">Read the prompt, explain your logic to the AI, and write your solution.
+                    </p>
                 </div>
                 <div class="coding-round-actions">
                     <button id="codingCheckpointBtn" class="btn btn-primary" type="button">Get AI Feedback</button>
@@ -1425,7 +1554,8 @@
                             <button class="coding-right-tab" type="button">Result</button>
                         </div>
                         <div class="coding-round-actions">
-                            <button id="codingCheckpointBtn" class="btn btn-primary" type="button">Get AI Feedback</button>
+                            <button id="codingCheckpointBtn" class="btn btn-primary" type="button">Get AI
+                                Feedback</button>
                             <button id="codingSubmitBtn" class="btn btn-danger" type="button">Submit</button>
                         </div>
                     </div>
@@ -1451,11 +1581,13 @@
                             <div class="coding-editor-status">Autosave by language</div>
                         </div>
                         <div id="codingEditorContainer" class="coding-editor-container"></div>
-                        <textarea id="codingCodeBox" class="coding-codebox" spellcheck="false" placeholder="Write your solution here..."></textarea>
+                        <textarea id="codingCodeBox" class="coding-codebox" spellcheck="false"
+                            placeholder="Write your solution here..."></textarea>
 
                         <div class="coding-console-shell">
                             <div class="coding-console-tabs">
-                                <button class="coding-console-tab active" type="button" data-pane="tests">Test Results</button>
+                                <button class="coding-console-tab active" type="button" data-pane="tests">Test
+                                    Results</button>
                                 <button class="coding-console-tab" type="button" data-pane="console">Console</button>
                                 <button class="coding-console-tab" type="button" data-pane="ai">AI Review</button>
                             </div>
@@ -1471,7 +1603,8 @@
                                 <div class="coding-pane-card">
                                     <div class="coding-pane-body">
                                         <h4>Execution Output</h4>
-                                        <p id="codingConsoleText">Run the code to see compiler errors, runtime errors, or pass/fail updates.</p>
+                                        <p id="codingConsoleText">Run the code to see compiler errors, runtime errors,
+                                            or pass/fail updates.</p>
                                     </div>
                                 </div>
                             </div>
@@ -1479,10 +1612,14 @@
                                 <div class="coding-pane-card">
                                     <div class="coding-pane-body">
                                         <h4>AI Interviewer</h4>
-                                        <p id="codingInterviewerIntent" class="coding-intent-box">The AI will infer what the candidate is trying to build and ask for the logic behind it.</p>
-                                        <div id="codingInterviewerPrompt" class="coding-interviewer-box">Tell me the approach you are planning before you start coding.</div>
-                                        <label class="coding-label" for="codingExplanationBox">Explain your current logic to the AI</label>
-                                        <textarea id="codingExplanationBox" class="coding-textarea" placeholder="Say or type what approach you are taking, what data structure you chose, and what edge cases you are considering."></textarea>
+                                        <p id="codingInterviewerIntent" class="coding-intent-box">The AI will infer what
+                                            the candidate is trying to build and ask for the logic behind it.</p>
+                                        <div id="codingInterviewerPrompt" class="coding-interviewer-box">Tell me the
+                                            approach you are planning before you start coding.</div>
+                                        <label class="coding-label" for="codingExplanationBox">Explain your current
+                                            logic to the AI</label>
+                                        <textarea id="codingExplanationBox" class="coding-textarea"
+                                            placeholder="Say or type what approach you are taking, what data structure you chose, and what edge cases you are considering."></textarea>
                                     </div>
                                 </div>
                                 <div class="coding-feedback-card">
@@ -1490,7 +1627,8 @@
                                         <h4>AI Coding Coach</h4>
                                         <span id="codingFeedbackMeta">Waiting for your first checkpoint</span>
                                     </div>
-                                    <p id="codingCoachMessage">The AI will review only a compact summary plus your latest explanation and code snapshot to keep token usage efficient.</p>
+                                    <p id="codingCoachMessage">The AI will review only a compact summary plus your
+                                        latest explanation and code snapshot to keep token usage efficient.</p>
                                     <div class="coding-feedback-columns">
                                         <div>
                                             <h5>Strengths</h5>
@@ -1506,9 +1644,12 @@
                                         <ul id="codingNextSteps" class="coding-list"></ul>
                                     </div>
                                     <div class="coding-score-grid">
-                                        <div><span>Understanding</span><strong id="codingScoreUnderstanding">--</strong></div>
-                                        <div><span>Implementation</span><strong id="codingScoreImplementation">--</strong></div>
-                                        <div><span>Communication</span><strong id="codingScoreCommunication">--</strong></div>
+                                        <div><span>Understanding</span><strong id="codingScoreUnderstanding">--</strong>
+                                        </div>
+                                        <div><span>Implementation</span><strong
+                                                id="codingScoreImplementation">--</strong></div>
+                                        <div><span>Communication</span><strong id="codingScoreCommunication">--</strong>
+                                        </div>
                                         <div><span>Overall</span><strong id="codingScoreOverall">--</strong></div>
                                     </div>
                                 </div>
@@ -1527,40 +1668,53 @@
     <!-- Results Section (Initially Hidden) -->
     <div id="resultsSection" class="hidden"
         style="margin-top: 3rem; background: #fff; padding: 5rem 2rem; border-radius: 20px; box-shadow: 0 10px 40px rgba(0,0,0,0.08); text-align: center; border: 1px solid #eff6ff;">
-        
+
         <div id="thankYouHeader">
-            <h1 style="color: #6366f1; font-size: 3rem; margin-bottom: 0.5rem; font-weight: 800;"><i class="fas fa-party-horn"></i> Thank You!</h1>
-            <p style="font-size: 1.25rem; color: #4b5563; margin-bottom: 3rem; font-weight: 500;">Your interview has been successfully submitted.</p>
+            <h1 style="color: #6366f1; font-size: 3rem; margin-bottom: 0.5rem; font-weight: 800;"><i
+                    class="fas fa-party-horn"></i> Thank You!</h1>
+            <p style="font-size: 1.25rem; color: #4b5563; margin-bottom: 3rem; font-weight: 500;">Your interview has
+                been successfully submitted.</p>
         </div>
 
-        <div id="uploadStatusContainer" style="background: #f8fafc; padding: 2.5rem; border-radius: 16px; border: 1px dashed #cbd5e1; max-width: 500px; margin: 0 auto;">
+        <div id="uploadStatusContainer"
+            style="background: #f8fafc; padding: 2.5rem; border-radius: 16px; border: 1px dashed #cbd5e1; max-width: 500px; margin: 0 auto;">
             <div style="font-size: 3rem; margin-bottom: 1.5rem;"><i class="fas fa-spinner fa-spin"></i></div>
             <h3 style="color: #1e293b; margin-bottom: 0.75rem;">Saving Your Recording</h3>
             <p style="font-size: 1rem; color: #64748b; margin-bottom: 1.5rem;">
                 We are securing your video interview. This usually takes a few moments.
             </p>
-            <div style="background: #fee2e2; color: #dc2626; padding: 12px; border-radius: 8px; font-weight: 700; display: inline-flex; align-items: center; gap: 8px;">
+            <div
+                style="background: #fee2e2; color: #dc2626; padding: 12px; border-radius: 8px; font-weight: 700; display: inline-flex; align-items: center; gap: 8px;">
                 <i class="fas fa-exclamation-triangle"></i> PLEASE DO NOT CLOSE THIS TAB
             </div>
-            <div style="margin-top: 1.5rem; width: 100%; height: 10px; background: #e2e8f0; border-radius: 5px; overflow: hidden; position: relative;">
-                <div id="uploadProgressBar" style="width: 0%; height: 100%; background: #6366f1; transition: width 0.3s ease;"></div>
+            <div
+                style="margin-top: 1.5rem; width: 100%; height: 10px; background: #e2e8f0; border-radius: 5px; overflow: hidden; position: relative;">
+                <div id="uploadProgressBar"
+                    style="width: 0%; height: 100%; background: #6366f1; transition: width 0.3s ease;"></div>
             </div>
-            <div id="uploadPercentageText" style="margin-top: 0.5rem; font-size: 0.85rem; color: #6366f1; font-weight: 700;">Preparing upload...</div>
-            
+            <div id="uploadPercentageText"
+                style="margin-top: 0.5rem; font-size: 0.85rem; color: #6366f1; font-weight: 700;">Preparing upload...
+            </div>
+
             <!-- Skip Option -->
-            <div id="skipUploadContainer" style="margin-top: 1.5rem; font-size: 0.8rem; color: #64748b; border-top: 1px solid #f1f5f9; padding-top: 1rem;">
-                Taking too long? <a href="javascript:void(0)" onclick="skipAndFinish()" style="color: #6366f1; text-decoration: underline; font-weight: 600;">Finish & Exit anyway</a>
-                <div style="font-size: 0.75rem; margin-top: 4px; color: #94a3b8;">(Your interview responses are already safely submitted)</div>
+            <div id="skipUploadContainer"
+                style="margin-top: 1.5rem; font-size: 0.8rem; color: #64748b; border-top: 1px solid #f1f5f9; padding-top: 1rem;">
+                Taking too long? <a href="javascript:void(0)" onclick="skipAndFinish()"
+                    style="color: #6366f1; text-decoration: underline; font-weight: 600;">Finish & Exit anyway</a>
+                <div style="font-size: 0.75rem; margin-top: 4px; color: #94a3b8;">(Your interview responses are already
+                    safely submitted)</div>
             </div>
         </div>
 
         <div id="finalClosureMessage" class="hidden" style="animation: fadeInUp 0.6s ease-out;">
-            <div style="font-size: 5rem; margin-bottom: 1.5rem; color: #059669;"><i class="fas fa-check-circle"></i></div>
+            <div style="font-size: 5rem; margin-bottom: 1.5rem; color: #059669;"><i class="fas fa-check-circle"></i>
+            </div>
             <h2 style="color: #059669; font-size: 2rem; margin-bottom: 1rem; font-weight: 700;">All Set!</h2>
             <p style="font-size: 1.1rem; color: #4b5563; max-width: 500px; margin: 0 auto 2.5rem;">
-                Your recording has been safe-stored. You may now safely close this window or exit the browser. 
+                Your recording has been safe-stored. You may now safely close this window or exit the browser.
             </p>
-            <button id="finalExitBtn" onclick="tryCloseWindow()" class="btn" style="background: #1e293b; color: white; padding: 1rem 2.5rem; border-radius: 12px; font-weight: 600; cursor: pointer; transition: all 0.2s;">
+            <button id="finalExitBtn" onclick="tryCloseWindow()" class="btn"
+                style="background: #1e293b; color: white; padding: 1rem 2.5rem; border-radius: 12px; font-weight: 600; cursor: pointer; transition: all 0.2s;">
                 Exit Now
             </button>
             <script>
@@ -1575,15 +1729,15 @@
                 function tryCloseWindow() {
                     // 1. Explicitly exit full screen if active
                     if (document.fullscreenElement) {
-                        try { document.exitFullscreen(); } catch (e) {}
+                        try { document.exitFullscreen(); } catch (e) { }
                     }
-                    
+
                     // 2. Try to close the tab
                     window.close();
-                    
+
                     // 3. Common workaround for browsers that block window.close()
                     setTimeout(() => {
-                        window.open('', '_self', ''); 
+                        window.open('', '_self', '');
                         window.close();
                     }, 100);
 
@@ -1915,19 +2069,19 @@
             const bars = document.querySelector('.ip-audio-bars');
 
             if (state === 'listening') {
-                if (dot) { dot.classList.remove('mic-active','mic-waiting'); dot.classList.add('mic-active'); }
+                if (dot) { dot.classList.remove('mic-active', 'mic-waiting'); dot.classList.add('mic-active'); }
                 text.textContent = 'Listening Keywords';
                 text.style.color = '#10b981';
                 if (bars) bars.style.opacity = '1';
                 updateInsights(); // refresh bars
             } else if (state === 'processing') {
-                if (dot) { dot.classList.remove('mic-active','mic-waiting'); dot.classList.add('mic-waiting'); }
+                if (dot) { dot.classList.remove('mic-active', 'mic-waiting'); dot.classList.add('mic-waiting'); }
                 text.textContent = 'Saving Your Answer...';
                 text.style.color = '#f59e0b';
                 if (bars) bars.style.opacity = '0.4';
             } else {
                 // 'waiting' — AI is speaking
-                if (dot) { dot.classList.remove('mic-active','mic-waiting'); dot.classList.add('mic-waiting'); }
+                if (dot) { dot.classList.remove('mic-active', 'mic-waiting'); dot.classList.add('mic-waiting'); }
                 text.textContent = 'AI is Reading the Question...';
                 text.style.color = '#6b7280';
                 if (bars) bars.style.opacity = '0.5';
@@ -1947,22 +2101,22 @@
 
         function updateInsights() {
             // Derive pseudo-metrics from behavioral tracking state
-            const wc  = (_qTrack && _qTrack.wordCount)   || 0;
-            const fc  = (_qTrack && _qTrack.fillerCount)  || 0;
-            const pc  = (_qTrack && _qTrack.pauseCount)   || 0;
-            const fa  = (_qTrack && _qTrack.faceAlerts)   || 0;
-            const ts  = (_qTrack && _qTrack.tabSwitches)  || 0;
+            const wc = (_qTrack && _qTrack.wordCount) || 0;
+            const fc = (_qTrack && _qTrack.fillerCount) || 0;
+            const pc = (_qTrack && _qTrack.pauseCount) || 0;
+            const fa = (_qTrack && _qTrack.faceAlerts) || 0;
+            const ts = (_qTrack && _qTrack.tabSwitches) || 0;
 
             // Clarity: penalise filler words and pauses
             const clarityRaw = Math.max(0, Math.min(100, 60 + wc * 0.5 - fc * 5 - pc * 3));
             // Technical depth: driven by word count growth
-            const techRaw    = Math.max(0, Math.min(100, 30 + wc * 0.8));
+            const techRaw = Math.max(0, Math.min(100, 30 + wc * 0.8));
             // Confidence: penalise face alerts & tab switches
-            const confRaw    = Math.max(0, Math.min(100, 80 - fa * 8 - ts * 10 + (wc > 20 ? 10 : 0)));
+            const confRaw = Math.max(0, Math.min(100, 80 - fa * 8 - ts * 10 + (wc > 20 ? 10 : 0)));
 
             const clarity = Math.round(clarityRaw);
-            const tech    = Math.round(techRaw);
-            const conf    = Math.round(confRaw);
+            const tech = Math.round(techRaw);
+            const conf = Math.round(confRaw);
 
             const cEl = document.getElementById('insightClarity');
             const tEl = document.getElementById('insightTech');
@@ -1971,9 +2125,9 @@
             const tBar = document.getElementById('insightTechBar');
             const kBar = document.getElementById('insightConfBar');
 
-            if (cEl)  cEl.textContent  = clarity + '%';
-            if (tEl)  tEl.textContent  = tech + '%';
-            if (kEl)  kEl.textContent  = conf + '%';
+            if (cEl) cEl.textContent = clarity + '%';
+            if (tEl) tEl.textContent = tech + '%';
+            if (kEl) kEl.textContent = conf + '%';
             if (cBar) cBar.style.width = clarity + '%';
             if (tBar) tBar.style.width = tech + '%';
             if (kBar) kBar.style.width = conf + '%';
@@ -2228,7 +2382,7 @@
                     globalTimeRemaining = 0;
                     clearInterval(globalCountdownInterval);
                     globalCountdownInterval = null;
-                    try { updateCountdownDisplay(); } catch(e) { console.error('Display error:', e); }
+                    try { updateCountdownDisplay(); } catch (e) { console.error('Display error:', e); }
                     showStatus('<i class="fas fa-clock"></i> Interview time is up. Submitting your responses...', 'info');
                     endInterview();
                     return;
@@ -2241,7 +2395,7 @@
                     const elapsed = globalTotalTime - globalTimeRemaining;
                     const pct = Math.round((elapsed / globalTotalTime) * 100);
                     updateProgress(pct);
-                } catch(e) {
+                } catch (e) {
                     console.error('Timer display error:', e);
                 }
 
@@ -2290,7 +2444,7 @@
             if (ring && globalTotalTime > 0) {
                 const ratio = globalTimeRemaining / globalTotalTime;
                 const dashOffset = circumference * (1 - ratio);
-                ring.style.strokeDasharray  = circumference;
+                ring.style.strokeDasharray = circumference;
                 ring.style.strokeDashoffset = dashOffset;
             }
         }
@@ -2302,6 +2456,19 @@
         const jdForm = document.getElementById('jdForm');
         const statusDiv = document.getElementById('status');
         const uploadStatus = document.getElementById('uploadStatus');
+
+        function normalizeInterviewStartResponse(data) {
+            const questions = Array.isArray(data?.questions) ? data.questions : [];
+            const firstQuestion = data?.first_question || questions[0] || null;
+            const totalQuestions = Number(data?.total_questions) || questions.length || 0;
+
+            return {
+                ...data,
+                questions,
+                first_question: firstQuestion,
+                total_questions: totalQuestions
+            };
+        }
 
         function renderExpiredSessionState(targetStatusDiv, message) {
             if (!targetStatusDiv) return;
@@ -2357,7 +2524,7 @@
                 const m = Math.floor((diff % 3600000) / 60000);
                 const s = Math.floor((diff % 60000) / 1000);
                 if (countdownEl) {
-                    countdownEl.textContent = `${String(h).padStart(2,'0')}:${String(m).padStart(2,'0')}:${String(s).padStart(2,'0')}`;
+                    countdownEl.textContent = `${String(h).padStart(2, '0')}:${String(m).padStart(2, '0')}:${String(s).padStart(2, '0')}`;
                 }
             }, 1000);
         }
@@ -2450,7 +2617,8 @@
                     console.log('Session API response status:', response.status);
 
                     if (response.ok) {
-                        const data = await response.json();
+                        const rawData = await response.json();
+                        const data = normalizeInterviewStartResponse(rawData);
                         console.log('Session response data:', JSON.stringify(data));
 
                         // Check if the link is expired
@@ -2473,14 +2641,14 @@
                             let startStr = data.scheduled_start;
                             if (!startStr.endsWith('Z') && !startStr.includes('+')) startStr += 'Z';
                             const startTime = new Date(startStr);
-                            
+
                             let endTimeStr = '';
                             if (data.scheduled_end) {
                                 let endStr = data.scheduled_end;
                                 if (!endStr.endsWith('Z') && !endStr.includes('+')) endStr += 'Z';
                                 endTimeStr = new Date(endStr).toLocaleTimeString('en-IN', { hour: '2-digit', minute: '2-digit', hour12: true });
                             }
-                            
+
                             if (statusDiv) {
                                 statusDiv.innerHTML = `
                                     <div style="text-align:center; padding:2.5rem;">
@@ -2510,7 +2678,7 @@
                                     const h = Math.floor(diff / 3600000);
                                     const m = Math.floor((diff % 3600000) / 60000);
                                     const s = Math.floor((diff % 60000) / 1000);
-                                    countdownEl.textContent = `${String(h).padStart(2,'0')}:${String(m).padStart(2,'0')}:${String(s).padStart(2,'0')}`;
+                                    countdownEl.textContent = `${String(h).padStart(2, '0')}:${String(m).padStart(2, '0')}:${String(s).padStart(2, '0')}`;
                                 }, 1000);
                             }
                             return;
@@ -2525,6 +2693,9 @@
                                 header.textContent = `Welcome, ${data.candidate_name}`;
                             }
 
+                        if (data.already_started || data.session_status === 'started') {
+                            console.log('Interview already taken. Status:', data.session_status);
+                            
                             if (data.session_status === 'completed') {
                                 document.getElementById('interviewSection').classList.add('hidden');
                                 document.getElementById('resultsSection').classList.remove('hidden');
@@ -2534,13 +2705,17 @@
                                 return;
                             }
 
+                            // For 'started' status — show a resume message
                             if (statusDiv) {
                                 statusDiv.innerHTML = `
                                     <div style="text-align:center; padding:2rem;">
                                         <div style="font-size:2.5rem; margin-bottom:1rem;">⏳</div>
-                                        <div style="font-size:1.05rem; font-weight:700; color:#4f46e5;">This interview session is already active.</div>
+                                        <div style="font-size:1.05rem; font-weight:700; color:#4f46e5;">
+                                            This interview session was already started.
+                                        </div>
                                         <div style="font-size:0.85rem; color:#6b7280; margin-top:0.5rem; max-width:440px; margin-left:auto; margin-right:auto;">
-                                            Please continue using the original interview tab. If this happened before your scheduled time, the backend likely needs a restart so the latest scheduling rules are loaded.
+                                            Please use the original interview tab. If you closed it by mistake, 
+                                            <a href="javascript:location.reload()" style="color:#4f46e5;">click here to retry</a>.
                                         </div>
                                     </div>`;
                                 statusDiv.className = 'status info';
@@ -2645,11 +2820,16 @@
                         throw new Error(error.detail || `Server error: ${response.status} ${response.statusText}`);
                     }
 
-                    const data = await response.json();
+                    const rawData = await response.json();
+                    const data = normalizeInterviewStartResponse(rawData);
                     console.log('Interview started:', data);
 
                     // Update UI with the interview data
                     currentInterviewId = data.interview_id;
+                    if (!data.first_question) {
+                        throw new Error('No questions available in the response');
+                    }
+
                     currentQuestionId = data.first_question.id;
                     totalQuestions = data.total_questions;
 
@@ -2740,7 +2920,8 @@
                     throw new Error(error.detail || 'Failed to start interview');
                 }
 
-                const data = await response.json();
+                const rawData = await response.json();
+                const data = normalizeInterviewStartResponse(rawData);
                 console.log('Interview started:', data);
 
                 // Store IDs
@@ -2762,9 +2943,11 @@
                 document.getElementById('nextButton').disabled = true;
 
                 // Load first question
-                if (data.first_question) {
-                    await loadQuestion(currentInterviewId, 1);
+                if (!data.first_question) {
+                    throw new Error('No questions available in the response');
                 }
+
+                await loadQuestion(currentInterviewId, Number(data.first_question.id) || 1);
 
             } catch (error) {
                 console.error('Start Interview Error:', error);
@@ -3121,7 +3304,7 @@
                     answer_text: answerText,
                     timestamp: Date.now()
                 }));
-            } catch(e) { /* localStorage may not be available */ }
+            } catch (e) { /* localStorage may not be available */ }
 
             // Retry logic (up to 3 attempts)
             let attempts = 0;
@@ -3139,7 +3322,7 @@
                     // Success — remove local backup
                     try {
                         localStorage.removeItem(`answer_backup_${currentInterviewId}_${currentQuestionId}`);
-                    } catch(e) {}
+                    } catch (e) { }
                     return; // Success
                 } catch (e) {
                     attempts++;
@@ -3718,10 +3901,10 @@ Output: ${formatCodingValue(testCase.output)}${resultBlock}</pre>
                     const currentAnswer = document.getElementById('transcriptionBox').value.trim();
                     if (currentAnswer) {
                         try {
-                           await saveCurrentAnswer();
-                           await saveBehavioralData(currentInterviewId, currentQuestionId, currentAnswer);
+                            await saveCurrentAnswer();
+                            await saveBehavioralData(currentInterviewId, currentQuestionId, currentAnswer);
                         } catch (e) {
-                           console.error('Error saving final data:', e);
+                            console.error('Error saving final data:', e);
                         }
                     }
                 }
@@ -3846,10 +4029,14 @@ Output: ${formatCodingValue(testCase.output)}${resultBlock}</pre>
     <div class="modal-content">
         <h2><i class="fas fa-clipboard-list"></i> Interview Guidelines</h2>
         <ul>
-            <li><strong><i class="fas fa-volume-up"></i> Speak Loudly</strong> Ensure your microphone is clear and voice is audible.</li>
-            <li><strong><i class="fas fa-volume-mute"></i> Maintain Silence</strong> Find a quiet room to minimize background noise.</li>
-            <li><strong><i class="fas fa-ban"></i> No Cheating</strong> Eye contact and face visibility are monitored strictly.</li>
-            <li><strong><i class="fas fa-image"></i> Plain Background</strong> Use a simple background to help AI face detection.</li>
+            <li><strong><i class="fas fa-volume-up"></i> Speak Loudly</strong> Ensure your microphone is clear and voice
+                is audible.</li>
+            <li><strong><i class="fas fa-volume-mute"></i> Maintain Silence</strong> Find a quiet room to minimize
+                background noise.</li>
+            <li><strong><i class="fas fa-ban"></i> No Cheating</strong> Eye contact and face visibility are monitored
+                strictly.</li>
+            <li><strong><i class="fas fa-image"></i> Plain Background</strong> Use a simple background to help AI face
+                detection.</li>
         </ul>
         <div style="margin-top: 25px; text-align: center;">
             <button onclick="acceptDisclaimer()" class="btn btn-primary"
@@ -3873,9 +4060,11 @@ Output: ${formatCodingValue(testCase.output)}${resultBlock}</pre>
     </button>
 </div>
 
-<div id="noiseAlertBanner" class="hidden" style="position:fixed;top:18px;right:18px;z-index:10001;background:#fff7ed;border:1px solid #fdba74;color:#9a3412;padding:12px 14px;border-radius:12px;box-shadow:0 10px 28px rgba(15,23,42,0.14);min-width:260px;">
+<div id="noiseAlertBanner" class="hidden"
+    style="position:fixed;top:18px;right:18px;z-index:10001;background:#fff7ed;border:1px solid #fdba74;color:#9a3412;padding:12px 14px;border-radius:12px;box-shadow:0 10px 28px rgba(15,23,42,0.14);min-width:260px;">
     <div style="font-weight:800;margin-bottom:4px;">Background Noise Alert</div>
-    <div id="noiseAlertText" style="font-size:0.9rem;line-height:1.45;">Noise detected near the microphone. Alerts: 0 / 20</div>
+    <div id="noiseAlertText" style="font-size:0.9rem;line-height:1.45;">Noise detected near the microphone. Alerts: 0 /
+        20</div>
 </div>
 
 <script>
@@ -4331,7 +4520,7 @@ Output: ${formatCodingValue(testCase.output)}${resultBlock}</pre>
         }
         backgroundNoiseFrameCount = 0;
         if (noiseAudioContext) {
-            try { noiseAudioContext.close(); } catch (e) {}
+            try { noiseAudioContext.close(); } catch (e) { }
             noiseAudioContext = null;
         }
         noiseAnalyser = null;
@@ -4393,15 +4582,15 @@ Output: ${formatCodingValue(testCase.output)}${resultBlock}</pre>
         draw();
     }
 
-        function stopAudioVisualizer() {
-            if (visualizerFrame) {
-                cancelAnimationFrame(visualizerFrame);
-                visualizerFrame = null;
-            }
-            backgroundNoiseFrameCount = 0;
-            const canvas = document.getElementById("audioVisualizer");
-            if (canvas) {
-                const ctx = canvas.getContext("2d");
+    function stopAudioVisualizer() {
+        if (visualizerFrame) {
+            cancelAnimationFrame(visualizerFrame);
+            visualizerFrame = null;
+        }
+        backgroundNoiseFrameCount = 0;
+        const canvas = document.getElementById("audioVisualizer");
+        if (canvas) {
+            const ctx = canvas.getContext("2d");
             ctx.fillStyle = "#e5e7eb";
             ctx.fillRect(0, 0, canvas.width, canvas.height); // Reset to blank/bg
         }
@@ -4434,7 +4623,7 @@ Output: ${formatCodingValue(testCase.output)}${resultBlock}</pre>
             console.error(error);
             showStatus("Error generating report: " + error.message, "error");
         }
-        }
+    }
     }
 
     // ── Anti-Cheating: Tab Switch Detection ──
@@ -4442,10 +4631,10 @@ Output: ${formatCodingValue(testCase.output)}${resultBlock}</pre>
         if (document.hidden && interviewActive) {
             tabViolationCount++;
             console.warn(`Tab switched ${tabViolationCount} times!`);
-            
+
             // Immediately alert the user (this pauses JS execution until dismissed)
             alert(`⚠️ WARNING: Tab switching is strictly prohibited during the interview. \n\nViolation #${tabViolationCount} has been recorded. Repeated violations may lead to disqualification.`);
-            
+
             // Log violation to backend
             if (currentInterviewId) {
                 fetch(`${API_BASE_URL}/session/${currentInterviewId}/violation`, {
