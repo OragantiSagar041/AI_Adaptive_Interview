@@ -3190,11 +3190,11 @@ async def get_all_sessions(admin_id: str, start_date: Optional[str] = None, end_
         # Default: only active
         query_filter = {"created_by": admin_id, "$or": [{"is_deactivated": False}, {"is_deactivated": {"$exists": False}}]}
     
-    if start_date or end_date:
+    if (start_date and start_date.strip()) or (end_date and end_date.strip()):
         date_filter = {}
-        if start_date:
+        if start_date and start_date.strip():
             date_filter["$gte"] = start_date
-        if end_date:
+        if end_date and end_date.strip():
             date_filter["$lte"] = end_date + "T23:59:59"
         query_filter["created_at"] = date_filter
     
