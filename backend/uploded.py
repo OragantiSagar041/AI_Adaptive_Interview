@@ -42,10 +42,12 @@ UPLOAD_FOLDER = "uploads"
 os.makedirs(UPLOAD_FOLDER, exist_ok=True)
 
 from fastapi.staticfiles import StaticFiles
+from fastapi.middleware.gzip import GZipMiddleware
 
 FRONTEND_URL = "https://ai-adaptive-interview.vercel.app"
 
 app = FastAPI()
+app.add_middleware(GZipMiddleware, minimum_size=1000)
 
 # Health check for keeping Render awake
 @app.get("/")
