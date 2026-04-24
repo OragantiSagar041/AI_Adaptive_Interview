@@ -2182,18 +2182,21 @@
                                         <label
                                             style="font-size: 0.7rem; color: var(--text-muted); margin-bottom: 2px;">From</label>
                                         <input type="date" id="filterStartDate" class="dash-input"
+                                            onchange="loadDashboardSessions()"
                                             style="padding: 0.4rem; font-size: 0.85rem; width: auto; min-width: 130px;">
                                     </div>
                                     <div style="display: flex; flex-direction: column;">
                                         <label
                                             style="font-size: 0.7rem; color: var(--text-muted); margin-bottom: 2px;">To</label>
                                         <input type="date" id="filterEndDate" class="dash-input"
+                                            onchange="loadDashboardSessions()"
                                             style="padding: 0.4rem; font-size: 0.85rem; width: auto; min-width: 130px;">
                                     </div>
                                     <div style="display: flex; flex-direction: column;">
                                         <label
                                             style="font-size: 0.7rem; color: var(--text-muted); margin-bottom: 2px;">Status</label>
                                         <select id="filterStatus" class="dash-input"
+                                            onchange="loadDashboardSessions()"
                                             style="padding: 0.4rem; font-size: 0.85rem; width: auto; min-width: 130px;">
                                             <option value="">All Statuses</option>
                                             <option value="completed">Completed</option>
@@ -2207,6 +2210,7 @@
                                             style="font-size: 0.7rem; color: var(--text-muted); margin-bottom: 2px;">Sort
                                             By</label>
                                         <select id="sortBy" class="dash-input"
+                                            onchange="loadDashboardSessions()"
                                             style="padding: 0.4rem; font-size: 0.85rem; width: auto; min-width: 100px;">
                                             <option value="score">Top Score</option>
                                             <option value="date">Newest First</option>
@@ -3426,7 +3430,8 @@
             }
         }
 
-        function renderDashboardTable(sessions, filterStatus) {
+        function renderDashboardTable(sessions, filterStatus, resetPagination = true) {
+            if (resetPagination) currentPage = 1;
             const tbody = document.getElementById('dashboardTableBody');
             const qualifiedBody = document.getElementById('qualifiedTableBody');
             const unqualifiedBody = document.getElementById('unqualifiedTableBody');
@@ -3474,7 +3479,11 @@
 
                 let currentStatus = s.status || 'pending';
                 if (currentStatus === 'pending' && s.expires_at) {
-                    if (new Date() > new Date(s.expires_at)) {
+                    let expiryStr = s.expires_at;
+                    if (expiryStr && !expiryStr.endsWith('Z') && !expiryStr.includes('+')) {
+                        expiryStr += 'Z';
+                    }
+                    if (new Date() > new Date(expiryStr)) {
                         currentStatus = 'expired';
                     }
                 }

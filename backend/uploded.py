@@ -3214,6 +3214,7 @@ async def get_all_sessions(admin_id: str, start_date: Optional[str] = None, end_
         sessions.append({
             "link_id": row.get("link_id"),
             "candidate_name": row.get("candidate_name"),
+            "candidate_email": row.get("candidate_email"),
             "status": row.get("status"),
             "created_at": row.get("created_at"),
             "expires_at": row.get("expires_at"),
