@@ -48,10 +48,10 @@
             --shadow-md: 0 4px 20px rgba(0, 0, 0, 0.4);
             --shadow-lg: 0 8px 40px rgba(0, 0, 0, 0.5);
             --shadow-glow: 0 0 30px rgba(99, 102, 241, 0.15);
-            --radius-sm: 8px;
-            --radius-md: 12px;
-            --radius-lg: 16px;
-            --radius-xl: 24px;
+            --radius-sm: 5px;
+            --radius-md: 5px;
+            --radius-lg: 5px;
+            --radius-xl: 5px;
         }
 
         [data-theme="light"] {
@@ -70,6 +70,14 @@
             --shadow-glow: 0 0 30px rgba(99, 102, 241, 0.2);
             --primary-glow: rgba(99, 102, 241, 0.15);
         }
+
+        /* ── Accent colour themes ── */
+        [data-accent="teal"]   { --primary: #0d9488; --primary-dark: #0f766e; --primary-light: #2dd4bf; --accent-gradient: linear-gradient(180deg,#134e4a 0%,#0d9488 45%,#5eead4 100%); }
+        [data-accent="indigo"] { --primary: #6366f1; --primary-dark: #4f46e5; --primary-light: #818cf8; --accent-gradient: linear-gradient(180deg,#1e1b4b 0%,#6366f1 45%,#a5b4fc 100%); }
+        [data-accent="purple"] { --primary: #9333ea; --primary-dark: #7e22ce; --primary-light: #c084fc; --accent-gradient: linear-gradient(180deg,#2e1065 0%,#9333ea 45%,#d8b4fe 100%); }
+        [data-accent="red"]    { --primary: #e11d48; --primary-dark: #be123c; --primary-light: #fb7185; --accent-gradient: linear-gradient(180deg,#450a0a 0%,#e11d48 45%,#fda4af 100%); }
+        [data-accent="green"]  { --primary: #16a34a; --primary-dark: #15803d; --primary-light: #4ade80; --accent-gradient: linear-gradient(180deg,#052e16 0%,#16a34a 45%,#86efac 100%); }
+        [data-accent="blue"]   { --primary: #2563eb; --primary-dark: #1d4ed8; --primary-light: #60a5fa; --accent-gradient: linear-gradient(180deg,#0d1b36 0%,#2563eb 45%,#93c5fd 100%); }
 
         [data-theme="light"] .login-kicker {
             background: rgba(255, 255, 255, 0.88);
@@ -393,7 +401,7 @@
             justify-content: space-between;
             gap: 1rem;
             padding: 0.8rem 1rem;
-            border-radius: 999px;
+            border-radius: 5px;
             background: rgba(252, 252, 252, 0.78);
             border: 1px solid rgba(17, 24, 39, 0.08);
             box-shadow: 0 10px 40px 5px rgba(194, 194, 194, 0.18);
@@ -444,7 +452,7 @@
             background: #111827;
             color: #fff;
             border: none;
-            border-radius: 999px;
+            border-radius: 5px;
             cursor: pointer;
             font-size: 0.875rem;
             font-weight: 500;
@@ -566,7 +574,7 @@
 
         .hero-primary-btn {
             padding: 1rem 1.65rem;
-            border-radius: 999px;
+            border-radius: 5px;
             color: #fff;
             background:
                 linear-gradient(180deg, rgba(255, 255, 255, 0.16), rgba(255, 255, 255, 0) 42%),
@@ -587,7 +595,7 @@
 
         .hero-secondary-btn {
             padding: 1rem 1.35rem;
-            border-radius: 999px;
+            border-radius: 5px;
             background: transparent;
             color: #111827;
             border: 1px solid rgba(17, 24, 39, 0.1);
@@ -609,7 +617,7 @@
             align-items: center;
             gap: 0.9rem;
             padding: 0.75rem 1rem;
-            border-radius: 999px;
+            border-radius: 5px;
             background: rgba(255, 255, 255, 0.9);
             border: 1px solid rgba(17, 24, 39, 0.06);
             box-shadow: 0 12px 28px rgba(194, 194, 194, 0.18);
@@ -631,7 +639,7 @@
 
         .login-card {
             width: min(100%, 420px);
-            border-radius: 28px;
+            border-radius: 5px;
             padding: 2rem;
             background: rgba(255, 255, 255, 0.88);
             border: 1px solid rgba(17, 24, 39, 0.08);
@@ -650,7 +658,7 @@
             height: 58px;
             background: linear-gradient(180deg, #1f2937, #111827);
             border: 1px solid rgba(17, 24, 39, 0.06);
-            border-radius: 16px;
+            border-radius: 5px;
             display: inline-flex;
             align-items: center;
             justify-content: center;
@@ -710,7 +718,7 @@
             padding: 0.9rem 1rem 0.9rem 2.8rem;
             background: rgba(252, 252, 252, 0.94);
             border: 1px solid rgba(17, 24, 39, 0.1);
-            border-radius: 0.875rem;
+            border-radius: 5px;
             color: #111827;
             font-size: 0.95rem;
             font-family: inherit;
@@ -762,7 +770,7 @@
             font-size: 1rem;
             font-weight: 500;
             border: none;
-            border-radius: 999px;
+            border-radius: 5px;
             cursor: pointer;
             transition: all 0.3s ease;
             font-family: inherit;
@@ -1100,16 +1108,19 @@
         }
 
         .btn-logout {
-            padding: 0.5rem 1.2rem;
-            background: rgba(244, 63, 94, 0.1);
-            color: var(--danger);
-            border: 1px solid rgba(244, 63, 94, 0.25);
-            border-radius: var(--radius-sm);
-            font-size: 0.85rem;
-            font-weight: 600;
+            padding: 0.6rem 1.4rem;
+            background: rgba(17, 24, 39, 0.05);
+            color: #111827;
+            border: 1px solid rgba(17, 24, 39, 0.1);
+            border-radius: 12px;
+            font-size: 0.9rem;
+            font-weight: 700;
             cursor: pointer;
             font-family: inherit;
-            transition: all 0.2s;
+            transition: all 0.25s;
+            display: flex;
+            align-items: center;
+            gap: 8px;
         }
 
         .btn-logout:hover {
@@ -1120,12 +1131,12 @@
         /* Section Card */
         .section-card {
             background: var(--bg-card);
-            border: 1px solid var(--border);
-            border-radius: var(--radius-lg);
+            border: none;
+            border-radius: 24px;
             padding: 2rem;
-            margin-bottom: 1.5rem;
-            box-shadow: var(--shadow-sm);
-            transition: box-shadow 0.3s;
+            margin-bottom: 2rem;
+            box-shadow: 0 10px 40px rgba(0, 0, 0, 0.08);
+            transition: transform 0.3s cubic-bezier(0.34, 1.56, 0.64, 1), box-shadow 0.3s;
         }
 
         .section-card:hover {
@@ -1530,8 +1541,7 @@
         .sidebar-wrapper {
             width: 260px;
             height: 100vh;
-            background:
-                linear-gradient(180deg, rgba(20, 37, 91, 0.96) 0%, rgba(30, 58, 138, 0.94) 46%, rgba(37, 99, 235, 0.9) 100%);
+            background: var(--accent-gradient, linear-gradient(180deg, rgba(20, 37, 91, 0.96) 0%, rgba(30, 58, 138, 0.94) 46%, rgba(37, 99, 235, 0.9) 100%));
             color: #ffffff;
             display: flex;
             flex-direction: column;
@@ -1600,12 +1610,15 @@
         }
 
         .nav-btn.active {
-            background: #2563eb;
-            /* Active blue */
-            color: #ffffff;
-            font-weight: 600;
-            border-left: 3px solid #60a5fa;
-            border-radius: 0 8px 8px 0;
+            background: #ffffff;
+            color: var(--primary);
+            font-weight: 700;
+            border-radius: 5px;
+            margin-right: -1rem; /* Extend into the right space slightly */
+            padding-right: 2rem;
+            box-shadow: 0 8px 20px rgba(0, 0, 0, 0.15);
+            position: relative;
+            z-index: 2;
         }
 
         /* Main Content Side */
@@ -1617,7 +1630,7 @@
             height: 100vh;
             position: relative;
             overflow: hidden;
-            background: linear-gradient(180deg, rgba(255, 255, 255, 0.32), rgba(255, 255, 255, 0.14));
+            background: var(--accent-gradient, #f8fafc);
             backdrop-filter: blur(18px);
         }
 
@@ -1653,44 +1666,38 @@
 
         /* Top Header */
         .top-bar {
-            height: 60px;
-            background: linear-gradient(135deg, rgba(37, 99, 235, 0.92), rgba(79, 70, 229, 0.9));
+            height: 72px;
+            background: #ffffff;
             display: flex;
             justify-content: space-between;
             align-items: center;
             padding: 0 2rem;
-            color: white;
-            box-shadow: 0 18px 40px rgba(37, 99, 235, 0.12);
+            color: #111827;
             flex-shrink: 0;
-            border-radius: 0;
+            margin: 1.25rem 1.5rem 0.5rem;
+            border-radius: 5px;
             position: relative;
             overflow: hidden;
-            z-index: 1;
-            border-bottom: 1px solid rgba(255, 255, 255, 0.12);
+            z-index: 10;
+            border: 1px solid rgba(0, 0, 0, 0.06);
+            box-shadow: 0 8px 30px rgba(0, 0, 0, 0.04);
         }
 
+        /* .top-bar::after sheen removed for white background */
         .top-bar::after {
-            content: '';
-            position: absolute;
-            inset: 0;
-            background:
-                linear-gradient(120deg, transparent 0%, rgba(255, 255, 255, 0.12) 25%, transparent 48%),
-                radial-gradient(circle at 20% 50%, rgba(255, 255, 255, 0.09), transparent 22%);
-            transform: translateX(-30%);
-            animation: dashboardSheen 10s linear infinite;
-            pointer-events: none;
+            display: none;
         }
 
         .brand-text h2 {
             margin: 0;
             font-size: 1.25rem;
             font-weight: 700;
-            color: white;
+            color: #111827;
         }
 
         .brand-text span {
             font-size: 0.85rem;
-            color: #bfdbfe;
+            color: var(--text-muted);
         }
 
         .main-content {
@@ -1742,7 +1749,7 @@
             background: #ffffff;
             border: none;
             box-shadow: 0 4px 15px rgba(0, 0, 0, 0.03);
-            border-radius: 12px;
+            border-radius: 5px;
         }
 
         /* Table Styles */
@@ -1778,7 +1785,7 @@
 
         .status-badge {
             padding: 0.3rem 0.6rem;
-            border-radius: 20px;
+            border-radius: 5px;
             font-size: 0.75rem;
             font-weight: 600;
             text-transform: uppercase;
@@ -1890,6 +1897,45 @@
                 font-size: 80px;
             }
         }
+
+        /* ── Color Switcher in Top-Bar ── */
+        .color-switcher {
+            display: flex;
+            align-items: center;
+            gap: 6px;
+            background: rgba(255,255,255,0.15);
+            border-radius: 30px;
+            padding: 4px 10px;
+            border: 1px solid rgba(255,255,255,0.2);
+        }
+        .color-dot {
+            width: 18px;
+            height: 18px;
+            border-radius: 50%;
+            cursor: pointer;
+            border: 2px solid rgba(255,255,255,0.4);
+            transition: transform 0.18s, box-shadow 0.18s, border-color 0.18s;
+            flex-shrink: 0;
+        }
+        .color-dot:hover {
+            transform: scale(1.25);
+            border-color: #fff;
+            box-shadow: 0 0 0 3px rgba(255,255,255,0.3);
+        }
+        .color-dot.active-dot {
+            border-color: #fff;
+            box-shadow: 0 0 0 3px rgba(255,255,255,0.5);
+            transform: scale(1.15);
+        }
+        .topbar-actions {
+            display: flex;
+            align-items: center;
+            gap: 16px;
+        }
+        .welcome-copy {
+            font-size: 0.9rem;
+            color: #4b5563;
+        }
     </style>
 </head>
 
@@ -1905,12 +1951,7 @@
         })();
     </script>
 
-    <!-- Dark/Light Mode Toggle -->
-    <button class="theme-toggle" id="themeToggle" onclick="toggleTheme()" title="Toggle Theme">
-        <span id="themeIcon" style="display:inline-block; transition: transform 0.3s ease;"><i
-                class="fas fa-sun"></i></span>
-    </button>
-
+    <!-- ==================== LOGIN SECTION ==================== -->
     <!-- ==================== LOGIN SECTION ==================== -->
     <div id="loginSection">
         <video class="login-video-bg" autoplay loop muted playsinline>
@@ -1941,14 +1982,9 @@
                             performance from one calm admin workspace built for fast hiring teams.</p>
 
                         <div class="hero-cta-stack login-rise" data-delay="360" data-duration="800">
-                            <div class="hero-email-bar">
-                                <input class="hero-email-input" type="email"
-                                    placeholder="Enter your work email to create an admin workspace">
-                                <button class="hero-primary-btn" type="button" onclick="focusLoginForm()">Create Free
-                                    Account</button>
-                                <button class="hero-secondary-btn" type="button" onclick="focusLoginForm()">Admin Sign
-                                    In</button>
-                            </div>
+                            <button class="hero-primary-btn" type="button" onclick="focusLoginForm()" style="width: auto; padding: 1rem 3rem;">
+                                Admin Sign In
+                            </button>
 
                             <div class="hero-meta">
                                 <div class="reviews-badge">
@@ -2008,10 +2044,8 @@
                         </div>
 
                         <div class="forgot-password"
-                            style="display: flex; justify-content: space-between; align-items: center; width: 100%;">
-                            <a onclick="showToast('Free account registration is currently invite-only.', 'info')"
-                                style="cursor: pointer; color: var(--primary); font-weight: 600;">Create a free
-                                account</a>
+                            style="display: flex; justify-content: flex-end; align-items: center; width: 100%;">
+
                             <a onclick="openResetModal()">Forgot Password?</a>
                         </div>
 
@@ -2050,15 +2084,7 @@
                         class="fas fa-plus-circle"></i> Create Interview</button>
                 <button class="nav-btn" onclick="switchView('settings')" id="nav-btn-settings"><i
                         class="fas fa-cog"></i> Profile Settings</button>
-                <div style="margin: 10px 0; border-top: 1px solid rgba(255,255,255,0.1);"></div>
-                <button class="nav-btn" onclick="switchView('scheduling')" id="nav-btn-scheduling"><i
-                        class="fas fa-calendar-alt"></i> Scheduling</button>
-                <button class="nav-btn" onclick="switchView('invitations')" id="nav-btn-invitations"><i
-                        class="fas fa-envelope"></i> Invitations</button>
-                <button class="nav-btn" onclick="switchView('evaluation')" id="nav-btn-evaluation"><i
-                        class="fas fa-clipboard-check"></i> Evaluation</button>
-                <button class="nav-btn" onclick="switchView('reports')" id="nav-btn-reports"><i
-                        class="fas fa-file-invoice"></i> Reports</button>
+
                 <div style="margin: 10px 0; border-top: 1px solid rgba(255,255,255,0.1);"></div>
                 <button class="nav-btn" onclick="switchView('results')" id="nav-btn-results" style="display: none;"><i
                         class="fas fa-broadcast-tower"></i> Live Results</button>
@@ -2073,13 +2099,18 @@
                 <div class="brand-text">
                     <h2>Admin Console</h2>
                 </div>
-                <div style="display:flex; align-items:center; gap:20px;">
-                    <div style="display:flex; align-items:center; gap: 10px;">
-                        <span style="font-size:0.9rem;">Welcome back, <strong id="adminName">Admin</strong></span>
+                <div class="topbar-actions">
+                    <!-- Color Switcher -->
+                    <div class="color-switcher" title="Change accent color">
+                        <div class="color-dot" id="dot-teal"   style="background:#0d9488" onclick="setAccent('teal')"   title="Teal"></div>
+                        <div class="color-dot" id="dot-indigo" style="background:#6366f1" onclick="setAccent('indigo')" title="Indigo"></div>
+                        <div class="color-dot" id="dot-purple" style="background:#9333ea" onclick="setAccent('purple')" title="Purple"></div>
+                        <div class="color-dot" id="dot-red"    style="background:#e11d48" onclick="setAccent('red')"    title="Red"></div>
+                        <div class="color-dot" id="dot-green"  style="background:#16a34a" onclick="setAccent('green')"  title="Green"></div>
+                        <div class="color-dot" id="dot-blue"   style="background:#2563eb" onclick="setAccent('blue')"   title="Blue"></div>
                     </div>
-                    <button class="btn-logout" onclick="logout()"
-                        style="background:rgba(255,255,255,0.2); border:none; border-radius:6px; color:white; padding:8px 16px; font-weight:600; cursor:pointer;"><i
-                            class="fas fa-power-off"></i> Logout</button>
+                    <span class="welcome-copy">Welcome back, <strong id="adminName">Admin</strong></span>
+                    <button class="btn-logout" onclick="logout()"><i class="fas fa-power-off"></i> Logout</button>
                 </div>
             </div>
 
@@ -3257,6 +3288,14 @@
 
             const startDate = document.getElementById('filterStartDate').value;
             const endDate = document.getElementById('filterEndDate').value;
+
+            if (startDate && endDate && new Date(endDate) < new Date(startDate)) {
+                showToast("Enter valid date range (End date cannot be before Start date)", "error");
+                window._isFetchingSessions = false;
+                tbody.innerHTML = '<tr><td colspan="6" style="text-align: center; padding: 2rem; color: var(--danger);">Invalid date range selected. Please enter a valid range.</td></tr>';
+                return;
+            }
+
             const sortBy = document.getElementById('sortBy').value;
             const filterStatus = document.getElementById('filterStatus') ? document.getElementById('filterStatus').value : '';
 
@@ -4206,34 +4245,53 @@
         }
 
         // --- THEME TOGGLE ---
+        // ── Accent colour switcher ──
+        function setAccent(name) {
+            document.documentElement.setAttribute('data-accent', name);
+            localStorage.setItem('adminAccent', name);
+
+            // Highlight the active dot
+            document.querySelectorAll('.color-dot').forEach(d => d.classList.remove('active-dot'));
+            const activeDot = document.getElementById('dot-' + name);
+            if (activeDot) activeDot.classList.add('active-dot');
+
+            showToast(`Accent: ${name.charAt(0).toUpperCase() + name.slice(1)}`, 'success');
+        }
+
         function initThemeIcon() {
             const currentTheme = document.documentElement.getAttribute('data-theme');
             const icon = document.getElementById('themeIcon');
-            if (currentTheme === 'light') {
-                icon.innerHTML = '<i class="fas fa-moon"></i>';
-            } else {
-                icon.innerHTML = '<i class="fas fa-sun"></i>';
+            if (icon) {
+                icon.innerHTML = currentTheme === 'light' ? '<i class="fas fa-moon"></i>' : '<i class="fas fa-sun"></i>';
             }
+            // Sync second theme icon in top-bar
+            const icon2 = document.getElementById('themeIcon2');
+            if (icon2) {
+                icon2.innerHTML = currentTheme === 'light' ? '<i class="fas fa-moon"></i>' : '<i class="fas fa-sun"></i>';
+            }
+
+            // Restore saved accent
+            const savedAccent = localStorage.getItem('adminAccent');
+            if (savedAccent) setAccent(savedAccent);
         }
 
         function toggleTheme() {
             const currentTheme = document.documentElement.getAttribute('data-theme');
-            let newTheme = 'dark';
-
-            if (currentTheme !== 'light') {
-                newTheme = 'light';
-            }
+            const newTheme = (currentTheme !== 'light') ? 'light' : 'dark';
 
             document.documentElement.setAttribute('data-theme', newTheme);
             localStorage.setItem('adminTheme', newTheme);
 
             const icon = document.getElementById('themeIcon');
-            icon.style.transform = 'scale(0) rotate(180deg)';
-
-            setTimeout(() => {
-                icon.innerHTML = newTheme === 'light' ? '<i class="fas fa-moon"></i>' : '<i class="fas fa-sun"></i>';
-                icon.style.transform = 'scale(1) rotate(0deg)';
-            }, 150);
+            const icon2 = document.getElementById('themeIcon2');
+            [icon, icon2].forEach(el => {
+                if (!el) return;
+                el.style.transform = 'scale(0) rotate(180deg)';
+                setTimeout(() => {
+                    el.innerHTML = newTheme === 'light' ? '<i class="fas fa-moon"></i>' : '<i class="fas fa-sun"></i>';
+                    el.style.transform = 'scale(1) rotate(0deg)';
+                }, 150);
+            });
         }
 
         // Set initial icon on load
