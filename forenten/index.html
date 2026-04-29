@@ -1709,8 +1709,13 @@
                 <div id="uploadProgressBar"
                     style="width: 0%; height: 100%; background: #6366f1; transition: width 0.3s ease;"></div>
             </div>
-            <div id="uploadPercentageText"
-                style="margin-top: 0.5rem; font-size: 0.85rem; color: #6366f1; font-weight: 700;">Preparing upload...
+            <div style="display: flex; justify-content: space-between; margin-top: 0.5rem;">
+                <div id="uploadPercentageText" style="font-size: 0.85rem; color: #6366f1; font-weight: 700;">
+                    Preparing video file...
+                </div>
+                <div id="uploadEstimatedTime" style="font-size: 0.85rem; color: #64748b; font-weight: 600;">
+                    <i class="fas fa-clock"></i> Est: 1-2 mins
+                </div>
             </div>
 
             <!-- Skip Option — dims in after 30 s, highlighted after 60 s -->
