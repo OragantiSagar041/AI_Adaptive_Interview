@@ -37,6 +37,44 @@ from reportlab.lib.utils import simpleSplit
 
 load_dotenv()
 
+import cloudinary
+import cloudinary.uploader
+import cloudinary.api
+
+cloudinary.config(
+    cloud_name=os.getenv("CLOUDINARY_CLOUD_NAME"),
+    api_key=os.getenv("CLOUDINARY_API_KEY"),
+    api_secret=os.getenv("CLOUDINARY_API_SECRET")
+)
+
+CLOUDINARY_CLEANUP_STARTED = False
+
+def cloudinary_cleanup_loop():
+    while True:
+        try:
+            now = datetime.now(timezone.utc)
+            cutoff = now - timedelta(days=3)
+            old_recordings = interviews_collection.find({
+                "created_at": {"$lt": cutoff.isoformat()},
+                "cloudinary_public_id": {"$exists": True}
+            })
+            for rec in old_recordings:
+                public_id = rec.get("cloudinary_public_id")
+                if public_id:
+                    try:
+                        print(f"🧹 Deleting old recording {public_id} from Cloudinary...")
+                        cloudinary.uploader.destroy(public_id, resource_type="video")
+                        interviews_collection.update_one(
+                            {"_id": rec["_id"]},
+                            {"$unset": {"recording_path": "", "cloudinary_public_id": ""}}
+                        )
+                    except Exception as e:
+                        print(f"Error deleting old recording {public_id}: {e}")
+        except Exception as e:
+            print(f"Error in cloudinary cleanup loop: {e}")
+        
+        time.sleep(86400) # Run once a day
+
 # Configuration
 UPLOAD_FOLDER = "uploads"
 os.makedirs(UPLOAD_FOLDER, exist_ok=True)
@@ -48,6 +86,14 @@ FRONTEND_URL = "https://ai-adaptive-interview.vercel.app"
 
 app = FastAPI()
 app.add_middleware(GZipMiddleware, minimum_size=1000)
+
+@app.on_event("startup")
+def startup_event():
+    global CLOUDINARY_CLEANUP_STARTED
+    if not CLOUDINARY_CLEANUP_STARTED:
+        import threading
+        threading.Thread(target=cloudinary_cleanup_loop, daemon=True).start()
+        CLOUDINARY_CLEANUP_STARTED = True
 
 # Health check for keeping Render awake
 @app.get("/")
@@ -1913,7 +1959,9 @@ def get_interview_details(link_id: str):
         if rec_row and rec_row.get("recording_path"):
             raw_path = rec_row["recording_path"]
             # Verify file exists on disk (handle ephemeral storage case)
-            if os.path.exists(raw_path):
+            if raw_path.startswith("http"):
+                recording_url = raw_path
+            elif os.path.exists(raw_path):
                 # Convert absolute path to a relative URL path
                 raw_path_fixed = raw_path.replace("\\", "/")
                 # Extract the part starting with "uploads/"
@@ -2052,7 +2100,7 @@ async def upload_full_recording(
     file: UploadFile = File(...)
 ):
     try:
-        # Create directory for recordings if it doesn't exist
+        # Create directory for temporary recordings if it doesn't exist
         recordings_dir = os.path.join(UPLOAD_FOLDER, "recordings")
         os.makedirs(recordings_dir, exist_ok=True)
         
@@ -2060,15 +2108,37 @@ async def upload_full_recording(
         filename = f"{interview_id}_full_recording.webm"
         file_path = os.path.join(recordings_dir, filename)
         
-        # Save file
+        # Save file locally first since it can be large
         with open(file_path, "wb") as buffer:
             shutil.copyfileobj(file.file, buffer)
             
+        # Upload to Cloudinary
+        try:
+            upload_result = cloudinary.uploader.upload_large(
+                file_path,
+                resource_type="video",
+                folder="mock_interview_recordings"
+            )
+            normalized_path = upload_result.get("secure_url")
+            cloudinary_public_id = upload_result.get("public_id")
+            
+            # Clean up local file after successful upload
+            os.remove(file_path)
+            
+        except Exception as cloud_e:
+            print(f"Error uploading to cloudinary: {cloud_e}")
+            # Fallback to local path if cloudinary fails
+            normalized_path = file_path.replace("\\", "/")
+            cloudinary_public_id = None
+
         # Update database
-        normalized_path = file_path.replace("\\", "/")
+        update_data = {"recording_path": normalized_path}
+        if cloudinary_public_id:
+            update_data["cloudinary_public_id"] = cloudinary_public_id
+            
         interviews_collection.update_one(
             {"id": interview_id},
-            {"$set": {"recording_path": normalized_path}}
+            {"$set": update_data}
         )
         
         return {"status": "success", "file_path": normalized_path}
@@ -3252,7 +3322,7 @@ async def get_all_sessions(admin_id: str, start_date: Optional[str] = None, end_
             if interview_doc and interview_doc.get("recording_path"):
                 rec_path = interview_doc.get("recording_path")
                 # Only show video icon if file actually exists on server
-                if os.path.exists(rec_path):
+                if rec_path.startswith("http") or os.path.exists(rec_path):
                     has_video = True
 
         sessions.append({
@@ -3399,11 +3469,41 @@ async def start_session_interview(link_id: str = Form(...)):
         
         if existing and existing.get("questions"):
             questions = existing["questions"]
+
+            # ── Find the last answered question so we can resume from there ──
+            resume_question_id = None
+            try:
+                answered_docs = list(answers_collection.find(
+                    {"interview_id": existing_interview_id},
+                    {"question_id": 1, "_id": 0}
+                ))
+                if answered_docs:
+                    answered_ids = [
+                        int(a["question_id"]) for a in answered_docs
+                        if a.get("question_id") is not None
+                    ]
+                    if answered_ids:
+                        last_answered = max(answered_ids)
+                        # Resume at the next unanswered question (capped to last question)
+                        next_q_id = last_answered + 1
+                        if next_q_id <= len(questions):
+                            resume_question_id = next_q_id
+                        else:
+                            resume_question_id = last_answered  # already done all
+            except Exception as resume_err:
+                print(f"⚠️ Could not determine resume question: {resume_err}")
+
+            resume_question = next(
+                (q for q in questions if int(q["id"]) == resume_question_id),
+                questions[0]
+            ) if resume_question_id else questions[0]
+
             return {
                 "status": "started",
                 "interview_id": existing_interview_id,
                 "questions": questions,
-                "first_question": questions[0],
+                "first_question": resume_question,
+                "resume_question_id": resume_question_id or 1,
                 "total_questions": len(questions),
                 "candidate_name": candidate_name,
                 "interview_duration": interview_duration,

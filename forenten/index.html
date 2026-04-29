@@ -1698,7 +1698,7 @@
             <div style="font-size: 3rem; margin-bottom: 1.5rem;"><i class="fas fa-spinner fa-spin"></i></div>
             <h3 style="color: #1e293b; margin-bottom: 0.75rem;">Saving Your Recording</h3>
             <p style="font-size: 1rem; color: #64748b; margin-bottom: 1.5rem;">
-                We are securing your video interview. This usually takes a few moments.
+                We are uploading your video interview. Time depends on your connection speed and interview length.
             </p>
             <div
                 style="background: #fee2e2; color: #dc2626; padding: 12px; border-radius: 8px; font-weight: 700; display: inline-flex; align-items: center; gap: 8px;">
@@ -1713,14 +1713,43 @@
                 style="margin-top: 0.5rem; font-size: 0.85rem; color: #6366f1; font-weight: 700;">Preparing upload...
             </div>
 
-            <!-- Skip Option -->
+            <!-- Skip Option — dims in after 30 s, highlighted after 60 s -->
             <div id="skipUploadContainer"
-                style="margin-top: 1.5rem; font-size: 0.8rem; color: #64748b; border-top: 1px solid #f1f5f9; padding-top: 1rem;">
+                style="margin-top: 1.5rem; font-size: 0.8rem; color: #64748b; border-top: 1px solid #f1f5f9; padding-top: 1rem; opacity:0.3; transition: opacity 0.8s ease;">
                 Taking too long? <a href="javascript:void(0)" onclick="skipAndFinish()"
-                    style="color: #6366f1; text-decoration: underline; font-weight: 600;">Finish & Exit anyway</a>
+                    id="skipUploadLink"
+                    style="color: #6366f1; text-decoration: underline; font-weight: 600;">Finish &amp; Exit anyway</a>
+                <span id="skipCountdownLabel" style="color:#94a3b8;"> (available in <span id="skipCountdownSec">30</span>s)</span>
                 <div style="font-size: 0.75rem; margin-top: 4px; color: #94a3b8;">(Your interview responses are already
                     safely submitted)</div>
             </div>
+            <script>
+                // Countdown that reveals the skip option after 30 s
+                (function startSkipCountdown() {
+                    let remaining = 30;
+                    const secEl = document.getElementById('skipCountdownSec');
+                    const container = document.getElementById('skipUploadContainer');
+                    const label = document.getElementById('skipCountdownLabel');
+                    const timer = setInterval(function () {
+                        remaining--;
+                        if (secEl) secEl.textContent = remaining;
+                        if (remaining <= 0) {
+                            clearInterval(timer);
+                            if (container) container.style.opacity = '1';
+                            if (label) label.style.display = 'none'; // hide "(available in Xs)"
+                            // After 60 more seconds, highlight it yellow to make it even more obvious
+                            setTimeout(function () {
+                                if (container) {
+                                    container.style.background = '#fef3c7';
+                                    container.style.borderRadius = '8px';
+                                    container.style.padding = '0.75rem';
+                                    container.style.border = '1px solid #fcd34d';
+                                }
+                            }, 60000);
+                        }
+                    }, 1000);
+                })();
+            </script>
         </div>
 
         <div id="finalClosureMessage" class="hidden" style="animation: fadeInUp 0.6s ease-out;">
@@ -2519,7 +2548,9 @@
             }
 
             currentInterviewId = data.interview_id;
-            currentQuestionId = Number(data.first_question.id) || 1;
+            // If the backend tells us where to resume, use that; otherwise start from first question
+            const resumeQId = Number(data.resume_question_id) || Number(data.first_question.id) || 1;
+            currentQuestionId = resumeQId;
             totalQuestions = Number(data.total_questions) || 0;
             window.interviewDuration = Number(data.interview_duration) > 0 ? Number(data.interview_duration) : 30;
             window.recordVideo = data.record_video !== false;
@@ -2534,6 +2565,18 @@
 
             if (targetStatusDiv) {
                 targetStatusDiv.style.display = 'none';
+            }
+
+            // If resuming mid-interview, show a notice in the disclaimer modal
+            if (data.resume_question_id && data.resume_question_id > 1) {
+                const disclaimerModal = document.getElementById('disclaimerModal');
+                if (disclaimerModal) {
+                    const resumeBanner = document.createElement('div');
+                    resumeBanner.style.cssText = 'background:#fef3c7;border:1px solid #fcd34d;border-radius:10px;padding:0.8rem 1.2rem;margin-bottom:1rem;font-size:0.9rem;color:#92400e;font-weight:600;text-align:center;';
+                    resumeBanner.innerHTML = `<i class="fas fa-redo"></i> Resuming your interview — continuing from Question ${data.resume_question_id} of ${data.total_questions}`;
+                    const firstChild = disclaimerModal.querySelector('div');
+                    if (firstChild) firstChild.prepend(resumeBanner);
+                }
             }
 
             document.getElementById('disclaimerModal').classList.remove('hidden');
@@ -4411,11 +4454,25 @@ Output: ${formatCodingValue(testCase.output)}${resultBlock}</pre>
                         const xhr = new XMLHttpRequest();
                         xhr.open('POST', `${API_BASE_URL}/upload-full-recording`, true);
 
+                        // Show file size and kick progress bar to 1% so user knows it started
+                        const sizeMB = (blob.size / (1024 * 1024)).toFixed(1);
+                        if (progressText) progressText.textContent = `Uploading ${sizeMB} MB... 0%`;
+                        if (progressBar) progressBar.style.width = '1%';
+
+                        // 5-minute hard timeout — unblocks the UI if server hangs
+                        const XHR_TIMEOUT_MS = 5 * 60 * 1000;
+                        xhr.timeout = XHR_TIMEOUT_MS;
+                        xhr.ontimeout = () => {
+                            console.warn("Video upload timed out after 5 minutes.");
+                            if (progressText) progressText.textContent = "Upload timed out. Responses are already saved.";
+                            uploadReject(new Error("Upload timed out"));
+                        };
+
                         xhr.upload.onprogress = (e) => {
                             if (e.lengthComputable) {
                                 const percent = Math.round((e.loaded / e.total) * 100);
                                 if (progressBar) progressBar.style.width = percent + '%';
-                                if (progressText) progressText.textContent = `Uploading... ${percent}%`;
+                                if (progressText) progressText.textContent = `Uploading ${sizeMB} MB... ${percent}%`;
                             }
                         };
 
@@ -4445,7 +4502,7 @@ Output: ${formatCodingValue(testCase.output)}${resultBlock}</pre>
                 } catch (e) {
                     console.error("Error uploading full recording:", e);
                     const progressText = document.getElementById('uploadPercentageText');
-                    if (progressText) progressText.textContent = "Upload failed. Please contact support.";
+                    if (progressText) progressText.textContent = "Upload failed. Your interview responses are safely saved.";
                     resolve(); // Resolve to avoid blocking UI
                 }
             }
