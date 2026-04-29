@@ -2837,11 +2837,11 @@
     <div id="toastContainer"></div>
 
     <script>
-        // CONFIGURATION: Dynamic backend URL resolution for local testing vs production
-        const API_BASE = window.location.hostname === "127.0.0.1" || window.location.hostname === "localhost"
-            ? "https://localhost:8000"
-            : "https://ai-adaptive-interview-1hsw.onrender.com";
-        const FRONTEND_BASE = "https://ai-adaptive-interview.vercel.app";
+        const protocol = window.location.protocol;
+        const API_BASE = (window.location.hostname === "127.0.0.1" || window.location.hostname === "localhost")
+            ? (window.location.port === "80" ? "/api" : `${protocol}//localhost:8000`)
+            : (window.location.origin.includes('vercel.app') ? "https://ai-adaptive-interview-1hsw.onrender.com" : "/api");
+        const FRONTEND_BASE = window.location.origin;
 
         /**
          * Convert a datetime-local input value (local ISO, no timezone) to a UTC ISO
@@ -2853,6 +2853,15 @@
             const d = new Date(localDatetimeValue);  // browser interprets as LOCAL time
             if (isNaN(d.getTime())) return localDatetimeValue;
             return d.toISOString();
+        }
+
+        function escapeHtml(unsafe) {
+            return (unsafe || "").toString()
+                 .replace(/&/g, "&amp;")
+                 .replace(/</g, "&lt;")
+                 .replace(/>/g, "&gt;")
+                 .replace(/"/g, "&quot;")
+                 .replace(/'/g, "&#039;");
         }
 
         let adminId = null;
@@ -2905,7 +2914,26 @@
             });
         }
 
-        document.addEventListener('DOMContentLoaded', initLoginHero);
+        document.addEventListener('DOMContentLoaded', () => {
+            initLoginHero();
+            
+            // Check for existing session
+            const savedAdminId = localStorage.getItem('adminId');
+            if (savedAdminId) {
+                adminId = savedAdminId;
+                adminEmail = localStorage.getItem('adminEmail') || "";
+                document.getElementById('adminName').textContent = localStorage.getItem('adminName') || "Admin";
+                document.getElementById('adminEmailInput').value = adminEmail;
+                
+                document.getElementById('loginSection').classList.add('hidden');
+                document.getElementById('dashboardSection').classList.remove('hidden');
+                document.body.classList.add('dashboard-active');
+                
+                switchView('dashboard');
+                fetchSessions();
+                fetchStats();
+            }
+        });
 
         // --- PASSWORD TOGGLE ---
         function togglePassword() {
@@ -2967,7 +2995,14 @@
                     const data = await response.json();
                     adminId = data.admin_id;
                     adminEmail = data.email || "";
-                    document.getElementById('adminName').textContent = data.username || username;
+                    const adminName = data.username || username;
+                    
+                    // Persist session
+                    localStorage.setItem('adminId', adminId);
+                    localStorage.setItem('adminEmail', adminEmail);
+                    localStorage.setItem('adminName', adminName);
+
+                    document.getElementById('adminName').textContent = adminName;
                     document.getElementById('adminEmailInput').value = adminEmail;
 
                     // Smooth transition
@@ -3007,6 +3042,9 @@
 
         // --- LOGOUT ---
         function logout() {
+            localStorage.removeItem('adminId');
+            localStorage.removeItem('adminEmail');
+            localStorage.removeItem('adminName');
             location.reload();
         }
 
@@ -3089,12 +3127,22 @@
             const createBtn = document.getElementById('createBtn');
 
             if (!name || !email || !resume || !jd) {
-                showToast("Please fill in all fields (including candidate email).", "error");
+                showToast("Please scroll up and fill in all required fields (Name, Email, Resume, Job Description).", "error");
+                return;
+            }
+            
+            if (duration < 5 || duration > 120) {
+                showToast("Interview Duration must be between 5 and 120 minutes.", "error");
                 return;
             }
 
-            if (scheduleStart && scheduleEnd) {
-                if (new Date(scheduleEnd) <= new Date(scheduleStart)) {
+            if (scheduleStart) {
+                const start = new Date(scheduleStart);
+                if (start < new Date()) {
+                    showToast("Schedule Start time cannot be in the past.", "error");
+                    return;
+                }
+                if (scheduleEnd && new Date(scheduleEnd) <= start) {
                     showToast("Schedule End time must be after the Start time.", "error");
                     return;
                 }
@@ -3181,7 +3229,7 @@
             item.className = 'session-item';
             item.innerHTML = `
                 <div class="session-item-header">
-                    <div class="candidate-name"><span class="dot"></span>${name}</div>
+                    <div class="candidate-name"><span class="dot"></span>${escapeHtml(name)}</div>
                     <div class="timestamp">${now}</div>
                 </div>
                 <div class="link-display">${fullUrl}</div>
@@ -3490,6 +3538,16 @@
             }
         }
 
+        function handleVideoError(videoElem) {
+            const container = videoElem.parentElement;
+            const errorMsg = container.querySelector('#videoErrorMsg') || container.querySelector('.video-error-msg');
+            if (errorMsg) {
+                videoElem.style.display = 'none';
+                errorMsg.style.display = 'block';
+            }
+            console.error("Video failed to load:", videoElem.querySelector('source')?.src);
+        }
+
         function renderDashboardTable(sessions, filterStatus, resetPagination = true) {
             if (resetPagination) currentPage = 1;
             const tbody = document.getElementById('dashboardTableBody');
@@ -3565,7 +3623,7 @@
                 if (s.is_deactivated) {
                     deactivatedHtml += `<tr>
                         <td style="padding-left: 1.5rem;"><input type="checkbox" class="session-checkbox" value="${s.link_id}" onclick="updateTableBulkDeleteBtn('deactivated')" style="cursor: pointer;"></td>
-                        <td style="font-weight: 500;">${s.candidate_name}</td>
+                        <td style="font-weight: 500;">${escapeHtml(s.candidate_name)}</td>
                         <td>${dateStr}</td>
                         <td><span class="status-badge pending" style="background:rgba(107,114,128,0.1); color:#6b7280;">DEACTIVATED</span></td>
                         <td style="text-align: right;">
@@ -3576,7 +3634,7 @@
                     if (s.decision === 'selected') {
                         qualHtml += `<tr>
                             <td style="padding-left: 1.5rem;"><input type="checkbox" class="session-checkbox" value="${s.link_id}" onclick="updateTableBulkDeleteBtn('qualified')" style="cursor: pointer;"></td>
-                            <td style="font-weight: 500;"><a href="javascript:void(0)" onclick="openLiveResults('${s.link_id}', '${s.candidate_name.replace(/'/g, "\\'")}')" style="color: var(--primary-light); text-decoration: none; border-bottom: 1px dashed var(--primary-light);">${s.candidate_name}</a></td>
+                            <td style="font-weight: 500;"><a href="javascript:void(0)" onclick="openLiveResults('${escapeHtml(s.link_id)}', '${escapeHtml(s.candidate_name).replace(/'/g, "\\'")}')" style="color: var(--primary-light); text-decoration: none; border-bottom: 1px dashed var(--primary-light);">${escapeHtml(s.candidate_name)}</a></td>
                             <td>${dateStr}</td>
                             <td>${scoreText}</td>
                             <td style="text-align: right;"><button class="btn-copy" onclick="openLiveResults('${s.link_id}', '${s.candidate_name.replace(/'/g, "\\'")}')" style="background:#10b981; color:white; border:none; padding:0.4rem 0.8rem; font-size:0.75rem; border-radius:6px; cursor:pointer; font-weight:600;"><i class="fas fa-eye"></i> View</button></td>
@@ -3585,7 +3643,7 @@
                     if (s.decision === 'rejected') {
                         unqualHtml += `<tr>
                             <td style="padding-left: 1.5rem;"><input type="checkbox" class="session-checkbox" value="${s.link_id}" onclick="updateTableBulkDeleteBtn('unqualified')" style="cursor: pointer;"></td>
-                            <td style="font-weight: 500;"><a href="javascript:void(0)" onclick="openLiveResults('${s.link_id}', '${s.candidate_name.replace(/'/g, "\\'")}')" style="color: var(--text-muted); text-decoration: none; border-bottom: 1px dashed var(--text-muted);">${s.candidate_name}</a></td>
+                            <td style="font-weight: 500;"><a href="javascript:void(0)" onclick="openLiveResults('${escapeHtml(s.link_id)}', '${escapeHtml(s.candidate_name).replace(/'/g, "\\'")}')" style="color: var(--text-muted); text-decoration: none; border-bottom: 1px dashed var(--text-muted);">${escapeHtml(s.candidate_name)}</a></td>
                             <td>${dateStr}</td>
                             <td>${scoreText}</td>
                             <td style="text-align: right;"><button class="btn-copy" onclick="openLiveResults('${s.link_id}', '${s.candidate_name.replace(/'/g, "\\'")}')" style="background:var(--danger); color:white; border:none; padding:0.4rem 0.8rem; font-size:0.75rem; border-radius:6px; cursor:pointer;"><i class="fas fa-eye"></i> View</button></td>
@@ -3812,7 +3870,7 @@
         }
 
         async function exportCurrentStatus(decisionFilter = '') {
-            const statusFilter = document.getElementById('filterStatus') ? document.getElementById('filterStatus').value : '';
+            const statusFilter = decisionFilter ? '' : (document.getElementById('filterStatus') ? document.getElementById('filterStatus').value : '');
             try {
                 showToast('Preparing export...', 'success');
                 const res = await fetch(`${API_BASE}/admin/export-sessions?admin_id=${adminId}&status_filter=${statusFilter}`);
@@ -3821,7 +3879,11 @@
                 let data = result.data || [];
 
                 if (decisionFilter) {
-                    data = data.filter(item => item.decision === decisionFilter);
+                    if (decisionFilter === 'deactivated') {
+                        data = data.filter(item => item.is_deactivated === true);
+                    } else {
+                        data = data.filter(item => item.decision === decisionFilter && !item.is_deactivated);
+                    }
                 }
 
                 if (!data || data.length === 0) {
@@ -4010,7 +4072,7 @@
             document.getElementById('liveResultsContent').innerHTML = `
                 <div style="text-align: center; padding: 3rem;">
                     <div class="spinner" style="border-color:var(--primary); border-bottom-color:transparent; width:30px; height:30px; display:inline-block;"></div>
-                    <p style="margin-top: 1rem; color: var(--text-muted);">Loading live results for ${candidateName}...</p>
+                    <p style="margin-top: 1rem; color: var(--text-muted);">Loading live results for ${escapeHtml(candidateName)}...</p>
                 </div>
             `;
 
@@ -4061,7 +4123,7 @@
 
                 let html = `
                     <div style="margin-bottom: 2rem;">
-                        <h2 style="color: var(--primary-light); margin-bottom: 0.5rem; font-size: 1.5rem;">${data.candidate_name || 'Candidate'}</h2>
+                        <h2 style="color: var(--primary-light); margin-bottom: 0.5rem; font-size: 1.5rem;">${escapeHtml(data.candidate_name) || 'Candidate'}</h2>
                         <p style="color: var(--text-muted); font-size: 0.9rem;">
                             Session ID: ${interviewId}
                         </p>
@@ -4113,9 +4175,21 @@
                         ${data.recording_url ? `
                         <div style="flex: 1; min-width: 300px; background: var(--bg-card); border: 1px solid var(--border); border-radius: var(--radius-sm); padding: 1.25rem;">
                             <strong style="color: var(--text-secondary); font-size: 0.85rem; text-transform: uppercase; letter-spacing: 1px;"><i class="fas fa-video"></i> Interview Recording</strong>
-                            <video controls style="width: 100%; max-height: 200px; border-radius: 8px; margin-top: 0.75rem; background: #000;">
-                                <source src="${API_BASE}/${data.recording_url}" type="video/webm">
-                            </video>
+                            <div style="margin-top: 1rem;">
+                                <video controls style="width: 100%; max-height: 250px; border-radius: 8px; background: #000;" onerror="handleVideoError(this)">
+                                    <source src="${API_BASE}/${data.recording_url}" type="video/webm">
+                                </video>
+                                <div id="videoErrorMsg" style="display:none; margin-top: 1rem; padding: 1rem; background: #fff5f5; border: 1px solid #feb2b2; border-radius: 8px; color: #c53030; font-size: 0.85rem;">
+                                    <i class="fas fa-exclamation-triangle"></i> Recording unavailable on server. 
+                                    <a href="${API_BASE}/${data.recording_url}" target="_blank" style="color: #c53030; text-decoration: underline; font-weight: 700;">Try direct link</a>
+                                </div>
+                                <div style="margin-top: 0.5rem; text-align: right;">
+                                    <a href="${API_BASE}/${data.recording_url}" download="interview_${escapeHtml(data.candidate_name) || 'recording'}.webm" 
+                                       style="color: var(--primary); text-decoration: none; font-size: 0.8rem; font-weight: 600;">
+                                        <i class="fas fa-download"></i> Download Video
+                                    </a>
+                                </div>
+                            </div>
                         </div>
                         ` : ''}
 
@@ -4393,15 +4467,22 @@
                         ${data.recording_url ? `
                         <div style="flex: 1; min-width: 300px; background: var(--bg-input); border: 1px solid var(--border); border-radius: var(--radius-sm); padding: 1.25rem;">
                             <strong style="color: var(--text-secondary); font-size: 0.85rem; text-transform: uppercase; letter-spacing: 1px;"><i class="fas fa-video"></i> Interview Recording</strong>
-                            <video controls style="width: 100%; max-height: 360px; border-radius: 8px; margin-top: 0.75rem; background: #000;">
-                                <source src="${API_BASE}/${data.recording_url}" type="video/webm">
-                                Your browser does not support the video tag.
-                            </video>
-                            <div style="margin-top: 0.75rem; display: flex; gap: 0.5rem;">
-                                <a href="${API_BASE}/${data.recording_url}" download="interview_${data.candidate_name || 'recording'}.webm"
-                                   style="padding: 0.4rem 1rem; background: var(--primary); color: #fff; border-radius: 6px; text-decoration: none; font-size: 0.85rem; font-weight: 600;">
-                                    <i class="fas fa-download"></i> Download Video
-                                </a>
+                            <div style="margin-top: 1rem;">
+                                <video controls style="width: 100%; max-height: 360px; border-radius: 8px; background: #000;" onerror="handleVideoError(this)">
+                                    <source src="${API_BASE}/${data.recording_url}" type="video/webm">
+                                    Your browser does not support the video tag.
+                                </video>
+                                <div class="video-error-msg" style="display:none; margin-top: 1rem; padding: 1rem; background: #fff5f5; border: 1px solid #feb2b2; border-radius: 8px; color: #c53030; font-size: 0.85rem;">
+                                    <i class="fas fa-exclamation-triangle"></i> Recording unavailable on server. This usually happens if the server restarted and the ephemeral recording was lost.
+                                    <br><br>
+                                    <a href="${API_BASE}/${data.recording_url}" target="_blank" style="color: #c53030; text-decoration: underline; font-weight: 700;">Try direct link</a>
+                                </div>
+                                <div style="margin-top: 0.75rem;">
+                                    <a href="${API_BASE}/${data.recording_url}" download="interview_${data.candidate_name || 'recording'}.webm"
+                                       style="color: var(--primary); text-decoration: none; font-weight: 600; font-size: 0.9rem;">
+                                        <i class="fas fa-download"></i> Download Video
+                                    </a>
+                                </div>
                             </div>
                         </div>
                         ` : `
@@ -4729,10 +4810,10 @@
             const tBulk = document.getElementById('tab-bulk');
 
             if (isSingle) {
-                tSingle.style.cssText = 'flex:1;padding:0.75rem;background:var(--primary);color:white;border:none;border-radius:var(--radius-md);font-weight:700;font-size:0.95rem;cursor:pointer;font-family:inherit;transition:all 0.2s;';
+                tSingle.style.cssText = 'flex:1;padding:0.75rem;background:#1e293b;color:#ffffff;border:none;border-radius:var(--radius-md);font-weight:700;font-size:0.95rem;cursor:pointer;font-family:inherit;transition:all 0.2s;';
                 tBulk.style.cssText = 'flex:1;padding:0.75rem;background:var(--bg-card);color:var(--text-secondary);border:1px solid var(--border);border-radius:var(--radius-md);font-weight:700;font-size:0.95rem;cursor:pointer;font-family:inherit;transition:all 0.2s;';
             } else {
-                tBulk.style.cssText = 'flex:1;padding:0.75rem;background:var(--primary);color:white;border:none;border-radius:var(--radius-md);font-weight:700;font-size:0.95rem;cursor:pointer;font-family:inherit;transition:all 0.2s;';
+                tBulk.style.cssText = 'flex:1;padding:0.75rem;background:#1e293b;color:#ffffff;border:none;border-radius:var(--radius-md);font-weight:700;font-size:0.95rem;cursor:pointer;font-family:inherit;transition:all 0.2s;';
                 tSingle.style.cssText = 'flex:1;padding:0.75rem;background:var(--bg-card);color:var(--text-secondary);border:1px solid var(--border);border-radius:var(--radius-md);font-weight:700;font-size:0.95rem;cursor:pointer;font-family:inherit;transition:all 0.2s;';
             }
         }
@@ -4862,8 +4943,8 @@
                 return `
                 <tr style="border-top:1px solid var(--border); transition:background 0.15s;" onmouseover="this.style.background='var(--bg-card-hover)'" onmouseout="this.style.background='transparent'">
                     <td style="padding:0.6rem 1rem; color:var(--text-muted);">${i + 1}</td>
-                    <td style="padding:0.6rem 1rem; font-weight:500;">${c.name}</td>
-                    <td style="padding:0.6rem 1rem; color:var(--primary-light);">${c.email}</td>
+                    <td style="padding:0.6rem 1rem; font-weight:500;">${escapeHtml(c.name)}</td>
+                    <td style="padding:0.6rem 1rem; color:var(--primary-light);">${escapeHtml(c.email)}</td>
                     <td style="padding:0.6rem 0.5rem; text-align:center;">
                         <input type="checkbox" ${isChecked ? 'checked' : ''} onchange="toggleBulkVideo(${i}, this.checked)" style="width:16px;height:16px;cursor:pointer;accent-color:var(--primary);">
                     </td>
@@ -4892,8 +4973,13 @@
             if (!jd) { showToast('Please enter a Job Description', 'error'); return; }
             if (bulkCandidates.length === 0) { showToast('Add at least one candidate', 'error'); return; }
             
-            if (schedStart && schedEnd) {
-                if (new Date(schedEnd) <= new Date(schedStart)) {
+            if (schedStart) {
+                const start = new Date(schedStart);
+                if (start < new Date()) {
+                    showToast("Schedule Start time cannot be in the past.", "error");
+                    return;
+                }
+                if (schedEnd && new Date(schedEnd) <= start) {
                     showToast("Schedule End time must be after the Start time.", "error");
                     return;
                 }
@@ -4959,20 +5045,20 @@
 
                 const linkHtml = isOk ? `
                     <div style="display:flex;align-items:center;gap:8px;margin-top:6px;">
-                        <div class="link-display" style="flex:1;font-size:0.75rem;">${fullUrl}</div>
-                        <button onclick="navigator.clipboard.writeText('${fullUrl}').then(()=>showToast('Copied!','success'))"
+                        <div class="link-display" style="flex:1;font-size:0.75rem;">${escapeHtml(fullUrl)}</div>
+                        <button onclick="navigator.clipboard.writeText('${escapeHtml(fullUrl)}').then(()=>showToast('Copied!','success'))"
                             style="background:rgba(6,214,160,0.1);color:var(--accent);border:1px solid rgba(6,214,160,0.25);padding:0.35rem 0.7rem;border-radius:6px;cursor:pointer;font-family:inherit;font-size:0.8rem;">
                             <i class="fas fa-copy"></i>
                         </button>
-                    </div>` : `<p style="color:var(--danger);font-size:0.82rem;margin-top:4px;">${r.error || 'Unknown error'}</p>`;
+                    </div>` : `<p style="color:var(--danger);font-size:0.82rem;margin-top:4px;">${escapeHtml(r.error) || 'Unknown error'}</p>`;
 
                 return `
                 <div style="display:flex;flex-direction:column;gap:4px;padding:0.9rem 1rem;border:1px solid var(--border);border-radius:var(--radius-md);margin-bottom:0.75rem;background:var(--bg-input);animation:slideIn 0.3s ease-out;">
                     <div style="display:flex;justify-content:space-between;align-items:center;">
                         <div style="display:flex;align-items:center;gap:8px;">
                             <i class="fas ${icon}" style="color:${color};"></i>
-                            <strong>${r.candidate_name}</strong>
-                            <span style="color:var(--text-muted);font-size:0.82rem;">${r.candidate_email}</span>
+                            <strong>${escapeHtml(r.candidate_name)}</strong>
+                            <span style="color:var(--text-muted);font-size:0.82rem;">${escapeHtml(r.candidate_email)}</span>
                         </div>
                         ${emailBadge}
                     </div>

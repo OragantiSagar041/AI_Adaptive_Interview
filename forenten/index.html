@@ -2069,12 +2069,10 @@
         let interviewActive = false;
         let tabViolationCount = 0;
 
-        // CONFIGURATION: Change this to your Render URL after deployment
-        // e.g. "https://your-app-name.onrender.com"
-        window.API_BASE_URL = window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1'
-            ? 'http://127.0.0.1:8000'
-            : 'https://ai-adaptive-interview-1hsw.onrender.com';
-        const API_BASE_URL = window.API_BASE_URL; // Keep local name too for convenience
+        window.API_BASE_URL = (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1')
+            ? (window.location.port === "80" ? "/api" : `${window.location.protocol}//localhost:8000`)
+            : (window.location.origin.includes('vercel.app') ? "https://ai-adaptive-interview-1hsw.onrender.com" : "/api");
+        const API_BASE_URL = window.API_BASE_URL;
 
         // ─── Mic Status Indicator ────────────────────────────────────────────────
         // States: 'waiting' | 'listening' | 'processing'

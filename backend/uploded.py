@@ -58,6 +58,34 @@ def health_check():
 # Mount uploads folder to serve files
 app.mount("/uploads", StaticFiles(directory="uploads"), name="uploads")
 
+# --- RATE LIMITING MIDDLEWARE ---
+from fastapi import Request
+from collections import defaultdict
+import time
+
+request_counts = defaultdict(list)
+RATE_LIMIT = 50  # requests per minute per IP
+RATE_LIMIT_WINDOW = 60
+
+@app.middleware("http")
+async def rate_limit_middleware(request: Request, call_next):
+    # Skip rate limiting for static files and health check
+    if request.url.path.startswith("/uploads") or request.url.path == "/health" or request.url.path == "/":
+        return await call_next(request)
+        
+    client_ip = request.client.host if request.client else "unknown"
+    now = time.time()
+    
+    # Filter out old requests
+    request_counts[client_ip] = [timestamp for timestamp in request_counts[client_ip] if now - timestamp < RATE_LIMIT_WINDOW]
+    
+    if len(request_counts[client_ip]) >= RATE_LIMIT:
+        return JSONResponse(status_code=429, content={"detail": "Too many requests. Please slow down."})
+    
+    request_counts[client_ip].append(now)
+    return await call_next(request)
+
+
 
 # Configure CORS
 app.add_middleware(
@@ -1262,6 +1290,10 @@ async def upload_resume(
     file: UploadFile = File(...),
     source: str = Form("resume")
 ):
+    ALLOWED_MIMES = ["application/pdf", "application/vnd.openxmlformats-officedocument.wordprocessingml.document", "application/msword", "text/plain"]
+    if file.content_type and file.content_type not in ALLOWED_MIMES:
+        raise HTTPException(status_code=400, detail="Invalid file type. Only PDF, DOCX, and TXT are allowed for security reasons.")
+        
     try:
         print(f"Uploading resume with source: {source}")
 
@@ -1879,12 +1911,17 @@ def get_interview_details(link_id: str):
     if actual_interview_id:
         rec_row = interviews_collection.find_one({"id": actual_interview_id})
         if rec_row and rec_row.get("recording_path"):
-            # Convert absolute path to a relative URL path
-            raw_path = rec_row["recording_path"].replace("\\", "/")
-            # Extract the part starting with "uploads/"
-            idx = raw_path.find("uploads/")
-            if idx != -1:
-                recording_url = raw_path[idx:]
+            raw_path = rec_row["recording_path"]
+            # Verify file exists on disk (handle ephemeral storage case)
+            if os.path.exists(raw_path):
+                # Convert absolute path to a relative URL path
+                raw_path_fixed = raw_path.replace("\\", "/")
+                # Extract the part starting with "uploads/"
+                idx = raw_path_fixed.find("uploads/")
+                if idx != -1:
+                    recording_url = raw_path_fixed[idx:]
+            else:
+                print(f"⚠️ Recording file not found on disk: {raw_path}")
 
     results = []
     total_tab_switches = 0
@@ -2964,6 +3001,10 @@ def extract_info_from_resume(text: str) -> Dict:
 
 @app.post("/admin/parse-resume")
 async def parse_resume(file: UploadFile = File(...)):
+    ALLOWED_MIMES = ["application/pdf", "application/vnd.openxmlformats-officedocument.wordprocessingml.document", "application/msword", "text/plain"]
+    if file.content_type and file.content_type not in ALLOWED_MIMES:
+        raise HTTPException(status_code=400, detail="Invalid file type. Only PDF, DOCX, and TXT are allowed for security reasons.")
+        
     content = await file.read()
     text = extract_text_from_file(content, file.filename)
     info = extract_info_from_resume(text)
@@ -3209,7 +3250,10 @@ async def get_all_sessions(admin_id: str, start_date: Optional[str] = None, end_
         if interview_id:
             interview_doc = interviews_collection.find_one({"id": interview_id}, {"recording_path": 1})
             if interview_doc and interview_doc.get("recording_path"):
-                has_video = True
+                rec_path = interview_doc.get("recording_path")
+                # Only show video icon if file actually exists on server
+                if os.path.exists(rec_path):
+                    has_video = True
 
         sessions.append({
             "link_id": row.get("link_id"),
