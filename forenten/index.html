@@ -4507,20 +4507,46 @@ Output: ${formatCodingValue(testCase.output)}${resultBlock}</pre>
                             uploadReject(new Error("Upload timed out"));
                         };
 
+                        let cloudinarySimInterval = null;
+
                         xhr.upload.onprogress = (e) => {
                             if (e.lengthComputable) {
-                                const percent = Math.round((e.loaded / e.total) * 100);
+                                // Scale XHR progress to 0-50% (uploading to our server)
+                                const percent = Math.floor((e.loaded / e.total) * 50);
                                 if (progressBar) progressBar.style.width = percent + '%';
                                 if (progressText) progressText.textContent = `Uploading ${sizeMB} MB... ${percent}%`;
+
+                                // Once it reaches 50%, start simulating the Cloudinary processing phase
+                                if (percent >= 50 && !cloudinarySimInterval) {
+                                    if (progressText) progressText.textContent = "Processing and saving to Cloudinary... (This may take a minute)";
+                                    let simPercent = 50;
+                                    cloudinarySimInterval = setInterval(() => {
+                                        simPercent += 1;
+                                        // Cap at 95% until we actually get the 200 OK from server
+                                        if (simPercent > 95) {
+                                            clearInterval(cloudinarySimInterval);
+                                        } else {
+                                            if (progressBar) progressBar.style.width = simPercent + '%';
+                                            if (progressText) progressText.textContent = `Processing video... ${simPercent}%`;
+                                        }
+                                    }, 1000); // 1% per second = ~45 seconds simulation
+                                }
                             }
                         };
 
                         xhr.onload = () => {
+                            if (cloudinarySimInterval) clearInterval(cloudinarySimInterval);
+                            
                             if (xhr.status === 200) {
                                 try {
                                     const data = JSON.parse(xhr.responseText);
                                     console.log("Full recording saved:", data);
-                                    const normalizedPath = data.file_path.replace(/\\/g, '/');
+                                    
+                                    // Jump to 100%
+                                    if (progressBar) progressBar.style.width = '100%';
+                                    if (progressText) progressText.textContent = "Upload complete!";
+                                    
+                                    const normalizedPath = data.file_path ? data.file_path.replace(/\\/g, '/') : '';
                                     if (window.stream) {
                                         window.stream.getTracks().forEach(track => track.stop());
                                     }
@@ -4533,7 +4559,10 @@ Output: ${formatCodingValue(testCase.output)}${resultBlock}</pre>
                             }
                         };
 
-                        xhr.onerror = () => uploadReject(new Error("Network error during upload"));
+                        xhr.onerror = () => {
+                            if (cloudinarySimInterval) clearInterval(cloudinarySimInterval);
+                            uploadReject(new Error("Network error during upload"));
+                        };
                         xhr.send(formData);
                     });
 

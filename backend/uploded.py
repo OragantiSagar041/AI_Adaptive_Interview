@@ -3439,6 +3439,22 @@ async def start_session_interview(link_id: str = Form(...)):
     
     # If session was already started or completed, don't restart — return status
     if status in ('started', 'completed') and existing_interview_id:
+        if status == 'started':
+            from datetime import timedelta
+            started_at_str = row.get("started_at")
+            if started_at_str:
+                try:
+                    started_at = parse_iso_datetime(started_at_str)
+                    # Block resuming if time elapsed exceeds duration + 5 minutes buffer
+                    if datetime.now(timezone.utc) > started_at + timedelta(minutes=interview_duration + 5):
+                        interview_sessions_collection.update_one(
+                            {"link_id": link_id},
+                            {"$set": {"status": "completed"}}
+                        )
+                        status = "completed"
+                except Exception as e:
+                    print(f"Error parsing started_at: {e}")
+
         if status == 'completed':
             return {
                 "already_started": True,
@@ -3563,7 +3579,11 @@ async def start_session_interview(link_id: str = Form(...)):
         # Update session status
         interview_sessions_collection.update_one(
             {"link_id": link_id},
-            {"$set": {"status": "started", "interview_id": interview_id}}
+            {"$set": {
+                "status": "started", 
+                "interview_id": interview_id,
+                "started_at": datetime.now(timezone.utc).isoformat()
+            }}
         )
     except Exception as db_e:
         print(f"⚠️ DB Save Error: {db_e}")
