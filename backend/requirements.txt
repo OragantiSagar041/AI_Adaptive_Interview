@@ -11,3 +11,4 @@ requests
 pymongo[srv]
 certifi
 langgraph
+cloudinary
