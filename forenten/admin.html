@@ -2918,11 +2918,11 @@
             initLoginHero();
             
             // Check for existing session
-            const savedAdminId = localStorage.getItem('adminId');
+            const savedAdminId = sessionStorage.getItem('adminId');
             if (savedAdminId) {
                 adminId = savedAdminId;
-                adminEmail = localStorage.getItem('adminEmail') || "";
-                document.getElementById('adminName').textContent = localStorage.getItem('adminName') || "Admin";
+                adminEmail = sessionStorage.getItem('adminEmail') || "";
+                document.getElementById('adminName').textContent = sessionStorage.getItem('adminName') || "Admin";
                 document.getElementById('adminEmailInput').value = adminEmail;
                 
                 document.getElementById('loginSection').classList.add('hidden');
@@ -2998,9 +2998,9 @@
                     const adminName = data.username || username;
                     
                     // Persist session
-                    localStorage.setItem('adminId', adminId);
-                    localStorage.setItem('adminEmail', adminEmail);
-                    localStorage.setItem('adminName', adminName);
+                    sessionStorage.setItem('adminId', adminId);
+                    sessionStorage.setItem('adminEmail', adminEmail);
+                    sessionStorage.setItem('adminName', adminName);
 
                     document.getElementById('adminName').textContent = adminName;
                     document.getElementById('adminEmailInput').value = adminEmail;
@@ -3042,9 +3042,9 @@
 
         // --- LOGOUT ---
         function logout() {
-            localStorage.removeItem('adminId');
-            localStorage.removeItem('adminEmail');
-            localStorage.removeItem('adminName');
+            sessionStorage.removeItem('adminId');
+            sessionStorage.removeItem('adminEmail');
+            sessionStorage.removeItem('adminName');
             location.reload();
         }
 
