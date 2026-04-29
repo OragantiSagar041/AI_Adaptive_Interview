@@ -2217,14 +2217,14 @@
                                         <label
                                             style="font-size: 0.7rem; color: var(--text-muted); margin-bottom: 2px;">From</label>
                                         <input type="date" id="filterStartDate" class="dash-input"
-                                            onchange="loadDashboardSessions()"
+                                            onchange="syncDateFilters('start'); loadDashboardSessions()"
                                             style="padding: 0.4rem; font-size: 0.85rem; width: auto; min-width: 130px;">
                                     </div>
                                     <div style="display: flex; flex-direction: column;">
                                         <label
                                             style="font-size: 0.7rem; color: var(--text-muted); margin-bottom: 2px;">To</label>
                                         <input type="date" id="filterEndDate" class="dash-input"
-                                            onchange="loadDashboardSessions()"
+                                            onchange="syncDateFilters('end'); loadDashboardSessions()"
                                             style="padding: 0.4rem; font-size: 0.85rem; width: auto; min-width: 130px;">
                                     </div>
                                     <div style="display: flex; flex-direction: column;">
@@ -3513,9 +3513,39 @@
             }
         }
 
+        // FIX #2: Cross-validate date filters to prevent negative/inverted ranges
+        function syncDateFilters(changedField) {
+            const startEl = document.getElementById('filterStartDate');
+            const endEl = document.getElementById('filterEndDate');
+            const startVal = startEl.value;
+            const endVal = endEl.value;
+
+            if (changedField === 'start' && startVal) {
+                // Set min on End date so it can't go before Start
+                endEl.min = startVal;
+                // If End date is set and is now before Start, auto-correct it
+                if (endVal && endVal < startVal) {
+                    endEl.value = startVal;
+                    showToast('End date adjusted to match start date', 'info');
+                }
+            } else if (changedField === 'end' && endVal) {
+                // Set max on Start date so it can't go after End
+                startEl.max = endVal;
+                // If Start date is set and is now after End, auto-correct it
+                if (startVal && startVal > endVal) {
+                    startEl.value = endVal;
+                    showToast('Start date adjusted to match end date', 'info');
+                }
+            }
+        }
+
         function clearFilters() {
-            document.getElementById('filterStartDate').value = '';
-            document.getElementById('filterEndDate').value = '';
+            const startEl = document.getElementById('filterStartDate');
+            const endEl = document.getElementById('filterEndDate');
+            startEl.value = '';
+            startEl.removeAttribute('max');
+            endEl.value = '';
+            endEl.removeAttribute('min');
             document.getElementById('searchCandidate').value = '';
             document.getElementById('sortBy').value = 'score';
             if (document.getElementById('filterStatus')) document.getElementById('filterStatus').value = '';

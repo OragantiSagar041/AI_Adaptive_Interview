@@ -1952,7 +1952,10 @@
             msg.textContent = "Requesting permissions... Please allow camera access.";
 
             try {
-                const stream = await navigator.mediaDevices.getUserMedia({ video: true, audio: true });
+                const stream = await navigator.mediaDevices.getUserMedia({
+                    video: { width: { ideal: 640 }, height: { ideal: 480 }, frameRate: { ideal: 15, max: 24 } },
+                    audio: true
+                });
                 video.style.display = 'block';
                 video.srcObject = stream;
 
@@ -2680,6 +2683,20 @@
                     const sessionInfo = await sessionInfoResponse.json();
                     console.log('Session info response:', JSON.stringify(sessionInfo));
 
+                    // ── FIX #4: If session is already completed, show Thank You immediately ──
+                    if (sessionInfo.session_status === 'completed') {
+                        console.log('Session already completed — showing Thank You page.');
+                        if (statusDiv) statusDiv.style.display = 'none';
+                        document.getElementById('interviewSection').classList.add('hidden');
+                        document.getElementById('resultsSection').classList.remove('hidden');
+                        // Hide the upload spinner, show the final closure message
+                        document.getElementById('uploadStatusContainer').classList.add('hidden');
+                        document.getElementById('finalClosureMessage').classList.remove('hidden');
+                        const header = document.querySelector('h1');
+                        if (header) { header.classList.add('hidden'); header.style.display = 'none'; }
+                        return;
+                    }
+
                     if (sessionInfo.is_deactivated) {
                         if (statusDiv) {
                             statusDiv.innerHTML = `
@@ -2799,9 +2816,12 @@
                         if (data.session_status === 'completed') {
                             document.getElementById('interviewSection').classList.add('hidden');
                             document.getElementById('resultsSection').classList.remove('hidden');
+                            // FIX #4: Show final Thank You, not the upload spinner
+                            document.getElementById('uploadStatusContainer').classList.add('hidden');
+                            document.getElementById('finalClosureMessage').classList.remove('hidden');
                             if (statusDiv) statusDiv.style.display = 'none';
                             const h1 = document.querySelector('h1');
-                            if (h1) h1.classList.add('hidden');
+                            if (h1) { h1.classList.add('hidden'); h1.style.display = 'none'; }
                             return;
                         }
 
@@ -4055,7 +4075,7 @@ Output: ${formatCodingValue(testCase.output)}${resultBlock}</pre>
 
             try {
                 mediaStream = await navigator.mediaDevices.getUserMedia({
-                    video: true,
+                    video: { width: { ideal: 640 }, height: { ideal: 480 }, frameRate: { ideal: 15, max: 24 } },
                     audio: true
                 });
 
@@ -4198,7 +4218,10 @@ Output: ${formatCodingValue(testCase.output)}${resultBlock}</pre>
         document.getElementById('cameraFallbackBtn').style.display = 'none';
         document.getElementById('cameraLoading').textContent = "Requesting access...";
         try {
-            const stream = await navigator.mediaDevices.getUserMedia({ video: true, audio: true });
+            const stream = await navigator.mediaDevices.getUserMedia({
+                video: { width: { ideal: 640 }, height: { ideal: 480 }, frameRate: { ideal: 15, max: 24 } },
+                audio: true
+            });
             window.mediaStream = stream;
 
             const videoPreview = document.getElementById('videoPreview');
@@ -4235,7 +4258,11 @@ Output: ${formatCodingValue(testCase.output)}${resultBlock}</pre>
             if (!stream || !stream.active || stream.getVideoTracks().length === 0) {
                 console.log("Getting new stream for full session recording...");
                 try {
-                    stream = await navigator.mediaDevices.getUserMedia({ video: true, audio: true });
+                    // FIX #1: Use constrained resolution (640x480) to reduce GPU load and improve performance
+                    stream = await navigator.mediaDevices.getUserMedia({
+                        video: { width: { ideal: 640 }, height: { ideal: 480 }, frameRate: { ideal: 15, max: 24 } },
+                        audio: true
+                    });
                     window.mediaStream = stream;
                 } catch (e) {
                     console.error("Camera access failed:", e);
@@ -4277,16 +4304,20 @@ Output: ${formatCodingValue(testCase.output)}${resultBlock}</pre>
             }
 
             if (window.recordVideo !== false) {
-                // Re-initialize recorder
-                fullSessionRecorder = new MediaRecorder(stream, { mimeType: 'video/webm;codecs=vp8,opus' });
+                // Re-initialize recorder — FIX #3: Cap bitrate to 500kbps to drastically reduce upload size
+                fullSessionRecorder = new MediaRecorder(stream, {
+                    mimeType: 'video/webm;codecs=vp8,opus',
+                    videoBitsPerSecond: 500000,   // 500 kbps video (was browser default ~2.5Mbps)
+                    audioBitsPerSecond: 64000      // 64 kbps audio (plenty for speech)
+                });
                 fullSessionChunks = [];
 
                 fullSessionRecorder.ondataavailable = e => {
                     if (e.data.size > 0) fullSessionChunks.push(e.data);
                 };
 
-                // Start recording
-                fullSessionRecorder.start(1000);
+                // Start recording — collect chunks every 2s instead of 1s to reduce overhead
+                fullSessionRecorder.start(2000);
                 console.log("Full session recording STARTED ✅");
             } else {
                 console.log("Full session recording skipped (record_video=false) 🛑");
@@ -4325,9 +4356,14 @@ Output: ${formatCodingValue(testCase.output)}${resultBlock}</pre>
         // Clear logic if already running
         if (faceDetectionInterval) clearInterval(faceDetectionInterval);
 
+        // FIX #1: Reduced from 500ms to 1500ms to prevent camera lag from GPU-intensive face detection
+        let _faceDetectionRunning = false; // guard against overlapping inference calls
         faceDetectionInterval = setInterval(async () => {
-            // Only detect if video is playing and ready
+            // Only detect if video is playing and ready, and previous detection finished
+            if (_faceDetectionRunning) return;
             if (video.readyState === 4 && !video.paused && !video.ended) {
+                _faceDetectionRunning = true;
+                try {
                 const returnTensors = false;
                 const predictions = await faceModel.estimateFaces(video, returnTensors);
 
@@ -4395,8 +4431,11 @@ Output: ${formatCodingValue(testCase.output)}${resultBlock}</pre>
                     warningEl.style.display = 'none';
                     video.style.border = "none";
                 }
+                } finally {
+                    _faceDetectionRunning = false;
+                }
             }
-        }, 500); // Check every 500ms
+        }, 1500); // FIX #1: Was 500ms — reduced to 1500ms to prevent camera lag
     }
 
     function stopFaceDetection() {
