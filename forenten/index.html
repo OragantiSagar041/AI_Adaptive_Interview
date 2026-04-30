@@ -4580,8 +4580,23 @@ Output: ${formatCodingValue(testCase.output)}${resultBlock}</pre>
                 }
             }
 
-            fullSessionRecorder.onstop = processAndUpload;
-            fullSessionRecorder.stop();
+            let stopHandled = false;
+            const handleStop = () => {
+                if (stopHandled) return;
+                stopHandled = true;
+                processAndUpload();
+            };
+
+            fullSessionRecorder.onstop = handleStop;
+            try {
+                fullSessionRecorder.stop();
+            } catch (e) {
+                console.error("Error calling stop on fullSessionRecorder:", e);
+                handleStop();
+            }
+
+            // Fallback: If onstop doesn't fire within 3 seconds, force it.
+            setTimeout(handleStop, 3000);
         });
     }
 
