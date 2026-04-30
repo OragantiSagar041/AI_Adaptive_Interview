@@ -3977,13 +3977,33 @@ Output: ${formatCodingValue(testCase.output)}${resultBlock}</pre>
             // Interview complete
             showStatus('Ending interview and saving results...', 'info');
 
+            // ═══════════════════════════════════════════════════════════════
+            // CRITICAL FIX: Mark session as completed IMMEDIATELY — before
+            // any async work (save answer, upload video). This ensures the
+            // database is updated even if the user closes the tab right away.
+            // ═══════════════════════════════════════════════════════════════
+            const urlParams = new URLSearchParams(window.location.search);
+            const sessionId = urlParams.get('session_id') || urlParams.get('session');
+            if (sessionId) {
+                console.log("[END] Marking session as completed in DB IMMEDIATELY...");
+                try {
+                    await fetch(`${API_BASE_URL}/complete-session/${sessionId}`, { method: 'POST' });
+                    console.log("[END] Session marked completed ✅");
+                } catch (e) {
+                    console.error('[END] Failed to mark session complete:', e);
+                    // Fallback: use sendBeacon which works even during page unload
+                    try {
+                        navigator.sendBeacon(`${API_BASE_URL}/complete-session/${sessionId}`);
+                    } catch (e2) { console.error('[END] sendBeacon also failed:', e2); }
+                }
+            }
+
             // --- UI TRANSITION ---
-            // Move this UP so the user immediately sees the end screen
             document.getElementById('interviewSection').classList.add('hidden');
             document.getElementById('codingRoundSection').classList.add('hidden');
-            document.getElementById('status').classList.add('hidden'); // Hide the generic status bar
-            document.getElementById('resultsSection').classList.remove('hidden'); // UNHIDE THE END SCREEN
-            document.getElementById('uploadStatusContainer').classList.remove('hidden'); // SHOW UPLOAD STATUS
+            document.getElementById('status').classList.add('hidden');
+            document.getElementById('resultsSection').classList.remove('hidden');
+            document.getElementById('uploadStatusContainer').classList.remove('hidden');
             const header = document.querySelector('h1');
             if (header) {
                 header.classList.add('hidden');
@@ -4017,18 +4037,6 @@ Output: ${formatCodingValue(testCase.output)}${resultBlock}</pre>
                 // Stop any active recording
                 if (videoRecorder && videoRecorder.isRecording) {
                     try { await videoRecorder.stopRecording(); } catch (e) { console.error('Error stopping recorder:', e); }
-                }
-
-                // --- CRITICAL: Mark session as completed ---
-                try {
-                    const urlParams = new URLSearchParams(window.location.search);
-                    const sessionId = urlParams.get('session_id') || urlParams.get('session');
-                    if (sessionId) {
-                        console.log("Marking session as completed in DB...");
-                        await fetch(`${API_BASE_URL}/complete-session/${sessionId}`, { method: 'POST' });
-                    }
-                } catch (e) {
-                    console.error('Failed to mark session complete:', e);
                 }
 
                 // Stop and save full session recording in background
@@ -4571,7 +4579,7 @@ Output: ${formatCodingValue(testCase.output)}${resultBlock}</pre>
                         xhr.send(formData);
                     });
 
-                    resolve();
+                    resolve(); // resolve the outer promise — the XHR runs in the background
                 } catch (e) {
                     console.error("Error uploading full recording:", e);
                     const progressText = document.getElementById('uploadPercentageText');
@@ -4827,6 +4835,20 @@ Output: ${formatCodingValue(testCase.output)}${resultBlock}</pre>
                     })
                 }).catch(err => console.error('Error logging violation:', err));
             }
+        }
+    });
+
+    // ── CRITICAL: Mark session completed when tab/browser is closed ──
+    // sendBeacon works reliably even during page unload (unlike fetch).
+    window.addEventListener('beforeunload', (e) => {
+        const urlParams = new URLSearchParams(window.location.search);
+        const sid = urlParams.get('session_id') || urlParams.get('session');
+        if (sid && interviewActive) {
+            console.log('[BEFOREUNLOAD] Marking session completed via sendBeacon');
+            navigator.sendBeacon(
+                `${API_BASE_URL}/complete-session/${sid}`,
+                new Blob([], { type: 'text/plain' })
+            );
         }
     });
 </script>
