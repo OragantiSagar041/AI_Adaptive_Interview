@@ -4003,7 +4003,13 @@ Output: ${formatCodingValue(testCase.output)}${resultBlock}</pre>
             document.getElementById('codingRoundSection').classList.add('hidden');
             document.getElementById('status').classList.add('hidden');
             document.getElementById('resultsSection').classList.remove('hidden');
-            document.getElementById('uploadStatusContainer').classList.remove('hidden');
+            // Only show the upload spinner if video recording was enabled
+            if (window.recordVideo !== false && fullSessionRecorder) {
+                document.getElementById('uploadStatusContainer').classList.remove('hidden');
+            } else {
+                document.getElementById('uploadStatusContainer').classList.add('hidden');
+                document.getElementById('finalClosureMessage').classList.remove('hidden');
+            }
             const header = document.querySelector('h1');
             if (header) {
                 header.classList.add('hidden');
@@ -4040,7 +4046,8 @@ Output: ${formatCodingValue(testCase.output)}${resultBlock}</pre>
                 }
 
                 // Stop and save full session recording in background
-                if (currentInterviewId) {
+                // ONLY if video recording was enabled AND we have an interview ID
+                if (currentInterviewId && window.recordVideo !== false && fullSessionRecorder) {
                     showStatus('Uploading video recording... please do not close the tab yet.', 'info');
                     try {
                         await stopAndSaveFullSessionRecording(currentInterviewId);
@@ -4058,7 +4065,8 @@ Output: ${formatCodingValue(testCase.output)}${resultBlock}</pre>
                         `;
                     }
                 } else {
-                    // If no recording id, just show the final message
+                    // No video to upload — skip straight to final message
+                    console.log("[END] Video recording was disabled or no recorder — skipping upload.");
                     document.getElementById('uploadStatusContainer').classList.add('hidden');
                     document.getElementById('finalClosureMessage').classList.remove('hidden');
                 }
