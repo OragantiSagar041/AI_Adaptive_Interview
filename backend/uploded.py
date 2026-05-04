@@ -111,14 +111,25 @@ import time
 request_counts = defaultdict(list)
 RATE_LIMIT = 50  # requests per minute per IP
 RATE_LIMIT_WINDOW = 60
+RATE_LIMIT_EXEMPT_PATHS = {
+    "/",
+    "/health",
+    "/live-heartbeat",
+}
+RATE_LIMIT_EXEMPT_PREFIXES = (
+    "/uploads",
+    "/admin/ongoing-interviews",
+    "/admin/live-snapshot",
+)
 
 @app.middleware("http")
 async def rate_limit_middleware(request: Request, call_next):
-    # Skip rate limiting for static files and health check
-    if request.url.path.startswith("/uploads") or request.url.path == "/health" or request.url.path == "/":
+    # Live monitor polling/heartbeats are intentionally frequent and low-risk.
+    if request.url.path in RATE_LIMIT_EXEMPT_PATHS or request.url.path.startswith(RATE_LIMIT_EXEMPT_PREFIXES):
         return await call_next(request)
         
-    client_ip = request.client.host if request.client else "unknown"
+    forwarded_for = request.headers.get("x-forwarded-for", "")
+    client_ip = forwarded_for.split(",")[0].strip() if forwarded_for else (request.client.host if request.client else "unknown")
     now = time.time()
     
     # Filter out old requests
@@ -2239,6 +2250,13 @@ class VerifyOTPRequest(BaseModel):
     username: str
     otp: str
 
+class AdminRegister(BaseModel):
+    username: str
+    password: str
+    email: str
+    role: str = "admin"  # admin or master
+    subscription_type: str = "trial"  # trial, basic, advance
+
 class ResetPasswordRequest(BaseModel):
     username: str
     otp: str
@@ -2992,13 +3010,57 @@ def send_otp_email(email: str, name: str, otp: str):
     except:
         return False
 
+@app.post("/admin/register")
+async def admin_register(data: AdminRegister):
+    existing = admins_collection.find_one({"username": data.username})
+    if existing:
+        raise HTTPException(status_code=400, detail="Username already exists")
+    
+    hashed_pw = hash_password(data.password)
+    expiry = (datetime.now(timezone.utc) + timedelta(days=15)).isoformat()
+    
+    new_admin = {
+        "username": data.username,
+        "password": hashed_pw,
+        "email": data.email,
+        "role": data.role,
+        "subscription_type": data.subscription_type,
+        "subscription_expiry": expiry,
+        "created_at": datetime.now(timezone.utc).isoformat()
+    }
+    
+    admins_collection.insert_one(new_admin)
+    return {"status": "success", "message": "Admin registered with 15-day trial"}
+
 @app.post("/admin/login")
 async def admin_login(data: AdminLogin):
     hashed_pw = hash_password(data.password)
     user = admins_collection.find_one({"username": data.username, "password": hashed_pw})
     if user:
         email = user.get("email", "")
-        return {"status": "success", "admin_id": str(user["_id"]), "username": user["username"], "email": email}
+        role = user.get("role", "admin")
+        sub_type = user.get("subscription_type", "trial")
+        sub_expiry = user.get("subscription_expiry", "")
+        
+        # Calculate days remaining
+        days_left = 0
+        if sub_expiry:
+            try:
+                expiry_dt = datetime.fromisoformat(sub_expiry)
+                delta = expiry_dt - datetime.now(timezone.utc)
+                days_left = max(0, delta.days)
+            except:
+                pass
+                
+        return {
+            "status": "success", 
+            "admin_id": str(user["_id"]), 
+            "username": user["username"], 
+            "email": email,
+            "role": role,
+            "subscription_type": sub_type,
+            "days_left": days_left
+        }
     else:
         raise HTTPException(status_code=401, detail="Invalid credentials")
 
@@ -3011,6 +3073,9 @@ async def update_profile(data: UpdateProfileRequest):
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Database error: {e}")
 
+'''
+Disabled broken duplicate session-management block. The corrected implementation is
+defined below, immediately before the session lookup endpoint.
 def extract_info_from_resume(text: str) -> Dict:
     try:
         raw = chat_completion(
@@ -3197,6 +3262,181 @@ async def bulk_create_sessions(data: BulkCreateSession):
         "results": results
     }
 
+'''
+
+def extract_info_from_resume(text: str) -> Dict:
+    try:
+        raw = chat_completion(
+            messages=[{
+                "role": "system",
+                "content": "You are a professional recruiting assistant. Extract the candidate's full name and email address from the provided resume text. Return ONLY a valid JSON object with keys 'name' and 'email'. If either cannot be found, use null."
+            }, {
+                "role": "user",
+                "content": text[:5000]
+            }],
+            model="google/gemini-2.0-flash-001"
+        )
+        res = extract_json(raw)
+        if res:
+            return res
+        return {"name": None, "email": None}
+    except Exception as e:
+        print(f"Error extracting candidate info: {e}")
+        return {"name": None, "email": None}
+
+@app.post("/admin/parse-resume")
+async def parse_resume(file: UploadFile = File(...)):
+    allowed_mimes = [
+        "application/pdf",
+        "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+        "application/msword",
+        "text/plain",
+    ]
+    if file.content_type and file.content_type not in allowed_mimes:
+        raise HTTPException(status_code=400, detail="Invalid file type. Only PDF, DOCX, and TXT are allowed for security reasons.")
+
+    content = await file.read()
+    text = extract_text_from_file(content, file.filename)
+    info = extract_info_from_resume(text)
+    return {
+        "status": "success",
+        "text": text,
+        "name": info.get("name"),
+        "email": info.get("email"),
+    }
+
+@app.post("/admin/create-session")
+async def create_session(data: CreateSession):
+    link_id = str(uuid.uuid4())
+    now = datetime.now(timezone.utc)
+
+    scheduled_expiry = parse_iso_datetime(data.scheduled_end)
+    expires_at = (scheduled_expiry.isoformat() if scheduled_expiry else (now + timedelta(hours=24)).isoformat())
+
+    session_doc = {
+        "link_id": link_id,
+        "candidate_name": data.candidate_name,
+        "candidate_email": data.candidate_email,
+        "resume_text": data.resume_text,
+        "job_description": data.job_description,
+        "custom_email_html": data.custom_email_html,
+        "created_by": data.admin_id,
+        "created_at": now.isoformat(),
+        "expires_at": expires_at,
+        "interview_duration": data.interview_duration,
+        "record_video": data.record_video,
+        "status": "pending",
+    }
+
+    if data.scheduled_start:
+        session_doc["scheduled_start"] = data.scheduled_start
+    if data.scheduled_end:
+        session_doc["scheduled_end"] = data.scheduled_end
+
+    insert_result = interview_sessions_collection.insert_one(session_doc)
+    session_doc["_id"] = insert_result.inserted_id
+
+    link_url = f"{FRONTEND_URL}/index.html?session_id={link_id}"
+    email_result = queue_or_send_interview_email(session_doc, link_url)
+
+    return {
+        "status": "success",
+        "link_id": link_id,
+        "link_url": link_url,
+        "email_sent": email_result["email_sent"],
+        "email_scheduled": email_result["email_scheduled"],
+        "email_send_at": email_result["email_send_at"],
+    }
+
+class BulkCandidate(BaseModel):
+    candidate_name: str
+    candidate_email: str
+    resume_text: str = ""
+    record_video: bool = True
+
+class BulkCreateSession(BaseModel):
+    candidates: List[BulkCandidate]
+    job_description: str
+    admin_id: str
+    interview_duration: int = 30
+    record_video: bool = True
+    custom_email_html: str = ""
+    scheduled_start: str = ""
+    scheduled_end: str = ""
+
+@app.post("/admin/bulk-create-sessions")
+async def bulk_create_sessions(data: BulkCreateSession):
+    if not data.candidates:
+        raise HTTPException(status_code=400, detail="No candidates provided")
+
+    results = []
+    now = datetime.now(timezone.utc)
+
+    for candidate in data.candidates:
+        link_id = str(uuid.uuid4())
+        link_url = f"{FRONTEND_URL}/index.html?session_id={link_id}"
+        candidate_error = None
+
+        try:
+            scheduled_expiry = parse_iso_datetime(data.scheduled_end)
+            session_doc = {
+                "link_id": link_id,
+                "candidate_name": candidate.candidate_name,
+                "candidate_email": candidate.candidate_email,
+                "resume_text": candidate.resume_text,
+                "job_description": data.job_description,
+                "custom_email_html": data.custom_email_html,
+                "created_by": data.admin_id,
+                "created_at": now.isoformat(),
+                "expires_at": (scheduled_expiry.isoformat() if scheduled_expiry else (now + timedelta(hours=24)).isoformat()),
+                "interview_duration": data.interview_duration,
+                "record_video": candidate.record_video,
+                "status": "pending",
+            }
+            if data.scheduled_start:
+                session_doc["scheduled_start"] = data.scheduled_start
+            if data.scheduled_end:
+                session_doc["scheduled_end"] = data.scheduled_end
+            insert_result = interview_sessions_collection.insert_one(session_doc)
+            session_doc["_id"] = insert_result.inserted_id
+        except Exception as db_err:
+            print(f"DB Error for {candidate.candidate_email}: {db_err}")
+            candidate_error = f"DB error: {db_err}"
+
+        email_sent = False
+        email_scheduled = False
+        email_send_at = ""
+        if not candidate_error:
+            try:
+                email_result = queue_or_send_interview_email(session_doc, link_url)
+                email_sent = email_result["email_sent"]
+                email_scheduled = email_result["email_scheduled"]
+                email_send_at = email_result["email_send_at"]
+            except Exception as email_err:
+                print(f"Email Error for {candidate.candidate_email}: {email_err}")
+
+        results.append({
+            "candidate_name": candidate.candidate_name,
+            "candidate_email": candidate.candidate_email,
+            "link_id": link_id if not candidate_error else None,
+            "link_url": link_url if not candidate_error else None,
+            "email_sent": email_sent,
+            "email_scheduled": email_scheduled,
+            "email_send_at": email_send_at,
+            "status": "error" if candidate_error else "success",
+            "error": candidate_error,
+        })
+
+    successful = sum(1 for r in results if r["status"] == "success")
+    print(f"Bulk sessions created: {successful}/{len(results)}")
+
+    return {
+        "status": "success",
+        "total": len(results),
+        "successful": successful,
+        "failed": len(results) - successful,
+        "results": results,
+    }
 
 @app.get("/session/{link_id}")
 async def get_session(link_id: str):

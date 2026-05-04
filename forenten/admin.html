@@ -5211,12 +5211,20 @@
         // --- LIVE ONGOING INTERVIEWS & MONITORING ---
         let ongoingPollTimer = null;
         let liveResultsPollTimer = null;
+        let ongoingBackoffUntil = 0;
 
         async function fetchOngoingInterviews() {
             try {
                 if (!adminId) return;
+                if (Date.now() < ongoingBackoffUntil) return;
                 const response = await fetch(API_BASE + '/admin/ongoing-interviews?admin_id=' + adminId);
+                if (response.status === 429) {
+                    ongoingBackoffUntil = Date.now() + 30000;
+                    console.warn('Ongoing interview polling rate-limited; backing off for 30 seconds.');
+                    return;
+                }
                 if (!response.ok) return;
+                ongoingBackoffUntil = 0;
                 const data = await response.json();
                 
                 const count = data.count || 0;
@@ -5253,7 +5261,7 @@
             document.getElementById('liveResultsModal').classList.remove('hidden');
             fetchOngoingInterviews();
             if (!liveResultsPollTimer) {
-                liveResultsPollTimer = setInterval(fetchOngoingInterviews, 5000);
+                liveResultsPollTimer = setInterval(fetchOngoingInterviews, 12000);
             }
         }
 
@@ -5267,6 +5275,7 @@
 
         const adminRtcConnections = {};
         const adminSignalingSockets = {};
+        const adminWebRtcBackoffUntil = {};
         const adminRtcConfig = {
             iceServers: [
                 { urls: 'stun:stun.l.google.com:19302' },
@@ -5306,6 +5315,7 @@
 
         async function initAdminWebRTC(linkId, videoElement, force = false) {
             if (adminRtcConnections[linkId] && !force) return;
+            if (!force && Date.now() < (adminWebRtcBackoffUntil[linkId] || 0)) return;
             if (force) closeAdminWebRTC(linkId);
 
             const wsUrl = API_BASE.replace('http', 'ws') + '/ws/webrtc/admin/' + linkId;
@@ -5314,6 +5324,7 @@
             setLiveFeedPlaceholder(linkId, 'Connecting live feed...');
 
             socket.onopen = async () => {
+                adminWebRtcBackoffUntil[linkId] = 0;
                 const pc = new RTCPeerConnection(adminRtcConfig);
                 adminRtcConnections[linkId] = pc;
 
@@ -5388,6 +5399,7 @@
             };
 
             socket.onerror = () => {
+                adminWebRtcBackoffUntil[linkId] = Date.now() + 30000;
                 setLiveFeedPlaceholder(linkId, 'Live connection unavailable');
             };
 
@@ -5535,7 +5547,7 @@
             if (document.getElementById('dashboardSection').classList.contains('hidden') === false) {
                 fetchOngoingInterviews();
             }
-        }, 10000);
+        }, 15000);
 
         const originalSwitchView = switchView;
         switchView = function(viewId) {

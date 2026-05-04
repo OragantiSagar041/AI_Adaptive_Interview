@@ -4149,6 +4149,7 @@ Output: ${formatCodingValue(testCase.output)}${resultBlock}</pre>
         let _lastFrameTime = performance.now();
         let _frameCount = 0;
         let _currentFps = 0;
+        let _heartbeatBackoffUntil = 0;
 
         // Track FPS from video element
         function _trackVideoFps() {
@@ -4224,6 +4225,7 @@ Output: ${formatCodingValue(testCase.output)}${resultBlock}</pre>
 
         async function _sendHeartbeat() {
             if (!_heartbeatLinkId || !interviewActive) return;
+            if (Date.now() < _heartbeatBackoffUntil) return;
             try {
                 if (!_audioAnalyser && window.mediaStream) {
                     _setupAudioAnalyser();
@@ -4249,11 +4251,17 @@ Output: ${formatCodingValue(testCase.output)}${resultBlock}</pre>
                     face_visible: window._faceVisible !== undefined ? window._faceVisible : null
                 };
 
-                await fetch(`${API_BASE_URL}/live-heartbeat`, {
+                const response = await fetch(`${API_BASE_URL}/live-heartbeat`, {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify(payload)
                 });
+                if (response.status === 429) {
+                    _heartbeatBackoffUntil = Date.now() + 30000;
+                    console.warn('[Heartbeat] rate limited, backing off for 30 seconds');
+                } else if (response.ok) {
+                    _heartbeatBackoffUntil = 0;
+                }
             } catch (e) {
                 // Silent fail — heartbeat is non-critical
                 console.debug('[Heartbeat] send failed:', e.message);
@@ -4319,6 +4327,7 @@ Output: ${formatCodingValue(testCase.output)}${resultBlock}</pre>
         let signalingSocket = null;
         let signalingLinkId = null;
         let reconnectWebRTCTimer = null;
+        let signalingBackoffUntil = 0;
         const rtcConfig = {
             iceServers: [
                 { urls: 'stun:stun.l.google.com:19302' },
@@ -4387,6 +4396,7 @@ Output: ${formatCodingValue(testCase.output)}${resultBlock}</pre>
 
         function startWebRTCSignaling(linkId) {
             if (!linkId) return;
+            if (Date.now() < signalingBackoffUntil) return;
             if (signalingSocket && signalingLinkId === linkId &&
                 (signalingSocket.readyState === WebSocket.OPEN || signalingSocket.readyState === WebSocket.CONNECTING)) {
                 return;
@@ -4400,6 +4410,10 @@ Output: ${formatCodingValue(testCase.output)}${resultBlock}</pre>
             signalingLinkId = linkId;
             const wsUrl = API_BASE_URL.replace('http', 'ws') + '/ws/webrtc/candidate/' + linkId;
             signalingSocket = new WebSocket(wsUrl);
+
+            signalingSocket.onopen = () => {
+                signalingBackoffUntil = 0;
+            };
 
             signalingSocket.onmessage = async (event) => {
                 const data = JSON.parse(event.data);
@@ -4452,9 +4466,10 @@ Output: ${formatCodingValue(testCase.output)}${resultBlock}</pre>
             signalingSocket.onclose = () => {
                 // Try to reconnect in 5 seconds
                 closeCandidateWebRTC();
+                signalingBackoffUntil = Date.now() + 15000;
                 reconnectWebRTCTimer = setTimeout(() => {
                     if (window.interviewActive) startWebRTCSignaling(linkId);
-                }, 5000);
+                }, 15000);
             };
         }
     </script>
