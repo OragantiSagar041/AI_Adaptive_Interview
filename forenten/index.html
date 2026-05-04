@@ -2104,6 +2104,7 @@
         let backgroundNoiseFrameCount = 0;
         let backgroundNoiseCooldownUntil = 0;
         let interviewActive = false;
+        let interviewSubmitted = false;
         let tabViolationCount = 0;
 
         window.API_BASE_URL = (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1')
@@ -2369,6 +2370,9 @@
             // Enforce Fullscreen
             enableFullscreen();
             interviewActive = true;
+            window.interviewActive = true;
+            interviewSubmitted = false;
+            window.interviewSubmitted = false;
 
             // Reset recording controls
             document.getElementById('startButton').disabled = false;
@@ -3975,6 +3979,9 @@ Output: ${formatCodingValue(testCase.output)}${resultBlock}</pre>
             // Stop the global countdown timer
             stopGlobalCountdown();
             interviewActive = false;
+            window.interviewActive = false;
+            interviewSubmitted = true;
+            window.interviewSubmitted = true;
             // Stop live heartbeat — interview is ending
             if (typeof stopLiveHeartbeat === 'function') stopLiveHeartbeat();
 
@@ -4086,8 +4093,12 @@ Output: ${formatCodingValue(testCase.output)}${resultBlock}</pre>
         }
 
         function updateProgress(percent) {
-            document.getElementById('progress').textContent = percent;
-            document.getElementById('progressBar').style.width = `${percent}%`;
+            const safePercent = Math.max(0, Math.min(100, Math.round(Number(percent) || 0)));
+            const progressText = document.getElementById('progress');
+            const progressBar = document.getElementById('progressBar');
+
+            if (progressText) progressText.textContent = safePercent;
+            if (progressBar) progressBar.style.width = `${safePercent}%`;
         }
 
         function showStatus(message, type = 'info') {
@@ -4214,6 +4225,9 @@ Output: ${formatCodingValue(testCase.output)}${resultBlock}</pre>
         async function _sendHeartbeat() {
             if (!_heartbeatLinkId || !interviewActive) return;
             try {
+                if (!_audioAnalyser && window.mediaStream) {
+                    _setupAudioAnalyser();
+                }
                 const snapshot = _captureSnapshot();
                 const audioLevel = _getAudioLevel();
                 const internetKbps = await _estimateSpeed();
@@ -4251,10 +4265,10 @@ Output: ${formatCodingValue(testCase.output)}${resultBlock}</pre>
             _heartbeatLinkId = linkId;
             window._interviewStartTime = window._interviewStartTime || Date.now();
             _setupAudioAnalyser();
+            _heartbeatTimer = setInterval(_sendHeartbeat, 5000);
             _trackVideoFps();
             // Send first one immediately then every 5 s
             _sendHeartbeat();
-            _heartbeatTimer = setInterval(_sendHeartbeat, 5000);
             console.log('[Heartbeat] started for', linkId);
         }
 
@@ -4303,6 +4317,8 @@ Output: ${formatCodingValue(testCase.output)}${resultBlock}</pre>
     <script>
         let rtcPeerConnection = null;
         let signalingSocket = null;
+        let signalingLinkId = null;
+        let reconnectWebRTCTimer = null;
         const rtcConfig = {
             iceServers: [
                 { urls: 'stun:stun.l.google.com:19302' },
@@ -4310,7 +4326,78 @@ Output: ${formatCodingValue(testCase.output)}${resultBlock}</pre>
             ]
         };
 
+        function getActiveCandidateMediaStream() {
+            const stream = window.mediaStream;
+            if (!stream || !stream.active) return null;
+            const hasLiveTrack = stream.getTracks().some(track => track.readyState === 'live');
+            return hasLiveTrack ? stream : null;
+        }
+
+        function addLocalTracksToPeerConnection(pc, stream) {
+            if (!pc || !stream) return 0;
+            const existingTrackIds = new Set(
+                pc.getSenders()
+                    .map(sender => sender.track && sender.track.id)
+                    .filter(Boolean)
+            );
+            let added = 0;
+            stream.getTracks().forEach(track => {
+                if (track.readyState === 'live' && !existingTrackIds.has(track.id)) {
+                    pc.addTrack(track, stream);
+                    added++;
+                }
+            });
+            return added;
+        }
+
+        async function waitForCandidateMediaStream(timeoutMs = 12000) {
+            let stream = getActiveCandidateMediaStream();
+            if (stream) return stream;
+
+            if (interviewActive && typeof startFullSessionRecording === 'function') {
+                await startFullSessionRecording().catch(err => {
+                    console.warn('[WebRTC] Could not start media for live monitor:', err);
+                });
+                stream = getActiveCandidateMediaStream();
+                if (stream) return stream;
+            }
+
+            const startedAt = Date.now();
+            while (Date.now() - startedAt < timeoutMs) {
+                await new Promise(resolve => setTimeout(resolve, 300));
+                stream = getActiveCandidateMediaStream();
+                if (stream) return stream;
+            }
+
+            return null;
+        }
+
+        function notifyCandidateMediaReady() {
+            if (signalingSocket && signalingSocket.readyState === WebSocket.OPEN) {
+                signalingSocket.send(JSON.stringify({ type: 'media-ready' }));
+            }
+        }
+
+        function closeCandidateWebRTC() {
+            if (rtcPeerConnection) {
+                try { rtcPeerConnection.close(); } catch (e) { console.warn(e); }
+                rtcPeerConnection = null;
+            }
+        }
+
         function startWebRTCSignaling(linkId) {
+            if (!linkId) return;
+            if (signalingSocket && signalingLinkId === linkId &&
+                (signalingSocket.readyState === WebSocket.OPEN || signalingSocket.readyState === WebSocket.CONNECTING)) {
+                return;
+            }
+
+            if (reconnectWebRTCTimer) {
+                clearTimeout(reconnectWebRTCTimer);
+                reconnectWebRTCTimer = null;
+            }
+
+            signalingLinkId = linkId;
             const wsUrl = API_BASE_URL.replace('http', 'ws') + '/ws/webrtc/candidate/' + linkId;
             signalingSocket = new WebSocket(wsUrl);
 
@@ -4318,16 +4405,11 @@ Output: ${formatCodingValue(testCase.output)}${resultBlock}</pre>
                 const data = JSON.parse(event.data);
                 if (data.type === 'offer') {
                     console.log('Received WebRTC offer from admin');
+                    closeCandidateWebRTC();
                     rtcPeerConnection = new RTCPeerConnection(rtcConfig);
-                    
-                    if (window.mediaStream) {
-                        window.mediaStream.getTracks().forEach(track => {
-                            rtcPeerConnection.addTrack(track, window.mediaStream);
-                        });
-                    }
 
                     rtcPeerConnection.onicecandidate = (e) => {
-                        if (e.candidate) {
+                        if (e.candidate && signalingSocket && signalingSocket.readyState === WebSocket.OPEN) {
                             signalingSocket.send(JSON.stringify({
                                 type: 'ice-candidate',
                                 candidate: e.candidate
@@ -4335,14 +4417,27 @@ Output: ${formatCodingValue(testCase.output)}${resultBlock}</pre>
                         }
                     };
 
+                    rtcPeerConnection.onconnectionstatechange = () => {
+                        const state = rtcPeerConnection && rtcPeerConnection.connectionState;
+                        if (state === 'failed' || state === 'disconnected') {
+                            notifyCandidateMediaReady();
+                        }
+                    };
+
                     await rtcPeerConnection.setRemoteDescription(new RTCSessionDescription(data.offer));
+                    const stream = await waitForCandidateMediaStream(interviewActive ? 12000 : 3000);
+                    const attachedTracks = addLocalTracksToPeerConnection(rtcPeerConnection, stream);
+                    console.log('[WebRTC] Attached local tracks:', attachedTracks);
+
                     const answer = await rtcPeerConnection.createAnswer();
                     await rtcPeerConnection.setLocalDescription(answer);
 
-                    signalingSocket.send(JSON.stringify({
+                    if (signalingSocket && signalingSocket.readyState === WebSocket.OPEN) {
+                        signalingSocket.send(JSON.stringify({
                         type: 'answer',
                         answer: answer
-                    }));
+                        }));
+                    }
                 } else if (data.type === 'ice-candidate') {
                     if (rtcPeerConnection) {
                         try {
@@ -4356,7 +4451,10 @@ Output: ${formatCodingValue(testCase.output)}${resultBlock}</pre>
             
             signalingSocket.onclose = () => {
                 // Try to reconnect in 5 seconds
-                setTimeout(() => { if(window.interviewActive) startWebRTCSignaling(linkId); }, 5000);
+                closeCandidateWebRTC();
+                reconnectWebRTCTimer = setTimeout(() => {
+                    if (window.interviewActive) startWebRTCSignaling(linkId);
+                }, 5000);
             };
         }
     </script>
@@ -4452,6 +4550,16 @@ Output: ${formatCodingValue(testCase.output)}${resultBlock}</pre>
     let fullSessionRecorder = null;
     let fullSessionChunks = [];
 
+    function announceCandidateMediaReady() {
+        const params = new URLSearchParams(window.location.search);
+        const sessionId = params.get('session_id') || params.get('session');
+        if (!sessionId) return;
+
+        if (typeof startLiveHeartbeat === 'function') startLiveHeartbeat(sessionId);
+        if (typeof startWebRTCSignaling === 'function') startWebRTCSignaling(sessionId);
+        if (typeof notifyCandidateMediaReady === 'function') notifyCandidateMediaReady();
+    }
+
     async function startCameraManual() {
         document.getElementById('cameraFallbackBtn').style.display = 'none';
         document.getElementById('cameraLoading').textContent = "Requesting access...";
@@ -4482,6 +4590,11 @@ Output: ${formatCodingValue(testCase.output)}${resultBlock}</pre>
         console.log("Initializing full session recording...");
         const fallbackBtn = document.getElementById('cameraFallbackBtn');
         const loadingText = document.getElementById('cameraLoading');
+
+        if (window.mediaStream && window.mediaStream.active && fullSessionRecorder && fullSessionRecorder.state === 'recording') {
+            announceCandidateMediaReady();
+            return true;
+        }
 
         // Cleanup test video to prevent conflicts
         const testVideo = document.getElementById('testVideo');
@@ -4536,9 +4649,11 @@ Output: ${formatCodingValue(testCase.output)}${resultBlock}</pre>
                 // START FACE DETECTION
                 startFaceDetection(videoPreview);
                 startBackgroundNoiseMonitor(stream);
+                announceCandidateMediaReady();
 
             } else {
                 console.error("Video preview element not found!");
+                announceCandidateMediaReady();
             }
 
             if (window.recordVideo !== false) {
@@ -4563,6 +4678,7 @@ Output: ${formatCodingValue(testCase.output)}${resultBlock}</pre>
             } else {
                 console.log("Full session recording skipped (record_video=false) 🛑");
             }
+            announceCandidateMediaReady();
             return true; // SUCCESS
 
         } catch (err) {
@@ -5095,7 +5211,7 @@ Output: ${formatCodingValue(testCase.output)}${resultBlock}</pre>
     window.addEventListener('beforeunload', (e) => {
         const urlParams = new URLSearchParams(window.location.search);
         const sid = urlParams.get('session_id') || urlParams.get('session');
-        if (sid && interviewActive) {
+        if (sid && interviewSubmitted) {
             console.log('[BEFOREUNLOAD] Marking session completed via sendBeacon');
             navigator.sendBeacon(
                 `${API_BASE_URL}/complete-session/${sid}`,

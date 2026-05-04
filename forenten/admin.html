@@ -5274,12 +5274,44 @@
             ]
         };
 
-        async function initAdminWebRTC(linkId, videoElement) {
-            if (adminRtcConnections[linkId]) return;
+        function closeAdminWebRTC(linkId) {
+            if (adminSignalingSockets[linkId]) {
+                try { adminSignalingSockets[linkId].close(); } catch (e) {}
+                delete adminSignalingSockets[linkId];
+            }
+            if (adminRtcConnections[linkId]) {
+                try { adminRtcConnections[linkId].close(); } catch (e) {}
+                delete adminRtcConnections[linkId];
+            }
+        }
+
+        function updateLiveFallbackSnapshot(linkId, snapshot) {
+            const img = document.getElementById('snapshot_' + linkId);
+            const placeholder = document.getElementById('placeholder_' + linkId);
+            if (!img || !snapshot) return;
+
+            img.src = snapshot;
+            if (!img.dataset.webrtcConnected) {
+                img.style.display = 'block';
+                if (placeholder) placeholder.style.display = 'none';
+            }
+        }
+
+        function setLiveFeedPlaceholder(linkId, message) {
+            const placeholder = document.getElementById('placeholder_' + linkId);
+            if (!placeholder) return;
+            placeholder.style.display = 'flex';
+            placeholder.innerHTML = `<div style="text-align:center;"><i class="fas fa-video-slash" style="font-size: 2rem; margin-bottom: 0.5rem; display:block;"></i>${message}</div>`;
+        }
+
+        async function initAdminWebRTC(linkId, videoElement, force = false) {
+            if (adminRtcConnections[linkId] && !force) return;
+            if (force) closeAdminWebRTC(linkId);
 
             const wsUrl = API_BASE.replace('http', 'ws') + '/ws/webrtc/admin/' + linkId;
             const socket = new WebSocket(wsUrl);
             adminSignalingSockets[linkId] = socket;
+            setLiveFeedPlaceholder(linkId, 'Connecting live feed...');
 
             socket.onopen = async () => {
                 const pc = new RTCPeerConnection(adminRtcConfig);
@@ -5297,7 +5329,27 @@
                 pc.ontrack = (e) => {
                     if (videoElement.srcObject !== e.streams[0]) {
                         videoElement.srcObject = e.streams[0];
-                        videoElement.play().catch(console.error);
+                        videoElement.style.display = 'block';
+                        videoElement.play().then(() => {
+                            const img = document.getElementById('snapshot_' + linkId);
+                            const placeholder = document.getElementById('placeholder_' + linkId);
+                            if (img) {
+                                img.dataset.webrtcConnected = 'true';
+                                img.style.display = 'none';
+                            }
+                            if (placeholder) placeholder.style.display = 'none';
+                        }).catch(console.error);
+                    }
+                };
+
+                pc.onconnectionstatechange = () => {
+                    const state = pc.connectionState;
+                    if (state === 'failed' || state === 'disconnected') {
+                        setLiveFeedPlaceholder(linkId, 'Reconnecting feed...');
+                        setTimeout(() => {
+                            const currentVideo = document.getElementById('video_' + linkId);
+                            if (currentVideo) initAdminWebRTC(linkId, currentVideo, true);
+                        }, 2000);
                     }
                 };
 
@@ -5322,10 +5374,21 @@
                         } catch(e) {}
                     } else if (data.type === 'candidate_disconnected') {
                         videoElement.srcObject = null;
+                        videoElement.style.display = 'none';
                         pc.close();
                         delete adminRtcConnections[linkId];
+                        setLiveFeedPlaceholder(linkId, 'Candidate disconnected');
+                    } else if (data.type === 'media-ready') {
+                        setTimeout(() => {
+                            const currentVideo = document.getElementById('video_' + linkId);
+                            if (currentVideo) initAdminWebRTC(linkId, currentVideo, true);
+                        }, 300);
                     }
                 };
+            };
+
+            socket.onerror = () => {
+                setLiveFeedPlaceholder(linkId, 'Live connection unavailable');
             };
 
             socket.onclose = () => {
@@ -5400,6 +5463,13 @@
                     if (detailsDiv) {
                         detailsDiv.innerHTML = buildCardDetailsHtml(s, isOnline, statusColor, statusText);
                     }
+                    updateLiveFallbackSnapshot(s.link_id, s.snapshot);
+                    if (isOnline) {
+                        const video = document.getElementById('video_' + s.link_id);
+                        if (video && !adminRtcConnections[s.link_id]) {
+                            initAdminWebRTC(s.link_id, video);
+                        }
+                    }
                     return; // Skip re-creating this card
                 }
                 
@@ -5411,13 +5481,30 @@
                 snapContainer.style.cssText = 'width: 100%; aspect-ratio: 16/9; background: #000; position: relative; border-bottom: 1px solid #334155; display:flex; align-items:center; justify-content:center; overflow:hidden;';
                 
                 if (isOnline) {
+                    const snapshot = document.createElement('img');
+                    snapshot.id = 'snapshot_' + s.link_id;
+                    snapshot.className = 'live-fallback-snapshot';
+                    snapshot.alt = 'Candidate live snapshot';
+                    snapshot.style.cssText = 'width: 100%; height: 100%; object-fit: contain; display: none; background:#000;';
+                    if (s.snapshot) {
+                        snapshot.src = s.snapshot;
+                        snapshot.style.display = 'block';
+                    }
+                    snapContainer.appendChild(snapshot);
+
                     const video = document.createElement('video');
                     video.autoplay = true;
                     video.muted = true;
                     video.playsInline = true;
-                    video.style.cssText = 'width: 100%; height: 100%; object-fit: contain;';
+                    video.style.cssText = 'position:absolute; inset:0; width: 100%; height: 100%; object-fit: contain; display:none;';
                     video.id = 'video_' + s.link_id;
                     snapContainer.appendChild(video);
+
+                    const placeholder = document.createElement('div');
+                    placeholder.id = 'placeholder_' + s.link_id;
+                    placeholder.style.cssText = `position:absolute; inset:0; display:${s.snapshot ? 'none' : 'flex'}; align-items:center; justify-content:center; color:#64748b; font-size:0.9rem; background:#000;`;
+                    placeholder.innerHTML = '<div style="text-align:center;"><i class="fas fa-video" style="font-size: 2rem; margin-bottom: 0.5rem; display:block;"></i>Connecting live feed...</div>';
+                    snapContainer.appendChild(placeholder);
                     
                     initAdminWebRTC(s.link_id, video);
                 } else {

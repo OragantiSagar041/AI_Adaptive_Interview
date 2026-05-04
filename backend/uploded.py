@@ -3816,11 +3816,15 @@ async def get_ongoing_interviews(admin_id: str):
             "created_at": row.get("created_at", ""),
             "interview_id": row.get("interview_id", ""),
             "online": online,
+            "snapshot": snap.get("snapshot"),
             "current_question": snap.get("current_question"),
             "total_questions": snap.get("total_questions"),
             "elapsed_seconds": snap.get("elapsed_seconds"),
             "audio_level": snap.get("audio_level"),
             "internet_kbps": snap.get("internet_kbps"),
+            "video_fps": snap.get("video_fps"),
+            "tab_active": snap.get("tab_active", True),
+            "face_visible": snap.get("face_visible"),
         })
 
     return {"sessions": sessions, "count": len(sessions)}
