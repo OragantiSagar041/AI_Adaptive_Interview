@@ -2953,8 +2953,8 @@
                 document.body.classList.add('dashboard-active');
                 
                 switchView('overview');
-                fetchSessions();
-                fetchStats();
+                loadDashboardSessions();
+                loadDashboardStats();
             }
         });
 
@@ -5215,9 +5215,7 @@
         async function fetchOngoingInterviews() {
             try {
                 if (!adminId) return;
-                const response = await fetch(API_BASE + '/admin/ongoing-interviews?admin_id=' + adminId, {
-                    headers: { 'Authorization': 'Bearer ' + authToken }
-                });
+                const response = await fetch(API_BASE + '/admin/ongoing-interviews?admin_id=' + adminId);
                 if (!response.ok) return;
                 const data = await response.json();
                 
@@ -5420,10 +5418,10 @@
             }
         }, 10000);
 
-        const originalShowDashboard = showDashboard;
-        showDashboard = function() {
-            if (typeof originalShowDashboard === 'function') originalShowDashboard();
-            fetchOngoingInterviews();
+        const originalSwitchView = switchView;
+        switchView = function(viewId) {
+            if (typeof originalSwitchView === 'function') originalSwitchView(viewId);
+            if (viewId === 'overview') fetchOngoingInterviews();
         }
     </script>
 
