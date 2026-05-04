@@ -4320,9 +4320,9 @@ Output: ${formatCodingValue(testCase.output)}${resultBlock}</pre>
                     console.log('Received WebRTC offer from admin');
                     rtcPeerConnection = new RTCPeerConnection(rtcConfig);
                     
-                    if (window.stream) {
-                        window.stream.getTracks().forEach(track => {
-                            rtcPeerConnection.addTrack(track, window.stream);
+                    if (window.mediaStream) {
+                        window.mediaStream.getTracks().forEach(track => {
+                            rtcPeerConnection.addTrack(track, window.mediaStream);
                         });
                     }
 
@@ -4695,7 +4695,7 @@ Output: ${formatCodingValue(testCase.output)}${resultBlock}</pre>
 
         if (!fullSessionRecorder && window.recordVideo === false) {
             console.log("Skipping save: video recording was disabled for this session.");
-            if (window.stream) window.stream.getTracks().forEach(track => track.stop());
+            if (window.mediaStream) window.mediaStream.getTracks().forEach(track => track.stop());
             return;
         }
 
@@ -4811,8 +4811,8 @@ Output: ${formatCodingValue(testCase.output)}${resultBlock}</pre>
                                     if (progressText) progressText.textContent = "Upload complete!";
                                     
                                     const normalizedPath = data.file_path ? data.file_path.replace(/\\/g, '/') : '';
-                                    if (window.stream) {
-                                        window.stream.getTracks().forEach(track => track.stop());
+                                    if (window.mediaStream) {
+                                        window.mediaStream.getTracks().forEach(track => track.stop());
                                     }
                                     uploadResolve();
                                 } catch (e) {
@@ -5106,5 +5106,6 @@ Output: ${formatCodingValue(testCase.output)}${resultBlock}</pre>
 </script>
 
 </html>
+
 
 
