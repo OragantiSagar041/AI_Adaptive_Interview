@@ -5348,14 +5348,27 @@
                  .replace(/'/g, "&#039;");
         }
 
+        function buildCardDetailsHtml(s, isOnline, statusColor, statusText) {
+            return `<div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 0.5rem;"><h3 style="font-size: 1.1rem; font-weight: 600; color: #f8fafc; margin: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;">${escapeHtml(s.candidate_name)}</h3><div style="display: flex; align-items: center; gap: 4px; background: ${isOnline ? 'rgba(16,185,129,0.1)' : 'rgba(245,158,11,0.1)'}; padding: 2px 6px; border-radius: 12px; border: 1px solid ${statusColor};"><div style="width: 6px; height: 6px; background: ${statusColor}; border-radius: 50%;"></div><span style="font-size: 0.6rem; color: ${statusColor}; font-weight: 700;">${statusText}</span></div></div><div style="font-size: 0.8rem; color: #94a3b8; display: flex; justify-content: space-between;"><span>Q: ${s.current_question || '?'}/${s.total_questions || '?'}</span><span>${s.elapsed_seconds ? Math.floor(s.elapsed_seconds/60) + 'm ' + (s.elapsed_seconds%60) + 's' : '--'}</span></div>`;
+        }
+
         function renderLiveSessionsGrid(sessions) {
             const grid = document.getElementById('liveSessionsGrid');
             const noMsg = document.getElementById('noLiveSessionsMsg');
             
             const currentLinkIds = sessions.map(s => s.link_id);
+            // Clean up WebRTC connections for sessions that are no longer active
             Object.keys(adminSignalingSockets).forEach(id => {
                 if (!currentLinkIds.includes(id)) {
-                    adminSignalingSockets[id].close();
+                    try { adminSignalingSockets[id].close(); } catch(e) {}
+                    if (adminRtcConnections[id]) {
+                        try { adminRtcConnections[id].close(); } catch(e) {}
+                        delete adminRtcConnections[id];
+                    }
+                    delete adminSignalingSockets[id];
+                    // Remove the card from DOM
+                    const oldCard = document.getElementById('live-card-' + id);
+                    if (oldCard) oldCard.remove();
                 }
             });
 
@@ -5366,14 +5379,32 @@
             }
             
             noMsg.style.display = 'none';
-            grid.innerHTML = '';
+            // DON'T do grid.innerHTML = '' — preserve existing cards with active WebRTC
             
+            // Remove cards for sessions no longer in list
+            const existingCards = grid.querySelectorAll('[id^="live-card-"]');
+            existingCards.forEach(c => {
+                const cid = c.id.replace('live-card-', '');
+                if (!currentLinkIds.includes(cid)) c.remove();
+            });
+
             sessions.forEach(s => {
                 const isOnline = s.online;
                 const statusColor = isOnline ? '#10b981' : '#f59e0b';
                 const statusText = isOnline ? 'ONLINE' : 'AWAY';
+
+                // If card already exists with active WebRTC, just update the text details
+                const existingCard = document.getElementById('live-card-' + s.link_id);
+                if (existingCard) {
+                    const detailsDiv = existingCard.querySelector('.live-card-details');
+                    if (detailsDiv) {
+                        detailsDiv.innerHTML = buildCardDetailsHtml(s, isOnline, statusColor, statusText);
+                    }
+                    return; // Skip re-creating this card
+                }
                 
                 const card = document.createElement('div');
+                card.id = 'live-card-' + s.link_id;
                 card.style.cssText = 'background: #1e293b; border: 1px solid #334155; border-radius: 8px; overflow: hidden;';
                 
                 const snapContainer = document.createElement('div');
@@ -5403,6 +5434,7 @@
                 snapContainer.appendChild(telemetry);
                 
                 const details = document.createElement('div');
+                details.className = 'live-card-details';
                 details.style.cssText = 'padding: 1rem;';
                 details.innerHTML = `<div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 0.5rem;"><h3 style="font-size: 1.1rem; font-weight: 600; color: #f8fafc; margin: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;">${escapeHtml(s.candidate_name)}</h3><div style="display: flex; align-items: center; gap: 4px; background: ${isOnline ? 'rgba(16,185,129,0.1)' : 'rgba(245,158,11,0.1)'}; padding: 2px 6px; border-radius: 12px; border: 1px solid ${statusColor};"><div style="width: 6px; height: 6px; background: ${statusColor}; border-radius: 50%;"></div><span style="font-size: 0.6rem; color: ${statusColor}; font-weight: 700;">${statusText}</span></div></div><div style="font-size: 0.8rem; color: #94a3b8; display: flex; justify-content: space-between;"><span>Q: ${s.current_question || '?'}/${s.total_questions || '?'}</span><span>${s.elapsed_seconds ? Math.floor(s.elapsed_seconds/60) + 'm ' + (s.elapsed_seconds%60) + 's' : '--'}</span></div>`;
                 

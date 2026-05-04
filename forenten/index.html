@@ -4749,34 +4749,57 @@ Output: ${formatCodingValue(testCase.output)}${resultBlock}</pre>
                         };
 
                         let cloudinarySimInterval = null;
+                        let realProgressReceived = false;
+                        let simulatedUploadInterval = null;
+                        let simUploadPct = 1;
+
+                        // FALLBACK: Start a simulated progress immediately.
+                        // Many reverse proxies (Render, Vercel) block lengthComputable,
+                        // so xhr.upload.onprogress never fires. This ensures the bar moves.
+                        simulatedUploadInterval = setInterval(() => {
+                            if (realProgressReceived) return; // real events took over
+                            simUploadPct += 1;
+                            if (simUploadPct > 45) {
+                                clearInterval(simulatedUploadInterval);
+                                simulatedUploadInterval = null;
+                            }
+                            if (progressBar) progressBar.style.width = simUploadPct + '%';
+                            if (progressText) progressText.textContent = `Uploading ${sizeMB} MB... ${simUploadPct}%`;
+                        }, 800); // ~36 seconds to reach 45%
 
                         xhr.upload.onprogress = (e) => {
                             if (e.lengthComputable) {
+                                realProgressReceived = true;
+                                if (simulatedUploadInterval) { clearInterval(simulatedUploadInterval); simulatedUploadInterval = null; }
                                 // Scale XHR progress to 0-50% (uploading to our server)
                                 const percent = Math.floor((e.loaded / e.total) * 50);
                                 if (progressBar) progressBar.style.width = percent + '%';
                                 if (progressText) progressText.textContent = `Uploading ${sizeMB} MB... ${percent}%`;
-
-                                // Once it reaches 50%, start simulating the Cloudinary processing phase
-                                if (percent >= 50 && !cloudinarySimInterval) {
-                                    if (progressText) progressText.textContent = "Processing and saving to Cloudinary... (This may take a minute)";
-                                    let simPercent = 50;
-                                    cloudinarySimInterval = setInterval(() => {
-                                        simPercent += 1;
-                                        // Cap at 95% until we actually get the 200 OK from server
-                                        if (simPercent > 95) {
-                                            clearInterval(cloudinarySimInterval);
-                                        } else {
-                                            if (progressBar) progressBar.style.width = simPercent + '%';
-                                            if (progressText) progressText.textContent = `Processing video... ${simPercent}%`;
-                                        }
-                                    }, 1000); // 1% per second = ~45 seconds simulation
-                                }
                             }
+                            // Once real or simulated progress reaches ~50%, start Cloudinary simulation
+                        };
+
+                        // When XHR upload completes (readyState changes), start Cloudinary phase
+                        xhr.upload.onload = () => {
+                            if (simulatedUploadInterval) { clearInterval(simulatedUploadInterval); simulatedUploadInterval = null; }
+                            if (progressBar) progressBar.style.width = '50%';
+                            if (progressText) progressText.textContent = "Processing and saving to Cloudinary... (This may take a minute)";
+                            let simPercent = 50;
+                            cloudinarySimInterval = setInterval(() => {
+                                simPercent += 1;
+                                // Cap at 95% until we actually get the 200 OK from server
+                                if (simPercent > 95) {
+                                    clearInterval(cloudinarySimInterval);
+                                } else {
+                                    if (progressBar) progressBar.style.width = simPercent + '%';
+                                    if (progressText) progressText.textContent = `Processing video... ${simPercent}%`;
+                                }
+                            }, 1000); // 1% per second = ~45 seconds simulation
                         };
 
                         xhr.onload = () => {
                             if (cloudinarySimInterval) clearInterval(cloudinarySimInterval);
+                            if (simulatedUploadInterval) clearInterval(simulatedUploadInterval);
                             
                             if (xhr.status === 200) {
                                 try {
@@ -4802,6 +4825,7 @@ Output: ${formatCodingValue(testCase.output)}${resultBlock}</pre>
 
                         xhr.onerror = () => {
                             if (cloudinarySimInterval) clearInterval(cloudinarySimInterval);
+                            if (simulatedUploadInterval) clearInterval(simulatedUploadInterval);
                             uploadReject(new Error("Network error during upload"));
                         };
                         xhr.send(formData);
