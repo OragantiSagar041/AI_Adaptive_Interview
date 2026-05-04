@@ -2123,7 +2123,30 @@
                     <!-- Task 8: Dashboard Stats Cards -->
                     <div id="statsCards"
                         style="display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: 1rem; margin-bottom: 1.5rem;">
-                        <div onclick="clearFilters()"
+                                                <div id="ongoingInterviewsCard" onclick="showLiveResultsModal()"
+                            style="background: #0f172a; border: 1px solid rgba(16, 185, 129, 0.3); border-radius: var(--radius-md); padding: 1.25rem; position: relative; overflow: hidden; cursor: pointer; transition: transform 0.2s; box-shadow: 0 10px 25px rgba(16, 185, 129, 0.15);"
+                            onmouseover="this.style.transform='translateY(-2px)'" onmouseout="this.style.transform='translateY(0)'">
+                            <div style="position: absolute; top: 10px; right: 10px; display: flex; align-items: center; gap: 6px; background: rgba(16, 185, 129, 0.2); padding: 4px 8px; border-radius: 20px; border: 1px solid rgba(16, 185, 129, 0.5);">
+                                <div style="width: 8px; height: 8px; background: #10b981; border-radius: 50%; animation: pulse-dot 1.5s infinite;"></div>
+                                <span style="font-size: 0.65rem; color: #10b981; font-weight: 700; text-transform: uppercase;">Live</span>
+                            </div>
+                            <div style="font-size: 0.75rem; color: #94a3b8; text-transform: uppercase; letter-spacing: 0.5px; font-weight: 600;">
+                                Ongoing Interviews
+                            </div>
+                            <div id="stat-ongoing" style="font-size: 2.5rem; font-weight: 800; color: #f8fafc; margin-top: 0.3rem;">0</div>
+                            <div style="margin-top: 0.5rem; display: grid; grid-template-columns: 1fr 1fr; gap: 4px; font-size: 0.7rem; color: #64748b;">
+                                <div><span id="stat-ongoing-live" style="color:#10b981;font-weight:600;">0</span> live sessions</div>
+                                <div><span id="stat-ongoing-alerts" style="color:#f43f5e;font-weight:600;">0</span> alerts</div>
+                                <div><span id="stat-ongoing-avgconf">0</span>/100 avg confidence</div>
+                                <div><span id="stat-ongoing-speaking">0</span> speaking now</div>
+                                <div><span id="stat-ongoing-coding">0</span> coding rounds</div>
+                                <div><span id="stat-ongoing-monitored">0</span> monitored</div>
+                            </div>
+                            <div style="margin-top: 1rem;">
+                                <button style="width: 100%; padding: 0.5rem; background: rgba(16, 185, 129, 0.1); border: 1px solid rgba(16, 185, 129, 0.4); color: #10b981; border-radius: 4px; font-size: 0.8rem; font-weight: 600; cursor: pointer;">Live Results <i class="fas fa-arrow-right"></i></button>
+                            </div>
+                        </div>
+<div onclick="clearFilters()"
                             style="background: var(--bg-card); border: 1px solid var(--border); border-radius: var(--radius-md); padding: 1.25rem; position: relative; overflow: hidden; cursor: pointer; transition: transform 0.2s;"
                             onmouseover="this.style.transform='translateY(-2px)'" onmouseout="this.style.transform='translateY(0)'">
                             <div
@@ -5162,6 +5185,247 @@
             </div>
         </div>
     </div>
+
+
+    
+
+    <!-- Live Results Modal -->
+    <div id="liveResultsModal" class="modal-overlay hidden" style="z-index: 3000;">
+        <div class="modal-card" style="max-width: 900px; padding: 2rem; background: #0f172a; border-color: #1e293b; color: #f8fafc;">
+            <button class="modal-close" onclick="closeLiveResultsModal()" style="color: #94a3b8;"><i class="fas fa-times"></i></button>
+            <h2 style="font-size: 1.5rem; font-weight: 600; margin-bottom: 1.5rem; display: flex; align-items: center; gap: 0.5rem;">
+                <div style="width: 10px; height: 10px; background: #10b981; border-radius: 50%; animation: pulse-dot 1.5s infinite;"></div>
+                Live Results Monitor
+            </h2>
+            <div id="liveSessionsGrid" style="display: grid; grid-template-columns: repeat(auto-fit, minmax(350px, 1fr)); gap: 1.5rem; max-height: 70vh; overflow-y: auto;">
+                <!-- Live sessions will be injected here -->
+            </div>
+            <div id="noLiveSessionsMsg" style="display: none; text-align: center; padding: 3rem; color: #64748b;">
+                <i class="fas fa-video-slash" style="font-size: 3rem; margin-bottom: 1rem; opacity: 0.5;"></i>
+                <p>No candidates are currently active.</p>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // --- LIVE ONGOING INTERVIEWS & MONITORING ---
+        let ongoingPollTimer = null;
+        let liveResultsPollTimer = null;
+
+        async function fetchOngoingInterviews() {
+            try {
+                if (!adminId) return;
+                const response = await fetch(API_BASE + '/admin/ongoing-interviews?admin_id=' + adminId, {
+                    headers: { 'Authorization': 'Bearer ' + authToken }
+                });
+                if (!response.ok) return;
+                const data = await response.json();
+                
+                const count = data.count || 0;
+                document.getElementById('stat-ongoing').textContent = count;
+                
+                let liveCount = 0;
+                let alertCount = 0;
+                let speakingCount = 0;
+                let codingCount = 0;
+
+                data.sessions.forEach(s => {
+                    if (s.online) liveCount++;
+                    if (!s.online && count > 0) alertCount++;
+                    if (s.audio_level > 5) speakingCount++;
+                    if (s.current_question && s.current_question.toString().includes('code')) codingCount++;
+                });
+
+                document.getElementById('stat-ongoing-live').textContent = liveCount;
+                document.getElementById('stat-ongoing-alerts').textContent = alertCount;
+                document.getElementById('stat-ongoing-speaking').textContent = speakingCount;
+                document.getElementById('stat-ongoing-monitored').textContent = count;
+                document.getElementById('stat-ongoing-coding').textContent = codingCount;
+
+                if (document.getElementById('liveResultsModal').classList.contains('hidden') === false) {
+                    renderLiveSessionsGrid(data.sessions);
+                }
+
+            } catch (error) {
+                console.error("Error fetching ongoing interviews:", error);
+            }
+        }
+
+        function showLiveResultsModal() {
+            document.getElementById('liveResultsModal').classList.remove('hidden');
+            fetchOngoingInterviews();
+            if (!liveResultsPollTimer) {
+                liveResultsPollTimer = setInterval(fetchOngoingInterviews, 5000);
+            }
+        }
+
+        function closeLiveResultsModal() {
+            document.getElementById('liveResultsModal').classList.add('hidden');
+            if (liveResultsPollTimer) {
+                clearInterval(liveResultsPollTimer);
+                liveResultsPollTimer = null;
+            }
+        }
+
+        const adminRtcConnections = {};
+        const adminSignalingSockets = {};
+        const adminRtcConfig = {
+            iceServers: [
+                { urls: 'stun:stun.l.google.com:19302' },
+                { urls: 'stun:stun1.l.google.com:19302' }
+            ]
+        };
+
+        async function initAdminWebRTC(linkId, videoElement) {
+            if (adminRtcConnections[linkId]) return;
+
+            const wsUrl = API_BASE.replace('http', 'ws') + '/ws/webrtc/admin/' + linkId;
+            const socket = new WebSocket(wsUrl);
+            adminSignalingSockets[linkId] = socket;
+
+            socket.onopen = async () => {
+                const pc = new RTCPeerConnection(adminRtcConfig);
+                adminRtcConnections[linkId] = pc;
+
+                pc.onicecandidate = (e) => {
+                    if (e.candidate) {
+                        socket.send(JSON.stringify({
+                            type: 'ice-candidate',
+                            candidate: e.candidate
+                        }));
+                    }
+                };
+
+                pc.ontrack = (e) => {
+                    if (videoElement.srcObject !== e.streams[0]) {
+                        videoElement.srcObject = e.streams[0];
+                        videoElement.play().catch(console.error);
+                    }
+                };
+
+                pc.addTransceiver('video', { direction: 'recvonly' });
+                pc.addTransceiver('audio', { direction: 'recvonly' });
+
+                const offer = await pc.createOffer();
+                await pc.setLocalDescription(offer);
+
+                socket.send(JSON.stringify({
+                    type: 'offer',
+                    offer: offer
+                }));
+
+                socket.onmessage = async (event) => {
+                    const data = JSON.parse(event.data);
+                    if (data.type === 'answer') {
+                        await pc.setRemoteDescription(new RTCSessionDescription(data.answer));
+                    } else if (data.type === 'ice-candidate') {
+                        try {
+                            await pc.addIceCandidate(new RTCIceCandidate(data.candidate));
+                        } catch(e) {}
+                    } else if (data.type === 'candidate_disconnected') {
+                        videoElement.srcObject = null;
+                        pc.close();
+                        delete adminRtcConnections[linkId];
+                    }
+                };
+            };
+
+            socket.onclose = () => {
+                if (adminRtcConnections[linkId]) {
+                    adminRtcConnections[linkId].close();
+                    delete adminRtcConnections[linkId];
+                }
+                delete adminSignalingSockets[linkId];
+            };
+        }
+
+        function escapeHtml(unsafe) {
+            if (!unsafe) return '';
+            return unsafe
+                 .toString()
+                 .replace(/&/g, "&amp;")
+                 .replace(/</g, "&lt;")
+                 .replace(/>/g, "&gt;")
+                 .replace(/"/g, "&quot;")
+                 .replace(/'/g, "&#039;");
+        }
+
+        function renderLiveSessionsGrid(sessions) {
+            const grid = document.getElementById('liveSessionsGrid');
+            const noMsg = document.getElementById('noLiveSessionsMsg');
+            
+            const currentLinkIds = sessions.map(s => s.link_id);
+            Object.keys(adminSignalingSockets).forEach(id => {
+                if (!currentLinkIds.includes(id)) {
+                    adminSignalingSockets[id].close();
+                }
+            });
+
+            if (!sessions || sessions.length === 0) {
+                grid.innerHTML = '';
+                noMsg.style.display = 'block';
+                return;
+            }
+            
+            noMsg.style.display = 'none';
+            grid.innerHTML = '';
+            
+            sessions.forEach(s => {
+                const isOnline = s.online;
+                const statusColor = isOnline ? '#10b981' : '#f59e0b';
+                const statusText = isOnline ? 'ONLINE' : 'AWAY';
+                
+                const card = document.createElement('div');
+                card.style.cssText = 'background: #1e293b; border: 1px solid #334155; border-radius: 8px; overflow: hidden;';
+                
+                const snapContainer = document.createElement('div');
+                snapContainer.style.cssText = 'width: 100%; aspect-ratio: 16/9; background: #000; position: relative; border-bottom: 1px solid #334155; display:flex; align-items:center; justify-content:center; overflow:hidden;';
+                
+                if (isOnline) {
+                    const video = document.createElement('video');
+                    video.autoplay = true;
+                    video.muted = true;
+                    video.playsInline = true;
+                    video.style.cssText = 'width: 100%; height: 100%; object-fit: contain;';
+                    video.id = 'video_' + s.link_id;
+                    snapContainer.appendChild(video);
+                    
+                    initAdminWebRTC(s.link_id, video);
+                } else {
+                    snapContainer.innerHTML = '<div style="color: #64748b; font-size: 0.9rem;"><i class="fas fa-video-slash" style="font-size: 2rem; margin-bottom: 0.5rem; display:block; text-align:center;"></i>Feed Unavailable</div>';
+                }
+
+                const telemetry = document.createElement('div');
+                telemetry.style.cssText = 'position: absolute; bottom: 8px; left: 8px; display: flex; gap: 8px;';
+                
+                const internetKbps = s.internet_kbps ? Math.round(s.internet_kbps/1000) + ' Mbps' : '--';
+                const audioLevel = s.audio_level ? Math.round(s.audio_level) + '%' : '--';
+                
+                telemetry.innerHTML = `<div style="background: rgba(0,0,0,0.6); backdrop-filter: blur(4px); color: #fff; padding: 4px 8px; border-radius: 4px; font-size: 0.7rem;"><i class="fas fa-wifi"></i> ${internetKbps}</div><div style="background: rgba(0,0,0,0.6); backdrop-filter: blur(4px); color: #fff; padding: 4px 8px; border-radius: 4px; font-size: 0.7rem;"><i class="fas fa-microphone"></i> ${audioLevel}</div>`;
+                snapContainer.appendChild(telemetry);
+                
+                const details = document.createElement('div');
+                details.style.cssText = 'padding: 1rem;';
+                details.innerHTML = `<div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 0.5rem;"><h3 style="font-size: 1.1rem; font-weight: 600; color: #f8fafc; margin: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;">${escapeHtml(s.candidate_name)}</h3><div style="display: flex; align-items: center; gap: 4px; background: ${isOnline ? 'rgba(16,185,129,0.1)' : 'rgba(245,158,11,0.1)'}; padding: 2px 6px; border-radius: 12px; border: 1px solid ${statusColor};"><div style="width: 6px; height: 6px; background: ${statusColor}; border-radius: 50%;"></div><span style="font-size: 0.6rem; color: ${statusColor}; font-weight: 700;">${statusText}</span></div></div><div style="font-size: 0.8rem; color: #94a3b8; display: flex; justify-content: space-between;"><span>Q: ${s.current_question || '?'}/${s.total_questions || '?'}</span><span>${s.elapsed_seconds ? Math.floor(s.elapsed_seconds/60) + 'm ' + (s.elapsed_seconds%60) + 's' : '--'}</span></div>`;
+                
+                card.appendChild(snapContainer);
+                card.appendChild(details);
+                grid.appendChild(card);
+            });
+        }
+
+        setInterval(() => {
+            if (document.getElementById('dashboardSection').classList.contains('hidden') === false) {
+                fetchOngoingInterviews();
+            }
+        }, 10000);
+
+        const originalShowDashboard = showDashboard;
+        showDashboard = function() {
+            if (typeof originalShowDashboard === 'function') originalShowDashboard();
+            fetchOngoingInterviews();
+        }
+    </script>
 
 </body>
 

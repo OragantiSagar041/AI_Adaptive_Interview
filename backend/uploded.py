@@ -1,7 +1,6 @@
 from fastapi import FastAPI, UploadFile, File, Form, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
-from openai import OpenAI
 import os
 import json
 import tempfile
@@ -21,8 +20,8 @@ import io
 import subprocess
 import tempfile
 import shutil as py_shutil
-from openai import OpenAI
 import requests
+from ai_client import chat_completion, extract_json
 import threading
 import time
 import base64
@@ -154,15 +153,7 @@ app.add_middleware(
 # In-memory storage (replace with database in production)
 interviews = {}
 
-def get_client():
-    load_dotenv()
-    api_key = os.getenv("OPENROUTER_API_KEY")
-    if not api_key:
-        print("⚠️ Warning: OPENROUTER_API_KEY not found in environment")
-    return OpenAI(
-        base_url="https://openrouter.ai/api/v1",
-        api_key=api_key
-    )
+
 
 def get_or_create_candidate(name: str) -> str:
     row = candidates_collection.find_one({"name": name})
@@ -611,16 +602,13 @@ def analyze_resume_or_jd(text: str):
     """
 
     try:
-        response = get_client().chat.completions.create(
-            model="google/gemini-2.0-flash-001", # OpenRouter model ID
-            messages=[{"role": "user", "content": prompt}]
+        raw_text = chat_completion(
+            messages=[{"role": "user", "content": prompt}],
+            model="google/gemini-2.0-flash-001"
         )
-        
-        raw_text = response.choices[0].message.content
-        # Extract JSON
-        json_start = raw_text.find("{")
-        json_end = raw_text.rfind("}") + 1
-        return json.loads(raw_text[json_start:json_end])
+        res = extract_json(raw_text)
+        if res: return res
+        return {"skills": [], "projects": [], "tools_and_technologies": [], "experience_level": "Unknown", "domains": [], "important_keywords": []}
     except Exception as e:
         print(f"OpenRouter Analysis Error: {e}")
         return {"skills": [], "projects": [], "tools_and_technologies": [], "experience_level": "Unknown", "domains": [], "important_keywords": []}
@@ -886,14 +874,11 @@ def generate_jd_questions(jd_text: str) -> List[Dict[str, str]]:
     """
 
     try:
-        response = get_client().chat.completions.create(
-            model="openai/gpt-4o-mini",
-            messages=[{"role": "user", "content": prompt}]
+        raw = chat_completion(
+            messages=[{"role": "user", "content": prompt}],
+            model="openai/gpt-4o-mini"
         )
-        raw = response.choices[0].message.content
-        start = raw.find("{")
-        end = raw.rfind("}") + 1
-        data = json.loads(raw[start:end])
+        data = extract_json(raw) or {}
         
         # Log extracted keywords for debugging/logging
         print(f"✅ Extracted JD Keywords: {data.get('extracted_keywords', [])}")
@@ -1187,15 +1172,11 @@ Return STRICT JSON only:
 }}
 """
 
-    response = get_client().chat.completions.create(
-        model="openai/gpt-4o-mini",
-        messages=[{"role": "user", "content": prompt}]
+    raw = chat_completion(
+        messages=[{"role": "user", "content": prompt}],
+        model="openai/gpt-4o-mini"
     )
-
-    raw = response.choices[0].message.content
-    start = raw.find("{")
-    end = raw.rfind("}") + 1
-    return json.loads(raw[start:end])
+    return extract_json(raw) or {"score": 0, "feedback": "Error", "keywords": []}
 
 # --- ADAPTIVE INTERVIEW LOGIC ---
 
@@ -1256,14 +1237,13 @@ def generate_followup_question(answer_text: str, resume_context: str, jd_text: s
         """
     
     try:
-        response = get_client().chat.completions.create(
-            model="openai/gpt-4o-mini",
-            messages=[{"role": "user", "content": prompt}]
+        raw = chat_completion(
+            messages=[{"role": "user", "content": prompt}],
+            model="openai/gpt-4o-mini"
         )
-        raw = response.choices[0].message.content
-        start = raw.find("{")
-        end = raw.rfind("}") + 1
-        q_data = json.loads(raw[start:end])
+        q_data = extract_json(raw)
+        if not q_data:
+            raise Exception("Invalid JSON returned")
         
         # Add ID
         q_data["id"] = current_q_id + 1
@@ -1541,34 +1521,17 @@ class ChatRequest(BaseModel):
     message: str
 @app.post("/chat")
 def chat(req: ChatRequest):
-    url = "https://openrouter.ai/api/v1/chat/completions"
-
-    headers = {
-        "Authorization": f"Bearer {os.getenv('OPENROUTER_API_KEY')}",
-        "Content-Type": "application/json",
-        "HTTP-Referer": "http://localhost",
-        "X-Title": "Voice Chatbot"
-    }
-
-    data = {
-        "model": "openai/gpt-4o-mini",
-        "messages": [
-            {
-                "role": "system",
-                "content": "You are a helpful interview assistant. Keep responses short."
-            },
-            {
-                "role": "user",
-                "content": req.message
-            }
-        ]
-    }
-
-    response = requests.post(url, headers=headers, json=data)
-
-    return {
-        "reply": response.json()["choices"][0]["message"]["content"]
-    }
+    try:
+        reply = chat_completion(
+            messages=[
+                {"role": "system", "content": "You are a helpful interview assistant. Keep responses short."},
+                {"role": "user", "content": req.message}
+            ],
+            model="openai/gpt-4o-mini"
+        )
+        return {"reply": reply}
+    except Exception as e:
+        return {"reply": f"Sorry, I am currently unavailable. ({str(e)})"}
 
 class AnswerRequest(BaseModel):
     interview_id: str
@@ -1902,14 +1865,13 @@ Please respond in JSON with exactly three keys:
 """
 
     try:
-        response = get_client().chat.completions.create(
-            model="openai/gpt-4o-mini",
-            messages=[{"role": "user", "content": prompt}]
+        raw = chat_completion(
+            messages=[{"role": "user", "content": prompt}],
+            model="openai/gpt-4o-mini"
         )
-        raw = response.choices[0].message.content
-        start = raw.find("{")
-        end = raw.rfind("}") + 1
-        return json.loads(raw[start:end])
+        res = extract_json(raw)
+        if res: return res
+        raise Exception("Invalid JSON returned")
     except Exception as e:
         print(f"Summary generation error: {e}")
         # Fallback from score
@@ -3050,10 +3012,8 @@ async def update_profile(data: UpdateProfileRequest):
         raise HTTPException(status_code=500, detail=f"Database error: {e}")
 
 def extract_info_from_resume(text: str) -> Dict:
-    client = get_client()
     try:
-        response = client.chat.completions.create(
-            model="google/gemini-2.0-flash-001",
+        raw = chat_completion(
             messages=[{
                 "role": "system",
                 "content": "You are a professional recruiting assistant. Extract the candidate's full name and email address from the provided resume text. Return ONLY a valid JSON object with keys 'name' and 'email'. If either cannot be found, use null."
@@ -3061,10 +3021,11 @@ def extract_info_from_resume(text: str) -> Dict:
                 "role": "user",
                 "content": text[:5000] # Use first block of text
             }],
-            response_format={"type": "json_object"}
+            model="google/gemini-2.0-flash-001"
         )
-        content = response.choices[0].message.content
-        return json.loads(content)
+        res = extract_json(raw)
+        if res: return res
+        return {"name": None, "email": None}
     except Exception as e:
         print(f"Error extracting candidate info: {e}")
         return {"name": None, "email": None}
@@ -3753,6 +3714,192 @@ async def complete_session(link_id: str):
     except Exception as e:
         print(f"Error completing session: {e}")
         raise HTTPException(status_code=500, detail=str(e))
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# LIVE MONITORING  –  Three endpoints for real-time admin oversight
+# ─────────────────────────────────────────────────────────────────────────────
+
+# In-memory store:  link_id → latest heartbeat payload
+_live_snapshots: Dict[str, Dict] = {}
+
+
+class LiveHeartbeatRequest(BaseModel):
+    link_id: str
+    snapshot_dataurl: Optional[str] = None   # base64 PNG from candidate's camera canvas
+    audio_level: Optional[float] = None       # 0–100 RMS amplitude
+    internet_kbps: Optional[float] = None     # measured download speed in kbps
+    current_question: Optional[int] = None
+    total_questions: Optional[int] = None
+    elapsed_seconds: Optional[int] = None
+    video_fps: Optional[float] = None
+    tab_active: Optional[bool] = True
+    face_visible: Optional[bool] = None
+
+
+@app.post("/live-heartbeat")
+async def live_heartbeat(data: LiveHeartbeatRequest):
+    """Candidate browser sends a heartbeat every ~5 s with camera snapshot and quality metrics."""
+    _live_snapshots[data.link_id] = {
+        "ts": datetime.now(timezone.utc).isoformat(),
+        "snapshot": data.snapshot_dataurl,
+        "audio_level": data.audio_level,
+        "internet_kbps": data.internet_kbps,
+        "current_question": data.current_question,
+        "total_questions": data.total_questions,
+        "elapsed_seconds": data.elapsed_seconds,
+        "video_fps": data.video_fps,
+        "tab_active": data.tab_active,
+        "face_visible": data.face_visible,
+    }
+    return {"status": "ok"}
+
+
+@app.get("/admin/live-snapshot/{link_id}")
+def get_live_snapshot(link_id: str):
+    """Admin polls latest candidate live snapshot and quality metrics."""
+    snap = _live_snapshots.get(link_id)
+    if not snap:
+        return {"online": False}
+
+    try:
+        ts = datetime.fromisoformat(snap["ts"].replace("Z", "+00:00"))
+        age_secs = (datetime.now(timezone.utc) - ts).total_seconds()
+        online = age_secs < 15          # considered online if seen within last 15 s
+    except Exception:
+        age_secs = 0
+        online = True
+
+    return {
+        "online": online,
+        "last_seen_ago_seconds": round(age_secs, 1),
+        "snapshot": snap.get("snapshot"),
+        "audio_level": snap.get("audio_level"),
+        "internet_kbps": snap.get("internet_kbps"),
+        "current_question": snap.get("current_question"),
+        "total_questions": snap.get("total_questions"),
+        "elapsed_seconds": snap.get("elapsed_seconds"),
+        "video_fps": snap.get("video_fps"),
+        "tab_active": snap.get("tab_active", True),
+        "face_visible": snap.get("face_visible"),
+    }
+
+
+@app.get("/admin/ongoing-interviews")
+async def get_ongoing_interviews(admin_id: str):
+    """Return all in-progress (status=started) sessions for this admin with live status."""
+    rows = list(interview_sessions_collection.find({
+        "created_by": admin_id,
+        "status": "started",
+        "$or": [{"is_deactivated": False}, {"is_deactivated": {"$exists": False}}]
+    }).sort("created_at", -1))
+
+    sessions = []
+    for row in rows:
+        link_id = row.get("link_id", "")
+        snap = _live_snapshots.get(link_id, {})
+
+        # Determine online status from heartbeat age
+        online = False
+        if snap.get("ts"):
+            try:
+                ts = datetime.fromisoformat(snap["ts"].replace("Z", "+00:00"))
+                age_secs = (datetime.now(timezone.utc) - ts).total_seconds()
+                online = age_secs < 15
+            except Exception:
+                online = False
+
+        sessions.append({
+            "link_id": link_id,
+            "candidate_name": row.get("candidate_name", ""),
+            "candidate_email": row.get("candidate_email", ""),
+            "created_at": row.get("created_at", ""),
+            "interview_id": row.get("interview_id", ""),
+            "online": online,
+            "current_question": snap.get("current_question"),
+            "total_questions": snap.get("total_questions"),
+            "elapsed_seconds": snap.get("elapsed_seconds"),
+            "audio_level": snap.get("audio_level"),
+            "internet_kbps": snap.get("internet_kbps"),
+        })
+
+    return {"sessions": sessions, "count": len(sessions)}
+
+
+from fastapi import WebSocket, WebSocketDisconnect
+from typing import Dict, List
+
+class ConnectionManager:
+    def __init__(self):
+        # role -> link_id -> websocket
+        # For admin, link_id is not strictly candidate's link_id, but admin session.
+        # Let's map link_id -> {"candidate": WebSocket, "admins": [WebSocket]}
+        self.active_connections: Dict[str, Dict[str, any]] = {}
+
+    async def connect_candidate(self, websocket: WebSocket, link_id: str):
+        await websocket.accept()
+        if link_id not in self.active_connections:
+            self.active_connections[link_id] = {"candidate": None, "admins": []}
+        self.active_connections[link_id]["candidate"] = websocket
+
+    async def connect_admin(self, websocket: WebSocket, link_id: str):
+        await websocket.accept()
+        if link_id not in self.active_connections:
+            self.active_connections[link_id] = {"candidate": None, "admins": []}
+        self.active_connections[link_id]["admins"].append(websocket)
+
+    def disconnect_candidate(self, link_id: str):
+        if link_id in self.active_connections:
+            self.active_connections[link_id]["candidate"] = None
+
+    def disconnect_admin(self, websocket: WebSocket, link_id: str):
+        if link_id in self.active_connections:
+            if websocket in self.active_connections[link_id]["admins"]:
+                self.active_connections[link_id]["admins"].remove(websocket)
+
+    async def send_to_candidate(self, link_id: str, message: dict):
+        if link_id in self.active_connections and self.active_connections[link_id]["candidate"]:
+            try:
+                await self.active_connections[link_id]["candidate"].send_json(message)
+            except:
+                pass
+
+    async def send_to_admins(self, link_id: str, message: dict):
+        if link_id in self.active_connections:
+            for admin_ws in self.active_connections[link_id]["admins"]:
+                try:
+                    await admin_ws.send_json(message)
+                except:
+                    pass
+
+manager = ConnectionManager()
+
+@app.websocket("/ws/webrtc/{role}/{link_id}")
+async def webrtc_endpoint(websocket: WebSocket, role: str, link_id: str):
+    if role == "candidate":
+        await manager.connect_candidate(websocket, link_id)
+    elif role == "admin":
+        await manager.connect_admin(websocket, link_id)
+    else:
+        await websocket.close()
+        return
+
+    try:
+        while True:
+            data = await websocket.receive_json()
+            # Signaling relay
+            if role == "candidate":
+                # Forward to all admins viewing this candidate
+                await manager.send_to_admins(link_id, data)
+            elif role == "admin":
+                # Forward to the specific candidate
+                await manager.send_to_candidate(link_id, data)
+    except WebSocketDisconnect:
+        if role == "candidate":
+            manager.disconnect_candidate(link_id)
+            await manager.send_to_admins(link_id, {"type": "candidate_disconnected"})
+        elif role == "admin":
+            manager.disconnect_admin(websocket, link_id)
 
 if __name__ == "__main__":
     import uvicorn

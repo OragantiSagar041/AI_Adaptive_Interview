@@ -2566,6 +2566,16 @@
             window.currentInterviewId = currentInterviewId;
             window.currentQuestionId = currentQuestionId;
 
+            // Start live heartbeat so admin can monitor this candidate
+            try {
+                const _hbParams = new URLSearchParams(window.location.search);
+                const _hbLinkId = _hbParams.get('session_id') || _hbParams.get('session');
+                if (_hbLinkId && typeof startLiveHeartbeat === 'function') {
+                            startLiveHeartbeat(_hbLinkId);
+                            if (typeof startWebRTCSignaling === 'function') { startWebRTCSignaling(_hbLinkId); }
+                        }
+            } catch (_hbErr) { console.warn('[Heartbeat] start error:', _hbErr); }
+
             if (data.candidate_name) {
                 const header = document.querySelector('h1');
                 if (header) header.textContent = `Welcome, ${data.candidate_name}`;
@@ -3965,6 +3975,8 @@ Output: ${formatCodingValue(testCase.output)}${resultBlock}</pre>
             // Stop the global countdown timer
             stopGlobalCountdown();
             interviewActive = false;
+            // Stop live heartbeat — interview is ending
+            if (typeof stopLiveHeartbeat === 'function') stopLiveHeartbeat();
 
             if (codingVoiceListening && codingVoiceRecognition) {
                 codingVoiceListening = false;
@@ -4113,6 +4125,149 @@ Output: ${formatCodingValue(testCase.output)}${resultBlock}</pre>
         }
     </script>
 
+    <!-- ════════════════════════════════════════════════════════════════════
+         LIVE HEARTBEAT — sends camera snapshot + quality metrics to admin
+         every 5 seconds while the interview is running.
+         ════════════════════════════════════════════════════════════════════ -->
+    <script>
+        let _heartbeatTimer = null;
+        let _audioCtx = null;
+        let _audioAnalyser = null;
+        let _audioBuf = null;
+        let _heartbeatLinkId = null;
+        let _lastFrameTime = performance.now();
+        let _frameCount = 0;
+        let _currentFps = 0;
+
+        // Track FPS from video element
+        function _trackVideoFps() {
+            const video = document.getElementById('videoPreview');
+            if (!video) return;
+            const now = performance.now();
+            _frameCount++;
+            const elapsed = now - _lastFrameTime;
+            if (elapsed >= 1000) {
+                _currentFps = Math.round(_frameCount * 1000 / elapsed);
+                _frameCount = 0;
+                _lastFrameTime = now;
+            }
+            if (_heartbeatTimer) requestAnimationFrame(_trackVideoFps);
+        }
+
+        // Setup Web Audio analyser on the existing media stream
+        function _setupAudioAnalyser() {
+            try {
+                if (!window.mediaStream) return;
+                if (_audioCtx) return; // already set up
+                _audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+                const source = _audioCtx.createMediaStreamSource(window.mediaStream);
+                _audioAnalyser = _audioCtx.createAnalyser();
+                _audioAnalyser.fftSize = 256;
+                source.connect(_audioAnalyser);
+                _audioBuf = new Uint8Array(_audioAnalyser.frequencyBinCount);
+            } catch (e) {
+                console.warn('Audio analyser setup failed:', e);
+            }
+        }
+
+        function _getAudioLevel() {
+            if (!_audioAnalyser || !_audioBuf) return null;
+            _audioAnalyser.getByteFrequencyData(_audioBuf);
+            const sum = _audioBuf.reduce((a, b) => a + b, 0);
+            const avg = sum / _audioBuf.length;
+            return Math.round((avg / 255) * 100); // 0–100
+        }
+
+        // Capture a small JPEG snapshot from the video element
+        function _captureSnapshot() {
+            try {
+                const video = document.getElementById('videoPreview');
+                if (!video || video.videoWidth === 0) return null;
+                const canvas = document.createElement('canvas');
+                // Use small resolution to keep payload tiny (~5–15 KB)
+                canvas.width = 240;
+                canvas.height = Math.round(video.videoHeight * 240 / video.videoWidth) || 135;
+                const ctx = canvas.getContext('2d');
+                ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
+                return canvas.toDataURL('image/jpeg', 0.5);
+            } catch (e) {
+                return null;
+            }
+        }
+
+        // Lightweight internet speed estimate: fetch a small known resource
+        async function _estimateSpeed() {
+            try {
+                const conn = navigator.connection || navigator.mozConnection || navigator.webkitConnection;
+                if (conn && conn.downlink) return Math.round(conn.downlink * 1000); // kbps
+                // Fallback: time a 10 KB image fetch
+                const t0 = performance.now();
+                await fetch(`${API_BASE_URL}/health?_ts=${Date.now()}`, { cache: 'no-store' });
+                const rtt = performance.now() - t0;
+                // Rough estimate based on RTT (heuristic; not perfectly accurate)
+                return rtt < 200 ? 10000 : rtt < 500 ? 5000 : rtt < 1500 ? 1000 : 300;
+            } catch (e) {
+                return null;
+            }
+        }
+
+        async function _sendHeartbeat() {
+            if (!_heartbeatLinkId || !interviewActive) return;
+            try {
+                const snapshot = _captureSnapshot();
+                const audioLevel = _getAudioLevel();
+                const internetKbps = await _estimateSpeed();
+                const urlParams = new URLSearchParams(window.location.search);
+                const sessionId = urlParams.get('session_id') || urlParams.get('session') || _heartbeatLinkId;
+
+                const payload = {
+                    link_id: _heartbeatLinkId,
+                    snapshot_dataurl: snapshot,
+                    audio_level: audioLevel,
+                    internet_kbps: internetKbps,
+                    current_question: currentQuestionId || null,
+                    total_questions: totalQuestions || null,
+                    elapsed_seconds: window._interviewStartTime
+                        ? Math.round((Date.now() - window._interviewStartTime) / 1000)
+                        : null,
+                    video_fps: _currentFps || null,
+                    tab_active: !document.hidden,
+                    face_visible: window._faceVisible !== undefined ? window._faceVisible : null
+                };
+
+                await fetch(`${API_BASE_URL}/live-heartbeat`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(payload)
+                });
+            } catch (e) {
+                // Silent fail — heartbeat is non-critical
+                console.debug('[Heartbeat] send failed:', e.message);
+            }
+        }
+
+        function startLiveHeartbeat(linkId) {
+            if (_heartbeatTimer) return; // already running
+            _heartbeatLinkId = linkId;
+            window._interviewStartTime = window._interviewStartTime || Date.now();
+            _setupAudioAnalyser();
+            _trackVideoFps();
+            // Send first one immediately then every 5 s
+            _sendHeartbeat();
+            _heartbeatTimer = setInterval(_sendHeartbeat, 5000);
+            console.log('[Heartbeat] started for', linkId);
+        }
+
+        function stopLiveHeartbeat() {
+            if (_heartbeatTimer) {
+                clearInterval(_heartbeatTimer);
+                _heartbeatTimer = null;
+            }
+            _heartbeatLinkId = null;
+            console.log('[Heartbeat] stopped');
+        }
+    </script>
+
     <script>
         async function uploadAudioForTranscription(audioBlob) {
             const formData = new FormData();
@@ -4143,6 +4298,68 @@ Output: ${formatCodingValue(testCase.output)}${resultBlock}</pre>
     </script>
 
 
+
+    <!-- WebRTC signaling logic for candidate -->
+    <script>
+        let rtcPeerConnection = null;
+        let signalingSocket = null;
+        const rtcConfig = {
+            iceServers: [
+                { urls: 'stun:stun.l.google.com:19302' },
+                { urls: 'stun:stun1.l.google.com:19302' }
+            ]
+        };
+
+        function startWebRTCSignaling(linkId) {
+            const wsUrl = API_BASE_URL.replace('http', 'ws') + '/ws/webrtc/candidate/' + linkId;
+            signalingSocket = new WebSocket(wsUrl);
+
+            signalingSocket.onmessage = async (event) => {
+                const data = JSON.parse(event.data);
+                if (data.type === 'offer') {
+                    console.log('Received WebRTC offer from admin');
+                    rtcPeerConnection = new RTCPeerConnection(rtcConfig);
+                    
+                    if (window.stream) {
+                        window.stream.getTracks().forEach(track => {
+                            rtcPeerConnection.addTrack(track, window.stream);
+                        });
+                    }
+
+                    rtcPeerConnection.onicecandidate = (e) => {
+                        if (e.candidate) {
+                            signalingSocket.send(JSON.stringify({
+                                type: 'ice-candidate',
+                                candidate: e.candidate
+                            }));
+                        }
+                    };
+
+                    await rtcPeerConnection.setRemoteDescription(new RTCSessionDescription(data.offer));
+                    const answer = await rtcPeerConnection.createAnswer();
+                    await rtcPeerConnection.setLocalDescription(answer);
+
+                    signalingSocket.send(JSON.stringify({
+                        type: 'answer',
+                        answer: answer
+                    }));
+                } else if (data.type === 'ice-candidate') {
+                    if (rtcPeerConnection) {
+                        try {
+                            await rtcPeerConnection.addIceCandidate(new RTCIceCandidate(data.candidate));
+                        } catch (e) {
+                            console.error('Error adding received ice candidate', e);
+                        }
+                    }
+                }
+            };
+            
+            signalingSocket.onclose = () => {
+                // Try to reconnect in 5 seconds
+                setTimeout(() => { if(window.interviewActive) startWebRTCSignaling(linkId); }, 5000);
+            };
+        }
+    </script>
 </body>
 <!-- Disclaimer Modal -->
 <div id="disclaimerModal" class="modal-overlay hidden">
@@ -4326,11 +4543,14 @@ Output: ${formatCodingValue(testCase.output)}${resultBlock}</pre>
 
             if (window.recordVideo !== false) {
                 // Re-initialize recorder — FIX #3: Cap bitrate to 500kbps to drastically reduce upload size
-                fullSessionRecorder = new MediaRecorder(stream, {
-                    mimeType: 'video/webm;codecs=vp8,opus',
-                    videoBitsPerSecond: 500000,   // 500 kbps video (was browser default ~2.5Mbps)
-                    audioBitsPerSecond: 64000      // 64 kbps audio (plenty for speech)
-                });
+                let options = { videoBitsPerSecond: 500000, audioBitsPerSecond: 64000 };
+                if (MediaRecorder.isTypeSupported('video/webm;codecs=vp8,opus')) {
+                    options.mimeType = 'video/webm;codecs=vp8,opus';
+                } else if (MediaRecorder.isTypeSupported('video/webm')) {
+                    options.mimeType = 'video/webm';
+                }
+                
+                fullSessionRecorder = new MediaRecorder(stream, options);
                 fullSessionChunks = [];
 
                 fullSessionRecorder.ondataavailable = e => {
@@ -4862,3 +5082,5 @@ Output: ${formatCodingValue(testCase.output)}${resultBlock}</pre>
 </script>
 
 </html>
+
+

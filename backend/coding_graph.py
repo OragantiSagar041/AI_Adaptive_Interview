@@ -4,7 +4,7 @@ import re
 from hashlib import sha1
 from typing import Any, Dict, List, TypedDict
 
-from openai import OpenAI
+from ai_client import chat_completion, extract_json as _safe_json_extract
 
 try:
     from langgraph.graph import END, StateGraph
@@ -17,6 +17,8 @@ except ImportError:
 
 
 DEFAULT_MODEL = os.getenv("CODING_ROUND_MODEL", "openai/gpt-4o-mini")
+
+# ai_client handles the OpenRouter→HuggingFace fallback automatically
 
 
 class CodingRoundState(TypedDict, total=False):
@@ -32,11 +34,7 @@ class CodingRoundState(TypedDict, total=False):
     response: Dict[str, Any]
 
 
-def _get_client() -> OpenAI:
-    return OpenAI(
-        base_url="https://openrouter.ai/api/v1",
-        api_key=os.getenv("OPENROUTER_API_KEY"),
-    )
+# _get_client removed — all calls now go through ai_client.chat_completion()
 
 
 def _truncate(text: str, limit: int) -> str:
@@ -172,16 +170,17 @@ def _build_context_packet(state: CodingRoundState) -> str:
 
 def _llm_json(system_prompt: str, user_prompt: str, fallback: Dict[str, Any]) -> Dict[str, Any]:
     try:
-        response = _get_client().chat.completions.create(
-            model=DEFAULT_MODEL,
-            temperature=0.1,
+        content = chat_completion(
             messages=[
                 {"role": "system", "content": system_prompt},
                 {"role": "user", "content": user_prompt},
             ],
+            model=DEFAULT_MODEL,
+            temperature=0.1,
+            timeout=60,
         )
-        content = response.choices[0].message.content or ""
-        return _safe_json(content, fallback)
+        result = _safe_json_extract(content)
+        return result if result else _safe_json(content, fallback)
     except Exception as exc:
         fallback = dict(fallback)
         fallback.setdefault("coach_message", f"AI feedback unavailable right now: {exc}")

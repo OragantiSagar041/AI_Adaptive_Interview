@@ -1,10 +1,6 @@
-import os
-import requests
 import json
+from ai_client import chat_completion, extract_json
 
-from dotenv import load_dotenv
-
-load_dotenv()
 
 def analyze_answer(question: str, answer: str, context: str = ""):
     # Short-circuit for empty/placeholder answers
@@ -18,13 +14,6 @@ def analyze_answer(question: str, answer: str, context: str = ""):
             "feedback": "Please record your answer before analyzing."
         }
 
-    api_key = os.getenv("OPENROUTER_API_KEY")
-    if not api_key:
-        return {
-            "corrected_answer": "Error: Missing API Key",
-            "overall_score": 0,
-            "feedback": "Server configuration error: OpenRouter API Key is missing."
-        }
     prompt = f"""
 You are an expert interview coach and evaluator. Your task is to provide high-quality, personalized feedback to a candidate.
 
@@ -69,39 +58,16 @@ Format:
 """
 
     try:
-        response = requests.post(
-            "https://openrouter.ai/api/v1/chat/completions",
-            headers={
-                "Authorization": f"Bearer {api_key}",
-                "Content-Type": "application/json"
-            },
-            json={
-                "model": "openai/gpt-4o-mini",
-                "messages": [{"role": "user", "content": prompt}],
-                "temperature": 0
-            },
-            timeout=30
+        content = chat_completion(
+            messages=[{"role": "user", "content": prompt}],
+            model="openai/gpt-4o-mini",
+            temperature=0.01,
+            timeout=45,
         )
 
-        if response.status_code == 402:
-            raise Exception("API Quota Exceeded (402)")
-        
-        if response.status_code != 200:
-             raise Exception(f"API Error {response.status_code}")
-
-        data = response.json()
-        
-        if "choices" not in data:
-            raise Exception("Invalid API structure")
-
-        content = data["choices"][0]["message"]["content"]
-        
-        start = content.find("{")
-        end = content.rfind("}") + 1
-        if start == -1 or end == 0:
-             raise Exception("No JSON found")
-
-        result = json.loads(content[start:end])
+        result = extract_json(content)
+        if not result:
+            raise Exception("No JSON found in AI response")
 
         # Safety Check: If answer is too short (< 15 words) and score is high, force it down.
         # This prevents the AI from scoring its own "Suggested Answer" or giving credit for empty greetings.
@@ -119,11 +85,11 @@ Format:
         
         if word_count < 10:
             score = 15
-            feedback = f"⚠️ API Quota/Error (Offline Mode). Answer too short ({word_count} words). Score penalized. Please provide more detail."
+            feedback = f"⚠️ AI Offline Mode. Answer too short ({word_count} words). Score penalized. Please provide more detail."
         else:
             # Score based on length, capped at 85
             score = min(max(word_count * 2, 40), 85)
-            feedback = f"⚠️ API Quota/Error (Offline Mode). Your answer was recorded ({word_count} words). To get real AI analysis, check API credits."
+            feedback = f"⚠️ AI Offline Mode. Your answer was recorded ({word_count} words). To get real AI analysis, check API credits."
             
         return {
             "corrected_answer": "Analysis unavailable (Offline Mode)",
@@ -132,4 +98,4 @@ Format:
             "keywords": ["Offline"]
         }
 
-print("✅ evaluate_answer.py loaded")
+print("✅ analyze_answer.py loaded — uses ai_client with auto-fallback")
