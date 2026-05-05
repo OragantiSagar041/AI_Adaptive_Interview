@@ -5654,6 +5654,33 @@
             ]
         };
 
+        // LAZY LOADING OBSERVER: Only connect WebRTC when the card is visible
+        const liveFeedObserver = new IntersectionObserver((entries) => {
+            entries.forEach(entry => {
+                const linkId = entry.target.dataset.linkId;
+                if (!linkId) return;
+
+                if (entry.isIntersecting) {
+                    console.log(`[LazyLoad] Connecting ${linkId}`);
+                    const video = document.getElementById('video_' + linkId);
+                    if (video) initAdminWebRTC(linkId, video);
+                } else {
+                    console.log(`[LazyLoad] Disconnecting ${linkId}`);
+                    closeAdminWebRTC(linkId);
+                    const video = document.getElementById('video_' + linkId);
+                    if (video) {
+                        video.srcObject = null;
+                        video.style.display = 'none';
+                    }
+                    const img = document.getElementById('snapshot_' + linkId);
+                    if (img) {
+                        delete img.dataset.webrtcConnected;
+                        if (img.src) img.style.display = 'block';
+                    }
+                }
+            });
+        }, { threshold: 0.1 });
+
         function closeAdminWebRTC(linkId) {
             if (adminSignalingSockets[linkId]) {
                 try { adminSignalingSockets[linkId].close(); } catch (e) {}
@@ -5847,18 +5874,17 @@
                         detailsDiv.innerHTML = buildCardDetailsHtml(s, isOnline, statusColor, statusText);
                     }
                     updateLiveFallbackSnapshot(s.link_id, s.snapshot);
-                    if (isOnline) {
-                        const video = document.getElementById('video_' + s.link_id);
-                        if (video && !adminRtcConnections[s.link_id]) {
-                            initAdminWebRTC(s.link_id, video);
-                        }
-                    }
-                    return; // Skip re-creating this card
+                    // Connection is now handled by IntersectionObserver
+                    return; 
                 }
                 
                 const card = document.createElement('div');
                 card.id = 'live-card-' + s.link_id;
+                card.dataset.linkId = s.link_id; // For observer
                 card.style.cssText = 'background: #1e293b; border: 1px solid #334155; border-radius: 8px; overflow: hidden;';
+                
+                // Observe this card for lazy loading
+                liveFeedObserver.observe(card);
                 
                 const snapContainer = document.createElement('div');
                 snapContainer.style.cssText = 'width: 100%; aspect-ratio: 16/9; background: #000; position: relative; border-bottom: 1px solid #334155; display:flex; align-items:center; justify-content:center; overflow:hidden;';
@@ -5889,7 +5915,7 @@
                     placeholder.innerHTML = '<div style="text-align:center;"><i class="fas fa-video" style="font-size: 2rem; margin-bottom: 0.5rem; display:block;"></i>Connecting live feed...</div>';
                     snapContainer.appendChild(placeholder);
                     
-                    initAdminWebRTC(s.link_id, video);
+                    // Note: initAdminWebRTC is now called by IntersectionObserver when card is visible
                 } else {
                     snapContainer.innerHTML = '<div style="color: #64748b; font-size: 0.9rem;"><i class="fas fa-video-slash" style="font-size: 2rem; margin-bottom: 0.5rem; display:block; text-align:center;"></i>Feed Unavailable</div>';
                 }

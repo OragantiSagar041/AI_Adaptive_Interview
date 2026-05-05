@@ -4159,30 +4159,36 @@ async def get_ongoing_interviews(admin_id: str):
         age_secs = float('inf')
         if snap.get("ts"):
             try:
-                ts = datetime.fromisoformat(snap["ts"].replace("Z", "+00:00"))
-                age_secs = (datetime.now(timezone.utc) - ts).total_seconds()
-                online = age_secs < 15
+                # 'ts' is stored as ISO string ending with Z
+                ts_dt = datetime.fromisoformat(snap["ts"].replace("Z", "+00:00"))
+                age_secs = (datetime.now(timezone.utc) - ts_dt).total_seconds()
+                online = age_secs < 60  # 60 seconds for "Live" status
             except Exception:
                 online = False
                 
-        # Filter out "ghost" candidates who are stuck in "started" but disconnected
-        # If no snapshot exists, only remove them if the session is older than 10 minutes
-        # If snapshot exists, remove if away for more than 5 minutes (300 seconds).
+        # GHOST FILTERING LOGIC
         if not online:
+            # 1. Use started_at for sessions that have officially begun
+            base_time_str = row.get("started_at") or row.get("created_at")
             session_age = 0
-            if row.get("created_at"):
+            if base_time_str:
                 try:
-                    # 'created_at' is stored as ISO string ending with Z
-                    ca_dt = datetime.fromisoformat(row["created_at"].replace("Z", "+00:00"))
-                    session_age = (datetime.now(timezone.utc) - ca_dt).total_seconds()
-                except Exception:
-                    session_age = 0
+                    dt = datetime.fromisoformat(base_time_str.replace("Z", "+00:00"))
+                    session_age = (datetime.now(timezone.utc) - dt).total_seconds()
+                except: pass
 
+            # 2. If no heartbeat has EVER been received
             if not snap.get("ts"):
-                if session_age > 600: # 10 minutes
+                # If they haven't sent a heartbeat within 10 mins of starting/creating, hide them
+                if session_age > 600: 
                     continue
-            elif age_secs > 300: # 5 minutes heartbeat timeout
-                continue
+            
+            # 3. If they HAVE sent heartbeats before, but are now silent
+            else:
+                # If they've been silent for more than 5 minutes, remove from "Ongoing" entirely
+                if age_secs > 300: 
+                    continue
+                # Note: The UI will show them as "AWAY" if age_secs > 60
 
         sessions.append({
             "link_id": link_id,
