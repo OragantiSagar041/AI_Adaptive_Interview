@@ -2062,8 +2062,7 @@
 
     <!-- ==================== DASHBOARD SECTION ==================== -->
     <div id="dashboardSection" class="hidden">
-
-        <!-- Sidebar (Left Fixed) -->
+            <!-- Sidebar (Left Fixed) -->
         <div class="sidebar-wrapper">
             <div class="sidebar-header">
                 <div class="brand-icon"
@@ -2116,6 +2115,92 @@
 
             <!-- Scrollable Independent Page Content -->
             <div class="main-content">
+
+<!-- MASTER DASHBOARD SECTION -->
+            <div id="masterDashboardSection" class="hidden" style="margin-top: 2rem;">
+                <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 2rem;">
+                    <h2>Master Dashboard - Tenant Subscriptions</h2>
+                    <button onclick="showCreateTenantModal()" style="background: var(--primary); color: white; padding: 0.5rem 1rem; border: none; border-radius: var(--radius-md); cursor: pointer;">
+                        + Create Tenant
+                    </button>
+                </div>
+                
+                <div class="table-container">
+                    <table class="session-table" id="masterTenantsTable">
+                        <thead>
+                            <tr>
+                                <th>Username</th>
+                                <th>Email</th>
+                                <th>Plan</th>
+                                <th>Status</th>
+                                <th>Expiry Date</th>
+                                <th>Actions</th>
+                            </tr>
+                        </thead>
+                        <tbody id="masterTenantsBody">
+                            <tr><td colspan="6" style="text-align: center;">Loading tenants...</td></tr>
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+            
+            <!-- MASTER CREATE TENANT MODAL -->
+            <div id="createTenantModal" class="modal hidden">
+                <div class="modal-content" style="max-width: 500px;">
+                    <h3>Create New Tenant</h3>
+                    <div class="form-group" style="margin-top: 1rem;">
+                        <label>Username</label>
+                        <input type="text" id="tenantUsername" class="input-field" placeholder="company_admin">
+                    </div>
+                    <div class="form-group">
+                        <label>Password</label>
+                        <input type="password" id="tenantPassword" class="input-field" placeholder="Password">
+                    </div>
+                    <div class="form-group">
+                        <label>Email</label>
+                        <input type="email" id="tenantEmail" class="input-field" placeholder="admin@company.com">
+                    </div>
+                    <div class="form-group">
+                        <label>Subscription Plan</label>
+                        <select id="tenantPlan" class="input-field">
+                            <option value="trial">15 Days Free Trial</option>
+                            <option value="basic">Basic (Single Interviews)</option>
+                            <option value="advance">Advance (All Features)</option>
+                        </select>
+                    </div>
+                    <div style="display: flex; gap: 1rem; margin-top: 1.5rem; justify-content: flex-end;">
+                        <button onclick="document.getElementById('createTenantModal').classList.add('hidden')" style="padding: 0.5rem 1rem; border: 1px solid var(--border); border-radius: var(--radius-md); background: white; cursor: pointer;">Cancel</button>
+                        <button onclick="submitCreateTenant()" style="padding: 0.5rem 1rem; background: var(--primary); color: white; border: none; border-radius: var(--radius-md); cursor: pointer;">Create</button>
+                    </div>
+                </div>
+            </div>
+            
+            <!-- MASTER UPDATE TENANT MODAL -->
+            <div id="updateTenantModal" class="modal hidden">
+                <div class="modal-content" style="max-width: 500px;">
+                    <h3>Update Tenant Subscription</h3>
+                    <input type="hidden" id="updateTenantId">
+                    <div class="form-group" style="margin-top: 1rem;">
+                        <label>Subscription Plan</label>
+                        <select id="updateTenantPlan" class="input-field">
+                            <option value="trial">15 Days Free Trial</option>
+                            <option value="basic">Basic (Single Interviews)</option>
+                            <option value="advance">Advance (All Features)</option>
+                        </select>
+                    </div>
+                    <div class="form-group">
+                        <label>Extend Expiry (Days)</label>
+                        <input type="number" id="updateTenantDays" class="input-field" value="0" min="0" placeholder="Add days to subscription">
+                        <small style="color: var(--text-muted); margin-top: 0.25rem; display: block;">Leave as 0 to keep current expiry.</small>
+                    </div>
+                    <div style="display: flex; gap: 1rem; margin-top: 1.5rem; justify-content: flex-end;">
+                        <button onclick="document.getElementById('updateTenantModal').classList.add('hidden')" style="padding: 0.5rem 1rem; border: 1px solid var(--border); border-radius: var(--radius-md); background: white; cursor: pointer;">Cancel</button>
+                        <button onclick="submitUpdateTenant()" style="padding: 0.5rem 1rem; background: var(--primary); color: white; border: none; border-radius: var(--radius-md); cursor: pointer;">Update</button>
+                    </div>
+                </div>
+            </div>
+
+
 
                 <!-- VIEW 1: OVERVIEW DASHBOARD -->
                 <div id="view-overview" class="view-panel">
@@ -2549,9 +2634,33 @@
                             <input type="hidden" id="resumeText" value="">
 
                             <div class="dash-form-group">
-                                <label class="dash-label">Job Description</label>
-                                <textarea class="dash-textarea" id="jobDescription"
-                                    placeholder="Paste the job description here..."></textarea>
+                                <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:5px;">
+                                    <label class="dash-label" style="margin-bottom:0;">Job Description</label>
+                                    <label for="jdFile" style="display:inline-flex;align-items:center;gap:5px;font-size:0.72rem;font-weight:600;color:var(--primary-light);cursor:pointer;padding:3px 8px;border:1px solid var(--primary-light);border-radius:5px;transition:0.2s;" onmouseover="this.style.background='rgba(99,102,241,0.1)'" onmouseout="this.style.background='transparent'"><i class="fas fa-paperclip"></i> Upload</label>
+                                    <input type="file" id="jdFile" accept=".pdf,.docx,.doc,.txt" onchange="handleJdFileSelect()" style="display:none;">
+                                </div>
+                                <div id="jdFileStatus" style="font-size:0.72rem;margin-bottom:4px;"></div>
+                                <textarea class="dash-textarea" id="jobDescription" placeholder="Paste the job description here or upload a file above..."></textarea>
+                            </div>
+
+                            <div class="dash-form-group">
+                                <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:5px;">
+                                    <label class="dash-label" style="margin-bottom:0;">Custom Questions <span style="font-size:0.7rem;color:var(--text-muted);font-weight:400;">(Optional)</span></label>
+                                    <label for="customFile" style="display:inline-flex;align-items:center;gap:5px;font-size:0.72rem;font-weight:600;color:var(--primary-light);cursor:pointer;padding:3px 8px;border:1px solid var(--primary-light);border-radius:5px;transition:0.2s;" onmouseover="this.style.background='rgba(99,102,241,0.1)'" onmouseout="this.style.background='transparent'"><i class="fas fa-paperclip"></i> Upload</label>
+                                    <input type="file" id="customFile" accept=".pdf,.docx,.doc,.txt" onchange="handleGenericFileSelect('customFile', 'customFileLabel', 'customFileStatus', 'customQuestions', 'Custom Questions')" style="display:none;">
+                                </div>
+                                <div id="customFileStatus" style="font-size:0.72rem;margin-bottom:4px;"></div>
+                                <textarea class="dash-textarea" id="customQuestions" style="height:80px;" placeholder="Enter your custom questions here or upload a file. If provided, the AI will ask these first."></textarea>
+                            </div>
+
+                            <div class="dash-form-group">
+                                <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:5px;">
+                                    <label class="dash-label" style="margin-bottom:0;">AI Interview Instructions <span style="font-size:0.7rem;color:var(--text-muted);font-weight:400;">(Optional)</span></label>
+                                    <label for="aiFile" style="display:inline-flex;align-items:center;gap:5px;font-size:0.72rem;font-weight:600;color:var(--primary-light);cursor:pointer;padding:3px 8px;border:1px solid var(--primary-light);border-radius:5px;transition:0.2s;" onmouseover="this.style.background='rgba(99,102,241,0.1)'" onmouseout="this.style.background='transparent'"><i class="fas fa-paperclip"></i> Upload</label>
+                                    <input type="file" id="aiFile" accept=".pdf,.docx,.doc,.txt" onchange="handleGenericFileSelect('aiFile', 'aiFileLabel', 'aiFileStatus', 'aiInstructions', 'AI Instructions')" style="display:none;">
+                                </div>
+                                <div id="aiFileStatus" style="font-size:0.72rem;margin-bottom:4px;"></div>
+                                <textarea class="dash-textarea" id="aiInstructions" style="height:80px;" placeholder="e.g. 'Focus heavily on system design and React performance optimization. Keep questions technical.'"></textarea>
                             </div>
 
                             <div class="dash-form-group">
@@ -2596,6 +2705,46 @@
                                     style="width: 18px; height: 18px; cursor: pointer;">
                                 <label for="recordVideo" class="dash-label" style="margin: 0; cursor: pointer;">Record
                                     Interview Video</label>
+                            </div>
+
+                            <!-- HR Screening Preferences -->
+                            <div class="dash-form-group" style="margin-bottom: 1.5rem;">
+                                <label class="dash-label" style="margin-bottom: 0.5rem;">
+                                    <i class="fas fa-clipboard-check" style="color: var(--accent); margin-right: 6px;"></i>
+                                    HR Screening Questions (Optional)
+                                </label>
+                                <p style="font-size: 0.75rem; color: var(--text-muted); margin-bottom: 0.75rem;">
+                                    <i class="fas fa-info-circle"></i> When enabled, AI will extract info from the job description and ask additional screening questions at the end of the interview.
+                                </p>
+                                <div style="display: flex; flex-direction: column; gap: 0.8rem; padding: 1rem; background: var(--bg-input); border: 1px solid var(--border); border-radius: var(--radius-md);">
+                                    <div>
+                                        <label style="display: flex; align-items: center; gap: 0.5rem; cursor: pointer; margin-bottom: 0.5rem;">
+                                            <input type="checkbox" id="askWorkMode" onchange="document.getElementById('workModeOptions').style.display = this.checked ? 'flex' : 'none';" style="width: 17px; height: 17px; accent-color: var(--primary);">
+                                            <span style="font-size: 0.9rem; font-weight: 500; color: var(--text-primary);">Work Mode</span>
+                                        </label>
+                                        <div id="workModeOptions" style="display: none; gap: 1rem; margin-left: 1.8rem;">
+                                            <label style="display: flex; align-items: center; gap: 0.3rem; cursor: pointer;"><input type="radio" name="workModeType" value="On-site" checked> <span style="font-size: 0.85rem;">On-site</span></label>
+                                            <label style="display: flex; align-items: center; gap: 0.3rem; cursor: pointer;"><input type="radio" name="workModeType" value="Remote"> <span style="font-size: 0.85rem;">Remote</span></label>
+                                            <label style="display: flex; align-items: center; gap: 0.3rem; cursor: pointer;"><input type="radio" name="workModeType" value="Hybrid"> <span style="font-size: 0.85rem;">Hybrid</span></label>
+                                        </div>
+                                    </div>
+                                    <div>
+                                        <label style="display: flex; align-items: center; gap: 0.5rem; cursor: pointer; margin-bottom: 0.5rem;">
+                                            <input type="checkbox" id="askLocation" onchange="document.getElementById('locationOptions').style.display = this.checked ? 'flex' : 'none';" style="width: 17px; height: 17px; accent-color: var(--primary);">
+                                            <span style="font-size: 0.9rem; font-weight: 500; color: var(--text-primary);">Location</span>
+                                        </label>
+                                        <div id="locationOptions" style="display: none; gap: 1rem; margin-left: 1.8rem;">
+                                            <label style="display: flex; align-items: center; gap: 0.3rem; cursor: pointer;"><input type="radio" name="locationType" value="Current" checked> <span style="font-size: 0.85rem;">Current Location</span></label>
+                                            <label style="display: flex; align-items: center; gap: 0.3rem; cursor: pointer;"><input type="radio" name="locationType" value="Preferred"> <span style="font-size: 0.85rem;">Preferred Location</span></label>
+                                        </div>
+                                    </div>
+                                    <div>
+                                        <label style="display: flex; align-items: center; gap: 0.5rem; cursor: pointer;">
+                                            <input type="checkbox" id="askBond" style="width: 17px; height: 17px; accent-color: var(--primary);">
+                                            <span style="font-size: 0.9rem; font-weight: 500; color: var(--text-primary);">Bond / Notice Period</span>
+                                        </label>
+                                    </div>
+                                </div>
                             </div>
 
                             <div style="display: flex; gap: 0.75rem; flex-wrap: wrap;">
@@ -2646,12 +2795,39 @@
 
                             <!-- JD + Duration (shared) -->
                             <div class="dash-form-group">
-                                <label class="dash-label">Job Description <span
-                                        style="color:var(--danger);">*</span></label>
+                                <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:5px;">
+                                    <label class="dash-label" style="margin-bottom:0;">Job Description <span style="color:var(--danger);">*</span></label>
+                                    <label for="bulkJdFile" style="display:inline-flex;align-items:center;gap:5px;font-size:0.72rem;font-weight:600;color:var(--primary-light);cursor:pointer;padding:3px 8px;border:1px solid var(--primary-light);border-radius:5px;transition:0.2s;" onmouseover="this.style.background='rgba(99,102,241,0.1)'" onmouseout="this.style.background='transparent'"><i class="fas fa-paperclip"></i> Upload</label>
+                                    <input type="file" id="bulkJdFile" accept=".pdf,.docx,.doc,.txt" onchange="handleBulkJdFileSelect()" style="display:none;">
+                                </div>
+                                <div id="bulkJdFileStatus" style="font-size:0.72rem;margin-bottom:4px;"></div>
                                 <textarea class="dash-textarea" id="bulkJobDescription"
-                                    placeholder="Paste the job description used for ALL candidates..."
+                                    placeholder="Paste the job description used for ALL candidates or upload a file above..."
                                     style="min-height:100px;"></textarea>
                             </div>
+
+                            <div class="dash-form-group">
+                                <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:5px;">
+                                    <label class="dash-label" style="margin-bottom:0;">Custom Questions <span style="font-size:0.7rem;color:var(--text-muted);font-weight:400;">(Optional)</span></label>
+                                    <label for="bulkCustomFile" style="display:inline-flex;align-items:center;gap:5px;font-size:0.72rem;font-weight:600;color:var(--primary-light);cursor:pointer;padding:3px 8px;border:1px solid var(--primary-light);border-radius:5px;transition:0.2s;" onmouseover="this.style.background='rgba(99,102,241,0.1)'" onmouseout="this.style.background='transparent'"><i class="fas fa-paperclip"></i> Upload</label>
+                                    <input type="file" id="bulkCustomFile" accept=".pdf,.docx,.doc,.txt" onchange="handleGenericFileSelect('bulkCustomFile', 'bulkCustomFileLabel', 'bulkCustomFileStatus', 'bulkCustomQuestions', 'Custom Questions')" style="display:none;">
+                                </div>
+                                <div id="bulkCustomFileStatus" style="font-size:0.72rem;margin-bottom:4px;"></div>
+                                <textarea class="dash-textarea" id="bulkCustomQuestions" style="height:80px;"
+                                    placeholder="Enter your custom questions here or upload a file. If provided, the AI will ask these first."></textarea>
+                            </div>
+
+                            <div class="dash-form-group">
+                                <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:5px;">
+                                    <label class="dash-label" style="margin-bottom:0;">AI Interview Instructions <span style="font-size:0.7rem;color:var(--text-muted);font-weight:400;">(Optional)</span></label>
+                                    <label for="bulkAiFile" style="display:inline-flex;align-items:center;gap:5px;font-size:0.72rem;font-weight:600;color:var(--primary-light);cursor:pointer;padding:3px 8px;border:1px solid var(--primary-light);border-radius:5px;transition:0.2s;" onmouseover="this.style.background='rgba(99,102,241,0.1)'" onmouseout="this.style.background='transparent'"><i class="fas fa-paperclip"></i> Upload</label>
+                                    <input type="file" id="bulkAiFile" accept=".pdf,.docx,.doc,.txt" onchange="handleGenericFileSelect('bulkAiFile', 'bulkAiFileLabel', 'bulkAiFileStatus', 'bulkAiInstructions', 'AI Instructions')" style="display:none;">
+                                </div>
+                                <div id="bulkAiFileStatus" style="font-size:0.72rem;margin-bottom:4px;"></div>
+                                <textarea class="dash-textarea" id="bulkAiInstructions" style="height:80px;"
+                                    placeholder="e.g. 'Focus heavily on system design and React performance optimization. Keep questions technical.'"></textarea>
+                            </div>
+
                             <div class="dash-form-group">
                                 <label class="dash-label">Interview Duration (Minutes)</label>
                                 <input type="number" class="dash-input" id="bulkDuration" min="5" max="120" value="30"
@@ -2664,6 +2840,46 @@
                                     style="width: 18px; height: 18px; cursor: pointer;">
                                 <label for="bulkRecordVideo" class="dash-label"
                                     style="margin: 0; cursor: pointer;">Record Interview Video (default for all)</label>
+                            </div>
+
+                            <!-- HR Screening Preferences (Bulk) -->
+                            <div class="dash-form-group" style="margin-bottom: 1rem;">
+                                <label class="dash-label" style="margin-bottom: 0.5rem;">
+                                    <i class="fas fa-clipboard-check" style="color: var(--accent); margin-right: 6px;"></i>
+                                    HR Screening Questions (Optional)
+                                </label>
+                                <p style="font-size: 0.75rem; color: var(--text-muted); margin-bottom: 0.75rem;">
+                                    <i class="fas fa-info-circle"></i> AI will ask additional screening questions at the end of each interview.
+                                </p>
+                                <div style="display: flex; flex-direction: column; gap: 0.8rem; padding: 1rem; background: var(--bg-input); border: 1px solid var(--border); border-radius: var(--radius-md);">
+                                    <div>
+                                        <label style="display: flex; align-items: center; gap: 0.5rem; cursor: pointer; margin-bottom: 0.5rem;">
+                                            <input type="checkbox" id="bulkAskWorkMode" onchange="document.getElementById('bulkWorkModeOptions').style.display = this.checked ? 'flex' : 'none';" style="width: 17px; height: 17px; accent-color: var(--primary);">
+                                            <span style="font-size: 0.9rem; font-weight: 500; color: var(--text-primary);">Work Mode</span>
+                                        </label>
+                                        <div id="bulkWorkModeOptions" style="display: none; gap: 1rem; margin-left: 1.8rem;">
+                                            <label style="display: flex; align-items: center; gap: 0.3rem; cursor: pointer;"><input type="radio" name="bulkWorkModeType" value="On-site" checked> <span style="font-size: 0.85rem;">On-site</span></label>
+                                            <label style="display: flex; align-items: center; gap: 0.3rem; cursor: pointer;"><input type="radio" name="bulkWorkModeType" value="Remote"> <span style="font-size: 0.85rem;">Remote</span></label>
+                                            <label style="display: flex; align-items: center; gap: 0.3rem; cursor: pointer;"><input type="radio" name="bulkWorkModeType" value="Hybrid"> <span style="font-size: 0.85rem;">Hybrid</span></label>
+                                        </div>
+                                    </div>
+                                    <div>
+                                        <label style="display: flex; align-items: center; gap: 0.5rem; cursor: pointer; margin-bottom: 0.5rem;">
+                                            <input type="checkbox" id="bulkAskLocation" onchange="document.getElementById('bulkLocationOptions').style.display = this.checked ? 'flex' : 'none';" style="width: 17px; height: 17px; accent-color: var(--primary);">
+                                            <span style="font-size: 0.9rem; font-weight: 500; color: var(--text-primary);">Location</span>
+                                        </label>
+                                        <div id="bulkLocationOptions" style="display: none; gap: 1rem; margin-left: 1.8rem;">
+                                            <label style="display: flex; align-items: center; gap: 0.3rem; cursor: pointer;"><input type="radio" name="bulkLocationType" value="Current" checked> <span style="font-size: 0.85rem;">Current Location</span></label>
+                                            <label style="display: flex; align-items: center; gap: 0.3rem; cursor: pointer;"><input type="radio" name="bulkLocationType" value="Preferred"> <span style="font-size: 0.85rem;">Preferred Location</span></label>
+                                        </div>
+                                    </div>
+                                    <div>
+                                        <label style="display: flex; align-items: center; gap: 0.5rem; cursor: pointer;">
+                                            <input type="checkbox" id="bulkAskBond" style="width: 17px; height: 17px; accent-color: var(--primary);">
+                                            <span style="font-size: 0.9rem; font-weight: 500; color: var(--text-primary);">Bond / Notice Period</span>
+                                        </label>
+                                    </div>
+                                </div>
                             </div>
 
                             <!-- Task 4: Schedule for Bulk -->
@@ -3016,14 +3232,27 @@
 
                 if (response.ok) {
                     const data = await response.json();
-                    adminId = data.admin_id;
+                    
+                    if (data.status === 'expired') {
+                        errorDiv.textContent = data.message || "Your subscription has expired.";
+                        errorDiv.classList.remove('hidden');
+                        loginBtn.disabled = false;
+                        loginBtn.innerHTML = 'Sign in to Dashboard';
+                        return;
+                    }
+                    
+                    adminId = data.admin_id || data.master_id;
                     adminEmail = data.email || "";
                     const adminName = data.username || username;
+                    const role = data.role || "tenant";
+                    const plan = data.subscription_plan || "trial";
                     
                     // Persist session
                     sessionStorage.setItem('adminId', adminId);
                     sessionStorage.setItem('adminEmail', adminEmail);
                     sessionStorage.setItem('adminName', adminName);
+                    sessionStorage.setItem('adminRole', role);
+                    sessionStorage.setItem('subscriptionPlan', plan);
 
                     document.getElementById('adminName').textContent = adminName;
                     document.getElementById('adminEmailInput').value = adminEmail;
@@ -3037,8 +3266,22 @@
                         document.getElementById('loginSection').classList.add('hidden');
                         document.getElementById('dashboardSection').classList.remove('hidden');
                         document.body.classList.add('dashboard-active'); // Enable full-screen layout
-                        loadDashboardSessions();
-                        loadDashboardStats(); // Task 8
+                        
+                        if (role === 'master') {
+                            // Hide standard tenant tabs
+                            document.querySelector('.tab-container').style.display = 'none';
+                            // Show Master Dashboard
+                            document.getElementById('masterDashboardSection').classList.remove('hidden');
+                            document.getElementById('singleSection').classList.add('hidden');
+                            loadMasterTenants();
+                        } else {
+                            if (plan === 'basic' || plan === 'trial') {
+                                // Basic plan cannot access bulk tab
+                                document.getElementById('bulkTabBtn').style.display = 'none';
+                            }
+                            loadDashboardSessions();
+                            loadDashboardStats(); // Task 8
+                        }
                     }, 300);
 
                 } else {
@@ -3137,17 +3380,125 @@
             }
         }
 
+        async function handleJdFileSelect() {
+            const fileInput = document.getElementById('jdFile');
+            const file = fileInput.files[0];
+            const statusDiv = document.getElementById('jdFileStatus');
+            const textArea = document.getElementById('jobDescription');
+
+            if (!file) return;
+
+            statusDiv.innerHTML = `<span class="file-status loading">⏳ Parsing <b>${file.name}</b>...</span>`;
+            textArea.value = "";
+
+            const formData = new FormData();
+            formData.append('file', file);
+
+            try {
+                const response = await fetch(`${API_BASE}/admin/parse-resume`, {
+                    method: 'POST',
+                    body: formData
+                });
+
+                if (response.ok) {
+                    const data = await response.json();
+                    textArea.value = data.text;
+                    statusDiv.innerHTML = '<span class="file-status success">✅ Parsed successfully</span>';
+                } else {
+                    statusDiv.innerHTML = '<span class="file-status error">❌ Failed to parse file</span>';
+                }
+            } catch (error) {
+                console.error(error);
+                statusDiv.innerHTML = '<span class="file-status error">❌ Server connection error</span>';
+            }
+        }
+
+        async function handleBulkJdFileSelect() {
+            const fileInput = document.getElementById('bulkJdFile');
+            const file = fileInput.files[0];
+            const statusDiv = document.getElementById('bulkJdFileStatus');
+            const textArea = document.getElementById('bulkJobDescription');
+
+            if (!file) return;
+
+            statusDiv.innerHTML = `<span class="file-status loading">⏳ Parsing <b>${file.name}</b>...</span>`;
+            textArea.value = "";
+
+            const formData = new FormData();
+            formData.append('file', file);
+
+            try {
+                const response = await fetch(`${API_BASE}/admin/parse-resume`, {
+                    method: 'POST',
+                    body: formData
+                });
+
+                if (response.ok) {
+                    const data = await response.json();
+                    textArea.value = data.text;
+                    statusDiv.innerHTML = '<span class="file-status success">✅ Parsed successfully</span>';
+                } else {
+                    statusDiv.innerHTML = '<span class="file-status error">❌ Failed to parse file</span>';
+                }
+            } catch (error) {
+                console.error(error);
+                statusDiv.innerHTML = '<span class="file-status error">❌ Server connection error</span>';
+            }
+        }
+
+        async function handleGenericFileSelect(inputId, labelId, statusId, textAreaId, typeName) {
+            const fileInput = document.getElementById(inputId);
+            const file = fileInput.files[0];
+            const statusDiv = document.getElementById(statusId);
+            const textArea = document.getElementById(textAreaId);
+
+            if (!file) return;
+
+            statusDiv.innerHTML = `<span class="file-status loading">⏳ Parsing <b>${file.name}</b>...</span>`;
+            textArea.value = "";
+
+            const formData = new FormData();
+            formData.append('file', file);
+
+            try {
+                const response = await fetch(`${API_BASE}/admin/parse-resume`, {
+                    method: 'POST',
+                    body: formData
+                });
+
+                if (response.ok) {
+                    const data = await response.json();
+                    textArea.value = data.text;
+                    statusDiv.innerHTML = '<span class="file-status success">✅ Parsed successfully</span>';
+                } else {
+                    statusDiv.innerHTML = '<span class="file-status error">❌ Failed to parse file</span>';
+                }
+            } catch (error) {
+                console.error(error);
+                statusDiv.innerHTML = '<span class="file-status error">❌ Server connection error</span>';
+            }
+        }
+
         // --- CREATE SESSION ---
         async function createSession() {
             const name = document.getElementById('candidateName').value.trim();
             const email = document.getElementById('candidateEmail').value.trim();
             const resume = document.getElementById('resumeText').value.trim();
             const jd = document.getElementById('jobDescription').value.trim();
+            const customQuestions = document.getElementById('customQuestions').value.trim();
+            const aiInstructions = document.getElementById('aiInstructions').value.trim();
             const duration = parseInt(document.getElementById('interviewDuration').value) || 30;
             const recordVideo = document.getElementById('recordVideo').checked;
             const scheduleStart = document.getElementById('scheduleStart').value;
             const scheduleEnd = document.getElementById('scheduleEnd').value;
             const createBtn = document.getElementById('createBtn');
+
+            // HR Screening Preferences
+            const hrScreening = {
+                work_mode: document.getElementById('askWorkMode').checked ? document.querySelector('input[name="workModeType"]:checked').value : "",
+                location: document.getElementById('askLocation').checked ? document.querySelector('input[name="locationType"]:checked').value : "",
+                ask_bond: document.getElementById('askBond').checked
+            };
 
             if (!name || !email || !resume || !jd) {
                 showToast("Please scroll up and fill in all required fields (Name, Email, Resume, Job Description).", "error");
@@ -3188,7 +3539,10 @@
                         record_video: recordVideo,
                         custom_email_html: window._customEmailHtml || "",
                         scheduled_start: toUtcIso(scheduleStart),
-                        scheduled_end: toUtcIso(scheduleEnd)
+                        scheduled_end: toUtcIso(scheduleEnd),
+                        hr_screening: hrScreening,
+                        custom_questions: customQuestions,
+                        ai_instructions: aiInstructions
                     })
                 });
 
@@ -3224,6 +3578,11 @@
                     document.getElementById('fileLabel').textContent = 'Click to upload or drag and drop';
                     document.getElementById('fileStatus').innerHTML = '';
                     window._customEmailHtml = ""; // Reset custom email
+                    document.getElementById('askWorkMode').checked = false;
+                    document.getElementById('askLocation').checked = false;
+                    document.getElementById('askBond').checked = false;
+                    document.getElementById('workModeOptions').style.display = 'none';
+                    document.getElementById('locationOptions').style.display = 'none';
 
                 } else {
                     showToast("Failed to create session.", "error");
@@ -5018,10 +5377,19 @@
         // Send all — calls /admin/bulk-create-sessions
         async function sendBulkInterviews() {
             const jd = document.getElementById('bulkJobDescription').value.trim();
+            const customQuestions = document.getElementById('bulkCustomQuestions').value.trim();
+            const aiInstructions = document.getElementById('bulkAiInstructions').value.trim();
             const duration = parseInt(document.getElementById('bulkDuration').value) || 30;
             const recordVideo = document.getElementById('bulkRecordVideo').checked;
             const schedStart = document.getElementById('bulkScheduleStart').value;
             const schedEnd = document.getElementById('bulkScheduleEnd').value;
+
+            // HR Screening Preferences (Bulk)
+            const hrScreening = {
+                work_mode: document.getElementById('bulkAskWorkMode').checked ? document.querySelector('input[name="bulkWorkModeType"]:checked').value : "",
+                location: document.getElementById('bulkAskLocation').checked ? document.querySelector('input[name="bulkLocationType"]:checked').value : "",
+                ask_bond: document.getElementById('bulkAskBond').checked
+            };
 
             if (!jd) { showToast('Please enter a Job Description', 'error'); return; }
             if (bulkCandidates.length === 0) { showToast('Add at least one candidate', 'error'); return; }
@@ -5059,7 +5427,10 @@
                         record_video: recordVideo,
                         custom_email_html: window._customEmailHtml || "",
                         scheduled_start: toUtcIso(schedStart),
-                        scheduled_end: toUtcIso(schedEnd)
+                        scheduled_end: toUtcIso(schedEnd),
+                        hr_screening: hrScreening,
+                        custom_questions: customQuestions,
+                        ai_instructions: aiInstructions
                     })
                 });
 

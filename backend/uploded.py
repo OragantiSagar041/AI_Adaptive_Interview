@@ -28,7 +28,7 @@ import base64
 import html
 import textwrap
 from pydantic import BaseModel
-from mongo_db import candidates_collection, interviews_collection, answers_collection, admins_collection, interview_sessions_collection
+from mongo_db import candidates_collection, interviews_collection, answers_collection, admins_collection, interview_sessions_collection, plans_collection
 from reportlab.lib.pagesizes import A4
 from reportlab.pdfgen import canvas
 from reportlab.lib.utils import simpleSplit
@@ -52,27 +52,40 @@ def cloudinary_cleanup_loop():
     while True:
         try:
             now = datetime.now(timezone.utc)
-            cutoff = now - timedelta(days=3)
+            # Increased retention to 7 days to prevent premature deletion
+            cutoff = now - timedelta(days=7)
+            
+            print(f"🔍 [Cleanup] Running Cloudinary maintenance (Cutoff: {cutoff.isoformat()})...")
+            
             old_recordings = interviews_collection.find({
                 "created_at": {"$lt": cutoff.isoformat()},
                 "cloudinary_public_id": {"$exists": True}
             })
+            
+            count = 0
             for rec in old_recordings:
                 public_id = rec.get("cloudinary_public_id")
+                created_at = rec.get("created_at", "unknown")
                 if public_id:
                     try:
-                        print(f"🧹 Deleting old recording {public_id} from Cloudinary...")
+                        print(f"🧹 [Cleanup] Deleting old recording {public_id} (Created: {created_at})")
                         cloudinary.uploader.destroy(public_id, resource_type="video")
                         interviews_collection.update_one(
                             {"_id": rec["_id"]},
                             {"$unset": {"recording_path": "", "cloudinary_public_id": ""}}
                         )
+                        count += 1
                     except Exception as e:
-                        print(f"Error deleting old recording {public_id}: {e}")
+                        print(f"❌ [Cleanup] Error deleting {public_id}: {e}")
+            
+            if count > 0:
+                print(f"✅ [Cleanup] Successfully removed {count} old recordings.")
+                
         except Exception as e:
-            print(f"Error in cloudinary cleanup loop: {e}")
+            print(f"❌ [Cleanup] Loop error: {e}")
         
-        time.sleep(86400) # Run once a day
+        # Run once every 24 hours
+        time.sleep(86400)
 
 # Configuration
 UPLOAD_FOLDER = "uploads"
@@ -842,7 +855,7 @@ def extract_text_from_file(file_content: bytes, filename: str) -> str:
         except:
             raise HTTPException(status_code=400, detail=f"Unable to process file {filename}. Supported formats: PDF, DOCX, TXT")
 
-def generate_jd_questions(jd_text: str) -> List[Dict[str, str]]:
+def generate_jd_questions(jd_text: str, ai_instructions: str = "") -> List[Dict[str, str]]:
     """Generate interview questions based on Job Description using AI."""
     print("Generating questions from Job Description...")
     
@@ -856,8 +869,10 @@ def generate_jd_questions(jd_text: str) -> List[Dict[str, str]]:
         }
     ]
 
+    instruction_block = f"\n    Additional Admin Instructions to Follow:\n    {ai_instructions}\n" if ai_instructions else ""
+
     prompt = f"""
-    You are an expert technical recruiter constructing a rigorous interview.
+    You are an expert technical recruiter constructing a rigorous interview.{instruction_block}
     
     Job Description:
     {jd_text[:4000]}
@@ -953,13 +968,16 @@ def generate_jd_questions(jd_text: str) -> List[Dict[str, str]]:
 
     return questions
 
-def generate_mock_questions(text: str, source: str, num_questions: int = 6, resume_text: str = None, jd_text: str = None) -> List[Dict[str, str]]:
+def generate_mock_questions(text: str, source: str, num_questions: int = 6, resume_text: str = None, jd_text: str = None, hr_screening: dict = None, custom_questions: str = "", ai_instructions: str = "") -> List[Dict[str, str]]:
     """
     Generate structured interview questions.
-    Structure: Self-Intro → Technical Middle → Closing
+    Structure: Self-Intro → Technical Middle → HR Screening (if enabled) → Closing
     
     When API is available: calls AI to generate dynamic middle questions.
     When API is down: uses smart keyword-extraction from resume/JD to build questions offline.
+    
+    hr_screening: dict with keys ask_work_mode, ask_preferred_location, ask_current_location, ask_bond.
+    When any is True, additional HR screening questions are appended before closing.
     """
     num_questions = max(4, num_questions)
     
@@ -1004,8 +1022,19 @@ def generate_mock_questions(text: str, source: str, num_questions: int = 6, resu
         if "resume" in source.lower():
             ai_questions = generate_resume_questions(text)
         else:
-            ai_questions = generate_jd_questions(text)
+            ai_questions = generate_jd_questions(text, ai_instructions=ai_instructions)
         
+        # Inject custom questions first if provided
+        if custom_questions:
+            custom_q_list = [q.strip() for q in custom_questions.split('\n') if q.strip()]
+            for cq in custom_q_list:
+                middle_questions.append({
+                    "question": cq,
+                    "difficulty": "Medium",
+                    "type": "Technical",
+                    "category": "Custom Question"
+                })
+
         for q in ai_questions:
             qtype = q.get("type", "").lower()
             qcat = q.get("category", "").lower()
@@ -1039,6 +1068,15 @@ def generate_mock_questions(text: str, source: str, num_questions: int = 6, resu
         q["id"] = idx
         all_questions.append(q)
         idx += 1
+    
+    # ── HR SCREENING QUESTIONS (inserted before closing) ──
+    if hr_screening:
+        screening_questions = _generate_hr_screening_questions(hr_screening, jd_text or text)
+        for q in screening_questions:
+            q["id"] = idx
+            all_questions.append(q)
+            idx += 1
+    
     for q in closing:
         q["id"] = idx
         all_questions.append(q)
@@ -1158,6 +1196,192 @@ def _generate_offline_questions(resume_text: str, jd_text: str, total_count: int
         questions.append({"question": q, "difficulty": "Medium", "type": "Behavioral", "category": "HR/Culture"})
 
     return questions
+
+
+def _generate_hr_screening_questions(hr_screening: dict, jd_text: str) -> List[Dict[str, str]]:
+    """
+    Generate HR screening questions based on admin preferences.
+    Tries to extract relevant info from the JD first for contextual questions.
+    Falls back to well-crafted static questions if AI is unavailable.
+    """
+    questions = []
+    if not hr_screening:
+        return questions
+
+    work_mode = hr_screening.get("work_mode", "")
+    location = hr_screening.get("location", "")
+    ask_bond = hr_screening.get("ask_bond", False)
+
+    if not any([work_mode, location, ask_bond]):
+        return questions
+
+    # Try AI-powered contextual question generation
+    try:
+        topics = []
+        if work_mode:
+            topics.append(f"confirmation of {work_mode} work mode preference")
+        if location == "Preferred":
+            topics.append("preferred work location and willingness to relocate")
+        elif location == "Current":
+            topics.append("current location and commute feasibility")
+        if ask_bond:
+            topics.append("current bond/service agreement status, notice period, and availability to join")
+
+        topic_list = "\\n".join(f"- {t}" for t in topics)
+        prompt = (
+            f"You are an HR interviewer. Based on the following job description, "
+            f"generate exactly {len(topics)} screening question(s) for these topics:\\n"
+            f"{topic_list}\\n\\n"
+            f"Job Description:\\n{jd_text[:3000]}\\n\\n"
+            "Rules:\\n"
+            "- Extract any relevant details from the JD (like location, work mode) and reference them.\\n"
+            "- Each question should be conversational and professional.\\n"
+            '- Return ONLY a valid JSON array of objects with keys: "question", "difficulty", "type", "category".\\n'
+            '- difficulty should be "Easy" for all.\\n'
+            '- type should be "HR Screening".\\n'
+            '- category: "Work Mode", "Preferred Location", "Current Location", or "Bond/Notice Period".\\n'
+        )
+
+        raw = chat_completion(
+            messages=[{"role": "user", "content": prompt}],
+            model="google/gemini-2.0-flash-001"
+        )
+        ai_questions = extract_json(raw)
+        if ai_questions and isinstance(ai_questions, list) and len(ai_questions) > 0:
+            for q in ai_questions:
+                if isinstance(q, dict) and q.get("question"):
+                    questions.append({
+                        "question": q["question"],
+                        "difficulty": q.get("difficulty", "Easy"),
+                        "type": "HR Screening",
+                        "category": q.get("category", "HR Screening")
+                    })
+            print(f"AI generated {len(questions)} HR screening questions")
+            return questions
+    except Exception as e:
+        print(f"AI HR screening question generation failed: {e}")
+
+    # Fallback: Static contextual questions
+    if work_mode:
+        questions.append({
+            "question": f"This role requires a {work_mode} work arrangement. Are you comfortable with this setup?",
+            "difficulty": "Easy",
+            "type": "HR Screening",
+            "category": "Work Mode"
+        })
+    if location == "Preferred":
+        questions.append({
+            "question": "What is your preferred work location? If the role is based in a different city, would you be open to relocating?",
+            "difficulty": "Easy",
+            "type": "HR Screening",
+            "category": "Preferred Location"
+        })
+    elif location == "Current":
+        questions.append({
+            "question": "Where are you currently located? How would you manage the commute or transition to our office?",
+            "difficulty": "Easy",
+            "type": "HR Screening",
+            "category": "Current Location"
+        })
+    if ask_bond:
+        questions.append({
+            "question": "Are you currently under any service agreement or bond with your current employer? What is your notice period, and how soon would you be available to join if selected?",
+            "difficulty": "Easy",
+            "type": "HR Screening",
+            "category": "Bond/Notice Period"
+        })
+
+    print(f"Added {len(questions)} static HR screening questions")
+    return questions
+
+    ask_work_mode = hr_screening.get("ask_work_mode", False)
+    ask_preferred_location = hr_screening.get("ask_preferred_location", False)
+    ask_current_location = hr_screening.get("ask_current_location", False)
+    ask_bond = hr_screening.get("ask_bond", False)
+
+    if not any([ask_work_mode, ask_preferred_location, ask_current_location, ask_bond]):
+        return questions
+
+    # Try AI-powered contextual question generation
+    try:
+        topics = []
+        if ask_work_mode:
+            topics.append("work mode preference (on-site, remote, or hybrid)")
+        if ask_preferred_location:
+            topics.append("preferred work location and willingness to relocate")
+        if ask_current_location:
+            topics.append("current location and commute feasibility")
+        if ask_bond:
+            topics.append("current bond/service agreement status, notice period, and availability to join")
+
+        topic_list = "\n".join(f"- {t}" for t in topics)
+        prompt = (
+            f"You are an HR interviewer. Based on the following job description, "
+            f"generate exactly {len(topics)} screening question(s) for these topics:\n"
+            f"{topic_list}\n\n"
+            f"Job Description:\n{jd_text[:3000]}\n\n"
+            "Rules:\n"
+            "- Extract any relevant details from the JD (like location, work mode) and reference them.\n"
+            "- Each question should be conversational and professional.\n"
+            '- Return ONLY a valid JSON array of objects with keys: "question", "difficulty", "type", "category".\n'
+            '- difficulty should be "Easy" for all.\n'
+            '- type should be "HR Screening".\n'
+            '- category: "Work Mode", "Preferred Location", "Current Location", or "Bond/Notice Period".\n'
+        )
+
+        raw = chat_completion(
+            messages=[{"role": "user", "content": prompt}],
+            model="google/gemini-2.0-flash-001"
+        )
+        ai_questions = extract_json(raw)
+        if ai_questions and isinstance(ai_questions, list) and len(ai_questions) > 0:
+            for q in ai_questions:
+                if isinstance(q, dict) and q.get("question"):
+                    questions.append({
+                        "question": q["question"],
+                        "difficulty": q.get("difficulty", "Easy"),
+                        "type": "HR Screening",
+                        "category": q.get("category", "HR Screening")
+                    })
+            print(f"AI generated {len(questions)} HR screening questions")
+            return questions
+    except Exception as e:
+        print(f"AI HR screening question generation failed: {e}")
+
+    # Fallback: Static contextual questions
+    if ask_work_mode:
+        questions.append({
+            "question": "This role may require a specific work arrangement. What is your preferred work mode - on-site, remote, or hybrid? Are you flexible if the company requires a particular arrangement?",
+            "difficulty": "Easy",
+            "type": "HR Screening",
+            "category": "Work Mode"
+        })
+    if ask_preferred_location:
+        questions.append({
+            "question": "What is your preferred work location? If the role is based in a different city, would you be open to relocating? Do you have any location constraints we should be aware of?",
+            "difficulty": "Easy",
+            "type": "HR Screening",
+            "category": "Preferred Location"
+        })
+    if ask_current_location:
+        questions.append({
+            "question": "Where are you currently located? If the office is in a different city, how would you manage the commute or transition? Are you already based near the job location?",
+            "difficulty": "Easy",
+            "type": "HR Screening",
+            "category": "Current Location"
+        })
+    if ask_bond:
+        questions.append({
+            "question": "Are you currently under any service agreement or bond with your current employer? What is your notice period, and how soon would you be available to join if selected?",
+            "difficulty": "Easy",
+            "type": "HR Screening",
+            "category": "Bond/Notice Period"
+        })
+
+    print(f"Added {len(questions)} static HR screening questions")
+    return questions
+
+
 
 def score_answer(question: str, answer: str):
     prompt = f"""
@@ -2230,6 +2454,22 @@ class AdminLogin(BaseModel):
     username: str
     password: str
 
+class TenantCreate(BaseModel):
+    username: str
+    password: str
+    email: str
+    subscription_plan: str # "trial", "basic", "advance"
+
+class TenantUpdate(BaseModel):
+    subscription_plan: str
+    add_days: int = 0
+
+
+class HRScreening(BaseModel):
+    work_mode: str = ""
+    location: str = ""
+    ask_bond: bool = False
+
 class CreateSession(BaseModel):
     candidate_name: str
     candidate_email: str
@@ -2241,6 +2481,9 @@ class CreateSession(BaseModel):
     custom_email_html: str = ""  # Task 1: Admin-editable email content
     scheduled_start: str = ""  # Task 4: ISO datetime for scheduled start
     scheduled_end: str = ""    # Task 4: ISO datetime for scheduled end
+    hr_screening: HRScreening = HRScreening()  # HR screening preferences
+    custom_questions: str = ""
+    ai_instructions: str = ""
 
 class ForgotPasswordRequest(BaseModel):
     username: str
@@ -2249,13 +2492,6 @@ class ForgotPasswordRequest(BaseModel):
 class VerifyOTPRequest(BaseModel):
     username: str
     otp: str
-
-class AdminRegister(BaseModel):
-    username: str
-    password: str
-    email: str
-    role: str = "admin"  # admin or master
-    subscription_type: str = "trial"  # trial, basic, advance
 
 class ResetPasswordRequest(BaseModel):
     username: str
@@ -2392,6 +2628,16 @@ def build_default_interview_email_html(candidate_name: str, duration: int, job_d
                     Start Interview
                 </a>
             </div>
+            
+            <div style="background: #f8fafc; border-radius: 8px; padding: 15px; margin: 20px 0; border: 1px solid #e2e8f0; border-left: 4px solid #ef4444;">
+                <h3 style="margin: 0 0 10px; font-size: 15px; color: #0f172a;">⚠️ Mandatory Interview Guidelines</h3>
+                <ul style="margin: 0; padding-left: 20px; color: #334155; font-size: 14px; line-height: 1.6;">
+                    <li><b>Full-Screen Mode:</b> You must maintain full-screen mode at all times. Tab switching or exiting full-screen will be recorded as a violation.</li>
+                    <li><b>Video Proctoring:</b> Your camera will be active. The system uses advanced face tracking and multi-face detection to ensure integrity.</li>
+                    <li><b>Audio Environment:</b> Please ensure you are in a quiet room. Background noise or additional voices may negatively impact your evaluation.</li>
+                </ul>
+            </div>
+
             <div style="background: #fef3c7; border-radius: 8px; padding: 12px; margin-top: 15px;">
                 <p style="margin: 0; color: #92400e; font-size: 13px;"><b>Important:</b> Please join only during the scheduled time window. If no schedule is set, the link remains valid for 24 hours.</p>
             </div>
@@ -2900,8 +3146,22 @@ def invitation_email_scheduler_loop():
 @app.on_event("startup")
 def startup_event():
     global EMAIL_SCHEDULER_STARTED
-    # Create default admin if not exists
+    # Create default MASTER admin if not exists
     try:
+        master_row = admins_collection.find_one({"username": "master"})
+        if not master_row:
+            hashed_pw = hash_password("master123")
+            default_email = os.getenv("BREVO_SENDER_EMAIL", "oragantisagar041@gmail.com")
+            admins_collection.insert_one({
+                "username": "master",
+                "password": hashed_pw,
+                "email": default_email,
+                "role": "master",
+                "subscription_plan": "master",
+                "created_at": datetime.now(timezone.utc).isoformat()
+            })
+            print(f"Default master created: master / master123 (Email: {default_email})")
+            
         row = admins_collection.find_one({"username": "admin"})
         if not row:
             hashed_pw = hash_password("admin123")
@@ -2910,16 +3170,70 @@ def startup_event():
                 "username": "admin",
                 "password": hashed_pw,
                 "email": default_email,
+                "role": "tenant",
+                "subscription_plan": "advance",
+                "subscription_start": datetime.now(timezone.utc).isoformat(),
+                "subscription_expiry": (datetime.now(timezone.utc) + timedelta(days=365)).isoformat(),
                 "created_at": datetime.now(timezone.utc).isoformat()
             })
             print(f"Default admin created: admin / admin123 (Email: {default_email})")
         else:
-            # Update email if missing
-            if not row.get("email"):
-                default_email = os.getenv("BREVO_SENDER_EMAIL", "oragantisagar041@gmail.com")
-                admins_collection.update_one({"username": "admin"}, {"$set": {"email": default_email}})
+            # Upgrade legacy admin to tenant
+            update_data = {}
+            if not row.get("email"): update_data["email"] = os.getenv("BREVO_SENDER_EMAIL", "oragantisagar041@gmail.com")
+            if not row.get("role"): update_data["role"] = "tenant"
+            if not row.get("subscription_plan"):
+                update_data["subscription_plan"] = "advance"
+                update_data["subscription_start"] = datetime.now(timezone.utc).isoformat()
+                update_data["subscription_expiry"] = (datetime.now(timezone.utc) + timedelta(days=365)).isoformat()
+            if update_data:
+                admins_collection.update_one({"username": "admin"}, {"$set": update_data})
     except Exception as e:
         print(f"Error checking/creating admin: {e}")
+
+    # Seed default plans if they don't exist
+    try:
+        default_plans = [
+            {
+                "plan_name": "Free Trial",
+                "duration_days": 15,
+                "price": 0,
+                "features": ["Admin Dashboard", "Single Interview Creation", "AI Video Recording", "Basic Analytics"],
+                "is_unlimited": False,
+                "is_owner_plan": False
+            },
+            {
+                "plan_name": "Basic",
+                "duration_days": 30,
+                "price": 2500,
+                "features": ["Admin Dashboard", "Single Interview Creation", "AI Video Recording", "Detailed Analytics", "Resume Parsing", "Email Notifications"],
+                "is_unlimited": False,
+                "is_owner_plan": False
+            },
+            {
+                "plan_name": "Advance",
+                "duration_days": 30,
+                "price": 3999,
+                "features": ["Everything in Basic", "Bulk Candidate Upload", "Unlimited Interviews", "Custom HR Screening", "Live Monitoring", "Priority Support"],
+                "is_unlimited": False,
+                "is_owner_plan": False
+            },
+            {
+                "plan_name": "Owner",
+                "duration_days": 36500,
+                "price": 0,
+                "features": ["All Features", "Master Dashboard", "Tenant Management", "Plan Management", "Billing Overview"],
+                "is_unlimited": True,
+                "is_owner_plan": True
+            }
+        ]
+        for plan in default_plans:
+            existing = plans_collection.find_one({"plan_name": plan["plan_name"]})
+            if not existing:
+                plans_collection.insert_one(plan)
+                print(f"Seeded plan: {plan['plan_name']}")
+    except Exception as e:
+        print(f"Error seeding plans: {e}")
 
     if not EMAIL_SCHEDULER_STARTED:
         threading.Thread(target=invitation_email_scheduler_loop, daemon=True).start()
@@ -3010,57 +3324,7 @@ def send_otp_email(email: str, name: str, otp: str):
     except:
         return False
 
-@app.post("/admin/register")
-async def admin_register(data: AdminRegister):
-    existing = admins_collection.find_one({"username": data.username})
-    if existing:
-        raise HTTPException(status_code=400, detail="Username already exists")
-    
-    hashed_pw = hash_password(data.password)
-    expiry = (datetime.now(timezone.utc) + timedelta(days=15)).isoformat()
-    
-    new_admin = {
-        "username": data.username,
-        "password": hashed_pw,
-        "email": data.email,
-        "role": data.role,
-        "subscription_type": data.subscription_type,
-        "subscription_expiry": expiry,
-        "created_at": datetime.now(timezone.utc).isoformat()
-    }
-    
-    admins_collection.insert_one(new_admin)
-    return {"status": "success", "message": "Admin registered with 15-day trial"}
 
-@app.post("/admin/login")
-async def admin_login(data: AdminLogin):
-    hashed_pw = hash_password(data.password)
-    user = admins_collection.find_one({"username": data.username, "password": hashed_pw})
-    if user:
-        email = user.get("email", "")
-        role = user.get("role", "admin")
-        sub_type = user.get("subscription_type", "trial")
-        sub_expiry = user.get("subscription_expiry", "")
-        
-        # Calculate days remaining
-        days_left = 0
-        if sub_expiry:
-            try:
-                expiry_dt = datetime.fromisoformat(sub_expiry)
-                delta = expiry_dt - datetime.now(timezone.utc)
-                days_left = max(0, delta.days)
-            except:
-                pass
-                
-        return {
-            "status": "success", 
-            "admin_id": str(user["_id"]), 
-            "username": user["username"], 
-            "email": email,
-            "role": role,
-            "subscription_type": sub_type,
-            "days_left": days_left
-        }
     else:
         raise HTTPException(status_code=401, detail="Invalid credentials")
 
@@ -3073,9 +3337,6 @@ async def update_profile(data: UpdateProfileRequest):
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Database error: {e}")
 
-'''
-Disabled broken duplicate session-management block. The corrected implementation is
-defined below, immediately before the session lookup endpoint.
 def extract_info_from_resume(text: str) -> Dict:
     try:
         raw = chat_completion(
@@ -3139,7 +3400,10 @@ async def create_session(data: CreateSession):
         "expires_at": expires_at,
         "interview_duration": data.interview_duration,
         "record_video": data.record_video,
-        "status": "pending"
+        "status": "pending",
+        "hr_screening": data.hr_screening.dict(),
+        "custom_questions": data.custom_questions,
+        "ai_instructions": data.ai_instructions
     }
     
     # Task 4: Store scheduled time window
@@ -3181,9 +3445,19 @@ class BulkCreateSession(BaseModel):
     custom_email_html: str = ""  # Task 1: Optional admin-edited email
     scheduled_start: str = ""  # Task 4
     scheduled_end: str = ""    # Task 4
+    hr_screening: HRScreening = HRScreening()  # HR screening preferences
+    custom_questions: str = ""
+    ai_instructions: str = ""
 
 @app.post("/admin/bulk-create-sessions")
 async def bulk_create_sessions(data: BulkCreateSession):
+    from bson import ObjectId
+    # ENFORCE SUBSCRIPTION PLAN
+    admin_user = admins_collection.find_one({"_id": ObjectId(admin_id)})
+    if admin_user and admin_user.get("role") != "master":
+        if admin_user.get("subscription_plan") not in ["advance"]:
+            raise HTTPException(status_code=403, detail="Bulk interviews require the Advance subscription plan. Please contact your administrator to upgrade.")
+
     """
     Create interview sessions for multiple candidates at once.
     Each candidate gets their own unique link and receives an email invitation.
@@ -3214,7 +3488,10 @@ async def bulk_create_sessions(data: BulkCreateSession):
                 "expires_at": (scheduled_expiry.isoformat() if scheduled_expiry else (now + timedelta(hours=24)).isoformat()),
                 "interview_duration": data.interview_duration,
                 "record_video": candidate.record_video,  # Task 5: Per-candidate video
-                "status": "pending"
+                "status": "pending",
+                "hr_screening": data.hr_screening.dict(),
+                "custom_questions": data.custom_questions,
+                "ai_instructions": data.ai_instructions
             }
             if data.scheduled_start:
                 session_doc["scheduled_start"] = data.scheduled_start
@@ -3262,181 +3539,6 @@ async def bulk_create_sessions(data: BulkCreateSession):
         "results": results
     }
 
-'''
-
-def extract_info_from_resume(text: str) -> Dict:
-    try:
-        raw = chat_completion(
-            messages=[{
-                "role": "system",
-                "content": "You are a professional recruiting assistant. Extract the candidate's full name and email address from the provided resume text. Return ONLY a valid JSON object with keys 'name' and 'email'. If either cannot be found, use null."
-            }, {
-                "role": "user",
-                "content": text[:5000]
-            }],
-            model="google/gemini-2.0-flash-001"
-        )
-        res = extract_json(raw)
-        if res:
-            return res
-        return {"name": None, "email": None}
-    except Exception as e:
-        print(f"Error extracting candidate info: {e}")
-        return {"name": None, "email": None}
-
-@app.post("/admin/parse-resume")
-async def parse_resume(file: UploadFile = File(...)):
-    allowed_mimes = [
-        "application/pdf",
-        "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
-        "application/msword",
-        "text/plain",
-    ]
-    if file.content_type and file.content_type not in allowed_mimes:
-        raise HTTPException(status_code=400, detail="Invalid file type. Only PDF, DOCX, and TXT are allowed for security reasons.")
-
-    content = await file.read()
-    text = extract_text_from_file(content, file.filename)
-    info = extract_info_from_resume(text)
-    return {
-        "status": "success",
-        "text": text,
-        "name": info.get("name"),
-        "email": info.get("email"),
-    }
-
-@app.post("/admin/create-session")
-async def create_session(data: CreateSession):
-    link_id = str(uuid.uuid4())
-    now = datetime.now(timezone.utc)
-
-    scheduled_expiry = parse_iso_datetime(data.scheduled_end)
-    expires_at = (scheduled_expiry.isoformat() if scheduled_expiry else (now + timedelta(hours=24)).isoformat())
-
-    session_doc = {
-        "link_id": link_id,
-        "candidate_name": data.candidate_name,
-        "candidate_email": data.candidate_email,
-        "resume_text": data.resume_text,
-        "job_description": data.job_description,
-        "custom_email_html": data.custom_email_html,
-        "created_by": data.admin_id,
-        "created_at": now.isoformat(),
-        "expires_at": expires_at,
-        "interview_duration": data.interview_duration,
-        "record_video": data.record_video,
-        "status": "pending",
-    }
-
-    if data.scheduled_start:
-        session_doc["scheduled_start"] = data.scheduled_start
-    if data.scheduled_end:
-        session_doc["scheduled_end"] = data.scheduled_end
-
-    insert_result = interview_sessions_collection.insert_one(session_doc)
-    session_doc["_id"] = insert_result.inserted_id
-
-    link_url = f"{FRONTEND_URL}/index.html?session_id={link_id}"
-    email_result = queue_or_send_interview_email(session_doc, link_url)
-
-    return {
-        "status": "success",
-        "link_id": link_id,
-        "link_url": link_url,
-        "email_sent": email_result["email_sent"],
-        "email_scheduled": email_result["email_scheduled"],
-        "email_send_at": email_result["email_send_at"],
-    }
-
-class BulkCandidate(BaseModel):
-    candidate_name: str
-    candidate_email: str
-    resume_text: str = ""
-    record_video: bool = True
-
-class BulkCreateSession(BaseModel):
-    candidates: List[BulkCandidate]
-    job_description: str
-    admin_id: str
-    interview_duration: int = 30
-    record_video: bool = True
-    custom_email_html: str = ""
-    scheduled_start: str = ""
-    scheduled_end: str = ""
-
-@app.post("/admin/bulk-create-sessions")
-async def bulk_create_sessions(data: BulkCreateSession):
-    if not data.candidates:
-        raise HTTPException(status_code=400, detail="No candidates provided")
-
-    results = []
-    now = datetime.now(timezone.utc)
-
-    for candidate in data.candidates:
-        link_id = str(uuid.uuid4())
-        link_url = f"{FRONTEND_URL}/index.html?session_id={link_id}"
-        candidate_error = None
-
-        try:
-            scheduled_expiry = parse_iso_datetime(data.scheduled_end)
-            session_doc = {
-                "link_id": link_id,
-                "candidate_name": candidate.candidate_name,
-                "candidate_email": candidate.candidate_email,
-                "resume_text": candidate.resume_text,
-                "job_description": data.job_description,
-                "custom_email_html": data.custom_email_html,
-                "created_by": data.admin_id,
-                "created_at": now.isoformat(),
-                "expires_at": (scheduled_expiry.isoformat() if scheduled_expiry else (now + timedelta(hours=24)).isoformat()),
-                "interview_duration": data.interview_duration,
-                "record_video": candidate.record_video,
-                "status": "pending",
-            }
-            if data.scheduled_start:
-                session_doc["scheduled_start"] = data.scheduled_start
-            if data.scheduled_end:
-                session_doc["scheduled_end"] = data.scheduled_end
-            insert_result = interview_sessions_collection.insert_one(session_doc)
-            session_doc["_id"] = insert_result.inserted_id
-        except Exception as db_err:
-            print(f"DB Error for {candidate.candidate_email}: {db_err}")
-            candidate_error = f"DB error: {db_err}"
-
-        email_sent = False
-        email_scheduled = False
-        email_send_at = ""
-        if not candidate_error:
-            try:
-                email_result = queue_or_send_interview_email(session_doc, link_url)
-                email_sent = email_result["email_sent"]
-                email_scheduled = email_result["email_scheduled"]
-                email_send_at = email_result["email_send_at"]
-            except Exception as email_err:
-                print(f"Email Error for {candidate.candidate_email}: {email_err}")
-
-        results.append({
-            "candidate_name": candidate.candidate_name,
-            "candidate_email": candidate.candidate_email,
-            "link_id": link_id if not candidate_error else None,
-            "link_url": link_url if not candidate_error else None,
-            "email_sent": email_sent,
-            "email_scheduled": email_scheduled,
-            "email_send_at": email_send_at,
-            "status": "error" if candidate_error else "success",
-            "error": candidate_error,
-        })
-
-    successful = sum(1 for r in results if r["status"] == "success")
-    print(f"Bulk sessions created: {successful}/{len(results)}")
-
-    return {
-        "status": "success",
-        "total": len(results),
-        "successful": successful,
-        "failed": len(results) - successful,
-        "results": results,
-    }
 
 @app.get("/session/{link_id}")
 async def get_session(link_id: str):
@@ -3746,7 +3848,20 @@ async def start_session_interview(link_id: str = Form(...)):
     
     profile_analysis = analyze_resume_or_jd(content_str)
     
-    questions = generate_mock_questions(content_str, source, num_questions=num_questions_to_generate, resume_text=resume_text, jd_text=job_description)
+    hr_screening = row.get("hr_screening")
+    custom_questions_text = row.get("custom_questions", "")
+    ai_instructions_text = row.get("ai_instructions", "")
+    
+    questions = generate_mock_questions(
+        content_str, 
+        source, 
+        num_questions=num_questions_to_generate, 
+        resume_text=resume_text, 
+        jd_text=job_description,
+        hr_screening=hr_screening,
+        custom_questions=custom_questions_text,
+        ai_instructions=ai_instructions_text
+    )
     
     if not questions:
         raise HTTPException(status_code=400, detail="Failed to generate questions")
@@ -4041,6 +4156,7 @@ async def get_ongoing_interviews(admin_id: str):
 
         # Determine online status from heartbeat age
         online = False
+        age_secs = float('inf')
         if snap.get("ts"):
             try:
                 ts = datetime.fromisoformat(snap["ts"].replace("Z", "+00:00"))
@@ -4048,6 +4164,25 @@ async def get_ongoing_interviews(admin_id: str):
                 online = age_secs < 15
             except Exception:
                 online = False
+                
+        # Filter out "ghost" candidates who are stuck in "started" but disconnected
+        # If no snapshot exists, only remove them if the session is older than 10 minutes
+        # If snapshot exists, remove if away for more than 5 minutes (300 seconds).
+        if not online:
+            session_age = 0
+            if row.get("created_at"):
+                try:
+                    # 'created_at' is stored as ISO string ending with Z
+                    ca_dt = datetime.fromisoformat(row["created_at"].replace("Z", "+00:00"))
+                    session_age = (datetime.now(timezone.utc) - ca_dt).total_seconds()
+                except Exception:
+                    session_age = 0
+
+            if not snap.get("ts"):
+                if session_age > 600: # 10 minutes
+                    continue
+            elif age_secs > 300: # 5 minutes heartbeat timeout
+                continue
 
         sessions.append({
             "link_id": link_id,
@@ -4144,6 +4279,509 @@ async def webrtc_endpoint(websocket: WebSocket, role: str, link_id: str):
             await manager.send_to_admins(link_id, {"type": "candidate_disconnected"})
         elif role == "admin":
             manager.disconnect_admin(websocket, link_id)
+
+
+# --------------------------------------------------------------------------------
+# MASTER & SUBSCRIPTION APIs
+# --------------------------------------------------------------------------------
+from bson import ObjectId
+
+@app.post("/master/login")
+async def master_login(data: AdminLogin):
+    user = admins_collection.find_one({"username": data.username, "role": "master"})
+    if not user:
+        raise HTTPException(status_code=401, detail="Invalid master credentials")
+    if user["password"] != hash_password(data.password):
+        raise HTTPException(status_code=401, detail="Invalid master credentials")
+        
+    return {
+        "status": "success",
+        "master_id": str(user["_id"]),
+        "username": user["username"],
+        "role": user["role"]
+    }
+
+@app.get("/master/tenants")
+async def get_tenants(master_id: str):
+    # Security check: ensure the request comes from a valid master
+    master = admins_collection.find_one({"_id": ObjectId(master_id), "role": "master"})
+    if not master:
+        raise HTTPException(status_code=401, detail="Unauthorized")
+        
+    tenants = list(admins_collection.find({"role": "tenant"}))
+    now = datetime.now(timezone.utc)
+    
+    result = []
+    for t in tenants:
+        exp_date = t.get("subscription_expiry")
+        is_expired = False
+        if exp_date:
+            try:
+                if now > datetime.fromisoformat(exp_date):
+                    is_expired = True
+            except:
+                pass
+                
+        result.append({
+            "id": str(t["_id"]),
+            "username": t["username"],
+            "email": t.get("email", ""),
+            "subscription_plan": t.get("subscription_plan", "trial"),
+            "subscription_start": t.get("subscription_start", ""),
+            "subscription_expiry": t.get("subscription_expiry", ""),
+            "is_expired": is_expired,
+            "created_at": t.get("created_at", "")
+        })
+    return {"status": "success", "data": result}
+
+@app.post("/master/tenants")
+async def create_tenant(master_id: str, data: TenantCreate):
+    master = admins_collection.find_one({"_id": ObjectId(master_id), "role": "master"})
+    if not master:
+        raise HTTPException(status_code=401, detail="Unauthorized")
+        
+    if admins_collection.find_one({"username": data.username}):
+        raise HTTPException(status_code=400, detail="Username already exists")
+        
+    start = datetime.now(timezone.utc)
+    if data.subscription_plan == "trial":
+        expiry = start + timedelta(days=15)
+    else:
+        expiry = start + timedelta(days=30) # Default 1 month for basic/advance
+        
+    new_tenant = {
+        "username": data.username,
+        "password": hash_password(data.password),
+        "email": data.email,
+        "role": "tenant",
+        "subscription_plan": data.subscription_plan,
+        "subscription_start": start.isoformat(),
+        "subscription_expiry": expiry.isoformat(),
+        "created_at": start.isoformat()
+    }
+    
+    admins_collection.insert_one(new_tenant)
+    return {"status": "success", "message": "Tenant created successfully"}
+
+@app.put("/master/tenants/{tenant_id}")
+async def update_tenant(master_id: str, tenant_id: str, data: TenantUpdate):
+    master = admins_collection.find_one({"_id": ObjectId(master_id), "role": "master"})
+    if not master:
+        raise HTTPException(status_code=401, detail="Unauthorized")
+        
+    tenant = admins_collection.find_one({"_id": ObjectId(tenant_id)})
+    if not tenant:
+        raise HTTPException(status_code=404, detail="Tenant not found")
+        
+    update_fields = {"subscription_plan": data.subscription_plan}
+    
+    if data.add_days > 0:
+        current_expiry = tenant.get("subscription_expiry")
+        now = datetime.now(timezone.utc)
+        
+        try:
+            exp_dt = datetime.fromisoformat(current_expiry) if current_expiry else now
+            if exp_dt < now:
+                exp_dt = now # If already expired, start from today
+            
+            new_expiry = exp_dt + timedelta(days=data.add_days)
+            update_fields["subscription_expiry"] = new_expiry.isoformat()
+        except Exception:
+            update_fields["subscription_expiry"] = (now + timedelta(days=data.add_days)).isoformat()
+            
+    admins_collection.update_one({"_id": ObjectId(tenant_id)}, {"$set": update_fields})
+    return {"status": "success", "message": "Tenant updated successfully"}
+
+# 4. Modify existing Admin Login endpoint to return subscription details
+@app.post("/admin/login")
+async def admin_login(data: AdminLogin):
+    # Try username match first, then email match (for self-registered users)
+    user = admins_collection.find_one({"username": data.username, "role": {"$ne": "master"}})
+    if not user:
+        user = admins_collection.find_one({"email": data.username, "role": {"$ne": "master"}})
+    if not user:
+        # Fallback: check without role filter
+        user = admins_collection.find_one({"username": data.username})
+        if not user:
+            user = admins_collection.find_one({"email": data.username})
+        if not user:
+            raise HTTPException(status_code=401, detail="Invalid username or password")
+            
+    if user["password"] != hash_password(data.password):
+        raise HTTPException(status_code=401, detail="Invalid username or password")
+    
+    # Check login_enabled
+    if user.get("login_enabled") == False:
+        return {
+            "status": "blocked",
+            "message": "Your account login has been stopped by the administrator. Please contact support.",
+        }
+        
+    # Check expiry
+    plan = user.get("subscription_plan", "trial")
+    expiry = user.get("subscription_expiry")
+    is_expired = False
+    
+    now = datetime.now(timezone.utc)
+    if expiry:
+        try:
+            if now > datetime.fromisoformat(expiry):
+                is_expired = True
+        except:
+            pass
+            
+    # If expired, block
+    if is_expired:
+        return {
+            "status": "expired",
+            "message": f"Your {plan} subscription has expired. Please contact the administrator.",
+            "plan": plan
+        }
+        
+    return {
+        "status": "success",
+        "admin_id": str(user["_id"]),
+        "username": user["username"],
+        "name": user.get("name", user.get("username", "")),
+        "role": user.get("role", "tenant"),
+        "subscription_plan": plan,
+        "subscription_expiry": expiry
+    }
+
+# --------------------------------------------------------------------------------
+# PLAN MANAGEMENT APIs (for Master + Landing Page)
+# --------------------------------------------------------------------------------
+
+class PlanUpdate(BaseModel):
+    plan_name: str
+    duration_days: int = 30
+    price: int = 0
+    features: list = []
+
+class AdminRegister(BaseModel):
+    name: str
+    email: str
+    password: str
+    phone: str = ""
+    plan: str = "Free Trial"
+
+class StripeCheckoutRequest(BaseModel):
+    plan_name: str
+    signup_form: dict
+
+@app.get("/api/plans")
+async def get_all_plans():
+    """Public endpoint - fetch all plans for pricing page"""
+    plans = list(plans_collection.find({}))
+    result = []
+    for p in plans:
+        if p.get("is_owner_plan"):
+            continue  # Don't expose owner plan publicly
+        result.append({
+            "id": str(p["_id"]),
+            "plan_name": p["plan_name"],
+            "duration_days": p.get("duration_days", 30),
+            "price": p.get("price", 0),
+            "features": p.get("features", []),
+        })
+    return {"status": "success", "data": result}
+
+@app.get("/master/plans")
+async def get_all_plans_master(master_id: str):
+    """Master-only: fetch ALL plans including owner"""
+    master = admins_collection.find_one({"_id": ObjectId(master_id), "role": "master"})
+    if not master:
+        raise HTTPException(status_code=401, detail="Unauthorized")
+    plans = list(plans_collection.find({}))
+    result = []
+    for p in plans:
+        result.append({
+            "id": str(p["_id"]),
+            "plan_name": p["plan_name"],
+            "duration_days": p.get("duration_days", 30),
+            "price": p.get("price", 0),
+            "features": p.get("features", []),
+            "is_unlimited": p.get("is_unlimited", False),
+            "is_owner_plan": p.get("is_owner_plan", False),
+        })
+    return {"status": "success", "data": result}
+
+@app.post("/master/plans")
+async def upsert_plan(master_id: str, data: PlanUpdate):
+    """Master-only: create or update a plan"""
+    master = admins_collection.find_one({"_id": ObjectId(master_id), "role": "master"})
+    if not master:
+        raise HTTPException(status_code=401, detail="Unauthorized")
+    
+    existing = plans_collection.find_one({"plan_name": data.plan_name})
+    if existing and existing.get("is_owner_plan"):
+        raise HTTPException(status_code=403, detail="Owner plan cannot be modified")
+    
+    plans_collection.update_one(
+        {"plan_name": data.plan_name},
+        {"$set": {
+            "plan_name": data.plan_name,
+            "duration_days": data.duration_days,
+            "price": data.price,
+            "features": data.features,
+        }},
+        upsert=True
+    )
+    return {"status": "success", "message": f"Plan '{data.plan_name}' saved"}
+
+@app.delete("/master/plans/{plan_id}")
+async def delete_plan(master_id: str, plan_id: str):
+    """Master-only: delete a plan"""
+    master = admins_collection.find_one({"_id": ObjectId(master_id), "role": "master"})
+    if not master:
+        raise HTTPException(status_code=401, detail="Unauthorized")
+    
+    plan = plans_collection.find_one({"_id": ObjectId(plan_id)})
+    if plan and plan.get("is_owner_plan"):
+        raise HTTPException(status_code=403, detail="Owner plan cannot be deleted")
+    
+    plans_collection.delete_one({"_id": ObjectId(plan_id)})
+    return {"status": "success", "message": "Plan deleted"}
+
+# --------------------------------------------------------------------------------
+# ADMIN SELF-REGISTRATION (from Landing Page)
+# --------------------------------------------------------------------------------
+
+@app.post("/api/register")
+async def register_admin(data: AdminRegister):
+    """Public: Self-register from landing page pricing cards"""
+    # Check if username/email already exists
+    if admins_collection.find_one({"username": data.email}):
+        raise HTTPException(status_code=400, detail="An account with this email already exists")
+    if admins_collection.find_one({"email": data.email}):
+        raise HTTPException(status_code=400, detail="An account with this email already exists")
+    
+    # Fetch plan details
+    plan_info = plans_collection.find_one({"plan_name": data.plan})
+    if not plan_info:
+        raise HTTPException(status_code=400, detail="Invalid plan selected")
+    
+    # For paid plans, block direct registration (must go through Stripe)
+    if plan_info.get("price", 0) > 0:
+        raise HTTPException(status_code=400, detail="Paid plans require payment. Use the checkout flow.")
+    
+    now = datetime.now(timezone.utc)
+    duration = plan_info.get("duration_days", 15)
+    expiry = now + timedelta(days=duration)
+    
+    new_admin = {
+        "username": data.email,  # Use email as username
+        "password": hash_password(data.password),
+        "email": data.email,
+        "name": data.name,
+        "phone": data.phone,
+        "role": "tenant",
+        "subscription_plan": data.plan,
+        "subscription_start": now.isoformat(),
+        "subscription_expiry": expiry.isoformat(),
+        "is_paid": False,
+        "login_enabled": True,
+        "created_at": now.isoformat()
+    }
+    
+    admins_collection.insert_one(new_admin)
+    return {"status": "success", "message": f"Account created with {data.plan} plan! Please login."}
+
+# --------------------------------------------------------------------------------
+# STRIPE CHECKOUT (for Paid Plans)
+# --------------------------------------------------------------------------------
+
+@app.post("/api/stripe/create-checkout-session")
+async def create_stripe_checkout(data: StripeCheckoutRequest):
+    """Create a Stripe Checkout session for paid plan subscription"""
+    import stripe
+    
+    stripe_key = os.getenv("STRIPE_SECRET_KEY")
+    if not stripe_key:
+        raise HTTPException(status_code=500, detail="Stripe is not configured. Contact administrator.")
+    
+    stripe.api_key = stripe_key
+    
+    plan_info = plans_collection.find_one({"plan_name": data.plan_name})
+    if not plan_info:
+        raise HTTPException(status_code=400, detail="Invalid plan")
+    if plan_info.get("price", 0) == 0:
+        raise HTTPException(status_code=400, detail="Free plans don't require payment")
+    
+    frontend_url = os.getenv("FRONTEND_URL", "https://localhost:3000")
+    
+    try:
+        session = stripe.checkout.Session.create(
+            mode="subscription",
+            customer_email=data.signup_form.get("email"),
+            line_items=[{
+                "price_data": {
+                    "currency": "inr",
+                    "product_data": {
+                        "name": plan_info["plan_name"],
+                        "description": f"Subscription for {plan_info['duration_days']} days",
+                    },
+                    "unit_amount": plan_info["price"] * 100,
+                    "recurring": {
+                        "interval": "day",
+                        "interval_count": plan_info["duration_days"],
+                    },
+                },
+                "quantity": 1,
+            }],
+            success_url=f"{frontend_url}/landing.html?payment=success",
+            cancel_url=f"{frontend_url}/landing.html?payment=cancelled",
+            metadata={
+                "name": data.signup_form.get("name", ""),
+                "email": data.signup_form.get("email", ""),
+                "password": data.signup_form.get("password", ""),
+                "phone": data.signup_form.get("phone", ""),
+                "plan": plan_info["plan_name"],
+            },
+        )
+        return {"status": "success", "url": session.url}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Stripe error: {str(e)}")
+
+@app.post("/api/stripe/webhook")
+async def stripe_webhook(request):
+    """Handle Stripe webhook for paid subscription completion"""
+    import stripe
+    
+    stripe_key = os.getenv("STRIPE_SECRET_KEY")
+    webhook_secret = os.getenv("STRIPE_WEBHOOK_SECRET")
+    if not stripe_key or not webhook_secret:
+        raise HTTPException(status_code=500, detail="Stripe not configured")
+    
+    stripe.api_key = stripe_key
+    payload = await request.body()
+    sig = request.headers.get("stripe-signature")
+    
+    try:
+        event = stripe.Webhook.construct_event(payload, sig, webhook_secret)
+    except Exception:
+        raise HTTPException(status_code=400, detail="Webhook signature failed")
+    
+    if event["type"] == "checkout.session.completed":
+        session = event["data"]["object"]
+        if session.get("mode") != "subscription":
+            return {"received": True}
+        
+        metadata = session.get("metadata", {})
+        name = metadata.get("name")
+        email = metadata.get("email")
+        password = metadata.get("password")
+        plan_name = metadata.get("plan")
+        
+        if not all([name, email, password, plan_name]):
+            return {"received": True}
+        
+        if admins_collection.find_one({"email": email}):
+            return {"received": True}
+        
+        plan_info = plans_collection.find_one({"plan_name": plan_name})
+        duration = plan_info["duration_days"] if plan_info else 30
+        now = datetime.now(timezone.utc)
+        
+        admins_collection.insert_one({
+            "username": email,
+            "password": hash_password(password),
+            "email": email,
+            "name": name,
+            "phone": metadata.get("phone", ""),
+            "role": "tenant",
+            "subscription_plan": plan_name,
+            "subscription_start": now.isoformat(),
+            "subscription_expiry": (now + timedelta(days=duration)).isoformat(),
+            "is_paid": True,
+            "stripe_customer_id": session.get("customer"),
+            "stripe_subscription_id": session.get("subscription"),
+            "login_enabled": True,
+            "created_at": now.isoformat()
+        })
+        print(f"Paid admin created via Stripe: {email} ({plan_name})")
+    
+    return {"received": True}
+
+# --------------------------------------------------------------------------------
+# MASTER: GET ALL ADMINS WITH SUBSCRIPTION DETAILS
+# --------------------------------------------------------------------------------
+
+@app.get("/master/admins")
+async def get_all_admins(master_id: str):
+    """Master-only: Get all admins with subscription & revenue stats"""
+    master = admins_collection.find_one({"_id": ObjectId(master_id), "role": "master"})
+    if not master:
+        raise HTTPException(status_code=401, detail="Unauthorized")
+    
+    all_admins = list(admins_collection.find({"role": {"$ne": "master"}}))
+    now = datetime.now(timezone.utc)
+    
+    total_admins = len(all_admins)
+    active_subs = 0
+    total_revenue = 0
+    
+    admin_list = []
+    for a in all_admins:
+        exp_str = a.get("subscription_expiry")
+        is_expired = False
+        if exp_str:
+            try:
+                if now > datetime.fromisoformat(exp_str):
+                    is_expired = True
+            except:
+                pass
+        
+        if not is_expired:
+            active_subs += 1
+        
+        plan_name = a.get("subscription_plan", "Free Trial")
+        plan_info = plans_collection.find_one({"plan_name": plan_name})
+        if plan_info and a.get("is_paid"):
+            total_revenue += plan_info.get("price", 0)
+        
+        admin_list.append({
+            "id": str(a["_id"]),
+            "username": a.get("username", ""),
+            "name": a.get("name", a.get("username", "")),
+            "email": a.get("email", ""),
+            "subscription_plan": plan_name,
+            "subscription_start": a.get("subscription_start", ""),
+            "subscription_expiry": a.get("subscription_expiry", ""),
+            "is_expired": is_expired,
+            "is_paid": a.get("is_paid", False),
+            "login_enabled": a.get("login_enabled", True),
+            "created_at": a.get("created_at", "")
+        })
+    
+    return {
+        "status": "success",
+        "stats": {
+            "total_companies": total_admins,
+            "active_subscriptions": active_subs,
+            "estimated_revenue": total_revenue
+        },
+        "admins": admin_list
+    }
+
+@app.put("/master/admins/{admin_id}/toggle-login")
+async def toggle_admin_login(master_id: str, admin_id: str):
+    """Master-only: Enable/disable an admin's login access"""
+    master = admins_collection.find_one({"_id": ObjectId(master_id), "role": "master"})
+    if not master:
+        raise HTTPException(status_code=401, detail="Unauthorized")
+    
+    admin = admins_collection.find_one({"_id": ObjectId(admin_id)})
+    if not admin:
+        raise HTTPException(status_code=404, detail="Admin not found")
+    
+    current = admin.get("login_enabled", True)
+    admins_collection.update_one(
+        {"_id": ObjectId(admin_id)},
+        {"$set": {"login_enabled": not current}}
+    )
+    return {"status": "success", "login_enabled": not current}
+
 
 if __name__ == "__main__":
     import uvicorn
