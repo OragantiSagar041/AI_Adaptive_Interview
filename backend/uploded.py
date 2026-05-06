@@ -47,19 +47,19 @@ cloudinary.config(
 )
 
 CLOUDINARY_CLEANUP_STARTED = False
+RECORDING_RETENTION_DAYS = int(os.getenv("RECORDING_RETENTION_DAYS", "3"))
 
 def cloudinary_cleanup_loop():
     while True:
         try:
             now = datetime.now(timezone.utc)
-            # Increased retention to 7 days to prevent premature deletion
-            cutoff = now - timedelta(days=7)
+            cutoff = now - timedelta(days=RECORDING_RETENTION_DAYS)
             
             print(f"🔍 [Cleanup] Running Cloudinary maintenance (Cutoff: {cutoff.isoformat()})...")
             
             old_recordings = interviews_collection.find({
-                "created_at": {"$lt": cutoff.isoformat()},
-                "cloudinary_public_id": {"$exists": True}
+                "recording_uploaded_at": {"$lt": cutoff.isoformat()},
+                "cloudinary_public_id": {"$exists": True, "$ne": ""}
             })
             
             count = 0
@@ -72,7 +72,12 @@ def cloudinary_cleanup_loop():
                         cloudinary.uploader.destroy(public_id, resource_type="video")
                         interviews_collection.update_one(
                             {"_id": rec["_id"]},
-                            {"$unset": {"recording_path": "", "cloudinary_public_id": ""}}
+                            {"$unset": {
+                                "recording_path": "",
+                                "cloudinary_public_id": "",
+                                "recording_uploaded_at": "",
+                                "recording_storage": ""
+                            }}
                         )
                         count += 1
                     except Exception as e:
