@@ -3680,6 +3680,41 @@ async def activate_session(link_id: str):
         raise HTTPException(status_code=404, detail="Session not found")
     return {"status": "success"}
 
+@app.post("/admin/sessions/{link_id}/reschedule")
+async def reschedule_session(link_id: str, new_expiry: str = Form(...)):
+    """
+    Reschedule an interview by updating its expires_at date 
+    and resetting its status to pending (if it was expired).
+    """
+    update_data = {
+        "expires_at": new_expiry,
+        "status": "pending",
+        "is_deactivated": False # Ensure it's active if rescheduled
+    }
+    
+    # Also update scheduled_end if it exists for consistency
+    result = interview_sessions_collection.update_one(
+        {"link_id": link_id}, 
+        {"$set": update_data}
+    )
+    
+    if result.matched_count == 0:
+        raise HTTPException(status_code=404, detail="Session not found")
+        
+    # Fetch the updated session for email dispatch
+    updated_session = interview_sessions_collection.find_one({"link_id": link_id})
+    link_url = f"{FRONTEND_URL}/index.html?session_id={link_id}"
+    
+    # Re-send the invitation email to the candidate
+    email_result = queue_or_send_interview_email(updated_session, link_url)
+    
+    return {
+        "status": "success", 
+        "message": "Session rescheduled and email sent",
+        "email_sent": email_result.get("email_sent", False),
+        "email_scheduled": email_result.get("email_scheduled", False)
+    }
+
 @app.post("/start-session-interview")
 async def start_session_interview(link_id: str = Form(...)):
     row = interview_sessions_collection.find_one({"link_id": link_id})
