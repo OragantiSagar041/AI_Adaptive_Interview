@@ -3,6 +3,9 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 import os
 import json
+import hmac
+import hashlib
+import math
 import tempfile
 import sys
 from typing import Any, Dict, List, Optional
@@ -100,6 +103,208 @@ from fastapi.staticfiles import StaticFiles
 from fastapi.middleware.gzip import GZipMiddleware
 
 FRONTEND_URL = "https://ai-adaptive-interview.vercel.app"
+
+PLAN_DEFINITIONS = {
+    "trial": {
+        "label": "Free Trial",
+        "duration_days": 15,
+        "price": 0,
+        "summary": "Core single-interview setup for evaluating the platform before rollout.",
+        "features": [
+            "Admin Dashboard",
+            "Single Interview Creation",
+            "Resume Parsing",
+            "Email Invitation Sending",
+            "Basic Analytics",
+        ],
+        "capabilities": {
+            "single_interview": True,
+            "bulk_interviews": False,
+            "resume_parsing": True,
+            "export_sessions": False,
+            "live_monitoring": False,
+            "deactivated_candidates": False,
+            "detailed_analytics": False,
+        },
+    },
+    "basic": {
+        "label": "Basic",
+        "duration_days": 30,
+        "price": 2500,
+        "summary": "Adds richer review and control workflows for growing hiring teams.",
+        "features": [
+            "Everything in Free Trial",
+            "Detailed Analytics",
+            "Session Export",
+            "Deactivated Candidate Control",
+            "Email Notifications",
+        ],
+        "capabilities": {
+            "single_interview": True,
+            "bulk_interviews": False,
+            "resume_parsing": True,
+            "export_sessions": True,
+            "live_monitoring": False,
+            "deactivated_candidates": True,
+            "detailed_analytics": True,
+        },
+    },
+    "advance": {
+        "label": "Advance",
+        "duration_days": 30,
+        "price": 3999,
+        "summary": "Unlocks the full hiring workflow including bulk send and live monitoring.",
+        "features": [
+            "Everything in Basic",
+            "Bulk Candidate Upload",
+            "Live Monitoring",
+            "Live Results Dashboard",
+            "Priority Support",
+        ],
+        "capabilities": {
+            "single_interview": True,
+            "bulk_interviews": True,
+            "resume_parsing": True,
+            "export_sessions": True,
+            "live_monitoring": True,
+            "deactivated_candidates": True,
+            "detailed_analytics": True,
+        },
+    },
+    "owner": {
+        "label": "Owner",
+        "duration_days": 36500,
+        "price": 0,
+        "summary": "Internal owner access.",
+        "features": [
+            "All Features",
+            "Master Dashboard",
+            "Tenant Management",
+            "Plan Management",
+            "Billing Overview",
+        ],
+        "capabilities": {
+            "single_interview": True,
+            "bulk_interviews": True,
+            "resume_parsing": True,
+            "export_sessions": True,
+            "live_monitoring": True,
+            "deactivated_candidates": True,
+            "detailed_analytics": True,
+        },
+    },
+}
+
+PLAN_ALIASES = {
+    "free trial": "trial",
+    "trial": "trial",
+    "basic": "basic",
+    "advance": "advance",
+    "advanced": "advance",
+    "owner": "owner",
+    "master": "owner",
+}
+
+def normalize_plan_key(plan_name: Optional[str]) -> str:
+    if not plan_name:
+        return "trial"
+    return PLAN_ALIASES.get(str(plan_name).strip().lower(), "trial")
+
+def get_plan_definition(plan_name: Optional[str]) -> Dict[str, Any]:
+    plan_key = normalize_plan_key(plan_name)
+    base = PLAN_DEFINITIONS.get(plan_key, PLAN_DEFINITIONS["trial"])
+    return {
+        "plan_key": plan_key,
+        "label": base["label"],
+        "duration_days": base["duration_days"],
+        "price": base["price"],
+        "summary": base["summary"],
+        "features": list(base["features"]),
+        "capabilities": dict(base["capabilities"]),
+    }
+
+def serialize_plan(plan_doc: Dict[str, Any]) -> Dict[str, Any]:
+    definition = get_plan_definition(plan_doc.get("plan_name"))
+    return {
+        "id": str(plan_doc["_id"]),
+        "plan_key": definition["plan_key"],
+        "plan_name": definition["label"],
+        "duration_days": plan_doc.get("duration_days", definition["duration_days"]),
+        "price": plan_doc.get("price", definition["price"]),
+        "features": definition["features"],
+        "summary": definition["summary"],
+        "capabilities": definition["capabilities"],
+        "is_unlimited": plan_doc.get("is_unlimited", False),
+        "is_owner_plan": plan_doc.get("is_owner_plan", False),
+    }
+
+def get_subscription_status(expiry: Optional[str]) -> Dict[str, Any]:
+    if not expiry:
+        return {
+            "expiry_iso": expiry,
+            "expiry_dt": None,
+            "is_expired": False,
+            "days_remaining": None,
+            "warning": False,
+            "warning_message": "",
+        }
+
+    try:
+        expiry_dt = datetime.fromisoformat(expiry.replace("Z", "+00:00"))
+        now = datetime.now(timezone.utc)
+        remaining_seconds = (expiry_dt - now).total_seconds()
+        is_expired = remaining_seconds <= 0
+        days_remaining = 0 if is_expired else max(0, math.ceil(remaining_seconds / 86400))
+        warning = not is_expired and days_remaining <= 2
+        warning_message = (
+            f"Your subscription expires in {days_remaining} day{'s' if days_remaining != 1 else ''}. Renew soon to avoid interruption."
+            if warning else ""
+        )
+        return {
+            "expiry_iso": expiry,
+            "expiry_dt": expiry_dt,
+            "is_expired": is_expired,
+            "days_remaining": days_remaining,
+            "warning": warning,
+            "warning_message": warning_message,
+        }
+    except Exception:
+        return {
+            "expiry_iso": expiry,
+            "expiry_dt": None,
+            "is_expired": False,
+            "days_remaining": None,
+            "warning": False,
+            "warning_message": "",
+        }
+
+def get_admin_plan_context(user: Dict[str, Any]) -> Dict[str, Any]:
+    definition = get_plan_definition(user.get("subscription_plan"))
+    subscription = get_subscription_status(user.get("subscription_expiry"))
+    return {
+        "plan_key": definition["plan_key"],
+        "plan_label": definition["label"],
+        "capabilities": definition["capabilities"],
+        "features": definition["features"],
+        "summary": definition["summary"],
+        **subscription,
+    }
+
+def require_admin_capability(admin_id: str, capability: str, detail: str):
+    try:
+        user = admins_collection.find_one({"_id": ObjectId(admin_id)})
+    except Exception:
+        user = None
+
+    if not user:
+        raise HTTPException(status_code=404, detail="Admin account not found")
+    if user.get("role") == "master":
+        return user
+
+    plan_context = get_admin_plan_context(user)
+    if not plan_context["capabilities"].get(capability, False):
+        raise HTTPException(status_code=403, detail=detail)
+    return user
 
 app = FastAPI()
 app.add_middleware(GZipMiddleware, minimum_size=1000)
@@ -1024,12 +1229,7 @@ def generate_mock_questions(text: str, source: str, num_questions: int = 6, resu
     middle_questions = []
     
     try:
-        if "resume" in source.lower():
-            ai_questions = generate_resume_questions(text)
-        else:
-            ai_questions = generate_jd_questions(text, ai_instructions=ai_instructions)
-        
-        # Inject custom questions first if provided
+        # If admin provided custom questions, ONLY use those for the technical portion
         if custom_questions:
             custom_q_list = [q.strip() for q in custom_questions.split('\n') if q.strip()]
             for cq in custom_q_list:
@@ -1039,28 +1239,40 @@ def generate_mock_questions(text: str, source: str, num_questions: int = 6, resu
                     "type": "Technical",
                     "category": "Custom Question"
                 })
-
-        for q in ai_questions:
-            qtype = q.get("type", "").lower()
-            qcat = q.get("category", "").lower()
-            if any(x in qtype for x in ["self-intro", "introduction", "career", "future"]):
-                continue
-            if any(x in qcat for x in ["basic", "background", "future goals", "closing"]):
-                continue
-            middle_questions.append(q)
+            print(f"✅ Loaded {len(middle_questions)} custom questions (Skipping AI & Fallback)")
             
-        print(f"✅ AI generated {len(middle_questions)} technical questions")
+        else:
+            # Otherwise, use AI to generate questions
+            if "resume" in source.lower():
+                ai_questions = generate_resume_questions(text)
+            else:
+                ai_questions = generate_jd_questions(text, ai_instructions=ai_instructions)
+            
+            for q in ai_questions:
+                qtype = q.get("type", "").lower()
+                qcat = q.get("category", "").lower()
+                if any(x in qtype for x in ["self-intro", "introduction", "career", "future"]):
+                    continue
+                if any(x in qcat for x in ["basic", "background", "future goals", "closing"]):
+                    continue
+                middle_questions.append(q)
+                
+            print(f"✅ AI generated {len(middle_questions)} technical questions")
     except Exception as e:
         print(f"⚠️ AI question generation failed: {e}")
-        print("📋 Falling back to smart offline question generator...")
+        if not custom_questions:
+            print("📋 Falling back to smart offline question generator...")
     
     # ── OFFLINE FALLBACK: Extract skills/projects and build timeline-based questions ──
-    if len(middle_questions) < middle_count:
+    # Only run offline fallback if NO custom questions were provided
+    if len(middle_questions) < middle_count and not custom_questions:
         offline_questions = _generate_offline_questions(resume_text or "", jd_text or text, num_questions)
         middle_questions.extend(offline_questions)
         print(f"📋 Offline generator added {len(offline_questions)} questions")
     
-    middle_questions = middle_questions[:middle_count]
+    if not custom_questions:
+        middle_questions = middle_questions[:middle_count]
+
     
     all_questions = []
     idx = 1
@@ -1529,10 +1741,28 @@ def api_gen_next_question(req: NextQuestionRequest):
             break
             
     if current_idx != -1:
+        current_q = interview["questions"][current_idx]
+        q_type = current_q.get("type", "").lower()
+        q_cat = current_q.get("category", "").lower()
+        
+        # ── BUGFIX: Prevent Follow-ups from hijacking the interview ──
+        # 1. Skip follow-ups for Intros, Custom Questions, Closing, and existing Follow-ups
+        if "self-intro" in q_type or "introduction" in q_type:
+            raise HTTPException(status_code=503, detail="Skip follow-up for intro")
+        if "follow-up" in q_type or "jd-based" in q_type:
+            raise HTTPException(status_code=503, detail="Already a follow-up")
+        if "custom" in q_cat:
+            raise HTTPException(status_code=503, detail="Skip follow-up for custom questions")
+        if "closing" in q_cat or "future" in q_cat or "closing" in q_type:
+            raise HTTPException(status_code=503, detail="Skip follow-up for closing")
+
         # Check if we already have a follow-up (avoid infinite expansion if re-running)
         if current_idx + 1 < len(interview["questions"]):
-             # If next question is already a "Follow-up", maybe replace it? 
-             # For now, let's just INSERT it to be dynamic.
+             # If the very next question is already a follow-up, do not insert another one
+             next_q = interview["questions"][current_idx+1]
+             if "follow-up" in next_q.get("type", "").lower() or "jd-based" in next_q.get("type", "").lower():
+                 raise HTTPException(status_code=503, detail="Next question is already a follow-up")
+                 
              # Shift IDs of subsequent questions
              for q in interview["questions"][current_idx+1:]:
                  q["id"] = int(q["id"]) + 1
@@ -3064,6 +3294,11 @@ def get_dashboard_stats(admin_id: str):
 @app.get("/admin/export-sessions")
 async def export_sessions(admin_id: str, status_filter: str = ""):
     """Return session data for Excel export, filtered by status."""
+    require_admin_capability(
+        admin_id,
+        "export_sessions",
+        "Session export is available on Basic and Advance plans only.",
+    )
     query = {"created_by": admin_id}
     rows = list(interview_sessions_collection.find(query).sort("created_at", -1))
     now = datetime.now(timezone.utc)
@@ -3201,33 +3436,33 @@ def startup_event():
         default_plans = [
             {
                 "plan_name": "Free Trial",
-                "duration_days": 15,
-                "price": 0,
-                "features": ["Admin Dashboard", "Single Interview Creation", "AI Video Recording", "Basic Analytics"],
+                "duration_days": get_plan_definition("trial")["duration_days"],
+                "price": get_plan_definition("trial")["price"],
+                "features": get_plan_definition("trial")["features"],
                 "is_unlimited": False,
                 "is_owner_plan": False
             },
             {
                 "plan_name": "Basic",
-                "duration_days": 30,
-                "price": 2500,
-                "features": ["Admin Dashboard", "Single Interview Creation", "AI Video Recording", "Detailed Analytics", "Resume Parsing", "Email Notifications"],
+                "duration_days": get_plan_definition("basic")["duration_days"],
+                "price": get_plan_definition("basic")["price"],
+                "features": get_plan_definition("basic")["features"],
                 "is_unlimited": False,
                 "is_owner_plan": False
             },
             {
                 "plan_name": "Advance",
-                "duration_days": 30,
-                "price": 3999,
-                "features": ["Everything in Basic", "Bulk Candidate Upload", "Unlimited Interviews", "Custom HR Screening", "Live Monitoring", "Priority Support"],
+                "duration_days": get_plan_definition("advance")["duration_days"],
+                "price": get_plan_definition("advance")["price"],
+                "features": get_plan_definition("advance")["features"],
                 "is_unlimited": False,
                 "is_owner_plan": False
             },
             {
                 "plan_name": "Owner",
-                "duration_days": 36500,
-                "price": 0,
-                "features": ["All Features", "Master Dashboard", "Tenant Management", "Plan Management", "Billing Overview"],
+                "duration_days": get_plan_definition("owner")["duration_days"],
+                "price": get_plan_definition("owner")["price"],
+                "features": get_plan_definition("owner")["features"],
                 "is_unlimited": True,
                 "is_owner_plan": True
             }
@@ -3371,9 +3606,9 @@ async def parse_resume(file: UploadFile = File(...)):
     text = extract_text_from_file(content, file.filename)
     info = extract_info_from_resume(text)
     return {
-        "status": "success", 
+        "status": "success",   
         "text": text,
-        "name": info.get("name"),
+        "name": info.get("name"), 
         "email": info.get("email")
     }
 
@@ -3458,10 +3693,15 @@ class BulkCreateSession(BaseModel):
 async def bulk_create_sessions(data: BulkCreateSession):
     from bson import ObjectId
     # ENFORCE SUBSCRIPTION PLAN
-    admin_user = admins_collection.find_one({"_id": ObjectId(admin_id)})
-    if admin_user and admin_user.get("role") != "master":
-        if admin_user.get("subscription_plan") not in ["advance"]:
-            raise HTTPException(status_code=403, detail="Bulk interviews require the Advance subscription plan. Please contact your administrator to upgrade.")
+    admin_user = admins_collection.find_one({"_id": ObjectId(data.created_by)})
+    if not admin_user:
+        raise HTTPException(status_code=404, detail="Admin not found")
+    if admin_user.get("role") != "master":
+        require_admin_capability(
+            data.created_by,
+            "bulk_interviews",
+            "Bulk interviews require the Advance subscription plan. Please upgrade to continue.",
+        )
 
     """
     Create interview sessions for multiple candidates at once.
@@ -4183,6 +4423,11 @@ def get_live_snapshot(link_id: str):
 @app.get("/admin/ongoing-interviews")
 async def get_ongoing_interviews(admin_id: str):
     """Return all in-progress (status=started) sessions for this admin with live status."""
+    require_admin_capability(
+        admin_id,
+        "live_monitoring",
+        "Live monitoring is available on the Advance plan only.",
+    )
     rows = list(interview_sessions_collection.find({
         "created_by": admin_id,
         "status": "started",
@@ -4463,21 +4708,12 @@ async def admin_login(data: AdminLogin):
             "message": "Your account login has been stopped by the administrator. Please contact support.",
         }
         
-    # Check expiry
-    plan = user.get("subscription_plan", "trial")
+    plan_context = get_admin_plan_context(user)
+    plan = plan_context["plan_label"]
     expiry = user.get("subscription_expiry")
-    is_expired = False
-    
-    now = datetime.now(timezone.utc)
-    if expiry:
-        try:
-            if now > datetime.fromisoformat(expiry):
-                is_expired = True
-        except:
-            pass
             
     # If expired, block
-    if is_expired:
+    if plan_context["is_expired"]:
         return {
             "status": "expired",
             "message": f"Your {plan} subscription has expired. Please contact the administrator.",
@@ -4488,10 +4724,16 @@ async def admin_login(data: AdminLogin):
         "status": "success",
         "admin_id": str(user["_id"]),
         "username": user["username"],
+        "email": user.get("email", ""),
         "name": user.get("name", user.get("username", "")),
         "role": user.get("role", "tenant"),
         "subscription_plan": plan,
-        "subscription_expiry": expiry
+        "subscription_plan_key": plan_context["plan_key"],
+        "subscription_expiry": expiry,
+        "subscription_days_remaining": plan_context["days_remaining"],
+        "subscription_warning": plan_context["warning"],
+        "subscription_warning_message": plan_context["warning_message"],
+        "plan_capabilities": plan_context["capabilities"],
     }
 
 # --------------------------------------------------------------------------------
@@ -4509,11 +4751,23 @@ class AdminRegister(BaseModel):
     email: str
     password: str
     phone: str = ""
+    company_name: str = ""
     plan: str = "Free Trial"
 
 class StripeCheckoutRequest(BaseModel):
     plan_name: str
     signup_form: dict
+
+class RazorpayOrderRequest(BaseModel):
+    plan_name: str
+    signup_form: dict
+
+class RazorpayVerifyRequest(BaseModel):
+    plan_name: str
+    signup_form: dict
+    razorpay_order_id: str
+    razorpay_payment_id: str
+    razorpay_signature: str
 
 @app.get("/api/plans")
 async def get_all_plans():
@@ -4523,13 +4777,7 @@ async def get_all_plans():
     for p in plans:
         if p.get("is_owner_plan"):
             continue  # Don't expose owner plan publicly
-        result.append({
-            "id": str(p["_id"]),
-            "plan_name": p["plan_name"],
-            "duration_days": p.get("duration_days", 30),
-            "price": p.get("price", 0),
-            "features": p.get("features", []),
-        })
+        result.append(serialize_plan(p))
     return {"status": "success", "data": result}
 
 @app.get("/master/plans")
@@ -4541,15 +4789,7 @@ async def get_all_plans_master(master_id: str):
     plans = list(plans_collection.find({}))
     result = []
     for p in plans:
-        result.append({
-            "id": str(p["_id"]),
-            "plan_name": p["plan_name"],
-            "duration_days": p.get("duration_days", 30),
-            "price": p.get("price", 0),
-            "features": p.get("features", []),
-            "is_unlimited": p.get("is_unlimited", False),
-            "is_owner_plan": p.get("is_owner_plan", False),
-        })
+        result.append(serialize_plan(p))
     return {"status": "success", "data": result}
 
 @app.post("/master/plans")
@@ -4596,10 +4836,14 @@ async def delete_plan(master_id: str, plan_id: str):
 @app.post("/api/register")
 async def register_admin(data: AdminRegister):
     """Public: Self-register from landing page pricing cards"""
+    normalized_email = data.email.strip().lower()
+    normalized_name = data.name.strip()
+    normalized_company = data.company_name.strip()
+
     # Check if username/email already exists
-    if admins_collection.find_one({"username": data.email}):
+    if admins_collection.find_one({"username": normalized_email}):
         raise HTTPException(status_code=400, detail="An account with this email already exists")
-    if admins_collection.find_one({"email": data.email}):
+    if admins_collection.find_one({"email": normalized_email}):
         raise HTTPException(status_code=400, detail="An account with this email already exists")
     
     # Fetch plan details
@@ -4607,7 +4851,7 @@ async def register_admin(data: AdminRegister):
     if not plan_info:
         raise HTTPException(status_code=400, detail="Invalid plan selected")
     
-    # For paid plans, block direct registration (must go through Stripe)
+    # For paid plans, block direct registration (must go through the payment checkout flow)
     if plan_info.get("price", 0) > 0:
         raise HTTPException(status_code=400, detail="Paid plans require payment. Use the checkout flow.")
     
@@ -4616,11 +4860,12 @@ async def register_admin(data: AdminRegister):
     expiry = now + timedelta(days=duration)
     
     new_admin = {
-        "username": data.email,  # Use email as username
+        "username": normalized_email,  # Use email as username
         "password": hash_password(data.password),
-        "email": data.email,
-        "name": data.name,
+        "email": normalized_email,
+        "name": normalized_name,
         "phone": data.phone,
+        "company_name": normalized_company,
         "role": "tenant",
         "subscription_plan": data.plan,
         "subscription_start": now.isoformat(),
@@ -4633,8 +4878,192 @@ async def register_admin(data: AdminRegister):
     admins_collection.insert_one(new_admin)
     return {"status": "success", "message": f"Account created with {data.plan} plan! Please login."}
 
+def get_razorpay_credentials():
+    key_id = os.getenv("RAZORPAY_KEY_ID")
+    key_secret = os.getenv("RAZORPAY_KEY_SECRET")
+    if not key_id or not key_secret:
+        raise HTTPException(status_code=500, detail="Razorpay is not configured. Add RAZORPAY_KEY_ID and RAZORPAY_KEY_SECRET.")
+    return key_id, key_secret
+
+def validate_signup_form(signup_form: dict):
+    name = (signup_form.get("name") or "").strip()
+    email = (signup_form.get("email") or "").strip().lower()
+    password = signup_form.get("password") or ""
+    if not name or not email or not password:
+        raise HTTPException(status_code=400, detail="Name, email and password are required.")
+    return {
+        "name": name,
+        "email": email,
+        "password": password,
+        "phone": (signup_form.get("phone") or "").strip(),
+        "company_name": (signup_form.get("company_name") or "").strip(),
+    }
+
+@app.post("/api/razorpay/create-order")
+async def create_razorpay_order(data: RazorpayOrderRequest):
+    """Create a Razorpay order for a paid subscription."""
+    key_id, key_secret = get_razorpay_credentials()
+    signup = validate_signup_form(data.signup_form or {})
+
+    if admins_collection.find_one({"$or": [{"username": signup["email"]}, {"email": signup["email"]}]}):
+        raise HTTPException(status_code=400, detail="An account with this email already exists")
+
+    plan_info = plans_collection.find_one({"plan_name": data.plan_name})
+    if not plan_info:
+        raise HTTPException(status_code=400, detail="Invalid plan selected")
+    if int(plan_info.get("price", 0)) <= 0:
+        raise HTTPException(status_code=400, detail="This plan does not require payment")
+
+    receipt = f"aii_{int(time.time())}_{uuid.uuid4().hex[:8]}"
+    payload = {
+        "amount": int(plan_info["price"]) * 100,
+        "currency": "INR",
+        "receipt": receipt[:40],
+        "notes": {
+            "plan_name": plan_info["plan_name"],
+            "email": signup["email"][:255],
+            "company_name": signup["company_name"][:255],
+        },
+    }
+
+    try:
+        response = requests.post(
+            "https://api.razorpay.com/v1/orders",
+            auth=(key_id, key_secret),
+            json=payload,
+            timeout=30,
+        )
+        if response.status_code >= 400:
+            try:
+                error_json = response.json()
+                error_message = error_json.get("error", {}).get("description") or error_json.get("description") or response.text
+            except Exception:
+                error_message = response.text
+            raise HTTPException(status_code=502, detail=f"Razorpay order creation failed: {error_message}")
+
+        order = response.json()
+        return {
+            "status": "success",
+            "key": key_id,
+            "company_name": os.getenv("APP_BRAND_NAME", "Mock Interview"),
+            "description": f"{plan_info['plan_name']} plan for {plan_info.get('duration_days', 30)} days",
+            "order": {
+                "id": order["id"],
+                "amount": order["amount"],
+                "currency": order["currency"],
+            },
+            "plan": {
+                "plan_name": plan_info["plan_name"],
+                "duration_days": plan_info.get("duration_days", 30),
+                "price": int(plan_info.get("price", 0)),
+            },
+            "prefill": {
+                "name": signup["name"],
+                "email": signup["email"],
+                "contact": signup["phone"],
+            },
+        }
+    except HTTPException:
+        raise
+    except Exception as exc:
+        raise HTTPException(status_code=500, detail=f"Unable to initialize Razorpay payment: {str(exc)}")
+
+@app.post("/api/razorpay/verify-payment")
+async def verify_razorpay_payment(data: RazorpayVerifyRequest):
+    """Verify Razorpay signature and activate the paid subscription."""
+    _, key_secret = get_razorpay_credentials()
+    signup = validate_signup_form(data.signup_form or {})
+
+    plan_info = plans_collection.find_one({"plan_name": data.plan_name})
+    if not plan_info:
+        raise HTTPException(status_code=400, detail="Invalid plan selected")
+    if int(plan_info.get("price", 0)) <= 0:
+        raise HTTPException(status_code=400, detail="This plan does not require payment")
+
+    existing_user = admins_collection.find_one({"email": signup["email"]})
+    if existing_user:
+        if existing_user.get("razorpay_payment_id") == data.razorpay_payment_id:
+            return {"status": "success", "message": "Subscription is already activated for this account."}
+        raise HTTPException(status_code=400, detail="An account with this email already exists")
+
+    signature_payload = f"{data.razorpay_order_id}|{data.razorpay_payment_id}".encode("utf-8")
+    expected_signature = hmac.new(
+        key_secret.encode("utf-8"),
+        signature_payload,
+        hashlib.sha256,
+    ).hexdigest()
+
+    if not hmac.compare_digest(expected_signature, data.razorpay_signature):
+        raise HTTPException(status_code=400, detail="Payment signature verification failed")
+
+    key_id = os.getenv("RAZORPAY_KEY_ID")
+    try:
+        order_response = requests.get(
+            f"https://api.razorpay.com/v1/orders/{data.razorpay_order_id}",
+            auth=(key_id, key_secret),
+            timeout=30,
+        )
+        if order_response.ok:
+            order_info = order_response.json()
+            expected_amount = int(plan_info["price"]) * 100
+            if int(order_info.get("amount", 0)) != expected_amount:
+                raise HTTPException(status_code=400, detail="Paid amount does not match the selected plan")
+            note_plan = (order_info.get("notes") or {}).get("plan_name")
+            if note_plan and note_plan != plan_info["plan_name"]:
+                raise HTTPException(status_code=400, detail="Payment order does not match the selected plan")
+    except HTTPException:
+        raise
+    except Exception:
+        pass
+
+    try:
+        payment_response = requests.get(
+            f"https://api.razorpay.com/v1/payments/{data.razorpay_payment_id}",
+            auth=(key_id, key_secret),
+            timeout=30,
+        )
+        if payment_response.ok:
+            payment_info = payment_response.json()
+            payment_status = (payment_info.get("status") or "").lower()
+            if payment_status and payment_status not in {"authorized", "captured"}:
+                raise HTTPException(status_code=400, detail=f"Payment is not successful yet. Current status: {payment_status}")
+    except HTTPException:
+        raise
+    except Exception:
+        pass
+
+    now = datetime.now(timezone.utc)
+    duration = int(plan_info.get("duration_days", 30))
+
+    admins_collection.insert_one({
+        "username": signup["email"],
+        "password": hash_password(signup["password"]),
+        "email": signup["email"],
+        "name": signup["name"],
+        "phone": signup["phone"],
+        "company_name": signup["company_name"],
+        "role": "tenant",
+        "subscription_plan": plan_info["plan_name"],
+        "subscription_start": now.isoformat(),
+        "subscription_expiry": (now + timedelta(days=duration)).isoformat(),
+        "is_paid": True,
+        "payment_provider": "razorpay",
+        "payment_status": "captured",
+        "amount_paid": int(plan_info.get("price", 0)),
+        "razorpay_order_id": data.razorpay_order_id,
+        "razorpay_payment_id": data.razorpay_payment_id,
+        "payment_verified_at": now.isoformat(),
+        "login_enabled": True,
+        "created_at": now.isoformat(),
+    })
+
+    return {
+        "status": "success",
+        "message": f"Payment verified. Your {plan_info['plan_name']} subscription is now active.",
+    }
+
 # --------------------------------------------------------------------------------
-# STRIPE CHECKOUT (for Paid Plans)
+# LEGACY STRIPE CHECKOUT (kept only for backward compatibility)
 # --------------------------------------------------------------------------------
 
 @app.post("/api/stripe/create-checkout-session")

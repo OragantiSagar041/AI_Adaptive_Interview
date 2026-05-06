@@ -3,668 +3,933 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>HR-Sync | Next-Gen AI Interviews</title>
-    <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;600;800&display=swap" rel="stylesheet">
+    <title>Mock Interview | AI Interview Platform</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
     <style>
         :root {
-            --bg-color: #030014;
-            --surface: #0a0129;
-            --surface-hover: #140441;
-            --primary: #8b5cf6;
-            --primary-glow: rgba(139, 92, 246, 0.6);
-            --secondary: #ec4899;
-            --text-main: #f8fafc;
-            --text-muted: #94a3b8;
-            --border: rgba(139, 92, 246, 0.2);
-            --gradient: linear-gradient(135deg, var(--primary), var(--secondary));
+            --bg: #f5faf7;
+            --surface: rgba(255, 255, 255, 0.84);
+            --surface-strong: #ffffff;
+            --ink: #10231f;
+            --muted: #5f726d;
+            --line: rgba(16, 35, 31, 0.1);
+            --brand: #0c8f86;
+            --brand-deep: #0f5f5b;
+            --brand-soft: rgba(12, 143, 134, 0.12);
+            --accent: #132f2b;
+            --accent-2: #7be2d8;
+            --sky: rgba(118, 180, 255, 0.18);
+            --shadow: 0 28px 80px rgba(16, 35, 31, 0.1);
         }
 
         * {
+            box-sizing: border-box;
             margin: 0;
             padding: 0;
-            box-sizing: border-box;
-            font-family: 'Outfit', sans-serif;
+            font-family: 'Inter', sans-serif;
+        }
+
+        html {
+            scroll-behavior: smooth;
         }
 
         body {
-            background-color: var(--bg-color);
-            color: var(--text-main);
+            color: var(--ink);
+            background:
+                radial-gradient(circle at top left, rgba(133, 255, 230, 0.38), transparent 32%),
+                radial-gradient(circle at 80% 12%, rgba(124, 180, 255, 0.28), transparent 28%),
+                linear-gradient(180deg, #f9fdfb 0%, var(--bg) 42%, #eef7f3 100%);
             overflow-x: hidden;
-            line-height: 1.6;
         }
 
-        /* Abstract Background */
-        .bg-shapes {
+        body::before {
+            content: "";
             position: fixed;
-            top: 0;
-            left: 0;
-            width: 100vw;
-            height: 100vh;
-            z-index: -1;
-            overflow: hidden;
+            inset: 0;
+            background-image:
+                linear-gradient(rgba(16, 35, 31, 0.04) 1px, transparent 1px),
+                linear-gradient(90deg, rgba(16, 35, 31, 0.04) 1px, transparent 1px);
+            background-size: 88px 88px;
+            mask-image: linear-gradient(180deg, rgba(0, 0, 0, 0.85), transparent 96%);
+            pointer-events: none;
+            z-index: 0;
         }
 
-        .shape {
-            position: absolute;
-            filter: blur(100px);
-            opacity: 0.4;
-            border-radius: 50%;
+        a {
+            color: inherit;
+            text-decoration: none;
         }
 
-        .shape-1 {
-            top: -10%; left: -10%;
-            width: 500px; height: 500px;
-            background: var(--primary);
-            animation: float 15s ease-in-out infinite;
+        .page {
+            position: relative;
+            z-index: 1;
+            max-width: 1340px;
+            margin: 0 auto;
+            padding: 26px 24px 80px;
         }
 
-        .shape-2 {
-            bottom: -10%; right: -10%;
-            width: 600px; height: 600px;
-            background: var(--secondary);
-            animation: float 20s ease-in-out infinite reverse;
-        }
-
-        @keyframes float {
-            0% { transform: translate(0, 0); }
-            50% { transform: translate(10%, 10%); }
-            100% { transform: translate(0, 0); }
-        }
-
-        /* Nav */
-        header {
+        .topbar {
             display: flex;
-            justify-content: space-between;
             align-items: center;
-            padding: 1.5rem 6%;
-            border-bottom: 1px solid var(--border);
-            background: rgba(3, 0, 20, 0.6);
-            backdrop-filter: blur(20px);
-            position: sticky;
-            top: 0;
-            z-index: 100;
+            justify-content: space-between;
+            gap: 18px;
+            padding: 16px 18px;
+            border: 1px solid rgba(255, 255, 255, 0.72);
+            border-radius: 28px;
+            background: rgba(255, 255, 255, 0.74);
+            backdrop-filter: blur(22px);
+            box-shadow: 0 18px 40px rgba(16, 35, 31, 0.08);
         }
 
-        .brand {
-            font-size: 1.8rem;
+        .brand-lockup {
+            display: flex;
+            align-items: center;
+            gap: 14px;
+        }
+
+        .brand-badge {
+            width: 46px;
+            height: 46px;
+            border-radius: 16px;
+            display: grid;
+            place-items: center;
+            background: linear-gradient(135deg, #14b8a6 0%, #0f766e 100%);
+            color: white;
+            font-size: 1.1rem;
             font-weight: 800;
-            background: var(--gradient);
-            -webkit-background-clip: text;
-            -webkit-text-fill-color: transparent;
-            letter-spacing: -1px;
+            box-shadow: 0 16px 30px rgba(20, 184, 166, 0.26);
         }
 
-        .nav-actions .btn {
-            margin-left: 1rem;
+        .brand-copy strong {
+            display: block;
+            font-size: 1rem;
+            letter-spacing: -0.03em;
+        }
+
+        .brand-copy span,
+        .nav-links a {
+            color: var(--muted);
+            font-size: 0.94rem;
+        }
+
+        .nav-links {
+            display: flex;
+            align-items: center;
+            gap: 22px;
+        }
+
+        .nav-links a:hover {
+            color: var(--accent);
+        }
+
+        .nav-actions {
+            display: flex;
+            align-items: center;
+            gap: 12px;
         }
 
         .btn {
-            padding: 0.8rem 1.8rem;
-            border-radius: 30px;
-            font-weight: 600;
-            text-decoration: none;
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            gap: 8px;
+            padding: 14px 20px;
+            border-radius: 999px;
+            border: 1px solid transparent;
+            font-size: 0.96rem;
+            font-weight: 700;
             cursor: pointer;
-            transition: all 0.3s;
-            font-size: 1rem;
-            border: none;
+            transition: transform 0.24s ease, box-shadow 0.24s ease, border-color 0.24s ease, background 0.24s ease;
+        }
+
+        .btn:hover {
+            transform: translateY(-2px);
         }
 
         .btn-outline {
-            background: transparent;
-            color: var(--text-main);
-            border: 2px solid var(--primary);
+            border-color: rgba(16, 35, 31, 0.12);
+            background: rgba(255, 255, 255, 0.7);
+            color: var(--accent);
         }
 
-        .btn-outline:hover {
-            background: var(--primary);
-            box-shadow: 0 0 20px var(--primary-glow);
-        }
-
-        .btn-filled {
-            background: var(--gradient);
+        .btn-primary {
             color: white;
-            box-shadow: 0 0 20px var(--primary-glow);
+            background: linear-gradient(135deg, #14312d 0%, #0f655f 52%, #11a89b 100%);
+            box-shadow:
+                inset -4px -6px 25px rgba(201, 201, 201, 0.08),
+                inset 4px 4px 10px rgba(29, 29, 29, 0.24),
+                0 18px 40px rgba(8, 169, 155, 0.2);
         }
 
-        .btn-filled:hover {
-            transform: scale(1.05);
-            box-shadow: 0 0 30px var(--primary-glow);
-        }
-
-        /* Hero */
-        .hero-section {
-            padding: 8rem 6% 4rem;
-            text-align: center;
-            max-width: 900px;
-            margin: 0 auto;
-        }
-
-        .pill {
-            display: inline-block;
-            padding: 0.5rem 1.2rem;
-            border-radius: 50px;
-            background: rgba(236, 72, 153, 0.1);
-            color: var(--secondary);
-            font-weight: 600;
-            font-size: 0.9rem;
-            margin-bottom: 2rem;
-            border: 1px solid rgba(236, 72, 153, 0.3);
-        }
-
-        .hero-section h1 {
-            font-size: 4rem;
-            font-weight: 800;
-            line-height: 1.1;
-            margin-bottom: 1.5rem;
-            letter-spacing: -1px;
-        }
-
-        .hero-section p {
-            font-size: 1.2rem;
-            color: var(--text-muted);
-            margin-bottom: 3rem;
-        }
-
-        /* Value Props */
-        .grid-cards {
+        .hero {
             display: grid;
-            grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
-            gap: 2rem;
-            padding: 4rem 6%;
-            max-width: 1200px;
-            margin: 0 auto;
+            grid-template-columns: 1.05fr 0.95fr;
+            gap: 32px;
+            padding: 62px 0 34px;
+            align-items: end;
         }
 
-        .info-card {
-            background: rgba(10, 1, 41, 0.6);
-            border: 1px solid var(--border);
-            border-radius: 24px;
-            padding: 2.5rem;
-            backdrop-filter: blur(10px);
-            transition: all 0.4s cubic-bezier(0.175, 0.885, 0.32, 1.275);
-        }
-
-        .info-card:hover {
-            transform: translateY(-10px);
-            border-color: var(--secondary);
-            box-shadow: 0 20px 40px rgba(236, 72, 153, 0.1);
-        }
-
-        .info-card i {
-            font-size: 2.5rem;
-            color: var(--primary);
-            margin-bottom: 1.5rem;
-            display: inline-block;
-        }
-
-        .info-card h3 {
-            font-size: 1.5rem;
-            margin-bottom: 1rem;
-        }
-
-        .info-card p {
-            color: var(--text-muted);
-        }
-
-        /* Subscriptions */
-        .pricing-section {
-            padding: 6rem 6%;
-            max-width: 1200px;
-            margin: 0 auto;
-        }
-
-        .pricing-header {
-            text-align: center;
-            margin-bottom: 4rem;
-        }
-
-        .pricing-header h2 {
-            font-size: 3rem;
-            font-weight: 800;
-        }
-
-        .plans-grid {
-            display: grid;
-            grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
-            gap: 2rem;
+        .hero-copy .eyebrow {
+            display: inline-flex;
             align-items: center;
-        }
-
-        .plan-card {
-            background: var(--surface);
-            border: 1px solid var(--border);
-            border-radius: 30px;
-            padding: 3rem 2rem;
-            position: relative;
-            overflow: hidden;
-            transition: 0.3s;
-        }
-
-        .plan-card:hover {
-            border-color: var(--primary);
-        }
-
-        .plan-card.featured {
-            background: linear-gradient(180deg, rgba(139, 92, 246, 0.1) 0%, var(--surface) 100%);
-            border: 2px solid var(--primary);
-            transform: scale(1.05);
-        }
-
-        .plan-card.featured::before {
-            content: 'Most Popular';
-            position: absolute;
-            top: 0;
-            left: 50%;
-            transform: translate(-50%, 0);
-            background: var(--primary);
-            color: white;
-            padding: 0.4rem 1.5rem;
-            font-size: 0.8rem;
-            font-weight: 800;
-            border-bottom-left-radius: 10px;
-            border-bottom-right-radius: 10px;
-        }
-
-        .plan-name {
-            font-size: 1.8rem;
-            font-weight: 800;
-            margin-bottom: 0.5rem;
-        }
-
-        .plan-duration {
-            color: var(--secondary);
-            font-size: 0.9rem;
-            font-weight: 600;
+            gap: 8px;
+            padding: 10px 14px;
+            border-radius: 999px;
+            background: rgba(255, 255, 255, 0.82);
+            border: 1px solid rgba(16, 35, 31, 0.08);
+            color: var(--brand-deep);
+            font-size: 0.84rem;
+            font-weight: 700;
+            letter-spacing: 0.05em;
             text-transform: uppercase;
-            letter-spacing: 1px;
-            margin-bottom: 2rem;
         }
 
-        .plan-price {
-            font-size: 3.5rem;
-            font-weight: 800;
-            margin-bottom: 2rem;
-            display: flex;
-            align-items: flex-end;
-            gap: 0.5rem;
+        .hero-copy h1 {
+            margin-top: 18px;
+            font-size: clamp(3rem, 7vw, 6rem);
+            line-height: 0.94;
+            letter-spacing: -0.08em;
+            max-width: 720px;
         }
 
-        .plan-price span {
-            font-size: 1rem;
-            color: var(--text-muted);
-            font-weight: 400;
-            margin-bottom: 0.8rem;
+        .hero-copy p {
+            margin-top: 22px;
+            max-width: 620px;
+            font-size: 1.08rem;
+            color: var(--muted);
+            line-height: 1.75;
         }
 
-        .plan-features {
-            list-style: none;
-            margin-bottom: 3rem;
-        }
-
-        .plan-features li {
-            margin-bottom: 1.2rem;
+        .hero-actions {
             display: flex;
             align-items: center;
-            gap: 1rem;
-            color: #cbd5e1;
+            flex-wrap: wrap;
+            gap: 14px;
+            margin-top: 30px;
         }
 
-        .plan-features li::before {
-            content: '';
-            width: 8px;
-            height: 8px;
-            background: var(--secondary);
-            border-radius: 50%;
-            box-shadow: 0 0 10px var(--secondary);
-        }
-
-        .plan-btn {
-            width: 100%;
-            text-align: center;
-            display: block;
-        }
-
-        /* Modal */
-        .modal {
-            position: fixed;
-            top: 0; left: 0; width: 100%; height: 100%;
-            background: rgba(3, 0, 20, 0.9);
-            backdrop-filter: blur(15px);
+        .hero-proof {
             display: flex;
+            align-items: center;
+            gap: 22px;
+            flex-wrap: wrap;
+            margin-top: 28px;
+            color: var(--muted);
+            font-size: 0.95rem;
+        }
+
+        .proof-item {
+            display: inline-flex;
+            align-items: center;
+            gap: 10px;
+        }
+
+        .proof-item .dot {
+            width: 10px;
+            height: 10px;
+            border-radius: 50%;
+            background: linear-gradient(135deg, #20d1c1, #0b8f86);
+            box-shadow: 0 0 0 8px rgba(11, 143, 134, 0.08);
+        }
+
+        .hero-visual {
+            position: relative;
+            border-radius: 36px;
+            padding: 22px;
+            background: linear-gradient(180deg, rgba(255, 255, 255, 0.88), rgba(238, 251, 247, 0.92));
+            border: 1px solid rgba(255, 255, 255, 0.8);
+            box-shadow: var(--shadow);
+            min-height: 540px;
+            overflow: hidden;
+        }
+
+        .hero-visual::after {
+            content: "";
+            position: absolute;
+            width: 360px;
+            height: 360px;
+            right: -100px;
+            top: -40px;
+            border-radius: 50%;
+            background: radial-gradient(circle, rgba(106, 180, 255, 0.18), transparent 70%);
+            pointer-events: none;
+        }
+
+        .visual-stack {
+            display: grid;
+            gap: 16px;
+            height: 100%;
+        }
+
+        .dashboard-card,
+        .stat-card,
+        .feature-card,
+        .flow-card,
+        .pricing-card,
+        .cta-banner {
+            border-radius: 30px;
+            border: 1px solid rgba(16, 35, 31, 0.08);
+            background: rgba(255, 255, 255, 0.88);
+            box-shadow: 0 18px 40px rgba(16, 35, 31, 0.06);
+        }
+
+        .dashboard-card {
+            padding: 22px;
+            background: linear-gradient(180deg, #13302d 0%, #173b36 100%);
+            color: white;
+        }
+
+        .dashboard-row {
+            display: grid;
+            grid-template-columns: 1.2fr 0.8fr;
+            gap: 14px;
+            margin-top: 16px;
+        }
+
+        .dash-panel {
+            padding: 18px;
+            border-radius: 22px;
+            background: rgba(255, 255, 255, 0.08);
+        }
+
+        .dash-panel h4 {
+            font-size: 0.92rem;
+            color: rgba(255, 255, 255, 0.72);
+        }
+
+        .dash-panel strong {
+            display: block;
+            margin-top: 10px;
+            font-size: 2rem;
+            letter-spacing: -0.06em;
+        }
+
+        .dash-mini-grid {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 14px;
+        }
+
+        .dash-mini {
+            padding: 18px;
+            border-radius: 22px;
+            background: rgba(255, 255, 255, 0.86);
+        }
+
+        .dash-mini span {
+            display: block;
+            color: var(--muted);
+            font-size: 0.88rem;
+        }
+
+        .dash-mini strong {
+            display: block;
+            margin-top: 12px;
+            font-size: 1.62rem;
+            letter-spacing: -0.05em;
+        }
+
+        .section {
+            margin-top: 56px;
+        }
+
+        .section-header {
+            display: flex;
+            align-items: end;
+            justify-content: space-between;
+            gap: 18px;
+            margin-bottom: 22px;
+        }
+
+        .section-header h2 {
+            font-size: clamp(2rem, 4vw, 3rem);
+            line-height: 1;
+            letter-spacing: -0.07em;
+            max-width: 620px;
+        }
+
+        .section-header p {
+            max-width: 520px;
+            color: var(--muted);
+            line-height: 1.75;
+        }
+
+        .stats-grid {
+            display: grid;
+            grid-template-columns: repeat(4, minmax(0, 1fr));
+            gap: 16px;
+        }
+
+        .stat-card {
+            padding: 24px;
+        }
+
+        .stat-card strong {
+            display: block;
+            font-size: 2.2rem;
+            letter-spacing: -0.07em;
+        }
+
+        .stat-card span {
+            display: block;
+            margin-top: 8px;
+            color: var(--muted);
+            font-size: 0.94rem;
+            line-height: 1.55;
+        }
+
+        .features-grid,
+        .flow-grid,
+        .pricing-grid {
+            display: grid;
+            gap: 18px;
+        }
+
+        .features-grid {
+            grid-template-columns: repeat(3, minmax(0, 1fr));
+        }
+
+        .feature-card {
+            padding: 24px;
+            min-height: 260px;
+            display: flex;
+            flex-direction: column;
+            justify-content: space-between;
+        }
+
+        .feature-card .pill {
+            display: inline-flex;
+            width: fit-content;
+            padding: 8px 12px;
+            border-radius: 999px;
+            background: var(--brand-soft);
+            color: var(--brand-deep);
+            font-size: 0.8rem;
+            font-weight: 700;
+            text-transform: uppercase;
+            letter-spacing: 0.05em;
+        }
+
+        .feature-card h3,
+        .pricing-card h3,
+        .flow-card h3 {
+            margin-top: 18px;
+            font-size: 1.32rem;
+            letter-spacing: -0.04em;
+        }
+
+        .feature-card p,
+        .pricing-card p,
+        .flow-card p {
+            margin-top: 12px;
+            color: var(--muted);
+            line-height: 1.72;
+        }
+
+        .flow-grid {
+            grid-template-columns: repeat(3, minmax(0, 1fr));
+        }
+
+        .flow-card {
+            padding: 24px;
+        }
+
+        .flow-step {
+            display: inline-flex;
             align-items: center;
             justify-content: center;
-            opacity: 0;
-            pointer-events: none;
-            transition: 0.3s;
-            z-index: 1000;
-        }
-
-        .modal.active {
-            opacity: 1;
-            pointer-events: all;
-        }
-
-        .modal-box {
-            background: var(--surface);
-            border: 1px solid var(--border);
-            border-radius: 24px;
-            padding: 3rem;
-            width: 90%;
-            max-width: 500px;
-            position: relative;
-            transform: translateY(30px);
-            transition: 0.4s cubic-bezier(0.175, 0.885, 0.32, 1.275);
-            box-shadow: 0 25px 50px rgba(0,0,0,0.5);
-        }
-
-        .modal.active .modal-box {
-            transform: translateY(0);
-        }
-
-        .close-modal {
-            position: absolute;
-            top: 1.5rem;
-            right: 1.5rem;
-            background: none;
-            border: none;
-            color: var(--text-muted);
-            font-size: 2rem;
-            cursor: pointer;
-            transition: 0.2s;
-        }
-
-        .close-modal:hover { color: white; }
-
-        .modal-title {
-            font-size: 2rem;
-            margin-bottom: 0.5rem;
+            width: 36px;
+            height: 36px;
+            border-radius: 50%;
+            background: linear-gradient(135deg, #14b8a6, #0f766e);
+            color: white;
             font-weight: 800;
         }
 
-        .modal-subtitle {
-            color: var(--primary);
-            margin-bottom: 2rem;
-            font-weight: 600;
+        .pricing-wrap {
+            padding: 32px;
+            border-radius: 40px;
+            background: linear-gradient(180deg, rgba(255, 255, 255, 0.88), rgba(244, 250, 247, 0.96));
+            border: 1px solid rgba(255, 255, 255, 0.78);
+            box-shadow: var(--shadow);
         }
 
-        .input-group {
-            margin-bottom: 1.5rem;
+        .pricing-grid {
+            grid-template-columns: repeat(3, minmax(0, 1fr));
+            margin-top: 26px;
         }
 
-        .input-group label {
-            display: block;
-            margin-bottom: 0.5rem;
-            color: var(--text-muted);
-            font-size: 0.9rem;
+        .pricing-card {
+            position: relative;
+            padding: 26px;
+            min-height: 370px;
+            display: flex;
+            flex-direction: column;
         }
 
-        .input-group input {
-            width: 100%;
-            padding: 1rem;
-            border-radius: 12px;
-            background: rgba(0,0,0,0.3);
-            border: 1px solid var(--border);
+        .pricing-card.featured {
+            background: linear-gradient(180deg, rgba(19, 48, 45, 0.96), rgba(16, 95, 91, 0.98));
             color: white;
-            font-size: 1rem;
-            transition: 0.3s;
+            box-shadow: 0 28px 56px rgba(11, 143, 134, 0.18);
         }
 
-        .input-group input:focus {
-            outline: none;
-            border-color: var(--secondary);
-            box-shadow: 0 0 15px rgba(236, 72, 153, 0.2);
+        .pricing-card.featured p,
+        .pricing-card.featured li {
+            color: rgba(255, 255, 255, 0.78);
         }
 
-        .alert {
-            padding: 1rem;
-            border-radius: 12px;
-            margin-bottom: 1.5rem;
-            font-size: 0.9rem;
-            display: none;
+        .pricing-card .badge {
+            position: absolute;
+            top: 18px;
+            right: 18px;
+            padding: 8px 12px;
+            border-radius: 999px;
+            font-size: 0.74rem;
+            font-weight: 800;
+            letter-spacing: 0.05em;
+            text-transform: uppercase;
+            background: rgba(11, 143, 134, 0.12);
+            color: var(--brand-deep);
         }
-        .alert.error { background: rgba(239, 68, 68, 0.1); color: #ef4444; border: 1px solid rgba(239, 68, 68, 0.3); }
-        .alert.success { background: rgba(16, 185, 129, 0.1); color: #10b981; border: 1px solid rgba(16, 185, 129, 0.3); }
 
-        .loader {
+        .pricing-card.featured .badge {
+            background: rgba(255, 255, 255, 0.12);
+            color: rgba(255, 255, 255, 0.92);
+        }
+
+        .pricing-card .duration {
+            margin-top: 8px;
+            color: var(--muted);
+            font-size: 0.94rem;
+        }
+
+        .pricing-card .price {
+            margin-top: 18px;
+            font-size: 2.6rem;
+            font-weight: 800;
+            letter-spacing: -0.07em;
+            line-height: 1;
+        }
+
+        .pricing-card .price span {
+            font-size: 0.98rem;
+            font-weight: 600;
+            color: var(--muted);
+        }
+
+        .pricing-card.featured .price span {
+            color: rgba(255, 255, 255, 0.72);
+        }
+
+        .pricing-card ul {
+            list-style: none;
+            display: grid;
+            gap: 12px;
+            margin: 22px 0 28px;
+            color: var(--muted);
+            font-size: 0.95rem;
+        }
+
+        .pricing-card li::before {
+            content: "✓";
+            margin-right: 10px;
+            color: var(--brand);
+            font-weight: 800;
+        }
+
+        .pricing-card.featured li::before {
+            color: #7be2d8;
+        }
+
+        .pricing-card .cta {
+            margin-top: auto;
+        }
+
+        .cta-banner {
+            margin-top: 28px;
+            padding: 30px;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            gap: 20px;
+            background: linear-gradient(135deg, #173b36 0%, #0d5f59 52%, #11a89b 100%);
+            color: white;
+            box-shadow: 0 24px 50px rgba(11, 143, 134, 0.22);
+        }
+
+        .cta-banner h3 {
+            font-size: 2rem;
+            line-height: 1;
+            letter-spacing: -0.06em;
+        }
+
+        .cta-banner p {
+            margin-top: 12px;
+            max-width: 580px;
+            color: rgba(255, 255, 255, 0.78);
+            line-height: 1.72;
+        }
+
+        .loader,
+        .empty-plans {
+            padding: 42px 0 10px;
             text-align: center;
-            font-size: 1.5rem;
-            color: var(--primary);
-            padding: 3rem;
-            animation: pulse 1.5s infinite;
+            color: var(--muted);
+            font-size: 0.96rem;
         }
 
-        @keyframes pulse {
-            0% { opacity: 0.5; }
-            50% { opacity: 1; }
-            100% { opacity: 0.5; }
+        footer {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            gap: 18px;
+            margin-top: 40px;
+            padding-top: 22px;
+            border-top: 1px solid rgba(16, 35, 31, 0.08);
+            color: var(--muted);
+            font-size: 0.92rem;
+        }
+
+        @media (max-width: 1080px) {
+            .hero,
+            .features-grid,
+            .flow-grid,
+            .pricing-grid,
+            .stats-grid {
+                grid-template-columns: 1fr;
+            }
+
+            .section-header,
+            .cta-banner,
+            footer {
+                flex-direction: column;
+                align-items: flex-start;
+            }
+        }
+
+        @media (max-width: 820px) {
+            .page {
+                padding: 18px 18px 60px;
+            }
+
+            .topbar {
+                flex-wrap: wrap;
+            }
+
+            .nav-links {
+                order: 3;
+                width: 100%;
+                justify-content: space-between;
+            }
+
+            .hero {
+                padding-top: 38px;
+            }
+
+            .hero-copy h1 {
+                font-size: 3.4rem;
+            }
         }
     </style>
 </head>
 <body>
-
-    <div class="bg-shapes">
-        <div class="shape shape-1"></div>
-        <div class="shape shape-2"></div>
-    </div>
-
-    <header>
-        <div class="brand">HR-Sync.</div>
-        <div class="nav-actions">
-            <a href="admin.html" class="btn btn-outline">Log In</a>
-        </div>
-    </header>
-
-    <section class="hero-section">
-        <div class="pill">Intelligent SaaS Platform</div>
-        <h1>Hire Smarter.<br>Interview Faster.</h1>
-        <p>Replace manual screening with AI-driven technical interviews, instant grading, and automated candidate shortlisting.</p>
-        <div>
-            <a href="#pricing" class="btn btn-filled" style="font-size: 1.2rem; padding: 1rem 2.5rem;">View Plans</a>
-        </div>
-    </section>
-
-    <section class="grid-cards">
-        <div class="info-card">
-            <h3 style="color: #38bdf8;">⚡ Automated Scheduling</h3>
-            <p>Upload a CSV of candidates, and HR-Sync will instantly generate and distribute unique, secure interview links.</p>
-        </div>
-        <div class="info-card">
-            <h3 style="color: #a78bfa;">🧠 AI Interrogator</h3>
-            <p>Our conversational AI reads resumes dynamically, asking highly specific, deeply technical questions tailored to each role.</p>
-        </div>
-        <div class="info-card">
-            <h3 style="color: #f472b6;">🛡️ Proctored Environment</h3>
-            <p>Full WebRTC integration ensures live monitoring, screen tracking, and tamper-proof interview sessions.</p>
-        </div>
-    </section>
-
-    <section id="pricing" class="pricing-section">
-        <div class="pricing-header">
-            <h2>Select Your Plan</h2>
-            <p style="color: var(--text-muted);">Transparent pricing for teams of all sizes.</p>
-        </div>
-
-        <div id="plans-loader" class="loader">Fetching plans...</div>
-        <div id="plans-container" class="plans-grid" style="display: none;">
-            <!-- Rendered by JS -->
-        </div>
-    </section>
-
-    <!-- Modal -->
-    <div id="authModal" class="modal">
-        <div class="modal-box">
-            <button class="close-modal" onclick="closeModal()">×</button>
-            <h2 class="modal-title">Get Started</h2>
-            <p class="modal-subtitle" id="selectedPlanText">Plan: Basic</p>
-
-            <div id="alertBox" class="alert"></div>
-
-            <div class="input-group">
-                <label>Company / Admin Name</label>
-                <input type="text" id="regName" placeholder="Acme Corp">
-            </div>
-            <div class="input-group">
-                <label>Email Address</label>
-                <input type="email" id="regEmail" placeholder="admin@acme.com">
-            </div>
-            <div class="input-group">
-                <label>Password</label>
-                <input type="password" id="regPassword" placeholder="••••••••">
+    <div class="page">
+        <header class="topbar">
+            <div class="brand-lockup">
+                <div class="brand-badge">MI</div>
+                <div class="brand-copy">
+                    <strong>Mock Interview</strong>
+                    <span>AI interview infrastructure for modern hiring teams</span>
+                </div>
             </div>
 
-            <button id="submitBtn" class="btn btn-filled plan-btn" onclick="processRegistration()" style="padding: 1.2rem; font-size: 1.1rem; border-radius: 12px; margin-top: 1rem;">
-                Complete Registration
-            </button>
-        </div>
+            <nav class="nav-links">
+                <a href="#platform">Platform</a>
+                <a href="#workflow">Workflow</a>
+                <a href="#pricing">Pricing</a>
+            </nav>
+
+            <div class="nav-actions">
+                <a href="admin.html" class="btn btn-outline">Admin Login</a>
+                <a href="register.html" class="btn btn-primary">Start Subscription</a>
+            </div>
+        </header>
+
+        <section class="hero">
+            <div class="hero-copy">
+                <div class="eyebrow">Hiring operations, rebuilt</div>
+                <h1>Run AI interviews, live proctoring, and recruiter decisions from one workspace.</h1>
+                <p>Mock Interview helps companies create scheduled interview links, evaluate candidates with AI-generated questions, monitor sessions live, and move shortlisted talent forward without juggling fragmented tools.</p>
+
+                <div class="hero-actions">
+                    <a href="register.html" class="btn btn-primary">Create Company Workspace</a>
+                    <a href="#pricing" class="btn btn-outline">View Subscription Plans</a>
+                </div>
+
+                <div class="hero-proof">
+                    <div class="proof-item"><span class="dot"></span> Schedule-aware interview access</div>
+                    <div class="proof-item"><span class="dot"></span> AI question generation and scoring</div>
+                    <div class="proof-item"><span class="dot"></span> Live result monitoring and recordings</div>
+                </div>
+            </div>
+
+            <div class="hero-visual">
+                <div class="visual-stack">
+                    <div class="dashboard-card">
+                        <div style="display:flex; align-items:center; justify-content:space-between; gap:14px;">
+                            <div>
+                                <div style="color: rgba(255,255,255,0.72); font-size:0.88rem;">Live hiring command center</div>
+                                <h3 style="margin-top:10px; font-size:1.8rem; letter-spacing:-0.05em;">One console for interviews, scheduling, and evaluation.</h3>
+                            </div>
+                            <div style="padding:10px 12px; border-radius:999px; background:rgba(255,255,255,0.08); color:rgba(255,255,255,0.82); font-size:0.82rem; font-weight:700;">Realtime</div>
+                        </div>
+
+                        <div class="dashboard-row">
+                            <div class="dash-panel">
+                                <h4>Ongoing interviews</h4>
+                                <strong>12</strong>
+                                <div style="margin-top:10px; color:rgba(255,255,255,0.72); font-size:0.92rem;">Live candidate sessions with active AI prompts and timer windows.</div>
+                            </div>
+                            <div class="dash-panel">
+                                <h4>Shortlisted today</h4>
+                                <strong>07</strong>
+                                <div style="margin-top:10px; color:rgba(255,255,255,0.72); font-size:0.92rem;">Candidates cleared for next round with reports ready.</div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="dash-mini-grid">
+                        <div class="dash-mini">
+                            <span>Interview creation</span>
+                            <strong>Schedule + send</strong>
+                        </div>
+                        <div class="dash-mini">
+                            <span>Live monitoring</span>
+                            <strong>WebRTC + snapshots</strong>
+                        </div>
+                        <div class="dash-mini">
+                            <span>AI evaluation</span>
+                            <strong>Transcript and scoring</strong>
+                        </div>
+                        <div class="dash-mini">
+                            <span>Admin workflow</span>
+                            <strong>Selected, rejected, archived</strong>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <section id="platform" class="section">
+            <div class="section-header">
+                <div>
+                    <h2>Built for the real recruiting workflow, not just one interview screen.</h2>
+                </div>
+                <p>From tenant signup through candidate reporting, the platform already understands the full admin lifecycle. That means your subscription page, dashboard, email invites, interview runtime, and results all stay connected.</p>
+            </div>
+
+            <div class="stats-grid">
+                <div class="stat-card">
+                    <strong>Single + Bulk</strong>
+                    <span>Create one-off interviews or move an entire list of candidates through the same governed flow.</span>
+                </div>
+                <div class="stat-card">
+                    <strong>Timed Access</strong>
+                    <span>Respect scheduled start and end windows, including pre-open and expiry logic for secure candidate access.</span>
+                </div>
+                <div class="stat-card">
+                    <strong>Live Video</strong>
+                    <span>Track interviews with WebRTC, live heartbeats, recordings, and proctoring-aware interactions.</span>
+                </div>
+                <div class="stat-card">
+                    <strong>Reports</strong>
+                    <span>Review shortlisted candidates, rejected outcomes, session detail, and score-backed recruiter decisions.</span>
+                </div>
+            </div>
+        </section>
+
+        <section class="section">
+            <div class="section-header">
+                <div>
+                    <h2>Three layers working together inside one AI interview system.</h2>
+                </div>
+                <p>The product is more than a landing page and form. It connects your company admin workspace, candidate experience, and monitoring controls so teams can scale hiring without manually stitching tools together.</p>
+            </div>
+
+            <div class="features-grid">
+                <article class="feature-card">
+                    <div class="pill">Admin workflow</div>
+                    <div>
+                        <h3>Workspace-driven interview orchestration</h3>
+                        <p>Create interviews, upload resumes, define scheduling windows, control email content, and manage candidate progression from a single admin console.</p>
+                    </div>
+                </article>
+
+                <article class="feature-card">
+                    <div class="pill">Candidate runtime</div>
+                    <div>
+                        <h3>Guided interview experience with timing and anti-cheating</h3>
+                        <p>Candidates enter only through session links, interview start windows are respected, and the experience combines video, transcripts, coding, and AI-led prompts.</p>
+                    </div>
+                </article>
+
+                <article class="feature-card">
+                    <div class="pill">Recruiter insight</div>
+                    <div>
+                        <h3>Evaluation, live results, and recording-backed review</h3>
+                        <p>Hiring teams can watch live progress, inspect AI insights, score reports, shortlisted candidates, and historical recordings tied to each interview session.</p>
+                    </div>
+                </article>
+            </div>
+        </section>
+
+        <section id="workflow" class="section">
+            <div class="section-header">
+                <div>
+                    <h2>A cleaner onboarding path for companies adopting the platform.</h2>
+                </div>
+                <p>The new subscription journey should feel as operationally sharp as the product itself, which is why the flow below now ends in a proper workspace registration screen with Razorpay checkout for paid tiers.</p>
+            </div>
+
+            <div class="flow-grid">
+                <article class="flow-card">
+                    <div class="flow-step">1</div>
+                    <h3>Choose the right plan</h3>
+                    <p>Start with a free trial for exploration or move directly into a paid workspace that matches your hiring volume and monitoring needs.</p>
+                </article>
+
+                <article class="flow-card">
+                    <div class="flow-step">2</div>
+                    <h3>Create your company workspace</h3>
+                    <p>Add the admin owner, company name, work email, and secure password so the subscription activates against the actual tenant record.</p>
+                </article>
+
+                <article class="flow-card">
+                    <div class="flow-step">3</div>
+                    <h3>Activate and start interviewing</h3>
+                    <p>Paid plans complete Razorpay verification before login is enabled, then the admin can immediately start creating interview sessions.</p>
+                </article>
+            </div>
+        </section>
+
+        <section id="pricing" class="section">
+            <div class="pricing-wrap">
+                <div class="section-header" style="margin-bottom:0;">
+                    <div>
+                        <h2>Choose a subscription plan that matches your interview operations.</h2>
+                    </div>
+                    <p>Every plan is wired into the same admin dashboard. The difference is how much of the hiring operation you want to automate from day one.</p>
+                </div>
+
+                <div id="plansLoader" class="loader">Loading subscription plans...</div>
+                <div id="plansGrid" class="pricing-grid" style="display:none;"></div>
+
+                <div class="cta-banner">
+                    <div>
+                        <h3>Need a faster path to deployment?</h3>
+                        <p>Use the new workspace registration page to create your company account, choose a plan, and activate your interview dashboard without waiting on a separate billing handoff.</p>
+                    </div>
+                    <a href="register.html" class="btn btn-outline" style="background:white; color:var(--accent); border-color:white;">Open Subscription Page</a>
+                </div>
+            </div>
+        </section>
+
+        <footer>
+            <div>Mock Interview, built for AI-powered recruiting operations.</div>
+            <div style="display:flex; align-items:center; gap:16px; flex-wrap:wrap;">
+                <a href="register.html">Subscription</a>
+                <a href="admin.html">Admin Login</a>
+            </div>
+        </footer>
     </div>
 
     <script>
-        // API Base Resolution
-        const protocol = window.location.protocol;
         const API_BASE = (window.location.hostname === "127.0.0.1" || window.location.hostname === "localhost")
-            ? (window.location.port === "3000" ? `${protocol}//localhost:8000` : "/api")
-            : (window.location.origin.includes('vercel.app') ? "https://ai-adaptive-interview-1hsw.onrender.com" : "/api");
+            ? (window.location.port === "3000" ? `${window.location.protocol}//localhost:8000` : "/api")
+            : (window.location.origin.includes("vercel.app") ? "https://ai-adaptive-interview-1hsw.onrender.com" : "/api");
 
-        let availablePlans = [];
-        let chosenPlanId = null;
-
-        window.onload = () => {
-            checkPaymentStatus();
-            loadPricingPlans();
+        const planOrder = {
+            "Free Trial": 0,
+            "Basic": 1,
+            "Advance": 2,
         };
 
-        function checkPaymentStatus() {
-            const urlParams = new URLSearchParams(window.location.search);
-            if (urlParams.get('payment') === 'success') {
-                alert('Payment Successful! Your HR-Sync account is active. Please log in.');
-                window.location.href = 'admin.html';
-            } else if (urlParams.get('payment') === 'cancelled') {
-                alert('Payment was cancelled.');
-                window.history.replaceState({}, document.title, window.location.pathname);
-            }
+        function formatPrice(price) {
+            const numeric = Number(price || 0);
+            if (numeric === 0) return "Free";
+            return `₹${numeric.toLocaleString("en-IN")}`;
         }
 
-        async function loadPricingPlans() {
-            try {
-                const res = await fetch(`${API_BASE}/api/plans`);
-                const data = await res.json();
-                
-                if (data.status === 'success') {
-                    availablePlans = data.data;
-                    renderPlans(availablePlans);
-                }
-            } catch (err) {
-                console.error("Error fetching plans", err);
-                document.getElementById('plans-loader').innerHTML = 'Failed to load plans. Ensure backend is running.';
-            }
+        function planBadge(plan, index) {
+            if (plan.price === 0) return "Trial";
+            if (index === 1) return "Popular";
+            if (plan.plan_name.toLowerCase() === "advance") return "Scale";
+            return "Plan";
         }
 
         function renderPlans(plans) {
-            const container = document.getElementById('plans-container');
-            document.getElementById('plans-loader').style.display = 'none';
-            container.style.display = 'grid';
+            const loader = document.getElementById("plansLoader");
+            const grid = document.getElementById("plansGrid");
+            loader.style.display = "none";
 
-            plans.forEach((plan, index) => {
-                const isPopular = plan.price > 0 && index === 1; // Mark middle/second plan as popular
-
-                const card = document.createElement('div');
-                card.className = `plan-card ${isPopular ? 'featured' : ''}`;
-                
-                const featuresHtml = plan.features.map(f => `<li>${f}</li>`).join('');
-
-                card.innerHTML = `
-                    <div class="plan-name">${plan.plan_name}</div>
-                    <div class="plan-duration">Valid for ${plan.duration_days} Days</div>
-                    <div class="plan-price">${plan.price === 0 ? 'Free' : '₹' + plan.price} ${plan.price > 0 ? '<span>/period</span>' : ''}</div>
-                    <ul class="plan-features">
-                        ${featuresHtml}
-                    </ul>
-                    <button class="btn ${isPopular ? 'btn-filled' : 'btn-outline'} plan-btn" onclick="openModal('${plan.id}')">
-                        ${plan.price === 0 ? 'Start Free Trial' : 'Subscribe Now'}
-                    </button>
-                `;
-                container.appendChild(card);
-            });
-        }
-
-        function openModal(id) {
-            chosenPlanId = id;
-            const plan = availablePlans.find(p => p.id === id);
-            document.getElementById('selectedPlanText').textContent = `Selected Plan: ${plan.plan_name}`;
-            
-            // reset form
-            document.getElementById('regName').value = '';
-            document.getElementById('regEmail').value = '';
-            document.getElementById('regPassword').value = '';
-            const alertBox = document.getElementById('alertBox');
-            alertBox.style.display = 'none';
-            alertBox.className = 'alert';
-
-            const btn = document.getElementById('submitBtn');
-            btn.textContent = plan.price === 0 ? 'Create Free Account' : 'Proceed to Checkout';
-            btn.disabled = false;
-
-            document.getElementById('authModal').classList.add('active');
-        }
-
-        function closeModal() {
-            document.getElementById('authModal').classList.remove('active');
-        }
-
-        function showAlert(msg, isError = true) {
-            const box = document.getElementById('alertBox');
-            box.textContent = msg;
-            box.className = `alert ${isError ? 'error' : 'success'}`;
-            box.style.display = 'block';
-        }
-
-        async function processRegistration() {
-            const name = document.getElementById('regName').value.trim();
-            const email = document.getElementById('regEmail').value.trim();
-            const password = document.getElementById('regPassword').value;
-
-            if (!name || !email || !password) {
-                showAlert('All fields are required.');
+            if (!plans.length) {
+                grid.style.display = "block";
+                grid.innerHTML = '<div class="empty-plans">No public plans are available right now.</div>';
                 return;
             }
 
-            const plan = availablePlans.find(p => p.id === chosenPlanId);
-            const btn = document.getElementById('submitBtn');
-            btn.disabled = true;
-            btn.textContent = 'Processing...';
+            grid.style.display = "grid";
+            grid.innerHTML = "";
 
+            plans.forEach((plan, index) => {
+                const card = document.createElement("article");
+                const featured = plan.price > 0 && index === 1;
+                card.className = `pricing-card ${featured ? "featured" : ""}`;
+
+                const features = (plan.features || []).map((feature) => `<li>${feature}</li>`).join("");
+                const priceText = formatPrice(plan.price);
+                card.innerHTML = `
+                    <div class="badge">${planBadge(plan, index)}</div>
+                    <h3>${plan.plan_name}</h3>
+                    <div class="duration">${plan.duration_days} days of workspace access</div>
+                    <div class="price">${priceText}${plan.price === 0 ? "" : '<span> / subscription</span>'}</div>
+                    <p>${plan.price === 0
+                        ? "Best for first-time teams who want to test the platform before moving into a paid workspace."
+                        : `Built for companies ready to operationalize interviews with ${plan.plan_name.toLowerCase()} tier access.`}</p>
+                    <ul>${features}</ul>
+                    <div class="cta">
+                        <a href="register.html?plan=${encodeURIComponent(plan.plan_name)}" class="btn ${featured ? 'btn-outline' : 'btn-primary'}" style="${featured ? 'background:white; color:var(--accent); border-color:white;' : ''}">
+                            ${plan.price === 0 ? "Start Free Trial" : "Choose This Plan"}
+                        </a>
+                    </div>
+                `;
+
+                grid.appendChild(card);
+            });
+        }
+
+        async function loadPlans() {
             try {
-                if (plan.price === 0) {
-                    const res = await fetch(`${API_BASE}/api/register`, {
-                        method: 'POST',
-                        headers: { 'Content-Type': 'application/json' },
-                        body: JSON.stringify({ name, email, password, plan: plan.plan_name })
-                    });
-                    const data = await res.json();
-                    if (!res.ok) throw new Error(data.detail || 'Registration failed');
-                    
-                    showAlert(data.message + ' Redirecting to login...', false);
-                    setTimeout(() => window.location.href = 'admin.html', 2000);
-                } else {
-                    const res = await fetch(`${API_BASE}/api/stripe/create-checkout-session`, {
-                        method: 'POST',
-                        headers: { 'Content-Type': 'application/json' },
-                        body: JSON.stringify({
-                            plan_name: plan.plan_name,
-                            signup_form: { name, email, password, phone: '' }
-                        })
-                    });
-                    const data = await res.json();
-                    if (!res.ok) throw new Error(data.detail || 'Stripe initialization failed');
-                    
-                    window.location.href = data.url;
+                const response = await fetch(`${API_BASE}/api/plans`);
+                const payload = await response.json();
+                if (!response.ok || payload.status !== "success") {
+                    throw new Error(payload.detail || payload.message || "Unable to load plans");
                 }
-            } catch (err) {
-                showAlert(err.message);
-                btn.disabled = false;
-                btn.textContent = plan.price === 0 ? 'Create Free Account' : 'Proceed to Checkout';
+
+                const plans = (payload.data || []).sort((a, b) => {
+                    const aOrder = planOrder[a.plan_name] ?? 999;
+                    const bOrder = planOrder[b.plan_name] ?? 999;
+                    return aOrder - bOrder;
+                });
+                renderPlans(plans);
+            } catch (error) {
+                document.getElementById("plansLoader").textContent = error.message || "Unable to load pricing plans right now.";
             }
         }
+
+        loadPlans();
     </script>
 </body>
 </html>

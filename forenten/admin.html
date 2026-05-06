@@ -2110,10 +2110,12 @@
                         <div class="color-dot" id="dot-green"  style="background:#16a34a" onclick="setAccent('green')"  title="Green"></div>
                         <div class="color-dot" id="dot-blue"   style="background:#2563eb" onclick="setAccent('blue')"   title="Blue"></div>
                     </div>
+                    <div id="subscriptionPlanBadge" style="display:none; align-items:center; gap:8px; background:rgba(13,148,136,0.12); color:#0f766e; border:1px solid rgba(13,148,136,0.24); border-radius:999px; padding:8px 12px; font-size:0.8rem; font-weight:700; white-space:nowrap;"></div>
                     <span class="welcome-copy">Welcome back, <strong id="adminName">Admin</strong></span>
                     <button class="btn-logout" onclick="logout()"><i class="fas fa-power-off"></i> Logout</button>
                 </div>
             </div>
+            <div id="subscriptionAlertBanner" class="hidden" style="margin-top:1rem; padding:0.95rem 1.1rem; border-radius:16px; border:1px solid rgba(245,158,11,0.3); background:rgba(245,158,11,0.12); color:#92400e; font-size:0.92rem; font-weight:600;"></div>
 
             <!-- Scrollable Independent Page Content -->
             <div class="main-content">
@@ -3108,11 +3110,139 @@
         let adminId = null;
         let adminEmail = "";
         let adminRole = sessionStorage.getItem('adminRole') || 'tenant';
+        const PLAN_CAPABILITY_FALLBACK = {
+            trial: {
+                single_interview: true,
+                bulk_interviews: false,
+                resume_parsing: true,
+                export_sessions: false,
+                live_monitoring: false,
+                deactivated_candidates: false,
+                detailed_analytics: false,
+            },
+            basic: {
+                single_interview: true,
+                bulk_interviews: false,
+                resume_parsing: true,
+                export_sessions: true,
+                live_monitoring: false,
+                deactivated_candidates: true,
+                detailed_analytics: true,
+            },
+            advance: {
+                single_interview: true,
+                bulk_interviews: true,
+                resume_parsing: true,
+                export_sessions: true,
+                live_monitoring: true,
+                deactivated_candidates: true,
+                detailed_analytics: true,
+            },
+            owner: {
+                single_interview: true,
+                bulk_interviews: true,
+                resume_parsing: true,
+                export_sessions: true,
+                live_monitoring: true,
+                deactivated_candidates: true,
+                detailed_analytics: true,
+            },
+        };
+        let currentPlanKey = sessionStorage.getItem('subscriptionPlanKey') || 'trial';
+        let currentPlanLabel = sessionStorage.getItem('subscriptionPlan') || 'Free Trial';
+        let currentPlanCapabilities = (() => {
+            try {
+                const stored = JSON.parse(sessionStorage.getItem('planCapabilities') || 'null');
+                return stored || PLAN_CAPABILITY_FALLBACK[currentPlanKey] || PLAN_CAPABILITY_FALLBACK.trial;
+            } catch {
+                return PLAN_CAPABILITY_FALLBACK[currentPlanKey] || PLAN_CAPABILITY_FALLBACK.trial;
+            }
+        })();
 
         // ── Task 6: Pagination State ──
         let currentPage = 1;
         const PAGE_SIZE = 20;
         let allFilteredSessions = []; // Holds current filtered data for pagination
+
+        function normalizePlanKey(plan) {
+            const value = String(plan || '').trim().toLowerCase();
+            if (value === 'free trial' || value === 'trial') return 'trial';
+            if (value === 'basic') return 'basic';
+            if (value === 'advance' || value === 'advanced') return 'advance';
+            if (value === 'owner' || value === 'master') return 'owner';
+            return 'trial';
+        }
+
+        function getPlanCapabilities(plan, capabilities) {
+            const planKey = normalizePlanKey(plan);
+            return capabilities || PLAN_CAPABILITY_FALLBACK[planKey] || PLAN_CAPABILITY_FALLBACK.trial;
+        }
+
+        function showSubscriptionBanner(message) {
+            const banner = document.getElementById('subscriptionAlertBanner');
+            if (!message) {
+                banner.classList.add('hidden');
+                banner.textContent = '';
+                return;
+            }
+            banner.textContent = message;
+            banner.classList.remove('hidden');
+        }
+
+        function applyPlanRestrictions(planPayload = {}) {
+            currentPlanKey = normalizePlanKey(planPayload.planKey || planPayload.plan || currentPlanKey);
+            currentPlanLabel = planPayload.planLabel || planPayload.plan || currentPlanLabel || 'Free Trial';
+            currentPlanCapabilities = getPlanCapabilities(currentPlanKey, planPayload.capabilities);
+
+            sessionStorage.setItem('subscriptionPlanKey', currentPlanKey);
+            sessionStorage.setItem('subscriptionPlan', currentPlanLabel);
+            sessionStorage.setItem('planCapabilities', JSON.stringify(currentPlanCapabilities));
+            if (planPayload.expiry) sessionStorage.setItem('subscriptionExpiry', planPayload.expiry);
+            if (planPayload.warningMessage !== undefined) sessionStorage.setItem('subscriptionWarningMessage', planPayload.warningMessage || '');
+            if (planPayload.daysRemaining !== undefined && planPayload.daysRemaining !== null) {
+                sessionStorage.setItem('subscriptionDaysRemaining', String(planPayload.daysRemaining));
+            }
+
+            const planBadge = document.getElementById('subscriptionPlanBadge');
+            if (planBadge) {
+                const remainingText = planPayload.daysRemaining != null ? ` · ${planPayload.daysRemaining} day${Number(planPayload.daysRemaining) === 1 ? '' : 's'} left` : '';
+                planBadge.innerHTML = `<i class="fas fa-layer-group"></i> ${currentPlanLabel}${remainingText}`;
+                planBadge.style.display = 'inline-flex';
+            }
+
+            showSubscriptionBanner(planPayload.warningMessage || sessionStorage.getItem('subscriptionWarningMessage') || '');
+
+            const bulkTab = document.getElementById('tab-bulk');
+            if (bulkTab) bulkTab.style.display = currentPlanCapabilities.bulk_interviews ? '' : 'none';
+            if (!currentPlanCapabilities.bulk_interviews && document.getElementById('panel-bulk') && document.getElementById('panel-bulk').style.display !== 'none') {
+                switchCreateTab('single');
+            }
+
+            const deactivatedNav = document.getElementById('nav-btn-deactivated');
+            if (deactivatedNav) deactivatedNav.style.display = currentPlanCapabilities.deactivated_candidates ? '' : 'none';
+
+            const ongoingCard = document.getElementById('ongoingInterviewsCard');
+            if (ongoingCard) ongoingCard.style.display = currentPlanCapabilities.live_monitoring ? '' : 'none';
+
+            document.querySelectorAll('[onclick^="exportCurrentStatus"]').forEach((button) => {
+                button.style.display = currentPlanCapabilities.export_sessions ? '' : 'none';
+            });
+
+            if (!currentPlanCapabilities.live_monitoring) {
+                closeLiveResultsModal();
+            }
+
+            if (!currentPlanCapabilities.deactivated_candidates) {
+                const deactivatedView = document.getElementById('view-deactivated');
+                if (deactivatedView && !deactivatedView.classList.contains('hidden')) {
+                    switchView('overview');
+                }
+            }
+        }
+
+        function showPlanUpgradeMessage(featureName, requiredPlan) {
+            showToast(`${featureName} is available on the ${requiredPlan} plan. Please upgrade to continue.`, 'error');
+        }
 
         function normalizeFrontendUrl(url) {
             if (!url) return '';
@@ -3171,6 +3301,17 @@
                 document.getElementById('loginSection').classList.add('hidden');
                 document.getElementById('dashboardSection').classList.remove('hidden');
                 document.body.classList.add('dashboard-active');
+
+                applyPlanRestrictions({
+                    plan: sessionStorage.getItem('subscriptionPlan') || 'Free Trial',
+                    planKey: sessionStorage.getItem('subscriptionPlanKey') || 'trial',
+                    capabilities: (() => {
+                        try { return JSON.parse(sessionStorage.getItem('planCapabilities') || 'null'); } catch { return null; }
+                    })(),
+                    expiry: sessionStorage.getItem('subscriptionExpiry') || '',
+                    daysRemaining: sessionStorage.getItem('subscriptionDaysRemaining'),
+                    warningMessage: sessionStorage.getItem('subscriptionWarningMessage') || '',
+                });
 
                 switchView('overview');
                 loadDashboardSessions();
@@ -3249,7 +3390,9 @@
                     adminEmail = data.email || "";
                     const adminName = data.username || username;
                     const role = data.role || "tenant";
-                    const plan = data.subscription_plan || "trial";
+                    const plan = data.subscription_plan || "Free Trial";
+                    const planKey = data.subscription_plan_key || normalizePlanKey(plan);
+                    const planCapabilities = getPlanCapabilities(planKey, data.plan_capabilities || null);
                     
                     // Persist session
                     sessionStorage.setItem('adminId', adminId);
@@ -3258,6 +3401,11 @@
                     sessionStorage.setItem('adminRole', role);
                     adminRole = role; // Update global variable
                     sessionStorage.setItem('subscriptionPlan', plan);
+                    sessionStorage.setItem('subscriptionPlanKey', planKey);
+                    sessionStorage.setItem('planCapabilities', JSON.stringify(planCapabilities));
+                    sessionStorage.setItem('subscriptionExpiry', data.subscription_expiry || '');
+                    sessionStorage.setItem('subscriptionDaysRemaining', data.subscription_days_remaining ?? '');
+                    sessionStorage.setItem('subscriptionWarningMessage', data.subscription_warning_message || '');
 
                     document.getElementById('adminName').textContent = adminName;
                     document.getElementById('adminEmailInput').value = adminEmail;
@@ -3280,10 +3428,14 @@
                         document.getElementById('singleSection').classList.add('hidden');
                         loadMasterTenants();
                     } else {
-                        if (plan === 'basic' || plan === 'trial') {
-                                // Basic plan cannot access bulk tab
-                                document.getElementById('bulkTabBtn').style.display = 'none';
-                            }
+                            applyPlanRestrictions({
+                                plan,
+                                planKey,
+                                capabilities: planCapabilities,
+                                expiry: data.subscription_expiry || '',
+                                daysRemaining: data.subscription_days_remaining,
+                                warningMessage: data.subscription_warning_message || '',
+                            });
                             loadDashboardSessions();
                             loadDashboardStats(); // Task 8
                         }
@@ -3316,6 +3468,13 @@
             sessionStorage.removeItem('adminId');
             sessionStorage.removeItem('adminEmail');
             sessionStorage.removeItem('adminName');
+            sessionStorage.removeItem('adminRole');
+            sessionStorage.removeItem('subscriptionPlan');
+            sessionStorage.removeItem('subscriptionPlanKey');
+            sessionStorage.removeItem('planCapabilities');
+            sessionStorage.removeItem('subscriptionExpiry');
+            sessionStorage.removeItem('subscriptionDaysRemaining');
+            sessionStorage.removeItem('subscriptionWarningMessage');
             location.reload();
         }
 
@@ -3605,6 +3764,9 @@
         function addSessionToUI(name, relativeUrl, id) {
             const fullUrl = normalizeFrontendUrl(relativeUrl);
             const list = document.getElementById('linksList');
+            const secondaryAction = currentPlanCapabilities.live_monitoring
+                ? `<button class="btn-copy" style="background: var(--primary); color: white;" onclick="viewResults('${id}')"><i class="fas fa-eye"></i> Live Results</button>`
+                : `<button class="btn-copy" style="background: rgba(245,158,11,0.12); color: #92400e; border: 1px solid rgba(245,158,11,0.28);" onclick="showPlanUpgradeMessage('Live monitoring', 'Advance')">Upgrade</button>`;
 
             // Remove empty state placeholder
             const emptyState = list.querySelector('.empty-state');
@@ -3622,7 +3784,7 @@
                 <div class="link-display">${fullUrl}</div>
                 <div style="display: flex; gap: 10px; margin-top: 10px;">
                     <button class="btn-copy" onclick="copyLink(this, '${fullUrl}')"><i class="fas fa-copy"></i> Copy Link</button>
-                    <button class="btn-copy" style="background: var(--primary); color: white;" onclick="viewResults('${id}')"><i class="fas fa-eye"></i> Live Results</button>
+                    ${secondaryAction}
                 </div>
             `;
             list.prepend(item);
@@ -3756,6 +3918,10 @@
         }
 
         async function toggleSessionActive(linkId, currentlyDeactivated) {
+            if (!currentPlanCapabilities.deactivated_candidates) {
+                showPlanUpgradeMessage('Deactivated candidate controls', 'Basic');
+                return;
+            }
             const action = currentlyDeactivated ? 'activate' : 'deactivate';
             const confirmMsg = `Are you sure you want to ${action} this interview link? ${currentlyDeactivated ? 'The candidate will be able to access the interview again.' : 'The candidate will no longer be able to access the interview.'}`;
 
@@ -4061,6 +4227,9 @@
             const baseUrl = window.location.href.substring(0, window.location.href.lastIndexOf('/'));
 
             const searchVal = document.getElementById('searchCandidate')?.value.toLowerCase() || '';
+            const canViewDetailedAnalytics = !!currentPlanCapabilities.detailed_analytics;
+            const canUseLiveMonitoring = !!currentPlanCapabilities.live_monitoring;
+            const canManageDeactivated = !!currentPlanCapabilities.deactivated_candidates;
 
             // Build filtered list
             allFilteredSessions = [];
@@ -4100,33 +4269,48 @@
                 }
 
                 if (s.is_deactivated) {
+                    const activateAction = canManageDeactivated
+                        ? `<button class="btn-copy" onclick="toggleSessionActive('${s.link_id}', true)" style="background:var(--success); color:white; border:none; padding:0.4rem 0.8rem; font-size:0.75rem; border-radius:6px; cursor:pointer;">Activate</button>`
+                        : `<button class="btn-copy" onclick="showPlanUpgradeMessage('Deactivated candidate controls', 'Basic')" style="background:rgba(245,158,11,0.12); color:#92400e; border:1px solid rgba(245,158,11,0.28); padding:0.4rem 0.8rem; font-size:0.75rem; border-radius:6px; cursor:pointer;">Upgrade</button>`;
                     deactivatedHtml += `<tr>
                         <td style="padding-left: 1.5rem;"><input type="checkbox" class="session-checkbox" value="${s.link_id}" onclick="updateTableBulkDeleteBtn('deactivated')" style="cursor: pointer;"></td>
                         <td style="font-weight: 500;">${escapeHtml(s.candidate_name)}</td>
                         <td>${dateStr}</td>
                         <td><span class="status-badge pending" style="background:rgba(107,114,128,0.1); color:#6b7280;">DEACTIVATED</span></td>
                         <td style="text-align: right;">
-                            <button class="btn-copy" onclick="toggleSessionActive('${s.link_id}', true)" style="background:var(--success); color:white; border:none; padding:0.4rem 0.8rem; font-size:0.75rem; border-radius:6px; cursor:pointer;">Activate</button>
+                            ${activateAction}
                             <button onclick="deleteSession('${s.link_id}')" style="background: none; border: none; color: var(--danger); cursor: pointer; padding: 4px; border-radius: 4px; transition: 0.2s; margin-left: 8px;" title="Remove Candidate"><i class="fas fa-times"></i></button>
                         </td>
                     </tr>`;
                 } else {
                     if (s.decision === 'selected') {
+                        const selectedNameCell = canViewDetailedAnalytics
+                            ? `<a href="javascript:void(0)" onclick="openLiveResults('${escapeHtml(s.link_id)}', '${escapeHtml(s.candidate_name).replace(/'/g, "\\'")}')" style="color: var(--primary-light); text-decoration: none; border-bottom: 1px dashed var(--primary-light);">${escapeHtml(s.candidate_name)}</a>`
+                            : escapeHtml(s.candidate_name);
+                        const selectedAction = canViewDetailedAnalytics
+                            ? `<button class="btn-copy" onclick="openLiveResults('${s.link_id}', '${s.candidate_name.replace(/'/g, "\\'")}')" style="background:#10b981; color:white; border:none; padding:0.4rem 0.8rem; font-size:0.75rem; border-radius:6px; cursor:pointer; font-weight:600;"><i class="fas fa-eye"></i> View</button>`
+                            : `<button class="btn-copy" onclick="showPlanUpgradeMessage('Detailed result analytics', 'Basic')" style="background:rgba(245,158,11,0.12); color:#92400e; border:1px solid rgba(245,158,11,0.28); padding:0.4rem 0.8rem; font-size:0.75rem; border-radius:6px; cursor:pointer;">Upgrade</button>`;
                         qualHtml += `<tr>
                             <td style="padding-left: 1.5rem;"><input type="checkbox" class="session-checkbox" value="${s.link_id}" onclick="updateTableBulkDeleteBtn('qualified')" style="cursor: pointer;"></td>
-                            <td style="font-weight: 500;"><a href="javascript:void(0)" onclick="openLiveResults('${escapeHtml(s.link_id)}', '${escapeHtml(s.candidate_name).replace(/'/g, "\\'")}')" style="color: var(--primary-light); text-decoration: none; border-bottom: 1px dashed var(--primary-light);">${escapeHtml(s.candidate_name)}</a></td>
+                            <td style="font-weight: 500;">${selectedNameCell}</td>
                             <td>${dateStr}</td>
                             <td>${scoreText}</td>
-                            <td style="text-align: right;"><button class="btn-copy" onclick="openLiveResults('${s.link_id}', '${s.candidate_name.replace(/'/g, "\\'")}')" style="background:#10b981; color:white; border:none; padding:0.4rem 0.8rem; font-size:0.75rem; border-radius:6px; cursor:pointer; font-weight:600;"><i class="fas fa-eye"></i> View</button></td>
+                            <td style="text-align: right;">${selectedAction}</td>
                         </tr>`;
                     }
                     if (s.decision === 'rejected') {
+                        const rejectedNameCell = canViewDetailedAnalytics
+                            ? `<a href="javascript:void(0)" onclick="openLiveResults('${escapeHtml(s.link_id)}', '${escapeHtml(s.candidate_name).replace(/'/g, "\\'")}')" style="color: var(--text-muted); text-decoration: none; border-bottom: 1px dashed var(--text-muted);">${escapeHtml(s.candidate_name)}</a>`
+                            : escapeHtml(s.candidate_name);
+                        const rejectedAction = canViewDetailedAnalytics
+                            ? `<button class="btn-copy" onclick="openLiveResults('${s.link_id}', '${s.candidate_name.replace(/'/g, "\\'")}')" style="background:var(--danger); color:white; border:none; padding:0.4rem 0.8rem; font-size:0.75rem; border-radius:6px; cursor:pointer;"><i class="fas fa-eye"></i> View</button>`
+                            : `<button class="btn-copy" onclick="showPlanUpgradeMessage('Detailed result analytics', 'Basic')" style="background:rgba(245,158,11,0.12); color:#92400e; border:1px solid rgba(245,158,11,0.28); padding:0.4rem 0.8rem; font-size:0.75rem; border-radius:6px; cursor:pointer;">Upgrade</button>`;
                         unqualHtml += `<tr>
                             <td style="padding-left: 1.5rem;"><input type="checkbox" class="session-checkbox" value="${s.link_id}" onclick="updateTableBulkDeleteBtn('unqualified')" style="cursor: pointer;"></td>
-                            <td style="font-weight: 500;"><a href="javascript:void(0)" onclick="openLiveResults('${escapeHtml(s.link_id)}', '${escapeHtml(s.candidate_name).replace(/'/g, "\\'")}')" style="color: var(--text-muted); text-decoration: none; border-bottom: 1px dashed var(--text-muted);">${escapeHtml(s.candidate_name)}</a></td>
+                            <td style="font-weight: 500;">${rejectedNameCell}</td>
                             <td>${dateStr}</td>
                             <td>${scoreText}</td>
-                            <td style="text-align: right;"><button class="btn-copy" onclick="openLiveResults('${s.link_id}', '${s.candidate_name.replace(/'/g, "\\'")}')" style="background:var(--danger); color:white; border:none; padding:0.4rem 0.8rem; font-size:0.75rem; border-radius:6px; cursor:pointer;"><i class="fas fa-eye"></i> View</button></td>
+                            <td style="text-align: right;">${rejectedAction}</td>
                         </tr>`;
                     }
                 }
@@ -4191,16 +4375,22 @@
                 let actionBtn = `<button class="btn-copy" onclick="copyLink(this, '${linkUrl}')" style="margin:0; padding:0.4rem 0.8rem; font-size:0.75rem;">Copy Link</button>`;
                 
                 if (currentStatus === 'completed') {
-                    actionBtn = `<button class="btn-copy" onclick="openLiveResults('${s.link_id}', '${s.candidate_name.replace(/'/g, "\\'")}')" style="margin:0; padding:0.4rem 0.8rem; font-size:0.75rem; background: #10b981; color: white; border: none; border-radius: 6px; cursor: pointer; transition: opacity 0.2s; font-weight: 600;">View Results</button>`;
+                    actionBtn = canViewDetailedAnalytics
+                        ? `<button class="btn-copy" onclick="openLiveResults('${s.link_id}', '${s.candidate_name.replace(/'/g, "\\'")}')" style="margin:0; padding:0.4rem 0.8rem; font-size:0.75rem; background: #10b981; color: white; border: none; border-radius: 6px; cursor: pointer; transition: opacity 0.2s; font-weight: 600;">View Results</button>`
+                        : `<button class="btn-copy" onclick="showPlanUpgradeMessage('Detailed result analytics', 'Basic')" style="margin:0; padding:0.4rem 0.8rem; font-size:0.75rem; background: rgba(245,158,11,0.12); color: #92400e; border: 1px solid rgba(245,158,11,0.28); border-radius: 6px; cursor: pointer;">Upgrade</button>`;
                 } else if (currentStatus === 'started') {
-                    actionBtn = `<button class="btn-copy" onclick="openLiveResults('${s.link_id}', '${s.candidate_name.replace(/'/g, "\\'")}')" style="margin:0; padding:0.4rem 0.8rem; font-size:0.75rem; background: #6366f1; color: white; border: none; border-radius: 6px; cursor: pointer; transition: opacity 0.2s; font-weight: 600;">Live Results</button>`;
+                    actionBtn = canUseLiveMonitoring
+                        ? `<button class="btn-copy" onclick="openLiveResults('${s.link_id}', '${s.candidate_name.replace(/'/g, "\\'")}')" style="margin:0; padding:0.4rem 0.8rem; font-size:0.75rem; background: #6366f1; color: white; border: none; border-radius: 6px; cursor: pointer; transition: opacity 0.2s; font-weight: 600;">Live Results</button>`
+                        : `<button class="btn-copy" onclick="showPlanUpgradeMessage('Live monitoring', 'Advance')" style="margin:0; padding:0.4rem 0.8rem; font-size:0.75rem; background: rgba(245,158,11,0.12); color: #92400e; border: 1px solid rgba(245,158,11,0.28); border-radius: 6px; cursor: pointer;">Upgrade</button>`;
                 } else if (currentStatus === 'expired') {
                     actionBtn = `<button class="btn-copy" onclick="openRescheduleModal('${s.link_id}', '${s.candidate_name.replace(/'/g, "\\'")}')" style="margin:0; padding:0.4rem 0.8rem; font-size:0.75rem; background: #6366f1; color: white; border: none; border-radius: 6px; cursor: pointer; transition: opacity 0.2s; font-weight: 600;">Reschedule</button>`;
                 }
 
                 // Deactivate and delete buttons available to all logged-in admins
                 const deleteBtn = `<button onclick="deleteSession('${s.link_id}')" style="background: none; border: none; color: var(--danger); cursor: pointer; padding: 4px; border-radius: 4px; transition: 0.2s; margin-left: 8px;" title="Remove Candidate"><i class="fas fa-times"></i></button>`;
-                const deactivateBtn = `<button onclick="toggleSessionActive('${s.link_id}', ${s.is_deactivated})" style="background: none; border: none; color: ${s.is_deactivated ? 'var(--success)' : 'var(--warning)'}; cursor: pointer; padding: 4px; border-radius: 4px; transition: 0.2s; margin-left: 4px;" title="${s.is_deactivated ? 'Activate' : 'Deactivate'} Link"><i class="fas fa-power-off"></i></button>`;
+                const deactivateBtn = canManageDeactivated
+                    ? `<button onclick="toggleSessionActive('${s.link_id}', ${s.is_deactivated})" style="background: none; border: none; color: ${s.is_deactivated ? 'var(--success)' : 'var(--warning)'}; cursor: pointer; padding: 4px; border-radius: 4px; transition: 0.2s; margin-left: 4px;" title="${s.is_deactivated ? 'Activate' : 'Deactivate'} Link"><i class="fas fa-power-off"></i></button>`
+                    : '';
                 const videoIcon = s.has_video ? `<i class="fas fa-video" style="color: #6366f1; margin-left: 8px; font-size: 0.85rem;" title="Video Available"></i>` : '';
 
                 mainHtml += `<tr>
@@ -4358,6 +4548,10 @@
         }
 
         async function exportCurrentStatus(decisionFilter = '') {
+            if (!currentPlanCapabilities.export_sessions) {
+                showPlanUpgradeMessage('Session export', 'Basic');
+                return;
+            }
             const statusFilter = decisionFilter ? '' : (document.getElementById('filterStatus') ? document.getElementById('filterStatus').value : '');
             try {
                 showToast('Preparing export...', 'success');
@@ -5315,6 +5509,10 @@
         let bulkCandidates = [];   // [{name, email}]
 
         function switchCreateTab(tab) {
+            if (tab === 'bulk' && !currentPlanCapabilities.bulk_interviews) {
+                showPlanUpgradeMessage('Bulk candidate send', 'Advance');
+                return;
+            }
             const isSingle = tab === 'single';
             document.getElementById('panel-single').style.display = isSingle ? 'block' : 'none';
             document.getElementById('panel-bulk').style.display = isSingle ? 'none' : 'block';
@@ -5477,6 +5675,7 @@
 
         // Send all — calls /admin/bulk-create-sessions
         async function sendBulkInterviews() {
+            if (!currentPlanCapabilities.bulk_interviews) { showPlanUpgradeMessage('Bulk candidate send', 'Advance'); return; }
             const jd = document.getElementById('bulkJobDescription').value.trim();
             const customQuestions = document.getElementById('bulkCustomQuestions').value.trim();
             const aiInstructions = document.getElementById('bulkAiInstructions').value.trim();
@@ -5687,6 +5886,7 @@
 
         async function fetchOngoingInterviews() {
             try {
+                if (!currentPlanCapabilities.live_monitoring) return;
                 if (!adminId) return;
                 if (Date.now() < ongoingBackoffUntil) return;
                 const response = await fetch(API_BASE + '/admin/ongoing-interviews?admin_id=' + adminId);
@@ -5730,6 +5930,10 @@
         }
 
         function showLiveResultsModal() {
+            if (!currentPlanCapabilities.live_monitoring) {
+                showPlanUpgradeMessage('Live monitoring', 'Advance');
+                return;
+            }
             document.getElementById('liveResultsModal').classList.remove('hidden');
             fetchOngoingInterviews();
             if (!liveResultsPollTimer) {
