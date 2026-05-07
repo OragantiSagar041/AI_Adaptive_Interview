@@ -2106,6 +2106,10 @@
         let interviewActive = false;
         let interviewSubmitted = false;
         let tabViolationCount = 0;
+        let interviewQuestions = [];
+        let hrScreeningTriggered = false;
+        let hrScreeningSwitching = false;
+        const HR_SCREENING_START_SECONDS = 90;
 
         window.API_BASE_URL = (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1')
             ? (window.location.port === "80" ? "/api" : `${window.location.protocol}//localhost:8000`)
@@ -2446,6 +2450,7 @@
 
                 try {
                     updateCountdownDisplay();
+                    switchToHrScreeningIfDue();
 
                     // Update progress bar based on time elapsed
                     const elapsed = globalTotalTime - globalTimeRemaining;
@@ -2526,6 +2531,73 @@
             };
         }
 
+        function setInterviewQuestionCache(questions) {
+            interviewQuestions = Array.isArray(questions) ? questions : [];
+        }
+
+        function findFirstHrScreeningQuestionId(questions) {
+            const hrQuestion = (Array.isArray(questions) ? questions : []).find(q => {
+                const type = String(q?.type || '').toLowerCase();
+                const category = String(q?.category || '').toLowerCase();
+                return type.includes('hr screening') || category.includes('hr screening');
+            });
+            return hrQuestion ? Number(hrQuestion.id) : null;
+        }
+
+        async function refreshInterviewQuestionCache() {
+            if (!currentInterviewId) return interviewQuestions;
+            try {
+                const response = await fetch(`${API_BASE_URL}/interview/${currentInterviewId}/summary`);
+                if (response.ok) {
+                    const data = await response.json();
+                    setInterviewQuestionCache(data.questions);
+                    if (data.total_questions) {
+                        totalQuestions = Number(data.total_questions) || totalQuestions;
+                        const totalEl = document.getElementById('totalQuestions');
+                        if (totalEl) totalEl.textContent = totalQuestions;
+                    }
+                }
+            } catch (e) {
+                console.warn('Unable to refresh interview question list for HR screening:', e);
+            }
+            return interviewQuestions;
+        }
+
+        async function switchToHrScreeningIfDue() {
+            if (hrScreeningTriggered || hrScreeningSwitching || !currentInterviewId || interviewSubmitted) return;
+            if (globalTimeRemaining > HR_SCREENING_START_SECONDS) return;
+
+            hrScreeningSwitching = true;
+            const latestQuestions = await refreshInterviewQuestionCache();
+            const hrQuestionId = findFirstHrScreeningQuestionId(latestQuestions);
+            if (!hrQuestionId || Number(currentQuestionId) >= hrQuestionId) {
+                hrScreeningSwitching = false;
+                return;
+            }
+
+            hrScreeningTriggered = true;
+            showStatus('<i class="fas fa-clipboard-check"></i> Moving to HR screening questions for the final 90 seconds.', 'info');
+
+            try {
+                if (window.speechSynthesis) window.speechSynthesis.cancel();
+                if (videoRecorder && videoRecorder.isRecording) {
+                    await videoRecorder.stopRecording();
+                }
+                const currentAnswer = document.getElementById("transcriptionBox").value.trim();
+                if (currentAnswer) {
+                    await saveCurrentAnswer();
+                    await saveBehavioralData(currentInterviewId, currentQuestionId, currentAnswer);
+                }
+                resetTranscript();
+                resetQuestionTracking();
+                await loadQuestion(currentInterviewId, hrQuestionId);
+            } catch (e) {
+                console.error('Failed to switch to HR screening:', e);
+            } finally {
+                hrScreeningSwitching = false;
+            }
+        }
+
         function getSessionIdFromUrl() {
             const params = new URLSearchParams(window.location.search);
             return params.get('session_id') || params.get('session') || '';
@@ -2564,6 +2636,10 @@
             const resumeQId = Number(data.resume_question_id) || Number(data.first_question.id) || 1;
             currentQuestionId = resumeQId;
             totalQuestions = Number(data.total_questions) || 0;
+            setInterviewQuestionCache(data.questions);
+            const hrStartId = findFirstHrScreeningQuestionId(interviewQuestions);
+            hrScreeningTriggered = Boolean(hrStartId && Number(currentQuestionId) >= hrStartId);
+            hrScreeningSwitching = false;
             window.interviewDuration = Number(data.interview_duration) > 0 ? Number(data.interview_duration) : 30;
             window.recordVideo = data.record_video !== false;
 
@@ -2949,6 +3025,9 @@
 
                     currentQuestionId = data.first_question.id;
                     totalQuestions = data.total_questions;
+                    setInterviewQuestionCache(data.questions);
+                    hrScreeningTriggered = false;
+                    hrScreeningSwitching = false;
 
                     window.currentInterviewId = currentInterviewId;
                     window.currentQuestionId = currentQuestionId;
@@ -3045,6 +3124,9 @@
                 currentInterviewId = data.interview_id;
                 totalQuestions = data.total_questions;
                 currentQuestionId = 1;
+                setInterviewQuestionCache(data.questions);
+                hrScreeningTriggered = false;
+                hrScreeningSwitching = false;
                 window.candidateName = "Candidate";
 
                 // Update UI - use classList to match CSS .hidden

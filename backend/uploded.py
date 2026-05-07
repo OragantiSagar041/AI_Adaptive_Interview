@@ -50,7 +50,7 @@ cloudinary.config(
 )
 
 CLOUDINARY_CLEANUP_STARTED = False
-RECORDING_RETENTION_DAYS = int(os.getenv("RECORDING_RETENTION_DAYS", "3"))
+RECORDING_RETENTION_DAYS = max(3, int(os.getenv("RECORDING_RETENTION_DAYS", "3")))
 
 def cloudinary_cleanup_loop():
     while True:
@@ -61,8 +61,14 @@ def cloudinary_cleanup_loop():
             print(f"🔍 [Cleanup] Running Cloudinary maintenance (Cutoff: {cutoff.isoformat()})...")
             
             old_recordings = interviews_collection.find({
-                "recording_uploaded_at": {"$lt": cutoff.isoformat()},
-                "cloudinary_public_id": {"$exists": True, "$ne": ""}
+                "cloudinary_public_id": {"$exists": True, "$ne": ""},
+                "$or": [
+                    {"recording_expires_at": {"$lt": now.isoformat()}},
+                    {
+                        "recording_expires_at": {"$exists": False},
+                        "recording_uploaded_at": {"$lt": cutoff.isoformat()}
+                    }
+                ]
             })
             
             count = 0
@@ -79,6 +85,8 @@ def cloudinary_cleanup_loop():
                                 "recording_path": "",
                                 "cloudinary_public_id": "",
                                 "recording_uploaded_at": "",
+                                "recording_expires_at": "",
+                                "recording_retention_days": "",
                                 "recording_storage": ""
                             }}
                         )
@@ -2567,7 +2575,14 @@ async def upload_full_recording(
             cloudinary_public_id = None
 
         # Update database
-        update_data = {"recording_path": normalized_path}
+        uploaded_at = datetime.now(timezone.utc)
+        update_data = {
+            "recording_path": normalized_path,
+            "recording_uploaded_at": uploaded_at.isoformat(),
+            "recording_expires_at": (uploaded_at + timedelta(days=RECORDING_RETENTION_DAYS)).isoformat(),
+            "recording_retention_days": RECORDING_RETENTION_DAYS,
+            "recording_storage": "cloudinary" if cloudinary_public_id else "local"
+        }
         if cloudinary_public_id:
             update_data["cloudinary_public_id"] = cloudinary_public_id
             
