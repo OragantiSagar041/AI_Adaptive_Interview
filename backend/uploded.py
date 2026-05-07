@@ -2397,9 +2397,10 @@ def get_interview_details(link_id: str):
 
     # Fetch recording path from interviews table
     recording_url = None
+    raw_path = session_data.get("recording_path")
     if actual_interview_id:
         rec_row = interviews_collection.find_one({"id": actual_interview_id})
-        if rec_row and rec_row.get("recording_path"):
+        if not raw_path and rec_row and rec_row.get("recording_path"):
             raw_path = rec_row["recording_path"]
             # Verify file exists on disk (handle ephemeral storage case)
             if raw_path.startswith("http"):
@@ -2413,6 +2414,17 @@ def get_interview_details(link_id: str):
                     recording_url = raw_path_fixed[idx:]
             else:
                 print(f"⚠️ Recording file not found on disk: {raw_path}")
+
+    if raw_path and not recording_url:
+        if raw_path.startswith("http"):
+            recording_url = raw_path
+        elif os.path.exists(raw_path):
+            raw_path_fixed = raw_path.replace("\\", "/")
+            idx = raw_path_fixed.find("uploads/")
+            if idx != -1:
+                recording_url = raw_path_fixed[idx:]
+        else:
+            print(f"Recording file not found on disk: {raw_path}")
 
     results = []
     total_tab_switches = 0
@@ -2540,6 +2552,7 @@ def analyze(req: AnalyzeRequest):
 @app.post("/upload-full-recording")
 async def upload_full_recording(
     interview_id: str = Form(...),
+    link_id: Optional[str] = Form(None),
     file: UploadFile = File(...)
 ):
     try:
@@ -2586,12 +2599,30 @@ async def upload_full_recording(
         if cloudinary_public_id:
             update_data["cloudinary_public_id"] = cloudinary_public_id
             
-        interviews_collection.update_one(
+        interview_update = interviews_collection.update_one(
             {"id": interview_id},
             {"$set": update_data}
         )
+
+        session_filter = {"interview_id": interview_id}
+        if link_id:
+            session_filter = {"link_id": link_id}
+            update_data["interview_id"] = interview_id
+        session_update = interview_sessions_collection.update_one(
+            session_filter,
+            {"$set": update_data}
+        )
+
+        if interview_update.matched_count == 0 and session_update.matched_count == 0:
+            print(f"⚠️ Recording uploaded but no DB record matched interview_id={interview_id}, link_id={link_id}")
         
-        return {"status": "success", "file_path": normalized_path}
+        return {
+            "status": "success",
+            "file_path": normalized_path,
+            "recording_url": normalized_path,
+            "saved_to_interviews": interview_update.matched_count > 0,
+            "saved_to_session": session_update.matched_count > 0
+        }
     except Exception as e:
         print(f"Error saving full recording: {e}")
         raise HTTPException(status_code=500, detail=str(e))
@@ -3883,13 +3914,15 @@ async def get_all_sessions(admin_id: str, start_date: Optional[str] = None, end_
     for row in rows:
         has_video = False
         interview_id = row.get("interview_id")
+        rec_path = row.get("recording_path")
         if interview_id:
             interview_doc = interviews_collection.find_one({"id": interview_id}, {"recording_path": 1})
-            if interview_doc and interview_doc.get("recording_path"):
+            if not rec_path and interview_doc and interview_doc.get("recording_path"):
                 rec_path = interview_doc.get("recording_path")
-                # Only show video icon if file actually exists on server
-                if rec_path.startswith("http") or os.path.exists(rec_path):
-                    has_video = True
+        if rec_path:
+            # Cloudinary URLs are DB-backed remote videos; local fallbacks need a file check.
+            if rec_path.startswith("http") or os.path.exists(rec_path):
+                has_video = True
 
         sessions.append({
             "link_id": row.get("link_id"),

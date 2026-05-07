@@ -4939,6 +4939,10 @@ Output: ${formatCodingValue(testCase.output)}${resultBlock}</pre>
                     const formData = new FormData();
                     formData.append('file', blob, 'full_interview.webm');
                     formData.append('interview_id', interviewId);
+                    const recordingSessionId = getSessionIdFromUrl();
+                    if (recordingSessionId) {
+                        formData.append('link_id', recordingSessionId);
+                    }
 
                     const progressText = document.getElementById('uploadPercentageText');
                     const progressBar = document.getElementById('uploadProgressBar');
