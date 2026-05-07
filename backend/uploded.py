@@ -4628,6 +4628,15 @@ async def webrtc_endpoint(websocket: WebSocket, role: str, link_id: str):
 # --------------------------------------------------------------------------------
 from bson import ObjectId
 
+def require_master_user(master_id: str) -> Dict[str, Any]:
+    try:
+        master = admins_collection.find_one({"_id": ObjectId(master_id), "role": "master"})
+    except Exception:
+        master = None
+    if not master:
+        raise HTTPException(status_code=401, detail="Unauthorized")
+    return master
+
 @app.post("/master/login")
 async def master_login(data: AdminLogin):
     user = admins_collection.find_one({"username": data.username, "role": "master"})
@@ -4645,42 +4654,47 @@ async def master_login(data: AdminLogin):
 
 @app.get("/master/tenants")
 async def get_tenants(master_id: str):
-    # Security check: ensure the request comes from a valid master
-    master = admins_collection.find_one({"_id": ObjectId(master_id), "role": "master"})
-    if not master:
-        raise HTTPException(status_code=401, detail="Unauthorized")
+    require_master_user(master_id)
         
     tenants = list(admins_collection.find({"role": "tenant"}))
-    now = datetime.now(timezone.utc)
     
     result = []
     for t in tenants:
-        exp_date = t.get("subscription_expiry")
-        is_expired = False
-        if exp_date:
-            try:
-                if now > datetime.fromisoformat(exp_date):
-                    is_expired = True
-            except:
-                pass
+        plan_context = get_admin_plan_context(t)
+        tenant_id = str(t["_id"])
+        session_filter = {"created_by": tenant_id}
+        total_sessions = interview_sessions_collection.count_documents(session_filter)
+        completed_sessions = interview_sessions_collection.count_documents({**session_filter, "status": "completed"})
+        started_sessions = interview_sessions_collection.count_documents({**session_filter, "status": "started"})
+        pending_sessions = interview_sessions_collection.count_documents({**session_filter, "status": "pending"})
+        deactivated_sessions = interview_sessions_collection.count_documents({**session_filter, "is_deactivated": True})
+        login_enabled = t.get("login_enabled", True) is not False
                 
         result.append({
-            "id": str(t["_id"]),
+            "id": tenant_id,
             "username": t["username"],
             "email": t.get("email", ""),
-            "subscription_plan": t.get("subscription_plan", "trial"),
+            "subscription_plan": plan_context["plan_key"],
+            "subscription_plan_label": plan_context["plan_label"],
             "subscription_start": t.get("subscription_start", ""),
             "subscription_expiry": t.get("subscription_expiry", ""),
-            "is_expired": is_expired,
-            "created_at": t.get("created_at", "")
+            "days_remaining": plan_context["days_remaining"],
+            "is_expired": plan_context["is_expired"],
+            "login_enabled": login_enabled,
+            "status": "blocked" if not login_enabled else ("expired" if plan_context["is_expired"] else "active"),
+            "created_at": t.get("created_at", ""),
+            "member_count": total_sessions,
+            "total_sessions": total_sessions,
+            "completed_sessions": completed_sessions,
+            "started_sessions": started_sessions,
+            "pending_sessions": pending_sessions,
+            "deactivated_sessions": deactivated_sessions,
         })
     return {"status": "success", "data": result}
 
 @app.post("/master/tenants")
 async def create_tenant(master_id: str, data: TenantCreate):
-    master = admins_collection.find_one({"_id": ObjectId(master_id), "role": "master"})
-    if not master:
-        raise HTTPException(status_code=401, detail="Unauthorized")
+    require_master_user(master_id)
         
     if admins_collection.find_one({"username": data.username}):
         raise HTTPException(status_code=400, detail="Username already exists")
@@ -4699,6 +4713,7 @@ async def create_tenant(master_id: str, data: TenantCreate):
         "subscription_plan": data.subscription_plan,
         "subscription_start": start.isoformat(),
         "subscription_expiry": expiry.isoformat(),
+        "login_enabled": True,
         "created_at": start.isoformat()
     }
     
@@ -4707,11 +4722,9 @@ async def create_tenant(master_id: str, data: TenantCreate):
 
 @app.put("/master/tenants/{tenant_id}")
 async def update_tenant(master_id: str, tenant_id: str, data: TenantUpdate):
-    master = admins_collection.find_one({"_id": ObjectId(master_id), "role": "master"})
-    if not master:
-        raise HTTPException(status_code=401, detail="Unauthorized")
+    require_master_user(master_id)
         
-    tenant = admins_collection.find_one({"_id": ObjectId(tenant_id)})
+    tenant = admins_collection.find_one({"_id": ObjectId(tenant_id), "role": "tenant"})
     if not tenant:
         raise HTTPException(status_code=404, detail="Tenant not found")
         
@@ -4733,6 +4746,39 @@ async def update_tenant(master_id: str, tenant_id: str, data: TenantUpdate):
             
     admins_collection.update_one({"_id": ObjectId(tenant_id)}, {"$set": update_fields})
     return {"status": "success", "message": "Tenant updated successfully"}
+
+@app.post("/master/tenants/{tenant_id}/login")
+async def set_tenant_login(master_id: str, tenant_id: str, payload: Dict[str, bool]):
+    require_master_user(master_id)
+    enabled = bool(payload.get("login_enabled", True))
+    result = admins_collection.update_one(
+        {"_id": ObjectId(tenant_id), "role": "tenant"},
+        {"$set": {"login_enabled": enabled}}
+    )
+    if result.matched_count == 0:
+        raise HTTPException(status_code=404, detail="Tenant not found")
+    return {"status": "success", "message": "Tenant login updated", "login_enabled": enabled}
+
+@app.delete("/master/tenants/{tenant_id}")
+async def delete_tenant(master_id: str, tenant_id: str):
+    require_master_user(master_id)
+    tenant = admins_collection.find_one({"_id": ObjectId(tenant_id), "role": "tenant"})
+    if not tenant:
+        raise HTTPException(status_code=404, detail="Tenant not found")
+
+    sessions = list(interview_sessions_collection.find({"created_by": tenant_id}, {"interview_id": 1}))
+    interview_ids = [s.get("interview_id") for s in sessions if s.get("interview_id")]
+    for interview_id in interview_ids:
+        interviews_collection.delete_one({"id": interview_id})
+        answers_collection.delete_many({"interview_id": interview_id})
+
+    interview_sessions_collection.delete_many({"created_by": tenant_id})
+    admins_collection.delete_one({"_id": ObjectId(tenant_id)})
+    return {
+        "status": "success",
+        "message": "Tenant and related interview data deleted",
+        "deleted_sessions": len(sessions),
+    }
 
 # 4. Modify existing Admin Login endpoint to return subscription details
 @app.post("/admin/login")
