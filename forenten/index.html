@@ -3211,7 +3211,7 @@
                 if (currentQuestionId < totalQuestions) {
                     await loadQuestion(currentInterviewId, currentQuestionId + 1, true);
                 } else {
-                    await launchCodingRound();
+                    await endInterview();
                 }
             } catch (error) {
                 console.error('Error skipping question:', error);

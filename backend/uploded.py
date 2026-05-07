@@ -1229,7 +1229,7 @@ def generate_mock_questions(text: str, source: str, num_questions: int = 6, resu
     middle_questions = []
     
     try:
-        # If admin provided custom questions, ONLY use those for the technical portion
+        # 1. Inject custom questions FIRST if provided
         if custom_questions:
             custom_q_list = [q.strip() for q in custom_questions.split('\n') if q.strip()]
             for cq in custom_q_list:
@@ -1239,38 +1239,41 @@ def generate_mock_questions(text: str, source: str, num_questions: int = 6, resu
                     "type": "Technical",
                     "category": "Custom Question"
                 })
-            print(f"✅ Loaded {len(middle_questions)} custom questions (Skipping AI & Fallback)")
+            print(f"✅ Loaded {len(custom_q_list)} custom questions")
             
+        # 2. Add AI questions (Instructions and JD/Resume)
+        if "resume" in source.lower():
+            ai_questions = generate_resume_questions(text)
         else:
-            # Otherwise, use AI to generate questions
-            if "resume" in source.lower():
-                ai_questions = generate_resume_questions(text)
-            else:
-                ai_questions = generate_jd_questions(text, ai_instructions=ai_instructions)
+            ai_questions = generate_jd_questions(text, ai_instructions=ai_instructions)
+        
+        ai_added = 0
+        for q in ai_questions:
+            qtype = q.get("type", "").lower()
+            qcat = q.get("category", "").lower()
+            if any(x in qtype for x in ["self-intro", "introduction", "career", "future"]):
+                continue
+            if any(x in qcat for x in ["basic", "background", "future goals", "closing"]):
+                continue
+            middle_questions.append(q)
+            ai_added += 1
             
-            for q in ai_questions:
-                qtype = q.get("type", "").lower()
-                qcat = q.get("category", "").lower()
-                if any(x in qtype for x in ["self-intro", "introduction", "career", "future"]):
-                    continue
-                if any(x in qcat for x in ["basic", "background", "future goals", "closing"]):
-                    continue
-                middle_questions.append(q)
-                
-            print(f"✅ AI generated {len(middle_questions)} technical questions")
+        print(f"✅ AI generated {ai_added} technical/instruction questions")
+        
     except Exception as e:
         print(f"⚠️ AI question generation failed: {e}")
-        if not custom_questions:
-            print("📋 Falling back to smart offline question generator...")
+        print("📋 Falling back to smart offline question generator...")
     
     # ── OFFLINE FALLBACK: Extract skills/projects and build timeline-based questions ──
-    # Only run offline fallback if NO custom questions were provided
-    if len(middle_questions) < middle_count and not custom_questions:
+    # Only run offline fallback if we don't have enough questions
+    if len(middle_questions) < middle_count:
         offline_questions = _generate_offline_questions(resume_text or "", jd_text or text, num_questions)
         middle_questions.extend(offline_questions)
         print(f"📋 Offline generator added {len(offline_questions)} questions")
     
-    if not custom_questions:
+    # Only truncate if we exceeded the requested middle count by offline fallback,
+    # but don't truncate Custom + AI questions if they naturally exceed it.
+    if len(middle_questions) > middle_count and not custom_questions:
         middle_questions = middle_questions[:middle_count]
 
     
