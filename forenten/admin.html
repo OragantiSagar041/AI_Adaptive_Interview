@@ -1827,32 +1827,55 @@
         .master-stat-card {
             background: #ffffff;
             border: 1px solid #e5edf7;
-            border-radius: 14px;
-            padding: 1.25rem;
-            box-shadow: 0 10px 26px rgba(15, 23, 42, 0.05);
+            border-radius: 20px;
+            padding: 1.5rem;
+            box-shadow: 0 10px 30px rgba(37, 99, 235, 0.04);
+            transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+            position: relative;
+            overflow: hidden;
+        }
+
+        .master-stat-card:hover {
+            transform: translateY(-5px);
+            box-shadow: 0 20px 40px rgba(37, 99, 235, 0.08);
+            border-color: #2563eb;
+        }
+
+        .master-stat-card::after {
+            content: '';
+            position: absolute;
+            top: 0;
+            right: 0;
+            width: 80px;
+            height: 80px;
+            background: linear-gradient(135deg, rgba(37, 99, 235, 0.05) 0%, transparent 100%);
+            border-radius: 0 0 0 80px;
         }
 
         .master-stat-card .label {
             margin: 0;
             color: #64748b;
-            font-size: 0.78rem;
+            font-size: 0.75rem;
             font-weight: 800;
             text-transform: uppercase;
+            letter-spacing: 0.5px;
         }
 
         .master-stat-card .value {
-            margin: 0.55rem 0 0;
-            color: #0f172a;
-            font-size: 2rem;
+            margin: 0.5rem 0 0;
+            color: #1e293b;
+            font-size: 2.25rem;
             font-weight: 900;
+            line-height: 1;
         }
 
         .master-panel {
             background: #ffffff;
             border: 1px solid #e5edf7;
-            border-radius: 16px;
+            border-radius: 20px;
             overflow: hidden;
-            box-shadow: 0 12px 30px rgba(15, 23, 42, 0.06);
+            box-shadow: 0 15px 35px rgba(15, 23, 42, 0.04);
+            margin-bottom: 2rem;
         }
 
         .master-panel-head {
@@ -2040,18 +2063,23 @@
 
         .master-field label {
             display: block;
-            color: #475569;
-            font-size: 0.75rem;
-            font-weight: 900;
-            letter-spacing: 0;
-            text-transform: uppercase;
-            margin-bottom: 0.4rem;
+            color: #1e293b;
+            font-size: 0.8rem;
+            font-weight: 700;
+            margin-bottom: 0.5rem;
         }
 
         .master-field .dash-input {
-            background: #ffffff;
+            background: #f8fafc;
             color: #0f172a;
-            border-color: #dbe4f0;
+            border: 1.5px solid #e2e8f0;
+            transition: all 0.2s;
+        }
+
+        .master-field .dash-input:focus {
+            background: #fff;
+            border-color: #2563eb;
+            box-shadow: 0 0 0 4px rgba(37, 99, 235, 0.1);
         }
 
         .master-modal-actions {
@@ -2443,16 +2471,21 @@
                         class="fas fa-broadcast-tower"></i> Live Results</button>
             </div>
             <div class="sidebar-nav hidden" id="masterSidebarNav">
+                <div style="font-size: 0.7rem; color: rgba(255,255,255,0.5); font-weight: 800; text-transform: uppercase; margin: 1rem 0 0.5rem 1rem; letter-spacing: 1px;">Master Control</div>
                 <button class="nav-btn active" id="master-nav-dashboard" onclick="showMasterDashboard(); loadMasterTenants();"><i class="fas fa-gauge-high"></i> Dashboard</button>
                 <button class="nav-btn" id="master-nav-subscribers" onclick="showMasterDashboard(); loadMasterTenants();"><i class="fas fa-building-user"></i> Subscribers</button>
-                <button class="nav-btn" onclick="showCreateTenantModal()"><i class="fas fa-user-plus"></i> Create Tenant</button>
+                <button class="nav-btn" onclick="scrollToCreateTenant()"><i class="fas fa-user-plus"></i> Create Tenant</button>
+                
+                <div style="font-size: 0.7rem; color: rgba(255,255,255,0.5); font-weight: 800; text-transform: uppercase; margin: 1.5rem 0 0.5rem 1rem; letter-spacing: 1px;">Admin Features</div>
+                <button class="nav-btn" onclick="showMasterAdminView('overview')" id="nav-master-overview"><i class="fas fa-chart-pie"></i> Overview Dashboard</button>
+                <button class="nav-btn" onclick="showMasterAdminView('create')" id="nav-master-create"><i class="fas fa-plus-circle"></i> Create Interview</button>
+                <button class="nav-btn" onclick="showMasterAdminView('qualified')" id="nav-master-qualified"><i class="fas fa-user-check"></i> Qualified Candidates</button>
+                <button class="nav-btn" onclick="showMasterAdminView('unqualified')" id="nav-master-unqualified"><i class="fas fa-user-slash"></i> Rejected Candidates</button>
+                <button class="nav-btn" onclick="showMasterAdminView('deactivated')" id="nav-master-deactivated"><i class="fas fa-user-minus"></i> Deactivated Candidates</button>
+                <button class="nav-btn" onclick="showMasterAdminView('settings')" id="nav-master-settings"><i class="fas fa-cog"></i> Profile Settings</button>
+                
                 <div class="master-sidebar-separator"></div>
-                <button class="nav-btn" onclick="showMasterAdminView('overview')"><i class="fas fa-chart-pie"></i> Admin Overview</button>
-                <button class="nav-btn" onclick="showMasterAdminView('qualified')"><i class="fas fa-user-check"></i> Qualified Candidates</button>
-                <button class="nav-btn" onclick="showMasterAdminView('unqualified')"><i class="fas fa-user-slash"></i> Rejected Candidates</button>
-                <button class="nav-btn" onclick="showMasterAdminView('deactivated')"><i class="fas fa-user-minus"></i> Deactivated Candidates</button>
-                <button class="nav-btn" onclick="showMasterAdminView('create')"><i class="fas fa-plus-circle"></i> Create Interview</button>
-                <button class="nav-btn" onclick="showMasterAdminView('settings')"><i class="fas fa-cog"></i> Profile Settings</button>
+                <button class="nav-btn" onclick="showLiveResultsModal()" style="background: rgba(16, 185, 129, 0.1); color: #10b981;"><i class="fas fa-broadcast-tower"></i> Live Monitor</button>
             </div>
         </div>
 
@@ -2519,7 +2552,10 @@
                 <div class="master-panel">
                     <div class="master-panel-head">
                         <h3>Companies Overview</h3>
-                        <input class="master-search" id="masterTenantSearch" placeholder="Search company or email..." oninput="renderMasterTenants()" />
+                        <div style="display: flex; gap: 1rem; align-items: center;">
+                            <input class="master-search" id="masterTenantSearch" placeholder="Search company or email..." oninput="renderMasterTenants()" />
+                            <button class="master-btn primary" onclick="scrollToCreateTenant()"><i class="fas fa-plus"></i> Add New Tenant</button>
+                        </div>
                     </div>
                     <div class="master-table-wrap">
                         <table class="master-table" id="masterTenantsTable">
@@ -2528,7 +2564,7 @@
                                     <th>Company / Admin</th>
                                     <th>Plan</th>
                                     <th>Status</th>
-                                    <th>Members</th>
+                                    <th>Usage</th>
                                     <th>Activation Date</th>
                                     <th>Expiry Date</th>
                                     <th>Actions</th>
@@ -2538,6 +2574,52 @@
                                 <tr><td colspan="7" style="text-align: center;">Loading tenants...</td></tr>
                             </tbody>
                         </table>
+                    </div>
+                </div>
+
+                <!-- INLINE CREATE TENANT SECTION -->
+                <div id="inlineCreateTenantSection" class="master-panel" style="margin-top: 2rem; border: 2px solid #e2e8f0; background: #fff;">
+                    <div class="master-panel-head" style="background: #f1f5f9;">
+                        <div>
+                            <h3 style="font-size: 1.25rem;">Create New Tenant</h3>
+                            <p style="color: #64748b; font-size: 0.85rem; font-weight: 500;">Provision a new administrative account with a subscription plan.</p>
+                        </div>
+                        <div class="header-icon" style="background: rgba(37, 99, 235, 0.1); color: #2563eb; width: 44px; height: 44px; border-radius: 12px; display: flex; align-items: center; justify-content: center; font-size: 1.2rem;">
+                            <i class="fas fa-user-plus"></i>
+                        </div>
+                    </div>
+                    <div style="padding: 2rem;">
+                        <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); gap: 2rem;">
+                            <div class="master-field">
+                                <label style="display: flex; align-items: center; gap: 6px;"><i class="fas fa-user" style="font-size: 0.7rem; color: #64748b;"></i> Username</label>
+                                <input type="text" id="tenantUsername" class="dash-input" style="padding: 0.9rem; font-size: 1rem; border-radius: 10px;" placeholder="e.g. company_admin">
+                            </div>
+                            <div class="master-field">
+                                <label style="display: flex; align-items: center; gap: 6px;"><i class="fas fa-envelope" style="font-size: 0.7rem; color: #64748b;"></i> Email Address</label>
+                                <input type="email" id="tenantEmail" class="dash-input" style="padding: 0.9rem; font-size: 1rem; border-radius: 10px;" placeholder="admin@company.com">
+                            </div>
+                            <div class="master-field">
+                                <label style="display: flex; align-items: center; gap: 6px;"><i class="fas fa-lock" style="font-size: 0.7rem; color: #64748b;"></i> Password</label>
+                                <div style="position: relative;">
+                                    <input type="password" id="tenantPassword" class="dash-input" style="padding: 0.9rem; font-size: 1rem; border-radius: 10px;" placeholder="Secure password">
+                                    <button onclick="togglePasswordVisibility('tenantPassword')" style="position: absolute; right: 12px; top: 50%; transform: translateY(-50%); background: none; border: none; color: #94a3b8; cursor: pointer;"><i class="fas fa-eye"></i></button>
+                                </div>
+                            </div>
+                            <div class="master-field">
+                                <label style="display: flex; align-items: center; gap: 6px;"><i class="fas fa-layer-group" style="font-size: 0.7rem; color: #64748b;"></i> Subscription Plan</label>
+                                <select id="tenantPlan" class="dash-input" style="padding: 0.9rem; font-size: 1rem; border-radius: 10px; appearance: none; background-image: url('data:image/svg+xml;charset=US-ASCII,%3Csvg%20xmlns%3D%22http%3A//www.w3.org/2000/svg%22%20width%3D%22292.4%22%20height%3D%22292.4%22%3E%3Cpath%20fill%3D%22%2364748B%22%20d%3D%22M287%2069.4a17.6%2017.6%200%200%200-13-5.4H18.4c-5%200-9.3%201.8-12.9%205.4A17.6%2017.6%200%200%200%200%2082.2c0%205%201.8%209.3%205.4%2012.9l128%20127.9c3.6%203.6%207.8%205.4%2012.8%205.4s9.2-1.8%2012.8-5.4L287%2095c3.5-3.5%205.4-7.8%205.4-12.8%200-5-1.9-9.2-5.5-12.8z%22/%3E%3C/svg%3E'); background-repeat: no-repeat; background-position: right 1rem center; background-size: 0.65rem auto;">
+                                    <option value="trial">15 Days Free Trial</option>
+                                    <option value="basic">Basic Plan (Standard)</option>
+                                    <option value="advance">Advance Plan (Premium)</option>
+                                </select>
+                            </div>
+                        </div>
+                        <div style="margin-top: 2.5rem; display: flex; justify-content: flex-end; gap: 1rem; border-top: 1px solid #f1f5f9; padding-top: 1.5rem;">
+                            <button class="master-btn" onclick="clearCreateTenantForm()" style="padding: 0.8rem 2rem; border-radius: 10px;">Reset Form</button>
+                            <button class="master-btn primary" onclick="submitCreateTenant()" style="padding: 0.8rem 2.5rem; border-radius: 10px; font-size: 1rem; box-shadow: 0 10px 20px rgba(37, 99, 235, 0.2);">
+                                <i class="fas fa-bolt" style="margin-right: 8px;"></i> Create Account Now
+                            </button>
+                        </div>
                     </div>
                 </div>
             </div>
@@ -3698,12 +3780,47 @@
             if (tabContainer) tabContainer.style.display = '';
             document.getElementById('tenantSidebarNav')?.classList.add('hidden');
             document.getElementById('masterSidebarNav')?.classList.remove('hidden');
+            
+            // Handle sidebar active states
             document.querySelectorAll('#masterSidebarNav .nav-btn').forEach(btn => btn.classList.remove('active'));
+            const activeBtn = document.getElementById('nav-master-' + viewId);
+            if (activeBtn) activeBtn.classList.add('active');
+            
             const masterSection = document.getElementById('masterDashboardSection');
             if (masterSection) masterSection.classList.add('hidden');
             const title = document.getElementById('consoleTitle');
             if (title) title.textContent = 'Master Console';
             switchView(viewId);
+        }
+
+        function scrollToCreateTenant() {
+            showMasterDashboard();
+            const section = document.getElementById('inlineCreateTenantSection');
+            if (section) {
+                section.scrollIntoView({ behavior: 'smooth', block: 'center' });
+                section.style.ring = "2px solid #2563eb";
+                setTimeout(() => section.style.ring = "none", 2000);
+            }
+        }
+
+        function clearCreateTenantForm() {
+            document.getElementById('tenantUsername').value = '';
+            document.getElementById('tenantEmail').value = '';
+            document.getElementById('tenantPassword').value = '';
+            document.getElementById('tenantPlan').value = 'trial';
+        }
+
+        function togglePasswordVisibility(id) {
+            const input = document.getElementById(id);
+            if (!input) return;
+            const icon = input.nextElementSibling?.querySelector('i');
+            if (input.type === 'password') {
+                input.type = 'text';
+                if (icon) icon.className = 'fas fa-eye-slash';
+            } else {
+                input.type = 'password';
+                if (icon) icon.className = 'fas fa-eye';
+            }
         }
 
         function formatTenantDate(value) {
