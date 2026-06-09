@@ -1257,6 +1257,7 @@
     <!-- Face Detection Scripts -->
     <script src="https://cdn.jsdelivr.net/npm/@tensorflow/tfjs"></script>
     <script src="https://cdn.jsdelivr.net/npm/@tensorflow-models/blazeface"></script>
+    <script src="https://cdn.jsdelivr.net/npm/@tensorflow-models/coco-ssd"></script>
     <script>
         (function () {
             try {
@@ -1515,7 +1516,7 @@
             <div class="coding-round-header">
                 <div>
                     <p class="coding-round-kicker">Round 2</p>
-                    <h2>Live Coding Test</h2>
+                    <h2 id="codingRoundMainTitle">Live Coding Test</h2>
                     <p id="codingRoundSubtitle">Read the prompt, explain your logic to the AI, and write your solution.
                     </p>
                 </div>
@@ -1597,7 +1598,7 @@
                             </div>
                             <div class="coding-editor-status">Autosave by language</div>
                         </div>
-                        <div id="codingEditorContainer" class="coding-editor-container"></div>
+                        <div id="codingEditorContainer" class="coding-editor-container" style="display: none;"></div>
                         <textarea id="codingCodeBox" class="coding-codebox" spellcheck="false"
                             placeholder="Write your solution here..."></textarea>
 
@@ -2198,7 +2199,8 @@
 
         // Periodically refresh insights while interview is active
         setInterval(() => {
-            if (currentInterviewId && !document.getElementById('interviewSection').classList.contains('hidden')) {
+            const isInterviewActive = !document.getElementById('interviewSection').classList.contains('hidden') || !document.getElementById('codingRoundSection').classList.contains('hidden');
+        if (currentInterviewId && isInterviewActive) {
                 _tipIndex++;
                 updateInsights();
             }
@@ -2396,15 +2398,18 @@
             const duration = (window.interviewDuration && Number(window.interviewDuration) > 0)
                 ? Number(window.interviewDuration)
                 : 30;
-            totalInterviewMinutes = Math.max(2, duration);
+            
+            configureInterviewPhases(duration);
+            
             console.log('[TIMER DEBUG] Final totalInterviewMinutes =', totalInterviewMinutes);
             console.log('[TIMER DEBUG] window.interviewDuration =', window.interviewDuration);
+            console.log('[TIMER DEBUG] window.interviewType =', window.interviewType);
             console.log('[TIMER DEBUG] duration used =', duration);
-            console.log('[TIMER DEBUG] totalInterviewMinutes =', totalInterviewMinutes);
+            console.log('[TIMER DEBUG] verbalRoundMinutes =', verbalRoundMinutes, 'codingRoundMinutes =', codingRoundMinutes);
             backgroundNoiseAlerts = 0;
             backgroundNoiseFrameCount = 0;
             backgroundNoiseCooldownUntil = 0;
-            startGlobalCountdown(totalInterviewMinutes, 'verbal');
+            startGlobalCountdown(verbalRoundMinutes, 'verbal');
 
             // Load first question
             if (currentInterviewId && currentQuestionId) {
@@ -2422,8 +2427,13 @@
 
         function configureInterviewPhases(durationMinutes) {
             totalInterviewMinutes = Math.max(2, Number(durationMinutes) || 30);
-            verbalRoundMinutes = Math.max(1, Math.floor(totalInterviewMinutes / 2));
-            codingRoundMinutes = Math.max(1, totalInterviewMinutes - verbalRoundMinutes);
+            if (window.interviewType === 'Normal') {
+                verbalRoundMinutes = totalInterviewMinutes;
+                codingRoundMinutes = 0;
+            } else {
+                verbalRoundMinutes = Math.max(1, Math.floor(totalInterviewMinutes / 2));
+                codingRoundMinutes = Math.max(1, totalInterviewMinutes - verbalRoundMinutes);
+            }
         }
 
         function startGlobalCountdown(durationMinutes, phase = 'verbal') {
@@ -2443,8 +2453,14 @@
                     clearInterval(globalCountdownInterval);
                     globalCountdownInterval = null;
                     try { updateCountdownDisplay(); } catch (e) { console.error('Display error:', e); }
-                    showStatus('<i class="fas fa-clock"></i> Interview time is up. Submitting your responses...', 'info');
-                    endInterview();
+                    
+                    if ((window.interviewType === 'Technical' || window.interviewType === 'Non-Technical') && interviewPhase === 'verbal') {
+                        showStatus(window.interviewType === 'Non-Technical' ? '<i class="fas fa-clock"></i> Verbal round time is up. Starting Written Case Study round...' : '<i class="fas fa-clock"></i> Verbal round time is up. Starting coding round...', 'info');
+                        launchCodingRound();
+                    } else {
+                        showStatus('<i class="fas fa-clock"></i> Interview time is up. Submitting your responses...', 'info');
+                        endInterview();
+                    }
                     return;
                 }
 
@@ -2487,7 +2503,11 @@
             el.textContent = `${String(mins).padStart(2, '0')}:${String(secs).padStart(2, '0')}`;
             const subtitle = document.getElementById('codingRoundSubtitle');
             if (subtitle && !document.getElementById('codingRoundSection').classList.contains('hidden')) {
-                subtitle.textContent = `Round 2 has ${String(mins).padStart(2, '0')}:${String(secs).padStart(2, '0')} remaining. Explain your logic to the AI while you code.`;
+                if (window.interviewType === 'Non-Technical') {
+                    subtitle.textContent = `Round 2 has ${String(mins).padStart(2, '0')}:${String(secs).padStart(2, '0')} remaining. Read the scenario and type your written strategy.`;
+                } else {
+                    subtitle.textContent = `Round 2 has ${String(mins).padStart(2, '0')}:${String(secs).padStart(2, '0')} remaining. Explain your logic to the AI while you code.`;
+                }
             }
 
             // Color coding: green > 2min, orange 1-2min, red < 1min
@@ -2641,6 +2661,7 @@
             hrScreeningTriggered = Boolean(hrStartId && Number(currentQuestionId) >= hrStartId);
             hrScreeningSwitching = false;
             window.interviewDuration = Number(data.interview_duration) > 0 ? Number(data.interview_duration) : 30;
+            window.interviewType = data.interview_type || 'Technical';
             window.recordVideo = data.record_video !== false;
 
             window.currentInterviewId = currentInterviewId;
@@ -3461,7 +3482,12 @@
             if (nextQuestionId <= totalQuestions) {
                 await loadQuestion(currentInterviewId, nextQuestionId);
             } else {
-                await endInterview();
+                if ((window.interviewType === 'Technical' || window.interviewType === 'Non-Technical') && interviewPhase === 'verbal') {
+                    showStatus(window.interviewType === 'Non-Technical' ? 'All verbal questions answered. Starting Written Case Study round...' : 'All verbal questions answered. Starting coding round...', 'info');
+                    launchCodingRound();
+                } else {
+                    await endInterview();
+                }
             }
         }
 
@@ -3604,17 +3630,18 @@
                 await loadMonaco();
                 window.require.config({ paths: { vs: 'https://cdnjs.cloudflare.com/ajax/libs/monaco-editor/0.52.2/min/vs' } });
                 window.require(['vs/editor/editor.main'], () => {
-                    codingEditor = window.monaco.editor.create(container, {
-                        value: textarea.value || '',
-                        language: document.getElementById('codingLanguageSelect').value || 'python',
-                        theme: 'vs-dark',
-                        automaticLayout: true,
-                        minimap: { enabled: false },
-                        fontSize: 14,
+                        codingEditor = window.monaco.editor.create(container, {
+                            value: textarea.value || '',
+                            language: document.getElementById('codingLanguageSelect').value || 'python',
+                            theme: 'vs-dark',
+                            automaticLayout: true,
+                            minimap: { enabled: false },
+                            fontSize: 14,
+                        });
+                        container.style.display = 'block';
+                        textarea.classList.add('hidden');
+                        codingEditor.onDidChangeModelContent(onChange);
                     });
-                    textarea.classList.add('hidden');
-                    codingEditor.onDidChangeModelContent(onChange);
-                });
             } catch (error) {
                 console.warn('Monaco editor unavailable, using textarea fallback.', error);
                 container.classList.add('hidden');
@@ -3741,15 +3768,49 @@ Output: ${formatCodingValue(testCase.output)}${resultBlock}</pre>
         function renderCodingTask(codingRound) {
             const task = codingRound.task || {};
             codingRoundState = codingRound;
-            document.getElementById('codingTaskTitle').textContent = task.title || 'Live coding problem';
+            document.getElementById('codingRoundMainTitle').textContent = window.interviewType === 'Non-Technical' ? "Round 2: Written Case Study" : "Round 2: Live Coding Task";
+            document.getElementById('codingTaskTitle').textContent = task.title || (window.interviewType === 'Non-Technical' ? 'Case Study Scenario' : 'Live coding problem');
             document.getElementById('codingTaskDescription').textContent = task.description || '';
             document.getElementById('codingInputFormat').textContent = task.input_format || '';
             document.getElementById('codingOutputFormat').textContent = task.output_format || '';
             document.getElementById('codingDifficultyTag').textContent = task.difficulty || 'Medium';
-            const selectedLanguage = codingRound.language || task.recommended_language || 'python';
+            const selectedLanguage = window.interviewType === 'Non-Technical' ? 'plaintext' : (codingRound.language || task.recommended_language || 'python');
             document.getElementById('codingLanguageHint').textContent = selectedLanguage.toUpperCase();
             document.getElementById('codingLanguageSelect').value = selectedLanguage;
             syncEditorLanguage(selectedLanguage);
+
+            if (window.interviewType === 'Non-Technical') {
+                document.getElementById('codingLanguageSelect').style.display = 'none';
+                const runCodeBtn = document.getElementById('runCodeBtn');
+                if (runCodeBtn) runCodeBtn.style.display = 'none';
+                const submitBtn = document.getElementById('codingSubmitBtn');
+                if (submitBtn) submitBtn.innerHTML = '<i class="fas fa-paper-plane"></i> Submit Case Study';
+                const testToggle = document.getElementById('codingTestsToggle');
+                if (testToggle) testToggle.style.display = 'none';
+                
+                document.querySelectorAll('.coding-problem-section').forEach(el => {
+                    const h4 = el.querySelector('h4');
+                    if (h4 && (h4.textContent.includes('Input') || h4.textContent.includes('Output') || h4.textContent.includes('Example'))) {
+                        el.style.display = 'none';
+                    }
+                });
+                const codeTab = document.querySelector('.coding-right-tab.active');
+                if (codeTab) codeTab.textContent = "Response";
+            } else {
+                document.getElementById('codingLanguageSelect').style.display = 'inline-block';
+                const runCodeBtn = document.getElementById('runCodeBtn');
+                if (runCodeBtn) runCodeBtn.style.display = 'flex';
+                const submitBtn = document.getElementById('codingSubmitBtn');
+                if (submitBtn) submitBtn.innerHTML = '<i class="fas fa-paper-plane"></i> Submit Code';
+                const testToggle = document.getElementById('codingTestsToggle');
+                if (testToggle) testToggle.style.display = 'flex';
+                
+                document.querySelectorAll('.coding-problem-section').forEach(el => {
+                    el.style.display = 'block';
+                });
+                const codeTab = document.querySelector('.coding-right-tab.active');
+                if (codeTab) codeTab.textContent = "Code";
+            }
 
             renderCodingList('codingConstraintsList', task.constraints || []);
             renderCodingList('codingFocusList', task.evaluation_focus || []);
@@ -3824,6 +3885,31 @@ Output: ${formatCodingValue(testCase.output)}${resultBlock}</pre>
 
             document.getElementById('interviewSection').classList.add('hidden');
             document.getElementById('codingRoundSection').classList.remove('hidden');
+            
+            // Move video preview and face warning to body so they stay active during coding round
+            const videoPreview = document.getElementById('videoPreview');
+            const faceWarning = document.getElementById('faceWarning');
+            if (videoPreview) {
+                document.body.appendChild(videoPreview);
+                videoPreview.style.position = 'fixed';
+                videoPreview.style.bottom = '20px';
+                videoPreview.style.left = '20px';
+                videoPreview.style.width = '150px';
+                videoPreview.style.height = '150px';
+                videoPreview.style.zIndex = '9999';
+                videoPreview.style.borderRadius = '50%';
+                videoPreview.style.boxShadow = '0 4px 15px rgba(0,0,0,0.3)';
+                videoPreview.style.border = '3px solid #6366f1';
+            }
+            if (faceWarning) {
+                document.body.appendChild(faceWarning);
+                faceWarning.style.position = 'fixed';
+                faceWarning.style.top = '50%';
+                faceWarning.style.left = '50%';
+                faceWarning.style.transform = 'translate(-50%, -50%)';
+                faceWarning.style.zIndex = '10000';
+            }
+
             showStatus('Preparing your live coding round...', 'info');
             await initializeCodingEditor();
 
@@ -4058,6 +4144,17 @@ Output: ${formatCodingValue(testCase.output)}${resultBlock}</pre>
         }
 
         async function endInterview(alreadySaved = false) {
+            if (window.interviewType === 'Technical' && interviewPhase === 'verbal') {
+                const proceed = confirm("Do you want to end the verbal round early and proceed to the coding round?");
+                if (proceed) {
+                    showStatus('Starting coding round...', 'info');
+                    launchCodingRound();
+                    return;
+                } else {
+                    return; // user cancelled ending the round
+                }
+            }
+
             // Stop the global countdown timer
             stopGlobalCountdown();
             interviewActive = false;
@@ -4628,7 +4725,7 @@ Output: ${formatCodingValue(testCase.output)}${resultBlock}</pre>
 
     function checkFullscreen() {
         const warning = document.getElementById('fullscreenWarning');
-        const isInterviewActive = !document.getElementById('interviewSection').classList.contains('hidden');
+        const isInterviewActive = !document.getElementById('interviewSection').classList.contains('hidden') || !document.getElementById('codingRoundSection').classList.contains('hidden');
 
         if (isInterviewActive && !document.fullscreenElement) {
             warning.style.display = 'flex';
@@ -4787,6 +4884,7 @@ Output: ${formatCodingValue(testCase.output)}${resultBlock}</pre>
 
     let faceDetectionInterval = null;
     let faceModel = null;
+    let cocoSsdModel = null;
 
     async function startFaceDetection(video) {
         if (!faceModel) {
@@ -4805,6 +4903,16 @@ Output: ${formatCodingValue(testCase.output)}${resultBlock}</pre>
             }
         }
 
+        if (!cocoSsdModel && window.cocoSsd) {
+            console.log("Loading COCO-SSD Model...");
+            try {
+                cocoSsdModel = await cocoSsd.load();
+                console.log("COCO-SSD Model Loaded ✅");
+            } catch (e) {
+                console.error("Failed to load COCO-SSD model", e);
+            }
+        }
+
         const warningEl = document.getElementById('faceWarning');
 
         // Clear logic if already running
@@ -4820,14 +4928,27 @@ Output: ${formatCodingValue(testCase.output)}${resultBlock}</pre>
                 try {
                 const returnTensors = false;
                 const predictions = await faceModel.estimateFaces(video, returnTensors);
+                
+                let cellPhoneDetected = false;
+                if (cocoSsdModel) {
+                    const objectPredictions = await cocoSsdModel.detect(video);
+                    for (const obj of objectPredictions) {
+                        if (obj.class === 'cell phone') {
+                            cellPhoneDetected = true;
+                            break;
+                        }
+                    }
+                }
 
-                // Advanced Face Analysis
+                // Advanced Face & Object Analysis
                 let warningMsg = "";
                 const videoWidth = video.videoWidth;
                 const videoHeight = video.videoHeight;
                 const margin = 20; // pixels from edge
 
-                if (predictions.length === 0) {
+                if (cellPhoneDetected) {
+                    warningMsg = "MOBILE PHONE DETECTED";
+                } else if (predictions.length === 0) {
                     warningMsg = "YOUR FACE IS NOT VISIBLE";
                 } else if (predictions.length > 1) {
                     warningMsg = "MULTIPLE FACES DETECTED";

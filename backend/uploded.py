@@ -314,8 +314,27 @@ def require_admin_capability(admin_id: str, capability: str, detail: str):
         raise HTTPException(status_code=403, detail=detail)
     return user
 
+from fastapi.exceptions import RequestValidationError
+from fastapi.responses import JSONResponse
+
 app = FastAPI()
 app.add_middleware(GZipMiddleware, minimum_size=1000)
+
+LAST_422_ERROR = None
+
+@app.exception_handler(RequestValidationError)
+async def validation_exception_handler(request, exc):
+    global LAST_422_ERROR
+    LAST_422_ERROR = {"errors": exc.errors(), "body": exc.body}
+    print(f"================ 422 ERROR ON {request.url.path} ================")
+    print("Errors:", exc.errors())
+    print("Body:", exc.body)
+    print("================================================================")
+    return JSONResponse(status_code=422, content={"detail": exc.errors()})
+
+@app.get("/admin/last-error")
+async def get_last_error():
+    return LAST_422_ERROR or {"status": "no errors"}
 
 @app.on_event("startup")
 def startup_event():
@@ -846,7 +865,7 @@ def analyze_resume_or_jd(text: str):
     try:
         raw_text = chat_completion(
             messages=[{"role": "user", "content": prompt}],
-            model="google/gemini-2.0-flash-001"
+            model="openai/gpt-4o-mini"
         )
         res = extract_json(raw_text)
         if res: return res
@@ -1073,9 +1092,9 @@ def extract_text_from_file(file_content: bytes, filename: str) -> str:
         except:
             raise HTTPException(status_code=400, detail=f"Unable to process file {filename}. Supported formats: PDF, DOCX, TXT")
 
-def generate_jd_questions(jd_text: str, ai_instructions: str = "") -> List[Dict[str, str]]:
+def generate_jd_questions(jd_text: str, ai_instructions: str = "", interview_type: str = "Technical") -> List[Dict[str, str]]:
     """Generate interview questions based on Job Description using AI."""
-    print("Generating questions from Job Description...")
+    print(f"Generating questions from Job Description for {interview_type} interview...")
     
     questions = [
         {
@@ -1089,19 +1108,38 @@ def generate_jd_questions(jd_text: str, ai_instructions: str = "") -> List[Dict[
 
     instruction_block = f"\n    Additional Admin Instructions to Follow:\n    {ai_instructions}\n" if ai_instructions else ""
 
-    prompt = f"""
-    You are an expert technical recruiter constructing a rigorous interview.{instruction_block}
-    
-    Job Description:
-    {jd_text[:4000]}
-    
-    Task:
-    1. EXTRACT top 5 critical technical keywords/skills from the Job Description (e.g., 'React', 'AWS', 'System Design').
-    2. GENERATE 6 specific interview questions testing these exact skills.
-       - The extracted keywords MUST be the focus of the questions.
-       - Do NOT ask generic "soft skill" questions unless the JD emphasizes them.
-       - Vary difficulty: Start with basic checks, move to scenario-based/hard problems.
-       - Act as a real human interviewer. NEVER say "According to the job description" or "You mentioned in your resume". Just ask the question directly.
+    if interview_type == "Non-Technical":
+        prompt = f"""
+        You are an expert Management Consultant and HR recruiter constructing a rigorous Case Study and Scenario-based interview.{instruction_block}
+        
+        Job Description:
+        {jd_text[:4000]}
+        
+        Task:
+        1. EXTRACT top 5 critical business, management, or functional keywords from the Job Description (e.g., 'Team Management', 'Stakeholder Communication', 'Agile Delivery', 'Conflict Resolution').
+        2. GENERATE 6 detailed Case Study and Scenario questions testing these exact keywords.
+           - Instead of generic "Tell me about a time" questions, present a hypothetical, complex business scenario or case study relevant to the job description and ask how they would solve it.
+           - The extracted keywords MUST be the central theme of the case studies.
+           - Do NOT ask technical coding or syntax questions. Focus on problem-solving, leadership, team management, and strategic thinking.
+           - Act as a real human interviewer. NEVER say "According to the job description". Just ask the question directly.
+        """
+    else:
+        prompt = f"""
+        You are an expert technical recruiter constructing a rigorous interview.{instruction_block}
+        
+        Job Description:
+        {jd_text[:4000]}
+        
+        Task:
+        1. EXTRACT top 5 critical technical keywords/skills from the Job Description (e.g., 'React', 'AWS', 'System Design').
+        2. GENERATE 6 specific interview questions testing these exact skills.
+           - The extracted keywords MUST be the focus of the questions.
+           - Do NOT ask generic "soft skill" questions unless the JD emphasizes them.
+           - Vary difficulty: Start with basic checks, move to scenario-based/hard problems.
+           - Act as a real human interviewer. NEVER say "According to the job description" or "You mentioned in your resume". Just ask the question directly.
+        """
+
+    prompt += f"""
     
     Return STRICT JSON format:
     {{
@@ -1186,7 +1224,7 @@ def generate_jd_questions(jd_text: str, ai_instructions: str = "") -> List[Dict[
 
     return questions
 
-def generate_mock_questions(text: str, source: str, num_questions: int = 6, resume_text: str = None, jd_text: str = None, hr_screening: dict = None, custom_questions: str = "", ai_instructions: str = "") -> List[Dict[str, str]]:
+def generate_mock_questions(text: str, source: str, num_questions: int = 6, resume_text: str = None, jd_text: str = None, hr_screening: dict = None, custom_questions: str = "", ai_instructions: str = "", interview_type: str = "Technical") -> List[Dict[str, str]]:
     """
     Generate structured interview questions.
     Structure: Self-Intro → Technical Middle → HR Screening (if enabled) → Closing
@@ -1251,9 +1289,9 @@ def generate_mock_questions(text: str, source: str, num_questions: int = 6, resu
             
         # 2. Add AI questions (Instructions and JD/Resume)
         if "resume" in source.lower():
-            ai_questions = generate_resume_questions(text)
+            ai_questions = generate_resume_questions(text) # Note: generate_resume_questions doesn't currently use AI, it generates from skills
         else:
-            ai_questions = generate_jd_questions(text, ai_instructions=ai_instructions)
+            ai_questions = generate_jd_questions(text, ai_instructions=ai_instructions, interview_type=interview_type)
         
         ai_added = 0
         for q in ai_questions:
@@ -1275,7 +1313,7 @@ def generate_mock_questions(text: str, source: str, num_questions: int = 6, resu
     # ── OFFLINE FALLBACK: Extract skills/projects and build timeline-based questions ──
     # Only run offline fallback if we don't have enough questions
     if len(middle_questions) < middle_count:
-        offline_questions = _generate_offline_questions(resume_text or "", jd_text or text, num_questions)
+        offline_questions = _generate_offline_questions(resume_text or "", jd_text or text, num_questions, interview_type)
         middle_questions.extend(offline_questions)
         print(f"📋 Offline generator added {len(offline_questions)} questions")
     
@@ -1313,7 +1351,7 @@ def generate_mock_questions(text: str, source: str, num_questions: int = 6, resu
     return all_questions
 
 
-def _generate_offline_questions(resume_text: str, jd_text: str, total_count: int) -> List[Dict[str, str]]:
+def _generate_offline_questions(resume_text: str, jd_text: str, total_count: int, interview_type: str = "Technical") -> List[Dict[str, str]]:
     """
     Intelligent Interview Coach Offline Generator
     Adapts based on Total Time (total_count) and Presence of Resume (Single vs Bulk).
@@ -1367,24 +1405,52 @@ def _generate_offline_questions(resume_text: str, jd_text: str, total_count: int
         questions.append({"question": "Could you provide a high-level overview of your background and your core expertise?", "difficulty": "Easy", "type": "Background", "category": "Experience"})
         questions.append({"question": "What is the single most important skill you bring to the table that aligns with this role?", "difficulty": "Easy", "type": "Motivation", "category": "Skills"})
         
-    # --- PHASE 2: SKILLS ---
-    skills_to_ask = resume_skills if resume_skills else jd_skills
-    if not skills_to_ask: skills_to_ask = generic_skills
-    skills_count = max(3, int(target * 0.25))
-    
-    for i in range(skills_count):
-        skill = skills_to_ask[i % len(skills_to_ask)]
-        if i % 3 == 0:
-            q = f"How would you rate your proficiency with {skill}? Can you describe a significant project where you utilized it to solve a complex problem?"
-        elif i % 3 == 1:
-            q = f"What are some common pitfalls or challenges you encounter when working with {skill}, and how do you mitigate them?"
-        else:
-            q = f"If you were to mentor a junior developer on {skill}, what core principles would you emphasize?"
-        questions.append({"question": q, "difficulty": "Medium", "type": "Technical", "category": f"{skill} Deep-Dive"})
+    # --- PHASE 2: SKILLS OR SCENARIOS ---
+    if interview_type == "Non-Technical":
+        non_tech_keywords = [
+            "Team Management", "Leadership", "Stakeholder Management", "Conflict Resolution", 
+            "Project Management", "Agile", "Budgeting", "Client Relations", 
+            "Strategic Planning", "Process Improvement", "Risk Management"
+        ]
+        jd_non_tech = [kw for kw in non_tech_keywords if kw.lower() in jd_lower]
+        if not jd_non_tech: jd_non_tech = ["Team Collaboration", "Problem Solving", "Time Management"]
+        
+        case_study_templates = [
+            "Imagine you are leading a critical project involving {skill}, but two key stakeholders strongly disagree on the direction. Walk me through your step-by-step strategy to resolve this.",
+            "You are tasked with improving our current approach to {skill} with a limited budget and a tight deadline. How do you plan your delivery?",
+            "Your team is underperforming in the area of {skill}. How would you diagnose the root cause and implement a turnaround plan?",
+            "A major client is unhappy with recent deliverables related to {skill}. How do you handle the immediate conversation and what is your remediation plan?",
+            "Describe a hypothetical scenario where {skill} processes break down entirely. What are your immediate actions to stabilize operations and communicate with leadership?"
+        ]
+        
+        skills_count = max(3, int(target * 0.25))
+        for i in range(skills_count):
+            skill = jd_non_tech[i % len(jd_non_tech)]
+            template = case_study_templates[i % len(case_study_templates)]
+            q = template.format(skill=skill)
+            questions.append({"question": q, "difficulty": "Medium", "type": "Behavioral", "category": f"{skill} Case Study"})
+    else:
+        skills_to_ask = resume_skills if resume_skills else jd_skills
+        if not skills_to_ask: skills_to_ask = generic_skills
+        skills_count = max(3, int(target * 0.25))
+        
+        for i in range(skills_count):
+            skill = skills_to_ask[i % len(skills_to_ask)]
+            if i % 3 == 0:
+                q = f"How would you rate your proficiency with {skill}? Can you describe a significant project where you utilized it to solve a complex problem?"
+            elif i % 3 == 1:
+                q = f"What are some common pitfalls or challenges you encounter when working with {skill}, and how do you mitigate them?"
+            else:
+                q = f"If you were to mentor a junior developer on {skill}, what core principles would you emphasize?"
+            questions.append({"question": q, "difficulty": "Medium", "type": "Technical", "category": f"{skill} Deep-Dive"})
 
     # --- PHASE 3: PROJECTS & EXPERIENCE ---
     projects_count = max(3, int(target * 0.25))
-    if has_resume:
+    if interview_type == "Non-Technical":
+        for i in range(projects_count):
+            q = hr_questions[(i + skills_count) % len(hr_questions)]
+            questions.append({"question": q, "difficulty": "Hard", "type": "Case Study", "category": "Scenario"})
+    elif has_resume:
         project_patterns = [r'(?:project|built|developed|created|designed)\s*[:\-]?\s*([A-Z][A-Za-z0-9\s\-]{3,30})']
         found_projects = []
         for pattern in project_patterns:
@@ -1472,7 +1538,7 @@ def _generate_hr_screening_questions(hr_screening: dict, jd_text: str) -> List[D
 
         raw = chat_completion(
             messages=[{"role": "user", "content": prompt}],
-            model="google/gemini-2.0-flash-001"
+            model="openai/gpt-4o-mini"
         )
         ai_questions = extract_json(raw)
         if ai_questions and isinstance(ai_questions, list) and len(ai_questions) > 0:
@@ -1559,7 +1625,7 @@ def _generate_hr_screening_questions(hr_screening: dict, jd_text: str) -> List[D
 
         raw = chat_completion(
             messages=[{"role": "user", "content": prompt}],
-            model="google/gemini-2.0-flash-001"
+            model="openai/gpt-4o-mini"
         )
         ai_questions = extract_json(raw)
         if ai_questions and isinstance(ai_questions, list) and len(ai_questions) > 0:
@@ -2029,9 +2095,11 @@ async def save_answer(
     question_id: int = Form(...),
     question_text: str = Form(...),
     answer_text: str = Form(...),
-    candidate_name: str = Form("Candidate")
+    candidate_name: str = Form("Candidate"),
+    time_spent_seconds: int = Form(0),
+    time_limit_seconds: int = Form(120),
 ):
-    print(f"💾 Saving answer for {question_id}...")
+    print(f"💾 Saving answer for {question_id} (time: {time_spent_seconds}s / {time_limit_seconds}s)...")
     
     # Get context
     context = ""
@@ -2049,8 +2117,14 @@ async def save_answer(
         except Exception as e:
             print(f"⚠️ Context fetch error: {e}")
 
-    # Use the robust analyze_answer function
-    ai_result = analyze_answer(question_text, answer_text, context)
+    # Use the robust analyze_answer function (now time-aware)
+    ai_result = analyze_answer(
+        question_text,
+        answer_text,
+        context,
+        time_spent_seconds=time_spent_seconds,
+        time_limit_seconds=time_limit_seconds,
+    )
 
     # Prepare keywords (handle list or string)
     keywords = ai_result.get("keywords", [])
@@ -2068,17 +2142,28 @@ async def save_answer(
         "question_text": question_text,
         "answer_text": answer_text,
         "ai_score": ai_result.get("overall_score", 0),
+        "content_score": ai_result.get("content_score", 0),
+        "relevance_score": ai_result.get("relevance_score", 0),
+        "time_score": ai_result.get("time_score", 0),
+        "time_spent_seconds": time_spent_seconds,
+        "time_limit_seconds": time_limit_seconds,
         "ai_feedback": ai_result.get("feedback", "No feedback"),
         "ai_keywords": keywords_str,
         "corrected_answer": ai_result.get("corrected_answer", "N/A"),
         "created_at": datetime.now(timezone.utc).isoformat()
     })
 
-    print("✅ Answer saved to DB.")
+    print(f"✅ Answer saved — Score: {ai_result.get('overall_score', 0)}/100 "
+          f"(content={ai_result.get('content_score',0)}, "
+          f"relevance={ai_result.get('relevance_score',0)}, "
+          f"time={ai_result.get('time_score',0)})")
 
     return {
         "status": "saved",
         "ai_score": ai_result.get("overall_score", 0),
+        "content_score": ai_result.get("content_score", 0),
+        "relevance_score": ai_result.get("relevance_score", 0),
+        "time_score": ai_result.get("time_score", 0),
         "ai_feedback": ai_result.get("feedback", "")
     }
 
@@ -2154,8 +2239,9 @@ def start_coding_round(req: CodingRoundStartRequest):
             "resumed": True,
         }
 
+    interview_type = interview.get("interview_type", "Technical")
     profile_text = interview.get("profile_text", "")
-    task = generate_coding_task(profile_text, answers_data)
+    task = generate_coding_task(profile_text, answers_data, interview_type)
     coding_round = {
         "status": "active",
         "task": task,
@@ -2402,18 +2488,15 @@ def get_interview_details(link_id: str):
         rec_row = interviews_collection.find_one({"id": actual_interview_id})
         if not raw_path and rec_row and rec_row.get("recording_path"):
             raw_path = rec_row["recording_path"]
-            # Verify file exists on disk (handle ephemeral storage case)
             if raw_path.startswith("http"):
                 recording_url = raw_path
             elif os.path.exists(raw_path):
-                # Convert absolute path to a relative URL path
                 raw_path_fixed = raw_path.replace("\\", "/")
-                # Extract the part starting with "uploads/"
                 idx = raw_path_fixed.find("uploads/")
                 if idx != -1:
                     recording_url = raw_path_fixed[idx:]
             else:
-                print(f"⚠️ Recording file not found on disk: {raw_path}")
+                print(f"Recording file not found on disk: {raw_path}")
 
     if raw_path and not recording_url:
         if raw_path.startswith("http"):
@@ -2433,25 +2516,27 @@ def get_interview_details(link_id: str):
 
     if actual_interview_id:
         rows = answers_collection.find({"interview_id": actual_interview_id}).sort("question_id", 1)
-
         for row in rows:
             tab_sw = row.get("tab_switches") or 0
             face_al = row.get("face_alerts") or 0
             total_tab_switches += tab_sw
             total_face_alerts += face_al
             total_time += (row.get("time_spent_seconds") or 0)
-
             results.append({
                 "question_id": row.get("question_id"),
                 "question_text": row.get("question_text"),
                 "answer_text": row.get("answer_text") or "(No answer yet)",
                 "ai_score": row.get("ai_score"),
+                "content_score": row.get("content_score"),
+                "relevance_score": row.get("relevance_score"),
+                "time_score": row.get("time_score"),
+                "time_spent_seconds": row.get("time_spent_seconds") or 0,
+                "time_limit_seconds": row.get("time_limit_seconds"),
                 "ai_feedback": row.get("ai_feedback") or "No feedback provided",
                 "corrected_answer": row.get("corrected_answer") or "N/A",
                 "wpm": round(row.get("wpm") or 0, 1),
                 "pause_count": row.get("pause_count") or 0,
                 "filler_count": row.get("filler_count") or 0,
-                "time_spent_seconds": row.get("time_spent_seconds") or 0,
                 "keyword_match_pct": round(row.get("keyword_match_pct") or 0, 1),
                 "tab_switches": tab_sw,
                 "face_alerts": face_al
@@ -2487,7 +2572,7 @@ def get_interview_details(link_id: str):
         except Exception as e:
             print(f"Summary cache error: {e}")
 
-    return {
+    response_payload = {
         "interview_id": link_id,
         "actual_interview_id": actual_interview_id,
         "candidate_name": candidate_name or "Candidate",
@@ -2505,6 +2590,13 @@ def get_interview_details(link_id: str):
         },
         "answers": results
     }
+    
+    if actual_interview_id:
+        interview_record = interviews_collection.find_one({"id": actual_interview_id})
+        if interview_record and interview_record.get("coding_round"):
+            response_payload["coding_round"] = interview_record.get("coding_round")
+            
+    return response_payload
 
 class AnalyzeRequest(BaseModel):
     interview_id: Optional[str] = None
@@ -2762,6 +2854,7 @@ class CreateSession(BaseModel):
     admin_id: str
     interview_duration: int = 30  # minutes
     record_video: bool = True
+    interview_type: str = "Technical"
     custom_email_html: str = ""  # Task 1: Admin-editable email content
     scheduled_start: str = ""  # Task 4: ISO datetime for scheduled start
     scheduled_end: str = ""    # Task 4: ISO datetime for scheduled end
@@ -3636,14 +3729,29 @@ def extract_info_from_resume(text: str) -> Dict:
                 "role": "user",
                 "content": text[:5000] # Use first block of text
             }],
-            model="google/gemini-2.0-flash-001"
+            model="openai/gpt-4o-mini"
         )
         res = extract_json(raw)
         if res: return res
         return {"name": None, "email": None}
     except Exception as e:
         print(f"Error extracting candidate info: {e}")
-        return {"name": None, "email": None}
+        # OFFLINE FALLBACK: Use regex to extract email and heuristics for name
+        import re
+        email = None
+        email_match = re.search(r'[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}', text)
+        if email_match:
+            email = email_match.group(0)
+            
+        name = None
+        lines = [line.strip() for line in text.split('\n') if line.strip()]
+        # First non-empty line that doesn't look like an email or phone
+        for line in lines[:10]:
+            if len(line) < 40 and not re.search(r'[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}', line) and not re.search(r'\d{10}', line):
+                name = line
+                break
+        
+        return {"name": name, "email": email}
 
 @app.post("/admin/parse-resume")
 async def parse_resume(file: UploadFile = File(...)):
@@ -3688,6 +3796,7 @@ async def create_session(data: CreateSession):
         "created_at": now.isoformat(),
         "expires_at": expires_at,
         "interview_duration": data.interview_duration,
+        "interview_type": data.interview_type,
         "record_video": data.record_video,
         "status": "pending",
         "hr_screening": data.hr_screening.dict(),
@@ -3731,6 +3840,7 @@ class BulkCreateSession(BaseModel):
     admin_id: str
     interview_duration: int = 30
     record_video: bool = True  # Global default
+    interview_type: str = "Technical"
     custom_email_html: str = ""  # Task 1: Optional admin-edited email
     scheduled_start: str = ""  # Task 4
     scheduled_end: str = ""    # Task 4
@@ -3781,6 +3891,7 @@ async def bulk_create_sessions(data: BulkCreateSession):
                 "created_at": now.isoformat(),
                 "expires_at": (scheduled_expiry.isoformat() if scheduled_expiry else (now + timedelta(hours=24)).isoformat()),
                 "interview_duration": data.interview_duration,
+                "interview_type": data.interview_type,
                 "record_video": candidate.record_video,  # Task 5: Per-candidate video
                 "status": "pending",
                 "hr_screening": data.hr_screening.dict(),
@@ -4023,6 +4134,7 @@ async def start_session_interview(link_id: str = Form(...)):
     resume_text = row.get("resume_text")
     job_description = row.get("job_description")
     status = row.get("status")
+    interview_type = row.get("interview_type", "Technical")
     num_questions = row.get("num_questions")
     raw_duration = row.get("interview_duration")
     try:
@@ -4157,6 +4269,7 @@ async def start_session_interview(link_id: str = Form(...)):
                 "total_questions": len(questions),
                 "candidate_name": candidate_name,
                 "interview_duration": interview_duration,
+                "interview_type": interview_type,
                 "record_video": row.get("record_video", True)
             }
         
@@ -4191,7 +4304,8 @@ async def start_session_interview(link_id: str = Form(...)):
         jd_text=job_description,
         hr_screening=hr_screening,
         custom_questions=custom_questions_text,
-        ai_instructions=ai_instructions_text
+        ai_instructions=ai_instructions_text,
+        interview_type=interview_type
     )
     
     if not questions:
@@ -4242,6 +4356,7 @@ async def start_session_interview(link_id: str = Form(...)):
         "total_questions": len(questions),
         "candidate_name": candidate_name,
         "interview_duration": interview_duration,
+        "interview_type": interview_type,
         "record_video": row.get("record_video", True)
     }
 
@@ -4781,6 +4896,78 @@ async def delete_tenant(master_id: str, tenant_id: str):
     }
 
 # 4. Modify existing Admin Login endpoint to return subscription details
+class FirebaseAuthRequest(BaseModel):
+    email: str
+    name: str = ""
+
+@app.post("/admin/firebase-auth")
+async def firebase_auth(data: FirebaseAuthRequest):
+    normalized_email = data.email.strip().lower()
+    
+    # Try email match first, then username match
+    user = admins_collection.find_one({"email": normalized_email, "role": {"$ne": "master"}})
+    if not user:
+        user = admins_collection.find_one({"username": normalized_email, "role": {"$ne": "master"}})
+    if not user:
+        user = admins_collection.find_one({"email": normalized_email})
+    if not user:
+        user = admins_collection.find_one({"username": normalized_email})
+        
+    if not user:
+        # Register new admin with Free Trial
+        now = datetime.now(timezone.utc)
+        plan_info = plans_collection.find_one({"plan_name": "Free Trial"})
+        duration = plan_info.get("duration_days", 15) if plan_info else 15
+        expiry = now + timedelta(days=duration)
+        
+        new_admin = {
+            "username": normalized_email,
+            "email": normalized_email,
+            "name": data.name or normalized_email.split("@")[0],
+            "password": hash_password(str(uuid.uuid4())), # random password, they use firebase
+            "role": "tenant",
+            "subscription_plan": "Free Trial",
+            "subscription_expiry": expiry.isoformat(),
+            "created_at": now.isoformat()
+        }
+        result = admins_collection.insert_one(new_admin)
+        user = admins_collection.find_one({"_id": result.inserted_id})
+        
+    # Check login_enabled
+    if user.get("login_enabled") == False:
+        return {
+            "status": "blocked",
+            "message": "Your account login has been stopped by the administrator. Please contact support.",
+        }
+        
+    plan_context = get_admin_plan_context(user)
+    plan = plan_context["plan_label"]
+    expiry = user.get("subscription_expiry")
+            
+    # If expired, block
+    if plan_context["is_expired"]:
+        return {
+            "status": "expired",
+            "message": f"Your {plan} subscription has expired. Please contact the administrator.",
+            "plan": plan
+        }
+        
+    return {
+        "status": "success",
+        "admin_id": str(user["_id"]),
+        "username": user["username"],
+        "email": user.get("email", ""),
+        "name": user.get("name", user.get("username", "")),
+        "role": user.get("role", "tenant"),
+        "subscription_plan": plan,
+        "subscription_plan_key": plan_context["plan_key"],
+        "subscription_expiry": expiry,
+        "subscription_days_remaining": plan_context["days_remaining"],
+        "subscription_warning": plan_context["warning"],
+        "subscription_warning_message": plan_context["warning_message"],
+        "plan_capabilities": plan_context["capabilities"],
+    }
+
 @app.post("/admin/login")
 async def admin_login(data: AdminLogin):
     # Try username match first, then email match (for self-registered users)
@@ -5042,7 +5229,7 @@ async def create_razorpay_order(data: RazorpayOrderRequest):
         return {
             "status": "success",
             "key": key_id,
-            "company_name": os.getenv("APP_BRAND_NAME", "Mock Interview"),
+            "company_name": os.getenv("APP_BRAND_NAME", "Hire IQ"),
             "description": f"{plan_info['plan_name']} plan for {plan_info.get('duration_days', 30)} days",
             "order": {
                 "id": order["id"],
@@ -5380,9 +5567,9 @@ if __name__ == "__main__":
     if port_to_use != DEFAULT_PORT:
         print(f"Port {DEFAULT_PORT} is in use; starting server on available port {port_to_use} instead.")
 
-    # Check for SSL certificates in the forenten folder
-    cert_path = r"c:\Users\sagar\Downloads\mock-interview\forenten\cert.pem"
-    key_path = r"c:\Users\sagar\Downloads\mock-interview\forenten\key.pem"
+    base_dir = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+    cert_path = os.path.join(base_dir, "forenten", "cert.pem")
+    key_path = os.path.join(base_dir, "forenten", "key.pem")
     
     if os.path.exists(cert_path) and os.path.exists(key_path):
         print(f"🚀 Starting HTTPS server on port {port_to_use}")

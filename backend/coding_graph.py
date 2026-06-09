@@ -187,16 +187,104 @@ def _llm_json(system_prompt: str, user_prompt: str, fallback: Dict[str, Any]) ->
         return fallback
 
 
-def generate_coding_task(profile_text: str, answers_data: List[Dict[str, Any]]) -> Dict[str, Any]:
+def _offline_coding_fallback(profile_text: str) -> Dict[str, Any]:
+    profile_lower = (profile_text or "").lower()
+    
+    if "sql" in profile_lower or "database" in profile_lower:
+        signature = "def find_duplicates(records):"
+        return {
+            "title": "Find Duplicate Records",
+            "description": "Write a function that identifies duplicate email addresses from a list of user records.",
+            "input_format": "A list of strings representing emails.",
+            "output_format": "A list of strings containing only the duplicate emails.",
+            "constraints": ["O(N) time complexity", "O(N) space complexity"],
+            "examples": [{"input": '["a@x.com", "b@x.com", "a@x.com"]', "output": '["a@x.com"]', "explanation": "a@x.com appears twice"}],
+            "evaluation_focus": ["Correctness", "Performance"],
+            "starter_function_signature": signature,
+            "function_name": _extract_function_name(signature),
+            "difficulty": "Easy",
+            "recommended_language": "python",
+            "timebox_minutes": 20,
+            "test_cases": [
+                {"id": 1, "input": [["a@x.com", "b@x.com", "a@x.com"]], "expected": ["a@x.com"], "visible": True},
+                {"id": 2, "input": [["a", "b", "c"]], "expected": [], "visible": True},
+                {"id": 3, "input": [["a", "a", "a"]], "expected": ["a"], "visible": True},
+                {"id": 4, "input": [["x", "y", "z", "x"]], "expected": ["x"], "visible": False},
+                {"id": 5, "input": [[]], "expected": [], "visible": False},
+                {"id": 6, "input": [["1", "2", "2"]], "expected": ["2"], "visible": False},
+                {"id": 7, "input": [["1", "1", "2", "2"]], "expected": ["1", "2"], "visible": False},
+            ],
+        }
+    elif "react" in profile_lower or "javascript" in profile_lower or "frontend" in profile_lower:
+        signature = "def debounce_simulation(calls, delay):"
+        return {
+            "title": "Debounce Simulation",
+            "description": "Write a function that takes an array of timestamps (integers) and a delay. Return the number of times a debounced function would actually execute.",
+            "input_format": "A list of integers (timestamps) and an integer delay.",
+            "output_format": "An integer representing the execution count.",
+            "constraints": ["Assume timestamps are sorted in ascending order."],
+            "examples": [{"input": "[10, 20, 100], 50", "output": "2", "explanation": "Calls at 10 and 20 are grouped, call at 100 is separate."}],
+            "evaluation_focus": ["Correctness", "Understanding of Debounce"],
+            "starter_function_signature": signature,
+            "function_name": _extract_function_name(signature),
+            "difficulty": "Medium",
+            "recommended_language": "javascript",
+            "timebox_minutes": 25,
+            "test_cases": [
+                {"id": 1, "input": [[10, 20, 100], 50], "expected": 2, "visible": True},
+                {"id": 2, "input": [[10, 20, 30], 50], "expected": 1, "visible": True},
+                {"id": 3, "input": [[], 50], "expected": 0, "visible": True},
+                {"id": 4, "input": [[10, 60, 110], 50], "expected": 3, "visible": False},
+                {"id": 5, "input": [[10, 10, 10], 5], "expected": 1, "visible": False},
+                {"id": 6, "input": [[0, 5, 10, 15, 20], 100], "expected": 1, "visible": False},
+                {"id": 7, "input": [[100, 200, 300], 10], "expected": 3, "visible": False},
+            ],
+        }
+    else:
+        return _default_task()
+
+def generate_coding_task(profile_text: str, answers_data: List[Dict[str, Any]], interview_type: str = "Technical") -> Dict[str, Any]:
     answers_summary = "\n".join(
         f"- Q: {a.get('question_text', '')}\n  A: {_truncate(a.get('answer_text', ''), 220)}"
         for a in answers_data[-5:]
     )
-    fallback = _default_task()
-    system_prompt = (
-        "You design realistic live-coding interview tasks. Return valid JSON only."
-    )
-    user_prompt = f"""
+    fallback = _offline_coding_fallback(profile_text)
+    
+    if interview_type == "Non-Technical":
+        system_prompt = (
+            "You design realistic written business and management case study tasks. Return valid JSON only."
+        )
+        user_prompt = f"""
+Create a single written case study round tailored to this candidate.
+
+Profile:
+{_truncate(profile_text, 2500)}
+
+Recent interview answers:
+{answers_summary or "- No answers available"}
+
+Return JSON with:
+- title
+- description (The detailed scenario the candidate must read and respond to)
+- input_format (Leave empty)
+- output_format (Leave empty)
+- constraints (Leave empty or provide guidelines like "Max 500 words")
+- examples (Empty array)
+- evaluation_focus (array of strings, e.g., ["Strategic thinking", "Problem solving"])
+- starter_function_signature (Empty string)
+- function_name (Empty string)
+- difficulty
+- recommended_language (Must be exactly "markdown")
+- timebox_minutes
+- test_cases (Must be an empty array: [])
+
+Make the task a deep business or management scenario that requires the candidate to type out a structured, written strategy. Do NOT ask for code.
+"""
+    else:
+        system_prompt = (
+            "You design realistic live-coding interview tasks. Return valid JSON only."
+        )
+        user_prompt = f"""
 Create a single coding round tailored to this candidate.
 
 Profile:
@@ -222,6 +310,7 @@ Return JSON with:
 
 Make the task a pure function problem using only cross-language friendly inputs and outputs such as strings, numbers, booleans, or flat arrays. It should be solvable in 20-30 minutes and suitable for Python, JavaScript, Java, or C.
 """
+
     result = _llm_json(system_prompt, user_prompt, fallback)
     return _normalize_task(result)
 

@@ -10,6 +10,10 @@ class VideoRecorder {
         this.transcriptionBox = document.getElementById('transcriptionBox');
         this.transcriptionDisplay = document.getElementById('transcription');
 
+        // Silence detection variables
+        this.silenceTimeout = null;
+        this.SILENCE_DURATION = 10000; // 10 seconds
+
         // Initialize Speech Recognition
         if ('webkitSpeechRecognition' in window || 'SpeechRecognition' in window) {
             const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
@@ -45,6 +49,12 @@ class VideoRecorder {
                     } else {
                         interimChunk += event.results[i][0].transcript;
                     }
+                }
+
+                // Reset silence timeout whenever speech is detected
+                if (this.silenceTimeout) {
+                    clearTimeout(this.silenceTimeout);
+                    this.startSilenceTimer();
                 }
 
                 // 1. Update the MAIN TEXT AREA
@@ -135,11 +145,25 @@ class VideoRecorder {
 
             this.showStatus('Recording started. Speak clearly.', 'info');
 
+            // Start silence detection timer
+            this.startSilenceTimer();
+
         } catch (err) {
             console.error(err);
             this.showError('Microphone permission denied.');
             throw err;
         }
+    }
+
+    startSilenceTimer() {
+        if (this.silenceTimeout) clearTimeout(this.silenceTimeout);
+        this.silenceTimeout = setTimeout(() => {
+            console.log("Silence detected for 10 seconds. Auto-submitting...");
+            this.showStatus("Silence detected. Moving to next question...", "warning");
+            if (typeof window.nextQuestion === 'function') {
+                window.nextQuestion();
+            }
+        }, this.SILENCE_DURATION);
     }
 
     visualizeAudio(stream) {
@@ -203,6 +227,11 @@ class VideoRecorder {
             this.isRecording = false;
             this.visualizerActive = false; // Stop Visualizer Loop
             this.transcriptionDisplay.textContent = "Stopping..."; // Immediate UI Feedback
+
+            if (this.silenceTimeout) {
+                clearTimeout(this.silenceTimeout);
+                this.silenceTimeout = null;
+            }
 
             // Stop Speech Recognition
             if (this.recognition) {

@@ -4,7 +4,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Admin Panel — Mock Interview</title>
+    <title>Admin Panel — Hire IQ</title>
     <link rel="icon"
         href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><path d='M50 5L10 25v30c0 25 40 40 40 40s40-15 40-40V25L50 5z' fill='%236366f1'/></svg>">
     <link rel="preconnect" href="https://fonts.googleapis.com">
@@ -72,12 +72,47 @@
         }
 
         /* ── Accent colour themes ── */
-        [data-accent="teal"]   { --primary: #0d9488; --primary-dark: #0f766e; --primary-light: #2dd4bf; --accent-gradient: linear-gradient(180deg,#134e4a 0%,#0d9488 45%,#5eead4 100%); }
-        [data-accent="indigo"] { --primary: #6366f1; --primary-dark: #4f46e5; --primary-light: #818cf8; --accent-gradient: linear-gradient(180deg,#1e1b4b 0%,#6366f1 45%,#a5b4fc 100%); }
-        [data-accent="purple"] { --primary: #9333ea; --primary-dark: #7e22ce; --primary-light: #c084fc; --accent-gradient: linear-gradient(180deg,#2e1065 0%,#9333ea 45%,#d8b4fe 100%); }
-        [data-accent="red"]    { --primary: #e11d48; --primary-dark: #be123c; --primary-light: #fb7185; --accent-gradient: linear-gradient(180deg,#450a0a 0%,#e11d48 45%,#fda4af 100%); }
-        [data-accent="green"]  { --primary: #16a34a; --primary-dark: #15803d; --primary-light: #4ade80; --accent-gradient: linear-gradient(180deg,#052e16 0%,#16a34a 45%,#86efac 100%); }
-        [data-accent="blue"]   { --primary: #2563eb; --primary-dark: #1d4ed8; --primary-light: #60a5fa; --accent-gradient: linear-gradient(180deg,#0d1b36 0%,#2563eb 45%,#93c5fd 100%); }
+        [data-accent="teal"] {
+            --primary: #0d9488;
+            --primary-dark: #0f766e;
+            --primary-light: #2dd4bf;
+            --accent-gradient: linear-gradient(180deg, #134e4a 0%, #0d9488 45%, #5eead4 100%);
+        }
+
+        [data-accent="indigo"] {
+            --primary: #6366f1;
+            --primary-dark: #4f46e5;
+            --primary-light: #818cf8;
+            --accent-gradient: linear-gradient(180deg, #1e1b4b 0%, #6366f1 45%, #a5b4fc 100%);
+        }
+
+        [data-accent="purple"] {
+            --primary: #9333ea;
+            --primary-dark: #7e22ce;
+            --primary-light: #c084fc;
+            --accent-gradient: linear-gradient(180deg, #2e1065 0%, #9333ea 45%, #d8b4fe 100%);
+        }
+
+        [data-accent="red"] {
+            --primary: #e11d48;
+            --primary-dark: #be123c;
+            --primary-light: #fb7185;
+            --accent-gradient: linear-gradient(180deg, #450a0a 0%, #e11d48 45%, #fda4af 100%);
+        }
+
+        [data-accent="green"] {
+            --primary: #16a34a;
+            --primary-dark: #15803d;
+            --primary-light: #4ade80;
+            --accent-gradient: linear-gradient(180deg, #052e16 0%, #16a34a 45%, #86efac 100%);
+        }
+
+        [data-accent="blue"] {
+            --primary: #2563eb;
+            --primary-dark: #1d4ed8;
+            --primary-light: #60a5fa;
+            --accent-gradient: linear-gradient(180deg, #0d1b36 0%, #2563eb 45%, #93c5fd 100%);
+        }
 
         [data-theme="light"] .login-kicker {
             background: rgba(255, 255, 255, 0.88);
@@ -1614,7 +1649,8 @@
             color: var(--primary);
             font-weight: 700;
             border-radius: 5px;
-            margin-right: -1rem; /* Extend into the right space slightly */
+            margin-right: -1rem;
+            /* Extend into the right space slightly */
             padding-right: 2rem;
             box-shadow: 0 8px 20px rgba(0, 0, 0, 0.15);
             position: relative;
@@ -2283,35 +2319,40 @@
             display: flex;
             align-items: center;
             gap: 6px;
-            background: rgba(255,255,255,0.15);
+            background: rgba(255, 255, 255, 0.15);
             border-radius: 30px;
             padding: 4px 10px;
-            border: 1px solid rgba(255,255,255,0.2);
+            border: 1px solid rgba(255, 255, 255, 0.2);
         }
+
         .color-dot {
             width: 18px;
             height: 18px;
             border-radius: 50%;
             cursor: pointer;
-            border: 2px solid rgba(255,255,255,0.4);
+            border: 2px solid rgba(255, 255, 255, 0.4);
             transition: transform 0.18s, box-shadow 0.18s, border-color 0.18s;
             flex-shrink: 0;
         }
+
         .color-dot:hover {
             transform: scale(1.25);
             border-color: #fff;
-            box-shadow: 0 0 0 3px rgba(255,255,255,0.3);
+            box-shadow: 0 0 0 3px rgba(255, 255, 255, 0.3);
         }
+
         .color-dot.active-dot {
             border-color: #fff;
-            box-shadow: 0 0 0 3px rgba(255,255,255,0.5);
+            box-shadow: 0 0 0 3px rgba(255, 255, 255, 0.5);
             transform: scale(1.15);
         }
+
         .topbar-actions {
             display: flex;
             align-items: center;
             gap: 16px;
         }
+
         .welcome-copy {
             font-size: 0.9rem;
             color: #4b5563;
@@ -2345,7 +2386,7 @@
         <div class="login-hero">
             <div class="hero-nav-wrap">
                 <div class="hero-nav">
-                    <a href="#" class="hero-logo">Mock Interview</a>
+                    <a href="#" class="hero-logo">Hire IQ</a>
                     <nav class="hero-nav-links">
                         <!-- Links moved to dashboard sidebar -->
                     </nav>
@@ -2364,7 +2405,8 @@
                             performance from one calm admin workspace built for fast hiring teams.</p>
 
                         <div class="hero-cta-stack login-rise" data-delay="360" data-duration="800">
-                            <button class="hero-primary-btn" type="button" onclick="focusLoginForm()" style="width: auto; padding: 1rem 3rem;">
+                            <button class="hero-primary-btn" type="button" onclick="focusLoginForm()"
+                                style="width: auto; padding: 1rem 3rem;">
                                 Admin Sign In
                             </button>
 
@@ -2426,9 +2468,9 @@
                         </div>
 
                         <div class="forgot-password"
-                            style="display: flex; justify-content: flex-end; align-items: center; width: 100%;">
-
-                            <a onclick="openResetModal()">Forgot Password?</a>
+                            style="display: flex; justify-content: flex-end; align-items: center; width: 100%; margin-bottom: 10px;">
+                            <a onclick="openForgotPasswordFlow()"
+                                style="cursor:pointer; color:#3b82f6; font-size:0.9rem;">Forgot Password?</a>
                         </div>
 
                         <button class="btn-login" id="loginBtn" onclick="login()">
@@ -2444,13 +2486,14 @@
 
     <!-- ==================== DASHBOARD SECTION ==================== -->
     <div id="dashboardSection" class="hidden">
-            <!-- Sidebar (Left Fixed) -->
+        <!-- Sidebar (Left Fixed) -->
         <div class="sidebar-wrapper">
             <div class="sidebar-header">
                 <div class="brand-icon"
                     style="background:#3b82f6;color:white;width:32px;height:32px;display:flex;align-items:center;justify-content:center;border-radius:8px;">
-                    <i class="fas fa-shield-halved"></i></div>
-                <div>Mock Interview</div>
+                    <i class="fas fa-shield-halved"></i>
+                </div>
+                <div>Hire IQ</div>
             </div>
             <div class="sidebar-nav" id="tenantSidebarNav">
                 <button class="nav-btn active" onclick="switchView('overview')" id="nav-btn-overview"><i
@@ -2471,21 +2514,38 @@
                         class="fas fa-broadcast-tower"></i> Live Results</button>
             </div>
             <div class="sidebar-nav hidden" id="masterSidebarNav">
-                <div style="font-size: 0.7rem; color: rgba(255,255,255,0.5); font-weight: 800; text-transform: uppercase; margin: 1rem 0 0.5rem 1rem; letter-spacing: 1px;">Master Control</div>
-                <button class="nav-btn active" id="master-nav-dashboard" onclick="showMasterDashboard(); loadMasterTenants();"><i class="fas fa-gauge-high"></i> Dashboard</button>
-                <button class="nav-btn" id="master-nav-subscribers" onclick="showMasterDashboard(); loadMasterTenants();"><i class="fas fa-building-user"></i> Subscribers</button>
-                <button class="nav-btn" onclick="scrollToCreateTenant()"><i class="fas fa-user-plus"></i> Create Tenant</button>
-                
-                <div style="font-size: 0.7rem; color: rgba(255,255,255,0.5); font-weight: 800; text-transform: uppercase; margin: 1.5rem 0 0.5rem 1rem; letter-spacing: 1px;">Admin Features</div>
-                <button class="nav-btn" onclick="showMasterAdminView('overview')" id="nav-master-overview"><i class="fas fa-chart-pie"></i> Overview Dashboard</button>
-                <button class="nav-btn" onclick="showMasterAdminView('create')" id="nav-master-create"><i class="fas fa-plus-circle"></i> Create Interview</button>
-                <button class="nav-btn" onclick="showMasterAdminView('qualified')" id="nav-master-qualified"><i class="fas fa-user-check"></i> Qualified Candidates</button>
-                <button class="nav-btn" onclick="showMasterAdminView('unqualified')" id="nav-master-unqualified"><i class="fas fa-user-slash"></i> Rejected Candidates</button>
-                <button class="nav-btn" onclick="showMasterAdminView('deactivated')" id="nav-master-deactivated"><i class="fas fa-user-minus"></i> Deactivated Candidates</button>
-                <button class="nav-btn" onclick="showMasterAdminView('settings')" id="nav-master-settings"><i class="fas fa-cog"></i> Profile Settings</button>
-                
+                <div
+                    style="font-size: 0.7rem; color: rgba(255,255,255,0.5); font-weight: 800; text-transform: uppercase; margin: 1rem 0 0.5rem 1rem; letter-spacing: 1px;">
+                    Master Control</div>
+                <button class="nav-btn active" id="master-nav-dashboard"
+                    onclick="showMasterDashboard(); loadMasterTenants();"><i class="fas fa-gauge-high"></i>
+                    Dashboard</button>
+                <button class="nav-btn" id="master-nav-subscribers"
+                    onclick="showMasterDashboard(); loadMasterTenants();"><i class="fas fa-building-user"></i>
+                    Subscribers</button>
+                <button class="nav-btn" onclick="scrollToCreateTenant()"><i class="fas fa-user-plus"></i> Create
+                    Tenant</button>
+
+                <div
+                    style="font-size: 0.7rem; color: rgba(255,255,255,0.5); font-weight: 800; text-transform: uppercase; margin: 1.5rem 0 0.5rem 1rem; letter-spacing: 1px;">
+                    Admin Features</div>
+                <button class="nav-btn" onclick="showMasterAdminView('overview')" id="nav-master-overview"><i
+                        class="fas fa-chart-pie"></i> Overview Dashboard</button>
+                <button class="nav-btn" onclick="showMasterAdminView('create')" id="nav-master-create"><i
+                        class="fas fa-plus-circle"></i> Create Interview</button>
+                <button class="nav-btn" onclick="showMasterAdminView('qualified')" id="nav-master-qualified"><i
+                        class="fas fa-user-check"></i> Qualified Candidates</button>
+                <button class="nav-btn" onclick="showMasterAdminView('unqualified')" id="nav-master-unqualified"><i
+                        class="fas fa-user-slash"></i> Rejected Candidates</button>
+                <button class="nav-btn" onclick="showMasterAdminView('deactivated')" id="nav-master-deactivated"><i
+                        class="fas fa-user-minus"></i> Deactivated Candidates</button>
+                <button class="nav-btn" onclick="showMasterAdminView('settings')" id="nav-master-settings"><i
+                        class="fas fa-cog"></i> Profile Settings</button>
+
                 <div class="master-sidebar-separator"></div>
-                <button class="nav-btn" onclick="showLiveResultsModal()" style="background: rgba(16, 185, 129, 0.1); color: #10b981;"><i class="fas fa-broadcast-tower"></i> Live Monitor</button>
+                <button class="nav-btn" onclick="showLiveResultsModal()"
+                    style="background: rgba(16, 185, 129, 0.1); color: #10b981;"><i class="fas fa-broadcast-tower"></i>
+                    Live Monitor</button>
             </div>
         </div>
 
@@ -2500,205 +2560,255 @@
                 <div class="topbar-actions">
                     <!-- Color Switcher -->
                     <div class="color-switcher" title="Change accent color">
-                        <div class="color-dot" id="dot-teal"   style="background:#0d9488" onclick="setAccent('teal')"   title="Teal"></div>
-                        <div class="color-dot" id="dot-indigo" style="background:#6366f1" onclick="setAccent('indigo')" title="Indigo"></div>
-                        <div class="color-dot" id="dot-purple" style="background:#9333ea" onclick="setAccent('purple')" title="Purple"></div>
-                        <div class="color-dot" id="dot-red"    style="background:#e11d48" onclick="setAccent('red')"    title="Red"></div>
-                        <div class="color-dot" id="dot-green"  style="background:#16a34a" onclick="setAccent('green')"  title="Green"></div>
-                        <div class="color-dot" id="dot-blue"   style="background:#2563eb" onclick="setAccent('blue')"   title="Blue"></div>
+                        <div class="color-dot" id="dot-teal" style="background:#0d9488" onclick="setAccent('teal')"
+                            title="Teal"></div>
+                        <div class="color-dot" id="dot-indigo" style="background:#6366f1" onclick="setAccent('indigo')"
+                            title="Indigo"></div>
+                        <div class="color-dot" id="dot-purple" style="background:#9333ea" onclick="setAccent('purple')"
+                            title="Purple"></div>
+                        <div class="color-dot" id="dot-red" style="background:#e11d48" onclick="setAccent('red')"
+                            title="Red"></div>
+                        <div class="color-dot" id="dot-green" style="background:#16a34a" onclick="setAccent('green')"
+                            title="Green"></div>
+                        <div class="color-dot" id="dot-blue" style="background:#2563eb" onclick="setAccent('blue')"
+                            title="Blue"></div>
                     </div>
-                    <div id="subscriptionPlanBadge" style="display:none; align-items:center; gap:8px; background:rgba(13,148,136,0.12); color:#0f766e; border:1px solid rgba(13,148,136,0.24); border-radius:999px; padding:8px 12px; font-size:0.8rem; font-weight:700; white-space:nowrap;"></div>
+                    <div id="subscriptionPlanBadge"
+                        style="display:none; align-items:center; gap:8px; background:rgba(13,148,136,0.12); color:#0f766e; border:1px solid rgba(13,148,136,0.24); border-radius:999px; padding:8px 12px; font-size:0.8rem; font-weight:700; white-space:nowrap;">
+                    </div>
                     <span class="welcome-copy">Welcome back, <strong id="adminName">Admin</strong></span>
                     <button class="btn-logout" onclick="logout()"><i class="fas fa-power-off"></i> Logout</button>
                 </div>
             </div>
-            <div id="subscriptionAlertBanner" class="hidden" style="margin-top:1rem; padding:0.95rem 1.1rem; border-radius:16px; border:1px solid rgba(245,158,11,0.3); background:rgba(245,158,11,0.12); color:#92400e; font-size:0.92rem; font-weight:600;"></div>
+            <div id="subscriptionAlertBanner" class="hidden"
+                style="margin-top:1rem; padding:0.95rem 1.1rem; border-radius:16px; border:1px solid rgba(245,158,11,0.3); background:rgba(245,158,11,0.12); color:#92400e; font-size:0.92rem; font-weight:600;">
+            </div>
 
             <!-- Scrollable Independent Page Content -->
             <div class="main-content">
 
-<!-- MASTER DASHBOARD SECTION -->
-            <div id="masterDashboardSection" class="hidden master-workspace">
-                <div class="master-page-head">
-                    <div>
-                        <h2 class="master-page-title">Subscription Monitor</h2>
-                        <p class="master-page-subtitle">Manage admin accounts, plan access, status, and interview usage from one master workspace.</p>
-                    </div>
-                    <div class="master-action-row">
-                        <button class="master-btn" onclick="loadMasterTenants()"><i class="fas fa-rotate"></i> Sync Now</button>
-                        <button class="master-btn primary" onclick="showCreateTenantModal()"><i class="fas fa-plus"></i> Create Tenant</button>
-                    </div>
-                </div>
-
-                <div class="master-stats-grid">
-                    <div class="master-stat-card">
-                        <p class="label">Total Companies</p>
-                        <p class="value" id="masterTotalCompanies">0</p>
-                    </div>
-                    <div class="master-stat-card">
-                        <p class="label">Active Plans</p>
-                        <p class="value" id="masterActivePlans">0</p>
-                    </div>
-                    <div class="master-stat-card">
-                        <p class="label">Expired Plans</p>
-                        <p class="value" id="masterExpiredPlans">0</p>
-                    </div>
-                    <div class="master-stat-card">
-                        <p class="label">Total Members</p>
-                        <p class="value" id="masterTotalMembers">0</p>
-                    </div>
-                </div>
-
-                <div class="master-panel">
-                    <div class="master-panel-head">
-                        <h3>Companies Overview</h3>
-                        <div style="display: flex; gap: 1rem; align-items: center;">
-                            <input class="master-search" id="masterTenantSearch" placeholder="Search company or email..." oninput="renderMasterTenants()" />
-                            <button class="master-btn primary" onclick="scrollToCreateTenant()"><i class="fas fa-plus"></i> Add New Tenant</button>
-                        </div>
-                    </div>
-                    <div class="master-table-wrap">
-                        <table class="master-table" id="masterTenantsTable">
-                            <thead>
-                                <tr>
-                                    <th>Company / Admin</th>
-                                    <th>Plan</th>
-                                    <th>Status</th>
-                                    <th>Usage</th>
-                                    <th>Activation Date</th>
-                                    <th>Expiry Date</th>
-                                    <th>Actions</th>
-                                </tr>
-                            </thead>
-                            <tbody id="masterTenantsBody">
-                                <tr><td colspan="7" style="text-align: center;">Loading tenants...</td></tr>
-                            </tbody>
-                        </table>
-                    </div>
-                </div>
-
-                <!-- INLINE CREATE TENANT SECTION -->
-                <div id="inlineCreateTenantSection" class="master-panel" style="margin-top: 2rem; border: 2px solid #e2e8f0; background: #fff;">
-                    <div class="master-panel-head" style="background: #f1f5f9;">
+                <!-- MASTER DASHBOARD SECTION -->
+                <div id="masterDashboardSection" class="hidden master-workspace">
+                    <div class="master-page-head">
                         <div>
-                            <h3 style="font-size: 1.25rem;">Create New Tenant</h3>
-                            <p style="color: #64748b; font-size: 0.85rem; font-weight: 500;">Provision a new administrative account with a subscription plan.</p>
+                            <h2 class="master-page-title">Subscription Monitor</h2>
+                            <p class="master-page-subtitle">Manage admin accounts, plan access, status, and interview
+                                usage from one master workspace.</p>
                         </div>
-                        <div class="header-icon" style="background: rgba(37, 99, 235, 0.1); color: #2563eb; width: 44px; height: 44px; border-radius: 12px; display: flex; align-items: center; justify-content: center; font-size: 1.2rem;">
-                            <i class="fas fa-user-plus"></i>
+                        <div class="master-action-row">
+                            <button class="master-btn" onclick="loadMasterTenants()"><i class="fas fa-rotate"></i> Sync
+                                Now</button>
+                            <button class="master-btn primary" onclick="showCreateTenantModal()"><i
+                                    class="fas fa-plus"></i> Create Tenant</button>
                         </div>
                     </div>
-                    <div style="padding: 2rem;">
-                        <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); gap: 2rem;">
-                            <div class="master-field">
-                                <label style="display: flex; align-items: center; gap: 6px;"><i class="fas fa-user" style="font-size: 0.7rem; color: #64748b;"></i> Username</label>
-                                <input type="text" id="tenantUsername" class="dash-input" style="padding: 0.9rem; font-size: 1rem; border-radius: 10px;" placeholder="e.g. company_admin">
+
+                    <div class="master-stats-grid">
+                        <div class="master-stat-card">
+                            <p class="label">Total Companies</p>
+                            <p class="value" id="masterTotalCompanies">0</p>
+                        </div>
+                        <div class="master-stat-card">
+                            <p class="label">Active Plans</p>
+                            <p class="value" id="masterActivePlans">0</p>
+                        </div>
+                        <div class="master-stat-card">
+                            <p class="label">Expired Plans</p>
+                            <p class="value" id="masterExpiredPlans">0</p>
+                        </div>
+                        <div class="master-stat-card">
+                            <p class="label">Total Members</p>
+                            <p class="value" id="masterTotalMembers">0</p>
+                        </div>
+                    </div>
+
+                    <div class="master-panel">
+                        <div class="master-panel-head">
+                            <h3>Companies Overview</h3>
+                            <div style="display: flex; gap: 1rem; align-items: center;">
+                                <input class="master-search" id="masterTenantSearch"
+                                    placeholder="Search company or email..." oninput="renderMasterTenants()" />
+                                <button class="master-btn primary" onclick="scrollToCreateTenant()"><i
+                                        class="fas fa-plus"></i> Add New Tenant</button>
                             </div>
-                            <div class="master-field">
-                                <label style="display: flex; align-items: center; gap: 6px;"><i class="fas fa-envelope" style="font-size: 0.7rem; color: #64748b;"></i> Email Address</label>
-                                <input type="email" id="tenantEmail" class="dash-input" style="padding: 0.9rem; font-size: 1rem; border-radius: 10px;" placeholder="admin@company.com">
+                        </div>
+                        <div class="master-table-wrap">
+                            <table class="master-table" id="masterTenantsTable">
+                                <thead>
+                                    <tr>
+                                        <th>Company / Admin</th>
+                                        <th>Plan</th>
+                                        <th>Status</th>
+                                        <th>Usage</th>
+                                        <th>Activation Date</th>
+                                        <th>Expiry Date</th>
+                                        <th>Actions</th>
+                                    </tr>
+                                </thead>
+                                <tbody id="masterTenantsBody">
+                                    <tr>
+                                        <td colspan="7" style="text-align: center;">Loading tenants...</td>
+                                    </tr>
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+
+                    <!-- INLINE CREATE TENANT SECTION -->
+                    <div id="inlineCreateTenantSection" class="master-panel"
+                        style="margin-top: 2rem; border: 2px solid #e2e8f0; background: #fff;">
+                        <div class="master-panel-head" style="background: #f1f5f9;">
+                            <div>
+                                <h3 style="font-size: 1.25rem;">Create New Tenant</h3>
+                                <p style="color: #64748b; font-size: 0.85rem; font-weight: 500;">Provision a new
+                                    administrative account with a subscription plan.</p>
                             </div>
-                            <div class="master-field">
-                                <label style="display: flex; align-items: center; gap: 6px;"><i class="fas fa-lock" style="font-size: 0.7rem; color: #64748b;"></i> Password</label>
-                                <div style="position: relative;">
-                                    <input type="password" id="tenantPassword" class="dash-input" style="padding: 0.9rem; font-size: 1rem; border-radius: 10px;" placeholder="Secure password">
-                                    <button onclick="togglePasswordVisibility('tenantPassword')" style="position: absolute; right: 12px; top: 50%; transform: translateY(-50%); background: none; border: none; color: #94a3b8; cursor: pointer;"><i class="fas fa-eye"></i></button>
+                            <div class="header-icon"
+                                style="background: rgba(37, 99, 235, 0.1); color: #2563eb; width: 44px; height: 44px; border-radius: 12px; display: flex; align-items: center; justify-content: center; font-size: 1.2rem;">
+                                <i class="fas fa-user-plus"></i>
+                            </div>
+                        </div>
+                        <div style="padding: 2rem;">
+                            <div
+                                style="display: grid; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); gap: 2rem;">
+                                <div class="master-field">
+                                    <label style="display: flex; align-items: center; gap: 6px;"><i class="fas fa-user"
+                                            style="font-size: 0.7rem; color: #64748b;"></i> Username</label>
+                                    <input type="text" id="tenantUsername" class="dash-input"
+                                        style="padding: 0.9rem; font-size: 1rem; border-radius: 10px;"
+                                        placeholder="e.g. company_admin">
+                                </div>
+                                <div class="master-field">
+                                    <label style="display: flex; align-items: center; gap: 6px;"><i
+                                            class="fas fa-envelope" style="font-size: 0.7rem; color: #64748b;"></i>
+                                        Email Address</label>
+                                    <input type="email" id="tenantEmail" class="dash-input"
+                                        style="padding: 0.9rem; font-size: 1rem; border-radius: 10px;"
+                                        placeholder="admin@company.com">
+                                </div>
+                                <div class="master-field">
+                                    <label style="display: flex; align-items: center; gap: 6px;"><i class="fas fa-lock"
+                                            style="font-size: 0.7rem; color: #64748b;"></i> Password</label>
+                                    <div style="position: relative;">
+                                        <input type="password" id="tenantPassword" class="dash-input"
+                                            style="padding: 0.9rem; font-size: 1rem; border-radius: 10px;"
+                                            placeholder="Secure password">
+                                        <button onclick="togglePasswordVisibility('tenantPassword')"
+                                            style="position: absolute; right: 12px; top: 50%; transform: translateY(-50%); background: none; border: none; color: #94a3b8; cursor: pointer;"><i
+                                                class="fas fa-eye"></i></button>
+                                    </div>
+                                </div>
+                                <div class="master-field">
+                                    <label style="display: flex; align-items: center; gap: 6px;"><i
+                                            class="fas fa-layer-group" style="font-size: 0.7rem; color: #64748b;"></i>
+                                        Subscription Plan</label>
+                                    <select id="tenantPlan" class="dash-input"
+                                        style="padding: 0.9rem; font-size: 1rem; border-radius: 10px; appearance: none; background-image: url('data:image/svg+xml;charset=US-ASCII,%3Csvg%20xmlns%3D%22http%3A//www.w3.org/2000/svg%22%20width%3D%22292.4%22%20height%3D%22292.4%22%3E%3Cpath%20fill%3D%22%2364748B%22%20d%3D%22M287%2069.4a17.6%2017.6%200%200%200-13-5.4H18.4c-5%200-9.3%201.8-12.9%205.4A17.6%2017.6%200%200%200%200%2082.2c0%205%201.8%209.3%205.4%2012.9l128%20127.9c3.6%203.6%207.8%205.4%2012.8%205.4s9.2-1.8%2012.8-5.4L287%2095c3.5-3.5%205.4-7.8%205.4-12.8%200-5-1.9-9.2-5.5-12.8z%22/%3E%3C/svg%3E'); background-repeat: no-repeat; background-position: right 1rem center; background-size: 0.65rem auto;">
+                                        <option value="trial">15 Days Free Trial</option>
+                                        <option value="basic">Basic Plan (Standard)</option>
+                                        <option value="advance">Advance Plan (Premium)</option>
+                                    </select>
                                 </div>
                             </div>
-                            <div class="master-field">
-                                <label style="display: flex; align-items: center; gap: 6px;"><i class="fas fa-layer-group" style="font-size: 0.7rem; color: #64748b;"></i> Subscription Plan</label>
-                                <select id="tenantPlan" class="dash-input" style="padding: 0.9rem; font-size: 1rem; border-radius: 10px; appearance: none; background-image: url('data:image/svg+xml;charset=US-ASCII,%3Csvg%20xmlns%3D%22http%3A//www.w3.org/2000/svg%22%20width%3D%22292.4%22%20height%3D%22292.4%22%3E%3Cpath%20fill%3D%22%2364748B%22%20d%3D%22M287%2069.4a17.6%2017.6%200%200%200-13-5.4H18.4c-5%200-9.3%201.8-12.9%205.4A17.6%2017.6%200%200%200%200%2082.2c0%205%201.8%209.3%205.4%2012.9l128%20127.9c3.6%203.6%207.8%205.4%2012.8%205.4s9.2-1.8%2012.8-5.4L287%2095c3.5-3.5%205.4-7.8%205.4-12.8%200-5-1.9-9.2-5.5-12.8z%22/%3E%3C/svg%3E'); background-repeat: no-repeat; background-position: right 1rem center; background-size: 0.65rem auto;">
-                                    <option value="trial">15 Days Free Trial</option>
-                                    <option value="basic">Basic Plan (Standard)</option>
-                                    <option value="advance">Advance Plan (Premium)</option>
-                                </select>
+                            <div
+                                style="margin-top: 2.5rem; display: flex; justify-content: flex-end; gap: 1rem; border-top: 1px solid #f1f5f9; padding-top: 1.5rem;">
+                                <button class="master-btn" onclick="clearCreateTenantForm()"
+                                    style="padding: 0.8rem 2rem; border-radius: 10px;">Reset Form</button>
+                                <button class="master-btn primary" onclick="submitCreateTenant()"
+                                    style="padding: 0.8rem 2.5rem; border-radius: 10px; font-size: 1rem; box-shadow: 0 10px 20px rgba(37, 99, 235, 0.2);">
+                                    <i class="fas fa-bolt" style="margin-right: 8px;"></i> Create Account Now
+                                </button>
                             </div>
-                        </div>
-                        <div style="margin-top: 2.5rem; display: flex; justify-content: flex-end; gap: 1rem; border-top: 1px solid #f1f5f9; padding-top: 1.5rem;">
-                            <button class="master-btn" onclick="clearCreateTenantForm()" style="padding: 0.8rem 2rem; border-radius: 10px;">Reset Form</button>
-                            <button class="master-btn primary" onclick="submitCreateTenant()" style="padding: 0.8rem 2.5rem; border-radius: 10px; font-size: 1rem; box-shadow: 0 10px 20px rgba(37, 99, 235, 0.2);">
-                                <i class="fas fa-bolt" style="margin-right: 8px;"></i> Create Account Now
-                            </button>
                         </div>
                     </div>
                 </div>
-            </div>
-            
-            <!-- MASTER CREATE TENANT MODAL -->
-            <div id="createTenantModal" class="master-modal hidden">
-                <div class="master-modal-card">
-                    <div class="master-modal-head">
-                        <div>
-                            <h3>Create New Tenant</h3>
-                            <p>Create an admin account and assign its starting subscription plan.</p>
+
+                <!-- MASTER CREATE TENANT MODAL -->
+                <div id="createTenantModal" class="master-modal hidden">
+                    <div class="master-modal-card">
+                        <div class="master-modal-head">
+                            <div>
+                                <h3>Create New Tenant</h3>
+                                <p>Create an admin account and assign its starting subscription plan.</p>
+                            </div>
+                            <button class="master-close" onclick="closeCreateTenantModal()"><i
+                                    class="fas fa-times"></i></button>
                         </div>
-                        <button class="master-close" onclick="closeCreateTenantModal()"><i class="fas fa-times"></i></button>
+                        <div class="master-modal-body">
+                            <div class="master-form-grid">
+                                <div class="master-field">
+                                    <label>Username</label>
+                                    <input type="text" id="tenantUsername" class="dash-input"
+                                        placeholder="company_admin">
+                                </div>
+                                <div class="master-field">
+                                    <label>Email</label>
+                                    <input type="email" id="tenantEmail" class="dash-input"
+                                        placeholder="admin@company.com">
+                                </div>
+                            </div>
+                            <div class="master-form-grid">
+                                <div class="master-field">
+                                    <label>Password</label>
+                                    <input type="password" id="tenantPassword" class="dash-input"
+                                        placeholder="Password">
+                                </div>
+                                <div class="master-field">
+                                    <label>Subscription Plan</label>
+                                    <select id="tenantPlan" class="dash-input">
+                                        <option value="trial">15 Days Free Trial</option>
+                                        <option value="basic">Basic</option>
+                                        <option value="advance">Advance</option>
+                                    </select>
+                                </div>
+                            </div>
+                        </div>
+                        <div class="master-modal-actions">
+                            <button class="master-btn" onclick="closeCreateTenantModal()">Cancel</button>
+                            <button class="master-btn primary" onclick="submitCreateTenant()"><i
+                                    class="fas fa-user-plus"></i> Create Tenant</button>
+                        </div>
                     </div>
-                    <div class="master-modal-body">
-                        <div class="master-form-grid">
-                            <div class="master-field">
-                                <label>Username</label>
-                                <input type="text" id="tenantUsername" class="dash-input" placeholder="company_admin">
+                </div>
+
+                <!-- MASTER UPDATE TENANT MODAL -->
+                <div id="updateTenantModal" class="master-modal hidden">
+                    <div class="master-modal-card">
+                        <div class="master-modal-head">
+                            <div>
+                                <h3>Update Tenant Subscription</h3>
+                                <p>Change the plan or add extra days to the current expiry.</p>
                             </div>
-                            <div class="master-field">
-                                <label>Email</label>
-                                <input type="email" id="tenantEmail" class="dash-input" placeholder="admin@company.com">
-                            </div>
+                            <button class="master-close"
+                                onclick="document.getElementById('updateTenantModal').classList.add('hidden')"><i
+                                    class="fas fa-times"></i></button>
                         </div>
-                        <div class="master-form-grid">
-                            <div class="master-field">
-                                <label>Password</label>
-                                <input type="password" id="tenantPassword" class="dash-input" placeholder="Password">
-                            </div>
+                        <div class="master-modal-body">
+                            <input type="hidden" id="updateTenantId">
                             <div class="master-field">
                                 <label>Subscription Plan</label>
-                                <select id="tenantPlan" class="dash-input">
+                                <select id="updateTenantPlan" class="dash-input">
                                     <option value="trial">15 Days Free Trial</option>
                                     <option value="basic">Basic</option>
                                     <option value="advance">Advance</option>
                                 </select>
                             </div>
+                            <div class="master-field">
+                                <label>Extend Expiry (Days)</label>
+                                <input type="number" id="updateTenantDays" class="dash-input" value="0" min="0"
+                                    placeholder="Add days to subscription">
+                                <small style="color: var(--text-muted); margin-top: 0.25rem; display: block;">Leave as 0
+                                    to keep current expiry.</small>
+                            </div>
+                        </div>
+                        <div class="master-modal-actions">
+                            <button class="master-btn"
+                                onclick="document.getElementById('updateTenantModal').classList.add('hidden')">Cancel</button>
+                            <button class="master-btn primary" onclick="submitUpdateTenant()"><i
+                                    class="fas fa-calendar-plus"></i> Update Plan</button>
                         </div>
                     </div>
-                    <div class="master-modal-actions">
-                        <button class="master-btn" onclick="closeCreateTenantModal()">Cancel</button>
-                        <button class="master-btn primary" onclick="submitCreateTenant()"><i class="fas fa-user-plus"></i> Create Tenant</button>
-                    </div>
                 </div>
-            </div>
-            
-            <!-- MASTER UPDATE TENANT MODAL -->
-            <div id="updateTenantModal" class="master-modal hidden">
-                <div class="master-modal-card">
-                    <div class="master-modal-head">
-                        <div>
-                            <h3>Update Tenant Subscription</h3>
-                            <p>Change the plan or add extra days to the current expiry.</p>
-                        </div>
-                        <button class="master-close" onclick="document.getElementById('updateTenantModal').classList.add('hidden')"><i class="fas fa-times"></i></button>
-                    </div>
-                    <div class="master-modal-body">
-                    <input type="hidden" id="updateTenantId">
-                    <div class="master-field">
-                        <label>Subscription Plan</label>
-                        <select id="updateTenantPlan" class="dash-input">
-                            <option value="trial">15 Days Free Trial</option>
-                            <option value="basic">Basic</option>
-                            <option value="advance">Advance</option>
-                        </select>
-                    </div>
-                    <div class="master-field">
-                        <label>Extend Expiry (Days)</label>
-                        <input type="number" id="updateTenantDays" class="dash-input" value="0" min="0" placeholder="Add days to subscription">
-                        <small style="color: var(--text-muted); margin-top: 0.25rem; display: block;">Leave as 0 to keep current expiry.</small>
-                    </div>
-                    </div>
-                    <div class="master-modal-actions">
-                        <button class="master-btn" onclick="document.getElementById('updateTenantModal').classList.add('hidden')">Cancel</button>
-                        <button class="master-btn primary" onclick="submitUpdateTenant()"><i class="fas fa-calendar-plus"></i> Update Plan</button>
-                    </div>
-                </div>
-            </div>
 
 
 
@@ -2708,32 +2818,45 @@
                     <!-- Task 8: Dashboard Stats Cards -->
                     <div id="statsCards"
                         style="display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: 1rem; margin-bottom: 1.5rem;">
-                                                <div id="ongoingInterviewsCard" onclick="showLiveResultsModal()"
+                        <div id="ongoingInterviewsCard" onclick="showLiveResultsModal()"
                             style="background: #0f172a; border: 1px solid rgba(16, 185, 129, 0.3); border-radius: var(--radius-md); padding: 1.25rem; position: relative; overflow: hidden; cursor: pointer; transition: transform 0.2s; box-shadow: 0 10px 25px rgba(16, 185, 129, 0.15);"
-                            onmouseover="this.style.transform='translateY(-2px)'" onmouseout="this.style.transform='translateY(0)'">
-                            <div style="position: absolute; top: 10px; right: 10px; display: flex; align-items: center; gap: 6px; background: rgba(16, 185, 129, 0.2); padding: 4px 8px; border-radius: 20px; border: 1px solid rgba(16, 185, 129, 0.5);">
-                                <div style="width: 8px; height: 8px; background: #10b981; border-radius: 50%; animation: pulse-dot 1.5s infinite;"></div>
-                                <span style="font-size: 0.65rem; color: #10b981; font-weight: 700; text-transform: uppercase;">Live</span>
+                            onmouseover="this.style.transform='translateY(-2px)'"
+                            onmouseout="this.style.transform='translateY(0)'">
+                            <div
+                                style="position: absolute; top: 10px; right: 10px; display: flex; align-items: center; gap: 6px; background: rgba(16, 185, 129, 0.2); padding: 4px 8px; border-radius: 20px; border: 1px solid rgba(16, 185, 129, 0.5);">
+                                <div
+                                    style="width: 8px; height: 8px; background: #10b981; border-radius: 50%; animation: pulse-dot 1.5s infinite;">
+                                </div>
+                                <span
+                                    style="font-size: 0.65rem; color: #10b981; font-weight: 700; text-transform: uppercase;">Live</span>
                             </div>
-                            <div style="font-size: 0.75rem; color: #94a3b8; text-transform: uppercase; letter-spacing: 0.5px; font-weight: 600;">
+                            <div
+                                style="font-size: 0.75rem; color: #94a3b8; text-transform: uppercase; letter-spacing: 0.5px; font-weight: 600;">
                                 Ongoing Interviews
                             </div>
-                            <div id="stat-ongoing" style="font-size: 2.5rem; font-weight: 800; color: #f8fafc; margin-top: 0.3rem;">0</div>
-                            <div style="margin-top: 0.5rem; display: grid; grid-template-columns: 1fr 1fr; gap: 4px; font-size: 0.7rem; color: #64748b;">
-                                <div><span id="stat-ongoing-live" style="color:#10b981;font-weight:600;">0</span> live sessions</div>
-                                <div><span id="stat-ongoing-alerts" style="color:#f43f5e;font-weight:600;">0</span> alerts</div>
+                            <div id="stat-ongoing"
+                                style="font-size: 2.5rem; font-weight: 800; color: #f8fafc; margin-top: 0.3rem;">0</div>
+                            <div
+                                style="margin-top: 0.5rem; display: grid; grid-template-columns: 1fr 1fr; gap: 4px; font-size: 0.7rem; color: #64748b;">
+                                <div><span id="stat-ongoing-live" style="color:#10b981;font-weight:600;">0</span> live
+                                    sessions</div>
+                                <div><span id="stat-ongoing-alerts" style="color:#f43f5e;font-weight:600;">0</span>
+                                    alerts</div>
                                 <div><span id="stat-ongoing-avgconf">0</span>/100 avg confidence</div>
                                 <div><span id="stat-ongoing-speaking">0</span> speaking now</div>
                                 <div><span id="stat-ongoing-coding">0</span> coding rounds</div>
                                 <div><span id="stat-ongoing-monitored">0</span> monitored</div>
                             </div>
                             <div style="margin-top: 1rem;">
-                                <button style="width: 100%; padding: 0.5rem; background: rgba(16, 185, 129, 0.1); border: 1px solid rgba(16, 185, 129, 0.4); color: #10b981; border-radius: 4px; font-size: 0.8rem; font-weight: 600; cursor: pointer;">Live Results <i class="fas fa-arrow-right"></i></button>
+                                <button
+                                    style="width: 100%; padding: 0.5rem; background: rgba(16, 185, 129, 0.1); border: 1px solid rgba(16, 185, 129, 0.4); color: #10b981; border-radius: 4px; font-size: 0.8rem; font-weight: 600; cursor: pointer;">Live
+                                    Results <i class="fas fa-arrow-right"></i></button>
                             </div>
                         </div>
-<div onclick="clearFilters()"
+                        <div onclick="clearFilters()"
                             style="background: var(--bg-card); border: 1px solid var(--border); border-radius: var(--radius-md); padding: 1.25rem; position: relative; overflow: hidden; cursor: pointer; transition: transform 0.2s;"
-                            onmouseover="this.style.transform='translateY(-2px)'" onmouseout="this.style.transform='translateY(0)'">
+                            onmouseover="this.style.transform='translateY(-2px)'"
+                            onmouseout="this.style.transform='translateY(0)'">
                             <div
                                 style="position: absolute; top: -10px; right: -10px; width: 60px; height: 60px; background: rgba(99,102,241,0.1); border-radius: 50%;">
                             </div>
@@ -2748,7 +2871,8 @@
                         </div>
                         <div onclick="filterByCardStatus('pending')"
                             style="background: var(--bg-card); border: 1px solid var(--border); border-radius: var(--radius-md); padding: 1.25rem; position: relative; overflow: hidden; cursor: pointer; transition: transform 0.2s;"
-                            onmouseover="this.style.transform='translateY(-2px)'" onmouseout="this.style.transform='translateY(0)'">
+                            onmouseover="this.style.transform='translateY(-2px)'"
+                            onmouseout="this.style.transform='translateY(0)'">
                             <div
                                 style="position: absolute; top: -10px; right: -10px; width: 60px; height: 60px; background: rgba(245,158,11,0.1); border-radius: 50%;">
                             </div>
@@ -2763,7 +2887,8 @@
                         </div>
                         <div onclick="filterByCardStatus('completed')"
                             style="background: var(--bg-card); border: 1px solid var(--border); border-radius: var(--radius-md); padding: 1.25rem; position: relative; overflow: hidden; cursor: pointer; transition: transform 0.2s;"
-                            onmouseover="this.style.transform='translateY(-2px)'" onmouseout="this.style.transform='translateY(0)'">
+                            onmouseover="this.style.transform='translateY(-2px)'"
+                            onmouseout="this.style.transform='translateY(0)'">
                             <div
                                 style="position: absolute; top: -10px; right: -10px; width: 60px; height: 60px; background: rgba(16,185,129,0.1); border-radius: 50%;">
                             </div>
@@ -2778,7 +2903,8 @@
                         </div>
                         <div onclick="filterByCardStatus('completed')"
                             style="background: var(--bg-card); border: 1px solid var(--border); border-radius: var(--radius-md); padding: 1.25rem; position: relative; overflow: hidden; cursor: pointer; transition: transform 0.2s;"
-                            onmouseover="this.style.transform='translateY(-2px)'" onmouseout="this.style.transform='translateY(0)'">
+                            onmouseover="this.style.transform='translateY(-2px)'"
+                            onmouseout="this.style.transform='translateY(0)'">
                             <div
                                 style="position: absolute; top: -10px; right: -10px; width: 60px; height: 60px; background: rgba(6,214,160,0.1); border-radius: 50%;">
                             </div>
@@ -2838,8 +2964,7 @@
                                     <div style="display: flex; flex-direction: column;">
                                         <label
                                             style="font-size: 0.7rem; color: var(--text-muted); margin-bottom: 2px;">Status</label>
-                                        <select id="filterStatus" class="dash-input"
-                                            onchange="loadDashboardSessions()"
+                                        <select id="filterStatus" class="dash-input" onchange="loadDashboardSessions()"
                                             style="padding: 0.4rem; font-size: 0.85rem; width: auto; min-width: 130px;">
                                             <option value="">All Statuses</option>
                                             <option value="completed">Completed</option>
@@ -2852,8 +2977,7 @@
                                         <label
                                             style="font-size: 0.7rem; color: var(--text-muted); margin-bottom: 2px;">Sort
                                             By</label>
-                                        <select id="sortBy" class="dash-input"
-                                            onchange="loadDashboardSessions()"
+                                        <select id="sortBy" class="dash-input" onchange="loadDashboardSessions()"
                                             style="padding: 0.4rem; font-size: 0.85rem; width: auto; min-width: 100px;">
                                             <option value="score">Top Score</option>
                                             <option value="date">Newest First</option>
@@ -3134,33 +3258,67 @@
                             <input type="hidden" id="resumeText" value="">
 
                             <div class="dash-form-group">
-                                <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:5px;">
+                                <div
+                                    style="display:flex;justify-content:space-between;align-items:center;margin-bottom:5px;">
                                     <label class="dash-label" style="margin-bottom:0;">Job Description</label>
-                                    <label for="jdFile" style="display:inline-flex;align-items:center;gap:5px;font-size:0.72rem;font-weight:600;color:var(--primary-light);cursor:pointer;padding:3px 8px;border:1px solid var(--primary-light);border-radius:5px;transition:0.2s;" onmouseover="this.style.background='rgba(99,102,241,0.1)'" onmouseout="this.style.background='transparent'"><i class="fas fa-paperclip"></i> Upload</label>
-                                    <input type="file" id="jdFile" accept=".pdf,.docx,.doc,.txt" onchange="handleJdFileSelect()" style="display:none;">
+                                    <label for="jdFile"
+                                        style="display:inline-flex;align-items:center;gap:5px;font-size:0.72rem;font-weight:600;color:var(--primary-light);cursor:pointer;padding:3px 8px;border:1px solid var(--primary-light);border-radius:5px;transition:0.2s;"
+                                        onmouseover="this.style.background='rgba(99,102,241,0.1)'"
+                                        onmouseout="this.style.background='transparent'"><i
+                                            class="fas fa-paperclip"></i> Upload</label>
+                                    <input type="file" id="jdFile" accept=".pdf,.docx,.doc,.txt"
+                                        onchange="handleJdFileSelect()" style="display:none;">
                                 </div>
                                 <div id="jdFileStatus" style="font-size:0.72rem;margin-bottom:4px;"></div>
-                                <textarea class="dash-textarea" id="jobDescription" placeholder="Paste the job description here or upload a file above..."></textarea>
+                                <textarea class="dash-textarea" id="jobDescription"
+                                    placeholder="Paste the job description here or upload a file above..."></textarea>
                             </div>
 
                             <div class="dash-form-group">
-                                <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:5px;">
-                                    <label class="dash-label" style="margin-bottom:0;">Custom Questions <span style="font-size:0.7rem;color:var(--text-muted);font-weight:400;">(Optional)</span></label>
-                                    <label for="customFile" style="display:inline-flex;align-items:center;gap:5px;font-size:0.72rem;font-weight:600;color:var(--primary-light);cursor:pointer;padding:3px 8px;border:1px solid var(--primary-light);border-radius:5px;transition:0.2s;" onmouseover="this.style.background='rgba(99,102,241,0.1)'" onmouseout="this.style.background='transparent'"><i class="fas fa-paperclip"></i> Upload</label>
-                                    <input type="file" id="customFile" accept=".pdf,.docx,.doc,.txt" onchange="handleGenericFileSelect('customFile', 'customFileLabel', 'customFileStatus', 'customQuestions', 'Custom Questions')" style="display:none;">
+                                <div
+                                    style="display:flex;justify-content:space-between;align-items:center;margin-bottom:5px;">
+                                    <label class="dash-label" style="margin-bottom:0;">Custom Questions <span
+                                            style="font-size:0.7rem;color:var(--text-muted);font-weight:400;">(Optional)</span></label>
+                                    <label for="customFile"
+                                        style="display:inline-flex;align-items:center;gap:5px;font-size:0.72rem;font-weight:600;color:var(--primary-light);cursor:pointer;padding:3px 8px;border:1px solid var(--primary-light);border-radius:5px;transition:0.2s;"
+                                        onmouseover="this.style.background='rgba(99,102,241,0.1)'"
+                                        onmouseout="this.style.background='transparent'"><i
+                                            class="fas fa-paperclip"></i> Upload</label>
+                                    <input type="file" id="customFile" accept=".pdf,.docx,.doc,.txt"
+                                        onchange="handleGenericFileSelect('customFile', 'customFileLabel', 'customFileStatus', 'customQuestions', 'Custom Questions')"
+                                        style="display:none;">
                                 </div>
                                 <div id="customFileStatus" style="font-size:0.72rem;margin-bottom:4px;"></div>
-                                <textarea class="dash-textarea" id="customQuestions" style="height:80px;" placeholder="Enter your custom questions here or upload a file. If provided, the AI will ask these first."></textarea>
+                                <textarea class="dash-textarea" id="customQuestions" style="height:80px;"
+                                    placeholder="Enter your custom questions here or upload a file. If provided, the AI will ask these first."></textarea>
                             </div>
 
                             <div class="dash-form-group">
-                                <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:5px;">
-                                    <label class="dash-label" style="margin-bottom:0;">AI Interview Instructions <span style="font-size:0.7rem;color:var(--text-muted);font-weight:400;">(Optional)</span></label>
-                                    <label for="aiFile" style="display:inline-flex;align-items:center;gap:5px;font-size:0.72rem;font-weight:600;color:var(--primary-light);cursor:pointer;padding:3px 8px;border:1px solid var(--primary-light);border-radius:5px;transition:0.2s;" onmouseover="this.style.background='rgba(99,102,241,0.1)'" onmouseout="this.style.background='transparent'"><i class="fas fa-paperclip"></i> Upload</label>
-                                    <input type="file" id="aiFile" accept=".pdf,.docx,.doc,.txt" onchange="handleGenericFileSelect('aiFile', 'aiFileLabel', 'aiFileStatus', 'aiInstructions', 'AI Instructions')" style="display:none;">
+                                <div
+                                    style="display:flex;justify-content:space-between;align-items:center;margin-bottom:5px;">
+                                    <label class="dash-label" style="margin-bottom:0;">AI Interview Instructions <span
+                                            style="font-size:0.7rem;color:var(--text-muted);font-weight:400;">(Optional)</span></label>
+                                    <label for="aiFile"
+                                        style="display:inline-flex;align-items:center;gap:5px;font-size:0.72rem;font-weight:600;color:var(--primary-light);cursor:pointer;padding:3px 8px;border:1px solid var(--primary-light);border-radius:5px;transition:0.2s;"
+                                        onmouseover="this.style.background='rgba(99,102,241,0.1)'"
+                                        onmouseout="this.style.background='transparent'"><i
+                                            class="fas fa-paperclip"></i> Upload</label>
+                                    <input type="file" id="aiFile" accept=".pdf,.docx,.doc,.txt"
+                                        onchange="handleGenericFileSelect('aiFile', 'aiFileLabel', 'aiFileStatus', 'aiInstructions', 'AI Instructions')"
+                                        style="display:none;">
                                 </div>
                                 <div id="aiFileStatus" style="font-size:0.72rem;margin-bottom:4px;"></div>
-                                <textarea class="dash-textarea" id="aiInstructions" style="height:80px;" placeholder="e.g. 'Focus heavily on system design and React performance optimization. Keep questions technical.'"></textarea>
+                                <textarea class="dash-textarea" id="aiInstructions" style="height:80px;"
+                                    placeholder="e.g. 'Focus heavily on system design and React performance optimization. Keep questions technical.'"></textarea>
+                            </div>
+
+                            <div class="dash-form-group">
+                                <label class="dash-label">Interview Type</label>
+                                <select class="dash-input" id="interviewType" style="padding: 0.7rem 1rem;">
+                                    <option value="Technical">Technical (Includes Coding Round)</option>
+                                    <option value="Normal">Normal (Standard AI Interview, No Coding)</option>
+                                    <option value="Non-Technical">Non-Technical (Scenario/Case Study based)</option>
+                                </select>
                             </div>
 
                             <div class="dash-form-group">
@@ -3210,38 +3368,71 @@
                             <!-- HR Screening Preferences -->
                             <div class="dash-form-group" style="margin-bottom: 1.5rem;">
                                 <label class="dash-label" style="margin-bottom: 0.5rem;">
-                                    <i class="fas fa-clipboard-check" style="color: var(--accent); margin-right: 6px;"></i>
+                                    <i class="fas fa-clipboard-check"
+                                        style="color: var(--accent); margin-right: 6px;"></i>
                                     HR Screening Questions (Optional)
                                 </label>
                                 <p style="font-size: 0.75rem; color: var(--text-muted); margin-bottom: 0.75rem;">
-                                    <i class="fas fa-info-circle"></i> When enabled, AI will extract info from the job description and ask additional screening questions at the end of the interview.
+                                    <i class="fas fa-info-circle"></i> When enabled, AI will extract info from the job
+                                    description and ask additional screening questions at the end of the interview.
                                 </p>
-                                <div style="display: flex; flex-direction: column; gap: 0.8rem; padding: 1rem; background: var(--bg-input); border: 1px solid var(--border); border-radius: var(--radius-md);">
+                                <div
+                                    style="display: flex; flex-direction: column; gap: 0.8rem; padding: 1rem; background: var(--bg-input); border: 1px solid var(--border); border-radius: var(--radius-md);">
                                     <div>
-                                        <label style="display: flex; align-items: center; gap: 0.5rem; cursor: pointer; margin-bottom: 0.5rem;">
-                                            <input type="checkbox" id="askWorkMode" onchange="document.getElementById('workModeOptions').style.display = this.checked ? 'flex' : 'none';" style="width: 17px; height: 17px; accent-color: var(--primary);">
-                                            <span style="font-size: 0.9rem; font-weight: 500; color: var(--text-primary);">Work Mode</span>
+                                        <label
+                                            style="display: flex; align-items: center; gap: 0.5rem; cursor: pointer; margin-bottom: 0.5rem;">
+                                            <input type="checkbox" id="askWorkMode"
+                                                onchange="document.getElementById('workModeOptions').style.display = this.checked ? 'flex' : 'none';"
+                                                style="width: 17px; height: 17px; accent-color: var(--primary);">
+                                            <span
+                                                style="font-size: 0.9rem; font-weight: 500; color: var(--text-primary);">Work
+                                                Mode</span>
                                         </label>
-                                        <div id="workModeOptions" style="display: none; gap: 1rem; margin-left: 1.8rem;">
-                                            <label style="display: flex; align-items: center; gap: 0.3rem; cursor: pointer;"><input type="radio" name="workModeType" value="On-site" checked> <span style="font-size: 0.85rem;">On-site</span></label>
-                                            <label style="display: flex; align-items: center; gap: 0.3rem; cursor: pointer;"><input type="radio" name="workModeType" value="Remote"> <span style="font-size: 0.85rem;">Remote</span></label>
-                                            <label style="display: flex; align-items: center; gap: 0.3rem; cursor: pointer;"><input type="radio" name="workModeType" value="Hybrid"> <span style="font-size: 0.85rem;">Hybrid</span></label>
+                                        <div id="workModeOptions"
+                                            style="display: none; gap: 1rem; margin-left: 1.8rem;">
+                                            <label
+                                                style="display: flex; align-items: center; gap: 0.3rem; cursor: pointer;"><input
+                                                    type="radio" name="workModeType" value="On-site" checked> <span
+                                                    style="font-size: 0.85rem;">On-site</span></label>
+                                            <label
+                                                style="display: flex; align-items: center; gap: 0.3rem; cursor: pointer;"><input
+                                                    type="radio" name="workModeType" value="Remote"> <span
+                                                    style="font-size: 0.85rem;">Remote</span></label>
+                                            <label
+                                                style="display: flex; align-items: center; gap: 0.3rem; cursor: pointer;"><input
+                                                    type="radio" name="workModeType" value="Hybrid"> <span
+                                                    style="font-size: 0.85rem;">Hybrid</span></label>
                                         </div>
                                     </div>
                                     <div>
-                                        <label style="display: flex; align-items: center; gap: 0.5rem; cursor: pointer; margin-bottom: 0.5rem;">
-                                            <input type="checkbox" id="askLocation" onchange="document.getElementById('locationOptions').style.display = this.checked ? 'flex' : 'none';" style="width: 17px; height: 17px; accent-color: var(--primary);">
-                                            <span style="font-size: 0.9rem; font-weight: 500; color: var(--text-primary);">Location</span>
+                                        <label
+                                            style="display: flex; align-items: center; gap: 0.5rem; cursor: pointer; margin-bottom: 0.5rem;">
+                                            <input type="checkbox" id="askLocation"
+                                                onchange="document.getElementById('locationOptions').style.display = this.checked ? 'flex' : 'none';"
+                                                style="width: 17px; height: 17px; accent-color: var(--primary);">
+                                            <span
+                                                style="font-size: 0.9rem; font-weight: 500; color: var(--text-primary);">Location</span>
                                         </label>
-                                        <div id="locationOptions" style="display: none; gap: 1rem; margin-left: 1.8rem;">
-                                            <label style="display: flex; align-items: center; gap: 0.3rem; cursor: pointer;"><input type="radio" name="locationType" value="Current" checked> <span style="font-size: 0.85rem;">Current Location</span></label>
-                                            <label style="display: flex; align-items: center; gap: 0.3rem; cursor: pointer;"><input type="radio" name="locationType" value="Preferred"> <span style="font-size: 0.85rem;">Preferred Location</span></label>
+                                        <div id="locationOptions"
+                                            style="display: none; gap: 1rem; margin-left: 1.8rem;">
+                                            <label
+                                                style="display: flex; align-items: center; gap: 0.3rem; cursor: pointer;"><input
+                                                    type="radio" name="locationType" value="Current" checked> <span
+                                                    style="font-size: 0.85rem;">Current Location</span></label>
+                                            <label
+                                                style="display: flex; align-items: center; gap: 0.3rem; cursor: pointer;"><input
+                                                    type="radio" name="locationType" value="Preferred"> <span
+                                                    style="font-size: 0.85rem;">Preferred Location</span></label>
                                         </div>
                                     </div>
                                     <div>
-                                        <label style="display: flex; align-items: center; gap: 0.5rem; cursor: pointer;">
-                                            <input type="checkbox" id="askBond" style="width: 17px; height: 17px; accent-color: var(--primary);">
-                                            <span style="font-size: 0.9rem; font-weight: 500; color: var(--text-primary);">Bond / Notice Period</span>
+                                        <label
+                                            style="display: flex; align-items: center; gap: 0.5rem; cursor: pointer;">
+                                            <input type="checkbox" id="askBond"
+                                                style="width: 17px; height: 17px; accent-color: var(--primary);">
+                                            <span
+                                                style="font-size: 0.9rem; font-weight: 500; color: var(--text-primary);">Bond
+                                                / Notice Period</span>
                                         </label>
                                     </div>
                                 </div>
@@ -3295,10 +3486,17 @@
 
                             <!-- JD + Duration (shared) -->
                             <div class="dash-form-group">
-                                <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:5px;">
-                                    <label class="dash-label" style="margin-bottom:0;">Job Description <span style="color:var(--danger);">*</span></label>
-                                    <label for="bulkJdFile" style="display:inline-flex;align-items:center;gap:5px;font-size:0.72rem;font-weight:600;color:var(--primary-light);cursor:pointer;padding:3px 8px;border:1px solid var(--primary-light);border-radius:5px;transition:0.2s;" onmouseover="this.style.background='rgba(99,102,241,0.1)'" onmouseout="this.style.background='transparent'"><i class="fas fa-paperclip"></i> Upload</label>
-                                    <input type="file" id="bulkJdFile" accept=".pdf,.docx,.doc,.txt" onchange="handleBulkJdFileSelect()" style="display:none;">
+                                <div
+                                    style="display:flex;justify-content:space-between;align-items:center;margin-bottom:5px;">
+                                    <label class="dash-label" style="margin-bottom:0;">Job Description <span
+                                            style="color:var(--danger);">*</span></label>
+                                    <label for="bulkJdFile"
+                                        style="display:inline-flex;align-items:center;gap:5px;font-size:0.72rem;font-weight:600;color:var(--primary-light);cursor:pointer;padding:3px 8px;border:1px solid var(--primary-light);border-radius:5px;transition:0.2s;"
+                                        onmouseover="this.style.background='rgba(99,102,241,0.1)'"
+                                        onmouseout="this.style.background='transparent'"><i
+                                            class="fas fa-paperclip"></i> Upload</label>
+                                    <input type="file" id="bulkJdFile" accept=".pdf,.docx,.doc,.txt"
+                                        onchange="handleBulkJdFileSelect()" style="display:none;">
                                 </div>
                                 <div id="bulkJdFileStatus" style="font-size:0.72rem;margin-bottom:4px;"></div>
                                 <textarea class="dash-textarea" id="bulkJobDescription"
@@ -3307,10 +3505,18 @@
                             </div>
 
                             <div class="dash-form-group">
-                                <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:5px;">
-                                    <label class="dash-label" style="margin-bottom:0;">Custom Questions <span style="font-size:0.7rem;color:var(--text-muted);font-weight:400;">(Optional)</span></label>
-                                    <label for="bulkCustomFile" style="display:inline-flex;align-items:center;gap:5px;font-size:0.72rem;font-weight:600;color:var(--primary-light);cursor:pointer;padding:3px 8px;border:1px solid var(--primary-light);border-radius:5px;transition:0.2s;" onmouseover="this.style.background='rgba(99,102,241,0.1)'" onmouseout="this.style.background='transparent'"><i class="fas fa-paperclip"></i> Upload</label>
-                                    <input type="file" id="bulkCustomFile" accept=".pdf,.docx,.doc,.txt" onchange="handleGenericFileSelect('bulkCustomFile', 'bulkCustomFileLabel', 'bulkCustomFileStatus', 'bulkCustomQuestions', 'Custom Questions')" style="display:none;">
+                                <div
+                                    style="display:flex;justify-content:space-between;align-items:center;margin-bottom:5px;">
+                                    <label class="dash-label" style="margin-bottom:0;">Custom Questions <span
+                                            style="font-size:0.7rem;color:var(--text-muted);font-weight:400;">(Optional)</span></label>
+                                    <label for="bulkCustomFile"
+                                        style="display:inline-flex;align-items:center;gap:5px;font-size:0.72rem;font-weight:600;color:var(--primary-light);cursor:pointer;padding:3px 8px;border:1px solid var(--primary-light);border-radius:5px;transition:0.2s;"
+                                        onmouseover="this.style.background='rgba(99,102,241,0.1)'"
+                                        onmouseout="this.style.background='transparent'"><i
+                                            class="fas fa-paperclip"></i> Upload</label>
+                                    <input type="file" id="bulkCustomFile" accept=".pdf,.docx,.doc,.txt"
+                                        onchange="handleGenericFileSelect('bulkCustomFile', 'bulkCustomFileLabel', 'bulkCustomFileStatus', 'bulkCustomQuestions', 'Custom Questions')"
+                                        style="display:none;">
                                 </div>
                                 <div id="bulkCustomFileStatus" style="font-size:0.72rem;margin-bottom:4px;"></div>
                                 <textarea class="dash-textarea" id="bulkCustomQuestions" style="height:80px;"
@@ -3318,14 +3524,31 @@
                             </div>
 
                             <div class="dash-form-group">
-                                <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:5px;">
-                                    <label class="dash-label" style="margin-bottom:0;">AI Interview Instructions <span style="font-size:0.7rem;color:var(--text-muted);font-weight:400;">(Optional)</span></label>
-                                    <label for="bulkAiFile" style="display:inline-flex;align-items:center;gap:5px;font-size:0.72rem;font-weight:600;color:var(--primary-light);cursor:pointer;padding:3px 8px;border:1px solid var(--primary-light);border-radius:5px;transition:0.2s;" onmouseover="this.style.background='rgba(99,102,241,0.1)'" onmouseout="this.style.background='transparent'"><i class="fas fa-paperclip"></i> Upload</label>
-                                    <input type="file" id="bulkAiFile" accept=".pdf,.docx,.doc,.txt" onchange="handleGenericFileSelect('bulkAiFile', 'bulkAiFileLabel', 'bulkAiFileStatus', 'bulkAiInstructions', 'AI Instructions')" style="display:none;">
+                                <div
+                                    style="display:flex;justify-content:space-between;align-items:center;margin-bottom:5px;">
+                                    <label class="dash-label" style="margin-bottom:0;">AI Interview Instructions <span
+                                            style="font-size:0.7rem;color:var(--text-muted);font-weight:400;">(Optional)</span></label>
+                                    <label for="bulkAiFile"
+                                        style="display:inline-flex;align-items:center;gap:5px;font-size:0.72rem;font-weight:600;color:var(--primary-light);cursor:pointer;padding:3px 8px;border:1px solid var(--primary-light);border-radius:5px;transition:0.2s;"
+                                        onmouseover="this.style.background='rgba(99,102,241,0.1)'"
+                                        onmouseout="this.style.background='transparent'"><i
+                                            class="fas fa-paperclip"></i> Upload</label>
+                                    <input type="file" id="bulkAiFile" accept=".pdf,.docx,.doc,.txt"
+                                        onchange="handleGenericFileSelect('bulkAiFile', 'bulkAiFileLabel', 'bulkAiFileStatus', 'bulkAiInstructions', 'AI Instructions')"
+                                        style="display:none;">
                                 </div>
                                 <div id="bulkAiFileStatus" style="font-size:0.72rem;margin-bottom:4px;"></div>
                                 <textarea class="dash-textarea" id="bulkAiInstructions" style="height:80px;"
                                     placeholder="e.g. 'Focus heavily on system design and React performance optimization. Keep questions technical.'"></textarea>
+                            </div>
+
+                            <div class="dash-form-group">
+                                <label class="dash-label">Interview Type</label>
+                                <select class="dash-input" id="bulkInterviewType" style="padding: 0.7rem 1rem;">
+                                    <option value="Technical">Technical (Includes Coding Round)</option>
+                                    <option value="Normal">Normal (Standard AI Interview, No Coding)</option>
+                                    <option value="Non-Technical">Non-Technical (Scenario/Case Study based)</option>
+                                </select>
                             </div>
 
                             <div class="dash-form-group">
@@ -3345,38 +3568,71 @@
                             <!-- HR Screening Preferences (Bulk) -->
                             <div class="dash-form-group" style="margin-bottom: 1rem;">
                                 <label class="dash-label" style="margin-bottom: 0.5rem;">
-                                    <i class="fas fa-clipboard-check" style="color: var(--accent); margin-right: 6px;"></i>
+                                    <i class="fas fa-clipboard-check"
+                                        style="color: var(--accent); margin-right: 6px;"></i>
                                     HR Screening Questions (Optional)
                                 </label>
                                 <p style="font-size: 0.75rem; color: var(--text-muted); margin-bottom: 0.75rem;">
-                                    <i class="fas fa-info-circle"></i> AI will ask additional screening questions at the end of each interview.
+                                    <i class="fas fa-info-circle"></i> AI will ask additional screening questions at the
+                                    end of each interview.
                                 </p>
-                                <div style="display: flex; flex-direction: column; gap: 0.8rem; padding: 1rem; background: var(--bg-input); border: 1px solid var(--border); border-radius: var(--radius-md);">
+                                <div
+                                    style="display: flex; flex-direction: column; gap: 0.8rem; padding: 1rem; background: var(--bg-input); border: 1px solid var(--border); border-radius: var(--radius-md);">
                                     <div>
-                                        <label style="display: flex; align-items: center; gap: 0.5rem; cursor: pointer; margin-bottom: 0.5rem;">
-                                            <input type="checkbox" id="bulkAskWorkMode" onchange="document.getElementById('bulkWorkModeOptions').style.display = this.checked ? 'flex' : 'none';" style="width: 17px; height: 17px; accent-color: var(--primary);">
-                                            <span style="font-size: 0.9rem; font-weight: 500; color: var(--text-primary);">Work Mode</span>
+                                        <label
+                                            style="display: flex; align-items: center; gap: 0.5rem; cursor: pointer; margin-bottom: 0.5rem;">
+                                            <input type="checkbox" id="bulkAskWorkMode"
+                                                onchange="document.getElementById('bulkWorkModeOptions').style.display = this.checked ? 'flex' : 'none';"
+                                                style="width: 17px; height: 17px; accent-color: var(--primary);">
+                                            <span
+                                                style="font-size: 0.9rem; font-weight: 500; color: var(--text-primary);">Work
+                                                Mode</span>
                                         </label>
-                                        <div id="bulkWorkModeOptions" style="display: none; gap: 1rem; margin-left: 1.8rem;">
-                                            <label style="display: flex; align-items: center; gap: 0.3rem; cursor: pointer;"><input type="radio" name="bulkWorkModeType" value="On-site" checked> <span style="font-size: 0.85rem;">On-site</span></label>
-                                            <label style="display: flex; align-items: center; gap: 0.3rem; cursor: pointer;"><input type="radio" name="bulkWorkModeType" value="Remote"> <span style="font-size: 0.85rem;">Remote</span></label>
-                                            <label style="display: flex; align-items: center; gap: 0.3rem; cursor: pointer;"><input type="radio" name="bulkWorkModeType" value="Hybrid"> <span style="font-size: 0.85rem;">Hybrid</span></label>
+                                        <div id="bulkWorkModeOptions"
+                                            style="display: none; gap: 1rem; margin-left: 1.8rem;">
+                                            <label
+                                                style="display: flex; align-items: center; gap: 0.3rem; cursor: pointer;"><input
+                                                    type="radio" name="bulkWorkModeType" value="On-site" checked> <span
+                                                    style="font-size: 0.85rem;">On-site</span></label>
+                                            <label
+                                                style="display: flex; align-items: center; gap: 0.3rem; cursor: pointer;"><input
+                                                    type="radio" name="bulkWorkModeType" value="Remote"> <span
+                                                    style="font-size: 0.85rem;">Remote</span></label>
+                                            <label
+                                                style="display: flex; align-items: center; gap: 0.3rem; cursor: pointer;"><input
+                                                    type="radio" name="bulkWorkModeType" value="Hybrid"> <span
+                                                    style="font-size: 0.85rem;">Hybrid</span></label>
                                         </div>
                                     </div>
                                     <div>
-                                        <label style="display: flex; align-items: center; gap: 0.5rem; cursor: pointer; margin-bottom: 0.5rem;">
-                                            <input type="checkbox" id="bulkAskLocation" onchange="document.getElementById('bulkLocationOptions').style.display = this.checked ? 'flex' : 'none';" style="width: 17px; height: 17px; accent-color: var(--primary);">
-                                            <span style="font-size: 0.9rem; font-weight: 500; color: var(--text-primary);">Location</span>
+                                        <label
+                                            style="display: flex; align-items: center; gap: 0.5rem; cursor: pointer; margin-bottom: 0.5rem;">
+                                            <input type="checkbox" id="bulkAskLocation"
+                                                onchange="document.getElementById('bulkLocationOptions').style.display = this.checked ? 'flex' : 'none';"
+                                                style="width: 17px; height: 17px; accent-color: var(--primary);">
+                                            <span
+                                                style="font-size: 0.9rem; font-weight: 500; color: var(--text-primary);">Location</span>
                                         </label>
-                                        <div id="bulkLocationOptions" style="display: none; gap: 1rem; margin-left: 1.8rem;">
-                                            <label style="display: flex; align-items: center; gap: 0.3rem; cursor: pointer;"><input type="radio" name="bulkLocationType" value="Current" checked> <span style="font-size: 0.85rem;">Current Location</span></label>
-                                            <label style="display: flex; align-items: center; gap: 0.3rem; cursor: pointer;"><input type="radio" name="bulkLocationType" value="Preferred"> <span style="font-size: 0.85rem;">Preferred Location</span></label>
+                                        <div id="bulkLocationOptions"
+                                            style="display: none; gap: 1rem; margin-left: 1.8rem;">
+                                            <label
+                                                style="display: flex; align-items: center; gap: 0.3rem; cursor: pointer;"><input
+                                                    type="radio" name="bulkLocationType" value="Current" checked> <span
+                                                    style="font-size: 0.85rem;">Current Location</span></label>
+                                            <label
+                                                style="display: flex; align-items: center; gap: 0.3rem; cursor: pointer;"><input
+                                                    type="radio" name="bulkLocationType" value="Preferred"> <span
+                                                    style="font-size: 0.85rem;">Preferred Location</span></label>
                                         </div>
                                     </div>
                                     <div>
-                                        <label style="display: flex; align-items: center; gap: 0.5rem; cursor: pointer;">
-                                            <input type="checkbox" id="bulkAskBond" style="width: 17px; height: 17px; accent-color: var(--primary);">
-                                            <span style="font-size: 0.9rem; font-weight: 500; color: var(--text-primary);">Bond / Notice Period</span>
+                                        <label
+                                            style="display: flex; align-items: center; gap: 0.5rem; cursor: pointer;">
+                                            <input type="checkbox" id="bulkAskBond"
+                                                style="width: 17px; height: 17px; accent-color: var(--primary);">
+                                            <span
+                                                style="font-size: 0.9rem; font-weight: 500; color: var(--text-primary);">Bond
+                                                / Notice Period</span>
                                         </label>
                                     </div>
                                 </div>
@@ -3481,7 +3737,8 @@
                                                     Email</th>
                                                 <th
                                                     style="padding:0.6rem 0.5rem; text-align:center; color:var(--text-muted); font-weight:600;">
-                                                    <i class="fas fa-video"></i> Video</th>
+                                                    <i class="fas fa-video"></i> Video
+                                                </th>
                                                 <th
                                                     style="padding:0.6rem 1rem; text-align:right; color:var(--text-muted); font-weight:600;">
                                                     Action</th>
@@ -3596,11 +3853,11 @@
 
         function escapeHtml(unsafe) {
             return (unsafe || "").toString()
-                 .replace(/&/g, "&amp;")
-                 .replace(/</g, "&lt;")
-                 .replace(/>/g, "&gt;")
-                 .replace(/"/g, "&quot;")
-                 .replace(/'/g, "&#039;");
+                .replace(/&/g, "&amp;")
+                .replace(/</g, "&lt;")
+                .replace(/>/g, "&gt;")
+                .replace(/"/g, "&quot;")
+                .replace(/'/g, "&#039;");
         }
 
         let adminId = null;
@@ -3772,6 +4029,11 @@
             if (masterSection) masterSection.classList.add('hidden');
             const title = document.getElementById('consoleTitle');
             if (title) title.textContent = 'Admin Console';
+            
+            // Explicitly switch to the overview tab so the dashboard isn't blank
+            if (typeof switchView === 'function') {
+                switchView('overview');
+            }
         }
 
         function showMasterAdminView(viewId) {
@@ -3780,12 +4042,12 @@
             if (tabContainer) tabContainer.style.display = '';
             document.getElementById('tenantSidebarNav')?.classList.add('hidden');
             document.getElementById('masterSidebarNav')?.classList.remove('hidden');
-            
+
             // Handle sidebar active states
             document.querySelectorAll('#masterSidebarNav .nav-btn').forEach(btn => btn.classList.remove('active'));
             const activeBtn = document.getElementById('nav-master-' + viewId);
             if (activeBtn) activeBtn.classList.add('active');
-            
+
             const masterSection = document.getElementById('masterDashboardSection');
             if (masterSection) masterSection.classList.add('hidden');
             const title = document.getElementById('consoleTitle');
@@ -4050,7 +4312,7 @@
 
         document.addEventListener('DOMContentLoaded', () => {
             initLoginHero();
-            
+
             // Check for existing session
             const savedAdminId = sessionStorage.getItem('adminId');
             if (savedAdminId) {
@@ -4059,7 +4321,7 @@
                 adminRole = sessionStorage.getItem('adminRole') || "tenant";
                 document.getElementById('adminName').textContent = sessionStorage.getItem('adminName') || "Admin";
                 document.getElementById('adminEmailInput').value = adminEmail;
-                
+
                 document.getElementById('loginSection').classList.add('hidden');
                 document.getElementById('dashboardSection').classList.remove('hidden');
                 document.body.classList.add('dashboard-active');
@@ -4125,18 +4387,19 @@
                 return;
             }
 
-            // Show loading state
             loginBtn.disabled = true;
             loginBtn.innerHTML = '<span class="spinner"></span> Signing in...';
             errorDiv.classList.add('hidden');
 
-            try {
-                const controller = new AbortController();
-                const timeout = setTimeout(() => controller.abort(), 15000); // 15s timeout
+            const controller = new AbortController();
+            const timeout = setTimeout(() => controller.abort(), 10000);
 
+            try {
                 const response = await fetch(`${API_BASE}/admin/login`, {
                     method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
+                    headers: {
+                        'Content-Type': 'application/json',
+                    },
                     body: JSON.stringify({ username, password }),
                     signal: controller.signal
                 });
@@ -4154,8 +4417,8 @@
                         return;
                     }
                     
-                    adminId = data.admin_id || data.master_id;
-                    adminEmail = data.email || "";
+                    const adminId = data.admin_id || data.master_id;
+                    const adminEmail = data.email || "";
                     const adminName = data.username || username;
                     const role = data.role || "tenant";
                     const plan = data.subscription_plan || "Free Trial";
@@ -4181,7 +4444,27 @@
                     document.getElementById('adminName').textContent = adminName;
                     document.getElementById('adminEmailInput').value = adminEmail;
 
-                    // Smooth transition
+                    // Update global state and UI
+                    currentTenantId = adminId;
+                    currentRole = role;
+                    const sidebarName = document.getElementById('sidebarAdminName');
+                    if (sidebarName) sidebarName.textContent = adminName;
+                    
+                    const sidebarRole = document.getElementById('sidebarAdminRole');
+                    if (sidebarRole) sidebarRole.textContent = (role === 'master' ? 'Master Admin' : 'Admin') + ' (' + plan + ')';
+                    
+                    // Show / Hide master elements
+                    if (role === "master") {
+                        document.getElementById('tenantSidebarNav').style.display = 'none';
+                        document.getElementById('masterSidebarNav').style.display = 'block';
+                        const navBtn = document.getElementById('nav-btn-master-plans');
+                        if (navBtn) navBtn.style.display = 'block';
+                    } else {
+                        document.getElementById('tenantSidebarNav').style.display = 'block';
+                        document.getElementById('masterSidebarNav').style.display = 'none';
+                    }
+                    
+                    // Switch to dashboard view
                     document.getElementById('loginSection').style.opacity = '0';
                     document.getElementById('loginSection').style.transform = 'scale(0.95)';
                     document.getElementById('loginSection').style.transition = 'all 0.3s ease';
@@ -4191,10 +4474,10 @@
                         document.getElementById('dashboardSection').classList.remove('hidden');
                         document.body.classList.add('dashboard-active'); // Enable full-screen layout
                         
-                    if (role === 'master') {
-                        showMasterDashboard();
-                        loadMasterTenants();
-                    } else {
+                        if (role === 'master') {
+                            showMasterDashboard();
+                            loadMasterTenants();
+                        } else {
                             showTenantDashboardShell();
                             applyPlanRestrictions({
                                 plan,
@@ -4219,10 +4502,13 @@
                     card.style.animation = 'shake 0.4s ease';
                 }
             } catch (error) {
+                console.error("Login catch block error:", error);
                 if (error.name === 'AbortError') {
                     errorDiv.textContent = "Request timed out. Server may be starting up — try again.";
+                } else if (error instanceof TypeError && error.message.includes('Failed to fetch')) {
+                    errorDiv.textContent = "Cannot connect to server. Please check if backend is running (or accept the self-signed cert).";
                 } else {
-                    errorDiv.textContent = "Cannot connect to server. Please check if backend is running.";
+                    errorDiv.textContent = "An unexpected error occurred: " + error.message;
                 }
                 errorDiv.classList.remove('hidden');
             } finally {
@@ -4411,6 +4697,8 @@
             }
         }
 
+
+
         // --- CREATE SESSION ---
         async function createSession() {
             const name = document.getElementById('candidateName').value.trim();
@@ -4420,6 +4708,7 @@
             const customQuestions = document.getElementById('customQuestions').value.trim();
             const aiInstructions = document.getElementById('aiInstructions').value.trim();
             const duration = parseInt(document.getElementById('interviewDuration').value) || 30;
+            const interviewType = document.getElementById('interviewType').value;
             const recordVideo = document.getElementById('recordVideo').checked;
             const scheduleStart = document.getElementById('scheduleStart').value;
             const scheduleEnd = document.getElementById('scheduleEnd').value;
@@ -4436,7 +4725,7 @@
                 showToast("Please scroll up and fill in all required fields (Name, Email, Resume, Job Description).", "error");
                 return;
             }
-            
+
             if (duration < 5 || duration > 120) {
                 showToast("Interview Duration must be between 5 and 120 minutes.", "error");
                 return;
@@ -4468,6 +4757,7 @@
                         job_description: jd,
                         admin_id: adminId,
                         interview_duration: duration,
+                        interview_type: interviewType,
                         record_video: recordVideo,
                         custom_email_html: window._customEmailHtml || "",
                         scheduled_start: toUtcIso(scheduleStart),
@@ -4517,7 +4807,13 @@
                     document.getElementById('locationOptions').style.display = 'none';
 
                 } else {
-                    showToast("Failed to create session.", "error");
+                    const errData = await response.json().catch(() => ({}));
+                    console.error("422 Error details:", errData);
+                    let errMsg = errData.detail || "Failed to create session.";
+                    if (Array.isArray(errMsg)) {
+                        errMsg = errMsg.map(e => `${e.loc.join('.')}: ${e.msg}`).join(', ');
+                    }
+                    showToast(errMsg, "error");
                 }
             } catch (error) {
                 console.error(error);
@@ -4717,7 +5013,7 @@
         function openRescheduleModal(linkId, candidateName) {
             currentRescheduleLinkId = linkId;
             document.getElementById('rescheduleCandidateName').textContent = `For ${candidateName}`;
-            
+
             // Set default to 24 hours from now
             const tomorrow = new Date();
             tomorrow.setHours(tomorrow.getHours() + 24);
@@ -5029,7 +5325,7 @@
                 }
                 const dateObj = new Date(utcDateStr);
                 const dateStr = dateObj.toLocaleString('en-IN', { timeZone: 'Asia/Kolkata', year: 'numeric', month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit', hour12: true });
-                
+
                 let scoreText = '—';
                 if (currentStatus === 'completed' && s.avg_score != null) {
                     const color = s.avg_score >= 60 ? 'var(--accent)' : 'var(--danger)';
@@ -5141,7 +5437,7 @@
 
                 const linkUrl = normalizeFrontendUrl(`/index.html?session_id=${s.link_id}`);
                 let actionBtn = `<button class="btn-copy" onclick="copyLink(this, '${linkUrl}')" style="margin:0; padding:0.4rem 0.8rem; font-size:0.75rem;">Copy Link</button>`;
-                
+
                 if (currentStatus === 'completed') {
                     actionBtn = canViewDetailedAnalytics
                         ? `<button class="btn-copy" onclick="openLiveResults('${s.link_id}', '${s.candidate_name.replace(/'/g, "\\'")}')" style="margin:0; padding:0.4rem 0.8rem; font-size:0.75rem; background: #10b981; color: white; border: none; border-radius: 6px; cursor: pointer; transition: opacity 0.2s; font-weight: 600;">View Results</button>`
@@ -5241,7 +5537,7 @@
 
                 const linkUrl = normalizeFrontendUrl(`/index.html?session_id=${s.link_id}`);
                 let actionBtn = `<button class="btn-copy" onclick="copyLink(this, '${linkUrl}')" style="margin:0; padding:0.4rem 0.8rem; font-size:0.75rem;">Copy Link</button>`;
-                
+
                 if (currentStatus === 'completed') {
                     actionBtn = `<button class="btn-copy" onclick="openLiveResults('${s.link_id}', '${s.candidate_name.replace(/'/g, "\\'")}')" style="margin:0; padding:0.4rem 0.8rem; font-size:0.75rem; background: #10b981; color: white; border: none; border-radius: 6px; cursor: pointer; transition: opacity 0.2s; font-weight: 600;">View Results</button>`;
                 } else if (currentStatus === 'started') {
@@ -5717,6 +6013,24 @@
 
                 html += '</div>'; // End questions container
 
+                if (data.coding_round && data.coding_round.task) {
+                    html += '<strong style="color: var(--text-secondary); font-size: 0.85rem; text-transform: uppercase; letter-spacing: 1px; margin-top: 2rem; display: block;"><i class="fas fa-code"></i> Coding Round Results</strong>';
+                    html += '<div style="background: var(--bg-card); padding: 1.5rem; border-radius: var(--radius-sm); border: 1px solid var(--border); margin-top: 1rem;">';
+                    html += '<div style="margin-bottom: 1rem;">';
+                    html += '<h4 style="color: var(--text-primary); margin: 0; font-size: 1.1rem;">Problem Statement</h4>';
+                    html += `<p style="color: var(--text-muted); font-size: 0.9rem; margin-top: 0.5rem; line-height: 1.5; white-space: pre-wrap;">${data.coding_round.task.description || 'N/A'}</p>`;
+                    html += '</div>';
+                    html += '<div style="margin-bottom: 1rem;">';
+                    html += '<h4 style="color: var(--text-primary); margin: 0; font-size: 1.1rem;">Candidate Code</h4>';
+                    html += `<pre style="background: #0f172a; color: #e2e8f0; padding: 1rem; border-radius: 8px; margin-top: 0.5rem; overflow-x: auto; font-family: monospace;">${escapeHtml(data.coding_round.latest_code || '(No code written)')}</pre>`;
+                    html += '</div>';
+                    html += '<div style="background: rgba(6,214,160,0.06); padding: 0.75rem; border-radius: 6px; border-left: 3px solid var(--accent);">';
+                    html += '<strong style="color: var(--accent); font-size: 0.85rem;">🤖 AI Feedback</strong>';
+                    html += `<p style="color: var(--text-primary); margin-top: 0.4rem; font-size: 0.9rem; line-height: 1.5; white-space: pre-wrap;">${escapeHtml(data.coding_round.final_evaluation || data.coding_round.latest_feedback || 'No feedback yet.')}</p>`;
+                    html += '</div>';
+                    html += '</div>';
+                }
+
                 container.innerHTML = html;
 
             } catch (err) {
@@ -6050,24 +6364,35 @@
     <!-- Results Modal HTML -->
     <!-- ==================== RESCHEDULE MODAL ==================== -->
     <div id="rescheduleModal" class="modal-overlay hidden" style="z-index: 4000;">
-        <div class="modal-content" style="max-width: 450px; padding: 2rem; border-radius: 1.5rem; background: var(--bg-card); border: 1px solid var(--border);">
+        <div class="modal-content"
+            style="max-width: 450px; padding: 2rem; border-radius: 1.5rem; background: var(--bg-card); border: 1px solid var(--border);">
             <div style="display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 1.5rem;">
                 <div>
                     <h3 style="margin: 0; font-size: 1.25rem; color: var(--primary-light);">Reschedule Interview</h3>
-                    <p id="rescheduleCandidateName" style="margin: 0.25rem 0 0; font-size: 0.9rem; color: var(--text-muted);">For Candidate</p>
+                    <p id="rescheduleCandidateName"
+                        style="margin: 0.25rem 0 0; font-size: 0.9rem; color: var(--text-muted);">For Candidate</p>
                 </div>
-                <button onclick="closeRescheduleModal()" style="background: none; border: none; color: var(--text-muted); cursor: pointer; font-size: 1.25rem;"><i class="fas fa-times"></i></button>
+                <button onclick="closeRescheduleModal()"
+                    style="background: none; border: none; color: var(--text-muted); cursor: pointer; font-size: 1.25rem;"><i
+                        class="fas fa-times"></i></button>
             </div>
 
             <div class="form-group" style="margin-bottom: 1.5rem;">
-                <label style="display: block; margin-bottom: 0.5rem; font-size: 0.85rem; font-weight: 600; color: var(--text-primary);">New Expiration Date & Time</label>
-                <input type="datetime-local" id="newExpiryInput" class="input-field" style="width: 100%; padding: 0.75rem; background: rgba(0,0,0,0.2); border: 1px solid var(--border); border-radius: 0.75rem; color: white;">
-                <p style="margin: 0.5rem 0 0; font-size: 0.75rem; color: var(--text-muted);">The candidate will be able to start the interview until this time.</p>
+                <label
+                    style="display: block; margin-bottom: 0.5rem; font-size: 0.85rem; font-weight: 600; color: var(--text-primary);">New
+                    Expiration Date & Time</label>
+                <input type="datetime-local" id="newExpiryInput" class="input-field"
+                    style="width: 100%; padding: 0.75rem; background: rgba(0,0,0,0.2); border: 1px solid var(--border); border-radius: 0.75rem; color: white;">
+                <p style="margin: 0.5rem 0 0; font-size: 0.75rem; color: var(--text-muted);">The candidate will be able
+                    to start the interview until this time.</p>
             </div>
 
             <div style="display: flex; gap: 1rem; margin-top: 2rem;">
-                <button onclick="closeRescheduleModal()" style="flex: 1; padding: 0.75rem; background: rgba(255,255,255,0.05); color: white; border: 1px solid var(--border); border-radius: 0.75rem; cursor: pointer; font-weight: 600;">Cancel</button>
-                <button id="rescheduleSubmitBtn" onclick="submitReschedule()" style="flex: 2; padding: 0.75rem; background: var(--primary); color: white; border: none; border-radius: 0.75rem; cursor: pointer; font-weight: 700; transition: 0.3s;">Save & Update</button>
+                <button onclick="closeRescheduleModal()"
+                    style="flex: 1; padding: 0.75rem; background: rgba(255,255,255,0.05); color: white; border: 1px solid var(--border); border-radius: 0.75rem; cursor: pointer; font-weight: 600;">Cancel</button>
+                <button id="rescheduleSubmitBtn" onclick="submitReschedule()"
+                    style="flex: 2; padding: 0.75rem; background: var(--primary); color: white; border: none; border-radius: 0.75rem; cursor: pointer; font-weight: 700; transition: 0.3s;">Save
+                    & Update</button>
             </div>
         </div>
     </div>
@@ -6423,7 +6748,7 @@
                 <tr style="border-top:1px solid var(--border); transition:background 0.15s;" onmouseover="this.style.background='var(--bg-card-hover)'" onmouseout="this.style.background='transparent'">
                     <td style="padding:0.6rem 1rem; color:var(--text-muted);">${i + 1}</td>
                     <td style="padding:0.6rem 1rem; font-weight:500;">${escapeHtml(c.name)}</td>
-                    <td style="padding:0.6rem 1rem; color:var(--primary-light);">${escapeHtml(c.email)}</td>
+                    <td style="padding:0.6rem 1rem; font-weight:500; color:var(--primary-light);">${escapeHtml(c.email)}</td>
                     <td style="padding:0.6rem 0.5rem; text-align:center;">
                         <input type="checkbox" ${isChecked ? 'checked' : ''} onchange="toggleBulkVideo(${i}, this.checked)" style="width:16px;height:16px;cursor:pointer;accent-color:var(--primary);">
                     </td>
@@ -6447,10 +6772,10 @@
             const jd = document.getElementById('bulkJobDescription').value.trim();
             const customQuestions = document.getElementById('bulkCustomQuestions').value.trim();
             const aiInstructions = document.getElementById('bulkAiInstructions').value.trim();
-            const duration = parseInt(document.getElementById('bulkDuration').value) || 30;
-            const recordVideo = document.getElementById('bulkRecordVideo').checked;
             const schedStart = document.getElementById('bulkScheduleStart').value;
             const schedEnd = document.getElementById('bulkScheduleEnd').value;
+            const duration = parseInt(document.getElementById('bulkDuration').value) || 30;
+            const recordVideo = document.getElementById('bulkRecordVideo').checked;
 
             // HR Screening Preferences (Bulk)
             const hrScreening = {
@@ -6461,7 +6786,7 @@
 
             if (!jd) { showToast('Please enter a Job Description', 'error'); return; }
             if (bulkCandidates.length === 0) { showToast('Add at least one candidate', 'error'); return; }
-            
+
             if (schedStart) {
                 const start = new Date(schedStart);
                 if (start < new Date()) {
@@ -6578,7 +6903,8 @@
                 <div style="display: flex; align-items: center; gap: 10px;">
                     <div
                         style="width: 36px; height: 36px; border-radius: 10px; background: rgba(245,158,11,0.15); display: flex; align-items: center; justify-content: center; color: #f59e0b;">
-                        <i class="fas fa-envelope-open-text"></i></div>
+                        <i class="fas fa-envelope-open-text"></i>
+                    </div>
                     <div>
                         <h3 style="margin: 0; font-size: 1rem; color: var(--text-primary);">Email Preview & Editor</h3>
                         <p style="margin: 0; font-size: 0.75rem; color: var(--text-muted);">Edit the email content
@@ -6626,17 +6952,23 @@
     </div>
 
 
-    
+
 
     <!-- Live Results Modal -->
     <div id="liveResultsModal" class="modal-overlay hidden" style="z-index: 3000;">
-        <div class="modal-card" style="max-width: 900px; padding: 2rem; background: #0f172a; border-color: #1e293b; color: #f8fafc;">
-            <button class="modal-close" onclick="closeLiveResultsModal()" style="color: #94a3b8;"><i class="fas fa-times"></i></button>
-            <h2 style="font-size: 1.5rem; font-weight: 600; margin-bottom: 1.5rem; display: flex; align-items: center; gap: 0.5rem;">
-                <div style="width: 10px; height: 10px; background: #10b981; border-radius: 50%; animation: pulse-dot 1.5s infinite;"></div>
+        <div class="modal-card"
+            style="max-width: 900px; padding: 2rem; background: #0f172a; border-color: #1e293b; color: #f8fafc;">
+            <button class="modal-close" onclick="closeLiveResultsModal()" style="color: #94a3b8;"><i
+                    class="fas fa-times"></i></button>
+            <h2
+                style="font-size: 1.5rem; font-weight: 600; margin-bottom: 1.5rem; display: flex; align-items: center; gap: 0.5rem;">
+                <div
+                    style="width: 10px; height: 10px; background: #10b981; border-radius: 50%; animation: pulse-dot 1.5s infinite;">
+                </div>
                 Live Results Monitor
             </h2>
-            <div id="liveSessionsGrid" style="display: grid; grid-template-columns: repeat(auto-fit, minmax(350px, 1fr)); gap: 1.5rem; max-height: 70vh; overflow-y: auto;">
+            <div id="liveSessionsGrid"
+                style="display: grid; grid-template-columns: repeat(auto-fit, minmax(350px, 1fr)); gap: 1.5rem; max-height: 70vh; overflow-y: auto;">
                 <!-- Live sessions will be injected here -->
             </div>
             <div id="noLiveSessionsMsg" style="display: none; text-align: center; padding: 3rem; color: #64748b;">
@@ -6666,10 +6998,10 @@
                 if (!response.ok) return;
                 ongoingBackoffUntil = 0;
                 const data = await response.json();
-                
+
                 const count = data.count || 0;
                 document.getElementById('stat-ongoing').textContent = count;
-                
+
                 let liveCount = 0;
                 let alertCount = 0;
                 let speakingCount = 0;
@@ -6756,11 +7088,11 @@
 
         function closeAdminWebRTC(linkId) {
             if (adminSignalingSockets[linkId]) {
-                try { adminSignalingSockets[linkId].close(); } catch (e) {}
+                try { adminSignalingSockets[linkId].close(); } catch (e) { }
                 delete adminSignalingSockets[linkId];
             }
             if (adminRtcConnections[linkId]) {
-                try { adminRtcConnections[linkId].close(); } catch (e) {}
+                try { adminRtcConnections[linkId].close(); } catch (e) { }
                 delete adminRtcConnections[linkId];
             }
         }
@@ -6853,7 +7185,7 @@
                     } else if (data.type === 'ice-candidate') {
                         try {
                             await pc.addIceCandidate(new RTCIceCandidate(data.candidate));
-                        } catch(e) {}
+                        } catch (e) { }
                     } else if (data.type === 'candidate_disconnected') {
                         videoElement.srcObject = null;
                         videoElement.style.display = 'none';
@@ -6886,29 +7218,29 @@
         function escapeHtml(unsafe) {
             if (!unsafe) return '';
             return unsafe
-                 .toString()
-                 .replace(/&/g, "&amp;")
-                 .replace(/</g, "&lt;")
-                 .replace(/>/g, "&gt;")
-                 .replace(/"/g, "&quot;")
-                 .replace(/'/g, "&#039;");
+                .toString()
+                .replace(/&/g, "&amp;")
+                .replace(/</g, "&lt;")
+                .replace(/>/g, "&gt;")
+                .replace(/"/g, "&quot;")
+                .replace(/'/g, "&#039;");
         }
 
         function buildCardDetailsHtml(s, isOnline, statusColor, statusText) {
-            return `<div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 0.5rem;"><h3 style="font-size: 1.1rem; font-weight: 600; color: #f8fafc; margin: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;">${escapeHtml(s.candidate_name)}</h3><div style="display: flex; align-items: center; gap: 4px; background: ${isOnline ? 'rgba(16,185,129,0.1)' : 'rgba(245,158,11,0.1)'}; padding: 2px 6px; border-radius: 12px; border: 1px solid ${statusColor};"><div style="width: 6px; height: 6px; background: ${statusColor}; border-radius: 50%;"></div><span style="font-size: 0.6rem; color: ${statusColor}; font-weight: 700;">${statusText}</span></div></div><div style="font-size: 0.8rem; color: #94a3b8; display: flex; justify-content: space-between;"><span>Q: ${s.current_question || '?'}/${s.total_questions || '?'}</span><span>${s.elapsed_seconds ? Math.floor(s.elapsed_seconds/60) + 'm ' + (s.elapsed_seconds%60) + 's' : '--'}</span></div>`;
+            return `<div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 0.5rem;"><h3 style="font-size: 1.1rem; font-weight: 600; color: #f8fafc; margin: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;">${escapeHtml(s.candidate_name)}</h3><div style="display: flex; align-items: center; gap: 4px; background: ${isOnline ? 'rgba(16,185,129,0.1)' : 'rgba(245,158,11,0.1)'}; padding: 2px 6px; border-radius: 12px; border: 1px solid ${statusColor};"><div style="width: 6px; height: 6px; background: ${statusColor}; border-radius: 50%;"></div><span style="font-size: 0.6rem; color: ${statusColor}; font-weight: 700;">${statusText}</span></div></div><div style="font-size: 0.8rem; color: #94a3b8; display: flex; justify-content: space-between;"><span>Q: ${s.current_question || '?'}/${s.total_questions || '?'}</span><span>${s.elapsed_seconds ? Math.floor(s.elapsed_seconds / 60) + 'm ' + (s.elapsed_seconds % 60) + 's' : '--'}</span></div>`;
         }
 
         function renderLiveSessionsGrid(sessions) {
             const grid = document.getElementById('liveSessionsGrid');
             const noMsg = document.getElementById('noLiveSessionsMsg');
-            
+
             const currentLinkIds = sessions.map(s => s.link_id);
             // Clean up WebRTC connections for sessions that are no longer active
             Object.keys(adminSignalingSockets).forEach(id => {
                 if (!currentLinkIds.includes(id)) {
-                    try { adminSignalingSockets[id].close(); } catch(e) {}
+                    try { adminSignalingSockets[id].close(); } catch (e) { }
                     if (adminRtcConnections[id]) {
-                        try { adminRtcConnections[id].close(); } catch(e) {}
+                        try { adminRtcConnections[id].close(); } catch (e) { }
                         delete adminRtcConnections[id];
                     }
                     delete adminSignalingSockets[id];
@@ -6923,10 +7255,10 @@
                 noMsg.style.display = 'block';
                 return;
             }
-            
+
             noMsg.style.display = 'none';
             // DON'T do grid.innerHTML = '' — preserve existing cards with active WebRTC
-            
+
             // Remove cards for sessions no longer in list
             const existingCards = grid.querySelectorAll('[id^="live-card-"]');
             existingCards.forEach(c => {
@@ -6948,20 +7280,20 @@
                     }
                     updateLiveFallbackSnapshot(s.link_id, s.snapshot);
                     // Connection is now handled by IntersectionObserver
-                    return; 
+                    return;
                 }
-                
+
                 const card = document.createElement('div');
                 card.id = 'live-card-' + s.link_id;
                 card.dataset.linkId = s.link_id; // For observer
                 card.style.cssText = 'background: #1e293b; border: 1px solid #334155; border-radius: 8px; overflow: hidden;';
-                
+
                 // Observe this card for lazy loading
                 liveFeedObserver.observe(card);
-                
+
                 const snapContainer = document.createElement('div');
                 snapContainer.style.cssText = 'width: 100%; aspect-ratio: 16/9; background: #000; position: relative; border-bottom: 1px solid #334155; display:flex; align-items:center; justify-content:center; overflow:hidden;';
-                
+
                 if (isOnline) {
                     const snapshot = document.createElement('img');
                     snapshot.id = 'snapshot_' + s.link_id;
@@ -6987,7 +7319,7 @@
                     placeholder.style.cssText = `position:absolute; inset:0; display:${s.snapshot ? 'none' : 'flex'}; align-items:center; justify-content:center; color:#64748b; font-size:0.9rem; background:#000;`;
                     placeholder.innerHTML = '<div style="text-align:center;"><i class="fas fa-video" style="font-size: 2rem; margin-bottom: 0.5rem; display:block;"></i>Connecting live feed...</div>';
                     snapContainer.appendChild(placeholder);
-                    
+
                     // Note: initAdminWebRTC is now called by IntersectionObserver when card is visible
                 } else {
                     snapContainer.innerHTML = '<div style="color: #64748b; font-size: 0.9rem;"><i class="fas fa-video-slash" style="font-size: 2rem; margin-bottom: 0.5rem; display:block; text-align:center;"></i>Feed Unavailable</div>';
@@ -6995,18 +7327,18 @@
 
                 const telemetry = document.createElement('div');
                 telemetry.style.cssText = 'position: absolute; bottom: 8px; left: 8px; display: flex; gap: 8px;';
-                
-                const internetKbps = s.internet_kbps ? Math.round(s.internet_kbps/1000) + ' Mbps' : '--';
+
+                const internetKbps = s.internet_kbps ? Math.round(s.internet_kbps / 1000) + ' Mbps' : '--';
                 const audioLevel = s.audio_level ? Math.round(s.audio_level) + '%' : '--';
-                
+
                 telemetry.innerHTML = `<div style="background: rgba(0,0,0,0.6); backdrop-filter: blur(4px); color: #fff; padding: 4px 8px; border-radius: 4px; font-size: 0.7rem;"><i class="fas fa-wifi"></i> ${internetKbps}</div><div style="background: rgba(0,0,0,0.6); backdrop-filter: blur(4px); color: #fff; padding: 4px 8px; border-radius: 4px; font-size: 0.7rem;"><i class="fas fa-microphone"></i> ${audioLevel}</div>`;
                 snapContainer.appendChild(telemetry);
-                
+
                 const details = document.createElement('div');
                 details.className = 'live-card-details';
                 details.style.cssText = 'padding: 1rem;';
-                details.innerHTML = `<div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 0.5rem;"><h3 style="font-size: 1.1rem; font-weight: 600; color: #f8fafc; margin: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;">${escapeHtml(s.candidate_name)}</h3><div style="display: flex; align-items: center; gap: 4px; background: ${isOnline ? 'rgba(16,185,129,0.1)' : 'rgba(245,158,11,0.1)'}; padding: 2px 6px; border-radius: 12px; border: 1px solid ${statusColor};"><div style="width: 6px; height: 6px; background: ${statusColor}; border-radius: 50%;"></div><span style="font-size: 0.6rem; color: ${statusColor}; font-weight: 700;">${statusText}</span></div></div><div style="font-size: 0.8rem; color: #94a3b8; display: flex; justify-content: space-between;"><span>Q: ${s.current_question || '?'}/${s.total_questions || '?'}</span><span>${s.elapsed_seconds ? Math.floor(s.elapsed_seconds/60) + 'm ' + (s.elapsed_seconds%60) + 's' : '--'}</span></div>`;
-                
+                details.innerHTML = `<div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 0.5rem;"><h3 style="font-size: 1.1rem; font-weight: 600; color: #f8fafc; margin: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;">${escapeHtml(s.candidate_name)}</h3><div style="display: flex; align-items: center; gap: 4px; background: ${isOnline ? 'rgba(16,185,129,0.1)' : 'rgba(245,158,11,0.1)'}; padding: 2px 6px; border-radius: 12px; border: 1px solid ${statusColor};"><div style="width: 6px; height: 6px; background: ${statusColor}; border-radius: 50%;"></div><span style="font-size: 0.6rem; color: ${statusColor}; font-weight: 700;">${statusText}</span></div></div><div style="font-size: 0.8rem; color: #94a3b8; display: flex; justify-content: space-between;"><span>Q: ${s.current_question || '?'}/${s.total_questions || '?'}</span><span>${s.elapsed_seconds ? Math.floor(s.elapsed_seconds / 60) + 'm ' + (s.elapsed_seconds % 60) + 's' : '--'}</span></div>`;
+
                 card.appendChild(snapContainer);
                 card.appendChild(details);
                 grid.appendChild(card);
@@ -7020,12 +7352,164 @@
         }, 15000);
 
         const originalSwitchView = switchView;
-        switchView = function(viewId) {
+        switchView = function (viewId) {
             if (typeof originalSwitchView === 'function') originalSwitchView(viewId);
             if (viewId === 'overview') fetchOngoingInterviews();
         }
     </script>
 
+    <!-- Forgot Password Modal -->
+    <div id="forgotPasswordModal" class="modal-overlay hidden" style="z-index: 5000;">
+        <div class="modal-content" style="max-width: 400px; padding: 2rem; border-radius: 1.5rem; background: var(--bg-card); border: 1px solid var(--border);">
+            <div style="display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 1.5rem;">
+                <div>
+                    <h3 id="fpModalTitle" style="margin: 0; font-size: 1.25rem; color: var(--primary-light);">Reset Password</h3>
+                    <p id="fpModalSubtitle" style="margin: 0.25rem 0 0; font-size: 0.9rem; color: var(--text-muted);">Enter your username and email.</p>
+                </div>
+                <button onclick="closeForgotPasswordFlow()" style="background: none; border: none; color: var(--text-muted); cursor: pointer; font-size: 1.25rem;"><i class="fas fa-times"></i></button>
+            </div>
+
+            <!-- Step 1: Username & Email -->
+            <div id="fpStep1">
+                <div class="dash-form-group" style="margin-bottom: 1rem;">
+                    <label style="display: block; margin-bottom: 0.5rem; font-size: 0.85rem; font-weight: 600; color: var(--text-primary);">Username</label>
+                    <input type="text" id="fpUsername" class="dash-input" placeholder="e.g. admin">
+                </div>
+                <div class="dash-form-group" style="margin-bottom: 1rem;">
+                    <label style="display: block; margin-bottom: 0.5rem; font-size: 0.85rem; font-weight: 600; color: var(--text-primary);">Email Address</label>
+                    <input type="email" id="fpEmail" class="dash-input" placeholder="admin@company.com">
+                </div>
+                <button id="fpSendOtpBtn" onclick="sendOtp()" style="width: 100%; padding: 0.75rem; background: var(--primary); color: white; border: none; border-radius: 0.75rem; cursor: pointer; font-weight: 700; transition: 0.3s; margin-top: 1rem;">Send OTP</button>
+            </div>
+
+            <!-- Step 2: Verify OTP -->
+            <div id="fpStep2" class="hidden">
+                <div class="dash-form-group" style="margin-bottom: 1rem;">
+                    <label style="display: block; margin-bottom: 0.5rem; font-size: 0.85rem; font-weight: 600; color: var(--text-primary);">6-Digit OTP</label>
+                    <input type="text" id="fpOtp" class="dash-input" placeholder="123456" maxlength="6" style="letter-spacing: 5px; font-size: 1.2rem; text-align: center;">
+                </div>
+                <button id="fpVerifyOtpBtn" onclick="verifyOtp()" style="width: 100%; padding: 0.75rem; background: var(--primary); color: white; border: none; border-radius: 0.75rem; cursor: pointer; font-weight: 700; transition: 0.3s; margin-top: 1rem;">Verify OTP</button>
+            </div>
+
+            <!-- Step 3: New Password -->
+            <div id="fpStep3" class="hidden">
+                <div class="dash-form-group" style="margin-bottom: 1rem;">
+                    <label style="display: block; margin-bottom: 0.5rem; font-size: 0.85rem; font-weight: 600; color: var(--text-primary);">New Password</label>
+                    <input type="password" id="fpNewPassword" class="dash-input" placeholder="New Password">
+                </div>
+                <button id="fpResetBtn" onclick="submitNewPassword()" style="width: 100%; padding: 0.75rem; background: var(--primary); color: white; border: none; border-radius: 0.75rem; cursor: pointer; font-weight: 700; transition: 0.3s; margin-top: 1rem;">Reset Password</button>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        function openForgotPasswordFlow() {
+            document.getElementById('forgotPasswordModal').classList.remove('hidden');
+            document.getElementById('fpStep1').classList.remove('hidden');
+            document.getElementById('fpStep2').classList.add('hidden');
+            document.getElementById('fpStep3').classList.add('hidden');
+            document.getElementById('fpUsername').value = document.getElementById('username').value;
+            document.getElementById('fpEmail').value = '';
+            document.getElementById('fpOtp').value = '';
+            document.getElementById('fpNewPassword').value = '';
+            document.getElementById('fpModalTitle').textContent = 'Reset Password';
+            document.getElementById('fpModalSubtitle').textContent = 'Enter your username and email.';
+        }
+
+        function closeForgotPasswordFlow() {
+            document.getElementById('forgotPasswordModal').classList.add('hidden');
+        }
+
+        async function sendOtp() {
+            const username = document.getElementById('fpUsername').value.trim();
+            const email = document.getElementById('fpEmail').value.trim();
+            if (!username || !email) { showToast('Please enter both username and email.', 'error'); return; }
+            
+            const btn = document.getElementById('fpSendOtpBtn');
+            btn.innerHTML = '<span class="spinner"></span> Sending...';
+            btn.disabled = true;
+
+            try {
+                const res = await fetch(`${API_BASE}/admin/forgot-password`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ username, email })
+                });
+                const data = await res.json();
+                if (!res.ok) throw new Error(data.detail || 'Failed to send OTP.');
+                
+                showToast(data.message, 'success');
+                document.getElementById('fpStep1').classList.add('hidden');
+                document.getElementById('fpStep2').classList.remove('hidden');
+                document.getElementById('fpModalSubtitle').textContent = 'Check your email for the OTP.';
+            } catch (err) {
+                showToast(err.message, 'error');
+            } finally {
+                btn.innerHTML = 'Send OTP';
+                btn.disabled = false;
+            }
+        }
+
+        async function verifyOtp() {
+            const username = document.getElementById('fpUsername').value.trim();
+            const otp = document.getElementById('fpOtp').value.trim();
+            if (!otp || otp.length !== 6) { showToast('Please enter a valid 6-digit OTP.', 'error'); return; }
+            
+            const btn = document.getElementById('fpVerifyOtpBtn');
+            btn.innerHTML = '<span class="spinner"></span> Verifying...';
+            btn.disabled = true;
+
+            try {
+                const res = await fetch(`${API_BASE}/admin/verify-otp`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ username, otp })
+                });
+                const data = await res.json();
+                if (!res.ok) throw new Error(data.detail || 'Failed to verify OTP.');
+                
+                showToast(data.message, 'success');
+                document.getElementById('fpStep2').classList.add('hidden');
+                document.getElementById('fpStep3').classList.remove('hidden');
+                document.getElementById('fpModalSubtitle').textContent = 'Enter your new password.';
+            } catch (err) {
+                showToast(err.message, 'error');
+            } finally {
+                btn.innerHTML = 'Verify OTP';
+                btn.disabled = false;
+            }
+        }
+
+        async function submitNewPassword() {
+            const username = document.getElementById('fpUsername').value.trim();
+            const otp = document.getElementById('fpOtp').value.trim();
+            const new_password = document.getElementById('fpNewPassword').value.trim();
+            if (!new_password || new_password.length < 6) { showToast('Password must be at least 6 characters.', 'error'); return; }
+            
+            const btn = document.getElementById('fpResetBtn');
+            btn.innerHTML = '<span class="spinner"></span> Resetting...';
+            btn.disabled = true;
+
+            try {
+                const res = await fetch(`${API_BASE}/admin/reset-password`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ username, otp, new_password })
+                });
+                const data = await res.json();
+                if (!res.ok) throw new Error(data.detail || 'Failed to reset password.');
+                
+                showToast(data.message, 'success');
+                closeForgotPasswordFlow();
+                document.getElementById('password').value = '';
+            } catch (err) {
+                showToast(err.message, 'error');
+            } finally {
+                btn.innerHTML = 'Reset Password';
+                btn.disabled = false;
+            }
+        }
+    </script>
 </body>
 
 </html>
