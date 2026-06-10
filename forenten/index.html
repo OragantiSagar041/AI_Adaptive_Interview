@@ -1344,6 +1344,10 @@
                 <!-- AI Avatar (user webcam) -->
                 <div class="ip-avatar-card">
                     <video id="videoPreview" autoplay muted playsinline></video>
+                    <!-- Hidden elements for Screen Share + Webcam Compositing -->
+                    <video id="screenVideo" autoplay muted playsinline style="display:none;"></video>
+                    <video id="cameraVideo" autoplay muted playsinline style="display:none;"></video>
+                    <canvas id="compositeCanvas" width="1280" height="720" style="display:none;"></canvas>
                     <button id="cameraFallbackBtn" onclick="startCameraManual()" class="btn btn-primary"
                         style="position:absolute;top:50%;left:50%;transform:translate(-50%,-50%);z-index:2;display:none;">
                         Enable Camera
@@ -1511,6 +1515,64 @@
             </div>
 
         </div> <!-- End of interviewSection -->
+
+        <!-- ═══ CASE STUDY ROUND (Non-Technical) ═══ -->
+        <div id="caseStudySection" class="hidden" style="max-width:900px; margin:1.5rem auto; padding:0 1rem;">
+            <div style="background:linear-gradient(135deg,#1e1b4b,#312e81); border-radius:16px; padding:1.5rem 2rem; margin-bottom:1.5rem; color:white;">
+                <p style="font-size:0.75rem; text-transform:uppercase; letter-spacing:2px; opacity:0.7; margin-bottom:0.3rem;">Round 2</p>
+                <h2 id="caseStudyMainTitle" style="font-size:1.5rem; font-weight:800; margin:0 0 0.3rem 0;">📋 Written Case Study</h2>
+                <p id="caseStudySubtitle" style="font-size:0.85rem; opacity:0.8; margin:0;">Read each scenario carefully and write your strategy or approach.</p>
+            </div>
+
+            <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:1rem;">
+                <div style="display: flex; align-items: center; flex-wrap: wrap; gap: 8px;">
+                    <span style="font-weight:700; font-size:1rem;" id="caseStudyProgress">Question 1 of 3</span>
+                    <span id="caseStudySkillBadge" style="background:#818cf8; color:white; padding:3px 10px; border-radius:20px; font-size:0.75rem;">Skill</span>
+                    <span class="ip-status-badge" style="font-size:0.7rem; padding:2px 8px; margin-left: 5px;">🔴 RECORDING</span>
+                </div>
+                <div style="display:flex; gap:0.5rem;">
+                    <button id="caseStudyPrevBtn" onclick="caseStudyNav(-1)" class="btn btn-primary" style="font-size:0.85rem; padding:0.5rem 1rem;" disabled>← Previous</button>
+                    <button id="caseStudyNextBtn" onclick="caseStudyNav(1)" class="btn btn-primary" style="font-size:0.85rem; padding:0.5rem 1rem;">Next →</button>
+                    <button id="caseStudySubmitAllBtn" onclick="submitAllCaseStudies()" class="btn btn-danger" style="font-size:0.85rem; padding:0.5rem 1rem; display:none;">Submit All & Finish</button>
+                </div>
+            </div>
+
+            <div style="background:var(--card-bg,#fff); border:1px solid var(--border-color,#e5e7eb); border-radius:14px; padding:1.5rem 2rem; margin-bottom:1rem; box-shadow:0 2px 8px rgba(0,0,0,0.06);">
+                <h3 style="font-size:1.1rem; font-weight:700; color:#4f46e5; margin:0 0 0.8rem 0;">📖 Scenario</h3>
+                <p id="caseStudyScenarioText" style="font-size:0.95rem; line-height:1.7; color:var(--text-primary,#1f2937); background:#f8fafc; padding:1rem 1.2rem; border-radius:10px; border-left:4px solid #6366f1;"></p>
+            </div>
+
+            <div style="background:var(--card-bg,#fff); border:1px solid var(--border-color,#e5e7eb); border-radius:14px; padding:1.5rem 2rem; margin-bottom:1rem; box-shadow:0 2px 8px rgba(0,0,0,0.06);">
+                <h3 style="font-size:1.1rem; font-weight:700; color:#dc2626; margin:0 0 0.8rem 0;">❓ Question</h3>
+                <p id="caseStudyQuestionText" style="font-size:0.95rem; line-height:1.6; color:var(--text-primary,#1f2937); font-weight:600;"></p>
+            </div>
+
+            <div style="background:var(--card-bg,#fff); border:1px solid var(--border-color,#e5e7eb); border-radius:14px; padding:1.5rem 2rem; box-shadow:0 2px 8px rgba(0,0,0,0.06);">
+                <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:0.8rem;">
+                    <h3 style="font-size:1.1rem; font-weight:700; color:#059669; margin:0;">✍️ Your Answer</h3>
+                    <div style="display:flex; gap: 10px; align-items: center;">
+                        <button id="caseStudyVoiceBtn" onclick="toggleCaseStudyVoice()" class="btn" style="background:#e5e7eb; color:#374151; font-size:0.75rem; padding:4px 8px; border-radius:6px; display:flex; align-items:center; gap:5px; border:none; cursor:pointer;">
+                            🎙️ Start Voice Input
+                        </button>
+                        <span id="caseStudyWordCount" style="font-size:0.75rem; color:#6b7280;">0 words</span>
+                    </div>
+                </div>
+                <textarea id="caseStudyAnswerBox" 
+                    style="width:100%; min-height:250px; border:1px solid #d1d5db; border-radius:10px; padding:1rem; font-size:0.95rem; line-height:1.7; resize:vertical; font-family:inherit;"
+                    placeholder="Type your detailed response here. Describe your approach, reasoning, and specific steps you would take..."
+                    oninput="updateCaseStudyWordCount()"></textarea>
+                <div style="display:flex; justify-content:space-between; align-items:center; margin-top:0.8rem;">
+                    <p style="font-size:0.75rem; color:#9ca3af; margin:0;">💡 Tip: Structure your answer with clear steps and reasoning. Quality matters more than length.</p>
+                    <button onclick="saveCaseStudyAnswer()" class="btn btn-primary" style="font-size:0.85rem; padding:0.5rem 1.2rem;">💾 Save Answer</button>
+                </div>
+            </div>
+
+            <div id="caseStudyEvalCriteria" style="background:#fefce8; border:1px solid #fde68a; border-radius:14px; padding:1rem 1.5rem; margin-top:1rem;">
+                <h4 style="font-size:0.85rem; font-weight:700; color:#92400e; margin:0 0 0.5rem 0;">🎯 What we're looking for:</h4>
+                <ul id="caseStudyCriteriaList" style="margin:0; padding-left:1.2rem; font-size:0.85rem; color:#78350f;"></ul>
+            </div>
+        </div>
+        <!-- ═══ END CASE STUDY ROUND ═══ -->
 
         <div id="codingRoundSection" class="hidden coding-round-shell">
             <div class="coding-round-header">
@@ -2373,13 +2435,6 @@
             document.getElementById('uploadSection').classList.add('hidden');
             document.getElementById('interviewSection').classList.remove('hidden');
 
-            // Enforce Fullscreen
-            enableFullscreen();
-            interviewActive = true;
-            window.interviewActive = true;
-            interviewSubmitted = false;
-            window.interviewSubmitted = false;
-
             // Reset recording controls
             document.getElementById('startButton').disabled = false;
             document.getElementById('stopButton').disabled = true;
@@ -2387,12 +2442,23 @@
 
             // PRE-EMPTIVELY START CAMERA AND MIC 
             // Ensures browser accepts permissions from direct user click
-            if (!window.mediaStream || !window.mediaStream.active) {
+            if (!window.mediaStream || !window.mediaStream.active || !screenStream || !screenStream.active) {
                 console.log("Preemptively starting webcam on Disclaimer accept...");
                 if (typeof startFullSessionRecording === 'function') {
-                    await startFullSessionRecording();
+                    const success = await startFullSessionRecording();
+                    if (!success) {
+                        return; // Prevent interview start if sharing is cancelled
+                    }
                 }
             }
+            
+            // Enforce Fullscreen ONLY AFTER permissions granted
+            enableFullscreen();
+
+            interviewActive = true;
+            window.interviewActive = true;
+            interviewSubmitted = false;
+            window.interviewSubmitted = false;
 
             // Use the duration explicitly set by admin — never derive it from the schedule window
             const duration = (window.interviewDuration && Number(window.interviewDuration) > 0)
@@ -2411,12 +2477,34 @@
             backgroundNoiseCooldownUntil = 0;
             startGlobalCountdown(verbalRoundMinutes, 'verbal');
 
-            // Load first question
-            if (currentInterviewId && currentQuestionId) {
+            // Load first question OR jump to Case Study if all verbal questions are already answered
+            if (window.allVerbalAnswered) {
+                console.log("All verbal questions answered! Jumping to Case Study/Coding Round.");
+                if (window.interviewType === 'Non-Technical' || window.interviewType === 'Technical') {
+                    showStatus(window.interviewType === 'Non-Technical' ? 'Starting Written Case Study round...' : 'Starting coding round...', 'info');
+                    // wait 2 seconds then launch
+                    setTimeout(() => {
+                        launchCodingRound();
+                    }, 2000);
+                } else {
+                    endInterview(true);
+                }
+            } else if (currentInterviewId && currentQuestionId) {
                 console.log('Loading first question:', currentInterviewId, currentQuestionId);
                 await loadQuestion(currentInterviewId, currentQuestionId);
             } else {
                 alert("Error: Interview data missing. Please refresh.");
+            }
+        }
+
+        async function restartScreenShare() {
+            document.getElementById("screenShareWarning").style.display = "none";
+            const success = await startFullSessionRecording();
+            if (success) {
+                enableFullscreen();
+            } else {
+                // If they cancelled, prompt again
+                document.getElementById("screenShareWarning").style.display = "flex";
             }
         }
 
@@ -2663,6 +2751,7 @@
             window.interviewDuration = Number(data.interview_duration) > 0 ? Number(data.interview_duration) : 30;
             window.interviewType = data.interview_type || 'Technical';
             window.recordVideo = data.record_video !== false;
+            window.allVerbalAnswered = Boolean(data.all_verbal_answered);
 
             window.currentInterviewId = currentInterviewId;
             window.currentQuestionId = currentQuestionId;
@@ -3851,7 +3940,191 @@ Output: ${formatCodingValue(testCase.output)}${resultBlock}</pre>
             };
         }
 
+        // ═══ CASE STUDY ROUND (Non-Technical) ═══════════════════════════════
+        let caseStudyQuestions = [];
+        let caseStudyAnswers = [];
+        let caseStudyCurrentIndex = 0;
+        let caseStudyStarted = false;
+
+        async function launchCaseStudyRound() {
+            if (caseStudyStarted) return;
+            caseStudyStarted = true;
+
+            stopGlobalCountdown();
+            if (window.speechSynthesis) window.speechSynthesis.cancel();
+
+            // Save any remaining verbal answer
+            const currentAnswer = document.getElementById('transcriptionBox').value.trim();
+            if (currentAnswer) {
+                try {
+                    await saveCurrentAnswer();
+                    await saveBehavioralData(currentInterviewId, currentQuestionId, currentAnswer);
+                } catch (e) { console.error('Error saving final verbal answer:', e); }
+            }
+
+            // Hide interview section but keep it "active" for fullscreen check?
+            // Actually, if we show an iframe over it, we can keep interviewSection visible but covered,
+            // or we can add a flag so checkFullscreen knows we are still active.
+            document.getElementById('interviewSection').classList.add('hidden');
+            document.getElementById('caseStudySection').classList.remove('hidden'); // We will inject iframe here to satisfy isInterviewActive
+
+            interviewPhase = 'case_study';
+
+            showStatus('Opening Case Study round...', 'info');
+
+            const caseStudyUrl = new URL('case-study.html', window.location.href);
+            caseStudyUrl.searchParams.set('interview_id', currentInterviewId);
+            caseStudyUrl.searchParams.set('duration', String(codingRoundMinutes || 15));
+
+            window.caseStudyRoundComplete = async function() {
+                console.log('[Case Study] Round complete signal received from iframe');
+                const frame = document.getElementById('caseStudyIframe');
+                if (frame) frame.remove();
+                await endInterview(true);
+            };
+
+            // Inject iframe into caseStudySection so it takes up the whole screen
+            const container = document.getElementById('caseStudySection');
+            container.innerHTML = ''; // clear any old content
+            
+            const iframe = document.createElement('iframe');
+            iframe.id = 'caseStudyIframe';
+            iframe.src = caseStudyUrl.toString();
+            iframe.style.position = 'fixed';
+            iframe.style.top = '0';
+            iframe.style.left = '0';
+            iframe.style.width = '100vw';
+            iframe.style.height = '100vh';
+            iframe.style.border = 'none';
+            iframe.style.zIndex = '9999';
+            iframe.style.backgroundColor = '#f1f5f9';
+            iframe.allow = "camera; microphone; display-capture";
+            
+            container.appendChild(iframe);
+            
+            // Hide status immediately since iframe covers screen
+            document.getElementById('status').classList.add('hidden');
+            document.getElementById('status').style.display = 'none';
+
+            // Bring video preview and face warning to front so user can see them over iframe
+            const videoPreview = document.getElementById('videoPreview');
+            const faceWarning = document.getElementById('faceWarning');
+            if (videoPreview) {
+                document.body.appendChild(videoPreview);
+                videoPreview.style.position = 'fixed';
+                videoPreview.style.bottom = '20px';
+                videoPreview.style.left = '20px';
+                videoPreview.style.width = '150px';
+                videoPreview.style.height = '150px';
+                videoPreview.style.zIndex = '10000';
+                videoPreview.style.borderRadius = '50%';
+                videoPreview.style.boxShadow = '0 4px 15px rgba(0,0,0,0.3)';
+                videoPreview.style.border = '3px solid #6366f1';
+                videoPreview.style.objectFit = 'cover';
+            }
+            if (faceWarning) {
+                document.body.appendChild(faceWarning);
+                faceWarning.style.position = 'fixed';
+                faceWarning.style.top = '50%';
+                faceWarning.style.left = '50%';
+                faceWarning.style.transform = 'translate(-50%, -50%)';
+                faceWarning.style.zIndex = '10001';
+            }
+        }
+
+        function renderCaseStudyQuestion(index) {
+            if (index < 0 || index >= caseStudyQuestions.length) return;
+            const q = caseStudyQuestions[index];
+            caseStudyCurrentIndex = index;
+
+            document.getElementById('caseStudyProgress').textContent = `Question ${index + 1} of ${caseStudyQuestions.length}`;
+            document.getElementById('caseStudySkillBadge').textContent = q.skill_tested || 'Scenario';
+            document.getElementById('caseStudyScenarioText').textContent = q.scenario || '';
+            document.getElementById('caseStudyQuestionText').textContent = q.question || '';
+
+            // Load saved answer if any
+            const savedAnswer = caseStudyAnswers[index];
+            document.getElementById('caseStudyAnswerBox').value = savedAnswer ? (savedAnswer.answer_text || '') : '';
+            updateCaseStudyWordCount();
+
+            // Evaluation criteria
+            const criteriaList = document.getElementById('caseStudyCriteriaList');
+            criteriaList.innerHTML = '';
+            (q.evaluation_criteria || []).forEach(c => {
+                const li = document.createElement('li');
+                li.textContent = c;
+                criteriaList.appendChild(li);
+            });
+
+            // Button states
+            document.getElementById('caseStudyPrevBtn').disabled = index === 0;
+            const isLast = index === caseStudyQuestions.length - 1;
+            document.getElementById('caseStudyNextBtn').style.display = isLast ? 'none' : 'inline-flex';
+            document.getElementById('caseStudySubmitAllBtn').style.display = isLast ? 'inline-flex' : 'none';
+        }
+
+        async function caseStudyNav(direction) {
+            // Auto-save current answer before navigating
+            await saveCaseStudyAnswer();
+            const newIndex = caseStudyCurrentIndex + direction;
+            if (newIndex >= 0 && newIndex < caseStudyQuestions.length) {
+                renderCaseStudyQuestion(newIndex);
+            }
+        }
+
+        async function saveCaseStudyAnswer() {
+            const answerText = document.getElementById('caseStudyAnswerBox').value.trim();
+            if (!answerText) return;
+
+            // Update local state
+            caseStudyAnswers[caseStudyCurrentIndex] = { answer_text: answerText };
+
+            try {
+                await fetch(`${API_BASE_URL}/case-study/submit-answer`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        interview_id: currentInterviewId,
+                        question_index: caseStudyCurrentIndex,
+                        answer_text: answerText
+                    })
+                });
+                showStatus('Answer saved ✓', 'success');
+            } catch (e) {
+                console.error('Failed to save case study answer:', e);
+                showStatus('Failed to save answer. Try again.', 'error');
+            }
+        }
+
+        async function submitAllCaseStudies() {
+            // Save current answer first
+            await saveCaseStudyAnswer();
+
+            // Check if all questions have been answered
+            const unanswered = caseStudyAnswers.filter(a => !a || !a.answer_text).length;
+            if (unanswered > 0) {
+                const proceed = confirm(`You have ${unanswered} unanswered question(s). Are you sure you want to submit?`);
+                if (!proceed) return;
+            }
+
+            document.getElementById('caseStudySubmitAllBtn').disabled = true;
+            document.getElementById('caseStudySubmitAllBtn').innerHTML = '<span class="spinner"></span> Submitting...';
+            showStatus('Submitting all case study answers...', 'info');
+            await endInterview(true);
+        }
+
+        function updateCaseStudyWordCount() {
+            const text = document.getElementById('caseStudyAnswerBox').value.trim();
+            const words = text ? text.split(/\s+/).length : 0;
+            document.getElementById('caseStudyWordCount').textContent = `${words} words`;
+        }
+        // ═══ END CASE STUDY ROUND ═══════════════════════════════════════════
+
         async function launchCodingRound() {
+            // Non-Technical interviews use the Case Study round instead
+            if (window.interviewType === 'Non-Technical') {
+                return launchCaseStudyRound();
+            }
             if (codingSubmitInProgress) {
                 return;
             }
@@ -4144,10 +4417,11 @@ Output: ${formatCodingValue(testCase.output)}${resultBlock}</pre>
         }
 
         async function endInterview(alreadySaved = false) {
-            if (window.interviewType === 'Technical' && interviewPhase === 'verbal') {
-                const proceed = confirm("Do you want to end the verbal round early and proceed to the coding round?");
+            if ((window.interviewType === 'Technical' || window.interviewType === 'Non-Technical') && interviewPhase === 'verbal') {
+                const roundName = window.interviewType === 'Non-Technical' ? 'Written Case Study' : 'Coding';
+                const proceed = confirm(`Do you want to end the verbal round early and proceed to the ${roundName} round?`);
                 if (proceed) {
-                    showStatus('Starting coding round...', 'info');
+                    showStatus(`Starting ${roundName} round...`, 'info');
                     launchCodingRound();
                     return;
                 } else {
@@ -4199,10 +4473,12 @@ Output: ${formatCodingValue(testCase.output)}${resultBlock}</pre>
             // --- UI TRANSITION ---
             document.getElementById('interviewSection').classList.add('hidden');
             document.getElementById('codingRoundSection').classList.add('hidden');
+            document.getElementById('caseStudySection').classList.add('hidden');
             document.getElementById('status').classList.add('hidden');
+            document.getElementById('status').style.display = 'none'; // Fix inline style override
             document.getElementById('resultsSection').classList.remove('hidden');
             // Only show the upload spinner if video recording was enabled
-            if (window.recordVideo !== false && fullSessionRecorder) {
+            if (window.recordVideo !== false && cameraRecorder) {
                 document.getElementById('uploadStatusContainer').classList.remove('hidden');
             } else {
                 document.getElementById('uploadStatusContainer').classList.add('hidden');
@@ -4245,7 +4521,7 @@ Output: ${formatCodingValue(testCase.output)}${resultBlock}</pre>
 
                 // Stop and save full session recording in background
                 // ONLY if video recording was enabled AND we have an interview ID
-                if (currentInterviewId && window.recordVideo !== false && fullSessionRecorder) {
+                if (currentInterviewId && window.recordVideo !== false && cameraRecorder) {
                     showStatus('Uploading video recording... please do not close the tab yet.', 'info');
                     try {
                         await stopAndSaveFullSessionRecording(currentInterviewId);
@@ -4267,6 +4543,42 @@ Output: ${formatCodingValue(testCase.output)}${resultBlock}</pre>
                     console.log("[END] Video recording was disabled or no recorder — skipping upload.");
                     document.getElementById('uploadStatusContainer').classList.add('hidden');
                     document.getElementById('finalClosureMessage').classList.remove('hidden');
+                }
+
+                // ═══════════════════════════════════════════════════════════════
+                // ALWAYS stop camera & microphone when interview is fully done
+                // ═══════════════════════════════════════════════════════════════
+                try {
+                    if (window.mediaStream) {
+                        window.mediaStream.getTracks().forEach(track => {
+                            track.stop();
+                            console.log('[END] Stopped media track:', track.kind);
+                        });
+                        window.mediaStream = null;
+                    }
+                    // Also stop the local mediaStream variable
+                    if (mediaStream && mediaStream !== window.mediaStream) {
+                        mediaStream.getTracks().forEach(track => track.stop());
+                        mediaStream = null;
+                    }
+                    // Hide the video preview
+                    const videoPreview = document.getElementById('videoPreview');
+                    if (videoPreview) {
+                        videoPreview.srcObject = null;
+                        videoPreview.style.display = 'none';
+                    }
+                    // Stop speech recognition if still active
+                    if (window.recognition) {
+                        try { window.recognition.stop(); } catch(e) {}
+                        window.recognition = null;
+                    }
+                    if (window.testRecognition) {
+                        try { window.testRecognition.stop(); } catch(e) {}
+                        window.testRecognition = null;
+                    }
+                    console.log('[END] All media tracks stopped ✅');
+                } catch (mediaErr) {
+                    console.error('[END] Error stopping media:', mediaErr);
                 }
             })();
         }
@@ -4664,6 +4976,7 @@ Output: ${formatCodingValue(testCase.output)}${resultBlock}</pre>
                 background noise.</li>
             <li><strong><i class="fas fa-ban"></i> No Cheating</strong> Eye contact and face visibility are monitored
                 strictly.</li>
+            <li><strong><i class="fas fa-desktop"></i> Screen Sharing</strong> You must share your entire screen. Stopping it will terminate the interview.</li>
             <li><strong><i class="fas fa-image"></i> Plain Background</strong> Use a simple background to help AI face
                 detection.</li>
         </ul>
@@ -4687,6 +5000,24 @@ Output: ${formatCodingValue(testCase.output)}${resultBlock}</pre>
         style="padding: 12px 30px; font-size: 1rem; background: #374151; color: #fca5a5; border: 1px solid #ef4444; border-radius: 8px; cursor: pointer; margin-top: 10px;">
         Exit Interview
     </button>
+</div>
+
+<!-- Screen Share Warning Overlay -->
+<div id="screenShareWarning"
+    style="position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.95); z-index: 10000; display: none; align-items: center; justify-content: center; flex-direction: column; color: white; text-align: center;">
+    <div style="background: white; color: #1f2937; padding: 2.5rem; border-radius: 12px; max-width: 500px; width: 90%;">
+        <h1 style="color: #1f2937; font-size: 1.8rem; margin-bottom: 15px; font-weight: 700;">Screen Sharing Stopped</h1>
+        <p style="font-size: 1rem; color: #4b5563; margin-bottom: 10px; line-height: 1.5;">
+            We detected that screen sharing has been stopped. To continue your interview with proper proctoring, please restart screen sharing by clicking the button below.
+        </p>
+        <p id="screenShareChancesText" style="font-size: 0.85rem; color: #ef4444; margin-bottom: 20px; font-weight: 600;">
+            Note: Stopping screen sharing may affect your proctoring score.
+        </p>
+        <button onclick="restartScreenShare()"
+            style="padding: 12px 24px; font-size: 1rem; font-weight: 600; background: #2563eb; color: white; border: none; border-radius: 20px; cursor: pointer; width: 100%;">
+            Restart Screen Sharing
+        </button>
+    </div>
 </div>
 
 <div id="noiseAlertBanner" class="hidden"
@@ -4725,12 +5056,21 @@ Output: ${formatCodingValue(testCase.output)}${resultBlock}</pre>
 
     function checkFullscreen() {
         const warning = document.getElementById('fullscreenWarning');
-        const isInterviewActive = !document.getElementById('interviewSection').classList.contains('hidden') || !document.getElementById('codingRoundSection').classList.contains('hidden');
+        const interviewSec = document.getElementById('interviewSection');
+        const codingSec = document.getElementById('codingRoundSection');
+        const caseStudySec = document.getElementById('caseStudySection');
+        
+        let isInterviewActive = false;
+        if (interviewSec && !interviewSec.classList.contains('hidden')) isInterviewActive = true;
+        if (codingSec && !codingSec.classList.contains('hidden')) isInterviewActive = true;
+        if (caseStudySec && !caseStudySec.classList.contains('hidden')) isInterviewActive = true;
 
-        if (isInterviewActive && !document.fullscreenElement) {
-            warning.style.display = 'flex';
-        } else {
-            warning.style.display = 'none';
+        if (warning) {
+            if (isInterviewActive && !document.fullscreenElement) {
+                warning.style.display = 'flex';
+            } else {
+                warning.style.display = 'none';
+            }
         }
     }
 
@@ -4741,8 +5081,18 @@ Output: ${formatCodingValue(testCase.output)}${resultBlock}</pre>
 </script>
 <script>
     // FULL SESSION RECORDING LOGIC
-    let fullSessionRecorder = null;
-    let fullSessionChunks = [];
+    let cameraRecorder = null;
+    let cameraChunks = [];
+    let screenRecorder = null;
+    let screenChunks = [];
+
+    window.addEventListener('beforeunload', function (e) {
+        // if we are fully done or haven't started, don't warn
+        if (window.mediaStream && window.mediaStream.active && cameraRecorder && cameraRecorder.state === 'recording') {
+            e.preventDefault();
+            e.returnValue = '';
+        }
+    });
 
     function announceCandidateMediaReady() {
         const params = new URLSearchParams(window.location.search);
@@ -4780,8 +5130,12 @@ Output: ${formatCodingValue(testCase.output)}${resultBlock}</pre>
         }
     }
 
+    let screenStream = null;
+    let compositeStream = null;
+    let compositeAnimId = null;
+
     async function startFullSessionRecording() {
-        console.log("Initializing full session recording...");
+        console.log("Initializing full session recording with screen share...");
         const fallbackBtn = document.getElementById('cameraFallbackBtn');
         const loadingText = document.getElementById('cameraLoading');
 
@@ -4799,11 +5153,10 @@ Output: ${formatCodingValue(testCase.output)}${resultBlock}</pre>
         try {
             let stream = window.mediaStream;
 
-            // Explicit check: if no stream or inactive, get a new one
+            // 1. Get Camera & Mic
             if (!stream || !stream.active || stream.getVideoTracks().length === 0) {
-                console.log("Getting new stream for full session recording...");
+                console.log("Getting new stream for camera and microphone...");
                 try {
-                    // FIX #1: Use constrained resolution (640x480) to reduce GPU load and improve performance
                     stream = await navigator.mediaDevices.getUserMedia({
                         video: { width: { ideal: 640 }, height: { ideal: 480 }, frameRate: { ideal: 15, max: 24 } },
                         audio: true
@@ -4811,64 +5164,134 @@ Output: ${formatCodingValue(testCase.output)}${resultBlock}</pre>
                     window.mediaStream = stream;
                 } catch (e) {
                     console.error("Camera access failed:", e);
-                    // Show fallback button if auto-start fails
                     if (fallbackBtn) fallbackBtn.style.display = 'block';
                     if (loadingText) loadingText.textContent = "Camera access needed";
                     return false; // FAILED
                 }
             }
 
-            // Connect stream to video preview immediately
+            // 2. Get Screen Share
+            if (!screenStream || !screenStream.active) {
+                console.log("Requesting screen share...");
+                try {
+                    // Hint to the browser that we want the entire screen
+                    screenStream = await navigator.mediaDevices.getDisplayMedia({
+                        video: { 
+                            displaySurface: "monitor",
+                            frameRate: { ideal: 15, max: 24 } 
+                        },
+                        audio: false // We capture audio from the mic
+                    });
+                    
+                    const track = screenStream.getVideoTracks()[0];
+                    const settings = track.getSettings();
+                    
+                    // Enforce Entire Screen if the browser supports reporting the surface type
+                    if (settings.displaySurface && settings.displaySurface !== 'monitor') {
+                        alert("You must share your ENTIRE SCREEN for this interview. Tabs or windows are not allowed.");
+                        track.stop();
+                        screenStream = null;
+                        return false;
+                    }
+                    
+                    track.onended = () => {
+                        console.warn("Screen share was stopped by user");
+                        window.screenShareViolations = (window.screenShareViolations || 0) + 1;
+
+                        if (window.screenShareViolations >= 4) {
+                            // 4th stop → terminate immediately
+                            document.getElementById("screenShareWarning").style.display = "none";
+                            alert("⚠️ Interview terminated: Screen sharing was stopped 4 times. Your responses up to this point have been saved.");
+                            endInterview(true);
+                        } else {
+                            // Stops 1, 2, 3 → show warning
+                            const chancesLeft = 3 - window.screenShareViolations;
+                            const chancesText = document.getElementById("screenShareChancesText");
+                            if (chancesText) {
+                                if (chancesLeft === 0) {
+                                    chancesText.textContent = "⚠️ FINAL WARNING! One more stop will immediately terminate the interview.";
+                                    chancesText.style.color = "#dc2626";
+                                    chancesText.style.fontWeight = "800";
+                                } else {
+                                    chancesText.textContent = `Warning ${window.screenShareViolations} of 3: You have ${chancesLeft} warning(s) left before the interview is terminated.`;
+                                    chancesText.style.color = "#ef4444";
+                                }
+                            }
+                            document.getElementById("screenShareWarning").style.display = "flex";
+                        }
+                    };
+                } catch (e) {
+                    console.error("Screen share access failed:", e);
+                    alert("Screen sharing is required for this interview. Please grant permission to share your entire screen to proceed.");
+                    return false; // Block if they refuse
+                }
+            }
+
+            // 3. Setup Video Preview (Camera only, for candidate feedback)
             const videoPreview = document.getElementById('videoPreview');
             if (videoPreview) {
                 videoPreview.srcObject = stream;
-                videoPreview.muted = true; // Mute local playback to avoid feedback
-
-                // Use event listener for safer playback
+                videoPreview.muted = true;
                 videoPreview.onloadedmetadata = async () => {
                     try {
                         await videoPreview.play();
                         if (fallbackBtn) fallbackBtn.style.display = 'none';
                         if (loadingText) loadingText.style.display = 'none';
-                    } catch (e) {
-                        console.error("Preview play failed:", e);
-                    }
+                    } catch (e) { console.error("Preview play failed:", e); }
                 };
-
                 await videoPreview.play().catch(e => console.error("Preview play failed:", e));
 
                 if (fallbackBtn) fallbackBtn.style.display = 'none';
                 if (loadingText) loadingText.style.display = 'none';
 
-                // START FACE DETECTION
                 startFaceDetection(videoPreview);
                 startBackgroundNoiseMonitor(stream);
                 announceCandidateMediaReady();
-
             } else {
-                console.error("Video preview element not found!");
                 announceCandidateMediaReady();
             }
 
+            // 4. Setup Separate Dual Recording
             if (window.recordVideo !== false) {
-                // Re-initialize recorder — FIX #3: Cap bitrate to 500kbps to drastically reduce upload size
-                let options = { videoBitsPerSecond: 500000, audioBitsPerSecond: 64000 };
+                const screenVid = document.getElementById('screenVideo');
+                const camVid = document.getElementById('cameraVideo');
+
+                screenVid.srcObject = screenStream;
+                camVid.srcObject = stream;
+
+                await screenVid.play().catch(e => console.warn(e));
+                await camVid.play().catch(e => console.warn(e));
+                
+                // Mix in the audio track from the microphone to the screen stream
+                const audioTracks = stream.getAudioTracks();
+                if (audioTracks.length > 0) {
+                    screenStream.addTrack(audioTracks[0]);
+                }
+
+                // 5. Initialize MediaRecorders
+                let options = { videoBitsPerSecond: 800000, audioBitsPerSecond: 64000 };
                 if (MediaRecorder.isTypeSupported('video/webm;codecs=vp8,opus')) {
                     options.mimeType = 'video/webm;codecs=vp8,opus';
                 } else if (MediaRecorder.isTypeSupported('video/webm')) {
                     options.mimeType = 'video/webm';
                 }
                 
-                fullSessionRecorder = new MediaRecorder(stream, options);
-                fullSessionChunks = [];
-
-                fullSessionRecorder.ondataavailable = e => {
-                    if (e.data.size > 0) fullSessionChunks.push(e.data);
+                cameraRecorder = new MediaRecorder(stream, options);
+                cameraChunks = [];
+                cameraRecorder.ondataavailable = e => {
+                    if (e.data.size > 0) cameraChunks.push(e.data);
+                };
+                
+                screenRecorder = new MediaRecorder(screenStream, options);
+                screenChunks = [];
+                screenRecorder.ondataavailable = e => {
+                    if (e.data.size > 0) screenChunks.push(e.data);
                 };
 
-                // Start recording — collect chunks every 2s instead of 1s to reduce overhead
-                fullSessionRecorder.start(2000);
-                console.log("Full session recording STARTED ✅");
+                // Start recording
+                cameraRecorder.start(2000);
+                screenRecorder.start(2000);
+                console.log("Dual session recording STARTED ✅");
             } else {
                 console.log("Full session recording skipped (record_video=false) 🛑");
             }
@@ -5023,178 +5446,133 @@ Output: ${formatCodingValue(testCase.output)}${resultBlock}</pre>
     }
 
     async function stopAndSaveFullSessionRecording(interviewId) {
-        console.log("Stopping full session recording...");
+        console.log("Stopping dual session recording...");
         stopFaceDetection(); // Stop detection loop
         stopBackgroundNoiseMonitor();
+        
+        if (screenStream) {
+            screenStream.getTracks().forEach(track => {
+                track.onended = null; // Remove handler so intentional stop isn't treated as a violation
+                track.stop();
+            });
+            screenStream = null;
+        }
 
-        if (!fullSessionRecorder && window.recordVideo === false) {
+        if (!cameraRecorder && window.recordVideo === false) {
             console.log("Skipping save: video recording was disabled for this session.");
             if (window.mediaStream) window.mediaStream.getTracks().forEach(track => track.stop());
             return;
         }
 
-        if (!fullSessionRecorder) {
+        if (!cameraRecorder || !screenRecorder) {
             console.warn("No recorder found, skipping save.");
+            if (window.mediaStream) window.mediaStream.getTracks().forEach(track => track.stop());
             return;
         }
 
-        return new Promise((resolve, reject) => {
-            // If already stopped, just process chunks
-            if (fullSessionRecorder.state === "inactive") {
-                processAndUpload();
-                return;
-            }
+        return new Promise(async (resolve, reject) => {
+            let cameraDone = cameraRecorder.state === "inactive";
+            let screenDone = screenRecorder.state === "inactive";
 
-            async function processAndUpload() {
-                try {
-                    if (fullSessionChunks.length === 0) {
-                        console.warn("No video chunks captured.");
-                        resolve();
+            const progressText = document.getElementById('uploadPercentageText');
+            const progressBar = document.getElementById('uploadProgressBar');
+
+            const uploadVideo = (chunks, type) => {
+                return new Promise((uploadResolve, uploadReject) => {
+                    if (chunks.length === 0) {
+                        uploadResolve();
                         return;
                     }
-
-                    console.log("Preparing video blob...");
-                    const blob = new Blob(fullSessionChunks, { type: 'video/webm' });
-                    console.log(`Blob size: ${blob.size} bytes`);
-
+                    const blob = new Blob(chunks, { type: 'video/webm' });
                     const formData = new FormData();
-                    formData.append('file', blob, 'full_interview.webm');
+                    formData.append('file', blob, `interview_${type}.webm`);
                     formData.append('interview_id', interviewId);
+                    formData.append('recording_type', type);
+                    
                     const recordingSessionId = getSessionIdFromUrl();
                     if (recordingSessionId) {
                         formData.append('link_id', recordingSessionId);
                     }
 
-                    const progressText = document.getElementById('uploadPercentageText');
-                    const progressBar = document.getElementById('uploadProgressBar');
-
-                    await new Promise((uploadResolve, uploadReject) => {
-                        const xhr = new XMLHttpRequest();
-                        xhr.open('POST', `${API_BASE_URL}/upload-full-recording`, true);
-
-                        // Show file size and kick progress bar to 1% so user knows it started
-                        const sizeMB = (blob.size / (1024 * 1024)).toFixed(1);
-                        if (progressText) progressText.textContent = `Uploading ${sizeMB} MB... 0%`;
-                        if (progressBar) progressBar.style.width = '1%';
-
-                        // 5-minute hard timeout — unblocks the UI if server hangs
-                        const XHR_TIMEOUT_MS = 5 * 60 * 1000;
-                        xhr.timeout = XHR_TIMEOUT_MS;
-                        xhr.ontimeout = () => {
-                            console.warn("Video upload timed out after 5 minutes.");
-                            if (progressText) progressText.textContent = "Upload timed out. Responses are already saved.";
-                            uploadReject(new Error("Upload timed out"));
-                        };
-
-                        let cloudinarySimInterval = null;
-                        let realProgressReceived = false;
-                        let simulatedUploadInterval = null;
-                        let simUploadPct = 1;
-
-                        // FALLBACK: Start a simulated progress immediately.
-                        // Many reverse proxies (Render, Vercel) block lengthComputable,
-                        // so xhr.upload.onprogress never fires. This ensures the bar moves.
-                        simulatedUploadInterval = setInterval(() => {
-                            if (realProgressReceived) return; // real events took over
-                            simUploadPct += 1;
-                            if (simUploadPct > 45) {
-                                clearInterval(simulatedUploadInterval);
-                                simulatedUploadInterval = null;
-                            }
-                            if (progressBar) progressBar.style.width = simUploadPct + '%';
-                            if (progressText) progressText.textContent = `Uploading ${sizeMB} MB... ${simUploadPct}%`;
-                        }, 800); // ~36 seconds to reach 45%
-
-                        xhr.upload.onprogress = (e) => {
-                            if (e.lengthComputable) {
-                                realProgressReceived = true;
-                                if (simulatedUploadInterval) { clearInterval(simulatedUploadInterval); simulatedUploadInterval = null; }
-                                // Scale XHR progress to 0-50% (uploading to our server)
-                                const percent = Math.floor((e.loaded / e.total) * 50);
-                                if (progressBar) progressBar.style.width = percent + '%';
-                                if (progressText) progressText.textContent = `Uploading ${sizeMB} MB... ${percent}%`;
-                            }
-                            // Once real or simulated progress reaches ~50%, start Cloudinary simulation
-                        };
-
-                        // When XHR upload completes (readyState changes), start Cloudinary phase
-                        xhr.upload.onload = () => {
-                            if (simulatedUploadInterval) { clearInterval(simulatedUploadInterval); simulatedUploadInterval = null; }
-                            if (progressBar) progressBar.style.width = '50%';
-                            if (progressText) progressText.textContent = "Processing and saving to Cloudinary... (This may take a minute)";
-                            let simPercent = 50;
-                            cloudinarySimInterval = setInterval(() => {
-                                simPercent += 1;
-                                // Cap at 95% until we actually get the 200 OK from server
-                                if (simPercent > 95) {
-                                    clearInterval(cloudinarySimInterval);
-                                } else {
-                                    if (progressBar) progressBar.style.width = simPercent + '%';
-                                    if (progressText) progressText.textContent = `Processing video... ${simPercent}%`;
-                                }
-                            }, 1000); // 1% per second = ~45 seconds simulation
-                        };
-
-                        xhr.onload = () => {
-                            if (cloudinarySimInterval) clearInterval(cloudinarySimInterval);
-                            if (simulatedUploadInterval) clearInterval(simulatedUploadInterval);
-                            
-                            if (xhr.status === 200) {
-                                try {
-                                    const data = JSON.parse(xhr.responseText);
-                                    console.log("Full recording saved:", data);
-                                    
-                                    // Jump to 100%
-                                    if (progressBar) progressBar.style.width = '100%';
-                                    if (progressText) progressText.textContent = "Upload complete!";
-                                    
-                                    const normalizedPath = data.file_path ? data.file_path.replace(/\\/g, '/') : '';
-                                    if (window.mediaStream) {
-                                        window.mediaStream.getTracks().forEach(track => track.stop());
-                                    }
-                                    uploadResolve();
-                                } catch (e) {
-                                    uploadReject(new Error("Failed to parse server response"));
-                                }
-                            } else {
-                                uploadReject(new Error(`Upload failed: ${xhr.statusText}`));
-                            }
-                        };
-
-                        xhr.onerror = () => {
-                            if (cloudinarySimInterval) clearInterval(cloudinarySimInterval);
-                            if (simulatedUploadInterval) clearInterval(simulatedUploadInterval);
-                            uploadReject(new Error("Network error during upload"));
-                        };
-                        xhr.send(formData);
-                    });
-
-                    resolve(); // resolve the outer promise — the XHR runs in the background
-                } catch (e) {
-                    console.error("Error uploading full recording:", e);
-                    const progressText = document.getElementById('uploadPercentageText');
-                    if (progressText) progressText.textContent = "Upload failed. Your interview responses are safely saved.";
-                    resolve(); // Resolve to avoid blocking UI
-                }
-            }
-
-            let stopHandled = false;
-            const handleStop = () => {
-                if (stopHandled) return;
-                stopHandled = true;
-                processAndUpload();
+                    const xhr = new XMLHttpRequest();
+                    xhr.open('POST', `${API_BASE_URL}/upload-full-recording`, true);
+                    const XHR_TIMEOUT_MS = 5 * 60 * 1000;
+                    xhr.timeout = XHR_TIMEOUT_MS;
+                    
+                    xhr.upload.onprogress = (e) => {
+                        if (e.lengthComputable && type === "camera" && progressBar) {
+                            // Only use camera progress for UI to avoid jumping
+                            const percent = Math.floor((e.loaded / e.total) * 100);
+                            progressBar.style.width = percent + '%';
+                            if (progressText) progressText.textContent = `Uploading videos... ${percent}%`;
+                        }
+                    };
+                    
+                    xhr.onload = () => {
+                        if (xhr.status === 200) uploadResolve();
+                        else uploadReject(new Error(`Upload failed: ${xhr.statusText}`));
+                    };
+                    xhr.onerror = () => uploadReject(new Error("Network error during upload"));
+                    xhr.ontimeout = () => uploadReject(new Error("Upload timed out"));
+                    
+                    xhr.send(formData);
+                });
             };
 
-            fullSessionRecorder.onstop = handleStop;
-            try {
-                fullSessionRecorder.stop();
-            } catch (e) {
-                console.error("Error calling stop on fullSessionRecorder:", e);
-                handleStop();
-            }
+            const checkAndUpload = async () => {
+                if (cameraDone && screenDone) {
+                    try {
+                        if (progressText) progressText.textContent = `Uploading two videos... 0%`;
+                        if (progressBar) progressBar.style.width = '1%';
 
-            // Fallback: If onstop doesn't fire within 3 seconds, force it.
-            setTimeout(handleStop, 3000);
+                        console.log("Uploading camera and screen recordings...");
+                        await Promise.all([
+                            uploadVideo(cameraChunks, "camera"),
+                            uploadVideo(screenChunks, "screen")
+                        ]);
+
+                        if (progressBar) progressBar.style.width = '100%';
+                        if (progressText) progressText.textContent = "Upload complete!";
+                        console.log("Both recordings saved!");
+                        
+                        if (window.mediaStream) {
+                            window.mediaStream.getTracks().forEach(track => track.stop());
+                        }
+                        resolve();
+                    } catch (e) {
+                        console.error("Error processing/uploading full session:", e);
+                        if (progressText) progressText.textContent = "Upload failed. Your interview responses are safely saved.";
+                        resolve(); // Resolve anyway so interview completes
+                    }
+                }
+            };
+
+            let cameraStopHandled = false;
+            cameraRecorder.onstop = () => {
+                if (cameraStopHandled) return;
+                cameraStopHandled = true;
+                cameraDone = true;
+                checkAndUpload();
+            };
+            
+            let screenStopHandled = false;
+            screenRecorder.onstop = () => {
+                if (screenStopHandled) return;
+                screenStopHandled = true;
+                screenDone = true;
+                checkAndUpload();
+            };
+
+            try { if (!cameraDone) cameraRecorder.stop(); } catch(e) { cameraRecorder.onstop(); }
+            try { if (!screenDone) screenRecorder.stop(); } catch(e) { screenRecorder.onstop(); }
+            
+            // Check immediately in case they were already stopped
+            checkAndUpload();
+            
+            setTimeout(() => {
+                cameraRecorder.onstop();
+                screenRecorder.onstop();
+            }, 3000);
         });
     }
 
@@ -5270,9 +5648,11 @@ Output: ${formatCodingValue(testCase.output)}${resultBlock}</pre>
             }
             const rms = Math.sqrt(sumSquares / noiseDataArray.length);
             const now = Date.now();
+            const intSec = document.getElementById('interviewSection');
+            const codSec = document.getElementById('codingRoundSection');
             const isInterviewVisible =
-                !document.getElementById('interviewSection').classList.contains('hidden') ||
-                !document.getElementById('codingRoundSection').classList.contains('hidden');
+                (intSec && !intSec.classList.contains('hidden')) ||
+                (codSec && !codSec.classList.contains('hidden'));
             const candidateRecentlySpoke = (now - ((_qTrack && _qTrack.lastSpeechTime) || 0)) < 1500;
             const aiTalking = window.speechSynthesis && window.speechSynthesis.speaking;
 

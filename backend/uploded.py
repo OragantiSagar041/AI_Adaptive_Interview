@@ -2263,6 +2263,245 @@ def start_coding_round(req: CodingRoundStartRequest):
     }
 
 
+# ── CASE STUDY ROUND (Non-Technical) ─────────────────────────────────────────
+
+class CaseStudyStartRequest(BaseModel):
+    interview_id: str
+
+class CaseStudyAnswerRequest(BaseModel):
+    interview_id: str
+    question_index: int
+    answer_text: str
+
+def _generate_case_study_questions_ai(job_description: str, num_questions: int, profile_text: str = "") -> list:
+    """Generate case study questions using AI based on JD skills."""
+    system_prompt = """You are an expert HR interviewer who creates deep, scenario-based case study questions.
+You must return ONLY a valid JSON array of objects. Each object must have:
+- "scenario": A detailed real-world business scenario (3-5 sentences) that places the candidate in a specific situation
+- "question": The specific question asking what the candidate would do
+- "skill_tested": The key skill being evaluated (e.g., "Team Management", "Conflict Resolution")
+- "evaluation_criteria": Array of 3-4 things to look for in the answer
+
+IMPORTANT: Do NOT ask coding or technical questions. Focus on leadership, management, communication, problem-solving, and business strategy scenarios."""
+
+    user_prompt = f"""Based on the following Job Description, create exactly {num_questions} scenario-based case study questions.
+
+Job Description:
+{job_description[:3000]}
+
+{f'Candidate Profile: {profile_text[:1000]}' if profile_text else ''}
+
+Extract key non-technical skills from the JD (like team management, stakeholder communication, project planning, conflict resolution, etc.) and create realistic business scenarios that test those skills.
+
+Each scenario should describe a specific situation the candidate might face in this role, and ask them to write their strategy/approach.
+
+Return ONLY a JSON array. Example format:
+[
+  {{
+    "scenario": "You have just joined as a Project Manager and discover that two senior team members have a long-standing disagreement about the project architecture...",
+    "question": "How would you handle this situation to ensure project delivery stays on track while maintaining team morale?",
+    "skill_tested": "Conflict Resolution & Team Management",
+    "evaluation_criteria": ["Problem identification", "Stakeholder management", "Communication strategy", "Resolution approach"]
+  }}
+]"""
+
+    try:
+        from ai_client import chat_completion
+        response_text = chat_completion(
+            system_prompt=system_prompt,
+            user_prompt=user_prompt,
+            temperature=0.7
+        )
+        # Extract JSON array from response
+        import json, re
+        json_match = re.search(r'\[[\s\S]*\]', response_text)
+        if json_match:
+            questions = json.loads(json_match.group())
+            if isinstance(questions, list) and len(questions) > 0:
+                validated_questions = []
+                for q in questions:
+                    # Normalize keys to handle AI inconsistencies
+                    norm_q = {str(k).lower(): v for k, v in q.items()}
+                    
+                    scenario = norm_q.get("scenario") or norm_q.get("situation", "")
+                    question_text = norm_q.get("question") or norm_q.get("task", "")
+                    skill = norm_q.get("skill_tested", "Scenario")
+                    eval_criteria = norm_q.get("evaluation_criteria", [])
+                    
+                    if scenario and question_text:
+                        validated_questions.append({
+                            "scenario": scenario,
+                            "question": question_text,
+                            "skill_tested": skill,
+                            "evaluation_criteria": eval_criteria
+                        })
+                        
+                if validated_questions:
+                    return validated_questions[:num_questions]
+    except Exception as e:
+        print(f"[CASE STUDY] AI generation failed: {e}")
+    
+    return None  # Signal to use offline fallback
+
+
+def _generate_case_study_questions_offline(job_description: str, num_questions: int) -> list:
+    """Generate offline case study questions by extracting skills from JD."""
+    jd_lower = job_description.lower()
+    
+    # Map of skills to scenario templates
+    skill_scenarios = {
+        "team management": {
+            "scenario": "You are leading a cross-functional team of 12 members on a critical project with a tight deadline. Two key team members have conflicting approaches to a major deliverable, and the rest of the team is divided in their support.",
+            "question": "Describe your step-by-step strategy to resolve this conflict, align the team, and ensure the project is delivered on time.",
+            "skill_tested": "Team Management",
+            "evaluation_criteria": ["Leadership approach", "Conflict resolution", "Decision-making", "Team alignment"]
+        },
+        "stakeholder": {
+            "scenario": "A major stakeholder has raised concerns about the project's direction during a review meeting. They want significant changes that would require reworking 3 weeks of effort. Your team is already stretched thin.",
+            "question": "How would you handle this stakeholder's concerns while protecting your team's morale and the project timeline?",
+            "skill_tested": "Stakeholder Management",
+            "evaluation_criteria": ["Negotiation skills", "Communication", "Prioritization", "Compromise ability"]
+        },
+        "leadership": {
+            "scenario": "You have been promoted to lead a department that has been underperforming for the past two quarters. Employee morale is low, and there is high turnover. Senior management expects a turnaround within 90 days.",
+            "question": "Outline your 90-day plan to turn this department around, including specific actions for the first week, first month, and first quarter.",
+            "skill_tested": "Leadership & Strategic Planning",
+            "evaluation_criteria": ["Strategic thinking", "People management", "Quick wins identification", "Long-term planning"]
+        },
+        "communication": {
+            "scenario": "Your company is going through a major organizational restructuring. You need to communicate changes to your team that will affect their roles, reporting structure, and some may face relocation.",
+            "question": "How would you plan and execute this communication? What would you say, when, and how would you handle the emotional responses?",
+            "skill_tested": "Communication & Change Management",
+            "evaluation_criteria": ["Empathy", "Transparency", "Timing", "Follow-up support"]
+        },
+        "problem solving": {
+            "scenario": "A critical production system has failed during peak business hours. The technical team estimates 4-6 hours for a fix, but the business impact is $50,000 per hour. There's a workaround that is 80% effective but can be deployed in 30 minutes.",
+            "question": "Walk through your decision-making process. What would you do, who would you involve, and how would you communicate to stakeholders?",
+            "skill_tested": "Problem Solving & Decision Making",
+            "evaluation_criteria": ["Analytical thinking", "Risk assessment", "Communication under pressure", "Decision speed"]
+        },
+        "project": {
+            "scenario": "You are managing a project that is 3 weeks behind schedule and 15% over budget. The client is expecting a demo next week, and your best developer just submitted their resignation.",
+            "question": "What is your action plan to address these simultaneous challenges and deliver a successful outcome?",
+            "skill_tested": "Project Management & Crisis Handling",
+            "evaluation_criteria": ["Prioritization", "Resource management", "Client management", "Contingency planning"]
+        },
+        "negotiation": {
+            "scenario": "A key vendor has informed you that they are increasing their prices by 40% effective next quarter. This vendor provides a critical component for your product, and switching vendors would take 6 months.",
+            "question": "How would you approach this negotiation? What alternatives would you explore, and what would your strategy be?",
+            "skill_tested": "Negotiation & Vendor Management",
+            "evaluation_criteria": ["Negotiation tactics", "Alternative exploration", "Cost-benefit analysis", "Relationship management"]
+        },
+        "agile": {
+            "scenario": "Your team has been using Waterfall methodology but management wants to transition to Agile. Half the team is excited, but the other half is resistant to change. You have a major release in 2 months.",
+            "question": "How would you plan and execute this transition while maintaining productivity and team cohesion?",
+            "skill_tested": "Agile Transformation & Change Management",
+            "evaluation_criteria": ["Change management", "Training approach", "Gradual adoption strategy", "Measuring success"]
+        },
+        "client": {
+            "scenario": "An important client has escalated a complaint to your CEO about the quality of service they have been receiving. Your investigation reveals that the client's expectations were never properly documented, and your team has been delivering what they understood.",
+            "question": "How would you resolve this situation with the client, prevent it from happening again, and address any internal process gaps?",
+            "skill_tested": "Client Relationship Management",
+            "evaluation_criteria": ["Client empathy", "Root cause analysis", "Process improvement", "Relationship recovery"]
+        },
+        "budget": {
+            "scenario": "You have been asked to reduce your department's operating budget by 20% without laying off any employees. Current expenses include software licenses, training programs, travel, and contractor costs.",
+            "question": "Present your strategy for achieving this budget reduction while maintaining team productivity and morale.",
+            "skill_tested": "Budget Management & Optimization",
+            "evaluation_criteria": ["Financial analysis", "Creative solutions", "Impact assessment", "Prioritization"]
+        }
+    }
+    
+    # Find matching skills from JD
+    matched_questions = []
+    for skill_key, question_data in skill_scenarios.items():
+        if skill_key in jd_lower:
+            matched_questions.append(question_data)
+    
+    # If not enough matches, add generic ones
+    all_questions = list(skill_scenarios.values())
+    for q in all_questions:
+        if q not in matched_questions:
+            matched_questions.append(q)
+        if len(matched_questions) >= num_questions:
+            break
+    
+    return matched_questions[:num_questions]
+
+
+@app.post("/case-study/start")
+def start_case_study_round(req: CaseStudyStartRequest):
+    interview = get_interview_or_404(req.interview_id)
+    
+    # Check if case study round already exists
+    existing = interview.get("case_study_round")
+    if existing and existing.get("questions"):
+        return {
+            "interview_id": req.interview_id,
+            "case_study_round": existing,
+            "resumed": True,
+        }
+    
+    job_description = interview.get("job_description", "") or interview.get("profile_text", "")
+    profile_text = interview.get("profile_text", "")
+    
+    # Get the number of questions from the session
+    link_id = interview.get("link_id", "")
+    session = interview_sessions_collection.find_one({"link_id": link_id}) if link_id else None
+    num_questions = (session or {}).get("case_study_count", 3) or 3
+    num_questions = max(1, min(8, num_questions))
+    
+    # Try AI first, fall back to offline
+    questions = _generate_case_study_questions_ai(job_description, num_questions, profile_text)
+    if not questions:
+        print(f"[CASE STUDY] Using offline fallback for {num_questions} questions")
+        questions = _generate_case_study_questions_offline(job_description, num_questions)
+    
+    case_study_round = {
+        "status": "active",
+        "questions": questions,
+        "answers": [None] * len(questions),
+        "current_question": 0,
+        "total_questions": len(questions),
+        "started_at": datetime.now(timezone.utc).isoformat(),
+    }
+    
+    interviews_collection.update_one(
+        {"id": req.interview_id},
+        {"$set": {"case_study_round": case_study_round}}
+    )
+    
+    return {
+        "interview_id": req.interview_id,
+        "case_study_round": case_study_round,
+        "resumed": False,
+    }
+
+
+@app.post("/case-study/submit-answer")
+def submit_case_study_answer(req: CaseStudyAnswerRequest):
+    interview = get_interview_or_404(req.interview_id)
+    case_study = interview.get("case_study_round")
+    if not case_study:
+        raise HTTPException(status_code=400, detail="Case study round not started")
+    
+    answers = case_study.get("answers", [])
+    if 0 <= req.question_index < len(answers):
+        answers[req.question_index] = {
+            "answer_text": req.answer_text,
+            "submitted_at": datetime.now(timezone.utc).isoformat()
+        }
+    
+    interviews_collection.update_one(
+        {"_id": interview["_id"]},
+        {"$set": {
+            "case_study_round.answers": answers,
+            "case_study_round.current_question": req.question_index + 1
+        }}
+    )
+    
+    return {"status": "saved", "question_index": req.question_index}
+
 @app.get("/coding-round/{interview_id}")
 def get_coding_round(interview_id: str):
     interview = get_interview_or_404(interview_id)
@@ -2482,32 +2721,32 @@ def get_interview_details(link_id: str):
             interview_sessions_collection.update_one({"link_id": link_id}, {"$set": {"status": "completed"}})
 
     # Fetch recording path from interviews table
+    def get_url_from_raw_path(rpath):
+        if not rpath: return None
+        if rpath.startswith("http"): return rpath
+        if os.path.exists(rpath):
+            raw_path_fixed = rpath.replace("\\", "/")
+            idx = raw_path_fixed.find("uploads/")
+            if idx != -1: return raw_path_fixed[idx:]
+        print(f"Recording file not found on disk: {rpath}")
+        return None
+
     recording_url = None
+    screen_recording_url = None
+    
     raw_path = session_data.get("recording_path")
+    raw_screen_path = session_data.get("screen_recording_path")
+    
     if actual_interview_id:
         rec_row = interviews_collection.find_one({"id": actual_interview_id})
-        if not raw_path and rec_row and rec_row.get("recording_path"):
-            raw_path = rec_row["recording_path"]
-            if raw_path.startswith("http"):
-                recording_url = raw_path
-            elif os.path.exists(raw_path):
-                raw_path_fixed = raw_path.replace("\\", "/")
-                idx = raw_path_fixed.find("uploads/")
-                if idx != -1:
-                    recording_url = raw_path_fixed[idx:]
-            else:
-                print(f"Recording file not found on disk: {raw_path}")
-
-    if raw_path and not recording_url:
-        if raw_path.startswith("http"):
-            recording_url = raw_path
-        elif os.path.exists(raw_path):
-            raw_path_fixed = raw_path.replace("\\", "/")
-            idx = raw_path_fixed.find("uploads/")
-            if idx != -1:
-                recording_url = raw_path_fixed[idx:]
-        else:
-            print(f"Recording file not found on disk: {raw_path}")
+        if rec_row:
+            if not raw_path and rec_row.get("recording_path"):
+                raw_path = rec_row["recording_path"]
+            if not raw_screen_path and rec_row.get("screen_recording_path"):
+                raw_screen_path = rec_row["screen_recording_path"]
+                
+    recording_url = get_url_from_raw_path(raw_path)
+    screen_recording_url = get_url_from_raw_path(raw_screen_path)
 
     results = []
     total_tab_switches = 0
@@ -2583,6 +2822,7 @@ def get_interview_details(link_id: str):
         "strengths_summary": strengths,
         "weaknesses_summary": weaknesses,
         "recording_url": recording_url,
+        "screen_recording_url": screen_recording_url,
         "integrity": {
             "total_tab_switches": total_tab_switches,
             "total_face_alerts": total_face_alerts,
@@ -2645,6 +2885,7 @@ def analyze(req: AnalyzeRequest):
 async def upload_full_recording(
     interview_id: str = Form(...),
     link_id: Optional[str] = Form(None),
+    recording_type: Optional[str] = Form("camera"),
     file: UploadFile = File(...)
 ):
     try:
@@ -2653,7 +2894,8 @@ async def upload_full_recording(
         os.makedirs(recordings_dir, exist_ok=True)
         
         # Generate filename
-        filename = f"{interview_id}_full_recording.webm"
+        prefix = "camera" if recording_type == "camera" else "screen"
+        filename = f"{interview_id}_{prefix}_recording.webm"
         file_path = os.path.join(recordings_dir, filename)
         
         # Save file locally first since it can be large
@@ -2676,20 +2918,23 @@ async def upload_full_recording(
         except Exception as cloud_e:
             print(f"Error uploading to cloudinary: {cloud_e}")
             # Fallback to local path if cloudinary fails
-            normalized_path = file_path.replace("\\", "/")
+            normalized_path = file_path.replace("\\\\", "/")
             cloudinary_public_id = None
 
         # Update database
         uploaded_at = datetime.now(timezone.utc)
+        
+        path_key = "recording_path" if recording_type == "camera" else "screen_recording_path"
+        
         update_data = {
-            "recording_path": normalized_path,
-            "recording_uploaded_at": uploaded_at.isoformat(),
-            "recording_expires_at": (uploaded_at + timedelta(days=RECORDING_RETENTION_DAYS)).isoformat(),
-            "recording_retention_days": RECORDING_RETENTION_DAYS,
-            "recording_storage": "cloudinary" if cloudinary_public_id else "local"
+            path_key: normalized_path,
+            f"{path_key}_uploaded_at": uploaded_at.isoformat(),
+            f"{path_key}_expires_at": (uploaded_at + timedelta(days=RECORDING_RETENTION_DAYS)).isoformat(),
+            f"{path_key}_retention_days": RECORDING_RETENTION_DAYS,
+            f"{path_key}_storage": "cloudinary" if cloudinary_public_id else "local"
         }
         if cloudinary_public_id:
-            update_data["cloudinary_public_id"] = cloudinary_public_id
+            update_data[f"{path_key}_cloudinary_public_id"] = cloudinary_public_id
             
         interview_update = interviews_collection.update_one(
             {"id": interview_id},
@@ -2861,6 +3106,7 @@ class CreateSession(BaseModel):
     hr_screening: HRScreening = HRScreening()  # HR screening preferences
     custom_questions: str = ""
     ai_instructions: str = ""
+    case_study_count: int = 0  # Number of case study questions for Non-Technical round 2
 
 class ForgotPasswordRequest(BaseModel):
     username: str
@@ -3801,7 +4047,8 @@ async def create_session(data: CreateSession):
         "status": "pending",
         "hr_screening": data.hr_screening.dict(),
         "custom_questions": data.custom_questions,
-        "ai_instructions": data.ai_instructions
+        "ai_instructions": data.ai_instructions,
+        "case_study_count": data.case_study_count
     }
     
     # Task 4: Store scheduled time window
@@ -4252,6 +4499,7 @@ async def start_session_interview(link_id: str = Form(...)):
                             resume_question_id = next_q_id
                         else:
                             resume_question_id = last_answered  # already done all
+                            
             except Exception as resume_err:
                 print(f"⚠️ Could not determine resume question: {resume_err}")
 
@@ -4259,6 +4507,14 @@ async def start_session_interview(link_id: str = Form(...)):
                 (q for q in questions if int(q["id"]) == resume_question_id),
                 questions[0]
             ) if resume_question_id else questions[0]
+            
+            # Determine if we should skip the verbal round entirely upon resume
+            all_verbal_answered = False
+            try:
+                if answered_ids and len(answered_ids) >= len(questions):
+                    all_verbal_answered = True
+            except:
+                pass
 
             return {
                 "status": "started",
@@ -4270,7 +4526,8 @@ async def start_session_interview(link_id: str = Form(...)):
                 "candidate_name": candidate_name,
                 "interview_duration": interview_duration,
                 "interview_type": interview_type,
-                "record_video": row.get("record_video", True)
+                "record_video": row.get("record_video", True),
+                "all_verbal_answered": all_verbal_answered
             }
         
         # Fallback: regenerate if questions lost

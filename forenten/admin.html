@@ -3314,11 +3314,26 @@
 
                             <div class="dash-form-group">
                                 <label class="dash-label">Interview Type</label>
-                                <select class="dash-input" id="interviewType" style="padding: 0.7rem 1rem;">
+                                <select class="dash-input" id="interviewType" style="padding: 0.7rem 1rem;" onchange="toggleCaseStudyCount()">
                                     <option value="Technical">Technical (Includes Coding Round)</option>
                                     <option value="Normal">Normal (Standard AI Interview, No Coding)</option>
                                     <option value="Non-Technical">Non-Technical (Scenario/Case Study based)</option>
                                 </select>
+                            </div>
+                            <div class="dash-form-group" id="caseStudyCountGroup" style="display:none;">
+                                <label class="dash-label">Number of Case Study Questions (Round 2)</label>
+                                <select class="dash-input" id="caseStudyCount" style="padding: 0.7rem 1rem;">
+                                    <option value="2">2 Questions</option>
+                                    <option value="3" selected>3 Questions</option>
+                                    <option value="4">4 Questions</option>
+                                    <option value="5">5 Questions</option>
+                                    <option value="6">6 Questions</option>
+                                    <option value="7">7 Questions</option>
+                                    <option value="8">8 Questions</option>
+                                </select>
+                                <p style="font-size: 0.75rem; color: var(--text-muted); margin-top: 4px;">
+                                    AI will generate scenario-based case study questions from the Job Description skills. Candidate writes answers for each scenario.
+                                </p>
                             </div>
 
                             <div class="dash-form-group">
@@ -4700,6 +4715,11 @@
 
 
         // --- CREATE SESSION ---
+        function toggleCaseStudyCount() {
+            const type = document.getElementById('interviewType').value;
+            document.getElementById('caseStudyCountGroup').style.display = type === 'Non-Technical' ? 'block' : 'none';
+        }
+
         async function createSession() {
             const name = document.getElementById('candidateName').value.trim();
             const email = document.getElementById('candidateEmail').value.trim();
@@ -4764,7 +4784,8 @@
                         scheduled_end: toUtcIso(scheduleEnd),
                         hr_screening: hrScreening,
                         custom_questions: customQuestions,
-                        ai_instructions: aiInstructions
+                        ai_instructions: aiInstructions,
+                        case_study_count: interviewType === 'Non-Technical' ? parseInt(document.getElementById('caseStudyCount').value) || 3 : 0
                     })
                 });
 
@@ -5920,19 +5941,40 @@
 
                         ${data.recording_url ? `
                         <div style="flex: 1; min-width: 300px; background: var(--bg-card); border: 1px solid var(--border); border-radius: var(--radius-sm); padding: 1.25rem;">
-                            <strong style="color: var(--text-secondary); font-size: 0.85rem; text-transform: uppercase; letter-spacing: 1px;"><i class="fas fa-video"></i> Interview Recording</strong>
+                            <strong style="color: var(--text-secondary); font-size: 0.85rem; text-transform: uppercase; letter-spacing: 1px;"><i class="fas fa-video"></i> Camera Recording</strong>
                             <div style="margin-top: 1rem;">
                                 <video controls style="width: 100%; max-height: 250px; border-radius: 8px; background: #000;" onerror="handleVideoError(this)">
                                     <source src="${data.recording_url.startsWith('http') ? data.recording_url : API_BASE + '/' + data.recording_url}" type="video/webm">
                                 </video>
-                                <div id="videoErrorMsg" style="display:none; margin-top: 1rem; padding: 1rem; background: #fff5f5; border: 1px solid #feb2b2; border-radius: 8px; color: #c53030; font-size: 0.85rem;">
-                                    <i class="fas fa-exclamation-triangle"></i> Recording unavailable on server. 
+                                <div class="video-error-msg" style="display:none; margin-top: 1rem; padding: 1rem; background: #fff5f5; border: 1px solid #feb2b2; border-radius: 8px; color: #c53030; font-size: 0.85rem;">
+                                    <i class="fas fa-exclamation-triangle"></i> Recording unavailable. 
                                     <a href="${data.recording_url.startsWith('http') ? data.recording_url : API_BASE + '/' + data.recording_url}" target="_blank" style="color: #c53030; text-decoration: underline; font-weight: 700;">Try direct link</a>
                                 </div>
                                 <div style="margin-top: 0.5rem; text-align: right;">
-                                    <a href="${data.recording_url.startsWith('http') ? data.recording_url : API_BASE + '/' + data.recording_url}" download="interview_${escapeHtml(data.candidate_name) || 'recording'}.webm" 
+                                    <a href="${data.recording_url.startsWith('http') ? data.recording_url : API_BASE + '/' + data.recording_url}" download="interview_camera_${escapeHtml(data.candidate_name) || 'recording'}.webm" 
                                        style="color: var(--primary); text-decoration: none; font-size: 0.8rem; font-weight: 600;">
-                                        <i class="fas fa-download"></i> Download Video
+                                        <i class="fas fa-download"></i> Download Camera
+                                    </a>
+                                </div>
+                            </div>
+                        </div>
+                        ` : ''}
+                        
+                        ${data.screen_recording_url ? `
+                        <div style="flex: 1; min-width: 300px; background: var(--bg-card); border: 1px solid var(--border); border-radius: var(--radius-sm); padding: 1.25rem;">
+                            <strong style="color: var(--text-secondary); font-size: 0.85rem; text-transform: uppercase; letter-spacing: 1px;"><i class="fas fa-desktop"></i> Screen Recording</strong>
+                            <div style="margin-top: 1rem;">
+                                <video controls style="width: 100%; max-height: 250px; border-radius: 8px; background: #000;" onerror="handleVideoError(this)">
+                                    <source src="${data.screen_recording_url.startsWith('http') ? data.screen_recording_url : API_BASE + '/' + data.screen_recording_url}" type="video/webm">
+                                </video>
+                                <div class="video-error-msg" style="display:none; margin-top: 1rem; padding: 1rem; background: #fff5f5; border: 1px solid #feb2b2; border-radius: 8px; color: #c53030; font-size: 0.85rem;">
+                                    <i class="fas fa-exclamation-triangle"></i> Recording unavailable. 
+                                    <a href="${data.screen_recording_url.startsWith('http') ? data.screen_recording_url : API_BASE + '/' + data.screen_recording_url}" target="_blank" style="color: #c53030; text-decoration: underline; font-weight: 700;">Try direct link</a>
+                                </div>
+                                <div style="margin-top: 0.5rem; text-align: right;">
+                                    <a href="${data.screen_recording_url.startsWith('http') ? data.screen_recording_url : API_BASE + '/' + data.screen_recording_url}" download="interview_screen_${escapeHtml(data.candidate_name) || 'recording'}.webm" 
+                                       style="color: var(--primary); text-decoration: none; font-size: 0.8rem; font-weight: 600;">
+                                        <i class="fas fa-download"></i> Download Screen
                                     </a>
                                 </div>
                             </div>
@@ -6230,31 +6272,56 @@
                     <div style="display: flex; gap: 1rem; flex-wrap: wrap;">
                         ${data.recording_url ? `
                         <div style="flex: 1; min-width: 300px; background: var(--bg-input); border: 1px solid var(--border); border-radius: var(--radius-sm); padding: 1.25rem;">
-                            <strong style="color: var(--text-secondary); font-size: 0.85rem; text-transform: uppercase; letter-spacing: 1px;"><i class="fas fa-video"></i> Interview Recording</strong>
+                            <strong style="color: var(--text-secondary); font-size: 0.85rem; text-transform: uppercase; letter-spacing: 1px;"><i class="fas fa-video"></i> Camera Recording</strong>
                             <div style="margin-top: 1rem;">
                                 <video controls style="width: 100%; max-height: 360px; border-radius: 8px; background: #000;" onerror="handleVideoError(this)">
                                     <source src="${data.recording_url.startsWith('http') ? data.recording_url : API_BASE + '/' + data.recording_url}" type="video/webm">
                                     Your browser does not support the video tag.
                                 </video>
                                 <div class="video-error-msg" style="display:none; margin-top: 1rem; padding: 1rem; background: #fff5f5; border: 1px solid #feb2b2; border-radius: 8px; color: #c53030; font-size: 0.85rem;">
-                                    <i class="fas fa-exclamation-triangle"></i> Recording unavailable on server. This usually happens if the server restarted and the ephemeral recording was lost.
+                                    <i class="fas fa-exclamation-triangle"></i> Recording unavailable on server.
                                     <br><br>
                                     <a href="${data.recording_url.startsWith('http') ? data.recording_url : API_BASE + '/' + data.recording_url}" target="_blank" style="color: #c53030; text-decoration: underline; font-weight: 700;">Try direct link</a>
                                 </div>
                                 <div style="margin-top: 0.75rem;">
-                                    <a href="${data.recording_url.startsWith('http') ? data.recording_url : API_BASE + '/' + data.recording_url}" download="interview_${data.candidate_name || 'recording'}.webm"
+                                    <a href="${data.recording_url.startsWith('http') ? data.recording_url : API_BASE + '/' + data.recording_url}" download="interview_camera_${data.candidate_name || 'recording'}.webm"
                                        style="color: var(--primary); text-decoration: none; font-weight: 600; font-size: 0.9rem;">
-                                        <i class="fas fa-download"></i> Download Video
+                                        <i class="fas fa-download"></i> Download Camera
                                     </a>
                                 </div>
                             </div>
                         </div>
-                        ` : `
+                        ` : ''}
+
+                        ${data.screen_recording_url ? `
+                        <div style="flex: 1; min-width: 300px; background: var(--bg-input); border: 1px solid var(--border); border-radius: var(--radius-sm); padding: 1.25rem;">
+                            <strong style="color: var(--text-secondary); font-size: 0.85rem; text-transform: uppercase; letter-spacing: 1px;"><i class="fas fa-desktop"></i> Screen Recording</strong>
+                            <div style="margin-top: 1rem;">
+                                <video controls style="width: 100%; max-height: 360px; border-radius: 8px; background: #000;" onerror="handleVideoError(this)">
+                                    <source src="${data.screen_recording_url.startsWith('http') ? data.screen_recording_url : API_BASE + '/' + data.screen_recording_url}" type="video/webm">
+                                    Your browser does not support the video tag.
+                                </video>
+                                <div class="video-error-msg" style="display:none; margin-top: 1rem; padding: 1rem; background: #fff5f5; border: 1px solid #feb2b2; border-radius: 8px; color: #c53030; font-size: 0.85rem;">
+                                    <i class="fas fa-exclamation-triangle"></i> Recording unavailable on server.
+                                    <br><br>
+                                    <a href="${data.screen_recording_url.startsWith('http') ? data.screen_recording_url : API_BASE + '/' + data.screen_recording_url}" target="_blank" style="color: #c53030; text-decoration: underline; font-weight: 700;">Try direct link</a>
+                                </div>
+                                <div style="margin-top: 0.75rem;">
+                                    <a href="${data.screen_recording_url.startsWith('http') ? data.screen_recording_url : API_BASE + '/' + data.screen_recording_url}" download="interview_screen_${data.candidate_name || 'recording'}.webm"
+                                       style="color: var(--primary); text-decoration: none; font-weight: 600; font-size: 0.9rem;">
+                                        <i class="fas fa-download"></i> Download Screen
+                                    </a>
+                                </div>
+                            </div>
+                        </div>
+                        ` : ''}
+
+                        ${(!data.recording_url && !data.screen_recording_url) ? `
                         <div style="flex: 1; min-width: 300px; background: var(--bg-input); border: 1px solid var(--border); border-radius: var(--radius-sm); padding: 1.25rem;">
                             <strong style="color: var(--text-secondary); font-size: 0.85rem; text-transform: uppercase; letter-spacing: 1px;"><i class="fas fa-video-slash"></i> Interview Recording</strong>
                             <p style="color: var(--text-muted); margin-top: 0.75rem; font-size: 0.9rem;">No recording available for this interview.</p>
                         </div>
-                        `}
+                        ` : ''}
 
                         <div style="flex: 0 0 auto; min-width: 200px; background: var(--bg-input); border: 1px solid var(--border); border-radius: var(--radius-sm); padding: 1.25rem; display: flex; flex-direction: column; gap: 0.75rem;">
                             <strong style="color: var(--text-secondary); font-size: 0.85rem; text-transform: uppercase; letter-spacing: 1px;"><i class="fas fa-file-pdf"></i> Interview Report</strong>
