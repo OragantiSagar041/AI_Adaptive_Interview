@@ -4494,6 +4494,10 @@
                 document.getElementById('loginSection').classList.add('hidden');
                 document.getElementById('dashboardSection').classList.remove('hidden');
                 document.body.classList.add('dashboard-active');
+                
+                // Show Copilot only on Dashboard
+                const copilotFab = document.getElementById('copilotFab');
+                if (copilotFab) copilotFab.style.display = 'flex';
 
                 if (adminRole === 'master') {
                     showMasterDashboard();
@@ -4647,6 +4651,10 @@
                         document.getElementById('loginSection').classList.add('hidden');
                         document.getElementById('dashboardSection').classList.remove('hidden');
                         document.body.classList.add('dashboard-active'); // Enable full-screen layout
+                        
+                        // Show Copilot only on Dashboard
+                        const copilotFab = document.getElementById('copilotFab');
+                        if (copilotFab) copilotFab.style.display = 'flex';
                         
                         if (role === 'master') {
                             showMasterDashboard();
@@ -7858,7 +7866,7 @@
             border-radius: 50%;
             background: var(--gradient-1);
             color: white;
-            display: flex;
+            display: none; /* Hidden by default on login page */
             align-items: center;
             justify-content: center;
             font-size: 24px;
@@ -8097,7 +8105,7 @@
         }
     </style>
 
-    <div class="copilot-fab" id="copilotFab" onclick="toggleCopilot()">
+    <div class="copilot-fab" id="copilotFab" onclick="toggleCopilot()" style="display: none;">
         <i class="fas fa-robot"></i>
     </div>
 
