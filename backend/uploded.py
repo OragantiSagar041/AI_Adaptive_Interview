@@ -4876,6 +4876,10 @@ CRITICAL RULES:
         
         try:
             response_text = chat_completion(messages, temperature=0.3)
+            
+            if not response_text or not str(response_text).strip():
+                raise ValueError("Empty response from AI")
+                
             import json
             import re
             
