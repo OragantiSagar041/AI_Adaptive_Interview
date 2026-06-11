@@ -276,4 +276,4 @@ def extract_json(text: str) -> Optional[Dict]:
         return None
 
 
-print(f"✅ ai_client.py loaded — Provider: {get_active_provider()}, HF model: {_active_hf_model}")
+print(f"[OK] ai_client.py loaded | Provider: {get_active_provider()}, HF model: {_active_hf_model}")

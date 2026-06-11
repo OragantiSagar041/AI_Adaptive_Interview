@@ -222,4 +222,4 @@ Return VALID JSON ONLY — no markdown, no extra text.
         }
 
 
-print("✅ analyze_answer.py loaded — time-aware scoring with industry-standard rubric")
+print("[OK] analyze_answer.py loaded | time-aware scoring with industry-standard rubric")

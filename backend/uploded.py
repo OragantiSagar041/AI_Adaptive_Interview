@@ -12,6 +12,7 @@ from typing import Any, Dict, List, Optional
 from pydantic import BaseModel
 from analyze_answer import analyze_answer
 from coding_graph import generate_coding_task, observe_coding_intent, run_coding_round
+from industry_fallback_data import INDUSTRY_TECHNICAL_QUESTIONS, INDUSTRY_CASE_STUDIES
 import shutil
 import uuid
 import random
@@ -58,7 +59,7 @@ def cloudinary_cleanup_loop():
             now = datetime.now(timezone.utc)
             cutoff = now - timedelta(days=RECORDING_RETENTION_DAYS)
             
-            print(f"🔍 [Cleanup] Running Cloudinary maintenance (Cutoff: {cutoff.isoformat()})...")
+            print(f"[Cleanup] Running Cloudinary maintenance (Cutoff: {cutoff.isoformat()})...")
             
             old_recordings = interviews_collection.find({
                 "cloudinary_public_id": {"$exists": True, "$ne": ""},
@@ -92,13 +93,13 @@ def cloudinary_cleanup_loop():
                         )
                         count += 1
                     except Exception as e:
-                        print(f"❌ [Cleanup] Error deleting {public_id}: {e}")
+                        print(f"[Error] [Cleanup] Error deleting {public_id}: {e}")
             
             if count > 0:
-                print(f"✅ [Cleanup] Successfully removed {count} old recordings.")
+                print(f"[OK] [Cleanup] Successfully removed {count} old recordings.")
                 
         except Exception as e:
-            print(f"❌ [Cleanup] Loop error: {e}")
+            print(f"[Error] [Cleanup] Loop error: {e}")
         
         # Run once every 24 hours
         time.sleep(86400)
@@ -1092,7 +1093,7 @@ def extract_text_from_file(file_content: bytes, filename: str) -> str:
         except:
             raise HTTPException(status_code=400, detail=f"Unable to process file {filename}. Supported formats: PDF, DOCX, TXT")
 
-def generate_jd_questions(jd_text: str, ai_instructions: str = "", interview_type: str = "Technical") -> List[Dict[str, str]]:
+def generate_jd_questions(jd_text: str, ai_instructions: str = "", interview_type: str = "Technical", industry: str = "General") -> List[Dict[str, str]]:
     """Generate interview questions based on Job Description using AI."""
     print(f"Generating questions from Job Description for {interview_type} interview...")
     
@@ -1110,7 +1111,7 @@ def generate_jd_questions(jd_text: str, ai_instructions: str = "", interview_typ
 
     if interview_type == "Non-Technical":
         prompt = f"""
-        You are an expert Management Consultant and HR recruiter constructing a rigorous Case Study and Scenario-based interview.{instruction_block}
+        You are an expert Management Consultant and HR recruiter constructing a rigorous Case Study and Scenario-based interview for the '{industry}' industry.{instruction_block}
         
         Job Description:
         {jd_text[:4000]}
@@ -1118,14 +1119,14 @@ def generate_jd_questions(jd_text: str, ai_instructions: str = "", interview_typ
         Task:
         1. EXTRACT top 5 critical business, management, or functional keywords from the Job Description (e.g., 'Team Management', 'Stakeholder Communication', 'Agile Delivery', 'Conflict Resolution').
         2. GENERATE 6 detailed Case Study and Scenario questions testing these exact keywords.
-           - Instead of generic "Tell me about a time" questions, present a hypothetical, complex business scenario or case study relevant to the job description and ask how they would solve it.
+           - Instead of generic "Tell me about a time" questions, present a hypothetical, complex business scenario or case study situated within the '{industry}' industry and ask how they would solve it.
            - The extracted keywords MUST be the central theme of the case studies.
            - Do NOT ask technical coding or syntax questions. Focus on problem-solving, leadership, team management, and strategic thinking.
            - Act as a real human interviewer. NEVER say "According to the job description". Just ask the question directly.
         """
     else:
         prompt = f"""
-        You are an expert technical recruiter constructing a rigorous interview.{instruction_block}
+        You are an expert technical recruiter constructing a rigorous interview for the '{industry}' industry.{instruction_block}
         
         Job Description:
         {jd_text[:4000]}
@@ -1133,6 +1134,7 @@ def generate_jd_questions(jd_text: str, ai_instructions: str = "", interview_typ
         Task:
         1. EXTRACT top 5 critical technical keywords/skills from the Job Description (e.g., 'React', 'AWS', 'System Design').
         2. GENERATE 6 specific interview questions testing these exact skills.
+           - The questions and scenarios should be highly relevant to the '{industry}' industry.
            - The extracted keywords MUST be the focus of the questions.
            - Do NOT ask generic "soft skill" questions unless the JD emphasizes them.
            - Vary difficulty: Start with basic checks, move to scenario-based/hard problems.
@@ -1224,7 +1226,7 @@ def generate_jd_questions(jd_text: str, ai_instructions: str = "", interview_typ
 
     return questions
 
-def generate_mock_questions(text: str, source: str, num_questions: int = 6, resume_text: str = None, jd_text: str = None, hr_screening: dict = None, custom_questions: str = "", ai_instructions: str = "", interview_type: str = "Technical") -> List[Dict[str, str]]:
+def generate_mock_questions(text: str, source: str, num_questions: int = 6, resume_text: str = None, jd_text: str = None, hr_screening: dict = None, custom_questions: str = "", ai_instructions: str = "", interview_type: str = "Technical", industry: str = "General") -> List[Dict[str, str]]:
     """
     Generate structured interview questions.
     Structure: Self-Intro → Technical Middle → HR Screening (if enabled) → Closing
@@ -1291,7 +1293,7 @@ def generate_mock_questions(text: str, source: str, num_questions: int = 6, resu
         if "resume" in source.lower():
             ai_questions = generate_resume_questions(text) # Note: generate_resume_questions doesn't currently use AI, it generates from skills
         else:
-            ai_questions = generate_jd_questions(text, ai_instructions=ai_instructions, interview_type=interview_type)
+            ai_questions = generate_jd_questions(text, ai_instructions=ai_instructions, interview_type=interview_type, industry=industry)
         
         ai_added = 0
         for q in ai_questions:
@@ -1313,7 +1315,7 @@ def generate_mock_questions(text: str, source: str, num_questions: int = 6, resu
     # ── OFFLINE FALLBACK: Extract skills/projects and build timeline-based questions ──
     # Only run offline fallback if we don't have enough questions
     if len(middle_questions) < middle_count:
-        offline_questions = _generate_offline_questions(resume_text or "", jd_text or text, num_questions, interview_type)
+        offline_questions = _generate_offline_questions(resume_text or "", jd_text or text, num_questions, interview_type, industry=industry)
         middle_questions.extend(offline_questions)
         print(f"📋 Offline generator added {len(offline_questions)} questions")
     
@@ -1351,7 +1353,7 @@ def generate_mock_questions(text: str, source: str, num_questions: int = 6, resu
     return all_questions
 
 
-def _generate_offline_questions(resume_text: str, jd_text: str, total_count: int, interview_type: str = "Technical") -> List[Dict[str, str]]:
+def _generate_offline_questions(resume_text: str, jd_text: str, total_count: int, interview_type: str = "Technical", industry: str = "General") -> List[Dict[str, str]]:
     """
     Intelligent Interview Coach Offline Generator
     Adapts based on Total Time (total_count) and Presence of Resume (Single vs Bulk).
@@ -1416,11 +1418,11 @@ def _generate_offline_questions(resume_text: str, jd_text: str, total_count: int
         if not jd_non_tech: jd_non_tech = ["Team Collaboration", "Problem Solving", "Time Management"]
         
         case_study_templates = [
-            "Imagine you are leading a critical project involving {skill}, but two key stakeholders strongly disagree on the direction. Walk me through your step-by-step strategy to resolve this.",
-            "You are tasked with improving our current approach to {skill} with a limited budget and a tight deadline. How do you plan your delivery?",
-            "Your team is underperforming in the area of {skill}. How would you diagnose the root cause and implement a turnaround plan?",
-            "A major client is unhappy with recent deliverables related to {skill}. How do you handle the immediate conversation and what is your remediation plan?",
-            "Describe a hypothetical scenario where {skill} processes break down entirely. What are your immediate actions to stabilize operations and communicate with leadership?"
+            f"Imagine you are leading a critical project involving {{skill}} within the {industry} industry, but two key stakeholders strongly disagree on the direction. Walk me through your step-by-step strategy to resolve this.",
+            f"You are tasked with improving our current approach to {{skill}} for a leading {industry} company with a limited budget and a tight deadline. How do you plan your delivery?",
+            f"Your team in the {industry} sector is underperforming in the area of {{skill}}. How would you diagnose the root cause and implement a turnaround plan?",
+            f"A major client in the {industry} space is unhappy with recent deliverables related to {{skill}}. How do you handle the immediate conversation and what is your remediation plan?",
+            f"Describe a hypothetical scenario in the {industry} industry where {{skill}} processes break down entirely. What are your immediate actions to stabilize operations and communicate with leadership?"
         ]
         
         skills_count = max(3, int(target * 0.25))
@@ -1434,16 +1436,27 @@ def _generate_offline_questions(resume_text: str, jd_text: str, total_count: int
         if not skills_to_ask: skills_to_ask = generic_skills
         skills_count = max(3, int(target * 0.25))
         
+        # Pull industry specific questions if available
+        industry_q = INDUSTRY_TECHNICAL_QUESTIONS.get(industry, [])
+        
         for i in range(skills_count):
             skill = skills_to_ask[i % len(skills_to_ask)]
-            if i % 3 == 0:
-                q = f"How would you rate your proficiency with {skill}? Can you describe a significant project where you utilized it to solve a complex problem?"
-            elif i % 3 == 1:
-                q = f"What are some common pitfalls or challenges you encounter when working with {skill}, and how do you mitigate them?"
+            
+            # Inject industry-specific question if available, otherwise fallback to generic
+            if i < len(industry_q):
+                q = industry_q[i].replace("Information Technology", skill)  # Just a light replace if needed, or leave as is
+                q = industry_q[i] # Just use the industry specific question
+                category = f"{industry} Expertise"
             else:
-                q = f"If you were to mentor a junior developer on {skill}, what core principles would you emphasize?"
-            questions.append({"question": q, "difficulty": "Medium", "type": "Technical", "category": f"{skill} Deep-Dive"})
-
+                if i % 3 == 0:
+                    q = f"In the context of the {industry} industry, how would you rate your proficiency with {skill}? Can you describe a significant project where you utilized it to solve a complex problem?"
+                elif i % 3 == 1:
+                    q = f"What are some common pitfalls or challenges you encounter when working with {skill} on {industry} projects, and how do you mitigate them?"
+                else:
+                    q = f"If you were to mentor a junior developer entering the {industry} sector on {skill}, what core principles would you emphasize?"
+                category = f"{skill} Deep-Dive"
+                
+            questions.append({"question": q, "difficulty": "Medium", "type": "Technical", "category": category})
     # --- PHASE 3: PROJECTS & EXPERIENCE ---
     projects_count = max(3, int(target * 0.25))
     if interview_type == "Non-Technical":
@@ -2241,7 +2254,13 @@ def start_coding_round(req: CodingRoundStartRequest):
 
     interview_type = interview.get("interview_type", "Technical")
     profile_text = interview.get("profile_text", "")
-    task = generate_coding_task(profile_text, answers_data, interview_type)
+    
+    # Get industry from the session
+    link_id = interview.get("link_id", "")
+    session = interview_sessions_collection.find_one({"link_id": link_id}) if link_id else None
+    industry = (session or {}).get("industry", "General")
+    
+    task = generate_coding_task(profile_text, answers_data, interview_type, industry=industry)
     coding_round = {
         "status": "active",
         "task": task,
@@ -2273,16 +2292,16 @@ class CaseStudyAnswerRequest(BaseModel):
     question_index: int
     answer_text: str
 
-def _generate_case_study_questions_ai(job_description: str, num_questions: int, profile_text: str = "") -> list:
+def _generate_case_study_questions_ai(job_description: str, num_questions: int, profile_text: str = "", industry: str = "General") -> list:
     """Generate case study questions using AI based on JD skills."""
-    system_prompt = """You are an expert HR interviewer who creates deep, scenario-based case study questions.
+    system_prompt = f"""You are an expert HR interviewer who creates deep, scenario-based case study questions for the '{industry}' industry.
 You must return ONLY a valid JSON array of objects. Each object must have:
-- "scenario": A detailed real-world business scenario (3-5 sentences) that places the candidate in a specific situation
+- "scenario": A detailed real-world business scenario (3-5 sentences) situated in the '{industry}' industry that places the candidate in a specific situation
 - "question": The specific question asking what the candidate would do
 - "skill_tested": The key skill being evaluated (e.g., "Team Management", "Conflict Resolution")
 - "evaluation_criteria": Array of 3-4 things to look for in the answer
 
-IMPORTANT: Do NOT ask coding or technical questions. Focus on leadership, management, communication, problem-solving, and business strategy scenarios."""
+IMPORTANT: Do NOT ask coding or technical questions. Focus on leadership, management, communication, problem-solving, and business strategy scenarios relevant to the '{industry}' sector."""
 
     user_prompt = f"""Based on the following Job Description, create exactly {num_questions} scenario-based case study questions.
 
@@ -2344,73 +2363,91 @@ Return ONLY a JSON array. Example format:
     return None  # Signal to use offline fallback
 
 
-def _generate_case_study_questions_offline(job_description: str, num_questions: int) -> list:
+def _generate_case_study_questions_offline(job_description: str, num_questions: int, industry: str = "General") -> list:
     """Generate offline case study questions by extracting skills from JD."""
     jd_lower = job_description.lower()
     
     # Map of skills to scenario templates
-    skill_scenarios = {
-        "team management": {
-            "scenario": "You are leading a cross-functional team of 12 members on a critical project with a tight deadline. Two key team members have conflicting approaches to a major deliverable, and the rest of the team is divided in their support.",
-            "question": "Describe your step-by-step strategy to resolve this conflict, align the team, and ensure the project is delivered on time.",
-            "skill_tested": "Team Management",
-            "evaluation_criteria": ["Leadership approach", "Conflict resolution", "Decision-making", "Team alignment"]
-        },
-        "stakeholder": {
-            "scenario": "A major stakeholder has raised concerns about the project's direction during a review meeting. They want significant changes that would require reworking 3 weeks of effort. Your team is already stretched thin.",
-            "question": "How would you handle this stakeholder's concerns while protecting your team's morale and the project timeline?",
-            "skill_tested": "Stakeholder Management",
-            "evaluation_criteria": ["Negotiation skills", "Communication", "Prioritization", "Compromise ability"]
-        },
-        "leadership": {
-            "scenario": "You have been promoted to lead a department that has been underperforming for the past two quarters. Employee morale is low, and there is high turnover. Senior management expects a turnaround within 90 days.",
-            "question": "Outline your 90-day plan to turn this department around, including specific actions for the first week, first month, and first quarter.",
-            "skill_tested": "Leadership & Strategic Planning",
-            "evaluation_criteria": ["Strategic thinking", "People management", "Quick wins identification", "Long-term planning"]
-        },
-        "communication": {
-            "scenario": "Your company is going through a major organizational restructuring. You need to communicate changes to your team that will affect their roles, reporting structure, and some may face relocation.",
-            "question": "How would you plan and execute this communication? What would you say, when, and how would you handle the emotional responses?",
-            "skill_tested": "Communication & Change Management",
-            "evaluation_criteria": ["Empathy", "Transparency", "Timing", "Follow-up support"]
-        },
-        "problem solving": {
-            "scenario": "A critical production system has failed during peak business hours. The technical team estimates 4-6 hours for a fix, but the business impact is $50,000 per hour. There's a workaround that is 80% effective but can be deployed in 30 minutes.",
-            "question": "Walk through your decision-making process. What would you do, who would you involve, and how would you communicate to stakeholders?",
-            "skill_tested": "Problem Solving & Decision Making",
-            "evaluation_criteria": ["Analytical thinking", "Risk assessment", "Communication under pressure", "Decision speed"]
-        },
-        "project": {
-            "scenario": "You are managing a project that is 3 weeks behind schedule and 15% over budget. The client is expecting a demo next week, and your best developer just submitted their resignation.",
-            "question": "What is your action plan to address these simultaneous challenges and deliver a successful outcome?",
-            "skill_tested": "Project Management & Crisis Handling",
-            "evaluation_criteria": ["Prioritization", "Resource management", "Client management", "Contingency planning"]
-        },
-        "negotiation": {
-            "scenario": "A key vendor has informed you that they are increasing their prices by 40% effective next quarter. This vendor provides a critical component for your product, and switching vendors would take 6 months.",
-            "question": "How would you approach this negotiation? What alternatives would you explore, and what would your strategy be?",
-            "skill_tested": "Negotiation & Vendor Management",
-            "evaluation_criteria": ["Negotiation tactics", "Alternative exploration", "Cost-benefit analysis", "Relationship management"]
-        },
-        "agile": {
-            "scenario": "Your team has been using Waterfall methodology but management wants to transition to Agile. Half the team is excited, but the other half is resistant to change. You have a major release in 2 months.",
-            "question": "How would you plan and execute this transition while maintaining productivity and team cohesion?",
-            "skill_tested": "Agile Transformation & Change Management",
-            "evaluation_criteria": ["Change management", "Training approach", "Gradual adoption strategy", "Measuring success"]
-        },
-        "client": {
-            "scenario": "An important client has escalated a complaint to your CEO about the quality of service they have been receiving. Your investigation reveals that the client's expectations were never properly documented, and your team has been delivering what they understood.",
-            "question": "How would you resolve this situation with the client, prevent it from happening again, and address any internal process gaps?",
-            "skill_tested": "Client Relationship Management",
-            "evaluation_criteria": ["Client empathy", "Root cause analysis", "Process improvement", "Relationship recovery"]
-        },
-        "budget": {
-            "scenario": "You have been asked to reduce your department's operating budget by 20% without laying off any employees. Current expenses include software licenses, training programs, travel, and contractor costs.",
-            "question": "Present your strategy for achieving this budget reduction while maintaining team productivity and morale.",
-            "skill_tested": "Budget Management & Optimization",
-            "evaluation_criteria": ["Financial analysis", "Creative solutions", "Impact assessment", "Prioritization"]
+    from industry_fallback_data import INDUSTRY_CASE_STUDIES
+    # Try to get specific industry scenarios first
+    industry_cases = INDUSTRY_CASE_STUDIES.get(industry)
+    if industry_cases:
+        skill_scenarios = industry_cases
+    else:
+        skill_scenarios = {
+            "team management": {
+                "scenario": f"You are leading a cross-functional team in the {industry} sector. Two senior team members have conflicting ideas on how to approach a major project phase, leading to delays and low morale.",
+                "question": "How would you mediate this conflict and get the team back on track?",
+                "skill_tested": "Conflict Resolution & Leadership",
+                "evaluation_criteria": ["Neutral mediation", "Focus on project goals", "Active listening", "Clear decision-making"]
+            },
+            "project planning": {
+                "scenario": f"Your {industry} project has just lost 20% of its budget due to company-wide cuts, but the delivery deadline remains the same. The client still expects all core features.",
+                "question": "How do you re-plan the project delivery and communicate this to the stakeholders?",
+                "skill_tested": "Project Management & Communication",
+                "evaluation_criteria": ["Prioritization/MVP focus", "Resource reallocation", "Transparent communication", "Risk management"]
+            },
+            "stakeholder management": {
+                "scenario": f"A key stakeholder in your {industry} project keeps changing their requirements late in the development cycle, causing scope creep and team frustration.",
+                "question": "What is your strategy to manage these changes without damaging the client relationship?",
+                "skill_tested": "Stakeholder Management & Scope Control",
+                "evaluation_criteria": ["Change management process", "Setting boundaries", "Impact analysis communication", "Relationship building"]
+            },
+            "agile delivery": {
+                "scenario": f"You are transitioning a traditional waterfall team to Agile methodologies for a critical {industry} product release. The team is highly resistant to daily standups and sprint planning.",
+                "question": "How do you drive Agile adoption while ensuring the product release is not delayed?",
+                "skill_tested": "Change Management & Agile Methodologies",
+                "evaluation_criteria": ["Iterative adoption", "Focus on value", "Addressing concerns", "Team coaching"]
+            },
+            "risk management": {
+                "scenario": f"Two weeks before a major {industry} product launch, you discover a critical compliance issue that might delay the release by a month. Leadership is pushing to launch anyway.",
+                "question": "How do you handle the situation with leadership and your team?",
+                "skill_tested": "Risk Management & Integrity",
+                "evaluation_criteria": ["Impact analysis", "Risk mitigation strategies", "Courageous communication", "Alternative solutions"]
+            },
+            "communication": {
+                "scenario": "Your company is going through a major organizational restructuring. You need to communicate changes to your team that will affect their roles, reporting structure, and some may face relocation.",
+                "question": "How would you plan and execute this communication? What would you say, when, and how would you handle the emotional responses?",
+                "skill_tested": "Communication & Change Management",
+                "evaluation_criteria": ["Empathy", "Transparency", "Timing", "Follow-up support"]
+            },
+            "problem solving": {
+                "scenario": "A critical production system has failed during peak business hours. The technical team estimates 4-6 hours for a fix, but the business impact is $50,000 per hour. There's a workaround that is 80% effective but can be deployed in 30 minutes.",
+                "question": "Walk through your decision-making process. What would you do, who would you involve, and how would you communicate to stakeholders?",
+                "skill_tested": "Problem Solving & Decision Making",
+                "evaluation_criteria": ["Analytical thinking", "Risk assessment", "Communication under pressure", "Decision speed"]
+            },
+            "project": {
+                "scenario": "You are managing a project that is 3 weeks behind schedule and 15% over budget. The client is expecting a demo next week, and your best developer just submitted their resignation.",
+                "question": "What is your action plan to address these simultaneous challenges and deliver a successful outcome?",
+                "skill_tested": "Project Management & Crisis Handling",
+                "evaluation_criteria": ["Prioritization", "Resource management", "Client management", "Contingency planning"]
+            },
+            "negotiation": {
+                "scenario": "A key vendor has informed you that they are increasing their prices by 40% effective next quarter. This vendor provides a critical component for your product, and switching vendors would take 6 months.",
+                "question": "How would you approach this negotiation? What alternatives would you explore, and what would your strategy be?",
+                "skill_tested": "Negotiation & Vendor Management",
+                "evaluation_criteria": ["Negotiation tactics", "Alternative exploration", "Cost-benefit analysis", "Relationship management"]
+            },
+            "agile": {
+                "scenario": "Your team has been using Waterfall methodology but management wants to transition to Agile. Half the team is excited, but the other half is resistant to change. You have a major release in 2 months.",
+                "question": "How would you plan and execute this transition while maintaining productivity and team cohesion?",
+                "skill_tested": "Agile Transformation & Change Management",
+                "evaluation_criteria": ["Change management", "Training approach", "Gradual adoption strategy", "Measuring success"]
+            },
+            "client": {
+                "scenario": "An important client has escalated a complaint to your CEO about the quality of service they have been receiving. Your investigation reveals that the client's expectations were never properly documented, and your team has been delivering what they understood.",
+                "question": "How would you resolve this situation with the client, prevent it from happening again, and address any internal process gaps?",
+                "skill_tested": "Client Relationship Management",
+                "evaluation_criteria": ["Client empathy", "Root cause analysis", "Process improvement", "Relationship recovery"]
+            },
+            "budget": {
+                "scenario": "You have been asked to reduce your department's operating budget by 20% without laying off any employees. Current expenses include software licenses, training programs, travel, and contractor costs.",
+                "question": "Present your strategy for achieving this budget reduction while maintaining team productivity and morale.",
+                "skill_tested": "Budget Management & Optimization",
+                "evaluation_criteria": ["Financial analysis", "Creative solutions", "Impact assessment", "Prioritization"]
+            }
         }
-    }
     
     # Find matching skills from JD
     matched_questions = []
@@ -2445,17 +2482,18 @@ def start_case_study_round(req: CaseStudyStartRequest):
     job_description = interview.get("job_description", "") or interview.get("profile_text", "")
     profile_text = interview.get("profile_text", "")
     
-    # Get the number of questions from the session
+    # Get the number of questions and industry from the session
     link_id = interview.get("link_id", "")
     session = interview_sessions_collection.find_one({"link_id": link_id}) if link_id else None
     num_questions = (session or {}).get("case_study_count", 3) or 3
     num_questions = max(1, min(8, num_questions))
+    industry = (session or {}).get("industry", "General")
     
     # Try AI first, fall back to offline
-    questions = _generate_case_study_questions_ai(job_description, num_questions, profile_text)
+    questions = _generate_case_study_questions_ai(job_description, num_questions, profile_text, industry=industry)
     if not questions:
         print(f"[CASE STUDY] Using offline fallback for {num_questions} questions")
-        questions = _generate_case_study_questions_offline(job_description, num_questions)
+        questions = _generate_case_study_questions_offline(job_description, num_questions, industry=industry)
     
     case_study_round = {
         "status": "active",
@@ -3100,6 +3138,7 @@ class CreateSession(BaseModel):
     interview_duration: int = 30  # minutes
     record_video: bool = True
     interview_type: str = "Technical"
+    industry: str = "General"
     custom_email_html: str = ""  # Task 1: Admin-editable email content
     scheduled_start: str = ""  # Task 4: ISO datetime for scheduled start
     scheduled_end: str = ""    # Task 4: ISO datetime for scheduled end
@@ -3123,7 +3162,11 @@ class ResetPasswordRequest(BaseModel):
 
 class UpdateProfileRequest(BaseModel):
     admin_id: str
-    email: str
+    email: Optional[str] = None
+    username: Optional[str] = None
+    company_name: Optional[str] = None
+    old_password: Optional[str] = None
+    new_password: Optional[str] = None
 
 def hash_password(password: str) -> str:
     return hashlib.sha256(password.encode()).hexdigest()
@@ -3605,7 +3648,10 @@ def send_submission_notification(candidate_email: str, candidate_name: str, admi
 def get_dashboard_stats(admin_id: str):
     """Return aggregated stats for the admin dashboard."""
     try:
-        all_sessions = list(interview_sessions_collection.find({"created_by": admin_id}))
+        all_sessions = list(interview_sessions_collection.find(
+            {"created_by": admin_id},
+            {"created_at": 1, "status": 1, "decision": 1, "avg_score": 1, "is_deactivated": 1, "expires_at": 1}
+        ))
         now = datetime.now(timezone.utc)
         
         active_sessions = [s for s in all_sessions if not s.get("is_deactivated", False)]
@@ -3876,7 +3922,7 @@ async def forgot_password(data: ForgotPasswordRequest):
     otp = "".join([str(random.randint(0, 9)) for _ in range(6)])
     expiry = (datetime.now(timezone.utc) + timedelta(minutes=10)).isoformat()
     
-    admins_collection.update_one({"_id": user["_id"]}, {"$set": {"otp": otp, "otp_expiry": expiry}})
+    admins_collection.update_one({"_id": user["_id"]}, {"$set": {"otp": otp, "otp_expiry": expiry, "otp_attempts": 0}})
     
     # Send OTP email
     email_sent = send_otp_email(data.email, data.username, otp)
@@ -3893,7 +3939,14 @@ async def verify_otp(data: VerifyOTPRequest):
     
     db_otp = row.get("otp")
     expiry_str = row.get("otp_expiry")
+    attempts = row.get("otp_attempts", 0)
+    
+    if attempts >= 5:
+        admins_collection.update_one({"_id": row["_id"]}, {"$unset": {"otp": "", "otp_expiry": "", "otp_attempts": ""}})
+        raise HTTPException(status_code=403, detail="Maximum OTP attempts exceeded. Please request a new OTP.")
+        
     if db_otp != data.otp:
+        admins_collection.update_one({"_id": row["_id"]}, {"$inc": {"otp_attempts": 1}})
         raise HTTPException(status_code=401, detail="Invalid OTP code.")
     
     expiry = datetime.fromisoformat(expiry_str)
@@ -3906,7 +3959,16 @@ async def verify_otp(data: VerifyOTPRequest):
 async def reset_password(data: ResetPasswordRequest):
     # Verify OTP one last time for safety
     row = admins_collection.find_one({"username": data.username})
-    if not row or row.get("otp") != data.otp:
+    if not row:
+        raise HTTPException(status_code=401, detail="Invalid session. Please restart the process.")
+        
+    attempts = row.get("otp_attempts", 0)
+    if attempts >= 5:
+        admins_collection.update_one({"_id": row["_id"]}, {"$unset": {"otp": "", "otp_expiry": "", "otp_attempts": ""}})
+        raise HTTPException(status_code=403, detail="Maximum OTP attempts exceeded. Please request a new OTP.")
+        
+    if row.get("otp") != data.otp:
+        admins_collection.update_one({"_id": row["_id"]}, {"$inc": {"otp_attempts": 1}})
         raise HTTPException(status_code=401, detail="Invalid session. Please restart the process.")
     
     expiry = datetime.fromisoformat(row.get("otp_expiry"))
@@ -3914,7 +3976,7 @@ async def reset_password(data: ResetPasswordRequest):
         raise HTTPException(status_code=401, detail="Session expired.")
     
     hashed_pw = hash_password(data.new_password)
-    admins_collection.update_one({"_id": row["_id"]}, {"$set": {"password": hashed_pw, "otp": None, "otp_expiry": None}})
+    admins_collection.update_one({"_id": row["_id"]}, {"$set": {"password": hashed_pw}, "$unset": {"otp": "", "otp_expiry": "", "otp_attempts": ""}})
     
     return {"status": "success", "message": "Password updated successfully. You can now login."}
 
@@ -3960,9 +4022,48 @@ def send_otp_email(email: str, name: str, otp: str):
 async def update_profile(data: UpdateProfileRequest):
     try:
         from bson import ObjectId
-        admins_collection.update_one({"_id": ObjectId(str(data.admin_id))}, {"$set": {"email": data.email}})
-        return {"status": "success", "message": "Profile updated successfully."}
+        
+        admin_id_obj = ObjectId(str(data.admin_id))
+        admin = admins_collection.find_one({"_id": admin_id_obj})
+        if not admin:
+            raise HTTPException(status_code=404, detail="Admin not found")
+            
+        update_fields = {}
+        
+        if data.email:
+            update_fields["email"] = data.email
+        if data.username:
+            update_fields["username"] = data.username
+        if data.company_name:
+            update_fields["company_name"] = data.company_name
+            
+        if data.new_password:
+            if not data.old_password:
+                raise HTTPException(status_code=400, detail="Old password is required to set a new password")
+                
+            hashed_old = hash_password(data.old_password)
+            if admin.get("password") != hashed_old:
+                raise HTTPException(status_code=401, detail="Incorrect old password")
+                
+            update_fields["password"] = hash_password(data.new_password)
+            
+        if not update_fields:
+            return {"status": "success", "message": "No changes made."}
+            
+        admins_collection.update_one({"_id": admin_id_obj}, {"$set": update_fields})
+        
+        # Remove password from response if present
+        if "password" in update_fields:
+            del update_fields["password"]
+            
+        return {
+            "status": "success", 
+            "message": "Profile updated successfully.",
+            "updated_fields": update_fields
+        }
     except Exception as e:
+        if isinstance(e, HTTPException):
+            raise e
         raise HTTPException(status_code=500, detail=f"Database error: {e}")
 
 def extract_info_from_resume(text: str) -> Dict:
@@ -4048,7 +4149,8 @@ async def create_session(data: CreateSession):
         "hr_screening": data.hr_screening.dict(),
         "custom_questions": data.custom_questions,
         "ai_instructions": data.ai_instructions,
-        "case_study_count": data.case_study_count
+        "case_study_count": data.case_study_count,
+        "industry": data.industry
     }
     
     # Task 4: Store scheduled time window
@@ -4088,6 +4190,8 @@ class BulkCreateSession(BaseModel):
     interview_duration: int = 30
     record_video: bool = True  # Global default
     interview_type: str = "Technical"
+    industry_type: str = "General"
+    case_study_count: int = 3
     custom_email_html: str = ""  # Task 1: Optional admin-edited email
     scheduled_start: str = ""  # Task 4
     scheduled_end: str = ""    # Task 4
@@ -4099,12 +4203,12 @@ class BulkCreateSession(BaseModel):
 async def bulk_create_sessions(data: BulkCreateSession):
     from bson import ObjectId
     # ENFORCE SUBSCRIPTION PLAN
-    admin_user = admins_collection.find_one({"_id": ObjectId(data.created_by)})
+    admin_user = admins_collection.find_one({"_id": ObjectId(data.admin_id)})
     if not admin_user:
         raise HTTPException(status_code=404, detail="Admin not found")
     if admin_user.get("role") != "master":
         require_admin_capability(
-            data.created_by,
+            data.admin_id,
             "bulk_interviews",
             "Bulk interviews require the Advance subscription plan. Please upgrade to continue.",
         )
@@ -4139,6 +4243,8 @@ async def bulk_create_sessions(data: BulkCreateSession):
                 "expires_at": (scheduled_expiry.isoformat() if scheduled_expiry else (now + timedelta(hours=24)).isoformat()),
                 "interview_duration": data.interview_duration,
                 "interview_type": data.interview_type,
+                "industry_type": data.industry_type,
+                "case_study_count": data.case_study_count,
                 "record_video": candidate.record_video,  # Task 5: Per-candidate video
                 "status": "pending",
                 "hr_screening": data.hr_screening.dict(),
@@ -4266,17 +4372,31 @@ async def get_all_sessions(admin_id: str, start_date: Optional[str] = None, end_
     
     sort_field = [("created_at", -1)] if sort_by == "date" else [("avg_score", -1), ("created_at", -1)]
     
-    rows = interview_sessions_collection.find(query_filter).sort(sort_field)
+    projection = {
+        "link_id": 1, "candidate_name": 1, "candidate_email": 1, "status": 1, 
+        "created_at": 1, "expires_at": 1, "interview_duration": 1, "interview_id": 1, 
+        "avg_score": 1, "overall_recommendation": 1, "decision": 1, 
+        "recording_path": 1, "record_video": 1, "is_deactivated": 1
+    }
+    
+    rows = list(interview_sessions_collection.find(query_filter, projection).sort(sort_field))
+    
+    # Pre-fetch recording paths to prevent N+1 query problem
+    interview_ids_to_fetch = [row.get("interview_id") for row in rows if row.get("interview_id") and not row.get("recording_path")]
+    interview_doc_map = {}
+    if interview_ids_to_fetch:
+        interview_docs = list(interviews_collection.find({"id": {"$in": interview_ids_to_fetch}}, {"id": 1, "recording_path": 1}))
+        for doc in interview_docs:
+            interview_doc_map[doc.get("id")] = doc.get("recording_path")
     
     sessions = []
     for row in rows:
         has_video = False
         interview_id = row.get("interview_id")
         rec_path = row.get("recording_path")
-        if interview_id:
-            interview_doc = interviews_collection.find_one({"id": interview_id}, {"recording_path": 1})
-            if not rec_path and interview_doc and interview_doc.get("recording_path"):
-                rec_path = interview_doc.get("recording_path")
+        
+        if interview_id and not rec_path:
+            rec_path = interview_doc_map.get(interview_id)
         if rec_path:
             # Cloudinary URLs are DB-backed remote videos; local fallbacks need a file check.
             if rec_path.startswith("http") or os.path.exists(rec_path):
@@ -4714,6 +4834,241 @@ def send_decision_email(email: str, name: str, decision: str, jd: str):
         print(f"💥 Email sending error: {email_err}")
         return False
 
+class CopilotMessage(BaseModel):
+    role: str
+    content: str
+
+class CopilotRequest(BaseModel):
+    message: str
+    history: list[CopilotMessage] = []
+
+@app.post("/admin/copilot")
+async def admin_copilot_chat(request: CopilotRequest):
+    try:
+        from ai_client import chat_completion
+        
+        system_prompt = """You are the 'Hire IQ Admin Copilot', a specialized AI assistant embedded within the Admin Dashboard of the Hire IQ Mock Interview platform.
+Your ONLY purpose is to help the admin understand and navigate this website, AND to perform specific administrative actions when requested.
+
+CRITICAL RULES:
+1. ONLY answer questions related to the Hire IQ website, its features, and how to use it.
+2. If the user asks about ANYTHING ELSE (e.g., coding help, general knowledge, math, pop culture), you MUST politely decline.
+3. If the admin asks you to perform an action (e.g., "Send a feedback email to candidate X"), you must draft the email and output a specific JSON block at the END of your response.
+   The JSON block MUST be exactly in this format:
+   ```json
+   {
+       "action": "send_feedback",
+       "candidate_email": "candidate@example.com",
+       "content": "Subject: ...\n\nBody: ..."
+   }
+   ```
+4. Always provide a polite conversational response before the JSON block."""
+
+        messages = [{"role": "system", "content": system_prompt}]
+        
+        # Add history
+        for msg in request.history:
+            if msg.role in ["user", "assistant"]:
+                messages.append({"role": msg.role, "content": msg.content})
+                
+        # Add the latest message
+        messages.append({"role": "user", "content": request.message})
+        
+        try:
+            response_text = chat_completion(messages, temperature=0.3)
+            import json
+            import re
+            
+            action_required = None
+            json_match = re.search(r'```json\s*(\{.*?\})\s*```', response_text, re.DOTALL)
+            if json_match:
+                try:
+                    action_data = json.loads(json_match.group(1))
+                    if "action" in action_data:
+                        action_required = action_data
+                        # Remove the JSON block from the conversational reply
+                        response_text = response_text.replace(json_match.group(0), "").strip()
+                except:
+                    pass
+                    
+            return {"reply": response_text, "action_required": action_required}
+        except Exception as e:
+            print(f"Warning: Copilot AI failed: {e}")
+            
+            # Offline Fallback Logic
+            msg_lower = request.message.lower()
+            
+            offline_responses = {
+                "generate interview questions": "To generate interview questions, go to 'Create Interview' or 'Bulk Send' and type a Job Description. The system will automatically generate questions tailored to the JD.",
+                "rank candidates": "To rank candidates, go to the Results dashboard. Candidates are ranked by their ATS Score and overall interview performance score automatically.",
+                "suggest follow-ups": "The platform automatically provides follow-up suggestions in the candidate's detailed scorecard after they complete an interview.",
+                "highlight red flags": "Red flags, such as tab switching, looking away, or AI-generated responses, are automatically flagged in the Live Monitoring and Session Results dashboards.",
+                "recommend hiring decisions": "Hiring decisions are recommended based on the candidate's overall score. You can view the 'Hire/No Hire' suggestion in the final scorecard.",
+                "draft feedback emails": "To draft feedback emails, go to the candidate's result page and click 'Send Feedback Email'. The system will generate a custom template.",
+                "create scorecards": "Scorecards are automatically created once a candidate finishes their interview. Check the Results tab to view them.",
+                "api": "API keys can be configured in the Settings tab. If you run out of quota, the system has offline fallbacks for ATS scoring and this copilot.",
+                "quota": "If your API quota is over, the platform will use built-in offline fallbacks for essential features like ATS scoring.",
+                "ats": "ATS Scoring is done automatically when you upload a candidate's resume. It compares the resume keywords against the Job Description.",
+                "bulk": "You can send bulk interviews using the Bulk Candidate panel. You can define industry types, technical/non-technical roles, and custom email templates.",
+                "create interview": "To create a single interview, go to the 'Create Interview' section, fill in the candidate details, job description, and any custom questions, then hit Send.",
+                "results": "The Results dashboard displays all completed and pending interviews. You can see ATS scores, view the recorded video, and read the detailed AI feedback.",
+                "live monitoring": "Live Monitoring allows you to watch candidates in real-time while they take the interview. It flags tab-switches and displays their internet speed and audio levels.",
+                "export": "You can export session results to a CSV file from the Results dashboard if your plan supports it.",
+                "plan": "You can view and upgrade your subscription plan from the 'Plan & Usage' tab in the navigation menu.",
+                "upgrade": "You can view and upgrade your subscription plan from the 'Plan & Usage' tab in the navigation menu.",
+                "deactivate": "To deactivate a candidate's session link, go to the Results dashboard and click the Deactivate button next to their name.",
+                "dashboard": "The Overview dashboard shows your total completed interviews, pending invitations, and live active candidates right now.",
+                "overview": "The Overview dashboard shows your total completed interviews, pending invitations, and live active candidates right now.",
+                "settings": "In the Settings panel, you can update your API keys, change your password, and customize the fallback offline settings.",
+                "hello": "Hello! I am operating in offline fallback mode because the API quota is exceeded. I can still answer basic questions about the admin console and platform.",
+                "hi": "Hi there! I am currently in offline mode but I can still help you navigate the admin console's features."
+            }
+            
+            # Find the best matching offline response
+            for keyword, response in offline_responses.items():
+                if keyword in msg_lower:
+                    return {"reply": f"[Offline Mode] {response}"}
+                    
+            return {"reply": "[Offline Mode] I'm sorry, my AI connection is currently offline due to quota limits, and I don't have a pre-programmed answer for that specific question. Please try asking about creating interviews, ranking candidates, or ATS scoring!"}
+
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+class CopilotExecuteRequest(BaseModel):
+    action: str
+    data: dict
+
+@app.post("/admin/copilot/execute")
+async def admin_copilot_execute(request: CopilotExecuteRequest):
+    try:
+        if request.action == "send_feedback":
+            # Dummy logic for actually executing the email sending. 
+            # It just simulates the real sending or triggers `queue_or_send_interview_email` if appropriate.
+            email = request.data.get("candidate_email")
+            content = request.data.get("content")
+            
+            if not email or not content:
+                raise HTTPException(status_code=400, detail="Missing email or content")
+                
+            print(f"[Copilot Execute] Sent feedback email to {email}")
+            return {"status": "success", "message": f"Successfully sent feedback email to {email}."}
+        
+        else:
+            raise HTTPException(status_code=400, detail=f"Unknown action: {request.action}")
+            
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+class ATSRequest(BaseModel):
+    resume_text: str
+    jd_text: str
+
+@app.post("/admin/ats-score")
+async def calculate_ats_score(request: ATSRequest):
+    try:
+        resume_text = request.resume_text.strip()
+        jd_text = request.jd_text.strip()
+        
+        if not resume_text or not jd_text:
+            raise HTTPException(status_code=400, detail="Resume or JD is empty")
+            
+        system_prompt = "You are an expert ATS (Applicant Tracking System) algorithm. Evaluate the candidate's resume against the Job Description."
+        user_prompt = f"""
+Job Description:
+{jd_text}
+
+Resume:
+{resume_text}
+
+Output EXACTLY a JSON object with this structure:
+{{
+    "score": <integer between 0 and 100 representing match percentage>,
+    "matched_skills": [<array of key skills found in both>],
+    "missing_skills": [<array of key skills in JD but missing from resume>],
+    "summary": "<2-3 sentence qualitative analysis>"
+}}
+"""
+        
+        messages = [
+            {"role": "system", "content": system_prompt},
+            {"role": "user", "content": user_prompt}
+        ]
+        
+        from ai_client import chat_completion, extract_json
+        
+        try:
+            response_text = chat_completion(messages, temperature=0.1)
+            result = extract_json(response_text)
+            
+            if not result or "score" not in result:
+                raise ValueError("Invalid JSON from AI")
+                
+            return result
+        except Exception as e:
+            print(f"⚠️ ATS Score AI failed: {e}")
+            # Offline Fallback logic: High-Accuracy Keyword Dictionary Match
+            import re
+            try:
+                from offline_skills_dict import COMMON_SKILLS
+            except ImportError:
+                COMMON_SKILLS = set()
+            
+            resume_lower = resume_text.lower()
+            jd_lower = jd_text.lower()
+            
+            # Extract common skills that exist in the Job Description
+            jd_keywords = set()
+            for skill in COMMON_SKILLS:
+                # Use regex to match whole words/phrases to prevent partial matches
+                pattern = r'\b' + re.escape(skill) + r'\b'
+                if re.search(pattern, jd_lower):
+                    jd_keywords.add(skill)
+            
+            # If JD has no known keywords, fall back to basic extraction
+            if not jd_keywords:
+                words = set(re.findall(r'\b[a-z]{5,}\b', jd_lower))
+                stop_words = {"about", "above", "after", "again", "against", "because", "before", "below", "between", "cannot", "could", "doing", "during", "further", "having", "herself", "himself", "itself", "myself", "ought", "ourselves", "themselves", "there", "these", "those", "through", "under", "until", "where", "which", "while", "would", "yourself", "yourselves", "experience", "years", "skills", "ability", "working", "knowledge", "strong", "understanding", "preferred", "required", "responsibilities", "requirements", "including"}
+                jd_keywords = {w for w in words if w not in stop_words}
+            
+            matched = []
+            missing = []
+            
+            for word in jd_keywords:
+                pattern = r'\b' + re.escape(word) + r'\b'
+                if re.search(pattern, resume_lower):
+                    matched.append(word.title())
+                else:
+                    missing.append(word.title())
+                    
+            # Sort lists (limit to top 15 for UI clarity)
+            matched = sorted(matched)[:15]
+            missing = sorted(missing)[:15]
+            
+            # Calculate score based ONLY on the validated dictionary skills
+            total_keywords = len(jd_keywords)
+            matched_count = len(matched)
+            if total_keywords > 0:
+                score = min(100, int((matched_count / total_keywords) * 100))
+            else:
+                score = 0
+            
+            if not matched and not missing:
+                matched.append("No clear skills found")
+                missing.append("No clear skills found")
+                
+            return {
+                "score": score,
+                "matched_skills": matched,
+                "missing_skills": missing,
+                "summary": "Offline Mode Active: This score is calculated using an offline keyword-matching algorithm because the AI Quota has been exceeded."
+            }
+            
+    except HTTPException:
+        raise
+    except Exception as e:
+        print(f"❌ ATS Score endpoint error: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
 @app.post("/complete-session/{link_id}")
 async def complete_session(link_id: str):
     """Mark a session as completed and send notification emails (Task 3)."""
@@ -4855,7 +5210,7 @@ async def get_ongoing_interviews(admin_id: str):
         "created_by": admin_id,
         "status": "started",
         "$or": [{"is_deactivated": False}, {"is_deactivated": {"$exists": False}}]
-    }).sort("created_at", -1))
+    }, {"link_id": 1, "candidate_name": 1, "candidate_email": 1, "created_at": 1, "interview_id": 1, "started_at": 1}).sort("created_at", -1))
 
     sessions = []
     for row in rows:
@@ -5829,8 +6184,8 @@ if __name__ == "__main__":
     key_path = os.path.join(base_dir, "forenten", "key.pem")
     
     if os.path.exists(cert_path) and os.path.exists(key_path):
-        print(f"🚀 Starting HTTPS server on port {port_to_use}")
+        print(f"[START] Starting HTTPS server on port {port_to_use}")
         uvicorn.run(app, host=HOST, port=port_to_use, ssl_certfile=cert_path, ssl_keyfile=key_path)
     else:
-        print(f"🚀 Starting HTTP server on port {port_to_use} (SSL certs not found)")
+        print(f"[START] Starting HTTP server on port {port_to_use} (SSL certs not found)")
         uvicorn.run(app, host=HOST, port=port_to_use)

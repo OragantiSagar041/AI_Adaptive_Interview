@@ -3272,6 +3272,41 @@
                                 <div id="jdFileStatus" style="font-size:0.72rem;margin-bottom:4px;"></div>
                                 <textarea class="dash-textarea" id="jobDescription"
                                     placeholder="Paste the job description here or upload a file above..."></textarea>
+                                
+                                <!-- ATS SCORE SECTION -->
+                                <div style="margin-top: 15px; background: rgba(99,102,241,0.05); border: 1px solid rgba(99,102,241,0.2); border-radius: 8px; padding: 15px;">
+                                    <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom: 10px;">
+                                        <h4 style="margin:0; font-size: 0.9rem; color: var(--text-dark); display:flex; align-items:center; gap:8px;">
+                                            <i class="fas fa-chart-pie" style="color:var(--primary-light);"></i> ATS Resume Match Score
+                                        </h4>
+                                        <button type="button" class="dash-btn dash-btn-secondary" onclick="calculateAtsScore()" id="atsBtn" style="padding: 6px 12px; font-size: 0.75rem;">
+                                            Calculate Match
+                                        </button>
+                                    </div>
+                                    <div id="atsResults" style="display: none; margin-top: 15px; border-top: 1px solid rgba(0,0,0,0.05); padding-top: 15px;">
+                                        <div style="display: flex; gap: 20px; align-items: flex-start;">
+                                            <div style="flex: 0 0 auto; text-align: center;">
+                                                <div id="atsScoreCircle" style="width: 80px; height: 80px; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-size: 1.5rem; font-weight: bold; color: white; margin: 0 auto 5px;">
+                                                    0%
+                                                </div>
+                                                <div style="font-size: 0.7rem; color: var(--text-muted); font-weight: 600;">Match</div>
+                                            </div>
+                                            <div style="flex: 1; font-size: 0.8rem;">
+                                                <p id="atsSummary" style="margin: 0 0 10px 0; color: var(--text-dark); line-height: 1.4;"></p>
+                                                <div style="display: flex; gap: 15px;">
+                                                    <div style="flex: 1; background: rgba(34,197,94,0.05); padding: 8px; border-radius: 6px; border: 1px solid rgba(34,197,94,0.1);">
+                                                        <strong style="color: #16a34a; display: block; margin-bottom: 5px;">✅ Matched Skills</strong>
+                                                        <div id="atsMatchedSkills" style="color: var(--text-muted);"></div>
+                                                    </div>
+                                                    <div style="flex: 1; background: rgba(239,68,68,0.05); padding: 8px; border-radius: 6px; border: 1px solid rgba(239,68,68,0.1);">
+                                                        <strong style="color: #dc2626; display: block; margin-bottom: 5px;">❌ Missing Skills</strong>
+                                                        <div id="atsMissingSkills" style="color: var(--text-muted);"></div>
+                                                    </div>
+                                                </div>
+                                            </div>
+                                        </div>
+                                    </div>
+                                </div>
                             </div>
 
                             <div class="dash-form-group">
@@ -3311,6 +3346,44 @@
                                 <textarea class="dash-textarea" id="aiInstructions" style="height:80px;"
                                     placeholder="e.g. 'Focus heavily on system design and React performance optimization. Keep questions technical.'"></textarea>
                             </div>
+
+                            <div class="dash-form-group">
+                                <label class="dash-label">Industry Type</label>
+                                <select class="dash-input" id="industryType" style="padding: 0.7rem 1rem;">
+                                    <option value="General">General (No Specific Industry)</option>
+                                    <option value="Information Technology">Information Technology</option>
+                                    <option value="Software & SaaS">Software & SaaS</option>
+                                    <option value="Healthcare">Healthcare</option>
+                                    <option value="Pharmaceuticals">Pharmaceuticals</option>
+                                    <option value="Banking">Banking</option>
+                                    <option value="Financial Services">Financial Services</option>
+                                    <option value="Insurance">Insurance</option>
+                                    <option value="FinTech">FinTech</option>
+                                    <option value="Education">Education</option>
+                                    <option value="Manufacturing">Manufacturing</option>
+                                    <option value="Automotive">Automotive</option>
+                                    <option value="Telecommunications">Telecommunications</option>
+                                    <option value="Retail">Retail</option>
+                                    <option value="E-commerce">E-commerce</option>
+                                    <option value="Logistics & Supply Chain">Logistics & Supply Chain</option>
+                                    <option value="Transportation">Transportation</option>
+                                    <option value="Aviation">Aviation</option>
+                                    <option value="Hospitality">Hospitality</option>
+                                    <option value="Tourism">Tourism</option>
+                                    <option value="Real Estate">Real Estate</option>
+                                    <option value="Construction">Construction</option>
+                                    <option value="Energy & Utilities">Energy & Utilities</option>
+                                    <option value="Oil & Gas">Oil & Gas</option>
+                                    <option value="Media & Entertainment">Media & Entertainment</option>
+                                    <option value="Marketing & Advertising">Marketing & Advertising</option>
+                                    <option value="Legal Services">Legal Services</option>
+                                    <option value="Government & Public Sector">Government & Public Sector</option>
+                                    <option value="Non-Profit Organizations">Non-Profit Organizations</option>
+                                    <option value="Agriculture & Food Processing">Agriculture & Food Processing</option>
+                                    <option value="Human Resources & Staffing">Human Resources & Staffing</option>
+                                </select>
+                            </div>
+
 
                             <div class="dash-form-group">
                                 <label class="dash-label">Interview Type</label>
@@ -3558,12 +3631,64 @@
                             </div>
 
                             <div class="dash-form-group">
+                                <label class="dash-label">Industry Type</label>
+                                <select class="dash-input" id="bulkIndustryType" style="padding: 0.7rem 1rem;">
+                                    <option value="General">General (No Specific Industry)</option>
+                                    <option value="Information Technology">Information Technology</option>
+                                    <option value="Software & SaaS">Software & SaaS</option>
+                                    <option value="Healthcare">Healthcare</option>
+                                    <option value="Pharmaceuticals">Pharmaceuticals</option>
+                                    <option value="Banking">Banking</option>
+                                    <option value="Financial Services">Financial Services</option>
+                                    <option value="Insurance">Insurance</option>
+                                    <option value="FinTech">FinTech</option>
+                                    <option value="Education">Education</option>
+                                    <option value="Manufacturing">Manufacturing</option>
+                                    <option value="Automotive">Automotive</option>
+                                    <option value="Telecommunications">Telecommunications</option>
+                                    <option value="Retail">Retail</option>
+                                    <option value="E-commerce">E-commerce</option>
+                                    <option value="Logistics & Supply Chain">Logistics & Supply Chain</option>
+                                    <option value="Transportation">Transportation</option>
+                                    <option value="Aviation">Aviation</option>
+                                    <option value="Hospitality">Hospitality</option>
+                                    <option value="Tourism">Tourism</option>
+                                    <option value="Real Estate">Real Estate</option>
+                                    <option value="Construction">Construction</option>
+                                    <option value="Energy & Utilities">Energy & Utilities</option>
+                                    <option value="Oil & Gas">Oil & Gas</option>
+                                    <option value="Media & Entertainment">Media & Entertainment</option>
+                                    <option value="Marketing & Advertising">Marketing & Advertising</option>
+                                    <option value="Legal Services">Legal Services</option>
+                                    <option value="Government & Public Sector">Government & Public Sector</option>
+                                    <option value="Non-Profit Organizations">Non-Profit Organizations</option>
+                                    <option value="Agriculture & Food Processing">Agriculture & Food Processing</option>
+                                    <option value="Human Resources & Staffing">Human Resources & Staffing</option>
+                                </select>
+                            </div>
+
+                            <div class="dash-form-group">
                                 <label class="dash-label">Interview Type</label>
-                                <select class="dash-input" id="bulkInterviewType" style="padding: 0.7rem 1rem;">
+                                <select class="dash-input" id="bulkInterviewType" style="padding: 0.7rem 1rem;" onchange="toggleBulkCaseStudyCount()">
                                     <option value="Technical">Technical (Includes Coding Round)</option>
                                     <option value="Normal">Normal (Standard AI Interview, No Coding)</option>
                                     <option value="Non-Technical">Non-Technical (Scenario/Case Study based)</option>
                                 </select>
+                            </div>
+                            <div class="dash-form-group" id="bulkCaseStudyCountGroup" style="display:none;">
+                                <label class="dash-label">Number of Case Study Questions (Round 2)</label>
+                                <select class="dash-input" id="bulkCaseStudyCount" style="padding: 0.7rem 1rem;">
+                                    <option value="2">2 Questions</option>
+                                    <option value="3" selected>3 Questions</option>
+                                    <option value="4">4 Questions</option>
+                                    <option value="5">5 Questions</option>
+                                    <option value="6">6 Questions</option>
+                                    <option value="7">7 Questions</option>
+                                    <option value="8">8 Questions</option>
+                                </select>
+                                <p style="font-size: 0.75rem; color: var(--text-muted); margin-top: 4px;">
+                                    AI will generate scenario-based case study questions from the Job Description skills. Candidate writes answers for each scenario.
+                                </p>
                             </div>
 
                             <div class="dash-form-group">
@@ -3828,11 +3953,40 @@
                         </div>
 
                         <div class="dash-form-group" style="max-width: 500px;">
+                            <label class="dash-label">Username</label>
+                            <input type="text" id="adminUsernameInput" class="dash-input"
+                                placeholder="Enter your username">
+                        </div>
+
+                        <div class="dash-form-group" style="max-width: 500px;">
+                            <label class="dash-label">Company Name</label>
+                            <input type="text" id="adminCompanyInput" class="dash-input"
+                                placeholder="Enter your company name">
+                        </div>
+
+                        <div class="dash-form-group" style="max-width: 500px;">
                             <label class="dash-label">Admin Email Address</label>
                             <input type="email" id="adminEmailInput" class="dash-input"
                                 placeholder="Enter new email address">
                             <p style="font-size: 0.75rem; color: var(--text-muted); margin-top: 5px;">This email will be
                                 used for OTP verification during password resets.</p>
+                        </div>
+                        
+                        <h4 style="margin-top: 30px; margin-bottom: 15px; color: var(--text-dark);">Change Password</h4>
+                        <div class="dash-form-group" style="max-width: 500px;">
+                            <label class="dash-label">Old Password</label>
+                            <input type="password" id="adminOldPasswordInput" class="dash-input"
+                                placeholder="Enter your current password">
+                        </div>
+                        <div class="dash-form-group" style="max-width: 500px;">
+                            <label class="dash-label">New Password</label>
+                            <input type="password" id="adminNewPasswordInput" class="dash-input"
+                                placeholder="Enter new password">
+                        </div>
+                        <div class="dash-form-group" style="max-width: 500px;">
+                            <label class="dash-label">Confirm New Password</label>
+                            <input type="password" id="adminConfirmPasswordInput" class="dash-input"
+                                placeholder="Confirm new password">
                         </div>
 
                         <button onclick="updateProfile()" id="updateProfileBtn" class="btn-generate"
@@ -4455,9 +4609,14 @@
                     sessionStorage.setItem('subscriptionExpiry', data.subscription_expiry || '');
                     sessionStorage.setItem('subscriptionDaysRemaining', data.subscription_days_remaining ?? '');
                     sessionStorage.setItem('subscriptionWarningMessage', data.subscription_warning_message || '');
+                    
+                    const companyName = data.company_name || "";
+                    sessionStorage.setItem('adminCompany', companyName);
 
                     document.getElementById('adminName').textContent = adminName;
                     document.getElementById('adminEmailInput').value = adminEmail;
+                    document.getElementById('adminUsernameInput').value = adminName;
+                    document.getElementById('adminCompanyInput').value = companyName;
 
                     // Update global state and UI
                     currentTenantId = adminId;
@@ -4712,7 +4871,64 @@
             }
         }
 
-
+        // --- ATS SCORE LOGIC ---
+        async function calculateAtsScore() {
+            const resume = document.getElementById('resumeText').value.trim();
+            const jd = document.getElementById('jobDescription').value.trim();
+            
+            if (!resume || !jd) {
+                showToast("Please upload or paste both a Resume and a Job Description first.", "error");
+                return;
+            }
+            
+            const btn = document.getElementById('atsBtn');
+            const resultsDiv = document.getElementById('atsResults');
+            
+            btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Analyzing...';
+            btn.disabled = true;
+            
+            try {
+                const response = await fetch(`${API_BASE}/admin/ats-score`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ resume_text: resume, jd_text: jd })
+                });
+                
+                if (response.ok) {
+                    const data = await response.json();
+                    
+                    resultsDiv.style.display = 'block';
+                    
+                    const scoreCircle = document.getElementById('atsScoreCircle');
+                    scoreCircle.textContent = `${data.score}%`;
+                    
+                    if (data.score >= 75) {
+                        scoreCircle.style.background = 'linear-gradient(135deg, #22c55e, #16a34a)';
+                    } else if (data.score >= 50) {
+                        scoreCircle.style.background = 'linear-gradient(135deg, #f59e0b, #d97706)';
+                    } else {
+                        scoreCircle.style.background = 'linear-gradient(135deg, #ef4444, #dc2626)';
+                    }
+                    
+                    document.getElementById('atsSummary').textContent = data.summary || '';
+                    
+                    const matchedDiv = document.getElementById('atsMatchedSkills');
+                    matchedDiv.innerHTML = (data.matched_skills || []).map(s => `<span style="display:inline-block; background:white; padding:2px 6px; border-radius:4px; margin:2px; font-size:0.7rem; border:1px solid #e5e7eb;">${s}</span>`).join('') || 'None identified';
+                    
+                    const missingDiv = document.getElementById('atsMissingSkills');
+                    missingDiv.innerHTML = (data.missing_skills || []).map(s => `<span style="display:inline-block; background:white; padding:2px 6px; border-radius:4px; margin:2px; font-size:0.7rem; border:1px solid #e5e7eb;">${s}</span>`).join('') || 'None identified';
+                    
+                } else {
+                    showToast("Failed to calculate ATS score.", "error");
+                }
+            } catch (error) {
+                console.error(error);
+                showToast("Server connection error while calculating score.", "error");
+            } finally {
+                btn.innerHTML = 'Calculate Match';
+                btn.disabled = false;
+            }
+        }
 
         // --- CREATE SESSION ---
         function toggleCaseStudyCount() {
@@ -4729,6 +4945,7 @@
             const aiInstructions = document.getElementById('aiInstructions').value.trim();
             const duration = parseInt(document.getElementById('interviewDuration').value) || 30;
             const interviewType = document.getElementById('interviewType').value;
+            const industryType = document.getElementById('industryType').value;
             const recordVideo = document.getElementById('recordVideo').checked;
             const scheduleStart = document.getElementById('scheduleStart').value;
             const scheduleEnd = document.getElementById('scheduleEnd').value;
@@ -4778,6 +4995,7 @@
                         admin_id: adminId,
                         interview_duration: duration,
                         interview_type: interviewType,
+                        industry: industryType,
                         record_video: recordVideo,
                         custom_email_html: window._customEmailHtml || "",
                         scheduled_start: toUtcIso(scheduleStart),
@@ -4932,27 +5150,63 @@
 
         async function updateProfile() {
             const newEmail = document.getElementById('adminEmailInput').value;
+            const newUsername = document.getElementById('adminUsernameInput').value;
+            const newCompany = document.getElementById('adminCompanyInput').value;
+            const oldPassword = document.getElementById('adminOldPasswordInput').value;
+            const newPassword = document.getElementById('adminNewPasswordInput').value;
+            const confirmPassword = document.getElementById('adminConfirmPasswordInput').value;
             const btn = document.getElementById('updateProfileBtn');
 
-            if (!newEmail) {
-                showToast('❌ Please enter an email address.', 'error');
+            if (newPassword && newPassword !== confirmPassword) {
+                showToast('❌ Passwords do not match.', 'error');
+                return;
+            }
+
+            if (newPassword && !oldPassword) {
+                showToast('❌ Old password is required to set a new password.', 'error');
                 return;
             }
 
             btn.disabled = true;
             btn.innerHTML = '<span class="spinner"></span> Updating...';
 
+            const payload = { admin_id: adminId };
+            if (newEmail) payload.email = newEmail;
+            if (newUsername) payload.username = newUsername;
+            if (newCompany) payload.company_name = newCompany;
+            if (oldPassword) payload.old_password = oldPassword;
+            if (newPassword) payload.new_password = newPassword;
+
             try {
                 const res = await fetch(`${API_BASE}/admin/profile`, {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ admin_id: adminId, email: newEmail })
+                    body: JSON.stringify(payload)
                 });
+                const data = await res.json();
+                
                 if (res.ok) {
-                    adminEmail = newEmail;
+                    if (data.updated_fields) {
+                        if (data.updated_fields.email) adminEmail = data.updated_fields.email;
+                        if (data.updated_fields.username) {
+                            sessionStorage.setItem('adminName', data.updated_fields.username);
+                            document.getElementById('adminName').textContent = data.updated_fields.username;
+                            const sidebarName = document.getElementById('sidebarAdminName');
+                            if (sidebarName) sidebarName.textContent = data.updated_fields.username;
+                        }
+                        if (data.updated_fields.company_name) {
+                            sessionStorage.setItem('adminCompany', data.updated_fields.company_name);
+                        }
+                    }
+                    
+                    // Clear password fields
+                    document.getElementById('adminOldPasswordInput').value = '';
+                    document.getElementById('adminNewPasswordInput').value = '';
+                    document.getElementById('adminConfirmPasswordInput').value = '';
+                    
                     showToast('Profile updated successfully!', 'success');
                 } else {
-                    showToast('Failed to update profile.', 'error');
+                    showToast(`Failed: ${data.detail || data.message}`, 'error');
                 }
             } catch (e) {
                 showToast('Connection error.', 'error');
@@ -6834,9 +7088,22 @@
         }
 
         // Send all — calls /admin/bulk-create-sessions
+        function toggleBulkCaseStudyCount() {
+            const intType = document.getElementById('bulkInterviewType').value;
+            const group = document.getElementById('bulkCaseStudyCountGroup');
+            if (intType === 'Non-Technical') {
+                group.style.display = 'block';
+            } else {
+                group.style.display = 'none';
+            }
+        }
+
         async function sendBulkInterviews() {
             if (!currentPlanCapabilities.bulk_interviews) { showPlanUpgradeMessage('Bulk candidate send', 'Advance'); return; }
             const jd = document.getElementById('bulkJobDescription').value.trim();
+            const bulkIndustryType = document.getElementById('bulkIndustryType').value;
+            const bulkInterviewType = document.getElementById('bulkInterviewType').value;
+            const bulkCaseStudyCount = parseInt(document.getElementById('bulkCaseStudyCount').value) || 3;
             const customQuestions = document.getElementById('bulkCustomQuestions').value.trim();
             const aiInstructions = document.getElementById('bulkAiInstructions').value.trim();
             const schedStart = document.getElementById('bulkScheduleStart').value;
@@ -6882,6 +7149,9 @@
                             record_video: c.record_video !== undefined ? c.record_video : recordVideo
                         })),
                         job_description: jd,
+                        industry_type: bulkIndustryType,
+                        interview_type: bulkInterviewType,
+                        case_study_count: bulkCaseStudyCount,
                         admin_id: adminId,
                         interview_duration: duration,
                         record_video: recordVideo,
@@ -7577,6 +7847,455 @@
             }
         }
     </script>
+    <!-- COPILOT WIDGET START -->
+    <style>
+        .copilot-fab {
+            position: fixed;
+            bottom: 30px;
+            right: 30px;
+            width: 60px;
+            height: 60px;
+            border-radius: 50%;
+            background: var(--gradient-1);
+            color: white;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 24px;
+            box-shadow: var(--shadow-lg), var(--shadow-glow);
+            cursor: pointer;
+            z-index: 10000;
+            transition: transform 0.3s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+        }
+        .copilot-fab:hover {
+            transform: scale(1.1);
+        }
+        .copilot-window {
+            font-family: 'Inter', system-ui, -apple-system, sans-serif;
+            position: fixed;
+            bottom: 100px;
+            right: 30px;
+            width: 380px;
+            height: 550px;
+            background: rgba(255, 255, 255, 0.85); /* fallback */
+            background: color-mix(in srgb, var(--bg-card) 85%, transparent);
+            backdrop-filter: blur(16px);
+            -webkit-backdrop-filter: blur(16px);
+            border: 1px solid rgba(255, 255, 255, 0.2);
+            border-radius: var(--radius-xl);
+            box-shadow: 0 10px 40px rgba(0, 0, 0, 0.15), 0 0 20px rgba(99, 102, 241, 0.1);
+            z-index: 10000;
+            display: flex;
+            flex-direction: column;
+            overflow: hidden;
+            opacity: 0;
+            pointer-events: none;
+            transform: translateY(30px) scale(0.95);
+            transition: all 0.4s cubic-bezier(0.34, 1.56, 0.64, 1);
+        }
+        .theme-dark .copilot-window {
+            background: rgba(30, 41, 59, 0.85);
+            border: 1px solid rgba(255, 255, 255, 0.1);
+            box-shadow: 0 10px 40px rgba(0, 0, 0, 0.4), 0 0 20px rgba(99, 102, 241, 0.15);
+        }
+        .copilot-window.open {
+            opacity: 1;
+            pointer-events: all;
+            transform: translateY(0) scale(1);
+        }
+        .copilot-header {
+            background: linear-gradient(135deg, var(--primary), var(--secondary));
+            color: white;
+            padding: 16px 20px;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            cursor: grab;
+            user-select: none;
+            box-shadow: 0 4px 15px rgba(0,0,0,0.1);
+            position: relative;
+            z-index: 10;
+        }
+        .copilot-header:active {
+            cursor: grabbing;
+        }
+        .copilot-title {
+            font-weight: 700;
+            font-size: 1.1rem;
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            letter-spacing: 0.5px;
+        }
+        .copilot-close {
+            background: rgba(255,255,255,0.2);
+            border: none;
+            color: white;
+            cursor: pointer;
+            font-size: 16px;
+            width: 32px;
+            height: 32px;
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            transition: all 0.2s;
+        }
+        .copilot-close:hover {
+            background: rgba(255,255,255,0.3);
+            transform: rotate(90deg);
+        }
+        .copilot-messages {
+            flex: 1;
+            padding: 20px;
+            overflow-y: auto;
+            display: flex;
+            flex-direction: column;
+            gap: 14px;
+            background: transparent;
+            scroll-behavior: smooth;
+        }
+        .copilot-messages::-webkit-scrollbar {
+            width: 6px;
+        }
+        .copilot-messages::-webkit-scrollbar-thumb {
+            background: rgba(100,100,100,0.2);
+            border-radius: 10px;
+        }
+        @keyframes popIn {
+            0% { transform: scale(0.9) translateY(10px); opacity: 0; }
+            100% { transform: scale(1) translateY(0); opacity: 1; }
+        }
+        .copilot-msg {
+            max-width: 85%;
+            padding: 12px 16px;
+            border-radius: 16px;
+            font-size: 0.95rem;
+            line-height: 1.5;
+            word-wrap: break-word;
+            animation: popIn 0.3s cubic-bezier(0.34, 1.56, 0.64, 1) forwards;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.05);
+        }
+        .copilot-msg.bot {
+            align-self: flex-start;
+            background: rgba(255, 255, 255, 0.9);
+            color: var(--text-primary);
+            border-bottom-left-radius: 4px;
+            border: 1px solid rgba(0,0,0,0.05);
+        }
+        .theme-dark .copilot-msg.bot {
+            background: rgba(51, 65, 85, 0.9);
+            border: 1px solid rgba(255,255,255,0.05);
+        }
+        .copilot-msg.user {
+            align-self: flex-end;
+            background: linear-gradient(135deg, var(--primary), var(--primary-dark));
+            color: white;
+            border-bottom-right-radius: 4px;
+            box-shadow: 0 4px 12px rgba(99, 102, 241, 0.3);
+        }
+        .copilot-input-area {
+            padding: 15px 20px;
+            background: rgba(255,255,255,0.5);
+            border-top: 1px solid rgba(0,0,0,0.05);
+            display: flex;
+            gap: 12px;
+            align-items: center;
+        }
+        .theme-dark .copilot-input-area {
+            background: rgba(30,41,59,0.5);
+            border-top: 1px solid rgba(255,255,255,0.05);
+        }
+        .copilot-input {
+            flex: 1;
+            background: var(--bg-input);
+            border: 1px solid rgba(0,0,0,0.1);
+            color: var(--text-primary);
+            border-radius: 24px;
+            padding: 12px 18px;
+            outline: none;
+            font-family: inherit;
+            font-size: 0.95rem;
+            transition: all 0.3s;
+            box-shadow: inset 0 2px 4px rgba(0,0,0,0.02);
+        }
+        .theme-dark .copilot-input {
+            border: 1px solid rgba(255,255,255,0.1);
+            box-shadow: inset 0 2px 4px rgba(0,0,0,0.2);
+        }
+        .copilot-input:focus {
+            border-color: var(--primary);
+            box-shadow: 0 0 0 3px rgba(99, 102, 241, 0.2), inset 0 2px 4px rgba(0,0,0,0.02);
+        }
+        .copilot-send {
+            background: linear-gradient(135deg, var(--primary), var(--primary-dark));
+            color: white;
+            border: none;
+            width: 44px;
+            height: 44px;
+            border-radius: 50%;
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            transition: all 0.3s cubic-bezier(0.34, 1.56, 0.64, 1);
+            box-shadow: 0 4px 12px rgba(99, 102, 241, 0.3);
+            flex-shrink: 0;
+        }
+        .copilot-send:hover {
+            transform: scale(1.1) rotate(5deg);
+            box-shadow: 0 6px 16px rgba(99, 102, 241, 0.4);
+        }
+        .copilot-send:active {
+            transform: scale(0.95);
+        }
+        .copilot-typing {
+            align-self: flex-start;
+            color: var(--primary);
+            font-size: 0.85rem;
+            display: none;
+            padding: 5px 10px;
+            font-style: italic;
+            animation: pulse 1.5s infinite;
+        }
+        @keyframes pulse {
+            0% { opacity: 0.5; }
+            50% { opacity: 1; }
+            100% { opacity: 0.5; }
+        }
+        .copilot-chips {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 8px;
+            margin-top: 10px;
+        }
+        .copilot-chip {
+            background: rgba(99, 102, 241, 0.08);
+            color: var(--primary);
+            border: 1px solid rgba(99, 102, 241, 0.15);
+            padding: 8px 14px;
+            border-radius: 20px;
+            font-size: 0.8rem;
+            font-weight: 500;
+            cursor: pointer;
+            transition: all 0.2s cubic-bezier(0.34, 1.56, 0.64, 1);
+        }
+        .theme-dark .copilot-chip {
+            background: rgba(99, 102, 241, 0.15);
+            color: var(--primary-light);
+            border: 1px solid rgba(99, 102, 241, 0.3);
+        }
+        .copilot-chip:hover {
+            background: var(--primary);
+            color: white;
+            border-color: var(--primary);
+            transform: translateY(-2px) scale(1.02);
+            box-shadow: 0 4px 10px rgba(99, 102, 241, 0.3);
+        }
+        .copilot-chip:active {
+            transform: translateY(0) scale(0.98);
+        }
+    </style>
+
+    <div class="copilot-fab" id="copilotFab" onclick="toggleCopilot()">
+        <i class="fas fa-robot"></i>
+    </div>
+
+    <div class="copilot-window" id="copilotWindow">
+        <div class="copilot-header" id="copilotHeader">
+            <div class="copilot-title">
+                <i class="fas fa-robot"></i> Admin Copilot
+            </div>
+            <button class="copilot-close" onclick="toggleCopilot()"><i class="fas fa-times"></i></button>
+        </div>
+        <div class="copilot-messages" id="copilotMessages">
+            <div class="copilot-msg bot">Hello! I am your Hire IQ Admin Copilot. Ask me anything about creating interviews, ATS scoring, or configuring the platform!</div>
+            
+            <div class="copilot-chips" id="copilotChips">
+                <button class="copilot-chip" onclick="copilotSuggest('Generate interview questions')">Generate interview questions</button>
+                <button class="copilot-chip" onclick="copilotSuggest('Rank candidates')">Rank candidates</button>
+                <button class="copilot-chip" onclick="copilotSuggest('Suggest follow-ups')">Suggest follow-ups</button>
+                <button class="copilot-chip" onclick="copilotSuggest('Highlight red flags')">Highlight red flags</button>
+                <button class="copilot-chip" onclick="copilotSuggest('Recommend hiring decisions')">Recommend hiring decisions</button>
+                <button class="copilot-chip" onclick="copilotSuggest('Draft feedback emails')">Draft feedback emails</button>
+                <button class="copilot-chip" onclick="copilotSuggest('Create scorecards')">Create scorecards</button>
+            </div>
+
+            <div class="copilot-typing" id="copilotTyping">Copilot is typing...</div>
+        </div>
+        <div class="copilot-input-area">
+            <input type="text" class="copilot-input" id="copilotInput" placeholder="Ask a question..." onkeypress="handleCopilotKeyPress(event)">
+            <button class="copilot-send" onclick="sendCopilotMessage()"><i class="fas fa-paper-plane"></i></button>
+        </div>
+    </div>
+
+    <script>
+        let copilotHistory = [];
+        
+        function toggleCopilot() {
+            const win = document.getElementById('copilotWindow');
+            win.classList.toggle('open');
+            if (win.classList.contains('open')) {
+                document.getElementById('copilotInput').focus();
+            }
+        }
+
+        function copilotSuggest(text) {
+            document.getElementById('copilotInput').value = text;
+            const chips = document.getElementById('copilotChips');
+            if (chips) chips.style.display = 'none';
+            sendCopilotMessage();
+        }
+
+        function handleCopilotKeyPress(e) {
+            if (e.key === 'Enter') sendCopilotMessage();
+        }
+
+        async function sendCopilotMessage() {
+            const input = document.getElementById('copilotInput');
+            const msg = input.value.trim();
+            if (!msg) return;
+
+            input.value = '';
+            appendCopilotMessage(msg, 'user');
+            
+            const typing = document.getElementById('copilotTyping');
+            typing.style.display = 'block';
+            
+            // Scroll to typing indicator
+            const msgs = document.getElementById('copilotMessages');
+            msgs.scrollTop = msgs.scrollHeight;
+
+            try {
+                const res = await fetch(`${API_BASE}/admin/copilot`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ message: msg, history: copilotHistory })
+                });
+                
+                const data = await res.json();
+                typing.style.display = 'none';
+                
+                if (data.reply) {
+                    appendCopilotMessage(data.reply, 'bot');
+                    if (data.action_required) {
+                        appendCopilotAction(data.action_required);
+                    }
+                    copilotHistory.push({ role: 'user', content: msg });
+                    copilotHistory.push({ role: 'assistant', content: data.reply });
+                } else {
+                    appendCopilotMessage('Sorry, I encountered an error.', 'bot');
+                }
+            } catch (err) {
+                typing.style.display = 'none';
+                appendCopilotMessage('Network error. Copilot is currently offline.', 'bot');
+            }
+        }
+
+        function appendCopilotMessage(text, sender) {
+            const msgs = document.getElementById('copilotMessages');
+            const typing = document.getElementById('copilotTyping');
+            const div = document.createElement('div');
+            div.className = `copilot-msg ${sender}`;
+            
+            // Format newlines
+            const formattedText = escapeHtml(text).replace(/\n/g, '<br>');
+            div.innerHTML = formattedText;
+            
+            msgs.insertBefore(div, typing);
+            msgs.scrollTop = msgs.scrollHeight;
+        }
+
+        function appendCopilotAction(actionData) {
+            const msgs = document.getElementById('copilotMessages');
+            const typing = document.getElementById('copilotTyping');
+            const div = document.createElement('div');
+            div.className = `copilot-msg bot`;
+            div.style.border = '1px solid var(--primary)';
+            div.style.background = 'rgba(99, 102, 241, 0.05)';
+            
+            let description = `Proposed Action: ${actionData.action}`;
+            if (actionData.action === 'send_feedback' && actionData.candidate_email) {
+                description = `Send Feedback Email to: ${actionData.candidate_email}`;
+            }
+            
+            div.innerHTML = `
+                <div style="font-weight:600; margin-bottom:8px; color:var(--primary-light);"><i class="fas fa-exclamation-circle"></i> Action Required</div>
+                <div style="font-size:0.85rem; margin-bottom:12px;">${escapeHtml(description)}</div>
+                <div style="display:flex; gap:8px;">
+                    <button class="approve-btn" style="flex:1; padding:6px; background:var(--primary); color:white; border:none; border-radius:6px; cursor:pointer; font-size:0.8rem;"><i class="fas fa-check"></i> Approve</button>
+                    <button class="reject-btn" style="flex:1; padding:6px; background:rgba(244,63,94,0.1); color:var(--danger); border:1px solid rgba(244,63,94,0.3); border-radius:6px; cursor:pointer; font-size:0.8rem;"><i class="fas fa-times"></i> Reject</button>
+                </div>
+            `;
+            
+            div.querySelector('.approve-btn').onclick = function() { executeCopilotAction(this, actionData); };
+            div.querySelector('.reject-btn').onclick = function() { div.remove(); };
+            
+            msgs.insertBefore(div, typing);
+            msgs.scrollTop = msgs.scrollHeight;
+        }
+
+        async function executeCopilotAction(btn, actionData) {
+            const originalHtml = btn.innerHTML;
+            btn.innerHTML = '<span class="spinner" style="width:12px;height:12px;border-width:2px;display:inline-block;"></span>';
+            btn.disabled = true;
+            btn.nextElementSibling.disabled = true; // disable reject
+            
+            try {
+                const res = await fetch(`${API_BASE}/admin/copilot/execute`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ action: actionData.action, data: actionData })
+                });
+                const data = await res.json();
+                
+                if (res.ok) {
+                    btn.parentElement.innerHTML = `<span style="color:var(--success); font-weight:600;"><i class="fas fa-check-circle"></i> Executed Successfully</span>`;
+                } else {
+                    throw new Error(data.detail || "Execution failed");
+                }
+            } catch (err) {
+                btn.innerHTML = originalHtml;
+                btn.disabled = false;
+                btn.nextElementSibling.disabled = false;
+                showToast(err.message, 'error');
+            }
+        }
+
+        // Draggable Logic
+        const dragHeader = document.getElementById('copilotHeader');
+        const dragWindow = document.getElementById('copilotWindow');
+        let isDraggingCopilot = false;
+        let dragOffsetX = 0;
+        let dragOffsetY = 0;
+
+        dragHeader.addEventListener('mousedown', (e) => {
+            isDraggingCopilot = true;
+            dragWindow.style.transition = 'none';
+            const rect = dragWindow.getBoundingClientRect();
+            dragOffsetX = e.clientX - rect.left;
+            dragOffsetY = e.clientY - rect.top;
+        });
+
+        document.addEventListener('mousemove', (e) => {
+            if (!isDraggingCopilot) return;
+            const x = e.clientX - dragOffsetX;
+            const y = e.clientY - dragOffsetY;
+            dragWindow.style.left = `${x}px`;
+            dragWindow.style.top = `${y}px`;
+            dragWindow.style.right = 'auto';
+            dragWindow.style.bottom = 'auto';
+            dragWindow.style.transform = 'none';
+        });
+
+        document.addEventListener('mouseup', () => {
+            if (isDraggingCopilot) {
+                isDraggingCopilot = false;
+                dragWindow.style.transition = 'opacity 0.3s ease';
+            }
+        });
+    </script>
+    <!-- COPILOT WIDGET END -->
 </body>
 
 </html>

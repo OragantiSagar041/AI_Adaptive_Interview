@@ -243,7 +243,7 @@ def _offline_coding_fallback(profile_text: str) -> Dict[str, Any]:
     else:
         return _default_task()
 
-def generate_coding_task(profile_text: str, answers_data: List[Dict[str, Any]], interview_type: str = "Technical") -> Dict[str, Any]:
+def generate_coding_task(profile_text: str, answers_data: List[Dict[str, Any]], interview_type: str = "Technical", industry: str = "General") -> Dict[str, Any]:
     answers_summary = "\n".join(
         f"- Q: {a.get('question_text', '')}\n  A: {_truncate(a.get('answer_text', ''), 220)}"
         for a in answers_data[-5:]
@@ -252,7 +252,7 @@ def generate_coding_task(profile_text: str, answers_data: List[Dict[str, Any]], 
     
     if interview_type == "Non-Technical":
         system_prompt = (
-            "You design realistic written business and management case study tasks. Return valid JSON only."
+            f"You design realistic written business and management case study tasks for the '{industry}' industry. Return valid JSON only."
         )
         user_prompt = f"""
 Create a single written case study round tailored to this candidate.
@@ -278,11 +278,11 @@ Return JSON with:
 - timebox_minutes
 - test_cases (Must be an empty array: [])
 
-Make the task a deep business or management scenario that requires the candidate to type out a structured, written strategy. Do NOT ask for code.
+Make the task a deep business or management scenario in the '{industry}' industry that requires the candidate to type out a structured, written strategy. Do NOT ask for code.
 """
     else:
         system_prompt = (
-            "You design realistic live-coding interview tasks. Return valid JSON only."
+            f"You design realistic live-coding interview tasks tailored to the '{industry}' industry. Return valid JSON only."
         )
         user_prompt = f"""
 Create a single coding round tailored to this candidate.
@@ -308,7 +308,7 @@ Return JSON with:
 - timebox_minutes
 - test_cases (exactly 7 items, each with input as JSON array args, expected, visible where first 3 are true and last 4 are false)
 
-Make the task a pure function problem using only cross-language friendly inputs and outputs such as strings, numbers, booleans, or flat arrays. It should be solvable in 20-30 minutes and suitable for Python, JavaScript, Java, or C.
+Make the task a pure function problem using only cross-language friendly inputs and outputs such as strings, numbers, booleans, or flat arrays. It should be solvable in 20-30 minutes and suitable for Python, JavaScript, Java, or C. The context and scenario of the problem MUST be heavily themed around the '{industry}' industry.
 """
 
     result = _llm_json(system_prompt, user_prompt, fallback)
