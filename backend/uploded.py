@@ -917,9 +917,6 @@ def generate_jd_questions(jd_text: str, ai_instructions: str = "", interview_typ
     """Generate interview questions based on Job Description using AI."""
     print(f"Generating questions from Job Description for {interview_type} interview...")
     
-    if language != "English":
-        return []
-    
     intro_q_text = "Can you please introduce yourself and tell us why you are interested in this specific role?"
     if language != "English":
         try:
@@ -939,6 +936,10 @@ def generate_jd_questions(jd_text: str, ai_instructions: str = "", interview_typ
     ]
 
     instruction_block = f"\n    Additional Admin Instructions to Follow:\n    {ai_instructions}\n" if ai_instructions else ""
+    
+    # Inject language requirement if not English
+    if language != "English":
+        instruction_block += f"\n    CRITICAL REQUIREMENT: You MUST generate all questions and interact STRICTLY in the {language} language. Do NOT use English unless {language} is English.\n"
 
     if interview_type == "Non-Technical":
         prompt = f"""

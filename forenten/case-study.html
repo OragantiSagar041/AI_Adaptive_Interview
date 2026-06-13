@@ -308,8 +308,7 @@ body{font-family:'Inter',sans-serif;background:var(--bg);color:var(--text);min-h
     <textarea
       class="transcript-box"
       id="transcriptBox"
-      placeholder="Your spoken answer will appear here..."
-      readonly
+      placeholder="Your spoken answer will appear here... (You can also type your answer)"
     ></textarea>
 
     <div class="transcript-tip">
@@ -422,9 +421,16 @@ function renderQuestion(idx) {
   // Load saved answer
   const saved = answers[idx];
   const savedText = saved ? (saved.answer_text || '') : '';
-  document.getElementById('transcriptBox').value = savedText;
+  const transcriptBox = document.getElementById('transcriptBox');
+  transcriptBox.value = savedText;
   finalText = savedText;
   updateWordCount();
+  
+  // Add input listener for manual typing word count updates
+  transcriptBox.addEventListener('input', () => {
+    finalText = transcriptBox.value;
+    updateWordCount();
+  });
 
   // Criteria
   const criteriaCard = document.getElementById('criteriaCard');

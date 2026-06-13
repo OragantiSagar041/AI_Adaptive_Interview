@@ -38,10 +38,9 @@ async def transcribe_audio(
         with open(path, "rb") as file:
             transcription = client.audio.transcriptions.create(
                 file=(os.path.basename(path), file.read()),
-                model="distil-whisper-large-v3-en",
+                model="whisper-large-v3-turbo",
                 prompt=f"This is a job interview. The candidate's name is {candidate_name}. Proper nouns and technical terms may appear.",
-                response_format="json",
-                language="en"
+                response_format="json"
             )
 
         text = transcription.text.strip()
