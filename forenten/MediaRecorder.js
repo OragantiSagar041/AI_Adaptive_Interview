@@ -21,7 +21,16 @@ class VideoRecorder {
             // We use continuous = false and manual restart for better stability & control
             this.recognition.continuous = false;
             this.recognition.interimResults = true;
-            this.recognition.lang = 'en-IN';
+            const langMap = {
+                'Hindi': 'hi-IN',
+                'Telugu': 'te-IN',
+                'Tamil': 'ta-IN',
+                'Malayalam': 'ml-IN',
+                'Kannada': 'kn-IN',
+                'English': 'en-IN'
+            };
+            const targetLang = langMap[window.sessionLanguage] || 'en-IN';
+            this.recognition.lang = targetLang;
 
             this.recognition.onstart = () => {
                 // console.log("Speech started");

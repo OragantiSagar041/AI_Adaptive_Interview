@@ -2806,6 +2806,7 @@ def get_interview_details(link_id: str):
     response_payload = {
         "interview_id": link_id,
         "actual_interview_id": actual_interview_id,
+        "candidate_id": session_data.get("candidate_id"),
         "candidate_name": candidate_name or "Candidate",
         "date": created_at,
         "source": "Job Description / Resume",
@@ -2827,9 +2828,12 @@ def get_interview_details(link_id: str):
     
     if actual_interview_id:
         interview_record = interviews_collection.find_one({"id": actual_interview_id})
-        if interview_record and interview_record.get("coding_round"):
-            response_payload["coding_round"] = interview_record.get("coding_round")
-            
+        if interview_record:
+            if interview_record.get("coding_round"):
+                response_payload["coding_round"] = interview_record.get("coding_round")
+            if interview_record.get("case_study_round"):
+                response_payload["case_study_round"] = interview_record.get("case_study_round")
+                
     return response_payload
 
 class AnalyzeRequest(BaseModel):
@@ -3803,7 +3807,7 @@ def process_pending_invitation_emails():
         if claimed.modified_count == 0:
             continue
 
-        link_url = f"{FRONTEND_URL}/index.html?session_id={session['link_id']}"
+        link_url = f"{FRONTEND_URL}/interview.html?session_id={session['link_id']}"
         sent = send_interview_email(
             candidate_email=session.get("candidate_email", ""),
             candidate_name=session.get("candidate_name", ""),
@@ -4176,7 +4180,7 @@ async def create_session(data: CreateSession, current_admin: dict = Depends(get_
     
     session_doc = {
         "link_id": link_id,
-        "candidate_id": f"CAN{random.randint(100, 999)}",
+        "candidate_id": f"CAN{random.randint(1000, 9999)}",
         "candidate_name": data.candidate_name,
         "candidate_email": data.candidate_email,
         "resume_text": data.resume_text,
@@ -4207,7 +4211,7 @@ async def create_session(data: CreateSession, current_admin: dict = Depends(get_
     interview_sessions_collection.insert_one(session_doc)
     session_doc["_id"] = interview_sessions_collection.find_one({"link_id": link_id}, {"_id": 1})["_id"]
     
-    link_url = f"{FRONTEND_URL}/index.html?session_id={link_id}"
+    link_url = f"{FRONTEND_URL}/interview.html?session_id={link_id}"
     
     email_result = queue_or_send_interview_email(session_doc, link_url)
     
@@ -4272,14 +4276,14 @@ async def bulk_create_sessions(data: BulkCreateSession, current_admin: dict = De
 
     for candidate in data.candidates:
         link_id = str(uuid.uuid4())
-        link_url = f"{FRONTEND_URL}/index.html?session_id={link_id}"
+        link_url = f"{FRONTEND_URL}/interview.html?session_id={link_id}"
         candidate_error = None
 
         try:
             scheduled_expiry = parse_iso_datetime(data.scheduled_end)
             session_doc = {
                 "link_id": link_id,
-                "candidate_id": f"CAN{random.randint(100, 999)}",
+                "candidate_id": f"CAN{random.randint(1000, 9999)}",
                 "candidate_name": candidate.candidate_name,
                 "candidate_email": candidate.candidate_email,
                 "resume_text": candidate.resume_text,
@@ -4529,7 +4533,7 @@ async def reschedule_session(link_id: str, new_expiry: str = Form(...)):
         
     # Fetch the updated session for email dispatch
     updated_session = interview_sessions_collection.find_one({"link_id": link_id})
-    link_url = f"{FRONTEND_URL}/index.html?session_id={link_id}"
+    link_url = f"{FRONTEND_URL}/interview.html?session_id={link_id}"
     
     # Re-send the invitation email to the candidate
     email_result = queue_or_send_interview_email(updated_session, link_url)
@@ -6123,8 +6127,8 @@ async def create_stripe_checkout(data: StripeCheckoutRequest):
                 },
                 "quantity": 1,
             }],
-            success_url=f"{frontend_url}/landing.html?payment=success",
-            cancel_url=f"{frontend_url}/landing.html?payment=cancelled",
+            success_url=f"{frontend_url}/index.html?payment=success",
+            cancel_url=f"{frontend_url}/index.html?payment=cancelled",
             metadata={
                 "name": data.signup_form.get("name", ""),
                 "email": data.signup_form.get("email", ""),

@@ -2390,7 +2390,6 @@
                     <nav class="hero-nav-links">
                         <!-- Links moved to dashboard sidebar -->
                     </nav>
-                    <button class="hero-nav-action" type="button" onclick="focusLoginForm()">Admin Login</button>
                 </div>
             </div>
 
@@ -2405,10 +2404,6 @@
                             performance from one calm admin workspace built for fast hiring teams.</p>
 
                         <div class="hero-cta-stack login-rise" data-delay="360" data-duration="800">
-                            <button class="hero-primary-btn" type="button" onclick="focusLoginForm()"
-                                style="width: auto; padding: 1rem 3rem;">
-                                Admin Sign In
-                            </button>
 
                             <div class="hero-meta">
                                 <div class="reviews-badge">
@@ -2430,7 +2425,7 @@
                     <div class="login-card login-rise" data-delay="520" data-duration="800" id="loginCard">
                         <div class="login-logo">
                             <div class="icon"><i class="fas fa-shield-halved"></i></div>
-                            <h1>Admin Console</h1>
+                            <h1>Login Page</h1>
                             <p>Secure access for interview creation, scheduling, and candidate review.</p>
                         </div>
 
@@ -2438,7 +2433,8 @@
                             <label for="username">Username</label>
                             <div class="input-wrapper">
                                 <span class="input-icon"><i class="fas fa-user"></i></span>
-                                <input type="text" id="username" placeholder="Enter username" autocomplete="username" oninput="this.value=this.value.replace(/[^a-zA-Z0-9_]/g,'')">
+                                <input type="text" id="username" placeholder="Enter username" autocomplete="username"
+                                    oninput="this.value=this.value.replace(/[^a-zA-Z0-9_]/g,'')">
                             </div>
                         </div>
 
@@ -2668,8 +2664,9 @@
                             <div
                                 style="display: grid; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); gap: 2rem;">
                                 <div class="master-field">
-                                    <label style="display: flex; align-items: center; gap: 6px;"><i class="fas fa-building"
-                                            style="font-size: 0.7rem; color: #64748b;"></i> Company Name</label>
+                                    <label style="display: flex; align-items: center; gap: 6px;"><i
+                                            class="fas fa-building" style="font-size: 0.7rem; color: #64748b;"></i>
+                                        Company Name</label>
                                     <input type="text" id="tenantCompany" class="dash-input"
                                         style="padding: 0.9rem; font-size: 1rem; border-radius: 10px;"
                                         placeholder="Company Inc.">
@@ -3212,7 +3209,9 @@
                                 </div>
                                 <input type="file" id="resumeFile" accept=".pdf,.docx,.doc,.txt"
                                     onchange="handleFileSelect()" style="display:none;">
-                                <button type="button" id="removeResumeBtn" class="hidden" onclick="removeResume()" style="background: transparent; border: none; color: var(--danger); font-size: 0.85rem; cursor: pointer; margin-top: 0.5rem;"><i class="fas fa-trash"></i> Remove Uploaded Resume</button>
+                                <button type="button" id="removeResumeBtn" class="hidden" onclick="removeResume()"
+                                    style="background: transparent; border: none; color: var(--danger); font-size: 0.85rem; cursor: pointer; margin-top: 0.5rem;"><i
+                                        class="fas fa-trash"></i> Remove Uploaded Resume</button>
                                 <div id="fileStatus"></div>
                             </div>
 
@@ -3232,36 +3231,57 @@
                                 </div>
                                 <div id="jdFileStatus" style="font-size:0.72rem;margin-bottom:4px;"></div>
                                 <textarea class="dash-textarea" id="jobDescription"
-                                    placeholder="Paste the job description here or upload a file above..." oninput="triggerAtsIfReady()"></textarea>
-                                
+                                    placeholder="Paste the job description here or upload a file above..."
+                                    oninput="triggerAtsIfReady()"></textarea>
+
                                 <!-- ATS SCORE SECTION -->
-                                <div style="margin-top: 15px; background: rgba(99,102,241,0.05); border: 1px solid rgba(99,102,241,0.2); border-radius: 8px; padding: 15px;">
-                                    <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom: 10px;">
-                                        <h4 style="margin:0; font-size: 0.9rem; color: var(--text-dark); display:flex; align-items:center; gap:8px;">
-                                            <i class="fas fa-chart-pie" style="color:var(--primary-light);"></i> ATS Resume Match Score
+                                <div
+                                    style="margin-top: 15px; background: rgba(99,102,241,0.05); border: 1px solid rgba(99,102,241,0.2); border-radius: 8px; padding: 15px;">
+                                    <div
+                                        style="display:flex; justify-content:space-between; align-items:center; margin-bottom: 10px;">
+                                        <h4
+                                            style="margin:0; font-size: 0.9rem; color: var(--text-dark); display:flex; align-items:center; gap:8px;">
+                                            <i class="fas fa-chart-pie" style="color:var(--primary-light);"></i> ATS
+                                            Resume Match Score
                                         </h4>
-                                        <button type="button" class="dash-btn dash-btn-secondary" onclick="calculateAtsScore()" id="atsBtn" style="padding: 6px 12px; font-size: 0.75rem; display: none;">
+                                        <button type="button" class="dash-btn dash-btn-secondary"
+                                            onclick="calculateAtsScore()" id="atsBtn"
+                                            style="padding: 6px 12px; font-size: 0.75rem; display: none;">
                                             Calculate Match
                                         </button>
                                     </div>
-                                    <div id="atsResults" style="display: none; margin-top: 15px; border-top: 1px solid rgba(0,0,0,0.05); padding-top: 15px;">
+                                    <div id="atsResults"
+                                        style="display: none; margin-top: 15px; border-top: 1px solid rgba(0,0,0,0.05); padding-top: 15px;">
                                         <div style="display: flex; gap: 20px; align-items: flex-start;">
                                             <div style="flex: 0 0 auto; text-align: center;">
-                                                <div id="atsScoreCircle" style="width: 80px; height: 80px; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-size: 1.5rem; font-weight: bold; color: white; margin: 0 auto 5px;">
+                                                <div id="atsScoreCircle"
+                                                    style="width: 80px; height: 80px; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-size: 1.5rem; font-weight: bold; color: white; margin: 0 auto 5px;">
                                                     0%
                                                 </div>
-                                                <div style="font-size: 0.7rem; color: var(--text-muted); font-weight: 600;">Match</div>
+                                                <div
+                                                    style="font-size: 0.7rem; color: var(--text-muted); font-weight: 600;">
+                                                    Match</div>
                                             </div>
                                             <div style="flex: 1; font-size: 0.8rem;">
-                                                <p id="atsSummary" style="margin: 0 0 10px 0; color: var(--text-dark); line-height: 1.4;"></p>
+                                                <p id="atsSummary"
+                                                    style="margin: 0 0 10px 0; color: var(--text-dark); line-height: 1.4;">
+                                                </p>
                                                 <div style="display: flex; gap: 15px;">
-                                                    <div style="flex: 1; background: rgba(34,197,94,0.05); padding: 8px; border-radius: 6px; border: 1px solid rgba(34,197,94,0.1);">
-                                                        <strong style="color: #16a34a; display: block; margin-bottom: 5px;">✅ Matched Skills</strong>
-                                                        <div id="atsMatchedSkills" style="color: var(--text-muted);"></div>
+                                                    <div
+                                                        style="flex: 1; background: rgba(34,197,94,0.05); padding: 8px; border-radius: 6px; border: 1px solid rgba(34,197,94,0.1);">
+                                                        <strong
+                                                            style="color: #16a34a; display: block; margin-bottom: 5px;">✅
+                                                            Matched Skills</strong>
+                                                        <div id="atsMatchedSkills" style="color: var(--text-muted);">
+                                                        </div>
                                                     </div>
-                                                    <div style="flex: 1; background: rgba(239,68,68,0.05); padding: 8px; border-radius: 6px; border: 1px solid rgba(239,68,68,0.1);">
-                                                        <strong style="color: #dc2626; display: block; margin-bottom: 5px;">❌ Missing Skills</strong>
-                                                        <div id="atsMissingSkills" style="color: var(--text-muted);"></div>
+                                                    <div
+                                                        style="flex: 1; background: rgba(239,68,68,0.05); padding: 8px; border-radius: 6px; border: 1px solid rgba(239,68,68,0.1);">
+                                                        <strong
+                                                            style="color: #dc2626; display: block; margin-bottom: 5px;">❌
+                                                            Missing Skills</strong>
+                                                        <div id="atsMissingSkills" style="color: var(--text-muted);">
+                                                        </div>
                                                     </div>
                                                 </div>
                                             </div>
@@ -3348,7 +3368,8 @@
 
                             <div class="dash-form-group">
                                 <label class="dash-label">Interview Type</label>
-                                <select class="dash-input" id="interviewType" style="padding: 0.7rem 1rem;" onchange="toggleCaseStudyCount()">
+                                <select class="dash-input" id="interviewType" style="padding: 0.7rem 1rem;"
+                                    onchange="toggleCaseStudyCount()">
                                     <option value="Technical">Technical (Includes Coding Round)</option>
                                     <option value="Normal">Normal (Standard AI Interview, No Coding)</option>
                                     <option value="Non-Technical">Non-Technical (Scenario/Case Study based)</option>
@@ -3357,7 +3378,8 @@
 
                             <div class="dash-form-group">
                                 <label class="dash-label">Interview Language</label>
-                                <select class="dash-input" id="interviewLanguage" style="padding: 0.7rem 1rem;" onchange="handleLanguageChange()">
+                                <select class="dash-input" id="interviewLanguage" style="padding: 0.7rem 1rem;"
+                                    onchange="handleLanguageChange()">
                                     <option value="English">English</option>
                                     <option value="Hindi">Hindi</option>
                                     <option value="Telugu">Telugu</option>
@@ -3378,14 +3400,16 @@
                                     <option value="8">8 Questions</option>
                                 </select>
                                 <p style="font-size: 0.75rem; color: var(--text-muted); margin-top: 4px;">
-                                    AI will generate scenario-based case study questions from the Job Description skills. Candidate writes answers for each scenario.
+                                    AI will generate scenario-based case study questions from the Job Description
+                                    skills. Candidate writes answers for each scenario.
                                 </p>
                             </div>
 
                             <div class="dash-form-group">
                                 <label class="dash-label">Interview Duration (Minutes)</label>
                                 <input type="number" class="dash-input" id="interviewDuration" min="1" max="120"
-                                    value="30" placeholder="Enter duration in minutes" style="padding: 0.7rem 1rem;" oninput="this.value = this.value.replace(/[^0-9]/g, ''); if(this.value && parseInt(this.value) > 120) this.value = 120;">
+                                    value="30" placeholder="Enter duration in minutes" style="padding: 0.7rem 1rem;"
+                                    oninput="this.value = this.value.replace(/[^0-9]/g, ''); if(this.value && parseInt(this.value) > 120) this.value = 120;">
                                 <p style="font-size: 0.75rem; color: var(--text-muted); margin-top: 4px;">
                                     Enter any value between 5–120 minutes. Interview ends automatically when time
                                     expires.
@@ -3642,7 +3666,8 @@
 
                             <div class="dash-form-group">
                                 <label class="dash-label">Interview Type</label>
-                                <select class="dash-input" id="bulkInterviewType" style="padding: 0.7rem 1rem;" onchange="toggleBulkCaseStudyCount()">
+                                <select class="dash-input" id="bulkInterviewType" style="padding: 0.7rem 1rem;"
+                                    onchange="toggleBulkCaseStudyCount()">
                                     <option value="Technical">Technical (Includes Coding Round)</option>
                                     <option value="Normal">Normal (Standard AI Interview, No Coding)</option>
                                     <option value="Non-Technical">Non-Technical (Scenario/Case Study based)</option>
@@ -3651,7 +3676,8 @@
 
                             <div class="dash-form-group">
                                 <label class="dash-label">Interview Language</label>
-                                <select class="dash-input" id="bulkInterviewLanguage" style="padding: 0.7rem 1rem;" onchange="handleBulkLanguageChange()">
+                                <select class="dash-input" id="bulkInterviewLanguage" style="padding: 0.7rem 1rem;"
+                                    onchange="handleBulkLanguageChange()">
                                     <option value="English">English</option>
                                     <option value="Hindi">Hindi</option>
                                     <option value="Telugu">Telugu</option>
@@ -3672,14 +3698,16 @@
                                     <option value="8">8 Questions</option>
                                 </select>
                                 <p style="font-size: 0.75rem; color: var(--text-muted); margin-top: 4px;">
-                                    AI will generate scenario-based case study questions from the Job Description skills. Candidate writes answers for each scenario.
+                                    AI will generate scenario-based case study questions from the Job Description
+                                    skills. Candidate writes answers for each scenario.
                                 </p>
                             </div>
 
                             <div class="dash-form-group">
                                 <label class="dash-label">Interview Duration (Minutes)</label>
                                 <input type="number" class="dash-input" id="bulkDuration" min="1" max="120" value="30"
-                                    style="padding:0.7rem 1rem;" oninput="this.value = this.value.replace(/[^0-9]/g, ''); if(this.value && parseInt(this.value) > 120) this.value = 120;">
+                                    style="padding:0.7rem 1rem;"
+                                    oninput="this.value = this.value.replace(/[^0-9]/g, ''); if(this.value && parseInt(this.value) > 120) this.value = 120;">
                             </div>
 
                             <div class="dash-form-group"
@@ -3940,7 +3968,8 @@
                         <div class="dash-form-group" style="max-width: 500px;">
                             <label class="dash-label">Username</label>
                             <input type="text" id="adminUsernameInput" class="dash-input"
-                                placeholder="Enter your username" oninput="this.value=this.value.replace(/[^a-zA-Z0-9_]/g,'')">
+                                placeholder="Enter your username"
+                                oninput="this.value=this.value.replace(/[^a-zA-Z0-9_]/g,'')">
                         </div>
 
                         <div class="dash-form-group" style="max-width: 500px;">
@@ -3956,30 +3985,39 @@
                             <p style="font-size: 0.75rem; color: var(--text-muted); margin-top: 5px;">This email will be
                                 used for OTP verification during password resets.</p>
                         </div>
-                        
+
                         <h4 style="margin-top: 30px; margin-bottom: 15px; color: var(--text-dark);">Change Password</h4>
                         <div class="dash-form-group" style="max-width: 500px;">
                             <label class="dash-label">Old Password</label>
                             <div style="position: relative;">
                                 <input type="password" id="adminOldPasswordInput" class="dash-input"
-                                    placeholder="Enter your current password" style="padding-right: 40px; width: 100%; box-sizing: border-box;">
-                                <i class="fas fa-eye" style="position: absolute; right: 15px; top: 13px; cursor: pointer; color: var(--text-muted);" onclick="const pwd=document.getElementById('adminOldPasswordInput'); if(pwd.type==='password'){pwd.type='text'; this.classList.remove('fa-eye'); this.classList.add('fa-eye-slash');}else{pwd.type='password'; this.classList.remove('fa-eye-slash'); this.classList.add('fa-eye');}"></i>
+                                    placeholder="Enter your current password"
+                                    style="padding-right: 40px; width: 100%; box-sizing: border-box;">
+                                <i class="fas fa-eye"
+                                    style="position: absolute; right: 15px; top: 13px; cursor: pointer; color: var(--text-muted);"
+                                    onclick="const pwd=document.getElementById('adminOldPasswordInput'); if(pwd.type==='password'){pwd.type='text'; this.classList.remove('fa-eye'); this.classList.add('fa-eye-slash');}else{pwd.type='password'; this.classList.remove('fa-eye-slash'); this.classList.add('fa-eye');}"></i>
                             </div>
                         </div>
                         <div class="dash-form-group" style="max-width: 500px;">
                             <label class="dash-label">New Password</label>
                             <div style="position: relative;">
                                 <input type="password" id="adminNewPasswordInput" class="dash-input"
-                                    placeholder="Enter new password" style="padding-right: 40px; width: 100%; box-sizing: border-box;">
-                                <i class="fas fa-eye" style="position: absolute; right: 15px; top: 13px; cursor: pointer; color: var(--text-muted);" onclick="const pwd=document.getElementById('adminNewPasswordInput'); if(pwd.type==='password'){pwd.type='text'; this.classList.remove('fa-eye'); this.classList.add('fa-eye-slash');}else{pwd.type='password'; this.classList.remove('fa-eye-slash'); this.classList.add('fa-eye');}"></i>
+                                    placeholder="Enter new password"
+                                    style="padding-right: 40px; width: 100%; box-sizing: border-box;">
+                                <i class="fas fa-eye"
+                                    style="position: absolute; right: 15px; top: 13px; cursor: pointer; color: var(--text-muted);"
+                                    onclick="const pwd=document.getElementById('adminNewPasswordInput'); if(pwd.type==='password'){pwd.type='text'; this.classList.remove('fa-eye'); this.classList.add('fa-eye-slash');}else{pwd.type='password'; this.classList.remove('fa-eye-slash'); this.classList.add('fa-eye');}"></i>
                             </div>
                         </div>
                         <div class="dash-form-group" style="max-width: 500px;">
                             <label class="dash-label">Confirm New Password</label>
                             <div style="position: relative;">
                                 <input type="password" id="adminConfirmPasswordInput" class="dash-input"
-                                    placeholder="Confirm new password" style="padding-right: 40px; width: 100%; box-sizing: border-box;">
-                                <i class="fas fa-eye" style="position: absolute; right: 15px; top: 13px; cursor: pointer; color: var(--text-muted);" onclick="const pwd=document.getElementById('adminConfirmPasswordInput'); if(pwd.type==='password'){pwd.type='text'; this.classList.remove('fa-eye'); this.classList.add('fa-eye-slash');}else{pwd.type='password'; this.classList.remove('fa-eye-slash'); this.classList.add('fa-eye');}"></i>
+                                    placeholder="Confirm new password"
+                                    style="padding-right: 40px; width: 100%; box-sizing: border-box;">
+                                <i class="fas fa-eye"
+                                    style="position: absolute; right: 15px; top: 13px; cursor: pointer; color: var(--text-muted);"
+                                    onclick="const pwd=document.getElementById('adminConfirmPasswordInput'); if(pwd.type==='password'){pwd.type='text'; this.classList.remove('fa-eye'); this.classList.add('fa-eye-slash');}else{pwd.type='password'; this.classList.remove('fa-eye-slash'); this.classList.add('fa-eye');}"></i>
                             </div>
                         </div>
 
@@ -4002,10 +4040,10 @@
 
         // Global Fetch Interceptor to attach JWT token
         const originalFetch = window.fetch;
-        window.fetch = async function() {
+        window.fetch = async function () {
             let [resource, config] = arguments;
             if (!config) config = {};
-            
+
             const token = localStorage.getItem('adminToken');
             if (token && resource.toString().startsWith(API_BASE)) {
                 if (!config.headers) config.headers = {};
@@ -4210,7 +4248,7 @@
             if (masterSection) masterSection.classList.add('hidden');
             const title = document.getElementById('consoleTitle');
             if (title) title.textContent = 'Admin Console';
-            
+
             // Explicitly switch to the overview tab so the dashboard isn't blank
             if (typeof switchView === 'function') {
                 switchView('overview');
@@ -4391,7 +4429,7 @@
                 if (!res.ok) throw new Error(data.detail || 'Create failed');
                 closeCreateTenantModal();
                 ['tenantCompany', 'tenantUsername', 'tenantPassword', 'tenantEmail'].forEach(id => {
-                    if(document.getElementById(id)) document.getElementById(id).value = '';
+                    if (document.getElementById(id)) document.getElementById(id).value = '';
                 });
                 showToast('Admin account created.', 'success');
                 loadMasterTenants();
@@ -4515,7 +4553,7 @@
                 document.getElementById('loginSection').classList.add('hidden');
                 document.getElementById('dashboardSection').classList.remove('hidden');
                 document.body.classList.add('dashboard-active');
-                
+
                 // Show Copilot only on Dashboard
                 const copilotFab = document.getElementById('copilotFab');
                 if (copilotFab) copilotFab.style.display = 'flex';
@@ -4602,7 +4640,7 @@
 
                 if (response.ok) {
                     const data = await response.json();
-                    
+
                     if (data.status === 'expired' || data.status === 'blocked') {
                         errorDiv.textContent = data.message || "Your subscription has expired.";
                         errorDiv.classList.remove('hidden');
@@ -4610,7 +4648,7 @@
                         loginBtn.innerHTML = 'Sign in to Dashboard';
                         return;
                     }
-                    
+
                     const adminId = data.admin_id || data.master_id;
                     const adminEmail = data.email || "";
                     const adminName = data.username || username;
@@ -4618,7 +4656,7 @@
                     const plan = data.subscription_plan || "Free Trial";
                     const planKey = data.subscription_plan_key || normalizePlanKey(plan);
                     const planCapabilities = getPlanCapabilities(planKey, data.plan_capabilities || null);
-                    
+
                     // Persist session
                     if (data.token) {
                         localStorage.setItem('adminToken', data.token);
@@ -4637,7 +4675,7 @@
                     sessionStorage.setItem('subscriptionExpiry', data.subscription_expiry || '');
                     sessionStorage.setItem('subscriptionDaysRemaining', data.subscription_days_remaining ?? '');
                     sessionStorage.setItem('subscriptionWarningMessage', data.subscription_warning_message || '');
-                    
+
                     const companyName = data.company_name || "";
                     sessionStorage.setItem('adminCompany', companyName);
 
@@ -4651,10 +4689,10 @@
                     currentRole = role;
                     const sidebarName = document.getElementById('sidebarAdminName');
                     if (sidebarName) sidebarName.textContent = adminName;
-                    
+
                     const sidebarRole = document.getElementById('sidebarAdminRole');
                     if (sidebarRole) sidebarRole.textContent = (role === 'master' ? 'Master Admin' : 'Admin') + ' (' + plan + ')';
-                    
+
                     // Show / Hide master elements
                     if (role === "master") {
                         document.getElementById('tenantSidebarNav').style.display = 'none';
@@ -4665,7 +4703,7 @@
                         document.getElementById('tenantSidebarNav').style.display = 'block';
                         document.getElementById('masterSidebarNav').style.display = 'none';
                     }
-                    
+
                     // Switch to dashboard view
                     document.getElementById('loginSection').style.opacity = '0';
                     document.getElementById('loginSection').style.transform = 'scale(0.95)';
@@ -4675,11 +4713,11 @@
                         document.getElementById('loginSection').classList.add('hidden');
                         document.getElementById('dashboardSection').classList.remove('hidden');
                         document.body.classList.add('dashboard-active'); // Enable full-screen layout
-                        
+
                         // Show Copilot only on Dashboard
                         const copilotFab = document.getElementById('copilotFab');
                         if (copilotFab) copilotFab.style.display = 'flex';
-                        
+
                         if (role === 'master') {
                             showMasterDashboard();
                             loadMasterTenants();
@@ -4934,17 +4972,17 @@
         async function calculateAtsScore() {
             const resume = document.getElementById('resumeText').value.trim();
             const jd = document.getElementById('jobDescription').value.trim();
-            
+
             if (!resume || !jd) {
                 return;
             }
-            
+
             const btn = document.getElementById('atsBtn');
             const resultsDiv = document.getElementById('atsResults');
-            
+
             btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Analyzing...';
             btn.disabled = true;
-            
+
             // Show loading state in the results div
             resultsDiv.style.display = 'block';
             document.getElementById('atsScoreCircle').textContent = '...';
@@ -4952,22 +4990,22 @@
             document.getElementById('atsSummary').innerHTML = '<span style="color: #64748b;"><i class="fas fa-spinner fa-spin"></i> Analyzing ATS match score...</span>';
             document.getElementById('atsMatchedSkills').innerHTML = '';
             document.getElementById('atsMissingSkills').innerHTML = '';
-            
+
             try {
                 const response = await fetch(`${API_BASE}/admin/ats-score`, {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify({ resume_text: resume, jd_text: jd })
                 });
-                
+
                 if (response.ok) {
                     const data = await response.json();
-                    
+
                     resultsDiv.style.display = 'block';
-                    
+
                     const scoreCircle = document.getElementById('atsScoreCircle');
                     scoreCircle.textContent = `${data.score}%`;
-                    
+
                     if (data.score >= 75) {
                         scoreCircle.style.background = 'linear-gradient(135deg, #22c55e, #16a34a)';
                     } else if (data.score >= 50) {
@@ -4975,15 +5013,15 @@
                     } else {
                         scoreCircle.style.background = 'linear-gradient(135deg, #ef4444, #dc2626)';
                     }
-                    
+
                     document.getElementById('atsSummary').textContent = data.summary || '';
-                    
+
                     const matchedDiv = document.getElementById('atsMatchedSkills');
                     matchedDiv.innerHTML = (data.matched_skills || []).map(s => `<span style="display:inline-block; background:white; padding:2px 6px; border-radius:4px; margin:2px; font-size:0.7rem; border:1px solid #e5e7eb;">${s}</span>`).join('') || 'None identified';
-                    
+
                     const missingDiv = document.getElementById('atsMissingSkills');
                     missingDiv.innerHTML = (data.missing_skills || []).map(s => `<span style="display:inline-block; background:white; padding:2px 6px; border-radius:4px; margin:2px; font-size:0.7rem; border:1px solid #e5e7eb;">${s}</span>`).join('') || 'None identified';
-                    
+
                 } else {
                     showToast("Failed to calculate ATS score.", "error");
                 }
@@ -5000,27 +5038,27 @@
         async function checkCandidateExists() {
             const email = document.getElementById('candidateEmail').value.trim();
             if (!email || !email.includes('@')) return;
-            
+
             try {
                 const response = await fetch(`${API_BASE}/admin/candidate/check?email=${encodeURIComponent(email)}`);
                 if (!response.ok) return;
-                
+
                 const data = await response.json();
                 if (data.exists && data.resume_text) {
                     const modal = document.getElementById('candidateExistsModal');
                     const nameSpan = document.getElementById('candidateExistsName');
                     const confirmBtn = document.getElementById('candidateExistsConfirmBtn');
-                    
+
                     nameSpan.textContent = data.candidate_name || email;
-                    
-                    confirmBtn.onclick = function() {
+
+                    confirmBtn.onclick = function () {
                         document.getElementById('candidateName').value = data.candidate_name || '';
                         document.getElementById('resumeText').value = data.resume_text;
                         showToast('Candidate details auto-filled.', 'success');
                         triggerAtsIfReady();
                         modal.classList.add('hidden');
                     };
-                    
+
                     modal.classList.remove('hidden');
                 }
             } catch (err) {
@@ -5037,7 +5075,7 @@
             const lang = document.getElementById('interviewLanguage').value;
             const typeSelect = document.getElementById('interviewType');
             const technicalOption = Array.from(typeSelect.options).find(opt => opt.value === 'Technical');
-            
+
             if (lang !== 'English') {
                 technicalOption.disabled = true;
                 if (typeSelect.value === 'Technical') {
@@ -5054,7 +5092,7 @@
             const lang = document.getElementById('bulkInterviewLanguage').value;
             const typeSelect = document.getElementById('bulkInterviewType');
             const technicalOption = Array.from(typeSelect.options).find(opt => opt.value === 'Technical');
-            
+
             if (lang !== 'English') {
                 technicalOption.disabled = true;
                 if (typeSelect.value === 'Technical') {
@@ -5316,7 +5354,7 @@
                     body: JSON.stringify(payload)
                 });
                 const data = await res.json();
-                
+
                 if (res.ok) {
                     if (data.updated_fields) {
                         if (data.updated_fields.email) adminEmail = data.updated_fields.email;
@@ -5330,12 +5368,12 @@
                             sessionStorage.setItem('adminCompany', data.updated_fields.company_name);
                         }
                     }
-                    
+
                     // Clear password fields
                     document.getElementById('adminOldPasswordInput').value = '';
                     document.getElementById('adminNewPasswordInput').value = '';
                     document.getElementById('adminConfirmPasswordInput').value = '';
-                    
+
                     showToast('Profile updated successfully!', 'success');
                 } else {
                     showToast(`Failed: ${data.detail || data.message}`, 'error');
@@ -5738,35 +5776,35 @@
                 }
 
                 if (s.decision === 'selected') {
-                        const selectedNameCell = canViewDetailedAnalytics
-                            ? `<a href="javascript:void(0)" onclick="openLiveResults('${escapeHtml(s.link_id)}', '${escapeHtml(s.candidate_name).replace(/'/g, "\\'")}')" style="color: var(--primary-light); text-decoration: none; border-bottom: 1px dashed var(--primary-light);">${escapeHtml(s.candidate_name)}</a>`
-                            : escapeHtml(s.candidate_name);
-                        const selectedAction = canViewDetailedAnalytics
-                            ? `<button class="btn-copy" onclick="openLiveResults('${s.link_id}', '${s.candidate_name.replace(/'/g, "\\'")}')" style="background:#10b981; color:white; border:none; padding:0.4rem 0.8rem; font-size:0.75rem; border-radius:6px; cursor:pointer; font-weight:600;"><i class="fas fa-eye"></i> View</button>`
-                            : `<button class="btn-copy" onclick="showPlanUpgradeMessage('Detailed result analytics', 'Basic')" style="background:rgba(245,158,11,0.12); color:#92400e; border:1px solid rgba(245,158,11,0.28); padding:0.4rem 0.8rem; font-size:0.75rem; border-radius:6px; cursor:pointer;">Upgrade</button>`;
-                        qualHtml += `<tr>
+                    const selectedNameCell = canViewDetailedAnalytics
+                        ? `<a href="javascript:void(0)" onclick="openLiveResults('${escapeHtml(s.link_id)}', '${escapeHtml(s.candidate_name).replace(/'/g, "\\'")}')" style="color: var(--primary-light); text-decoration: none; border-bottom: 1px dashed var(--primary-light);">${escapeHtml(s.candidate_name)}</a>`
+                        : escapeHtml(s.candidate_name);
+                    const selectedAction = canViewDetailedAnalytics
+                        ? `<button class="btn-copy" onclick="openLiveResults('${s.link_id}', '${s.candidate_name.replace(/'/g, "\\'")}')" style="background:#10b981; color:white; border:none; padding:0.4rem 0.8rem; font-size:0.75rem; border-radius:6px; cursor:pointer; font-weight:600;"><i class="fas fa-eye"></i> View</button>`
+                        : `<button class="btn-copy" onclick="showPlanUpgradeMessage('Detailed result analytics', 'Basic')" style="background:rgba(245,158,11,0.12); color:#92400e; border:1px solid rgba(245,158,11,0.28); padding:0.4rem 0.8rem; font-size:0.75rem; border-radius:6px; cursor:pointer;">Upgrade</button>`;
+                    qualHtml += `<tr>
                             <td style="padding-left: 1.5rem;"><input type="checkbox" class="session-checkbox" value="${s.link_id}" onclick="updateTableBulkDeleteBtn('qualified')" style="cursor: pointer;"></td>
                             <td style="font-weight: 500;">${selectedNameCell}${s.candidate_id ? `<div style="font-size: 0.75rem; color: var(--text-muted); font-weight: normal; margin-top: 2px;">${escapeHtml(s.candidate_id)}</div>` : ''}</td>
                             <td>${dateStr}</td>
                             <td>${scoreText}</td>
                             <td style="text-align: right;">${selectedAction}</td>
                         </tr>`;
-                    }
-                    if (s.decision === 'rejected') {
-                        const rejectedNameCell = canViewDetailedAnalytics
-                            ? `<a href="javascript:void(0)" onclick="openLiveResults('${escapeHtml(s.link_id)}', '${escapeHtml(s.candidate_name).replace(/'/g, "\\'")}')" style="color: var(--text-muted); text-decoration: none; border-bottom: 1px dashed var(--text-muted);">${escapeHtml(s.candidate_name)}</a>`
-                            : escapeHtml(s.candidate_name);
-                        const rejectedAction = canViewDetailedAnalytics
-                            ? `<button class="btn-copy" onclick="openLiveResults('${s.link_id}', '${s.candidate_name.replace(/'/g, "\\'")}')" style="background:var(--danger); color:white; border:none; padding:0.4rem 0.8rem; font-size:0.75rem; border-radius:6px; cursor:pointer;"><i class="fas fa-eye"></i> View</button>`
-                            : `<button class="btn-copy" onclick="showPlanUpgradeMessage('Detailed result analytics', 'Basic')" style="background:rgba(245,158,11,0.12); color:#92400e; border:1px solid rgba(245,158,11,0.28); padding:0.4rem 0.8rem; font-size:0.75rem; border-radius:6px; cursor:pointer;">Upgrade</button>`;
-                        unqualHtml += `<tr>
+                }
+                if (s.decision === 'rejected') {
+                    const rejectedNameCell = canViewDetailedAnalytics
+                        ? `<a href="javascript:void(0)" onclick="openLiveResults('${escapeHtml(s.link_id)}', '${escapeHtml(s.candidate_name).replace(/'/g, "\\'")}')" style="color: var(--text-muted); text-decoration: none; border-bottom: 1px dashed var(--text-muted);">${escapeHtml(s.candidate_name)}</a>`
+                        : escapeHtml(s.candidate_name);
+                    const rejectedAction = canViewDetailedAnalytics
+                        ? `<button class="btn-copy" onclick="openLiveResults('${s.link_id}', '${s.candidate_name.replace(/'/g, "\\'")}')" style="background:var(--danger); color:white; border:none; padding:0.4rem 0.8rem; font-size:0.75rem; border-radius:6px; cursor:pointer;"><i class="fas fa-eye"></i> View</button>`
+                        : `<button class="btn-copy" onclick="showPlanUpgradeMessage('Detailed result analytics', 'Basic')" style="background:rgba(245,158,11,0.12); color:#92400e; border:1px solid rgba(245,158,11,0.28); padding:0.4rem 0.8rem; font-size:0.75rem; border-radius:6px; cursor:pointer;">Upgrade</button>`;
+                    unqualHtml += `<tr>
                             <td style="padding-left: 1.5rem;"><input type="checkbox" class="session-checkbox" value="${s.link_id}" onclick="updateTableBulkDeleteBtn('unqualified')" style="cursor: pointer;"></td>
                             <td style="font-weight: 500;">${rejectedNameCell}${s.candidate_id ? `<div style="font-size: 0.75rem; color: var(--text-muted); font-weight: normal; margin-top: 2px;">${escapeHtml(s.candidate_id)}</div>` : ''}</td>
                             <td>${dateStr}</td>
                             <td>${scoreText}</td>
                             <td style="text-align: right;">${rejectedAction}</td>
                         </tr>`;
-                    }
+                }
                 // --- Apply Status Filter for Overview Table only ---
                 const filterStatusLower = (filterStatus || "").toLowerCase();
                 if (filterStatusLower && filterStatusLower !== currentStatus) {
@@ -5823,7 +5861,7 @@
                     scoreText = `<span style="color:${color}; font-weight:700;">${s.avg_score.toFixed(1)}/100</span>`;
                 }
 
-                const linkUrl = normalizeFrontendUrl(`/index.html?session_id=${s.link_id}`);
+                const linkUrl = normalizeFrontendUrl(`/interview.html?session_id=${s.link_id}`);
                 let actionBtn = `<button class="btn-copy" onclick="copyLink(this, '${linkUrl}')" style="margin:0; padding:0.4rem 0.8rem; font-size:0.75rem;">Copy Link</button>`;
 
                 if (currentStatus === 'completed') {
@@ -5920,7 +5958,7 @@
                     scoreText = `<span style="color:${color}; font-weight:700;">${s.avg_score.toFixed(1)}/100</span>`;
                 }
 
-                const linkUrl = normalizeFrontendUrl(`/index.html?session_id=${s.link_id}`);
+                const linkUrl = normalizeFrontendUrl(`/interview.html?session_id=${s.link_id}`);
                 let actionBtn = `<button class="btn-copy" onclick="copyLink(this, '${linkUrl}')" style="margin:0; padding:0.4rem 0.8rem; font-size:0.75rem;">Copy Link</button>`;
 
                 if (currentStatus === 'completed') {
@@ -6256,7 +6294,7 @@
                     <div style="margin-bottom: 2rem;">
                         <h2 style="color: var(--primary-light); margin-bottom: 0.5rem; font-size: 1.5rem;">${escapeHtml(data.candidate_name) || 'Candidate'}</h2>
                         <p style="color: var(--text-muted); font-size: 0.9rem;">
-                            Session ID: ${interviewId}
+                            Candidate ID: <span style="font-weight: 700; color: var(--text-primary);">${data.candidate_id || 'N/A'}</span> <span style="margin-left: 1rem; font-size: 0.8rem;">(Session: ${interviewId})</span>
                         </p>
                     </div>
 
@@ -6448,7 +6486,7 @@
                         const task = data.coding_round.task;
                         html += '<strong style="color: var(--text-secondary); font-size: 0.85rem; text-transform: uppercase; letter-spacing: 1px; display: block;"><i class="fas fa-code"></i> Coding Round Results</strong>';
                         html += '<div style="background: var(--bg-card); padding: 1.5rem; border-radius: var(--radius-sm); border: 1px solid var(--border); margin-top: 1rem;">';
-                        
+
                         html += '<div style="margin-bottom: 1rem;">';
                         html += '<h4 style="color: var(--text-primary); margin: 0; font-size: 1.1rem;">Problem Statement</h4>';
                         html += `<p style="color: var(--text-muted); font-size: 0.9rem; margin-top: 0.5rem; line-height: 1.5; white-space: pre-wrap;">${escapeHtml(task.description || 'N/A')}</p>`;
@@ -6475,7 +6513,7 @@
                             html += '<div style="margin-bottom: 1.5rem;">';
                             html += `<h4 style="color: var(--text-primary); margin: 0 0 0.75rem 0; font-size: 1.1rem;">Test Cases (${passedCount}/${totalTests} Passed)</h4>`;
                             html += '<div style="display: flex; flex-direction: column; gap: 0.5rem;">';
-                            
+
                             task.test_cases.forEach((tc, idx) => {
                                 const isPassed = idx < passedCount;
                                 const statusColor = isPassed ? 'var(--accent)' : 'var(--danger)';
@@ -6527,7 +6565,7 @@
                             html += `<p style="color: var(--text-muted); margin-top: 0.4rem; font-size: 0.9rem; line-height: 1.5;">No feedback or score yet.</p>`;
                         }
                         html += '</div>';
-                        
+
                         html += '<p style="color: var(--text-muted); font-size: 0.75rem; margin-top: 1rem; text-align: center;">Note: Code execution is evaluated statically by AI. Strict test case passing is currently disabled in this environment.</p>';
                         html += '</div>';
                     }
@@ -6535,7 +6573,7 @@
                     if (data.case_study_round && data.case_study_round.answers) {
                         html += '<strong style="color: var(--text-secondary); font-size: 0.85rem; text-transform: uppercase; letter-spacing: 1px; display: block; margin-top: 2rem;"><i class="fas fa-briefcase"></i> Case Study Results</strong>';
                         html += '<div style="display: flex; flex-direction: column; gap: 1rem; margin-top: 1rem;">';
-                        
+
                         data.case_study_round.answers.forEach(ans => {
                             const score = ans.ai_score ?? '—';
                             const sColor = (ans.ai_score || 0) >= 60 ? 'var(--accent)' : 'var(--danger)';
@@ -6569,7 +6607,7 @@
             }
         }
 
-        window.switchReportTab = function(tabName) {
+        window.switchReportTab = function (tabName) {
             const verbalTab = document.getElementById('tab-verbal');
             const codingTab = document.getElementById('tab-coding');
             const verbalContent = document.getElementById('report-content-verbal');
@@ -6975,9 +7013,10 @@
 
             <div style="margin-bottom: 1.5rem;">
                 <p style="margin: 0; font-size: 0.95rem; color: var(--text-primary); line-height: 1.5;">
-                    This candidate already exists in your records. Do you want to interview them again? 
+                    This candidate already exists in your records. Do you want to interview them again?
                     <br><br>
-                    Click <strong>Use Previous Details</strong> to auto-fill their previous resume and details (you can still upload a new resume if you want).
+                    Click <strong>Use Previous Details</strong> to auto-fill their previous resume and details (you can
+                    still upload a new resume if you want).
                 </p>
             </div>
 
@@ -6985,7 +7024,8 @@
                 <button onclick="document.getElementById('candidateExistsModal').classList.add('hidden')"
                     style="flex: 1; padding: 0.75rem; background: rgba(255,255,255,0.05); color: white; border: 1px solid var(--border); border-radius: 0.75rem; cursor: pointer; font-weight: 600;">Cancel</button>
                 <button id="candidateExistsConfirmBtn"
-                    style="flex: 2; padding: 0.75rem; background: var(--primary); color: white; border: none; border-radius: 0.75rem; cursor: pointer; font-weight: 700; transition: 0.3s;">Use Previous Details</button>
+                    style="flex: 2; padding: 0.75rem; background: var(--primary); color: white; border: none; border-radius: 0.75rem; cursor: pointer; font-weight: 700; transition: 0.3s;">Use
+                    Previous Details</button>
             </div>
         </div>
     </div>
@@ -8006,44 +8046,63 @@
 
     <!-- Forgot Password Modal -->
     <div id="forgotPasswordModal" class="modal-overlay hidden" style="z-index: 5000;">
-        <div class="modal-content" style="max-width: 400px; padding: 2rem; border-radius: 1.5rem; background: var(--bg-card); border: 1px solid var(--border);">
+        <div class="modal-content"
+            style="max-width: 400px; padding: 2rem; border-radius: 1.5rem; background: var(--bg-card); border: 1px solid var(--border);">
             <div style="display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 1.5rem;">
                 <div>
-                    <h3 id="fpModalTitle" style="margin: 0; font-size: 1.25rem; color: var(--primary-light);">Reset Password</h3>
-                    <p id="fpModalSubtitle" style="margin: 0.25rem 0 0; font-size: 0.9rem; color: var(--text-muted);">Enter your username and email.</p>
+                    <h3 id="fpModalTitle" style="margin: 0; font-size: 1.25rem; color: var(--primary-light);">Reset
+                        Password</h3>
+                    <p id="fpModalSubtitle" style="margin: 0.25rem 0 0; font-size: 0.9rem; color: var(--text-muted);">
+                        Enter your username and email.</p>
                 </div>
-                <button onclick="closeForgotPasswordFlow()" style="background: none; border: none; color: var(--text-muted); cursor: pointer; font-size: 1.25rem;"><i class="fas fa-times"></i></button>
+                <button onclick="closeForgotPasswordFlow()"
+                    style="background: none; border: none; color: var(--text-muted); cursor: pointer; font-size: 1.25rem;"><i
+                        class="fas fa-times"></i></button>
             </div>
 
             <!-- Step 1: Username & Email -->
             <div id="fpStep1">
                 <div class="dash-form-group" style="margin-bottom: 1rem;">
-                    <label style="display: block; margin-bottom: 0.5rem; font-size: 0.85rem; font-weight: 600; color: var(--text-primary);">Username</label>
+                    <label
+                        style="display: block; margin-bottom: 0.5rem; font-size: 0.85rem; font-weight: 600; color: var(--text-primary);">Username</label>
                     <input type="text" id="fpUsername" class="dash-input" placeholder="e.g. admin">
                 </div>
                 <div class="dash-form-group" style="margin-bottom: 1rem;">
-                    <label style="display: block; margin-bottom: 0.5rem; font-size: 0.85rem; font-weight: 600; color: var(--text-primary);">Email Address</label>
+                    <label
+                        style="display: block; margin-bottom: 0.5rem; font-size: 0.85rem; font-weight: 600; color: var(--text-primary);">Email
+                        Address</label>
                     <input type="email" id="fpEmail" class="dash-input" placeholder="admin@company.com">
                 </div>
-                <button id="fpSendOtpBtn" onclick="sendOtp()" style="width: 100%; padding: 0.75rem; background: var(--primary); color: white; border: none; border-radius: 0.75rem; cursor: pointer; font-weight: 700; transition: 0.3s; margin-top: 1rem;">Send OTP</button>
+                <button id="fpSendOtpBtn" onclick="sendOtp()"
+                    style="width: 100%; padding: 0.75rem; background: var(--primary); color: white; border: none; border-radius: 0.75rem; cursor: pointer; font-weight: 700; transition: 0.3s; margin-top: 1rem;">Send
+                    OTP</button>
             </div>
 
             <!-- Step 2: Verify OTP -->
             <div id="fpStep2" class="hidden">
                 <div class="dash-form-group" style="margin-bottom: 1rem;">
-                    <label style="display: block; margin-bottom: 0.5rem; font-size: 0.85rem; font-weight: 600; color: var(--text-primary);">6-Digit OTP</label>
-                    <input type="text" id="fpOtp" class="dash-input" placeholder="123456" maxlength="6" style="letter-spacing: 5px; font-size: 1.2rem; text-align: center;">
+                    <label
+                        style="display: block; margin-bottom: 0.5rem; font-size: 0.85rem; font-weight: 600; color: var(--text-primary);">6-Digit
+                        OTP</label>
+                    <input type="text" id="fpOtp" class="dash-input" placeholder="123456" maxlength="6"
+                        style="letter-spacing: 5px; font-size: 1.2rem; text-align: center;">
                 </div>
-                <button id="fpVerifyOtpBtn" onclick="verifyOtp()" style="width: 100%; padding: 0.75rem; background: var(--primary); color: white; border: none; border-radius: 0.75rem; cursor: pointer; font-weight: 700; transition: 0.3s; margin-top: 1rem;">Verify OTP</button>
+                <button id="fpVerifyOtpBtn" onclick="verifyOtp()"
+                    style="width: 100%; padding: 0.75rem; background: var(--primary); color: white; border: none; border-radius: 0.75rem; cursor: pointer; font-weight: 700; transition: 0.3s; margin-top: 1rem;">Verify
+                    OTP</button>
             </div>
 
             <!-- Step 3: New Password -->
             <div id="fpStep3" class="hidden">
                 <div class="dash-form-group" style="margin-bottom: 1rem;">
-                    <label style="display: block; margin-bottom: 0.5rem; font-size: 0.85rem; font-weight: 600; color: var(--text-primary);">New Password</label>
+                    <label
+                        style="display: block; margin-bottom: 0.5rem; font-size: 0.85rem; font-weight: 600; color: var(--text-primary);">New
+                        Password</label>
                     <input type="password" id="fpNewPassword" class="dash-input" placeholder="New Password">
                 </div>
-                <button id="fpResetBtn" onclick="submitNewPassword()" style="width: 100%; padding: 0.75rem; background: var(--primary); color: white; border: none; border-radius: 0.75rem; cursor: pointer; font-weight: 700; transition: 0.3s; margin-top: 1rem;">Reset Password</button>
+                <button id="fpResetBtn" onclick="submitNewPassword()"
+                    style="width: 100%; padding: 0.75rem; background: var(--primary); color: white; border: none; border-radius: 0.75rem; cursor: pointer; font-weight: 700; transition: 0.3s; margin-top: 1rem;">Reset
+                    Password</button>
             </div>
         </div>
     </div>
@@ -8070,7 +8129,7 @@
             const username = document.getElementById('fpUsername').value.trim();
             const email = document.getElementById('fpEmail').value.trim();
             if (!username || !email) { showToast('Please enter both username and email.', 'error'); return; }
-            
+
             const btn = document.getElementById('fpSendOtpBtn');
             btn.innerHTML = '<span class="spinner"></span> Sending...';
             btn.disabled = true;
@@ -8083,7 +8142,7 @@
                 });
                 const data = await res.json();
                 if (!res.ok) throw new Error(data.detail || 'Failed to send OTP.');
-                
+
                 showToast(data.message, 'success');
                 document.getElementById('fpStep1').classList.add('hidden');
                 document.getElementById('fpStep2').classList.remove('hidden');
@@ -8100,7 +8159,7 @@
             const username = document.getElementById('fpUsername').value.trim();
             const otp = document.getElementById('fpOtp').value.trim();
             if (!otp || otp.length !== 6) { showToast('Please enter a valid 6-digit OTP.', 'error'); return; }
-            
+
             const btn = document.getElementById('fpVerifyOtpBtn');
             btn.innerHTML = '<span class="spinner"></span> Verifying...';
             btn.disabled = true;
@@ -8113,7 +8172,7 @@
                 });
                 const data = await res.json();
                 if (!res.ok) throw new Error(data.detail || 'Failed to verify OTP.');
-                
+
                 showToast(data.message, 'success');
                 document.getElementById('fpStep2').classList.add('hidden');
                 document.getElementById('fpStep3').classList.remove('hidden');
@@ -8131,7 +8190,7 @@
             const otp = document.getElementById('fpOtp').value.trim();
             const new_password = document.getElementById('fpNewPassword').value.trim();
             if (!new_password || new_password.length < 6) { showToast('Password must be at least 6 characters.', 'error'); return; }
-            
+
             const btn = document.getElementById('fpResetBtn');
             btn.innerHTML = '<span class="spinner"></span> Resetting...';
             btn.disabled = true;
@@ -8144,7 +8203,7 @@
                 });
                 const data = await res.json();
                 if (!res.ok) throw new Error(data.detail || 'Failed to reset password.');
-                
+
                 showToast(data.message, 'success');
                 closeForgotPasswordFlow();
                 document.getElementById('password').value = '';
@@ -8167,7 +8226,8 @@
             border-radius: 50%;
             background: var(--gradient-1);
             color: white;
-            display: none; /* Hidden by default on login page */
+            display: none;
+            /* Hidden by default on login page */
             align-items: center;
             justify-content: center;
             font-size: 24px;
@@ -8176,9 +8236,11 @@
             z-index: 10000;
             transition: transform 0.3s cubic-bezier(0.175, 0.885, 0.32, 1.275);
         }
+
         .copilot-fab:hover {
             transform: scale(1.1);
         }
+
         .copilot-window {
             font-family: 'Inter', system-ui, -apple-system, sans-serif;
             position: fixed;
@@ -8186,7 +8248,8 @@
             right: 30px;
             width: 380px;
             height: 550px;
-            background: rgba(255, 255, 255, 0.85); /* fallback */
+            background: rgba(255, 255, 255, 0.85);
+            /* fallback */
             background: color-mix(in srgb, var(--bg-card) 85%, transparent);
             backdrop-filter: blur(16px);
             -webkit-backdrop-filter: blur(16px);
@@ -8202,16 +8265,19 @@
             transform: translateY(30px) scale(0.95);
             transition: all 0.4s cubic-bezier(0.34, 1.56, 0.64, 1);
         }
+
         .theme-dark .copilot-window {
             background: rgba(30, 41, 59, 0.85);
             border: 1px solid rgba(255, 255, 255, 0.1);
             box-shadow: 0 10px 40px rgba(0, 0, 0, 0.4), 0 0 20px rgba(99, 102, 241, 0.15);
         }
+
         .copilot-window.open {
             opacity: 1;
             pointer-events: all;
             transform: translateY(0) scale(1);
         }
+
         .copilot-header {
             background: linear-gradient(135deg, var(--primary), var(--secondary));
             color: white;
@@ -8221,13 +8287,15 @@
             justify-content: space-between;
             cursor: grab;
             user-select: none;
-            box-shadow: 0 4px 15px rgba(0,0,0,0.1);
+            box-shadow: 0 4px 15px rgba(0, 0, 0, 0.1);
             position: relative;
             z-index: 10;
         }
+
         .copilot-header:active {
             cursor: grabbing;
         }
+
         .copilot-title {
             font-weight: 700;
             font-size: 1.1rem;
@@ -8236,8 +8304,9 @@
             gap: 10px;
             letter-spacing: 0.5px;
         }
+
         .copilot-close {
-            background: rgba(255,255,255,0.2);
+            background: rgba(255, 255, 255, 0.2);
             border: none;
             color: white;
             cursor: pointer;
@@ -8250,10 +8319,12 @@
             justify-content: center;
             transition: all 0.2s;
         }
+
         .copilot-close:hover {
-            background: rgba(255,255,255,0.3);
+            background: rgba(255, 255, 255, 0.3);
             transform: rotate(90deg);
         }
+
         .copilot-messages {
             flex: 1;
             padding: 20px;
@@ -8264,17 +8335,28 @@
             background: transparent;
             scroll-behavior: smooth;
         }
+
         .copilot-messages::-webkit-scrollbar {
             width: 6px;
         }
+
         .copilot-messages::-webkit-scrollbar-thumb {
-            background: rgba(100,100,100,0.2);
+            background: rgba(100, 100, 100, 0.2);
             border-radius: 10px;
         }
+
         @keyframes popIn {
-            0% { transform: scale(0.9) translateY(10px); opacity: 0; }
-            100% { transform: scale(1) translateY(0); opacity: 1; }
+            0% {
+                transform: scale(0.9) translateY(10px);
+                opacity: 0;
+            }
+
+            100% {
+                transform: scale(1) translateY(0);
+                opacity: 1;
+            }
         }
+
         .copilot-msg {
             max-width: 85%;
             padding: 12px 16px;
@@ -8283,19 +8365,22 @@
             line-height: 1.5;
             word-wrap: break-word;
             animation: popIn 0.3s cubic-bezier(0.34, 1.56, 0.64, 1) forwards;
-            box-shadow: 0 2px 8px rgba(0,0,0,0.05);
+            box-shadow: 0 2px 8px rgba(0, 0, 0, 0.05);
         }
+
         .copilot-msg.bot {
             align-self: flex-start;
             background: rgba(255, 255, 255, 0.9);
             color: var(--text-primary);
             border-bottom-left-radius: 4px;
-            border: 1px solid rgba(0,0,0,0.05);
+            border: 1px solid rgba(0, 0, 0, 0.05);
         }
+
         .theme-dark .copilot-msg.bot {
             background: rgba(51, 65, 85, 0.9);
-            border: 1px solid rgba(255,255,255,0.05);
+            border: 1px solid rgba(255, 255, 255, 0.05);
         }
+
         .copilot-msg.user {
             align-self: flex-end;
             background: linear-gradient(135deg, var(--primary), var(--primary-dark));
@@ -8303,22 +8388,25 @@
             border-bottom-right-radius: 4px;
             box-shadow: 0 4px 12px rgba(99, 102, 241, 0.3);
         }
+
         .copilot-input-area {
             padding: 15px 20px;
-            background: rgba(255,255,255,0.5);
-            border-top: 1px solid rgba(0,0,0,0.05);
+            background: rgba(255, 255, 255, 0.5);
+            border-top: 1px solid rgba(0, 0, 0, 0.05);
             display: flex;
             gap: 12px;
             align-items: center;
         }
+
         .theme-dark .copilot-input-area {
-            background: rgba(30,41,59,0.5);
-            border-top: 1px solid rgba(255,255,255,0.05);
+            background: rgba(30, 41, 59, 0.5);
+            border-top: 1px solid rgba(255, 255, 255, 0.05);
         }
+
         .copilot-input {
             flex: 1;
             background: var(--bg-input);
-            border: 1px solid rgba(0,0,0,0.1);
+            border: 1px solid rgba(0, 0, 0, 0.1);
             color: var(--text-primary);
             border-radius: 24px;
             padding: 12px 18px;
@@ -8326,16 +8414,19 @@
             font-family: inherit;
             font-size: 0.95rem;
             transition: all 0.3s;
-            box-shadow: inset 0 2px 4px rgba(0,0,0,0.02);
+            box-shadow: inset 0 2px 4px rgba(0, 0, 0, 0.02);
         }
+
         .theme-dark .copilot-input {
-            border: 1px solid rgba(255,255,255,0.1);
-            box-shadow: inset 0 2px 4px rgba(0,0,0,0.2);
+            border: 1px solid rgba(255, 255, 255, 0.1);
+            box-shadow: inset 0 2px 4px rgba(0, 0, 0, 0.2);
         }
+
         .copilot-input:focus {
             border-color: var(--primary);
-            box-shadow: 0 0 0 3px rgba(99, 102, 241, 0.2), inset 0 2px 4px rgba(0,0,0,0.02);
+            box-shadow: 0 0 0 3px rgba(99, 102, 241, 0.2), inset 0 2px 4px rgba(0, 0, 0, 0.02);
         }
+
         .copilot-send {
             background: linear-gradient(135deg, var(--primary), var(--primary-dark));
             color: white;
@@ -8351,13 +8442,16 @@
             box-shadow: 0 4px 12px rgba(99, 102, 241, 0.3);
             flex-shrink: 0;
         }
+
         .copilot-send:hover {
             transform: scale(1.1) rotate(5deg);
             box-shadow: 0 6px 16px rgba(99, 102, 241, 0.4);
         }
+
         .copilot-send:active {
             transform: scale(0.95);
         }
+
         .copilot-typing {
             align-self: flex-start;
             color: var(--primary);
@@ -8367,17 +8461,28 @@
             font-style: italic;
             animation: pulse 1.5s infinite;
         }
+
         @keyframes pulse {
-            0% { opacity: 0.5; }
-            50% { opacity: 1; }
-            100% { opacity: 0.5; }
+            0% {
+                opacity: 0.5;
+            }
+
+            50% {
+                opacity: 1;
+            }
+
+            100% {
+                opacity: 0.5;
+            }
         }
+
         .copilot-chips {
             display: flex;
             flex-wrap: wrap;
             gap: 8px;
             margin-top: 10px;
         }
+
         .copilot-chip {
             background: rgba(99, 102, 241, 0.08);
             color: var(--primary);
@@ -8389,11 +8494,13 @@
             cursor: pointer;
             transition: all 0.2s cubic-bezier(0.34, 1.56, 0.64, 1);
         }
+
         .theme-dark .copilot-chip {
             background: rgba(99, 102, 241, 0.15);
             color: var(--primary-light);
             border: 1px solid rgba(99, 102, 241, 0.3);
         }
+
         .copilot-chip:hover {
             background: var(--primary);
             color: white;
@@ -8401,6 +8508,7 @@
             transform: translateY(-2px) scale(1.02);
             box-shadow: 0 4px 10px rgba(99, 102, 241, 0.3);
         }
+
         .copilot-chip:active {
             transform: translateY(0) scale(0.98);
         }
@@ -8418,29 +8526,35 @@
             <button class="copilot-close" onclick="toggleCopilot()"><i class="fas fa-times"></i></button>
         </div>
         <div class="copilot-messages" id="copilotMessages">
-            <div class="copilot-msg bot">Hello! I am your Hire IQ Admin Copilot. Ask me anything about creating interviews, ATS scoring, or configuring the platform!</div>
-            
+            <div class="copilot-msg bot">Hello! I am your Hire IQ Admin Copilot. Ask me anything about creating
+                interviews, ATS scoring, or configuring the platform!</div>
+
             <div class="copilot-chips" id="copilotChips">
-                <button class="copilot-chip" onclick="copilotSuggest('Generate interview questions')">Generate interview questions</button>
+                <button class="copilot-chip" onclick="copilotSuggest('Generate interview questions')">Generate interview
+                    questions</button>
                 <button class="copilot-chip" onclick="copilotSuggest('Rank candidates')">Rank candidates</button>
                 <button class="copilot-chip" onclick="copilotSuggest('Suggest follow-ups')">Suggest follow-ups</button>
-                <button class="copilot-chip" onclick="copilotSuggest('Highlight red flags')">Highlight red flags</button>
-                <button class="copilot-chip" onclick="copilotSuggest('Recommend hiring decisions')">Recommend hiring decisions</button>
-                <button class="copilot-chip" onclick="copilotSuggest('Draft feedback emails')">Draft feedback emails</button>
+                <button class="copilot-chip" onclick="copilotSuggest('Highlight red flags')">Highlight red
+                    flags</button>
+                <button class="copilot-chip" onclick="copilotSuggest('Recommend hiring decisions')">Recommend hiring
+                    decisions</button>
+                <button class="copilot-chip" onclick="copilotSuggest('Draft feedback emails')">Draft feedback
+                    emails</button>
                 <button class="copilot-chip" onclick="copilotSuggest('Create scorecards')">Create scorecards</button>
             </div>
 
             <div class="copilot-typing" id="copilotTyping">Copilot is typing...</div>
         </div>
         <div class="copilot-input-area">
-            <input type="text" class="copilot-input" id="copilotInput" placeholder="Ask a question..." onkeypress="handleCopilotKeyPress(event)">
+            <input type="text" class="copilot-input" id="copilotInput" placeholder="Ask a question..."
+                onkeypress="handleCopilotKeyPress(event)">
             <button class="copilot-send" onclick="sendCopilotMessage()"><i class="fas fa-paper-plane"></i></button>
         </div>
     </div>
 
     <script>
         let copilotHistory = [];
-        
+
         function toggleCopilot() {
             const win = document.getElementById('copilotWindow');
             win.classList.toggle('open');
@@ -8467,10 +8581,10 @@
 
             input.value = '';
             appendCopilotMessage(msg, 'user');
-            
+
             const typing = document.getElementById('copilotTyping');
             typing.style.display = 'block';
-            
+
             // Scroll to typing indicator
             const msgs = document.getElementById('copilotMessages');
             msgs.scrollTop = msgs.scrollHeight;
@@ -8481,10 +8595,10 @@
                     headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify({ message: msg, history: copilotHistory, admin_id: adminId })
                 });
-                
+
                 const data = await res.json();
                 typing.style.display = 'none';
-                
+
                 if (data.reply !== undefined && data.reply !== null && data.reply !== "") {
                     appendCopilotMessage(data.reply, 'bot');
                     if (data.action_required) {
@@ -8514,11 +8628,11 @@
             const typing = document.getElementById('copilotTyping');
             const div = document.createElement('div');
             div.className = `copilot-msg ${sender}`;
-            
+
             // Format newlines
             const formattedText = escapeHtml(text).replace(/\n/g, '<br>');
             div.innerHTML = formattedText;
-            
+
             msgs.insertBefore(div, typing);
             msgs.scrollTop = msgs.scrollHeight;
         }
@@ -8530,12 +8644,12 @@
             div.className = `copilot-msg bot`;
             div.style.border = '1px solid var(--primary)';
             div.style.background = 'rgba(99, 102, 241, 0.05)';
-            
+
             let description = `Proposed Action: ${actionData.action}`;
             if (actionData.action === 'send_feedback' && actionData.candidate_email) {
                 description = `Send Feedback Email to: ${actionData.candidate_email}`;
             }
-            
+
             div.innerHTML = `
                 <div style="font-weight:600; margin-bottom:8px; color:var(--primary-light);"><i class="fas fa-exclamation-circle"></i> Action Required</div>
                 <div style="font-size:0.85rem; margin-bottom:12px;">${escapeHtml(description)}</div>
@@ -8544,10 +8658,10 @@
                     <button class="reject-btn" style="flex:1; padding:6px; background:rgba(244,63,94,0.1); color:var(--danger); border:1px solid rgba(244,63,94,0.3); border-radius:6px; cursor:pointer; font-size:0.8rem;"><i class="fas fa-times"></i> Reject</button>
                 </div>
             `;
-            
-            div.querySelector('.approve-btn').onclick = function() { executeCopilotAction(this, actionData); };
-            div.querySelector('.reject-btn').onclick = function() { div.remove(); };
-            
+
+            div.querySelector('.approve-btn').onclick = function () { executeCopilotAction(this, actionData); };
+            div.querySelector('.reject-btn').onclick = function () { div.remove(); };
+
             msgs.insertBefore(div, typing);
             msgs.scrollTop = msgs.scrollHeight;
         }
@@ -8557,7 +8671,7 @@
             btn.innerHTML = '<span class="spinner" style="width:12px;height:12px;border-width:2px;display:inline-block;"></span>';
             btn.disabled = true;
             btn.nextElementSibling.disabled = true; // disable reject
-            
+
             try {
                 const res = await fetch(`${API_BASE}/admin/copilot/execute`, {
                     method: 'POST',
@@ -8565,7 +8679,7 @@
                     body: JSON.stringify({ action: actionData.action, data: actionData })
                 });
                 const data = await res.json();
-                
+
                 if (res.ok) {
                     btn.parentElement.innerHTML = `<span style="color:var(--success); font-weight:600;"><i class="fas fa-check-circle"></i> Executed Successfully</span>`;
                 } else {

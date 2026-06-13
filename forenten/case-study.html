@@ -456,14 +456,60 @@ function renderQuestion(idx) {
   setMicIdle();
 }
 
-// ─── SPEECH RECOGNITION (MediaRecorder + Groq API) ─────────────────────────────
-let mediaRecorder = null;
-let audioChunks = [];
-let mediaStream = null;
 
-async function initSpeechRecognition() {
-  // We no longer rely on browser SpeechRecognition.
-  // Instead, we use MediaRecorder to send audio to the Groq backend.
+function initSpeechRecognition() {
+  if ('webkitSpeechRecognition' in window || 'SpeechRecognition' in window) {
+    const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
+    recognition = new SpeechRecognition();
+    recognition.continuous = true;
+    recognition.interimResults = true;
+
+    const currentLang = (window.parent && window.parent.sessionLanguage) || 'English';
+    const langMap = {
+        'Hindi': 'hi-IN',
+        'Telugu': 'te-IN',
+        'Tamil': 'ta-IN',
+        'Malayalam': 'ml-IN',
+        'Kannada': 'kn-IN',
+        'English': 'en-IN'
+    };
+    recognition.lang = langMap[currentLang] || 'en-IN';
+
+    recognition.onstart = () => {
+      isListening = true;
+      setMicListening();
+      showToast('🎤 Recording... Speak your answer now.', 'success');
+    };
+
+    recognition.onend = () => {
+      isListening = false;
+      setMicIdle();
+    };
+
+    recognition.onresult = (event) => {
+      let finalChunk = '';
+      for (let i = event.resultIndex; i < event.results.length; ++i) {
+        if (event.results[i].isFinal) {
+          finalChunk += event.results[i][0].transcript + ' ';
+        }
+      }
+      if (finalChunk) {
+        const tb = document.getElementById('transcriptBox');
+        tb.value = (tb.value + (tb.value.endsWith(' ') ? '' : ' ') + finalChunk).trim() + ' ';
+        updateWordCount();
+      }
+    };
+
+    recognition.onerror = (event) => {
+      console.error("Speech error", event.error);
+      if (event.error !== 'no-speech') {
+        showToast('❌ Transcription error: ' + event.error, 'error');
+        stopMic();
+      }
+    };
+  } else {
+    console.warn("Web Speech API not supported.");
+  }
 }
 
 function toggleMic() {
@@ -471,72 +517,24 @@ function toggleMic() {
   else startMic();
 }
 
-async function startMic() {
+function startMic() {
+  if (!recognition) {
+    showToast('❌ Speech recognition not supported in this browser.', 'error');
+    return;
+  }
   try {
-    mediaStream = await navigator.mediaDevices.getUserMedia({ audio: true });
-    mediaRecorder = new MediaRecorder(mediaStream);
-    audioChunks = [];
-
-    mediaRecorder.ondataavailable = e => {
-      if (e.data.size > 0) audioChunks.push(e.data);
-    };
-
-    mediaRecorder.onstop = async () => {
-      setMicIdle();
-      showToast('⏳ Transcribing audio...', 'info');
-      
-      const audioBlob = new Blob(audioChunks, { type: 'audio/webm' });
-      const formData = new FormData();
-      formData.append('audio', audioBlob, 'casestudy_audio.webm');
-      formData.append('candidate_name', 'Candidate'); // Default name since we don't have it here
-
-      try {
-        const res = await fetch(`${API_BASE_URL}/transcribe`, {
-          method: 'POST',
-          body: formData
-        });
-        
-        if (!res.ok) throw new Error('Transcription failed');
-        
-        const data = await res.json();
-        if (data.text) {
-          const currentText = document.getElementById('transcriptBox').value.trim();
-          document.getElementById('transcriptBox').value = currentText ? currentText + ' ' + data.text : data.text;
-          updateWordCount();
-          showToast('✅ Audio transcribed!', 'success');
-        } else {
-          showToast('⚠️ Could not transcribe audio.', 'error');
-        }
-      } catch (err) {
-        console.error("Transcription error:", err);
-        showToast('❌ Transcription failed. Please type your answer.', 'error');
-      }
-      
-      // Stop all tracks to release microphone
-      if (mediaStream) {
-        mediaStream.getTracks().forEach(track => track.stop());
-      }
-    };
-
-    mediaRecorder.start();
-    isListening = true;
-    setMicListening();
-    showToast('🎤 Recording... Speak your answer now.', 'success');
-
+    recognition.start();
   } catch (err) {
     console.error("Mic error:", err);
-    showToast('❌ Microphone access denied. Please type your answer.', 'error');
-    isListening = false;
-    setMicIdle();
   }
 }
 
 function stopMic() {
-  if (mediaRecorder && mediaRecorder.state !== 'inactive') {
-    mediaRecorder.stop();
+  if (recognition) {
+    try { recognition.stop(); } catch(e) {}
   }
   isListening = false;
-  // UI is reset in mediaRecorder.onstop
+  setMicIdle();
 }
 
 function setMicListening() {
