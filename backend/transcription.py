@@ -1,24 +1,10 @@
-from fastapi import APIRouter, UploadFile, File, Form
-import whisper, tempfile, os
+import os
+import tempfile
 from difflib import SequenceMatcher
-import imageio_ffmpeg
-
-# Add imageio_ffmpeg to PATH so whisper can find it automatically without system-level ffmpeg installation
-os.environ["PATH"] += os.pathsep + os.path.dirname(imageio_ffmpeg.get_ffmpeg_exe())
-
-import torch
+from fastapi import APIRouter, UploadFile, File, Form
+from groq import Groq
 
 router = APIRouter()
-model = None
-
-def get_model():
-    global model
-    if model is None:
-        # Limit torch threads to reduce memory overhead on Render Free Tier
-        torch.set_num_threads(1)
-        # Use tiny.en (39MB) instead of small (461MB) to prevent OOM crashes
-        model = whisper.load_model("tiny.en")
-    return model
 
 def similarity(a, b):
     return SequenceMatcher(None, a.lower(), b.lower()).ratio()
@@ -41,22 +27,28 @@ async def transcribe_audio(
         f.write(data)
         path = f.name
 
-    whisper_model = get_model()
-    result = whisper_model.transcribe(
-        path,
-        language="en",
-        task="transcribe",
-        fp16=False,
-        initial_prompt=(
-            f"This is a job interview. "
-            f"The candidate's name is {candidate_name}. "
-            f"Proper nouns and technical terms may appear."
-        )
-    )
+    try:
+        # Get Groq API key from environment
+        groq_api_key = os.environ.get("GROQ_API_KEY")
+        if not groq_api_key:
+            return {"error": "GROQ_API_KEY not found in environment."}
 
-    os.remove(path)
+        client = Groq(api_key=groq_api_key)
 
-    text = result["text"].strip()
-    text = fix_name(text, candidate_name)
+        with open(path, "rb") as file:
+            transcription = client.audio.transcriptions.create(
+                file=(os.path.basename(path), file.read()),
+                model="distil-whisper-large-v3-en",
+                prompt=f"This is a job interview. The candidate's name is {candidate_name}. Proper nouns and technical terms may appear.",
+                response_format="json",
+                language="en"
+            )
+
+        text = transcription.text.strip()
+        text = fix_name(text, candidate_name)
+    except Exception as e:
+        text = f"Transcription failed: {str(e)}"
+    finally:
+        os.remove(path)
 
     return {"text": text}
