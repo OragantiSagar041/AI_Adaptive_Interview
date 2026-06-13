@@ -1,6 +1,10 @@
 from fastapi import APIRouter, UploadFile, File, Form
 import whisper, tempfile, os
 from difflib import SequenceMatcher
+import imageio_ffmpeg
+
+# Add imageio_ffmpeg to PATH so whisper can find it automatically without system-level ffmpeg installation
+os.environ["PATH"] += os.pathsep + os.path.dirname(imageio_ffmpeg.get_ffmpeg_exe())
 
 router = APIRouter()
 model = None
