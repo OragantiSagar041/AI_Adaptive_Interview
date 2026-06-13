@@ -6,13 +6,18 @@ import imageio_ffmpeg
 # Add imageio_ffmpeg to PATH so whisper can find it automatically without system-level ffmpeg installation
 os.environ["PATH"] += os.pathsep + os.path.dirname(imageio_ffmpeg.get_ffmpeg_exe())
 
+import torch
+
 router = APIRouter()
 model = None
 
 def get_model():
     global model
     if model is None:
-        model = whisper.load_model("small")
+        # Limit torch threads to reduce memory overhead on Render Free Tier
+        torch.set_num_threads(1)
+        # Use tiny.en (39MB) instead of small (461MB) to prevent OOM crashes
+        model = whisper.load_model("tiny.en")
     return model
 
 def similarity(a, b):
