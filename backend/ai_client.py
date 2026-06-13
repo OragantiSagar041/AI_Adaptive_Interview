@@ -74,7 +74,7 @@ def _mark_quota_exhausted():
     global _quota_hit_at
     with _lock:
         _quota_hit_at = time.time()
-    print(f"⚠️  OpenRouter quota exhausted — switching to HuggingFace for {QUOTA_COOLDOWN_SECONDS}s")
+    print(f"  OpenRouter quota exhausted  switching to HuggingFace for {QUOTA_COOLDOWN_SECONDS}s")
 
 
 def _is_quota_error(exc: Exception) -> bool:
@@ -158,7 +158,7 @@ def _call_huggingface(
     current_idx = HF_MODELS.index(hf_model) if hf_model in HF_MODELS else -1
     if current_idx < len(HF_MODELS) - 1:
         next_model = HF_MODELS[current_idx + 1]
-        print(f"⚠️  HF model {hf_model} failed ({resp.status_code}), trying {next_model}...")
+        print(f"  HF model {hf_model} failed ({resp.status_code}), trying {next_model}...")
         _active_hf_model = next_model
         return _call_huggingface(messages, next_model, temperature, timeout)
 
@@ -206,14 +206,14 @@ def chat_completion(
         try:
             return _call_openrouter(messages, model, temperature, timeout)
         except QuotaExhaustedError:
-            print("🔄 Falling back to HuggingFace (quota exhausted)...")
+            print(" Falling back to HuggingFace (quota exhausted)...")
         except Exception as exc:
             if _is_quota_error(exc):
                 _mark_quota_exhausted()
-                print("🔄 Falling back to HuggingFace (quota error in exception)...")
+                print(" Falling back to HuggingFace (quota error in exception)...")
             else:
                 # Non-quota error — still try HF as safety net
-                print(f"⚠️  OpenRouter error: {exc} — trying HuggingFace fallback...")
+                print(f"  OpenRouter error: {exc}  trying HuggingFace fallback...")
 
     # ── Fallback to HuggingFace ──
     try:
@@ -239,7 +239,7 @@ def chat_completion_safe(
     try:
         return chat_completion(messages, model, temperature, timeout)
     except Exception as exc:
-        print(f"⚠️  chat_completion_safe caught: {exc}")
+        print(f"  chat_completion_safe caught: {exc}")
         return fallback_text
 
 

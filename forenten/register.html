@@ -10,21 +10,21 @@
     <script src="https://checkout.razorpay.com/v1/checkout.js"></script>
     <style>
         :root {
-            --bg: #f4f8f5;
-            --surface: rgba(255, 255, 255, 0.86);
+            --bg: #ffffff;
+            --surface: rgba(255, 255, 255, 0.84);
             --surface-strong: #ffffff;
-            --ink: #10231f;
-            --muted: #5c706b;
-            --line: rgba(16, 35, 31, 0.1);
-            --brand: #0b8f86;
-            --brand-deep: #0f625d;
-            --brand-soft: rgba(11, 143, 134, 0.1);
-            --accent: #14312d;
-            --highlight: #e7fbf6;
+            --ink: #111827;
+            --muted: #475569;
+            --line: rgba(17, 24, 39, 0.1);
+            --brand: #6366f1;
+            --brand-deep: #4f46e5;
+            --brand-soft: rgba(99, 102, 241, 0.12);
+            --accent: #111827;
+            --highlight: #eef2ff;
             --warning: #f59e0b;
             --danger: #dc2626;
             --success: #119669;
-            --shadow: 0 28px 80px rgba(15, 40, 35, 0.12);
+            --shadow: 0 28px 80px rgba(17, 24, 39, 0.1);
         }
 
         * {
@@ -38,9 +38,10 @@
             min-height: 100vh;
             color: var(--ink);
             background:
-                radial-gradient(circle at top left, rgba(151, 255, 230, 0.42), transparent 34%),
-                radial-gradient(circle at top right, rgba(189, 214, 255, 0.4), transparent 30%),
-                linear-gradient(180deg, #f9fcfb 0%, var(--bg) 48%, #eef8f4 100%);
+                radial-gradient(circle at 15% 20%, rgba(192, 132, 252, 0.35), transparent 45%),
+                radial-gradient(circle at 85% 80%, rgba(147, 197, 253, 0.35), transparent 45%),
+                linear-gradient(180deg, #f8fafc 0%, #eef2f6 100%);
+            background-attachment: fixed;
             overflow-x: hidden;
         }
 
@@ -49,10 +50,9 @@
             position: fixed;
             inset: 0;
             background-image:
-                linear-gradient(rgba(16, 35, 31, 0.04) 1px, transparent 1px),
-                linear-gradient(90deg, rgba(16, 35, 31, 0.04) 1px, transparent 1px);
-            background-size: 90px 90px;
-            mask-image: linear-gradient(180deg, rgba(0, 0, 0, 0.6), transparent 95%);
+                linear-gradient(rgba(17, 24, 39, 0.04) 1px, transparent 1px),
+                linear-gradient(90deg, rgba(17, 24, 39, 0.04) 1px, transparent 1px);
+            background-size: 88px 88px;
             pointer-events: none;
             z-index: 0;
         }
@@ -80,7 +80,7 @@
             border-radius: 28px;
             background: rgba(255, 255, 255, 0.72);
             backdrop-filter: blur(20px);
-            box-shadow: 0 18px 40px rgba(16, 35, 31, 0.08);
+            box-shadow: 0 18px 40px rgba(17, 24, 39, 0.08);
         }
 
         .brand-lockup {
@@ -98,8 +98,8 @@
             font-size: 1.25rem;
             font-weight: 800;
             color: white;
-            background: linear-gradient(135deg, #14b8a6 0%, #0f766e 100%);
-            box-shadow: 0 16px 30px rgba(20, 184, 166, 0.28);
+            background: linear-gradient(135deg, #6366f1 0%, #4f46e5 100%);
+            box-shadow: 0 16px 30px rgba(99, 102, 241, 0.28);
         }
 
         .brand-copy strong {
@@ -137,8 +137,8 @@
             position: relative;
             padding: 38px;
             background:
-                linear-gradient(150deg, rgba(255, 255, 255, 0.92), rgba(231, 251, 246, 0.78)),
-                radial-gradient(circle at 10% 10%, rgba(9, 155, 144, 0.22), transparent 34%);
+                linear-gradient(150deg, rgba(255, 255, 255, 0.92), rgba(248, 250, 252, 0.78)),
+                radial-gradient(circle at 10% 10%, rgba(99, 102, 241, 0.22), transparent 34%);
             min-height: 760px;
             display: flex;
             flex-direction: column;
@@ -164,7 +164,7 @@
             padding: 10px 14px;
             border-radius: 999px;
             background: rgba(255, 255, 255, 0.84);
-            border: 1px solid rgba(16, 35, 31, 0.08);
+            border: 1px solid rgba(17, 24, 39, 0.08);
             color: var(--brand-deep);
             font-size: 0.84rem;
             font-weight: 700;
@@ -199,7 +199,7 @@
             padding: 18px;
             border-radius: 24px;
             background: rgba(255, 255, 255, 0.88);
-            border: 1px solid rgba(16, 35, 31, 0.08);
+            border: 1px solid rgba(17, 24, 39, 0.08);
         }
 
         .metric-card strong {
@@ -228,7 +228,7 @@
             padding: 22px;
             border-radius: 28px;
             background: rgba(255, 255, 255, 0.9);
-            border: 1px solid rgba(16, 35, 31, 0.08);
+            border: 1px solid rgba(17, 24, 39, 0.08);
         }
 
         .story-card h3,
@@ -280,9 +280,9 @@
         }
 
         .summary-card {
-            background: linear-gradient(180deg, #10302c 0%, #163a35 100%);
+            background: linear-gradient(135deg, #1e1b4b 0%, #312e81 52%, #4338ca 100%);
             color: white;
-            box-shadow: 0 24px 46px rgba(6, 36, 31, 0.24);
+            box-shadow: 0 24px 46px rgba(17, 24, 39, 0.24);
         }
 
         .summary-card p,
@@ -418,8 +418,8 @@
             width: 100%;
             padding: 16px 18px;
             border-radius: 18px;
-            border: 1px solid rgba(16, 35, 31, 0.1);
-            background: rgba(247, 250, 248, 0.96);
+            border: 1px solid rgba(17, 24, 39, 0.1);
+            background: rgba(248, 250, 252, 0.96);
             color: var(--ink);
             font-size: 1rem;
             transition: border-color 0.2s ease, box-shadow 0.2s ease, transform 0.2s ease;
@@ -427,8 +427,8 @@
 
         .field input:focus {
             outline: none;
-            border-color: rgba(11, 143, 134, 0.42);
-            box-shadow: 0 0 0 4px rgba(11, 143, 134, 0.12);
+            border-color: rgba(99, 102, 241, 0.42);
+            box-shadow: 0 0 0 4px rgba(99, 102, 241, 0.12);
             transform: translateY(-1px);
         }
 
@@ -443,21 +443,21 @@
             position: relative;
             padding: 18px 16px;
             border-radius: 22px;
-            border: 1px solid rgba(16, 35, 31, 0.1);
-            background: linear-gradient(180deg, rgba(255, 255, 255, 0.94), rgba(244, 249, 247, 0.98));
+            border: 1px solid rgba(17, 24, 39, 0.1);
+            background: linear-gradient(180deg, rgba(255, 255, 255, 0.94), rgba(248, 250, 252, 0.98));
             cursor: pointer;
             transition: transform 0.24s ease, box-shadow 0.24s ease, border-color 0.24s ease;
         }
 
         .plan-tile:hover {
             transform: translateY(-3px);
-            box-shadow: 0 18px 36px rgba(16, 35, 31, 0.08);
+            box-shadow: 0 18px 36px rgba(17, 24, 39, 0.08);
         }
 
         .plan-tile.active {
-            border-color: rgba(11, 143, 134, 0.56);
-            box-shadow: 0 16px 34px rgba(11, 143, 134, 0.12);
-            background: linear-gradient(180deg, #ffffff, rgba(231, 251, 246, 0.96));
+            border-color: rgba(99, 102, 241, 0.56);
+            box-shadow: 0 16px 34px rgba(99, 102, 241, 0.12);
+            background: linear-gradient(180deg, #ffffff, rgba(248, 250, 252, 0.96));
         }
 
         .plan-tile .badge {
@@ -499,8 +499,8 @@
             margin-top: 24px;
             padding: 22px;
             border-radius: 26px;
-            background: linear-gradient(180deg, rgba(247, 251, 249, 0.98), rgba(255, 255, 255, 0.96));
-            border: 1px solid rgba(16, 35, 31, 0.08);
+            background: linear-gradient(180deg, rgba(248, 250, 252, 0.98), rgba(255, 255, 255, 0.96));
+            border: 1px solid rgba(17, 24, 39, 0.08);
         }
 
         .selected-plan-panel header {
@@ -556,11 +556,11 @@
             letter-spacing: -0.02em;
             background:
                 radial-gradient(circle at top, rgba(255, 255, 255, 0.18), transparent 34%),
-                linear-gradient(135deg, #14312d 0%, #0d5f59 46%, #08a99b 100%);
+                linear-gradient(135deg, #6366f1 0%, #4f46e5 52%, #4338ca 100%);
             box-shadow:
                 inset -4px -6px 25px rgba(201, 201, 201, 0.08),
                 inset 4px 4px 10px rgba(29, 29, 29, 0.24),
-                0 18px 38px rgba(8, 169, 155, 0.22);
+                0 18px 38px rgba(99, 102, 241, 0.22);
             transition: transform 0.22s ease, box-shadow 0.22s ease, opacity 0.22s ease;
         }
 
@@ -569,7 +569,7 @@
             box-shadow:
                 inset -4px -6px 25px rgba(201, 201, 201, 0.08),
                 inset 4px 4px 10px rgba(29, 29, 29, 0.24),
-                0 20px 46px rgba(8, 169, 155, 0.26);
+                0 20px 46px rgba(99, 102, 241, 0.26);
         }
 
         .cta-button:disabled {
@@ -863,10 +863,9 @@
         </main>
     </div>
 
+    <script src="api_config.js"></script>
     <script>
-        const API_BASE = (window.location.hostname === "127.0.0.1" || window.location.hostname === "localhost")
-            ? (window.location.port === "3000" ? `${window.location.protocol}//localhost:8000` : "/api")
-            : (window.location.origin.includes("vercel.app") ? "https://ai-adaptive-interview-1hsw.onrender.com" : "/api");
+
 
         const planOrder = {
             "Free Trial": 0,
@@ -1078,7 +1077,7 @@
                 name: orderPayload.company_name || "Hire IQ",
                 description: orderPayload.description || `${selectedPlan.plan_name} subscription`,
                 prefill: orderPayload.prefill || {},
-                theme: { color: "#0b8f86" },
+                theme: { color: "#6366f1" },
                 handler: async function (response) {
                     try {
                         showStatus("Payment received. Verifying and activating your workspace...", "info");

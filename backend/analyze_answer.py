@@ -8,6 +8,7 @@ def analyze_answer(
     context: str = "",
     time_spent_seconds: int = 0,
     time_limit_seconds: int = 120,
+    language: str = "English"
 ):
     """
     Analyze a candidate's interview answer and return a structured score.
@@ -84,6 +85,9 @@ Candidate's Answer: "{answer}"
 
 Time Information:
 {time_context}
+
+CRITICAL LANGUAGE REQUIREMENT:
+You MUST provide your analysis, feedback, and suggested answers STRICTLY in the {language} language. Do NOT use English unless {language} is English.
 
 ════════════════ SCORING RUBRIC ════════════════
 

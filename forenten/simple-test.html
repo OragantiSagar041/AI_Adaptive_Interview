@@ -37,16 +37,16 @@
         statusDiv.className = '';
 
         try {
-            console.log('Sending request to /upload-resume...');
+            // console.log('Sending request to /upload-resume...');
             const response = await fetch('http://127.0.0.1:8009/upload-resume', {
                 method: 'POST',
                 body: formData,
                 // No Content-Type header - let the browser set it with the boundary
             });
 
-            console.log('Response status:', response.status);
+            // console.log('Response status:', response.status);
             const result = await response.json();
-            console.log('Response:', result);
+            // console.log('Response:', result);
             
             statusDiv.textContent = 'Success! ' + JSON.stringify(result, null, 2);
             statusDiv.className = 'success';

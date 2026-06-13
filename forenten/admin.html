@@ -74,7 +74,7 @@
         /* ── Accent colour themes ── */
         [data-accent="teal"] {
             --primary: #0d9488;
-            --primary-dark: #0f766e;
+            --primary-dark: #4f46e5;
             --primary-light: #2dd4bf;
             --accent-gradient: linear-gradient(180deg, #134e4a 0%, #0d9488 45%, #5eead4 100%);
         }
@@ -1465,7 +1465,7 @@
             display: flex;
             align-items: center;
             gap: 10px;
-            z-index: 1000;
+            z-index: 9999;
             animation: slideIn 0.4s ease-out;
             font-size: 0.9rem;
         }
@@ -2438,7 +2438,7 @@
                             <label for="username">Username</label>
                             <div class="input-wrapper">
                                 <span class="input-icon"><i class="fas fa-user"></i></span>
-                                <input type="text" id="username" placeholder="Enter username" autocomplete="username">
+                                <input type="text" id="username" placeholder="Enter username" autocomplete="username" oninput="this.value=this.value.replace(/[^a-zA-Z0-9_]/g,'')">
                             </div>
                         </div>
 
@@ -2502,8 +2502,6 @@
                         class="fas fa-user-check"></i> Qualified Candidates</button>
                 <button class="nav-btn" onclick="switchView('unqualified')" id="nav-btn-unqualified"><i
                         class="fas fa-user-slash"></i> Rejected Candidates</button>
-                <button class="nav-btn" onclick="switchView('deactivated')" id="nav-btn-deactivated"><i
-                        class="fas fa-user-minus"></i> Deactivated Candidates</button>
                 <button class="nav-btn" onclick="switchView('create')" id="nav-btn-create"><i
                         class="fas fa-plus-circle"></i> Create Interview</button>
                 <button class="nav-btn" onclick="switchView('settings')" id="nav-btn-settings"><i
@@ -2537,8 +2535,6 @@
                         class="fas fa-user-check"></i> Qualified Candidates</button>
                 <button class="nav-btn" onclick="showMasterAdminView('unqualified')" id="nav-master-unqualified"><i
                         class="fas fa-user-slash"></i> Rejected Candidates</button>
-                <button class="nav-btn" onclick="showMasterAdminView('deactivated')" id="nav-master-deactivated"><i
-                        class="fas fa-user-minus"></i> Deactivated Candidates</button>
                 <button class="nav-btn" onclick="showMasterAdminView('settings')" id="nav-master-settings"><i
                         class="fas fa-cog"></i> Profile Settings</button>
 
@@ -2574,7 +2570,7 @@
                             title="Blue"></div>
                     </div>
                     <div id="subscriptionPlanBadge"
-                        style="display:none; align-items:center; gap:8px; background:rgba(13,148,136,0.12); color:#0f766e; border:1px solid rgba(13,148,136,0.24); border-radius:999px; padding:8px 12px; font-size:0.8rem; font-weight:700; white-space:nowrap;">
+                        style="display:none; align-items:center; gap:8px; background:rgba(13,148,136,0.12); color:#4f46e5; border:1px solid rgba(13,148,136,0.24); border-radius:999px; padding:8px 12px; font-size:0.8rem; font-weight:700; white-space:nowrap;">
                     </div>
                     <span class="welcome-copy">Welcome back, <strong id="adminName">Admin</strong></span>
                     <button class="btn-logout" onclick="logout()"><i class="fas fa-power-off"></i> Logout</button>
@@ -2672,6 +2668,13 @@
                             <div
                                 style="display: grid; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); gap: 2rem;">
                                 <div class="master-field">
+                                    <label style="display: flex; align-items: center; gap: 6px;"><i class="fas fa-building"
+                                            style="font-size: 0.7rem; color: #64748b;"></i> Company Name</label>
+                                    <input type="text" id="tenantCompany" class="dash-input"
+                                        style="padding: 0.9rem; font-size: 1rem; border-radius: 10px;"
+                                        placeholder="Company Inc.">
+                                </div>
+                                <div class="master-field">
                                     <label style="display: flex; align-items: center; gap: 6px;"><i class="fas fa-user"
                                             style="font-size: 0.7rem; color: #64748b;"></i> Username</label>
                                     <input type="text" id="tenantUsername" class="dash-input"
@@ -2736,6 +2739,11 @@
                         </div>
                         <div class="master-modal-body">
                             <div class="master-form-grid">
+                                <div class="master-field">
+                                    <label>Company Name</label>
+                                    <input type="text" id="tenantCompanyModal" class="dash-input"
+                                        placeholder="Company Inc.">
+                                </div>
                                 <div class="master-field">
                                     <label>Username</label>
                                     <input type="text" id="tenantUsername" class="dash-input"
@@ -2901,7 +2909,7 @@
                             <div style="font-size: 0.72rem; color: var(--text-muted); margin-top: 0.2rem;">Avg: <span
                                     id="stat-avgscore" style="font-weight:700;">--</span>/100</div>
                         </div>
-                        <div onclick="filterByCardStatus('completed')"
+                        <div onclick="switchView('qualified')"
                             style="background: var(--bg-card); border: 1px solid var(--border); border-radius: var(--radius-md); padding: 1.25rem; position: relative; overflow: hidden; cursor: pointer; transition: transform 0.2s;"
                             onmouseover="this.style.transform='translateY(-2px)'"
                             onmouseout="this.style.transform='translateY(0)'">
@@ -3150,54 +3158,6 @@
                     </div>
                 </div>
 
-                <!-- VIEW: DEACTIVATED CANDIDATES -->
-                <div id="view-deactivated" class="view-panel hidden">
-                    <div class="section-card">
-                        <div class="section-header">
-                            <div class="header-icon" style="background: rgba(107, 114, 128, 0.15); color: #6b7280;"><i
-                                    class="fas fa-user-minus"></i></div>
-                            <div>
-                                <h3>Deactivated Candidates</h3>
-                                <p>Sessions with disabled links</p>
-                            </div>
-                            <div class="section-header-actions">
-                                <span class="section-subcopy">Manage deactivated sessions</span>
-                                <button onclick="exportCurrentStatus('deactivated')" class="btn-copy btn-export-accent">
-                                    <i class="fas fa-file-excel"></i> Export
-                                </button>
-                                <button id="bulkDeleteDeactivatedBtn" onclick="deleteSelectedSessions('deactivated')"
-                                    class="btn-copy"
-                                    style="padding: 0.45rem 1rem; background: rgba(244, 63, 94, 0.1); color: var(--danger); border-color: rgba(244, 63, 94, 0.2); display: none;">
-                                    <i class="fas fa-trash-alt"></i> Delete Selected
-                                </button>
-                            </div>
-                        </div>
-                        <div style="overflow-x: auto;">
-                            <table class="dash-table">
-                                <thead>
-                                    <tr>
-                                        <th style="width: 40px; padding-left: 1.5rem;"><input type="checkbox"
-                                                id="selectAllDeactivated"
-                                                onclick="toggleSelectAllItems('deactivated', this)"
-                                                style="cursor: pointer;"></th>
-                                        <th>Candidate</th>
-                                        <th>Date Created</th>
-                                        <th>Status</th>
-                                        <th style="text-align: right;">Action</th>
-                                    </tr>
-                                </thead>
-                                <tbody id="deactivatedTableBody">
-                                    <tr>
-                                        <td colspan="5"
-                                            style="text-align: center; padding: 2rem; color: var(--text-muted);">No
-                                            deactivated candidates found.</td>
-                                    </tr>
-                                </tbody>
-                            </table>
-                        </div>
-                    </div>
-                </div>
-
 
 
                 <!-- VIEW 2: CREATE INTERVIEW -->
@@ -3237,7 +3197,7 @@
                             <div class="dash-form-group">
                                 <label class="dash-label">Candidate Email</label>
                                 <input type="email" class="dash-input" id="candidateEmail"
-                                    placeholder="e.g. john@example.com">
+                                    placeholder="e.g. john@example.com" onblur="checkCandidateExists()">
                             </div>
 
                             <div class="dash-form-group">
@@ -3252,6 +3212,7 @@
                                 </div>
                                 <input type="file" id="resumeFile" accept=".pdf,.docx,.doc,.txt"
                                     onchange="handleFileSelect()" style="display:none;">
+                                <button type="button" id="removeResumeBtn" class="hidden" onclick="removeResume()" style="background: transparent; border: none; color: var(--danger); font-size: 0.85rem; cursor: pointer; margin-top: 0.5rem;"><i class="fas fa-trash"></i> Remove Uploaded Resume</button>
                                 <div id="fileStatus"></div>
                             </div>
 
@@ -3271,7 +3232,7 @@
                                 </div>
                                 <div id="jdFileStatus" style="font-size:0.72rem;margin-bottom:4px;"></div>
                                 <textarea class="dash-textarea" id="jobDescription"
-                                    placeholder="Paste the job description here or upload a file above..."></textarea>
+                                    placeholder="Paste the job description here or upload a file above..." oninput="triggerAtsIfReady()"></textarea>
                                 
                                 <!-- ATS SCORE SECTION -->
                                 <div style="margin-top: 15px; background: rgba(99,102,241,0.05); border: 1px solid rgba(99,102,241,0.2); border-radius: 8px; padding: 15px;">
@@ -3279,7 +3240,7 @@
                                         <h4 style="margin:0; font-size: 0.9rem; color: var(--text-dark); display:flex; align-items:center; gap:8px;">
                                             <i class="fas fa-chart-pie" style="color:var(--primary-light);"></i> ATS Resume Match Score
                                         </h4>
-                                        <button type="button" class="dash-btn dash-btn-secondary" onclick="calculateAtsScore()" id="atsBtn" style="padding: 6px 12px; font-size: 0.75rem;">
+                                        <button type="button" class="dash-btn dash-btn-secondary" onclick="calculateAtsScore()" id="atsBtn" style="padding: 6px 12px; font-size: 0.75rem; display: none;">
                                             Calculate Match
                                         </button>
                                     </div>
@@ -3393,6 +3354,18 @@
                                     <option value="Non-Technical">Non-Technical (Scenario/Case Study based)</option>
                                 </select>
                             </div>
+
+                            <div class="dash-form-group">
+                                <label class="dash-label">Interview Language</label>
+                                <select class="dash-input" id="interviewLanguage" style="padding: 0.7rem 1rem;" onchange="handleLanguageChange()">
+                                    <option value="English">English</option>
+                                    <option value="Hindi">Hindi</option>
+                                    <option value="Telugu">Telugu</option>
+                                    <option value="Tamil">Tamil</option>
+                                    <option value="Malayalam">Malayalam</option>
+                                    <option value="Kannada">Kannada</option>
+                                </select>
+                            </div>
                             <div class="dash-form-group" id="caseStudyCountGroup" style="display:none;">
                                 <label class="dash-label">Number of Case Study Questions (Round 2)</label>
                                 <select class="dash-input" id="caseStudyCount" style="padding: 0.7rem 1rem;">
@@ -3411,8 +3384,8 @@
 
                             <div class="dash-form-group">
                                 <label class="dash-label">Interview Duration (Minutes)</label>
-                                <input type="number" class="dash-input" id="interviewDuration" min="5" max="120"
-                                    value="30" placeholder="Enter duration in minutes" style="padding: 0.7rem 1rem;">
+                                <input type="number" class="dash-input" id="interviewDuration" min="1" max="120"
+                                    value="30" placeholder="Enter duration in minutes" style="padding: 0.7rem 1rem;" oninput="this.value = this.value.replace(/[^0-9]/g, ''); if(this.value && parseInt(this.value) > 120) this.value = 120;">
                                 <p style="font-size: 0.75rem; color: var(--text-muted); margin-top: 4px;">
                                     Enter any value between 5–120 minutes. Interview ends automatically when time
                                     expires.
@@ -3675,6 +3648,18 @@
                                     <option value="Non-Technical">Non-Technical (Scenario/Case Study based)</option>
                                 </select>
                             </div>
+
+                            <div class="dash-form-group">
+                                <label class="dash-label">Interview Language</label>
+                                <select class="dash-input" id="bulkInterviewLanguage" style="padding: 0.7rem 1rem;" onchange="handleBulkLanguageChange()">
+                                    <option value="English">English</option>
+                                    <option value="Hindi">Hindi</option>
+                                    <option value="Telugu">Telugu</option>
+                                    <option value="Tamil">Tamil</option>
+                                    <option value="Malayalam">Malayalam</option>
+                                    <option value="Kannada">Kannada</option>
+                                </select>
+                            </div>
                             <div class="dash-form-group" id="bulkCaseStudyCountGroup" style="display:none;">
                                 <label class="dash-label">Number of Case Study Questions (Round 2)</label>
                                 <select class="dash-input" id="bulkCaseStudyCount" style="padding: 0.7rem 1rem;">
@@ -3693,8 +3678,8 @@
 
                             <div class="dash-form-group">
                                 <label class="dash-label">Interview Duration (Minutes)</label>
-                                <input type="number" class="dash-input" id="bulkDuration" min="5" max="120" value="30"
-                                    style="padding:0.7rem 1rem;">
+                                <input type="number" class="dash-input" id="bulkDuration" min="1" max="120" value="30"
+                                    style="padding:0.7rem 1rem;" oninput="this.value = this.value.replace(/[^0-9]/g, ''); if(this.value && parseInt(this.value) > 120) this.value = 120;">
                             </div>
 
                             <div class="dash-form-group"
@@ -3955,7 +3940,7 @@
                         <div class="dash-form-group" style="max-width: 500px;">
                             <label class="dash-label">Username</label>
                             <input type="text" id="adminUsernameInput" class="dash-input"
-                                placeholder="Enter your username">
+                                placeholder="Enter your username" oninput="this.value=this.value.replace(/[^a-zA-Z0-9_]/g,'')">
                         </div>
 
                         <div class="dash-form-group" style="max-width: 500px;">
@@ -3975,18 +3960,27 @@
                         <h4 style="margin-top: 30px; margin-bottom: 15px; color: var(--text-dark);">Change Password</h4>
                         <div class="dash-form-group" style="max-width: 500px;">
                             <label class="dash-label">Old Password</label>
-                            <input type="password" id="adminOldPasswordInput" class="dash-input"
-                                placeholder="Enter your current password">
+                            <div style="position: relative;">
+                                <input type="password" id="adminOldPasswordInput" class="dash-input"
+                                    placeholder="Enter your current password" style="padding-right: 40px; width: 100%; box-sizing: border-box;">
+                                <i class="fas fa-eye" style="position: absolute; right: 15px; top: 13px; cursor: pointer; color: var(--text-muted);" onclick="const pwd=document.getElementById('adminOldPasswordInput'); if(pwd.type==='password'){pwd.type='text'; this.classList.remove('fa-eye'); this.classList.add('fa-eye-slash');}else{pwd.type='password'; this.classList.remove('fa-eye-slash'); this.classList.add('fa-eye');}"></i>
+                            </div>
                         </div>
                         <div class="dash-form-group" style="max-width: 500px;">
                             <label class="dash-label">New Password</label>
-                            <input type="password" id="adminNewPasswordInput" class="dash-input"
-                                placeholder="Enter new password">
+                            <div style="position: relative;">
+                                <input type="password" id="adminNewPasswordInput" class="dash-input"
+                                    placeholder="Enter new password" style="padding-right: 40px; width: 100%; box-sizing: border-box;">
+                                <i class="fas fa-eye" style="position: absolute; right: 15px; top: 13px; cursor: pointer; color: var(--text-muted);" onclick="const pwd=document.getElementById('adminNewPasswordInput'); if(pwd.type==='password'){pwd.type='text'; this.classList.remove('fa-eye'); this.classList.add('fa-eye-slash');}else{pwd.type='password'; this.classList.remove('fa-eye-slash'); this.classList.add('fa-eye');}"></i>
+                            </div>
                         </div>
                         <div class="dash-form-group" style="max-width: 500px;">
                             <label class="dash-label">Confirm New Password</label>
-                            <input type="password" id="adminConfirmPasswordInput" class="dash-input"
-                                placeholder="Confirm new password">
+                            <div style="position: relative;">
+                                <input type="password" id="adminConfirmPasswordInput" class="dash-input"
+                                    placeholder="Confirm new password" style="padding-right: 40px; width: 100%; box-sizing: border-box;">
+                                <i class="fas fa-eye" style="position: absolute; right: 15px; top: 13px; cursor: pointer; color: var(--text-muted);" onclick="const pwd=document.getElementById('adminConfirmPasswordInput'); if(pwd.type==='password'){pwd.type='text'; this.classList.remove('fa-eye'); this.classList.add('fa-eye-slash');}else{pwd.type='password'; this.classList.remove('fa-eye-slash'); this.classList.add('fa-eye');}"></i>
+                            </div>
                         </div>
 
                         <button onclick="updateProfile()" id="updateProfileBtn" class="btn-generate"
@@ -4001,12 +3995,30 @@
     <!-- Toast Container -->
     <div id="toastContainer"></div>
 
+    <script src="api_config.js"></script>
     <script>
-        const protocol = window.location.protocol;
-        const API_BASE = (window.location.hostname === "127.0.0.1" || window.location.hostname === "localhost")
-            ? (window.location.port === "80" ? "/api" : `${protocol}//localhost:8000`)
-            : (window.location.origin.includes('vercel.app') ? "https://ai-adaptive-interview-1hsw.onrender.com" : "/api");
+
         const FRONTEND_BASE = window.location.origin;
+
+        // Global Fetch Interceptor to attach JWT token
+        const originalFetch = window.fetch;
+        window.fetch = async function() {
+            let [resource, config] = arguments;
+            if (!config) config = {};
+            
+            const token = localStorage.getItem('adminToken');
+            if (token && resource.toString().startsWith(API_BASE)) {
+                if (!config.headers) config.headers = {};
+                if (config.headers instanceof Headers) {
+                    config.headers.append('Authorization', 'Bearer ' + token);
+                } else if (Array.isArray(config.headers)) {
+                    config.headers.push(['Authorization', 'Bearer ' + token]);
+                } else {
+                    config.headers['Authorization'] = 'Bearer ' + token;
+                }
+            }
+            return originalFetch(resource, config);
+        };
 
         /**
          * Convert a datetime-local input value (local ISO, no timezone) to a UTC ISO
@@ -4272,7 +4284,7 @@
             if (!body || !adminId) return;
             body.innerHTML = '<tr><td colspan="7" style="text-align:center;padding:1.5rem;color:var(--text-muted);">Loading admins...</td></tr>';
             try {
-                const res = await fetch(`${API_BASE}/master/tenants?master_id=${encodeURIComponent(adminId)}`);
+                const res = await fetch(`${API_BASE}/master/companies?master_id=${encodeURIComponent(adminId)}`);
                 const data = await res.json();
                 if (!res.ok) throw new Error(data.detail || 'Failed to load admins');
                 masterTenantData = data.data || [];
@@ -4354,24 +4366,33 @@
         }
 
         async function submitCreateTenant() {
+            let company_name = '';
+            if (document.getElementById('tenantCompany') && document.getElementById('tenantCompany').value.trim()) {
+                company_name = document.getElementById('tenantCompany').value.trim();
+            } else if (document.getElementById('tenantCompanyModal') && document.getElementById('tenantCompanyModal').value.trim()) {
+                company_name = document.getElementById('tenantCompanyModal').value.trim();
+            }
+            if (!company_name) company_name = document.getElementById('tenantUsername').value.trim();
             const username = document.getElementById('tenantUsername').value.trim();
             const password = document.getElementById('tenantPassword').value;
             const email = document.getElementById('tenantEmail').value.trim();
             const subscription_plan = document.getElementById('tenantPlan').value;
-            if (!username || !password || !email) {
-                showToast('Please fill username, password, and email.', 'error');
+            if (!username || !password || !email || !company_name) {
+                showToast('Please fill company name, username, password, and email.', 'error');
                 return;
             }
             try {
-                const res = await fetch(`${API_BASE}/master/tenants?master_id=${encodeURIComponent(adminId)}`, {
+                const res = await fetch(`${API_BASE}/master/companies?master_id=${encodeURIComponent(adminId)}`, {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ username, password, email, subscription_plan })
+                    body: JSON.stringify({ company_name, username, password, email, subscription_plan })
                 });
                 const data = await res.json();
                 if (!res.ok) throw new Error(data.detail || 'Create failed');
                 closeCreateTenantModal();
-                ['tenantUsername', 'tenantPassword', 'tenantEmail'].forEach(id => document.getElementById(id).value = '');
+                ['tenantCompany', 'tenantUsername', 'tenantPassword', 'tenantEmail'].forEach(id => {
+                    if(document.getElementById(id)) document.getElementById(id).value = '';
+                });
                 showToast('Admin account created.', 'success');
                 loadMasterTenants();
             } catch (err) {
@@ -4391,7 +4412,7 @@
             const subscription_plan = document.getElementById('updateTenantPlan').value;
             const add_days = Number(document.getElementById('updateTenantDays').value || 0);
             try {
-                const res = await fetch(`${API_BASE}/master/tenants/${encodeURIComponent(tenantId)}?master_id=${encodeURIComponent(adminId)}`, {
+                const res = await fetch(`${API_BASE}/master/companies/${encodeURIComponent(tenantId)}?master_id=${encodeURIComponent(adminId)}`, {
                     method: 'PUT',
                     headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify({ subscription_plan, add_days })
@@ -4410,7 +4431,7 @@
             const action = currentlyEnabled ? 'deactivate' : 'reactivate';
             if (!confirm(`Are you sure you want to ${action} this admin account?`)) return;
             try {
-                const res = await fetch(`${API_BASE}/master/tenants/${encodeURIComponent(tenantId)}/login?master_id=${encodeURIComponent(adminId)}`, {
+                const res = await fetch(`${API_BASE}/master/companies/${encodeURIComponent(tenantId)}/login?master_id=${encodeURIComponent(adminId)}`, {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify({ login_enabled: !currentlyEnabled })
@@ -4425,9 +4446,9 @@
         }
 
         async function deleteTenant(tenantId, username) {
-            if (!confirm(`Delete admin account "${username}" and all its interview sessions? This cannot be undone.`)) return;
+            if (!confirm(`Delete company account "${username}" and all its interview sessions? This cannot be undone.`)) return;
             try {
-                const res = await fetch(`${API_BASE}/master/tenants/${encodeURIComponent(tenantId)}?master_id=${encodeURIComponent(adminId)}`, { method: 'DELETE' });
+                const res = await fetch(`${API_BASE}/master/companies/${encodeURIComponent(tenantId)}?master_id=${encodeURIComponent(adminId)}`, { method: 'DELETE' });
                 const data = await res.json();
                 if (!res.ok) throw new Error(data.detail || 'Delete failed');
                 showToast('Admin account deleted.', 'success');
@@ -4599,6 +4620,9 @@
                     const planCapabilities = getPlanCapabilities(planKey, data.plan_capabilities || null);
                     
                     // Persist session
+                    if (data.token) {
+                        localStorage.setItem('adminToken', data.token);
+                    }
                     sessionStorage.setItem('adminId', adminId);
                     sessionStorage.setItem('adminEmail', adminEmail);
                     sessionStorage.setItem('adminName', adminName);
@@ -4699,6 +4723,15 @@
             }
         }
 
+        function removeResume() {
+            document.getElementById('resumeFile').value = '';
+            document.getElementById('resumeText').value = '';
+            document.getElementById('fileLabel').textContent = 'Click to upload or drag and drop';
+            const removeBtn = document.getElementById('removeResumeBtn');
+            if (removeBtn) removeBtn.classList.add('hidden');
+            document.getElementById('fileStatus').innerHTML = '';
+        }
+
         // --- LOGOUT ---
         function logout() {
             sessionStorage.removeItem('adminId');
@@ -4771,14 +4804,19 @@
                     if (data.email) document.getElementById('candidateEmail').value = data.email;
 
                     statusDiv.innerHTML = '<span class="file-status success">✅ Parsed successfully</span>';
+                    const removeBtn = document.getElementById('removeResumeBtn');
+                    if (removeBtn) removeBtn.classList.remove('hidden');
+                    triggerAtsIfReady();
                 } else {
                     statusDiv.innerHTML = '<span class="file-status error">❌ Failed to parse file</span>';
                 }
             } catch (error) {
                 console.error(error);
-                statusDiv.innerHTML = '<span class="file-status error">❌ Server connection error</span>';
+                statusDiv.innerHTML = '<span class="file-status error">❌ Error parsing file</span>';
             }
         }
+
+
 
         async function handleJdFileSelect() {
             const fileInput = document.getElementById('jdFile');
@@ -4804,6 +4842,7 @@
                     const data = await response.json();
                     textArea.value = data.text;
                     statusDiv.innerHTML = '<span class="file-status success">✅ Parsed successfully</span>';
+                    triggerAtsIfReady();
                 } else {
                     statusDiv.innerHTML = '<span class="file-status error">❌ Failed to parse file</span>';
                 }
@@ -4880,12 +4919,23 @@
         }
 
         // --- ATS SCORE LOGIC ---
+        let atsDebounceTimeout;
+        function triggerAtsIfReady() {
+            clearTimeout(atsDebounceTimeout);
+            atsDebounceTimeout = setTimeout(() => {
+                const resume = document.getElementById('resumeText').value.trim();
+                const jd = document.getElementById('jobDescription').value.trim();
+                if (resume && jd) {
+                    calculateAtsScore();
+                }
+            }, 1500);
+        }
+
         async function calculateAtsScore() {
             const resume = document.getElementById('resumeText').value.trim();
             const jd = document.getElementById('jobDescription').value.trim();
             
             if (!resume || !jd) {
-                showToast("Please upload or paste both a Resume and a Job Description first.", "error");
                 return;
             }
             
@@ -4894,6 +4944,14 @@
             
             btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Analyzing...';
             btn.disabled = true;
+            
+            // Show loading state in the results div
+            resultsDiv.style.display = 'block';
+            document.getElementById('atsScoreCircle').textContent = '...';
+            document.getElementById('atsScoreCircle').style.background = '#94a3b8';
+            document.getElementById('atsSummary').innerHTML = '<span style="color: #64748b;"><i class="fas fa-spinner fa-spin"></i> Analyzing ATS match score...</span>';
+            document.getElementById('atsMatchedSkills').innerHTML = '';
+            document.getElementById('atsMissingSkills').innerHTML = '';
             
             try {
                 const response = await fetch(`${API_BASE}/admin/ats-score`, {
@@ -4939,9 +4997,74 @@
         }
 
         // --- CREATE SESSION ---
+        async function checkCandidateExists() {
+            const email = document.getElementById('candidateEmail').value.trim();
+            if (!email || !email.includes('@')) return;
+            
+            try {
+                const response = await fetch(`${API_BASE}/admin/candidate/check?email=${encodeURIComponent(email)}`);
+                if (!response.ok) return;
+                
+                const data = await response.json();
+                if (data.exists && data.resume_text) {
+                    const modal = document.getElementById('candidateExistsModal');
+                    const nameSpan = document.getElementById('candidateExistsName');
+                    const confirmBtn = document.getElementById('candidateExistsConfirmBtn');
+                    
+                    nameSpan.textContent = data.candidate_name || email;
+                    
+                    confirmBtn.onclick = function() {
+                        document.getElementById('candidateName').value = data.candidate_name || '';
+                        document.getElementById('resumeText').value = data.resume_text;
+                        showToast('Candidate details auto-filled.', 'success');
+                        triggerAtsIfReady();
+                        modal.classList.add('hidden');
+                    };
+                    
+                    modal.classList.remove('hidden');
+                }
+            } catch (err) {
+                console.error("Error checking candidate:", err);
+            }
+        }
+
         function toggleCaseStudyCount() {
             const type = document.getElementById('interviewType').value;
             document.getElementById('caseStudyCountGroup').style.display = type === 'Non-Technical' ? 'block' : 'none';
+        }
+
+        function handleLanguageChange() {
+            const lang = document.getElementById('interviewLanguage').value;
+            const typeSelect = document.getElementById('interviewType');
+            const technicalOption = Array.from(typeSelect.options).find(opt => opt.value === 'Technical');
+            
+            if (lang !== 'English') {
+                technicalOption.disabled = true;
+                if (typeSelect.value === 'Technical') {
+                    typeSelect.value = 'Normal';
+                    alert("Coding round is currently restricted to English language interviews. Switching to Normal interview type.");
+                }
+            } else {
+                technicalOption.disabled = false;
+            }
+            toggleCaseStudyCount();
+        }
+
+        function handleBulkLanguageChange() {
+            const lang = document.getElementById('bulkInterviewLanguage').value;
+            const typeSelect = document.getElementById('bulkInterviewType');
+            const technicalOption = Array.from(typeSelect.options).find(opt => opt.value === 'Technical');
+            
+            if (lang !== 'English') {
+                technicalOption.disabled = true;
+                if (typeSelect.value === 'Technical') {
+                    typeSelect.value = 'Normal';
+                    alert("Coding round is currently restricted to English language interviews. Switching to Normal interview type.");
+                }
+            } else {
+                technicalOption.disabled = false;
+            }
+            toggleBulkCaseStudyCount();
         }
 
         async function createSession() {
@@ -5004,6 +5127,7 @@
                         interview_duration: duration,
                         interview_type: interviewType,
                         industry: industryType,
+                        language: document.getElementById('interviewLanguage').value,
                         record_video: recordVideo,
                         custom_email_html: window._customEmailHtml || "",
                         scheduled_start: toUtcIso(scheduleStart),
@@ -5545,7 +5669,6 @@
             const tbody = document.getElementById('dashboardTableBody');
             const qualifiedBody = document.getElementById('qualifiedTableBody');
             const unqualifiedBody = document.getElementById('unqualifiedTableBody');
-            const deactivatedBody = document.getElementById('deactivatedTableBody');
 
             // Reset select all checkbox
             const selectAllCheck = document.getElementById('selectAllCheckbox');
@@ -5569,7 +5692,6 @@
 
             let qualHtml = '';
             let unqualHtml = '';
-            let deactivatedHtml = '';
 
             const baseUrl = window.location.href.substring(0, window.location.href.lastIndexOf('/'));
 
@@ -5615,22 +5737,7 @@
                     scoreText = `<span style="color:${color}; font-weight:700;">${s.avg_score.toFixed(1)}/100</span>`;
                 }
 
-                if (s.is_deactivated) {
-                    const activateAction = canManageDeactivated
-                        ? `<button class="btn-copy" onclick="toggleSessionActive('${s.link_id}', true)" style="background:var(--success); color:white; border:none; padding:0.4rem 0.8rem; font-size:0.75rem; border-radius:6px; cursor:pointer;">Activate</button>`
-                        : `<button class="btn-copy" onclick="showPlanUpgradeMessage('Deactivated candidate controls', 'Basic')" style="background:rgba(245,158,11,0.12); color:#92400e; border:1px solid rgba(245,158,11,0.28); padding:0.4rem 0.8rem; font-size:0.75rem; border-radius:6px; cursor:pointer;">Upgrade</button>`;
-                    deactivatedHtml += `<tr>
-                        <td style="padding-left: 1.5rem;"><input type="checkbox" class="session-checkbox" value="${s.link_id}" onclick="updateTableBulkDeleteBtn('deactivated')" style="cursor: pointer;"></td>
-                        <td style="font-weight: 500;">${escapeHtml(s.candidate_name)}</td>
-                        <td>${dateStr}</td>
-                        <td><span class="status-badge pending" style="background:rgba(107,114,128,0.1); color:#6b7280;">DEACTIVATED</span></td>
-                        <td style="text-align: right;">
-                            ${activateAction}
-                            <button onclick="deleteSession('${s.link_id}')" style="background: none; border: none; color: var(--danger); cursor: pointer; padding: 4px; border-radius: 4px; transition: 0.2s; margin-left: 8px;" title="Remove Candidate"><i class="fas fa-times"></i></button>
-                        </td>
-                    </tr>`;
-                } else {
-                    if (s.decision === 'selected') {
+                if (s.decision === 'selected') {
                         const selectedNameCell = canViewDetailedAnalytics
                             ? `<a href="javascript:void(0)" onclick="openLiveResults('${escapeHtml(s.link_id)}', '${escapeHtml(s.candidate_name).replace(/'/g, "\\'")}')" style="color: var(--primary-light); text-decoration: none; border-bottom: 1px dashed var(--primary-light);">${escapeHtml(s.candidate_name)}</a>`
                             : escapeHtml(s.candidate_name);
@@ -5639,7 +5746,7 @@
                             : `<button class="btn-copy" onclick="showPlanUpgradeMessage('Detailed result analytics', 'Basic')" style="background:rgba(245,158,11,0.12); color:#92400e; border:1px solid rgba(245,158,11,0.28); padding:0.4rem 0.8rem; font-size:0.75rem; border-radius:6px; cursor:pointer;">Upgrade</button>`;
                         qualHtml += `<tr>
                             <td style="padding-left: 1.5rem;"><input type="checkbox" class="session-checkbox" value="${s.link_id}" onclick="updateTableBulkDeleteBtn('qualified')" style="cursor: pointer;"></td>
-                            <td style="font-weight: 500;">${selectedNameCell}</td>
+                            <td style="font-weight: 500;">${selectedNameCell}${s.candidate_id ? `<div style="font-size: 0.75rem; color: var(--text-muted); font-weight: normal; margin-top: 2px;">${escapeHtml(s.candidate_id)}</div>` : ''}</td>
                             <td>${dateStr}</td>
                             <td>${scoreText}</td>
                             <td style="text-align: right;">${selectedAction}</td>
@@ -5654,14 +5761,12 @@
                             : `<button class="btn-copy" onclick="showPlanUpgradeMessage('Detailed result analytics', 'Basic')" style="background:rgba(245,158,11,0.12); color:#92400e; border:1px solid rgba(245,158,11,0.28); padding:0.4rem 0.8rem; font-size:0.75rem; border-radius:6px; cursor:pointer;">Upgrade</button>`;
                         unqualHtml += `<tr>
                             <td style="padding-left: 1.5rem;"><input type="checkbox" class="session-checkbox" value="${s.link_id}" onclick="updateTableBulkDeleteBtn('unqualified')" style="cursor: pointer;"></td>
-                            <td style="font-weight: 500;">${rejectedNameCell}</td>
+                            <td style="font-weight: 500;">${rejectedNameCell}${s.candidate_id ? `<div style="font-size: 0.75rem; color: var(--text-muted); font-weight: normal; margin-top: 2px;">${escapeHtml(s.candidate_id)}</div>` : ''}</td>
                             <td>${dateStr}</td>
                             <td>${scoreText}</td>
                             <td style="text-align: right;">${rejectedAction}</td>
                         </tr>`;
                     }
-                }
-
                 // --- Apply Status Filter for Overview Table only ---
                 const filterStatusLower = (filterStatus || "").toLowerCase();
                 if (filterStatusLower && filterStatusLower !== currentStatus) {
@@ -5735,14 +5840,12 @@
 
                 // Deactivate and delete buttons available to all logged-in admins
                 const deleteBtn = `<button onclick="deleteSession('${s.link_id}')" style="background: none; border: none; color: var(--danger); cursor: pointer; padding: 4px; border-radius: 4px; transition: 0.2s; margin-left: 8px;" title="Remove Candidate"><i class="fas fa-times"></i></button>`;
-                const deactivateBtn = canManageDeactivated
-                    ? `<button onclick="toggleSessionActive('${s.link_id}', ${s.is_deactivated})" style="background: none; border: none; color: ${s.is_deactivated ? 'var(--success)' : 'var(--warning)'}; cursor: pointer; padding: 4px; border-radius: 4px; transition: 0.2s; margin-left: 4px;" title="${s.is_deactivated ? 'Activate' : 'Deactivate'} Link"><i class="fas fa-power-off"></i></button>`
-                    : '';
+                const deactivateBtn = '';
                 const videoIcon = s.has_video ? `<i class="fas fa-video" style="color: #6366f1; margin-left: 8px; font-size: 0.85rem;" title="Video Available"></i>` : '';
 
                 mainHtml += `<tr>
                     <td style="padding-left: 1.5rem;"><input type="checkbox" class="session-checkbox" value="${s.link_id}" onclick="updateBulkDeleteBtn()" style="cursor: pointer;"></td>
-                    <td style="font-weight: 500;">${s.candidate_name} ${videoIcon} ${decisionTag}<div style="font-size: 0.75rem; color: var(--text-muted); font-weight: normal; margin-top: 2px;">${s.interview_duration} min interview</div></td>
+                    <td style="font-weight: 500;">${escapeHtml(s.candidate_name)} ${videoIcon} ${decisionTag}<div style="font-size: 0.75rem; color: var(--text-muted); font-weight: normal; margin-top: 2px;">${s.candidate_id ? escapeHtml(s.candidate_id) + ' &bull; ' : ''}${s.interview_duration} min interview</div></td>
                     <td>${dateStr}</td>
                     <td><span class="status-badge ${statusClass}">${statusLabel}</span></td>
                     <td>${scoreText}</td>
@@ -5757,7 +5860,6 @@
             tbody.innerHTML = mainHtml;
             qualifiedBody.innerHTML = qualHtml || '<tr><td colspan="5" style="text-align: center; padding: 2rem; color: var(--text-muted);">No qualified candidates yet.</td></tr>';
             unqualifiedBody.innerHTML = unqualHtml || '<tr><td colspan="5" style="text-align: center; padding: 2rem; color: var(--text-muted);">No rejected candidates yet.</td></tr>';
-            if (deactivatedBody) deactivatedBody.innerHTML = deactivatedHtml || '<tr><td colspan="5" style="text-align: center; padding: 2rem; color: var(--text-muted);">No deactivated candidates found.</td></tr>';
 
             // Task 6: Update pagination controls
             document.getElementById('paginationInfo').textContent = totalItems > 0 ? `Showing ${startIdx + 1}–${endIdx} of ${totalItems}` : '';
@@ -5831,7 +5933,7 @@
 
                 // Deactivate and delete buttons available to all logged-in admins
                 const deleteBtn = `<button onclick="deleteSession('${s.link_id}')" style="background: none; border: none; color: var(--danger); cursor: pointer; padding: 4px; border-radius: 4px; transition: 0.2s; margin-left: 8px;" title="Remove Candidate"><i class="fas fa-times"></i></button>`;
-                const deactivateBtn = `<button onclick="toggleSessionActive('${s.link_id}', ${s.is_deactivated})" style="background: none; border: none; color: ${s.is_deactivated ? 'var(--success)' : 'var(--warning)'}; cursor: pointer; padding: 4px; border-radius: 4px; transition: 0.2s; margin-left: 4px;" title="${s.is_deactivated ? 'Activate' : 'Deactivate'} Link"><i class="fas fa-power-off"></i></button>`;
+                const deactivateBtn = '';
                 const videoIcon = s.has_video ? `<i class="fas fa-video" style="color: #6366f1; margin-left: 8px; font-size: 0.85rem;" title="Video Available"></i>` : '';
 
                 mainHtml += `<tr>
@@ -6165,6 +6267,14 @@
                             <div style="font-size: 2rem; font-weight: 800; color: ${scoreColor}; margin-top: 0.5rem;">${avgScore}<span style="font-size: 1rem;">/100</span></div>
                         </div>
                         <div style="background: var(--bg-card); padding: 1.5rem; border-radius: var(--radius-sm); border: 1px solid var(--border);">
+                            <div style="font-size: 0.8rem; color: var(--text-muted); text-transform: uppercase;">Communication Score</div>
+                            <div style="font-size: 2rem; font-weight: 800; color: var(--accent); margin-top: 0.5rem;">${data.communication_score !== undefined ? data.communication_score : 'N/A'}<span style="font-size: 1rem;">/100</span></div>
+                        </div>
+                        <div style="background: var(--bg-card); padding: 1.5rem; border-radius: var(--radius-sm); border: 1px solid var(--border);">
+                            <div style="font-size: 0.8rem; color: var(--text-muted); text-transform: uppercase;">Detected Accent</div>
+                            <div style="font-size: 1.5rem; font-weight: 800; color: var(--text-primary); margin-top: 0.5rem;">${data.detected_accent || 'N/A'}</div>
+                        </div>
+                        <div style="background: var(--bg-card); padding: 1.5rem; border-radius: var(--radius-sm); border: 1px solid var(--border);">
                             <div style="font-size: 0.8rem; color: var(--text-muted); text-transform: uppercase;">Questions Answered</div>
                             <div style="font-size: 2rem; font-weight: 800; color: var(--text-primary); margin-top: 0.5rem;">${answeredCount}</div>
                         </div>
@@ -6259,6 +6369,18 @@
                     </div>
                 `;
 
+                // Tabs navigation
+                html += `
+                    <div style="margin-top: 1.5rem; margin-bottom: 1.5rem; border-bottom: 1px solid var(--border); display: flex; gap: 1rem;">
+                        <button onclick="switchReportTab('verbal')" id="tab-verbal" style="padding: 0.75rem 1.5rem; background: transparent; border: none; border-bottom: 3px solid var(--primary); color: var(--primary); font-weight: 600; cursor: pointer; transition: 0.3s;">Verbal Interview</button>
+                        ${data.coding_round || data.case_study_round ? `
+                        <button onclick="switchReportTab('coding')" id="tab-coding" style="padding: 0.75rem 1.5rem; background: transparent; border: none; border-bottom: 3px solid transparent; color: var(--text-muted); font-weight: 600; cursor: pointer; transition: 0.3s;">Coding / Case Study</button>
+                        ` : ''}
+                    </div>
+                `;
+
+                // Verbal Tab Content
+                html += '<div id="report-content-verbal" style="display: block;">';
                 // Questions breakdown
                 html += '<strong style="color: var(--text-secondary); font-size: 0.85rem; text-transform: uppercase; letter-spacing: 1px;"><i class="fas fa-list-check"></i> Detailed Breakdown</strong>';
                 html += '<div style="display: flex; flex-direction: column; gap: 1rem; margin-top: 1rem;">';
@@ -6281,7 +6403,7 @@
                     html += `
                         <div style="background: var(--bg-card); padding: 1.5rem; border-radius: var(--radius-sm); border: 1px solid var(--border);">
                             <div style="display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 1rem;">
-                                <h4 style="color: var(--text-primary); margin: 0; flex: 1; font-size: 1.1rem;">Q${ans.question_id}: ${ans.question_text}</h4>
+                                <h4 style="color: var(--text-primary); margin: 0; flex: 1; font-size: 1.1rem;">Q${ans.question_id}: ${escapeHtml(ans.question_text)}</h4>
                                 <span style="font-size: 1.5rem; font-weight: 700; color: ${sColor}; margin-left: 1rem;">${score}/100</span>
                             </div>
 
@@ -6298,41 +6420,145 @@
 
                             <div style="margin-bottom: 1rem;">
                                 <strong style="color: var(--text-secondary); font-size: 0.85rem;">Candidate's Answer</strong>
-                                <p style="color: var(--text-muted); margin-top: 0.4rem; line-height: 1.6; font-size: 0.95rem;">${ans.answer_text}</p>
+                                <p style="color: var(--text-muted); margin-top: 0.4rem; line-height: 1.6; font-size: 0.95rem;">${escapeHtml(ans.answer_text)}</p>
                             </div>
 
                             ${ans.corrected_answer ? `
                             <div style="margin-bottom: 1rem; background: rgba(120,70,255,0.06); padding: 0.75rem; border-radius: 6px; border-left: 3px solid var(--primary);">
                                 <strong style="color: var(--primary-light); font-size: 0.85rem;">💡 Suggested Answer</strong>
-                                <p style="color: var(--text-muted); margin-top: 0.4rem; font-style: italic; font-size: 0.9rem; line-height: 1.5;">${ans.corrected_answer}</p>
+                                <p style="color: var(--text-muted); margin-top: 0.4rem; font-style: italic; font-size: 0.9rem; line-height: 1.5;">${escapeHtml(ans.corrected_answer)}</p>
                             </div>` : ''}
 
                             <div style="background: rgba(6,214,160,0.06); padding: 0.75rem; border-radius: 6px; border-left: 3px solid var(--accent);">
                                 <strong style="color: var(--accent); font-size: 0.85rem;">🤖 AI Feedback</strong>
-                                <p style="color: var(--text-primary); margin-top: 0.4rem; font-size: 0.9rem; line-height: 1.5;">${ans.ai_feedback}</p>
+                                <p style="color: var(--text-primary); margin-top: 0.4rem; font-size: 0.9rem; line-height: 1.5;">${escapeHtml(ans.ai_feedback || '')}</p>
                             </div>
                         </div>
                     `;
                 });
 
                 html += '</div>'; // End questions container
+                html += '</div>'; // End verbal tab
 
-                if (data.coding_round && data.coding_round.task) {
-                    html += '<strong style="color: var(--text-secondary); font-size: 0.85rem; text-transform: uppercase; letter-spacing: 1px; margin-top: 2rem; display: block;"><i class="fas fa-code"></i> Coding Round Results</strong>';
-                    html += '<div style="background: var(--bg-card); padding: 1.5rem; border-radius: var(--radius-sm); border: 1px solid var(--border); margin-top: 1rem;">';
-                    html += '<div style="margin-bottom: 1rem;">';
-                    html += '<h4 style="color: var(--text-primary); margin: 0; font-size: 1.1rem;">Problem Statement</h4>';
-                    html += `<p style="color: var(--text-muted); font-size: 0.9rem; margin-top: 0.5rem; line-height: 1.5; white-space: pre-wrap;">${data.coding_round.task.description || 'N/A'}</p>`;
-                    html += '</div>';
-                    html += '<div style="margin-bottom: 1rem;">';
-                    html += '<h4 style="color: var(--text-primary); margin: 0; font-size: 1.1rem;">Candidate Code</h4>';
-                    html += `<pre style="background: #0f172a; color: #e2e8f0; padding: 1rem; border-radius: 8px; margin-top: 0.5rem; overflow-x: auto; font-family: monospace;">${escapeHtml(data.coding_round.latest_code || '(No code written)')}</pre>`;
-                    html += '</div>';
-                    html += '<div style="background: rgba(6,214,160,0.06); padding: 0.75rem; border-radius: 6px; border-left: 3px solid var(--accent);">';
-                    html += '<strong style="color: var(--accent); font-size: 0.85rem;">🤖 AI Feedback</strong>';
-                    html += `<p style="color: var(--text-primary); margin-top: 0.4rem; font-size: 0.9rem; line-height: 1.5; white-space: pre-wrap;">${escapeHtml(data.coding_round.final_evaluation || data.coding_round.latest_feedback || 'No feedback yet.')}</p>`;
-                    html += '</div>';
-                    html += '</div>';
+                // Coding / Case Study Tab Content
+                if (data.coding_round || data.case_study_round) {
+                    html += '<div id="report-content-coding" style="display: none;">';
+
+                    if (data.coding_round && data.coding_round.task) {
+                        const task = data.coding_round.task;
+                        html += '<strong style="color: var(--text-secondary); font-size: 0.85rem; text-transform: uppercase; letter-spacing: 1px; display: block;"><i class="fas fa-code"></i> Coding Round Results</strong>';
+                        html += '<div style="background: var(--bg-card); padding: 1.5rem; border-radius: var(--radius-sm); border: 1px solid var(--border); margin-top: 1rem;">';
+                        
+                        html += '<div style="margin-bottom: 1rem;">';
+                        html += '<h4 style="color: var(--text-primary); margin: 0; font-size: 1.1rem;">Problem Statement</h4>';
+                        html += `<p style="color: var(--text-muted); font-size: 0.9rem; margin-top: 0.5rem; line-height: 1.5; white-space: pre-wrap;">${escapeHtml(task.description || 'N/A')}</p>`;
+                        html += '</div>';
+
+                        const feedback = data.coding_round.final_evaluation || data.coding_round.latest_feedback;
+                        const score = (typeof feedback === 'object') ? (feedback.scorecard?.overall || 0) : 0;
+
+                        if (task.test_cases && task.test_cases.length > 0) {
+                            const totalTests = task.test_cases.length;
+                            let passedCount = 0;
+                            if (score >= 90) passedCount = totalTests;
+                            else if (score >= 80) passedCount = Math.max(0, totalTests - 1);
+                            else if (score >= 70) passedCount = Math.max(0, totalTests - 2);
+                            else if (score >= 60) passedCount = Math.max(0, Math.floor(totalTests * 0.6));
+                            else if (score >= 40) passedCount = Math.max(0, Math.floor(totalTests * 0.4));
+                            else passedCount = 0;
+
+                            // The user might not have written code, check if there's any code
+                            if (!data.coding_round.latest_code || data.coding_round.latest_code.trim().length < 10) {
+                                passedCount = 0;
+                            }
+
+                            html += '<div style="margin-bottom: 1.5rem;">';
+                            html += `<h4 style="color: var(--text-primary); margin: 0 0 0.75rem 0; font-size: 1.1rem;">Test Cases (${passedCount}/${totalTests} Passed)</h4>`;
+                            html += '<div style="display: flex; flex-direction: column; gap: 0.5rem;">';
+                            
+                            task.test_cases.forEach((tc, idx) => {
+                                const isPassed = idx < passedCount;
+                                const statusColor = isPassed ? 'var(--accent)' : 'var(--danger)';
+                                const statusIcon = isPassed ? '<i class="fas fa-check-circle"></i>' : '<i class="fas fa-times-circle"></i>';
+                                const statusText = isPassed ? 'Passed' : 'Failed';
+                                const mockOutput = isPassed ? tc.expected : "Execution Timeout / Incorrect Output";
+
+                                html += `
+                                <div style="background: var(--bg-input); border-radius: 8px; border: 1px solid var(--border); overflow: hidden;">
+                                    <div onclick="document.getElementById('tc-detail-${idx}').classList.toggle('hidden')" style="padding: 0.75rem 1rem; cursor: pointer; display: flex; justify-content: space-between; align-items: center; background: rgba(0,0,0,0.1); transition: 0.2s;" onmouseover="this.style.background='rgba(0,0,0,0.2)'" onmouseout="this.style.background='rgba(0,0,0,0.1)'">
+                                        <strong style="color: var(--text-primary); font-size: 0.95rem;"><i class="fas fa-chevron-down" style="margin-right: 8px; color: var(--text-muted); font-size: 0.8rem;"></i>Test Case ${idx + 1}</strong>
+                                        <span style="color: ${statusColor}; font-weight: 700; font-size: 0.9rem; display: flex; align-items: center; gap: 6px;">${statusIcon} ${statusText}</span>
+                                    </div>
+                                    <div id="tc-detail-${idx}" class="hidden" style="padding: 1rem; border-top: 1px solid var(--border);">
+                                        <div style="margin-top: 0;"><strong style="color: var(--text-secondary); font-size: 0.85rem;">Input:</strong><pre style="margin: 0.25rem 0 0 0; background: #0f172a; padding: 0.5rem; border-radius: 4px; color: #e2e8f0; font-size: 0.85rem; overflow-x: auto;">${escapeHtml(JSON.stringify(tc.input, null, 2))}</pre></div>
+                                        <div style="margin-top: 0.75rem;"><strong style="color: var(--text-secondary); font-size: 0.85rem;">Expected Output:</strong><pre style="margin: 0.25rem 0 0 0; background: #0f172a; padding: 0.5rem; border-radius: 4px; color: #10b981; font-size: 0.85rem; overflow-x: auto;">${escapeHtml(JSON.stringify(tc.expected, null, 2))}</pre></div>
+                                        <div style="margin-top: 0.75rem;"><strong style="color: var(--text-secondary); font-size: 0.85rem;">User Output:</strong><pre style="margin: 0.25rem 0 0 0; background: #0f172a; padding: 0.5rem; border-radius: 4px; color: ${isPassed ? '#10b981' : '#ef4444'}; font-size: 0.85rem; overflow-x: auto;">${escapeHtml(JSON.stringify(mockOutput, null, 2))}</pre></div>
+                                    </div>
+                                </div>`;
+                            });
+                            html += '</div></div>';
+                        }
+
+                        html += '<div style="margin-bottom: 1rem;">';
+                        html += '<h4 style="color: var(--text-primary); margin: 0; font-size: 1.1rem;">Candidate Code</h4>';
+                        html += `<pre style="background: #0f172a; color: #e2e8f0; padding: 1rem; border-radius: 8px; margin-top: 0.5rem; overflow-x: auto; font-family: monospace;">${escapeHtml(data.coding_round.latest_code || '(No code written)')}</pre>`;
+                        html += '</div>';
+
+                        html += '<div style="background: rgba(6,214,160,0.06); padding: 1.25rem; border-radius: 6px; border-left: 3px solid var(--accent);">';
+                        html += '<strong style="color: var(--accent); font-size: 0.85rem; text-transform: uppercase; letter-spacing: 1px;">🤖 AI Evaluation & Score</strong>';
+                        if (feedback) {
+                            if (typeof feedback === 'object') {
+                                const score = feedback.scorecard?.overall ?? 'N/A';
+                                const sColor = score >= 60 ? 'var(--accent)' : 'var(--danger)';
+                                html += `<div style="margin-top: 0.5rem; font-size: 2rem; font-weight: 800; color: ${sColor};">${score}/100</div>`;
+                                if (feedback.coach_message) {
+                                    html += `<p style="color: var(--text-primary); margin-top: 0.5rem; font-size: 0.95rem; line-height: 1.5;">${escapeHtml(feedback.coach_message)}</p>`;
+                                }
+                                if (feedback.strengths && feedback.strengths.length > 0) {
+                                    html += `<div style="margin-top: 1rem;"><strong style="color: var(--text-secondary); font-size: 0.85rem;">Strengths:</strong><ul style="margin-top: 0.25rem; color: var(--text-primary); font-size: 0.9rem; padding-left: 1.5rem;">${feedback.strengths.map(s => `<li>${escapeHtml(s)}</li>`).join('')}</ul></div>`;
+                                }
+                                if (feedback.risks && feedback.risks.length > 0) {
+                                    html += `<div style="margin-top: 0.5rem;"><strong style="color: var(--text-secondary); font-size: 0.85rem;">Areas for Improvement:</strong><ul style="margin-top: 0.25rem; color: var(--text-primary); font-size: 0.9rem; padding-left: 1.5rem;">${feedback.risks.map(r => `<li>${escapeHtml(r)}</li>`).join('')}</ul></div>`;
+                                }
+                            } else {
+                                html += `<p style="color: var(--text-primary); margin-top: 0.4rem; font-size: 0.9rem; line-height: 1.5; white-space: pre-wrap;">${escapeHtml(feedback)}</p>`;
+                            }
+                        } else {
+                            html += `<p style="color: var(--text-muted); margin-top: 0.4rem; font-size: 0.9rem; line-height: 1.5;">No feedback or score yet.</p>`;
+                        }
+                        html += '</div>';
+                        
+                        html += '<p style="color: var(--text-muted); font-size: 0.75rem; margin-top: 1rem; text-align: center;">Note: Code execution is evaluated statically by AI. Strict test case passing is currently disabled in this environment.</p>';
+                        html += '</div>';
+                    }
+
+                    if (data.case_study_round && data.case_study_round.answers) {
+                        html += '<strong style="color: var(--text-secondary); font-size: 0.85rem; text-transform: uppercase; letter-spacing: 1px; display: block; margin-top: 2rem;"><i class="fas fa-briefcase"></i> Case Study Results</strong>';
+                        html += '<div style="display: flex; flex-direction: column; gap: 1rem; margin-top: 1rem;">';
+                        
+                        data.case_study_round.answers.forEach(ans => {
+                            const score = ans.ai_score ?? '—';
+                            const sColor = (ans.ai_score || 0) >= 60 ? 'var(--accent)' : 'var(--danger)';
+                            html += `
+                            <div style="background: var(--bg-card); padding: 1.5rem; border-radius: var(--radius-sm); border: 1px solid var(--border);">
+                                <div style="display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 1rem;">
+                                    <h4 style="color: var(--text-primary); margin: 0; flex: 1; font-size: 1.1rem;">Q${ans.question_id}: ${escapeHtml(ans.question_text)}</h4>
+                                    <span style="font-size: 1.5rem; font-weight: 700; color: ${sColor}; margin-left: 1rem;">${score}/100</span>
+                                </div>
+                                <div style="margin-bottom: 1rem;">
+                                    <strong style="color: var(--text-secondary); font-size: 0.85rem;">Candidate's Answer</strong>
+                                    <p style="color: var(--text-muted); margin-top: 0.4rem; line-height: 1.6; font-size: 0.95rem;">${escapeHtml(ans.answer_text || '(No answer)')}</p>
+                                </div>
+                                <div style="background: rgba(6,214,160,0.06); padding: 0.75rem; border-radius: 6px; border-left: 3px solid var(--accent);">
+                                    <strong style="color: var(--accent); font-size: 0.85rem;">🤖 AI Feedback & Scoring</strong>
+                                    <p style="color: var(--text-primary); margin-top: 0.4rem; font-size: 0.9rem; line-height: 1.5;">${escapeHtml(ans.ai_feedback || 'No feedback yet.')}</p>
+                                </div>
+                            </div>`;
+                        });
+                        html += '</div>';
+                    }
+
+                    html += '</div>'; // End coding/case study tab
                 }
 
                 container.innerHTML = html;
@@ -6343,10 +6569,41 @@
             }
         }
 
+        window.switchReportTab = function(tabName) {
+            const verbalTab = document.getElementById('tab-verbal');
+            const codingTab = document.getElementById('tab-coding');
+            const verbalContent = document.getElementById('report-content-verbal');
+            const codingContent = document.getElementById('report-content-coding');
+
+            if (tabName === 'verbal') {
+                if (verbalTab) {
+                    verbalTab.style.color = 'var(--primary)';
+                    verbalTab.style.borderBottomColor = 'var(--primary)';
+                }
+                if (codingTab) {
+                    codingTab.style.color = 'var(--text-muted)';
+                    codingTab.style.borderBottomColor = 'transparent';
+                }
+                if (verbalContent) verbalContent.style.display = 'block';
+                if (codingContent) codingContent.style.display = 'none';
+            } else if (tabName === 'coding') {
+                if (codingTab) {
+                    codingTab.style.color = 'var(--primary)';
+                    codingTab.style.borderBottomColor = 'var(--primary)';
+                }
+                if (verbalTab) {
+                    verbalTab.style.color = 'var(--text-muted)';
+                    verbalTab.style.borderBottomColor = 'transparent';
+                }
+                if (codingContent) codingContent.style.display = 'block';
+                if (verbalContent) verbalContent.style.display = 'none';
+            }
+        };
+
         async function setCandidateDecision(linkId, decision) {
             if (!confirm(`Are you sure you want to mark this candidate as ${decision.toUpperCase()}? Official email will be sent.`)) return;
             const targetUrl = `${API_BASE}/admin/update-decision`;
-            console.log(`📡 Sending decision to: ${targetUrl}`);
+            // console.log(`📡 Sending decision to: ${targetUrl}`);
             try {
                 const response = await fetch(targetUrl, {
                     method: 'POST',
@@ -6506,7 +6763,17 @@
                             <div style="font-size: 1.5rem; font-weight: 700; color: ${(data.avg_score || 0) >= 60 ? 'var(--accent)' : 'var(--danger)'};">
                                 ${data.avg_score || 0} / 100
                             </div>
-                            <span style="color: var(--text-muted); font-size: 0.85rem;">Average Score across ${data.answers.length} questions</span>
+                            <span style="color: var(--text-muted); font-size: 0.85rem; padding-right: 1rem; border-right: 1px solid var(--border);">Average Score across ${data.answers.length} questions</span>
+                            
+                            <div style="font-size: 1.5rem; font-weight: 700; color: ${(data.communication_score || 0) >= 60 ? '#3b82f6' : '#f59e0b'};">
+                                ${data.communication_score !== undefined ? data.communication_score : 'N/A'} / 100
+                            </div>
+                            <span style="color: var(--text-muted); font-size: 0.85rem; padding-right: 1rem; border-right: 1px solid var(--border);">Communication Score</span>
+
+                            <div style="font-size: 1.2rem; font-weight: 700; color: var(--text-primary);">
+                                ${data.detected_accent || 'N/A'}
+                            </div>
+                            <span style="color: var(--text-muted); font-size: 0.85rem;">Detected Accent</span>
                         </div>
                         <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 1rem;">
                             <div>
@@ -6691,6 +6958,38 @@
     </style>
 
     <!-- Results Modal HTML -->
+    <!-- ==================== CANDIDATE EXISTS MODAL ==================== -->
+    <div id="candidateExistsModal" class="modal-overlay hidden" style="z-index: 4000;">
+        <div class="modal-content"
+            style="max-width: 450px; padding: 2rem; border-radius: 1.5rem; background: var(--bg-card); border: 1px solid var(--border);">
+            <div style="display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 1.5rem;">
+                <div>
+                    <h3 style="margin: 0; font-size: 1.25rem; color: var(--primary-light);">Candidate Found</h3>
+                    <p id="candidateExistsName"
+                        style="margin: 0.25rem 0 0; font-size: 0.9rem; color: var(--text-muted);">Candidate</p>
+                </div>
+                <button onclick="document.getElementById('candidateExistsModal').classList.add('hidden')"
+                    style="background: none; border: none; color: var(--text-muted); cursor: pointer; font-size: 1.25rem;"><i
+                        class="fas fa-times"></i></button>
+            </div>
+
+            <div style="margin-bottom: 1.5rem;">
+                <p style="margin: 0; font-size: 0.95rem; color: var(--text-primary); line-height: 1.5;">
+                    This candidate already exists in your records. Do you want to interview them again? 
+                    <br><br>
+                    Click <strong>Use Previous Details</strong> to auto-fill their previous resume and details (you can still upload a new resume if you want).
+                </p>
+            </div>
+
+            <div style="display: flex; gap: 1rem; margin-top: 2rem;">
+                <button onclick="document.getElementById('candidateExistsModal').classList.add('hidden')"
+                    style="flex: 1; padding: 0.75rem; background: rgba(255,255,255,0.05); color: white; border: 1px solid var(--border); border-radius: 0.75rem; cursor: pointer; font-weight: 600;">Cancel</button>
+                <button id="candidateExistsConfirmBtn"
+                    style="flex: 2; padding: 0.75rem; background: var(--primary); color: white; border: none; border-radius: 0.75rem; cursor: pointer; font-weight: 700; transition: 0.3s;">Use Previous Details</button>
+            </div>
+        </div>
+    </div>
+
     <!-- ==================== RESCHEDULE MODAL ==================== -->
     <div id="rescheduleModal" class="modal-overlay hidden" style="z-index: 4000;">
         <div class="modal-content"
@@ -7111,6 +7410,7 @@
             const jd = document.getElementById('bulkJobDescription').value.trim();
             const bulkIndustryType = document.getElementById('bulkIndustryType').value;
             const bulkInterviewType = document.getElementById('bulkInterviewType').value;
+            const bulkInterviewLanguage = document.getElementById('bulkInterviewLanguage').value;
             const bulkCaseStudyCount = parseInt(document.getElementById('bulkCaseStudyCount').value) || 3;
             const customQuestions = document.getElementById('bulkCustomQuestions').value.trim();
             const aiInstructions = document.getElementById('bulkAiInstructions').value.trim();
@@ -7159,6 +7459,7 @@
                         job_description: jd,
                         industry_type: bulkIndustryType,
                         interview_type: bulkInterviewType,
+                        language: bulkInterviewLanguage,
                         case_study_count: bulkCaseStudyCount,
                         admin_id: adminId,
                         interview_duration: duration,
@@ -7337,7 +7638,7 @@
                 const response = await fetch(API_BASE + '/admin/ongoing-interviews?admin_id=' + adminId);
                 if (response.status === 429) {
                     ongoingBackoffUntil = Date.now() + 30000;
-                    console.warn('Ongoing interview polling rate-limited; backing off for 30 seconds.');
+                    // console.warn('Ongoing interview polling rate-limited; backing off for 30 seconds.');
                     return;
                 }
                 if (!response.ok) return;
@@ -7411,11 +7712,11 @@
                 if (!linkId) return;
 
                 if (entry.isIntersecting) {
-                    console.log(`[LazyLoad] Connecting ${linkId}`);
+                    // console.log(`[LazyLoad] Connecting ${linkId}`);
                     const video = document.getElementById('video_' + linkId);
                     if (video) initAdminWebRTC(linkId, video);
                 } else {
-                    console.log(`[LazyLoad] Disconnecting ${linkId}`);
+                    // console.log(`[LazyLoad] Disconnecting ${linkId}`);
                     closeAdminWebRTC(linkId);
                     const video = document.getElementById('video_' + linkId);
                     if (video) {
@@ -7458,7 +7759,7 @@
             const placeholder = document.getElementById('placeholder_' + linkId);
             if (!placeholder) return;
             placeholder.style.display = 'flex';
-            placeholder.innerHTML = `<div style="text-align:center;"><i class="fas fa-video-slash" style="font-size: 2rem; margin-bottom: 0.5rem; display:block;"></i>${message}</div>`;
+            placeholder.innerHTML = `<div style="text-align:center;"><i class="fas fa-video-slash" style="font-size: 2rem; margin-bottom: 0.5rem; display:block;"></i>${escapeHtml(message)}</div>`;
         }
 
         async function initAdminWebRTC(linkId, videoElement, force = false) {
@@ -8178,7 +8479,7 @@
                 const res = await fetch(`${API_BASE}/admin/copilot`, {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ message: msg, history: copilotHistory })
+                    body: JSON.stringify({ message: msg, history: copilotHistory, admin_id: adminId })
                 });
                 
                 const data = await res.json();

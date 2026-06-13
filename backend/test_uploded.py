@@ -23,6 +23,7 @@ mongo_db.interview_sessions_collection = db_mock["interview_sessions"]
 
 import uploded
 client = TestClient(uploded.app)
+uploded.app.dependency_overrides[uploded.get_current_admin] = lambda: {"username": "admin"}
 
 # --- FIx Missing Import In Setup ---
 @pytest.fixture(autouse=True)
@@ -90,14 +91,26 @@ def test_generate_offline_questions(text, count):
 
 # --- API TESTS: AUTHENTICATION (Parametrized for massive coverage) ---
 def test_admin_creation_on_startup():
-    uploded.startup_event()
+    import asyncio
+    try:
+        asyncio.get_running_loop()
+    except RuntimeError:
+        pass
+    asyncio.run(uploded.startup_event_db_and_email())
+    uploded.startup_event_cloudinary()
     admin = mongo_db.admins_collection.find_one({"username": "admin"})
     assert admin is not None
     assert admin["email"] == "oragantisagar041@gmail.com"
 
 @patch("uploded.send_otp_email", return_value=True)
 def test_forgot_password(mock_email):
-    uploded.startup_event()
+    import asyncio
+    try:
+        asyncio.get_running_loop()
+    except RuntimeError:
+        pass
+    asyncio.run(uploded.startup_event_db_and_email())
+    uploded.startup_event_cloudinary()
     res = client.post("/admin/forgot-password", json={"username": "admin", "email": "oragantisagar041@gmail.com"})
     assert res.status_code == 200
     assert "OTP sent" in res.json()["message"]

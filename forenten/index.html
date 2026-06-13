@@ -1267,7 +1267,7 @@
                     document.documentElement.classList.add('session-link-mode');
                 }
             } catch (e) {
-                console.warn('Session bootstrap precheck failed:', e);
+                // console.warn('Session bootstrap precheck failed:', e);
             }
         })();
     </script>
@@ -1870,9 +1870,10 @@
         </div>
     </div>
 
+    <script src="api_config.js"></script>
     <script src="MediaRecorder.js"></script>
     <script>
-        console.log("VideoRecorder:", typeof VideoRecorder);
+        // console.log("VideoRecorder:", typeof VideoRecorder);
     </script>
 
 
@@ -1920,14 +1921,35 @@
                 setTimeout(() => {
                     const utterance = new SpeechSynthesisUtterance(text);
 
+                    // Map regional languages to their BCP-47 prefixes
+                    const langMap = {
+                        'Hindi': 'hi',
+                        'Telugu': 'te',
+                        'Tamil': 'ta',
+                        'Malayalam': 'ml',
+                        'Kannada': 'kn',
+                        'English': 'en'
+                    };
+                    const targetLangPrefix = langMap[window.sessionLanguage] || 'en';
+
                     // Try to load voices (they may not be ready on first call)
                     let voices = window.speechSynthesis.getVoices();
-                    const femaleVoice = voices.find(v =>
-                        v.name.includes("Google US English") ||
-                        v.name.includes("Female") ||
-                        v.lang === 'en-US'
-                    );
-                    if (femaleVoice) utterance.voice = femaleVoice;
+                    
+                    // Find a voice matching the target language prefix
+                    let preferredVoice = voices.find(v => 
+                        v.lang.startsWith(targetLangPrefix) && 
+                        (v.name.includes("Female") || v.name.includes("Google"))
+                    ) || voices.find(v => v.lang.startsWith(targetLangPrefix));
+
+                    // Fallback to English female if regional voice is missing
+                    if (!preferredVoice) {
+                        preferredVoice = voices.find(v =>
+                            v.name.includes("Google US English") ||
+                            v.name.includes("Female") ||
+                            v.lang === 'en-US'
+                        );
+                    }
+                    if (preferredVoice) utterance.voice = preferredVoice;
                     utterance.rate = 0.95;
                     utterance.pitch = 1.0;
 
@@ -1940,7 +1962,7 @@
                         clearInterval(pollTimer);
                         isSpeaking = false;
                         setToggleBtnState(false);
-                        console.log("✅ speakText callback fired");
+                        // console.log("✅ speakText callback fired");
                         if (onEndCallback) onEndCallback();
                     }
 
@@ -1948,10 +1970,10 @@
                     utterance.onstart = () => {
                         isSpeaking = true;
                         setToggleBtnState(true);
-                        console.log("🔊 Speech started");
+                        // console.log("🔊 Speech started");
                     };
-                    utterance.onend = () => { console.log("🔊 Speech onend"); fireCallback(); };
-                    utterance.onerror = (e) => { console.warn("Speech error:", e.error); fireCallback(); };
+                    utterance.onend = () => { /* console.log("🔊 Speech onend"); */ fireCallback(); };
+                    utterance.onerror = (e) => { /* console.warn("Speech error:", e.error); */ fireCallback(); };
 
                     // ── Strategy 2: Poll speechSynthesis.speaking every 300ms ──
                     // Chrome sometimes stops speaking without firing onend
@@ -1961,7 +1983,7 @@
                             speakingStarted = true;
                         } else if (speakingStarted) {
                             // Was speaking, now stopped → done
-                            console.log("✅ Poll detected speech finished");
+                            // console.log("✅ Poll detected speech finished");
                             fireCallback();
                         }
                     }, 300);
@@ -1971,7 +1993,7 @@
                     const wordCount = text.trim().split(/\s+/).length;
                     const estimatedMs = Math.max(4000, (wordCount / 2.0) * 1000) + 3000;
                     const fallbackTimer = setTimeout(() => {
-                        console.warn(`⏰ speakText fallback timer fired after ${estimatedMs}ms`);
+                        // console.warn(`⏰ speakText fallback timer fired after ${estimatedMs}ms`);
                         fireCallback();
                     }, estimatedMs);
 
@@ -2049,7 +2071,7 @@
 
                     recognition.onresult = (e) => {
                         const transcript = e.results[0][0].transcript;
-                        console.log("Test Transcript:", transcript);
+                        // console.log("Test Transcript:", transcript);
                         if (!speechDetected) {
                             msg.textContent = `✅ Success! Heard: "${transcript}"`;
                             msg.style.color = 'green';
@@ -2174,10 +2196,6 @@
         let hrScreeningSwitching = false;
         const HR_SCREENING_START_SECONDS = 90;
 
-        window.API_BASE_URL = (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1')
-            ? (window.location.port === "80" ? "/api" : `${window.location.protocol}//localhost:8000`)
-            : (window.location.origin.includes('vercel.app') ? "https://ai-adaptive-interview-1hsw.onrender.com" : "/api");
-        const API_BASE_URL = window.API_BASE_URL;
 
         // ─── Mic Status Indicator ────────────────────────────────────────────────
         // States: 'waiting' | 'listening' | 'processing'
@@ -2300,7 +2318,7 @@
         document.addEventListener("visibilitychange", () => {
             if (document.hidden && currentInterviewId) {
                 _qTrack.tabSwitches++;
-                console.log("⚠️ Tab switch detected:", _qTrack.tabSwitches);
+                // console.log("⚠️ Tab switch detected:", _qTrack.tabSwitches);
             }
         });
 
@@ -2411,7 +2429,7 @@
                 face_alerts: _qTrack.faceAlerts,
             };
 
-            console.log("📊 Saving behavioral data:", payload);
+            // console.log("📊 Saving behavioral data:", payload);
 
             try {
                 await fetch(`${API_BASE_URL}/save-behavioral-data`, {
@@ -2443,7 +2461,7 @@
             // PRE-EMPTIVELY START CAMERA AND MIC 
             // Ensures browser accepts permissions from direct user click
             if (!window.mediaStream || !window.mediaStream.active || !screenStream || !screenStream.active) {
-                console.log("Preemptively starting webcam on Disclaimer accept...");
+                // console.log("Preemptively starting webcam on Disclaimer accept...");
                 if (typeof startFullSessionRecording === 'function') {
                     const success = await startFullSessionRecording();
                     if (!success) {
@@ -2467,11 +2485,11 @@
             
             configureInterviewPhases(duration);
             
-            console.log('[TIMER DEBUG] Final totalInterviewMinutes =', totalInterviewMinutes);
-            console.log('[TIMER DEBUG] window.interviewDuration =', window.interviewDuration);
-            console.log('[TIMER DEBUG] window.interviewType =', window.interviewType);
-            console.log('[TIMER DEBUG] duration used =', duration);
-            console.log('[TIMER DEBUG] verbalRoundMinutes =', verbalRoundMinutes, 'codingRoundMinutes =', codingRoundMinutes);
+            // console.log('[TIMER DEBUG] Final totalInterviewMinutes =', totalInterviewMinutes);
+            // console.log('[TIMER DEBUG] window.interviewDuration =', window.interviewDuration);
+            // console.log('[TIMER DEBUG] window.interviewType =', window.interviewType);
+            // console.log('[TIMER DEBUG] duration used =', duration);
+            // console.log('[TIMER DEBUG] verbalRoundMinutes =', verbalRoundMinutes, 'codingRoundMinutes =', codingRoundMinutes);
             backgroundNoiseAlerts = 0;
             backgroundNoiseFrameCount = 0;
             backgroundNoiseCooldownUntil = 0;
@@ -2479,7 +2497,7 @@
 
             // Load first question OR jump to Case Study if all verbal questions are already answered
             if (window.allVerbalAnswered) {
-                console.log("All verbal questions answered! Jumping to Case Study/Coding Round.");
+                // console.log("All verbal questions answered! Jumping to Case Study/Coding Round.");
                 if (window.interviewType === 'Non-Technical' || window.interviewType === 'Technical') {
                     showStatus(window.interviewType === 'Non-Technical' ? 'Starting Written Case Study round...' : 'Starting coding round...', 'info');
                     // wait 2 seconds then launch
@@ -2490,7 +2508,7 @@
                     endInterview(true);
                 }
             } else if (currentInterviewId && currentQuestionId) {
-                console.log('Loading first question:', currentInterviewId, currentQuestionId);
+                // console.log('Loading first question:', currentInterviewId, currentQuestionId);
                 await loadQuestion(currentInterviewId, currentQuestionId);
             } else {
                 alert("Error: Interview data missing. Please refresh.");
@@ -2666,7 +2684,7 @@
                     }
                 }
             } catch (e) {
-                console.warn('Unable to refresh interview question list for HR screening:', e);
+                // console.warn('Unable to refresh interview question list for HR screening:', e);
             }
             return interviewQuestions;
         }
@@ -2764,7 +2782,7 @@
                             startLiveHeartbeat(_hbLinkId);
                             if (typeof startWebRTCSignaling === 'function') { startWebRTCSignaling(_hbLinkId); }
                         }
-            } catch (_hbErr) { console.warn('[Heartbeat] start error:', _hbErr); }
+            } catch (_hbErr) { /* console.warn('[Heartbeat] start error:', _hbErr); */ }
 
             if (data.candidate_name) {
                 const header = document.querySelector('h1');
@@ -2858,7 +2876,7 @@
             const sessionId = getSessionIdFromUrl();
 
             if (sessionId) {
-                console.log("Found session ID:", sessionId);
+                // console.log("Found session ID:", sessionId);
                 setSessionLinkMode(true);
 
                 const statusDiv = document.getElementById('status');
@@ -2886,11 +2904,12 @@
                     }
 
                     const sessionInfo = await sessionInfoResponse.json();
-                    console.log('Session info response:', JSON.stringify(sessionInfo));
+                    window.sessionLanguage = sessionInfo.language || 'English';
+                    // console.log('Session info response:', JSON.stringify(sessionInfo));
 
                     // ── FIX #4: If session is already completed, show Thank You immediately ──
                     if (sessionInfo.session_status === 'completed') {
-                        console.log('Session already completed — showing Thank You page.');
+                        // console.log('Session already completed — showing Thank You page.');
                         if (statusDiv) statusDiv.style.display = 'none';
                         document.getElementById('interviewSection').classList.add('hidden');
                         document.getElementById('resultsSection').classList.remove('hidden');
@@ -2948,12 +2967,12 @@
                     });
                     clearTimeout(timeoutId);
 
-                    console.log('Session API response status:', response.status);
+                    // console.log('Session API response status:', response.status);
 
                     if (response.ok) {
                         const rawData = await response.json();
                         const data = normalizeInterviewStartResponse(rawData);
-                        console.log('Session response data:', JSON.stringify(data));
+                        // console.log('Session response data:', JSON.stringify(data));
 
                         // Check if the link is expired
                         if (data.is_expired) {
@@ -3107,7 +3126,7 @@
                     formData.append('file', file);
                     formData.append('source', 'resume');
 
-                    console.log('Sending file to /upload-resume...');
+                    // console.log('Sending file to /upload-resume...');
                     const response = await fetch(`${API_BASE_URL}/upload-resume`, {
                         method: 'POST',
                         body: formData,
@@ -3116,7 +3135,7 @@
                         }
                     });
 
-                    console.log('Response status:', response.status);
+                    // console.log('Response status:', response.status);
 
                     if (!response.ok) {
                         const error = await response.json().catch(() => ({}));
@@ -3125,7 +3144,7 @@
 
                     const rawData = await response.json();
                     const data = normalizeInterviewStartResponse(rawData);
-                    console.log('Interview started:', data);
+                    // console.log('Interview started:', data);
 
                     // Update UI with the interview data
                     currentInterviewId = data.interview_id;
@@ -3157,7 +3176,7 @@
 
                     // Load first question
                     if (data.first_question) {
-                        console.log('Loading first question:', currentInterviewId, data.first_question.id);
+                        // console.log('Loading first question:', currentInterviewId, data.first_question.id);
                         await loadQuestion(currentInterviewId, data.first_question.id);
                     } else {
                         throw new Error('No questions available in the response');
@@ -3215,7 +3234,7 @@
             try {
                 showStatus('Starting interview...', 'info');
 
-                console.log('Sending interview start request...');
+                // console.log('Sending interview start request...');
                 const response = await fetch(`${API_BASE_URL}/start-interview`, {
                     method: 'POST',
                     body: formData
@@ -3228,7 +3247,7 @@
 
                 const rawData = await response.json();
                 const data = normalizeInterviewStartResponse(rawData);
-                console.log('Interview started:', data);
+                // console.log('Interview started:', data);
 
                 // Store IDs
                 currentInterviewId = data.interview_id;
@@ -3339,7 +3358,7 @@
                 setMicState('waiting');
 
                 // Speak the question aloud, then auto-start recording
-                console.log("🔊 Speaking text:", question.question.substring(0, 100), "...");
+                // console.log("🔊 Speaking text:", question.question.substring(0, 100), "...");
                 speakText(question.question, async () => {
                     // When AI finishes speaking, auto-start recording
                     setMicState('listening');
@@ -3425,7 +3444,7 @@
 
             // Ensure webcam/mic is running
             if (!window.mediaStream || !window.mediaStream.active) {
-                console.log("Starting webcam for recording...");
+                // console.log("Starting webcam for recording...");
                 if (typeof startFullSessionRecording === 'function') {
                     const success = await startFullSessionRecording();
                     if (!success) {
@@ -3444,13 +3463,13 @@
             }
 
             if (videoRecorder.isRecording) {
-                console.warn("Already recording");
+                // console.warn("Already recording");
                 return;
             }
 
             try {
                 await videoRecorder.startRecording();
-                console.log("Recording started successfully.");
+                // console.log("Recording started successfully.");
 
                 if (window.mediaStream) {
                     startAudioVisualizer(window.mediaStream);
@@ -3467,7 +3486,7 @@
         // Stop recording using VideoRecorder class
         async function stopRecording() {
             if (!videoRecorder || !videoRecorder.isRecording) {
-                console.warn("No active recording to stop");
+                // console.warn("No active recording to stop");
                 return;
             }
 
@@ -3548,7 +3567,7 @@
                         });
                         if (response.ok) {
                             const newQ = await response.json();
-                            console.log("Generated adaptive question:", newQ);
+                            // console.log("Generated adaptive question:", newQ);
                             // The totalQuestions count needs to increase since we inserted one
                             totalQuestions++;
                         }
@@ -3640,7 +3659,7 @@
                     return; // Success
                 } catch (e) {
                     attempts++;
-                    console.warn(`Save answer attempt ${attempts}/${maxAttempts} failed:`, e.message);
+                    // console.warn(`Save answer attempt ${attempts}/${maxAttempts} failed:`, e.message);
                     if (attempts < maxAttempts) {
                         await new Promise(r => setTimeout(r, 1000 * attempts)); // Exponential backoff
                     }
@@ -3732,7 +3751,7 @@
                         codingEditor.onDidChangeModelContent(onChange);
                     });
             } catch (error) {
-                console.warn('Monaco editor unavailable, using textarea fallback.', error);
+                // console.warn('Monaco editor unavailable, using textarea fallback.', error);
                 container.classList.add('hidden');
                 textarea.classList.remove('hidden');
                 textarea.addEventListener('input', scheduleCodingObservation);
@@ -3977,7 +3996,7 @@ Output: ${formatCodingValue(testCase.output)}${resultBlock}</pre>
             caseStudyUrl.searchParams.set('duration', String(codingRoundMinutes || 15));
 
             window.caseStudyRoundComplete = async function() {
-                console.log('[Case Study] Round complete signal received from iframe');
+                // console.log('[Case Study] Round complete signal received from iframe');
                 const frame = document.getElementById('caseStudyIframe');
                 if (frame) frame.remove();
                 await endInterview(true);
@@ -4335,7 +4354,7 @@ Output: ${formatCodingValue(testCase.output)}${resultBlock}</pre>
                     speakText(data.observation.interviewer_prompt || 'Explain what you are implementing right now.');
                 }
             } catch (error) {
-                console.warn('Coding observation error:', error);
+                // console.warn('Coding observation error:', error);
             }
         }
 
@@ -4384,12 +4403,12 @@ Output: ${formatCodingValue(testCase.output)}${resultBlock}</pre>
                 try {
                     codingVoiceRecognition.start();
                 } catch (e) {
-                    console.warn('Coding voice restart failed:', e);
+                    // console.warn('Coding voice restart failed:', e);
                 }
             };
 
             codingVoiceRecognition.onerror = (event) => {
-                console.warn('Coding voice notes error:', event.error);
+                // console.warn('Coding voice notes error:', event.error);
             };
         }
 
@@ -4440,7 +4459,7 @@ Output: ${formatCodingValue(testCase.output)}${resultBlock}</pre>
 
             if (codingVoiceListening && codingVoiceRecognition) {
                 codingVoiceListening = false;
-                try { codingVoiceRecognition.stop(); } catch (e) { console.warn(e); }
+                try { codingVoiceRecognition.stop(); } catch (e) { /* console.warn(e); */ }
             }
 
             // Stop speech if AI is reading
@@ -4457,10 +4476,10 @@ Output: ${formatCodingValue(testCase.output)}${resultBlock}</pre>
             const urlParams = new URLSearchParams(window.location.search);
             const sessionId = urlParams.get('session_id') || urlParams.get('session');
             if (sessionId) {
-                console.log("[END] Marking session as completed in DB IMMEDIATELY...");
+                // console.log("[END] Marking session as completed in DB IMMEDIATELY...");
                 try {
                     await fetch(`${API_BASE_URL}/complete-session/${sessionId}`, { method: 'POST' });
-                    console.log("[END] Session marked completed ✅");
+                    // console.log("[END] Session marked completed ✅");
                 } catch (e) {
                     console.error('[END] Failed to mark session complete:', e);
                     // Fallback: use sendBeacon which works even during page unload
@@ -4540,7 +4559,7 @@ Output: ${formatCodingValue(testCase.output)}${resultBlock}</pre>
                     }
                 } else {
                     // No video to upload — skip straight to final message
-                    console.log("[END] Video recording was disabled or no recorder — skipping upload.");
+                    // console.log("[END] Video recording was disabled or no recorder — skipping upload.");
                     document.getElementById('uploadStatusContainer').classList.add('hidden');
                     document.getElementById('finalClosureMessage').classList.remove('hidden');
                 }
@@ -4552,7 +4571,7 @@ Output: ${formatCodingValue(testCase.output)}${resultBlock}</pre>
                     if (window.mediaStream) {
                         window.mediaStream.getTracks().forEach(track => {
                             track.stop();
-                            console.log('[END] Stopped media track:', track.kind);
+                            // console.log('[END] Stopped media track:', track.kind);
                         });
                         window.mediaStream = null;
                     }
@@ -4576,7 +4595,7 @@ Output: ${formatCodingValue(testCase.output)}${resultBlock}</pre>
                         try { window.testRecognition.stop(); } catch(e) {}
                         window.testRecognition = null;
                     }
-                    console.log('[END] All media tracks stopped ✅');
+                    // console.log('[END] All media tracks stopped ✅');
                 } catch (mediaErr) {
                     console.error('[END] Error stopping media:', mediaErr);
                 }
@@ -4619,7 +4638,7 @@ Output: ${formatCodingValue(testCase.output)}${resultBlock}</pre>
                 video.muted = true;
                 await video.play();
 
-                console.log("Camera & microphone started");
+                // console.log("Camera & microphone started");
             } catch (err) {
                 console.error("Camera/Mic error:", err);
                 alert("Camera or microphone permission denied");
@@ -4669,7 +4688,7 @@ Output: ${formatCodingValue(testCase.output)}${resultBlock}</pre>
                 source.connect(_audioAnalyser);
                 _audioBuf = new Uint8Array(_audioAnalyser.frequencyBinCount);
             } catch (e) {
-                console.warn('Audio analyser setup failed:', e);
+                // console.warn('Audio analyser setup failed:', e);
             }
         }
 
@@ -4749,7 +4768,7 @@ Output: ${formatCodingValue(testCase.output)}${resultBlock}</pre>
                 });
                 if (response.status === 429) {
                     _heartbeatBackoffUntil = Date.now() + 30000;
-                    console.warn('[Heartbeat] rate limited, backing off for 30 seconds');
+                    // console.warn('[Heartbeat] rate limited, backing off for 30 seconds');
                 } else if (response.ok) {
                     _heartbeatBackoffUntil = 0;
                 }
@@ -4768,7 +4787,7 @@ Output: ${formatCodingValue(testCase.output)}${resultBlock}</pre>
             _trackVideoFps();
             // Send first one immediately then every 5 s
             _sendHeartbeat();
-            console.log('[Heartbeat] started for', linkId);
+            // console.log('[Heartbeat] started for', linkId);
         }
 
         function stopLiveHeartbeat() {
@@ -4777,7 +4796,7 @@ Output: ${formatCodingValue(testCase.output)}${resultBlock}</pre>
                 _heartbeatTimer = null;
             }
             _heartbeatLinkId = null;
-            console.log('[Heartbeat] stopped');
+            // console.log('[Heartbeat] stopped');
         }
     </script>
 
@@ -4856,7 +4875,7 @@ Output: ${formatCodingValue(testCase.output)}${resultBlock}</pre>
 
             if (interviewActive && typeof startFullSessionRecording === 'function') {
                 await startFullSessionRecording().catch(err => {
-                    console.warn('[WebRTC] Could not start media for live monitor:', err);
+                    // console.warn('[WebRTC] Could not start media for live monitor:', err);
                 });
                 stream = getActiveCandidateMediaStream();
                 if (stream) return stream;
@@ -4880,7 +4899,7 @@ Output: ${formatCodingValue(testCase.output)}${resultBlock}</pre>
 
         function closeCandidateWebRTC() {
             if (rtcPeerConnection) {
-                try { rtcPeerConnection.close(); } catch (e) { console.warn(e); }
+                try { rtcPeerConnection.close(); } catch (e) { /* console.warn(e); */ }
                 rtcPeerConnection = null;
             }
         }
@@ -4909,7 +4928,7 @@ Output: ${formatCodingValue(testCase.output)}${resultBlock}</pre>
             signalingSocket.onmessage = async (event) => {
                 const data = JSON.parse(event.data);
                 if (data.type === 'offer') {
-                    console.log('Received WebRTC offer from admin');
+                    // console.log('Received WebRTC offer from admin');
                     closeCandidateWebRTC();
                     rtcPeerConnection = new RTCPeerConnection(rtcConfig);
 
@@ -4932,7 +4951,7 @@ Output: ${formatCodingValue(testCase.output)}${resultBlock}</pre>
                     await rtcPeerConnection.setRemoteDescription(new RTCSessionDescription(data.offer));
                     const stream = await waitForCandidateMediaStream(interviewActive ? 12000 : 3000);
                     const attachedTracks = addLocalTracksToPeerConnection(rtcPeerConnection, stream);
-                    console.log('[WebRTC] Attached local tracks:', attachedTracks);
+                    // console.log('[WebRTC] Attached local tracks:', attachedTracks);
 
                     const answer = await rtcPeerConnection.createAnswer();
                     await rtcPeerConnection.setLocalDescription(answer);
@@ -4967,22 +4986,46 @@ Output: ${formatCodingValue(testCase.output)}${resultBlock}</pre>
 </body>
 <!-- Disclaimer Modal -->
 <div id="disclaimerModal" class="modal-overlay hidden">
-    <div class="modal-content">
-        <h2><i class="fas fa-clipboard-list"></i> Interview Guidelines</h2>
-        <ul>
-            <li><strong><i class="fas fa-volume-up"></i> Speak Loudly</strong> Ensure your microphone is clear and voice
-                is audible.</li>
-            <li><strong><i class="fas fa-volume-mute"></i> Maintain Silence</strong> Find a quiet room to minimize
-                background noise.</li>
-            <li><strong><i class="fas fa-ban"></i> No Cheating</strong> Eye contact and face visibility are monitored
-                strictly.</li>
-            <li><strong><i class="fas fa-desktop"></i> Screen Sharing</strong> You must share your entire screen. Stopping it will terminate the interview.</li>
-            <li><strong><i class="fas fa-image"></i> Plain Background</strong> Use a simple background to help AI face
-                detection.</li>
-        </ul>
+    <div class="modal-content" style="max-width: 600px; max-height: 80vh; overflow-y: auto;">
+        <h2><i class="fas fa-clipboard-list"></i> Terms and Conditions</h2>
+        <div style="font-size: 0.95rem; text-align: left; margin-bottom: 15px;">
+            <h3 style="color: var(--success); margin-bottom: 10px;">✅ DO'S</h3>
+            <ul style="padding-left: 20px; margin-bottom: 15px; color: var(--text);">
+                <li>Join the interview/test 10–15 minutes before the scheduled time.</li>
+                <li>Ensure a stable internet connection and a fully charged device.</li>
+                <li>Ensure you have a suitable device such as a Laptop/Desktop.</li>
+                <li>Keep your camera and microphone functional throughout the assessment, if required.</li>
+                <li>Attend the test from a quiet, well-lit, and distraction-free environment.</li>
+                <li>Read all instructions carefully before starting the assessment.</li>
+                <li>Complete the assessment independently and honestly.</li>
+                <li>Maintain professional behavior and communication throughout the process.</li>
+                <li>Inform the recruiter immediately if you face any technical issues.</li>
+            </ul>
+
+            <h3 style="color: var(--danger); margin-bottom: 10px;">❌ DON'TS</h3>
+            <ul style="padding-left: 20px; margin-bottom: 15px; color: var(--text);">
+                <li>Do not use mobile phones, books, notes, AI tools, or unauthorized resources during the assessment.</li>
+                <li>Do not seek assistance from any other person.</li>
+                <li>Do not share test questions, answers, or assessment content with others.</li>
+                <li>Do not switch tabs, applications, or devices if prohibited by the assessment platform.</li>
+                <li>Do not engage in cheating, impersonation, or any form of misconduct.</li>
+                <li>Do not leave the assessment before submission unless instructed.</li>
+                <li>Do not record, screenshot, or distribute any part of the assessment.</li>
+            </ul>
+
+            <div style="background: rgba(99, 102, 241, 0.1); padding: 10px; border-radius: 8px; font-size: 0.85rem; color: var(--text-muted); margin-bottom: 15px;">
+                <strong>NOTE:</strong> By participating in this assessment, you agree to follow the guidelines above. Any violation of these rules may result in disqualification from the recruitment process. The company's decision regarding evaluation and selection will be final and binding.
+            </div>
+
+            <div style="display: flex; align-items: flex-start; gap: 10px; margin-top: 20px;">
+                <input type="checkbox" id="agreeTermsCheckbox" onchange="document.getElementById('startInterviewBtn').disabled = !this.checked;" style="margin-top: 4px; transform: scale(1.2); cursor: pointer;">
+                <label for="agreeTermsCheckbox" style="cursor: pointer; font-weight: 600; color: var(--text);">I agree to follow the guidelines above.</label>
+            </div>
+        </div>
+
         <div style="margin-top: 25px; text-align: center;">
-            <button onclick="acceptDisclaimer()" class="btn btn-primary"
-                style="width: 100%; padding: 15px; font-size: 1.2rem;">I Understand & Start Interview</button>
+            <button id="startInterviewBtn" onclick="acceptDisclaimer()" class="btn btn-primary" disabled
+                style="width: 100%; padding: 15px; font-size: 1.2rem; cursor: pointer;">I Understand & Start Interview</button>
         </div>
     </div>
 </div>
@@ -5032,7 +5075,7 @@ Output: ${formatCodingValue(testCase.output)}${resultBlock}</pre>
         const elem = document.documentElement;
         if (elem.requestFullscreen) {
             elem.requestFullscreen().catch(err => {
-                console.log("Error attempting to enable full-screen mode:", err.message);
+                // console.log("Error attempting to enable full-screen mode:", err.message);
             });
         } else if (elem.webkitRequestFullscreen) { /* Safari */
             elem.webkitRequestFullscreen();
@@ -5135,7 +5178,7 @@ Output: ${formatCodingValue(testCase.output)}${resultBlock}</pre>
     let compositeAnimId = null;
 
     async function startFullSessionRecording() {
-        console.log("Initializing full session recording with screen share...");
+        // console.log("Initializing full session recording with screen share...");
         const fallbackBtn = document.getElementById('cameraFallbackBtn');
         const loadingText = document.getElementById('cameraLoading');
 
@@ -5155,7 +5198,7 @@ Output: ${formatCodingValue(testCase.output)}${resultBlock}</pre>
 
             // 1. Get Camera & Mic
             if (!stream || !stream.active || stream.getVideoTracks().length === 0) {
-                console.log("Getting new stream for camera and microphone...");
+                // console.log("Getting new stream for camera and microphone...");
                 try {
                     stream = await navigator.mediaDevices.getUserMedia({
                         video: { width: { ideal: 640 }, height: { ideal: 480 }, frameRate: { ideal: 15, max: 24 } },
@@ -5172,7 +5215,7 @@ Output: ${formatCodingValue(testCase.output)}${resultBlock}</pre>
 
             // 2. Get Screen Share
             if (!screenStream || !screenStream.active) {
-                console.log("Requesting screen share...");
+                // console.log("Requesting screen share...");
                 try {
                     // Hint to the browser that we want the entire screen
                     screenStream = await navigator.mediaDevices.getDisplayMedia({
@@ -5195,7 +5238,7 @@ Output: ${formatCodingValue(testCase.output)}${resultBlock}</pre>
                     }
                     
                     track.onended = () => {
-                        console.warn("Screen share was stopped by user");
+                        // console.warn("Screen share was stopped by user");
                         window.screenShareViolations = (window.screenShareViolations || 0) + 1;
 
                         if (window.screenShareViolations >= 4) {
@@ -5259,8 +5302,8 @@ Output: ${formatCodingValue(testCase.output)}${resultBlock}</pre>
                 screenVid.srcObject = screenStream;
                 camVid.srcObject = stream;
 
-                await screenVid.play().catch(e => console.warn(e));
-                await camVid.play().catch(e => console.warn(e));
+                await screenVid.play().catch(e => { /* console.warn(e) */ });
+                await camVid.play().catch(e => { /* console.warn(e) */ });
                 
                 // Mix in the audio track from the microphone to the screen stream
                 const audioTracks = stream.getAudioTracks();
@@ -5291,9 +5334,9 @@ Output: ${formatCodingValue(testCase.output)}${resultBlock}</pre>
                 // Start recording
                 cameraRecorder.start(2000);
                 screenRecorder.start(2000);
-                console.log("Dual session recording STARTED ✅");
+                // console.log("Dual session recording STARTED ✅");
             } else {
-                console.log("Full session recording skipped (record_video=false) 🛑");
+                // console.log("Full session recording skipped (record_video=false) 🛑");
             }
             announceCandidateMediaReady();
             return true; // SUCCESS
@@ -5311,7 +5354,7 @@ Output: ${formatCodingValue(testCase.output)}${resultBlock}</pre>
 
     async function startFaceDetection(video) {
         if (!faceModel) {
-            console.log("Loading Face Detection Model...");
+            // console.log("Loading Face Detection Model...");
             try {
                 // Load with lower threshold to detect faces further away or in background
                 faceModel = await blazeface.load({
@@ -5319,7 +5362,7 @@ Output: ${formatCodingValue(testCase.output)}${resultBlock}</pre>
                     scoreThreshold: 0.5,
                     iouThreshold: 0.3
                 });
-                console.log("Face Model Loaded ✅");
+                // console.log("Face Model Loaded ✅");
             } catch (e) {
                 console.error("Failed to load face model", e);
                 return;
@@ -5327,10 +5370,10 @@ Output: ${formatCodingValue(testCase.output)}${resultBlock}</pre>
         }
 
         if (!cocoSsdModel && window.cocoSsd) {
-            console.log("Loading COCO-SSD Model...");
+            // console.log("Loading COCO-SSD Model...");
             try {
                 cocoSsdModel = await cocoSsd.load();
-                console.log("COCO-SSD Model Loaded ✅");
+                // console.log("COCO-SSD Model Loaded ✅");
             } catch (e) {
                 console.error("Failed to load COCO-SSD model", e);
             }
@@ -5446,7 +5489,7 @@ Output: ${formatCodingValue(testCase.output)}${resultBlock}</pre>
     }
 
     async function stopAndSaveFullSessionRecording(interviewId) {
-        console.log("Stopping dual session recording...");
+        // console.log("Stopping dual session recording...");
         stopFaceDetection(); // Stop detection loop
         stopBackgroundNoiseMonitor();
         
@@ -5459,13 +5502,13 @@ Output: ${formatCodingValue(testCase.output)}${resultBlock}</pre>
         }
 
         if (!cameraRecorder && window.recordVideo === false) {
-            console.log("Skipping save: video recording was disabled for this session.");
+            // console.log("Skipping save: video recording was disabled for this session.");
             if (window.mediaStream) window.mediaStream.getTracks().forEach(track => track.stop());
             return;
         }
 
         if (!cameraRecorder || !screenRecorder) {
-            console.warn("No recorder found, skipping save.");
+            // console.warn("No recorder found, skipping save.");
             if (window.mediaStream) window.mediaStream.getTracks().forEach(track => track.stop());
             return;
         }
@@ -5525,7 +5568,7 @@ Output: ${formatCodingValue(testCase.output)}${resultBlock}</pre>
                         if (progressText) progressText.textContent = `Uploading two videos... 0%`;
                         if (progressBar) progressBar.style.width = '1%';
 
-                        console.log("Uploading camera and screen recordings...");
+                        // console.log("Uploading camera and screen recordings...");
                         await Promise.all([
                             uploadVideo(cameraChunks, "camera"),
                             uploadVideo(screenChunks, "screen")
@@ -5533,7 +5576,7 @@ Output: ${formatCodingValue(testCase.output)}${resultBlock}</pre>
 
                         if (progressBar) progressBar.style.width = '100%';
                         if (progressText) progressText.textContent = "Upload complete!";
-                        console.log("Both recordings saved!");
+                        // console.log("Both recordings saved!");
                         
                         if (window.mediaStream) {
                             window.mediaStream.getTracks().forEach(track => track.stop());
@@ -5697,7 +5740,7 @@ Output: ${formatCodingValue(testCase.output)}${resultBlock}</pre>
 
         // Check if stream has audio tracks
         if (stream.getAudioTracks().length === 0) {
-            console.warn("No audio tracks in stream for visualizer");
+            // console.warn("No audio tracks in stream for visualizer");
             return;
         }
 
@@ -5788,7 +5831,7 @@ Output: ${formatCodingValue(testCase.output)}${resultBlock}</pre>
     document.addEventListener('visibilitychange', () => {
         if (document.hidden && interviewActive) {
             tabViolationCount++;
-            console.warn(`Tab switched ${tabViolationCount} times!`);
+            // console.warn(`Tab switched ${tabViolationCount} times!`);
 
             // Immediately alert the user (this pauses JS execution until dismissed)
             alert(`⚠️ WARNING: Tab switching is strictly prohibited during the interview. \n\nViolation #${tabViolationCount} has been recorded. Repeated violations may lead to disqualification.`);
@@ -5814,7 +5857,7 @@ Output: ${formatCodingValue(testCase.output)}${resultBlock}</pre>
         const urlParams = new URLSearchParams(window.location.search);
         const sid = urlParams.get('session_id') || urlParams.get('session');
         if (sid && interviewSubmitted) {
-            console.log('[BEFOREUNLOAD] Marking session completed via sendBeacon');
+            // console.log('[BEFOREUNLOAD] Marking session completed via sendBeacon');
             navigator.sendBeacon(
                 `${API_BASE_URL}/complete-session/${sid}`,
                 new Blob([], { type: 'text/plain' })

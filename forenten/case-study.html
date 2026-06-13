@@ -348,11 +348,9 @@ body{font-family:'Inter',sans-serif;background:var(--bg);color:var(--text);min-h
   </button>
 </div>
 
+<script src="api_config.js"></script>
 <script>
 // ─── STATE ────────────────────────────────────────────────────────────────────
-const API_BASE_URL = (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1')
-  ? `${window.location.protocol}//localhost:8000`
-  : 'https://ai-adaptive-interview-1hsw.onrender.com';
 
 let interviewId   = null;
 let questions     = [];
@@ -482,7 +480,7 @@ function initSpeechRecognition() {
   };
 
   recognition.onerror = (e) => {
-    console.warn('Speech error:', e.error);
+    // console.warn('Speech error:', e.error);
     if (e.error === 'not-allowed') {
       showToast('❌ Microphone access denied. Please type your answer.', 'error');
       isListening = false;

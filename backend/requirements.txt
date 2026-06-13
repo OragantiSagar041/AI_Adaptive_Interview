@@ -12,3 +12,9 @@ pymongo[srv]
 certifi
 langgraph
 cloudinary
+stripe
+PyJWT
+passlib[bcrypt]
+bcrypt<5.0.0
+
+openai-whisper

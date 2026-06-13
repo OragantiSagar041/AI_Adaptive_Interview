@@ -3,7 +3,13 @@ import whisper, tempfile, os
 from difflib import SequenceMatcher
 
 router = APIRouter()
-model = whisper.load_model("small")
+model = None
+
+def get_model():
+    global model
+    if model is None:
+        model = whisper.load_model("small")
+    return model
 
 def similarity(a, b):
     return SequenceMatcher(None, a.lower(), b.lower()).ratio()
@@ -26,7 +32,8 @@ async def transcribe_audio(
         f.write(data)
         path = f.name
 
-    result = model.transcribe(
+    whisper_model = get_model()
+    result = whisper_model.transcribe(
         path,
         language="en",
         task="transcribe",

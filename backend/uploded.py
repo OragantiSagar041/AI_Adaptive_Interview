@@ -32,7 +32,7 @@ import base64
 import html
 import textwrap
 from pydantic import BaseModel
-from mongo_db import candidates_collection, interviews_collection, answers_collection, admins_collection, interview_sessions_collection, plans_collection
+from mongo_db import candidates_collection, interviews_collection, answers_collection, admins_collection, companies_collection, interview_sessions_collection, plans_collection
 from reportlab.lib.pagesizes import A4
 from reportlab.pdfgen import canvas
 from reportlab.lib.utils import simpleSplit
@@ -78,7 +78,7 @@ def cloudinary_cleanup_loop():
                 created_at = rec.get("created_at", "unknown")
                 if public_id:
                     try:
-                        print(f"🧹 [Cleanup] Deleting old recording {public_id} (Created: {created_at})")
+                        print(f" [Cleanup] Deleting old recording {public_id} (Created: {created_at})")
                         cloudinary.uploader.destroy(public_id, resource_type="video")
                         interviews_collection.update_one(
                             {"_id": rec["_id"]},
@@ -288,8 +288,16 @@ def get_subscription_status(expiry: Optional[str]) -> Dict[str, Any]:
         }
 
 def get_admin_plan_context(user: Dict[str, Any]) -> Dict[str, Any]:
-    definition = get_plan_definition(user.get("subscription_plan"))
-    subscription = get_subscription_status(user.get("subscription_expiry"))
+    # Default fallback
+    company = None
+    if user.get("company_id"):
+        company = companies_collection.find_one({"_id": ObjectId(user["company_id"])})
+        
+    subscription_plan = company.get("subscription_plan") if company else user.get("subscription_plan")
+    subscription_expiry = company.get("subscription_expiry") if company else user.get("subscription_expiry")
+    
+    definition = get_plan_definition(subscription_plan)
+    subscription = get_subscription_status(subscription_expiry)
     return {
         "plan_key": definition["plan_key"],
         "plan_label": definition["label"],
@@ -321,6 +329,9 @@ from fastapi.responses import JSONResponse
 app = FastAPI()
 app.add_middleware(GZipMiddleware, minimum_size=1000)
 
+import transcription
+app.include_router(transcription.router)
+
 LAST_422_ERROR = None
 
 @app.exception_handler(RequestValidationError)
@@ -338,7 +349,7 @@ async def get_last_error():
     return LAST_422_ERROR or {"status": "no errors"}
 
 @app.on_event("startup")
-def startup_event():
+def startup_event_cloudinary():
     global CLOUDINARY_CLEANUP_STARTED
     if not CLOUDINARY_CLEANUP_STARTED:
         import threading
@@ -620,209 +631,8 @@ def run_code_against_tests(code: str, task: Dict[str, Any], language: str) -> Di
     if not code.strip():
         return _runner_error("No code was provided.")
 
-    if language == "python":
-        payload = {"function_name": function_name, "tests": tests}
-        harness = f"""
-import json
-candidate_ns = {{}}
-payload = json.loads({json.dumps(json.dumps(payload))})
-code = {json.dumps(code)}
-exec(code, candidate_ns)
-func = candidate_ns.get(payload["function_name"])
-if not callable(func):
-    raise NameError(f"Function '{{payload['function_name']}}' was not found in the submitted code.")
-results = []
-for case in payload["tests"]:
-    try:
-        actual = func(*case["input"])
-        passed = actual == case["expected"]
-        results.append({{"id": case["id"], "visible": case["visible"], "passed": passed, "error": None}})
-    except Exception as exc:
-        results.append({{"id": case["id"], "visible": case["visible"], "passed": False, "error": f"{{type(exc).__name__}}: {{exc}}"}})
-print(json.dumps(results))
-"""
-        with tempfile.TemporaryDirectory() as tmpdir:
-            script_path = os.path.join(tmpdir, "runner.py")
-            with open(script_path, "w", encoding="utf-8") as handle:
-                handle.write(harness)
-            try:
-                result = subprocess.run([sys.executable, script_path], capture_output=True, text=True, timeout=8)
-            except subprocess.TimeoutExpired:
-                return _runner_error("Execution timed out after 8 seconds.")
-        return _collect_runner_output(result)
+    return _runner_error("Native code execution is disabled for security reasons. Please use the 'Get AI Feedback' button to evaluate your solution.")
 
-    if language == "javascript":
-        if not py_shutil.which("node"):
-            return _runner_error("JavaScript runtime is not installed on the server.")
-        if not all(_supports_simple_multilang(case.get("expected")) and all(_supports_simple_multilang(arg) for arg in case.get("input", [])) for case in tests):
-            return _runner_error("This task uses inputs that are not supported for JavaScript execution in the current runner.")
-        payload = {"function_name": function_name, "tests": tests}
-        harness = f"""
-const payload = JSON.parse({json.dumps(json.dumps(payload))});
-{code}
-const fn = globalThis[payload.function_name];
-if (typeof fn !== 'function') {{
-  throw new Error(`Function ${{payload.function_name}} was not found in the submitted code.`);
-}}
-const results = [];
-for (const testCase of payload.tests) {{
-  try {{
-    const actual = fn(...testCase.input);
-    const passed = JSON.stringify(actual) === JSON.stringify(testCase.expected);
-    results.push({{ id: testCase.id, visible: testCase.visible, passed, error: null }});
-  }} catch (err) {{
-    results.push({{ id: testCase.id, visible: testCase.visible, passed: false, error: String(err) }});
-  }}
-}}
-console.log(JSON.stringify(results));
-"""
-        with tempfile.TemporaryDirectory() as tmpdir:
-            script_path = os.path.join(tmpdir, "runner.js")
-            with open(script_path, "w", encoding="utf-8") as handle:
-                handle.write(harness)
-            try:
-                result = subprocess.run(["node", script_path], capture_output=True, text=True, timeout=8)
-            except subprocess.TimeoutExpired:
-                return _runner_error("Execution timed out after 8 seconds.")
-        return _collect_runner_output(result)
-
-    if language == "java":
-        if not py_shutil.which("javac") or not py_shutil.which("java"):
-            return _runner_error("Java compiler/runtime is not installed on the server.")
-        try:
-            runner_cases = []
-            for case in tests:
-                args = ", ".join(_java_literal(arg) for arg in case.get("input", []))
-                expected = _java_literal(case.get("expected"))
-                runner_cases.append((case["id"], case["visible"], args, expected))
-        except ValueError as exc:
-            return _runner_error(str(exc))
-        method_name = function_name
-        runner_body = "\n".join(
-            f"""
-        try {{
-            boolean passed = java.util.Objects.deepEquals(Solution.{method_name}({args}), {expected});
-            results.add(new Result({case_id}, {str(visible).lower()}, passed, null));
-        }} catch (Throwable err) {{
-            results.add(new Result({case_id}, {str(visible).lower()}, false, err.toString()));
-        }}
-"""
-            for case_id, visible, args, expected in runner_cases
-        )
-        runner = f"""
-import java.util.*;
-
-class Runner {{
-    static class Result {{
-        int id;
-        boolean visible;
-        boolean passed;
-        String error;
-        Result(int id, boolean visible, boolean passed, String error) {{
-            this.id = id;
-            this.visible = visible;
-            this.passed = passed;
-            this.error = error;
-        }}
-    }}
-
-    public static void main(String[] args) {{
-        List<Result> results = new ArrayList<>();
-{runner_body}
-        StringBuilder out = new StringBuilder("[");
-        for (int i = 0; i < results.size(); i++) {{
-            Result r = results.get(i);
-            if (i > 0) out.append(",");
-            out.append("{{\\"id\\":").append(r.id)
-               .append(",\\"visible\\":").append(r.visible)
-               .append(",\\"passed\\":").append(r.passed)
-               .append(",\\"error\\":");
-            if (r.error == null) out.append("null");
-            else out.append("\\"").append(r.error.replace("\\\\", "\\\\\\\\").replace("\\"", "\\\\\\"")).append("\\"");
-            out.append("}}");
-        }}
-        out.append("]");
-        System.out.println(out.toString());
-    }}
-}}
-"""
-        with tempfile.TemporaryDirectory() as tmpdir:
-            solution_path = os.path.join(tmpdir, "Solution.java")
-            runner_path = os.path.join(tmpdir, "Runner.java")
-            with open(solution_path, "w", encoding="utf-8") as handle:
-                handle.write(code)
-            with open(runner_path, "w", encoding="utf-8") as handle:
-                handle.write(runner)
-            compile_result = subprocess.run(["javac", solution_path, runner_path], capture_output=True, text=True, cwd=tmpdir, timeout=12)
-            if compile_result.returncode != 0:
-                return _runner_error((compile_result.stderr or compile_result.stdout).strip())
-            try:
-                result = subprocess.run(["java", "Runner"], capture_output=True, text=True, cwd=tmpdir, timeout=8)
-            except subprocess.TimeoutExpired:
-                return _runner_error("Execution timed out after 8 seconds.")
-        return _collect_runner_output(result)
-
-    if language == "c":
-        if not py_shutil.which("gcc"):
-            return _runner_error("C compiler is not installed on the server.")
-        if not all(
-            isinstance(case.get("expected"), (int, bool, str))
-            and all(isinstance(arg, (int, bool, str)) for arg in case.get("input", []))
-            for case in tests
-        ):
-            return _runner_error("This task uses inputs that are not supported for C execution in the current runner.")
-        try:
-            call_blocks = []
-            for case in tests:
-                args = ", ".join(_c_literal(arg) for arg in case.get("input", []))
-                expected = _c_literal(case.get("expected"))
-                if isinstance(case.get("expected"), str):
-                    compare = f'strcmp({function_name}({args}), {expected}) == 0'
-                else:
-                    compare = f'{function_name}({args}) == {expected}'
-                call_blocks.append(
-                    f"""
-    results[index++] = (struct Result){{{case["id"]}, {1 if case["visible"] else 0}, ({compare}), NULL}};
-"""
-                )
-        except ValueError as exc:
-            return _runner_error(str(exc))
-        harness = f"""
-#include <stdio.h>
-#include <string.h>
-{code}
-struct Result {{ int id; int visible; int passed; const char* error; }};
-int main() {{
-    struct Result results[{len(tests)}];
-    int index = 0;
-{''.join(call_blocks)}
-    printf("[");
-    for (int i = 0; i < index; i++) {{
-        if (i > 0) printf(",");
-        printf("{{\\"id\\":%d,\\"visible\\":%s,\\"passed\\":%s,\\"error\\":null}}",
-            results[i].id,
-            results[i].visible ? "true" : "false",
-            results[i].passed ? "true" : "false");
-    }}
-    printf("]");
-    return 0;
-}}
-"""
-        with tempfile.TemporaryDirectory() as tmpdir:
-            c_path = os.path.join(tmpdir, "runner.c")
-            exe_path = os.path.join(tmpdir, "runner.exe")
-            with open(c_path, "w", encoding="utf-8") as handle:
-                handle.write(harness)
-            compile_result = subprocess.run(["gcc", c_path, "-o", exe_path], capture_output=True, text=True, timeout=12)
-            if compile_result.returncode != 0:
-                return _runner_error((compile_result.stderr or compile_result.stdout).strip())
-            try:
-                result = subprocess.run([exe_path], capture_output=True, text=True, timeout=8)
-            except subprocess.TimeoutExpired:
-                return _runner_error("Execution timed out after 8 seconds.")
-        return _collect_runner_output(result)
-
-    return _runner_error(f"Language '{language}' is not supported.")
 
 
 def extract_skills(text: str) -> List[str]:
@@ -913,22 +723,32 @@ def extract_projects(text: str) -> List[Dict]:
     
     return projects
 
-def generate_resume_questions(resume_text: str) -> List[Dict[str, str]]:
-    """Generate personalized interview questions based on resume content."""
-    print("Generating personalized resume-specific questions...")
+def generate_resume_questions(resume_text: str, language: str = "English") -> List[Dict[str, str]]:
+    """Generate interview questions based on candidate's resume using AI."""
+    print("Generating questions from resume...")
     
-    # Extract structured information
-    skills = extract_skills(resume_text)
+    if language != "English":
+        return []
+        
     experiences = extract_experiences(resume_text)
     projects = extract_projects(resume_text)
+    skills = extract_skills(resume_text)
     
     questions = []
     
+    intro_q_text = "Can you please introduce yourself and tell us about your professional background?"
+    if language != "English":
+        try:
+            from offline_language_fallback import OFFLINE_LANGUAGE_INTRO_QUESTIONS
+            intro_q_text = OFFLINE_LANGUAGE_INTRO_QUESTIONS.get(language, intro_q_text)
+        except ImportError:
+            pass
+        
     # 1. Self Introduction (First 2 questions)
     intro_questions = [
         {
             "id": 1,
-            "question": "Can you please introduce yourself and tell us about your professional background?",
+            "question": intro_q_text,
             "difficulty": "Easy",
             "type": "Self-Introduction",
             "category": "Basic"
@@ -1093,14 +913,25 @@ def extract_text_from_file(file_content: bytes, filename: str) -> str:
         except:
             raise HTTPException(status_code=400, detail=f"Unable to process file {filename}. Supported formats: PDF, DOCX, TXT")
 
-def generate_jd_questions(jd_text: str, ai_instructions: str = "", interview_type: str = "Technical", industry: str = "General") -> List[Dict[str, str]]:
+def generate_jd_questions(jd_text: str, ai_instructions: str = "", interview_type: str = "Technical", industry: str = "General", language: str = "English") -> List[Dict[str, str]]:
     """Generate interview questions based on Job Description using AI."""
     print(f"Generating questions from Job Description for {interview_type} interview...")
     
+    if language != "English":
+        return []
+    
+    intro_q_text = "Can you please introduce yourself and tell us why you are interested in this specific role?"
+    if language != "English":
+        try:
+            from offline_language_fallback import OFFLINE_LANGUAGE_INTRO_QUESTIONS
+            intro_q_text = OFFLINE_LANGUAGE_INTRO_QUESTIONS.get(language, intro_q_text)
+        except ImportError:
+            pass
+
     questions = [
         {
             "id": 1,
-            "question": "Can you please introduce yourself and tell us why you are interested in this specific role?",
+            "question": intro_q_text,
             "difficulty": "Easy",
             "type": "Self-Introduction",
             "category": "Basic"
@@ -1165,7 +996,7 @@ def generate_jd_questions(jd_text: str, ai_instructions: str = "", interview_typ
         data = extract_json(raw) or {}
         
         # Log extracted keywords for debugging/logging
-        print(f"✅ Extracted JD Keywords: {data.get('extracted_keywords', [])}")
+        print(f" Extracted JD Keywords: {data.get('extracted_keywords', [])}")
         
         # Add generated questions to the list
         for q in data.get("questions", []):
@@ -1194,7 +1025,7 @@ def generate_jd_questions(jd_text: str, ai_instructions: str = "", interview_typ
             if kw.lower() in jd_text.lower():
                 found_keywords.append(kw)
         
-        print(f"⚠️ Offline Mode: Found keywords {found_keywords}")
+        print(f" Offline Mode: Found keywords {found_keywords}")
         
         if found_keywords:
             for i, kw in enumerate(found_keywords[:5]): # Top 5 matched
@@ -1226,7 +1057,7 @@ def generate_jd_questions(jd_text: str, ai_instructions: str = "", interview_typ
 
     return questions
 
-def generate_mock_questions(text: str, source: str, num_questions: int = 6, resume_text: str = None, jd_text: str = None, hr_screening: dict = None, custom_questions: str = "", ai_instructions: str = "", interview_type: str = "Technical", industry: str = "General") -> List[Dict[str, str]]:
+def generate_mock_questions(text: str, source: str, num_questions: int = 6, resume_text: str = None, jd_text: str = None, hr_screening: dict = None, custom_questions: str = "", ai_instructions: str = "", interview_type: str = "Technical", industry: str = "General", language: str = "English") -> List[Dict[str, str]]:
     """
     Generate structured interview questions.
     Structure: Self-Intro → Technical Middle → HR Screening (if enabled) → Closing
@@ -1239,10 +1070,18 @@ def generate_mock_questions(text: str, source: str, num_questions: int = 6, resu
     """
     num_questions = max(4, num_questions)
     
+    intro_q_text = "Can you please introduce yourself and tell us why you are interested in this specific role?"
+    if language != "English":
+        try:
+            from offline_language_fallback import OFFLINE_LANGUAGE_INTRO_QUESTIONS
+            intro_q_text = OFFLINE_LANGUAGE_INTRO_QUESTIONS.get(language, intro_q_text)
+        except ImportError:
+            pass
+
     opening = [
         {
             "id": 1,
-            "question": "Can you please introduce yourself and tell us why you are interested in this specific role?",
+            "question": intro_q_text,
             "difficulty": "Easy",
             "type": "Self-Introduction",
             "category": "Basic"
@@ -1271,6 +1110,18 @@ def generate_mock_questions(text: str, source: str, num_questions: int = 6, resu
             "category": "Candidate Questions"
         })
     
+    # Translate closing questions if language is not English
+    if language != "English":
+        try:
+            from offline_language_fallback import OFFLINE_LANGUAGE_CLOSING_QUESTIONS
+            lang_closing = OFFLINE_LANGUAGE_CLOSING_QUESTIONS.get(language, [])
+            if lang_closing:
+                for i, q in enumerate(closing):
+                    if i < len(lang_closing):
+                        q["question"] = lang_closing[i]
+        except ImportError:
+            pass
+    
     middle_count = num_questions - len(opening) - len(closing)
     middle_count = max(1, middle_count)
     
@@ -1287,13 +1138,13 @@ def generate_mock_questions(text: str, source: str, num_questions: int = 6, resu
                     "type": "Technical",
                     "category": "Custom Question"
                 })
-            print(f"✅ Loaded {len(custom_q_list)} custom questions")
+            print(f" Loaded {len(custom_q_list)} custom questions")
             
         # 2. Add AI questions (Instructions and JD/Resume)
         if "resume" in source.lower():
-            ai_questions = generate_resume_questions(text) # Note: generate_resume_questions doesn't currently use AI, it generates from skills
+            ai_questions = generate_resume_questions(text, language=language)
         else:
-            ai_questions = generate_jd_questions(text, ai_instructions=ai_instructions, interview_type=interview_type, industry=industry)
+            ai_questions = generate_jd_questions(text, ai_instructions=ai_instructions, interview_type=interview_type, industry=industry, language=language)
         
         ai_added = 0
         for q in ai_questions:
@@ -1306,18 +1157,18 @@ def generate_mock_questions(text: str, source: str, num_questions: int = 6, resu
             middle_questions.append(q)
             ai_added += 1
             
-        print(f"✅ AI generated {ai_added} technical/instruction questions")
+        print(f" AI generated {ai_added} technical/instruction questions")
         
     except Exception as e:
-        print(f"⚠️ AI question generation failed: {e}")
-        print("📋 Falling back to smart offline question generator...")
+        print(f" AI question generation failed: {e}")
+        print(" Falling back to smart offline question generator...")
     
     # ── OFFLINE FALLBACK: Extract skills/projects and build timeline-based questions ──
     # Only run offline fallback if we don't have enough questions
     if len(middle_questions) < middle_count:
-        offline_questions = _generate_offline_questions(resume_text or "", jd_text or text, num_questions, interview_type, industry=industry)
+        offline_questions = _generate_offline_questions(resume_text or "", jd_text or text, num_questions, interview_type, industry=industry, language=language)
         middle_questions.extend(offline_questions)
-        print(f"📋 Offline generator added {len(offline_questions)} questions")
+        print(f" Offline generator added {len(offline_questions)} questions")
     
     # Only truncate if we exceeded the requested middle count by offline fallback,
     # but don't truncate Custom + AI questions if they naturally exceed it.
@@ -1353,7 +1204,7 @@ def generate_mock_questions(text: str, source: str, num_questions: int = 6, resu
     return all_questions
 
 
-def _generate_offline_questions(resume_text: str, jd_text: str, total_count: int, interview_type: str = "Technical", industry: str = "General") -> List[Dict[str, str]]:
+def _generate_offline_questions(resume_text: str, jd_text: str, total_count: int, interview_type: str = "Technical", industry: str = "General", language: str = "English") -> List[Dict[str, str]]:
     """
     Intelligent Interview Coach Offline Generator
     Adapts based on Total Time (total_count) and Presence of Resume (Single vs Bulk).
@@ -1399,6 +1250,48 @@ def _generate_offline_questions(resume_text: str, jd_text: str, total_count: int
     # We apportion the questions to ensure an endless stream depending on total_count
     target = max(10, total_count + 15) # Generate significantly more to ensure an endless flow
     
+    # ── If language is NOT English, use fully translated offline questions ──
+    if language != "English":
+        try:
+            from offline_language_fallback import OFFLINE_LANGUAGE_TECHNICAL_QUESTIONS, OFFLINE_LANGUAGE_TEMPLATE_QUESTIONS
+            lang_tech = OFFLINE_LANGUAGE_TECHNICAL_QUESTIONS.get(language, [])
+            lang_tmpl = OFFLINE_LANGUAGE_TEMPLATE_QUESTIONS.get(language, [])
+        except ImportError:
+            lang_tech = []
+            lang_tmpl = []
+        
+        # Get skills from resume/JD to personalize template questions
+        skills_to_ask = resume_skills if resume_skills else jd_skills
+        if not skills_to_ask:
+            skills_to_ask = generic_skills
+        
+        # Add all the pre-translated technical questions
+        for i, q_text in enumerate(lang_tech):
+            questions.append({
+                "question": q_text,
+                "difficulty": ["Easy", "Medium", "Hard"][i % 3],
+                "type": "Technical",
+                "category": "Technical Expertise"
+            })
+        
+        # Add skill-specific questions using translated templates
+        if lang_tmpl:
+            for i in range(max(10, target - len(questions))):
+                skill = skills_to_ask[i % len(skills_to_ask)]
+                template = lang_tmpl[i % len(lang_tmpl)]
+                try:
+                    q_text = template.format(skill=skill, industry=industry)
+                except (KeyError, IndexError):
+                    q_text = template.replace("{skill}", skill).replace("{industry}", industry)
+                questions.append({
+                    "question": q_text,
+                    "difficulty": ["Medium", "Hard"][i % 2],
+                    "type": "Technical",
+                    "category": f"{skill} Expertise"
+                })
+        
+        return questions[:target]
+    
     # --- PHASE 1: SELF-INTRO / BACKGROUND ---
     if has_resume:
         questions.append({"question": "Can you briefly walk me through your professional journey and what led you to apply for this role?", "difficulty": "Easy", "type": "Background", "category": "Experience"})
@@ -1437,14 +1330,16 @@ def _generate_offline_questions(resume_text: str, jd_text: str, total_count: int
         skills_count = max(3, int(target * 0.25))
         
         # Pull industry specific questions if available
-        industry_q = INDUSTRY_TECHNICAL_QUESTIONS.get(industry, [])
+        industry_q = []
+        
+        if not industry_q:
+            industry_q = INDUSTRY_TECHNICAL_QUESTIONS.get(industry, [])
         
         for i in range(skills_count):
             skill = skills_to_ask[i % len(skills_to_ask)]
             
-            # Inject industry-specific question if available, otherwise fallback to generic
             if i < len(industry_q):
-                q = industry_q[i].replace("Information Technology", skill)  # Just a light replace if needed, or leave as is
+                q = industry_q[i].replace("Information Technology", skill)
                 q = industry_q[i] # Just use the industry specific question
                 category = f"{industry} Expertise"
             else:
@@ -1457,13 +1352,9 @@ def _generate_offline_questions(resume_text: str, jd_text: str, total_count: int
                 category = f"{skill} Deep-Dive"
                 
             questions.append({"question": q, "difficulty": "Medium", "type": "Technical", "category": category})
-    # --- PHASE 3: PROJECTS & EXPERIENCE ---
-    projects_count = max(3, int(target * 0.25))
-    if interview_type == "Non-Technical":
-        for i in range(projects_count):
-            q = hr_questions[(i + skills_count) % len(hr_questions)]
-            questions.append({"question": q, "difficulty": "Hard", "type": "Case Study", "category": "Scenario"})
-    elif has_resume:
+    # --- PHASE 3: PROJECTS ---
+    projects_count = max(2, int(target * 0.15))
+    if has_resume:
         project_patterns = [r'(?:project|built|developed|created|designed)\s*[:\-]?\s*([A-Z][A-Za-z0-9\s\-]{3,30})']
         found_projects = []
         for pattern in project_patterns:
@@ -1732,11 +1623,14 @@ class ViolationRequest(BaseModel):
     count: int
     timestamp: str
 
-def generate_followup_question(answer_text: str, resume_context: str, jd_text: str, current_q_id: int, followup_streak: int) -> Dict:
+def generate_followup_question(answer_text: str, resume_context: str, jd_text: str, current_q_id: int, followup_streak: int, language: str = "English") -> Dict:
     if followup_streak < 3:
         prompt = f"""
         You are an intelligent technical interviewer.
         
+        CRITICAL LANGUAGE REQUIREMENT:
+        You MUST generate the follow-up question and output STRICTLY in the {language} language. Do NOT use English unless {language} is English.
+
         Context:
         - Candidate Resume Summary: {resume_context[:1000]}...
         - Candidate's Last Answer: "{answer_text}"
@@ -1805,12 +1699,14 @@ def api_gen_next_question(req: NextQuestionRequest):
     
     try:
         # Generate the question
+        language = interview.get("language", "English")
         new_question = generate_followup_question(
             req.answer_text, 
             interview.get("profile_text", ""),
             interview.get("job_description", ""),
             req.current_question_id,
-            followup_streak
+            followup_streak,
+            language
         )
         
         if followup_streak >= 3:
@@ -1879,6 +1775,9 @@ async def upload_resume(
     ALLOWED_MIMES = ["application/pdf", "application/vnd.openxmlformats-officedocument.wordprocessingml.document", "application/msword", "text/plain"]
     if file.content_type and file.content_type not in ALLOWED_MIMES:
         raise HTTPException(status_code=400, detail="Invalid file type. Only PDF, DOCX, and TXT are allowed for security reasons.")
+    
+    if getattr(file, "size", 0) and file.size > 10 * 1024 * 1024:
+        raise HTTPException(status_code=413, detail="File too large. Maximum size is 10MB.")
         
     try:
         print(f"Uploading resume with source: {source}")
@@ -1925,7 +1824,7 @@ async def upload_resume(
                 "created_at": datetime.now(timezone.utc).isoformat()
             })
         except Exception as db_e:
-            print(f"⚠️ DB Save Error: {db_e}")
+            print(f" DB Save Error: {db_e}")
 
 
         return {
@@ -1981,7 +1880,7 @@ async def start_interview(
                 "created_at": datetime.now(timezone.utc).isoformat()
             })
         except Exception as db_e:
-            print(f"⚠️ DB Save Error: {db_e}")
+            print(f" DB Save Error: {db_e}")
 
         return {
             "interview_id": interview_id,
@@ -1998,7 +1897,7 @@ async def get_question(interview_id: str, question_id: int):
     if interview_id not in interviews:
         row = interviews_collection.find_one({"id": interview_id})
         if row:
-            print(f"🔄 Restoring interview {interview_id} from DB...")
+            print(f" Restoring interview {interview_id} from DB...")
             try:
                 loaded_questions = json.loads(row.get("questions", "[]"))
                 interviews[interview_id] = {
@@ -2037,25 +1936,9 @@ async def upload_answer(
     question_id: int = Form(...),
     video: UploadFile = File(...)
 ):
-    if interview_id not in interviews:
-        raise HTTPException(status_code=404, detail="Interview not found")
-
-    with tempfile.TemporaryDirectory() as tmp:
-        video_path = os.path.join(tmp, "input.webm")
-        audio_path = os.path.join(tmp, "audio.wav")
-
-        with open(video_path, "wb") as f:
-            f.write(await video.read())
-
-        # Extract audio using ffmpeg
-        subprocess.run([
-            "ffmpeg", "-i", video_path,
-            "-ar", "16000",
-            "-ac", "1",
-            audio_path
-        ], check=True)
-
-        # Whisper STT
+    # Endpoint is incomplete and not used by the current frontend.
+    # Return 501 Not Implemented instead of causing syntax or runtime errors.
+    raise HTTPException(status_code=501, detail="Upload answer with video is not implemented yet.")
 
 @app.get("/interview/{interview_id}/summary")
 async def get_interview_summary(interview_id: str):
@@ -2073,9 +1956,7 @@ async def get_interview_summary(interview_id: str):
         "questions": interview["questions"],
         "answers": interview["answers"]
     }
-@app.get("/")
-def root():
-    return {"status": "Backend is running"}
+
 
 class ChatRequest(BaseModel):
     message: str
@@ -2112,7 +1993,7 @@ async def save_answer(
     time_spent_seconds: int = Form(0),
     time_limit_seconds: int = Form(120),
 ):
-    print(f"💾 Saving answer for {question_id} (time: {time_spent_seconds}s / {time_limit_seconds}s)...")
+    print(f" Saving answer for {question_id} (time: {time_spent_seconds}s / {time_limit_seconds}s)...")
     
     # Get context
     context = ""
@@ -2128,15 +2009,20 @@ async def save_answer(
             if row:
                 context = f"Candidate's {row.get('source')}: {row.get('profile_text')}"
         except Exception as e:
-            print(f"⚠️ Context fetch error: {e}")
+            print(f" Context fetch error: {e}")
 
     # Use the robust analyze_answer function (now time-aware)
+    language = "English"
+    if interview_id in interviews:
+        language = interviews[interview_id].get("language", "English")
+        
     ai_result = analyze_answer(
         question_text,
         answer_text,
         context,
         time_spent_seconds=time_spent_seconds,
         time_limit_seconds=time_limit_seconds,
+        language=language
     )
 
     # Prepare keywords (handle list or string)
@@ -2166,7 +2052,7 @@ async def save_answer(
         "created_at": datetime.now(timezone.utc).isoformat()
     })
 
-    print(f"✅ Answer saved — Score: {ai_result.get('overall_score', 0)}/100 "
+    print(f" Answer saved  Score: {ai_result.get('overall_score', 0)}/100 "
           f"(content={ai_result.get('content_score',0)}, "
           f"relevance={ai_result.get('relevance_score',0)}, "
           f"time={ai_result.get('time_score',0)})")
@@ -2292,9 +2178,12 @@ class CaseStudyAnswerRequest(BaseModel):
     question_index: int
     answer_text: str
 
-def _generate_case_study_questions_ai(job_description: str, num_questions: int, profile_text: str = "", industry: str = "General") -> list:
+def _generate_case_study_questions_ai(job_description: str, num_questions: int, profile_text: str = "", industry: str = "General", language: str = "English") -> list:
     """Generate case study questions using AI based on JD skills."""
     system_prompt = f"""You are an expert HR interviewer who creates deep, scenario-based case study questions for the '{industry}' industry.
+    
+    CRITICAL REQUIREMENT: You MUST generate the questions and scenarios STRICTLY in the {language} language. Do NOT use English unless {language} is English.
+    
 You must return ONLY a valid JSON array of objects. Each object must have:
 - "scenario": A detailed real-world business scenario (3-5 sentences) situated in the '{industry}' industry that places the candidate in a specific situation
 - "question": The specific question asking what the candidate would do
@@ -2363,13 +2252,35 @@ Return ONLY a JSON array. Example format:
     return None  # Signal to use offline fallback
 
 
-def _generate_case_study_questions_offline(job_description: str, num_questions: int, industry: str = "General") -> list:
+def _generate_case_study_questions_offline(job_description: str, num_questions: int, industry: str = "General", language: str = "English") -> list:
     """Generate offline case study questions by extracting skills from JD."""
     jd_lower = job_description.lower()
     
     # Map of skills to scenario templates
     from industry_fallback_data import INDUSTRY_CASE_STUDIES
     # Try to get specific industry scenarios first
+    if language != "English":
+        try:
+            from offline_language_fallback import OFFLINE_LANGUAGE_CASE_STUDIES
+            lang_cases = OFFLINE_LANGUAGE_CASE_STUDIES.get(language, [])
+            if lang_cases:
+                import random
+                selected = random.sample(lang_cases, min(num_questions, len(lang_cases)))
+                results = []
+                for idx, c in enumerate(selected):
+                    results.append({
+                        "id": str(idx + 1),
+                        "scenario": c["scenario"],
+                        "question": c["task"],
+                        "skill_tested": "Scenario",
+                        "difficulty": "Medium",
+                        "time_limit": 300,
+                        "evaluation_criteria": ["Analysis", "Problem Solving", "Communication"]
+                    })
+                return results
+        except ImportError:
+            pass
+
     industry_cases = INDUSTRY_CASE_STUDIES.get(industry)
     if industry_cases:
         skill_scenarios = industry_cases
@@ -2488,12 +2399,13 @@ def start_case_study_round(req: CaseStudyStartRequest):
     num_questions = (session or {}).get("case_study_count", 3) or 3
     num_questions = max(1, min(8, num_questions))
     industry = (session or {}).get("industry", "General")
+    language = interview.get("language", "English")
     
     # Try AI first, fall back to offline
-    questions = _generate_case_study_questions_ai(job_description, num_questions, profile_text, industry=industry)
+    questions = _generate_case_study_questions_ai(job_description, num_questions, profile_text, industry=industry, language=language)
     if not questions:
         print(f"[CASE STUDY] Using offline fallback for {num_questions} questions")
-        questions = _generate_case_study_questions_offline(job_description, num_questions, industry=industry)
+        questions = _generate_case_study_questions_offline(job_description, num_questions, industry=industry, language=language)
     
     case_study_round = {
         "status": "active",
@@ -2690,7 +2602,7 @@ def generate_interview_summary(candidate_name: str, answers_data: list) -> dict:
     avg = sum(a.get("ai_score", 0) or 0 for a in answers_data) / len(answers_data)
 
     qa_block = "\n".join(
-        f"Q{i+1}: {a['question_text']}\nA: {a['answer_text']}\nScore: {a.get('ai_score',0)}/100"
+        f"Q{i+1}: {a['question_text']}\nA: {a['answer_text']}\nWPM (Words per Minute): {a.get('wpm', 0)}\nScore: {a.get('ai_score',0)}/100"
         for i, a in enumerate(answers_data)
     )
 
@@ -2702,10 +2614,12 @@ Here is the full transcript:
 
 Average score: {avg:.1f}/100
 
-Please respond in JSON with exactly three keys:
+Please respond in JSON with exactly five keys:
 - "recommendation": one of "Strong Hire", "Hire", "Borderline", "No Hire"
 - "strengths": 2-3 sentence paragraph on what the candidate did well
 - "weaknesses": 2-3 sentence paragraph on where the candidate needs improvement
+- "communication_score": an integer from 0 to 100 assessing the candidate's communication skills based on their WPM (ideal is 130-160), sentence formation, and clarity. (NOTE: Evaluate their communication independently from their average score.)
+- "detected_accent": a short string estimating the candidate's likely accent/dialect (e.g., 'Indian English', 'American English', 'British English', 'Neutral', etc.) based strictly on their vocabulary, phrasing, and grammar.
 """
 
     try:
@@ -2730,7 +2644,9 @@ Please respond in JSON with exactly three keys:
         return {
             "recommendation": rec,
             "strengths": "Summary generation failed — please review individual scores.",
-            "weaknesses": "Summary generation failed — please review individual scores."
+            "weaknesses": "Summary generation failed — please review individual scores.",
+            "communication_score": int(avg),
+            "detected_accent": "Unknown"
         }
 
 
@@ -2749,23 +2665,32 @@ def get_interview_details(link_id: str):
     saved_str = session_data.get("strengths_summary")
     saved_wk = session_data.get("weaknesses_summary")
     saved_avg = session_data.get("avg_score")
+    saved_comm = session_data.get("communication_score")
+    saved_accent = session_data.get("detected_accent")
     current_status = session_data.get("status")
     candidate_email = session_data.get("candidate_email")
 
     # Fallback: If results exist but status is still 'started', mark as 'completed'
     if current_status == 'started' and actual_interview_id:
         if answers_collection.find_one({"interview_id": actual_interview_id}):
-            print(f"🔄 Fallback: Marking session {link_id} as completed because results exist.")
+            print(f" Fallback: Marking session {link_id} as completed because results exist.")
             interview_sessions_collection.update_one({"link_id": link_id}, {"$set": {"status": "completed"}})
 
-    # Fetch recording path from interviews table
     def get_url_from_raw_path(rpath):
         if not rpath: return None
         if rpath.startswith("http"): return rpath
-        if os.path.exists(rpath):
-            raw_path_fixed = rpath.replace("\\", "/")
-            idx = raw_path_fixed.find("uploads/")
-            if idx != -1: return raw_path_fixed[idx:]
+        
+        raw_path_fixed = rpath.replace("\\", "/")
+        idx = raw_path_fixed.find("uploads/")
+        
+        if idx != -1: 
+            relative_path = raw_path_fixed[idx:]
+            if os.path.exists(rpath):
+                return relative_path
+            else:
+                # If running locally, the file might be on the production server
+                return "https://ai-adaptive-interview-1hsw.onrender.com/" + relative_path
+                
         print(f"Recording file not found on disk: {rpath}")
         return None
 
@@ -2826,28 +2751,36 @@ def get_interview_details(link_id: str):
         avg_score = round(sum(scores) / len(scores), 1) if scores else 0
 
     # Use cached values if available, else generate
-    if saved_rec:
+    if saved_rec and saved_comm is not None and saved_accent is not None:
         recommendation = saved_rec
         strengths = saved_str
         weaknesses = saved_wk
+        communication_score = saved_comm
+        detected_accent = saved_accent
     else:
         summary = generate_interview_summary(candidate_name or "Candidate", results)
         recommendation = summary.get("recommendation", "No Data")
         strengths = summary.get("strengths", "")
         weaknesses = summary.get("weaknesses", "")
-        # Cache in DB
-        try:
-            interview_sessions_collection.update_one(
-                {"link_id": link_id},
-                {"$set": {
-                    "overall_recommendation": recommendation,
-                    "strengths_summary": strengths,
-                    "weaknesses_summary": weaknesses,
-                    "avg_score": avg_score
-                }}
-            )
-        except Exception as e:
-            print(f"Summary cache error: {e}")
+        communication_score = summary.get("communication_score", 0)
+        detected_accent = summary.get("detected_accent", "Unknown")
+        
+        # Only cache in DB if it's a real summary (not the fallback)
+        if "Summary generation failed" not in strengths:
+            try:
+                interview_sessions_collection.update_one(
+                    {"link_id": link_id},
+                    {"$set": {
+                        "overall_recommendation": recommendation,
+                        "strengths_summary": strengths,
+                        "weaknesses_summary": weaknesses,
+                        "communication_score": communication_score,
+                        "detected_accent": detected_accent,
+                        "avg_score": avg_score
+                    }}
+                )
+            except Exception as e:
+                print(f"Summary cache error: {e}")
 
     response_payload = {
         "interview_id": link_id,
@@ -2859,6 +2792,8 @@ def get_interview_details(link_id: str):
         "overall_recommendation": recommendation,
         "strengths_summary": strengths,
         "weaknesses_summary": weaknesses,
+        "communication_score": communication_score,
+        "detected_accent": detected_accent,
         "recording_url": recording_url,
         "screen_recording_url": screen_recording_url,
         "integrity": {
@@ -2890,13 +2825,15 @@ class DecisionRequest(BaseModel):
 @app.post("/analyze-answer")
 def analyze(req: AnalyzeRequest):
     context = ""
+    language = "English"
     # Retrieve Resume/JD context from the CURRENT in-memory session (not historical DB data)
     if req.interview_id and req.interview_id in interviews:
          profile_text = interviews[req.interview_id].get("profile_text", "")
          source = interviews[req.interview_id].get("source", "Resume")
+         language = interviews[req.interview_id].get("language", "English")
          context = f"Candidate's {source}: {profile_text}"
     
-    result = analyze_answer(req.question, req.answer, context)
+    result = analyze_answer(req.question, req.answer, context, language=language)
 
     # Delete existing to avoid duplicates
     answers_collection.delete_many({"interview_id": req.interview_id, "question_id": req.question_id})
@@ -2915,7 +2852,7 @@ def analyze(req: AnalyzeRequest):
             "created_at": datetime.now(timezone.utc).isoformat()
         })
     except Exception as e:
-        print(f"⚠️ Failed to save answer to DB: {e}")
+        print(f" Failed to save answer to DB: {e}")
 
     return result
 
@@ -2926,6 +2863,9 @@ async def upload_full_recording(
     recording_type: Optional[str] = Form("camera"),
     file: UploadFile = File(...)
 ):
+    if getattr(file, "size", 0) and file.size > 100 * 1024 * 1024:
+        raise HTTPException(status_code=413, detail="Recording too large. Maximum size is 100MB.")
+        
     try:
         # Create directory for temporary recordings if it doesn't exist
         recordings_dir = os.path.join(UPLOAD_FOLDER, "recordings")
@@ -2989,7 +2929,7 @@ async def upload_full_recording(
         )
 
         if interview_update.matched_count == 0 and session_update.matched_count == 0:
-            print(f"⚠️ Recording uploaded but no DB record matched interview_id={interview_id}, link_id={link_id}")
+            print(f" Recording uploaded but no DB record matched interview_id={interview_id}, link_id={link_id}")
         
         return {
             "status": "success",
@@ -3114,6 +3054,7 @@ class AdminLogin(BaseModel):
     password: str
 
 class TenantCreate(BaseModel):
+    company_name: str
     username: str
     password: str
     email: str
@@ -3139,6 +3080,7 @@ class CreateSession(BaseModel):
     record_video: bool = True
     interview_type: str = "Technical"
     industry: str = "General"
+    language: str = "English"
     custom_email_html: str = ""  # Task 1: Admin-editable email content
     scheduled_start: str = ""  # Task 4: ISO datetime for scheduled start
     scheduled_end: str = ""    # Task 4: ISO datetime for scheduled end
@@ -3168,8 +3110,56 @@ class UpdateProfileRequest(BaseModel):
     old_password: Optional[str] = None
     new_password: Optional[str] = None
 
+from passlib.context import CryptContext
+pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
+
 def hash_password(password: str) -> str:
-    return hashlib.sha256(password.encode()).hexdigest()
+    return pwd_context.hash(password)
+
+def verify_password(plain_password: str, hashed_password: str) -> bool:
+    if len(hashed_password) == 64 and all(c in '0123456789abcdefABCDEF' for c in hashed_password):
+        return hashlib.sha256(plain_password.encode()).hexdigest() == hashed_password
+    try:
+        return pwd_context.verify(plain_password, hashed_password)
+    except Exception:
+        return False
+
+import jwt
+from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
+from fastapi import Depends
+from datetime import timedelta, timezone
+
+JWT_SECRET_KEY = os.getenv("JWT_SECRET_KEY")
+if not JWT_SECRET_KEY:
+    raise ValueError("FATAL ERROR: JWT_SECRET_KEY environment variable is not set. Refusing to start.")
+ALGORITHM = "HS256"
+
+security = HTTPBearer()
+
+def create_access_token(data: dict, expires_delta: timedelta = None):
+    to_encode = data.copy()
+    if expires_delta:
+        expire = datetime.now(timezone.utc) + expires_delta
+    else:
+        expire = datetime.now(timezone.utc) + timedelta(days=7)
+    to_encode.update({"exp": expire})
+    return jwt.encode(to_encode, JWT_SECRET_KEY, algorithm=ALGORITHM)
+
+def get_current_admin_details(credentials: HTTPAuthorizationCredentials = Depends(security)):
+    try:
+        payload = jwt.decode(credentials.credentials, JWT_SECRET_KEY, algorithms=[ALGORITHM])
+        admin_id: str = payload.get("sub")
+        company_id: str = payload.get("company_id")
+        role: str = payload.get("role", "tenant")
+        if admin_id is None:
+            raise HTTPException(status_code=401, detail="Invalid authentication credentials")
+        return {"admin_id": admin_id, "company_id": company_id, "role": role}
+    except jwt.PyJWTError:
+        raise HTTPException(status_code=401, detail="Invalid or expired token")
+
+def get_current_admin(details: dict = Depends(get_current_admin_details)):
+    return details["admin_id"]
+
 
 EMAIL_SCHEDULER_STARTED = False
 JOB_DESCRIPTION_PDF_THRESHOLD = 900
@@ -3376,7 +3366,7 @@ def send_interview_email(candidate_email: str, candidate_name: str, link_url: st
     sender_email = os.getenv("BREVO_SENDER_EMAIL", "oragantisagar041@gmail.com")
 
     if not brevo_api_key:
-        print("⚠️ Warning: BREVO_API_KEY not found in environment")
+        print(" Warning: BREVO_API_KEY not found in environment")
         return False
     
     print(f"DEBUG: Using Brevo API key: {brevo_api_key[:10]}...{brevo_api_key[-5:] if len(brevo_api_key) > 5 else ''}")
@@ -3645,11 +3635,11 @@ def send_submission_notification(candidate_email: str, candidate_name: str, admi
 
 # ── Task 8: Dashboard Stats Endpoint ────────────────────────────────────────
 @app.get("/admin/dashboard-stats")
-def get_dashboard_stats(admin_id: str):
+def get_dashboard_stats(current_admin: dict = Depends(get_current_admin_details)):
     """Return aggregated stats for the admin dashboard."""
     try:
         all_sessions = list(interview_sessions_collection.find(
-            {"created_by": admin_id},
+            {"company_id": current_admin.get("company_id")},
             {"created_at": 1, "status": 1, "decision": 1, "avg_score": 1, "is_deactivated": 1, "expires_at": 1}
         ))
         now = datetime.now(timezone.utc)
@@ -3726,14 +3716,16 @@ def get_dashboard_stats(admin_id: str):
 
 # ── Task 2: Export Sessions Data Endpoint ───────────────────────────────────
 @app.get("/admin/export-sessions")
-async def export_sessions(admin_id: str, status_filter: str = ""):
+async def export_sessions(current_admin: dict = Depends(get_current_admin_details), status_filter: str = ""):
     """Return session data for Excel export, filtered by status."""
+    admin_id = current_admin["admin_id"]
+    company_id = current_admin.get("company_id")
     require_admin_capability(
         admin_id,
         "export_sessions",
         "Session export is available on Basic and Advance plans only.",
     )
-    query = {"created_by": admin_id}
+    query = {"company_id": company_id}
     rows = list(interview_sessions_collection.find(query).sort("created_at", -1))
     now = datetime.now(timezone.utc)
     
@@ -3759,6 +3751,7 @@ async def export_sessions(admin_id: str, status_filter: str = ""):
                 continue
         
         export_data.append({
+            "candidate_id": row.get("candidate_id", ""),
             "candidate_name": row.get("candidate_name", ""),
             "candidate_email": row.get("candidate_email", ""),
             "status": current_status,
@@ -3818,7 +3811,9 @@ def invitation_email_scheduler_loop():
         time.sleep(30)
 
 @app.on_event("startup")
-def startup_event():
+async def startup_event_db_and_email():
+    import mongo_db
+    await mongo_db.init_db_indexes()
     global EMAIL_SCHEDULER_STARTED
     # Create default MASTER admin if not exists
     try:
@@ -4019,7 +4014,7 @@ def send_otp_email(email: str, name: str, otp: str):
         raise HTTPException(status_code=401, detail="Invalid credentials")
 
 @app.post("/admin/profile")
-async def update_profile(data: UpdateProfileRequest):
+async def update_profile(data: UpdateProfileRequest, current_admin: str = Depends(get_current_admin)):
     try:
         from bson import ObjectId
         
@@ -4030,6 +4025,11 @@ async def update_profile(data: UpdateProfileRequest):
             
         update_fields = {}
         
+        if data.old_password and data.new_password:
+            if not verify_password(data.old_password, admin["password"]):
+                raise HTTPException(status_code=400, detail="Incorrect old password")
+            update_fields["password"] = hash_password(data.new_password)
+            
         if data.email:
             update_fields["email"] = data.email
         if data.username:
@@ -4106,6 +4106,9 @@ async def parse_resume(file: UploadFile = File(...)):
     if file.content_type and file.content_type not in ALLOWED_MIMES:
         raise HTTPException(status_code=400, detail="Invalid file type. Only PDF, DOCX, and TXT are allowed for security reasons.")
         
+    if getattr(file, "size", 0) and file.size > 10 * 1024 * 1024:
+        raise HTTPException(status_code=413, detail="File too large. Maximum size is 10MB.")
+        
     content = await file.read()
     text = extract_text_from_file(content, file.filename)
     info = extract_info_from_resume(text)
@@ -4118,8 +4121,26 @@ async def parse_resume(file: UploadFile = File(...)):
 
 from datetime import timedelta
 
+@app.get("/admin/candidate/check")
+async def check_candidate(email: str, current_admin: dict = Depends(get_current_admin_details)):
+    try:
+        # Check if candidate exists for this company
+        session = interview_sessions_collection.find_one(
+            {"company_id": current_admin.get("company_id"), "candidate_email": email},
+            sort=[("created_at", -1)]
+        )
+        if session and session.get("resume_text"):
+            return {
+                "exists": True,
+                "resume_text": session.get("resume_text"),
+                "candidate_name": session.get("candidate_name")
+            }
+        return {"exists": False}
+    except Exception as e:
+        return {"exists": False, "error": str(e)}
+
 @app.post("/admin/create-session")
-async def create_session(data: CreateSession):
+async def create_session(data: CreateSession, current_admin: dict = Depends(get_current_admin_details)):
     link_id = str(uuid.uuid4())
     now = datetime.now(timezone.utc)
     
@@ -4134,16 +4155,19 @@ async def create_session(data: CreateSession):
     
     session_doc = {
         "link_id": link_id,
+        "candidate_id": f"CAN{random.randint(100, 999)}",
         "candidate_name": data.candidate_name,
         "candidate_email": data.candidate_email,
         "resume_text": data.resume_text,
         "job_description": data.job_description,
         "custom_email_html": data.custom_email_html,
         "created_by": data.admin_id,
+        "company_id": current_admin.get("company_id"),
         "created_at": now.isoformat(),
         "expires_at": expires_at,
         "interview_duration": data.interview_duration,
         "interview_type": data.interview_type,
+        "language": data.language,
         "record_video": data.record_video,
         "status": "pending",
         "hr_screening": data.hr_screening.dict(),
@@ -4191,6 +4215,7 @@ class BulkCreateSession(BaseModel):
     record_video: bool = True  # Global default
     interview_type: str = "Technical"
     industry_type: str = "General"
+    language: str = "English"
     case_study_count: int = 3
     custom_email_html: str = ""  # Task 1: Optional admin-edited email
     scheduled_start: str = ""  # Task 4
@@ -4200,7 +4225,7 @@ class BulkCreateSession(BaseModel):
     ai_instructions: str = ""
 
 @app.post("/admin/bulk-create-sessions")
-async def bulk_create_sessions(data: BulkCreateSession):
+async def bulk_create_sessions(data: BulkCreateSession, current_admin: dict = Depends(get_current_admin_details)):
     from bson import ObjectId
     # ENFORCE SUBSCRIPTION PLAN
     admin_user = admins_collection.find_one({"_id": ObjectId(data.admin_id)})
@@ -4233,17 +4258,20 @@ async def bulk_create_sessions(data: BulkCreateSession):
             scheduled_expiry = parse_iso_datetime(data.scheduled_end)
             session_doc = {
                 "link_id": link_id,
+                "candidate_id": f"CAN{random.randint(100, 999)}",
                 "candidate_name": candidate.candidate_name,
                 "candidate_email": candidate.candidate_email,
                 "resume_text": candidate.resume_text,
                 "job_description": data.job_description,
                 "custom_email_html": data.custom_email_html,
                 "created_by": data.admin_id,
+                "company_id": current_admin.get("company_id"),
                 "created_at": now.isoformat(),
                 "expires_at": (scheduled_expiry.isoformat() if scheduled_expiry else (now + timedelta(hours=24)).isoformat()),
                 "interview_duration": data.interview_duration,
                 "interview_type": data.interview_type,
                 "industry_type": data.industry_type,
+                "language": data.language,
                 "case_study_count": data.case_study_count,
                 "record_video": candidate.record_video,  # Task 5: Per-candidate video
                 "status": "pending",
@@ -4258,7 +4286,7 @@ async def bulk_create_sessions(data: BulkCreateSession):
             insert_result = interview_sessions_collection.insert_one(session_doc)
             session_doc["_id"] = insert_result.inserted_id
         except Exception as db_err:
-            print(f"⚠️ DB Error for {candidate.candidate_email}: {db_err}")
+            print(f" DB Error for {candidate.candidate_email}: {db_err}")
             candidate_error = f"DB error: {db_err}"
 
         # Send email invitation
@@ -4272,7 +4300,7 @@ async def bulk_create_sessions(data: BulkCreateSession):
                 email_scheduled = email_result["email_scheduled"]
                 email_send_at = email_result["email_send_at"]
             except Exception as email_err:
-                print(f"⚠️ Email Error for {candidate.candidate_email}: {email_err}")
+                print(f" Email Error for {candidate.candidate_email}: {email_err}")
 
         results.append({
             "candidate_name": candidate.candidate_name,
@@ -4287,7 +4315,7 @@ async def bulk_create_sessions(data: BulkCreateSession):
         })
 
     successful = sum(1 for r in results if r["status"] == "success")
-    print(f"✅ Bulk sessions created: {successful}/{len(results)}")
+    print(f" Bulk sessions created: {successful}/{len(results)}")
 
     return {
         "status": "success",
@@ -4346,21 +4374,23 @@ async def get_session(link_id: str):
             "scheduled_start": scheduled_start,
             "scheduled_end": scheduled_end,
             "record_video": row.get("record_video", True),
-            "is_deactivated": row.get("is_deactivated", False)
+            "is_deactivated": row.get("is_deactivated", False),
+            "language": row.get("language", "English")
         }
     else:
         raise HTTPException(status_code=404, detail="Session not found")
 from typing import Optional
 
 @app.get("/admin/sessions")
-async def get_all_sessions(admin_id: str, start_date: Optional[str] = None, end_date: Optional[str] = None, sort_by: str = "score", deactivated: str = "false"):
+async def get_all_sessions(current_admin: dict = Depends(get_current_admin_details), start_date: Optional[str] = None, end_date: Optional[str] = None, sort_by: str = "score", deactivated: str = "false"):
+    company_id = current_admin.get("company_id")
     if deactivated == "all":
-        query_filter = {"created_by": admin_id}
+        query_filter = {"company_id": company_id}
     elif deactivated == "true":
-        query_filter = {"created_by": admin_id, "is_deactivated": True}
+        query_filter = {"company_id": company_id, "is_deactivated": True}
     else:
         # Default: only active
-        query_filter = {"created_by": admin_id, "$or": [{"is_deactivated": False}, {"is_deactivated": {"$exists": False}}]}
+        query_filter = {"company_id": company_id, "$or": [{"is_deactivated": False}, {"is_deactivated": {"$exists": False}}]}
     
     if (start_date and start_date.strip()) or (end_date and end_date.strip()):
         date_filter = {}
@@ -4373,7 +4403,7 @@ async def get_all_sessions(admin_id: str, start_date: Optional[str] = None, end_
     sort_field = [("created_at", -1)] if sort_by == "date" else [("avg_score", -1), ("created_at", -1)]
     
     projection = {
-        "link_id": 1, "candidate_name": 1, "candidate_email": 1, "status": 1, 
+        "link_id": 1, "candidate_id": 1, "candidate_name": 1, "candidate_email": 1, "status": 1, 
         "created_at": 1, "expires_at": 1, "interview_duration": 1, "interview_id": 1, 
         "avg_score": 1, "overall_recommendation": 1, "decision": 1, 
         "recording_path": 1, "record_video": 1, "is_deactivated": 1
@@ -4404,6 +4434,7 @@ async def get_all_sessions(admin_id: str, start_date: Optional[str] = None, end_
 
         sessions.append({
             "link_id": row.get("link_id"),
+            "candidate_id": row.get("candidate_id"),
             "candidate_name": row.get("candidate_name"),
             "candidate_email": row.get("candidate_email"),
             "status": row.get("status"),
@@ -4621,7 +4652,7 @@ async def start_session_interview(link_id: str = Form(...)):
                             resume_question_id = last_answered  # already done all
                             
             except Exception as resume_err:
-                print(f"⚠️ Could not determine resume question: {resume_err}")
+                print(f" Could not determine resume question: {resume_err}")
 
             resume_question = next(
                 (q for q in questions if int(q["id"]) == resume_question_id),
@@ -4672,6 +4703,9 @@ async def start_session_interview(link_id: str = Form(...)):
     hr_screening = row.get("hr_screening")
     custom_questions_text = row.get("custom_questions", "")
     ai_instructions_text = row.get("ai_instructions", "")
+    language = row.get("language", "English")
+    if language != "English":
+        ai_instructions_text += f"\n\nCRITICAL REQUIREMENT: You MUST generate all questions and interact STRICTLY in the {language} language. Do NOT use English."
     
     questions = generate_mock_questions(
         content_str, 
@@ -4682,7 +4716,8 @@ async def start_session_interview(link_id: str = Form(...)):
         hr_screening=hr_screening,
         custom_questions=custom_questions_text,
         ai_instructions=ai_instructions_text,
-        interview_type=interview_type
+        interview_type=interview_type,
+        language=language
     )
     
     if not questions:
@@ -4701,7 +4736,8 @@ async def start_session_interview(link_id: str = Form(...)):
         "created_at": datetime.now(timezone.utc).isoformat(),
         "candidate_name": candidate_name,
         "candidate_email": candidate_email,
-        "status": status
+        "status": status,
+        "language": language
     }
     
     # Store interview data (DB)
@@ -4711,7 +4747,8 @@ async def start_session_interview(link_id: str = Form(...)):
             "source": source,
             "profile_text": content_str[:5000],
             "questions": json.dumps(questions),
-            "created_at": datetime.now(timezone.utc).isoformat()
+            "created_at": datetime.now(timezone.utc).isoformat(),
+            "language": language
         })
         
         # Update session status
@@ -4724,7 +4761,7 @@ async def start_session_interview(link_id: str = Form(...)):
             }}
         )
     except Exception as db_e:
-        print(f"⚠️ DB Save Error: {db_e}")
+        print(f" DB Save Error: {db_e}")
     return {
         "status": "started",
         "interview_id": interview_id,
@@ -4739,7 +4776,7 @@ async def start_session_interview(link_id: str = Form(...)):
 
 @app.post("/session/{interview_id}/violation")
 async def log_violation(interview_id: str, violation: ViolationRequest):
-    print(f"⚠️ VIOLATION detected for session {interview_id}: {violation.type} (#{violation.count}) at {violation.timestamp}")
+    print(f" VIOLATION detected for session {interview_id}: {violation.type} (#{violation.count}) at {violation.timestamp}")
     try:
         interview_sessions_collection.update_one(
             {"interview_id": interview_id},
@@ -4747,42 +4784,43 @@ async def log_violation(interview_id: str, violation: ViolationRequest):
         )
         return {"status": "success"}
     except Exception as e:
-        print(f"❌ Error logging violation: {e}")
+        print(f" Error logging violation: {e}")
         return {"status": "error", "message": str(e)}
 
 @app.post("/admin/update-decision")
 @app.post("/admin/update_decision")
 async def update_decision(data: DecisionRequest):
-    print(f"🚀 Decision Update Request: link_id={data.link_id}, decision={data.decision}")
+    print(f" Decision Update Request: link_id={data.link_id}, decision={data.decision}")
     try:
         # 1. Fetch candidate details for email
         row = interview_sessions_collection.find_one({"link_id": data.link_id})
         if not row:
-            print(f"❌ Session NOT found for link_id: {data.link_id}")
+            print(f" Session NOT found for link_id: {data.link_id}")
             raise HTTPException(status_code=404, detail="Session not found")
         
         name = row.get("candidate_name")
         email = row.get("candidate_email")
         jd = row.get("job_description")
-        print(f"👤 Candidate: {name}, Email: {email}")
+        print(f" Candidate: {name}, Email: {email}")
         
         # 2. Update DB
         interview_sessions_collection.update_one({"link_id": data.link_id}, {"$set": {"decision": data.decision}})
-        print(f"✅ DB Updated for {data.link_id}")
+        print(f" DB Updated for {data.link_id}")
         
         # 3. Send Email
+        load_dotenv(override=True)
         email_sent = False
         email_reason = "No candidate email found"
         if email:
             email_sent = send_decision_email(email, name, data.decision, jd)
-            print(f"📧 Email sent: {email_sent}")
+            print(f" Email sent: {email_sent}")
             email_reason = "Success" if email_sent else "Email service error (Brevo API failed)"
         else:
-            print("⚠️ No email found for candidate, skipping notification.")
+            print(" No email found for candidate, skipping notification.")
         
         return {"status": "success", "decision": data.decision, "email_sent": email_sent, "email_reason": email_reason}
     except Exception as e:
-        print(f"💥 Decision update error: {e}")
+        print(f" Decision update error: {e}")
         raise HTTPException(status_code=500, detail=str(e))
 
 def send_decision_email(email: str, name: str, decision: str, jd: str):
@@ -4828,10 +4866,10 @@ def send_decision_email(email: str, name: str, decision: str, jd: str):
             "api-key": api_key, "content-type": "application/json"
         })
         if res.status_code >= 300:
-            print(f"❌ Brevo Error: {res.status_code} - {res.text}")
+            print(f" Brevo Error: {res.status_code} - {res.text}")
         return res.status_code < 300
     except Exception as email_err:
-        print(f"💥 Email sending error: {email_err}")
+        print(f" Email sending error: {email_err}")
         return False
 
 class CopilotMessage(BaseModel):
@@ -4841,6 +4879,7 @@ class CopilotMessage(BaseModel):
 class CopilotRequest(BaseModel):
     message: str
     history: list[CopilotMessage] = []
+    admin_id: Optional[str] = None
 
 @app.post("/admin/copilot")
 async def admin_copilot_chat(request: CopilotRequest):
@@ -4862,7 +4901,21 @@ CRITICAL RULES:
        "candidate_email": "candidate@example.com",
        "content": "Subject: ...\n\nBody: ..."
    }
-   ```"""
+   ```
+5. Do NOT echo or repeat the user's question in your response. Just provide the answer directly.
+6. You DO have access to recent candidate scores. If the admin asks about candidate rankings or scores, answer directly using ONLY the Recent Candidate Data provided below."""
+
+        if request.admin_id:
+            recent_sessions = list(interview_sessions_collection.find(
+                {"created_by": request.admin_id, "status": "completed"},
+                {"candidate_name": 1, "avg_score": 1, "decision": 1, "_id": 0}
+            ).sort("created_at", -1).limit(50))
+            
+            if recent_sessions:
+                candidate_context = "\n\n--- RECENT CANDIDATE DATA ---\n"
+                for s in recent_sessions:
+                    candidate_context += f"- Candidate: {s.get('candidate_name', 'Unknown')} | Score: {s.get('avg_score', 'N/A')}/100 | Decision: {s.get('decision', 'None')}\n"
+                system_prompt += candidate_context
 
         messages = [{"role": "system", "content": system_prompt}]
         
@@ -5009,7 +5062,7 @@ Output EXACTLY a JSON object with this structure:
                 
             return result
         except Exception as e:
-            print(f"⚠️ ATS Score AI failed: {e}")
+            print(f" ATS Score AI failed: {e}")
             # Offline Fallback logic: High-Accuracy Keyword Dictionary Match
             import re
             try:
@@ -5070,14 +5123,21 @@ Output EXACTLY a JSON object with this structure:
     except HTTPException:
         raise
     except Exception as e:
-        print(f"❌ ATS Score endpoint error: {e}")
+        print(f" ATS Score endpoint error: {e}")
         raise HTTPException(status_code=500, detail=str(e))
 
 @app.post("/complete-session/{link_id}")
 async def complete_session(link_id: str):
     """Mark a session as completed and send notification emails (Task 3)."""
     try:
-        interview_sessions_collection.update_one({"link_id": link_id}, {"$set": {"status": "completed"}})
+        session = interview_sessions_collection.find_one({"link_id": link_id})
+        update_data = {"status": "completed"}
+        if session:
+            candidate_id = session.get("candidate_id")
+            if candidate_id and not candidate_id.endswith("IQ"):
+                update_data["candidate_id"] = f"{candidate_id}IQ"
+                
+        interview_sessions_collection.update_one({"link_id": link_id}, {"$set": update_data})
         
         # Task 3: Send submission notification to admin and candidate
         try:
@@ -5123,9 +5183,9 @@ async def complete_session(link_id: str):
                         avg_score=avg_score,
                         total_questions=total_q
                     )
-                    print(f"✅ Submission notification sent for {candidate_name}")
+                    print(f" Submission notification sent for {candidate_name}")
         except Exception as notify_err:
-            print(f"⚠️ Submission notification error: {notify_err}")
+            print(f" Submission notification error: {notify_err}")
         
         return {"status": "success"}
     except Exception as e:
@@ -5203,15 +5263,16 @@ def get_live_snapshot(link_id: str):
 
 
 @app.get("/admin/ongoing-interviews")
-async def get_ongoing_interviews(admin_id: str):
+async def get_ongoing_interviews(current_admin: dict = Depends(get_current_admin_details)):
     """Return all in-progress (status=started) sessions for this admin with live status."""
+    admin_id = current_admin["admin_id"]
     require_admin_capability(
         admin_id,
         "live_monitoring",
         "Live monitoring is available on the Advance plan only.",
     )
     rows = list(interview_sessions_collection.find({
-        "created_by": admin_id,
+        "company_id": current_admin.get("company_id"),
         "status": "started",
         "$or": [{"is_deactivated": False}, {"is_deactivated": {"$exists": False}}]
     }, {"link_id": 1, "candidate_name": 1, "candidate_email": 1, "created_at": 1, "interview_id": 1, "started_at": 1}).sort("created_at", -1))
@@ -5327,11 +5388,19 @@ class ConnectionManager:
 manager = ConnectionManager()
 
 @app.websocket("/ws/webrtc/{role}/{link_id}")
-async def webrtc_endpoint(websocket: WebSocket, role: str, link_id: str):
+async def webrtc_endpoint(websocket: WebSocket, role: str, link_id: str, token: Optional[str] = None):
     if role == "candidate":
         await manager.connect_candidate(websocket, link_id)
     elif role == "admin":
-        await manager.connect_admin(websocket, link_id)
+        if not token:
+            await websocket.close(code=1008)
+            return
+        try:
+            jwt.decode(token, JWT_SECRET_KEY, algorithms=[ALGORITHM])
+            await manager.connect_admin(websocket, link_id)
+        except jwt.PyJWTError:
+            await websocket.close(code=1008)
+            return
     else:
         await websocket.close()
         return
@@ -5373,47 +5442,58 @@ async def master_login(data: AdminLogin):
     user = admins_collection.find_one({"username": data.username, "role": "master"})
     if not user:
         raise HTTPException(status_code=401, detail="Invalid master credentials")
-    if user["password"] != hash_password(data.password):
+    if not verify_password(data.password, user["password"]):
         raise HTTPException(status_code=401, detail="Invalid master credentials")
         
+    access_token = create_access_token(data={"sub": str(user["_id"]), "role": user["role"], "company_id": str(user.get("company_id", ""))})
     return {
         "status": "success",
         "master_id": str(user["_id"]),
+        "token": access_token,
         "username": user["username"],
         "role": user["role"]
     }
 
-@app.get("/master/tenants")
-async def get_tenants(master_id: str):
+@app.get("/master/companies")
+async def get_companies(master_id: str = Depends(get_current_admin)):
     require_master_user(master_id)
         
-    tenants = list(admins_collection.find({"role": "tenant"}))
+    companies = list(companies_collection.find())
     
     result = []
-    for t in tenants:
-        plan_context = get_admin_plan_context(t)
-        tenant_id = str(t["_id"])
-        session_filter = {"created_by": tenant_id}
+    for c in companies:
+        company_id = str(c["_id"])
+        # Create a mock user dict to pass to get_admin_plan_context
+        mock_user = {"company_id": company_id}
+        plan_context = get_admin_plan_context(mock_user)
+        
+        session_filter = {"company_id": company_id}
         total_sessions = interview_sessions_collection.count_documents(session_filter)
         completed_sessions = interview_sessions_collection.count_documents({**session_filter, "status": "completed"})
         started_sessions = interview_sessions_collection.count_documents({**session_filter, "status": "started"})
         pending_sessions = interview_sessions_collection.count_documents({**session_filter, "status": "pending"})
         deactivated_sessions = interview_sessions_collection.count_documents({**session_filter, "is_deactivated": True})
-        login_enabled = t.get("login_enabled", True) is not False
-                
+        
+        # Get primary admin email
+        primary_admin = admins_collection.find_one({"company_id": company_id, "role": "tenant"})
+        email = primary_admin.get("email", "") if primary_admin else ""
+        username = primary_admin.get("username", "") if primary_admin else ""
+        login_enabled = primary_admin.get("login_enabled", True) if primary_admin else False
+        
         result.append({
-            "id": tenant_id,
-            "username": t["username"],
-            "email": t.get("email", ""),
+            "id": company_id,
+            "company_name": c.get("name", "Unknown"),
+            "username": username,
+            "email": email,
             "subscription_plan": plan_context["plan_key"],
             "subscription_plan_label": plan_context["plan_label"],
-            "subscription_start": t.get("subscription_start", ""),
-            "subscription_expiry": t.get("subscription_expiry", ""),
+            "subscription_start": c.get("subscription_start", ""),
+            "subscription_expiry": c.get("subscription_expiry", ""),
             "days_remaining": plan_context["days_remaining"],
             "is_expired": plan_context["is_expired"],
             "login_enabled": login_enabled,
             "status": "blocked" if not login_enabled else ("expired" if plan_context["is_expired"] else "active"),
-            "created_at": t.get("created_at", ""),
+            "created_at": c.get("created_at", ""),
             "member_count": total_sessions,
             "total_sessions": total_sessions,
             "completed_sessions": completed_sessions,
@@ -5424,7 +5504,7 @@ async def get_tenants(master_id: str):
     return {"status": "success", "data": result}
 
 @app.post("/master/tenants")
-async def create_tenant(master_id: str, data: TenantCreate):
+async def create_tenant(data: TenantCreate, master_id: str = Depends(get_current_admin), current_admin: str = Depends(get_current_admin)):
     require_master_user(master_id)
         
     if admins_collection.find_one({"username": data.username}):
@@ -5436,14 +5516,22 @@ async def create_tenant(master_id: str, data: TenantCreate):
     else:
         expiry = start + timedelta(days=30) # Default 1 month for basic/advance
         
+    new_company = {
+        "name": data.company_name,
+        "subscription_plan": data.subscription_plan,
+        "subscription_start": start.isoformat(),
+        "subscription_expiry": expiry.isoformat(),
+        "created_at": start.isoformat()
+    }
+    company_insert = companies_collection.insert_one(new_company)
+    company_id = str(company_insert.inserted_id)
+
     new_tenant = {
         "username": data.username,
         "password": hash_password(data.password),
         "email": data.email,
         "role": "tenant",
-        "subscription_plan": data.subscription_plan,
-        "subscription_start": start.isoformat(),
-        "subscription_expiry": expiry.isoformat(),
+        "company_id": company_id,
         "login_enabled": True,
         "created_at": start.isoformat()
     }
@@ -5451,18 +5539,18 @@ async def create_tenant(master_id: str, data: TenantCreate):
     admins_collection.insert_one(new_tenant)
     return {"status": "success", "message": "Tenant created successfully"}
 
-@app.put("/master/tenants/{tenant_id}")
-async def update_tenant(master_id: str, tenant_id: str, data: TenantUpdate):
+@app.put("/master/companies/{company_id}")
+async def update_company(company_id: str, data: TenantUpdate, master_id: str = Depends(get_current_admin)):
     require_master_user(master_id)
         
-    tenant = admins_collection.find_one({"_id": ObjectId(tenant_id), "role": "tenant"})
-    if not tenant:
-        raise HTTPException(status_code=404, detail="Tenant not found")
+    company = companies_collection.find_one({"_id": ObjectId(company_id)})
+    if not company:
+        raise HTTPException(status_code=404, detail="Company not found")
         
     update_fields = {"subscription_plan": data.subscription_plan}
     
     if data.add_days > 0:
-        current_expiry = tenant.get("subscription_expiry")
+        current_expiry = company.get("subscription_expiry")
         now = datetime.now(timezone.utc)
         
         try:
@@ -5475,39 +5563,40 @@ async def update_tenant(master_id: str, tenant_id: str, data: TenantUpdate):
         except Exception:
             update_fields["subscription_expiry"] = (now + timedelta(days=data.add_days)).isoformat()
             
-    admins_collection.update_one({"_id": ObjectId(tenant_id)}, {"$set": update_fields})
-    return {"status": "success", "message": "Tenant updated successfully"}
+    companies_collection.update_one({"_id": ObjectId(company_id)}, {"$set": update_fields})
+    return {"status": "success", "message": "Company updated successfully"}
 
-@app.post("/master/tenants/{tenant_id}/login")
-async def set_tenant_login(master_id: str, tenant_id: str, payload: Dict[str, bool]):
+@app.post("/master/companies/{company_id}/login")
+async def set_company_login(company_id: str, payload: Dict[str, bool], master_id: str = Depends(get_current_admin)):
     require_master_user(master_id)
     enabled = bool(payload.get("login_enabled", True))
-    result = admins_collection.update_one(
-        {"_id": ObjectId(tenant_id), "role": "tenant"},
+    result = admins_collection.update_many(
+        {"company_id": company_id},
         {"$set": {"login_enabled": enabled}}
     )
     if result.matched_count == 0:
         raise HTTPException(status_code=404, detail="Tenant not found")
     return {"status": "success", "message": "Tenant login updated", "login_enabled": enabled}
 
-@app.delete("/master/tenants/{tenant_id}")
-async def delete_tenant(master_id: str, tenant_id: str):
+@app.delete("/master/companies/{company_id}")
+async def delete_company(company_id: str, master_id: str = Depends(get_current_admin)):
     require_master_user(master_id)
-    tenant = admins_collection.find_one({"_id": ObjectId(tenant_id), "role": "tenant"})
-    if not tenant:
-        raise HTTPException(status_code=404, detail="Tenant not found")
+    company = companies_collection.find_one({"_id": ObjectId(company_id)})
+    if not company:
+        raise HTTPException(status_code=404, detail="Company not found")
 
-    sessions = list(interview_sessions_collection.find({"created_by": tenant_id}, {"interview_id": 1}))
+    sessions = list(interview_sessions_collection.find({"company_id": company_id}, {"interview_id": 1}))
     interview_ids = [s.get("interview_id") for s in sessions if s.get("interview_id")]
     for interview_id in interview_ids:
         interviews_collection.delete_one({"id": interview_id})
         answers_collection.delete_many({"interview_id": interview_id})
 
-    interview_sessions_collection.delete_many({"created_by": tenant_id})
-    admins_collection.delete_one({"_id": ObjectId(tenant_id)})
+    interview_sessions_collection.delete_many({"company_id": company_id})
+    admins_collection.delete_many({"company_id": company_id})
+    companies_collection.delete_one({"_id": ObjectId(company_id)})
     return {
         "status": "success",
-        "message": "Tenant and related interview data deleted",
+        "message": "Company and related data deleted",
         "deleted_sessions": len(sessions),
     }
 
@@ -5598,7 +5687,7 @@ async def admin_login(data: AdminLogin):
         if not user:
             raise HTTPException(status_code=401, detail="Invalid username or password")
             
-    if user["password"] != hash_password(data.password):
+    if not verify_password(data.password, user["password"]):
         raise HTTPException(status_code=401, detail="Invalid username or password")
     
     # Check login_enabled
@@ -5620,9 +5709,11 @@ async def admin_login(data: AdminLogin):
             "plan": plan
         }
         
+    access_token = create_access_token(data={"sub": str(user["_id"]), "role": user.get("role", "tenant"), "company_id": str(user.get("company_id", ""))})
     return {
         "status": "success",
         "admin_id": str(user["_id"]),
+        "token": access_token,
         "username": user["username"],
         "email": user.get("email", ""),
         "name": user.get("name", user.get("username", "")),
@@ -5681,7 +5772,7 @@ async def get_all_plans():
     return {"status": "success", "data": result}
 
 @app.get("/master/plans")
-async def get_all_plans_master(master_id: str):
+async def get_all_plans_master(master_id: str = Depends(get_current_admin)):
     """Master-only: fetch ALL plans including owner"""
     master = admins_collection.find_one({"_id": ObjectId(master_id), "role": "master"})
     if not master:
@@ -5693,7 +5784,7 @@ async def get_all_plans_master(master_id: str):
     return {"status": "success", "data": result}
 
 @app.post("/master/plans")
-async def upsert_plan(master_id: str, data: PlanUpdate):
+async def upsert_plan(data: PlanUpdate, master_id: str = Depends(get_current_admin), current_admin: str = Depends(get_current_admin)):
     """Master-only: create or update a plan"""
     master = admins_collection.find_one({"_id": ObjectId(master_id), "role": "master"})
     if not master:
@@ -5716,7 +5807,7 @@ async def upsert_plan(master_id: str, data: PlanUpdate):
     return {"status": "success", "message": f"Plan '{data.plan_name}' saved"}
 
 @app.delete("/master/plans/{plan_id}")
-async def delete_plan(master_id: str, plan_id: str):
+async def delete_plan(plan_id: str, master_id: str = Depends(get_current_admin)):
     """Master-only: delete a plan"""
     master = admins_collection.find_one({"_id": ObjectId(master_id), "role": "master"})
     if not master:
@@ -5759,18 +5850,25 @@ async def register_admin(data: AdminRegister):
     duration = plan_info.get("duration_days", 15)
     expiry = now + timedelta(days=duration)
     
+    new_company = {
+        "name": normalized_company,
+        "subscription_plan": data.plan,
+        "subscription_start": now.isoformat(),
+        "subscription_expiry": expiry.isoformat(),
+        "is_paid": False,
+        "created_at": now.isoformat()
+    }
+    company_insert = companies_collection.insert_one(new_company)
+    company_id = str(company_insert.inserted_id)
+
     new_admin = {
         "username": normalized_email,  # Use email as username
         "password": hash_password(data.password),
         "email": normalized_email,
         "name": normalized_name,
         "phone": data.phone,
-        "company_name": normalized_company,
         "role": "tenant",
-        "subscription_plan": data.plan,
-        "subscription_start": now.isoformat(),
-        "subscription_expiry": expiry.isoformat(),
-        "is_paid": False,
+        "company_id": company_id,
         "login_enabled": True,
         "created_at": now.isoformat()
     }
@@ -6083,7 +6181,7 @@ async def stripe_webhook(request):
 # --------------------------------------------------------------------------------
 
 @app.get("/master/admins")
-async def get_all_admins(master_id: str):
+async def get_all_admins(master_id: str = Depends(get_current_admin)):
     """Master-only: Get all admins with subscription & revenue stats"""
     master = admins_collection.find_one({"_id": ObjectId(master_id), "role": "master"})
     if not master:
@@ -6140,7 +6238,7 @@ async def get_all_admins(master_id: str):
     }
 
 @app.put("/master/admins/{admin_id}/toggle-login")
-async def toggle_admin_login(master_id: str, admin_id: str):
+async def toggle_admin_login(admin_id: str, master_id: str = Depends(get_current_admin)):
     """Master-only: Enable/disable an admin's login access"""
     master = admins_collection.find_one({"_id": ObjectId(master_id), "role": "master"})
     if not master:

@@ -24,13 +24,13 @@ class VideoRecorder {
             this.recognition.lang = 'en-IN';
 
             this.recognition.onstart = () => {
-                console.log("Speech started");
+                // console.log("Speech started");
                 this.transcriptionDisplay.textContent = "🎤 Listening (Active)...";
                 // this.transcriptionBox.value += "[Debug: Listener Started]\n"; 
             };
 
             this.recognition.onend = () => {
-                console.log("Speech ended");
+                // console.log("Speech ended");
                 if (this.isRecording) {
                     // console.log("Restarting speech...");
                     try { this.recognition.start(); } catch (e) { }
@@ -84,10 +84,10 @@ class VideoRecorder {
             };
 
             this.recognition.nomatch = () => {
-                console.log("Speech recognition: No match found.");
+                // console.log("Speech recognition: No match found.");
             };
         } else {
-            console.warn("Web Speech API not supported in this browser.");
+            // console.warn("Web Speech API not supported in this browser.");
             this.recognition = null;
         }
     }
@@ -97,7 +97,7 @@ class VideoRecorder {
             // ALWAYS get a dedicated audio stream for recording/speech
             // Reusing the video stream (window.mediaStream) often causes issues with SpeechRecognition
             // because the video track might interfere or the audio track might be optimized for playback.
-            console.log("Requesting dedicated audio stream for best recognition...");
+            // console.log("Requesting dedicated audio stream for best recognition...");
             this.stream = await navigator.mediaDevices.getUserMedia({
                 audio: {
                     echoCancellation: true,
@@ -136,7 +136,7 @@ class VideoRecorder {
                 try {
                     this.recognition.start();
                 } catch (e) {
-                    console.warn("Recognition already started or failed:", e);
+                    // console.warn("Recognition already started or failed:", e);
                 }
             }
 
@@ -158,7 +158,7 @@ class VideoRecorder {
     startSilenceTimer() {
         if (this.silenceTimeout) clearTimeout(this.silenceTimeout);
         this.silenceTimeout = setTimeout(() => {
-            console.log("Silence detected for 10 seconds. Auto-submitting...");
+            // console.log("Silence detected for 10 seconds. Auto-submitting...");
             this.showStatus("Silence detected. Moving to next question...", "warning");
             if (typeof window.nextQuestion === 'function') {
                 window.nextQuestion();
@@ -236,10 +236,10 @@ class VideoRecorder {
             // Stop Speech Recognition
             if (this.recognition) {
                 try {
-                    console.log("Stopping speech recognition manually...");
+                    // console.log("Stopping speech recognition manually...");
                     this.recognition.stop();
                 } catch (e) {
-                    console.warn("Recognition already stopped:", e);
+                    // console.warn("Recognition already stopped:", e);
                 }
             }
 
@@ -287,9 +287,10 @@ class VideoRecorder {
         formData.append('audio', audioBlob, `answer_${Date.now()}.webm`);
         formData.append('interview_id', interviewId);
         formData.append('question_id', questionId);
+        formData.append('candidate_name', window.candidateName || 'Candidate');
 
         // Use the globally defined API_BASE_URL if available, else fallback to localhost
-        const baseUrl = window.API_BASE_URL || "https://localhost:8000";
+        const baseUrl = window.API_BASE_URL;
         const response = await fetch(`${baseUrl}/transcribe`, {
             method: 'POST',
             body: formData
@@ -309,7 +310,7 @@ class VideoRecorder {
                 window.updateBehavioralFromTranscript(data.text);
             }
         } else {
-            console.warn("Backend returned no speech, keeping live text.");
+            // console.warn("Backend returned no speech, keeping live text.");
         }
 
         this.transcriptionDisplay.textContent = "Processing complete.";

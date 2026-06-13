@@ -84,7 +84,14 @@ def test_massive_experience_extraction(text, expected_subsets):
     ("Admin", "admin123", False),
 ] * 200)
 def test_massive_admin_login(username, password, should_pass):
-    uploded.startup_event()
+    import asyncio
+    try:
+        asyncio.get_running_loop()
+        # If there's an event loop, this is tricky, but pytest test functions are synchronous here unless async def
+    except RuntimeError:
+        pass
+    asyncio.run(uploded.startup_event_db_and_email())
+    uploded.startup_event_cloudinary()
     res = client.post("/admin/login", json={"username": username, "password": password})
     assert res.status_code == (200 if should_pass else 401)
 

@@ -9,19 +9,19 @@
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
     <style>
         :root {
-            --bg: #f5faf7;
+            --bg: #ffffff;
             --surface: rgba(255, 255, 255, 0.84);
             --surface-strong: #ffffff;
-            --ink: #10231f;
-            --muted: #5f726d;
-            --line: rgba(16, 35, 31, 0.1);
-            --brand: #0c8f86;
-            --brand-deep: #0f5f5b;
-            --brand-soft: rgba(12, 143, 134, 0.12);
-            --accent: #132f2b;
-            --accent-2: #7be2d8;
+            --ink: #111827;
+            --muted: #475569;
+            --line: rgba(17, 24, 39, 0.1);
+            --brand: #6366f1;
+            --brand-deep: #4f46e5;
+            --brand-soft: rgba(99, 102, 241, 0.12);
+            --accent: #111827;
+            --accent-2: #818cf8;
             --sky: rgba(118, 180, 255, 0.18);
-            --shadow: 0 28px 80px rgba(16, 35, 31, 0.1);
+            --shadow: 0 28px 80px rgba(17, 24, 39, 0.1);
         }
 
         * {
@@ -38,9 +38,9 @@
         body {
             color: var(--ink);
             background:
-                radial-gradient(circle at top left, rgba(133, 255, 230, 0.38), transparent 32%),
-                radial-gradient(circle at 80% 12%, rgba(124, 180, 255, 0.28), transparent 28%),
-                linear-gradient(180deg, #f9fdfb 0%, var(--bg) 42%, #eef7f3 100%);
+                radial-gradient(circle at top left, rgba(192, 132, 252, 0.38), transparent 32%),
+                radial-gradient(circle at 80% 12%, rgba(147, 197, 253, 0.28), transparent 28%),
+                linear-gradient(180deg, #f8fafc 0%, var(--bg) 42%, #eef2f6 100%);
             overflow-x: hidden;
         }
 
@@ -49,8 +49,8 @@
             position: fixed;
             inset: 0;
             background-image:
-                linear-gradient(rgba(16, 35, 31, 0.04) 1px, transparent 1px),
-                linear-gradient(90deg, rgba(16, 35, 31, 0.04) 1px, transparent 1px);
+                linear-gradient(rgba(17, 24, 39, 0.04) 1px, transparent 1px),
+                linear-gradient(90deg, rgba(17, 24, 39, 0.04) 1px, transparent 1px);
             background-size: 88px 88px;
             mask-image: linear-gradient(180deg, rgba(0, 0, 0, 0.85), transparent 96%);
             pointer-events: none;
@@ -80,7 +80,7 @@
             border-radius: 28px;
             background: rgba(255, 255, 255, 0.74);
             backdrop-filter: blur(22px);
-            box-shadow: 0 18px 40px rgba(16, 35, 31, 0.08);
+            box-shadow: 0 18px 40px rgba(17, 24, 39, 0.08);
         }
 
         .brand-lockup {
@@ -95,7 +95,7 @@
             border-radius: 16px;
             display: grid;
             place-items: center;
-            background: linear-gradient(135deg, #14b8a6 0%, #0f766e 100%);
+            background: linear-gradient(135deg, #6366f1 0%, #4f46e5 100%);
             color: white;
             font-size: 1.1rem;
             font-weight: 800;
@@ -149,14 +149,14 @@
         }
 
         .btn-outline {
-            border-color: rgba(16, 35, 31, 0.12);
+            border-color: rgba(17, 24, 39, 0.12);
             background: rgba(255, 255, 255, 0.7);
             color: var(--accent);
         }
 
         .btn-primary {
             color: white;
-            background: linear-gradient(135deg, #14312d 0%, #0f655f 52%, #11a89b 100%);
+            background: linear-gradient(135deg, #6366f1 0%, #4f46e5 52%, #4338ca 100%);
             box-shadow:
                 inset -4px -6px 25px rgba(201, 201, 201, 0.08),
                 inset 4px 4px 10px rgba(29, 29, 29, 0.24),
@@ -178,7 +178,7 @@
             padding: 10px 14px;
             border-radius: 999px;
             background: rgba(255, 255, 255, 0.82);
-            border: 1px solid rgba(16, 35, 31, 0.08);
+            border: 1px solid rgba(17, 24, 39, 0.08);
             color: var(--brand-deep);
             font-size: 0.84rem;
             font-weight: 700;
@@ -230,8 +230,8 @@
             width: 10px;
             height: 10px;
             border-radius: 50%;
-            background: linear-gradient(135deg, #20d1c1, #0b8f86);
-            box-shadow: 0 0 0 8px rgba(11, 143, 134, 0.08);
+            background: linear-gradient(135deg, #818cf8, #6366f1);
+            box-shadow: 0 0 0 8px rgba(99, 102, 241, 0.08);
         }
 
         .hero-visual {
@@ -270,14 +270,14 @@
         .pricing-card,
         .cta-banner {
             border-radius: 30px;
-            border: 1px solid rgba(16, 35, 31, 0.08);
+            border: 1px solid rgba(17, 24, 39, 0.08);
             background: rgba(255, 255, 255, 0.88);
-            box-shadow: 0 18px 40px rgba(16, 35, 31, 0.06);
+            box-shadow: 0 18px 40px rgba(17, 24, 39, 0.06);
         }
 
         .dashboard-card {
             padding: 22px;
-            background: linear-gradient(180deg, #13302d 0%, #173b36 100%);
+            background: linear-gradient(180deg, #1e1b4b 0%, #312e81 100%);
             color: white;
         }
 
@@ -443,7 +443,7 @@
             width: 36px;
             height: 36px;
             border-radius: 50%;
-            background: linear-gradient(135deg, #14b8a6, #0f766e);
+            background: linear-gradient(135deg, #6366f1, #4f46e5);
             color: white;
             font-weight: 800;
         }
@@ -470,9 +470,9 @@
         }
 
         .pricing-card.featured {
-            background: linear-gradient(180deg, rgba(19, 48, 45, 0.96), rgba(16, 95, 91, 0.98));
+            background: linear-gradient(180deg, rgba(30, 27, 75, 0.96), rgba(49, 46, 129, 0.98));
             color: white;
-            box-shadow: 0 28px 56px rgba(11, 143, 134, 0.18);
+            box-shadow: 0 28px 56px rgba(99, 102, 241, 0.18);
         }
 
         .pricing-card.featured p,
@@ -490,7 +490,7 @@
             font-weight: 800;
             letter-spacing: 0.05em;
             text-transform: uppercase;
-            background: rgba(11, 143, 134, 0.12);
+            background: rgba(99, 102, 241, 0.12);
             color: var(--brand-deep);
         }
 
@@ -540,7 +540,7 @@
         }
 
         .pricing-card.featured li::before {
-            color: #7be2d8;
+            color: #818cf8;
         }
 
         .pricing-card .cta {
@@ -554,9 +554,9 @@
             align-items: center;
             justify-content: space-between;
             gap: 20px;
-            background: linear-gradient(135deg, #173b36 0%, #0d5f59 52%, #11a89b 100%);
+            background: linear-gradient(135deg, #312e81 0%, #4338ca 52%, #4338ca 100%);
             color: white;
-            box-shadow: 0 24px 50px rgba(11, 143, 134, 0.22);
+            box-shadow: 0 24px 50px rgba(99, 102, 241, 0.22);
         }
 
         .cta-banner h3 {
@@ -587,7 +587,7 @@
             gap: 18px;
             margin-top: 40px;
             padding-top: 22px;
-            border-top: 1px solid rgba(16, 35, 31, 0.08);
+            border-top: 1px solid rgba(17, 24, 39, 0.08);
             color: var(--muted);
             font-size: 0.92rem;
         }
@@ -845,10 +845,9 @@
         </footer>
     </div>
 
+    <script src="api_config.js"></script>
     <script>
-        const API_BASE = (window.location.hostname === "127.0.0.1" || window.location.hostname === "localhost")
-            ? (window.location.port === "3000" ? `${window.location.protocol}//localhost:8000` : "/api")
-            : (window.location.origin.includes("vercel.app") ? "https://ai-adaptive-interview-1hsw.onrender.com" : "/api");
+
 
         const planOrder = {
             "Free Trial": 0,

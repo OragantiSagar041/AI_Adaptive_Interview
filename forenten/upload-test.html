@@ -54,7 +54,7 @@
         showStatus('Uploading file...', 'info');
         
         try {
-            console.log('Sending request to /upload-resume...');
+            // console.log('Sending request to /upload-resume...');
             const response = await fetch('http://127.0.0.1:8009/upload-resume', {
                 method: 'POST',
                 body: formData,
@@ -64,7 +64,7 @@
                 }
             });
             
-            console.log('Response status:', response.status);
+            // console.log('Response status:', response.status);
             
             if (!response.ok) {
                 let errorMessage = `Server error: ${response.status} ${response.statusText}`;
@@ -79,7 +79,7 @@
             }
             
             const data = await response.json();
-            console.log('Upload successful:', data);
+            // console.log('Upload successful:', data);
             showStatus('File uploaded successfully!', 'success');
             
         } catch (error) {
