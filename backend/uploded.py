@@ -1012,6 +1012,8 @@ def generate_jd_questions(jd_text: str, ai_instructions: str = "", interview_typ
             
     except Exception as e:
         print(f"Error generating JD questions: {e}")
+        if language != "English":
+            return []
         
         # --- OFFLINE/FALLBACK MODE ---
         # If API fails, try to extract keywords manually using Regex/List
@@ -1687,8 +1689,26 @@ def generate_followup_question(answer_text: str, resume_context: str, jd_text: s
         return q_data
     except Exception as e:
         print(f"Error generating follow-up: {e}")
-        # Raise error so the endpoint fails and frontend skips adaptive questions
-        raise Exception("API Quota/Error (Offline Mode) - Follow-up generation skipped.")
+        # --- OFFLINE FALLBACK ---
+        import random
+        fallback_followups = {
+            "English": ["Could you elaborate a bit more on that point?", "Can you walk me through a specific example from your experience?", "What challenges did you face there, and how did you overcome them?", "Could you explain the reasoning behind your approach?"],
+            "Hindi": ["क्या आप इस पर थोड़ा और विस्तार से बता सकते हैं?", "क्या आप अपने पिछले अनुभव से एक विशिष्ट उदाहरण दे सकते हैं?", "वहां आपको किन चुनौतियों का सामना करना पड़ा, और आपने उन्हें कैसे पार किया?", "क्या आप अपने दृष्टिकोण के पीछे का कारण बता सकते हैं?"],
+            "Telugu": ["దయచేసి దాని గురించి కొంచెం వివరంగా చెప్పగలరా?", "మీ గత అనుభవం నుండి ఒక నిర్దిష్ట ఉదాహరణ ఇవ్వగలరా?", "అక్కడ మీరు ఎలాంటి సవాళ్లను ఎదుర్కొన్నారు, మరియు వాటిని ఎలా అధిగమించారు?", "మీ విధానం వెనుక ఉన్న కారణాన్ని వివరించగలరా?"],
+            "Tamil": ["அதைப்பற்றி கொஞ்சம் விரிவாக கூற முடியுமா?", "உங்கள் முந்தைய அனுபவத்திலிருந்து ஒரு குறிப்பிட்ட உதாரணத்தை கொடுக்க முடியுமா?", "அங்கு நீங்கள் என்ன சவால்களை எதிர்கொண்டீர்கள், அவற்றை எவ்வாறு சமாளித்தீர்கள்?", "உங்கள் அணுகுமுறைக்கு பின்னணியில் உள்ள காரணத்தை விளக்க முடியுமா?"],
+            "Malayalam": ["അതിനെക്കുറിച്ച് കുറച്ചുകൂടി വിശദീകരിക്കാമോ?", "നിങ്ങളുടെ മുൻകാല അനുഭവത്തിൽ നിന്ന് ഒരു പ്രത്യേക ഉദാഹരണം നൽകാമോ?", "അവിടെ നിങ്ങൾ എന്തൊക്കെ വെല്ലുവിളികൾ നേരിട്ടു, അവ എങ്ങനെ മറികടന്നു?", "നിങ്ങളുടെ സമീപനത്തിന് പിന്നിലെ കാരണം വിശദീകരിക്കാമോ?"],
+            "Kannada": ["ದಯವಿಟ್ಟು ಅದರ ಬಗ್ಗೆ ಸ್ವಲ್ಪ ಹೆಚ್ಚು ವಿವರಿಸಬಹುದೇ?", "ನಿಮ್ಮ ಹಿಂದಿನ ಅನುಭವದಿಂದ ನಿರ್ದಿಷ್ಟ ಉದಾಹರಣೆಯನ್ನು ನೀಡಬಲ್ಲಿರಾ?", "ಅಲ್ಲಿ ನೀವು ಯಾವ ಸವಾಲುಗಳನ್ನು ಎದುರಿಸಿದ್ದೀರಿ ಮತ್ತು ಅವುಗಳನ್ನು ಹೇಗೆ ನಿವಾರಿಸಿದ್ದೀರಿ?", "ನಿಮ್ಮ ವಿಧಾನದ ಹಿಂದಿನ ಕಾರಣವನ್ನು ವಿವರಿಸಬಹುದೇ?"]
+        }
+        
+        fallback_list = fallback_followups.get(language, fallback_followups["English"])
+        
+        return {
+            "id": current_q_id + 1,
+            "question": random.choice(fallback_list),
+            "difficulty": "Medium",
+            "type": "Follow-up",
+            "category": "Deep Dive"
+        }
 
 @app.post("/generate-next-question")
 def api_gen_next_question(req: NextQuestionRequest):
