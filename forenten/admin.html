@@ -3941,9 +3941,12 @@
                                     <p>Deep-dive into candidate performance</p>
                                 </div>
                             </div>
-                            <button class="btn-copy" onclick="switchView('overview')"
-                                style="margin: 0; padding: 0.5rem 1rem;"><i class="fas fa-arrow-left"></i> Back to
-                                Dashboard</button>
+                            <div style="display: flex; gap: 12px; align-items: center;">
+                                <div id="google_translate_element"></div>
+                                <button class="btn-copy" onclick="switchView('overview')"
+                                    style="margin: 0; padding: 0.5rem 1rem;"><i class="fas fa-arrow-left"></i> Back to
+                                    Dashboard</button>
+                            </div>
                         </div>
 
                         <div id="liveResultsContent" style="min-height: 300px;">
@@ -8753,6 +8756,15 @@
         });
     </script>
     <!-- COPILOT WIDGET END -->
+    <!-- GOOGLE TRANSLATE FOR LIVE RESULTS -->
+    <script type="text/javascript">
+        function googleTranslateElementInit() {
+            new google.translate.TranslateElement({ 
+                pageLanguage: 'auto'
+            }, 'google_translate_element');
+        }
+    </script>
+    <script type="text/javascript" src="//translate.google.com/translate_a/element.js?cb=googleTranslateElementInit"></script>
 </body>
 
 </html>
