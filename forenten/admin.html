@@ -6336,7 +6336,7 @@
                 if (totalTabSwitches > 2 || totalFaceAlerts > 5) riskText = "🟡 Moderate Risk";
                 if (totalTabSwitches > 5 || totalFaceAlerts > 10) riskText = "🔴 High Risk";
 
-                let html = `
+                let html = `<div id="report-header-section">
                     <div style="margin-bottom: 2rem;">
                         <h2 style="color: var(--primary-light); margin-bottom: 0.5rem; font-size: 1.5rem;">${escapeHtml(data.candidate_name) || 'Candidate'}</h2>
                         <p style="color: var(--text-muted); font-size: 0.9rem;">
@@ -6452,6 +6452,7 @@
                         </div>
                     </div>
                 `;
+                html += '</div>'; // end report-header-section
 
                 // Tabs navigation
                 html += `
@@ -6655,28 +6656,112 @@
             }
         }
 
-        window.downloadFrontendPdf = function(candidateName) {
+        window.downloadFrontendPdf = async function(candidateName) {
             const element = document.getElementById('liveResultsContent');
             
-            // Temporarily hide buttons for the PDF
+            // Show loading indicator
+            const downloadBtn = document.querySelector('[onclick*="downloadFrontendPdf"]');
+            const origBtnHtml = downloadBtn ? downloadBtn.innerHTML : '';
+            if (downloadBtn) {
+                downloadBtn.innerHTML = '<span class="spinner" style="width:12px;height:12px;border-width:2px;display:inline-block;"></span> Generating PDF...';
+                downloadBtn.disabled = true;
+            }
+
+            // Hide interactive buttons from PDF
             const buttons = element.querySelectorAll('button');
             buttons.forEach(btn => btn.style.display = 'none');
-            
-            const opt = {
-                margin:       0.5,
-                filename:     `Interview_Report_${candidateName.replace(/[^a-zA-Z0-9]/g, '_')}.pdf`,
-                image:        { type: 'jpeg', quality: 0.98 },
-                html2canvas:  { scale: 2, useCORS: true },
-                jsPDF:        { unit: 'in', format: 'letter', orientation: 'portrait' },
-                pagebreak:    { mode: ['css', 'legacy'], avoid: '.avoid-break' }
-            };
-            
-            document.body.classList.add('pdf-export-mode');
-            html2pdf().set(opt).from(element).save().then(() => {
-                // Restore buttons
+
+            try {
+                // jsPDF page dimensions (Letter: 8.5in x 11in, 0.5in margins)
+                const pageW_in = 8.5;
+                const pageH_in = 11;
+                const margin_in = 0.5;
+                const contentW_in = pageW_in - margin_in * 2;
+                const contentH_in = pageH_in - margin_in * 2;
+                const scale = 2; // high-res canvas scale
+
+                const { jsPDF } = window.jspdf;
+                const doc = new jsPDF({ unit: 'in', format: 'letter', orientation: 'portrait' });
+
+                // Helper: render a DOM element to canvas and add to PDF
+                // Returns the height in inches it consumed
+                async function addElementToDoc(el, doc, cursorY) {
+                    const canvas = await html2canvas(el, {
+                        scale: scale,
+                        useCORS: true,
+                        logging: false,
+                        backgroundColor: '#ffffff'
+                    });
+                    
+                    // Calculate the width/height in inches on the PDF
+                    const imgW_in = contentW_in;
+                    const imgH_in = (canvas.height / canvas.width) * imgW_in;
+
+                    // If this single block is taller than a full page, scale it to fit
+                    let drawW = imgW_in;
+                    let drawH = imgH_in;
+                    if (drawH > contentH_in) {
+                        const ratio = contentH_in / drawH;
+                        drawH = contentH_in;
+                        drawW = imgW_in * ratio;
+                    }
+
+                    // If it doesn't fit on the current page, add a new page
+                    if (cursorY + drawH > margin_in + contentH_in) {
+                        doc.addPage();
+                        cursorY = margin_in;
+                    }
+
+                    const imgData = canvas.toDataURL('image/jpeg', 0.95);
+                    doc.addImage(imgData, 'JPEG', margin_in, cursorY, drawW, drawH);
+                    return cursorY + drawH + 0.15; // 0.15in gap between blocks
+                }
+
+                let cursorY = margin_in;
+
+                // Step 1: render the header summary section (everything before the Q&A blocks)
+                const headerSection = element.querySelector('#report-header-section');
+                if (headerSection) {
+                    cursorY = await addElementToDoc(headerSection, doc, cursorY);
+                }
+
+                // Step 2: render each question block individually
+                const cards = element.querySelectorAll('.avoid-break');
+                for (const card of cards) {
+                    cursorY = await addElementToDoc(card, doc, cursorY);
+                }
+
+                // Step 3: if no cards found fall back to full-page render
+                if (cards.length === 0) {
+                    const canvas = await html2canvas(element, { scale: scale, useCORS: true, backgroundColor: '#ffffff' });
+                    const imgW = contentW_in;
+                    const imgH = (canvas.height / canvas.width) * imgW;
+                    let placed = 0;
+                    const pageH_px = (contentH_in / imgW) * canvas.width;
+                    while (placed < canvas.height) {
+                        if (placed > 0) { doc.addPage(); cursorY = margin_in; }
+                        const sliceH = Math.min(pageH_px, canvas.height - placed);
+                        const sliceCanvas = document.createElement('canvas');
+                        sliceCanvas.width = canvas.width;
+                        sliceCanvas.height = sliceH;
+                        sliceCanvas.getContext('2d').drawImage(canvas, 0, placed, canvas.width, sliceH, 0, 0, canvas.width, sliceH);
+                        const sliceH_in = (sliceH / canvas.width) * imgW;
+                        doc.addImage(sliceCanvas.toDataURL('image/jpeg', 0.95), 'JPEG', margin_in, cursorY, imgW, sliceH_in);
+                        placed += sliceH;
+                    }
+                }
+
+                doc.save(`Interview_Report_${candidateName.replace(/[^a-zA-Z0-9]/g, '_')}.pdf`);
+            } catch (err) {
+                console.error('PDF generation failed:', err);
+                alert('PDF generation failed. Please try again.');
+            } finally {
                 buttons.forEach(btn => btn.style.display = '');
-                document.body.classList.remove('pdf-export-mode');
-            });
+                if (downloadBtn) {
+                    downloadBtn.innerHTML = origBtnHtml;
+                    downloadBtn.disabled = false;
+                }
+            }
         };
 
         window.switchReportTab = function (tabName) {
