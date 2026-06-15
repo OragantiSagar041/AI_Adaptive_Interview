@@ -2630,19 +2630,30 @@ def generate_interview_summary(candidate_name: str, answers_data: list) -> dict:
     )
 
     prompt = f"""
-You are a senior hiring manager reviewing an interview for {candidate_name}.
+You are a senior hiring manager and industrial psychologist reviewing an interview for {candidate_name}.
 Here is the full transcript:
 
 {qa_block}
 
 Average score: {avg:.1f}/100
 
-Please respond in JSON with exactly five keys:
+Please respond in JSON with the following keys:
 - "recommendation": one of "Strong Hire", "Hire", "Borderline", "No Hire"
 - "strengths": 2-3 sentence paragraph on what the candidate did well
 - "weaknesses": 2-3 sentence paragraph on where the candidate needs improvement
-- "communication_score": an integer from 0 to 100 assessing the candidate's communication skills based on their WPM (ideal is 130-160), sentence formation, and clarity. (NOTE: Evaluate their communication independently from their average score.)
-- "detected_accent": a short string estimating the candidate's likely accent/dialect (e.g., 'Indian English', 'American English', 'British English', 'Neutral', etc.) based strictly on their vocabulary, phrasing, and grammar.
+- "communication_score": an integer from 0 to 100 assessing communication skills.
+- "communication_reasoning": a short sentence explaining the communication score.
+- "skills_score": an integer from 0 to 100 assessing technical/domain skills.
+- "skills_reasoning": a short sentence explaining the skills score.
+- "competencies_score": an integer from 0 to 100 assessing behavioral competencies and leadership.
+- "competencies_reasoning": a short sentence explaining the competencies score.
+- "personality_score": an integer from 0 to 100 assessing HEXACO/Big Five personality fit.
+- "personality_reasoning": a short sentence explaining the dominant personality traits observed.
+- "culture_fit_score": an integer from 0 to 100 assessing alignment with company culture.
+- "culture_fit_reasoning": a short sentence explaining the culture fit score.
+- "job_success_score": an integer from 0 to 100 predicting overall job success.
+- "job_success_reasoning": a short sentence explaining the prediction.
+- "detected_accent": a short string estimating the candidate's likely accent/dialect.
 """
 
     try:
@@ -2669,6 +2680,17 @@ Please respond in JSON with exactly five keys:
             "strengths": "Summary generation failed — please review individual scores.",
             "weaknesses": "Summary generation failed — please review individual scores.",
             "communication_score": int(avg),
+            "communication_reasoning": "N/A",
+            "skills_score": int(avg),
+            "skills_reasoning": "N/A",
+            "competencies_score": int(avg),
+            "competencies_reasoning": "N/A",
+            "personality_score": int(avg),
+            "personality_reasoning": "N/A",
+            "culture_fit_score": int(avg),
+            "culture_fit_reasoning": "N/A",
+            "job_success_score": int(avg),
+            "job_success_reasoning": "N/A",
             "detected_accent": "Unknown"
         }
 
@@ -2689,6 +2711,17 @@ def get_interview_details(link_id: str):
     saved_wk = session_data.get("weaknesses_summary")
     saved_avg = session_data.get("avg_score")
     saved_comm = session_data.get("communication_score")
+    saved_comm_reason = session_data.get("communication_reasoning")
+    saved_skills = session_data.get("skills_score")
+    saved_skills_reason = session_data.get("skills_reasoning")
+    saved_comp = session_data.get("competencies_score")
+    saved_comp_reason = session_data.get("competencies_reasoning")
+    saved_pers = session_data.get("personality_score")
+    saved_pers_reason = session_data.get("personality_reasoning")
+    saved_cult = session_data.get("culture_fit_score")
+    saved_cult_reason = session_data.get("culture_fit_reasoning")
+    saved_job = session_data.get("job_success_score")
+    saved_job_reason = session_data.get("job_success_reasoning")
     saved_accent = session_data.get("detected_accent")
     current_status = session_data.get("status")
     candidate_email = session_data.get("candidate_email")
@@ -2774,11 +2807,22 @@ def get_interview_details(link_id: str):
         avg_score = round(sum(scores) / len(scores), 1) if scores else 0
 
     # Use cached values if available, else generate
-    if saved_rec and saved_comm is not None and saved_accent is not None:
+    if saved_rec and saved_comm is not None and saved_skills is not None:
         recommendation = saved_rec
         strengths = saved_str
         weaknesses = saved_wk
         communication_score = saved_comm
+        communication_reasoning = saved_comm_reason
+        skills_score = saved_skills
+        skills_reasoning = saved_skills_reason
+        competencies_score = saved_comp
+        competencies_reasoning = saved_comp_reason
+        personality_score = saved_pers
+        personality_reasoning = saved_pers_reason
+        culture_fit_score = saved_cult
+        culture_fit_reasoning = saved_cult_reason
+        job_success_score = saved_job
+        job_success_reasoning = saved_job_reason
         detected_accent = saved_accent
     else:
         summary = generate_interview_summary(candidate_name or "Candidate", results)
@@ -2786,6 +2830,17 @@ def get_interview_details(link_id: str):
         strengths = summary.get("strengths", "")
         weaknesses = summary.get("weaknesses", "")
         communication_score = summary.get("communication_score", 0)
+        communication_reasoning = summary.get("communication_reasoning", "N/A")
+        skills_score = summary.get("skills_score", 0)
+        skills_reasoning = summary.get("skills_reasoning", "N/A")
+        competencies_score = summary.get("competencies_score", 0)
+        competencies_reasoning = summary.get("competencies_reasoning", "N/A")
+        personality_score = summary.get("personality_score", 0)
+        personality_reasoning = summary.get("personality_reasoning", "N/A")
+        culture_fit_score = summary.get("culture_fit_score", 0)
+        culture_fit_reasoning = summary.get("culture_fit_reasoning", "N/A")
+        job_success_score = summary.get("job_success_score", 0)
+        job_success_reasoning = summary.get("job_success_reasoning", "N/A")
         detected_accent = summary.get("detected_accent", "Unknown")
         
         # Only cache in DB if it's a real summary (not the fallback)
@@ -2798,6 +2853,17 @@ def get_interview_details(link_id: str):
                         "strengths_summary": strengths,
                         "weaknesses_summary": weaknesses,
                         "communication_score": communication_score,
+                        "communication_reasoning": communication_reasoning,
+                        "skills_score": skills_score,
+                        "skills_reasoning": skills_reasoning,
+                        "competencies_score": competencies_score,
+                        "competencies_reasoning": competencies_reasoning,
+                        "personality_score": personality_score,
+                        "personality_reasoning": personality_reasoning,
+                        "culture_fit_score": culture_fit_score,
+                        "culture_fit_reasoning": culture_fit_reasoning,
+                        "job_success_score": job_success_score,
+                        "job_success_reasoning": job_success_reasoning,
                         "detected_accent": detected_accent,
                         "avg_score": avg_score
                     }}
@@ -2817,6 +2883,17 @@ def get_interview_details(link_id: str):
         "strengths_summary": strengths,
         "weaknesses_summary": weaknesses,
         "communication_score": communication_score,
+        "communication_reasoning": communication_reasoning,
+        "skills_score": skills_score,
+        "skills_reasoning": skills_reasoning,
+        "competencies_score": competencies_score,
+        "competencies_reasoning": competencies_reasoning,
+        "personality_score": personality_score,
+        "personality_reasoning": personality_reasoning,
+        "culture_fit_score": culture_fit_score,
+        "culture_fit_reasoning": culture_fit_reasoning,
+        "job_success_score": job_success_score,
+        "job_success_reasoning": job_success_reasoning,
         "detected_accent": detected_accent,
         "recording_url": recording_url,
         "screen_recording_url": screen_recording_url,

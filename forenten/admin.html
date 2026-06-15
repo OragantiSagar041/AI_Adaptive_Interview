@@ -6348,6 +6348,28 @@
                 if (totalTabSwitches > 2 || totalFaceAlerts > 5) riskText = "🟡 Moderate Risk";
                 if (totalTabSwitches > 5 || totalFaceAlerts > 10) riskText = "🔴 High Risk";
 
+                const renderMetricCard = (title, score, reasoning, iconClass) => {
+                    const safeScore = score !== undefined && score !== null ? score : 'N/A';
+                    let color = 'var(--text-muted)';
+                    if (safeScore !== 'N/A') {
+                        color = safeScore >= 75 ? 'var(--accent)' : safeScore >= 50 ? '#d97706' : 'var(--danger)';
+                    }
+                    return `
+                    <div style="background: var(--bg-card); border: 1px solid var(--border); border-radius: var(--radius-sm); padding: 1.25rem;">
+                        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 0.5rem;">
+                            <strong style="color: var(--text-primary); font-size: 1rem;"><i class="fas ${iconClass}" style="color: var(--text-muted); margin-right: 0.5rem;"></i> ${title}</strong>
+                            <span style="font-size: 1.2rem; font-weight: 800; color: ${color};">${safeScore}</span>
+                        </div>
+                        <div style="background: rgba(255,255,255,0.05); border-radius: 4px; height: 6px; width: 100%; margin-bottom: 1rem; overflow: hidden;">
+                            <div style="background: ${color}; height: 100%; width: ${safeScore === 'N/A' ? 0 : safeScore}%;"></div>
+                        </div>
+                        <div style="font-size: 0.85rem; color: var(--text-secondary); line-height: 1.4; padding-top: 0.5rem; border-top: 1px dashed var(--border);">
+                            <strong style="color:var(--text-primary);">AI Reasoning:</strong> ${reasoning || 'No reasoning available.'}
+                        </div>
+                    </div>
+                    `;
+                };
+
                 let html = `<div id="report-header-section">
                     <div style="margin-bottom: 2rem;">
                         <h2 style="color: var(--primary-light); margin-bottom: 0.5rem; font-size: 1.5rem;">${escapeHtml(data.candidate_name) || 'Candidate'}</h2>
@@ -6380,6 +6402,18 @@
                         </div>
                     </div>
 
+                    <!-- Multi-Dimensional Scoring Grid -->
+                    <div style="margin-bottom: 2rem;">
+                        <h3 style="color: var(--text-primary); margin-bottom: 1rem; font-size: 1.2rem;">Multi-Dimensional Analysis</h3>
+                        <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); gap: 1rem;">
+                            ${renderMetricCard("Technical Skills", data.skills_score, data.skills_reasoning, "fa-code")}
+                            ${renderMetricCard("Behavioral Competencies", data.competencies_score, data.competencies_reasoning, "fa-users")}
+                            ${renderMetricCard("Personality & Traits", data.personality_score, data.personality_reasoning, "fa-brain")}
+                            ${renderMetricCard("Communication & Clarity", data.communication_score, data.communication_reasoning, "fa-comments")}
+                            ${renderMetricCard("Culture Fit", data.culture_fit_score, data.culture_fit_reasoning, "fa-handshake")}
+                            ${renderMetricCard("Predicted Job Success", data.job_success_score, data.job_success_reasoning, "fa-chart-line")}
+                        </div>
+                    </div>
                     <!-- Proctoring Risk Widget -->
                     <div style="background: var(--bg-card); padding: 1.5rem; border-radius: var(--radius-sm); border: 1px solid var(--border); margin-bottom: 2rem; display: flex; align-items: center; justify-content: space-between;">
                         <div>
