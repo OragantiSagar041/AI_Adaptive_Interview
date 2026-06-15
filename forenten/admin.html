@@ -1608,8 +1608,6 @@
             gap: 12px;
             font-size: 1.2rem;
             font-weight: 700;
-            border-bottom: 1px solid rgba(255, 255, 255, 0.1);
-            background: rgba(255, 255, 255, 0.06);
             position: relative;
             z-index: 1;
         }
@@ -2367,40 +2365,56 @@
             display: none !important;
             visibility: hidden !important;
         }
+
         body {
             top: 0px !important;
             position: static !important;
         }
-        .goog-tooltip, .goog-tooltip:hover {
+
+        .goog-tooltip,
+        .goog-tooltip:hover {
             display: none !important;
             box-shadow: none !important;
         }
+
         .goog-text-highlight {
             background-color: transparent !important;
             border: none !important;
             box-shadow: none !important;
         }
+
         .goog-te-gadget {
             color: transparent !important;
         }
+
         .goog-te-gadget span {
             display: none !important;
         }
 
         /* PDF Export Optimizations */
-        .pdf-export-mode #report-content-verbal, 
+        .pdf-export-mode #report-content-verbal,
         .pdf-export-mode #report-content-coding {
             font-size: 0.85rem !important;
         }
+
         .pdf-export-mode .avoid-break {
             padding: 1rem !important;
             margin-bottom: 0.75rem !important;
             page-break-inside: avoid !important;
             break-inside: avoid !important;
         }
-        .pdf-export-mode h4 { font-size: 1rem !important; }
-        .pdf-export-mode p { font-size: 0.85rem !important; }
-        .pdf-export-mode .fas { font-size: 0.85rem !important; }
+
+        .pdf-export-mode h4 {
+            font-size: 1rem !important;
+        }
+
+        .pdf-export-mode p {
+            font-size: 0.85rem !important;
+        }
+
+        .pdf-export-mode .fas {
+            font-size: 0.85rem !important;
+        }
     </style>
 </head>
 
@@ -2467,10 +2481,9 @@
                     </div>
 
                     <div class="login-card login-rise" data-delay="520" data-duration="800" id="loginCard">
-                        <div class="login-logo">
-                            <div class="icon"><i class="fas fa-shield-halved"></i></div>
-                            <h1>Login Page</h1>
-                            <p>Secure access for interview creation, scheduling, and candidate review.</p>
+                        <div class="login-logo" style="display: flex; justify-content: center; margin-bottom: 2rem;">
+                            <img src="assets/logo.png" alt="Hire IQ Logo"
+                                style="height: 90px; width: auto; object-fit: contain;">
                         </div>
 
                         <div class="form-group">
@@ -2528,8 +2541,8 @@
     <div id="dashboardSection" class="hidden">
         <!-- Sidebar (Left Fixed) -->
         <div class="sidebar-wrapper">
-            <div class="sidebar-header" style="padding: 1rem 1.25rem;">
-                <img src="assets/logo.png" alt="Hire IQ Logo" style="height: 40px; width: auto; max-width: 100%; object-fit: contain; background: white; padding: 6px 12px; border-radius: 8px;">
+            <div class="sidebar-header" style="padding: 1.5rem 1.25rem; display: flex; justify-content: center;">
+                <img src="assets/logo.png" alt="Hire IQ Logo" style="height: 50px; width: auto; object-fit: contain;">
             </div>
             <div class="sidebar-nav" id="tenantSidebarNav">
                 <button class="nav-btn active" onclick="switchView('overview')" id="nav-btn-overview"><i
@@ -6655,9 +6668,9 @@
             }
         }
 
-        window.downloadFrontendPdf = async function(candidateName) {
+        window.downloadFrontendPdf = async function (candidateName) {
             const element = document.getElementById('liveResultsContent');
-            
+
             // Show loading indicator
             const downloadBtn = document.querySelector('[onclick*="downloadFrontendPdf"]');
             const origBtnHtml = downloadBtn ? downloadBtn.innerHTML : '';
@@ -6691,7 +6704,7 @@
                         logging: false,
                         backgroundColor: '#ffffff'
                     });
-                    
+
                     // Calculate the width/height in inches on the PDF
                     const imgW_in = contentW_in;
                     const imgH_in = (canvas.height / canvas.width) * imgW_in;
@@ -8887,12 +8900,13 @@
     <!-- GOOGLE TRANSLATE FOR LIVE RESULTS -->
     <script type="text/javascript">
         function googleTranslateElementInit() {
-            new google.translate.TranslateElement({ 
+            new google.translate.TranslateElement({
                 pageLanguage: 'auto'
             }, 'google_translate_element');
         }
     </script>
-    <script type="text/javascript" src="//translate.google.com/translate_a/element.js?cb=googleTranslateElementInit"></script>
+    <script type="text/javascript"
+        src="//translate.google.com/translate_a/element.js?cb=googleTranslateElementInit"></script>
 </body>
 
 </html>

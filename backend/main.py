@@ -4731,6 +4731,8 @@ async def start_session_interview(link_id: str = Form(...)):
     custom_questions_text = row.get("custom_questions", "")
     ai_instructions_text = row.get("ai_instructions", "")
     language = row.get("language", "English")
+    industry_val = row.get("industry") or row.get("industry_type") or "General"
+    
     if language != "English":
         ai_instructions_text += f"\n\nCRITICAL REQUIREMENT: You MUST generate all questions and interact STRICTLY in the {language} language. Do NOT use English."
     
@@ -4744,6 +4746,7 @@ async def start_session_interview(link_id: str = Form(...)):
         custom_questions=custom_questions_text,
         ai_instructions=ai_instructions_text,
         interview_type=interview_type,
+        industry=industry_val,
         language=language
     )
     
