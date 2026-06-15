@@ -4126,6 +4126,7 @@
 
         let adminId = null;
         let adminEmail = "";
+        let adminName = "";
         let adminRole = sessionStorage.getItem('adminRole') || 'tenant';
         let masterTenantData = [];
         const PLAN_CAPABILITY_FALLBACK = {
@@ -4694,9 +4695,9 @@
                         return;
                     }
 
-                    const adminId = data.admin_id || data.master_id;
-                    const adminEmail = data.email || "";
-                    const adminName = data.username || username;
+                    adminId = data.admin_id || data.master_id;
+                    adminEmail = data.email || "";
+                    adminName = data.username || username;
                     const role = data.role || "tenant";
                     const plan = data.subscription_plan || "Free Trial";
                     const planKey = data.subscription_plan_key || normalizePlanKey(plan);
