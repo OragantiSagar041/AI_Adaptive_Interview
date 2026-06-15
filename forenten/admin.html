@@ -11,6 +11,7 @@
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
     <script src="https://cdn.sheetjs.com/xlsx-0.20.1/package/dist/xlsx.full.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/html2pdf.js/0.10.1/html2pdf.bundle.min.js"></script>
     <link
         href="https://fonts.googleapis.com/css2?family=Geist:wght@400;500;600&family=Instrument+Serif:ital@0;1&family=Inter:wght@300;400;500;600&display=swap"
         rel="stylesheet">
@@ -6396,10 +6397,10 @@
                             <strong style="color: var(--text-secondary); font-size: 0.85rem; text-transform: uppercase; letter-spacing: 1px;"><i class="fas fa-file-pdf"></i> Interview Report</strong>
                             <div style="margin-top: 1rem;">
                                 ${data.actual_interview_id ? `
-                                <a href="${API_BASE}/generate-report/${data.actual_interview_id}" target="_blank"
-                                   style="padding: 0.6rem 1.2rem; background: var(--primary); color: #fff; border-radius: 8px; text-decoration: none; font-size: 0.9rem; font-weight: 600; text-align: center; display: block;">
+                                <button onclick="downloadFrontendPdf('${escapeHtml(data.candidate_name)}')" 
+                                   style="width: 100%; padding: 0.6rem 1.2rem; background: var(--primary); color: #fff; border: none; border-radius: 8px; text-decoration: none; font-size: 0.9rem; font-weight: 600; cursor: pointer; text-align: center; display: block; transition: background 0.2s;">
                                     <i class="fas fa-download"></i> Download PDF Report
-                                </a>
+                                </button>
                                 ` : `
                                 <p style="color: var(--text-muted); font-size: 0.9rem;">PDF Report not available yet.</p>
                                 `}
@@ -6609,6 +6610,27 @@
                 container.innerHTML = '<div style="text-align: center; color: var(--danger); padding: 2rem;">Failed to load live results.</div>';
             }
         }
+
+        window.downloadFrontendPdf = function(candidateName) {
+            const element = document.getElementById('liveResultsContent');
+            
+            // Temporarily hide buttons for the PDF
+            const buttons = element.querySelectorAll('button');
+            buttons.forEach(btn => btn.style.display = 'none');
+            
+            const opt = {
+                margin:       0.5,
+                filename:     `Interview_Report_${candidateName.replace(/[^a-zA-Z0-9]/g, '_')}.pdf`,
+                image:        { type: 'jpeg', quality: 0.98 },
+                html2canvas:  { scale: 2, useCORS: true },
+                jsPDF:        { unit: 'in', format: 'letter', orientation: 'portrait' }
+            };
+            
+            html2pdf().set(opt).from(element).save().then(() => {
+                // Restore buttons
+                buttons.forEach(btn => btn.style.display = '');
+            });
+        };
 
         window.switchReportTab = function (tabName) {
             const verbalTab = document.getElementById('tab-verbal');
