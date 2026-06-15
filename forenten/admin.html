@@ -6273,6 +6273,7 @@
                 let totalFaceAlerts = 0;
 
                 data.answers.forEach(a => {
+                    if (!a) return;
                     if (a.ai_score != null) {
                         totalScore += a.ai_score;
                         answeredCount++;
@@ -6432,6 +6433,7 @@
                 };
 
                 data.answers.forEach(ans => {
+                    if (!ans) return;
                     const score = ans.ai_score ?? '—';
                     const sColor = (ans.ai_score || 0) >= 60 ? 'var(--accent)' : 'var(--danger)';
                     const timeStr = `${Math.floor((ans.time_spent_seconds || 0) / 60)}m ${(ans.time_spent_seconds || 0) % 60}s`;
@@ -6575,6 +6577,7 @@
                         html += '<div style="display: flex; flex-direction: column; gap: 1rem; margin-top: 1rem;">';
 
                         data.case_study_round.answers.forEach(ans => {
+                            if (!ans) return;
                             const score = ans.ai_score ?? '—';
                             const sColor = (ans.ai_score || 0) >= 60 ? 'var(--accent)' : 'var(--danger)';
                             html += `
