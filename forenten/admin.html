@@ -6442,7 +6442,7 @@
                     const faceWarn = (ans.face_alerts || 0) > 0 ? `<span style="color:var(--danger);"><i class="fas fa-face-frown"></i> ${ans.face_alerts} face alert(s)</span>` : `<span style="color:var(--accent);"><i class="fas fa-face-smile"></i> Visible</span>`;
 
                     html += `
-                        <div style="background: var(--bg-card); padding: 1.5rem; border-radius: var(--radius-sm); border: 1px solid var(--border);">
+                        <div style="background: var(--bg-card); padding: 1.5rem; border-radius: var(--radius-sm); border: 1px solid var(--border); page-break-inside: avoid; break-inside: avoid;">
                             <div style="display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 1rem;">
                                 <h4 style="color: var(--text-primary); margin: 0; flex: 1; font-size: 1.1rem;">Q${ans.question_id}: ${escapeHtml(ans.question_text)}</h4>
                                 <span style="font-size: 1.5rem; font-weight: 700; color: ${sColor}; margin-left: 1rem;">${score}/100</span>
@@ -6582,7 +6582,7 @@
                             const score = ans.ai_score ?? '—';
                             const sColor = (ans.ai_score || 0) >= 60 ? 'var(--accent)' : 'var(--danger)';
                             html += `
-                            <div style="background: var(--bg-card); padding: 1.5rem; border-radius: var(--radius-sm); border: 1px solid var(--border);">
+                            <div style="background: var(--bg-card); padding: 1.5rem; border-radius: var(--radius-sm); border: 1px solid var(--border); page-break-inside: avoid; break-inside: avoid;">
                                 <div style="display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 1rem;">
                                     <h4 style="color: var(--text-primary); margin: 0; flex: 1; font-size: 1.1rem;">Q${ans.question_id}: ${escapeHtml(ans.question_text)}</h4>
                                     <span style="font-size: 1.5rem; font-weight: 700; color: ${sColor}; margin-left: 1rem;">${score}/100</span>
@@ -6623,7 +6623,8 @@
                 filename:     `Interview_Report_${candidateName.replace(/[^a-zA-Z0-9]/g, '_')}.pdf`,
                 image:        { type: 'jpeg', quality: 0.98 },
                 html2canvas:  { scale: 2, useCORS: true },
-                jsPDF:        { unit: 'in', format: 'letter', orientation: 'portrait' }
+                jsPDF:        { unit: 'in', format: 'letter', orientation: 'portrait' },
+                pagebreak:    { mode: ['css', 'legacy'] }
             };
             
             html2pdf().set(opt).from(element).save().then(() => {
