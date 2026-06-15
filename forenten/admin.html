@@ -2358,6 +2358,27 @@
             font-size: 0.9rem;
             color: #4b5563;
         }
+
+        /* Hide Google Translate top bar & prevent body shift */
+        .goog-te-banner-frame.skiptranslate {
+            display: none !important;
+        }
+        body {
+            top: 0px !important;
+        }
+        .goog-tooltip {
+            display: none !important;
+            box-shadow: none !important;
+        }
+        .goog-tooltip:hover {
+            display: none !important;
+            box-shadow: none !important;
+        }
+        .goog-text-highlight {
+            background-color: transparent !important;
+            border: none !important;
+            box-shadow: none !important;
+        }
     </style>
 </head>
 
