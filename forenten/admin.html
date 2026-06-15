@@ -6447,7 +6447,7 @@
                 html += '<div id="report-content-verbal" style="display: block;">';
                 // Questions breakdown
                 html += '<strong style="color: var(--text-secondary); font-size: 0.85rem; text-transform: uppercase; letter-spacing: 1px;"><i class="fas fa-list-check"></i> Detailed Breakdown</strong>';
-                html += '<div style="display: flex; flex-direction: column; gap: 1rem; margin-top: 1rem;">';
+                html += '<div style="display: block; margin-top: 1rem;">';
 
                 // Helper
                 function wpmLabel(wpm) {
@@ -6466,7 +6466,7 @@
                     const faceWarn = (ans.face_alerts || 0) > 0 ? `<span style="color:var(--danger);"><i class="fas fa-face-frown"></i> ${ans.face_alerts} face alert(s)</span>` : `<span style="color:var(--accent);"><i class="fas fa-face-smile"></i> Visible</span>`;
 
                     html += `
-                        <div style="background: var(--bg-card); padding: 1.5rem; border-radius: var(--radius-sm); border: 1px solid var(--border); page-break-inside: avoid; break-inside: avoid;">
+                        <div class="avoid-break" style="background: var(--bg-card); padding: 1.5rem; border-radius: var(--radius-sm); border: 1px solid var(--border); margin-bottom: 1rem; page-break-inside: avoid; break-inside: avoid;">
                             <div style="display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 1rem;">
                                 <h4 style="color: var(--text-primary); margin: 0; flex: 1; font-size: 1.1rem;">Q${ans.question_id}: ${escapeHtml(ans.question_text)}</h4>
                                 <span style="font-size: 1.5rem; font-weight: 700; color: ${sColor}; margin-left: 1rem;">${score}/100</span>
@@ -6599,14 +6599,14 @@
 
                     if (data.case_study_round && data.case_study_round.answers) {
                         html += '<strong style="color: var(--text-secondary); font-size: 0.85rem; text-transform: uppercase; letter-spacing: 1px; display: block; margin-top: 2rem;"><i class="fas fa-briefcase"></i> Case Study Results</strong>';
-                        html += '<div style="display: flex; flex-direction: column; gap: 1rem; margin-top: 1rem;">';
+                        html += '<div style="display: block; margin-top: 1rem;">';
 
                         data.case_study_round.answers.forEach(ans => {
                             if (!ans) return;
                             const score = ans.ai_score ?? '—';
                             const sColor = (ans.ai_score || 0) >= 60 ? 'var(--accent)' : 'var(--danger)';
                             html += `
-                            <div style="background: var(--bg-card); padding: 1.5rem; border-radius: var(--radius-sm); border: 1px solid var(--border); page-break-inside: avoid; break-inside: avoid;">
+                            <div class="avoid-break" style="background: var(--bg-card); padding: 1.5rem; border-radius: var(--radius-sm); border: 1px solid var(--border); margin-bottom: 1rem; page-break-inside: avoid; break-inside: avoid;">
                                 <div style="display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 1rem;">
                                     <h4 style="color: var(--text-primary); margin: 0; flex: 1; font-size: 1.1rem;">Q${ans.question_id}: ${escapeHtml(ans.question_text)}</h4>
                                     <span style="font-size: 1.5rem; font-weight: 700; color: ${sColor}; margin-left: 1rem;">${score}/100</span>
@@ -6648,7 +6648,7 @@
                 image:        { type: 'jpeg', quality: 0.98 },
                 html2canvas:  { scale: 2, useCORS: true },
                 jsPDF:        { unit: 'in', format: 'letter', orientation: 'portrait' },
-                pagebreak:    { mode: ['css', 'legacy'] }
+                pagebreak:    { mode: ['css', 'legacy'], avoid: '.avoid-break' }
             };
             
             html2pdf().set(opt).from(element).save().then(() => {
