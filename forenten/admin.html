@@ -2360,17 +2360,16 @@
         }
 
         /* Hide Google Translate top bar & prevent body shift */
+        iframe.goog-te-banner-frame,
         .goog-te-banner-frame.skiptranslate {
             display: none !important;
+            visibility: hidden !important;
         }
         body {
             top: 0px !important;
+            position: static !important;
         }
-        .goog-tooltip {
-            display: none !important;
-            box-shadow: none !important;
-        }
-        .goog-tooltip:hover {
+        .goog-tooltip, .goog-tooltip:hover {
             display: none !important;
             box-shadow: none !important;
         }
@@ -2379,6 +2378,27 @@
             border: none !important;
             box-shadow: none !important;
         }
+        .goog-te-gadget {
+            color: transparent !important;
+        }
+        .goog-te-gadget span {
+            display: none !important;
+        }
+
+        /* PDF Export Optimizations */
+        .pdf-export-mode #report-content-verbal, 
+        .pdf-export-mode #report-content-coding {
+            font-size: 0.85rem !important;
+        }
+        .pdf-export-mode .avoid-break {
+            padding: 1rem !important;
+            margin-bottom: 0.75rem !important;
+            page-break-inside: avoid !important;
+            break-inside: avoid !important;
+        }
+        .pdf-export-mode h4 { font-size: 1rem !important; }
+        .pdf-export-mode p { font-size: 0.85rem !important; }
+        .pdf-export-mode .fas { font-size: 0.85rem !important; }
     </style>
 </head>
 
@@ -6651,9 +6671,11 @@
                 pagebreak:    { mode: ['css', 'legacy'], avoid: '.avoid-break' }
             };
             
+            document.body.classList.add('pdf-export-mode');
             html2pdf().set(opt).from(element).save().then(() => {
                 // Restore buttons
                 buttons.forEach(btn => btn.style.display = '');
+                document.body.classList.remove('pdf-export-mode');
             });
         };
 
@@ -8721,6 +8743,7 @@
             btn.innerHTML = '<span class="spinner" style="width:12px;height:12px;border-width:2px;display:inline-block;"></span>';
             btn.disabled = true;
             btn.nextElementSibling.disabled = true; // disable reject
+
 
             try {
                 const res = await fetch(`${API_BASE}/admin/copilot/execute`, {
