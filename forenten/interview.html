@@ -1908,6 +1908,14 @@
             }
         }
 
+        // Pre-load voices for production
+        if ('speechSynthesis' in window) {
+            window.speechSynthesis.getVoices();
+            window.speechSynthesis.onvoiceschanged = () => {
+                window.speechSynthesis.getVoices();
+            };
+        }
+
         function speakText(text, onEndCallback = null) {
             if ('speechSynthesis' in window) {
                 // Cancel any ongoing speech first
@@ -5286,7 +5294,15 @@ Output: ${formatCodingValue(testCase.output)}${resultBlock}</pre>
             }
 
             // 2. Get Screen Share
-            if (!screenStream || !screenStream.active) {
+            let needScreenShare = true;
+            if (screenStream) {
+                const screenTracks = screenStream.getVideoTracks();
+                if (screenTracks.length > 0 && screenTracks[0].readyState === 'live') {
+                    needScreenShare = false;
+                }
+            }
+
+            if (needScreenShare) {
                 // console.log("Requesting screen share...");
                 try {
                     // Hint to the browser that we want the entire screen
@@ -5391,21 +5407,25 @@ Output: ${formatCodingValue(testCase.output)}${resultBlock}</pre>
                     options.mimeType = 'video/webm';
                 }
                 
-                cameraRecorder = new MediaRecorder(stream, options);
-                cameraChunks = [];
-                cameraRecorder.ondataavailable = e => {
-                    if (e.data.size > 0) cameraChunks.push(e.data);
-                };
+                if (!cameraRecorder || cameraRecorder.state === 'inactive') {
+                    cameraRecorder = new MediaRecorder(stream, options);
+                    // Do not clear cameraChunks if we are just restarting screen share
+                    if (!cameraChunks || cameraChunks.length === 0) cameraChunks = [];
+                    cameraRecorder.ondataavailable = e => {
+                        if (e.data.size > 0) cameraChunks.push(e.data);
+                    };
+                    cameraRecorder.start(2000);
+                }
                 
-                screenRecorder = new MediaRecorder(screenStream, options);
-                screenChunks = [];
-                screenRecorder.ondataavailable = e => {
-                    if (e.data.size > 0) screenChunks.push(e.data);
-                };
-
-                // Start recording
-                cameraRecorder.start(2000);
-                screenRecorder.start(2000);
+                if (!screenRecorder || screenRecorder.state === 'inactive') {
+                    screenRecorder = new MediaRecorder(screenStream, options);
+                    // Do not clear screenChunks if we are just restarting screen share
+                    if (!screenChunks || screenChunks.length === 0) screenChunks = [];
+                    screenRecorder.ondataavailable = e => {
+                        if (e.data.size > 0) screenChunks.push(e.data);
+                    };
+                    screenRecorder.start(2000);
+                }
                 // console.log("Dual session recording STARTED ✅");
             } else {
                 // console.log("Full session recording skipped (record_video=false) 🛑");

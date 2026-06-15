@@ -111,7 +111,7 @@ os.makedirs(UPLOAD_FOLDER, exist_ok=True)
 from fastapi.staticfiles import StaticFiles
 from fastapi.middleware.gzip import GZipMiddleware
 
-FRONTEND_URL = "https://ai-adaptive-interview.vercel.app"
+FRONTEND_URL = "https://www.hireiq.co.in"
 
 PLAN_DEFINITIONS = {
     "trial": {
@@ -416,6 +416,8 @@ app.add_middleware(
         "http://localhost:8000",
         "http://127.0.0.1:8000",
         "https://ai-adaptive-interview.vercel.app",
+        "https://www.hireiq.co.in",
+        "https://hireiq.co.in",
     ],
     allow_origin_regex=r"https://.*\.vercel\.app",
     allow_credentials=True,
