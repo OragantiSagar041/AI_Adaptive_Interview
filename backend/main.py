@@ -2016,17 +2016,17 @@ async def save_answer(
     time_spent_seconds: int = Form(0),
     time_limit_seconds: int = Form(120),
 ):
-    print(f" Saving answer for {question_id} (time: {time_spent_seconds}s / {time_limit_seconds}s)...")
-    
-    # Get context
+    print(f"⚡ Instant save for Q{question_id} — AI scoring in background...")
+
+    # ── STEP 1: Get context (fast — RAM first) ──────────────────────────────
     context = ""
-    # Try RAM first
+    language = "English"
     if interview_id in interviews:
-         profile_text = interviews[interview_id].get("profile_text", "")
-         source = interviews[interview_id].get("source", "Resume")
-         context = f"Candidate's {source}: {profile_text}"
+        profile_text = interviews[interview_id].get("profile_text", "")
+        source = interviews[interview_id].get("source", "Resume")
+        context = f"Candidate's {source}: {profile_text}"
+        language = interviews[interview_id].get("language", "English")
     else:
-        # Try DB
         try:
             row = interviews_collection.find_one({"id": interview_id})
             if row:
@@ -2034,60 +2034,72 @@ async def save_answer(
         except Exception as e:
             print(f" Context fetch error: {e}")
 
-    # Use the robust analyze_answer function (now time-aware)
-    language = "English"
-    if interview_id in interviews:
-        language = interviews[interview_id].get("language", "English")
-        
-    ai_result = analyze_answer(
-        question_text,
-        answer_text,
-        context,
-        time_spent_seconds=time_spent_seconds,
-        time_limit_seconds=time_limit_seconds,
-        language=language
-    )
-
-    # Prepare keywords (handle list or string)
-    keywords = ai_result.get("keywords", [])
-    if isinstance(keywords, list):
-        keywords_str = ",".join(keywords)
-    else:
-        keywords_str = str(keywords)
-
-    # Delete any existing answer for this question in this interview to avoid duplicates
+    # ── STEP 2: Save to MongoDB INSTANTLY with pending status ───────────────
     answers_collection.delete_many({"interview_id": interview_id, "question_id": question_id})
-    
     answers_collection.insert_one({
         "interview_id": interview_id,
         "question_id": question_id,
         "question_text": question_text,
         "answer_text": answer_text,
-        "ai_score": ai_result.get("overall_score", 0),
-        "content_score": ai_result.get("content_score", 0),
-        "relevance_score": ai_result.get("relevance_score", 0),
-        "time_score": ai_result.get("time_score", 0),
+        "ai_score": None,
+        "content_score": None,
+        "relevance_score": None,
+        "time_score": None,
         "time_spent_seconds": time_spent_seconds,
         "time_limit_seconds": time_limit_seconds,
-        "ai_feedback": ai_result.get("feedback", "No feedback"),
-        "ai_keywords": keywords_str,
-        "corrected_answer": ai_result.get("corrected_answer", "N/A"),
+        "ai_feedback": "Scoring in progress...",
+        "ai_keywords": "",
+        "corrected_answer": "Scoring in progress...",
+        "scoring_status": "pending",
         "created_at": datetime.now(timezone.utc).isoformat()
     })
 
-    print(f" Answer saved  Score: {ai_result.get('overall_score', 0)}/100 "
-          f"(content={ai_result.get('content_score',0)}, "
-          f"relevance={ai_result.get('relevance_score',0)}, "
-          f"time={ai_result.get('time_score',0)})")
+    # ── STEP 3: Fire AI scoring in a BACKGROUND THREAD ─────────────────────
+    def _score_in_background():
+        try:
+            ai_result = analyze_answer(
+                question_text,
+                answer_text,
+                context,
+                time_spent_seconds=time_spent_seconds,
+                time_limit_seconds=time_limit_seconds,
+                language=language
+            )
+            keywords = ai_result.get("keywords", [])
+            keywords_str = ",".join(keywords) if isinstance(keywords, list) else str(keywords)
 
+            answers_collection.update_one(
+                {"interview_id": interview_id, "question_id": question_id},
+                {"$set": {
+                    "ai_score": ai_result.get("overall_score", 0),
+                    "content_score": ai_result.get("content_score", 0),
+                    "relevance_score": ai_result.get("relevance_score", 0),
+                    "time_score": ai_result.get("time_score", 0),
+                    "ai_feedback": ai_result.get("feedback", "No feedback"),
+                    "ai_keywords": keywords_str,
+                    "corrected_answer": ai_result.get("corrected_answer", "N/A"),
+                    "scoring_status": "complete"
+                }}
+            )
+            print(f"✅ Background scoring complete for Q{question_id}: {ai_result.get('overall_score', 0)}/100")
+        except Exception as e:
+            print(f"⚠️ Background scoring failed for Q{question_id}: {e}")
+            answers_collection.update_one(
+                {"interview_id": interview_id, "question_id": question_id},
+                {"$set": {"scoring_status": "failed", "ai_score": 0}}
+            )
+
+    thread = threading.Thread(target=_score_in_background, daemon=True)
+    thread.start()
+
+    # ── STEP 4: Return INSTANTLY to the candidate ───────────────────────────
     return {
         "status": "saved",
-        "ai_score": ai_result.get("overall_score", 0),
-        "content_score": ai_result.get("content_score", 0),
-        "relevance_score": ai_result.get("relevance_score", 0),
-        "time_score": ai_result.get("time_score", 0),
-        "ai_feedback": ai_result.get("feedback", "")
+        "scoring_status": "pending",
+        "ai_score": None,
+        "message": "Answer saved! Scoring is running in the background."
     }
+
 
 
 # ─── NEW: Save Behavioral / Proctoring Metrics per Question ───────────────────
@@ -2905,6 +2917,26 @@ def get_interview_details(link_id: str):
         "answers": results
     }
     
+    # Include full question list so admin can see which questions were skipped
+    all_questions = []
+    try:
+        raw_qs = session_data.get("pre_generated_questions") or session_data.get("questions")
+        if raw_qs:
+            if isinstance(raw_qs, str):
+                import json as _json
+                raw_qs = _json.loads(raw_qs)
+            if isinstance(raw_qs, list):
+                for q in raw_qs:
+                    if isinstance(q, dict):
+                        all_questions.append({
+                            "id": q.get("id"),
+                            "question": q.get("question") or q.get("text") or q.get("q", "")
+                        })
+    except Exception as e:
+        print(f"all_questions parse error: {e}")
+    
+    response_payload["all_questions"] = all_questions
+
     if actual_interview_id:
         interview_record = interviews_collection.find_one({"id": actual_interview_id})
         if interview_record:
@@ -3768,7 +3800,10 @@ def get_dashboard_stats(current_admin: dict = Depends(get_current_admin_details)
             status = s.get("status", "pending")
             if status == "pending" and s.get("expires_at"):
                 try:
-                    if now > datetime.fromisoformat(s["expires_at"]):
+                    exp_dt = datetime.fromisoformat(s["expires_at"].replace('Z', '+00:00'))
+                    if exp_dt.tzinfo is None:
+                        exp_dt = exp_dt.replace(tzinfo=timezone.utc)
+                    if now > exp_dt:
                         status = "expired"
                 except Exception:
                     pass
@@ -3838,7 +3873,10 @@ async def export_sessions(current_admin: dict = Depends(get_current_admin_detail
         current_status = row.get("status", "pending")
         if current_status == "pending" and row.get("expires_at"):
             try:
-                if now > datetime.fromisoformat(row["expires_at"]):
+                exp_dt = datetime.fromisoformat(row["expires_at"].replace('Z', '+00:00'))
+                if exp_dt.tzinfo is None:
+                    exp_dt = exp_dt.replace(tzinfo=timezone.utc)
+                if now > exp_dt:
                     current_status = "expired"
             except Exception:
                 pass
@@ -4782,7 +4820,8 @@ async def start_session_interview(link_id: str = Form(...)):
                 "interview_duration": interview_duration,
                 "interview_type": interview_type,
                 "record_video": row.get("record_video", True),
-                "all_verbal_answered": all_verbal_answered
+                "all_verbal_answered": all_verbal_answered,
+                "started_at": row.get("started_at")
             }
         
         # Fallback: regenerate if questions lost
@@ -4813,19 +4852,35 @@ async def start_session_interview(link_id: str = Form(...)):
     if language != "English":
         ai_instructions_text += f"\n\nCRITICAL REQUIREMENT: You MUST generate all questions and interact STRICTLY in the {language} language. Do NOT use English."
     
-    questions = generate_mock_questions(
-        content_str, 
-        source, 
-        num_questions=num_questions_to_generate, 
-        resume_text=resume_text, 
-        jd_text=job_description,
-        hr_screening=hr_screening,
-        custom_questions=custom_questions_text,
-        ai_instructions=ai_instructions_text,
-        interview_type=interview_type,
-        industry=industry_val,
-        language=language
-    )
+    # ── Strategy 3: Load pre-cached questions if already generated ──────────
+    pre_cached_questions = row.get("pre_generated_questions")
+    if pre_cached_questions:
+        try:
+            questions = json.loads(pre_cached_questions) if isinstance(pre_cached_questions, str) else pre_cached_questions
+            if questions:
+                print(f"⚡ Loaded {len(questions)} pre-cached questions instantly (no AI call needed)")
+            else:
+                raise ValueError("Empty questions list")
+        except Exception:
+            questions = None
+    else:
+        questions = None
+
+    if not questions:
+        print("🤖 Generating questions via AI (not pre-cached)...")
+        questions = generate_mock_questions(
+            content_str, 
+            source, 
+            num_questions=num_questions_to_generate, 
+            resume_text=resume_text, 
+            jd_text=job_description,
+            hr_screening=hr_screening,
+            custom_questions=custom_questions_text,
+            ai_instructions=ai_instructions_text,
+            interview_type=interview_type,
+            industry=industry_val,
+            language=language
+        )
     
     if not questions:
         raise HTTPException(status_code=400, detail="Failed to generate questions")
@@ -4858,13 +4913,14 @@ async def start_session_interview(link_id: str = Form(...)):
             "language": language
         })
         
-        # Update session status
+        # Update session status AND cache questions for instant future loads
         interview_sessions_collection.update_one(
             {"link_id": link_id},
             {"$set": {
                 "status": "started", 
                 "interview_id": interview_id,
-                "started_at": datetime.now(timezone.utc).isoformat()
+                "started_at": datetime.now(timezone.utc).isoformat(),
+                "pre_generated_questions": json.dumps(questions)  # cache for instant reload
             }}
         )
     except Exception as db_e:
@@ -4878,7 +4934,8 @@ async def start_session_interview(link_id: str = Form(...)):
         "candidate_name": candidate_name,
         "interview_duration": interview_duration,
         "interview_type": interview_type,
-        "record_video": row.get("record_video", True)
+        "record_video": row.get("record_video", True),
+        "started_at": datetime.now(timezone.utc).isoformat()
     }
 
 @app.post("/session/{interview_id}/violation")

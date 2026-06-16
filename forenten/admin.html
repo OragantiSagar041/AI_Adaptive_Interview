@@ -2542,7 +2542,7 @@
         <!-- Sidebar (Left Fixed) -->
         <div class="sidebar-wrapper">
             <div class="sidebar-header" style="padding: 1.5rem 1.25rem; display: flex; justify-content: center;">
-                <img src="assets/logo.png" alt="Hire IQ Logo" style="height: 50px; width: auto; object-fit: contain;">
+                <img src="assets/logo.png" alt="Hire IQ Logo" style="height: 90px; width: auto; object-fit: contain;">
             </div>
             <div class="sidebar-nav" id="tenantSidebarNav">
                 <button class="nav-btn active" onclick="switchView('overview')" id="nav-btn-overview"><i
@@ -2877,38 +2877,27 @@
                     <div id="statsCards"
                         style="display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: 1rem; margin-bottom: 1.5rem;">
                         <div id="ongoingInterviewsCard" onclick="showLiveResultsModal()"
-                            style="background: #0f172a; border: 1px solid rgba(16, 185, 129, 0.3); border-radius: var(--radius-md); padding: 1.25rem; position: relative; overflow: hidden; cursor: pointer; transition: transform 0.2s; box-shadow: 0 10px 25px rgba(16, 185, 129, 0.15);"
+                            style="background: var(--bg-card); border: 1px solid var(--border); border-radius: var(--radius-md); padding: 1.25rem; position: relative; overflow: hidden; cursor: pointer; transition: transform 0.2s;"
                             onmouseover="this.style.transform='translateY(-2px)'"
                             onmouseout="this.style.transform='translateY(0)'">
                             <div
-                                style="position: absolute; top: 10px; right: 10px; display: flex; align-items: center; gap: 6px; background: rgba(16, 185, 129, 0.2); padding: 4px 8px; border-radius: 20px; border: 1px solid rgba(16, 185, 129, 0.5);">
-                                <div
-                                    style="width: 8px; height: 8px; background: #10b981; border-radius: 50%; animation: pulse-dot 1.5s infinite;">
-                                </div>
-                                <span
-                                    style="font-size: 0.65rem; color: #10b981; font-weight: 700; text-transform: uppercase;">Live</span>
+                                style="position: absolute; top: -10px; right: -10px; width: 60px; height: 60px; background: rgba(16, 185, 129, 0.1); border-radius: 50%;">
                             </div>
                             <div
-                                style="font-size: 0.75rem; color: #94a3b8; text-transform: uppercase; letter-spacing: 0.5px; font-weight: 600;">
+                                style="font-size: 0.75rem; color: var(--text-muted); text-transform: uppercase; letter-spacing: 0.5px; font-weight: 600;">
                                 Ongoing Interviews
                             </div>
                             <div id="stat-ongoing"
-                                style="font-size: 2.5rem; font-weight: 800; color: #f8fafc; margin-top: 0.3rem;">0</div>
-                            <div
-                                style="margin-top: 0.5rem; display: grid; grid-template-columns: 1fr 1fr; gap: 4px; font-size: 0.7rem; color: #64748b;">
-                                <div><span id="stat-ongoing-live" style="color:#10b981;font-weight:600;">0</span> live
-                                    sessions</div>
-                                <div><span id="stat-ongoing-alerts" style="color:#f43f5e;font-weight:600;">0</span>
-                                    alerts</div>
-                                <div><span id="stat-ongoing-avgconf">0</span>/100 avg confidence</div>
-                                <div><span id="stat-ongoing-speaking">0</span> speaking now</div>
-                                <div><span id="stat-ongoing-coding">0</span> coding rounds</div>
-                                <div><span id="stat-ongoing-monitored">0</span> monitored</div>
-                            </div>
-                            <div style="margin-top: 1rem;">
-                                <button
-                                    style="width: 100%; padding: 0.5rem; background: rgba(16, 185, 129, 0.1); border: 1px solid rgba(16, 185, 129, 0.4); color: #10b981; border-radius: 4px; font-size: 0.8rem; font-weight: 600; cursor: pointer;">Live
-                                    Results <i class="fas fa-arrow-right"></i></button>
+                                style="font-size: 2rem; font-weight: 800; color: var(--primary-light); margin-top: 0.3rem;">0</div>
+                            <div style="font-size: 0.72rem; color: var(--text-muted); margin-top: 0.2rem;">
+                                <span id="stat-ongoing-live" style="color:#10b981;font-weight:600;">0</span> live sessions
+                                <span style="display:none;">
+                                    <span id="stat-ongoing-alerts">0</span>
+                                    <span id="stat-ongoing-avgconf">0</span>
+                                    <span id="stat-ongoing-speaking">0</span>
+                                    <span id="stat-ongoing-coding">0</span>
+                                    <span id="stat-ongoing-monitored">0</span>
+                                </span>
                             </div>
                         </div>
                         <div onclick="clearFilters()"
@@ -3022,7 +3011,7 @@
                                     <div style="display: flex; flex-direction: column;">
                                         <label
                                             style="font-size: 0.7rem; color: var(--text-muted); margin-bottom: 2px;">Status</label>
-                                        <select id="filterStatus" class="dash-input" onchange="loadDashboardSessions()"
+                                        <select id="filterStatus" class="dash-input" onchange="renderCurrentSessions()"
                                             style="padding: 0.4rem; font-size: 0.85rem; width: auto; min-width: 130px;">
                                             <option value="">All Statuses</option>
                                             <option value="completed">Completed</option>
@@ -5745,7 +5734,7 @@
             const statusSelect = document.getElementById('filterStatus');
             if (statusSelect) {
                 statusSelect.value = status;
-                loadDashboardSessions();
+                renderCurrentSessions();
             }
         }
 
@@ -6524,8 +6513,63 @@
                     return `<span style="color:var(--accent)"><i class="fas fa-gauge"></i> ${wpm} WPM (Good)</span>`;
                 };
 
-                data.answers.forEach(ans => {
+                // Build a lookup of answered questions by ID
+                const answeredMap = {};
+                (data.answers || []).forEach(ans => {
+                    if (ans) answeredMap[ans.question_id] = ans;
+                });
+
+                // Build the full ordered list: all_questions merged with answered data
+                let questionList = [];
+                if (data.all_questions && data.all_questions.length > 0) {
+                    data.all_questions.forEach(q => {
+                        const answered = answeredMap[q.id];
+                        if (answered) {
+                            questionList.push(answered);
+                        } else {
+                            // Unanswered placeholder
+                            questionList.push({
+                                question_id: q.id,
+                                question_text: q.question,
+                                answer_text: null,
+                                ai_score: null,
+                                ai_feedback: null,
+                                corrected_answer: null,
+                                time_spent_seconds: 0,
+                                wpm: 0,
+                                pause_count: 0,
+                                filler_count: 0,
+                                tab_switches: 0,
+                                face_alerts: 0,
+                                _not_answered: true
+                            });
+                        }
+                    });
+                } else {
+                    // Fallback: only answered questions (old behaviour)
+                    questionList = data.answers || [];
+                }
+
+                questionList.forEach(ans => {
                     if (!ans) return;
+
+                    // ── NOT ANSWERED card ──────────────────────────────────
+                    if (ans._not_answered) {
+                        html += `
+                            <div class="avoid-break" style="background: var(--bg-card); padding: 1.5rem; border-radius: var(--radius-sm); border: 1px solid var(--border); margin-bottom: 1rem; opacity: 0.6; page-break-inside: avoid; break-inside: avoid;">
+                                <div style="display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 0.75rem;">
+                                    <h4 style="color: var(--text-primary); margin: 0; flex: 1; font-size: 1.1rem;">Q${ans.question_id}: ${escapeHtml(ans.question_text)}</h4>
+                                    <span style="font-size: 1rem; font-weight: 700; color: var(--text-muted); margin-left: 1rem; background: rgba(150,150,150,0.1); padding: 4px 10px; border-radius: 6px;">Not Answered</span>
+                                </div>
+                                <div style="font-size: 0.85rem; color: var(--text-muted); display: flex; align-items: center; gap: 0.5rem;">
+                                    <i class="fas fa-minus-circle"></i> This question was skipped by the candidate.
+                                </div>
+                            </div>
+                        `;
+                        return;
+                    }
+
+                    // ── ANSWERED card ──────────────────────────────────────
                     const score = ans.ai_score ?? '—';
                     const sColor = (ans.ai_score || 0) >= 60 ? 'var(--accent)' : 'var(--danger)';
                     const timeStr = `${Math.floor((ans.time_spent_seconds || 0) / 60)}m ${(ans.time_spent_seconds || 0) % 60}s`;
@@ -7669,7 +7713,10 @@
                 ask_bond: document.getElementById('bulkAskBond').checked
             };
 
-            if (!jd) { showToast('Please enter a Job Description', 'error'); return; }
+            if (!jd || jd.length < 50) { 
+                showToast('Please enter a detailed Job Description (at least 50 characters) so the AI can generate relevant questions.', 'error'); 
+                return; 
+            }
             if (bulkCandidates.length === 0) { showToast('Add at least one candidate', 'error'); return; }
 
             if (schedStart) {
@@ -8197,7 +8244,8 @@
 
                     const video = document.createElement('video');
                     video.autoplay = true;
-                    video.muted = true;
+                    video.muted = false;
+                    video.controls = true;
                     video.playsInline = true;
                     video.style.cssText = 'position:absolute; inset:0; width: 100%; height: 100%; object-fit: contain; display:none;';
                     video.id = 'video_' + s.link_id;

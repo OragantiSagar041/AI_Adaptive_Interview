@@ -54,6 +54,13 @@ OPENROUTER_TO_HF = {
 # Cool-down: after quota error, skip OpenRouter for this many seconds
 QUOTA_COOLDOWN_SECONDS = int(os.getenv("QUOTA_COOLDOWN_SECONDS", "1800"))  # 30 min default
 
+# ── KILL-SWITCH: When quota dies, skip HuggingFace entirely and fail fast ──────
+# Set INSTANT_OFFLINE_ON_QUOTA=false in .env to re-enable HuggingFace backup
+INSTANT_OFFLINE_ON_QUOTA = os.getenv("INSTANT_OFFLINE_ON_QUOTA", "true").lower() == "true"
+
+# Max seconds to wait for a HuggingFace response (only used when kill-switch is off)
+HF_TIMEOUT_SECONDS = int(os.getenv("HF_TIMEOUT_SECONDS", "8"))
+
 # ─── State ────────────────────────────────────────────────────────────────────
 
 _lock = threading.Lock()
@@ -206,18 +213,26 @@ def chat_completion(
         try:
             return _call_openrouter(messages, model, temperature, timeout)
         except QuotaExhaustedError:
+            if INSTANT_OFFLINE_ON_QUOTA:
+                # Kill-switch ON: don't waste time on HuggingFace, fail fast
+                print("⚡ Kill-switch: quota exhausted → instant offline mode (no HF attempt)")
+                raise RuntimeError("QUOTA_EXHAUSTED_INSTANT_OFFLINE")
             print(" Falling back to HuggingFace (quota exhausted)...")
         except Exception as exc:
             if _is_quota_error(exc):
                 _mark_quota_exhausted()
+                if INSTANT_OFFLINE_ON_QUOTA:
+                    print("⚡ Kill-switch: quota error → instant offline mode (no HF attempt)")
+                    raise RuntimeError("QUOTA_EXHAUSTED_INSTANT_OFFLINE")
                 print(" Falling back to HuggingFace (quota error in exception)...")
             else:
                 # Non-quota error — still try HF as safety net
                 print(f"  OpenRouter error: {exc}  trying HuggingFace fallback...")
 
-    # ── Fallback to HuggingFace ──
+    # ── Fallback to HuggingFace (only if kill-switch is OFF or non-quota error) ──
     try:
-        return _call_huggingface(messages, hf_model, temperature, max(timeout, 120))
+        hf_timeout = HF_TIMEOUT_SECONDS  # fast timeout to avoid hanging
+        return _call_huggingface(messages, hf_model, temperature, hf_timeout)
     except Exception as hf_exc:
         raise RuntimeError(
             f"Both OpenRouter and HuggingFace failed.\n"

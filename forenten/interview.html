@@ -2573,6 +2573,21 @@
             const safeDuration = Math.max(1, Number(durationMinutes) || 1);
             globalTotalTime = safeDuration * 60;
             globalTimeRemaining = globalTotalTime;
+
+            if (window._interviewStartTimeStr) {
+                const startTime = new Date(window._interviewStartTimeStr).getTime();
+                const nowTime = Date.now();
+                if (nowTime > startTime) {
+                    const elapsedSeconds = Math.floor((nowTime - startTime) / 1000);
+                    if (phase === 'verbal') {
+                        globalTimeRemaining = Math.max(0, globalTotalTime - elapsedSeconds);
+                    } else if (phase === 'coding' && typeof totalInterviewMinutes !== 'undefined') {
+                        const maxPossibleRemaining = Math.max(0, (totalInterviewMinutes * 60) - elapsedSeconds);
+                        globalTimeRemaining = Math.min(globalTotalTime, maxPossibleRemaining);
+                    }
+                }
+            }
+
             updateCountdownDisplay();
 
             globalCountdownInterval = setInterval(() => {
@@ -2998,6 +3013,10 @@
                         const rawData = await response.json();
                         const data = normalizeInterviewStartResponse(rawData);
                         // console.log('Session response data:', JSON.stringify(data));
+                        
+                        if (rawData.status === 'started' || rawData.already_started) {
+                            window._interviewStartTimeStr = rawData.started_at;
+                        }
 
                         // Check if the link is expired
                         if (data.is_expired) {
@@ -4182,6 +4201,8 @@ Output: ${formatCodingValue(testCase.output)}${resultBlock}</pre>
             }
 
             codingRoundStarted = true;
+            currentQuestionId = 'Code';
+            window.currentQuestionId = 'Code';
             stopGlobalCountdown();
             if (window.speechSynthesis) window.speechSynthesis.cancel();
 
