@@ -1255,9 +1255,9 @@
         }
     </style>
     <!-- Face Detection Scripts -->
-    <script src="https://cdn.jsdelivr.net/npm/@tensorflow/tfjs"></script>
-    <script src="https://cdn.jsdelivr.net/npm/@tensorflow-models/blazeface"></script>
-    <script src="https://cdn.jsdelivr.net/npm/@tensorflow-models/coco-ssd"></script>
+    <script src="https://cdn.jsdelivr.net/npm/@tensorflow/tfjs" defer></script>
+    <script src="https://cdn.jsdelivr.net/npm/@tensorflow-models/blazeface" defer></script>
+    <script src="https://cdn.jsdelivr.net/npm/@tensorflow-models/coco-ssd" defer></script>
     <script>
         (function () {
             try {
@@ -2005,7 +2005,7 @@
                     // ── Strategy 3: Hard fallback timer ──
                     // Fires after estimated reading time + 3s buffer
                     const wordCount = text.trim().split(/\s+/).length;
-                    const estimatedMs = Math.max(4000, (wordCount / 2.0) * 1000) + 3000;
+                    const estimatedMs = Math.max(3000, (wordCount / 2.0) * 1000) + 1500;
                     const fallbackTimer = setTimeout(() => {
                         // console.warn(`⏰ speakText fallback timer fired after ${estimatedMs}ms`);
                         fireCallback();
@@ -3677,14 +3677,14 @@
             // Local backup for resilience
             try {
                 const backupKey = `answer_backup_${currentInterviewId}_${currentQuestionId}`;
-                localStorage.setItem(backupKey, JSON.stringify({
+                sessionStorage.setItem(backupKey, JSON.stringify({
                     interview_id: currentInterviewId,
                     question_id: currentQuestionId,
                     question_text: document.getElementById("questionText").innerText,
                     answer_text: answerText,
                     timestamp: Date.now()
                 }));
-            } catch (e) { /* localStorage may not be available */ }
+            } catch (e) { /* sessionStorage may not be available */ }
 
             // Retry logic (up to 3 attempts)
             let attempts = 0;
@@ -3701,7 +3701,7 @@
                     clearTimeout(timeout);
                     // Success — remove local backup
                     try {
-                        localStorage.removeItem(`answer_backup_${currentInterviewId}_${currentQuestionId}`);
+                        sessionStorage.removeItem(`answer_backup_${currentInterviewId}_${currentQuestionId}`);
                     } catch (e) { }
                     return; // Success
                 } catch (e) {
@@ -5466,6 +5466,16 @@ Output: ${formatCodingValue(testCase.output)}${resultBlock}</pre>
     let cocoSsdModel = null;
 
     async function startFaceDetection(video) {
+        // Wait for blazeface to load (it's deferred, so may not be ready immediately)
+        let retries = 0;
+        while (typeof blazeface === 'undefined' && retries < 10) {
+            await new Promise(r => setTimeout(r, 1000));
+            retries++;
+        }
+        if (typeof blazeface === 'undefined') {
+            console.warn('blazeface not available, skipping face detection');
+            return;
+        }
         if (!faceModel) {
             // console.log("Loading Face Detection Model...");
             try {

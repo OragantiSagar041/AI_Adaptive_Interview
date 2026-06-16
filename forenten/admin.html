@@ -2422,7 +2422,7 @@
     <!-- Script to prevent FOUC (Flash of Unstyled Content) -->
     <script>
         (function () {
-            const savedTheme = localStorage.getItem('adminTheme');
+            const savedTheme = sessionStorage.getItem('adminTheme');
             // Default to 'light' for a premium glassmorphism experience unless dark is explicitly saved
             if (savedTheme === 'light' || !savedTheme) {
                 document.documentElement.setAttribute('data-theme', 'light');
@@ -2490,8 +2490,7 @@
                             <label for="username">Username</label>
                             <div class="input-wrapper">
                                 <span class="input-icon"><i class="fas fa-user"></i></span>
-                                <input type="text" id="username" placeholder="Enter username" autocomplete="username"
-                                    oninput="this.value=this.value.replace(/[^a-zA-Z0-9_]/g,'')">
+                                <input type="email" id="username" placeholder="Enter work email (username)" autocomplete="username">
                             </div>
                         </div>
 
@@ -3230,13 +3229,13 @@
 
                             <div class="dash-form-group">
                                 <label class="dash-label">Candidate Name</label>
-                                <input type="text" class="dash-input" id="candidateName" placeholder="e.g. John Doe">
+                                <input type="text" class="dash-input" id="candidateName" placeholder="e.g. John Doe" oninput="this.value = this.value.replace(/[^a-zA-Z\s]/g, '')">
                             </div>
 
                             <div class="dash-form-group">
                                 <label class="dash-label">Candidate Email</label>
                                 <input type="email" class="dash-input" id="candidateEmail"
-                                    placeholder="e.g. john@example.com" onblur="checkCandidateExists()">
+                                    placeholder="e.g. john@example.com" onblur="checkCandidateExists()" oninput="this.value = this.value.replace(/[^a-zA-Z0-9@._-]/g, '')">
                             </div>
 
                             <div class="dash-form-group">
@@ -3893,9 +3892,9 @@
                                 <label class="dash-label">Or Add Manually</label>
                                 <div style="display:flex; gap:8px; align-items:center;">
                                     <input type="text" class="dash-input" id="bulkName" placeholder="Candidate Name"
-                                        style="flex:1;">
+                                        style="flex:1;" oninput="this.value = this.value.replace(/[^a-zA-Z\s]/g, '')">
                                     <input type="email" class="dash-input" id="bulkEmail"
-                                        placeholder="candidate@email.com" style="flex:1;">
+                                        placeholder="candidate@email.com" style="flex:1;" oninput="this.value = this.value.replace(/[^a-zA-Z0-9@._-]/g, '')">
                                     <button onclick="addBulkRow()"
                                         style="padding:0.7rem 1rem; background:var(--primary); color:white; border:none; border-radius:var(--radius-sm); cursor:pointer; font-weight:600; white-space:nowrap; font-family:inherit; transition:all 0.2s;"
                                         onmouseover="this.style.background='var(--primary-dark)'"
@@ -4089,7 +4088,7 @@
             let [resource, config] = arguments;
             if (!config) config = {};
 
-            const token = localStorage.getItem('adminToken');
+            const token = sessionStorage.getItem('adminToken');
             if (token && resource.toString().startsWith(API_BASE)) {
                 if (!config.headers) config.headers = {};
                 if (config.headers instanceof Headers) {
@@ -4705,7 +4704,7 @@
 
                     // Persist session
                     if (data.token) {
-                        localStorage.setItem('adminToken', data.token);
+                        sessionStorage.setItem('adminToken', data.token);
                     }
                     sessionStorage.setItem('adminId', adminId);
                     sessionStorage.setItem('adminEmail', adminEmail);
@@ -4885,7 +4884,10 @@
 
                     // Populate name and email if found
                     if (data.name) document.getElementById('candidateName').value = data.name;
-                    if (data.email) document.getElementById('candidateEmail').value = data.email;
+                    if (data.email) {
+                        document.getElementById('candidateEmail').value = data.email;
+                        checkCandidateExists();
+                    }
 
                     statusDiv.innerHTML = '<span class="file-status success">✅ Parsed successfully</span>';
                     const removeBtn = document.getElementById('removeResumeBtn');
@@ -5247,13 +5249,10 @@
                     // Clear form
                     document.getElementById('candidateName').value = '';
                     document.getElementById('candidateEmail').value = '';
-                    document.getElementById('resumeFile').value = '';
-                    document.getElementById('resumeText').value = '';
+                    if (typeof removeResume === 'function') removeResume();
                     document.getElementById('jobDescription').value = '';
                     document.getElementById('scheduleStart').value = '';
                     document.getElementById('scheduleEnd').value = '';
-                    document.getElementById('fileLabel').textContent = 'Click to upload or drag and drop';
-                    document.getElementById('fileStatus').innerHTML = '';
                     window._customEmailHtml = ""; // Reset custom email
                     document.getElementById('askWorkMode').checked = false;
                     document.getElementById('askLocation').checked = false;
@@ -5747,6 +5746,31 @@
             }
             console.error("Video failed to load:", videoElem.querySelector('source')?.src);
         }
+
+        async function downloadRecording(url, filename, btnEl) {
+            if (!url) return;
+            const originalText = btnEl ? btnEl.innerHTML : '';
+            if (btnEl) btnEl.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Downloading...';
+            try {
+                const resp = await fetch(url);
+                if (!resp.ok) throw new Error('Network error');
+                const blob = await resp.blob();
+                const objectUrl = URL.createObjectURL(blob);
+                const a = document.createElement('a');
+                a.href = objectUrl;
+                a.download = filename;
+                document.body.appendChild(a);
+                a.click();
+                document.body.removeChild(a);
+                setTimeout(() => URL.revokeObjectURL(objectUrl), 10000);
+            } catch (e) {
+                console.error('Download failed, opening in new tab:', e);
+                window.open(url, '_blank');
+            } finally {
+                if (btnEl) btnEl.innerHTML = originalText;
+            }
+        }
+
 
         function renderDashboardTable(sessions, filterStatus, resetPagination = true) {
             if (resetPagination) currentPage = 1;
@@ -6442,10 +6466,10 @@
                                     <a href="${data.recording_url.startsWith('http') ? data.recording_url : API_BASE + '/' + data.recording_url}" target="_blank" style="color: #c53030; text-decoration: underline; font-weight: 700;">Try direct link</a>
                                 </div>
                                 <div style="margin-top: 0.5rem; text-align: right;">
-                                    <a href="${data.recording_url.startsWith('http') ? data.recording_url : API_BASE + '/' + data.recording_url}" download="interview_camera_${escapeHtml(data.candidate_name) || 'recording'}.webm" 
-                                       style="color: var(--primary); text-decoration: none; font-size: 0.8rem; font-weight: 600;">
+                                    <button onclick="downloadRecording('${data.recording_url.startsWith('http') ? data.recording_url : API_BASE + '/' + data.recording_url}', 'interview_camera_${(data.candidate_name || 'recording').replace(/'/g, '')}.webm', this)"
+                                       style="background: none; border: none; color: var(--primary); font-size: 0.8rem; font-weight: 600; cursor: pointer; padding: 0;">
                                         <i class="fas fa-download"></i> Download Camera
-                                    </a>
+                                    </button>
                                 </div>
                             </div>
                         </div>
@@ -6463,10 +6487,10 @@
                                     <a href="${data.screen_recording_url.startsWith('http') ? data.screen_recording_url : API_BASE + '/' + data.screen_recording_url}" target="_blank" style="color: #c53030; text-decoration: underline; font-weight: 700;">Try direct link</a>
                                 </div>
                                 <div style="margin-top: 0.5rem; text-align: right;">
-                                    <a href="${data.screen_recording_url.startsWith('http') ? data.screen_recording_url : API_BASE + '/' + data.screen_recording_url}" download="interview_screen_${escapeHtml(data.candidate_name) || 'recording'}.webm" 
-                                       style="color: var(--primary); text-decoration: none; font-size: 0.8rem; font-weight: 600;">
+                                    <button onclick="downloadRecording('${data.screen_recording_url.startsWith('http') ? data.screen_recording_url : API_BASE + '/' + data.screen_recording_url}', 'interview_screen_${(data.candidate_name || 'recording').replace(/'/g, '')}.webm', this)"
+                                       style="background: none; border: none; color: var(--primary); font-size: 0.8rem; font-weight: 600; cursor: pointer; padding: 0;">
                                         <i class="fas fa-download"></i> Download Screen
-                                    </a>
+                                    </button>
                                 </div>
                             </div>
                         </div>
@@ -6932,7 +6956,7 @@
         // ── Accent colour switcher ──
         function setAccent(name) {
             document.documentElement.setAttribute('data-accent', name);
-            localStorage.setItem('adminAccent', name);
+            sessionStorage.setItem('adminAccent', name);
 
             // Highlight the active dot
             document.querySelectorAll('.color-dot').forEach(d => d.classList.remove('active-dot'));
@@ -6955,7 +6979,7 @@
             }
 
             // Restore saved accent
-            const savedAccent = localStorage.getItem('adminAccent');
+            const savedAccent = sessionStorage.getItem('adminAccent');
             if (savedAccent) setAccent(savedAccent);
         }
 
@@ -6964,7 +6988,7 @@
             const newTheme = (currentTheme !== 'light') ? 'light' : 'dark';
 
             document.documentElement.setAttribute('data-theme', newTheme);
-            localStorage.setItem('adminTheme', newTheme);
+            sessionStorage.setItem('adminTheme', newTheme);
 
             const icon = document.getElementById('themeIcon');
             const icon2 = document.getElementById('themeIcon2');
@@ -7098,10 +7122,10 @@
                                     <a href="${data.recording_url.startsWith('http') ? data.recording_url : API_BASE + '/' + data.recording_url}" target="_blank" style="color: #c53030; text-decoration: underline; font-weight: 700;">Try direct link</a>
                                 </div>
                                 <div style="margin-top: 0.75rem;">
-                                    <a href="${data.recording_url.startsWith('http') ? data.recording_url : API_BASE + '/' + data.recording_url}" download="interview_camera_${data.candidate_name || 'recording'}.webm"
-                                       style="color: var(--primary); text-decoration: none; font-weight: 600; font-size: 0.9rem;">
+                                    <button onclick="downloadRecording('${data.recording_url.startsWith('http') ? data.recording_url : API_BASE + '/' + data.recording_url}', 'interview_camera_${(data.candidate_name || 'recording').replace(/'/g, '')}.webm', this)"
+                                       style="background: none; border: none; color: var(--primary); font-weight: 600; font-size: 0.9rem; cursor: pointer; padding: 0;">
                                         <i class="fas fa-download"></i> Download Camera
-                                    </a>
+                                    </button>
                                 </div>
                             </div>
                         </div>
@@ -7121,10 +7145,10 @@
                                     <a href="${data.screen_recording_url.startsWith('http') ? data.screen_recording_url : API_BASE + '/' + data.screen_recording_url}" target="_blank" style="color: #c53030; text-decoration: underline; font-weight: 700;">Try direct link</a>
                                 </div>
                                 <div style="margin-top: 0.75rem;">
-                                    <a href="${data.screen_recording_url.startsWith('http') ? data.screen_recording_url : API_BASE + '/' + data.screen_recording_url}" download="interview_screen_${data.candidate_name || 'recording'}.webm"
-                                       style="color: var(--primary); text-decoration: none; font-weight: 600; font-size: 0.9rem;">
+                                    <button onclick="downloadRecording('${data.screen_recording_url.startsWith('http') ? data.screen_recording_url : API_BASE + '/' + data.screen_recording_url}', 'interview_screen_${(data.candidate_name || 'recording').replace(/'/g, '')}.webm', this)"
+                                       style="background: none; border: none; color: var(--primary); font-weight: 600; font-size: 0.9rem; cursor: pointer; padding: 0;">
                                         <i class="fas fa-download"></i> Download Screen
-                                    </a>
+                                    </button>
                                 </div>
                             </div>
                         </div>
@@ -7269,7 +7293,7 @@
 
             <div style="display: flex; gap: 1rem; margin-top: 2rem;">
                 <button onclick="document.getElementById('candidateExistsModal').classList.add('hidden')"
-                    style="flex: 1; padding: 0.75rem; background: rgba(255,255,255,0.05); color: white; border: 1px solid var(--border); border-radius: 0.75rem; cursor: pointer; font-weight: 600;">Cancel</button>
+                    style="flex: 1; padding: 0.75rem; background: var(--bg-body); color: var(--text-primary); border: 1px solid var(--border); border-radius: 0.75rem; cursor: pointer; font-weight: 600;">Cancel</button>
                 <button id="candidateExistsConfirmBtn"
                     style="flex: 2; padding: 0.75rem; background: var(--primary); color: white; border: none; border-radius: 0.75rem; cursor: pointer; font-weight: 700; transition: 0.3s;">Use
                     Previous Details</button>
@@ -7297,14 +7321,14 @@
                     style="display: block; margin-bottom: 0.5rem; font-size: 0.85rem; font-weight: 600; color: var(--text-primary);">New
                     Expiration Date & Time</label>
                 <input type="datetime-local" id="newExpiryInput" class="input-field"
-                    style="width: 100%; padding: 0.75rem; background: rgba(0,0,0,0.2); border: 1px solid var(--border); border-radius: 0.75rem; color: white;">
+                    style="width: 100%; padding: 0.75rem; background: var(--bg-body); border: 1px solid var(--border); border-radius: 0.75rem; color: var(--text-primary);">
                 <p style="margin: 0.5rem 0 0; font-size: 0.75rem; color: var(--text-muted);">The candidate will be able
                     to start the interview until this time.</p>
             </div>
 
             <div style="display: flex; gap: 1rem; margin-top: 2rem;">
                 <button onclick="closeRescheduleModal()"
-                    style="flex: 1; padding: 0.75rem; background: rgba(255,255,255,0.05); color: white; border: 1px solid var(--border); border-radius: 0.75rem; cursor: pointer; font-weight: 600;">Cancel</button>
+                    style="flex: 1; padding: 0.75rem; background: var(--bg-body); color: var(--text-primary); border: 1px solid var(--border); border-radius: 0.75rem; cursor: pointer; font-weight: 600;">Cancel</button>
                 <button id="rescheduleSubmitBtn" onclick="submitReschedule()"
                     style="flex: 2; padding: 0.75rem; background: var(--primary); color: white; border: none; border-radius: 0.75rem; cursor: pointer; font-weight: 700; transition: 0.3s;">Save
                     & Update</button>
@@ -8083,19 +8107,37 @@
                         videoElement.play().then(() => {
                             const img = document.getElementById('snapshot_' + linkId);
                             const placeholder = document.getElementById('placeholder_' + linkId);
+                            const muteBtn = document.getElementById('muteBtn_' + linkId);
                             if (img) {
                                 img.dataset.webrtcConnected = 'true';
                                 img.style.display = 'none';
                             }
                             if (placeholder) placeholder.style.display = 'none';
-                        }).catch(console.error);
+                            if (muteBtn) muteBtn.style.display = 'flex'; // Show mute button
+                        }).catch(err => {
+                            console.warn('[WebRTC] Video play failed:', err);
+                            // Fallback to snapshot
+                            videoElement.style.display = 'none';
+                            const img = document.getElementById('snapshot_' + linkId);
+                            if (img && img.src) img.style.display = 'block';
+                        });
                     }
                 };
 
                 pc.onconnectionstatechange = () => {
                     const state = pc.connectionState;
                     if (state === 'failed' || state === 'disconnected') {
-                        setLiveFeedPlaceholder(linkId, 'Reconnecting feed...');
+                        // Show snapshot fallback while reconnecting
+                        videoElement.style.display = 'none';
+                        const muteBtn = document.getElementById('muteBtn_' + linkId);
+                        if (muteBtn) muteBtn.style.display = 'none';
+                        const img = document.getElementById('snapshot_' + linkId);
+                        if (img) {
+                            delete img.dataset.webrtcConnected; // Clear flag so snapshots resume
+                            if (img.src) img.style.display = 'block';
+                        } else {
+                            setLiveFeedPlaceholder(linkId, 'Reconnecting feed...');
+                        }
                         setTimeout(() => {
                             const currentVideo = document.getElementById('video_' + linkId);
                             if (currentVideo) initAdminWebRTC(linkId, currentVideo, true);
@@ -8125,6 +8167,10 @@
                     } else if (data.type === 'candidate_disconnected') {
                         videoElement.srcObject = null;
                         videoElement.style.display = 'none';
+                        const muteBtn = document.getElementById('muteBtn_' + linkId);
+                        if (muteBtn) muteBtn.style.display = 'none';
+                        const img = document.getElementById('snapshot_' + linkId);
+                        if (img) delete img.dataset.webrtcConnected;
                         pc.close();
                         delete adminRtcConnections[linkId];
                         setLiveFeedPlaceholder(linkId, 'Candidate disconnected');
@@ -8244,12 +8290,29 @@
 
                     const video = document.createElement('video');
                     video.autoplay = true;
-                    video.muted = false;
-                    video.controls = true;
+                    video.muted = true;  // Must start muted for autoplay to work in browsers
                     video.playsInline = true;
                     video.style.cssText = 'position:absolute; inset:0; width: 100%; height: 100%; object-fit: contain; display:none;';
                     video.id = 'video_' + s.link_id;
                     snapContainer.appendChild(video);
+
+                    // Mute/Unmute toggle button
+                    const muteBtn = document.createElement('button');
+                    muteBtn.id = 'muteBtn_' + s.link_id;
+                    muteBtn.title = 'Click to unmute candidate audio';
+                    muteBtn.style.cssText = 'position:absolute; top:8px; right:8px; z-index:10; background:rgba(0,0,0,0.65); border:none; color:#fff; border-radius:50%; width:36px; height:36px; cursor:pointer; display:none; align-items:center; justify-content:center; font-size:1rem; transition: background 0.2s;';
+                    muteBtn.innerHTML = '<i class="fas fa-volume-mute"></i>';
+                    muteBtn.onclick = () => {
+                        const v = document.getElementById('video_' + s.link_id);
+                        if (!v) return;
+                        v.muted = !v.muted;
+                        muteBtn.innerHTML = v.muted
+                            ? '<i class="fas fa-volume-mute"></i>'
+                            : '<i class="fas fa-volume-up"></i>';
+                        muteBtn.title = v.muted ? 'Click to unmute candidate audio' : 'Click to mute candidate audio';
+                        muteBtn.style.background = v.muted ? 'rgba(0,0,0,0.65)' : 'rgba(16,185,129,0.75)';
+                    };
+                    snapContainer.appendChild(muteBtn);
 
                     const placeholder = document.createElement('div');
                     placeholder.id = 'placeholder_' + s.link_id;

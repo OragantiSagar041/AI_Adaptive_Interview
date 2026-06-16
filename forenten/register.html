@@ -783,7 +783,7 @@
                     <div class="form-grid">
                         <div class="field">
                             <label for="fullName">Full Name</label>
-                            <input id="fullName" type="text" placeholder="John Doe">
+                            <input id="fullName" type="text" placeholder="John Doe" oninput="this.value = this.value.replace(/[^A-Za-z\s]/g, '')">
                         </div>
                         <div class="field">
                             <label for="companyName">Company / Workspace</label>
@@ -795,11 +795,16 @@
                         </div>
                         <div class="field">
                             <label for="phone">Phone Number</label>
-                            <input id="phone" type="tel" placeholder="+91 98765 43210">
+                            <input id="phone" type="tel" placeholder="+91 98765 43210" oninput="this.value = this.value.replace(/[^\d+]/g, '')">
                         </div>
                         <div class="field full">
                             <label for="password">Password</label>
-                            <input id="password" type="password" placeholder="Create a secure password">
+                            <div style="position: relative;">
+                                <input id="password" type="password" placeholder="Create a secure password" style="padding-right: 48px;">
+                                <button type="button" onclick="togglePasswordVisibility()" style="position: absolute; right: 16px; top: 50%; transform: translateY(-50%); background: none; border: none; cursor: pointer; color: #64748b; font-size: 1.1rem; padding: 0;">
+                                    <i class="fas fa-eye" id="togglePasswordIcon"></i>
+                                </button>
+                            </div>
                         </div>
                     </div>
 
@@ -866,6 +871,20 @@
     <script src="api_config.js"></script>
     <script>
 
+
+        function togglePasswordVisibility() {
+            const passwordInput = document.getElementById('password');
+            const toggleIcon = document.getElementById('togglePasswordIcon');
+            if (passwordInput.type === 'password') {
+                passwordInput.type = 'text';
+                toggleIcon.classList.remove('fa-eye');
+                toggleIcon.classList.add('fa-eye-slash');
+            } else {
+                passwordInput.type = 'password';
+                toggleIcon.classList.remove('fa-eye-slash');
+                toggleIcon.classList.add('fa-eye');
+            }
+        }
 
         const planOrder = {
             "Free Trial": 0,

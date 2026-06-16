@@ -2937,6 +2937,14 @@ def get_interview_details(link_id: str):
     
     response_payload["all_questions"] = all_questions
 
+    # If the interview ended early, only show questions up to the last one attempted
+    # so that unreached questions don't appear as "Not Answered"
+    if all_questions and results:
+        max_answered_id = max((r.get("question_id", 0) for r in results if r), default=0)
+        if max_answered_id > 0:
+            response_payload["all_questions"] = [q for q in all_questions if (q.get("id") or 0) <= max_answered_id]
+
+
     if actual_interview_id:
         interview_record = interviews_collection.find_one({"id": actual_interview_id})
         if interview_record:
@@ -3807,6 +3815,19 @@ def get_dashboard_stats(current_admin: dict = Depends(get_current_admin_details)
                         status = "expired"
                 except Exception:
                     pass
+            elif status == "started":
+                time_ref_str = s.get("started_at") or s.get("created_at")
+                if time_ref_str:
+                    try:
+                        time_ref = datetime.fromisoformat(time_ref_str.replace('Z', '+00:00'))
+                        if time_ref.tzinfo is None:
+                            time_ref = time_ref.replace(tzinfo=timezone.utc)
+                        duration_mins = int(s.get("interview_duration") or 30)
+                        buffer_mins = max(120, duration_mins * 2)
+                        if (now - time_ref).total_seconds() > (buffer_mins * 60):
+                            status = "expired"
+                    except Exception:
+                        pass
             
             if status == "completed":
                 completed += 1
@@ -4562,6 +4583,7 @@ async def get_all_sessions(current_admin: dict = Depends(get_current_admin_detai
             interview_doc_map[doc.get("id")] = doc.get("recording_path")
     
     sessions = []
+    now = datetime.now(timezone.utc)
     for row in rows:
         has_video = False
         interview_id = row.get("interview_id")
@@ -4573,13 +4595,37 @@ async def get_all_sessions(current_admin: dict = Depends(get_current_admin_detai
             # Cloudinary URLs are DB-backed remote videos; local fallbacks need a file check.
             if rec_path.startswith("http") or os.path.exists(rec_path):
                 has_video = True
+                
+        status = row.get("status", "pending")
+        if status == "pending" and row.get("expires_at"):
+            try:
+                exp_dt = datetime.fromisoformat(row["expires_at"].replace('Z', '+00:00'))
+                if exp_dt.tzinfo is None:
+                    exp_dt = exp_dt.replace(tzinfo=timezone.utc)
+                if now > exp_dt:
+                    status = "expired"
+            except Exception:
+                pass
+        elif status == "started":
+            time_ref_str = row.get("started_at") or row.get("created_at")
+            if time_ref_str:
+                try:
+                    time_ref = datetime.fromisoformat(time_ref_str.replace('Z', '+00:00'))
+                    if time_ref.tzinfo is None:
+                        time_ref = time_ref.replace(tzinfo=timezone.utc)
+                    duration_mins = int(row.get("interview_duration") or 30)
+                    buffer_mins = max(120, duration_mins * 2)
+                    if (now - time_ref).total_seconds() > (buffer_mins * 60):
+                        status = "expired"
+                except Exception:
+                    pass
 
         sessions.append({
             "link_id": row.get("link_id"),
             "candidate_id": row.get("candidate_id"),
             "candidate_name": row.get("candidate_name"),
             "candidate_email": row.get("candidate_email"),
-            "status": row.get("status"),
+            "status": status,
             "created_at": row.get("created_at"),
             "expires_at": row.get("expires_at"),
             "interview_duration": row.get("interview_duration"),
