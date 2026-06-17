@@ -7,6 +7,7 @@
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
     <script src="https://checkout.razorpay.com/v1/checkout.js"></script>
     <style>
         :root {
@@ -951,7 +952,7 @@
                 : "Built for teams that want paid activation with real hiring workflow controls.";
             document.getElementById("summaryPlanLabel").textContent = plan.price === 0 ? "Trial ready" : "Checkout enabled";
             document.getElementById("summaryPlanPrice").innerHTML = `${formatPrice(plan.price)}<span>${plan.price === 0 ? " / setup" : " / subscription"}</span>`;
-            document.getElementById("summaryPlanDuration").textContent = `${plan.duration_days} days`;
+            document.getElementById("summaryPlanDuration").textContent = plan.credits_granted >= 1000000 ? "Unlimited" : `${plan.credits_granted} credits`;
             document.getElementById("summaryPlanAccess").textContent = plan.price === 0 ? "Explore" : "Activate";
         }
 
@@ -964,7 +965,7 @@
             document.getElementById("selectedPlanName").textContent = plan.plan_name;
             document.getElementById("selectedPlanDescription").textContent = plan.price === 0
                 ? "Perfect for a first setup. Create the workspace instantly and start testing your interview operations."
-                : `Activates your paid workspace for ${plan.duration_days} days with secure Razorpay checkout and immediate admin access after verification.`;
+                : `Activates your paid workspace with ${plan.credits_granted >= 1000000 ? 'unlimited' : plan.credits_granted} interview credits via secure Razorpay checkout and immediate admin access after verification.`;
             document.getElementById("selectedPlanPrice").innerHTML = `${formatPrice(plan.price)}${plan.price === 0 ? "" : "<span> / plan</span>"}`;
 
             const featuresContainer = document.getElementById("selectedPlanFeatures");
@@ -1004,7 +1005,7 @@
                 tile.innerHTML = `
                     ${plan.price > 0 && index === 1 ? '<div class="badge">Popular</div>' : ""}
                     <strong>${plan.plan_name}</strong>
-                    <span>${plan.duration_days} days of workspace access</span>
+                    <span>${plan.credits_granted >= 1000000 ? 'Unlimited' : plan.credits_granted} interview credits</span>
                     <div class="value">${formatPrice(plan.price)}</div>
                 `;
                 tile.addEventListener("click", () => renderSelectedPlan(plan));
@@ -1065,6 +1066,7 @@
 
             showStatus("Workspace created successfully. Redirecting you to the admin login...", "success");
             window.setTimeout(() => {
+                sessionStorage.clear();
                 window.location.href = "admin.html";
             }, 1800);
         }
@@ -1119,6 +1121,7 @@
 
                         showStatus("Payment verified and workspace activated. Redirecting to admin login...", "success");
                         window.setTimeout(() => {
+                            sessionStorage.clear();
                             window.location.href = "admin.html";
                         }, 2200);
                     } catch (error) {

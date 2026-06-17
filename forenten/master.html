@@ -229,11 +229,6 @@
                     <div id="subscriptionPlanBadge"
                         style="display:none; align-items:center; gap:8px; background:rgba(13,148,136,0.12); color:#4f46e5; border:1px solid rgba(13,148,136,0.24); border-radius:999px; padding:8px 12px; font-size:0.8rem; font-weight:700; white-space:nowrap;">
                     </div>
-                    <div id="adminCreditsBadge"
-                        style="display:none; align-items:center; gap:8px; background:rgba(245, 158, 11, 0.12); color:#d97706; border:1px solid rgba(245, 158, 11, 0.24); border-radius:999px; padding:8px 12px; font-size:0.8rem; font-weight:700; white-space:nowrap;">
-                        <i class="fas fa-coins"></i> <span id="adminCreditsCount">0</span> Credits
-                        <button onclick="openRequestCreditsModal()" style="margin-left: 4px; background: none; border: none; color: #b45309; cursor: pointer; padding: 0;"><i class="fas fa-plus-circle"></i></button>
-                    </div>
                     <span class="welcome-copy">Welcome back, <strong id="adminName">Admin</strong></span>
                     <button class="btn-logout" onclick="logout()"><i class="fas fa-power-off"></i> Logout</button>
                 </div>
@@ -277,6 +272,14 @@
                         <div class="master-stat-card">
                             <p class="label">Total Members</p>
                             <p class="value" id="masterTotalMembers">0</p>
+                        </div>
+                    </div>
+
+                    <!-- Global Credits Visualization -->
+                    <div style="background: var(--bg-card); border: 1px solid var(--border); border-radius: var(--radius-md); padding: 1.5rem; margin-top: 1.5rem;">
+                        <h3 style="margin-top: 0; margin-bottom: 1rem; font-size: 1rem; font-weight: 500;">Global Credits Overview (Used vs Available)</h3>
+                        <div style="position: relative; height: 300px; width: 100%; max-width: 400px; margin: 0 auto;">
+                            <canvas id="masterCreditsDoughnutChart"></canvas>
                         </div>
                     </div>
 
@@ -480,32 +483,7 @@
                         </div>
                     </div>
                 </div>
-                <!-- REQUEST CREDITS MODAL -->
-                <div id="requestCreditsModal" class="master-modal hidden" style="z-index: 2000;">
-                    <div class="master-modal-card" style="max-width: 400px;">
-                        <div class="master-modal-head">
-                            <div>
-                                <h3>Request Credits</h3>
-                                <p>Ask your super admin for more interview credits.</p>
-                            </div>
-                            <button class="master-close" onclick="document.getElementById('requestCreditsModal').classList.add('hidden')"><i class="fas fa-times"></i></button>
-                        </div>
-                        <div class="master-modal-body">
-                            <div class="master-field">
-                                <label>Amount Requested</label>
-                                <input type="number" id="requestCreditsAmount" class="dash-input" min="1" value="50">
-                            </div>
-                            <div class="master-field">
-                                <label>Reason (Optional)</label>
-                                <textarea id="requestCreditsReason" class="dash-input" rows="3" placeholder="Why do you need more credits?"></textarea>
-                            </div>
-                        </div>
-                        <div class="master-modal-actions">
-                            <button class="master-btn" onclick="document.getElementById('requestCreditsModal').classList.add('hidden')">Cancel</button>
-                            <button class="master-btn primary" onclick="submitCreditRequest()"><i class="fas fa-paper-plane"></i> Send Request</button>
-                        </div>
-                    </div>
-                </div>
+
 
 
                 <!-- SUPER ADMIN TABS -->
@@ -1870,6 +1848,7 @@
         let adminName = "";
         let adminRole = sessionStorage.getItem('adminRole') || 'tenant';
         let masterTenantData = [];
+        let masterCreditsChartInstance = null;
         const PLAN_CAPABILITY_FALLBACK = {
             trial: {
                 single_interview: true,
@@ -2139,6 +2118,31 @@
                 const haystack = `${t.username || ''} ${t.email || ''} ${t.subscription_plan_label || ''}`.toLowerCase();
                 return !search || haystack.includes(search);
             });
+
+            const totalUsedCredits = tenants.reduce((sum, t) => sum + Number(t.total_sessions || 0), 0);
+            const totalAvailableCredits = tenants.reduce((sum, t) => sum + Number(t.credits || 0), 0);
+
+            if (masterCreditsChartInstance) {
+                masterCreditsChartInstance.destroy();
+            }
+            const ctxCredits = document.getElementById('masterCreditsDoughnutChart')?.getContext('2d');
+            if (ctxCredits) {
+                masterCreditsChartInstance = new Chart(ctxCredits, {
+                    type: 'doughnut',
+                    data: {
+                        labels: ['Global Credits Used', 'Global Credits Available'],
+                        datasets: [{
+                            data: [totalUsedCredits, totalAvailableCredits],
+                            backgroundColor: ['#ef4444', '#10b981']
+                        }]
+                    },
+                    options: {
+                        responsive: true,
+                        maintainAspectRatio: false,
+                        plugins: { legend: { position: 'bottom' } }
+                    }
+                });
+            }
 
             if (!filtered.length) {
                 body.innerHTML = '<tr><td colspan="7" style="text-align:center;padding:2rem;color:#64748b;">No matching admin accounts found.</td></tr>';
@@ -2460,7 +2464,6 @@
                     sessionStorage.setItem('adminEmail', adminEmail);
                     sessionStorage.setItem('adminName', adminName);
                     sessionStorage.setItem('adminRole', role);
-                    sessionStorage.setItem('adminCredits', data.credits !== undefined ? data.credits : 0);
                     adminRole = role; // Update global variable
                     currentPlanKey = planKey;
                     currentPlanLabel = plan;
@@ -3829,12 +3832,6 @@
                     document.getElementById('stat-today').textContent = d.today || 0;
                     document.getElementById('stat-started').textContent = d.started || 0;
                     document.getElementById('stat-avgscore').textContent = d.avg_score || 0;
-                    
-                    if (d.credits !== undefined && window.currentRole !== 'super_admin') {
-                        document.getElementById('adminCreditsCount').textContent = d.credits;
-                        document.getElementById('adminCreditsBadge').style.display = 'inline-flex';
-                        sessionStorage.setItem('adminCredits', d.credits);
-                    }
                 }
             } catch (e) { console.error('Stats error:', e); }
         }
@@ -6951,45 +6948,6 @@
                 dragWindow.style.transition = 'opacity 0.3s ease';
             }
         });
-
-        // --- CREDIT REQUEST LOGIC ---
-        function openRequestCreditsModal() {
-            document.getElementById('requestCreditsAmount').value = 50;
-            document.getElementById('requestCreditsReason').value = '';
-            document.getElementById('requestCreditsModal').classList.remove('hidden');
-        }
-
-        async function submitCreditRequest() {
-            const amount = parseInt(document.getElementById('requestCreditsAmount').value);
-            const reason = document.getElementById('requestCreditsReason').value.trim();
-
-            if (!amount || amount <= 0) {
-                showToast("Please enter a valid amount", "error");
-                return;
-            }
-
-            const token = sessionStorage.getItem('adminToken');
-            try {
-                const res = await fetch(`${API_BASE}/admin/credit-requests`, {
-                    method: 'POST',
-                    headers: {
-                        'Content-Type': 'application/json',
-                        'Authorization': `Bearer ${token}`
-                    },
-                    body: JSON.stringify({ amount, reason })
-                });
-
-                const data = await res.json();
-                if (res.ok) {
-                    showToast("Credit request sent successfully", "success");
-                    document.getElementById('requestCreditsModal').classList.add('hidden');
-                } else {
-                    showToast(data.detail || "Failed to send request", "error");
-                }
-            } catch (err) {
-                showToast("Network error", "error");
-            }
-        }
     </script>
     <!-- COPILOT WIDGET END -->
     <!-- GOOGLE TRANSLATE FOR LIVE RESULTS -->

@@ -655,7 +655,7 @@
             </nav>
 
             <div class="nav-actions">
-                <a href="admin.html" class="btn btn-outline">Login</a>
+                <a href="login.html" class="btn btn-outline">Login</a>
                 <a href="register.html" class="btn btn-primary">Start Subscription</a>
             </div>
         </header>
@@ -842,7 +842,7 @@
             <div>Hire IQ, built for AI-powered recruiting operations.</div>
             <div style="display:flex; align-items:center; gap:16px; flex-wrap:wrap;">
                 <a href="register.html">Subscription</a>
-                <a href="admin.html">Admin Login</a>
+                <a href="login.html">Admin Login</a>
             </div>
         </footer>
     </div>
@@ -894,7 +894,7 @@
                 card.innerHTML = `
                     <div class="badge">${planBadge(plan, index)}</div>
                     <h3>${plan.plan_name}</h3>
-                    <div class="duration">${plan.duration_days} days of workspace access</div>
+                    <div class="duration">${plan.credits_granted >= 1000000 ? 'Unlimited' : plan.credits_granted} interview credits</div>
                     <div class="price">${priceText}${plan.price === 0 ? "" : '<span> / subscription</span>'}</div>
                     <p>${plan.price === 0
                         ? "Best for first-time teams who want to test the platform before moving into a paid workspace."

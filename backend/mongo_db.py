@@ -16,6 +16,7 @@ admins_collection = db["admins"]
 interview_sessions_collection = db["interview_sessions"]
 plans_collection = db["plans"]
 companies_collection = db["companies"]
+credit_requests_collection = db["credit_requests"]
 
 async def init_db_indexes():
     candidates_collection.create_index("name", unique=True)

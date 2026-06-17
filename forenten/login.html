@@ -37,7 +37,7 @@
 
     <!-- ==================== LOGIN SECTION ==================== -->
     <!-- ==================== LOGIN SECTION ==================== -->
-    <div id="loginSection" class="hidden">
+    <div id="loginSection">
         <video class="login-video-bg" autoplay loop muted playsinline>
             <source
                 src="https://d8j0ntlcm91z4.cloudfront.net/user_38xzZboKViGWJOttwIXH07lWA1P/hf_20260302_085640_276ea93b-d7da-4418-a09b-2aa5b490e838.mp4"
@@ -140,7 +140,7 @@
     </div>
 
     <!-- ==================== DASHBOARD SECTION ==================== -->
-    <div id="dashboardSection">
+    <div id="dashboardSection" class="hidden">
         <!-- Sidebar (Left Fixed) -->
         <div class="sidebar-wrapper">
             <div class="sidebar-header" style="padding: 1.5rem 1.25rem; display: flex; justify-content: center;">
@@ -228,11 +228,6 @@
                     </div>
                     <div id="subscriptionPlanBadge"
                         style="display:none; align-items:center; gap:8px; background:rgba(13,148,136,0.12); color:#4f46e5; border:1px solid rgba(13,148,136,0.24); border-radius:999px; padding:8px 12px; font-size:0.8rem; font-weight:700; white-space:nowrap;">
-                    </div>
-                    <div id="adminCreditsBadge"
-                        style="display:none; align-items:center; gap:8px; background:rgba(245, 158, 11, 0.12); color:#d97706; border:1px solid rgba(245, 158, 11, 0.24); border-radius:999px; padding:8px 12px; font-size:0.8rem; font-weight:700; white-space:nowrap;">
-                        <i class="fas fa-coins"></i> <span id="adminCreditsCount">0</span> Credits
-                        <button onclick="openRequestCreditsModal()" style="margin-left: 4px; background: none; border: none; color: #b45309; cursor: pointer; padding: 0;"><i class="fas fa-plus-circle"></i></button>
                     </div>
                     <span class="welcome-copy">Welcome back, <strong id="adminName">Admin</strong></span>
                     <button class="btn-logout" onclick="logout()"><i class="fas fa-power-off"></i> Logout</button>
@@ -480,32 +475,7 @@
                         </div>
                     </div>
                 </div>
-                <!-- REQUEST CREDITS MODAL -->
-                <div id="requestCreditsModal" class="master-modal hidden" style="z-index: 2000;">
-                    <div class="master-modal-card" style="max-width: 400px;">
-                        <div class="master-modal-head">
-                            <div>
-                                <h3>Request Credits</h3>
-                                <p>Ask your super admin for more interview credits.</p>
-                            </div>
-                            <button class="master-close" onclick="document.getElementById('requestCreditsModal').classList.add('hidden')"><i class="fas fa-times"></i></button>
-                        </div>
-                        <div class="master-modal-body">
-                            <div class="master-field">
-                                <label>Amount Requested</label>
-                                <input type="number" id="requestCreditsAmount" class="dash-input" min="1" value="50">
-                            </div>
-                            <div class="master-field">
-                                <label>Reason (Optional)</label>
-                                <textarea id="requestCreditsReason" class="dash-input" rows="3" placeholder="Why do you need more credits?"></textarea>
-                            </div>
-                        </div>
-                        <div class="master-modal-actions">
-                            <button class="master-btn" onclick="document.getElementById('requestCreditsModal').classList.add('hidden')">Cancel</button>
-                            <button class="master-btn primary" onclick="submitCreditRequest()"><i class="fas fa-paper-plane"></i> Send Request</button>
-                        </div>
-                    </div>
-                </div>
+
 
 
                 <!-- SUPER ADMIN TABS -->
@@ -1959,13 +1929,13 @@
             sessionStorage.setItem('planCapabilities', JSON.stringify(currentPlanCapabilities));
             if (planPayload.expiry) sessionStorage.setItem('subscriptionExpiry', planPayload.expiry);
             if (planPayload.warningMessage !== undefined) sessionStorage.setItem('subscriptionWarningMessage', planPayload.warningMessage || '');
-            if (planPayload.daysRemaining !== undefined && planPayload.daysRemaining !== null) {
-                sessionStorage.setItem('subscriptionDaysRemaining', String(planPayload.daysRemaining));
+            if (planPayload.credits !== undefined && planPayload.credits !== null) {
+                sessionStorage.setItem('subscriptionCredits', String(planPayload.credits));
             }
 
             const planBadge = document.getElementById('subscriptionPlanBadge');
             if (planBadge) {
-                const remainingText = planPayload.daysRemaining != null ? ` · ${planPayload.daysRemaining} day${Number(planPayload.daysRemaining) === 1 ? '' : 's'} left` : '';
+                const remainingText = planPayload.credits != null ? (planPayload.credits >= 1000000 ? ' &bull; Unlimited credits' : ` &bull; ${planPayload.credits} credits left`) : '';
                 planBadge.innerHTML = `<i class="fas fa-layer-group"></i> ${currentPlanLabel}${remainingText}`;
                 planBadge.style.display = 'inline-flex';
             }
@@ -2330,7 +2300,6 @@
 
             // Check for existing session
             const savedAdminId = sessionStorage.getItem('adminId');
-            if (!savedAdminId) { window.location.href = 'login.html'; return; }
             if (savedAdminId) {
                 adminId = savedAdminId;
                 adminEmail = sessionStorage.getItem('adminEmail') || "";
@@ -2338,41 +2307,13 @@
                 document.getElementById('adminName').textContent = sessionStorage.getItem('adminName') || "Admin";
                 document.getElementById('adminEmailInput').value = adminEmail;
 
-                document.getElementById('loginSection').classList.add('hidden');
-                document.getElementById('dashboardSection').classList.remove('hidden');
-                document.body.classList.add('dashboard-active');
-
-                // Show Copilot only on Dashboard
-                const copilotFab = document.getElementById('copilotFab');
-                if (copilotFab) copilotFab.style.display = 'flex';
-
                 if (adminRole === 'master') {
-                    showMasterDashboard();
-                    loadMasterTenants();
-                    return;
+                    window.location.href = 'master.html';
+                } else if (adminRole === 'super_admin') {
+                    window.location.href = 'super_admin.html';
+                } else {
+                    window.location.href = 'admin.html';
                 }
-                
-                if (adminRole === 'super_admin') {
-                    const btn1 = document.getElementById('nav-btn-super_dashboard');
-                    const btn2 = document.getElementById('nav-btn-team');
-                    if (btn1) btn1.style.display = 'block';
-                    if (btn2) btn2.style.display = 'block';
-                }
-
-                applyPlanRestrictions({
-                    plan: sessionStorage.getItem('subscriptionPlan') || 'Free Trial',
-                    planKey: sessionStorage.getItem('subscriptionPlanKey') || 'trial',
-                    capabilities: (() => {
-                        try { return JSON.parse(sessionStorage.getItem('planCapabilities') || 'null'); } catch { return null; }
-                    })(),
-                    expiry: sessionStorage.getItem('subscriptionExpiry') || '',
-                    daysRemaining: sessionStorage.getItem('subscriptionDaysRemaining'),
-                    warningMessage: sessionStorage.getItem('subscriptionWarningMessage') || '',
-                });
-
-                switchView('overview');
-                loadDashboardSessions();
-                loadDashboardStats();
             }
         });
 
@@ -2460,7 +2401,6 @@
                     sessionStorage.setItem('adminEmail', adminEmail);
                     sessionStorage.setItem('adminName', adminName);
                     sessionStorage.setItem('adminRole', role);
-                    sessionStorage.setItem('adminCredits', data.credits !== undefined ? data.credits : 0);
                     adminRole = role; // Update global variable
                     currentPlanKey = planKey;
                     currentPlanLabel = plan;
@@ -2469,7 +2409,7 @@
                     sessionStorage.setItem('subscriptionPlanKey', planKey);
                     sessionStorage.setItem('planCapabilities', JSON.stringify(planCapabilities));
                     sessionStorage.setItem('subscriptionExpiry', data.subscription_expiry || '');
-                    sessionStorage.setItem('subscriptionDaysRemaining', data.subscription_days_remaining ?? '');
+                    sessionStorage.setItem('subscriptionCredits', data.credits ?? '');
                     sessionStorage.setItem('subscriptionWarningMessage', data.subscription_warning_message || '');
 
                     const companyName = data.company_name || "";
@@ -2504,37 +2444,14 @@
                         }
                     }
 
-                    // Switch to dashboard view
-                    document.getElementById('loginSection').style.opacity = '0';
-                    document.getElementById('loginSection').style.transform = 'scale(0.95)';
-                    document.getElementById('loginSection').style.transition = 'all 0.3s ease';
-
-                    setTimeout(() => {
-                        document.getElementById('loginSection').classList.add('hidden');
-                        document.getElementById('dashboardSection').classList.remove('hidden');
-                        document.body.classList.add('dashboard-active'); // Enable full-screen layout
-
-                        // Show Copilot only on Dashboard
-                        const copilotFab = document.getElementById('copilotFab');
-                        if (copilotFab) copilotFab.style.display = 'flex';
-
-                        if (role === 'master') {
-                            showMasterDashboard();
-                            loadMasterTenants();
-                        } else {
-                            showTenantDashboardShell();
-                            applyPlanRestrictions({
-                                plan,
-                                planKey,
-                                capabilities: planCapabilities,
-                                expiry: data.subscription_expiry || '',
-                                daysRemaining: data.subscription_days_remaining,
-                                warningMessage: data.subscription_warning_message || '',
-                            });
-                            loadDashboardSessions();
-                            loadDashboardStats(); // Task 8
-                        }
-                    }, 300);
+                    // Redirect based on role
+                    if (role === 'master') {
+                        window.location.href = 'master.html';
+                    } else if (role === 'super_admin') {
+                        window.location.href = 'super_admin.html';
+                    } else {
+                        window.location.href = 'admin.html';
+                    }
 
                 } else {
                     errorDiv.textContent = "Invalid username or password.";
@@ -2580,7 +2497,7 @@
             sessionStorage.removeItem('subscriptionPlanKey');
             sessionStorage.removeItem('planCapabilities');
             sessionStorage.removeItem('subscriptionExpiry');
-            sessionStorage.removeItem('subscriptionDaysRemaining');
+            sessionStorage.removeItem('subscriptionCredits');
             sessionStorage.removeItem('subscriptionWarningMessage');
             location.reload();
         }
@@ -3829,12 +3746,6 @@
                     document.getElementById('stat-today').textContent = d.today || 0;
                     document.getElementById('stat-started').textContent = d.started || 0;
                     document.getElementById('stat-avgscore').textContent = d.avg_score || 0;
-                    
-                    if (d.credits !== undefined && window.currentRole !== 'super_admin') {
-                        document.getElementById('adminCreditsCount').textContent = d.credits;
-                        document.getElementById('adminCreditsBadge').style.display = 'inline-flex';
-                        sessionStorage.setItem('adminCredits', d.credits);
-                    }
                 }
             } catch (e) { console.error('Stats error:', e); }
         }
@@ -6951,45 +6862,6 @@
                 dragWindow.style.transition = 'opacity 0.3s ease';
             }
         });
-
-        // --- CREDIT REQUEST LOGIC ---
-        function openRequestCreditsModal() {
-            document.getElementById('requestCreditsAmount').value = 50;
-            document.getElementById('requestCreditsReason').value = '';
-            document.getElementById('requestCreditsModal').classList.remove('hidden');
-        }
-
-        async function submitCreditRequest() {
-            const amount = parseInt(document.getElementById('requestCreditsAmount').value);
-            const reason = document.getElementById('requestCreditsReason').value.trim();
-
-            if (!amount || amount <= 0) {
-                showToast("Please enter a valid amount", "error");
-                return;
-            }
-
-            const token = sessionStorage.getItem('adminToken');
-            try {
-                const res = await fetch(`${API_BASE}/admin/credit-requests`, {
-                    method: 'POST',
-                    headers: {
-                        'Content-Type': 'application/json',
-                        'Authorization': `Bearer ${token}`
-                    },
-                    body: JSON.stringify({ amount, reason })
-                });
-
-                const data = await res.json();
-                if (res.ok) {
-                    showToast("Credit request sent successfully", "success");
-                    document.getElementById('requestCreditsModal').classList.add('hidden');
-                } else {
-                    showToast(data.detail || "Failed to send request", "error");
-                }
-            } catch (err) {
-                showToast("Network error", "error");
-            }
-        }
     </script>
     <!-- COPILOT WIDGET END -->
     <!-- GOOGLE TRANSLATE FOR LIVE RESULTS -->

@@ -12,6 +12,7 @@
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
     <script src="https://cdn.sheetjs.com/xlsx-0.20.1/package/dist/xlsx.full.min.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+    <script src="https://checkout.razorpay.com/v1/checkout.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/html2pdf.js/0.10.1/html2pdf.bundle.min.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
@@ -208,7 +209,7 @@
             <!-- Top Header -->
             <div class="top-bar">
                 <div class="brand-text">
-                    <h2 id="consoleTitle">Admin Console</h2>
+                    <h2 id="consoleTitle">Super Admin Console</h2>
                 </div>
                 <div class="topbar-actions">
                     <!-- Color Switcher -->
@@ -228,11 +229,6 @@
                     </div>
                     <div id="subscriptionPlanBadge"
                         style="display:none; align-items:center; gap:8px; background:rgba(13,148,136,0.12); color:#4f46e5; border:1px solid rgba(13,148,136,0.24); border-radius:999px; padding:8px 12px; font-size:0.8rem; font-weight:700; white-space:nowrap;">
-                    </div>
-                    <div id="adminCreditsBadge"
-                        style="display:none; align-items:center; gap:8px; background:rgba(245, 158, 11, 0.12); color:#d97706; border:1px solid rgba(245, 158, 11, 0.24); border-radius:999px; padding:8px 12px; font-size:0.8rem; font-weight:700; white-space:nowrap;">
-                        <i class="fas fa-coins"></i> <span id="adminCreditsCount">0</span> Credits
-                        <button onclick="openRequestCreditsModal()" style="margin-left: 4px; background: none; border: none; color: #b45309; cursor: pointer; padding: 0;"><i class="fas fa-plus-circle"></i></button>
                     </div>
                     <span class="welcome-copy">Welcome back, <strong id="adminName">Admin</strong></span>
                     <button class="btn-logout" onclick="logout()"><i class="fas fa-power-off"></i> Logout</button>
@@ -388,6 +384,23 @@
                         </div>
                     </div>
                 </div>
+                <!-- UPGRADE MODAL -->
+                <div id="upgradeModal" class="master-modal hidden">
+                    <div class="master-modal-card" style="max-width: 600px;">
+                        <div class="master-modal-head">
+                            <div>
+                                <h3>Upgrade / Buy Credits</h3>
+                                <p>Select a plan to purchase additional credits using Razorpay.</p>
+                            </div>
+                            <button class="master-close" onclick="closeUpgradeModal()"><i class="fas fa-times"></i></button>
+                        </div>
+                        <div class="master-modal-body">
+                            <div id="upgradePlansContainer" style="display: flex; flex-direction: column; gap: 1rem;">
+                                <!-- Plans will be populated here -->
+                            </div>
+                        </div>
+                    </div>
+                </div>
 
                 <!-- MASTER CREATE TENANT MODAL -->
                 <div id="createTenantModal" class="master-modal hidden">
@@ -421,8 +434,10 @@
                             <div class="master-form-grid">
                                 <div class="master-field">
                                     <label>Password</label>
-                                    <input type="password" id="tenantPassword" class="dash-input"
-                                        placeholder="Password">
+                                    <div style="position: relative;">
+                                        <input type="password" id="tenantPassword" class="dash-input" placeholder="Password" style="padding-right: 40px; width: 100%;">
+                                        <button onclick="togglePasswordVisibility('tenantPassword')" style="position: absolute; right: 12px; top: 50%; transform: translateY(-50%); background: none; border: none; color: #94a3b8; cursor: pointer;"><i class="fas fa-eye"></i></button>
+                                    </div>
                                 </div>
                                 <div class="master-field">
                                     <label>Subscription Plan</label>
@@ -480,38 +495,13 @@
                         </div>
                     </div>
                 </div>
-                <!-- REQUEST CREDITS MODAL -->
-                <div id="requestCreditsModal" class="master-modal hidden" style="z-index: 2000;">
-                    <div class="master-modal-card" style="max-width: 400px;">
-                        <div class="master-modal-head">
-                            <div>
-                                <h3>Request Credits</h3>
-                                <p>Ask your super admin for more interview credits.</p>
-                            </div>
-                            <button class="master-close" onclick="document.getElementById('requestCreditsModal').classList.add('hidden')"><i class="fas fa-times"></i></button>
-                        </div>
-                        <div class="master-modal-body">
-                            <div class="master-field">
-                                <label>Amount Requested</label>
-                                <input type="number" id="requestCreditsAmount" class="dash-input" min="1" value="50">
-                            </div>
-                            <div class="master-field">
-                                <label>Reason (Optional)</label>
-                                <textarea id="requestCreditsReason" class="dash-input" rows="3" placeholder="Why do you need more credits?"></textarea>
-                            </div>
-                        </div>
-                        <div class="master-modal-actions">
-                            <button class="master-btn" onclick="document.getElementById('requestCreditsModal').classList.add('hidden')">Cancel</button>
-                            <button class="master-btn primary" onclick="submitCreditRequest()"><i class="fas fa-paper-plane"></i> Send Request</button>
-                        </div>
-                    </div>
-                </div>
+
 
 
                 <!-- SUPER ADMIN TABS -->
                 <!-- VIEW: SUPER DASHBOARD -->
                 <div id="view-super_dashboard" class="view-panel hidden">
-                    <h2 class="view-title">Super Admin Dashboard</h2>
+
                     <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 1rem; margin-bottom: 2rem;">
                         <div class="stat-card" style="padding: 1.5rem; background: var(--bg-card); border: 1px solid var(--border); border-radius: var(--radius-md);">
                             <div style="color: var(--text-muted); font-size: 0.875rem; margin-bottom: 0.5rem;">Available Credits</div>
@@ -531,7 +521,7 @@
                         </div>
                     </div>
                     
-                    <div style="display: grid; grid-template-columns: 2fr 1fr; gap: 2rem;">
+                    <div style="display: grid; grid-template-columns: 2fr 1fr 1fr; gap: 2rem;">
                         <div style="background: var(--bg-card); border: 1px solid var(--border); border-radius: var(--radius-md); padding: 1.5rem;">
                             <h3 style="margin-top: 0; margin-bottom: 1rem; font-size: 1rem; font-weight: 500;">Interviews Last 7 Days</h3>
                             <div style="position: relative; height: 300px; width: 100%;">
@@ -544,12 +534,18 @@
                                 <canvas id="saAdminPieChart"></canvas>
                             </div>
                         </div>
+                        <div style="background: var(--bg-card); border: 1px solid var(--border); border-radius: var(--radius-md); padding: 1.5rem;">
+                            <h3 style="margin-top: 0; margin-bottom: 1rem; font-size: 1rem; font-weight: 500;">Credits Used vs Available</h3>
+                            <div style="position: relative; height: 300px; width: 100%;">
+                                <canvas id="saCreditsDoughnutChart"></canvas>
+                            </div>
+                        </div>
                     </div>
                 </div>
 
                 <!-- VIEW: TEAM MANAGEMENT -->
                 <div id="view-team" class="view-panel hidden">
-                    <div class="dash-card">
+                    <div class="sa-card" style="background: white; border: 1px solid var(--border); border-radius: var(--radius-md);">
                         <div style="display: flex; justify-content: space-between; align-items: center; padding: 1.5rem; flex-wrap: wrap; gap: 1rem;">
                             <div style="display: flex; gap: 12px; align-items: center;">
                                 <div class="header-icon purple" style="background: rgba(99, 102, 241, 0.15);">
@@ -582,6 +578,39 @@
                             </table>
                         </div>
                     </div>
+                    
+                    <!-- Pending Credit Requests Table -->
+                    <div class="sa-card" style="margin-top: 2rem; background: white; border: 1px solid var(--border); border-radius: var(--radius-md);">
+                        <div style="display: flex; justify-content: space-between; align-items: center; padding: 1.5rem; flex-wrap: wrap; gap: 1rem;">
+                            <div style="display: flex; gap: 12px; align-items: center;">
+                                <div class="header-icon" style="background: rgba(245, 158, 11, 0.15); color: #f59e0b;">
+                                    <i class="fas fa-coins"></i>
+                                </div>
+                                <div>
+                                    <h3 style="margin: 0;">Pending Credit Requests</h3>
+                                    <p style="margin: 0; color: var(--text-muted); font-size: 0.85rem;">Approve or reject credit requests from your admins</p>
+                                </div>
+                            </div>
+                        </div>
+                        
+                        <div style="overflow-x: auto;">
+                            <table class="dash-table">
+                                <thead>
+                                    <tr>
+                                        <th style="padding-left: 1.5rem;">Date</th>
+                                        <th>Admin Name</th>
+                                        <th>Amount Requested</th>
+                                        <th>Reason</th>
+                                        <th>Status</th>
+                                        <th>Actions</th>
+                                    </tr>
+                                </thead>
+                                <tbody id="creditRequestsTableBody">
+                                    <tr><td colspan="6" style="text-align: center; padding: 2rem;">Loading requests...</td></tr>
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
                 </div>
                 
                 <!-- Add Admin Modal -->
@@ -604,6 +633,10 @@
                             <label style="display: block; margin-bottom: 0.5rem; color: var(--text-muted); font-size: 0.875rem;">Password</label>
                             <input type="password" id="newAdminPassword" class="dash-input" placeholder="Min 6 characters">
                         </div>
+                        <div style="margin-bottom: 1.5rem;">
+                            <label style="display: block; margin-bottom: 0.5rem; color: var(--text-muted); font-size: 0.875rem;">Credits</label>
+                            <input type="number" id="newAdminCredits" class="dash-input" placeholder="e.g. 100" min="0" value="0">
+                        </div>
                         <div style="display: flex; gap: 1rem;">
                             <button class="master-btn" style="flex: 1;" onclick="document.getElementById('addAdminModal').classList.add('hidden')">Cancel</button>
                             <button class="primary-btn" style="flex: 1;" onclick="submitNewAdmin()">Add Admin</button>
@@ -613,6 +646,14 @@
 
                 <!-- VIEW 1: OVERVIEW DASHBOARD -->
                 <div id="view-overview" class="view-panel">
+                
+                    <!-- Super Admin Only: Admin Filter -->
+                    <div id="superAdminFilterContainer" style="display: none; margin-bottom: 1.5rem; display: flex; align-items: center; justify-content: flex-end; gap: 1rem;">
+                        <label style="font-size: 0.875rem; color: rgba(255, 255, 255, 0.9); font-weight: 500;">Filter by Admin:</label>
+                        <select id="superAdminFilter" class="dash-input" style="width: auto; min-width: 200px; padding: 0.5rem 1rem; background-color: #fff; color: #333;" onchange="loadDashboardStats(); loadDashboardSessions();">
+                            <option value="">All Admins</option>
+                        </select>
+                    </div>
 
                     <!-- Task 8: Dashboard Stats Cards -->
                     <div id="statsCards"
@@ -640,6 +681,14 @@
                                     <span id="stat-ongoing-monitored">0</span>
                                 </span>
                             </div>
+                        </div>
+                        <div style="background: var(--bg-card); border: 1px solid var(--border); border-radius: var(--radius-md); padding: 1.25rem; position: relative; overflow: hidden; cursor: default;">
+                            <div style="position: absolute; top: -10px; right: -10px; width: 60px; height: 60px; background: rgba(16, 185, 129, 0.1); border-radius: 50%;"></div>
+                            <div style="font-size: 0.75rem; color: var(--text-muted); text-transform: uppercase; letter-spacing: 0.5px; font-weight: 600;">
+                                Available Credits</div>
+                            <div id="stat-credits" style="font-size: 2rem; font-weight: 800; color: #10b981; margin-top: 0.3rem;">
+                                --</div>
+                            <div style="font-size: 0.72rem; color: var(--text-muted); margin-top: 0.2rem;">allocated by super admin</div>
                         </div>
                         <div onclick="clearFilters()"
                             style="background: var(--bg-card); border: 1px solid var(--border); border-radius: var(--radius-md); padding: 1.25rem; position: relative; overflow: hidden; cursor: pointer; transition: transform 0.2s;"
@@ -1959,15 +2008,17 @@
             sessionStorage.setItem('planCapabilities', JSON.stringify(currentPlanCapabilities));
             if (planPayload.expiry) sessionStorage.setItem('subscriptionExpiry', planPayload.expiry);
             if (planPayload.warningMessage !== undefined) sessionStorage.setItem('subscriptionWarningMessage', planPayload.warningMessage || '');
-            if (planPayload.daysRemaining !== undefined && planPayload.daysRemaining !== null) {
-                sessionStorage.setItem('subscriptionDaysRemaining', String(planPayload.daysRemaining));
+            if (planPayload.credits !== undefined && planPayload.credits !== null) {
+                sessionStorage.setItem('subscriptionCredits', String(planPayload.credits));
             }
 
             const planBadge = document.getElementById('subscriptionPlanBadge');
             if (planBadge) {
-                const remainingText = planPayload.daysRemaining != null ? ` · ${planPayload.daysRemaining} day${Number(planPayload.daysRemaining) === 1 ? '' : 's'} left` : '';
-                planBadge.innerHTML = `<i class="fas fa-layer-group"></i> ${currentPlanLabel}${remainingText}`;
+                const remainingText = planPayload.credits != null ? (planPayload.credits >= 1000000 ? ' &bull; Unlimited credits' : ` &bull; ${planPayload.credits} credits left`) : '';
+                const upgradeBtn = ` <button onclick="openUpgradeModal()" title="Buy Credits" style="background: none; border: none; cursor: pointer; color: inherit; margin-left: 5px;"><i class="fas fa-plus-circle"></i></button>`;
+                planBadge.innerHTML = `<i class="fas fa-layer-group"></i> ${currentPlanLabel}${remainingText}${upgradeBtn}`;
                 planBadge.style.display = 'inline-flex';
+                planBadge.style.alignItems = 'center';
             }
 
             showSubscriptionBanner(planPayload.warningMessage || sessionStorage.getItem('subscriptionWarningMessage') || '');
@@ -2034,7 +2085,7 @@
             const masterSection = document.getElementById('masterDashboardSection');
             if (masterSection) masterSection.classList.add('hidden');
             const title = document.getElementById('consoleTitle');
-            if (title) title.textContent = 'Admin Console';
+            if (title) title.textContent = 'Super Admin Console';
 
             // Explicitly switch to the overview tab so the dashboard isn't blank
             if (typeof switchView === 'function') {
@@ -2357,22 +2408,46 @@
                     const btn2 = document.getElementById('nav-btn-team');
                     if (btn1) btn1.style.display = 'block';
                     if (btn2) btn2.style.display = 'block';
+
+                    // Setup Admin Filter for Overview
+                    const filterContainer = document.getElementById('superAdminFilterContainer');
+                    const filterSelect = document.getElementById('superAdminFilter');
+                    if (filterContainer && filterSelect) {
+                        filterContainer.style.display = 'flex';
+                        const savedToken = sessionStorage.getItem('adminToken');
+                        if (savedToken) {
+                            fetch(`${API_BASE}/super-admin/admins`, {
+                                headers: { 'Authorization': `Bearer ${savedToken}` }
+                            }).then(r => r.json()).then(resData => {
+                                if (resData.data) {
+                                    let optionsHtml = '<option value="">All Admins</option>';
+                                    resData.data.forEach(admin => {
+                                        optionsHtml += `<option value="${admin.id}">${admin.name || admin.username}</option>`;
+                                    });
+                                    filterSelect.innerHTML = optionsHtml;
+                                }
+                            }).catch(err => console.error('Failed to load admins for filter', err));
+                        }
+                    }
                 }
 
                 applyPlanRestrictions({
                     plan: sessionStorage.getItem('subscriptionPlan') || 'Free Trial',
                     planKey: sessionStorage.getItem('subscriptionPlanKey') || 'trial',
-                    capabilities: (() => {
-                        try { return JSON.parse(sessionStorage.getItem('planCapabilities') || 'null'); } catch { return null; }
-                    })(),
-                    expiry: sessionStorage.getItem('subscriptionExpiry') || '',
-                    daysRemaining: sessionStorage.getItem('subscriptionDaysRemaining'),
+                    capabilities: JSON.parse(sessionStorage.getItem('planCapabilities') || '{}'),
+                    expiry: sessionStorage.getItem('subscriptionExpiry'),
+                    credits: sessionStorage.getItem('subscriptionCredits'),
                     warningMessage: sessionStorage.getItem('subscriptionWarningMessage') || '',
                 });
 
-                switchView('overview');
-                loadDashboardSessions();
-                loadDashboardStats();
+                if (adminRole === 'super_admin') {
+                    switchView('super_dashboard');
+                    loadSuperAdminDashboard();
+                } else {
+                    switchView('overview');
+                    loadDashboardSessions();
+                    loadDashboardStats();
+                }
             }
         });
 
@@ -2460,7 +2535,6 @@
                     sessionStorage.setItem('adminEmail', adminEmail);
                     sessionStorage.setItem('adminName', adminName);
                     sessionStorage.setItem('adminRole', role);
-                    sessionStorage.setItem('adminCredits', data.credits !== undefined ? data.credits : 0);
                     adminRole = role; // Update global variable
                     currentPlanKey = planKey;
                     currentPlanLabel = plan;
@@ -2469,7 +2543,7 @@
                     sessionStorage.setItem('subscriptionPlanKey', planKey);
                     sessionStorage.setItem('planCapabilities', JSON.stringify(planCapabilities));
                     sessionStorage.setItem('subscriptionExpiry', data.subscription_expiry || '');
-                    sessionStorage.setItem('subscriptionDaysRemaining', data.subscription_days_remaining ?? '');
+                    sessionStorage.setItem('subscriptionCredits', data.credits ?? '');
                     sessionStorage.setItem('subscriptionWarningMessage', data.subscription_warning_message || '');
 
                     const companyName = data.company_name || "";
@@ -2501,6 +2575,25 @@
                         if (role === "super_admin") {
                             document.getElementById('nav-btn-super_dashboard').style.display = 'block';
                             document.getElementById('nav-btn-team').style.display = 'block';
+                            
+                            // Setup Admin Filter for Overview
+                            const filterContainer = document.getElementById('superAdminFilterContainer');
+                            const filterSelect = document.getElementById('superAdminFilter');
+                            if (filterContainer && filterSelect) {
+                                filterContainer.style.display = 'flex';
+                                // Fetch admins to populate dropdown
+                                fetch(`${API_BASE}/super-admin/admins`, {
+                                    headers: { 'Authorization': `Bearer ${data.token}` }
+                                }).then(r => r.json()).then(resData => {
+                                    if (resData.data) {
+                                        let optionsHtml = '<option value="">All Admins</option>';
+                                        resData.data.forEach(admin => {
+                                            optionsHtml += `<option value="${admin.id}">${admin.name || admin.username}</option>`;
+                                        });
+                                        filterSelect.innerHTML = optionsHtml;
+                                    }
+                                }).catch(err => console.error('Failed to load admins for filter', err));
+                            }
                         }
                     }
 
@@ -2580,7 +2673,7 @@
             sessionStorage.removeItem('subscriptionPlanKey');
             sessionStorage.removeItem('planCapabilities');
             sessionStorage.removeItem('subscriptionExpiry');
-            sessionStorage.removeItem('subscriptionDaysRemaining');
+            sessionStorage.removeItem('subscriptionCredits');
             sessionStorage.removeItem('subscriptionWarningMessage');
             location.reload();
         }
@@ -3116,6 +3209,10 @@
             if (viewId === 'settings') {
                 document.getElementById('adminEmailInput').value = adminEmail;
             }
+            if (viewId === 'team') {
+                loadTeamManagement();
+                loadCreditRequests();
+            }
         }
 
         async function updateProfile() {
@@ -3205,7 +3302,13 @@
             const sortBy = document.getElementById('sortBy').value;
             const filterStatus = document.getElementById('filterStatus') ? document.getElementById('filterStatus').value : '';
 
-            let url = `${API_BASE}/admin/sessions?admin_id=${adminId}&sort_by=${sortBy}&deactivated=all`;
+            let url = `${API_BASE}/admin/sessions?sort_by=${sortBy}&deactivated=all`;
+            
+            const superAdminFilter = document.getElementById('superAdminFilter');
+            if (superAdminFilter && superAdminFilter.value) {
+                url += `&admin_id=${superAdminFilter.value}`;
+            }
+
             if (startDate) url += `&start_date=${startDate}`;
             if (endDate) url += `&end_date=${endDate}`;
 
@@ -3818,7 +3921,12 @@
         async function loadDashboardStats() {
             if (!adminId) return;
             try {
-                const res = await fetch(`${API_BASE}/admin/dashboard-stats?admin_id=${adminId}`);
+            let url = `${API_BASE}/admin/dashboard-stats?1=1`;
+            const superAdminFilter = document.getElementById('superAdminFilter');
+            if (superAdminFilter && superAdminFilter.value) {
+                url += `&admin_id=${superAdminFilter.value}`;
+            }
+            const res = await fetch(url);
                 if (res.ok) {
                     const d = await res.json();
                     document.getElementById('stat-total').textContent = d.total || 0;
@@ -3827,14 +3935,21 @@
                     document.getElementById('stat-selected').textContent = d.selected || 0;
                     document.getElementById('stat-rejected').textContent = d.rejected || 0;
                     document.getElementById('stat-today').textContent = d.today || 0;
+                    
+                    const statCreditsEl = document.getElementById('stat-credits');
+                    if (statCreditsEl) {
+                        statCreditsEl.textContent = d.credits >= 1000000 ? 'Unlimited' : (d.credits || 0);
+                    }
+                    const planBadge = document.getElementById('subscriptionPlanBadge');
+                    if (planBadge && adminRole !== 'master') {
+                        const remainingText = d.credits != null ? (d.credits >= 1000000 ? ' &bull; Unlimited credits' : ` &bull; ${d.credits} credits left`) : '';
+                        const upgradeBtn = ` <button onclick="openUpgradeModal()" title="Buy Credits" style="background: none; border: none; cursor: pointer; color: inherit; margin-left: 5px;"><i class="fas fa-plus-circle"></i></button>`;
+                        planBadge.innerHTML = `<i class="fas fa-layer-group"></i> ${currentPlanLabel}${remainingText}${upgradeBtn}`;
+                        planBadge.style.display = 'inline-flex';
+                        planBadge.style.alignItems = 'center';
+                    }
                     document.getElementById('stat-started').textContent = d.started || 0;
                     document.getElementById('stat-avgscore').textContent = d.avg_score || 0;
-                    
-                    if (d.credits !== undefined && window.currentRole !== 'super_admin') {
-                        document.getElementById('adminCreditsCount').textContent = d.credits;
-                        document.getElementById('adminCreditsBadge').style.display = 'inline-flex';
-                        sessionStorage.setItem('adminCredits', d.credits);
-                    }
                 }
             } catch (e) { console.error('Stats error:', e); }
         }
@@ -4998,6 +5113,114 @@
                 container.innerHTML = '<div style="text-align: center; color: var(--danger); padding: 2rem;">Failed to load results. Please check your network connection and try refreshing.</div>';
             }
         }
+
+        // --- UPGRADE MODAL LOGIC ---
+        function openUpgradeModal() {
+            document.getElementById('upgradeModal').classList.remove('hidden');
+            loadUpgradePlans();
+        }
+
+        function closeUpgradeModal() {
+            document.getElementById('upgradeModal').classList.remove('hidden');
+            document.getElementById('upgradeModal').classList.add('hidden');
+        }
+
+        async function loadUpgradePlans() {
+            const container = document.getElementById('upgradePlansContainer');
+            container.innerHTML = '<div style="text-align:center; padding:2rem;"><i class="fas fa-spinner fa-spin"></i> Loading plans...</div>';
+            try {
+                const res = await fetch(`${API_BASE}/api/plans`);
+                const data = await res.json();
+                if (data.status === 'success') {
+                    const plans = data.data;
+                    let html = '';
+                    plans.forEach(p => {
+                        const isFree = p.price === 0;
+                        if (!isFree) {
+                            html += `
+                            <div style="border: 1px solid var(--border-light); border-radius: 12px; padding: 1.5rem; display: flex; justify-content: space-between; align-items: center; background: var(--bg-card);">
+                                <div>
+                                    <h4 style="margin: 0; font-size: 1.2rem; color: var(--text-primary);">${p.plan_name} <span style="font-size: 0.8rem; background: var(--accent); color: white; padding: 2px 6px; border-radius: 4px; margin-left: 8px;">+${p.credits_granted >= 1000000 ? 'Unlimited' : p.credits_granted} Credits</span></h4>
+                                    <p style="margin: 0.5rem 0 0 0; font-size: 1rem; color: var(--text-secondary); font-weight: 600;">₹${p.price.toLocaleString('en-IN')}</p>
+                                </div>
+                                <button class="master-btn primary" onclick="buyPlan('${p.plan_name}', ${p.price})" style="padding: 0.6rem 1.2rem; border-radius: 8px;">Buy Now</button>
+                            </div>
+                            `;
+                        }
+                    });
+                    if (html === '') {
+                        html = '<div style="text-align:center; padding:2rem; color: var(--text-secondary);">No paid plans available right now.</div>';
+                    }
+                    container.innerHTML = html;
+                }
+            } catch (err) {
+                console.error('Error loading plans:', err);
+                container.innerHTML = '<div style="color:var(--danger); text-align:center;">Failed to load plans. Please try again.</div>';
+            }
+        }
+
+        async function buyPlan(planName, price) {
+            try {
+                showToast("Preparing secure checkout...", "info");
+                
+                const orderRes = await fetch(`${API_BASE}/api/razorpay/create-upgrade-order`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        plan_name: planName,
+                        admin_id: adminId
+                    })
+                });
+                
+                const orderData = await orderRes.json();
+                if (!orderRes.ok) throw new Error(orderData.detail || "Failed to create order");
+                
+                const options = {
+                    key: orderData.key_id,
+                    amount: orderData.amount,
+                    currency: orderData.currency,
+                    name: "Hire IQ",
+                    description: `Upgrade to ${planName}`,
+                    order_id: orderData.razorpay_order_id,
+                    handler: async function (response) {
+                        try {
+                            showToast("Verifying payment...", "info");
+                            const verifyRes = await fetch(`${API_BASE}/api/razorpay/verify-upgrade`, {
+                                method: 'POST',
+                                headers: { 'Content-Type': 'application/json' },
+                                body: JSON.stringify({
+                                    plan_name: planName,
+                                    admin_id: adminId,
+                                    razorpay_order_id: response.razorpay_order_id,
+                                    razorpay_payment_id: response.razorpay_payment_id,
+                                    razorpay_signature: response.razorpay_signature
+                                })
+                            });
+                            
+                            const verifyData = await verifyRes.json();
+                            if (!verifyRes.ok) throw new Error(verifyData.detail || "Payment verification failed");
+                            
+                            showToast(`Success! Added ${verifyData.credits_added} credits.`, "success");
+                            closeUpgradeModal();
+                            loadDashboardStats(); // Refresh credits on UI
+                            
+                        } catch (err) {
+                            console.error(err);
+                            showToast(err.message, "error");
+                        }
+                    },
+                    theme: { color: "#2563eb" }
+                };
+                
+                const rzp = new window.Razorpay(options);
+                rzp.open();
+                
+            } catch (err) {
+                console.error(err);
+                showToast(err.message, "error");
+            }
+        }
+
 
     </script>
 
@@ -6178,6 +6401,23 @@
                             plugins: { legend: { position: 'bottom' } }
                         }
                     });
+
+                    const ctxCredits = document.getElementById('saCreditsDoughnutChart').getContext('2d');
+                    new Chart(ctxCredits, {
+                        type: 'doughnut',
+                        data: {
+                            labels: ['Credits Used', 'Credits Available'],
+                            datasets: [{
+                                data: [data.total_sessions || 0, data.credits || 0],
+                                backgroundColor: ['#ef4444', '#10b981']
+                            }]
+                        },
+                        options: {
+                            responsive: true,
+                            maintainAspectRatio: false,
+                            plugins: { legend: { position: 'bottom' } }
+                        }
+                    });
                 }
             } catch (err) {
                 console.error("Super admin stats error", err);
@@ -6239,6 +6479,7 @@
             const username = document.getElementById('newAdminUsername').value.trim();
             const email = document.getElementById('newAdminEmail').value.trim();
             const password = document.getElementById('newAdminPassword').value;
+            const credits = parseInt(document.getElementById('newAdminCredits').value) || 0;
 
             if (!username || !password || !email) {
                 showToast("Username, email, and password are required.", "error");
@@ -6253,7 +6494,7 @@
                         'Content-Type': 'application/json',
                         'Authorization': `Bearer ${token}`
                     },
-                    body: JSON.stringify({ name, username, email, password })
+                    body: JSON.stringify({ name, username, email, password, credits })
                 });
                 const data = await res.json();
                 if (res.ok) {
@@ -6262,6 +6503,81 @@
                     loadTeamManagement();
                 } else {
                     showToast(data.detail || "Failed to create admin", "error");
+                }
+            } catch (err) {
+                showToast("Network error", "error");
+            }
+        }
+
+        async function loadCreditRequests() {
+            const token = sessionStorage.getItem('adminToken');
+            if (!token) return;
+            try {
+                const res = await fetch(`${API_BASE_URL}/super-admin/credit-requests`, {
+                    headers: { 'Authorization': `Bearer ${token}` }
+                });
+                if (res.ok) {
+                    const data = await res.json();
+                    const tbody = document.getElementById('creditRequestsTableBody');
+                    if (!tbody) return;
+                    if(data.data.length === 0) {
+                        tbody.innerHTML = `<tr><td colspan="6" style="text-align: center; padding: 2rem; color: var(--text-muted);">No credit requests found</td></tr>`;
+                        return;
+                    }
+                    tbody.innerHTML = data.data.map(req => {
+                        const date = new Date(req.created_at).toLocaleDateString();
+                        const statusClass = req.status === 'pending' ? 'status-pending' : (req.status === 'approved' ? 'status-completed' : 'status-failed');
+                        let actions = '';
+                        if (req.status === 'pending') {
+                            actions = `
+                                <button class="btn-action btn-accept" onclick="updateCreditRequest('${req.id}', 'approved')" title="Approve" style="background: rgba(16, 185, 129, 0.1); color: #10b981; border: none; padding: 6px 12px; border-radius: 6px; cursor: pointer;"><i class="fas fa-check"></i></button>
+                                <button class="btn-action btn-reject" onclick="updateCreditRequest('${req.id}', 'rejected')" title="Reject" style="background: rgba(239, 68, 68, 0.1); color: #ef4444; border: none; padding: 6px 12px; border-radius: 6px; cursor: pointer; margin-left: 8px;"><i class="fas fa-times"></i></button>
+                            `;
+                        } else {
+                            actions = `<span style="color: var(--text-muted); font-size: 0.85rem;">Processed</span>`;
+                        }
+                        
+                        return `
+                        <tr>
+                            <td style="padding-left: 1.5rem;">${date}</td>
+                            <td>
+                                <div style="font-weight: 500;">${req.admin_name}</div>
+                                <div style="font-size: 0.75rem; color: var(--text-muted);">${req.admin_email}</div>
+                            </td>
+                            <td style="font-weight: 600;">+${req.amount}</td>
+                            <td><div style="max-width: 200px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;" title="${req.reason}">${req.reason || '-'}</div></td>
+                            <td><span class="status-badge ${statusClass}">${req.status}</span></td>
+                            <td><div style="display: flex; gap: 8px;">${actions}</div></td>
+                        </tr>
+                        `;
+                    }).join('');
+                }
+            } catch (err) {
+                console.error("Failed to load credit requests", err);
+            }
+        }
+
+        async function updateCreditRequest(requestId, status) {
+            if (!confirm(`Are you sure you want to ${status} this request?`)) return;
+            
+            const token = sessionStorage.getItem('adminToken');
+            try {
+                const res = await fetch(`${API_BASE_URL}/super-admin/credit-requests/${requestId}`, {
+                    method: 'PUT',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'Authorization': `Bearer ${token}`
+                    },
+                    body: JSON.stringify({ status })
+                });
+                
+                const data = await res.json();
+                if (res.ok) {
+                    showToast(`Request ${status} successfully`, "success");
+                    loadCreditRequests();
+                    // Optional: refresh other stats if needed
+                } else {
+                    showToast(data.detail || "Failed to update request", "error");
                 }
             } catch (err) {
                 showToast("Network error", "error");
@@ -6951,45 +7267,6 @@
                 dragWindow.style.transition = 'opacity 0.3s ease';
             }
         });
-
-        // --- CREDIT REQUEST LOGIC ---
-        function openRequestCreditsModal() {
-            document.getElementById('requestCreditsAmount').value = 50;
-            document.getElementById('requestCreditsReason').value = '';
-            document.getElementById('requestCreditsModal').classList.remove('hidden');
-        }
-
-        async function submitCreditRequest() {
-            const amount = parseInt(document.getElementById('requestCreditsAmount').value);
-            const reason = document.getElementById('requestCreditsReason').value.trim();
-
-            if (!amount || amount <= 0) {
-                showToast("Please enter a valid amount", "error");
-                return;
-            }
-
-            const token = sessionStorage.getItem('adminToken');
-            try {
-                const res = await fetch(`${API_BASE}/admin/credit-requests`, {
-                    method: 'POST',
-                    headers: {
-                        'Content-Type': 'application/json',
-                        'Authorization': `Bearer ${token}`
-                    },
-                    body: JSON.stringify({ amount, reason })
-                });
-
-                const data = await res.json();
-                if (res.ok) {
-                    showToast("Credit request sent successfully", "success");
-                    document.getElementById('requestCreditsModal').classList.add('hidden');
-                } else {
-                    showToast(data.detail || "Failed to send request", "error");
-                }
-            } catch (err) {
-                showToast("Network error", "error");
-            }
-        }
     </script>
     <!-- COPILOT WIDGET END -->
     <!-- GOOGLE TRANSLATE FOR LIVE RESULTS -->

@@ -32,7 +32,7 @@ import base64
 import html
 import textwrap
 from pydantic import BaseModel
-from mongo_db import candidates_collection, interviews_collection, answers_collection, admins_collection, companies_collection, interview_sessions_collection, plans_collection
+from mongo_db import candidates_collection, interviews_collection, answers_collection, admins_collection, companies_collection, interview_sessions_collection, plans_collection, credit_requests_collection
 from reportlab.lib.pagesizes import A4
 from reportlab.pdfgen import canvas
 from reportlab.lib.utils import simpleSplit
@@ -116,7 +116,7 @@ FRONTEND_URL = "https://www.hireiq.co.in"
 PLAN_DEFINITIONS = {
     "trial": {
         "label": "Free Trial",
-        "duration_days": 15,
+        "credits_granted": 10,
         "price": 0,
         "summary": "Core single-interview setup for evaluating the platform before rollout.",
         "features": [
@@ -138,7 +138,7 @@ PLAN_DEFINITIONS = {
     },
     "basic": {
         "label": "Basic",
-        "duration_days": 30,
+        "credits_granted": 250,
         "price": 2500,
         "summary": "Adds richer review and control workflows for growing hiring teams.",
         "features": [
@@ -160,7 +160,7 @@ PLAN_DEFINITIONS = {
     },
     "advance": {
         "label": "Advance",
-        "duration_days": 30,
+        "credits_granted": 400,
         "price": 3999,
         "summary": "Unlocks the full hiring workflow including bulk send and live monitoring.",
         "features": [
@@ -182,7 +182,7 @@ PLAN_DEFINITIONS = {
     },
     "owner": {
         "label": "Owner",
-        "duration_days": 36500,
+        "credits_granted": 1000000,
         "price": 0,
         "summary": "Internal owner access.",
         "features": [
@@ -225,7 +225,7 @@ def get_plan_definition(plan_name: Optional[str]) -> Dict[str, Any]:
     return {
         "plan_key": plan_key,
         "label": base["label"],
-        "duration_days": base["duration_days"],
+        "credits_granted": base["credits_granted"],
         "price": base["price"],
         "summary": base["summary"],
         "features": list(base["features"]),
@@ -238,7 +238,7 @@ def serialize_plan(plan_doc: Dict[str, Any]) -> Dict[str, Any]:
         "id": str(plan_doc["_id"]),
         "plan_key": definition["plan_key"],
         "plan_name": definition["label"],
-        "duration_days": plan_doc.get("duration_days", definition["duration_days"]),
+        "credits_granted": plan_doc.get("credits_granted", definition["credits_granted"]),
         "price": plan_doc.get("price", definition["price"]),
         "features": definition["features"],
         "summary": definition["summary"],
@@ -297,14 +297,23 @@ def get_admin_plan_context(user: Dict[str, Any]) -> Dict[str, Any]:
     subscription_expiry = company.get("subscription_expiry") if company else user.get("subscription_expiry")
     
     definition = get_plan_definition(subscription_plan)
-    subscription = get_subscription_status(subscription_expiry)
+    credits = company.get("credits", 0) if company else user.get("credits", 0)
+    
+    is_expired = credits <= 0
+    warning = not is_expired and credits <= 5
+    warning_message = "Your plan credits are running low (5 or fewer left). Please renew your subscription to avoid interruption." if warning else ""
+
     return {
         "plan_key": definition["plan_key"],
         "plan_label": definition["label"],
         "capabilities": definition["capabilities"],
         "features": definition["features"],
         "summary": definition["summary"],
-        **subscription,
+        "credits": credits,
+        "is_expired": is_expired,
+        "warning": warning,
+        "warning_message": warning_message,
+        "days_remaining": None,
     }
 
 def require_admin_capability(admin_id: str, capability: str, detail: str):
@@ -3197,16 +3206,33 @@ class AdminLogin(BaseModel):
     username: str
     password: str
 
+class SubAdminCreate(BaseModel):
+    username: str
+    password: str
+    email: str
+    name: str
+    credits: int = 0
+
+class CreditRequestCreate(BaseModel):
+    amount: int
+    reason: Optional[str] = None
+
+class CreditRequestUpdate(BaseModel):
+    status: str # 'approved' or 'rejected'
+
+
 class TenantCreate(BaseModel):
     company_name: str
     username: str
     password: str
     email: str
     subscription_plan: str # "trial", "basic", "advance"
+    credits: int = 10 # Default initial credits
 
 class TenantUpdate(BaseModel):
     subscription_plan: str
     add_days: int = 0
+    add_credits: int = 0
 
 
 class HRScreening(BaseModel):
@@ -3254,17 +3280,21 @@ class UpdateProfileRequest(BaseModel):
     old_password: Optional[str] = None
     new_password: Optional[str] = None
 
-from passlib.context import CryptContext
-pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
+import bcrypt
 
 def hash_password(password: str) -> str:
-    return pwd_context.hash(password)
+    # bcrypt limits passwords to 72 bytes. Truncate if necessary.
+    pwd_bytes = password.encode('utf-8')[:72]
+    salt = bcrypt.gensalt()
+    return bcrypt.hashpw(pwd_bytes, salt).decode('utf-8')
 
 def verify_password(plain_password: str, hashed_password: str) -> bool:
     if len(hashed_password) == 64 and all(c in '0123456789abcdefABCDEF' for c in hashed_password):
         return hashlib.sha256(plain_password.encode()).hexdigest() == hashed_password
     try:
-        return pwd_context.verify(plain_password, hashed_password)
+        pwd_bytes = plain_password.encode('utf-8')[:72]
+        hash_bytes = hashed_password.encode('utf-8')
+        return bcrypt.checkpw(pwd_bytes, hash_bytes)
     except Exception:
         return False
 
@@ -3779,12 +3809,29 @@ def send_submission_notification(candidate_email: str, candidate_name: str, admi
 
 # ── Task 8: Dashboard Stats Endpoint ────────────────────────────────────────
 @app.get("/admin/dashboard-stats")
-def get_dashboard_stats(current_admin: dict = Depends(get_current_admin_details)):
+def get_dashboard_stats(admin_id: Optional[str] = None, current_admin: dict = Depends(get_current_admin_details)):
     """Return aggregated stats for the admin dashboard."""
     try:
+        query = {"company_id": current_admin.get("company_id")}
+        
+        if current_admin.get("role") == "admin":
+            admin_doc = admins_collection.find_one({"_id": ObjectId(current_admin["admin_id"])})
+            credits = admin_doc.get("credits", 0) if admin_doc else 0
+        else:
+            company = companies_collection.find_one({"_id": ObjectId(current_admin["company_id"])})
+            credits = company.get("credits", 0) if company else 0
+        
+        # Data Isolation:
+        # If the user is a standard admin, force the query to their own admin_id
+        if current_admin.get("role") == "admin":
+            query["created_by"] = current_admin["admin_id"]
+        # If the user is a super admin and requested a specific admin's data, filter by it
+        elif admin_id:
+            query["created_by"] = admin_id
+            
         all_sessions = list(interview_sessions_collection.find(
-            {"company_id": current_admin.get("company_id")},
-            {"created_at": 1, "status": 1, "decision": 1, "avg_score": 1, "is_deactivated": 1, "expires_at": 1}
+            query,
+            {"created_at": 1, "status": 1, "decision": 1, "avg_score": 1, "is_deactivated": 1, "expires_at": 1, "created_by": 1}
         ))
         now = datetime.now(timezone.utc)
         
@@ -3868,7 +3915,8 @@ def get_dashboard_stats(current_admin: dict = Depends(get_current_admin_details)
             "rejected": rejected,
             "avg_score": avg_score,
             "today": today_count,
-            "this_week": week_count
+            "this_week": week_count,
+            "credits": credits
         }
     except Exception as e:
         return {"error": str(e)}
@@ -4002,7 +4050,7 @@ async def startup_event_db_and_email():
                 "username": "admin",
                 "password": hashed_pw,
                 "email": default_email,
-                "role": "tenant",
+                "role": "super_admin",
                 "subscription_plan": "advance",
                 "subscription_start": datetime.now(timezone.utc).isoformat(),
                 "subscription_expiry": (datetime.now(timezone.utc) + timedelta(days=365)).isoformat(),
@@ -4028,7 +4076,7 @@ async def startup_event_db_and_email():
         default_plans = [
             {
                 "plan_name": "Free Trial",
-                "duration_days": get_plan_definition("trial")["duration_days"],
+                "credits_granted": get_plan_definition("trial")["credits_granted"],
                 "price": get_plan_definition("trial")["price"],
                 "features": get_plan_definition("trial")["features"],
                 "is_unlimited": False,
@@ -4036,7 +4084,7 @@ async def startup_event_db_and_email():
             },
             {
                 "plan_name": "Basic",
-                "duration_days": get_plan_definition("basic")["duration_days"],
+                "credits_granted": get_plan_definition("basic")["credits_granted"],
                 "price": get_plan_definition("basic")["price"],
                 "features": get_plan_definition("basic")["features"],
                 "is_unlimited": False,
@@ -4044,7 +4092,7 @@ async def startup_event_db_and_email():
             },
             {
                 "plan_name": "Advance",
-                "duration_days": get_plan_definition("advance")["duration_days"],
+                "credits_granted": get_plan_definition("advance")["credits_granted"],
                 "price": get_plan_definition("advance")["price"],
                 "features": get_plan_definition("advance")["features"],
                 "is_unlimited": False,
@@ -4052,7 +4100,7 @@ async def startup_event_db_and_email():
             },
             {
                 "plan_name": "Owner",
-                "duration_days": get_plan_definition("owner")["duration_days"],
+                "credits_granted": get_plan_definition("owner")["credits_granted"],
                 "price": get_plan_definition("owner")["price"],
                 "features": get_plan_definition("owner")["features"],
                 "is_unlimited": True,
@@ -4304,6 +4352,15 @@ async def check_candidate(email: str, current_admin: dict = Depends(get_current_
 
 @app.post("/admin/create-session")
 async def create_session(data: CreateSession, current_admin: dict = Depends(get_current_admin_details)):
+    plan_context = get_admin_plan_context(current_admin)
+    if plan_context.get("credits", 0) <= 0:
+        raise HTTPException(status_code=403, detail="Company has insufficient credits to create a session")
+        
+    if current_admin.get("role") == "admin":
+        admin_doc = admins_collection.find_one({"_id": ObjectId(current_admin["admin_id"])})
+        if not admin_doc or admin_doc.get("credits", 0) <= 0:
+            raise HTTPException(status_code=403, detail="You have insufficient credits. Please request more from your Super Admin.")
+
     link_id = str(uuid.uuid4())
     now = datetime.now(timezone.utc)
     
@@ -4347,6 +4404,16 @@ async def create_session(data: CreateSession, current_admin: dict = Depends(get_
         session_doc["scheduled_end"] = data.scheduled_end
     
     interview_sessions_collection.insert_one(session_doc)
+    
+    # Deduct credit
+    company_id = current_admin.get("company_id")
+    if company_id:
+        companies_collection.update_one({"_id": ObjectId(company_id)}, {"$inc": {"credits": -1}})
+    
+    if current_admin.get("role") == "admin":
+        admins_collection.update_one({"_id": ObjectId(current_admin["admin_id"])}, {"$inc": {"credits": -1}})
+    elif not company_id:
+        admins_collection.update_one({"_id": ObjectId(current_admin["admin_id"])}, {"$inc": {"credits": -1}})
     session_doc["_id"] = interview_sessions_collection.find_one({"link_id": link_id}, {"_id": 1})["_id"]
     
     link_url = f"{FRONTEND_URL}/interview.html?session_id={link_id}"
@@ -4408,6 +4475,16 @@ async def bulk_create_sessions(data: BulkCreateSession, current_admin: dict = De
     """
     if not data.candidates:
         raise HTTPException(status_code=400, detail="No candidates provided")
+        
+    num_candidates = len(data.candidates)
+    plan_context = get_admin_plan_context(current_admin)
+    if plan_context.get("credits", 0) < num_candidates:
+        raise HTTPException(status_code=403, detail=f"Company has insufficient credits. You need {num_candidates} credits to bulk create these interviews.")
+
+    if current_admin.get("role") == "admin":
+        admin_doc = admins_collection.find_one({"_id": ObjectId(current_admin["admin_id"])})
+        if not admin_doc or admin_doc.get("credits", 0) < num_candidates:
+            raise HTTPException(status_code=403, detail=f"You have insufficient credits. Please request more from your Super Admin.")
 
     results = []
     now = datetime.now(timezone.utc)
@@ -4479,6 +4556,16 @@ async def bulk_create_sessions(data: BulkCreateSession, current_admin: dict = De
 
     successful = sum(1 for r in results if r["status"] == "success")
     print(f" Bulk sessions created: {successful}/{len(results)}")
+    
+    if successful > 0:
+        company_id = current_admin.get("company_id")
+        if company_id:
+            companies_collection.update_one({"_id": ObjectId(company_id)}, {"$inc": {"credits": -successful}})
+            
+        if current_admin.get("role") == "admin":
+            admins_collection.update_one({"_id": ObjectId(current_admin["admin_id"])}, {"$inc": {"credits": -successful}})
+        elif not company_id:
+            admins_collection.update_one({"_id": ObjectId(current_admin["admin_id"])}, {"$inc": {"credits": -successful}})
 
     return {
         "status": "success",
@@ -4545,7 +4632,14 @@ async def get_session(link_id: str):
 from typing import Optional
 
 @app.get("/admin/sessions")
-async def get_all_sessions(current_admin: dict = Depends(get_current_admin_details), start_date: Optional[str] = None, end_date: Optional[str] = None, sort_by: str = "score", deactivated: str = "false"):
+async def get_all_sessions(
+    current_admin: dict = Depends(get_current_admin_details), 
+    start_date: Optional[str] = None, 
+    end_date: Optional[str] = None, 
+    sort_by: str = "score", 
+    deactivated: str = "false",
+    admin_id: Optional[str] = None
+):
     company_id = current_admin.get("company_id")
     if deactivated == "all":
         query_filter = {"company_id": company_id}
@@ -4554,6 +4648,13 @@ async def get_all_sessions(current_admin: dict = Depends(get_current_admin_detai
     else:
         # Default: only active
         query_filter = {"company_id": company_id, "$or": [{"is_deactivated": False}, {"is_deactivated": {"$exists": False}}]}
+        
+    # Data Isolation:
+    if current_admin.get("role") == "admin":
+        query_filter["created_by"] = current_admin["admin_id"]
+    elif admin_id:
+        query_filter["created_by"] = admin_id
+
     
     if (start_date and start_date.strip()) or (end_date and end_date.strip()):
         date_filter = {}
@@ -5685,7 +5786,7 @@ async def get_companies(master_id: str = Depends(get_current_admin)):
         deactivated_sessions = interview_sessions_collection.count_documents({**session_filter, "is_deactivated": True})
         
         # Get primary admin email
-        primary_admin = admins_collection.find_one({"company_id": company_id, "role": "tenant"})
+        primary_admin = admins_collection.find_one({"company_id": company_id, "role": "super_admin"})
         email = primary_admin.get("email", "") if primary_admin else ""
         username = primary_admin.get("username", "") if primary_admin else ""
         login_enabled = primary_admin.get("login_enabled", True) if primary_admin else False
@@ -5710,6 +5811,7 @@ async def get_companies(master_id: str = Depends(get_current_admin)):
             "started_sessions": started_sessions,
             "pending_sessions": pending_sessions,
             "deactivated_sessions": deactivated_sessions,
+            "credits": c.get("credits", 0),
         })
     return {"status": "success", "data": result}
 
@@ -5721,16 +5823,18 @@ async def create_tenant(data: TenantCreate, master_id: str = Depends(get_current
         raise HTTPException(status_code=400, detail="Username already exists")
         
     start = datetime.now(timezone.utc)
-    if data.subscription_plan == "trial":
-        expiry = start + timedelta(days=15)
-    else:
-        expiry = start + timedelta(days=30) # Default 1 month for basic/advance
+    plan_def = get_plan_definition(data.subscription_plan)
+    credits_to_grant = plan_def.get("credits_granted", 10)
+    
+    # Expiry is no longer time-based, but we keep the field for backward compatibility
+    expiry = start + timedelta(days=3650) 
         
     new_company = {
         "name": data.company_name,
         "subscription_plan": data.subscription_plan,
         "subscription_start": start.isoformat(),
         "subscription_expiry": expiry.isoformat(),
+        "credits": data.credits if data.credits > 0 else credits_to_grant,
         "created_at": start.isoformat()
     }
     company_insert = companies_collection.insert_one(new_company)
@@ -5740,7 +5844,7 @@ async def create_tenant(data: TenantCreate, master_id: str = Depends(get_current
         "username": data.username,
         "password": hash_password(data.password),
         "email": data.email,
-        "role": "tenant",
+        "role": "super_admin",
         "company_id": company_id,
         "login_enabled": True,
         "created_at": start.isoformat()
@@ -5772,6 +5876,10 @@ async def update_company(company_id: str, data: TenantUpdate, master_id: str = D
             update_fields["subscription_expiry"] = new_expiry.isoformat()
         except Exception:
             update_fields["subscription_expiry"] = (now + timedelta(days=data.add_days)).isoformat()
+            
+    if data.add_credits > 0:
+        current_credits = company.get("credits", 0)
+        update_fields["credits"] = current_credits + data.add_credits
             
     companies_collection.update_one({"_id": ObjectId(company_id)}, {"$set": update_fields})
     return {"status": "success", "message": "Company updated successfully"}
@@ -5831,18 +5939,19 @@ async def firebase_auth(data: FirebaseAuthRequest):
     if not user:
         # Register new admin with Free Trial
         now = datetime.now(timezone.utc)
-        plan_info = plans_collection.find_one({"plan_name": "Free Trial"})
-        duration = plan_info.get("duration_days", 15) if plan_info else 15
-        expiry = now + timedelta(days=duration)
+        plan_def = get_plan_definition("Free Trial")
+        credits_to_grant = plan_def.get("credits_granted", 10)
+        expiry = now + timedelta(days=3650)
         
         new_admin = {
             "username": normalized_email,
             "email": normalized_email,
             "name": data.name or normalized_email.split("@")[0],
             "password": hash_password(str(uuid.uuid4())), # random password, they use firebase
-            "role": "tenant",
+            "role": "super_admin",
             "subscription_plan": "Free Trial",
             "subscription_expiry": expiry.isoformat(),
+            "credits": credits_to_grant,
             "created_at": now.isoformat()
         }
         result = admins_collection.insert_one(new_admin)
@@ -5935,6 +6044,7 @@ async def admin_login(data: AdminLogin):
         "subscription_warning": plan_context["warning"],
         "subscription_warning_message": plan_context["warning_message"],
         "plan_capabilities": plan_context["capabilities"],
+        "credits": plan_context.get("credits", 0),
     }
 
 # --------------------------------------------------------------------------------
@@ -5943,7 +6053,7 @@ async def admin_login(data: AdminLogin):
 
 class PlanUpdate(BaseModel):
     plan_name: str
-    duration_days: int = 30
+    credits_granted: int = 250
     price: int = 0
     features: list = []
 
@@ -5969,6 +6079,18 @@ class RazorpayVerifyRequest(BaseModel):
     razorpay_order_id: str
     razorpay_payment_id: str
     razorpay_signature: str
+
+class RazorpayUpgradeOrderRequest(BaseModel):
+    plan_name: str
+    admin_id: str
+
+class RazorpayUpgradeVerifyRequest(BaseModel):
+    plan_name: str
+    admin_id: str
+    razorpay_order_id: str
+    razorpay_payment_id: str
+    razorpay_signature: str
+
 
 @app.get("/api/plans")
 async def get_all_plans():
@@ -6008,7 +6130,7 @@ async def upsert_plan(data: PlanUpdate, master_id: str = Depends(get_current_adm
         {"plan_name": data.plan_name},
         {"$set": {
             "plan_name": data.plan_name,
-            "duration_days": data.duration_days,
+            "credits_granted": data.credits_granted,
             "price": data.price,
             "features": data.features,
         }},
@@ -6057,8 +6179,9 @@ async def register_admin(data: AdminRegister):
         raise HTTPException(status_code=400, detail="Paid plans require payment. Use the checkout flow.")
     
     now = datetime.now(timezone.utc)
-    duration = plan_info.get("duration_days", 15)
-    expiry = now + timedelta(days=duration)
+    plan_def = get_plan_definition(data.plan)
+    credits_to_grant = plan_def.get("credits_granted", 10)
+    expiry = now + timedelta(days=3650)
     
     new_company = {
         "name": normalized_company,
@@ -6066,6 +6189,7 @@ async def register_admin(data: AdminRegister):
         "subscription_start": now.isoformat(),
         "subscription_expiry": expiry.isoformat(),
         "is_paid": False,
+        "credits": credits_to_grant,
         "created_at": now.isoformat()
     }
     company_insert = companies_collection.insert_one(new_company)
@@ -6077,9 +6201,10 @@ async def register_admin(data: AdminRegister):
         "email": normalized_email,
         "name": normalized_name,
         "phone": data.phone,
-        "role": "tenant",
+        "role": "super_admin",
         "company_id": company_id,
         "login_enabled": True,
+        "credits": credits_to_grant,
         "created_at": now.isoformat()
     }
     
@@ -6150,11 +6275,12 @@ async def create_razorpay_order(data: RazorpayOrderRequest):
             raise HTTPException(status_code=502, detail=f"Razorpay order creation failed: {error_message}")
 
         order = response.json()
+        plan_def = get_plan_definition(plan_info["plan_name"])
         return {
             "status": "success",
             "key": key_id,
             "company_name": os.getenv("APP_BRAND_NAME", "Hire IQ"),
-            "description": f"{plan_info['plan_name']} plan for {plan_info.get('duration_days', 30)} days",
+            "description": f"{plan_info['plan_name']} plan with {plan_def.get('credits_granted', 0)} credits",
             "order": {
                 "id": order["id"],
                 "amount": order["amount"],
@@ -6162,7 +6288,7 @@ async def create_razorpay_order(data: RazorpayOrderRequest):
             },
             "plan": {
                 "plan_name": plan_info["plan_name"],
-                "duration_days": plan_info.get("duration_days", 30),
+                "credits_granted": plan_def.get("credits_granted", 0),
                 "price": int(plan_info.get("price", 0)),
             },
             "prefill": {
@@ -6241,7 +6367,20 @@ async def verify_razorpay_payment(data: RazorpayVerifyRequest):
         pass
 
     now = datetime.now(timezone.utc)
-    duration = int(plan_info.get("duration_days", 30))
+    plan_def = get_plan_definition(plan_info["plan_name"])
+    credits_to_grant = plan_def.get("credits_granted", 0)
+    
+    new_company = {
+        "name": signup["company_name"],
+        "subscription_plan": plan_info["plan_name"],
+        "subscription_start": now.isoformat(),
+        "subscription_expiry": (now + timedelta(days=3650)).isoformat(),
+        "is_paid": True,
+        "credits": credits_to_grant,
+        "created_at": now.isoformat()
+    }
+    company_insert = companies_collection.insert_one(new_company)
+    company_id = str(company_insert.inserted_id)
 
     admins_collection.insert_one({
         "username": signup["email"],
@@ -6250,10 +6389,12 @@ async def verify_razorpay_payment(data: RazorpayVerifyRequest):
         "name": signup["name"],
         "phone": signup["phone"],
         "company_name": signup["company_name"],
-        "role": "tenant",
+        "company_id": company_id,
+        "role": "super_admin",
         "subscription_plan": plan_info["plan_name"],
         "subscription_start": now.isoformat(),
-        "subscription_expiry": (now + timedelta(days=duration)).isoformat(),
+        "subscription_expiry": (now + timedelta(days=3650)).isoformat(),
+        "credits": credits_to_grant,
         "is_paid": True,
         "payment_provider": "razorpay",
         "payment_status": "captured",
@@ -6268,6 +6409,118 @@ async def verify_razorpay_payment(data: RazorpayVerifyRequest):
     return {
         "status": "success",
         "message": f"Payment verified. Your {plan_info['plan_name']} subscription is now active.",
+    }
+
+
+@app.post("/api/razorpay/create-upgrade-order")
+async def create_razorpay_upgrade_order(data: RazorpayUpgradeOrderRequest):
+    """Create a Razorpay order for purchasing credits / upgrading."""
+    key_id, key_secret = get_razorpay_credentials()
+    admin = admins_collection.find_one({"_id": ObjectId(data.admin_id)})
+    if not admin:
+        raise HTTPException(status_code=404, detail="Admin not found")
+        
+    plan_info = plans_collection.find_one({"plan_name": data.plan_name})
+    if not plan_info:
+        raise HTTPException(status_code=400, detail="Invalid plan selected")
+    if int(plan_info.get("price", 0)) <= 0:
+        raise HTTPException(status_code=400, detail="This plan does not require payment")
+
+    receipt = f"upg_{int(time.time())}_{uuid.uuid4().hex[:8]}"
+    payload = {
+        "amount": int(plan_info["price"]) * 100,
+        "currency": "INR",
+        "receipt": receipt[:40],
+        "notes": {
+            "upgrade_admin_id": data.admin_id,
+            "plan_name": data.plan_name
+        }
+    }
+
+    try:
+        response = requests.post(
+            "https://api.razorpay.com/v1/orders",
+            auth=(key_id, key_secret),
+            json=payload,
+            timeout=15,
+        )
+        if not response.ok:
+            raise HTTPException(status_code=500, detail=f"Razorpay error: {response.text}")
+        
+        order_data = response.json()
+        return {
+            "status": "success",
+            "razorpay_order_id": order_data["id"],
+            "amount": order_data["amount"],
+            "currency": order_data["currency"],
+            "key_id": key_id
+        }
+    except Exception as e:
+        print(f"Razorpay Upgrade error: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+@app.post("/api/razorpay/verify-upgrade")
+async def verify_razorpay_upgrade(data: RazorpayUpgradeVerifyRequest):
+    """Verify Razorpay signature and add credits to the user/company."""
+    key_id, key_secret = get_razorpay_credentials()
+    
+    admin = admins_collection.find_one({"_id": ObjectId(data.admin_id)})
+    if not admin:
+        raise HTTPException(status_code=404, detail="Admin not found")
+
+    signature_payload = f"{data.razorpay_order_id}|{data.razorpay_payment_id}".encode("utf-8")
+    expected_signature = hmac.new(
+        key_secret.encode("utf-8"),
+        signature_payload,
+        hashlib.sha256,
+    ).hexdigest()
+
+    if not hmac.compare_digest(expected_signature, data.razorpay_signature):
+        raise HTTPException(status_code=400, detail="Payment signature verification failed")
+
+    plan_info = plans_collection.find_one({"plan_name": data.plan_name})
+    if not plan_info:
+        raise HTTPException(status_code=400, detail="Invalid plan selected")
+
+    plan_def = get_plan_definition(plan_info["plan_name"])
+    credits_to_grant = plan_def.get("credits_granted", 0)
+
+    now = datetime.now(timezone.utc).isoformat()
+    expiry = (datetime.now(timezone.utc) + timedelta(days=3650)).isoformat()
+
+    if admin.get("company_id"):
+        # Update Company
+        companies_collection.update_one(
+            {"_id": ObjectId(admin["company_id"])},
+            {
+                "$set": {
+                    "subscription_plan": data.plan_name,
+                    "subscription_start": now,
+                    "subscription_expiry": expiry,
+                    "is_paid": True,
+                },
+                "$inc": {"credits": credits_to_grant}
+            }
+        )
+    else:
+        # Update Admin
+        admins_collection.update_one(
+            {"_id": ObjectId(data.admin_id)},
+            {
+                "$set": {
+                    "subscription_plan": data.plan_name,
+                    "subscription_start": now,
+                    "subscription_expiry": expiry,
+                    "is_paid": True,
+                },
+                "$inc": {"credits": credits_to_grant}
+            }
+        )
+        
+    return {
+        "status": "success",
+        "message": f"Payment verified. {credits_to_grant} credits added to your account.",
+        "credits_added": credits_to_grant
     }
 
 # --------------------------------------------------------------------------------
@@ -6302,12 +6555,12 @@ async def create_stripe_checkout(data: StripeCheckoutRequest):
                     "currency": "inr",
                     "product_data": {
                         "name": plan_info["plan_name"],
-                        "description": f"Subscription for {plan_info['duration_days']} days",
+                        "description": f"Subscription for {plan_info.get('credits_granted', 0)} credits",
                     },
                     "unit_amount": plan_info["price"] * 100,
                     "recurring": {
                         "interval": "day",
-                        "interval_count": plan_info["duration_days"],
+                        "interval_count": 30,
                     },
                 },
                 "quantity": 1,
@@ -6363,7 +6616,7 @@ async def stripe_webhook(request):
             return {"received": True}
         
         plan_info = plans_collection.find_one({"plan_name": plan_name})
-        duration = plan_info["duration_days"] if plan_info else 30
+        credits_granted = plan_info.get("credits_granted", 30) if plan_info else 30
         now = datetime.now(timezone.utc)
         
         admins_collection.insert_one({
@@ -6372,7 +6625,7 @@ async def stripe_webhook(request):
             "email": email,
             "name": name,
             "phone": metadata.get("phone", ""),
-            "role": "tenant",
+            "role": "super_admin",
             "subscription_plan": plan_name,
             "subscription_start": now.isoformat(),
             "subscription_expiry": (now + timedelta(days=duration)).isoformat(),
@@ -6464,6 +6717,195 @@ async def toggle_admin_login(admin_id: str, master_id: str = Depends(get_current
         {"$set": {"login_enabled": not current}}
     )
     return {"status": "success", "login_enabled": not current}
+
+# --------------------------------------------------------------------------------
+# SUPER ADMIN APIs
+# --------------------------------------------------------------------------------
+
+@app.get("/super-admin/admins")
+async def get_sub_admins(current_admin: dict = Depends(get_current_admin_details)):
+    if current_admin.get("role") != "super_admin":
+        raise HTTPException(status_code=403, detail="Super Admin access required")
+    company_id = current_admin.get("company_id")
+    if not company_id:
+        raise HTTPException(status_code=400, detail="Super Admin is not associated with a company")
+        
+    admins = list(admins_collection.find({"company_id": company_id, "role": "admin"}, {"password": 0}))
+    
+    # Enrich with session count created by each admin
+    for admin in admins:
+        admin["id"] = str(admin["_id"])
+        admin["_id"] = str(admin["_id"])
+        admin["credits"] = admin.get("credits", 0)
+        admin["sessions_created"] = interview_sessions_collection.count_documents({"admin_id": str(admin["id"])})
+        
+    return {"status": "success", "data": admins}
+
+@app.post("/super-admin/admins")
+async def create_sub_admin(data: SubAdminCreate, current_admin: dict = Depends(get_current_admin_details)):
+    if current_admin.get("role") != "super_admin":
+        raise HTTPException(status_code=403, detail="Super Admin access required")
+    company_id = current_admin.get("company_id")
+    if not company_id:
+        raise HTTPException(status_code=400, detail="Super Admin is not associated with a company")
+        
+    # Check if username already exists
+    if admins_collection.find_one({"username": data.username}):
+        raise HTTPException(status_code=400, detail="Username already exists")
+        
+    new_admin = {
+        "username": data.username,
+        "password": hash_password(data.password),
+        "email": data.email,
+        "name": data.name,
+        "role": "admin",
+        "company_id": company_id,
+        "credits": data.credits,
+        "login_enabled": True,
+        "created_at": datetime.now(timezone.utc).isoformat()
+    }
+    
+    admins_collection.insert_one(new_admin)
+    return {"status": "success", "message": "Sub-admin created successfully"}
+
+@app.get("/super-admin/dashboard-stats")
+async def get_super_admin_dashboard_stats(current_admin: dict = Depends(get_current_admin_details)):
+    if current_admin.get("role") != "super_admin":
+        raise HTTPException(status_code=403, detail="Super Admin access required")
+    company_id = current_admin.get("company_id")
+    if not company_id:
+        raise HTTPException(status_code=400, detail="Super Admin is not associated with a company")
+        
+    company = companies_collection.find_one({"_id": ObjectId(company_id)})
+    credits = company.get("credits", 0) if company else 0
+    
+    session_filter = {"company_id": company_id}
+    total_sessions = interview_sessions_collection.count_documents(session_filter)
+    completed_sessions = interview_sessions_collection.count_documents({**session_filter, "status": "completed"})
+    pending_sessions = interview_sessions_collection.count_documents({**session_filter, "status": "pending"})
+    
+    # Usage over the last 7 days
+    now = datetime.now(timezone.utc)
+    chart_labels = []
+    chart_data = []
+    
+    for i in range(6, -1, -1):
+        day = now - timedelta(days=i)
+        start_of_day = datetime(day.year, day.month, day.day, tzinfo=timezone.utc)
+        end_of_day = start_of_day + timedelta(days=1)
+        
+        count = interview_sessions_collection.count_documents({
+            **session_filter,
+            "created_at": {
+                "$gte": start_of_day.isoformat(),
+                "$lt": end_of_day.isoformat()
+            }
+        })
+        chart_labels.append(day.strftime("%m/%d"))
+        chart_data.append(count)
+        
+    # Breakdown by admin
+    admins = list(admins_collection.find({"company_id": company_id}))
+    admin_labels = []
+    admin_data = []
+    for a in admins:
+        name = a.get("name", a.get("username"))
+        count = interview_sessions_collection.count_documents({"admin_id": str(a["_id"])})
+        admin_labels.append(name)
+        admin_data.append(count)
+
+    return {
+        "status": "success",
+        "credits": credits,
+        "total_sessions": total_sessions,
+        "completed_sessions": completed_sessions,
+        "pending_sessions": pending_sessions,
+        "chart_labels": chart_labels,
+        "chart_data": chart_data,
+        "admin_labels": admin_labels,
+        "admin_data": admin_data
+    }
+
+# --------------------------------------------------------------------------------
+# CREDIT REQUEST APIs
+# --------------------------------------------------------------------------------
+
+@app.post("/admin/credit-requests")
+async def request_credits(data: CreditRequestCreate, current_admin: dict = Depends(get_current_admin_details)):
+    if current_admin.get("role") != "admin":
+        raise HTTPException(status_code=403, detail="Only tenant admins can request credits")
+        
+    admin_id = current_admin["admin_id"]
+    company_id = current_admin.get("company_id")
+    
+    request_doc = {
+        "admin_id": admin_id,
+        "company_id": company_id,
+        "amount": data.amount,
+        "reason": data.reason,
+        "status": "pending",
+        "created_at": datetime.now(timezone.utc).isoformat()
+    }
+    
+    credit_requests_collection.insert_one(request_doc)
+    return {"status": "success", "message": "Credit request submitted successfully"}
+
+@app.get("/super-admin/credit-requests")
+async def get_credit_requests(current_admin: dict = Depends(get_current_admin_details)):
+    if current_admin.get("role") != "super_admin":
+        raise HTTPException(status_code=403, detail="Super Admin access required")
+        
+    company_id = current_admin.get("company_id")
+    requests = list(credit_requests_collection.find({"company_id": company_id}))
+    
+    # Enrich with admin details
+    for req in requests:
+        req["id"] = str(req["_id"])
+        req["_id"] = str(req["_id"])
+        admin_doc = admins_collection.find_one({"_id": ObjectId(req["admin_id"])})
+        if admin_doc:
+            req["admin_name"] = admin_doc.get("name", admin_doc.get("username", "Unknown"))
+            req["admin_email"] = admin_doc.get("email", "Unknown")
+            
+    # Sort pending first, then by date descending
+    requests.sort(key=lambda x: (0 if x["status"] == "pending" else 1, x.get("created_at", "")), reverse=True)
+    return {"status": "success", "data": requests}
+
+@app.put("/super-admin/credit-requests/{request_id}")
+async def update_credit_request(request_id: str, data: CreditRequestUpdate, current_admin: dict = Depends(get_current_admin_details)):
+    if current_admin.get("role") != "super_admin":
+        raise HTTPException(status_code=403, detail="Super Admin access required")
+        
+    company_id = current_admin.get("company_id")
+    req = credit_requests_collection.find_one({"_id": ObjectId(request_id), "company_id": company_id})
+    if not req:
+        raise HTTPException(status_code=404, detail="Request not found")
+        
+    if req["status"] != "pending":
+        raise HTTPException(status_code=400, detail="Request is already processed")
+        
+    if data.status not in ["approved", "rejected"]:
+        raise HTTPException(status_code=400, detail="Invalid status")
+        
+    credit_requests_collection.update_one(
+        {"_id": ObjectId(request_id)},
+        {"$set": {
+            "status": data.status,
+            "processed_at": datetime.now(timezone.utc).isoformat(),
+            "processed_by": current_admin["admin_id"]
+        }}
+    )
+    
+    if data.status == "approved":
+        amount = req["amount"]
+        # Deduct from company (Super Admin's pool)
+        if company_id:
+            companies_collection.update_one({"_id": ObjectId(company_id)}, {"$inc": {"credits": -amount}})
+        # Add to the requesting admin
+        admins_collection.update_one({"_id": ObjectId(req["admin_id"])}, {"$inc": {"credits": amount}})
+        
+    return {"status": "success", "message": f"Request {data.status} successfully"}
+
 
 
 if __name__ == "__main__":
