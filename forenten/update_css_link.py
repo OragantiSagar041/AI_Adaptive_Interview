@@ -1,6 +1,6 @@
 import os
 
-base_path = r'c:\Users\sagar\Downloads\mock-interview - Copy (3)\forenten'
+base_path = r'c:\Users\sagar\Downloads\mock-interview - Copy (3)\Front-end'
 admin_file = os.path.join(base_path, 'admin.html')
 
 with open(admin_file, 'r', encoding='utf-8') as f:

@@ -17,7 +17,7 @@ services:
 
   frontend:
     build:
-      context: ./forenten
+      context: ./Front-end
     container_name: interview_frontend
     ports:
       - "80:80"
