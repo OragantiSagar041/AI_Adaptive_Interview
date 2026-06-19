@@ -12,15 +12,15 @@
     <title>Interview Recorder</title>
     <style>
         :root {
-            --primary-color: #6366f1;
-            --primary-hover: #818cf8;
+            --primary-color: #4f46e5;
+            --primary-hover: #4338ca;
             --danger-color: #ef4444;
-            --danger-hover: #f87171;
+            --danger-hover: #dc2626;
             --success-color: #10b981;
-            --background: #0f172a; /* Deep slate background */
-            --card-bg: rgba(30, 41, 59, 0.6); /* Frosted glass */
-            --text-main: #f8fafc;
-            --text-muted: #94a3b8;
+            --background: #f3f4f6;
+            --card-bg: #ffffff;
+            --text-main: #1f2937;
+            --text-muted: #6b7280;
         }
 
         body {
@@ -69,13 +69,10 @@
 
         /* AI Avatar Card */
         .ip-avatar-card {
-            background: var(--card-bg);
-            backdrop-filter: blur(12px);
-            -webkit-backdrop-filter: blur(12px);
-            border: 1px solid rgba(255, 255, 255, 0.05);
-            border-radius: 20px;
+            background: #fff;
+            border-radius: 16px;
             overflow: hidden;
-            box-shadow: 0 10px 30px rgba(0, 0, 0, 0.3);
+            box-shadow: 0 4px 20px rgba(0, 0, 0, 0.08);
             position: relative;
         }
 
@@ -127,13 +124,10 @@
 
         /* AI Analyzing Card */
         .ip-analyzing-card {
-            background: var(--card-bg);
-            backdrop-filter: blur(12px);
-            -webkit-backdrop-filter: blur(12px);
-            border: 1px solid rgba(255, 255, 255, 0.05);
-            border-radius: 16px;
+            background: #fff;
+            border-radius: 14px;
             padding: 0.9rem 1.1rem;
-            box-shadow: 0 4px 15px rgba(0, 0, 0, 0.2);
+            box-shadow: 0 2px 12px rgba(0, 0, 0, 0.07);
             display: flex;
             align-items: center;
             gap: 0.9rem;
@@ -158,13 +152,13 @@
             margin: 0;
             font-size: 0.92rem;
             font-weight: 700;
-            color: var(--text-main);
+            color: #1f2937;
         }
 
         .ip-analyzing-text p {
             margin: 2px 0 0;
             font-size: 0.78rem;
-            color: var(--text-muted);
+            color: #6b7280;
         }
 
         .ip-audio-bars {
@@ -214,13 +208,10 @@
 
         /* Timer Card */
         .ip-timer-card {
-            background: var(--card-bg);
-            backdrop-filter: blur(12px);
-            -webkit-backdrop-filter: blur(12px);
-            border: 1px solid rgba(255, 255, 255, 0.05);
-            border-radius: 16px;
+            background: #fff;
+            border-radius: 14px;
             padding: 1.2rem;
-            box-shadow: 0 4px 15px rgba(0, 0, 0, 0.2);
+            box-shadow: 0 2px 12px rgba(0, 0, 0, 0.07);
             display: flex;
             flex-direction: column;
             align-items: center;
@@ -265,7 +256,7 @@
         .ip-timer-label #globalCountdown {
             font-size: 1.25rem;
             font-weight: 800;
-            color: var(--text-main);
+            color: #1f2937;
             font-family: monospace;
             line-height: 1;
         }
@@ -300,20 +291,17 @@
 
         /* AI Insights Card */
         .ip-insights-card {
-            background: var(--card-bg);
-            backdrop-filter: blur(12px);
-            -webkit-backdrop-filter: blur(12px);
-            border: 1px solid rgba(255, 255, 255, 0.05);
-            border-radius: 16px;
+            background: #fff;
+            border-radius: 14px;
             padding: 1.1rem 1.2rem;
-            box-shadow: 0 4px 15px rgba(0, 0, 0, 0.2);
+            box-shadow: 0 2px 12px rgba(0, 0, 0, 0.07);
         }
 
         .ip-insights-card h4 {
             margin: 0 0 0.9rem;
             font-size: 0.95rem;
             font-weight: 700;
-            color: var(--text-main);
+            color: #1f2937;
         }
 
         .insight-row {
@@ -387,13 +375,10 @@
 
         /* Question Card */
         .ip-question-card {
-            background: var(--card-bg);
-            backdrop-filter: blur(12px);
-            -webkit-backdrop-filter: blur(12px);
-            border: 1px solid rgba(255, 255, 255, 0.05);
-            border-radius: 20px;
+            background: #fff;
+            border-radius: 16px;
             padding: 1.4rem 1.5rem;
-            box-shadow: 0 10px 30px rgba(0, 0, 0, 0.3);
+            box-shadow: 0 4px 20px rgba(0, 0, 0, 0.07);
         }
 
         .ip-question-meta {
@@ -438,7 +423,7 @@
             flex: 1;
             font-size: 1.08rem;
             font-weight: 500;
-            color: var(--text-main);
+            color: #111827;
             line-height: 1.65;
             margin: 0;
         }
@@ -460,13 +445,10 @@
 
         /* Live Transcript Card */
         .ip-transcript-card {
-            background: var(--card-bg);
-            backdrop-filter: blur(12px);
-            -webkit-backdrop-filter: blur(12px);
-            border: 1px solid rgba(255, 255, 255, 0.05);
-            border-radius: 20px;
+            background: #fff;
+            border-radius: 16px;
             padding: 1.2rem 1.4rem;
-            box-shadow: 0 10px 30px rgba(0, 0, 0, 0.3);
+            box-shadow: 0 4px 20px rgba(0, 0, 0, 0.07);
         }
 
         .ip-transcript-header {
@@ -482,7 +464,7 @@
             gap: 0.5rem;
             font-size: 0.95rem;
             font-weight: 700;
-            color: var(--text-main);
+            color: #1f2937;
         }
 
         .ip-recording-badge {
@@ -508,18 +490,17 @@
         }
 
         .ip-transcript-box {
-            background: rgba(15, 23, 42, 0.5);
-            border: 1px solid rgba(255, 255, 255, 0.1);
-            border-radius: 12px;
-            padding: 1rem 1.2rem;
-            min-height: 100px;
-            font-size: 0.95rem;
-            color: var(--text-main);
+            background: #f8fafc;
+            border: 1px solid #e5e7eb;
+            border-radius: 10px;
+            padding: 0.85rem 1rem;
+            min-height: 90px;
+            font-size: 0.9rem;
+            color: #374151;
             font-family: inherit;
             resize: vertical;
             width: 100%;
             box-sizing: border-box;
-            box-shadow: inset 0 2px 10px rgba(0, 0, 0, 0.2);
         }
 
         /* Nav Buttons */
@@ -624,7 +605,6 @@
             box-shadow: 0 12px 30px rgba(15, 23, 42, 0.08);
             padding: 1rem;
             margin-top: 1.5rem;
-            color: #1e293b;
         }
 
         .coding-round-header {
@@ -672,7 +652,6 @@
             border: 1px solid #dbe2ea;
             border-radius: 16px;
             background: #ffffff;
-            color: #1e293b;
         }
 
         .coding-problem-card {
@@ -5064,13 +5043,13 @@ Output: ${formatCodingValue(testCase.output)}${resultBlock}</pre>
     </script>
     <!-- Custom Confirm Modal -->
     <div id="customConfirmModal" style="display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.6); z-index: 10000; align-items: center; justify-content: center; backdrop-filter: blur(4px);">
-        <div style="background: white; padding: 2rem; border-radius: 12px; max-width: 400px; width: 90%; text-align: center; box-shadow: 0 10px 25px rgba(0,0,0,0.2); color: #1e293b;">
-            <i class="fas fa-question-circle" style="font-size: 3rem; color: #2563eb; margin-bottom: 1rem;"></i>
-            <h3 style="margin-bottom: 1rem; color: #0f172a;">Proceed to next round?</h3>
-            <p id="customConfirmMessage" style="color: #475569; margin-bottom: 1.5rem; line-height: 1.5;"></p>
+        <div style="background: white; padding: 2rem; border-radius: 12px; max-width: 400px; width: 90%; text-align: center; box-shadow: 0 10px 25px rgba(0,0,0,0.2);">
+            <i class="fas fa-question-circle" style="font-size: 3rem; color: var(--primary); margin-bottom: 1rem;"></i>
+            <h3 style="margin-bottom: 1rem; color: var(--text-color);">Proceed to next round?</h3>
+            <p id="customConfirmMessage" style="color: var(--text-muted); margin-bottom: 1.5rem; line-height: 1.5;"></p>
             <div style="display: flex; gap: 1rem; justify-content: center;">
-                <button id="customConfirmCancel" style="padding: 0.75rem 1.5rem; border: 1px solid #cbd5e1; background: transparent; border-radius: 6px; cursor: pointer; color: #334155; font-weight: 500;">Cancel</button>
-                <button id="customConfirmOk" style="padding: 0.75rem 1.5rem; border: none; background: #2563eb; color: white; border-radius: 6px; cursor: pointer; font-weight: 500;">Proceed</button>
+                <button id="customConfirmCancel" style="padding: 0.75rem 1.5rem; border: 1px solid var(--border-color); background: transparent; border-radius: 6px; cursor: pointer; color: var(--text-color); font-weight: 500;">Cancel</button>
+                <button id="customConfirmOk" style="padding: 0.75rem 1.5rem; border: none; background: var(--primary-color); color: white; border-radius: 6px; cursor: pointer; font-weight: 500;">Proceed</button>
             </div>
         </div>
     </div>
@@ -5107,11 +5086,11 @@ Output: ${formatCodingValue(testCase.output)}${resultBlock}</pre>
 </body>
 <!-- Disclaimer Modal -->
 <div id="disclaimerModal" class="modal-overlay hidden">
-    <div class="modal-content" style="max-width: 600px; max-height: 80vh; overflow-y: auto; color: #1e293b;">
-        <h2 style="color: #0f172a;"><i class="fas fa-clipboard-list"></i> Terms and Conditions</h2>
+    <div class="modal-content" style="max-width: 600px; max-height: 80vh; overflow-y: auto;">
+        <h2><i class="fas fa-clipboard-list"></i> Terms and Conditions</h2>
         <div style="font-size: 0.95rem; text-align: left; margin-bottom: 15px;">
-            <h3 style="color: #16a34a; margin-bottom: 10px;">✅ DO'S</h3>
-            <ul style="padding-left: 20px; margin-bottom: 15px; color: #334155;">
+            <h3 style="color: var(--success); margin-bottom: 10px;">✅ DO'S</h3>
+            <ul style="padding-left: 20px; margin-bottom: 15px; color: var(--text);">
                 <li>Join the interview/test 10–15 minutes before the scheduled time.</li>
                 <li>Ensure a stable internet connection and a fully charged device.</li>
                 <li>Ensure you have a suitable device such as a Laptop/Desktop.</li>
@@ -5123,8 +5102,8 @@ Output: ${formatCodingValue(testCase.output)}${resultBlock}</pre>
                 <li>Inform the recruiter immediately if you face any technical issues.</li>
             </ul>
 
-            <h3 style="color: #dc2626; margin-bottom: 10px;">❌ DON'TS</h3>
-            <ul style="padding-left: 20px; margin-bottom: 15px; color: #334155;">
+            <h3 style="color: var(--danger); margin-bottom: 10px;">❌ DON'TS</h3>
+            <ul style="padding-left: 20px; margin-bottom: 15px; color: var(--text);">
                 <li>Do not use mobile phones, books, notes, AI tools, or unauthorized resources during the assessment.</li>
                 <li>Do not seek assistance from any other person.</li>
                 <li>Do not share test questions, answers, or assessment content with others.</li>
@@ -5134,13 +5113,13 @@ Output: ${formatCodingValue(testCase.output)}${resultBlock}</pre>
                 <li>Do not record, screenshot, or distribute any part of the assessment.</li>
             </ul>
 
-            <div style="background: rgba(99, 102, 241, 0.1); padding: 10px; border-radius: 8px; font-size: 0.85rem; color: #475569; margin-bottom: 15px;">
-                <strong style="color: #1e293b;">NOTE:</strong> By participating in this assessment, you agree to follow the guidelines above. Any violation of these rules may result in disqualification from the recruitment process. The company's decision regarding evaluation and selection will be final and binding.
+            <div style="background: rgba(99, 102, 241, 0.1); padding: 10px; border-radius: 8px; font-size: 0.85rem; color: var(--text-muted); margin-bottom: 15px;">
+                <strong>NOTE:</strong> By participating in this assessment, you agree to follow the guidelines above. Any violation of these rules may result in disqualification from the recruitment process. The company's decision regarding evaluation and selection will be final and binding.
             </div>
 
             <div style="display: flex; align-items: flex-start; gap: 10px; margin-top: 20px;">
                 <input type="checkbox" id="agreeTermsCheckbox" onchange="document.getElementById('startInterviewBtn').disabled = !this.checked;" style="margin-top: 4px; transform: scale(1.2); cursor: pointer;">
-                <label for="agreeTermsCheckbox" style="cursor: pointer; font-weight: 600; color: #1e293b;">I agree to follow the guidelines above.</label>
+                <label for="agreeTermsCheckbox" style="cursor: pointer; font-weight: 600; color: var(--text);">I agree to follow the guidelines above.</label>
             </div>
         </div>
 
@@ -5487,9 +5466,6 @@ Output: ${formatCodingValue(testCase.output)}${resultBlock}</pre>
     let cocoSsdModel = null;
 
     async function startFaceDetection(video) {
-        // Delay model loading to completely eliminate startup lag for the camera and UI
-        await new Promise(r => setTimeout(r, 2000));
-
         // Wait for blazeface to load (it's deferred, so may not be ready immediately)
         let retries = 0;
         while (typeof blazeface === 'undefined' && retries < 10) {
