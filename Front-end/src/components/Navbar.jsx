@@ -17,6 +17,7 @@ export default function Navbar({
   adminUser,
   onAccentChange,
   onLogout,
+  onAddCredits,
 }) {
   return (
     <header

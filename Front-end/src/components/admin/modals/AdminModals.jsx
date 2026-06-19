@@ -30,7 +30,7 @@ export function CandidateScorecardModal({
       }
       subtitle={
         <span className="text-slate-500 text-sm font-medium mt-1 inline-block">
-          Candidate ID: <strong className="text-slate-800">CAN{selectedCandidate?.id || selectedCandidate?.link_id?.substring(0,6).toUpperCase() || '1X0'}IQ</strong> &nbsp;&nbsp;(Session: {selectedCandidate?.session_id || selectedCandidate?.link_id})
+          Candidate ID: <strong className="text-slate-800">CAN{selectedCandidate?.id || selectedCandidate?.link_id?.substring(0,6)?.toUpperCase() || '1X0'}IQ</strong> &nbsp;&nbsp;(Session: {selectedCandidate?.session_id || selectedCandidate?.link_id})
         </span>
       }
       maxWidth="max-w-6xl"
