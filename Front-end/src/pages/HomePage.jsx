@@ -817,9 +817,6 @@ function HomePage() {
     }
   }
 
-  useEffect(() => {
-    handleNextQuestionRef.current = handleNextQuestion
-  }, [handleNextQuestion])
 
   // Helper to count fillers
   const countFillers = (text) => {
@@ -914,6 +911,11 @@ function HomePage() {
       })
     }
   }
+
+  // Keep ref in sync so callbacks (silence timer, TTS onend) always call the latest version
+  useEffect(() => {
+    handleNextQuestionRef.current = handleNextQuestion
+  }, [handleNextQuestion])
 
   // Compiler code runner
   const handleRunCode = async () => {
