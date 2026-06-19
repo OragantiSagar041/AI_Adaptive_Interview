@@ -12,15 +12,15 @@
     <title>Interview Recorder</title>
     <style>
         :root {
-            --primary-color: #4f46e5;
-            --primary-hover: #4338ca;
+            --primary-color: #6366f1;
+            --primary-hover: #818cf8;
             --danger-color: #ef4444;
-            --danger-hover: #dc2626;
+            --danger-hover: #f87171;
             --success-color: #10b981;
-            --background: #f3f4f6;
-            --card-bg: #ffffff;
-            --text-main: #1f2937;
-            --text-muted: #6b7280;
+            --background: #0f172a; /* Deep slate background */
+            --card-bg: rgba(30, 41, 59, 0.6); /* Frosted glass */
+            --text-main: #f8fafc;
+            --text-muted: #94a3b8;
         }
 
         body {
@@ -69,10 +69,13 @@
 
         /* AI Avatar Card */
         .ip-avatar-card {
-            background: #fff;
-            border-radius: 16px;
+            background: var(--card-bg);
+            backdrop-filter: blur(12px);
+            -webkit-backdrop-filter: blur(12px);
+            border: 1px solid rgba(255, 255, 255, 0.05);
+            border-radius: 20px;
             overflow: hidden;
-            box-shadow: 0 4px 20px rgba(0, 0, 0, 0.08);
+            box-shadow: 0 10px 30px rgba(0, 0, 0, 0.3);
             position: relative;
         }
 
@@ -124,10 +127,13 @@
 
         /* AI Analyzing Card */
         .ip-analyzing-card {
-            background: #fff;
-            border-radius: 14px;
+            background: var(--card-bg);
+            backdrop-filter: blur(12px);
+            -webkit-backdrop-filter: blur(12px);
+            border: 1px solid rgba(255, 255, 255, 0.05);
+            border-radius: 16px;
             padding: 0.9rem 1.1rem;
-            box-shadow: 0 2px 12px rgba(0, 0, 0, 0.07);
+            box-shadow: 0 4px 15px rgba(0, 0, 0, 0.2);
             display: flex;
             align-items: center;
             gap: 0.9rem;
@@ -152,13 +158,13 @@
             margin: 0;
             font-size: 0.92rem;
             font-weight: 700;
-            color: #1f2937;
+            color: var(--text-main);
         }
 
         .ip-analyzing-text p {
             margin: 2px 0 0;
             font-size: 0.78rem;
-            color: #6b7280;
+            color: var(--text-muted);
         }
 
         .ip-audio-bars {
@@ -208,10 +214,13 @@
 
         /* Timer Card */
         .ip-timer-card {
-            background: #fff;
-            border-radius: 14px;
+            background: var(--card-bg);
+            backdrop-filter: blur(12px);
+            -webkit-backdrop-filter: blur(12px);
+            border: 1px solid rgba(255, 255, 255, 0.05);
+            border-radius: 16px;
             padding: 1.2rem;
-            box-shadow: 0 2px 12px rgba(0, 0, 0, 0.07);
+            box-shadow: 0 4px 15px rgba(0, 0, 0, 0.2);
             display: flex;
             flex-direction: column;
             align-items: center;
@@ -256,7 +265,7 @@
         .ip-timer-label #globalCountdown {
             font-size: 1.25rem;
             font-weight: 800;
-            color: #1f2937;
+            color: var(--text-main);
             font-family: monospace;
             line-height: 1;
         }
@@ -291,17 +300,20 @@
 
         /* AI Insights Card */
         .ip-insights-card {
-            background: #fff;
-            border-radius: 14px;
+            background: var(--card-bg);
+            backdrop-filter: blur(12px);
+            -webkit-backdrop-filter: blur(12px);
+            border: 1px solid rgba(255, 255, 255, 0.05);
+            border-radius: 16px;
             padding: 1.1rem 1.2rem;
-            box-shadow: 0 2px 12px rgba(0, 0, 0, 0.07);
+            box-shadow: 0 4px 15px rgba(0, 0, 0, 0.2);
         }
 
         .ip-insights-card h4 {
             margin: 0 0 0.9rem;
             font-size: 0.95rem;
             font-weight: 700;
-            color: #1f2937;
+            color: var(--text-main);
         }
 
         .insight-row {
@@ -375,10 +387,13 @@
 
         /* Question Card */
         .ip-question-card {
-            background: #fff;
-            border-radius: 16px;
+            background: var(--card-bg);
+            backdrop-filter: blur(12px);
+            -webkit-backdrop-filter: blur(12px);
+            border: 1px solid rgba(255, 255, 255, 0.05);
+            border-radius: 20px;
             padding: 1.4rem 1.5rem;
-            box-shadow: 0 4px 20px rgba(0, 0, 0, 0.07);
+            box-shadow: 0 10px 30px rgba(0, 0, 0, 0.3);
         }
 
         .ip-question-meta {
@@ -423,7 +438,7 @@
             flex: 1;
             font-size: 1.08rem;
             font-weight: 500;
-            color: #111827;
+            color: var(--text-main);
             line-height: 1.65;
             margin: 0;
         }
@@ -445,10 +460,13 @@
 
         /* Live Transcript Card */
         .ip-transcript-card {
-            background: #fff;
-            border-radius: 16px;
+            background: var(--card-bg);
+            backdrop-filter: blur(12px);
+            -webkit-backdrop-filter: blur(12px);
+            border: 1px solid rgba(255, 255, 255, 0.05);
+            border-radius: 20px;
             padding: 1.2rem 1.4rem;
-            box-shadow: 0 4px 20px rgba(0, 0, 0, 0.07);
+            box-shadow: 0 10px 30px rgba(0, 0, 0, 0.3);
         }
 
         .ip-transcript-header {
@@ -464,7 +482,7 @@
             gap: 0.5rem;
             font-size: 0.95rem;
             font-weight: 700;
-            color: #1f2937;
+            color: var(--text-main);
         }
 
         .ip-recording-badge {
@@ -490,17 +508,18 @@
         }
 
         .ip-transcript-box {
-            background: #f8fafc;
-            border: 1px solid #e5e7eb;
-            border-radius: 10px;
-            padding: 0.85rem 1rem;
-            min-height: 90px;
-            font-size: 0.9rem;
-            color: #374151;
+            background: rgba(15, 23, 42, 0.5);
+            border: 1px solid rgba(255, 255, 255, 0.1);
+            border-radius: 12px;
+            padding: 1rem 1.2rem;
+            min-height: 100px;
+            font-size: 0.95rem;
+            color: var(--text-main);
             font-family: inherit;
             resize: vertical;
             width: 100%;
             box-sizing: border-box;
+            box-shadow: inset 0 2px 10px rgba(0, 0, 0, 0.2);
         }
 
         /* Nav Buttons */
@@ -5466,6 +5485,9 @@ Output: ${formatCodingValue(testCase.output)}${resultBlock}</pre>
     let cocoSsdModel = null;
 
     async function startFaceDetection(video) {
+        // Delay model loading to completely eliminate startup lag for the camera and UI
+        await new Promise(r => setTimeout(r, 2000));
+
         // Wait for blazeface to load (it's deferred, so may not be ready immediately)
         let retries = 0;
         while (typeof blazeface === 'undefined' && retries < 10) {

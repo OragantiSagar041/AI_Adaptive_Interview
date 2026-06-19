@@ -240,7 +240,7 @@ def serialize_plan(plan_doc: Dict[str, Any]) -> Dict[str, Any]:
         "plan_name": definition["label"],
         "credits_granted": plan_doc.get("credits_granted", definition["credits_granted"]),
         "price": plan_doc.get("price", definition["price"]),
-        "features": definition["features"],
+        "features": plan_doc.get("features", definition["features"]),
         "summary": definition["summary"],
         "capabilities": definition["capabilities"],
         "is_unlimited": plan_doc.get("is_unlimited", False),
@@ -3016,8 +3016,8 @@ async def upload_full_recording(
     recording_type: Optional[str] = Form("camera"),
     file: UploadFile = File(...)
 ):
-    if getattr(file, "size", 0) and file.size > 100 * 1024 * 1024:
-        raise HTTPException(status_code=413, detail="Recording too large. Maximum size is 100MB.")
+    if getattr(file, "size", 0) and file.size > 500 * 1024 * 1024:
+        raise HTTPException(status_code=413, detail="Recording too large. Maximum size is 500MB.")
         
     try:
         # Create directory for temporary recordings if it doesn't exist

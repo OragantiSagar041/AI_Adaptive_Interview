@@ -1,10 +1,12 @@
 <!DOCTYPE html>
 <html lang="en">
-
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <meta name="google" content="notranslate">
+    <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
+    <meta http-equiv="Pragma" content="no-cache">
+    <meta http-equiv="Expires" content="0">
     <title>Admin Panel — Hire IQ</title>
     <link rel="icon" type="image/png" href="assets/logo.png">
     <link rel="preconnect" href="https://fonts.googleapis.com">
@@ -19,6 +21,7 @@
         href="https://fonts.googleapis.com/css2?family=Geist:wght@400;500;600&family=Instrument+Serif:ital@0;1&family=Inter:wght@300;400;500;600&display=swap"
         rel="stylesheet">
     <link rel="stylesheet" href="assets/css/admin-core.css">
+    <link rel="stylesheet" href="master/css/master.css">
 </head>
 
 <body class="notranslate">
@@ -180,20 +183,6 @@
                     Subscribers</button>
                 <button class="nav-btn" onclick="scrollToCreateTenant()"><i class="fas fa-user-plus"></i> Create
                     Tenant</button>
-
-                <div
-                    style="font-size: 0.7rem; color: rgba(255,255,255,0.5); font-weight: 800; text-transform: uppercase; margin: 1.5rem 0 0.5rem 1rem; letter-spacing: 1px;">
-                    Admin Features</div>
-                <button class="nav-btn" onclick="showMasterAdminView('overview')" id="nav-master-overview"><i
-                        class="fas fa-chart-pie"></i> Overview Dashboard</button>
-                <button class="nav-btn" onclick="showMasterAdminView('create')" id="nav-master-create"><i
-                        class="fas fa-plus-circle"></i> Create Interview</button>
-                <button class="nav-btn" onclick="showMasterAdminView('qualified')" id="nav-master-qualified"><i
-                        class="fas fa-user-check"></i> Qualified Candidates</button>
-                <button class="nav-btn" onclick="showMasterAdminView('unqualified')" id="nav-master-unqualified"><i
-                        class="fas fa-user-slash"></i> Rejected Candidates</button>
-                <button class="nav-btn" onclick="showMasterAdminView('settings')" id="nav-master-settings"><i
-                        class="fas fa-cog"></i> Profile Settings</button>
 
                 <div class="master-sidebar-separator"></div>
                 <button class="nav-btn" onclick="showLiveResultsModal()"
@@ -4542,96 +4531,39 @@
                 downloadBtn.disabled = true;
             }
 
-            // Hide interactive buttons from PDF
+            // Hide interactive buttons and remove videos
             const buttons = element.querySelectorAll('button');
             buttons.forEach(btn => btn.style.display = 'none');
+            
+            const videos = element.querySelectorAll('video');
+            const videoPlacements = [];
+            videos.forEach(v => {
+                videoPlacements.push({ parent: v.parentNode, next: v.nextSibling, el: v });
+                v.parentNode.removeChild(v);
+            });
 
             try {
-                // jsPDF page dimensions (Letter: 8.5in x 11in, 0.5in margins)
-                const pageW_in = 8.5;
-                const pageH_in = 11;
-                const margin_in = 0.5;
-                const contentW_in = pageW_in - margin_in * 2;
-                const contentH_in = pageH_in - margin_in * 2;
-                const scale = 2; // high-res canvas scale
+                console.log("Starting PDF generation via html2pdf...");
+                const opt = {
+                    margin:       0.5,
+                    filename:     `Interview_Report_${candidateName.replace(/[^a-zA-Z0-9]/g, '_')}.pdf`,
+                    image:        { type: 'jpeg', quality: 0.95 },
+                    html2canvas:  { scale: 2, useCORS: true, logging: true },
+                    jsPDF:        { unit: 'in', format: 'letter', orientation: 'portrait' },
+                    pagebreak:    { mode: 'css', avoid: '.avoid-break' }
+                };
 
-                const { jsPDF } = window.jspdf;
-                const doc = new jsPDF({ unit: 'in', format: 'letter', orientation: 'portrait' });
-
-                // Helper: render a DOM element to canvas and add to PDF
-                // Returns the height in inches it consumed
-                async function addElementToDoc(el, doc, cursorY) {
-                    const canvas = await html2canvas(el, {
-                        scale: scale,
-                        useCORS: true,
-                        logging: false,
-                        backgroundColor: '#ffffff'
-                    });
-
-                    // Calculate the width/height in inches on the PDF
-                    const imgW_in = contentW_in;
-                    const imgH_in = (canvas.height / canvas.width) * imgW_in;
-
-                    // If this single block is taller than a full page, scale it to fit
-                    let drawW = imgW_in;
-                    let drawH = imgH_in;
-                    if (drawH > contentH_in) {
-                        const ratio = contentH_in / drawH;
-                        drawH = contentH_in;
-                        drawW = imgW_in * ratio;
-                    }
-
-                    // If it doesn't fit on the current page, add a new page
-                    if (cursorY + drawH > margin_in + contentH_in) {
-                        doc.addPage();
-                        cursorY = margin_in;
-                    }
-
-                    const imgData = canvas.toDataURL('image/jpeg', 0.95);
-                    doc.addImage(imgData, 'JPEG', margin_in, cursorY, drawW, drawH);
-                    return cursorY + drawH + 0.15; // 0.15in gap between blocks
-                }
-
-                let cursorY = margin_in;
-
-                // Step 1: render the header summary section (everything before the Q&A blocks)
-                const headerSection = element.querySelector('#report-header-section');
-                if (headerSection) {
-                    cursorY = await addElementToDoc(headerSection, doc, cursorY);
-                }
-
-                // Step 2: render each question block individually
-                const cards = element.querySelectorAll('.avoid-break');
-                for (const card of cards) {
-                    cursorY = await addElementToDoc(card, doc, cursorY);
-                }
-
-                // Step 3: if no cards found fall back to full-page render
-                if (cards.length === 0) {
-                    const canvas = await html2canvas(element, { scale: scale, useCORS: true, backgroundColor: '#ffffff' });
-                    const imgW = contentW_in;
-                    const imgH = (canvas.height / canvas.width) * imgW;
-                    let placed = 0;
-                    const pageH_px = (contentH_in / imgW) * canvas.width;
-                    while (placed < canvas.height) {
-                        if (placed > 0) { doc.addPage(); cursorY = margin_in; }
-                        const sliceH = Math.min(pageH_px, canvas.height - placed);
-                        const sliceCanvas = document.createElement('canvas');
-                        sliceCanvas.width = canvas.width;
-                        sliceCanvas.height = sliceH;
-                        sliceCanvas.getContext('2d').drawImage(canvas, 0, placed, canvas.width, sliceH, 0, 0, canvas.width, sliceH);
-                        const sliceH_in = (sliceH / canvas.width) * imgW;
-                        doc.addImage(sliceCanvas.toDataURL('image/jpeg', 0.95), 'JPEG', margin_in, cursorY, imgW, sliceH_in);
-                        placed += sliceH;
-                    }
-                }
-
-                doc.save(`Interview_Report_${candidateName.replace(/[^a-zA-Z0-9]/g, '_')}.pdf`);
+                await html2pdf().set(opt).from(element).save();
+                console.log("PDF downloaded successfully!");
             } catch (err) {
                 console.error('PDF generation failed:', err);
                 alert('PDF generation failed. Please try again.');
             } finally {
+                // Restore buttons and videos
                 buttons.forEach(btn => btn.style.display = '');
+                videoPlacements.forEach(vp => {
+                    if (vp.parent) vp.parent.insertBefore(vp.el, vp.next);
+                });
                 if (downloadBtn) {
                     downloadBtn.innerHTML = origBtnHtml;
                     downloadBtn.disabled = false;
@@ -5610,7 +5542,7 @@
 
     <!-- Task 1: Email Preview Modal -->
     <div id="emailPreviewModal" class="hidden"
-        style="position: fixed; inset: 0; z-index: 9999; background: rgba(0,0,0,0.6); backdrop-filter: blur(4px); display: flex; align-items: center; justify-content: center; padding: 1rem;">
+        style="position: fixed; inset: 0; z-index: 1050; background: rgba(0,0,0,0.6); backdrop-filter: blur(4px); display: flex; align-items: center; justify-content: center; padding: 1rem;">
         <style>
             #emailPreviewModal.hidden {
                 display: none !important;

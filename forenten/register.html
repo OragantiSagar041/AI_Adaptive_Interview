@@ -893,6 +893,30 @@
             "Advance": 2,
         };
 
+        const fallbackPlans = [
+            {
+                id: "fallback-trial",
+                plan_name: "Free Trial",
+                credits_granted: 10,
+                price: 0,
+                features: ["Admin Dashboard", "Single Interview Creation", "Resume Parsing", "Basic Analytics"],
+            },
+            {
+                id: "fallback-basic",
+                plan_name: "Basic",
+                credits_granted: 250,
+                price: 2500,
+                features: ["Detailed Analytics", "Session Export", "Email Notifications", "Deactivated Candidate Control"],
+            },
+            {
+                id: "fallback-advance",
+                plan_name: "Advance",
+                credits_granted: 400,
+                price: 3999,
+                features: ["Bulk Candidate Upload", "Live Monitoring", "Live Results Dashboard", "Priority Support"],
+            },
+        ];
+
         let availablePlans = [];
         let selectedPlan = null;
 
@@ -1026,6 +1050,9 @@
                     const bOrder = planOrder[b.plan_name] ?? 999;
                     return aOrder - bOrder;
                 });
+                if (!availablePlans.length) {
+                    throw new Error("No plans returned from backend");
+                }
 
                 planLoader.style.display = "none";
                 registrationForm.style.display = "block";
@@ -1035,8 +1062,14 @@
                 const match = availablePlans.find((plan) => plan.plan_name.toLowerCase() === (preferredPlan || "").toLowerCase());
                 renderSelectedPlan(match || availablePlans[0]);
             } catch (error) {
-                planLoader.textContent = "Unable to load subscription plans right now. Please make sure the backend is running.";
-                showStatus(error.message || "Failed to load plans.");
+                console.warn("Using fallback plans:", error);
+                availablePlans = fallbackPlans;
+                planLoader.style.display = "none";
+                registrationForm.style.display = "block";
+                renderPlanPicker(availablePlans);
+                const preferredPlan = getSelectedPlanFromQuery();
+                const match = availablePlans.find((plan) => plan.plan_name.toLowerCase() === (preferredPlan || "").toLowerCase());
+                renderSelectedPlan(match || availablePlans[0]);
             }
         }
 

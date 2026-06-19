@@ -5,6 +5,9 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <meta name="google" content="notranslate">
+    <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
+    <meta http-equiv="Pragma" content="no-cache">
+    <meta http-equiv="Expires" content="0">
     <title>Admin Panel — Hire IQ</title>
     <link rel="icon" type="image/png" href="assets/logo.png">
     <link rel="preconnect" href="https://fonts.googleapis.com">
@@ -20,6 +23,7 @@
         href="https://fonts.googleapis.com/css2?family=Geist:wght@400;500;600&family=Instrument+Serif:ital@0;1&family=Inter:wght@300;400;500;600&display=swap"
         rel="stylesheet">
     <link rel="stylesheet" href="assets/css/admin-core.css">
+    <link rel="stylesheet" href="master/css/master.css">
 </head>
 
 <body class="notranslate">
@@ -94,7 +98,8 @@
                             <label for="username">Username</label>
                             <div class="input-wrapper">
                                 <span class="input-icon"><i class="fas fa-user"></i></span>
-                                <input type="email" id="username" placeholder="Enter work email (username)" autocomplete="username">
+                                <input type="email" id="username" placeholder="Enter work email (username)"
+                                    autocomplete="username">
                             </div>
                         </div>
 
@@ -149,11 +154,11 @@
             </div>
             <div class="sidebar-nav" id="tenantSidebarNav">
                 <!-- SUPER ADMIN ONLY TABS -->
-                <button class="nav-btn" onclick="switchView('super_dashboard')" id="nav-btn-super_dashboard" style="display: none;"><i
-                        class="fas fa-chart-line"></i> Super Admin Dashboard</button>
+                <button class="nav-btn" onclick="switchView('super_dashboard')" id="nav-btn-super_dashboard"
+                    style="display: none;"><i class="fas fa-chart-line"></i> Super Admin Dashboard</button>
                 <button class="nav-btn" onclick="switchView('team')" id="nav-btn-team" style="display: none;"><i
                         class="fas fa-users-cog"></i> Team Management</button>
-                        
+
                 <button class="nav-btn active" onclick="switchView('overview')" id="nav-btn-overview"><i
                         class="fas fa-chart-pie"></i> Overview Dashboard</button>
                 <button class="nav-btn" onclick="switchView('qualified')" id="nav-btn-qualified"><i
@@ -181,20 +186,6 @@
                     Subscribers</button>
                 <button class="nav-btn" onclick="scrollToCreateTenant()"><i class="fas fa-user-plus"></i> Create
                     Tenant</button>
-
-                <div
-                    style="font-size: 0.7rem; color: rgba(255,255,255,0.5); font-weight: 800; text-transform: uppercase; margin: 1.5rem 0 0.5rem 1rem; letter-spacing: 1px;">
-                    Admin Features</div>
-                <button class="nav-btn" onclick="showMasterAdminView('overview')" id="nav-master-overview"><i
-                        class="fas fa-chart-pie"></i> Overview Dashboard</button>
-                <button class="nav-btn" onclick="showMasterAdminView('create')" id="nav-master-create"><i
-                        class="fas fa-plus-circle"></i> Create Interview</button>
-                <button class="nav-btn" onclick="showMasterAdminView('qualified')" id="nav-master-qualified"><i
-                        class="fas fa-user-check"></i> Qualified Candidates</button>
-                <button class="nav-btn" onclick="showMasterAdminView('unqualified')" id="nav-master-unqualified"><i
-                        class="fas fa-user-slash"></i> Rejected Candidates</button>
-                <button class="nav-btn" onclick="showMasterAdminView('settings')" id="nav-master-settings"><i
-                        class="fas fa-cog"></i> Profile Settings</button>
 
                 <div class="master-sidebar-separator"></div>
                 <button class="nav-btn" onclick="showLiveResultsModal()"
@@ -392,7 +383,8 @@
                                 <h3>Upgrade / Buy Credits</h3>
                                 <p>Select a plan to purchase additional credits using Razorpay.</p>
                             </div>
-                            <button class="master-close" onclick="closeUpgradeModal()"><i class="fas fa-times"></i></button>
+                            <button class="master-close" onclick="closeUpgradeModal()"><i
+                                    class="fas fa-times"></i></button>
                         </div>
                         <div class="master-modal-body">
                             <div id="upgradePlansContainer" style="display: flex; flex-direction: column; gap: 1rem;">
@@ -435,8 +427,11 @@
                                 <div class="master-field">
                                     <label>Password</label>
                                     <div style="position: relative;">
-                                        <input type="password" id="tenantPassword" class="dash-input" placeholder="Password" style="padding-right: 40px; width: 100%;">
-                                        <button onclick="togglePasswordVisibility('tenantPassword')" style="position: absolute; right: 12px; top: 50%; transform: translateY(-50%); background: none; border: none; color: #94a3b8; cursor: pointer;"><i class="fas fa-eye"></i></button>
+                                        <input type="password" id="tenantPassword" class="dash-input"
+                                            placeholder="Password" style="padding-right: 40px; width: 100%;">
+                                        <button onclick="togglePasswordVisibility('tenantPassword')"
+                                            style="position: absolute; right: 12px; top: 50%; transform: translateY(-50%); background: none; border: none; color: #94a3b8; cursor: pointer;"><i
+                                                class="fas fa-eye"></i></button>
                                     </div>
                                 </div>
                                 <div class="master-field">
@@ -502,40 +497,55 @@
                 <!-- VIEW: SUPER DASHBOARD -->
                 <div id="view-super_dashboard" class="view-panel hidden">
 
-                    <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 1rem; margin-bottom: 2rem;">
-                        <div class="stat-card" style="padding: 1.5rem; background: var(--bg-card); border: 1px solid var(--border); border-radius: var(--radius-md);">
-                            <div style="color: var(--text-muted); font-size: 0.875rem; margin-bottom: 0.5rem;">Available Credits</div>
+                    <div
+                        style="display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 1rem; margin-bottom: 2rem;">
+                        <div class="stat-card"
+                            style="padding: 1.5rem; background: var(--bg-card); border: 1px solid var(--border); border-radius: var(--radius-md);">
+                            <div style="color: var(--text-muted); font-size: 0.875rem; margin-bottom: 0.5rem;">Available
+                                Credits</div>
                             <div id="sa-credits" style="font-size: 2rem; font-weight: 600; color: #10b981;">0</div>
                         </div>
-                        <div class="stat-card" style="padding: 1.5rem; background: var(--bg-card); border: 1px solid var(--border); border-radius: var(--radius-md);">
-                            <div style="color: var(--text-muted); font-size: 0.875rem; margin-bottom: 0.5rem;">Total Interviews</div>
+                        <div class="stat-card"
+                            style="padding: 1.5rem; background: var(--bg-card); border: 1px solid var(--border); border-radius: var(--radius-md);">
+                            <div style="color: var(--text-muted); font-size: 0.875rem; margin-bottom: 0.5rem;">Total
+                                Interviews</div>
                             <div id="sa-total" style="font-size: 2rem; font-weight: 600;">0</div>
                         </div>
-                        <div class="stat-card" style="padding: 1.5rem; background: var(--bg-card); border: 1px solid var(--border); border-radius: var(--radius-md);">
-                            <div style="color: var(--text-muted); font-size: 0.875rem; margin-bottom: 0.5rem;">Completed</div>
+                        <div class="stat-card"
+                            style="padding: 1.5rem; background: var(--bg-card); border: 1px solid var(--border); border-radius: var(--radius-md);">
+                            <div style="color: var(--text-muted); font-size: 0.875rem; margin-bottom: 0.5rem;">Completed
+                            </div>
                             <div id="sa-completed" style="font-size: 2rem; font-weight: 600;">0</div>
                         </div>
-                        <div class="stat-card" style="padding: 1.5rem; background: var(--bg-card); border: 1px solid var(--border); border-radius: var(--radius-md);">
-                            <div style="color: var(--text-muted); font-size: 0.875rem; margin-bottom: 0.5rem;">Pending</div>
+                        <div class="stat-card"
+                            style="padding: 1.5rem; background: var(--bg-card); border: 1px solid var(--border); border-radius: var(--radius-md);">
+                            <div style="color: var(--text-muted); font-size: 0.875rem; margin-bottom: 0.5rem;">Pending
+                            </div>
                             <div id="sa-pending" style="font-size: 2rem; font-weight: 600;">0</div>
                         </div>
                     </div>
-                    
+
                     <div style="display: grid; grid-template-columns: 2fr 1fr 1fr; gap: 2rem;">
-                        <div style="background: var(--bg-card); border: 1px solid var(--border); border-radius: var(--radius-md); padding: 1.5rem;">
-                            <h3 style="margin-top: 0; margin-bottom: 1rem; font-size: 1rem; font-weight: 500;">Interviews Last 7 Days</h3>
+                        <div
+                            style="background: var(--bg-card); border: 1px solid var(--border); border-radius: var(--radius-md); padding: 1.5rem;">
+                            <h3 style="margin-top: 0; margin-bottom: 1rem; font-size: 1rem; font-weight: 500;">
+                                Interviews Last 7 Days</h3>
                             <div style="position: relative; height: 300px; width: 100%;">
                                 <canvas id="saUsageChart"></canvas>
                             </div>
                         </div>
-                        <div style="background: var(--bg-card); border: 1px solid var(--border); border-radius: var(--radius-md); padding: 1.5rem;">
-                            <h3 style="margin-top: 0; margin-bottom: 1rem; font-size: 1rem; font-weight: 500;">Interviews by Admin</h3>
+                        <div
+                            style="background: var(--bg-card); border: 1px solid var(--border); border-radius: var(--radius-md); padding: 1.5rem;">
+                            <h3 style="margin-top: 0; margin-bottom: 1rem; font-size: 1rem; font-weight: 500;">
+                                Interviews by Admin</h3>
                             <div style="position: relative; height: 300px; width: 100%;">
                                 <canvas id="saAdminPieChart"></canvas>
                             </div>
                         </div>
-                        <div style="background: var(--bg-card); border: 1px solid var(--border); border-radius: var(--radius-md); padding: 1.5rem;">
-                            <h3 style="margin-top: 0; margin-bottom: 1rem; font-size: 1rem; font-weight: 500;">Credits Used vs Available</h3>
+                        <div
+                            style="background: var(--bg-card); border: 1px solid var(--border); border-radius: var(--radius-md); padding: 1.5rem;">
+                            <h3 style="margin-top: 0; margin-bottom: 1rem; font-size: 1rem; font-weight: 500;">Credits
+                                Used vs Available</h3>
                             <div style="position: relative; height: 300px; width: 100%;">
                                 <canvas id="saCreditsDoughnutChart"></canvas>
                             </div>
@@ -545,22 +555,26 @@
 
                 <!-- VIEW: TEAM MANAGEMENT -->
                 <div id="view-team" class="view-panel hidden">
-                    <div class="sa-card" style="background: white; border: 1px solid var(--border); border-radius: var(--radius-md);">
-                        <div style="display: flex; justify-content: space-between; align-items: center; padding: 1.5rem; flex-wrap: wrap; gap: 1rem;">
+                    <div class="sa-card"
+                        style="background: white; border: 1px solid var(--border); border-radius: var(--radius-md);">
+                        <div
+                            style="display: flex; justify-content: space-between; align-items: center; padding: 1.5rem; flex-wrap: wrap; gap: 1rem;">
                             <div style="display: flex; gap: 12px; align-items: center;">
                                 <div class="header-icon purple" style="background: rgba(99, 102, 241, 0.15);">
                                     <i class="fas fa-users-cog"></i>
                                 </div>
                                 <div>
                                     <h3 style="margin: 0;">Team Management</h3>
-                                    <p style="margin: 0; color: var(--text-muted); font-size: 0.85rem;">Manage sub-admins and their access</p>
+                                    <p style="margin: 0; color: var(--text-muted); font-size: 0.85rem;">Manage
+                                        sub-admins and their access</p>
                                 </div>
                             </div>
-                            <button class="primary-btn" onclick="document.getElementById('addAdminModal').classList.remove('hidden')">
+                            <button class="primary-btn"
+                                onclick="document.getElementById('addAdminModal').classList.remove('hidden')">
                                 <i class="fas fa-plus"></i> Add Admin
                             </button>
                         </div>
-                        
+
                         <div style="overflow-x: auto;">
                             <table class="dash-table">
                                 <thead>
@@ -578,21 +592,24 @@
                             </table>
                         </div>
                     </div>
-                    
+
                     <!-- Pending Credit Requests Table -->
-                    <div class="sa-card" style="margin-top: 2rem; background: white; border: 1px solid var(--border); border-radius: var(--radius-md);">
-                        <div style="display: flex; justify-content: space-between; align-items: center; padding: 1.5rem; flex-wrap: wrap; gap: 1rem;">
+                    <div class="sa-card"
+                        style="margin-top: 2rem; background: white; border: 1px solid var(--border); border-radius: var(--radius-md);">
+                        <div
+                            style="display: flex; justify-content: space-between; align-items: center; padding: 1.5rem; flex-wrap: wrap; gap: 1rem;">
                             <div style="display: flex; gap: 12px; align-items: center;">
                                 <div class="header-icon" style="background: rgba(245, 158, 11, 0.15); color: #f59e0b;">
                                     <i class="fas fa-coins"></i>
                                 </div>
                                 <div>
                                     <h3 style="margin: 0;">Pending Credit Requests</h3>
-                                    <p style="margin: 0; color: var(--text-muted); font-size: 0.85rem;">Approve or reject credit requests from your admins</p>
+                                    <p style="margin: 0; color: var(--text-muted); font-size: 0.85rem;">Approve or
+                                        reject credit requests from your admins</p>
                                 </div>
                             </div>
                         </div>
-                        
+
                         <div style="overflow-x: auto;">
                             <table class="dash-table">
                                 <thead>
@@ -606,39 +623,54 @@
                                     </tr>
                                 </thead>
                                 <tbody id="creditRequestsTableBody">
-                                    <tr><td colspan="6" style="text-align: center; padding: 2rem;">Loading requests...</td></tr>
+                                    <tr>
+                                        <td colspan="6" style="text-align: center; padding: 2rem;">Loading requests...
+                                        </td>
+                                    </tr>
                                 </tbody>
                             </table>
                         </div>
                     </div>
                 </div>
-                
+
                 <!-- Add Admin Modal -->
-                <div id="addAdminModal" class="modal-overlay hidden" style="position: fixed; inset: 0; background: rgba(0,0,0,0.5); z-index: 1000; display: flex; align-items: center; justify-content: center; backdrop-filter: blur(4px);">
-                    <div style="background: var(--bg-card); border: 1px solid var(--border); border-radius: var(--radius-md); width: 100%; max-width: 400px; padding: 2rem;">
+                <div id="addAdminModal" class="modal-overlay hidden"
+                    style="position: fixed; inset: 0; background: rgba(0,0,0,0.5); z-index: 1000; display: flex; align-items: center; justify-content: center; backdrop-filter: blur(4px);">
+                    <div
+                        style="background: var(--bg-card); border: 1px solid var(--border); border-radius: var(--radius-md); width: 100%; max-width: 400px; padding: 2rem;">
                         <h3 style="margin-top: 0; margin-bottom: 1.5rem;">Add New Admin</h3>
                         <div style="margin-bottom: 1rem;">
-                            <label style="display: block; margin-bottom: 0.5rem; color: var(--text-muted); font-size: 0.875rem;">Full Name</label>
+                            <label
+                                style="display: block; margin-bottom: 0.5rem; color: var(--text-muted); font-size: 0.875rem;">Full
+                                Name</label>
                             <input type="text" id="newAdminName" class="dash-input" placeholder="e.g. John Doe">
                         </div>
                         <div style="margin-bottom: 1rem;">
-                            <label style="display: block; margin-bottom: 0.5rem; color: var(--text-muted); font-size: 0.875rem;">Username</label>
+                            <label
+                                style="display: block; margin-bottom: 0.5rem; color: var(--text-muted); font-size: 0.875rem;">Username</label>
                             <input type="text" id="newAdminUsername" class="dash-input" placeholder="e.g. john_d">
                         </div>
                         <div style="margin-bottom: 1rem;">
-                            <label style="display: block; margin-bottom: 0.5rem; color: var(--text-muted); font-size: 0.875rem;">Email</label>
-                            <input type="email" id="newAdminEmail" class="dash-input" placeholder="e.g. john@example.com">
+                            <label
+                                style="display: block; margin-bottom: 0.5rem; color: var(--text-muted); font-size: 0.875rem;">Email</label>
+                            <input type="email" id="newAdminEmail" class="dash-input"
+                                placeholder="e.g. john@example.com">
                         </div>
                         <div style="margin-bottom: 1.5rem;">
-                            <label style="display: block; margin-bottom: 0.5rem; color: var(--text-muted); font-size: 0.875rem;">Password</label>
-                            <input type="password" id="newAdminPassword" class="dash-input" placeholder="Min 6 characters">
+                            <label
+                                style="display: block; margin-bottom: 0.5rem; color: var(--text-muted); font-size: 0.875rem;">Password</label>
+                            <input type="password" id="newAdminPassword" class="dash-input"
+                                placeholder="Min 6 characters">
                         </div>
                         <div style="margin-bottom: 1.5rem;">
-                            <label style="display: block; margin-bottom: 0.5rem; color: var(--text-muted); font-size: 0.875rem;">Credits</label>
-                            <input type="number" id="newAdminCredits" class="dash-input" placeholder="e.g. 100" min="0" value="0">
+                            <label
+                                style="display: block; margin-bottom: 0.5rem; color: var(--text-muted); font-size: 0.875rem;">Credits</label>
+                            <input type="number" id="newAdminCredits" class="dash-input" placeholder="e.g. 100" min="0"
+                                value="0">
                         </div>
                         <div style="display: flex; gap: 1rem;">
-                            <button class="master-btn" style="flex: 1;" onclick="document.getElementById('addAdminModal').classList.add('hidden')">Cancel</button>
+                            <button class="master-btn" style="flex: 1;"
+                                onclick="document.getElementById('addAdminModal').classList.add('hidden')">Cancel</button>
                             <button class="primary-btn" style="flex: 1;" onclick="submitNewAdmin()">Add Admin</button>
                         </div>
                     </div>
@@ -646,11 +678,15 @@
 
                 <!-- VIEW 1: OVERVIEW DASHBOARD -->
                 <div id="view-overview" class="view-panel">
-                
+
                     <!-- Super Admin Only: Admin Filter -->
-                    <div id="superAdminFilterContainer" style="display: none; margin-bottom: 1.5rem; display: flex; align-items: center; justify-content: flex-end; gap: 1rem;">
-                        <label style="font-size: 0.875rem; color: rgba(255, 255, 255, 0.9); font-weight: 500;">Filter by Admin:</label>
-                        <select id="superAdminFilter" class="dash-input" style="width: auto; min-width: 200px; padding: 0.5rem 1rem; background-color: #fff; color: #333;" onchange="loadDashboardStats(); loadDashboardSessions();">
+                    <div id="superAdminFilterContainer"
+                        style="display: none; margin-bottom: 1.5rem; display: flex; align-items: center; justify-content: flex-end; gap: 1rem;">
+                        <label style="font-size: 0.875rem; color: rgba(255, 255, 255, 0.9); font-weight: 500;">Filter by
+                            Admin:</label>
+                        <select id="superAdminFilter" class="dash-input"
+                            style="width: auto; min-width: 200px; padding: 0.5rem 1rem; background-color: #fff; color: #333;"
+                            onchange="loadDashboardStats(); loadDashboardSessions();">
                             <option value="">All Admins</option>
                         </select>
                     </div>
@@ -670,9 +706,11 @@
                                 Ongoing Interviews
                             </div>
                             <div id="stat-ongoing"
-                                style="font-size: 2rem; font-weight: 800; color: var(--primary-light); margin-top: 0.3rem;">0</div>
+                                style="font-size: 2rem; font-weight: 800; color: var(--primary-light); margin-top: 0.3rem;">
+                                0</div>
                             <div style="font-size: 0.72rem; color: var(--text-muted); margin-top: 0.2rem;">
-                                <span id="stat-ongoing-live" style="color:#10b981;font-weight:600;">0</span> live sessions
+                                <span id="stat-ongoing-live" style="color:#10b981;font-weight:600;">0</span> live
+                                sessions
                                 <span style="display:none;">
                                     <span id="stat-ongoing-alerts">0</span>
                                     <span id="stat-ongoing-avgconf">0</span>
@@ -682,13 +720,19 @@
                                 </span>
                             </div>
                         </div>
-                        <div style="background: var(--bg-card); border: 1px solid var(--border); border-radius: var(--radius-md); padding: 1.25rem; position: relative; overflow: hidden; cursor: default;">
-                            <div style="position: absolute; top: -10px; right: -10px; width: 60px; height: 60px; background: rgba(16, 185, 129, 0.1); border-radius: 50%;"></div>
-                            <div style="font-size: 0.75rem; color: var(--text-muted); text-transform: uppercase; letter-spacing: 0.5px; font-weight: 600;">
+                        <div
+                            style="background: var(--bg-card); border: 1px solid var(--border); border-radius: var(--radius-md); padding: 1.25rem; position: relative; overflow: hidden; cursor: default;">
+                            <div
+                                style="position: absolute; top: -10px; right: -10px; width: 60px; height: 60px; background: rgba(16, 185, 129, 0.1); border-radius: 50%;">
+                            </div>
+                            <div
+                                style="font-size: 0.75rem; color: var(--text-muted); text-transform: uppercase; letter-spacing: 0.5px; font-weight: 600;">
                                 Available Credits</div>
-                            <div id="stat-credits" style="font-size: 2rem; font-weight: 800; color: #10b981; margin-top: 0.3rem;">
+                            <div id="stat-credits"
+                                style="font-size: 2rem; font-weight: 800; color: #10b981; margin-top: 0.3rem;">
                                 --</div>
-                            <div style="font-size: 0.72rem; color: var(--text-muted); margin-top: 0.2rem;">allocated by super admin</div>
+                            <div style="font-size: 0.72rem; color: var(--text-muted); margin-top: 0.2rem;">allocated by
+                                super admin</div>
                         </div>
                         <div onclick="clearFilters()"
                             style="background: var(--bg-card); border: 1px solid var(--border); border-radius: var(--radius-md); padding: 1.25rem; position: relative; overflow: hidden; cursor: pointer; transition: transform 0.2s;"
@@ -1020,13 +1064,15 @@
 
                             <div class="dash-form-group">
                                 <label class="dash-label">Candidate Name</label>
-                                <input type="text" class="dash-input" id="candidateName" placeholder="e.g. John Doe" oninput="this.value = this.value.replace(/[^a-zA-Z\s]/g, '')">
+                                <input type="text" class="dash-input" id="candidateName" placeholder="e.g. John Doe"
+                                    oninput="this.value = this.value.replace(/[^a-zA-Z\s]/g, '')">
                             </div>
 
                             <div class="dash-form-group">
                                 <label class="dash-label">Candidate Email</label>
                                 <input type="email" class="dash-input" id="candidateEmail"
-                                    placeholder="e.g. john@example.com" onblur="checkCandidateExists()" oninput="this.value = this.value.replace(/[^a-zA-Z0-9@._-]/g, '')">
+                                    placeholder="e.g. john@example.com" onblur="checkCandidateExists()"
+                                    oninput="this.value = this.value.replace(/[^a-zA-Z0-9@._-]/g, '')">
                             </div>
 
                             <div class="dash-form-group">
@@ -1685,7 +1731,8 @@
                                     <input type="text" class="dash-input" id="bulkName" placeholder="Candidate Name"
                                         style="flex:1;" oninput="this.value = this.value.replace(/[^a-zA-Z\s]/g, '')">
                                     <input type="email" class="dash-input" id="bulkEmail"
-                                        placeholder="candidate@email.com" style="flex:1;" oninput="this.value = this.value.replace(/[^a-zA-Z0-9@._-]/g, '')">
+                                        placeholder="candidate@email.com" style="flex:1;"
+                                        oninput="this.value = this.value.replace(/[^a-zA-Z0-9@._-]/g, '')">
                                     <button onclick="addBulkRow()"
                                         style="padding:0.7rem 1rem; background:var(--primary); color:white; border:none; border-radius:var(--radius-sm); cursor:pointer; font-weight:600; white-space:nowrap; font-family:inherit; transition:all 0.2s;"
                                         onmouseover="this.style.background='var(--primary-dark)'"
@@ -2402,7 +2449,7 @@
                     loadMasterTenants();
                     return;
                 }
-                
+
                 if (adminRole === 'super_admin') {
                     const btn1 = document.getElementById('nav-btn-super_dashboard');
                     const btn2 = document.getElementById('nav-btn-team');
@@ -2575,7 +2622,7 @@
                         if (role === "super_admin") {
                             document.getElementById('nav-btn-super_dashboard').style.display = 'block';
                             document.getElementById('nav-btn-team').style.display = 'block';
-                            
+
                             // Setup Admin Filter for Overview
                             const filterContainer = document.getElementById('superAdminFilterContainer');
                             const filterSelect = document.getElementById('superAdminFilter');
@@ -3303,7 +3350,7 @@
             const filterStatus = document.getElementById('filterStatus') ? document.getElementById('filterStatus').value : '';
 
             let url = `${API_BASE}/admin/sessions?sort_by=${sortBy}&deactivated=all`;
-            
+
             const superAdminFilter = document.getElementById('superAdminFilter');
             if (superAdminFilter && superAdminFilter.value) {
                 url += `&admin_id=${superAdminFilter.value}`;
@@ -3921,12 +3968,12 @@
         async function loadDashboardStats() {
             if (!adminId) return;
             try {
-            let url = `${API_BASE}/admin/dashboard-stats?1=1`;
-            const superAdminFilter = document.getElementById('superAdminFilter');
-            if (superAdminFilter && superAdminFilter.value) {
-                url += `&admin_id=${superAdminFilter.value}`;
-            }
-            const res = await fetch(url);
+                let url = `${API_BASE}/admin/dashboard-stats?1=1`;
+                const superAdminFilter = document.getElementById('superAdminFilter');
+                if (superAdminFilter && superAdminFilter.value) {
+                    url += `&admin_id=${superAdminFilter.value}`;
+                }
+                const res = await fetch(url);
                 if (res.ok) {
                     const d = await res.json();
                     document.getElementById('stat-total').textContent = d.total || 0;
@@ -3935,7 +3982,7 @@
                     document.getElementById('stat-selected').textContent = d.selected || 0;
                     document.getElementById('stat-rejected').textContent = d.rejected || 0;
                     document.getElementById('stat-today').textContent = d.today || 0;
-                    
+
                     const statCreditsEl = document.getElementById('stat-credits');
                     if (statCreditsEl) {
                         statCreditsEl.textContent = d.credits >= 1000000 ? 'Unlimited' : (d.credits || 0);
@@ -4657,96 +4704,39 @@
                 downloadBtn.disabled = true;
             }
 
-            // Hide interactive buttons from PDF
+            // Hide interactive buttons and remove videos
             const buttons = element.querySelectorAll('button');
             buttons.forEach(btn => btn.style.display = 'none');
+            
+            const videos = element.querySelectorAll('video');
+            const videoPlacements = [];
+            videos.forEach(v => {
+                videoPlacements.push({ parent: v.parentNode, next: v.nextSibling, el: v });
+                v.parentNode.removeChild(v);
+            });
 
             try {
-                // jsPDF page dimensions (Letter: 8.5in x 11in, 0.5in margins)
-                const pageW_in = 8.5;
-                const pageH_in = 11;
-                const margin_in = 0.5;
-                const contentW_in = pageW_in - margin_in * 2;
-                const contentH_in = pageH_in - margin_in * 2;
-                const scale = 2; // high-res canvas scale
+                console.log("Starting PDF generation via html2pdf...");
+                const opt = {
+                    margin:       0.5,
+                    filename:     `Interview_Report_${candidateName.replace(/[^a-zA-Z0-9]/g, '_')}.pdf`,
+                    image:        { type: 'jpeg', quality: 0.95 },
+                    html2canvas:  { scale: 2, useCORS: true, logging: false },
+                    jsPDF:        { unit: 'in', format: 'letter', orientation: 'portrait' },
+                    pagebreak:    { mode: ['avoid-all', 'css', 'legacy'] }
+                };
 
-                const { jsPDF } = window.jspdf;
-                const doc = new jsPDF({ unit: 'in', format: 'letter', orientation: 'portrait' });
-
-                // Helper: render a DOM element to canvas and add to PDF
-                // Returns the height in inches it consumed
-                async function addElementToDoc(el, doc, cursorY) {
-                    const canvas = await html2canvas(el, {
-                        scale: scale,
-                        useCORS: true,
-                        logging: false,
-                        backgroundColor: '#ffffff'
-                    });
-
-                    // Calculate the width/height in inches on the PDF
-                    const imgW_in = contentW_in;
-                    const imgH_in = (canvas.height / canvas.width) * imgW_in;
-
-                    // If this single block is taller than a full page, scale it to fit
-                    let drawW = imgW_in;
-                    let drawH = imgH_in;
-                    if (drawH > contentH_in) {
-                        const ratio = contentH_in / drawH;
-                        drawH = contentH_in;
-                        drawW = imgW_in * ratio;
-                    }
-
-                    // If it doesn't fit on the current page, add a new page
-                    if (cursorY + drawH > margin_in + contentH_in) {
-                        doc.addPage();
-                        cursorY = margin_in;
-                    }
-
-                    const imgData = canvas.toDataURL('image/jpeg', 0.95);
-                    doc.addImage(imgData, 'JPEG', margin_in, cursorY, drawW, drawH);
-                    return cursorY + drawH + 0.15; // 0.15in gap between blocks
-                }
-
-                let cursorY = margin_in;
-
-                // Step 1: render the header summary section (everything before the Q&A blocks)
-                const headerSection = element.querySelector('#report-header-section');
-                if (headerSection) {
-                    cursorY = await addElementToDoc(headerSection, doc, cursorY);
-                }
-
-                // Step 2: render each question block individually
-                const cards = element.querySelectorAll('.avoid-break');
-                for (const card of cards) {
-                    cursorY = await addElementToDoc(card, doc, cursorY);
-                }
-
-                // Step 3: if no cards found fall back to full-page render
-                if (cards.length === 0) {
-                    const canvas = await html2canvas(element, { scale: scale, useCORS: true, backgroundColor: '#ffffff' });
-                    const imgW = contentW_in;
-                    const imgH = (canvas.height / canvas.width) * imgW;
-                    let placed = 0;
-                    const pageH_px = (contentH_in / imgW) * canvas.width;
-                    while (placed < canvas.height) {
-                        if (placed > 0) { doc.addPage(); cursorY = margin_in; }
-                        const sliceH = Math.min(pageH_px, canvas.height - placed);
-                        const sliceCanvas = document.createElement('canvas');
-                        sliceCanvas.width = canvas.width;
-                        sliceCanvas.height = sliceH;
-                        sliceCanvas.getContext('2d').drawImage(canvas, 0, placed, canvas.width, sliceH, 0, 0, canvas.width, sliceH);
-                        const sliceH_in = (sliceH / canvas.width) * imgW;
-                        doc.addImage(sliceCanvas.toDataURL('image/jpeg', 0.95), 'JPEG', margin_in, cursorY, imgW, sliceH_in);
-                        placed += sliceH;
-                    }
-                }
-
-                doc.save(`Interview_Report_${candidateName.replace(/[^a-zA-Z0-9]/g, '_')}.pdf`);
+                await html2pdf().set(opt).from(element).save();
+                console.log("PDF downloaded successfully!");
             } catch (err) {
                 console.error('PDF generation failed:', err);
                 alert('PDF generation failed. Please try again.');
             } finally {
+                // Restore buttons and videos
                 buttons.forEach(btn => btn.style.display = '');
+                videoPlacements.forEach(vp => {
+                    if (vp.parent) vp.parent.insertBefore(vp.el, vp.next);
+                });
                 if (downloadBtn) {
                     downloadBtn.innerHTML = origBtnHtml;
                     downloadBtn.disabled = false;
@@ -5162,7 +5152,7 @@
         async function buyPlan(planName, price) {
             try {
                 showToast("Preparing secure checkout...", "info");
-                
+
                 const orderRes = await fetch(`${API_BASE}/api/razorpay/create-upgrade-order`, {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
@@ -5171,10 +5161,10 @@
                         admin_id: adminId
                     })
                 });
-                
+
                 const orderData = await orderRes.json();
                 if (!orderRes.ok) throw new Error(orderData.detail || "Failed to create order");
-                
+
                 const options = {
                     key: orderData.key_id,
                     amount: orderData.amount,
@@ -5196,14 +5186,14 @@
                                     razorpay_signature: response.razorpay_signature
                                 })
                             });
-                            
+
                             const verifyData = await verifyRes.json();
                             if (!verifyRes.ok) throw new Error(verifyData.detail || "Payment verification failed");
-                            
+
                             showToast(`Success! Added ${verifyData.credits_added} credits.`, "success");
                             closeUpgradeModal();
                             loadDashboardStats(); // Refresh credits on UI
-                            
+
                         } catch (err) {
                             console.error(err);
                             showToast(err.message, "error");
@@ -5211,10 +5201,10 @@
                     },
                     theme: { color: "#2563eb" }
                 };
-                
+
                 const rzp = new window.Razorpay(options);
                 rzp.open();
-                
+
             } catch (err) {
                 console.error(err);
                 showToast(err.message, "error");
@@ -5721,9 +5711,9 @@
                 ask_bond: document.getElementById('bulkAskBond').checked
             };
 
-            if (!jd || jd.length < 50) { 
-                showToast('Please enter a detailed Job Description (at least 50 characters) so the AI can generate relevant questions.', 'error'); 
-                return; 
+            if (!jd || jd.length < 50) {
+                showToast('Please enter a detailed Job Description (at least 50 characters) so the AI can generate relevant questions.', 'error');
+                return;
             }
             if (bulkCandidates.length === 0) { showToast('Add at least one candidate', 'error'); return; }
 
@@ -6359,7 +6349,7 @@
                     document.getElementById('sa-total').textContent = data.total_sessions;
                     document.getElementById('sa-completed').textContent = data.completed_sessions;
                     document.getElementById('sa-pending').textContent = data.pending_sessions;
-                    
+
                     if (saUsageChartInstance) saUsageChartInstance.destroy();
                     if (saAdminChartInstance) saAdminChartInstance.destroy();
 
@@ -6434,7 +6424,7 @@
                 if (res.ok) {
                     const data = await res.json();
                     const tbody = document.getElementById('teamTableBody');
-                    if(data.data.length === 0) {
+                    if (data.data.length === 0) {
                         tbody.innerHTML = `<tr><td colspan="5" style="text-align: center; padding: 3rem 1rem; color: var(--text-muted);">
                             <div style="font-size: 2.5rem; margin-bottom: 1rem; color: var(--border);"><i class="fas fa-users-slash"></i></div>
                             <div style="font-weight: 500; font-size: 1.1rem; color: var(--text-primary); margin-bottom: 0.5rem;">No team members yet</div>
@@ -6520,7 +6510,7 @@
                     const data = await res.json();
                     const tbody = document.getElementById('creditRequestsTableBody');
                     if (!tbody) return;
-                    if(data.data.length === 0) {
+                    if (data.data.length === 0) {
                         tbody.innerHTML = `<tr><td colspan="6" style="text-align: center; padding: 2rem; color: var(--text-muted);">No credit requests found</td></tr>`;
                         return;
                     }
@@ -6536,7 +6526,7 @@
                         } else {
                             actions = `<span style="color: var(--text-muted); font-size: 0.85rem;">Processed</span>`;
                         }
-                        
+
                         return `
                         <tr>
                             <td style="padding-left: 1.5rem;">${date}</td>
@@ -6559,7 +6549,7 @@
 
         async function updateCreditRequest(requestId, status) {
             if (!confirm(`Are you sure you want to ${status} this request?`)) return;
-            
+
             const token = sessionStorage.getItem('adminToken');
             try {
                 const res = await fetch(`${API_BASE_URL}/super-admin/credit-requests/${requestId}`, {
@@ -6570,7 +6560,7 @@
                     },
                     body: JSON.stringify({ status })
                 });
-                
+
                 const data = await res.json();
                 if (res.ok) {
                     showToast(`Request ${status} successfully`, "success");

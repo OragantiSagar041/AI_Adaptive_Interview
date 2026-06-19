@@ -1,0 +1,23 @@
+<div class="sidebar-wrapper">
+<div class="sidebar-header" style="padding: 1.5rem 1.25rem; display: flex; justify-content: center;">
+<img alt="Hire IQ Logo" src="assets/logo.png" style="height: 90px; width: auto; object-fit: contain;"/>
+</div>
+<div class="sidebar-nav" id="masterSidebarNav">
+<div style="font-size: 0.7rem; color: rgba(255,255,255,0.5); font-weight: 800; text-transform: uppercase; margin-bottom: 0.5rem; letter-spacing: 1px; padding-left: 0.5rem;">
+                Master Control</div>
+<button class="nav-btn active" id="master-nav-dashboard" onclick="showMasterDashboard();"><i class="fas fa-gauge-high"></i> Dashboard</button>
+<button class="nav-btn" id="master-nav-plans" onclick="showMasterPlans();"><i class="fas fa-tags"></i> Plans</button>
+<button class="nav-btn" id="master-nav-subscribers" onclick="showMasterSubscribers();"><i class="fas fa-building-user"></i> Subscribers</button>
+<button class="nav-btn" id="master-nav-create-tenant" onclick="showMasterCreateTenant();"><i class="fas fa-user-plus"></i> Create Tenant</button>
+<div style="font-size: 0.7rem; color: rgba(255,255,255,0.5); font-weight: 800; text-transform: uppercase; margin: 1.5rem 0 0.5rem 1rem; letter-spacing: 1px;">
+                Admin Features</div>
+<button class="nav-btn" id="nav-master-overview" onclick="showMasterAdminView('overview')"><i class="fas fa-chart-pie"></i> Overview Dashboard</button>
+<button class="nav-btn" id="nav-master-create" onclick="showMasterAdminView('create')"><i class="fas fa-plus-circle"></i> Create Interview</button>
+<button class="nav-btn" id="nav-master-qualified" onclick="showMasterAdminView('qualified')"><i class="fas fa-user-check"></i> Qualified Candidates</button>
+<button class="nav-btn" id="nav-master-unqualified" onclick="showMasterAdminView('unqualified')"><i class="fas fa-user-slash"></i> Rejected Candidates</button>
+<button class="nav-btn" id="nav-master-deactivated" onclick="showMasterAdminView('deactivated')"><i class="fas fa-user-times"></i> Deactivated Candidates</button>
+<button class="nav-btn" id="nav-master-settings" onclick="showMasterAdminView('settings')"><i class="fas fa-cog"></i> Profile Settings</button>
+<div class="master-sidebar-separator"></div>
+<button class="nav-btn" onclick="showLiveResultsModal()" style="background: rgba(16, 185, 129, 0.1); color: #10b981;"><i class="fas fa-broadcast-tower"></i> Live Monitor</button>
+</div>
+</div>

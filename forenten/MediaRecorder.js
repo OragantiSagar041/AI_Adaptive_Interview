@@ -150,7 +150,10 @@ class VideoRecorder {
             }
 
             // Start Visualizer
-            // this.visualizeAudio(this.stream); // DISABLED to rule out AudioContext conflict
+            try {
+                this.visualizeAudio(this.stream);
+                document.getElementById('audioVisualizer').style.display = 'block';
+            } catch(e) { console.error('Visualizer failed', e); }
 
             this.showStatus('Recording started. Speak clearly.', 'info');
 
@@ -192,36 +195,53 @@ class VideoRecorder {
         const draw = () => {
             if (!this.visualizerActive) {
                 audioCtx.close();
+                // Clear the canvas when stopping
+                ctx.clearRect(0, 0, canvas.width, canvas.height);
+                document.getElementById('audioVisualizer').style.display = 'none';
                 return;
             }
 
             requestAnimationFrame(draw);
             analyser.getByteFrequencyData(dataArray);
 
-            // Calculate average volume
-            let sum = 0;
-            for (let i = 0; i < bufferLength; i++) {
-                sum += dataArray[i];
-            }
-            const average = sum / bufferLength;
-
-            // Draw
             ctx.clearRect(0, 0, canvas.width, canvas.height);
 
-            // Background
-            ctx.fillStyle = '#e5e7eb';
-            ctx.fillRect(0, 0, canvas.width, canvas.height);
+            // Draw a smooth, modern waveform
+            ctx.lineWidth = 2.5;
+            ctx.lineCap = 'round';
+            ctx.lineJoin = 'round';
+            
+            // Create gradient
+            const gradient = ctx.createLinearGradient(0, 0, canvas.width, 0);
+            gradient.addColorStop(0, 'rgba(99, 102, 241, 0.4)');
+            gradient.addColorStop(0.5, 'rgba(79, 70, 229, 1)');
+            gradient.addColorStop(1, 'rgba(99, 102, 241, 0.4)');
+            ctx.strokeStyle = gradient;
 
-            // Bar
-            const barWidth = (average / 255) * canvas.width;
-
-            if (average > 10) {
-                ctx.fillStyle = '#10b981'; // Green for good volume
-            } else {
-                ctx.fillStyle = '#9ca3af'; // Grey/low
+            ctx.beginPath();
+            
+            // Use a subset of the frequencies for a cleaner look
+            const drawLength = Math.floor(bufferLength * 0.6); 
+            const sliceWidth = canvas.width / drawLength;
+            let x = 0;
+            
+            for (let i = 0; i < drawLength; i++) {
+                // Normalize frequency data
+                const v = dataArray[i] / 255.0; // 0.0 to 1.0
+                // Center the waveform vertically, scale amplitude
+                const amplitude = (canvas.height / 2) * 0.8;
+                const y = (canvas.height / 2) + (v * amplitude * (i % 2 === 0 ? 1 : -1));
+                
+                if (i === 0) {
+                    ctx.moveTo(x, canvas.height / 2);
+                } else {
+                    // Smooth curve
+                    ctx.lineTo(x, y);
+                }
+                x += sliceWidth;
             }
-
-            ctx.fillRect(0, 0, barWidth, canvas.height);
+            
+            ctx.stroke();
         };
         draw();
     }
