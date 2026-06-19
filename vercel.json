@@ -3,5 +3,8 @@
   "trailingSlash": false,
   "rewrites": [
     { "source": "/(.*)", "destination": "/forenten/$1" }
-  ]
+  ],
+  "git": {
+    "deploymentEnabled": false
+  }
 }
