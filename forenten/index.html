@@ -865,35 +865,26 @@
         }
 
         function renderPlans(plans) {
-            const grid = document.getElementById("plansGrid");
-            if (!grid) return;
-            
-            grid.innerHTML = ""; // Clear loader
-            grid.style.display = "grid";
             const loader = document.getElementById("plansLoader");
-            if (loader) loader.style.display = "none";
-            
+            const grid = document.getElementById("plansGrid");
+            loader.style.display = "none";
+
+            if (!plans.length) {
+                grid.style.display = "block";
+                grid.innerHTML = '<div class="empty-plans">No public plans are available right now.</div>';
+                return;
+            }
+
+            grid.style.display = "grid";
+            grid.innerHTML = "";
+
             plans.forEach((plan, index) => {
-                const featured = index === 1; // Middle plan is highlighted
-                const card = document.createElement("div");
-                card.className = `pricing-card ${featured ? 'featured' : ''}`;
-                
-                // Parse features
-                let featuresList = [];
-                if (Array.isArray(plan.features)) {
-                    featuresList = plan.features;
-                } else if (typeof plan.features === 'string') {
-                    featuresList = plan.features.split(',').map(f => f.trim());
-                }
-                
-                if (featuresList.length === 0) {
-                    featuresList = ["No specific features defined"];
-                }
-                
-                const featuresHtml = featuresList.map(feature => 
-                    `<li><i class="fas fa-check-circle" style="color: ${featured ? '#fff' : 'var(--accent)'}"></i> ${feature}</li>`
-                ).join("");
-                
+                const card = document.createElement("article");
+                const featured = plan.price > 0 && index === 1;
+                card.className = `pricing-card ${featured ? "featured" : ""}`;
+
+                const features = (plan.features || []).map((feature) => `<li>${feature}</li>`).join("");
+                const priceText = formatPrice(plan.price);
                 card.innerHTML = `
                     ${featured ? `<div class="popular-badge"><i class="fas fa-star"></i> Most Popular</div>` : ''}
                     <div class="card-header">
@@ -940,8 +931,7 @@
                 }
                 renderPlans(plans);
             } catch (error) {
-                console.warn("Using fallback plans:", error);
-                renderPlans(fallbackPlans);
+                document.getElementById("plansLoader").textContent = error.message || "Unable to load pricing plans right now.";
             }
         }
         

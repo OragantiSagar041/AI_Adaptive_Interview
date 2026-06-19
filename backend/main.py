@@ -8,7 +8,10 @@ import hashlib
 import math
 import tempfile
 import sys
+sys.stdout.reconfigure(encoding='utf-8')
+sys.stderr.reconfigure(encoding='utf-8')
 from typing import Any, Dict, List, Optional
+from bson import ObjectId
 from pydantic import BaseModel
 from analyze_answer import analyze_answer
 from coding_graph import generate_coding_task, observe_coding_intent, run_coding_round
@@ -319,10 +322,12 @@ def get_admin_plan_context(user: Dict[str, Any]) -> Dict[str, Any]:
 def require_admin_capability(admin_id: str, capability: str, detail: str):
     try:
         user = admins_collection.find_one({"_id": ObjectId(admin_id)})
-    except Exception:
+    except Exception as e:
+        print(f"[Error] require_admin_capability (admin_id={admin_id}): {e}")
         user = None
 
     if not user:
+        print(f"[Error] Admin user not found in DB for ID: {admin_id}")
         raise HTTPException(status_code=404, detail="Admin account not found")
     if user.get("role") == "master":
         return user
@@ -427,6 +432,10 @@ app.add_middleware(
         "https://ai-adaptive-interview.vercel.app",
         "https://www.hireiq.co.in",
         "https://hireiq.co.in",
+        "http://localhost:5173",
+        "http://127.0.0.1:5173",
+        "http://localhost:5174",
+        "http://127.0.0.1:5174",
     ],
     allow_origin_regex=r"https://.*\.vercel\.app",
     allow_credentials=True,
@@ -2260,8 +2269,10 @@ Return ONLY a JSON array. Example format:
     try:
         from ai_client import chat_completion
         response_text = chat_completion(
-            system_prompt=system_prompt,
-            user_prompt=user_prompt,
+            messages=[
+                {"role": "system", "content": system_prompt},
+                {"role": "user", "content": user_prompt}
+            ],
             temperature=0.7
         )
         # Extract JSON array from response
@@ -3993,7 +4004,7 @@ def process_pending_invitation_emails():
         if claimed.modified_count == 0:
             continue
 
-        link_url = f"{FRONTEND_URL}/interview.html?session_id={session['link_id']}"
+        link_url = f"{FRONTEND_URL}/interview?session_id={session['link_id']}"
         sent = send_interview_email(
             candidate_email=session.get("candidate_email", ""),
             candidate_name=session.get("candidate_name", ""),
@@ -4416,7 +4427,7 @@ async def create_session(data: CreateSession, current_admin: dict = Depends(get_
         admins_collection.update_one({"_id": ObjectId(current_admin["admin_id"])}, {"$inc": {"credits": -1}})
     session_doc["_id"] = interview_sessions_collection.find_one({"link_id": link_id}, {"_id": 1})["_id"]
     
-    link_url = f"{FRONTEND_URL}/interview.html?session_id={link_id}"
+    link_url = f"{FRONTEND_URL}/interview?session_id={link_id}"
     
     email_result = queue_or_send_interview_email(session_doc, link_url)
     
@@ -4491,7 +4502,7 @@ async def bulk_create_sessions(data: BulkCreateSession, current_admin: dict = De
 
     for candidate in data.candidates:
         link_id = str(uuid.uuid4())
-        link_url = f"{FRONTEND_URL}/interview.html?session_id={link_id}"
+        link_url = f"{FRONTEND_URL}/interview?session_id={link_id}"
         candidate_error = None
 
         try:
@@ -4797,7 +4808,7 @@ async def reschedule_session(link_id: str, new_expiry: str = Form(...)):
         
     # Fetch the updated session for email dispatch
     updated_session = interview_sessions_collection.find_one({"link_id": link_id})
-    link_url = f"{FRONTEND_URL}/interview.html?session_id={link_id}"
+    link_url = f"{FRONTEND_URL}/interview?session_id={link_id}"
     
     # Re-send the invitation email to the candidate
     email_result = queue_or_send_interview_email(updated_session, link_url)
@@ -6565,8 +6576,8 @@ async def create_stripe_checkout(data: StripeCheckoutRequest):
                 },
                 "quantity": 1,
             }],
-            success_url=f"{frontend_url}/index.html?payment=success",
-            cancel_url=f"{frontend_url}/index.html?payment=cancelled",
+            success_url=f"{frontend_url}/?payment=success",
+            cancel_url=f"{frontend_url}/?payment=cancelled",
             metadata={
                 "name": data.signup_form.get("name", ""),
                 "email": data.signup_form.get("email", ""),
@@ -6934,12 +6945,12 @@ if __name__ == "__main__":
         print(f"Port {DEFAULT_PORT} is in use; starting server on available port {port_to_use} instead.")
 
     base_dir = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-    cert_path = os.path.join(base_dir, "forenten", "cert.pem")
-    key_path = os.path.join(base_dir, "forenten", "key.pem")
+    cert_path = os.path.join(base_dir, "Front-end", "cert.pem")
+    key_path = os.path.join(base_dir, "Front-end", "key.pem")
     
-    if os.path.exists(cert_path) and os.path.exists(key_path):
+    if os.path.exists(cert_path) and os.path.exists(key_path) and os.getenv("USE_SSL") == "true":
         print(f"[START] Starting HTTPS server on port {port_to_use}")
         uvicorn.run(app, host=HOST, port=port_to_use, ssl_certfile=cert_path, ssl_keyfile=key_path)
     else:
-        print(f"[START] Starting HTTP server on port {port_to_use} (SSL certs not found)")
+        print(f"[START] Starting HTTP server on port {port_to_use}")
         uvicorn.run(app, host=HOST, port=port_to_use)
