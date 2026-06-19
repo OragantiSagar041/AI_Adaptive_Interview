@@ -46,8 +46,16 @@ export default function Navbar({
           ))}
         </div>
 
-        <div className="flex items-center gap-1.5 bg-primary/8 text-primary border border-primary/20 rounded-full px-3 py-1 text-xs font-bold">
-          {adminUser?.subscription_plan || 'Advance'} • {adminUser?.subscription_days_remaining || 326} days left
+        <div className="flex items-center gap-1.5 bg-primary/10 text-primary border border-primary/20 rounded-full pl-4 pr-1.5 py-1 text-sm font-bold shadow-sm">
+          <i className="fas fa-layer-group text-[10px]"></i>
+          {adminUser?.subscription_plan || 'Advance'} • {adminUser?.credits ?? 0} credits left
+          <button 
+            onClick={onAddCredits}
+            className="ml-1 w-5 h-5 flex items-center justify-center bg-primary text-white rounded-full hover:bg-primary-hover shadow-md transition-colors"
+            title={adminUser?.role === 'superadmin' ? 'Buy Credits' : 'Request Credits'}
+          >
+            <i className="fas fa-plus text-[10px]"></i>
+          </button>
         </div>
 
         <span className="text-sm text-slate-600">

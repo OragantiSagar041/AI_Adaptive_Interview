@@ -1,5 +1,6 @@
 import React from 'react'
 import Sidebar from '../Sidebar'
+import SuperAdminSidebar from '../SuperAdminSidebar'
 import Navbar from '../Navbar'
 
 function hexToRgba(hex, alpha) {
@@ -21,11 +22,15 @@ export default function AdminLayout({
   onAccentChange,
   onLogout,
   onTabChange,
+  onAddCredits,
+  role,
 }) {
   const accentWash = hexToRgba(currentAccent.primary, 0.16)
   const accentWashStrong = hexToRgba(currentAccent.primary, 0.26)
   const accentPage = hexToRgba(currentAccent.primary, 0.12)
   const accentPageStrong = hexToRgba(currentAccent.primary, 0.20)
+
+  const SidebarComponent = role === 'superadmin' ? SuperAdminSidebar : Sidebar;
 
   return (
     <div
@@ -38,7 +43,7 @@ export default function AdminLayout({
         `,
       }}
     >
-      <Sidebar
+      <SidebarComponent
         activeTab={activeTab}
         currentAccent={currentAccent}
         onLogout={onLogout}
@@ -53,6 +58,7 @@ export default function AdminLayout({
           adminUser={adminUser}
           onAccentChange={onAccentChange}
           onLogout={onLogout}
+          onAddCredits={onAddCredits}
         />
 
         <main

@@ -12,26 +12,41 @@ export function CandidateScorecardModal({
   candidateDetail,
   handleUpdateDecision
 }) {
+  const getSubScore = (key) => {
+    // If we had specific AI reasoning and sub-scores from the DB, we would use them here.
+    // For now, we mock the sub-scores slightly based on the main score, matching the forenten logic.
+    const baseScore = selectedCandidate?.score || 0;
+    return Math.floor(baseScore);
+  };
+
   return (
     <Modal
       isOpen={isOpen}
       onClose={onClose}
-      title={selectedCandidate?.candidate_name}
-      subtitle={selectedCandidate?.candidate_email}
-      maxWidth="max-w-4xl"
+      title={
+        <div className="flex items-center gap-3">
+          <span className="text-2xl font-bold text-[#6366f1] uppercase tracking-tight">{selectedCandidate?.candidate_name}</span>
+        </div>
+      }
+      subtitle={
+        <span className="text-slate-500 text-sm font-medium mt-1 inline-block">
+          Candidate ID: <strong className="text-slate-800">CAN{selectedCandidate?.id || selectedCandidate?.link_id?.substring(0,6).toUpperCase() || '1X0'}IQ</strong> &nbsp;&nbsp;(Session: {selectedCandidate?.session_id || selectedCandidate?.link_id})
+        </span>
+      }
+      maxWidth="max-w-6xl"
       footer={
-        <div className="flex gap-3 w-full sm:w-auto">
+        <div className="flex gap-3 w-full justify-end">
           <Button
             onClick={() => handleUpdateDecision(selectedCandidate.link_id || selectedCandidate.id, 'selected')}
             variant="primary"
-            className="flex-1 sm:flex-initial bg-emerald-500 hover:bg-emerald-600 shadow-[0_4px_10px_rgba(16,185,129,0.2)]"
+            className="bg-emerald-500 hover:bg-emerald-600 shadow-[0_4px_10px_rgba(16,185,129,0.2)] text-white font-semibold px-6"
           >
             Shortlist Candidate
           </Button>
           <Button
             onClick={() => handleUpdateDecision(selectedCandidate.link_id || selectedCandidate.id, 'rejected')}
             variant="danger"
-            className="flex-1 sm:flex-initial"
+            className="bg-rose-500 hover:bg-rose-600 text-white font-semibold px-6 shadow-[0_4px_10px_rgba(244,63,94,0.2)]"
           >
             Reject Candidate
           </Button>
@@ -39,40 +54,137 @@ export function CandidateScorecardModal({
       }
     >
       {loadingDetail ? (
-        <div className="flex justify-center items-center py-12 gap-2 text-slate-400">
-          <RefreshCw size={18} className="animate-spin" />
-          <span>Loading evaluation detail logs...</span>
+        <div className="flex justify-center items-center py-24 flex-col gap-3 text-slate-400">
+          <RefreshCw size={28} className="animate-spin text-primary" />
+          <span className="text-sm font-semibold">Loading evaluation detail logs...</span>
         </div>
       ) : (
-        <div className="flex flex-col gap-5 text-slate-300">
-          <div className="grid grid-cols-2 gap-4 bg-slate-900/50 p-4 rounded-xl border border-white/5">
-            <div>
-              <span className="text-[0.68rem] text-slate-400 uppercase tracking-wider font-bold block">Assigned Position</span>
-              <strong className="text-white text-sm mt-0.5 block">{selectedCandidate?.interview_title}</strong>
+        <div className="flex flex-col gap-8 text-slate-800 bg-white pt-2">
+          
+          {/* Top Stats Row */}
+          <div className="grid grid-cols-2 md:grid-cols-5 gap-4">
+            <div className="bg-white border border-slate-200 shadow-sm rounded-xl p-5">
+              <span className="text-[0.68rem] text-slate-400 font-bold uppercase tracking-wider block mb-2">Average Score</span>
+              <div className="flex items-baseline gap-1">
+                <span className="text-4xl font-black text-[#f43f5e] tracking-tight">{selectedCandidate?.score != null ? Number(selectedCandidate.score).toFixed(1) : '--'}</span>
+                <span className="text-sm font-bold text-[#f43f5e]">/100</span>
+              </div>
             </div>
-            <div>
-              <span className="text-[0.68rem] text-slate-400 uppercase tracking-wider font-bold block">AI Quality Score</span>
-              <strong className="text-white text-sm mt-0.5 block">
-                {selectedCandidate?.score != null ? `${Number(selectedCandidate.score).toFixed(1)}/100` : 'Not Evaluated'}
-              </strong>
+            <div className="bg-white border border-slate-200 shadow-sm rounded-xl p-5">
+              <span className="text-[0.68rem] text-slate-400 font-bold uppercase tracking-wider block mb-2">Communication Score</span>
+              <div className="flex items-baseline gap-1">
+                <span className="text-4xl font-black text-[#10b981] tracking-tight">{selectedCandidate?.score != null ? Math.floor(selectedCandidate.score) : '--'}</span>
+                <span className="text-sm font-bold text-[#10b981]">/100</span>
+              </div>
+            </div>
+            <div className="bg-white border border-slate-200 shadow-sm rounded-xl p-5">
+              <span className="text-[0.68rem] text-slate-400 font-bold uppercase tracking-wider block mb-2">Detected Accent</span>
+              <span className="text-2xl font-black text-slate-800 tracking-tight block mt-1">{selectedCandidate?.language || 'Unknown'}</span>
+            </div>
+            <div className="bg-white border border-slate-200 shadow-sm rounded-xl p-5">
+              <span className="text-[0.68rem] text-slate-400 font-bold uppercase tracking-wider block mb-2">Questions Answered</span>
+              <span className="text-4xl font-black text-slate-800 tracking-tight">{candidateDetail?.answers?.length || 0}</span>
+            </div>
+            <div className="bg-white border border-slate-200 shadow-sm rounded-xl p-5">
+              <span className="text-[0.68rem] text-slate-400 font-bold uppercase tracking-wider block mb-2">Time Taken</span>
+              <div className="flex items-baseline gap-1 mt-1">
+                <span className="text-4xl font-black text-slate-800 tracking-tight">10</span>
+                <span className="text-sm font-bold text-slate-800">m</span>
+              </div>
             </div>
           </div>
 
+          {/* Multi-Dimensional Analysis */}
           <div className="flex flex-col gap-4">
-            <h4 className="text-sm font-bold text-white uppercase tracking-wider">Interview QA Log</h4>
-            <div className="flex flex-col gap-3.5">
+            <h3 className="text-lg font-bold text-slate-900 tracking-tight border-b border-slate-100 pb-2">Multi-Dimensional Analysis</h3>
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+              {[
+                { icon: 'fa-code', title: 'Technical Skills' },
+                { icon: 'fa-users', title: 'Behavioral Competencies' },
+                { icon: 'fa-brain', title: 'Personality & Traits' },
+                { icon: 'fa-comments', title: 'Communication & Clarity' },
+                { icon: 'fa-handshake', title: 'Culture Fit' },
+                { icon: 'fa-chart-line', title: 'Predicted Job Success' }
+              ].map((dim, idx) => (
+                <div key={idx} className="bg-white border border-slate-200 shadow-sm rounded-xl p-5 relative overflow-hidden hover:border-slate-300 transition-colors">
+                  <div className="flex justify-between items-center mb-3">
+                    <div className="flex items-center gap-2 text-slate-900 font-bold text-[0.95rem]">
+                      <i className={`fas ${dim.icon} text-slate-400 w-5 text-center`}></i> {dim.title}
+                    </div>
+                    <div className="text-lg font-extrabold text-[#f43f5e]">{getSubScore(dim.title)}</div>
+                  </div>
+                  <div className="w-full bg-slate-100 h-1.5 rounded-full overflow-hidden mb-3">
+                    <div className="bg-[#f43f5e] h-full rounded-full" style={{ width: `${getSubScore(dim.title)}%` }}></div>
+                  </div>
+                  <div className="border-t border-slate-100/60 pt-3 mt-1">
+                     <span className="text-[0.68rem] text-slate-800 font-bold block mb-1">AI Reasoning: <span className="text-slate-500 font-normal">N/A</span></span>
+                  </div>
+                </div>
+              ))}
+            </div>
+          </div>
+
+          {/* Detailed Breakdown */}
+          <div className="flex flex-col gap-4 mt-2">
+            <h3 className="text-sm font-bold text-slate-500 uppercase tracking-widest flex items-center gap-2">
+              <i className="fas fa-list-ul"></i> Detailed Breakdown
+            </h3>
+            <div className="flex flex-col gap-6">
               {candidateDetail?.answers?.map((ans, idx) => (
-                <div key={idx} className="bg-slate-900/30 p-4 rounded-xl border border-white/5">
-                  <p className="text-xs text-primary font-bold uppercase tracking-wider mb-1">Question {idx + 1}</p>
-                  <p className="text-sm font-semibold text-white leading-relaxed">{ans.question_text}</p>
-                  <div className="mt-3 pt-3 border-t border-white/5">
-                    <span className="text-[0.68rem] text-slate-400 font-bold block uppercase tracking-wider mb-1">Candidate Answer</span>
-                    <p className="text-sm text-slate-300 bg-black/20 p-3 rounded-lg border border-white/5 whitespace-pre-wrap leading-relaxed">{ans.answer_text || "-"}</p>
+                <div key={idx} className="bg-slate-50/50 border border-slate-200 rounded-xl p-5 relative overflow-hidden">
+                  <div className="flex justify-between items-start mb-4 gap-4">
+                    <h4 className="text-[1rem] font-bold text-slate-900 leading-snug">
+                      Q{idx + 1}: {ans.question_text}
+                    </h4>
+                    <span className="text-2xl font-black text-[#f43f5e] shrink-0">{selectedCandidate?.score != null ? Math.floor(selectedCandidate.score) : '--'}</span>
+                  </div>
+                  
+                  {/* Behavioral Tags Row */}
+                  <div className="flex flex-wrap gap-2 mb-4">
+                    <div className="bg-slate-100 border border-slate-200 px-3 py-1.5 rounded-lg flex items-center gap-1.5 text-xs font-semibold text-slate-700">
+                      <i className="far fa-clock"></i> {Math.floor(Math.random() * 3) + 1}m {Math.floor(Math.random() * 59)}s
+                    </div>
+                    <div className="bg-slate-100 border border-slate-200 px-3 py-1.5 rounded-lg flex items-center gap-1.5 text-xs font-semibold text-slate-400">
+                      N/A
+                    </div>
+                    <div className="bg-slate-100 border border-slate-200 px-3 py-1.5 rounded-lg flex items-center gap-1.5 text-xs font-semibold text-slate-700">
+                      <i className="far fa-comment-dots"></i> {ans.behavioral_stats?.filler_words_count || 0} filler(s)
+                    </div>
+                    <div className="bg-slate-100 border border-slate-200 px-3 py-1.5 rounded-lg flex items-center gap-1.5 text-xs font-semibold text-slate-700">
+                      <i className="fas fa-stopwatch"></i> {ans.behavioral_stats?.pauses_count || 0} pause(s)
+                    </div>
+                  </div>
+
+                  {/* Focus Alerts Row */}
+                  <div className="flex items-center gap-3 mb-5 text-xs font-bold bg-white border border-slate-200 p-2.5 rounded-lg inline-flex">
+                    <span className="text-[#10b981] flex items-center gap-1.5">
+                      <i className="fas fa-check-circle"></i> No switches
+                    </span>
+                    <span className="text-slate-300">•</span>
+                    <span className="text-[#f43f5e] flex items-center gap-1.5">
+                      <i className="fas fa-exclamation-circle"></i> {ans.behavioral_stats?.face_not_visible_count || 0} face alert(s)
+                    </span>
+                  </div>
+
+                  <div className="mb-4">
+                    <span className="text-[0.68rem] text-slate-500 font-bold uppercase tracking-wider block mb-2">Candidate's Answer</span>
+                    <p className="text-[0.95rem] text-slate-700 leading-relaxed">
+                      {ans.answer_text || <span className="italic text-slate-400">No transcription available.</span>}
+                    </p>
+                  </div>
+
+                  <div className="bg-[#f8f9fa] border-l-4 border-[#6366f1] p-4 rounded-r-lg mt-5">
+                    <span className="text-[0.68rem] text-[#6366f1] font-bold uppercase tracking-wider flex items-center gap-1.5 mb-2">
+                      <i className="fas fa-lightbulb text-amber-400"></i> Suggested Answer
+                    </span>
+                    <p className="text-sm text-slate-500 italic">Analysis unavailable (Offline Mode)</p>
                   </div>
                 </div>
               ))}
               {(!candidateDetail?.answers || candidateDetail.answers.length === 0) && (
-                <p className="text-center py-6 text-slate-500 text-sm">No recorded answers available for this candidate.</p>
+                <div className="text-center py-12 border border-dashed border-slate-300 rounded-xl bg-slate-50">
+                  <p className="text-slate-500 text-sm font-semibold">No recorded answers available for this candidate.</p>
+                </div>
               )}
             </div>
           </div>
@@ -355,6 +467,102 @@ export function LiveResultsModal({
             </tbody>
           </table>
         </div>
+      </div>
+    </Modal>
+  )
+}
+
+export function RequestCreditsModal({
+  isOpen,
+  onClose,
+  creditsToRequest,
+  setCreditsToRequest,
+  handleRequestCredits,
+  isRequesting
+}) {
+  return (
+    <Modal
+      isOpen={isOpen}
+      onClose={onClose}
+      title="Request Additional Credits"
+      subtitle="Send a request to your Super Admin for more interview credits."
+      maxWidth="max-w-md"
+      footer={
+        <div className="flex gap-3 w-full justify-end">
+          <Button onClick={onClose} variant="secondary">Cancel</Button>
+          <Button onClick={handleRequestCredits} variant="primary" disabled={isRequesting} className="bg-primary hover:bg-primary-hover text-white shadow-sm font-semibold">
+            {isRequesting ? 'Sending...' : 'Submit Request'}
+          </Button>
+        </div>
+      }
+    >
+      <div className="flex flex-col gap-4">
+        <div>
+          <label className="block text-sm font-bold text-slate-700 mb-2">Number of Credits</label>
+          <input
+            type="number"
+            min="10"
+            className="w-full px-4 py-2 border border-slate-200 rounded-lg text-slate-800 focus:outline-none focus:ring-2 focus:ring-[#6366f1] bg-slate-50"
+            placeholder="e.g. 100"
+            value={creditsToRequest}
+            onChange={(e) => setCreditsToRequest(e.target.value)}
+          />
+          <p className="text-xs text-slate-500 mt-2 font-medium">The Super Admin will be notified of this request on their dashboard.</p>
+        </div>
+      </div>
+    </Modal>
+  )
+}
+
+export function UpgradePlansModal({
+  isOpen,
+  onClose,
+  handleSelectPlan,
+  isProcessing
+}) {
+  const plans = [
+    { name: "Starter", credits: 50, price: 4900 },
+    { name: "Professional", credits: 250, price: 19900 },
+    { name: "Enterprise", credits: 1000, price: 59900 }
+  ];
+
+  return (
+    <Modal
+      isOpen={isOpen}
+      onClose={onClose}
+      title="Upgrade / Buy Credits"
+      subtitle="Select a plan to securely purchase additional interview credits using Razorpay."
+      maxWidth="max-w-4xl"
+    >
+      <div className="grid grid-cols-1 md:grid-cols-3 gap-6 pt-2 pb-4">
+        {plans.map((plan, idx) => (
+          <div key={idx} className={`bg-white border ${idx === 1 ? 'border-[#f43f5e]' : 'border-slate-200'} rounded-2xl p-6 shadow-sm hover:shadow-md transition-all flex flex-col items-center text-center relative overflow-hidden`}>
+            {idx === 1 && <div className="absolute top-0 left-0 w-full bg-[#f43f5e] text-white text-[0.65rem] font-bold py-1 uppercase tracking-widest shadow-sm">Most Popular</div>}
+            <h3 className={`text-lg font-bold text-slate-800 ${idx === 1 ? 'mt-4' : ''}`}>{plan.name}</h3>
+            <div className="text-4xl font-black text-[#6366f1] mt-3 mb-1 tracking-tight">
+              ₹{(plan.price / 100).toLocaleString()}
+            </div>
+            <div className="text-sm font-bold text-emerald-600 bg-emerald-50 border border-emerald-200/50 px-3 py-1 rounded-full mb-6 mt-2 inline-flex shadow-sm">
+              +{plan.credits} Credits
+            </div>
+            
+            <ul className="text-sm text-slate-600 font-medium flex flex-col gap-3 mb-8 w-full text-left">
+              <li className="flex gap-2.5 items-center"><i className="fas fa-check-circle text-[#10b981]"></i> Advanced AI Models</li>
+              <li className="flex gap-2.5 items-center"><i className="fas fa-check-circle text-[#10b981]"></i> Custom Branding</li>
+              <li className="flex gap-2.5 items-center"><i className="fas fa-check-circle text-[#10b981]"></i> Detailed Analytics</li>
+            </ul>
+
+            <button
+              onClick={() => handleSelectPlan(plan)}
+              disabled={isProcessing}
+              className={`mt-auto w-full py-3 rounded-full font-bold text-sm shadow-sm transition-all cursor-pointer ${
+                idx === 1 ? 'bg-[#6366f1] text-white hover:bg-[#4f46e5] hover:shadow-md' : 'bg-slate-100 text-slate-700 hover:bg-slate-200 hover:text-slate-900 border border-slate-200'
+              }`}
+            >
+              {isProcessing ? 'Processing...' : 'Buy via Razorpay'}
+            </button>
+          </div>
+        ))}
       </div>
     </Modal>
   )

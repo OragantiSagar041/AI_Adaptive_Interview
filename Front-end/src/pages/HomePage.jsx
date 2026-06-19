@@ -5,6 +5,15 @@ import { Video, Volume2, ArrowRight, ShieldAlert, Cpu, AlertTriangle, RefreshCw 
 import Swal from 'sweetalert2'
 import 'sweetalert2/dist/sweetalert2.min.css'
 
+const langMap = {
+  'Hindi': 'hi-IN',
+  'Telugu': 'te-IN',
+  'Tamil': 'ta-IN',
+  'Malayalam': 'ml-IN',
+  'Kannada': 'kn-IN',
+  'English': 'en-IN'
+}
+
 function HomePage() {
   const [searchParams] = useSearchParams()
   const navigate = useNavigate()
@@ -34,6 +43,8 @@ function HomePage() {
   // Upload states
   const [uploadPercentage, setUploadPercentage] = useState(0)
   const [uploadingText, setUploadingText] = useState('')
+  const [skipCountdown, setSkipCountdown] = useState(30)
+  const [showSkipButton, setShowSkipButton] = useState(false)
 
   // Answer state
   const [transcriptionText, setTranscriptionText] = useState('')
@@ -64,6 +75,14 @@ function HomePage() {
   const noiseFrameCountRef = useRef(0)
   const noiseCooldownRef = useRef(0)
 
+  // Feature Migration Refs
+  const visualizerCanvasRef = useRef(null)
+  const visualizerActiveRef = useRef(false)
+  const silenceTimeoutRef = useRef(null)
+  const questionStartTimeRef = useRef(Date.now())
+  const behavioralStatsRef = useRef({ wordCount: 0, fillerCount: 0, pauseCount: 0, faceAlerts: 0, tabSwitches: 0 })
+  const handleNextQuestionRef = useRef(null)
+
   const normalizeQuestions = (rawQuestions = []) => {
     return rawQuestions.map((question, index) => ({
       ...question,
@@ -71,6 +90,122 @@ function HomePage() {
       text: question.text || question.question || question.prompt || '',
       type: question.type || question.category || 'Interview'
     }))
+  }
+
+  useEffect(() => {
+    const handleVisibilityChange = () => {
+      if (document.hidden) {
+        behavioralStatsRef.current.tabSwitches += 1
+      }
+    }
+    document.addEventListener("visibilitychange", handleVisibilityChange)
+    return () => document.removeEventListener("visibilitychange", handleVisibilityChange)
+  }, [])
+
+  // Audio Visualizer
+  const visualizeAudio = (stream) => {
+    const canvas = visualizerCanvasRef.current
+    if (!canvas) return
+    const ctx = canvas.getContext("2d")
+    const audioCtx = new (window.AudioContext || window.webkitAudioContext)()
+    const source = audioCtx.createMediaStreamSource(stream)
+    const analyser = audioCtx.createAnalyser()
+    analyser.fftSize = 256
+    source.connect(analyser)
+
+    const bufferLength = analyser.frequencyBinCount
+    const dataArray = new Uint8Array(bufferLength)
+
+    visualizerActiveRef.current = true
+
+    const draw = () => {
+      if (!visualizerActiveRef.current) {
+        audioCtx.close().catch(() => {})
+        ctx.clearRect(0, 0, canvas.width, canvas.height)
+        return
+      }
+
+      requestAnimationFrame(draw)
+      analyser.getByteFrequencyData(dataArray)
+
+      ctx.clearRect(0, 0, canvas.width, canvas.height)
+      ctx.lineWidth = 2.5
+      ctx.lineCap = 'round'
+      ctx.lineJoin = 'round'
+
+      const gradient = ctx.createLinearGradient(0, 0, canvas.width, 0)
+      gradient.addColorStop(0, 'rgba(99, 102, 241, 0.4)')
+      gradient.addColorStop(0.5, 'rgba(79, 70, 229, 1)')
+      gradient.addColorStop(1, 'rgba(99, 102, 241, 0.4)')
+      ctx.strokeStyle = gradient
+
+      ctx.beginPath()
+
+      const drawLength = Math.floor(bufferLength * 0.6)
+      const sliceWidth = canvas.width / drawLength
+      let x = 0
+
+      for (let i = 0; i < drawLength; i++) {
+        const v = dataArray[i] / 255.0
+        const amplitude = (canvas.height / 2) * 0.8
+        const y = (canvas.height / 2) + (v * amplitude * (i % 2 === 0 ? 1 : -1))
+
+        if (i === 0) {
+          ctx.moveTo(x, canvas.height / 2)
+        } else {
+          ctx.lineTo(x, y)
+        }
+        x += sliceWidth
+      }
+
+      ctx.stroke()
+    }
+    draw()
+  }
+
+  useEffect(() => {
+    if (isMediaReady && mediaStreamRef.current && visualizerCanvasRef.current) {
+      visualizeAudio(mediaStreamRef.current)
+    }
+    return () => {
+      visualizerActiveRef.current = false
+    }
+  }, [isMediaReady, currentQuestionIndex])
+
+  useEffect(() => {
+    let timer;
+    if (showSkipButton && skipCountdown > 0) {
+      timer = setInterval(() => {
+        setSkipCountdown(prev => prev - 1)
+      }, 1000)
+    }
+    return () => clearInterval(timer)
+  }, [showSkipButton, skipCountdown])
+
+  const handleSkipUpload = () => {
+    Swal.fire({
+      title: 'Interview Completed',
+      text: 'Your textual responses were saved successfully. Video upload skipped.',
+      icon: 'success',
+      background: '#161c2d',
+      color: '#fff',
+      customClass: {
+        popup: 'border border-white/8 rounded-2xl shadow-2xl',
+        title: 'text-xl font-bold text-white',
+        htmlContainer: 'text-slate-300 text-sm',
+        confirmButton: 'bg-primary hover:bg-primary-hover text-white rounded-full px-6 py-2.5 font-semibold text-sm cursor-pointer border-none outline-none'
+      },
+      buttonsStyling: false,
+      allowOutsideClick: false
+    }).then(() => {
+      document.body.innerHTML = `
+        <div style="display:flex; flex-direction:column; align-items:center; justify-content:center; height:100vh; font-family:sans-serif; text-align:center; background:#0f172a; color:#fff;">
+          <h1 style="font-size:24px; font-weight:bold; margin-bottom:16px;">Thanks! Your interview is complete.</h1>
+          <p style="color:#94a3b8; margin-bottom:24px;">You can now close this tab safely.</p>
+          <button onclick="window.close()" style="padding:10px 24px; background:#4f46e5; color:white; border:none; border-radius:9999px; cursor:pointer;">Close Window</button>
+        </div>
+      `
+    })
   }
 
   useEffect(() => {
@@ -213,7 +348,8 @@ function HomePage() {
     const rec = new SpeechRecognition()
     rec.continuous = false
     rec.interimResults = true
-    rec.lang = 'en-IN'
+    const targetLang = langMap[sessionDetail?.language] || 'en-IN'
+    rec.lang = targetLang
 
     rec.onstart = () => {
       isSpeechRecordingRef.current = true
@@ -221,6 +357,7 @@ function HomePage() {
 
     rec.onend = () => {
       if (isSpeechRecordingRef.current) {
+        behavioralStatsRef.current.pauseCount += 1
         try { rec.start() } catch (e) {}
       }
     }
@@ -235,6 +372,11 @@ function HomePage() {
       if (finalChunk) {
         setTranscriptionText(prev => prev + finalChunk + ' ')
       }
+
+      if (silenceTimeoutRef.current) clearTimeout(silenceTimeoutRef.current)
+      silenceTimeoutRef.current = setTimeout(() => {
+        if (handleNextQuestionRef.current) handleNextQuestionRef.current()
+      }, 10000)
     }
 
     rec.onerror = (e) => {
@@ -382,6 +524,7 @@ function HomePage() {
 
   // Record proctoring metrics
   const recordAlertMetric = async (type) => {
+    behavioralStatsRef.current.faceAlerts += 1
     try {
       await fetch(`${API_BASE_URL}/record-proctoring-violation/${sessionId}`, {
         method: 'POST',
@@ -639,14 +782,84 @@ function HomePage() {
     if (!window.speechSynthesis) return
     window.speechSynthesis.cancel() // stop any active speech
     const utterance = new SpeechSynthesisUtterance(text)
-    utterance.lang = 'en-US'
-    window.speechSynthesis.speak(utterance)
+    
+    const targetLang = langMap[sessionDetail?.language] || 'en-IN'
+    const targetLangPrefix = targetLang.split('-')[0]
+    utterance.lang = targetLang
+
+    const setVoiceAndSpeak = () => {
+      let voices = window.speechSynthesis.getVoices()
+      let preferredVoice = voices.find(v => 
+        v.lang.startsWith(targetLangPrefix) && 
+        (v.name.includes("Female") || v.name.includes("Google"))
+      )
+      if (preferredVoice) {
+        utterance.voice = preferredVoice
+      }
+
+      utterance.onend = () => {
+        const currentQ = questions[currentQuestionIndex]
+        if (currentQ?.type !== 'coding') {
+          if (silenceTimeoutRef.current) clearTimeout(silenceTimeoutRef.current)
+          silenceTimeoutRef.current = setTimeout(() => {
+            if (handleNextQuestionRef.current) handleNextQuestionRef.current()
+          }, 10000)
+        }
+      }
+
+      window.speechSynthesis.speak(utterance)
+    }
+
+    if (window.speechSynthesis.getVoices().length === 0) {
+      window.speechSynthesis.onvoiceschanged = setVoiceAndSpeak
+    } else {
+      setVoiceAndSpeak()
+    }
+  }
+
+  useEffect(() => {
+    handleNextQuestionRef.current = handleNextQuestion
+  }, [handleNextQuestion])
+
+  // Helper to count fillers
+  const countFillers = (text) => {
+    const FILLER_WORDS = ["um", "uh", "er", "like", "you know", "basically", "actually", "literally", "sort of", "kind of"]
+    let count = 0
+    const lower = text.toLowerCase()
+    for (let fw of FILLER_WORDS) {
+      const regex = new RegExp(`\\b${fw}\\b`, 'g')
+      const matches = lower.match(regex)
+      if (matches) count += matches.length
+    }
+    return count
   }
 
   // Submit Answer & Move Next
   const handleNextQuestion = async () => {
     if (currentQuestionIndex >= questions.length) return
     const currentQuestion = questions[currentQuestionIndex]
+
+    if (silenceTimeoutRef.current) clearTimeout(silenceTimeoutRef.current)
+
+    const timeSpent = Math.round((Date.now() - questionStartTimeRef.current) / 1000)
+    const words = transcriptionText.trim().split(/\s+/).filter(w => w.length > 0).length
+    const wpm = timeSpent > 0 ? Math.round((words / timeSpent) * 60) : 0
+    const payload = {
+      interview_id: interviewId || sessionDetail?.interview_id || sessionId,
+      question_id: currentQuestion.id,
+      filler_words_count: countFillers(transcriptionText),
+      speaking_pace_wpm: wpm,
+      pause_count: behavioralStatsRef.current.pauseCount,
+      tab_switches: behavioralStatsRef.current.tabSwitches,
+      face_not_visible_alerts: behavioralStatsRef.current.faceAlerts
+    }
+    try {
+      await fetch(`${API_BASE_URL}/save-behavioral-data`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(payload)
+      })
+    } catch (e) {}
 
     // Save answer
     try {
@@ -676,6 +889,10 @@ function HomePage() {
         setTranscriptionText('')
         setCodeAnswer('')
         setCodeOutput('')
+
+        behavioralStatsRef.current = { wordCount: 0, fillerCount: 0, pauseCount: 0, faceAlerts: 0, tabSwitches: 0 }
+        questionStartTimeRef.current = Date.now()
+
         const nextIdx = currentQuestionIndex + 1
         setCurrentQuestionIndex(nextIdx)
         speakAIQuestion(questions[nextIdx].text || questions[nextIdx].question || questions[nextIdx].prompt || '')
@@ -728,6 +945,7 @@ function HomePage() {
 
   // End Interview & Upload Recordings
   const handleSubmitInterview = async (forceClose = false) => {
+    visualizerActiveRef.current = false
     // Stop loops
     if (faceDetectionIntervalRef.current) clearInterval(faceDetectionIntervalRef.current)
     if (noiseMonitorFrameRef.current) cancelAnimationFrame(noiseMonitorFrameRef.current)
@@ -756,6 +974,7 @@ function HomePage() {
     if (cameraChunksRef.current.length > 0 || screenChunksRef.current.length > 0) {
       setUploadingText("Uploading video recordings...")
       setUploadPercentage(10)
+      setShowSkipButton(true)
 
       const uploadPromise = (chunks, type) => {
         return new Promise((resolve, reject) => {
@@ -803,6 +1022,7 @@ function HomePage() {
     } catch (e) {}
 
     // Complete UI screen
+    setShowSkipButton(false)
     setUploadingText("Interview Completed successfully! Thank you for participating.")
     setTimeout(() => {
       // Exit fullscreen
@@ -887,6 +1107,20 @@ function HomePage() {
         {uploadPercentage > 0 && uploadPercentage < 100 && (
           <div className="w-[300px] h-2.5 bg-slate-100 border border-slate-200 rounded-full overflow-hidden">
             <div className="h-full bg-primary transition-all duration-300" style={{ width: `${uploadPercentage}%` }}></div>
+          </div>
+        )}
+        {showSkipButton && uploadPercentage < 100 && (
+          <div className="mt-4 p-4 border border-amber-200 bg-amber-50 rounded-xl max-w-sm">
+            <p className="text-amber-800 text-sm font-medium mb-3">
+              Takes too long? Your text answers are already saved.
+            </p>
+            <button 
+              onClick={handleSkipUpload}
+              disabled={skipCountdown > 0}
+              className={`px-4 py-2 rounded-full text-sm font-semibold transition-all ${skipCountdown > 0 ? 'bg-slate-200 text-slate-400 cursor-not-allowed' : 'bg-amber-100 text-amber-700 hover:bg-amber-200 border border-amber-300'}`}
+            >
+              {skipCountdown > 0 ? `Skip available in ${skipCountdown}s` : 'Skip Video Upload'}
+            </button>
           </div>
         )}
       </div>
@@ -1055,6 +1289,13 @@ function HomePage() {
                 readOnly
                 placeholder="Microphone transcription will stream here automatically."
               />
+              <canvas 
+                id="audioVisualizer" 
+                ref={visualizerCanvasRef} 
+                width="800" 
+                height="80" 
+                className="w-full h-[80px] mt-4 rounded-lg bg-slate-50 border border-slate-200 shadow-inner"
+              ></canvas>
 
               <div className="flex justify-between items-center mt-2 flex-wrap gap-3">
                 <button

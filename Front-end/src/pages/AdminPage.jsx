@@ -17,7 +17,7 @@ import AdminLayout from '../components/admin/AdminLayout'
 import ProfileSettings from '../components/admin/ProfileSettings'
 import DashboardStats from '../components/admin/DashboardStats'
 import { CandidateFilters, CandidateTable } from '../components/admin/AdminSubComponents'
-import { CandidateScorecardModal, EmailPreviewModal, BulkResultsModal, LiveResultsModal } from '../components/admin/modals/AdminModals'
+import { CandidateScorecardModal, EmailPreviewModal, BulkResultsModal, LiveResultsModal, RequestCreditsModal, UpgradePlansModal } from '../components/admin/modals/AdminModals'
 import { useCandidateFilters } from '../hooks/useCandidateFilters'
 import { exportCandidatesReport } from '../utils/adminExport'
 import { getComputedStatus } from '../utils/adminFormatters'
@@ -88,6 +88,14 @@ export default function AdminPage({ role = 'admin' }) {
   const [selectedCandidate, setSelectedCandidate] = useState(null)
   const [candidateDetail, setCandidateDetail] = useState(null)
   const [loadingDetail, setLoadingDetail] = useState(false)
+  
+  // Credit / Razorpay states
+  const [showRequestCreditsModal, setShowRequestCreditsModal] = useState(false)
+  const [creditsToRequest, setCreditsToRequest] = useState(100)
+  const [isRequesting, setIsRequesting] = useState(false)
+  const [showUpgradePlansModal, setShowUpgradePlansModal] = useState(false)
+  const [isProcessingUpgrade, setIsProcessingUpgrade] = useState(false)
+  const [creditRequests, setCreditRequests] = useState([])
 
   // Filters
   const [searchTerm, setSearchTerm] = useState('')
@@ -800,17 +808,13 @@ export default function AdminPage({ role = 'admin' }) {
 
       setInterviews([])
 
-      const sessionsUrl = role === 'superadmin'
-        ? `${API_BASE_URL}/api/superadmin/candidates${selectedAdminId ? `?admin_id=${selectedAdminId}` : ''}`
-        : `${API_BASE_URL}/admin/sessions`
+      const sessionsUrl = `${API_BASE_URL}/admin/sessions${selectedAdminId ? `?admin_id=${selectedAdminId}` : ''}`
       const resSessions = await fetch(sessionsUrl, { headers })
       const payloadSessions = await resSessions.json()
       const fetchedCandidates = payloadSessions.sessions || []
       setCandidates(fetchedCandidates)
 
-      const statsUrl = role === 'superadmin'
-        ? `${API_BASE_URL}/api/superadmin/dashboard${selectedAdminId ? `?admin_id=${selectedAdminId}` : ''}`
-        : `${API_BASE_URL}/admin/dashboard-stats`
+      const statsUrl = `${API_BASE_URL}/admin/dashboard-stats${selectedAdminId ? `?admin_id=${selectedAdminId}` : ''}`
       const resStats = await fetch(statsUrl, { headers })
       if (resStats.ok) {
         const data = await resStats.json()
@@ -835,9 +839,7 @@ export default function AdminPage({ role = 'admin' }) {
       }
 
       if (adminUser?.plan_capabilities?.live_monitoring || role === 'superadmin') {
-        const ongoingUrl = role === 'superadmin'
-          ? `${API_BASE_URL}/api/superadmin/ongoing-interviews${selectedAdminId ? `?admin_id=${selectedAdminId}` : ''}`
-          : `${API_BASE_URL}/admin/ongoing-interviews`
+        const ongoingUrl = `${API_BASE_URL}/admin/ongoing-interviews${selectedAdminId ? `?admin_id=${selectedAdminId}` : ''}`
         const resOngoing = await fetch(ongoingUrl, { headers })
         if (resOngoing.ok) {
           const data = await resOngoing.json()
@@ -864,10 +866,126 @@ export default function AdminPage({ role = 'admin' }) {
         }
       }
 
+      if (adminUser?.role === 'superadmin' || role === 'superadmin') {
+        try {
+          const reqRes = await fetch(`${API_BASE_URL}/super-admin/credit-requests`, { headers })
+          if (reqRes.ok) {
+            const reqData = await reqRes.json()
+            setCreditRequests(reqData.data || reqData || [])
+          }
+        } catch(e){}
+      }
+
     } catch (e) {
       console.error(e)
     } finally {
       setLoadingData(false)
+    }
+  }
+
+  const handleAddCreditsClick = () => {
+    if (adminUser?.role === 'superadmin' || role === 'superadmin') {
+      setShowUpgradePlansModal(true)
+    } else {
+      setShowRequestCreditsModal(true)
+    }
+  }
+
+  const handleRequestCredits = async () => {
+    if (!creditsToRequest || creditsToRequest < 10) return;
+    setIsRequesting(true);
+    try {
+      const response = await fetch(`${API_BASE_URL}/admin/credit-requests`, {
+        method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${token}`,
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({ requested_amount: parseInt(creditsToRequest) })
+      });
+      if (response.ok) {
+        alert("Credit request sent successfully!");
+        setShowRequestCreditsModal(false);
+      } else {
+        alert("Failed to send credit request.");
+      }
+    } catch (e) {
+      console.error(e);
+    } finally {
+      setIsRequesting(false);
+    }
+  }
+
+  const handleUpdateCreditRequest = async (requestId, status) => {
+    try {
+      const res = await fetch(`${API_BASE_URL}/super-admin/credit-requests/${requestId}`, {
+        method: 'PUT',
+        headers: {
+          'Authorization': `Bearer ${token}`,
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({ status })
+      });
+      if (res.ok) {
+        loadDashboardData()
+      } else {
+        alert("Failed to update credit request");
+      }
+    } catch(e){}
+  }
+
+  const handleSelectPlan = async (plan) => {
+    setIsProcessingUpgrade(true)
+    try {
+      const orderRes = await fetch(`${API_BASE_URL}/api/razorpay/create-upgrade-order`, {
+        method: 'POST',
+        headers: { 'Authorization': `Bearer ${token}`, 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          plan_name: plan.name,
+          amount_inr: plan.price / 100,
+          credits: plan.credits
+        })
+      });
+
+      if (!orderRes.ok) throw new Error("Failed to create order")
+      const orderData = await orderRes.json()
+
+      const options = {
+        key: 'rzp_test_YourKeyHere', 
+        amount: plan.price,
+        currency: 'INR',
+        name: 'Hire IQ Credits',
+        description: `Purchase ${plan.credits} Credits`,
+        order_id: orderData.razorpay_order_id,
+        handler: async function (response) {
+          try {
+            const verifyRes = await fetch(`${API_BASE_URL}/api/razorpay/verify-upgrade`, {
+              method: 'POST',
+              headers: { 'Authorization': `Bearer ${token}`, 'Content-Type': 'application/json' },
+              body: JSON.stringify({
+                razorpay_order_id: response.razorpay_order_id,
+                razorpay_payment_id: response.razorpay_payment_id,
+                razorpay_signature: response.razorpay_signature
+              })
+            });
+            if (verifyRes.ok) {
+              alert("Credits added successfully!")
+              setShowUpgradePlansModal(false)
+              window.location.reload()
+            } else {
+              alert("Payment verification failed")
+            }
+          } catch(e){}
+        },
+        theme: { color: '#6366f1' }
+      };
+
+      const rzp = new window.Razorpay(options);
+      rzp.open();
+    } catch (e) {
+      alert(e.message)
+    } finally {
+      setIsProcessingUpgrade(false)
     }
   }
 
@@ -1148,6 +1266,7 @@ export default function AdminPage({ role = 'admin' }) {
   return (
     <>
       <AdminLayout
+        role={role}
         activeTab={liveResultsModalOpen ? 'live' : activeTab}
         accentColors={accentColors}
         accentName={accentName}
@@ -1155,6 +1274,7 @@ export default function AdminPage({ role = 'admin' }) {
         adminUser={adminUser}
         onAccentChange={setAccentName}
         onLogout={handleLogout}
+        onAddCredits={handleAddCreditsClick}
         onTabChange={(tab) => {
           if (tab === 'live') {
             setLiveResultsModalOpen(true)
@@ -1240,6 +1360,43 @@ export default function AdminPage({ role = 'admin' }) {
                     currentPage={currentPage}
                     setCurrentPage={setCurrentPage}
                   />
+
+                  {role === 'superadmin' && creditRequests && creditRequests.length > 0 && (
+                    <div className="mt-8 border-t border-slate-100 pt-8 px-6 pb-6 bg-slate-50 rounded-b-xl">
+                      <h3 className="text-base font-bold text-slate-800 mb-4 flex items-center gap-2">
+                        <i className="fas fa-layer-group text-[#6366f1]"></i> Pending Credit Requests
+                      </h3>
+                      <div className="overflow-x-auto">
+                        <table className="w-full text-left border-collapse bg-white rounded-xl shadow-sm border border-slate-100">
+                          <thead>
+                            <tr className="bg-slate-50/50 border-b border-slate-100 text-xs uppercase tracking-wider text-slate-500 font-semibold">
+                              <th className="p-4 rounded-tl-xl">Admin ID</th>
+                              <th className="p-4">Requested Credits</th>
+                              <th className="p-4">Date</th>
+                              <th className="p-4">Status</th>
+                              <th className="p-4 text-right rounded-tr-xl">Actions</th>
+                            </tr>
+                          </thead>
+                          <tbody className="divide-y divide-slate-100">
+                            {creditRequests.map(req => (
+                              <tr key={req.id || req._id} className="hover:bg-slate-50/50 transition-colors">
+                                <td className="p-4 text-sm font-semibold text-slate-700">{req.admin_id}</td>
+                                <td className="p-4 text-sm text-[#6366f1] font-black">+{req.requested_amount}</td>
+                                <td className="p-4 text-sm text-slate-500">{new Date(req.created_at).toLocaleDateString()}</td>
+                                <td className="p-4">
+                                  <span className="bg-amber-100/50 border border-amber-200 text-amber-700 text-xs font-bold px-2.5 py-1 rounded-full shadow-sm">Pending</span>
+                                </td>
+                                <td className="p-4 text-right">
+                                  <button onClick={() => handleUpdateCreditRequest(req.id || req._id, 'approved')} className="text-emerald-600 bg-emerald-50 hover:bg-emerald-100 border border-emerald-200/50 px-4 py-1.5 rounded-lg text-xs uppercase tracking-wider font-bold mr-2 shadow-sm transition-colors cursor-pointer">Approve</button>
+                                  <button onClick={() => handleUpdateCreditRequest(req.id || req._id, 'rejected')} className="text-rose-600 bg-rose-50 hover:bg-rose-100 border border-rose-200/50 px-4 py-1.5 rounded-lg text-xs uppercase tracking-wider font-bold shadow-sm transition-colors cursor-pointer">Reject</button>
+                                </td>
+                              </tr>
+                            ))}
+                          </tbody>
+                        </table>
+                      </div>
+                    </div>
+                  )}
 
                 </Card>
               </div>
@@ -2423,6 +2580,22 @@ export default function AdminPage({ role = 'admin' }) {
             )}            </>
         )}
       </AdminLayout>
+
+      <RequestCreditsModal
+        isOpen={showRequestCreditsModal}
+        onClose={() => setShowRequestCreditsModal(false)}
+        creditsToRequest={creditsToRequest}
+        setCreditsToRequest={setCreditsToRequest}
+        handleRequestCredits={handleRequestCredits}
+        isRequesting={isRequesting}
+      />
+
+      <UpgradePlansModal
+        isOpen={showUpgradePlansModal}
+        onClose={() => setShowUpgradePlansModal(false)}
+        handleSelectPlan={handleSelectPlan}
+        isProcessing={isProcessingUpgrade}
+      />
 
       <CandidateScorecardModal
         isOpen={!!selectedCandidate}
