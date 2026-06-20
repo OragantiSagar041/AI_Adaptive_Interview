@@ -1,5 +1,5 @@
 import React from 'react'
-import { useNavigate, useLocation } from 'react-router-dom'
+import { useNavigate, useLocation, NavLink } from 'react-router-dom'
 import {
   LayoutDashboard,
   CheckCircle,
@@ -8,7 +8,6 @@ import {
   Settings,
   LogOut,
   Shield,
-  Users,
   Radio,
 } from 'lucide-react'
 
@@ -22,11 +21,11 @@ export default function Sidebar({
   const location = useLocation()
 
   const navItems = [
-    { id: 'dashboard', label: 'Overview Dashboard', icon: LayoutDashboard },
-    { id: 'qualified', label: 'Qualified Candidates', icon: CheckCircle },
-    { id: 'rejected', label: 'Rejected Candidates', icon: XCircle },
-    { id: 'create', label: 'Create Interview', icon: Plus },
-    { id: 'settings', label: 'Profile Settings', icon: Settings },
+    { id: 'dashboard', label: 'Overview Dashboard', icon: LayoutDashboard, path: '/admin/dashboard' },
+    { id: 'qualified', label: 'Qualified Candidates', icon: CheckCircle, path: '/admin/qualified-candidates' },
+    { id: 'rejected', label: 'Rejected Candidates', icon: XCircle, path: '/admin/rejected-candidates' },
+    { id: 'create', label: 'Create Interview', icon: Plus, path: '/admin/create-interview' },
+    { id: 'settings', label: 'Profile Settings', icon: Settings, path: '/admin/profile-settings' },
   ]
 
   return (
@@ -45,28 +44,28 @@ export default function Sidebar({
       </div>
 
       <nav className="flex flex-col gap-2 flex-grow overflow-y-auto">
-
-        {navItems.map(({ id, label, icon: Icon }) => {
-          // Active state is purely based on the activeTab prop (which comes from ?tab= URL param)
-          const isActive = activeTab === id
-
+        {navItems.map(({ id, label, icon: Icon, path }) => {
           return (
-            <button
+            <NavLink
               key={id}
-              onClick={() => onTabChange(id)}
-              className={`w-full text-left flex items-center gap-3 px-3.5 py-2.5 rounded-lg font-medium text-sm transition-all border-none outline-none cursor-pointer ${isActive ? 'bg-white/18 text-white font-semibold' : 'text-white/70 hover:bg-white/8 hover:text-white'
-                }`}
+              to={path}
+              className={({ isActive }) =>
+                `w-full text-left flex items-center gap-3 px-3.5 py-2.5 rounded-lg font-medium text-sm transition-all border-none outline-none cursor-pointer no-underline ${
+                  isActive && activeTab !== 'live' ? 'bg-white/18 text-white font-semibold' : 'text-white/70 hover:bg-white/8 hover:text-white'
+                }`
+              }
             >
               <Icon size={16} /> {label}
-            </button>
+            </NavLink>
           )
         })}
 
         <div className="border-t border-white/10 my-2" />
         <button
           onClick={() => onTabChange('live')}
-          className={`w-full text-left flex items-center gap-3 px-3.5 py-2.5 rounded-lg font-medium text-sm transition-all border-none outline-none cursor-pointer ${activeTab === 'live' ? 'bg-white/18 text-white font-semibold' : 'text-white/70 hover:bg-white/8 hover:text-white'
-            }`}
+          className={`w-full text-left flex items-center gap-3 px-3.5 py-2.5 rounded-lg font-medium text-sm transition-all border-none outline-none cursor-pointer ${
+            activeTab === 'live' ? 'bg-white/18 text-white font-semibold' : 'text-white/70 hover:bg-white/8 hover:text-white'
+          }`}
         >
           <Radio size={16} /> Live Results
         </button>

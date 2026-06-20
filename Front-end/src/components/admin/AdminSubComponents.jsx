@@ -148,10 +148,10 @@ export function CandidateTable({
                   onChange={(e) => {
                     if (e.target.checked) {
                       const pageIds = paginatedCandidates.map(c => c.link_id || c.id)
-                      setSelectedIds(prev => Array.from(new Set([...prev, ...pageIds])))
+                      setSelectedIds(Array.from(new Set([...selectedIds, ...pageIds])))
                     } else {
                       const pageIds = paginatedCandidates.map(c => c.link_id || c.id)
-                      setSelectedIds(prev => prev.filter(id => !pageIds.includes(id)))
+                      setSelectedIds(selectedIds.filter(id => !pageIds.includes(id)))
                     }
                   }}
                   className="cursor-pointer"
@@ -182,9 +182,9 @@ export function CandidateTable({
                         checked={isSelected}
                         onChange={(e) => {
                           if (e.target.checked) {
-                            setSelectedIds(prev => [...prev, c.link_id || c.id])
+                            setSelectedIds([...selectedIds, c.link_id || c.id])
                           } else {
-                            setSelectedIds(prev => prev.filter(id => id !== (c.link_id || c.id)))
+                            setSelectedIds(selectedIds.filter(id => id !== (c.link_id || c.id)))
                           }
                         }}
                         className="cursor-pointer"
@@ -291,7 +291,7 @@ export function CandidateTable({
           <div className="flex gap-2">
             <Button
               disabled={currentPage === 1}
-              onClick={() => setCurrentPage(p => Math.max(1, p - 1))}
+              onClick={() => setCurrentPage(Math.max(1, currentPage - 1))}
               variant="secondary"
               className="px-3 py-1.5 text-xs h-[32px]"
             >
@@ -299,7 +299,7 @@ export function CandidateTable({
             </Button>
             <Button
               disabled={currentPage === totalPages}
-              onClick={() => setCurrentPage(p => Math.min(totalPages, p + 1))}
+              onClick={() => setCurrentPage(Math.min(totalPages, currentPage + 1))}
               variant="secondary"
               className="px-3 py-1.5 text-xs h-[32px]"
             >

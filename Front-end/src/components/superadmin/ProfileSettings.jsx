@@ -9,8 +9,8 @@ export default function ProfileSettings() {
   return (
     <div className="max-w-2xl mx-auto">
       <Card className="bg-white/82 backdrop-blur-md border border-[#e5edf7] text-slate-800 flex flex-col gap-5">
-        <h3 className="text-lg font-bold text-slate-800">Admin Profile Settings</h3>
-        <p className="text-xs text-slate-500 -mt-3.5">Update company workspace settings or reset passwords</p>
+        <h3 className="text-lg font-bold text-slate-800">SuperAdmin Profile Settings</h3>
+        <p className="text-xs text-slate-500 -mt-3.5">Update superadmin settings or reset passwords</p>
 
         <form
           onSubmit={async (e) => {
@@ -20,14 +20,14 @@ export default function ProfileSettings() {
           className="flex flex-col gap-4"
         >
           <Input
-            label="Workspace Owner Name"
-            defaultValue={adminUser?.name || 'Administrator'}
+            label="SuperAdmin Owner Name"
+            defaultValue={adminUser?.name || 'Super Administrator'}
             required
           />
           <Input
-            label="Workspace Admin Email"
+            label="SuperAdmin Email"
             type="email"
-            defaultValue={adminUser?.email || 'admin@company.com'}
+            defaultValue={adminUser?.email || 'superadmin@company.com'}
             required
           />
           <Input

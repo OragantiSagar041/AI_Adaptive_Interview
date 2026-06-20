@@ -1,23 +1,17 @@
 import React from 'react'
+import { useSelector } from 'react-redux'
 import { Navigate } from 'react-router-dom'
 
 export default function ProtectedRoute({ children, allowedRoles }) {
-  const token = sessionStorage.getItem('adminToken')
-  const role = sessionStorage.getItem('adminRole')
+  const role = useSelector(state => state.auth.role)
+  const token = useSelector(state => state.auth.token)
 
-  if (!token) {
+  if (!token || !role) {
     return <Navigate to="/login" replace />
   }
 
   if (allowedRoles && !allowedRoles.includes(role)) {
-    // Redirect based on role
-    if (role === 'super_admin' || role === 'master') {
-      return <Navigate to="/super-admin" replace />
-    } else if (role === 'admin' || role === 'tenant') {
-      return <Navigate to="/admin" replace />
-    } else {
-      return <Navigate to="/login" replace />
-    }
+    return <Navigate to="/unauthorized" replace />
   }
 
   return children

@@ -1,5 +1,6 @@
 import React from 'react'
 import { RefreshCw, Video, X, Monitor, Eye } from 'lucide-react'
+import { API_BASE_URL } from '../../../apiConfig'
 import Modal from '../../Modal'
 import Button from '../../Button'
 import Badge from '../../Badge'
@@ -18,6 +19,14 @@ export function CandidateScorecardModal({
     const baseScore = selectedCandidate?.score || 0;
     return Math.floor(baseScore);
   };
+
+  const getVideoUrl = (url) => {
+    if (!url) return null
+    if (url.startsWith('http')) return url
+    const base = API_BASE_URL.endsWith('/') ? API_BASE_URL.slice(0, -1) : API_BASE_URL
+    const path = url.startsWith('/') ? url : `/${url}`
+    return `${base}${path}`
+  }
 
   return (
     <Modal
@@ -93,6 +102,47 @@ export function CandidateScorecardModal({
               </div>
             </div>
           </div>
+
+          {/* Interview Video Recordings */}
+          {(candidateDetail?.recording_url || candidateDetail?.screen_recording_url) && (
+            <div className="flex flex-col gap-4">
+              <h3 className="text-lg font-bold text-slate-900 tracking-tight border-b border-slate-100 pb-2 flex items-center gap-2">
+                <Video className="text-indigo-600 w-5 h-5 animate-pulse" /> Interview Video Recordings
+              </h3>
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                {candidateDetail?.recording_url && (
+                  <div className="bg-slate-50 border border-slate-200 rounded-xl p-4 flex flex-col gap-2">
+                    <span className="text-xs font-bold text-slate-500 uppercase tracking-wider block">
+                      Candidate Webcam Video
+                    </span>
+                    <div className="relative rounded-lg overflow-hidden bg-black aspect-video shadow-inner">
+                      <video
+                        src={getVideoUrl(candidateDetail.recording_url)}
+                        controls
+                        className="w-full h-full object-contain"
+                        preload="metadata"
+                      />
+                    </div>
+                  </div>
+                )}
+                {candidateDetail?.screen_recording_url && (
+                  <div className="bg-slate-50 border border-slate-200 rounded-xl p-4 flex flex-col gap-2">
+                    <span className="text-xs font-bold text-slate-500 uppercase tracking-wider block">
+                      Candidate Screen Share Video
+                    </span>
+                    <div className="relative rounded-lg overflow-hidden bg-black aspect-video shadow-inner">
+                      <video
+                        src={getVideoUrl(candidateDetail.screen_recording_url)}
+                        controls
+                        className="w-full h-full object-contain"
+                        preload="metadata"
+                      />
+                    </div>
+                  </div>
+                )}
+              </div>
+            </div>
+          )}
 
           {/* Multi-Dimensional Analysis */}
           <div className="flex flex-col gap-4">

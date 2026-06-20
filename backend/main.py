@@ -5585,19 +5585,30 @@ def get_live_snapshot(link_id: str):
 
 
 @app.get("/admin/ongoing-interviews")
-async def get_ongoing_interviews(current_admin: dict = Depends(get_current_admin_details)):
+async def get_ongoing_interviews(admin_id: Optional[str] = None, current_admin: dict = Depends(get_current_admin_details)):
     """Return all in-progress (status=started) sessions for this admin with live status."""
-    admin_id = current_admin["admin_id"]
+    admin_uuid = current_admin["admin_id"]
     require_admin_capability(
-        admin_id,
+        admin_uuid,
         "live_monitoring",
         "Live monitoring is available on the Advance plan only.",
     )
-    rows = list(interview_sessions_collection.find({
+    query_filter = {
         "company_id": current_admin.get("company_id"),
         "status": "started",
         "$or": [{"is_deactivated": False}, {"is_deactivated": {"$exists": False}}]
-    }, {"link_id": 1, "candidate_name": 1, "candidate_email": 1, "created_at": 1, "interview_id": 1, "started_at": 1}).sort("created_at", -1))
+    }
+    
+    # Data Isolation:
+    if current_admin.get("role") == "admin":
+        query_filter["created_by"] = current_admin["admin_id"]
+    elif admin_id:
+        query_filter["created_by"] = admin_id
+
+    rows = list(interview_sessions_collection.find(
+        query_filter, 
+        {"link_id": 1, "candidate_name": 1, "candidate_email": 1, "created_at": 1, "interview_id": 1, "started_at": 1}
+    ).sort("created_at", -1))
 
     sessions = []
     for row in rows:
@@ -6917,6 +6928,298 @@ async def update_credit_request(request_id: str, data: CreditRequestUpdate, curr
         
     return {"status": "success", "message": f"Request {data.status} successfully"}
 
+
+class ExportExcelRequest(BaseModel):
+    candidates: List[Dict[str, Any]]
+
+class BulkDeleteRequest(BaseModel):
+    ids: List[str]
+
+class UpdateCreditRequestSchema(BaseModel):
+    status: str
+
+@app.get("/dashboard")
+def get_dashboard_aggregated_data(admin_id: Optional[str] = None, current_admin: dict = Depends(get_current_admin_details)):
+    try:
+        stats_data = get_dashboard_stats(admin_id=admin_id, current_admin=current_admin)
+        
+        query = {"company_id": current_admin.get("company_id")}
+        if current_admin.get("role") == "admin":
+            query["created_by"] = current_admin["admin_id"]
+        elif admin_id:
+            query["created_by"] = admin_id
+            
+        sessions_cursor = list(interview_sessions_collection.find(query).sort("created_at", -1))
+        candidates_list = []
+        for s in sessions_cursor:
+            s["id"] = str(s["_id"])
+            s["_id"] = str(s["_id"])
+            candidates_list.append(s)
+            
+        live_sessions = []
+        ongoing_monitored_count = 0
+        ongoing_live_count = 0
+        ongoing_alert_count = 0
+        ongoing_speaking_count = 0
+        ongoing_coding_count = 0
+        
+        # Plan capability checks
+        admin_user_doc = admins_collection.find_one({"_id": ObjectId(current_admin["admin_id"])})
+        plan_ctx = get_admin_plan_context(admin_user_doc) if admin_user_doc else None
+        has_live = plan_ctx.get("capabilities", {}).get("live_monitoring", False) if plan_ctx else False
+        
+        if has_live or current_admin.get("role") in ["master", "super_admin"]:
+            query_filter = {
+                "company_id": current_admin.get("company_id"),
+                "status": "started",
+                "$or": [{"is_deactivated": False}, {"is_deactivated": {"$exists": False}}]
+            }
+            if current_admin.get("role") == "admin":
+                query_filter["created_by"] = current_admin["admin_id"]
+            elif admin_id:
+                query_filter["created_by"] = admin_id
+            
+            rows = list(interview_sessions_collection.find(
+                query_filter,
+                {"link_id": 1, "candidate_name": 1, "candidate_email": 1, "created_at": 1, "interview_id": 1, "started_at": 1}
+            ).sort("created_at", -1))
+            
+            ongoing_monitored_count = len(rows)
+            for row in rows:
+                link_id = row.get("link_id", "")
+                snap = _live_snapshots.get(link_id, {}) if "_live_snapshots" in globals() else {}
+                online = False
+                if snap.get("ts"):
+                    try:
+                        ts_dt = datetime.fromisoformat(snap["ts"].replace("Z", "+00:00"))
+                        age_secs = (datetime.now(timezone.utc) - ts_dt).total_seconds()
+                        online = age_secs < 60
+                    except Exception:
+                        pass
+                
+                audio_level = snap.get("audio_level", 0)
+                current_question = snap.get("current_question", "")
+                
+                session_item = {
+                    "online": online,
+                    "audio_level": audio_level,
+                    "current_question": current_question,
+                    "link_id": row.get("link_id", ""),
+                    "candidate_name": row.get("candidate_name", ""),
+                    "candidate_email": row.get("candidate_email", ""),
+                    "interview_title": row.get("interview_title", ""),
+                    "session_id": str(row.get("_id", ""))
+                }
+                live_sessions.append(session_item)
+                
+                if online:
+                    ongoing_live_count += 1
+                else:
+                    ongoing_alert_count += 1
+                    
+                if audio_level > 5:
+                    ongoing_speaking_count += 1
+                if current_question and "code" in str(current_question).lower():
+                    ongoing_coding_count += 1
+
+        credit_reqs = []
+        if current_admin.get("role") in ["master", "super_admin"]:
+            reqs = list(credit_requests_collection.find({"status": "pending"}).sort("created_at", -1))
+            for r in reqs:
+                r["id"] = str(r["_id"])
+                r["_id"] = str(r["_id"])
+                credit_reqs.append(r)
+                
+        return {
+            "dbStats": stats_data,
+            "candidates": candidates_list,
+            "liveSessions": live_sessions,
+            "ongoingMonitoredCount": ongoing_monitored_count,
+            "ongoingLiveCount": ongoing_live_count,
+            "ongoingAlertCount": ongoing_alert_count,
+            "ongoingSpeakingCount": ongoing_speaking_count,
+            "ongoingCodingCount": ongoing_coding_count,
+            "creditRequests": credit_reqs
+        }
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+@app.post("/api/export/excel")
+def export_excel(data: ExportExcelRequest, current_admin: dict = Depends(get_current_admin_details)):
+    import csv
+    import io
+    from fastapi.responses import StreamingResponse
+    try:
+        output = io.StringIO()
+        writer = csv.writer(output)
+        writer.writerow(["Name", "Email", "Position", "Status", "Score", "Created"])
+        for c in data.candidates:
+            writer.writerow([
+                c.get("candidate_name", ""),
+                c.get("candidate_email", ""),
+                c.get("interview_title", ""),
+                c.get("status", ""),
+                c.get("score", 0),
+                c.get("created_at", "")
+            ])
+        output.seek(0)
+        return StreamingResponse(
+            io.BytesIO(output.getvalue().encode("utf-8")),
+            media_type="text/csv",
+            headers={"Content-Disposition": "attachment; filename=Interview_Candidates_Report.csv"}
+        )
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+@app.delete("/api/candidates/bulk")
+def bulk_delete_candidates(data: BulkDeleteRequest, current_admin: dict = Depends(get_current_admin_details)):
+    try:
+        object_ids = [ObjectId(id_str) for id_str in data.ids]
+        result = interview_sessions_collection.delete_many({"_id": {"$in": object_ids}})
+        return {"status": "success", "deleted_count": result.deleted_count}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+@app.delete("/api/interview/session/{link_id}")
+def delete_session_alias(link_id: str, current_admin: dict = Depends(get_current_admin_details)):
+    try:
+        row = interview_sessions_collection.find_one({"link_id": link_id})
+        if not row:
+            raise HTTPException(status_code=404, detail="Session not found")
+
+        # Cascade-delete associated interview record and answers
+        interview_id = row.get("interview_id")
+        if interview_id:
+            interviews_collection.delete_one({"id": interview_id})
+            answers_collection.delete_many({"interview_id": interview_id})
+            if interview_id in interviews:
+                del interviews[interview_id]
+
+        # Delete the session link itself
+        interview_sessions_collection.delete_one({"link_id": link_id})
+        return {"status": "success", "message": "Session deleted"}
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+@app.patch("/api/credits/request/{request_id}")
+def update_credit_request_alias(request_id: str, data: UpdateCreditRequestSchema, current_admin: dict = Depends(get_current_admin_details)):
+    try:
+        req = credit_requests_collection.find_one({"_id": ObjectId(request_id)})
+        if not req:
+            raise HTTPException(status_code=404, detail="Request not found")
+            
+        credit_requests_collection.update_one(
+            {"_id": ObjectId(request_id)},
+            {"$set": {"status": data.status}}
+        )
+        
+        if data.status == "approved":
+            amount = req.get("requested_amount", 0)
+            admin_id = req.get("admin_id")
+            admin_doc = admins_collection.find_one({"_id": ObjectId(admin_id)}) if admin_id else None
+            if admin_doc:
+                company_id = admin_doc.get("company_id")
+                if company_id:
+                    companies_collection.update_one({"_id": ObjectId(company_id)}, {"$inc": {"credits": -amount}})
+                admins_collection.update_one({"_id": ObjectId(admin_id)}, {"$inc": {"credits": amount}})
+                
+        return {"status": "success", "message": f"Request {data.status} successfully"}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+# ─── SuperAdmin APIs ─────────────────────────────────
+
+@app.get("/api/superadmin/dashboard")
+@app.get("/superadmin/dashboard")
+def superadmin_dashboard(adminId: Optional[str] = None, current_admin: dict = Depends(get_current_admin_details)):
+    if current_admin.get("role") not in ["super_admin", "master"]:
+        raise HTTPException(status_code=403, detail="Super Admin access required")
+    return get_dashboard_aggregated_data(admin_id=adminId, current_admin=current_admin)
+
+@app.get("/api/superadmin/candidates/qualified")
+@app.get("/superadmin/candidates/qualified")
+def get_superadmin_qualified(adminId: Optional[str] = None, current_admin: dict = Depends(get_current_admin_details)):
+    if current_admin.get("role") not in ["super_admin", "master"]:
+        raise HTTPException(status_code=403, detail="Super Admin access required")
+    query = {"company_id": current_admin.get("company_id"), "decision": "selected"}
+    if adminId:
+        query["created_by"] = adminId
+    sessions = list(interview_sessions_collection.find(query).sort("created_at", -1))
+    for s in sessions:
+        s["id"] = str(s["_id"])
+        s["_id"] = str(s["_id"])
+    return sessions
+
+@app.get("/api/superadmin/candidates/rejected")
+@app.get("/superadmin/candidates/rejected")
+def get_superadmin_rejected(adminId: Optional[str] = None, current_admin: dict = Depends(get_current_admin_details)):
+    if current_admin.get("role") not in ["super_admin", "master"]:
+        raise HTTPException(status_code=403, detail="Super Admin access required")
+    query = {"company_id": current_admin.get("company_id"), "decision": "rejected"}
+    if adminId:
+        query["created_by"] = adminId
+    sessions = list(interview_sessions_collection.find(query).sort("created_at", -1))
+    for s in sessions:
+        s["id"] = str(s["_id"])
+        s["_id"] = str(s["_id"])
+    return sessions
+
+@app.post("/api/superadmin/interview/create")
+@app.post("/superadmin/interview/create")
+async def superadmin_interview_create(data: dict, current_admin: dict = Depends(get_current_admin_details)):
+    if current_admin.get("role") not in ["super_admin", "master"]:
+        raise HTTPException(status_code=403, detail="Super Admin access required")
+    if "candidates" in data:
+        try:
+            bulk_data = BulkCreateSession(**data)
+        except Exception as e:
+            raise HTTPException(status_code=422, detail=str(e))
+        return await bulk_create_sessions(bulk_data, current_admin)
+    else:
+        try:
+            single_data = CreateSession(**data)
+        except Exception as e:
+            raise HTTPException(status_code=422, detail=str(e))
+        return await create_session(single_data, current_admin)
+
+@app.get("/api/superadmin/profile")
+@app.get("/superadmin/profile")
+def get_superadmin_profile(current_admin: dict = Depends(get_current_admin_details)):
+    if current_admin.get("role") not in ["super_admin", "master"]:
+        raise HTTPException(status_code=403, detail="Super Admin access required")
+    admin_doc = admins_collection.find_one({"_id": ObjectId(current_admin["admin_id"])}, {"password": 0})
+    if not admin_doc:
+        raise HTTPException(status_code=404, detail="Super Admin not found")
+    admin_doc["id"] = str(admin_doc["_id"])
+    admin_doc["_id"] = str(admin_doc["_id"])
+    if admin_doc.get("company_id"):
+        company = companies_collection.find_one({"_id": ObjectId(admin_doc["company_id"])})
+        if company:
+            admin_doc["company_name"] = company.get("name", "")
+    return admin_doc
+
+@app.delete("/api/superadmin/candidates/bulk")
+@app.delete("/superadmin/candidates/bulk")
+def superadmin_bulk_delete(data: BulkDeleteRequest, current_admin: dict = Depends(get_current_admin_details)):
+    if current_admin.get("role") not in ["super_admin", "master"]:
+        raise HTTPException(status_code=403, detail="Super Admin access required")
+    return bulk_delete_candidates(data, current_admin)
+
+@app.post("/api/superadmin/export/excel")
+@app.post("/superadmin/export/excel")
+def superadmin_export_excel(data: ExportExcelRequest, current_admin: dict = Depends(get_current_admin_details)):
+    if current_admin.get("role") not in ["super_admin", "master"]:
+        raise HTTPException(status_code=403, detail="Super Admin access required")
+    return export_excel(data, current_admin)
+
+@app.patch("/api/superadmin/credits/request/{request_id}")
+@app.patch("/superadmin/credits/request/{request_id}")
+def superadmin_patch_credit_request(request_id: str, data: UpdateCreditRequestSchema, current_admin: dict = Depends(get_current_admin_details)):
+    if current_admin.get("role") not in ["super_admin", "master"]:
+        raise HTTPException(status_code=403, detail="Super Admin access required")
+    return update_credit_request_alias(request_id, data, current_admin)
 
 
 if __name__ == "__main__":

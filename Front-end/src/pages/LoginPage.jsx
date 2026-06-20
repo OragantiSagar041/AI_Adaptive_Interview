@@ -1,12 +1,16 @@
 import React, { useState, useEffect, useRef } from 'react'
 import { useNavigate } from 'react-router-dom'
+import { useDispatch } from 'react-redux'
+import { setCredentials } from '../store/slices/authSlice'
 import { API_BASE_URL } from '../apiConfig'
 import logo from '../assets/logo.png'
 import Swal from 'sweetalert2'
 import 'sweetalert2/dist/sweetalert2.min.css'
+import axios from 'axios'
 
 export default function LoginPage() {
   const navigate = useNavigate()
+  const dispatch = useDispatch()
 
   // State values
   const [username, setUsername] = useState('')
@@ -45,72 +49,64 @@ export default function LoginPage() {
     setLoginLoading(true)
     setLoginError('')
 
-    const controller = new AbortController()
-    const timeout = setTimeout(() => controller.abort(), 10000)
-
     try {
-      const response = await fetch(`${API_BASE_URL}/admin/login`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ username, password }),
-        signal: controller.signal,
+      const response = await axios.post(`${API_BASE_URL}/admin/login`, { username, password }, {
+        timeout: 10000
       })
 
-      clearTimeout(timeout)
+      const data = response.data
 
-      if (response.ok) {
-        const data = await response.json()
+      if (data.status === 'expired' || data.status === 'blocked') {
+        setLoginError(data.message || 'Your subscription has expired.')
+        setLoginLoading(false)
+        return
+      }
 
-        if (data.status === 'expired' || data.status === 'blocked') {
-          setLoginError(data.message || 'Your subscription has expired.')
-          setLoginLoading(false)
-          return
-        }
+      const adminId = data.admin_id || data.master_id
+      const adminEmail = data.email || ''
+      const adminName = data.username || username
+      const role = data.role || 'tenant'
+      const plan = data.subscription_plan || 'Free Trial'
+      const planKey = data.subscription_plan_key || 'trial'
+      const planCapabilities = data.plan_capabilities || {}
 
-        const adminId = data.admin_id || data.master_id
-        const adminEmail = data.email || ''
-        const adminName = data.username || username
-        const role = data.role || 'tenant'
-        const plan = data.subscription_plan || 'Free Trial'
-        const planKey = data.subscription_plan_key || 'trial'
-        const planCapabilities = data.plan_capabilities || {}
+      let finalRole = role
+      if (role === 'super_admin' || role === 'superadmin' || role === 'master') finalRole = 'superadmin'
+      if (role === 'tenant' || role === 'admin') finalRole = 'admin'
 
-        // Persist session
-        if (data.token) {
-          sessionStorage.setItem('adminToken', data.token)
-        }
-        sessionStorage.setItem('adminId', adminId)
-        sessionStorage.setItem('adminEmail', adminEmail)
-        sessionStorage.setItem('adminName', adminName)
-        sessionStorage.setItem('adminRole', role)
-        sessionStorage.setItem('adminUser', JSON.stringify(data))
-        sessionStorage.setItem('subscriptionPlan', plan)
-        sessionStorage.setItem('subscriptionPlanKey', planKey)
-        sessionStorage.setItem('planCapabilities', JSON.stringify(planCapabilities))
-        sessionStorage.setItem('subscriptionExpiry', data.subscription_expiry || '')
-        sessionStorage.setItem('subscriptionCredits', data.credits ?? '')
-        sessionStorage.setItem('subscriptionWarningMessage', data.subscription_warning_message || '')
-        sessionStorage.setItem('adminCompany', data.company_name || '')
+      // Persist session
+      if (data.token) {
+        sessionStorage.setItem('adminToken', data.token)
+        dispatch(setCredentials({ role: finalRole, token: data.token, adminUser: data }))
+      }
+      sessionStorage.setItem('adminId', adminId)
+      sessionStorage.setItem('adminEmail', adminEmail)
+      sessionStorage.setItem('adminName', adminName)
+      sessionStorage.setItem('adminRole', finalRole)
+      sessionStorage.setItem('adminUser', JSON.stringify(data))
+      sessionStorage.setItem('subscriptionPlan', plan)
+      sessionStorage.setItem('subscriptionPlanKey', planKey)
+      sessionStorage.setItem('planCapabilities', JSON.stringify(planCapabilities))
+      sessionStorage.setItem('subscriptionExpiry', data.subscription_expiry || '')
+      sessionStorage.setItem('subscriptionCredits', data.credits ?? '')
+      sessionStorage.setItem('subscriptionWarningMessage', data.subscription_warning_message || '')
+      sessionStorage.setItem('adminCompany', data.company_name || '')
 
-        // Redirect based on role
-        if (role === 'master') {
-          navigate('/master')
-        } else if (role === 'super_admin') {
-          navigate('/super-admin')
-        } else if (role === 'tenant' || role === 'admin') {
-          navigate('/admin')
-        } else {
-          navigate('/login')
-        }
+      // Redirect based on role
+      if (finalRole === 'superadmin') {
+        navigate('/superadmin/dashboard')
+      } else if (finalRole === 'admin') {
+        navigate('/admin/dashboard')
       } else {
-        setLoginError('Invalid username or password.')
+        navigate('/login')
       }
     } catch (error) {
       console.error('Login error:', error)
-      if (error.name === 'AbortError') {
+      if (error.code === 'ECONNABORTED' || error.message?.includes('timeout')) {
         setLoginError('Request timed out. Server may be starting up — try again.')
       } else {
-        setLoginError('Cannot connect to server. Please check if backend is running.')
+        const detailMsg = error.response?.data?.detail || error.response?.data?.message || 'Cannot connect to server. Please check if backend is running.'
+        setLoginError(detailMsg)
       }
     } finally {
       setLoginLoading(false)
@@ -128,26 +124,18 @@ export default function LoginPage() {
     setResetLoading(true)
 
     try {
-      const res = await fetch(`${API_BASE_URL}/admin/forgot-password`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ username: resetUser, email: resetEmail }),
+      await axios.post(`${API_BASE_URL}/admin/forgot-password`, { username: resetUser, email: resetEmail })
+      Swal.fire({
+        title: 'OTP Sent',
+        text: 'An OTP has been sent successfully to your registered email.',
+        icon: 'success',
+        background: '#161c2d',
+        color: '#fff',
       })
-      const data = await res.json()
-      if (res.ok) {
-        Swal.fire({
-          title: 'OTP Sent',
-          text: 'An OTP has been sent successfully to your registered email.',
-          icon: 'success',
-          background: '#161c2d',
-          color: '#fff',
-        })
-        setResetStep('verify')
-      } else {
-        setResetError(data.detail || 'Error sending OTP.')
-      }
+      setResetStep('verify')
     } catch (e) {
-      setResetError('Network error. Try again.')
+      const detailMsg = e.response?.data?.detail || e.response?.data?.message || 'Error sending OTP.'
+      setResetError(detailMsg)
     } finally {
       setResetLoading(false)
     }
@@ -163,19 +151,11 @@ export default function LoginPage() {
     setResetLoading(true)
 
     try {
-      const res = await fetch(`${API_BASE_URL}/admin/verify-otp`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ username: resetUser, otp: resetOTP }),
-      })
-      if (res.ok) {
-        setResetStep('final')
-      } else {
-        const data = await res.json().catch(() => ({}))
-        setResetError(data.detail || 'Invalid OTP.')
-      }
+      await axios.post(`${API_BASE_URL}/admin/verify-otp`, { username: resetUser, otp: resetOTP })
+      setResetStep('final')
     } catch (e) {
-      setResetError('Network error. Try again.')
+      const detailMsg = e.response?.data?.detail || e.response?.data?.message || 'Invalid OTP.'
+      setResetError(detailMsg)
     } finally {
       setResetLoading(false)
     }
@@ -191,26 +171,18 @@ export default function LoginPage() {
     setResetLoading(true)
 
     try {
-      const res = await fetch(`${API_BASE_URL}/admin/reset-password`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ username: resetUser, otp: resetOTP, new_password: newPassword }),
+      await axios.post(`${API_BASE_URL}/admin/reset-password`, { username: resetUser, otp: resetOTP, new_password: newPassword })
+      Swal.fire({
+        title: 'Success',
+        text: 'Password updated! Please sign in with your new password.',
+        icon: 'success',
+        background: '#161c2d',
+        color: '#fff',
       })
-      if (res.ok) {
-        Swal.fire({
-          title: 'Success',
-          text: 'Password updated! Please sign in with your new password.',
-          icon: 'success',
-          background: '#161c2d',
-          color: '#fff',
-        })
-        handleCloseResetModal()
-      } else {
-        const data = await res.json().catch(() => ({}))
-        setResetError(data.detail || 'Failed to update password.')
-      }
+      handleCloseResetModal()
     } catch (e) {
-      setResetError('Network error.')
+      const detailMsg = e.response?.data?.detail || e.response?.data?.message || 'Failed to update password.'
+      setResetError(detailMsg)
     } finally {
       setResetLoading(false)
     }
