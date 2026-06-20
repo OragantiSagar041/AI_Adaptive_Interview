@@ -1,0 +1,519 @@
+
+    <div class="container">
+        <h1>AI - powered interview</h1>
+
+        <!-- Upload Section -->
+        <div id="uploadSection">
+            <h2>Start Your Interview</h2>
+
+            <div class="tab">
+                <button class="tablinks active" onclick="openTab(event, 'resumeTab')">Upload Resume</button>
+                <button class="tablinks" onclick="openTab(event, 'jdTab')">Paste Job Description</button>
+            </div>
+            <label>Full Name</label>
+            <input type="text" id="candidateName" placeholder="Enter your full name" required>
+
+            <!-- Resume Upload Tab -->
+            <div id="resumeTab" class="tabcontent" style="display: block;">
+                <form id="resumeForm">
+                    <div class="form-group">
+                        <label for="resumeFile">Upload your resume (PDF/DOCX/TXT):</label>
+                        <input type="file" id="resumeFile" accept=".pdf,.docx,.txt" required />
+                        <p class="help-text">Supported formats: PDF, DOCX, TXT (max 5MB)</p>
+                    </div>
+                    <button type="submit" class="btn btn-primary">Start Interview with Resume</button>
+                </form>
+            </div>
+
+            <!-- Job Description Tab -->
+            <div id="jdTab" class="tabcontent">
+                <form id="jdForm">
+                    <div class="form-group">
+                        <label for="jobDescription">Or paste a job description:</label>
+                        <textarea id="jobDescription" placeholder="Paste the job description here..."
+                            required></textarea>
+                    </div>
+                    <button type="submit" class="btn btn-primary">Start Interview with Job Description</button>
+                </form>
+            </div>
+
+            <div id="uploadStatus" class="status"></div>
+
+            <div style="margin-top: 2rem; padding-top: 1rem; border-top: 1px solid #eee;">
+                <h4><i class="fas fa-wrench"></i> System Check</h4>
+                <button type="button" onclick="testCameraSystem()" class="btn"
+                    style="background: #4b5563; color: white;">
+                    <i class="fas fa-video"></i> Test Camera & Microphone
+                </button>
+                <div id="systemCheckMsg" style="margin-top: 10px; font-weight: bold;"></div>
+                <video id="testVideo" autoplay muted playsinline
+                    style="width: 320px; height: 180px; background: black; display: none; margin-top: 10px; border-radius: 8px;"></video>
+            </div>
+        </div>
+        <!-- Interview Section (initially hidden) -->
+        <div id="interviewSection" class="hidden">
+
+            <!-- SVG gradient for the timer ring -->
+            <svg width="0" height="0" style="position:absolute">
+                <defs>
+                    <linearGradient id="timerGradient" x1="0%" y1="0%" x2="100%" y2="0%">
+                        <stop offset="0%" stop-color="#6366f1" />
+                        <stop offset="100%" stop-color="#8b5cf6" />
+                    </linearGradient>
+                </defs>
+            </svg>
+
+            <!-- ═══ LEFT COLUMN ═══ -->
+            <div class="ip-left">
+
+                <!-- AI Avatar (user webcam) -->
+                <div class="ip-avatar-card">
+                    <video id="videoPreview" autoplay muted playsinline></video>
+                    <!-- Hidden elements for Screen Share + Webcam Compositing -->
+                    <video id="screenVideo" autoplay muted playsinline style="display:none;"></video>
+                    <video id="cameraVideo" autoplay muted playsinline style="display:none;"></video>
+                    <canvas id="compositeCanvas" width="1280" height="720" style="display:none;"></canvas>
+                    <button id="cameraFallbackBtn" onclick="startCameraManual()" class="btn btn-primary"
+                        style="position:absolute;top:50%;left:50%;transform:translate(-50%,-50%);z-index:2;display:none;">
+                        Enable Camera
+                    </button>
+                    <div id="cameraLoading"
+                        style="position:absolute;top:50%;left:50%;transform:translate(-50%,-50%);color:#fff;z-index:0;font-size:0.85rem;">
+                        Waiting for camera...</div>
+                    <div class="live-badge">LIVE</div>
+
+                    <!-- Face Detection Warning -->
+                    <div id="faceWarning"
+                        style="position:absolute;top:0;left:0;width:100%;height:100%;background:rgba(0,0,0,0.8);color:#ef4444;display:none;align-items:center;justify-content:center;z-index:10;font-size:1.2rem;font-weight:bold;flex-direction:column;text-align:center;padding:20px;">
+                        <span style="font-size:3rem;margin-bottom:10px;">⚠️</span>
+                        <div>YOUR FACE IS NOT VISIBLE</div>
+                        <div style="font-size:0.9rem;color:#ccc;margin-top:5px;font-weight:normal;">Please adjust your
+                            camera</div>
+                    </div>
+                </div>
+
+                <!-- AI Analyzing Status -->
+                <div class="ip-analyzing-card">
+                    <div class="ip-analyzing-icon">
+                        <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none"
+                            stroke="white" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                            <circle cx="12" cy="8" r="4" />
+                            <path d="M6 20v-2a6 6 0 0 1 12 0v2" />
+                        </svg>
+                    </div>
+                    <div class="ip-analyzing-text">
+                        <h4>AI Analyzing</h4>
+                        <p id="micStatusText">Listening Keywords</p>
+                    </div>
+                    <div class="ip-audio-bars">
+                        <span></span><span></span><span></span><span></span>
+                    </div>
+                </div>
+
+                <!-- Circular Timer -->
+                <div class="ip-timer-card">
+                    <div class="ip-timer-ring">
+                        <svg width="110" height="110" viewBox="0 0 110 110">
+                            <circle class="track" cx="55" cy="55" r="47" />
+                            <circle class="fill" id="timerRingFill" cx="55" cy="55" r="47" />
+                        </svg>
+                        <div class="ip-timer-label">
+                            <span id="globalCountdown">--:--</span>
+                            <span class="remaining-lbl">Remaining</span>
+                        </div>
+                    </div>
+                    <button class="ip-end-btn" onclick="endInterview()">
+                        ⏹ End Interview
+                    </button>
+                </div>
+
+                <!-- AI Insights -->
+                <div class="ip-insights-card">
+                    <h4>AI Insights</h4>
+
+                    <div class="insight-row">
+                        <div class="insight-row-header">
+                            <span class="insight-label">CLARITY</span>
+                            <span class="insight-value" id="insightClarity" style="color:#10b981;">--</span>
+                        </div>
+                        <div class="insight-bar-track">
+                            <div class="insight-bar-fill clarity" id="insightClarityBar" style="width:0%"></div>
+                        </div>
+                    </div>
+
+                    <div class="insight-row">
+                        <div class="insight-row-header">
+                            <span class="insight-label">TECHNICAL DEPTH</span>
+                            <span class="insight-value" id="insightTech" style="color:#6366f1;">--</span>
+                        </div>
+                        <div class="insight-bar-track">
+                            <div class="insight-bar-fill techDepth" id="insightTechBar" style="width:0%"></div>
+                        </div>
+                    </div>
+
+                    <div class="insight-row">
+                        <div class="insight-row-header">
+                            <span class="insight-label">CONFIDENCE</span>
+                            <span class="insight-value" id="insightConf" style="color:#f59e0b;">--</span>
+                        </div>
+                        <div class="insight-bar-track">
+                            <div class="insight-bar-fill confidence" id="insightConfBar" style="width:0%"></div>
+                        </div>
+                    </div>
+
+                    <div class="ip-ai-tip" id="aiTipBox">
+                        <strong>AI Tip:</strong> Speak clearly and structure your answer with a beginning, middle, and
+                        conclusion.
+                    </div>
+                </div>
+
+                <!-- Hidden stubs so existing JS still works -->
+                <button id="startButton" style="display:none;"></button>
+                <button id="stopButton" style="display:none;"></button>
+                <!-- Hidden mic pulse dot for existing setMicState() JS -->
+                <span id="micPulse" style="display:none;"></span>
+                <!-- Timer display kept for stopRecordingTimer() CSS resets -->
+                <div id="timerDisplay" style="display:none;">00:00</div>
+                <!-- Audio visualizer canvas (kept hidden, used by audio code) -->
+                <canvas id="audioVisualizer" width="100" height="20" style="display:none;"></canvas>
+                <!-- Transcription interim text (kept for JS) -->
+                <div id="transcription" style="display:none;"></div>
+            </div>
+
+            <!-- ═══ RIGHT COLUMN ═══ -->
+            <div class="ip-right">
+
+                <!-- Question Card -->
+                <div class="ip-question-card">
+                    <!-- Question number info (subtle) -->
+                    <div style="font-size:0.78rem;color:#9ca3af;font-weight:600;margin-bottom:0.5rem;">
+                        Question <span id="questionNumber">1</span> of <span id="totalQuestions">?</span>
+                    </div>
+
+                    <!-- Type / Difficulty badges -->
+                    <div class="ip-question-meta">
+                        <span class="ip-tag type" id="questionType">General</span>
+                        <span class="ip-tag difficulty" id="questionDifficulty">Medium</span>
+                    </div>
+
+                    <!-- Question text + mute button -->
+                    <div class="ip-question-body">
+                        <div class="q-bar"></div>
+                        <p id="questionText">Loading question...</p>
+                        <button id="toggleSpeechBtn" class="ip-mute-btn" onclick="toggleSpeech()"
+                            title="Toggle question audio">
+                            <svg id="speechIcon" xmlns="http://www.w3.org/2000/svg" width="22" height="22"
+                                viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
+                                stroke-linecap="round" stroke-linejoin="round">
+                                <line x1="1" y1="1" x2="23" y2="23" />
+                                <path d="M9 9v3a3 3 0 0 0 5.12 2.12M15 9.34V4a3 3 0 0 0-5.94-.6" />
+                                <path d="M17 16.95A7 7 0 0 1 5 12v-2m14 0v2a7 7 0 0 1-.11 1.23" />
+                                <line x1="12" y1="19" x2="12" y2="23" />
+                                <line x1="8" y1="23" x2="16" y2="23" />
+                            </svg>
+                        </button>
+                    </div>
+                </div>
+
+                <!-- Live Transcript Card -->
+                <div class="ip-transcript-card" id="transcriptionContainer">
+                    <div class="ip-transcript-header">
+                        <div class="ip-transcript-title">
+                            🎙 Live Transcript
+                        </div>
+                        <div class="ip-recording-badge" id="recordingStatusBar">
+                            <div class="rec-dot"></div>
+                            RECORDING
+                        </div>
+                    </div>
+                    <textarea id="transcriptionBox" class="ip-transcript-box"
+                        placeholder="Your speech will appear here automatically..." readonly></textarea>
+                </div>
+
+                <!-- Navigation -->
+                <div class="ip-nav-row">
+                    <button id="prevButton" onclick="prevQuestion()" class="ip-btn-prev">← Prev</button>
+                    <button id="nextButton" onclick="nextQuestion()" class="ip-btn-next" disabled style="display: none;">Next →</button>
+                    <button id="skipButton" class="ip-btn-skip" style="display: none;">Skip</button>
+                </div>
+
+            </div>
+
+        </div> <!-- End of interviewSection -->
+
+        <!-- ═══ CASE STUDY ROUND (Non-Technical) ═══ -->
+        <div id="caseStudySection" class="hidden" style="max-width:900px; margin:1.5rem auto; padding:0 1rem;">
+            <div style="background:linear-gradient(135deg,#1e1b4b,#312e81); border-radius:16px; padding:1.5rem 2rem; margin-bottom:1.5rem; color:white;">
+                <p style="font-size:0.75rem; text-transform:uppercase; letter-spacing:2px; opacity:0.7; margin-bottom:0.3rem;">Round 2</p>
+                <h2 id="caseStudyMainTitle" style="font-size:1.5rem; font-weight:800; margin:0 0 0.3rem 0;">📋 Written Case Study</h2>
+                <p id="caseStudySubtitle" style="font-size:0.85rem; opacity:0.8; margin:0;">Read each scenario carefully and write your strategy or approach.</p>
+            </div>
+
+            <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:1rem;">
+                <div style="display: flex; align-items: center; flex-wrap: wrap; gap: 8px;">
+                    <span style="font-weight:700; font-size:1rem;" id="caseStudyProgress">Question 1 of 3</span>
+                    <span id="caseStudySkillBadge" style="background:#818cf8; color:white; padding:3px 10px; border-radius:20px; font-size:0.75rem;">Skill</span>
+                    <span class="ip-status-badge" style="font-size:0.7rem; padding:2px 8px; margin-left: 5px;">🔴 RECORDING</span>
+                </div>
+                <div style="display:flex; gap:0.5rem;">
+                    <button id="caseStudyPrevBtn" onclick="caseStudyNav(-1)" class="btn btn-primary" style="font-size:0.85rem; padding:0.5rem 1rem;" disabled>← Previous</button>
+                    <button id="caseStudyNextBtn" onclick="caseStudyNav(1)" class="btn btn-primary" style="font-size:0.85rem; padding:0.5rem 1rem;">Next →</button>
+                    <button id="caseStudySubmitAllBtn" onclick="submitAllCaseStudies()" class="btn btn-danger" style="font-size:0.85rem; padding:0.5rem 1rem; display:none;">Submit All & Finish</button>
+                </div>
+            </div>
+
+            <div style="background:var(--card-bg,#fff); border:1px solid var(--border-color,#e5e7eb); border-radius:14px; padding:1.5rem 2rem; margin-bottom:1rem; box-shadow:0 2px 8px rgba(0,0,0,0.06);">
+                <h3 style="font-size:1.1rem; font-weight:700; color:#4f46e5; margin:0 0 0.8rem 0;">📖 Scenario</h3>
+                <p id="caseStudyScenarioText" style="font-size:0.95rem; line-height:1.7; color:var(--text-primary,#1f2937); background:#f8fafc; padding:1rem 1.2rem; border-radius:10px; border-left:4px solid #6366f1;"></p>
+            </div>
+
+            <div style="background:var(--card-bg,#fff); border:1px solid var(--border-color,#e5e7eb); border-radius:14px; padding:1.5rem 2rem; margin-bottom:1rem; box-shadow:0 2px 8px rgba(0,0,0,0.06);">
+                <h3 style="font-size:1.1rem; font-weight:700; color:#dc2626; margin:0 0 0.8rem 0;">❓ Question</h3>
+                <p id="caseStudyQuestionText" style="font-size:0.95rem; line-height:1.6; color:var(--text-primary,#1f2937); font-weight:600;"></p>
+            </div>
+
+            <div style="background:var(--card-bg,#fff); border:1px solid var(--border-color,#e5e7eb); border-radius:14px; padding:1.5rem 2rem; box-shadow:0 2px 8px rgba(0,0,0,0.06);">
+                <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:0.8rem;">
+                    <h3 style="font-size:1.1rem; font-weight:700; color:#059669; margin:0;">✍️ Your Answer</h3>
+                    <div style="display:flex; gap: 10px; align-items: center;">
+                        <button id="caseStudyVoiceBtn" onclick="toggleCaseStudyVoice()" class="btn" style="background:#e5e7eb; color:#374151; font-size:0.75rem; padding:4px 8px; border-radius:6px; display:flex; align-items:center; gap:5px; border:none; cursor:pointer;">
+                            🎙️ Start Voice Input
+                        </button>
+                        <span id="caseStudyWordCount" style="font-size:0.75rem; color:#6b7280;">0 words</span>
+                    </div>
+                </div>
+                <textarea id="caseStudyAnswerBox" 
+                    style="width:100%; min-height:250px; border:1px solid #d1d5db; border-radius:10px; padding:1rem; font-size:0.95rem; line-height:1.7; resize:vertical; font-family:inherit;"
+                    placeholder="Type your detailed response here. Describe your approach, reasoning, and specific steps you would take..."
+                    oninput="updateCaseStudyWordCount()"></textarea>
+                <div style="display:flex; justify-content:space-between; align-items:center; margin-top:0.8rem;">
+                    <p style="font-size:0.75rem; color:#9ca3af; margin:0;">💡 Tip: Structure your answer with clear steps and reasoning. Quality matters more than length.</p>
+                    <button onclick="saveCaseStudyAnswer()" class="btn btn-primary" style="font-size:0.85rem; padding:0.5rem 1.2rem;">💾 Save Answer</button>
+                </div>
+            </div>
+
+            <div id="caseStudyEvalCriteria" style="background:#fefce8; border:1px solid #fde68a; border-radius:14px; padding:1rem 1.5rem; margin-top:1rem;">
+                <h4 style="font-size:0.85rem; font-weight:700; color:#92400e; margin:0 0 0.5rem 0;">🎯 What we're looking for:</h4>
+                <ul id="caseStudyCriteriaList" style="margin:0; padding-left:1.2rem; font-size:0.85rem; color:#78350f;"></ul>
+            </div>
+        </div>
+        <!-- ═══ END CASE STUDY ROUND ═══ -->
+
+        <div id="codingRoundSection" class="hidden coding-round-shell">
+            <div class="coding-round-header">
+                <div>
+                    <p class="coding-round-kicker">Round 2</p>
+                    <h2 id="codingRoundMainTitle">Live Coding Test</h2>
+                    <p id="codingRoundSubtitle">Read the prompt, explain your logic to the AI, and write your solution.
+                    </p>
+                </div>
+                <div class="coding-round-actions">
+                    <button id="codingCheckpointBtn" class="btn btn-primary" type="button">Get AI Feedback</button>
+                    <button id="codingSubmitBtn" class="btn btn-danger" type="button">Submit Coding Round</button>
+                </div>
+            </div>
+
+            <div class="coding-round-grid">
+                <div class="coding-problem-card">
+                    <div class="coding-problem-topbar">
+                        <div class="coding-problem-tabs">
+                            <span class="coding-tab-pill">Description</span>
+                            <span class="coding-tab-pill">Editorial Disabled</span>
+                        </div>
+                        <div class="coding-problem-meta">
+                            <span id="codingDifficultyTag" class="question-difficulty">Medium</span>
+                            <span id="codingLanguageHint" class="question-type">Python</span>
+                        </div>
+                    </div>
+                    <div class="coding-problem-scroll">
+                        <h3 id="codingTaskTitle">Loading coding task...</h3>
+                        <p id="codingTaskDescription"></p>
+                        <div class="coding-problem-section">
+                            <h4>Input</h4>
+                            <p id="codingInputFormat"></p>
+                        </div>
+                        <div class="coding-problem-section">
+                            <h4>Output</h4>
+                            <p id="codingOutputFormat"></p>
+                        </div>
+                        <div class="coding-problem-section">
+                            <h4>Constraints</h4>
+                            <ul id="codingConstraintsList" class="coding-list"></ul>
+                        </div>
+                        <div class="coding-problem-section">
+                            <h4>Example</h4>
+                            <pre id="codingExampleBox" class="coding-example"></pre>
+                        </div>
+                        <div class="coding-problem-section">
+                            <h4>Evaluation Focus</h4>
+                            <ul id="codingFocusList" class="coding-list"></ul>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="coding-editor-card">
+                    <div class="coding-editor-topbar">
+                        <div class="coding-right-tabs">
+                            <button class="coding-right-tab active" type="button">Code</button>
+                            <button class="coding-right-tab" type="button">Testcase</button>
+                            <button class="coding-right-tab" type="button">Result</button>
+                        </div>
+                        <div class="coding-round-actions">
+                            <button id="codingCheckpointBtn" class="btn btn-primary" type="button">Get AI
+                                Feedback</button>
+                            <button id="codingSubmitBtn" class="btn btn-danger" type="button">Submit</button>
+                        </div>
+                    </div>
+
+                    <div class="coding-toolbar">
+                        <label for="codingLanguageSelect">Language</label>
+                        <select id="codingLanguageSelect">
+                            <option value="python">Python</option>
+                            <option value="javascript">JavaScript</option>
+                            <option value="java">Java</option>
+                            <option value="c">C</option>
+                        </select>
+                        <button id="codingVoiceBtn" class="btn btn-primary" type="button">Start Voice Notes</button>
+                        <button id="codingRunBtn" class="btn btn-primary" type="button">Run Code</button>
+                    </div>
+
+                    <div class="coding-editor-wrap">
+                        <div class="coding-editor-header">
+                            <div>
+                                <h4>Editor</h4>
+                                <div class="coding-editor-status">Write your solution in the IDE below.</div>
+                            </div>
+                            <div class="coding-editor-status">Autosave by language</div>
+                        </div>
+                        <div id="codingEditorContainer" class="coding-editor-container" style="display: none;"></div>
+                        <textarea id="codingCodeBox" class="coding-codebox" spellcheck="false"
+                            placeholder="Write your solution here..."></textarea>
+
+                        <div class="coding-console-shell">
+                            <div class="coding-console-tabs">
+                                <button class="coding-console-tab active" type="button" data-pane="tests">Test
+                                    Results</button>
+                                <button class="coding-console-tab" type="button" data-pane="console">Console</button>
+                                <button class="coding-console-tab" type="button" data-pane="ai">AI Review</button>
+                            </div>
+                            <div id="codingTestsPane" class="coding-console-pane active">
+                                <div class="coding-feedback-header">
+                                    <h4>Test Results</h4>
+                                    <span id="codingHiddenSummary">3 visible cases, 4 hidden cases</span>
+                                </div>
+                                <div id="codingVisibleTests"></div>
+                            </div>
+                            <div id="codingConsolePane" class="coding-console-pane">
+                                <div id="codingRuntimeError" class="coding-runtime hidden"></div>
+                                <div class="coding-pane-card">
+                                    <div class="coding-pane-body">
+                                        <h4>Execution Output</h4>
+                                        <p id="codingConsoleText">Run the code to see compiler errors, runtime errors,
+                                            or pass/fail updates.</p>
+                                    </div>
+                                </div>
+                            </div>
+                            <div id="codingAiPane" class="coding-console-pane">
+                                <div class="coding-pane-card">
+                                    <div class="coding-pane-body">
+                                        <h4>AI Interviewer</h4>
+                                        <p id="codingInterviewerIntent" class="coding-intent-box">The AI will infer what
+                                            the candidate is trying to build and ask for the logic behind it.</p>
+                                        <div id="codingInterviewerPrompt" class="coding-interviewer-box">Tell me the
+                                            approach you are planning before you start coding.</div>
+                                        <label class="coding-label" for="codingExplanationBox">Explain your current
+                                            logic to the AI</label>
+                                        <textarea id="codingExplanationBox" class="coding-textarea"
+                                            placeholder="Say or type what approach you are taking, what data structure you chose, and what edge cases you are considering."></textarea>
+                                    </div>
+                                </div>
+                                <div class="coding-feedback-card">
+                                    <div class="coding-feedback-header">
+                                        <h4>AI Coding Coach</h4>
+                                        <span id="codingFeedbackMeta">Waiting for your first checkpoint</span>
+                                    </div>
+                                    <p id="codingCoachMessage">The AI will review only a compact summary plus your
+                                        latest explanation and code snapshot to keep token usage efficient.</p>
+                                    <div class="coding-feedback-columns">
+                                        <div>
+                                            <h5>Strengths</h5>
+                                            <ul id="codingStrengths" class="coding-list"></ul>
+                                        </div>
+                                        <div>
+                                            <h5>Risks</h5>
+                                            <ul id="codingRisks" class="coding-list"></ul>
+                                        </div>
+                                    </div>
+                                    <div>
+                                        <h5>Next Steps</h5>
+                                        <ul id="codingNextSteps" class="coding-list"></ul>
+                                    </div>
+                                    <div class="coding-score-grid">
+                                        <div><span>Understanding</span><strong id="codingScoreUnderstanding">--</strong>
+                                        </div>
+                                        <div><span>Implementation</span><strong
+                                                id="codingScoreImplementation">--</strong></div>
+                                        <div><span>Communication</span><strong id="codingScoreCommunication">--</strong>
+                                        </div>
+                                        <div><span>Overall</span><strong id="codingScoreOverall">--</strong></div>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <div id="status" class="status"></div>
+
+
+    </div> <!-- End of container -->
+
+    <!-- Results Section (Initially Hidden) -->
+    <div id="resultsSection" class="hidden"
+        style="margin-top: 3rem; background: #fff; padding: 5rem 2rem; border-radius: 20px; box-shadow: 0 10px 40px rgba(0,0,0,0.08); text-align: center; border: 1px solid #eff6ff;">
+
+        <div id="thankYouHeader">
+            <h1 style="color: #6366f1; font-size: 3rem; margin-bottom: 0.5rem; font-weight: 800;"><i
+                    class="fas fa-party-horn"></i> Thank You!</h1>
+            <p style="font-size: 1.25rem; color: #4b5563; margin-bottom: 3rem; font-weight: 500;">Your interview has
+                been successfully submitted.</p>
+        </div>
+
+        <div id="uploadStatusContainer"
+            style="background: #f8fafc; padding: 2.5rem; border-radius: 16px; border: 1px dashed #cbd5e1; max-width: 500px; margin: 0 auto;">
+            <div style="font-size: 3rem; margin-bottom: 1.5rem;"><i class="fas fa-spinner fa-spin"></i></div>
+            <h3 style="color: #1e293b; margin-bottom: 0.75rem;">Saving Your Recording</h3>
+            <p style="font-size: 1rem; color: #64748b; margin-bottom: 1.5rem;">
+                We are uploading your video interview. Time depends on your connection speed and interview length.
+            </p>
+            <div
+                style="background: #fee2e2; color: #dc2626; padding: 12px; border-radius: 8px; font-weight: 700; display: inline-flex; align-items: center; gap: 8px;">
+                <i class="fas fa-exclamation-triangle"></i> PLEASE DO NOT CLOSE THIS TAB
+            </div>
+            <div
+                style="margin-top: 1.5rem; width: 100%; height: 10px; background: #e2e8f0; border-radius: 5px; overflow: hidden; position: relative;">
+                <div id="uploadProgressBar"
+                    style="width: 0%; height: 100%; background: #6366f1; transition: width 0.3s ease;"></div>
+            </div>
+            <div style="display: flex; justify-content: space-between; margin-top: 0.5rem;">
+                <div id="uploadPercentageText" style="font-size: 0.85rem; color: #6366f1; font-weight: 700;">
+                    Preparing video file...
+                </div>
+                <div id="uploadEstimatedTime" style="font-size: 0.85rem; color: #64748b; font-weight: 600;">
+                    <i class="fas fa-clock"></i> Est: 1-2 mins
+                </div>
+            </div>
+
+            <!-- Skip Option — dims in after 30 s, highlighted after 60 s -->
+            <div id="skipUploadContainer"
+                style="margin-top: 1.5rem; font-size: 0.8rem; color: #64748b; border-top: 1px solid #f1f5f9; padding-top: 1rem; opacity:0.3; transition: opacity 0.8s ease;">
+                Taking too long? <a href="javascript:void(0)" onclick="skipAndFinish()"
+                    id="skipUploadLink"
+                    style="color: #6366f1; text-decoration: underline; font-weight: 600;">Finish &amp; Exit anyway</a>
+                <span id="skipCountdownLabel" style="color:#94a3b8;"> (available in <span id="skipCountdownSec">30</span>s)</span>
+                <div style="font-size: 0.75rem; margin-top: 4px; color: #94a3b8;">(Your interview responses are already
+                    safely submitted)</div>
+            </div>
+            
