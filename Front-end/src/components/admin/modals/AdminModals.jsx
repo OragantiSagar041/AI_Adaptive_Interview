@@ -518,14 +518,9 @@ export function UpgradePlansModal({
   isOpen,
   onClose,
   handleSelectPlan,
-  isProcessing
+  isProcessing,
+  plans = []
 }) {
-  const plans = [
-    { name: "Starter", credits: 50, price: 4900 },
-    { name: "Professional", credits: 250, price: 19900 },
-    { name: "Enterprise", credits: 1000, price: 59900 }
-  ];
-
   return (
     <Modal
       isOpen={isOpen}
@@ -535,34 +530,44 @@ export function UpgradePlansModal({
       maxWidth="max-w-4xl"
     >
       <div className="grid grid-cols-1 md:grid-cols-3 gap-6 pt-2 pb-4">
-        {plans.map((plan, idx) => (
-          <div key={idx} className={`bg-white border ${idx === 1 ? 'border-[#f43f5e]' : 'border-slate-200'} rounded-2xl p-6 shadow-sm hover:shadow-md transition-all flex flex-col items-center text-center relative overflow-hidden`}>
-            {idx === 1 && <div className="absolute top-0 left-0 w-full bg-[#f43f5e] text-white text-[0.65rem] font-bold py-1 uppercase tracking-widest shadow-sm">Most Popular</div>}
-            <h3 className={`text-lg font-bold text-slate-800 ${idx === 1 ? 'mt-4' : ''}`}>{plan.name}</h3>
-            <div className="text-4xl font-black text-[#6366f1] mt-3 mb-1 tracking-tight">
-              ₹{(plan.price / 100).toLocaleString()}
-            </div>
-            <div className="text-sm font-bold text-emerald-600 bg-emerald-50 border border-emerald-200/50 px-3 py-1 rounded-full mb-6 mt-2 inline-flex shadow-sm">
-              +{plan.credits} Credits
-            </div>
-            
-            <ul className="text-sm text-slate-600 font-medium flex flex-col gap-3 mb-8 w-full text-left">
-              <li className="flex gap-2.5 items-center"><i className="fas fa-check-circle text-[#10b981]"></i> Advanced AI Models</li>
-              <li className="flex gap-2.5 items-center"><i className="fas fa-check-circle text-[#10b981]"></i> Custom Branding</li>
-              <li className="flex gap-2.5 items-center"><i className="fas fa-check-circle text-[#10b981]"></i> Detailed Analytics</li>
-            </ul>
+        {plans.map((plan, idx) => {
+          const isPopular = idx === 1;
+          const displayPrice = plan.price / 100;
+          
+          return (
+            <div key={plan.id || idx} className={`bg-white border ${isPopular ? 'border-[#f43f5e]' : 'border-slate-200'} rounded-2xl p-6 shadow-sm hover:shadow-md transition-all flex flex-col items-center text-center relative overflow-hidden`}>
+              {isPopular && <div className="absolute top-0 left-0 w-full bg-[#f43f5e] text-white text-[0.65rem] font-bold py-1 uppercase tracking-widest shadow-sm">Most Popular</div>}
+              <h3 className={`text-lg font-bold text-slate-800 ${isPopular ? 'mt-4' : ''}`}>{plan.name}</h3>
+              <div className="text-4xl font-black text-[#6366f1] mt-3 mb-1 tracking-tight">
+                {displayPrice > 0 ? `₹${displayPrice.toLocaleString()}` : 'Free'}
+              </div>
+              <div className="text-sm font-bold text-emerald-600 bg-emerald-50 border border-emerald-200/50 px-3 py-1 rounded-full mb-4 mt-2 inline-flex shadow-sm">
+                +{plan.credits} Credits
+              </div>
+              
+              <p className="text-xs text-slate-500 mb-6 font-medium leading-relaxed">{plan.summary}</p>
+              
+              <ul className="text-sm text-slate-600 font-medium flex flex-col gap-3 mb-8 w-full text-left">
+                {plan.features?.slice(0, 5).map((feature, fIdx) => (
+                  <li key={fIdx} className="flex gap-2.5 items-center">
+                    <i className="fas fa-check-circle text-[#10b981]"></i> {feature}
+                  </li>
+                ))}
+              </ul>
 
-            <button
-              onClick={() => handleSelectPlan(plan)}
-              disabled={isProcessing}
-              className={`mt-auto w-full py-3 rounded-full font-bold text-sm shadow-sm transition-all cursor-pointer ${
-                idx === 1 ? 'bg-[#6366f1] text-white hover:bg-[#4f46e5] hover:shadow-md' : 'bg-slate-100 text-slate-700 hover:bg-slate-200 hover:text-slate-900 border border-slate-200'
-              }`}
-            >
-              {isProcessing ? 'Processing...' : 'Buy via Razorpay'}
-            </button>
-          </div>
-        ))}
+              <button
+                onClick={() => handleSelectPlan(plan)}
+                disabled={isProcessing || displayPrice === 0}
+                className={`mt-auto w-full py-3 rounded-full font-bold text-sm shadow-sm transition-all cursor-pointer ${
+                  displayPrice === 0 ? 'bg-slate-100 text-slate-400 border border-slate-200 cursor-not-allowed' :
+                  isPopular ? 'bg-[#6366f1] text-white hover:bg-[#4f46e5] hover:shadow-md' : 'bg-slate-100 text-slate-700 hover:bg-slate-200 hover:text-slate-900 border border-slate-200'
+                }`}
+              >
+                {isProcessing ? 'Processing...' : (displayPrice === 0 ? 'Current Plan' : 'Buy via Razorpay')}
+              </button>
+            </div>
+          );
+        })}
       </div>
     </Modal>
   )

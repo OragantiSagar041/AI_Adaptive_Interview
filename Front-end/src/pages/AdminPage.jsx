@@ -96,6 +96,7 @@ export default function AdminPage({ role = 'admin' }) {
   const [showUpgradePlansModal, setShowUpgradePlansModal] = useState(false)
   const [isProcessingUpgrade, setIsProcessingUpgrade] = useState(false)
   const [creditRequests, setCreditRequests] = useState([])
+  const [subscriptionPlans, setSubscriptionPlans] = useState([])
 
   // Filters
   const [searchTerm, setSearchTerm] = useState('')
@@ -873,6 +874,12 @@ export default function AdminPage({ role = 'admin' }) {
             const reqData = await reqRes.json()
             setCreditRequests(reqData.data || reqData || [])
           }
+          
+          const plansRes = await fetch(`${API_BASE_URL}/api/plans`)
+          if (plansRes.ok) {
+            const plansData = await plansRes.json()
+            setSubscriptionPlans(plansData.data || [])
+          }
         } catch(e){}
       }
 
@@ -1021,6 +1028,7 @@ export default function AdminPage({ role = 'admin' }) {
     setToken('')
     setAdminUser(null)
   }
+
 
   const handleGenerateLink = async (e) => {
     e.preventDefault()
@@ -2595,6 +2603,7 @@ export default function AdminPage({ role = 'admin' }) {
         onClose={() => setShowUpgradePlansModal(false)}
         handleSelectPlan={handleSelectPlan}
         isProcessing={isProcessingUpgrade}
+        plans={subscriptionPlans}
       />
 
       <CandidateScorecardModal
