@@ -831,6 +831,61 @@ function HomePage() {
     return count
   }
 
+  // Start Coding Round: called after all verbal questions are answered
+  const startCodingRound = async (verbalQuestionsLength) => {
+    if (codingRoundStartedRef.current) return
+    codingRoundStartedRef.current = true
+    setCodingRoundLoading(true)
+
+    const iid = interviewId || sessionDetail?.interview_id || sessionId
+    try {
+      const res = await fetch(`${API_BASE_URL}/coding-round/start`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ interview_id: iid })
+      })
+      const payload = await res.json()
+      if (!res.ok) throw new Error(payload.detail || 'Failed to start coding round')
+
+      const task = payload.coding_round?.task || {}
+      const recommendedLang = task.recommended_language || 'python'
+      setSelectedLanguage(recommendedLang)
+      setCodingRoundData(payload)
+
+      // Build the display text shown in the question card
+      const constraintsText = (task.constraints || []).join(' | ')
+      const questionText = [
+        `🖥️ CODING ROUND — ${task.title || 'Coding Challenge'}`,
+        '',
+        task.description || '',
+        task.input_format ? `\nInput: ${task.input_format}` : '',
+        task.output_format ? `Output: ${task.output_format}` : '',
+        constraintsText ? `\nConstraints: ${constraintsText}` : '',
+      ].filter(Boolean).join('\n')
+
+      // Inject the coding question as the next (last) question
+      const codingQ = {
+        id: verbalQuestionsLength + 1,
+        text: questionText,
+        question: questionText,
+        type: 'coding',
+        category: 'Coding',
+        difficulty: task.difficulty || 'Medium',
+        codingTask: task,
+        codingTests: payload.tests || []
+      }
+      setQuestions(prev => [...prev, codingQ])
+      setCurrentQuestionIndex(verbalQuestionsLength)
+    } catch (err) {
+      console.error('Coding round start failed:', err)
+      // Fallback: skip coding round gracefully if it fails
+      codingRoundStartedRef.current = false
+      handleSubmitInterview()
+    } finally {
+      setCodingRoundLoading(false)
+    }
+  }
+
   // Submit Answer & Move Next
   const handleNextQuestion = async () => {
     if (currentQuestionIndex >= questions.length) return
@@ -880,7 +935,37 @@ function HomePage() {
 
       // Check if this was the last question
       if (currentQuestionIndex === questions.length - 1) {
-        handleSubmitInterview()
+        const isTechnical = (sessionDetail?.interview_type || '').toLowerCase() === 'technical'
+        const isCodingQ = currentQuestion.type === 'coding'
+
+        if (isCodingQ) {
+          // Submit the coding answer to the coding-round/submit endpoint
+          const iid = interviewId || sessionDetail?.interview_id || sessionId
+          try {
+            await fetch(`${API_BASE_URL}/coding-round/submit`, {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({
+                interview_id: iid,
+                code: codeAnswer,
+                explanation: codeAnswer,
+                language: selectedLanguage
+              })
+            })
+          } catch (e) {}
+          handleSubmitInterview()
+        } else if (isTechnical) {
+          // All verbal questions done — transition to coding round
+          setTranscriptionText('')
+          setCodeAnswer('')
+          setCodeOutput('')
+          behavioralStatsRef.current = { wordCount: 0, fillerCount: 0, pauseCount: 0, faceAlerts: 0, tabSwitches: 0 }
+          questionStartTimeRef.current = Date.now()
+          // Pass current question count so startCodingRound knows the new index
+          startCodingRound(questions.length)
+        } else {
+          handleSubmitInterview()
+        }
       } else {
         // Clear templates
         setTranscriptionText('')
