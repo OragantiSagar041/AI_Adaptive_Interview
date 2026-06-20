@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react'
+import '../Interview.css'
 import { useSearchParams, useNavigate, Link } from 'react-router-dom'
 import { API_BASE_URL } from '../apiConfig'
 import { Video, Volume2, ArrowRight, ShieldAlert, Cpu, AlertTriangle, RefreshCw } from 'lucide-react'
@@ -21,6 +22,7 @@ function HomePage() {
 
   // Screen States
   const [loading, setLoading] = useState(true)
+  const [showAllSet, setShowAllSet] = useState(false)
   const [error, setError] = useState(null)
   const [isDisclaimerAccepted, setIsDisclaimerAccepted] = useState(false)
   const [agreeChecked, setAgreeChecked] = useState(false)
@@ -183,29 +185,8 @@ function HomePage() {
   }, [showSkipButton, skipCountdown])
 
   const handleSkipUpload = () => {
-    Swal.fire({
-      title: 'Interview Completed',
-      text: 'Your textual responses were saved successfully. Video upload skipped.',
-      icon: 'success',
-      background: '#161c2d',
-      color: '#fff',
-      customClass: {
-        popup: 'border border-white/8 rounded-2xl shadow-2xl',
-        title: 'text-xl font-bold text-white',
-        htmlContainer: 'text-slate-300 text-sm',
-        confirmButton: 'bg-primary hover:bg-primary-hover text-white rounded-full px-6 py-2.5 font-semibold text-sm cursor-pointer border-none outline-none'
-      },
-      buttonsStyling: false,
-      allowOutsideClick: false
-    }).then(() => {
-      document.body.innerHTML = `
-        <div style="display:flex; flex-direction:column; align-items:center; justify-content:center; height:100vh; font-family:sans-serif; text-align:center; background:#0f172a; color:#fff;">
-          <h1 style="font-size:24px; font-weight:bold; margin-bottom:16px;">Thanks! Your interview is complete.</h1>
-          <p style="color:#94a3b8; margin-bottom:24px;">You can now close this tab safely.</p>
-          <button onclick="window.close()" style="padding:10px 24px; background:#4f46e5; color:white; border:none; border-radius:9999px; cursor:pointer;">Close Window</button>
-        </div>
-      `
-    })
+    setShowSkipButton(false)
+    setShowAllSet(true)
   }
 
   useEffect(() => {
@@ -526,11 +507,13 @@ function HomePage() {
   const recordAlertMetric = async (type) => {
     behavioralStatsRef.current.faceAlerts += 1
     try {
+      /* Backend endpoint doesn't exist yet
       await fetch(`${API_BASE_URL}/record-proctoring-violation/${sessionId}`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ violation_type: type })
       })
+      */
     } catch (e) {}
   }
 
@@ -862,9 +845,9 @@ function HomePage() {
     try {
       const answerForm = new FormData()
       answerForm.append('interview_id', interviewId || sessionDetail?.interview_id || sessionId)
-      answerForm.append('question_id', currentQuestion.id)
+      answerForm.append('question_id', currentQuestion.id || (currentQuestionIndex + 1))
       answerForm.append('question_text', currentQuestion.text || currentQuestion.question || '')
-      answerForm.append('answer_text', currentQuestion.type === 'coding' ? codeAnswer : transcriptionText)
+      answerForm.append('answer_text', currentQuestion.type === 'coding' ? (codeAnswer || ' ') : (transcriptionText || ' '))
       answerForm.append('candidate_name', sessionDetail?.candidate_name || 'Candidate')
       answerForm.append('time_spent_seconds', '0')
       answerForm.append('time_limit_seconds', '120')
@@ -1023,16 +1006,16 @@ function HomePage() {
       await fetch(`${API_BASE_URL}/complete-session/${sessionId}`, { method: 'POST' })
     } catch (e) {}
 
-    // Complete UI screen
+        // Complete UI screen
     setShowSkipButton(false)
-    setUploadingText("Interview Completed successfully! Thank you for participating.")
+    setUploadPercentage(100)
     setTimeout(() => {
       // Exit fullscreen
       if (document.fullscreenElement) {
         document.exitFullscreen().catch(err => console.log(err))
       }
-      navigate('/')
-    }, 3000)
+      setShowAllSet(true)
+    }, 1500)
   }
 
   if (loading) {
@@ -1101,25 +1084,41 @@ function HomePage() {
     )
   }
 
+  // Render "All Set!" screen
+  if (showAllSet) {
+    return (
+      <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', height: '100vh', fontFamily: 'sans-serif', textAlign: 'center', background: '#0f172a', color: '#fff' }}>
+        <div style={{ background: '#22c55e', width: '80px', height: '80px', borderRadius: '50%', display: 'flex', alignItems: 'center', justifyContent: 'center', marginBottom: '1.5rem' }}>
+          <svg style={{ width: '40px', height: '40px', color: '#fff' }} fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="3" d="M5 13l4 4L19 7"></path></svg>
+        </div>
+        <h1 style={{ fontSize: '32px', fontWeight: 'bold', marginBottom: '16px' }}>All Set!</h1>
+        <p style={{ color: '#94a3b8', marginBottom: '32px', fontSize: '18px' }}>Your interview has been successfully submitted and saved.</p>
+        <button onClick={() => navigate('/')} style={{ padding: '12px 32px', background: '#4f46e5', color: 'white', border: 'none', borderRadius: '9999px', cursor: 'pointer', fontSize: '16px', fontWeight: 'bold' }}>
+          Exit Now
+        </button>
+      </div>
+    )
+  }
+
   // Render Video uploading progress panel
   if (uploadingText) {
     return (
-      <div className="flex justify-center items-center h-screen flex-col gap-5 p-6 text-center">
-        <h2 className="text-2xl font-bold text-slate-900 tracking-tight">{uploadingText}</h2>
+      <div style={{ display: 'flex', justifyContent: 'center', alignItems: 'center', height: '100vh', flexDirection: 'column', gap: '20px', padding: '24px', textAlign: 'center', background: '#0f172a' }}>
+        <h2 style={{ fontSize: '24px', fontWeight: 'bold', color: '#fff' }}>{uploadingText}</h2>
         {uploadPercentage > 0 && uploadPercentage < 100 && (
-          <div className="w-[300px] h-2.5 bg-slate-100 border border-slate-200 rounded-full overflow-hidden">
-            <div className="h-full bg-primary transition-all duration-300" style={{ width: `${uploadPercentage}%` }}></div>
+          <div style={{ width: '300px', height: '10px', background: '#1e293b', border: '1px solid #334155', borderRadius: '9999px', overflow: 'hidden' }}>
+            <div style={{ height: '100%', background: '#4f46e5', transition: 'width 0.3s', width: `${uploadPercentage}%` }}></div>
           </div>
         )}
         {showSkipButton && uploadPercentage < 100 && (
-          <div className="mt-4 p-4 border border-amber-200 bg-amber-50 rounded-xl max-w-sm">
-            <p className="text-amber-800 text-sm font-medium mb-3">
+          <div style={{ marginTop: '16px', padding: '16px', border: '1px solid #fbbf24', background: '#fffbeb', borderRadius: '12px', maxWidth: '380px' }}>
+            <p style={{ color: '#92400e', fontSize: '14px', fontWeight: '500', marginBottom: '12px' }}>
               Takes too long? Your text answers are already saved.
             </p>
             <button 
               onClick={handleSkipUpload}
               disabled={skipCountdown > 0}
-              className={`px-4 py-2 rounded-full text-sm font-semibold transition-all ${skipCountdown > 0 ? 'bg-slate-200 text-slate-400 cursor-not-allowed' : 'bg-amber-100 text-amber-700 hover:bg-amber-200 border border-amber-300'}`}
+              style={{ padding: '8px 16px', borderRadius: '9999px', fontSize: '14px', fontWeight: 'bold', cursor: skipCountdown > 0 ? 'not-allowed' : 'pointer', background: skipCountdown > 0 ? '#e2e8f0' : '#fef3c7', color: skipCountdown > 0 ? '#94a3b8' : '#b45309', border: skipCountdown > 0 ? 'none' : '1px solid #fcd34d' }}
             >
               {skipCountdown > 0 ? `Skip available in ${skipCountdown}s` : 'Skip Video Upload'}
             </button>
@@ -1130,28 +1129,27 @@ function HomePage() {
   }
 
   return (
-    <div className="p-6 min-h-screen flex flex-col gap-6">
-      
+    <div className="container">
       {/* Background Noise banner */}
       {showNoiseBanner && (
-        <div className="fixed top-5 right-5 z-[99999] p-4 rounded-xl bg-warning/10 border border-warning text-warning flex items-center gap-3 shadow-lg max-w-sm">
-          <Volume2 size={20} className="flex-shrink-0 animate-bounce" />
+        <div style={{ position: 'fixed', top: '20px', right: '20px', zIndex: 99999, padding: '16px', borderRadius: '12px', background: 'rgba(245, 158, 11, 0.1)', border: '1px solid #f59e0b', color: '#f59e0b', display: 'flex', alignItems: 'center', gap: '12px', boxShadow: '0 4px 6px rgba(0,0,0,0.1)', maxWidth: '380px' }}>
+          <Volume2 size={20} style={{ animation: 'bounce 1s infinite' }} />
           <div>
-            <strong className="text-sm block">Background Noise Alert</strong>
-            <p className="text-xs text-warning/90 mt-0.5">Please maintain silence. Alerts: {noiseAlertCount}/20</p>
+            <strong style={{ fontSize: '14px', display: 'block' }}>Background Noise Alert</strong>
+            <p style={{ fontSize: '12px', opacity: 0.9, margin: '2px 0 0 0' }}>Please maintain silence. Alerts: {noiseAlertCount}/20</p>
           </div>
         </div>
       )}
 
       {/* Fullscreen Alert Banner */}
       {fullscreenWarning && (
-        <div className="fixed inset-0 bg-black/95 z-[99999] flex flex-col justify-center items-center gap-5 text-center p-6">
-          <ShieldAlert size={60} className="text-danger animate-pulse" />
-          <h2 className="text-3xl font-extrabold text-white tracking-tight">⚠️ Anti-Cheating Alert</h2>
-          <p className="text-base text-slate-400 max-w-lg leading-relaxed">Full Screen Mode is REQUIRED to take this interview. Exiting fullscreen compromises proctoring validation.</p>
+        <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.95)', zIndex: 99999, display: 'flex', flexDirection: 'column', justifyContent: 'center', alignItems: 'center', gap: '20px', textAlign: 'center', padding: '24px' }}>
+          <ShieldAlert size={60} color="#ef4444" style={{ animation: 'pulse 2s infinite' }} />
+          <h2 style={{ fontSize: '30px', fontWeight: '800', color: '#fff' }}>⚠️ Anti-Cheating Alert</h2>
+          <p style={{ fontSize: '16px', color: '#94a3b8', maxWidth: '500px', lineHeight: '1.5' }}>Full Screen Mode is REQUIRED to take this interview. Exiting fullscreen compromises proctoring validation.</p>
           <button
             onClick={enableFullscreen}
-            className="px-8 py-3 rounded-full bg-primary hover:bg-primary-hover text-white font-semibold text-sm shadow-[0_4px_14px_rgba(99,102,241,0.15)] cursor-pointer border-none"
+            style={{ padding: '12px 32px', borderRadius: '9999px', background: '#4f46e5', color: '#fff', fontWeight: 'bold', border: 'none', cursor: 'pointer' }}
           >
             Enable Full Screen
           </button>
@@ -1160,167 +1158,236 @@ function HomePage() {
 
       {/* Screen Share alert */}
       {screenShareWarning && (
-        <div className="fixed inset-0 bg-black/95 z-[99999] flex flex-col justify-center items-center gap-5 text-center p-6">
-          <ShieldAlert size={60} className="text-danger animate-pulse" />
-          <h2 className="text-2xl font-bold text-white tracking-tight">Screen Sharing Stopped</h2>
-          <p className="text-slate-400 text-sm max-w-md">You must share your entire screen to continue the proctored interview. Violations: {screenShareViolations} of 3</p>
+        <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.95)', zIndex: 99999, display: 'flex', flexDirection: 'column', justifyContent: 'center', alignItems: 'center', gap: '20px', textAlign: 'center', padding: '24px' }}>
+          <ShieldAlert size={60} color="#ef4444" style={{ animation: 'pulse 2s infinite' }} />
+          <h2 style={{ fontSize: '24px', fontWeight: 'bold', color: '#fff' }}>Screen Sharing Stopped</h2>
+          <p style={{ color: '#94a3b8', fontSize: '14px', maxWidth: '400px' }}>You must share your entire screen to continue the proctored interview. Violations: {screenShareViolations} of 3</p>
           <button
             onClick={restartScreenShare}
-            className="px-6 py-2.5 rounded-full bg-primary hover:bg-primary-hover text-white text-sm font-semibold cursor-pointer border-none shadow-[0_4px_14px_rgba(99,102,241,0.15)]"
+            style={{ padding: '10px 24px', borderRadius: '9999px', background: '#4f46e5', color: '#fff', fontSize: '14px', fontWeight: 'bold', cursor: 'pointer', border: 'none' }}
           >
             Restart Screen Share
           </button>
         </div>
       )}
 
-      {/* Header Info */}
-      <header className="flex justify-between items-center bg-white/90 backdrop-blur-md border border-slate-200 rounded-2xl px-6 py-4 shadow-[0_18px_45px_rgba(15,23,42,0.12)]">
-        <div>
-          <span className="text-[0.68rem] font-bold text-slate-500 uppercase tracking-wider block">Secure Candidate Portal</span>
-          <h3 className="text-base font-bold text-slate-900 mt-0.5">{sessionDetail?.candidate_name} — {sessionDetail?.interview_title}</h3>
-        </div>
-        <div className="flex items-center gap-3">
-          <span className="bg-primary/10 text-primary px-3 py-1 rounded-full text-xs font-bold uppercase tracking-wider">Q: {currentQuestionIndex + 1} / {questions.length}</span>
-          <span className="bg-success/10 text-success px-3 py-1 rounded-full text-xs font-bold uppercase tracking-wider animate-pulse">Proctored</span>
-        </div>
-      </header>
+      <div id="interviewSection">
+        <svg width="0" height="0" style={{ position: 'absolute' }}>
+          <defs>
+            <linearGradient id="timerGradient" x1="0%" y1="0%" x2="100%" y2="0%">
+              <stop offset="0%" stopColor="#6366f1" />
+              <stop offset="100%" stopColor="#8b5cf6" />
+            </linearGradient>
+          </defs>
+        </svg>
 
-      {/* Main Panel Grid */}
-      <main className={`grid gap-6 flex-grow ${currentQuestion?.type === 'coding' ? 'grid-cols-1' : 'grid-cols-1 lg:grid-cols-[380px_1fr]'}`}>
-        
-        {/* Left Side: Avatar/Camera Preview (Hidden in coding round for layout space) */}
-        {currentQuestion?.type !== 'coding' && (
-          <div className="flex flex-col gap-6">
-            <div className="bg-white/90 backdrop-blur-md border border-slate-200 rounded-2xl p-0 overflow-hidden relative shadow-[0_18px_45px_rgba(15,23,42,0.12)]">
-              <video ref={videoPreviewRef} className="w-full h-[260px] object-cover bg-black" />
-              {proctoringAlert && (
-                <div className="absolute bottom-3 left-3 right-3 p-3 bg-danger text-white rounded-lg text-xs font-extrabold flex gap-2 items-center shadow-md animate-pulse">
-                  <ShieldAlert size={14} className="flex-shrink-0" /> {proctoringAlert}
-                </div>
-              )}
+        {/* ═══ LEFT COLUMN ═══ */}
+        <div className="ip-left">
+          {/* AI Avatar */}
+          <div className="ip-avatar-card">
+            <video ref={videoPreviewRef} autoPlay muted playsInline id="videoPreview" />
+            <div className="live-badge">LIVE</div>
+            {proctoringAlert && (
+               <div style={{ position: 'absolute', top: 0, left: 0, width: '100%', height: '100%', background: 'rgba(0,0,0,0.8)', color: '#ef4444', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 10, fontSize: '1.2rem', fontWeight: 'bold', flexDirection: 'column', textAlign: 'center', padding: '20px' }}>
+                 <span style={{ fontSize: '3rem', marginBottom: '10px' }}>⚠️</span>
+                 <div>{proctoringAlert}</div>
+               </div>
+            )}
+          </div>
+
+          {/* AI Analyzing Status */}
+          <div className="ip-analyzing-card">
+            <div className="ip-analyzing-icon">
+              <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                <circle cx="12" cy="8" r="4" />
+                <path d="M6 20v-2a6 6 0 0 1 12 0v2" />
+              </svg>
+            </div>
+            <div className="ip-analyzing-text">
+              <h4>AI Analyzing</h4>
+              <p>AI is Reading the Question...</p>
+            </div>
+            <div className="ip-audio-bars">
+              <span></span><span></span><span></span><span></span>
+            </div>
+          </div>
+
+          {/* Circular Timer */}
+          <div className="ip-timer-card">
+            <div className="ip-timer-ring">
+              <svg width="110" height="110" viewBox="0 0 110 110">
+                <circle className="track" cx="55" cy="55" r="47" />
+                <circle className="fill" cx="55" cy="55" r="47" />
+              </svg>
+              <div className="ip-timer-label">
+                <span>02:00</span>
+                <span className="remaining-lbl">Remaining</span>
+              </div>
+            </div>
+            <button className="ip-end-btn" onClick={() => handleSubmitInterview(false)}>
+              ⏹ End Interview
+            </button>
+          </div>
+
+          {/* AI Insights */}
+          <div className="ip-insights-card">
+            <h4>AI Insights</h4>
+
+            <div className="insight-row">
+              <div className="insight-row-header">
+                <span className="insight-label">CLARITY</span>
+                <span className="insight-value" style={{ color: '#10b981' }}>60%</span>
+              </div>
+              <div className="insight-bar-track">
+                <div className="insight-bar-fill clarity" style={{ width: '60%' }}></div>
+              </div>
             </div>
 
-            <div className="bg-white/90 backdrop-blur-md border border-slate-200 rounded-2xl p-4 text-center flex flex-col gap-2 shadow-[0_18px_45px_rgba(15,23,42,0.12)]">
-              <span className="text-slate-500 text-xs font-semibold uppercase tracking-wider">Continuous AI Proctoring</span>
-              <div className="flex justify-center gap-1 items-end h-[24px]">
-                <span className="w-1 h-3 bg-success rounded-full"></span>
-                <span className="w-1 h-5 bg-success rounded-full animate-bounce"></span>
-                <span className="w-1 h-2 bg-success rounded-full"></span>
-                <span className="w-1 h-4.5 bg-success rounded-full animate-bounce delay-75"></span>
+            <div className="insight-row">
+              <div className="insight-row-header">
+                <span className="insight-label">TECHNICAL DEPTH</span>
+                <span className="insight-value" style={{ color: '#6366f1' }}>30%</span>
+              </div>
+              <div className="insight-bar-track">
+                <div className="insight-bar-fill techDepth" style={{ width: '30%' }}></div>
+              </div>
+            </div>
+
+            <div className="insight-row">
+              <div className="insight-row-header">
+                <span className="insight-label">CONFIDENCE</span>
+                <span className="insight-value" style={{ color: '#f59e0b' }}>80%</span>
+              </div>
+              <div className="insight-bar-track">
+                <div className="insight-bar-fill confidence" style={{ width: '80%' }}></div>
               </div>
             </div>
           </div>
-        )}
+        </div>
 
-        {/* Right Side / Entire layout: Question Workspace */}
-        <div className="flex flex-col gap-6">
-          
-          {/* Question Text */}
-          <div className="bg-white/90 backdrop-blur-md border border-slate-200 rounded-2xl p-6 shadow-[0_18px_45px_rgba(15,23,42,0.12)] flex flex-col items-start gap-3">
-            <span className="bg-primary/10 text-primary px-3 py-0.5 rounded-full text-xs font-bold uppercase tracking-wider">{currentQuestion?.type} round</span>
-            <h2 className="text-xl sm:text-2xl font-bold text-slate-900 leading-relaxed">{currentQuestionText || 'Question is loading...'}</h2>
-          </div>
-
-          {/* Answer Workspace */}
+        {/* ═══ RIGHT COLUMN ═══ */}
+        <div className="ip-right">
           {currentQuestion?.type === 'coding' ? (
-            /* Coding Round side-by-side workspace */
-            <div className="grid grid-cols-1 lg:grid-cols-[1.2fr_0.8fr] gap-6 flex-grow">
-              {/* Left Column: Compiler details & code editor */}
-              <div className="bg-white/90 backdrop-blur-md border border-slate-200 rounded-2xl p-6 shadow-[0_18px_45px_rgba(15,23,42,0.12)] flex flex-col gap-4">
-                <div className="flex justify-between items-center">
-                  <label className="text-xs font-semibold uppercase tracking-wider text-slate-500 m-0">Code Editor</label>
+            <div className="coding-round-shell" style={{ flexGrow: 1, display: 'flex', flexDirection: 'column', marginTop: '0', background: '#0f172a', borderColor: '#1e293b', borderRadius: '14px', padding: '1.5rem' }}>
+              <div className="coding-round-header">
+                <div>
+                  <h5 className="coding-round-kicker" style={{ color: '#818cf8' }}>Technical Assessment</h5>
+                  <h2 style={{ color: '#f8fafc', margin: 0 }}>Coding Round</h2>
+                </div>
+                <div className="coding-round-actions">
                   <select
-                    className="bg-slate-50 border border-slate-200 rounded-lg px-3 py-1 text-slate-900 text-xs outline-none cursor-pointer focus:border-primary"
+                    className="coding-tab-pill"
                     value={selectedLanguage}
                     onChange={(e) => setSelectedLanguage(e.target.value)}
+                    style={{ background: '#1e293b', color: '#f8fafc', borderColor: '#334155' }}
                   >
                     <option value="python">Python 3</option>
                     <option value="javascript">JavaScript</option>
                     <option value="cpp">C++</option>
                   </select>
                 </div>
-                
-                <textarea
-                  className="w-full bg-[#0e111a] border border-white/8 rounded-lg p-4 text-[#82aaff] text-sm font-mono outline-none focus:border-primary min-h-[300px] flex-grow resize-y"
-                  value={codeAnswer}
-                  onChange={(e) => setCodeAnswer(e.target.value)}
-                  placeholder="// Write your code solution here..."
-                />
-
-                <div className="flex gap-3 mt-2">
-                  <button
-                    onClick={handleRunCode}
-                    disabled={compiling}
-                    className="flex-1 py-3 rounded-full font-semibold text-sm bg-white hover:bg-slate-50 text-slate-900 border border-slate-200 cursor-pointer transition-all flex items-center justify-center gap-1.5"
-                  >
-                    <Cpu size={16} /> {compiling ? "Running..." : "Run Test Code"}
-                  </button>
-                  <button
-                    onClick={handleNextQuestion}
-                    className="flex-1 py-3 rounded-full font-semibold text-sm bg-primary hover:bg-primary-hover text-white cursor-pointer transition-all border-none flex items-center justify-center gap-1.5 shadow-[0_4px_14px_rgba(99,102,241,0.15)]"
-                  >
-                    Submit Code Answer <ArrowRight size={16} />
-                  </button>
-                </div>
               </div>
 
-              {/* Right Column: Execution stdout console & webcam widget */}
-              <div className="flex flex-col gap-6">
-                {/* Webcam feedback during coding */}
-                <div className="bg-white/90 backdrop-blur-md border border-slate-200 rounded-2xl p-0 overflow-hidden h-[150px] relative shadow-[0_18px_45px_rgba(15,23,42,0.12)]">
-                  <video ref={videoPreviewRef} className="w-full h-full object-cover bg-black" />
-                </div>
+              <div className="coding-round-grid" style={{ display: 'flex', flexDirection: 'column', minHeight: '300px', flexGrow: 1 }}>
+                <div className="coding-editor-card" style={{ background: '#0f172a', borderColor: '#1e293b', flexGrow: 1 }}>
+                  
+                  <div className="coding-editor-container" style={{ background: '#020617', border: 'none' }}>
+                    <textarea
+                      className="w-full h-full bg-transparent text-[#e2e8f0] p-4 font-mono text-sm border-none outline-none resize-none"
+                      value={codeAnswer}
+                      onChange={(e) => setCodeAnswer(e.target.value)}
+                      placeholder="// Write your code solution here..."
+                      style={{ minHeight: '200px' }}
+                    ></textarea>
+                  </div>
 
-                {/* Console */}
-                <div className="bg-white/90 backdrop-blur-md border border-slate-200 rounded-2xl p-6 shadow-[0_18px_45px_rgba(15,23,42,0.12)] flex flex-col gap-3 flex-grow">
-                  <label className="text-xs font-semibold uppercase tracking-wider text-slate-500 m-0">Output Console</label>
-                  <pre className="flex-grow bg-[#090d16] border border-white/5 rounded-lg p-3 font-mono text-xs text-emerald-400 overflow-auto whitespace-pre-wrap min-h-[140px]">
-                    {codeOutput || "No compilation stdout. Run test code to check outputs."}
-                  </pre>
+                  <div className="coding-console-shell" style={{ background: '#0f172a', borderColor: '#1e293b', minHeight: '120px' }}>
+                    <div className="coding-console-tabs" style={{ background: '#1e293b', borderColor: '#334155' }}>
+                      <button className="coding-console-tab active" style={{ color: '#f8fafc' }}>Test Output</button>
+                    </div>
+                    <div className="coding-console-pane active">
+                      <pre className="text-emerald-400 font-mono text-xs whitespace-pre-wrap">
+                        {codeOutput || "Run code to see output..."}
+                      </pre>
+                    </div>
+                  </div>
                 </div>
               </div>
             </div>
           ) : (
-            /* Traditional Q&A Speech-to-Text workspace */
-            <div className="bg-white/90 backdrop-blur-md border border-slate-200 rounded-2xl p-6 shadow-[0_18px_45px_rgba(15,23,42,0.12)] flex flex-col gap-4 flex-grow">
-              <label className="text-xs font-semibold uppercase tracking-wider text-slate-500 m-0">Live Transcription Answer Box</label>
-              
-              <textarea
-                className="w-full bg-slate-50 border border-slate-200 rounded-lg p-4 text-slate-900 text-sm outline-none placeholder:text-slate-500 min-h-[180px] flex-grow resize-y cursor-default"
-                value={transcriptionText}
-                readOnly
-                placeholder="Microphone transcription will stream here automatically."
-              />
-              <canvas 
-                id="audioVisualizer" 
-                ref={visualizerCanvasRef} 
-                width="800" 
-                height="80" 
-                className="w-full h-[80px] mt-4 rounded-lg bg-slate-50 border border-slate-200 shadow-inner"
-              ></canvas>
-
-              <div className="flex justify-between items-center mt-2 flex-wrap gap-3">
-                <button
-                  onClick={() => speakAIQuestion(currentQuestionText)}
-                  className="py-2.5 px-5 rounded-full font-semibold text-xs bg-white hover:bg-slate-50 text-slate-900 border border-slate-200 cursor-pointer transition-all flex items-center gap-1.5"
-                >
-                  <Volume2 size={16} /> Repeat Question
-                </button>
-                
-                <button
-                  onClick={handleNextQuestion}
-                  className="py-3 px-8 rounded-full font-semibold text-sm bg-primary hover:bg-primary-hover text-white border-none cursor-pointer transition-all flex items-center gap-1.5 shadow-[0_4px_14px_rgba(99,102,241,0.15)]"
-                >
-                  Next Question <ArrowRight size={16} />
-                </button>
+            <>
+              {/* Question Card */}
+              <div className="ip-question-card">
+                <div style={{ fontSize: '0.78rem', color: '#9ca3af', fontWeight: 600, marginBottom: '0.5rem' }}>
+                  Question <span id="questionNumber">{currentQuestionIndex + 1}</span> of <span id="totalQuestions">{questions.length}</span>
+                </div>
+                <div className="ip-question-meta">
+                  <span className="ip-tag type">{currentQuestion?.type || 'Self-Introduction'}</span>
+                  <span className="ip-tag difficulty">Easy</span>
+                </div>
+                <div className="ip-question-body">
+                  <div className="q-bar"></div>
+                  <p>{currentQuestionText || 'Question is loading...'}</p>
+                  <button className="ip-mute-btn" onClick={() => speakAIQuestion(currentQuestionText)}>
+                    <svg xmlns="http://www.w3.org/2000/svg" width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                      <line x1="1" y1="1" x2="23" y2="23" />
+                      <path d="M9 9v3a3 3 0 0 0 5.12 2.12M15 9.34V4a3 3 0 0 0-5.94-.6" />
+                      <path d="M17 16.95A7 7 0 0 1 5 12v-2m14 0v2a7 7 0 0 1-.11 1.23" />
+                      <line x1="12" y1="19" x2="12" y2="23" />
+                      <line x1="8" y1="23" x2="16" y2="23" />
+                    </svg>
+                  </button>
+                </div>
               </div>
-            </div>
+
+              {/* Live Transcript Card */}
+              <div className="ip-transcript-card">
+                <div className="ip-transcript-header">
+                  <div className="ip-transcript-title">
+                    🎙 Live Transcript
+                  </div>
+                  <div className="ip-recording-badge">
+                    <div className="rec-dot"></div>
+                    RECORDING
+                  </div>
+                </div>
+                <textarea 
+                  className="ip-transcript-box" 
+                  placeholder="Your speech will appear here automatically..." 
+                  readOnly
+                  value={transcriptionText}
+                />
+              </div>
+            </>
           )}
 
+          {/* Navigation */}
+          <div className="ip-nav-row">
+            {currentQuestion?.type === 'coding' && (
+              <button className="ip-btn-prev" onClick={handleRunCode} disabled={compiling} style={{ marginRight: 'auto', background: '#3b82f6', color: 'white', border: 'none' }}>
+                {compiling ? 'Running...' : 'Run Code'}
+              </button>
+            )}
+            
+            <button className="ip-btn-prev" onClick={() => setCurrentQuestionIndex(prev => Math.max(0, prev - 1))} disabled={currentQuestionIndex === 0}>← Prev</button>
+            
+            {currentQuestionIndex === questions.length - 1 ? (
+              <button className="ip-btn-next" style={{ background: '#2563eb' }} onClick={() => {
+                handleSubmitInterview(false);
+                setTimeout(() => navigate('/case-study'), 1500);
+              }}>
+                Next Round →
+              </button>
+            ) : (
+              <button className="ip-btn-next" onClick={handleNextQuestion}>Next →</button>
+            )}
+          </div>
+
         </div>
-      </main>
+      </div>
     </div>
   )
 }
 
 export default HomePage
+

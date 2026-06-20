@@ -251,7 +251,7 @@ function LandingPage() {
                         {getPlanBadge(plan, index)}
                       </span>
                       <h3 className="pr-24 text-xl font-extrabold tracking-tight">{plan.plan_name}</h3>
-                      <div className={`mt-2 text-sm ${isFeatured ? 'text-white/70' : 'text-slate-500'}`}>{plan.duration_days} days of workspace access</div>
+                      <div className={`mt-2 text-sm ${isFeatured ? 'text-white/70' : 'text-slate-500'}`}>{plan.duration_days || 30} days of workspace access</div>
                       <div className="mt-5 text-4xl font-extrabold tracking-tight">
                         {formatPrice(plan.price)}
                         {plan.price > 0 && <span className={`text-sm font-semibold ${isFeatured ? 'text-white/70' : 'text-slate-500'}`}> / subscription</span>}
