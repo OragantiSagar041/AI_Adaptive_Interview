@@ -31,7 +31,7 @@ import {
   setLiveResultsModalOpen,
   setSelectedCandidate,
   handleOpenScorecard,
-  handleDeleteSession,
+  handleDeleteSession as deleteSessionThunk,
   handleUpdateDecision
 } from '../store/slices/interviewSlice'
 import { handleUpdateCreditRequest } from '../store/slices/creditsSlice'
@@ -143,7 +143,7 @@ export default function AdminPage({ role: initialRole = 'admin' }) {
 
   const [searchParams] = useSearchParams()
   const tabParam = searchParams.get('tab')
-  
+
   // Derive activeTab from path or search params
   let activeTab = 'dashboard'
   if (role === 'superadmin') {
@@ -176,26 +176,13 @@ export default function AdminPage({ role: initialRole = 'admin' }) {
   const [isRequesting, setIsRequesting] = useState(false)
   const [showUpgradePlansModal, setShowUpgradePlansModal] = useState(false)
   const [isProcessingUpgrade, setIsProcessingUpgrade] = useState(false)
-  const [creditRequests, setCreditRequests] = useState([])
   const [subscriptionPlans, setSubscriptionPlans] = useState([])
-
-  // Filters
-  const [searchTerm, setSearchTerm] = useState('')
-  const [startDate, setStartDate] = useState('')
-  const [endDate, setEndDate] = useState('')
-  const [statusFilter, setStatusFilter] = useState('all')
-  const [sortBy, setSortBy] = useState('score')
-
-  // Selection states (for bulk delete)
-  const [selectedIds, setSelectedIds] = useState([])
 
   // Invite candidate state
   const [inviteInterviewId, setInviteInterviewId] = useState(null)
   const [inviteForm, setInviteForm] = useState({ name: '', email: '' })
   const [inviting, setInviting] = useState(false)
 
-  // Pagination states
-  const [currentPage, setCurrentPage] = useState(1)
   const PAGE_SIZE = 10
 
   // New create interview form states
@@ -276,29 +263,6 @@ export default function AdminPage({ role: initialRole = 'admin' }) {
   const [bulkResultsModalOpen, setBulkResultsModalOpen] = useState(false)
   const [bulkResultsData, setBulkResultsData] = useState(null)
 
-  // Live monitoring states
-  const [liveResultsModalOpen, setLiveResultsModalOpen] = useState(false)
-  const [liveSessions, setLiveSessions] = useState([])
-  const [ongoingLiveCount, setOngoingLiveCount] = useState(0)
-  const [ongoingAlertCount, setOngoingAlertCount] = useState(0)
-  const [ongoingAvgConfidence, setOngoingAvgConfidence] = useState(0)
-  const [ongoingSpeakingCount, setOngoingSpeakingCount] = useState(0)
-  const [ongoingCodingCount, setOngoingCodingCount] = useState(0)
-  const [ongoingMonitoredCount, setOngoingMonitoredCount] = useState(0)
-
-  // Dashboard Aggregated Stats (Backend mapped)
-  const [dbStats, setDbStats] = useState({
-    total: '--',
-    pending: '--',
-    completed: '--',
-    started: '--',
-    expired: '--',
-    selected: '--',
-    rejected: '--',
-    avg_score: '--',
-    today: '--'
-  })
-
   const accentColors = {
     teal: { primary: '#0d9488', hover: '#0f766e', glow: 'rgba(13, 148, 136, 0.15)' },
     indigo: { primary: '#6366f1', hover: '#4f46e5', glow: 'rgba(99, 102, 241, 0.15)' },
@@ -309,7 +273,7 @@ export default function AdminPage({ role: initialRole = 'admin' }) {
   }
 
   const currentAccent = accentColors[accentName] || accentColors.indigo
-  
+
   // Inject CSS override variables
   useEffect(() => {
     document.documentElement.style.setProperty('--accent-theme-color', currentAccent.primary)
@@ -330,46 +294,25 @@ export default function AdminPage({ role: initialRole = 'admin' }) {
     return () => clearInterval(statsInterval)
   }, [dispatch, token, selectedAdminId])
 
-          let live = 0
-          let alerts = 0
-          let speaking = 0
-          let coding = 0
+  useEffect(() => {
+    if (!token || (adminUser?.role !== 'superadmin' && role !== 'superadmin')) return
 
-          const sessions = data.sessions || []
-          sessions.forEach(s => {
-            if (s.online) live++
-            if (!s.online && (data.count || 0) > 0) alerts++
-            if (s.audio_level > 5) speaking++
-            if (s.current_question && s.current_question.toString().includes('code')) coding++
-          })
-
-          setOngoingLiveCount(live)
-          setOngoingAlertCount(alerts)
-          setOngoingSpeakingCount(speaking)
-          setOngoingCodingCount(coding)
+    const fetchSubscriptionPlans = async () => {
+      try {
+        const plansRes = await fetch(`${API_BASE_URL}/api/plans`)
+        if (plansRes.ok) {
+          const plansData = await plansRes.json()
+          setSubscriptionPlans(plansData.data || [])
         }
-      } catch (err) {
-        console.error("Ongoing interviews polling error:", err)
+      } catch (e) {
+        console.error(e)
       }
     }
 
-    loadDashboardStats()
-    const statsInterval = setInterval(loadDashboardStats, 12000)
+    fetchSubscriptionPlans()
+  }, [token, adminUser, role, API_BASE_URL])
 
-    let ongoingInterval = null
-    const hasLiveMonitoring = adminUser?.plan_capabilities?.live_monitoring || role === 'superadmin'
-    if (hasLiveMonitoring) {
-      fetchOngoing()
-      ongoingInterval = setInterval(fetchOngoing, 12000)
-    }
-
-    return () => {
-      clearInterval(statsInterval)
-      if (ongoingInterval) {
-        clearInterval(ongoingInterval)
-      }
-    }
-  }, [token, adminUser, selectedAdminId, role])
+  const refreshDashboardData = () => dispatch(loadDashboardData(selectedAdminId))
 
   // Form input setters
   const handleSingleChange = (key, value) => {
@@ -649,7 +592,7 @@ export default function AdminPage({ role: initialRole = 'admin' }) {
         setAtsScoreData(null)
         setCustomEmailHtml('')
 
-        loadDashboardData()
+        refreshDashboardData()
       } else {
         alert(data.detail || data.message || "Failed to create session.")
       }
@@ -816,7 +759,7 @@ export default function AdminPage({ role: initialRole = 'admin' }) {
         setBulkResultsModalOpen(true)
         setBulkCandidates([])
         setCustomEmailHtml('')
-        loadDashboardData()
+        refreshDashboardData()
       } else {
         alert(data.detail || data.message || "Failed to create bulk sessions.")
       }
@@ -825,100 +768,6 @@ export default function AdminPage({ role: initialRole = 'admin' }) {
       alert("Error sending bulk interviews.")
     } finally {
       setInviting(false)
-    }
-  }
-
-  useEffect(() => {
-    if (token) {
-      loadDashboardData()
-    }
-  }, [token, selectedAdminId, role])
-
-  const loadDashboardData = async () => {
-    setLoadingData(true)
-    try {
-      const headers = { 'Authorization': `Bearer ${token}` }
-
-      setInterviews([])
-
-      const sessionsUrl = `${API_BASE_URL}/admin/sessions${selectedAdminId ? `?admin_id=${selectedAdminId}` : ''}`
-      const resSessions = await fetch(sessionsUrl, { headers })
-      const payloadSessions = await resSessions.json()
-      const fetchedCandidates = payloadSessions.sessions || []
-      setCandidates(fetchedCandidates)
-
-      const statsUrl = `${API_BASE_URL}/admin/dashboard-stats${selectedAdminId ? `?admin_id=${selectedAdminId}` : ''}`
-      const resStats = await fetch(statsUrl, { headers })
-      if (resStats.ok) {
-        const data = await resStats.json()
-        setDbStats(prev => ({
-          ...prev,
-          total: data.total ?? 0,
-          pending: data.pending ?? 0,
-          completed: data.completed ?? 0,
-          started: data.started ?? 0,
-          expired: data.expired ?? 0,
-          selected: data.selected ?? 0,
-          rejected: data.rejected ?? 0,
-          avg_score: data.avg_score ?? 0,
-          today: data.today ?? 0
-        }))
-        setStats({
-          total: data.total ?? 0,
-          pending: data.pending ?? 0,
-          completed: data.completed ?? 0,
-          shortlisted: data.selected ?? 0
-        })
-      }
-
-      if (adminUser?.plan_capabilities?.live_monitoring || role === 'superadmin') {
-        const ongoingUrl = `${API_BASE_URL}/admin/ongoing-interviews${selectedAdminId ? `?admin_id=${selectedAdminId}` : ''}`
-        const resOngoing = await fetch(ongoingUrl, { headers })
-        if (resOngoing.ok) {
-          const data = await resOngoing.json()
-          setLiveSessions(data.sessions || [])
-          setOngoingMonitoredCount(data.count || 0)
-
-          let live = 0
-          let alerts = 0
-          let speaking = 0
-          let coding = 0
-
-          const sessions = data.sessions || []
-          sessions.forEach(s => {
-            if (s.online) live++
-            if (!s.online && (data.count || 0) > 0) alerts++
-            if (s.audio_level > 5) speaking++
-            if (s.current_question && s.current_question.toString().includes('code')) coding++
-          })
-
-          setOngoingLiveCount(live)
-          setOngoingAlertCount(alerts)
-          setOngoingSpeakingCount(speaking)
-          setOngoingCodingCount(coding)
-        }
-      }
-
-      if (adminUser?.role === 'superadmin' || role === 'superadmin') {
-        try {
-          const reqRes = await fetch(`${API_BASE_URL}/super-admin/credit-requests`, { headers })
-          if (reqRes.ok) {
-            const reqData = await reqRes.json()
-            setCreditRequests(reqData.data || reqData || [])
-          }
-          
-          const plansRes = await fetch(`${API_BASE_URL}/api/plans`)
-          if (plansRes.ok) {
-            const plansData = await plansRes.json()
-            setSubscriptionPlans(plansData.data || [])
-          }
-        } catch(e){}
-      }
-
-    } catch (e) {
-      console.error(e)
-    } finally {
-      setLoadingData(false)
     }
   }
 
@@ -969,7 +818,7 @@ export default function AdminPage({ role: initialRole = 'admin' }) {
       const orderData = orderRes.data
 
       const options = {
-        key: 'rzp_test_YourKeyHere', 
+        key: 'rzp_test_YourKeyHere',
         amount: plan.price,
         currency: 'INR',
         name: 'Hire IQ Credits',
@@ -987,7 +836,7 @@ export default function AdminPage({ role: initialRole = 'admin' }) {
             alert("Credits added successfully!")
             setShowUpgradePlansModal(false)
             window.location.reload()
-          } catch(e){
+          } catch (e) {
             alert("Payment verification failed")
           }
         },
@@ -1037,7 +886,7 @@ export default function AdminPage({ role: initialRole = 'admin' }) {
         alert(`Successfully generated secure candidate link:\n${window.location.origin}/interview?session_id=${payload.session_id}`)
         setInviteInterviewId(null)
         setInviteForm({ name: '', email: '' })
-        loadDashboardData()
+        refreshDashboardData()
       } else {
         alert(payload.detail || payload.message || "Failed to generate link.")
       }
@@ -1048,9 +897,9 @@ export default function AdminPage({ role: initialRole = 'admin' }) {
     }
   }
 
-  const handleDeleteSession = async (linkId) => {
+  const handleDeleteSessionAction = async (linkId) => {
     if (!confirm("Are you sure you want to delete this candidate's interview session? This cannot be undone.")) return
-    dispatch(handleDeleteSession(linkId))
+    dispatch(deleteSessionThunk(linkId))
   }
 
   const handleBulkDeleteAction = () => {
@@ -1112,7 +961,7 @@ export default function AdminPage({ role: initialRole = 'admin' }) {
     adminUser,
     candidates,
     loadingData,
-    loadDashboardData: loadDashboardDataAction,
+    loadDashboardData: refreshDashboardData,
     handleExportExcel: handleExportExcelAction,
     handleDeleteSession: handleDeleteSessionAction,
     handleBulkDelete: handleBulkDeleteAction,

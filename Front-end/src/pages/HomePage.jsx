@@ -55,6 +55,11 @@ function HomePage() {
   const [codeOutput, setCodeOutput] = useState('')
   const [compiling, setCompiling] = useState(false)
   const [globalCountdown, setGlobalCountdown] = useState(0)
+  const [totalDuration, setTotalDuration] = useState(0)
+  const [isRoundTwo, setIsRoundTwo] = useState(false)
+  const codingRoundStartedRef = useRef(false)
+  const [codingRoundLoading, setCodingRoundLoading] = useState(false)
+  const [codingRoundData, setCodingRoundData] = useState(null)
 
   // Recording Ref elements
   const videoPreviewRef = useRef(null)
@@ -193,7 +198,9 @@ function HomePage() {
         setGlobalCountdown(prev => prev - 1)
       }, 1000)
     } else if (globalCountdown === 0 && isDisclaimerAccepted && !showAllSet && questions.length > 0) {
-      // Time's up logic could go here, e.g., auto-submit
+      if (!isRoundTwo && totalDuration > 0) {
+        startNextRound()
+      }
     }
     return () => clearInterval(interval)
   }, [isDisclaimerAccepted, showAllSet, globalCountdown, questions.length])
@@ -293,9 +300,12 @@ function HomePage() {
             ...prev,
             interview_duration: startPayload.interview_duration
           }))
-          setGlobalCountdown(parseInt(startPayload.interview_duration, 10) * 60)
+          const dur = parseInt(startPayload.interview_duration, 10)
+          setTotalDuration(dur * 60)
+          setGlobalCountdown((dur / 2) * 60)
         } else {
-          setGlobalCountdown(30 * 60)
+          setTotalDuration(30 * 60)
+          setGlobalCountdown(15 * 60)
         }
 
         setLoading(false)
@@ -831,6 +841,64 @@ function HomePage() {
     return count
   }
 
+  // Start Next Round (Handles both Coding and Case Study)
+  const startNextRound = async () => {
+    if (isRoundTwo) return
+    setIsRoundTwo(true)
+    
+    if (totalDuration > 0) {
+      setGlobalCountdown(totalDuration / 2)
+    }
+
+    const type = sessionDetail?.interview_type || 'Technical'
+    if (type === 'Non-Technical') {
+      await startCaseStudyRound(questions.length)
+    } else {
+      await startCodingRound(questions.length)
+    }
+  }
+
+  const startCaseStudyRound = async (verbalQuestionsLength) => {
+    if (codingRoundStartedRef.current) return
+    codingRoundStartedRef.current = true
+    setCodingRoundLoading(true)
+
+    const iid = interviewId || sessionDetail?.interview_id || sessionId
+    try {
+      const res = await fetch(`${API_BASE_URL}/case-study/start`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ interview_id: iid })
+      })
+      const payload = await res.json()
+      if (!res.ok) throw new Error(payload.detail || 'Failed to start case study round')
+
+      const caseStudyQuestions = payload.case_study_round?.questions || []
+      
+      const formattedQs = caseStudyQuestions.map((q, idx) => {
+        const text = `📁 CASE STUDY ROUND: ${q.skill_tested || 'Scenario'}\n\n${q.scenario}\n\nQuestion: ${q.question}`
+        return {
+          id: verbalQuestionsLength + idx + 1,
+          text: text,
+          question: text,
+          type: 'case_study',
+          category: 'Case Study',
+          difficulty: 'Medium',
+          caseStudyIndex: idx,
+          evaluationCriteria: q.evaluation_criteria || []
+        }
+      })
+
+      setQuestions(prev => [...prev, ...formattedQs])
+      setCurrentQuestionIndex(verbalQuestionsLength)
+    } catch (err) {
+      console.error('Case study round start failed:', err)
+      handleSubmitInterview()
+    } finally {
+      setCodingRoundLoading(false)
+    }
+  }
+
   // Start Coding Round: called after all verbal questions are answered
   const startCodingRound = async (verbalQuestionsLength) => {
     if (codingRoundStartedRef.current) return
@@ -915,32 +983,46 @@ function HomePage() {
 
     // Save answer
     try {
-      const answerForm = new FormData()
-      answerForm.append('interview_id', interviewId || sessionDetail?.interview_id || sessionId)
-      answerForm.append('question_id', currentQuestion.id || (currentQuestionIndex + 1))
-      answerForm.append('question_text', currentQuestion.text || currentQuestion.question || '')
-      answerForm.append('answer_text', currentQuestion.type === 'coding' ? (codeAnswer || ' ') : (transcriptionText || ' '))
-      answerForm.append('candidate_name', sessionDetail?.candidate_name || 'Candidate')
-      answerForm.append('time_spent_seconds', '0')
-      answerForm.append('time_limit_seconds', '120')
+      const iid = interviewId || sessionDetail?.interview_id || sessionId
 
-      const response = await fetch(`${API_BASE_URL}/save-answer`, {
-        method: 'POST',
-        body: answerForm
-      })
-      if (!response.ok) {
-        const payload = await response.json().catch(() => ({}))
-        throw new Error(payload.detail || payload.message || 'Failed to save answer')
+      if (currentQuestion.type === 'case_study') {
+        const response = await fetch(`${API_BASE_URL}/case-study/submit-answer`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            interview_id: iid,
+            question_index: currentQuestion.caseStudyIndex,
+            answer_text: transcriptionText || ' '
+          })
+        })
+        if (!response.ok) throw new Error('Failed to submit case study answer')
+      } else {
+        const answerForm = new FormData()
+        answerForm.append('interview_id', iid)
+        answerForm.append('question_id', currentQuestion.id || (currentQuestionIndex + 1))
+        answerForm.append('question_text', currentQuestion.text || currentQuestion.question || '')
+        answerForm.append('answer_text', currentQuestion.type === 'coding' ? (codeAnswer || ' ') : (transcriptionText || ' '))
+        answerForm.append('candidate_name', sessionDetail?.candidate_name || 'Candidate')
+        answerForm.append('time_spent_seconds', '0')
+        answerForm.append('time_limit_seconds', '120')
+
+        const response = await fetch(`${API_BASE_URL}/save-answer`, {
+          method: 'POST',
+          body: answerForm
+        })
+        if (!response.ok) {
+          const payload = await response.json().catch(() => ({}))
+          throw new Error(payload.detail || payload.message || 'Failed to save answer')
+        }
       }
 
       // Check if this was the last question
       if (currentQuestionIndex === questions.length - 1) {
-        const isTechnical = (sessionDetail?.interview_type || '').toLowerCase() === 'technical'
         const isCodingQ = currentQuestion.type === 'coding'
+        const isCaseStudyQ = currentQuestion.type === 'case_study'
 
         if (isCodingQ) {
           // Submit the coding answer to the coding-round/submit endpoint
-          const iid = interviewId || sessionDetail?.interview_id || sessionId
           try {
             await fetch(`${API_BASE_URL}/coding-round/submit`, {
               method: 'POST',
@@ -954,15 +1036,16 @@ function HomePage() {
             })
           } catch (e) {}
           handleSubmitInterview()
-        } else if (isTechnical) {
-          // All verbal questions done — transition to coding round
+        } else if (isCaseStudyQ) {
+          handleSubmitInterview()
+        } else if (!isRoundTwo) {
+          // All verbal questions done before timer forced transition — transition to Round 2
           setTranscriptionText('')
           setCodeAnswer('')
           setCodeOutput('')
           behavioralStatsRef.current = { wordCount: 0, fillerCount: 0, pauseCount: 0, faceAlerts: 0, tabSwitches: 0 }
           questionStartTimeRef.current = Date.now()
-          // Pass current question count so startCodingRound knows the new index
-          startCodingRound(questions.length)
+          startNextRound()
         } else {
           handleSubmitInterview()
         }
@@ -971,13 +1054,16 @@ function HomePage() {
         setTranscriptionText('')
         setCodeAnswer('')
         setCodeOutput('')
-
         behavioralStatsRef.current = { wordCount: 0, fillerCount: 0, pauseCount: 0, faceAlerts: 0, tabSwitches: 0 }
-        questionStartTimeRef.current = Date.now()
-
+        
         const nextIdx = currentQuestionIndex + 1
         setCurrentQuestionIndex(nextIdx)
-        speakAIQuestion(questions[nextIdx].text || questions[nextIdx].question || questions[nextIdx].prompt || '')
+        questionStartTimeRef.current = Date.now()
+
+        // Read out the next question
+        if (questions[nextIdx] && questions[nextIdx].type !== 'coding') {
+          speakAIQuestion(questions[nextIdx].text || questions[nextIdx].question || questions[nextIdx].prompt || '')
+        }
       }
     } catch (e) {
       Swal.fire({
@@ -1007,24 +1093,47 @@ function HomePage() {
     if (!codeAnswer) return
     setCompiling(true)
     setCodeOutput("Compiling and executing code...")
+    
+    // We need interviewId for the coding round
+    const iid = interviewId || sessionDetail?.interview_id || sessionId
     try {
-      const response = await fetch(`${API_BASE_URL}/run-code`, {
+      const response = await fetch(`${API_BASE_URL}/coding-round/run`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
+          interview_id: iid,
           code: codeAnswer,
           language: selectedLanguage,
-          question_id: questions[currentQuestionIndex]?.id
+          explanation: transcriptionText
         })
       })
       const payload = await response.json()
       if (response.ok) {
-        setCodeOutput(payload.output || "Code executed successfully with no stdout.")
+        // Output from the runner
+        let outputStr = "Code Execution Result:\n"
+        if (payload.run_result) {
+           const res = payload.run_result;
+           if (res.passed) {
+               outputStr += "✅ All Tests Passed!\n"
+           } else {
+               outputStr += "❌ Some Tests Failed\n"
+           }
+           if (res.compiler_error) outputStr += `\nCompiler Error:\n${res.compiler_error}\n`
+           if (res.runtime_error) outputStr += `\nRuntime Error:\n${res.runtime_error}\n`
+           
+           if (res.results && res.results.length > 0) {
+               outputStr += "\nTest Case Details:\n"
+               res.results.forEach((r, i) => {
+                   outputStr += `Test ${i+1}: ${r.passed ? '✅ Passed' : '❌ Failed'}\n`
+               })
+           }
+        }
+        setCodeOutput(outputStr)
       } else {
-        setCodeOutput(`Compilation Error:\n${payload.detail || payload.message || "Execution failed."}`)
+        setCodeOutput(`Execution Error:\n${payload.detail || payload.message || "Failed."}`)
       }
     } catch (e) {
-      setCodeOutput("Execution failed due to server error.")
+      setCodeOutput("Execution request failed. Please check your network connection.")
     } finally {
       setCompiling(false)
     }
@@ -1491,10 +1600,21 @@ function HomePage() {
               />
             </div>
 
-            <div className="ip-nav-row">
+            <div className="ip-nav-row" style={{ display: 'flex', gap: '10px', alignItems: 'center' }}>
               <button className="ip-btn-prev" onClick={() => setCurrentQuestionIndex(prev => Math.max(0, prev - 1))} disabled={currentQuestionIndex === 0}>← Prev</button>
+              
+              {!isRoundTwo && (
+                <button 
+                  className="ip-btn-next" 
+                  style={{ background: '#3b82f6', marginLeft: 'auto' }} 
+                  onClick={startNextRound}
+                >
+                  Start Round 2
+                </button>
+              )}
+
               {currentQuestionIndex === questions.length - 1 ? (
-                <button className="ip-btn-next" style={{ marginLeft: '10px', background: '#ef4444' }} onClick={() => handleSubmitInterview(false)}>
+                <button className="ip-btn-next" style={{ background: '#ef4444' }} onClick={() => handleSubmitInterview(false)}>
                   Submit Interview
                 </button>
               ) : (

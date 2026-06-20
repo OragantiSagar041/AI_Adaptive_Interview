@@ -9,6 +9,15 @@ import logo from '../assets/logo.png'
 import aiDashboard from '../assets/ai_dashboard.png'
 import onboardingFlow from '../assets/onboarding_flow.png'
 
+const normalizePlan = (plan) => {
+  const planName = plan.plan_name || plan.name || 'Plan'
+  const priceInPaise = Boolean(plan.name && !plan.plan_name)
+  const price = priceInPaise && plan.price > 0 ? plan.price / 100 : (plan.price ?? 0)
+  return { ...plan, plan_name: planName, price, duration_days: plan.duration_days ?? 30 }
+}
+
+const getPlanName = (plan) => plan?.plan_name || plan?.name || 'Plan'
+
 // ─── Shiny animated headline text ───────────────────────────────────────────
 const ShinyText = ({ text }) => (
   <motion.span
@@ -163,11 +172,10 @@ const PricingCard = ({ plan, index, isFeatured, badge, formatPrice }) => {
       animate={inView ? { opacity: 1, y: 0, scale: 1 } : {}}
       transition={{ delay: index * 0.12, duration: 0.65, ease: [0.22, 1, 0.36, 1] }}
       whileHover={isFeatured ? { scale: 1.02 } : { y: -5 }}
-      className={`relative flex min-h-[420px] flex-col rounded-[28px] border p-7 overflow-hidden transition-all duration-300 ${
-        isFeatured
+      className={`relative flex min-h-[420px] flex-col rounded-[28px] border p-7 overflow-hidden transition-all duration-300 ${isFeatured
           ? 'border-indigo-900/10 bg-gradient-to-b from-indigo-950 to-indigo-800 text-white shadow-[0_32px_80px_rgba(99,102,241,0.35)]'
           : 'border-slate-200/80 bg-white text-slate-900 shadow-[0_8px_40px_rgba(17,24,39,0.08)]'
-      }`}
+        }`}
     >
       {isFeatured && (
         <motion.div
@@ -178,11 +186,10 @@ const PricingCard = ({ plan, index, isFeatured, badge, formatPrice }) => {
         />
       )}
       <div className="relative z-10 flex flex-col h-full">
-        <span className={`absolute right-0 top-0 rounded-full px-3 py-1.5 text-xs font-extrabold uppercase tracking-wide ${
-          isFeatured ? 'bg-white/15 text-white/90' : 'bg-indigo-500/10 text-indigo-700'
-        }`}>{badge}</span>
-        <h3 className="pr-16 text-xl font-extrabold tracking-tight">{plan.plan_name}</h3>
-        <div className={`mt-1 text-sm ${isFeatured ? 'text-white/60' : 'text-slate-400'}`}>{plan.duration_days} days access</div>
+        <span className={`absolute right-0 top-0 rounded-full px-3 py-1.5 text-xs font-extrabold uppercase tracking-wide ${isFeatured ? 'bg-white/15 text-white/90' : 'bg-indigo-500/10 text-indigo-700'
+          }`}>{badge}</span>
+        <h3 className="pr-16 text-xl font-extrabold tracking-tight">{getPlanName(plan)}</h3>
+        <div className={`mt-1 text-sm ${isFeatured ? 'text-white/60' : 'text-slate-400'}`}>{plan.duration_days ?? 30} days access</div>
         <div className="mt-5 text-4xl font-extrabold tracking-tight">
           {formatPrice(plan.price)}
           {plan.price > 0 && <span className={`text-sm font-semibold ${isFeatured ? 'text-white/60' : 'text-slate-400'}`}> /sub</span>}
@@ -190,7 +197,7 @@ const PricingCard = ({ plan, index, isFeatured, badge, formatPrice }) => {
         <p className={`mt-4 text-sm leading-7 ${isFeatured ? 'text-white/70' : 'text-slate-500'}`}>
           {plan.price === 0
             ? "Try the full platform free. No card needed."
-            : `Scale your hiring with ${plan.plan_name.toLowerCase()} tier capabilities.`}
+            : `Scale your hiring with ${getPlanName(plan).toLowerCase()} tier capabilities.`}
         </p>
         <ul className={`mt-5 grid gap-2.5 text-sm ${isFeatured ? 'text-white/75' : 'text-slate-600'}`}>
           {(plan.features || []).map((f, i) => (
@@ -206,7 +213,7 @@ const PricingCard = ({ plan, index, isFeatured, badge, formatPrice }) => {
             </motion.li>
           ))}
         </ul>
-        <Link to={`/register?plan=${encodeURIComponent(plan.plan_name)}`} className="mt-auto pt-7 no-underline">
+        <Link to={`/register?plan=${encodeURIComponent(getPlanName(plan))}`} className="mt-auto pt-7 no-underline">
           <motion.div whileTap={{ scale: 0.97 }}>
             <Button variant={isFeatured ? 'secondary' : 'primary'} className="w-full">
               {plan.price === 0 ? "Start Free Trial" : "Choose This Plan"}
@@ -293,6 +300,7 @@ function LandingPage() {
   const [plans, setPlans] = useState([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState(null)
+  const [mobileMenuOpen, setMobileMenuOpen] = useState(false)
 
   const planOrder = { "Free Trial": 0, "Basic": 1, "Advance": 2 }
 
@@ -302,7 +310,9 @@ function LandingPage() {
         const response = await fetch(`${API_BASE_URL}/api/plans`)
         const payload = await response.json()
         if (!response.ok || payload.status !== "success") throw new Error(payload.detail || payload.message || "Unable to load plans")
-        const sortedPlans = (payload.data || []).sort((a, b) => (planOrder[a.plan_name] ?? 999) - (planOrder[b.plan_name] ?? 999))
+        const sortedPlans = (payload.data || [])
+          .map(normalizePlan)
+          .sort((a, b) => (planOrder[a.plan_name] ?? 999) - (planOrder[b.plan_name] ?? 999))
         setPlans(sortedPlans)
       } catch (err) {
         setError(err.message || "Unable to load pricing plans right now.")
@@ -321,7 +331,7 @@ function LandingPage() {
   const getPlanBadge = (plan, index) => {
     if (plan.price === 0) return "Trial"
     if (index === 1) return "Popular"
-    if (plan.plan_name.toLowerCase() === "advance") return "Scale"
+    if (getPlanName(plan).toLowerCase() === "advance") return "Scale"
     return "Plan"
   }
 
@@ -331,31 +341,102 @@ function LandingPage() {
     "Razorpay Checkout", "Email Scheduling", "Workspace Management",
   ]
 
+  const navLinks = [
+    { label: 'Platform', href: '#platform' },
+    { label: 'Workflow', href: '#workflow' },
+    { label: 'Pricing', href: '#pricing' },
+  ]
+
+  const closeMobileMenu = () => setMobileMenuOpen(false)
+
   return (
     <main className="font-sans">
-      {/* ── HERO (unchanged) ───────────────────────────────────────────────── */}
+      {/* ── STICKY NAV ─────────────────────────────────────────────────────── */}
+      <header className="fixed inset-x-0 top-0 z-50 border-b border-white/10 bg-black/70 backdrop-blur-md">
+        <div className="mx-auto flex max-w-7xl items-center justify-between gap-4 px-4 py-4 sm:px-6 lg:px-8">
+          <Link to="/" className="flex items-center gap-3 no-underline">
+            <img src={logo} alt="Hire IQ Logo" className="h-8 w-auto object-contain brightness-0 invert" />
+            <span className="text-lg font-semibold tracking-wide text-white">Hire IQ</span>
+          </Link>
+
+          <nav className="hidden items-center gap-1 lg:flex">
+            {navLinks.map(({ label, href }) => (
+              <a
+                key={label}
+                href={href}
+                className="rounded-full px-4 py-2 text-sm text-white/80 transition-colors hover:bg-white/10 hover:text-white"
+              >
+                {label}
+              </a>
+            ))}
+          </nav>
+
+          <div className="hidden items-center gap-3 lg:flex">
+            <Link to="/login" className="no-underline">
+              <Button variant="secondary" className="!rounded-full !px-5 !py-2.5 !text-sm !shadow-none">
+                Admin Login
+              </Button>
+            </Link>
+            <Link to="/register" className="no-underline">
+              <Button className="!rounded-full !px-5 !py-2.5 !text-sm">
+                Start Subscription
+              </Button>
+            </Link>
+          </div>
+
+          <button
+            type="button"
+            className="rounded-lg p-2 text-white/80 transition-colors hover:bg-white/10 hover:text-white lg:hidden"
+            onClick={() => setMobileMenuOpen((open) => !open)}
+            aria-label="Toggle menu"
+          >
+            <Menu className="h-6 w-6" />
+          </button>
+        </div>
+
+        <AnimatePresence>
+          {mobileMenuOpen && (
+            <motion.div
+              initial={{ opacity: 0, height: 0 }}
+              animate={{ opacity: 1, height: 'auto' }}
+              exit={{ opacity: 0, height: 0 }}
+              className="overflow-hidden border-t border-white/10 bg-black/90 lg:hidden"
+            >
+              <div className="mx-auto flex max-w-7xl flex-col gap-2 px-4 py-4 sm:px-6">
+                {navLinks.map(({ label, href }) => (
+                  <a
+                    key={label}
+                    href={href}
+                    onClick={closeMobileMenu}
+                    className="rounded-xl px-4 py-3 text-sm font-medium text-white/85 transition-colors hover:bg-white/10 hover:text-white"
+                  >
+                    {label}
+                  </a>
+                ))}
+                <Link to="/login" onClick={closeMobileMenu} className="no-underline">
+                  <Button variant="secondary" className="mt-2 w-full !rounded-xl">
+                    Admin Login
+                  </Button>
+                </Link>
+                <Link to="/register" onClick={closeMobileMenu} className="no-underline">
+                  <Button className="w-full !rounded-xl">
+                    Start Subscription
+                  </Button>
+                </Link>
+              </div>
+            </motion.div>
+          )}
+        </AnimatePresence>
+      </header>
+
+      {/* ── HERO ───────────────────────────────────────────────────────────── */}
       <div className="relative h-screen w-full bg-black overflow-hidden text-white">
         <video
           src="https://d8j0ntlcm91z4.cloudfront.net/user_38xzZboKViGWJOttwIXH07lWA1P/hf_20260328_105406_16f4600d-7a92-4292-b96e-b19156c7830a.mp4"
           autoPlay loop muted playsInline
           className="absolute inset-0 h-full w-full object-cover"
         />
-        <div className="relative z-10 mx-auto flex h-full max-w-7xl flex-col px-4 sm:px-6 lg:px-8">
-          <nav className="flex items-center justify-between pt-6 pb-4">
-            <div className="flex items-center gap-3 cursor-pointer">
-              <img src={logo} alt="Hire IQ Logo" className="h-8 w-auto object-contain brightness-0 invert" />
-              <span className="text-lg font-semibold tracking-wide">Hire IQ</span>
-            </div>
-            <div className="hidden lg:flex items-center rounded-full border border-gray-700 bg-white/5 backdrop-blur-sm px-2 py-1.5">
-              {['Platform', 'Workflow', 'Pricing'].map((item) => (
-                <a key={item} href={`#${item.toLowerCase()}`} className="px-5 py-2 text-sm text-white/80 transition-all hover:text-white">{item}</a>
-              ))}
-              <Link to="/admin" className="flex items-center gap-1 px-5 py-2 text-sm text-white/80 transition-all hover:text-white">
-                Admin Login <ArrowUpRight className="h-4 w-4" />
-              </Link>
-            </div>
-            <button className="text-white/80 hover:text-white lg:hidden"><Menu className="h-6 w-6" /></button>
-          </nav>
+        <div className="relative z-10 mx-auto flex h-full max-w-7xl flex-col px-4 pt-24 sm:px-6 lg:px-8">
           <div className="mt-8 grid grid-cols-1 gap-4 lg:grid-cols-2 lg:gap-8">
             <p className="max-w-md text-sm text-white/80 sm:text-base">Create scheduled interview links, evaluate candidates with AI-generated questions, and monitor sessions live from one workspace.</p>
             <div className="flex lg:justify-end">
@@ -374,6 +455,20 @@ function LandingPage() {
                 <ArrowRight className="h-4 w-4 transition-transform duration-300 group-hover:translate-x-1.5 md:h-5 md:w-5" />
               </button>
             </Link>
+            <div className="mt-4 flex flex-col items-center justify-center gap-3 sm:flex-row">
+              <a
+                href="#pricing"
+                className="inline-flex items-center gap-2 rounded-full border border-white/25 bg-white/10 px-6 py-3 text-sm font-medium text-white transition-all hover:bg-white/15 md:px-8 md:py-4 md:text-base"
+              >
+                View Subscription Plans
+              </a>
+              <Link to="/login" className="no-underline">
+                <button className="inline-flex items-center gap-2 rounded-full border border-white/25 px-6 py-3 text-sm font-medium text-white/90 transition-all hover:border-white/40 hover:text-white md:px-8 md:py-4 md:text-base">
+                  Admin Login
+                  <ArrowUpRight className="h-4 w-4" />
+                </button>
+              </Link>
+            </div>
           </div>
         </div>
       </div>
@@ -598,43 +693,13 @@ function LandingPage() {
                   const isFeatured = plan.price > 0 && index === 1
                   return (
                     <PricingCard
-                      key={plan.plan_name}
-                      className={`relative flex min-h-[370px] flex-col rounded-[30px] border p-6 shadow-[0_18px_40px_rgba(17,24,39,0.06)] ${
-                        isFeatured
-                          ? 'border-indigo-900/10 bg-gradient-to-b from-indigo-950 to-indigo-800 text-white shadow-[0_28px_56px_rgba(99,102,241,0.18)]'
-                          : 'border-slate-900/8 bg-white/90 text-slate-900'
-                      }`}
-                    >
-                      <span className={`absolute right-5 top-5 rounded-full px-3 py-2 text-xs font-extrabold uppercase tracking-wide ${
-                        isFeatured ? 'bg-white/10 text-white/90' : 'bg-indigo-500/10 text-indigo-700'
-                      }`}>
-                        {getPlanBadge(plan, index)}
-                      </span>
-                      <h3 className="pr-24 text-xl font-extrabold tracking-tight">{plan.plan_name}</h3>
-                      <div className={`mt-2 text-sm ${isFeatured ? 'text-white/70' : 'text-slate-500'}`}>{plan.duration_days || 30} days of workspace access</div>
-                      <div className="mt-5 text-4xl font-extrabold tracking-tight">
-                        {formatPrice(plan.price)}
-                        {plan.price > 0 && <span className={`text-sm font-semibold ${isFeatured ? 'text-white/70' : 'text-slate-500'}`}> / subscription</span>}
-                      </div>
-                      <p className={`mt-4 leading-7 ${isFeatured ? 'text-white/75' : 'text-slate-600'}`}>
-                        {plan.price === 0
-                          ? "Best for first-time teams who want to test the platform before moving into a paid workspace."
-                          : `Built for companies ready to operationalize interviews with ${plan.plan_name.toLowerCase()} tier access.`}
-                      </p>
-                      <ul className={`mt-5 grid gap-3 text-sm ${isFeatured ? 'text-white/75' : 'text-slate-600'}`}>
-                        {(plan.features || []).map((feature, idx) => (
-                          <li key={idx} className="flex gap-2">
-                            <span className={isFeatured ? 'text-indigo-300' : 'text-indigo-600'}>✓</span>
-                            <span>{feature}</span>
-                          </li>
-                        ))}
-                      </ul>
-                      <Link to={`/register?plan=${encodeURIComponent(plan.plan_name)}`} className="mt-auto pt-7 no-underline">
-                        <Button variant={isFeatured ? 'secondary' : 'primary'} className="w-full">
-                          {plan.price === 0 ? "Start Free Trial" : "Choose This Plan"}
-                        </Button>
-                      </Link>
-                    </PricingCard>
+                      key={getPlanName(plan)}
+                      plan={plan}
+                      index={index}
+                      isFeatured={isFeatured}
+                      badge={getPlanBadge(plan, index)}
+                      formatPrice={formatPrice}
+                    />
                   )
                 })}
               </div>
@@ -690,7 +755,7 @@ function LandingPage() {
             </div>
             <div className="flex flex-wrap items-center gap-5 font-medium">
               <Link to="/register" className="hover:text-slate-700 transition-colors">Subscription</Link>
-              <Link to="/admin" className="hover:text-slate-700 transition-colors">Admin Login</Link>
+              <Link to="/login" className="hover:text-slate-700 transition-colors">Admin Login</Link>
             </div>
           </footer>
 
