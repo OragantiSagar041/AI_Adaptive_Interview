@@ -362,6 +362,59 @@ async def validation_exception_handler(request, exc):
 async def get_last_error():
     return LAST_422_ERROR or {"status": "no errors"}
 
+@app.get("/api/plans")
+async def get_plans():
+    plans_cursor = plans_collection.find({})
+    plans_list = []
+    for p in plans_cursor:
+        if p.get("plan_name", "").lower() == "owner":
+            continue
+        plans_list.append({
+            "id": str(p["_id"]),
+            "name": p.get("plan_name", "Unknown Plan"),
+            "credits": p.get("credits_granted", 0),
+            "price": p.get("price", 0) * 100,  # Convert INR to paise for Razorpay
+            "features": p.get("features", []),
+            "summary": p.get("summary", "")
+        })
+    
+    # Fallback to in-memory PLAN_DEFINITIONS if MongoDB collection is empty
+    if not plans_list:
+        for key, plan in PLAN_DEFINITIONS.items():
+            if key == "owner":
+                continue
+            plans_list.append({
+                "id": key,
+                "name": plan["label"],
+                "credits": plan["credits_granted"],
+                "price": plan["price"] * 100,
+                "features": plan["features"],
+                "summary": plan["summary"]
+            })
+            
+    return {"status": "success", "data": plans_list}
+
+class RazorpayOrderRequest(BaseModel):
+    plan_name: str
+    amount_inr: float
+    credits: int
+
+@app.post("/api/razorpay/create-upgrade-order")
+async def create_upgrade_order(req: RazorpayOrderRequest):
+    import uuid
+    # Mock order creation for Razorpay
+    return {"status": "success", "razorpay_order_id": f"order_{uuid.uuid4().hex[:14]}"}
+
+class RazorpayVerifyRequest(BaseModel):
+    razorpay_order_id: str
+    razorpay_payment_id: str
+    razorpay_signature: str
+
+@app.post("/api/razorpay/verify-upgrade")
+async def verify_upgrade(req: RazorpayVerifyRequest):
+    # Mock successful verification
+    return {"status": "success", "message": "Payment verified successfully"}
+
 @app.on_event("startup")
 def startup_event_cloudinary():
     global CLOUDINARY_CLEANUP_STARTED
@@ -436,6 +489,7 @@ app.add_middleware(
         "http://127.0.0.1:5173",
         "http://localhost:5174",
         "http://127.0.0.1:5174",
+        "https://hire-ai-iq.netlify.app",
     ],
     allow_origin_regex=r"https://.*\.vercel\.app",
     allow_credentials=True,

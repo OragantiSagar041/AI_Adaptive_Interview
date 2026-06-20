@@ -599,12 +599,42 @@ function LandingPage() {
                   return (
                     <PricingCard
                       key={plan.plan_name}
-                      plan={plan}
-                      index={index}
-                      isFeatured={isFeatured}
-                      badge={getPlanBadge(plan, index)}
-                      formatPrice={formatPrice}
-                    />
+                      className={`relative flex min-h-[370px] flex-col rounded-[30px] border p-6 shadow-[0_18px_40px_rgba(17,24,39,0.06)] ${
+                        isFeatured
+                          ? 'border-indigo-900/10 bg-gradient-to-b from-indigo-950 to-indigo-800 text-white shadow-[0_28px_56px_rgba(99,102,241,0.18)]'
+                          : 'border-slate-900/8 bg-white/90 text-slate-900'
+                      }`}
+                    >
+                      <span className={`absolute right-5 top-5 rounded-full px-3 py-2 text-xs font-extrabold uppercase tracking-wide ${
+                        isFeatured ? 'bg-white/10 text-white/90' : 'bg-indigo-500/10 text-indigo-700'
+                      }`}>
+                        {getPlanBadge(plan, index)}
+                      </span>
+                      <h3 className="pr-24 text-xl font-extrabold tracking-tight">{plan.plan_name}</h3>
+                      <div className={`mt-2 text-sm ${isFeatured ? 'text-white/70' : 'text-slate-500'}`}>{plan.duration_days || 30} days of workspace access</div>
+                      <div className="mt-5 text-4xl font-extrabold tracking-tight">
+                        {formatPrice(plan.price)}
+                        {plan.price > 0 && <span className={`text-sm font-semibold ${isFeatured ? 'text-white/70' : 'text-slate-500'}`}> / subscription</span>}
+                      </div>
+                      <p className={`mt-4 leading-7 ${isFeatured ? 'text-white/75' : 'text-slate-600'}`}>
+                        {plan.price === 0
+                          ? "Best for first-time teams who want to test the platform before moving into a paid workspace."
+                          : `Built for companies ready to operationalize interviews with ${plan.plan_name.toLowerCase()} tier access.`}
+                      </p>
+                      <ul className={`mt-5 grid gap-3 text-sm ${isFeatured ? 'text-white/75' : 'text-slate-600'}`}>
+                        {(plan.features || []).map((feature, idx) => (
+                          <li key={idx} className="flex gap-2">
+                            <span className={isFeatured ? 'text-indigo-300' : 'text-indigo-600'}>✓</span>
+                            <span>{feature}</span>
+                          </li>
+                        ))}
+                      </ul>
+                      <Link to={`/register?plan=${encodeURIComponent(plan.plan_name)}`} className="mt-auto pt-7 no-underline">
+                        <Button variant={isFeatured ? 'secondary' : 'primary'} className="w-full">
+                          {plan.price === 0 ? "Start Free Trial" : "Choose This Plan"}
+                        </Button>
+                      </Link>
+                    </PricingCard>
                   )
                 })}
               </div>

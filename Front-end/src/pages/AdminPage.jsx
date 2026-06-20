@@ -176,6 +176,128 @@ export default function AdminPage({ role: initialRole = 'admin' }) {
   const [isRequesting, setIsRequesting] = useState(false)
   const [showUpgradePlansModal, setShowUpgradePlansModal] = useState(false)
   const [isProcessingUpgrade, setIsProcessingUpgrade] = useState(false)
+  const [creditRequests, setCreditRequests] = useState([])
+  const [subscriptionPlans, setSubscriptionPlans] = useState([])
+
+  // Filters
+  const [searchTerm, setSearchTerm] = useState('')
+  const [startDate, setStartDate] = useState('')
+  const [endDate, setEndDate] = useState('')
+  const [statusFilter, setStatusFilter] = useState('all')
+  const [sortBy, setSortBy] = useState('score')
+
+  // Selection states (for bulk delete)
+  const [selectedIds, setSelectedIds] = useState([])
+
+  // Invite candidate state
+  const [inviteInterviewId, setInviteInterviewId] = useState(null)
+  const [inviteForm, setInviteForm] = useState({ name: '', email: '' })
+  const [inviting, setInviting] = useState(false)
+
+  // Pagination states
+  const [currentPage, setCurrentPage] = useState(1)
+  const PAGE_SIZE = 10
+
+  // New create interview form states
+  const [createTab, setCreateTab] = useState('single') // 'single' | 'bulk'
+
+  // Single Candidate Form
+  const [singleCandidate, setSingleCandidate] = useState({
+    name: '',
+    email: '',
+    resumeText: '',
+    jobDescription: '',
+    customQuestions: '',
+    aiInstructions: '',
+    industry: 'General',
+    interviewType: 'Technical',
+    language: 'English',
+    caseStudyCount: 3,
+    duration: 30,
+    scheduledStart: '',
+    scheduledEnd: '',
+    recordVideo: true,
+    hrScreening: {
+      askWorkMode: false,
+      workModeType: 'On-site',
+      askLocation: false,
+      locationType: 'Current',
+      askBond: false
+    }
+  })
+
+  // Parsing & Calculating statuses
+  const [resumeParsing, setResumeParsing] = useState(false)
+  const [jdParsing, setJdParsing] = useState(false)
+  const [customQuestionsParsing, setCustomQuestionsParsing] = useState(false)
+  const [aiInstructionsParsing, setAiInstructionsParsing] = useState(false)
+  const [atsCalculating, setAtsCalculating] = useState(false)
+  const [atsScoreData, setAtsScoreData] = useState(null) // { score, summary, matched_skills, missing_skills }
+
+  // Email Preview Modal
+  const [emailPreviewModalOpen, setEmailPreviewModalOpen] = useState(false)
+  const [emailTemplate, setEmailTemplate] = useState({
+    headHtml: '',
+    bodyAttributes: {},
+    bodyInnerHtml: ''
+  })
+  const [customEmailHtml, setCustomEmailHtml] = useState('')
+  const [singleCreatedLinks, setSingleCreatedLinks] = useState([]) // [{ name, url, id, email }]
+
+  // Bulk Send Configurations
+  const [bulkConfig, setBulkConfig] = useState({
+    jobDescription: '',
+    customQuestions: '',
+    aiInstructions: '',
+    industry: 'General',
+    interviewType: 'Technical',
+    language: 'English',
+    caseStudyCount: 3,
+    duration: 30,
+    scheduledStart: '',
+    scheduledEnd: '',
+    recordVideo: true,
+    hrScreening: {
+      askWorkMode: false,
+      workModeType: 'On-site',
+      askLocation: false,
+      locationType: 'Current',
+      askBond: false
+    }
+  })
+  const [bulkCandidates, setBulkCandidates] = useState([]) // [{ name, email, record_video }]
+  const [bulkCandidateInput, setBulkCandidateInput] = useState({ name: '', email: '' })
+  const [bulkJdParsing, setBulkJdParsing] = useState(false)
+  const [bulkCustomQuestionsParsing, setBulkCustomQuestionsParsing] = useState(false)
+  const [bulkAiInstructionsParsing, setBulkAiInstructionsParsing] = useState(false)
+  const [bulkCsvLabel, setBulkCsvLabel] = useState('Click to upload or drag and drop Excel or CSV template')
+
+  // Bulk submission results
+  const [bulkResultsModalOpen, setBulkResultsModalOpen] = useState(false)
+  const [bulkResultsData, setBulkResultsData] = useState(null)
+
+  // Live monitoring states
+  const [liveResultsModalOpen, setLiveResultsModalOpen] = useState(false)
+  const [liveSessions, setLiveSessions] = useState([])
+  const [ongoingLiveCount, setOngoingLiveCount] = useState(0)
+  const [ongoingAlertCount, setOngoingAlertCount] = useState(0)
+  const [ongoingAvgConfidence, setOngoingAvgConfidence] = useState(0)
+  const [ongoingSpeakingCount, setOngoingSpeakingCount] = useState(0)
+  const [ongoingCodingCount, setOngoingCodingCount] = useState(0)
+  const [ongoingMonitoredCount, setOngoingMonitoredCount] = useState(0)
+
+  // Dashboard Aggregated Stats (Backend mapped)
+  const [dbStats, setDbStats] = useState({
+    total: '--',
+    pending: '--',
+    completed: '--',
+    started: '--',
+    expired: '--',
+    selected: '--',
+    rejected: '--',
+    avg_score: '--',
+    today: '--'
+  })
 
   const accentColors = {
     teal: { primary: '#0d9488', hover: '#0f766e', glow: 'rgba(13, 148, 136, 0.15)' },
@@ -208,8 +330,596 @@ export default function AdminPage({ role: initialRole = 'admin' }) {
     return () => clearInterval(statsInterval)
   }, [dispatch, token, selectedAdminId])
 
-  const loadDashboardDataAction = () => {
-    dispatch(loadDashboardData(selectedAdminId))
+          let live = 0
+          let alerts = 0
+          let speaking = 0
+          let coding = 0
+
+          const sessions = data.sessions || []
+          sessions.forEach(s => {
+            if (s.online) live++
+            if (!s.online && (data.count || 0) > 0) alerts++
+            if (s.audio_level > 5) speaking++
+            if (s.current_question && s.current_question.toString().includes('code')) coding++
+          })
+
+          setOngoingLiveCount(live)
+          setOngoingAlertCount(alerts)
+          setOngoingSpeakingCount(speaking)
+          setOngoingCodingCount(coding)
+        }
+      } catch (err) {
+        console.error("Ongoing interviews polling error:", err)
+      }
+    }
+
+    loadDashboardStats()
+    const statsInterval = setInterval(loadDashboardStats, 12000)
+
+    let ongoingInterval = null
+    const hasLiveMonitoring = adminUser?.plan_capabilities?.live_monitoring || role === 'superadmin'
+    if (hasLiveMonitoring) {
+      fetchOngoing()
+      ongoingInterval = setInterval(fetchOngoing, 12000)
+    }
+
+    return () => {
+      clearInterval(statsInterval)
+      if (ongoingInterval) {
+        clearInterval(ongoingInterval)
+      }
+    }
+  }, [token, adminUser, selectedAdminId, role])
+
+  // Form input setters
+  const handleSingleChange = (key, value) => {
+    setSingleCandidate(prev => ({ ...prev, [key]: value }))
+  }
+
+  const handleSingleHrChange = (key, value) => {
+    setSingleCandidate(prev => ({
+      ...prev,
+      hrScreening: { ...prev.hrScreening, [key]: value }
+    }))
+  }
+
+  const handleBulkConfigChange = (key, value) => {
+    setBulkConfig(prev => ({ ...prev, [key]: value }))
+  }
+
+  const handleBulkHrChange = (key, value) => {
+    setBulkConfig(prev => ({
+      ...prev,
+      hrScreening: { ...prev.hrScreening, [key]: value }
+    }))
+  }
+
+  // Parse file content
+  const handleParseFile = async (file, onParsed, onLoading) => {
+    if (!file) return
+    onLoading(true)
+    const formData = new FormData()
+    formData.append('file', file)
+    try {
+      const response = await fetch(`${API_BASE_URL}/admin/parse-resume`, {
+        method: 'POST',
+        body: formData
+      })
+      if (response.ok) {
+        const data = await response.json()
+        onParsed(null, data)
+      } else {
+        const err = await response.text()
+        onParsed(err || "Failed to parse file")
+      }
+    } catch (error) {
+      onParsed(error.message || "Error parsing file")
+    } finally {
+      onLoading(false)
+    }
+  }
+
+  // Check if candidate already has a profile/resume on file
+  const handleCheckCandidate = async (email) => {
+    if (!email || !email.includes('@')) return
+    try {
+      const response = await fetch(`${API_BASE_URL}/admin/candidate/check?email=${encodeURIComponent(email)}`, {
+        headers: { 'Authorization': `Bearer ${token}` }
+      })
+      if (response.ok) {
+        const data = await response.json()
+        if (data.exists && data.resume_text) {
+          if (confirm(`Candidate profile found for ${email}. Auto-fill name and resume?`)) {
+            setSingleCandidate(prev => ({
+              ...prev,
+              name: data.candidate_name || prev.name,
+              resumeText: data.resume_text
+            }))
+            if (singleCandidate.jobDescription) {
+              handleCalculateAts(data.resume_text, singleCandidate.jobDescription)
+            }
+          }
+        }
+      }
+    } catch (e) {
+      console.error(e)
+    }
+  }
+
+  // Calculate ATS match score
+  const handleCalculateAts = async (resume, jd) => {
+    if (!resume || !jd) return
+    setAtsCalculating(true)
+    try {
+      const response = await fetch(`${API_BASE_URL}/admin/ats-score`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ resume_text: resume, jd_text: jd })
+      })
+      if (response.ok) {
+        const data = await response.json()
+        setAtsScoreData({
+          score: data.score || 0,
+          summary: data.summary || '',
+          matched_skills: data.matched_skills || [],
+          missing_skills: data.missing_skills || []
+        })
+      } else {
+        alert("Failed to calculate ATS match score.")
+      }
+    } catch (e) {
+      console.error("ATS score error:", e)
+    } finally {
+      setAtsCalculating(false)
+    }
+  }
+
+  // Debounce ATS score trigger
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      if (singleCandidate.resumeText && singleCandidate.jobDescription) {
+        handleCalculateAts(singleCandidate.resumeText, singleCandidate.jobDescription)
+      }
+    }, 1500)
+    return () => clearTimeout(timer)
+  }, [singleCandidate.resumeText, singleCandidate.jobDescription])
+
+  // Email template builder and editor sync
+  const buildEmailHtml = () => {
+    const { headHtml, bodyAttributes, bodyInnerHtml } = emailTemplate
+    const attrs = Object.entries(bodyAttributes || {})
+      .map(([key, value]) => `${key}="${String(value).replace(/"/g, '&quot;')}"`)
+      .join(' ')
+    return `<!DOCTYPE html><html><head>${headHtml || ''}</head><body ${attrs}>${bodyInnerHtml || ''}</body></html>`
+  }
+
+  const handlePreviewEmail = async (type) => {
+    let name = 'Candidate Name'
+    let email = 'candidate@example.com'
+    let jd = 'Job description will appear here'
+    let duration = 30
+    let start = ''
+    let end = ''
+
+    if (type === 'single') {
+      name = singleCandidate.name || name
+      email = singleCandidate.email || email
+      jd = singleCandidate.jobDescription || jd
+      duration = singleCandidate.duration
+      start = singleCandidate.scheduledStart
+      end = singleCandidate.scheduledEnd
+    } else {
+      if (bulkCandidates.length > 0) {
+        name = bulkCandidates[0].name
+        email = bulkCandidates[0].email
+      }
+      jd = bulkConfig.jobDescription || jd
+      duration = bulkConfig.duration
+      start = bulkConfig.scheduledStart
+      end = bulkConfig.scheduledEnd
+    }
+
+    const toUtcIso = (val) => {
+      if (!val) return ""
+      return new Date(val).toISOString()
+    }
+
+    try {
+      const res = await fetch(`${API_BASE_URL}/admin/preview-email`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${token}`
+        },
+        body: JSON.stringify({
+          candidate_name: name,
+          candidate_email: email,
+          job_description: jd,
+          interview_duration: Number(duration),
+          scheduled_start: toUtcIso(start),
+          scheduled_end: toUtcIso(end)
+        })
+      })
+
+      if (!res.ok) throw new Error('Failed to get email preview')
+      const data = await res.json()
+
+      const parser = new DOMParser()
+      const doc = parser.parseFromString(data.html, 'text/html')
+      const bodyAttributes = {}
+      Array.from(doc.body.attributes).forEach(attr => {
+        bodyAttributes[attr.name] = attr.value
+      })
+
+      setEmailTemplate({
+        headHtml: doc.head ? doc.head.innerHTML : '',
+        bodyAttributes,
+        bodyInnerHtml: doc.body ? doc.body.innerHTML : data.html
+      })
+
+      setEmailPreviewModalOpen(true)
+    } catch (e) {
+      alert('Could not generate email preview: ' + e.message)
+    }
+  }
+
+  const handleSaveEmailPreview = () => {
+    setCustomEmailHtml(buildEmailHtml())
+    setEmailPreviewModalOpen(false)
+    alert("Custom email template saved and will be used for invitations!")
+  }
+
+  const handleResetEmailPreview = () => {
+    setCustomEmailHtml('')
+    setEmailPreviewModalOpen(false)
+    alert("Reset to default invitation email template.")
+  }
+
+  // Generate Single Link Session
+  const handleGenerateInterviewLink = async () => {
+    const { name, email, resumeText, jobDescription, duration, interviewType, industry, language, caseStudyCount, scheduledStart, scheduledEnd, recordVideo, hrScreening, customQuestions, aiInstructions } = singleCandidate
+
+    if (!name || !email || !resumeText || !jobDescription) {
+      alert("Please fill in all required fields (Name, Email, Resume, Job Description).")
+      return
+    }
+
+    if (duration < 5 || duration > 120) {
+      alert("Interview Duration must be between 5 and 120 minutes.")
+      return
+    }
+
+    const toUtcIso = (val) => {
+      if (!val) return ""
+      return new Date(val).toISOString()
+    }
+
+    setInviting(true)
+    try {
+      const response = await fetch(`${API_BASE_URL}/admin/create-session`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${token}`
+        },
+        body: JSON.stringify({
+          candidate_name: name,
+          candidate_email: email,
+          resume_text: resumeText,
+          job_description: jobDescription,
+          admin_id: adminUser?.admin_id || 'admin',
+          interview_duration: Number(duration),
+          interview_type: interviewType,
+          industry: industry,
+          language: language,
+          record_video: recordVideo,
+          custom_email_html: customEmailHtml || "",
+          scheduled_start: toUtcIso(scheduledStart),
+          scheduled_end: toUtcIso(scheduledEnd),
+          hr_screening: hrScreening,
+          custom_questions: customQuestions,
+          ai_instructions: aiInstructions,
+          case_study_count: interviewType === 'Non-Technical' ? Number(caseStudyCount) : 0
+        })
+      })
+
+      const data = await response.json()
+      if (response.ok) {
+        let msg = `Secure interview link created successfully!`
+        if (data.email_scheduled && data.email_send_at) {
+          msg += `\nInvitation scheduled to send to ${email} at ${new Date(data.email_send_at).toLocaleString()}`
+        } else if (data.email_sent) {
+          msg += `\nInvitation email sent successfully to ${email}!`
+        }
+        alert(msg)
+
+        setSingleCreatedLinks(prev => [
+          ...prev,
+          { name, url: data.link_url, id: data.link_id, email }
+        ])
+
+        setSingleCandidate(prev => ({
+          ...prev,
+          name: '',
+          email: '',
+          resumeText: '',
+          scheduledStart: '',
+          scheduledEnd: ''
+        }))
+        setAtsScoreData(null)
+        setCustomEmailHtml('')
+
+        loadDashboardData()
+      } else {
+        alert(data.detail || data.message || "Failed to create session.")
+      }
+    } catch (e) {
+      console.error(e)
+      alert("Failed to connect to server.")
+    } finally {
+      setInviting(false)
+    }
+  }
+
+  // Excel template downloader
+  const downloadExcelTemplate = () => {
+    if (window.XLSX) {
+      const ws = window.XLSX.utils.aoa_to_sheet([
+        ['Name', 'Email'],
+        ['John Doe', 'john@example.com'],
+        ['Jane Smith', 'jane@example.com']
+      ])
+      ws['!cols'] = [{ wch: 24 }, { wch: 32 }]
+      const wb = window.XLSX.utils.book_new()
+      window.XLSX.utils.book_append_sheet(wb, ws, 'Candidates')
+      window.XLSX.writeFile(wb, 'interview_candidates_template.xlsx')
+      alert('Template downloaded successfully!')
+    } else {
+      let csvContent = "data:text/csv;charset=utf-8,Name,Email\nJohn Doe,john@example.com\nJane Smith,jane@example.com"
+      const encodedUri = encodeURI(csvContent)
+      const link = document.createElement("a")
+      link.setAttribute("href", encodedUri)
+      link.setAttribute("download", "interview_candidates_template.csv")
+      document.body.appendChild(link)
+      link.click()
+      document.body.removeChild(link)
+      alert('CSV Template downloaded!')
+    }
+  }
+
+  // Bulk Excel/CSV parser
+  const handleBulkFileUpload = (e) => {
+    const file = e.target.files[0]
+    if (!file) return
+
+    const ext = file.name.split('.').pop().toLowerCase()
+    setBulkCsvLabel(`Reading ${file.name}...`)
+
+    const reader = new FileReader()
+
+    if (ext === 'xlsx' || ext === 'xls') {
+      reader.onload = (event) => {
+        try {
+          if (!window.XLSX) throw new Error("SheetJS XLSX library is not loaded")
+          const workbook = window.XLSX.read(event.target.result, { type: 'array' })
+          const sheet = workbook.Sheets[workbook.SheetNames[0]]
+          const rows = window.XLSX.utils.sheet_to_json(sheet, { header: 1, defval: '' })
+
+          let added = 0
+          const newCandidates = [...bulkCandidates]
+          rows.forEach((row) => {
+            const rawName = String(row[0] || '').trim()
+            const rawEmail = String(row[1] || '').trim()
+            if (!rawName || !rawEmail) return
+            if (rawName.toLowerCase() === 'name' && rawEmail.toLowerCase() === 'email') return
+            if (!rawEmail.includes('@')) return
+            if (!newCandidates.find(c => c.email === rawEmail)) {
+              newCandidates.push({ name: rawName, email: rawEmail, record_video: true })
+              added++
+            }
+          })
+
+          setBulkCandidates(newCandidates)
+          setBulkCsvLabel(`${file.name} - ${added} candidates imported`)
+          alert(`${added} candidates imported successfully!`)
+        } catch (err) {
+          setBulkCsvLabel('Could not read Excel file')
+          alert('Error reading Excel: ' + err.message)
+        }
+      }
+      reader.readAsArrayBuffer(file)
+    } else {
+      reader.onload = (event) => {
+        try {
+          const lines = event.target.result.split('\n').map(l => l.trim()).filter(Boolean)
+          let added = 0
+          const newCandidates = [...bulkCandidates]
+          lines.forEach(line => {
+            const parts = line.split(',')
+            if (parts.length >= 2) {
+              const name = parts[0].trim().replace(/^["']|["']$/g, '')
+              const email = parts[1].trim().replace(/^["']|["']$/g, '')
+              if (!name || !email || !email.includes('@')) return
+              if (name.toLowerCase() === 'name' && email.toLowerCase() === 'email') return
+              if (!newCandidates.find(c => c.email === email)) {
+                newCandidates.push({ name, email, record_video: true })
+                added++
+              }
+            }
+          })
+          setBulkCandidates(newCandidates)
+          setBulkCsvLabel(`${file.name} - ${added} candidates imported`)
+          alert(`${added} candidates imported successfully!`)
+        } catch (err) {
+          setBulkCsvLabel('Could not read CSV file')
+          alert('Error reading CSV: ' + err.message)
+        }
+      }
+      reader.readAsText(file)
+    }
+  }
+
+  // Submit bulk invitation sessions
+  const handleSendBulkInterviews = async () => {
+    const { jobDescription, customQuestions, aiInstructions, industry, interviewType, language, caseStudyCount, duration, recordVideo, scheduledStart, scheduledEnd, hrScreening } = bulkConfig
+
+    if (!jobDescription) {
+      alert("Please enter a Job Description.")
+      return
+    }
+    if (bulkCandidates.length === 0) {
+      alert("Please add at least one candidate.")
+      return
+    }
+
+    const toUtcIso = (val) => {
+      if (!val) return ""
+      return new Date(val).toISOString()
+    }
+
+    setInviting(true)
+    try {
+      const response = await fetch(`${API_BASE_URL}/admin/bulk-create-sessions`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${token}`
+        },
+        body: JSON.stringify({
+          candidates: bulkCandidates.map(c => ({
+            candidate_name: c.name,
+            candidate_email: c.email,
+            resume_text: '',
+            record_video: c.record_video !== undefined ? c.record_video : recordVideo
+          })),
+          job_description: jobDescription,
+          industry_type: industry,
+          interview_type: interviewType,
+          language: language,
+          case_study_count: interviewType === 'Non-Technical' ? Number(caseStudyCount) : 0,
+          admin_id: adminUser?.admin_id || 'admin',
+          interview_duration: Number(duration),
+          record_video: recordVideo,
+          custom_email_html: customEmailHtml || "",
+          scheduled_start: toUtcIso(scheduledStart),
+          scheduled_end: toUtcIso(scheduledEnd),
+          hr_screening: hrScreening,
+          custom_questions: customQuestions,
+          ai_instructions: aiInstructions
+        })
+      })
+
+      const data = await response.json()
+      if (response.ok) {
+        alert(`Successfully sent ${data.successful}/${data.total} interviews!`)
+        setBulkResultsData(data)
+        setBulkResultsModalOpen(true)
+        setBulkCandidates([])
+        setCustomEmailHtml('')
+        loadDashboardData()
+      } else {
+        alert(data.detail || data.message || "Failed to create bulk sessions.")
+      }
+    } catch (e) {
+      console.error(e)
+      alert("Error sending bulk interviews.")
+    } finally {
+      setInviting(false)
+    }
+  }
+
+  useEffect(() => {
+    if (token) {
+      loadDashboardData()
+    }
+  }, [token, selectedAdminId, role])
+
+  const loadDashboardData = async () => {
+    setLoadingData(true)
+    try {
+      const headers = { 'Authorization': `Bearer ${token}` }
+
+      setInterviews([])
+
+      const sessionsUrl = `${API_BASE_URL}/admin/sessions${selectedAdminId ? `?admin_id=${selectedAdminId}` : ''}`
+      const resSessions = await fetch(sessionsUrl, { headers })
+      const payloadSessions = await resSessions.json()
+      const fetchedCandidates = payloadSessions.sessions || []
+      setCandidates(fetchedCandidates)
+
+      const statsUrl = `${API_BASE_URL}/admin/dashboard-stats${selectedAdminId ? `?admin_id=${selectedAdminId}` : ''}`
+      const resStats = await fetch(statsUrl, { headers })
+      if (resStats.ok) {
+        const data = await resStats.json()
+        setDbStats(prev => ({
+          ...prev,
+          total: data.total ?? 0,
+          pending: data.pending ?? 0,
+          completed: data.completed ?? 0,
+          started: data.started ?? 0,
+          expired: data.expired ?? 0,
+          selected: data.selected ?? 0,
+          rejected: data.rejected ?? 0,
+          avg_score: data.avg_score ?? 0,
+          today: data.today ?? 0
+        }))
+        setStats({
+          total: data.total ?? 0,
+          pending: data.pending ?? 0,
+          completed: data.completed ?? 0,
+          shortlisted: data.selected ?? 0
+        })
+      }
+
+      if (adminUser?.plan_capabilities?.live_monitoring || role === 'superadmin') {
+        const ongoingUrl = `${API_BASE_URL}/admin/ongoing-interviews${selectedAdminId ? `?admin_id=${selectedAdminId}` : ''}`
+        const resOngoing = await fetch(ongoingUrl, { headers })
+        if (resOngoing.ok) {
+          const data = await resOngoing.json()
+          setLiveSessions(data.sessions || [])
+          setOngoingMonitoredCount(data.count || 0)
+
+          let live = 0
+          let alerts = 0
+          let speaking = 0
+          let coding = 0
+
+          const sessions = data.sessions || []
+          sessions.forEach(s => {
+            if (s.online) live++
+            if (!s.online && (data.count || 0) > 0) alerts++
+            if (s.audio_level > 5) speaking++
+            if (s.current_question && s.current_question.toString().includes('code')) coding++
+          })
+
+          setOngoingLiveCount(live)
+          setOngoingAlertCount(alerts)
+          setOngoingSpeakingCount(speaking)
+          setOngoingCodingCount(coding)
+        }
+      }
+
+      if (adminUser?.role === 'superadmin' || role === 'superadmin') {
+        try {
+          const reqRes = await fetch(`${API_BASE_URL}/super-admin/credit-requests`, { headers })
+          if (reqRes.ok) {
+            const reqData = await reqRes.json()
+            setCreditRequests(reqData.data || reqData || [])
+          }
+          
+          const plansRes = await fetch(`${API_BASE_URL}/api/plans`)
+          if (plansRes.ok) {
+            const plansData = await plansRes.json()
+            setSubscriptionPlans(plansData.data || [])
+          }
+        } catch(e){}
+      }
+
+    } catch (e) {
+      console.error(e)
+    } finally {
+      setLoadingData(false)
+    }
   }
 
   const handleAddCreditsClick = () => {
@@ -301,7 +1011,44 @@ export default function AdminPage({ role: initialRole = 'admin' }) {
     navigate('/login')
   }
 
-  const handleDeleteSessionAction = (linkId) => {
+
+  const handleGenerateLink = async (e) => {
+    e.preventDefault()
+    if (!inviteForm.name || !inviteForm.email || !inviteInterviewId) {
+      alert("All fields are required to invite a candidate.")
+      return
+    }
+    setInviting(true)
+    try {
+      const response = await fetch(`${API_BASE_URL}/generate-link`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${token}`
+        },
+        body: JSON.stringify({
+          interview_id: inviteInterviewId,
+          candidate_name: inviteForm.name,
+          candidate_email: inviteForm.email
+        })
+      })
+      const payload = await response.json()
+      if (response.ok) {
+        alert(`Successfully generated secure candidate link:\n${window.location.origin}/interview?session_id=${payload.session_id}`)
+        setInviteInterviewId(null)
+        setInviteForm({ name: '', email: '' })
+        loadDashboardData()
+      } else {
+        alert(payload.detail || payload.message || "Failed to generate link.")
+      }
+    } catch (e) {
+      console.error(e)
+    } finally {
+      setInviting(false)
+    }
+  }
+
+  const handleDeleteSession = async (linkId) => {
     if (!confirm("Are you sure you want to delete this candidate's interview session? This cannot be undone.")) return
     dispatch(handleDeleteSession(linkId))
   }
@@ -485,6 +1232,7 @@ export default function AdminPage({ role: initialRole = 'admin' }) {
         onClose={() => setShowUpgradePlansModal(false)}
         handleSelectPlan={handleSelectPlan}
         isProcessing={isProcessingUpgrade}
+        plans={subscriptionPlans}
       />
 
       <CandidateScorecardModal
