@@ -371,9 +371,9 @@ async def get_plans():
             continue
         plans_list.append({
             "id": str(p["_id"]),
-            "name": p.get("plan_name", "Unknown Plan"),
+            "plan_name": p.get("plan_name", "Unknown Plan"),
             "credits": p.get("credits_granted", 0),
-            "price": p.get("price", 0) * 100,  # Convert INR to paise for Razorpay
+            "price": p.get("price", 0),
             "features": p.get("features", []),
             "summary": p.get("summary", "")
         })
@@ -385,9 +385,9 @@ async def get_plans():
                 continue
             plans_list.append({
                 "id": key,
-                "name": plan["label"],
+                "plan_name": plan["label"],
                 "credits": plan["credits_granted"],
-                "price": plan["price"] * 100,
+                "price": plan["price"],
                 "features": plan["features"],
                 "summary": plan["summary"]
             })

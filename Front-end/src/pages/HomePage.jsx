@@ -54,6 +54,7 @@ function HomePage() {
   const [selectedLanguage, setSelectedLanguage] = useState('python')
   const [codeOutput, setCodeOutput] = useState('')
   const [compiling, setCompiling] = useState(false)
+  const [globalCountdown, setGlobalCountdown] = useState(0)
 
   // Recording Ref elements
   const videoPreviewRef = useRef(null)
@@ -184,6 +185,19 @@ function HomePage() {
     return () => clearInterval(timer)
   }, [showSkipButton, skipCountdown])
 
+  // Interview Countdown Timer
+  useEffect(() => {
+    let interval;
+    if (isDisclaimerAccepted && !showAllSet && globalCountdown > 0) {
+      interval = setInterval(() => {
+        setGlobalCountdown(prev => prev - 1)
+      }, 1000)
+    } else if (globalCountdown === 0 && isDisclaimerAccepted && !showAllSet && questions.length > 0) {
+      // Time's up logic could go here, e.g., auto-submit
+    }
+    return () => clearInterval(interval)
+  }, [isDisclaimerAccepted, showAllSet, globalCountdown, questions.length])
+
   const handleSkipUpload = () => {
     setShowSkipButton(false)
     setShowAllSet(true)
@@ -279,6 +293,9 @@ function HomePage() {
             ...prev,
             interview_duration: startPayload.interview_duration
           }))
+          setGlobalCountdown(parseInt(startPayload.interview_duration, 10) * 60)
+        } else {
+          setGlobalCountdown(30 * 60)
         }
 
         setLoading(false)
@@ -1084,53 +1101,62 @@ function HomePage() {
     )
   }
 
-  // Render "All Set!" screen
-  if (showAllSet) {
+  // Render Video uploading progress & "All Set!" screen
+  if (showAllSet || uploadingText) {
     return (
-      <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', height: '100vh', fontFamily: 'sans-serif', textAlign: 'center', background: '#0f172a', color: '#fff' }}>
-        <div style={{ background: '#22c55e', width: '80px', height: '80px', borderRadius: '50%', display: 'flex', alignItems: 'center', justifyContent: 'center', marginBottom: '1.5rem' }}>
-          <svg style={{ width: '40px', height: '40px', color: '#fff' }} fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="3" d="M5 13l4 4L19 7"></path></svg>
-        </div>
-        <h1 style={{ fontSize: '32px', fontWeight: 'bold', marginBottom: '16px' }}>All Set!</h1>
-        <p style={{ color: '#94a3b8', marginBottom: '32px', fontSize: '18px' }}>Your interview has been successfully submitted and saved.</p>
-        <button onClick={() => navigate('/')} style={{ padding: '12px 32px', background: '#4f46e5', color: 'white', border: 'none', borderRadius: '9999px', cursor: 'pointer', fontSize: '16px', fontWeight: 'bold' }}>
-          Exit Now
-        </button>
-      </div>
-    )
-  }
+      <div className="container">
+        <div style={{ marginTop: '3rem', background: '#fff', padding: '5rem 2rem', borderRadius: '20px', boxShadow: '0 10px 40px rgba(0,0,0,0.08)', textAlign: 'center', border: '1px solid #eff6ff' }}>
+          <div>
+            <h1 style={{ color: '#6366f1', fontSize: '3rem', marginBottom: '0.5rem', fontWeight: '800' }}>🎉 Thank You!</h1>
+            <p style={{ fontSize: '1.25rem', color: '#4b5563', marginBottom: '3rem', fontWeight: '500' }}>Your interview has been successfully submitted.</p>
+          </div>
 
-  // Render Video uploading progress panel
-  if (uploadingText) {
-    return (
-      <div style={{ display: 'flex', justifyContent: 'center', alignItems: 'center', height: '100vh', flexDirection: 'column', gap: '20px', padding: '24px', textAlign: 'center', background: '#0f172a' }}>
-        <h2 style={{ fontSize: '24px', fontWeight: 'bold', color: '#fff' }}>{uploadingText}</h2>
-        {uploadPercentage > 0 && uploadPercentage < 100 && (
-          <div style={{ width: '300px', height: '10px', background: '#1e293b', border: '1px solid #334155', borderRadius: '9999px', overflow: 'hidden' }}>
-            <div style={{ height: '100%', background: '#4f46e5', transition: 'width 0.3s', width: `${uploadPercentage}%` }}></div>
-          </div>
-        )}
-        {showSkipButton && uploadPercentage < 100 && (
-          <div style={{ marginTop: '16px', padding: '16px', border: '1px solid #fbbf24', background: '#fffbeb', borderRadius: '12px', maxWidth: '380px' }}>
-            <p style={{ color: '#92400e', fontSize: '14px', fontWeight: '500', marginBottom: '12px' }}>
-              Takes too long? Your text answers are already saved.
-            </p>
-            <button 
-              onClick={handleSkipUpload}
-              disabled={skipCountdown > 0}
-              style={{ padding: '8px 16px', borderRadius: '9999px', fontSize: '14px', fontWeight: 'bold', cursor: skipCountdown > 0 ? 'not-allowed' : 'pointer', background: skipCountdown > 0 ? '#e2e8f0' : '#fef3c7', color: skipCountdown > 0 ? '#94a3b8' : '#b45309', border: skipCountdown > 0 ? 'none' : '1px solid #fcd34d' }}
-            >
-              {skipCountdown > 0 ? `Skip available in ${skipCountdown}s` : 'Skip Video Upload'}
-            </button>
-          </div>
-        )}
+          {!showAllSet ? (
+            <div style={{ background: '#f8fafc', padding: '2.5rem', borderRadius: '16px', border: '1px dashed #cbd5e1', maxWidth: '500px', margin: '0 auto' }}>
+              <div style={{ fontSize: '3rem', marginBottom: '1.5rem', animation: 'spin 2s linear infinite' }}>⏳</div>
+              <h3 style={{ color: '#1e293b', marginBottom: '0.75rem', fontSize: '1.5rem', fontWeight: 'bold' }}>Saving Your Recording</h3>
+              <p style={{ fontSize: '1rem', color: '#64748b', marginBottom: '1.5rem' }}>
+                We are uploading your video interview. Time depends on your connection speed and interview length.
+              </p>
+              <div style={{ background: '#fee2e2', color: '#dc2626', padding: '12px', borderRadius: '8px', fontWeight: '700', display: 'inline-flex', alignItems: 'center', gap: '8px' }}>
+                ⚠️ PLEASE DO NOT CLOSE THIS TAB
+              </div>
+              <div style={{ marginTop: '1.5rem', width: '100%', height: '10px', background: '#e2e8f0', borderRadius: '5px', overflow: 'hidden', position: 'relative' }}>
+                <div style={{ width: `${uploadPercentage}%`, height: '100%', background: '#6366f1', transition: 'width 0.3s ease' }}></div>
+              </div>
+              <div style={{ display: 'flex', justifyContent: 'space-between', marginTop: '0.5rem' }}>
+                <div style={{ fontSize: '0.85rem', color: '#6366f1', fontWeight: '700' }}>{uploadingText || 'Preparing video file...'}</div>
+                <div style={{ fontSize: '0.85rem', color: '#64748b', fontWeight: '600' }}>Est: 1-2 mins</div>
+              </div>
+
+              {showSkipButton && (
+                <div style={{ marginTop: '1.5rem', fontSize: '0.8rem', color: '#64748b', borderTop: '1px solid #f1f5f9', paddingTop: '1rem' }}>
+                  Taking too long? <a href="#" onClick={(e) => { e.preventDefault(); if (skipCountdown <= 0) handleSkipUpload(); }} style={{ color: skipCountdown <= 0 ? '#6366f1' : '#94a3b8', textDecoration: skipCountdown <= 0 ? 'underline' : 'none', fontWeight: '600', cursor: skipCountdown <= 0 ? 'pointer' : 'not-allowed' }}>Finish & Exit anyway</a>
+                  {skipCountdown > 0 && <span style={{ color: '#94a3b8' }}> (available in <span>{skipCountdown}</span>s)</span>}
+                  <div style={{ fontSize: '0.75rem', marginTop: '4px', color: '#94a3b8' }}>(Your interview responses are already safely submitted)</div>
+                </div>
+              )}
+            </div>
+          ) : (
+            <div style={{ background: '#f0fdf4', padding: '3rem 2rem', borderRadius: '16px', border: '1px dashed #bbf7d0', maxWidth: '500px', margin: '0 auto' }}>
+              <div style={{ background: '#22c55e', width: '60px', height: '60px', borderRadius: '50%', display: 'flex', alignItems: 'center', justifyContent: 'center', margin: '0 auto 1.5rem auto' }}>
+                <svg style={{ width: '30px', height: '30px', color: '#fff' }} fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="3" d="M5 13l4 4L19 7"></path></svg>
+              </div>
+              <h2 style={{ color: '#166534', marginBottom: '1rem', fontSize: '2rem', fontWeight: 'bold' }}>All Set!</h2>
+              <p style={{ fontSize: '1.1rem', color: '#15803d', marginBottom: '2rem', lineHeight: '1.6' }}>Your recording has been safe-stored. You may now safely close this window or exit the browser.</p>
+              <button onClick={() => navigate('/')} style={{ background: '#1e293b', color: 'white', padding: '12px 32px', borderRadius: '9999px', fontSize: '1.1rem', fontWeight: '600', border: 'none', cursor: 'pointer', boxShadow: '0 4px 10px rgba(0,0,0,0.1)' }}>
+                Exit Now
+              </button>
+            </div>
+          )}
+        </div>
       </div>
     )
   }
 
   return (
     <div className="container">
-      {/* Background Noise banner */}
+      {/* Alerts */}
       {showNoiseBanner && (
         <div style={{ position: 'fixed', top: '20px', right: '20px', zIndex: 99999, padding: '16px', borderRadius: '12px', background: 'rgba(245, 158, 11, 0.1)', border: '1px solid #f59e0b', color: '#f59e0b', display: 'flex', alignItems: 'center', gap: '12px', boxShadow: '0 4px 6px rgba(0,0,0,0.1)', maxWidth: '380px' }}>
           <Volume2 size={20} style={{ animation: 'bounce 1s infinite' }} />
@@ -1141,253 +1167,262 @@ function HomePage() {
         </div>
       )}
 
-      {/* Fullscreen Alert Banner */}
       {fullscreenWarning && (
         <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.95)', zIndex: 99999, display: 'flex', flexDirection: 'column', justifyContent: 'center', alignItems: 'center', gap: '20px', textAlign: 'center', padding: '24px' }}>
           <ShieldAlert size={60} color="#ef4444" style={{ animation: 'pulse 2s infinite' }} />
           <h2 style={{ fontSize: '30px', fontWeight: '800', color: '#fff' }}>⚠️ Anti-Cheating Alert</h2>
           <p style={{ fontSize: '16px', color: '#94a3b8', maxWidth: '500px', lineHeight: '1.5' }}>Full Screen Mode is REQUIRED to take this interview. Exiting fullscreen compromises proctoring validation.</p>
-          <button
-            onClick={enableFullscreen}
-            style={{ padding: '12px 32px', borderRadius: '9999px', background: '#4f46e5', color: '#fff', fontWeight: 'bold', border: 'none', cursor: 'pointer' }}
-          >
-            Enable Full Screen
-          </button>
+          <button onClick={enableFullscreen} style={{ padding: '12px 32px', borderRadius: '9999px', background: '#4f46e5', color: '#fff', fontWeight: 'bold', border: 'none', cursor: 'pointer' }}>Enable Full Screen</button>
         </div>
       )}
 
-      {/* Screen Share alert */}
       {screenShareWarning && (
         <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.95)', zIndex: 99999, display: 'flex', flexDirection: 'column', justifyContent: 'center', alignItems: 'center', gap: '20px', textAlign: 'center', padding: '24px' }}>
           <ShieldAlert size={60} color="#ef4444" style={{ animation: 'pulse 2s infinite' }} />
           <h2 style={{ fontSize: '24px', fontWeight: 'bold', color: '#fff' }}>Screen Sharing Stopped</h2>
           <p style={{ color: '#94a3b8', fontSize: '14px', maxWidth: '400px' }}>You must share your entire screen to continue the proctored interview. Violations: {screenShareViolations} of 3</p>
-          <button
-            onClick={restartScreenShare}
-            style={{ padding: '10px 24px', borderRadius: '9999px', background: '#4f46e5', color: '#fff', fontSize: '14px', fontWeight: 'bold', cursor: 'pointer', border: 'none' }}
-          >
-            Restart Screen Share
-          </button>
+          <button onClick={restartScreenShare} style={{ padding: '10px 24px', borderRadius: '9999px', background: '#4f46e5', color: '#fff', fontSize: '14px', fontWeight: 'bold', cursor: 'pointer', border: 'none' }}>Restart Screen Share</button>
         </div>
       )}
 
-      <div id="interviewSection">
-        <svg width="0" height="0" style={{ position: 'absolute' }}>
-          <defs>
-            <linearGradient id="timerGradient" x1="0%" y1="0%" x2="100%" y2="0%">
-              <stop offset="0%" stopColor="#6366f1" />
-              <stop offset="100%" stopColor="#8b5cf6" />
-            </linearGradient>
-          </defs>
-        </svg>
-
-        {/* ═══ LEFT COLUMN ═══ */}
-        <div className="ip-left">
-          {/* AI Avatar */}
-          <div className="ip-avatar-card">
-            <video ref={videoPreviewRef} autoPlay muted playsInline id="videoPreview" />
-            <div className="live-badge">LIVE</div>
-            {proctoringAlert && (
-               <div style={{ position: 'absolute', top: 0, left: 0, width: '100%', height: '100%', background: 'rgba(0,0,0,0.8)', color: '#ef4444', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 10, fontSize: '1.2rem', fontWeight: 'bold', flexDirection: 'column', textAlign: 'center', padding: '20px' }}>
-                 <span style={{ fontSize: '3rem', marginBottom: '10px' }}>⚠️</span>
-                 <div>{proctoringAlert}</div>
-               </div>
-            )}
-          </div>
-
-          {/* AI Analyzing Status */}
-          <div className="ip-analyzing-card">
-            <div className="ip-analyzing-icon">
-              <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                <circle cx="12" cy="8" r="4" />
-                <path d="M6 20v-2a6 6 0 0 1 12 0v2" />
-              </svg>
+      {currentQuestion?.type === 'coding' ? (
+        <div id="codingRoundSection" className="coding-round-shell" style={{ marginTop: '1.5rem', width: '100%' }}>
+          <div className="coding-round-header">
+            <div>
+              <p className="coding-round-kicker">Round 2</p>
+              <h2>Live Coding Task</h2>
+              <p>Round 2 has {Math.floor(globalCountdown / 60).toString().padStart(2, '0')}:{(globalCountdown % 60).toString().padStart(2, '0')} remaining. Explain your logic to the AI while you code.</p>
             </div>
-            <div className="ip-analyzing-text">
-              <h4>AI Analyzing</h4>
-              <p>AI is Reading the Question...</p>
-            </div>
-            <div className="ip-audio-bars">
-              <span></span><span></span><span></span><span></span>
+            <div className="coding-round-actions">
+              <button className="btn btn-primary" onClick={handleRunCode} disabled={compiling}>Get AI Feedback</button>
+              <button className="btn btn-danger" onClick={() => handleSubmitInterview(false)}>Submit Code</button>
             </div>
           </div>
 
-          {/* Circular Timer */}
-          <div className="ip-timer-card">
-            <div className="ip-timer-ring">
-              <svg width="110" height="110" viewBox="0 0 110 110">
-                <circle className="track" cx="55" cy="55" r="47" />
-                <circle className="fill" cx="55" cy="55" r="47" />
-              </svg>
-              <div className="ip-timer-label">
-                <span>02:00</span>
-                <span className="remaining-lbl">Remaining</span>
+          <div className="coding-round-grid">
+            <div className="coding-problem-card" style={{ position: 'relative' }}>
+              <div className="coding-problem-topbar">
+                <div className="coding-problem-tabs">
+                  <span className="coding-tab-pill active" style={{ background: '#fff', border: '1px solid #e2e8f0', color: '#4b5563' }}>Description</span>
+                  <span className="coding-tab-pill" style={{ color: '#94a3b8' }}>Editorial Disabled</span>
+                </div>
+                <div className="coding-problem-meta" style={{ display: 'flex', gap: '8px' }}>
+                  <span className="question-difficulty" style={{ background: '#dcfce7', color: '#166534', padding: '4px 12px', borderRadius: '9999px', fontSize: '12px', fontWeight: '600' }}>Easy</span>
+                  <span className="question-type" style={{ background: '#e0e7ff', color: '#3730a3', padding: '4px 12px', borderRadius: '9999px', fontSize: '12px', fontWeight: '600', textTransform: 'uppercase' }}>{selectedLanguage}</span>
+                </div>
               </div>
-            </div>
-            <button className="ip-end-btn" onClick={() => handleSubmitInterview(false)}>
-              ⏹ End Interview
-            </button>
-          </div>
-
-          {/* AI Insights */}
-          <div className="ip-insights-card">
-            <h4>AI Insights</h4>
-
-            <div className="insight-row">
-              <div className="insight-row-header">
-                <span className="insight-label">CLARITY</span>
-                <span className="insight-value" style={{ color: '#10b981' }}>60%</span>
-              </div>
-              <div className="insight-bar-track">
-                <div className="insight-bar-fill clarity" style={{ width: '60%' }}></div>
+              <div className="coding-problem-scroll" style={{ padding: '24px' }}>
+                <h3 style={{ fontSize: '20px', fontWeight: 'bold', color: '#1e293b', marginBottom: '16px' }}>{currentQuestion.title || 'Technical Assessment'}</h3>
+                <p style={{ color: '#475569', lineHeight: '1.6', marginBottom: '24px' }}>{currentQuestionText}</p>
+                {/* Floating Video for Coding Round */}
+                <div style={{ position: 'absolute', bottom: '24px', left: '24px', width: '120px', height: '120px', borderRadius: '50%', overflow: 'hidden', border: '3px solid #6366f1', boxShadow: '0 10px 25px rgba(0,0,0,0.2)', zIndex: 50 }}>
+                   <video ref={videoPreviewRef} autoPlay muted playsInline style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+                </div>
               </div>
             </div>
 
-            <div className="insight-row">
-              <div className="insight-row-header">
-                <span className="insight-label">TECHNICAL DEPTH</span>
-                <span className="insight-value" style={{ color: '#6366f1' }}>30%</span>
+            <div className="coding-editor-card">
+              <div className="coding-editor-topbar" style={{ display: 'flex', justifyContent: 'space-between', borderBottom: '1px solid #e2e8f0', padding: '0 16px' }}>
+                <div className="coding-right-tabs" style={{ display: 'flex', gap: '24px' }}>
+                  <button className="coding-right-tab active" style={{ borderBottom: '2px solid #4f46e5', color: '#1e293b', fontWeight: '600', padding: '16px 0', background: 'transparent', borderTop: 'none', borderLeft: 'none', borderRight: 'none' }}>Code</button>
+                  <button className="coding-right-tab" style={{ color: '#64748b', fontWeight: '500', padding: '16px 0', background: 'transparent', border: 'none' }}>Testcase</button>
+                  <button className="coding-right-tab" style={{ color: '#64748b', fontWeight: '500', padding: '16px 0', background: 'transparent', border: 'none' }}>Result</button>
+                </div>
+                <div className="coding-round-actions" style={{ display: 'flex', gap: '12px', alignItems: 'center' }}>
+                   <button className="btn btn-primary" style={{ background: '#4f46e5', color: 'white', padding: '8px 16px', borderRadius: '8px', fontWeight: '600', border: 'none' }}>Get AI Feedback</button>
+                   <button className="btn btn-danger" style={{ background: '#ef4444', color: 'white', padding: '8px 16px', borderRadius: '8px', fontWeight: '600', border: 'none' }}>Submit</button>
+                </div>
               </div>
-              <div className="insight-bar-track">
-                <div className="insight-bar-fill techDepth" style={{ width: '30%' }}></div>
-              </div>
-            </div>
 
-            <div className="insight-row">
-              <div className="insight-row-header">
-                <span className="insight-label">CONFIDENCE</span>
-                <span className="insight-value" style={{ color: '#f59e0b' }}>80%</span>
+              <div className="coding-toolbar" style={{ padding: '12px 16px', display: 'flex', gap: '16px', alignItems: 'center', background: '#f8fafc', borderBottom: '1px solid #e2e8f0' }}>
+                <label style={{ fontSize: '14px', color: '#64748b', fontWeight: '500' }}>Language</label>
+                <select
+                  value={selectedLanguage}
+                  onChange={(e) => setSelectedLanguage(e.target.value)}
+                  style={{ padding: '8px 12px', borderRadius: '8px', border: '1px solid #cbd5e1', outline: 'none', background: '#fff' }}
+                >
+                  <option value="python">Python</option>
+                  <option value="javascript">JavaScript</option>
+                  <option value="cpp">C++</option>
+                </select>
+                <button style={{ background: '#4f46e5', color: 'white', border: 'none', borderRadius: '8px', padding: '8px 16px', fontWeight: '600' }}>Start Voice Notes</button>
+                <button style={{ background: '#4f46e5', color: 'white', border: 'none', borderRadius: '8px', padding: '8px 16px', fontWeight: '600' }} onClick={handleRunCode}>Run Code</button>
               </div>
-              <div className="insight-bar-track">
-                <div className="insight-bar-fill confidence" style={{ width: '80%' }}></div>
+
+              <div className="coding-editor-wrap" style={{ flexGrow: 1, display: 'flex', flexDirection: 'column' }}>
+                <div className="coding-editor-header" style={{ display: 'flex', justifyContent: 'space-between', padding: '12px 16px', background: '#fff', borderBottom: '1px solid #e2e8f0' }}>
+                  <div>
+                    <h4 style={{ margin: 0, fontSize: '14px', fontWeight: 'bold', color: '#1e293b' }}>Editor</h4>
+                    <div style={{ fontSize: '12px', color: '#94a3b8' }}>Write your solution in the IDE below.</div>
+                  </div>
+                  <div style={{ fontSize: '12px', color: '#94a3b8', fontStyle: 'italic' }}>Autosave by language</div>
+                </div>
+                
+                <textarea
+                  className="coding-codebox"
+                  spellCheck="false"
+                  placeholder="// Write your solution here..."
+                  value={codeAnswer}
+                  onChange={(e) => setCodeAnswer(e.target.value)}
+                  style={{ flexGrow: 1, width: '100%', border: 'none', outline: 'none', padding: '16px', fontFamily: 'monospace', fontSize: '14px', resize: 'none', background: '#fff' }}
+                ></textarea>
+
+                <div className="coding-console-shell" style={{ borderTop: '1px solid #e2e8f0', background: '#f8fafc' }}>
+                  <div className="coding-console-tabs" style={{ display: 'flex', gap: '2px', background: '#e2e8f0', padding: '8px 8px 0 8px' }}>
+                    <button className="coding-console-tab active" style={{ background: '#fff', border: 'none', padding: '8px 16px', borderRadius: '8px 8px 0 0', fontWeight: '600', color: '#1e293b' }}>Test Results</button>
+                    <button className="coding-console-tab" style={{ background: 'transparent', border: 'none', padding: '8px 16px', color: '#64748b' }}>Console</button>
+                  </div>
+                  <div className="coding-console-pane active" style={{ padding: '16px', background: '#fff', minHeight: '120px' }}>
+                    <pre style={{ margin: 0, fontSize: '12px', fontFamily: 'monospace', color: '#334155', whiteSpace: 'pre-wrap' }}>
+                      {codeOutput || "Run the code to see compiler errors, runtime errors, or pass/fail updates."}
+                    </pre>
+                  </div>
+                </div>
               </div>
             </div>
           </div>
         </div>
+      ) : (
+        <div id="interviewSection">
+          <svg width="0" height="0" style={{ position: 'absolute' }}>
+            <defs>
+              <linearGradient id="timerGradient" x1="0%" y1="0%" x2="100%" y2="0%">
+                <stop offset="0%" stopColor="#6366f1" />
+                <stop offset="100%" stopColor="#8b5cf6" />
+              </linearGradient>
+            </defs>
+          </svg>
 
-        {/* ═══ RIGHT COLUMN ═══ */}
-        <div className="ip-right">
-          {currentQuestion?.type === 'coding' ? (
-            <div className="coding-round-shell" style={{ flexGrow: 1, display: 'flex', flexDirection: 'column', marginTop: '0', background: '#0f172a', borderColor: '#1e293b', borderRadius: '14px', padding: '1.5rem' }}>
-              <div className="coding-round-header">
-                <div>
-                  <h5 className="coding-round-kicker" style={{ color: '#818cf8' }}>Technical Assessment</h5>
-                  <h2 style={{ color: '#f8fafc', margin: 0 }}>Coding Round</h2>
-                </div>
-                <div className="coding-round-actions">
-                  <select
-                    className="coding-tab-pill"
-                    value={selectedLanguage}
-                    onChange={(e) => setSelectedLanguage(e.target.value)}
-                    style={{ background: '#1e293b', color: '#f8fafc', borderColor: '#334155' }}
-                  >
-                    <option value="python">Python 3</option>
-                    <option value="javascript">JavaScript</option>
-                    <option value="cpp">C++</option>
-                  </select>
+          <div className="ip-left">
+            <div className="ip-avatar-card">
+              <video ref={videoPreviewRef} autoPlay muted playsInline id="videoPreview" />
+              <div className="live-badge">LIVE</div>
+              {proctoringAlert && (
+                 <div style={{ position: 'absolute', top: 0, left: 0, width: '100%', height: '100%', background: 'rgba(0,0,0,0.8)', color: '#ef4444', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 10, fontSize: '1.2rem', fontWeight: 'bold', flexDirection: 'column', textAlign: 'center', padding: '20px' }}>
+                   <span style={{ fontSize: '3rem', marginBottom: '10px' }}>⚠️</span>
+                   <div>{proctoringAlert}</div>
+                 </div>
+              )}
+            </div>
+
+            <div className="ip-analyzing-card">
+              <div className="ip-analyzing-icon">
+                <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                  <circle cx="12" cy="8" r="4" />
+                  <path d="M6 20v-2a6 6 0 0 1 12 0v2" />
+                </svg>
+              </div>
+              <div className="ip-analyzing-text">
+                <h4>AI Analyzing</h4>
+                <p>AI is Reading the Question...</p>
+              </div>
+              <div className="ip-audio-bars">
+                <span></span><span></span><span></span><span></span>
+              </div>
+            </div>
+
+            <div className="ip-timer-card">
+              <div className="ip-timer-ring">
+                <svg width="110" height="110" viewBox="0 0 110 110">
+                  <circle className="track" cx="55" cy="55" r="47" />
+                  <circle className="fill" cx="55" cy="55" r="47" />
+                </svg>
+                <div className="ip-timer-label">
+                  <span>{Math.floor(globalCountdown / 60).toString().padStart(2, '0')}:{(globalCountdown % 60).toString().padStart(2, '0')}</span>
+                  <span className="remaining-lbl">Remaining</span>
                 </div>
               </div>
+              <button className="ip-end-btn" onClick={() => handleSubmitInterview(false)}>
+                ⏹ End Interview
+              </button>
+            </div>
 
-              <div className="coding-round-grid" style={{ display: 'flex', flexDirection: 'column', minHeight: '300px', flexGrow: 1 }}>
-                <div className="coding-editor-card" style={{ background: '#0f172a', borderColor: '#1e293b', flexGrow: 1 }}>
-                  
-                  <div className="coding-editor-container" style={{ background: '#020617', border: 'none' }}>
-                    <textarea
-                      className="w-full h-full bg-transparent text-[#e2e8f0] p-4 font-mono text-sm border-none outline-none resize-none"
-                      value={codeAnswer}
-                      onChange={(e) => setCodeAnswer(e.target.value)}
-                      placeholder="// Write your code solution here..."
-                      style={{ minHeight: '200px' }}
-                    ></textarea>
-                  </div>
-
-                  <div className="coding-console-shell" style={{ background: '#0f172a', borderColor: '#1e293b', minHeight: '120px' }}>
-                    <div className="coding-console-tabs" style={{ background: '#1e293b', borderColor: '#334155' }}>
-                      <button className="coding-console-tab active" style={{ color: '#f8fafc' }}>Test Output</button>
-                    </div>
-                    <div className="coding-console-pane active">
-                      <pre className="text-emerald-400 font-mono text-xs whitespace-pre-wrap">
-                        {codeOutput || "Run code to see output..."}
-                      </pre>
-                    </div>
-                  </div>
+            <div className="ip-insights-card">
+              <h4>AI Insights</h4>
+              <div className="insight-row">
+                <div className="insight-row-header">
+                  <span className="insight-label">CLARITY</span>
+                  <span className="insight-value" style={{ color: '#10b981' }}>60%</span>
+                </div>
+                <div className="insight-bar-track">
+                  <div className="insight-bar-fill clarity" style={{ width: '60%' }}></div>
+                </div>
+              </div>
+              <div className="insight-row">
+                <div className="insight-row-header">
+                  <span className="insight-label">TECHNICAL DEPTH</span>
+                  <span className="insight-value" style={{ color: '#6366f1' }}>30%</span>
+                </div>
+                <div className="insight-bar-track">
+                  <div className="insight-bar-fill techDepth" style={{ width: '30%' }}></div>
+                </div>
+              </div>
+              <div className="insight-row">
+                <div className="insight-row-header">
+                  <span className="insight-label">CONFIDENCE</span>
+                  <span className="insight-value" style={{ color: '#f59e0b' }}>80%</span>
+                </div>
+                <div className="insight-bar-track">
+                  <div className="insight-bar-fill confidence" style={{ width: '80%' }}></div>
                 </div>
               </div>
             </div>
-          ) : (
-            <>
-              {/* Question Card */}
-              <div className="ip-question-card">
-                <div style={{ fontSize: '0.78rem', color: '#9ca3af', fontWeight: 600, marginBottom: '0.5rem' }}>
-                  Question <span id="questionNumber">{currentQuestionIndex + 1}</span> of <span id="totalQuestions">{questions.length}</span>
-                </div>
-                <div className="ip-question-meta">
-                  <span className="ip-tag type">{currentQuestion?.type || 'Self-Introduction'}</span>
-                  <span className="ip-tag difficulty">Easy</span>
-                </div>
-                <div className="ip-question-body">
-                  <div className="q-bar"></div>
-                  <p>{currentQuestionText || 'Question is loading...'}</p>
-                  <button className="ip-mute-btn" onClick={() => speakAIQuestion(currentQuestionText)}>
-                    <svg xmlns="http://www.w3.org/2000/svg" width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                      <line x1="1" y1="1" x2="23" y2="23" />
-                      <path d="M9 9v3a3 3 0 0 0 5.12 2.12M15 9.34V4a3 3 0 0 0-5.94-.6" />
-                      <path d="M17 16.95A7 7 0 0 1 5 12v-2m14 0v2a7 7 0 0 1-.11 1.23" />
-                      <line x1="12" y1="19" x2="12" y2="23" />
-                      <line x1="8" y1="23" x2="16" y2="23" />
-                    </svg>
-                  </button>
-                </div>
-              </div>
-
-              {/* Live Transcript Card */}
-              <div className="ip-transcript-card">
-                <div className="ip-transcript-header">
-                  <div className="ip-transcript-title">
-                    🎙 Live Transcript
-                  </div>
-                  <div className="ip-recording-badge">
-                    <div className="rec-dot"></div>
-                    RECORDING
-                  </div>
-                </div>
-                <textarea 
-                  className="ip-transcript-box" 
-                  placeholder="Your speech will appear here automatically..." 
-                  readOnly
-                  value={transcriptionText}
-                />
-              </div>
-            </>
-          )}
-
-          {/* Navigation */}
-          <div className="ip-nav-row">
-            {currentQuestion?.type === 'coding' && (
-              <button className="ip-btn-prev" onClick={handleRunCode} disabled={compiling} style={{ marginRight: 'auto', background: '#3b82f6', color: 'white', border: 'none' }}>
-                {compiling ? 'Running...' : 'Run Code'}
-              </button>
-            )}
-            
-            <button className="ip-btn-prev" onClick={() => setCurrentQuestionIndex(prev => Math.max(0, prev - 1))} disabled={currentQuestionIndex === 0}>← Prev</button>
-            
-            {currentQuestionIndex === questions.length - 1 ? (
-              <button className="ip-btn-next" style={{ background: '#2563eb' }} onClick={() => {
-                handleSubmitInterview(false);
-                setTimeout(() => navigate('/case-study'), 1500);
-              }}>
-                Next Round →
-              </button>
-            ) : (
-              <button className="ip-btn-next" onClick={handleNextQuestion}>Next →</button>
-            )}
           </div>
 
+          <div className="ip-right">
+            <div className="ip-question-card">
+              <div style={{ fontSize: '0.78rem', color: '#9ca3af', fontWeight: 600, marginBottom: '0.5rem' }}>
+                Question <span id="questionNumber">{currentQuestionIndex + 1}</span> of <span id="totalQuestions">{questions.length}</span>
+              </div>
+              <div className="ip-question-meta">
+                <span className="ip-tag type">{currentQuestion?.type || 'Self-Introduction'}</span>
+                <span className="ip-tag difficulty">Easy</span>
+              </div>
+              <div className="ip-question-body">
+                <div className="q-bar"></div>
+                <p>{currentQuestionText || 'Question is loading...'}</p>
+                <button className="ip-mute-btn" onClick={() => speakAIQuestion(currentQuestionText)}>
+                  <svg xmlns="http://www.w3.org/2000/svg" width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                    <path d="M11 5L6 9H2v6h4l5 4V5z"></path>
+                    <path d="M19.07 4.93a10 10 0 0 1 0 14.14M15.54 8.46a5 5 0 0 1 0 7.07"></path>
+                  </svg>
+                </button>
+              </div>
+            </div>
+
+            <div className="ip-transcript-card">
+              <div className="ip-transcript-header">
+                <div className="ip-transcript-title">🎙 Live Transcript</div>
+                <div className="ip-recording-badge">
+                  <div className="rec-dot"></div>
+                  RECORDING
+                </div>
+              </div>
+              <textarea 
+                className="ip-transcript-box" 
+                placeholder="Your speech will appear here automatically..."
+                readOnly 
+                value={transcriptionText} 
+              />
+            </div>
+
+            <div className="ip-nav-row">
+              <button className="ip-btn-prev" onClick={() => setCurrentQuestionIndex(prev => Math.max(0, prev - 1))} disabled={currentQuestionIndex === 0}>← Prev</button>
+              {currentQuestionIndex === questions.length - 1 ? (
+                <button className="ip-btn-next" style={{ marginLeft: '10px', background: '#ef4444' }} onClick={() => handleSubmitInterview(false)}>
+                  Submit Interview
+                </button>
+              ) : (
+                <button className="ip-btn-next" onClick={handleNextQuestion}>Next →</button>
+              )}
+            </div>
+          </div>
         </div>
-      </div>
+      )}
     </div>
   )
 }
+
 
 export default HomePage
 
