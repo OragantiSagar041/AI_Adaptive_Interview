@@ -198,8 +198,10 @@ function HomePage() {
         setGlobalCountdown(prev => prev - 1)
       }, 1000)
     } else if (globalCountdown === 0 && isDisclaimerAccepted && !showAllSet && questions.length > 0) {
-      if (!isRoundTwo && totalDuration > 0) {
+      if (!isRoundTwo && totalDuration > 0 && sessionDetail?.interview_type !== 'Normal') {
         startNextRound()
+      } else {
+        handleSubmitInterview()
       }
     }
     return () => clearInterval(interval)
@@ -844,6 +846,10 @@ function HomePage() {
   // Start Next Round (Handles both Coding and Case Study)
   const startNextRound = async () => {
     if (isRoundTwo) return
+    if (sessionDetail?.interview_type === 'Normal') {
+      handleSubmitInterview()
+      return
+    }
     setIsRoundTwo(true)
     
     if (totalDuration > 0) {
@@ -1038,7 +1044,7 @@ function HomePage() {
           handleSubmitInterview()
         } else if (isCaseStudyQ) {
           handleSubmitInterview()
-        } else if (!isRoundTwo) {
+        } else if (!isRoundTwo && sessionDetail?.interview_type !== 'Normal') {
           // All verbal questions done before timer forced transition — transition to Round 2
           setTranscriptionText('')
           setCodeAnswer('')
@@ -1137,6 +1143,26 @@ function HomePage() {
     } finally {
       setCompiling(false)
     }
+  }
+
+  // Helper to submit code answer and end interview
+  const handleSubmitCodingAndInterview = async () => {
+    const iid = interviewId || sessionDetail?.interview_id || sessionId
+    try {
+      await fetch(`${API_BASE_URL}/coding-round/submit`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          interview_id: iid,
+          code: codeAnswer,
+          explanation: codeAnswer,
+          language: selectedLanguage
+        })
+      })
+    } catch (e) {
+      console.error("Failed to submit coding answer:", e)
+    }
+    handleSubmitInterview(false)
   }
 
   // End Interview & Upload Recordings
@@ -1389,7 +1415,7 @@ function HomePage() {
             </div>
             <div className="coding-round-actions">
               <button className="btn btn-primary" onClick={handleRunCode} disabled={compiling}>Get AI Feedback</button>
-              <button className="btn btn-danger" onClick={() => handleSubmitInterview(false)}>Submit Code</button>
+              <button className="btn btn-danger" onClick={handleSubmitCodingAndInterview}>Submit Code</button>
             </div>
           </div>
 
@@ -1423,8 +1449,8 @@ function HomePage() {
                   <button className="coding-right-tab" style={{ color: '#64748b', fontWeight: '500', padding: '16px 0', background: 'transparent', border: 'none' }}>Result</button>
                 </div>
                 <div className="coding-round-actions" style={{ display: 'flex', gap: '12px', alignItems: 'center' }}>
-                   <button className="btn btn-primary" style={{ background: '#4f46e5', color: 'white', padding: '8px 16px', borderRadius: '8px', fontWeight: '600', border: 'none' }}>Get AI Feedback</button>
-                   <button className="btn btn-danger" style={{ background: '#ef4444', color: 'white', padding: '8px 16px', borderRadius: '8px', fontWeight: '600', border: 'none' }}>Submit</button>
+                   <button className="btn btn-primary" style={{ background: '#4f46e5', color: 'white', padding: '8px 16px', borderRadius: '8px', fontWeight: '600', border: 'none' }} onClick={handleRunCode} disabled={compiling}>Get AI Feedback</button>
+                   <button className="btn btn-danger" style={{ background: '#ef4444', color: 'white', padding: '8px 16px', borderRadius: '8px', fontWeight: '600', border: 'none' }} onClick={handleSubmitCodingAndInterview}>Submit</button>
                 </div>
               </div>
 
@@ -1603,22 +1629,18 @@ function HomePage() {
             <div className="ip-nav-row" style={{ display: 'flex', gap: '10px', alignItems: 'center' }}>
               <button className="ip-btn-prev" onClick={() => setCurrentQuestionIndex(prev => Math.max(0, prev - 1))} disabled={currentQuestionIndex === 0}>← Prev</button>
               
-              {!isRoundTwo && (
-                <button 
-                  className="ip-btn-next" 
-                  style={{ background: '#3b82f6', marginLeft: 'auto' }} 
-                  onClick={startNextRound}
-                >
-                  Start Round 2
-                </button>
-              )}
-
               {currentQuestionIndex === questions.length - 1 ? (
-                <button className="ip-btn-next" style={{ background: '#ef4444' }} onClick={() => handleSubmitInterview(false)}>
-                  Submit Interview
-                </button>
+                !isRoundTwo && sessionDetail?.interview_type !== 'Normal' ? (
+                  <button className="ip-btn-next" style={{ background: '#3b82f6', marginLeft: 'auto' }} onClick={handleNextQuestion}>
+                    Start Round 2 →
+                  </button>
+                ) : (
+                  <button className="ip-btn-next" style={{ background: '#ef4444', marginLeft: 'auto' }} onClick={() => handleSubmitInterview(false)}>
+                    Submit Interview
+                  </button>
+                )
               ) : (
-                <button className="ip-btn-next" onClick={handleNextQuestion}>Next →</button>
+                <button className="ip-btn-next" style={{ marginLeft: 'auto' }} onClick={handleNextQuestion}>Next →</button>
               )}
             </div>
           </div>
