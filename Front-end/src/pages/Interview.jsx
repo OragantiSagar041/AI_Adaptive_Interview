@@ -16,7 +16,7 @@ const langMap = {
   'English': 'en-IN'
 }
 
-function HomePage() {
+function Interview() {
   const [searchParams] = useSearchParams()
   const navigate = useNavigate()
   const sessionId = searchParams.get('session_id') || searchParams.get('session')
@@ -58,6 +58,8 @@ function HomePage() {
   const [globalCountdown, setGlobalCountdown] = useState(0)
   const [totalDuration, setTotalDuration] = useState(0)
   const [isRoundTwo, setIsRoundTwo] = useState(false)
+  const isRoundTwoRef = useRef(false)
+  const [showRound2Confirm, setShowRound2Confirm] = useState(false)
   const codingRoundStartedRef = useRef(false)
   const [codingRoundLoading, setCodingRoundLoading] = useState(false)
   const [codingRoundData, setCodingRoundData] = useState(null)
@@ -259,7 +261,13 @@ function HomePage() {
           throw new Error("This interview session has already been completed.")
         }
 
+        if (payload.interview_format === 'Voice') {
+          navigate(`/voice-interview/${sessionId}`, { replace: true })
+          return
+        }
+
         // Step 2: Call start-session-interview to initialize/retrieve questions
+    
         const formData = new FormData()
         formData.append('link_id', sessionId)
         
@@ -396,9 +404,11 @@ function HomePage() {
       }
 
       if (silenceTimeoutRef.current) clearTimeout(silenceTimeoutRef.current)
-      silenceTimeoutRef.current = setTimeout(() => {
-        if (handleNextQuestionRef.current) handleNextQuestionRef.current()
-      }, 10000)
+      if (!isRoundTwoRef.current) {
+        silenceTimeoutRef.current = setTimeout(() => {
+          if (handleNextQuestionRef.current) handleNextQuestionRef.current()
+        }, 10000)
+      }
     }
 
     rec.onerror = (e) => {
@@ -822,8 +832,7 @@ function HomePage() {
       }
 
       utterance.onend = () => {
-        const currentQ = questions[currentQuestionIndex]
-        if (currentQ?.type !== 'coding') {
+        if (!isRoundTwoRef.current) {
           if (silenceTimeoutRef.current) clearTimeout(silenceTimeoutRef.current)
           silenceTimeoutRef.current = setTimeout(() => {
             if (handleNextQuestionRef.current) handleNextQuestionRef.current()
@@ -857,12 +866,17 @@ function HomePage() {
 
   // Start Next Round (Handles both Coding and Case Study)
   const startNextRound = async () => {
-    if (isRoundTwo) return
+    if (isRoundTwoRef.current) return
+    if (silenceTimeoutRef.current) {
+      clearTimeout(silenceTimeoutRef.current)
+      silenceTimeoutRef.current = null
+    }
     if (sessionDetail?.interview_type === 'Normal') {
       handleSubmitInterview()
       return
     }
     setIsRoundTwo(true)
+    isRoundTwoRef.current = true
     
     if (totalDuration > 0) {
       setGlobalCountdown(totalDuration / 2)
@@ -874,6 +888,46 @@ function HomePage() {
     } else {
       await startCodingRound(questions.length)
     }
+  }
+
+  const handleStartRound2Click = () => {
+    if (currentQuestionIndex < questions.length - 1) {
+      setShowRound2Confirm(true)
+    } else {
+      proceedToRoundTwo()
+    }
+  }
+
+  const proceedToRoundTwo = async () => {
+    setShowRound2Confirm(false)
+    
+    // Save current answer first
+    try {
+      const activeQuestion = questions[currentQuestionIndex]
+      const iid = interviewId || sessionDetail?.interview_id || sessionId
+      const answerForm = new FormData()
+      answerForm.append('interview_id', iid)
+      answerForm.append('question_id', activeQuestion?.id || (currentQuestionIndex + 1))
+      answerForm.append('question_text', activeQuestion?.text || activeQuestion?.question || '')
+      answerForm.append('answer_text', activeQuestion?.type === 'coding' ? (codeAnswer || ' ') : (transcriptionText || ' '))
+      answerForm.append('candidate_name', sessionDetail?.candidate_name || 'Candidate')
+      answerForm.append('time_spent_seconds', '0')
+      answerForm.append('time_limit_seconds', '120')
+
+      await fetch(`${API_BASE_URL}/save-answer`, {
+        method: 'POST',
+        body: answerForm
+      })
+    } catch (e) {
+      console.error("Failed to save answer during transition:", e)
+    }
+
+    setTranscriptionText('')
+    setCodeAnswer('')
+    setCodeOutput('')
+    behavioralStatsRef.current = { wordCount: 0, fillerCount: 0, pauseCount: 0, faceAlerts: 0, tabSwitches: 0 }
+    questionStartTimeRef.current = Date.now()
+    startNextRound()
   }
 
   const startCaseStudyRound = async (verbalQuestionsLength) => {
@@ -1564,6 +1618,16 @@ function HomePage() {
                   <span className="remaining-lbl">Remaining</span>
                 </div>
               </div>
+
+              {!isRoundTwo && sessionDetail?.interview_type !== 'Normal' && (
+                <button 
+                  onClick={handleStartRound2Click}
+                  className="w-full py-2.5 px-4 rounded-full font-bold text-sm bg-blue-600 hover:bg-blue-700 text-white transition-all cursor-pointer border-none shadow-[0_4px_12px_rgba(37,99,235,0.2)] flex items-center justify-center gap-2 mb-2"
+                >
+                  🚀 Start Round 2 &rarr;
+                </button>
+              )}
+
               <button className="ip-end-btn" onClick={() => handleSubmitInterview(false)}>
                 ⏹ End Interview
               </button>
@@ -1643,9 +1707,11 @@ function HomePage() {
               
               {currentQuestionIndex === questions.length - 1 ? (
                 !isRoundTwo && sessionDetail?.interview_type !== 'Normal' ? (
-                  <button className="ip-btn-next" style={{ background: '#3b82f6', marginLeft: 'auto' }} onClick={handleNextQuestion}>
-                    Start Round 2 →
-                  </button>
+                  <div style={{ marginLeft: 'auto', display: 'flex', alignItems: 'center', gap: '8px' }}>
+                    <span style={{ fontSize: '0.85rem', color: '#4f46e5', fontWeight: '600' }}>
+                      Round 1 complete. Click "Start Round 2" in the sidebar to proceed.
+                    </span>
+                  </div>
                 ) : (
                   <button className="ip-btn-next" style={{ background: '#ef4444', marginLeft: 'auto' }} onClick={() => handleSubmitInterview(false)}>
                     Submit Interview
@@ -1658,10 +1724,37 @@ function HomePage() {
           </div>
         </div>
       )}
+      {showRound2Confirm && (
+        <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-[99999] flex items-center justify-center p-4">
+          <div className="bg-white rounded-2xl max-w-md w-full p-6 shadow-2xl border border-slate-100 transform transition-all text-left">
+            <div className="flex items-center gap-3 text-amber-500 mb-4">
+              <span className="text-3xl">⚠️</span>
+              <h3 className="text-lg font-bold text-slate-950 m-0">Switch to Round 2?</h3>
+            </div>
+            <p className="text-slate-600 text-sm mb-6 leading-relaxed">
+              Round 1 is not complete. Are you sure you want to move to Round 2?
+            </p>
+            <div className="flex justify-end gap-3">
+              <button 
+                onClick={() => setShowRound2Confirm(false)}
+                className="px-4 py-2 rounded-lg font-semibold text-sm text-slate-700 bg-slate-100 hover:bg-slate-200 transition-colors border-none cursor-pointer"
+              >
+                Cancel
+              </button>
+              <button 
+                onClick={proceedToRoundTwo}
+                className="px-4 py-2 rounded-lg font-semibold text-sm text-white bg-blue-600 hover:bg-blue-700 transition-colors border-none cursor-pointer"
+              >
+                Yes, Switch
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   )
 }
 
 
-export default HomePage
+export default Interview
 

@@ -1,6 +1,6 @@
 import React from 'react'
 import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom'
-import HomePage from './pages/HomePage'
+import Interview from './pages/Interview'
 import LandingPage from './pages/LandingPage'
 import RegisterPage from './pages/RegisterPage'
 import LoginPage from './pages/LoginPage'
@@ -39,7 +39,7 @@ function App() {
       <Routes>
         <Route path="/" element={<LandingPage />} />
         <Route path="/login" element={<LoginPage />} />
-        <Route path="/interview" element={<HomePage />} />
+        <Route path="/interview" element={<Interview />} />
         <Route path="/register" element={<RegisterPage />} />
         <Route path="/case-study" element={<CaseStudyPage />} />
         {/* Master routes */}
