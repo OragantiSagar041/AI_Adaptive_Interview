@@ -1,73 +1,97 @@
 from fastapi import APIRouter, WebSocket, WebSocketDisconnect
-from typing import Dict
+from typing import Dict, Any
 import asyncio
 import json
+import logging
 
+from core_infra import pubsub, ws_manager, task_queue, MongoBatchWriter
+from mongo_db import answers_collection, interview_sessions_collection
+
+logger = logging.getLogger(__name__)
 router = APIRouter()
 
-class VoiceConnectionManager:
-    def __init__(self):
-        self.active_connections: Dict[str, WebSocket] = {}
+# Initialize the batch writer for answers
+answers_batch_writer = MongoBatchWriter(answers_collection, flush_interval=3.0, batch_size=20)
 
-    async def connect(self, link_id: str, websocket: WebSocket):
-        await websocket.accept()
-        self.active_connections[link_id] = websocket
+@router.on_event("startup")
+async def startup_event():
+    await answers_batch_writer.start()
+    await task_queue.start()
 
-    def disconnect(self, link_id: str):
-        if link_id in self.active_connections:
-            del self.active_connections[link_id]
+@router.on_event("shutdown")
+async def shutdown_event():
+    await answers_batch_writer.stop()
+    await task_queue.stop()
 
-    async def send_json(self, link_id: str, data: dict):
-        if link_id in self.active_connections:
-            await self.active_connections[link_id].send_json(data)
-
-    async def send_bytes(self, link_id: str, data: bytes):
-        if link_id in self.active_connections:
-            await self.active_connections[link_id].send_bytes(data)
-
-voice_manager = VoiceConnectionManager()
-
-@router.websocket("/ws/voice/{link_id}")
-async def voice_interview_endpoint(websocket: WebSocket, link_id: str):
-    await voice_manager.connect(link_id, websocket)
+@router.websocket("/ws/interview/{link_id}")
+async def interview_websocket(websocket: WebSocket, link_id: str):
+    """
+    Main WebSocket endpoint for the real-time AI interview.
+    Handles affinity, batch DB writes, and Pub/Sub broadcasting.
+    """
+    await ws_manager.connect(websocket, link_id)
     
-    try:
-        # Mock initialization
-        await voice_manager.send_json(link_id, {"event": "state", "status": "listening"})
-        
+    # Subscribe to personal channel for this interview
+    pubsub_queue = await pubsub.subscribe(f"interview_{link_id}")
+    
+    # Background task to push pubsub messages to the client
+    async def pubsub_to_ws():
         while True:
-            # In a real app, this receives binary audio chunks
-            data = await websocket.receive()
-            
-            if "bytes" in data:
-                # Mock: we received audio. Transition to thinking, then speaking.
-                audio_bytes = data["bytes"]
+            try:
+                msg = await pubsub_queue.get()
+                await ws_manager.send_json(msg, link_id)
+                pubsub_queue.task_done()
+            except asyncio.CancelledError:
+                break
+            except Exception as e:
+                logger.error(f"Pubsub task error: {e}")
                 
-                # Mock VAD / STT logic here
-                # ...
-                
-                await voice_manager.send_json(link_id, {"event": "transcript_update", "text": "I am processing your audio..."})
-                await voice_manager.send_json(link_id, {"event": "state", "status": "thinking"})
-                
-                await asyncio.sleep(1) # simulate LLM time
-                
-                await voice_manager.send_json(link_id, {"event": "state", "status": "speaking"})
-                await voice_manager.send_json(link_id, {"event": "transcript_update", "text": "That's an interesting point. Let's dig deeper."})
-                
-                # Mock TTS audio bytes (just sending dummy bytes back)
-                await voice_manager.send_bytes(link_id, b'MOCK_AUDIO_RESPONSE')
-                
-                # Wait for audio to finish "playing" then go back to listening
-                await asyncio.sleep(2)
-                await voice_manager.send_json(link_id, {"event": "state", "status": "listening"})
+    pubsub_task = asyncio.create_task(pubsub_to_ws())
 
-            elif "text" in data:
-                text_data = json.loads(data["text"])
-                print(f"Voice WS text message: {text_data}")
+    try:
+        while True:
+            data = await websocket.receive_text()
+            payload = json.loads(data)
+            action = payload.get("action")
+            
+            if action == "save_answer":
+                # Use batch writer instead of direct DB insert
+                answer_doc = {
+                    "interview_id": payload.get("interview_id"),
+                    "question_id": payload.get("question_id"),
+                    "question_text": payload.get("question_text"),
+                    "answer_text": payload.get("answer_text"),
+                    "candidate_name": payload.get("candidate_name"),
+                    "timestamp": payload.get("timestamp"),
+                    "link_id": link_id
+                }
+                await answers_batch_writer.insert(answer_doc)
+                
+                # Broadcast that an answer was saved (useful if admin dashboard is listening)
+                await pubsub.publish(f"admin_dashboard", {"type": "answer_saved", "link_id": link_id})
+                
+            elif action == "ai_state_change":
+                # Broadcast AI state changes (thinking, speaking, listening)
+                state = payload.get("state")
+                await pubsub.publish(f"interview_{link_id}", {"type": "ai_state", "state": state})
+
+            elif action == "coding_observation":
+                # Add heavy LLM generation to the background task queue
+                # In a real app, this would trigger an LLM call. Here we just mock a queue job.
+                async def process_coding_insight(code, lang):
+                    await asyncio.sleep(2) # Simulate processing
+                    await pubsub.publish(f"interview_{link_id}", {
+                        "type": "ai_message",
+                        "text": "I noticed you made some changes to the logic. Can you explain your reasoning?"
+                    })
+                
+                await task_queue.produce(process_coding_insight, payload.get("code"), payload.get("language"))
 
     except WebSocketDisconnect:
-        voice_manager.disconnect(link_id)
-        print(f"Voice Client #{link_id} disconnected")
+        logger.info(f"WebSocket disconnected for {link_id}")
     except Exception as e:
-        voice_manager.disconnect(link_id)
-        print(f"Voice WS Error #{link_id}: {e}")
+        logger.error(f"WebSocket error for {link_id}: {e}")
+    finally:
+        ws_manager.disconnect(link_id)
+        await pubsub.unsubscribe(f"interview_{link_id}", pubsub_queue)
+        pubsub_task.cancel()

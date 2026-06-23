@@ -5522,11 +5522,11 @@ Output EXACTLY a JSON object with this structure:
         raise HTTPException(status_code=500, detail=str(e))
 
 @app.post("/complete-session/{link_id}")
-async def complete_session(link_id: str):
+async def complete_session(link_id: str, warnings: int = 0):
     """Mark a session as completed and send notification emails (Task 3)."""
     try:
         session = interview_sessions_collection.find_one({"link_id": link_id})
-        update_data = {"status": "completed"}
+        update_data = {"status": "completed", "warnings": warnings}
         if session:
             candidate_id = session.get("candidate_id")
             if candidate_id and not candidate_id.endswith("IQ"):
