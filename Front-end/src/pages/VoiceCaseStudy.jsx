@@ -5,6 +5,7 @@
  */
 import React, { useState, useRef, useEffect, useCallback } from 'react'
 import { API_BASE_URL } from '../apiConfig'
+import OrbAvatar from '../components/OrbAvatar'
 
 // ── Follow-up question trees by topic keywords ────────────────────────────
 const FOLLOWUP_TREES = {
@@ -86,11 +87,15 @@ function getFollowup(transcript, usedFollowups) {
 function Bubble({ role, text, typing }) {
   return (
     <div className={`flex gap-3 mb-4 ${role === 'user' ? 'flex-row-reverse' : ''}`}>
-      <div className={`w-9 h-9 rounded-full flex items-center justify-center shrink-0 ${
-        role === 'ai' ? 'bg-gradient-to-br from-violet-500 to-indigo-600 shadow-[0_0_20px_rgba(139,92,246,0.3)]' : 'bg-emerald-500/20 border-2 border-emerald-500/40'
-      }`}>
-        <i className={`fas ${role === 'ai' ? 'fa-robot' : 'fa-user'} text-sm ${role === 'ai' ? 'text-white' : 'text-emerald-400'}`}/>
-      </div>
+      {role === 'ai' ? (
+        <div className="w-9 h-9 rounded-full flex items-center justify-center shrink-0">
+          <OrbAvatar status={typing ? 'speaking' : 'idle'} />
+        </div>
+      ) : (
+        <div className="w-9 h-9 rounded-full flex items-center justify-center shrink-0 bg-emerald-500/20 border-2 border-emerald-500/40">
+          <i className="fas fa-user text-sm text-emerald-400"/>
+        </div>
+      )}
       <div className={`max-w-[72%] rounded-2xl px-4 py-3 text-sm leading-relaxed shadow-sm ${
         role === 'ai' ? 'bg-indigo-500/10 border border-indigo-500/15 text-slate-200 rounded-tl-none' :
                         'bg-emerald-500/10 border border-emerald-500/15 text-slate-200 rounded-tr-none'
@@ -327,26 +332,8 @@ export default function VoiceCaseStudy({
         {/* Left: AI Avatar */}
         <div className="lg:w-[360px] flex flex-col items-center justify-center gap-6 px-8 py-8 border-r border-white/6 bg-gradient-to-b from-violet-950/20 to-[#0a0f1e]">
           {/* Avatar */}
-          <div className="relative w-52 h-52 flex items-center justify-center">
-            <div className={`absolute inset-0 rounded-full transition-all duration-700 ${aiStatus === 'speaking' ? 'bg-violet-500/20 blur-2xl scale-125' : aiStatus === 'listening' ? 'bg-emerald-500/15 blur-2xl scale-110' : 'bg-transparent'}`}/>
-            {aiStatus === 'listening' && <div className="absolute inset-0 rounded-full border border-dashed border-emerald-500/30" style={{ animation: 'spin 12s linear infinite' }}/>}
-            <div className={`relative z-10 w-44 h-44 rounded-full flex flex-col items-center justify-center gap-2 transition-all duration-500 ${
-              aiStatus === 'speaking'  ? 'border-4 border-violet-500 bg-violet-950/60' :
-              aiStatus === 'listening' ? 'border-4 border-emerald-500 bg-emerald-950/40' :
-              aiStatus === 'thinking'  ? 'border-4 border-amber-500 animate-pulse bg-amber-950/30' :
-              'border-4 border-slate-700 bg-slate-900/60'
-            }`} style={{ animation: aiStatus === 'speaking' ? 'glow 1.5s ease-in-out infinite' : 'none' }}>
-              <i className={`fas fa-robot text-5xl ${
-                aiStatus === 'speaking'  ? 'text-violet-300' :
-                aiStatus === 'listening' ? 'text-emerald-400' :
-                aiStatus === 'thinking'  ? 'text-amber-400' : 'text-slate-500'
-              }`}/>
-              {aiStatus === 'speaking' && (
-                <div className="flex items-center gap-1 h-5">
-                  {[0,1,2,3,4].map(i => <div key={i} className="w-1 rounded-full bg-violet-400" style={{ height:4, animation:`wave ${0.4+i*0.08}s ease-in-out infinite alternate`, animationDelay:`${i*0.06}s` }}/>)}
-                </div>
-              )}
-            </div>
+          <div className="relative w-52 h-52 flex items-center justify-center mb-4">
+            <OrbAvatar status={aiStatus} />
           </div>
 
           {/* Zara ID */}

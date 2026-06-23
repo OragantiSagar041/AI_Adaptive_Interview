@@ -11,6 +11,7 @@ import { API_BASE_URL } from '../apiConfig'
 import VoiceCodingRound from './VoiceCodingRound'
 import VoiceCaseStudy   from './VoiceCaseStudy'
 import useCandidateWebRTC from '../hooks/useCandidateWebRTC'
+import OrbAvatar from '../components/OrbAvatar'
 
 // ── Language map ─────────────────────────────────────────────────────────────
 const langMap = {
@@ -59,15 +60,15 @@ function Bubble({ role, text, isNew }) {
   useEffect(() => { setTimeout(() => setVisible(true), 50) }, [])
   return (
     <div className={`flex gap-3 mb-4 transition-all duration-500 ${role === 'user' ? 'flex-row-reverse' : ''} ${visible ? 'opacity-100 translate-y-0' : 'opacity-0 translate-y-3'}`}>
-      <div className={`w-9 h-9 rounded-full flex items-center justify-center shrink-0 ${
-        role === 'ai'
-          ? 'bg-gradient-to-br from-indigo-500 to-purple-600 shadow-[0_0_20px_rgba(99,102,241,0.3)]'
-          : 'bg-emerald-500/15 border-2 border-emerald-500/30'
-      }`}>
-        {role === 'ai'
-          ? <i className="fas fa-robot text-sm text-white"/>
-          : <i className="fas fa-user text-sm text-emerald-400"/>}
-      </div>
+      {role === 'ai' ? (
+        <div className="w-9 h-9 rounded-full flex items-center justify-center shrink-0">
+          <OrbAvatar status="idle" />
+        </div>
+      ) : (
+        <div className="w-9 h-9 rounded-full flex items-center justify-center shrink-0 bg-emerald-500/15 border-2 border-emerald-500/30">
+          <i className="fas fa-user text-sm text-emerald-400"/>
+        </div>
+      )}
       <div className={`max-w-[72%] rounded-2xl px-4 py-3 text-sm leading-relaxed ${
         role === 'ai'
           ? 'bg-indigo-500/10 border border-indigo-500/15 text-slate-200 rounded-tl-none'
@@ -682,12 +683,9 @@ export default function VoiceInterviewPage() {
         </div>
 
         {/* Avatar */}
-        <div className="relative flex items-center justify-center h-64">
-          <div className="absolute w-48 h-48 rounded-full bg-indigo-500/8" style={{animation:'pulse-ring 2.5s ease-in-out infinite'}}/>
-          <div className="absolute w-56 h-56 rounded-full bg-indigo-500/5" style={{animation:'pulse-ring 2.5s ease-in-out infinite',animationDelay:'0.5s'}}/>
-          <div className="relative z-10 w-44 h-44 rounded-full bg-gradient-to-br from-indigo-600 to-purple-700 flex flex-col items-center justify-center gap-2 shadow-[0_0_80px_rgba(99,102,241,0.5)]">
-            <i className="fas fa-robot text-6xl text-white/90"/>
-            <span className="text-white text-xs font-bold tracking-wider">ZARA</span>
+        <div className="relative flex items-center justify-center h-64 mb-4">
+          <div className="w-56 h-56">
+            <OrbAvatar status="idle" />
           </div>
         </div>
 
@@ -789,51 +787,8 @@ export default function VoiceInterviewPage() {
         <div className="flex flex-col items-center gap-6 my-4">
           {/* Ripple rings */}
           <div className="relative flex items-center justify-center">
-            {aiStatus === 'speaking' && (
-              <>
-                <div className="absolute w-72 h-72 rounded-full bg-indigo-500/5" style={{animation:'pulse-ring 2s ease-in-out infinite'}}/>
-                <div className="absolute w-60 h-60 rounded-full bg-indigo-500/8" style={{animation:'pulse-ring 2s ease-in-out infinite',animationDelay:'.4s'}}/>
-              </>
-            )}
-            {aiStatus === 'listening' && (
-              <>
-                <div className="absolute w-72 h-72 rounded-full bg-emerald-500/5" style={{animation:'pulse-ring 2s ease-in-out infinite'}}/>
-                <div className="absolute w-60 h-60 rounded-full bg-emerald-500/8" style={{animation:'pulse-ring 2s ease-in-out infinite',animationDelay:'.4s'}}/>
-              </>
-            )}
-
-            {/* Rotating ring when listening */}
-            {aiStatus === 'listening' && (
-              <div className="absolute w-56 h-56 rounded-full border border-dashed border-emerald-500/20" style={{animation:'spin-slow 15s linear infinite'}}/>
-            )}
-
-            {/* Avatar circle */}
-            <div className={`relative w-48 h-48 rounded-full flex flex-col items-center justify-center gap-2 transition-all duration-500 ${
-              aiStatus==='speaking' ? 'bg-gradient-to-br from-indigo-700/80 to-purple-800/80 border-2 border-indigo-400/60' :
-              aiStatus==='listening'? 'bg-gradient-to-br from-emerald-900/60 to-teal-900/60 border-2 border-emerald-400/60' :
-              aiStatus==='thinking' ? 'bg-gradient-to-br from-amber-900/50 to-orange-900/50 border-2 border-amber-400/50 animate-pulse' :
-              'bg-gradient-to-br from-slate-800 to-slate-900 border-2 border-slate-600/40'
-            }`} style={{
-              boxShadow: aiStatus==='speaking' ? '0 0 60px rgba(99,102,241,.5), 0 0 120px rgba(99,102,241,.2)' :
-                         aiStatus==='listening'? '0 0 60px rgba(16,185,129,.4), 0 0 100px rgba(16,185,129,.15)' : 'none',
-              animation: aiStatus==='speaking' ? 'float 3s ease-in-out infinite' : 'none'
-            }}>
-              <i className={`fas fa-robot text-6xl ${
-                aiStatus==='speaking'?'text-indigo-300':
-                aiStatus==='listening'?'text-emerald-400':
-                aiStatus==='thinking'?'text-amber-400':'text-slate-500'
-              }`}/>
-              <span className="text-[10px] font-black uppercase tracking-[.35em] text-white/40">ZARA</span>
-
-              {/* Speaking waveform on avatar */}
-              {aiStatus==='speaking' && (
-                <div className="flex items-center gap-1 h-5">
-                  {[0,1,2,3,4,5,6].map(i => (
-                    <div key={i} className="w-1 rounded-full bg-indigo-400"
-                      style={{height:4,animation:`wave ${.35+i*.07}s ease-in-out infinite alternate`,animationDelay:`${i*.05}s`}}/>
-                  ))}
-                </div>
-              )}
+            <div className="w-56 h-56">
+              <OrbAvatar status={aiStatus} />
             </div>
           </div>
 

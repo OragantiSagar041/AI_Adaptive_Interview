@@ -6,6 +6,7 @@
 import React, { useState, useRef, useCallback, useEffect } from 'react'
 import Editor from '@monaco-editor/react'
 import { API_BASE_URL } from '../apiConfig'
+import OrbAvatar from '../components/OrbAvatar'
 
 // ── Code Pattern Detector ──────────────────────────────────────────────────
 const CODE_PATTERNS = [
@@ -71,8 +72,8 @@ function ChatBubble({ role, text, speaking }) {
   return (
     <div className={`flex gap-3 ${role === 'user' ? 'flex-row-reverse' : ''} mb-3`}>
       {role === 'ai' && (
-        <div className={`w-8 h-8 rounded-full bg-gradient-to-br from-indigo-500 to-purple-600 flex items-center justify-center shrink-0 ${speaking ? 'ring-2 ring-indigo-400 ring-offset-1 ring-offset-slate-900' : ''}`}>
-          <i className="fas fa-robot text-xs text-white" />
+        <div className={`w-8 h-8 rounded-full flex items-center justify-center shrink-0 ${speaking ? 'ring-2 ring-indigo-400 ring-offset-1 ring-offset-slate-900' : ''}`}>
+          <OrbAvatar status={speaking ? 'speaking' : 'idle'} />
         </div>
       )}
       <div className={`max-w-[75%] rounded-2xl px-4 py-2.5 text-sm leading-relaxed ${
@@ -482,8 +483,8 @@ export default function VoiceCodingRound({
           {/* AI Chat */}
           <div className="flex-1 overflow-y-auto p-3 space-y-1">
             <div className="flex items-center gap-2 mb-3">
-              <div className="w-6 h-6 rounded-full bg-gradient-to-br from-indigo-500 to-purple-600 flex items-center justify-center">
-                <i className="fas fa-robot text-xs text-white"/>
+              <div className="w-8 h-8 rounded-full flex items-center justify-center">
+                <OrbAvatar status={aiStatus} />
               </div>
               <span className="text-xs font-bold text-indigo-300">Zara — AI Interviewer</span>
             </div>
