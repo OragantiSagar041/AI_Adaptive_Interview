@@ -219,7 +219,7 @@ export default function VoiceInterviewPage() {
       const res = await fetch(`${API_BASE_URL}/tts`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ text, voice: 'nova' })
+        body: JSON.stringify({ text, voice: 'shimmer' })
       })
       if (!res.ok) throw new Error('TTS Failed')
       const blob = await res.blob()

@@ -145,7 +145,7 @@ export default function VoiceCodingRound({
       const res = await fetch(`${API_BASE_URL}/tts`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ text, voice: 'nova' })
+        body: JSON.stringify({ text, voice: 'shimmer' })
       })
       if (!res.ok) throw new Error('TTS Failed')
       const blob = await res.blob()
@@ -239,7 +239,7 @@ export default function VoiceCodingRound({
       mediaRecorder.start()
       silenceTimerRef.current = setTimeout(() => {
         if (mediaRecorder.state !== 'inactive') mediaRecorder.stop()
-      }, 5000)
+      }, 60000)
 
     }).catch(err => {
       console.error("Mic error:", err)

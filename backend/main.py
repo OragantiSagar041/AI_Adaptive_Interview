@@ -1,6 +1,6 @@
 from fastapi import FastAPI, UploadFile, File, Form, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import JSONResponse
+from fastapi.responses import JSONResponse, StreamingResponse, FileResponse
 import os
 import json
 import hmac
@@ -36,6 +36,7 @@ import html
 import textwrap
 from pydantic import BaseModel
 from mongo_db import candidates_collection, interviews_collection, answers_collection, admins_collection, companies_collection, interview_sessions_collection, plans_collection, credit_requests_collection
+import tasks
 from reportlab.lib.pagesizes import A4
 from reportlab.pdfgen import canvas
 from reportlab.lib.utils import simpleSplit
@@ -46,9 +47,13 @@ load_dotenv()
 import cloudinary
 import cloudinary.uploader
 import cloudinary.api
-from openai import AsyncOpenAI
+from groq import AsyncGroq
+import edge_tts
+from starlette.background import BackgroundTask
+import uuid
+import asyncio
 
-client = AsyncOpenAI()
+groq_client = AsyncGroq(api_key=os.getenv("GROQ_API_KEY"))
 
 cloudinary.config(
     cloud_name=os.getenv("CLOUDINARY_CLOUD_NAME"),
@@ -3581,7 +3586,8 @@ def queue_or_send_interview_email(session_doc: Dict[str, Any], link_url: str) ->
             "email_send_at": send_at.isoformat()
         }
 
-    email_sent = send_interview_email(
+    # "?"? Celery: Push email sending to background
+    tasks.send_email_task.delay(
         candidate_email=session_doc.get("candidate_email", ""),
         candidate_name=session_doc.get("candidate_name", ""),
         link_url=link_url,
@@ -3591,6 +3597,7 @@ def queue_or_send_interview_email(session_doc: Dict[str, Any], link_url: str) ->
         scheduled_start=session_doc.get("scheduled_start", ""),
         scheduled_end=session_doc.get("scheduled_end", "")
     )
+    email_sent = True # Async operation queued successfully
 
     interview_sessions_collection.update_one(
         {"_id": session_doc["_id"]},
@@ -5582,6 +5589,10 @@ async def complete_session(link_id: str, warnings: int = 0):
                         total_questions=total_q
                     )
                     print(f" Submission notification sent for {candidate_name}")
+                
+                # "?"? Celery: Pre-generate PDF report in background
+                if interview_id:
+                    tasks.generate_report_task.delay(interview_id=interview_id)
         except Exception as notify_err:
             print(f" Submission notification error: {notify_err}")
         
@@ -6701,6 +6712,7 @@ async def stripe_webhook(request):
         
         plan_info = plans_collection.find_one({"plan_name": plan_name})
         credits_granted = plan_info.get("credits_granted", 30) if plan_info else 30
+        duration = plan_info.get("duration", 30) if plan_info else 30
         now = datetime.now(timezone.utc)
         
         admins_collection.insert_one({
@@ -7294,31 +7306,43 @@ class TTSRequest(BaseModel):
 
 @app.post("/tts")
 async def generate_tts(req: TTSRequest):
-    """Generate high-quality TTS audio via OpenAI"""
+    """Generate high-quality TTS audio via Edge TTS"""
     try:
-        response = await client.audio.speech.create(
-            model="tts-1",
-            voice=req.voice,
-            input=req.text,
-            response_format="mp3"
+        # Default to Microsoft Neural Aria voice (clean, clear female)
+        voice_model = "en-US-AriaNeural"
+        if req.voice == "shimmer" or req.voice == "nova":
+            voice_model = "en-US-JennyNeural"
+
+        temp_filename = f"temp_tts_{uuid.uuid4().hex}.mp3"
+        communicate = edge_tts.Communicate(req.text, voice_model)
+        await communicate.save(temp_filename)
+        
+        return FileResponse(
+            temp_filename, 
+            media_type="audio/mpeg", 
+            background=BackgroundTask(os.remove, temp_filename)
         )
-        return StreamingResponse(response.iter_bytes(chunk_size=4096), media_type="audio/mpeg")
     except Exception as e:
         print(f"TTS Error: {e}")
         raise HTTPException(status_code=500, detail=str(e))
 
 @app.post("/stt")
 async def stt_endpoint(file: UploadFile = File(...)):
-    """Transcribe audio via OpenAI Whisper for flawless recognition"""
+    """Transcribe audio via Groq Whisper for flawless recognition"""
     try:
         audio_content = await file.read()
-        audio_file = io.BytesIO(audio_content)
-        audio_file.name = file.filename or "audio.webm"
         
-        transcript = await client.audio.transcriptions.create(
-            model="whisper-1",
-            file=audio_file
-        )
+        temp_filename = f"temp_stt_{uuid.uuid4().hex}.webm"
+        with open(temp_filename, "wb") as f:
+            f.write(audio_content)
+            
+        with open(temp_filename, "rb") as f:
+            transcript = await groq_client.audio.transcriptions.create(
+                model="whisper-large-v3",
+                file=f
+            )
+        os.remove(temp_filename)
+        
         return {"transcript": transcript.text}
     except Exception as e:
         print(f"STT Error: {e}")
@@ -7352,11 +7376,11 @@ If they asked a clarification (e.g. "Come again?"), politely repeat the question
 If they are explaining their approach, acknowledge it and guide them. 
 Be encouraging and clear. Do not provide full code solutions."""
 
-        response = await client.chat.completions.create(
-            model="gpt-4o-mini",
-            messages=[{"role": "system", "content": prompt}]
+        reply = await asyncio.to_thread(
+            chat_completion,
+            [{"role": "system", "content": prompt}],
+            model="openai/gpt-4o-mini"
         )
-        reply = response.choices[0].message.content
         return {"reply": reply}
     except Exception as e:
         print(f"Coding Chat Error: {e}")
