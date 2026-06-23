@@ -20,6 +20,7 @@ import {
   CandidateScorecardModal,
   LiveResultsModal
 } from '../admin/modals/AdminModals'
+import LiveMonitorStreamModal from '../admin/modals/LiveMonitorStreamModal'
 import axios from 'axios'
 import { setSelectedCandidate, setLiveResultsModalOpen } from '../../store/slices/interviewSlice'
 import { loadSuperAdminDashboard } from '../../store/slices/dashboardSlice'
@@ -60,6 +61,15 @@ export default function SuperAdminLayout() {
   const [accentName, setAccentName] = useState('indigo')
   const [showUpgradePlansModal, setShowUpgradePlansModal] = useState(false)
   const [isProcessingUpgrade, setIsProcessingUpgrade] = useState(false)
+
+  // Live Stream WebRTC State
+  const [isLiveStreamOpen, setIsLiveStreamOpen] = useState(false)
+  const [liveStreamSession, setLiveStreamSession] = useState(null)
+
+  const handleOpenLiveStreamAction = (session) => {
+    setLiveStreamSession(session)
+    setIsLiveStreamOpen(true)
+  }
 
   const accentColors = {
     teal: { primary: '#0d9488', hover: '#0f766e', glow: 'rgba(13, 148, 136, 0.15)' },
@@ -324,6 +334,16 @@ export default function SuperAdminLayout() {
         ongoingCodingCount={ongoingCodingCount}
         liveSessions={liveSessions}
         handleOpenScorecard={() => {}}
+        handleOpenLiveStream={handleOpenLiveStreamAction}
+      />
+
+      <LiveMonitorStreamModal
+        isOpen={isLiveStreamOpen}
+        onClose={() => {
+          setIsLiveStreamOpen(false)
+          setLiveStreamSession(null)
+        }}
+        session={liveStreamSession}
       />
     </div>
   )

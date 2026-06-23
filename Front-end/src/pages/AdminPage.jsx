@@ -6,6 +6,7 @@ import axios from 'axios'
 import AdminLayout from '../components/admin/AdminLayout'
 import ProfileSettings from '../components/admin/ProfileSettings'
 import { CandidateScorecardModal, LiveResultsModal, RequestCreditsModal, UpgradePlansModal } from '../components/admin/modals/AdminModals'
+import LiveMonitorStreamModal from '../components/admin/modals/LiveMonitorStreamModal'
 import { getComputedStatus } from '../utils/adminFormatters'
 
 import OverviewDashboardPage from './admin/OverviewDashboardPage'
@@ -169,6 +170,15 @@ export default function AdminPage({ role: initialRole = 'admin' }) {
 
   // Accent color state
   const [accentName, setAccentName] = useState('indigo')
+
+  // Live Stream WebRTC State
+  const [isLiveStreamOpen, setIsLiveStreamOpen] = useState(false)
+  const [liveStreamSession, setLiveStreamSession] = useState(null)
+
+  const handleOpenLiveStreamAction = (session) => {
+    setLiveStreamSession(session)
+    setIsLiveStreamOpen(true)
+  }
 
   // Credit / Razorpay states
   const [showRequestCreditsModal, setShowRequestCreditsModal] = useState(false)
@@ -1102,6 +1112,16 @@ export default function AdminPage({ role: initialRole = 'admin' }) {
         ongoingCodingCount={ongoingCodingCount}
         liveSessions={liveSessions}
         handleOpenScorecard={handleOpenScorecardAction}
+        handleOpenLiveStream={handleOpenLiveStreamAction}
+      />
+
+      <LiveMonitorStreamModal
+        isOpen={isLiveStreamOpen}
+        onClose={() => {
+          setIsLiveStreamOpen(false)
+          setLiveStreamSession(null)
+        }}
+        session={liveStreamSession}
       />
     </>
   )

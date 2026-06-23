@@ -3879,12 +3879,16 @@ def get_dashboard_stats(admin_id: Optional[str] = None, current_admin: dict = De
     try:
         query = {"company_id": current_admin.get("company_id")}
         
-        if current_admin.get("role") == "admin":
+        if current_admin.get("role") in ["admin", "super_admin", "master"]:
             admin_doc = admins_collection.find_one({"_id": ObjectId(current_admin["admin_id"])})
             credits = admin_doc.get("credits", 0) if admin_doc else 0
         else:
-            company = companies_collection.find_one({"_id": ObjectId(current_admin["company_id"])})
-            credits = company.get("credits", 0) if company else 0
+            comp_id = current_admin.get("company_id")
+            if comp_id:
+                company = companies_collection.find_one({"_id": ObjectId(comp_id)})
+                credits = company.get("credits", 0) if company else 0
+            else:
+                credits = 0
         
         # Data Isolation:
         # If the user is a standard admin, force the query to their own admin_id
@@ -5774,19 +5778,35 @@ class ConnectionManager:
 
 manager = ConnectionManager()
 
+import traceback
+
 @app.websocket("/ws/webrtc/{role}/{link_id}")
 async def webrtc_endpoint(websocket: WebSocket, role: str, link_id: str, token: Optional[str] = None):
+    with open("webrtc_debug.log", "a") as f:
+        f.write(f"\\n--- New Connection ---\\nRole: {role}, Link ID: {link_id}\\nToken: {token}\\n")
+    
     if role == "candidate":
         await manager.connect_candidate(websocket, link_id)
     elif role == "admin":
         if not token:
+            with open("webrtc_debug.log", "a") as f:
+                f.write("No token provided. Closing with 1008.\\n")
             await websocket.close(code=1008)
             return
         try:
             jwt.decode(token, JWT_SECRET_KEY, algorithms=[ALGORITHM])
             await manager.connect_admin(websocket, link_id)
-        except jwt.PyJWTError:
+            with open("webrtc_debug.log", "a") as f:
+                f.write("Admin connected successfully.\\n")
+        except jwt.PyJWTError as e:
+            with open("webrtc_debug.log", "a") as f:
+                f.write(f"JWT Decode Error: {str(e)}\\n")
             await websocket.close(code=1008)
+            return
+        except Exception as e:
+            with open("webrtc_debug.log", "a") as f:
+                f.write(f"Other Error: {str(e)}\\n{traceback.format_exc()}\\n")
+            await websocket.close(code=1011)
             return
     else:
         await websocket.close()
@@ -5797,17 +5817,30 @@ async def webrtc_endpoint(websocket: WebSocket, role: str, link_id: str, token: 
             data = await websocket.receive_json()
             # Signaling relay
             if role == "candidate":
-                # Forward to all admins viewing this candidate
                 await manager.send_to_admins(link_id, data)
+                
+                # Parse telemetry data if it's there
+                if data.get("type") == "telemetry":
+                    if "_live_snapshots" not in globals():
+                        globals()["_live_snapshots"] = {}
+                    globals()["_live_snapshots"][link_id] = {
+                        "ts": datetime.now(timezone.utc).isoformat(),
+                        "audio_level": data.get("data", {}).get("audio_level", 0),
+                        "current_question": data.get("data", {}).get("current_question", "")
+                    }
             elif role == "admin":
-                # Forward to the specific candidate
                 await manager.send_to_candidate(link_id, data)
     except WebSocketDisconnect:
+        with open("webrtc_debug.log", "a") as f:
+            f.write(f"WebSocketDisconnect for role {role}, link_id {link_id}\\n")
         if role == "candidate":
             manager.disconnect_candidate(link_id)
             await manager.send_to_admins(link_id, {"type": "candidate_disconnected"})
         elif role == "admin":
             manager.disconnect_admin(websocket, link_id)
+    except Exception as e:
+        with open("webrtc_debug.log", "a") as f:
+            f.write(f"Exception in while loop: {str(e)}\\n{traceback.format_exc()}\\n")
 
 
 # --------------------------------------------------------------------------------
