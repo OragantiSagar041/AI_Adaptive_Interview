@@ -123,7 +123,6 @@ export default function VoiceCodingRound({
   const mediaRecorderRef  = useRef(null)
   const audioChunksRef    = useRef([])
   const currentTxRef      = useRef('')
-  const currentTxRef      = useRef('')
   const chatBottomRef     = useRef(null)
   const submittingRef     = useRef(false)
   const langMap = { 'Hindi':'hi-IN', 'Telugu':'te-IN', 'Tamil':'ta-IN', 'Malayalam':'ml-IN', 'Kannada':'kn-IN', 'English':'en-US' }
