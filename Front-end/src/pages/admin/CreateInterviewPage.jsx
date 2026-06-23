@@ -30,6 +30,7 @@ export default function CreateInterviewPage() {
     customQuestions: '',
     aiInstructions: '',
     industry: 'General',
+    interviewFormat: 'Standard',
     interviewType: 'Technical',
     language: 'English',
     caseStudyCount: 3,
@@ -70,6 +71,7 @@ export default function CreateInterviewPage() {
     customQuestions: '',
     aiInstructions: '',
     industry: 'General',
+    interviewFormat: 'Standard',
     interviewType: 'Technical',
     language: 'English',
     caseStudyCount: 3,
@@ -333,7 +335,7 @@ export default function CreateInterviewPage() {
 
   // Generate Single Link Session
   const handleGenerateInterviewLink = async () => {
-    const { name, email, resumeText, jobDescription, duration, interviewType, industry, language, caseStudyCount, scheduledStart, scheduledEnd, recordVideo, hrScreening, customQuestions, aiInstructions } = singleCandidate
+    const { name, email, resumeText, jobDescription, duration, interviewFormat, interviewType, industry, language, caseStudyCount, scheduledStart, scheduledEnd, recordVideo, hrScreening, customQuestions, aiInstructions } = singleCandidate
 
     if (!name || !email || !resumeText || !jobDescription) {
       alert("Please fill in all required fields (Name, Email, Resume, Job Description).")
@@ -359,6 +361,7 @@ export default function CreateInterviewPage() {
         job_description: jobDescription,
         admin_id: adminUser?.admin_id || 'admin',
         interview_duration: Number(duration),
+        interview_format: interviewFormat,
         interview_type: interviewType,
         industry: industry,
         language: language,
@@ -510,7 +513,7 @@ export default function CreateInterviewPage() {
 
   // Submit bulk invitation sessions
   const handleSendBulkInterviews = async () => {
-    const { jobDescription, customQuestions, aiInstructions, industry, interviewType, language, caseStudyCount, duration, recordVideo, scheduledStart, scheduledEnd, hrScreening } = bulkConfig
+    const { jobDescription, customQuestions, aiInstructions, industry, interviewFormat, interviewType, language, caseStudyCount, duration, recordVideo, scheduledStart, scheduledEnd, hrScreening } = bulkConfig
 
     if (!jobDescription) {
       alert("Please enter a Job Description.")
@@ -536,6 +539,7 @@ export default function CreateInterviewPage() {
           record_video: c.record_video !== undefined ? c.record_video : recordVideo
         })),
         job_description: jobDescription,
+        interview_format: interviewFormat,
         industry_type: industry,
         interview_type: interviewType,
         language: language,
@@ -925,6 +929,16 @@ export default function CreateInterviewPage() {
                 </div>
 
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                  <Select
+                    label="Interview Format"
+                    value={singleCandidate.interviewFormat}
+                    onChange={(e) => handleSingleChange('interviewFormat', e.target.value)}
+                    options={[
+                      { value: 'Standard', label: 'Standard (Text/Form Based)' },
+                      { value: 'Voice', label: 'Voice AI (Real-time Speech)' }
+                    ]}
+                  />
+
                   <Select
                     label="Industry Type"
                     value={singleCandidate.industry}
@@ -1354,6 +1368,16 @@ export default function CreateInterviewPage() {
                 </div>
 
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                  <Select
+                    label="Interview Format"
+                    value={bulkConfig.interviewFormat}
+                    onChange={(e) => handleBulkConfigChange('interviewFormat', e.target.value)}
+                    options={[
+                      { value: 'Standard', label: 'Standard (Text/Form Based)' },
+                      { value: 'Voice', label: 'Voice AI (Real-time Speech)' }
+                    ]}
+                  />
+
                   <Select
                     label="Industry Type"
                     value={bulkConfig.industry}

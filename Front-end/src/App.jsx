@@ -5,6 +5,7 @@ import LandingPage from './pages/LandingPage'
 import RegisterPage from './pages/RegisterPage'
 import LoginPage from './pages/LoginPage'
 import CaseStudyPage from './pages/CaseStudyPage'
+import VoiceInterviewPage from './pages/VoiceInterviewPage'
 import MasterLayout from './components/master/MasterLayout'
 import MasterDashboard from './pages/master/MasterDashboard'
 import Plans from './pages/master/Plans'
@@ -42,6 +43,7 @@ function App() {
         <Route path="/interview" element={<HomePage />} />
         <Route path="/register" element={<RegisterPage />} />
         <Route path="/case-study" element={<CaseStudyPage />} />
+        <Route path="/voice-interview/:linkId" element={<VoiceInterviewPage />} />
         {/* Master routes */}
         <Route
           path="/master"
