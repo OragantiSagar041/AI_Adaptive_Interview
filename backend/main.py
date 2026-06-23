@@ -346,6 +346,9 @@ app.add_middleware(GZipMiddleware, minimum_size=1000)
 import transcription
 app.include_router(transcription.router)
 
+from routes import voice_routes
+app.include_router(voice_routes.router)
+
 LAST_422_ERROR = None
 
 @app.exception_handler(RequestValidationError)
@@ -1023,12 +1026,14 @@ def generate_jd_questions(jd_text: str, ai_instructions: str = "", interview_typ
         {jd_text[:4000]}
         
         Task:
-        1. EXTRACT top 5 critical business, management, or functional keywords from the Job Description (e.g., 'Team Management', 'Stakeholder Communication', 'Agile Delivery', 'Conflict Resolution').
-        2. GENERATE 6 detailed Case Study and Scenario questions testing these exact keywords.
-           - Instead of generic "Tell me about a time" questions, present a hypothetical, complex business scenario or case study situated within the '{industry}' industry and ask how they would solve it.
+        1. IDENTIFY the specific Job Role/Title from the Job Description and tailor all questions specifically for that level and position.
+        2. EXTRACT top 5 critical business, management, or functional keywords from the Job Description (e.g., 'Team Management', 'Stakeholder Communication', 'Agile Delivery', 'Conflict Resolution').
+        3. GENERATE 6 Case Study and Scenario questions testing these exact keywords.
+           - Instead of generic "Tell me about a time" questions, present a sharp, focused business scenario or case study situated within the '{industry}' industry and ask how they would solve it.
            - The extracted keywords MUST be the central theme of the case studies.
            - Do NOT ask technical coding or syntax questions. Focus on problem-solving, leadership, team management, and strategic thinking.
            - Act as a real human interviewer. NEVER say "According to the job description". Just ask the question directly.
+           - CRITICAL LENGTH CONSTRAINT: Keep every question strictly under 2-3 sentences. Make it conversational, punchy, and direct. Do NOT generate multi-part essay questions.
         """
     else:
         prompt = f"""
@@ -1038,13 +1043,15 @@ def generate_jd_questions(jd_text: str, ai_instructions: str = "", interview_typ
         {jd_text[:4000]}
         
         Task:
-        1. EXTRACT top 5 critical technical keywords/skills from the Job Description (e.g., 'React', 'AWS', 'System Design').
-        2. GENERATE 6 specific interview questions testing these exact skills.
+        1. IDENTIFY the specific Job Role/Title from the Job Description and tailor all questions specifically for that level and position.
+        2. EXTRACT top 5 critical technical keywords/skills from the Job Description (e.g., 'React', 'AWS', 'System Design').
+        3. GENERATE 6 specific interview questions testing these exact skills.
            - The questions and scenarios should be highly relevant to the '{industry}' industry.
            - The extracted keywords MUST be the focus of the questions.
            - Do NOT ask generic "soft skill" questions unless the JD emphasizes them.
            - Vary difficulty: Start with basic checks, move to scenario-based/hard problems.
            - Act as a real human interviewer. NEVER say "According to the job description" or "You mentioned in your resume". Just ask the question directly.
+           - CRITICAL LENGTH CONSTRAINT: Keep every question strictly under 2-3 sentences. Make it conversational, punchy, and direct. Do NOT generate multi-part essay questions.
         """
 
     prompt += f"""
@@ -1719,6 +1726,7 @@ def generate_followup_question(answer_text: str, resume_context: str, jd_text: s
         - If they mentioned a Project, ask about architectural decisions or challenges in THAT project.
         - If they mentioned a specific Tech Stack (e.g., React, Python), ask a conceptual question about it.
         - If their answer was vague, ask them to clarify specific examples.
+        - CRITICAL LENGTH CONSTRAINT: Keep your follow-up strictly under 2 sentences. It must sound like a natural, brief spoken conversation.
         
         Return STRICT JSON:
         {{
@@ -3313,6 +3321,7 @@ class CreateSession(BaseModel):
     admin_id: str
     interview_duration: int = 30  # minutes
     record_video: bool = True
+    interview_format: str = "Standard"  # "Standard" or "Voice"
     interview_type: str = "Technical"
     industry: str = "General"
     language: str = "English"
@@ -4455,6 +4464,7 @@ async def create_session(data: CreateSession, current_admin: dict = Depends(get_
         "created_at": now.isoformat(),
         "expires_at": expires_at,
         "interview_duration": data.interview_duration,
+        "interview_format": data.interview_format,
         "interview_type": data.interview_type,
         "language": data.language,
         "record_video": data.record_video,
@@ -4512,6 +4522,7 @@ class BulkCreateSession(BaseModel):
     admin_id: str
     interview_duration: int = 30
     record_video: bool = True  # Global default
+    interview_format: str = "Standard"  # "Standard" or "Voice"
     interview_type: str = "Technical"
     industry_type: str = "General"
     language: str = "English"
@@ -4578,6 +4589,7 @@ async def bulk_create_sessions(data: BulkCreateSession, current_admin: dict = De
                 "created_at": now.isoformat(),
                 "expires_at": (scheduled_expiry.isoformat() if scheduled_expiry else (now + timedelta(hours=24)).isoformat()),
                 "interview_duration": data.interview_duration,
+                "interview_format": data.interview_format,
                 "interview_type": data.interview_type,
                 "industry_type": data.industry_type,
                 "language": data.language,
@@ -4688,6 +4700,7 @@ async def get_session(link_id: str):
             "job_description": row.get("job_description"),
             "session_status": row.get("status"),
             "interview_duration": int(row.get("interview_duration") or 30) if row.get("interview_duration") else 30,
+            "interview_format": row.get("interview_format", "Standard"),
             "is_expired": is_expired,
             "is_before_schedule": is_before_schedule,
             "scheduled_start": scheduled_start,
@@ -5035,6 +5048,7 @@ async def start_session_interview(link_id: str = Form(...)):
                 "candidate_name": candidate_name,
                 "interview_duration": interview_duration,
                 "interview_type": interview_type,
+                "interview_format": row.get("interview_format", "Standard"),
                 "record_video": row.get("record_video", True),
                 "all_verbal_answered": all_verbal_answered,
                 "started_at": row.get("started_at")
@@ -5149,6 +5163,7 @@ async def start_session_interview(link_id: str = Form(...)):
         "total_questions": len(questions),
         "candidate_name": candidate_name,
         "interview_duration": interview_duration,
+        "interview_format": row.get("interview_format", "Standard"),
         "interview_type": interview_type,
         "record_video": row.get("record_video", True),
         "started_at": datetime.now(timezone.utc).isoformat()
