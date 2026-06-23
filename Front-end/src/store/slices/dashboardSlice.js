@@ -87,13 +87,16 @@ const dashboardSlice = createSlice({
       })
       .addCase(loadDashboardData.fulfilled, (state, action) => {
         state.status = 'succeeded'
-        state.dbStats = action.payload.dbStats
-        state.ongoingLiveCount = action.payload.ongoingLiveCount
-        state.ongoingAlertCount = action.payload.ongoingAlertCount
-        state.ongoingSpeakingCount = action.payload.ongoingSpeakingCount
-        state.ongoingCodingCount = action.payload.ongoingCodingCount
-        state.ongoingMonitoredCount = action.payload.ongoingMonitoredCount
-        state.liveSessions = action.payload.liveSessions || []
+        const payload = typeof action.payload === 'object' && action.payload ? action.payload : {}
+        state.dbStats = payload.dbStats || {
+          total: '--', pending: '--', completed: '--', started: '--', expired: '--', selected: '--', rejected: '--', avg_score: '--', today: '--'
+        }
+        state.ongoingLiveCount = payload.ongoingLiveCount || 0
+        state.ongoingAlertCount = payload.ongoingAlertCount || 0
+        state.ongoingSpeakingCount = payload.ongoingSpeakingCount || 0
+        state.ongoingCodingCount = payload.ongoingCodingCount || 0
+        state.ongoingMonitoredCount = payload.ongoingMonitoredCount || 0
+        state.liveSessions = payload.liveSessions || []
       })
       .addCase(loadDashboardData.rejected, (state, action) => {
         state.status = 'failed'
@@ -104,14 +107,18 @@ const dashboardSlice = createSlice({
       })
       .addCase(loadSuperAdminDashboard.fulfilled, (state, action) => {
         state.status = 'succeeded'
-        state.superAdminStats = action.payload.dbStats
-        state.dbStats = action.payload.dbStats
-        state.ongoingLiveCount = action.payload.ongoingLiveCount
-        state.ongoingAlertCount = action.payload.ongoingAlertCount
-        state.ongoingSpeakingCount = action.payload.ongoingSpeakingCount
-        state.ongoingCodingCount = action.payload.ongoingCodingCount
-        state.ongoingMonitoredCount = action.payload.ongoingMonitoredCount
-        state.liveSessions = action.payload.liveSessions || []
+        const payload = typeof action.payload === 'object' && action.payload ? action.payload : {}
+        const safeStats = payload.dbStats || {
+          total: '--', pending: '--', completed: '--', started: '--', expired: '--', selected: '--', rejected: '--', avg_score: '--', today: '--'
+        }
+        state.superAdminStats = safeStats
+        state.dbStats = safeStats
+        state.ongoingLiveCount = payload.ongoingLiveCount || 0
+        state.ongoingAlertCount = payload.ongoingAlertCount || 0
+        state.ongoingSpeakingCount = payload.ongoingSpeakingCount || 0
+        state.ongoingCodingCount = payload.ongoingCodingCount || 0
+        state.ongoingMonitoredCount = payload.ongoingMonitoredCount || 0
+        state.liveSessions = payload.liveSessions || []
       })
       .addCase(loadSuperAdminDashboard.rejected, (state, action) => {
         state.status = 'failed'

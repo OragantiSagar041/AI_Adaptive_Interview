@@ -640,7 +640,8 @@ export function LiveResultsModal({
   ongoingSpeakingCount,
   ongoingCodingCount,
   liveSessions,
-  handleOpenScorecard
+  handleOpenScorecard,
+  handleOpenLiveStream
 }) {
   return (
     <Modal
@@ -738,7 +739,11 @@ export function LiveResultsModal({
                       className="px-3 py-1.5 text-xs rounded h-[28px] font-bold"
                       onClick={() => {
                         onClose()
-                        handleOpenScorecard(session)
+                        if (handleOpenLiveStream) {
+                          handleOpenLiveStream(session)
+                        } else {
+                          handleOpenScorecard(session)
+                        }
                       }}
                     >
                       Monitor

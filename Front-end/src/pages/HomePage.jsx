@@ -5,6 +5,7 @@ import { API_BASE_URL } from '../apiConfig'
 import { Video, Volume2, ArrowRight, ShieldAlert, Cpu, AlertTriangle, RefreshCw } from 'lucide-react'
 import Swal from 'sweetalert2'
 import 'sweetalert2/dist/sweetalert2.min.css'
+import useCandidateWebRTC from '../hooks/useCandidateWebRTC'
 
 const langMap = {
   'Hindi': 'hi-IN',
@@ -90,6 +91,17 @@ function HomePage() {
   const questionStartTimeRef = useRef(Date.now())
   const behavioralStatsRef = useRef({ wordCount: 0, fillerCount: 0, pauseCount: 0, faceAlerts: 0, tabSwitches: 0 })
   const handleNextQuestionRef = useRef(null)
+
+  // WebRTC Candidate Logic
+  const telemetryData = {
+    round_type: isRoundTwo ? 'coding' : 'verbal',
+    current_question: currentQuestionIndex + 1,
+    total_questions: questions.length,
+    question_text: questions[currentQuestionIndex]?.text || '',
+    audio_level: 50, // Static or dynamically retrieved if needed
+    proctoring_alerts: screenShareViolations + noiseAlertCount + behavioralStatsRef.current.faceAlerts + behavioralStatsRef.current.tabSwitches
+  }
+  useCandidateWebRTC(sessionId, mediaStreamRef, telemetryData)
 
   const normalizeQuestions = (rawQuestions = []) => {
     return rawQuestions.map((question, index) => ({
