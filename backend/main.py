@@ -46,6 +46,9 @@ load_dotenv()
 import cloudinary
 import cloudinary.uploader
 import cloudinary.api
+from openai import AsyncOpenAI
+
+client = AsyncOpenAI()
 
 cloudinary.config(
     cloud_name=os.getenv("CLOUDINARY_CLOUD_NAME"),
@@ -5748,50 +5751,7 @@ async def get_ongoing_interviews(admin_id: Optional[str] = None, current_admin: 
 from fastapi import WebSocket, WebSocketDisconnect
 from typing import Dict, List
 
-class ConnectionManager:
-    def __init__(self):
-        # role -> link_id -> websocket
-        # For admin, link_id is not strictly candidate's link_id, but admin session.
-        # Let's map link_id -> {"candidate": WebSocket, "admins": [WebSocket]}
-        self.active_connections: Dict[str, Dict[str, any]] = {}
-
-    async def connect_candidate(self, websocket: WebSocket, link_id: str):
-        await websocket.accept()
-        if link_id not in self.active_connections:
-            self.active_connections[link_id] = {"candidate": None, "admins": []}
-        self.active_connections[link_id]["candidate"] = websocket
-
-    async def connect_admin(self, websocket: WebSocket, link_id: str):
-        await websocket.accept()
-        if link_id not in self.active_connections:
-            self.active_connections[link_id] = {"candidate": None, "admins": []}
-        self.active_connections[link_id]["admins"].append(websocket)
-
-    def disconnect_candidate(self, link_id: str):
-        if link_id in self.active_connections:
-            self.active_connections[link_id]["candidate"] = None
-
-    def disconnect_admin(self, websocket: WebSocket, link_id: str):
-        if link_id in self.active_connections:
-            if websocket in self.active_connections[link_id]["admins"]:
-                self.active_connections[link_id]["admins"].remove(websocket)
-
-    async def send_to_candidate(self, link_id: str, message: dict):
-        if link_id in self.active_connections and self.active_connections[link_id]["candidate"]:
-            try:
-                await self.active_connections[link_id]["candidate"].send_json(message)
-            except:
-                pass
-
-    async def send_to_admins(self, link_id: str, message: dict):
-        if link_id in self.active_connections:
-            for admin_ws in self.active_connections[link_id]["admins"]:
-                try:
-                    await admin_ws.send_json(message)
-                except:
-                    pass
-
-manager = ConnectionManager()
+from redis_manager import manager
 
 import traceback
 
@@ -7322,6 +7282,85 @@ def superadmin_patch_credit_request(request_id: str, data: UpdateCreditRequestSc
     if current_admin.get("role") not in ["super_admin", "master"]:
         raise HTTPException(status_code=403, detail="Super Admin access required")
     return update_credit_request_alias(request_id, data, current_admin)
+
+
+# -------------------------------------------------------------------------------------
+# PREMIUM VOICE & INTERACTIVE CODING ROUND ENDPOINTS
+# -------------------------------------------------------------------------------------
+
+class TTSRequest(BaseModel):
+    text: str
+    voice: str = "nova"
+
+@app.post("/tts")
+async def generate_tts(req: TTSRequest):
+    """Generate high-quality TTS audio via OpenAI"""
+    try:
+        response = await client.audio.speech.create(
+            model="tts-1",
+            voice=req.voice,
+            input=req.text,
+            response_format="mp3"
+        )
+        return StreamingResponse(response.iter_bytes(chunk_size=4096), media_type="audio/mpeg")
+    except Exception as e:
+        print(f"TTS Error: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+@app.post("/stt")
+async def stt_endpoint(file: UploadFile = File(...)):
+    """Transcribe audio via OpenAI Whisper for flawless recognition"""
+    try:
+        audio_content = await file.read()
+        audio_file = io.BytesIO(audio_content)
+        audio_file.name = file.filename or "audio.webm"
+        
+        transcript = await client.audio.transcriptions.create(
+            model="whisper-1",
+            file=audio_file
+        )
+        return {"transcript": transcript.text}
+    except Exception as e:
+        print(f"STT Error: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+class CodingChatRequest(BaseModel):
+    interview_id: str
+    transcript: str
+    code: str
+
+@app.post("/coding-round/chat")
+async def coding_round_chat(req: CodingChatRequest):
+    """Provide conversational AI responses during the coding round"""
+    try:
+        # Load interview context
+        interview = get_interview_or_404(req.interview_id)
+        task = interview.get("coding_round", {}).get("task", {})
+        problem_text = task.get("title", "") + "\n" + task.get("description", "")
+        
+        prompt = f"""You are a friendly, human-like AI coding interviewer named Zara.
+The candidate is solving this problem: 
+{problem_text}
+
+Their current code is:
+{req.code}
+
+The candidate just said: "{req.transcript}"
+
+Respond conversationally (max 2-3 sentences).
+If they asked a clarification (e.g. "Come again?"), politely repeat the question or provide a hint.
+If they are explaining their approach, acknowledge it and guide them. 
+Be encouraging and clear. Do not provide full code solutions."""
+
+        response = await client.chat.completions.create(
+            model="gpt-4o-mini",
+            messages=[{"role": "system", "content": prompt}]
+        )
+        reply = response.choices[0].message.content
+        return {"reply": reply}
+    except Exception as e:
+        print(f"Coding Chat Error: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
 
 
 if __name__ == "__main__":

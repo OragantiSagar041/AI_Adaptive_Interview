@@ -113,12 +113,16 @@ export default function VoiceCodingRound({
   const [timeLeft, setTimeLeft]       = useState(900)    // 15 min coding round
   const [runOutput, setRunOutput]     = useState('')
   const [running, setRunning]         = useState(false)
+  const [isSubmitting, setIsSubmitting] = useState(false)
   const [phase, setPhase]             = useState('approach') // approach | coding | done
 
   const recognitionRef    = useRef(null)
   const silenceTimerRef   = useRef(null)
   const codeChangeTimer   = useRef(null)
   const isListeningRef    = useRef(false)
+  const mediaRecorderRef  = useRef(null)
+  const audioChunksRef    = useRef([])
+  const currentTxRef      = useRef('')
   const currentTxRef      = useRef('')
   const chatBottomRef     = useRef(null)
   const submittingRef     = useRef(false)
@@ -136,22 +140,33 @@ export default function VoiceCodingRound({
   const fmt = s => `${String(Math.floor(s/60)).padStart(2,'0')}:${String(s%60).padStart(2,'0')}`
 
   // ── TTS ──────────────────────────────────────────────────────────────────
-  const speak = useCallback((text, onEnd) => {
-    const synth = window.speechSynthesis
-    if (!synth) { onEnd?.(); return }
-    synth.cancel()
-    const utter = new SpeechSynthesisUtterance(text)
-    utter.lang  = langMap[sessionLang] || 'en-US'
-    utter.rate  = 0.92
-    utter.pitch = 1.05
-    utter.onend   = () => { setAiStatus('idle'); onEnd?.() }
-    utter.onstart = () =>   setAiStatus('speaking')
-    utter.onerror = () => { setAiStatus('idle'); onEnd?.() }
-    const voices = synth.getVoices()
-    const v = voices.find(v => v.lang.startsWith('en') && v.localService) || voices.find(v => v.lang.startsWith('en'))
-    if (v) utter.voice = v
-    synth.speak(utter)
-  }, [sessionLang])
+  const speak = useCallback(async (text, onEnd) => {
+    try {
+      setAiStatus('speaking')
+      const res = await fetch(`${API_BASE_URL}/tts`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ text, voice: 'nova' })
+      })
+      if (!res.ok) throw new Error('TTS Failed')
+      const blob = await res.blob()
+      const url = URL.createObjectURL(blob)
+      const audio = new Audio(url)
+      audio.onended = () => {
+        setAiStatus('idle')
+        URL.revokeObjectURL(url)
+        onEnd?.()
+      }
+      audio.onerror = () => {
+        setAiStatus('idle')
+        onEnd?.()
+      }
+      audio.play()
+    } catch (e) {
+      setAiStatus('idle')
+      onEnd?.()
+    }
+  }, [])
 
   const addMessage = useCallback((role, text) => {
     setChatMessages(p => [...p, { role, text, ts: Date.now() }])
@@ -162,45 +177,78 @@ export default function VoiceCodingRound({
     speak(text, onEnd)
   }, [addMessage, speak])
 
+  const askAIForReply = useCallback(async (transcriptText) => {
+    try {
+      const res = await fetch(`${API_BASE_URL}/coding-round/chat`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ interview_id: interviewId, transcript: transcriptText, code })
+      })
+      const data = await res.json()
+      if (data.reply) {
+        aiSay(data.reply)
+      }
+    } catch(e) {
+      aiSay("I didn't quite catch that. Could you repeat?")
+    }
+  }, [interviewId, code, aiSay])
+
   // ── STT ──────────────────────────────────────────────────────────────────
   const stopListening = useCallback(() => {
-    isListeningRef.current = false
+    if (mediaRecorderRef.current && mediaRecorderRef.current.state !== 'inactive') {
+      mediaRecorderRef.current.stop()
+    }
     clearTimeout(silenceTimerRef.current)
-    try { recognitionRef.current?.stop() } catch(_) {}
     setAiStatus('idle')
+    isListeningRef.current = false
   }, [])
 
   const startListening = useCallback((onFinish) => {
-    const SR = window.SpeechRecognition || window.webkitSpeechRecognition
-    if (!SR) { onFinish?.(''); return }
-    try { recognitionRef.current?.stop() } catch(_) {}
-    const rec = new SR()
-    rec.lang = langMap[sessionLang] || 'en-US'
-    rec.continuous = true; rec.interimResults = true
-    recognitionRef.current = rec; isListeningRef.current = true
-    currentTxRef.current = ''; setTranscript(''); setInterimText('')
+    if (isListeningRef.current) return
+    isListeningRef.current = true
     setAiStatus('listening')
+    setTranscript('')
 
-    rec.onresult = ev => {
-      let fin = '', interim = ''
-      for (let i = ev.resultIndex; i < ev.results.length; i++) {
-        if (ev.results[i].isFinal) fin += ev.results[i][0].transcript
-        else interim += ev.results[i][0].transcript
+    navigator.mediaDevices.getUserMedia({ audio: true }).then(stream => {
+      const mediaRecorder = new MediaRecorder(stream)
+      mediaRecorderRef.current = mediaRecorder
+      audioChunksRef.current = []
+
+      mediaRecorder.ondataavailable = e => {
+        if (e.data.size > 0) audioChunksRef.current.push(e.data)
       }
-      if (fin) { currentTxRef.current += fin + ' '; setTranscript(currentTxRef.current) }
-      setInterimText(interim)
-      clearTimeout(silenceTimerRef.current)
-      silenceTimerRef.current = setTimeout(() => {
-        if (isListeningRef.current) {
-          stopListening()
-          onFinish?.(currentTxRef.current.trim())
+
+      mediaRecorder.onstop = async () => {
+        const audioBlob = new Blob(audioChunksRef.current, { type: 'audio/webm' })
+        const fd = new FormData()
+        fd.append('file', audioBlob, 'audio.webm')
+        
+        try {
+          const res = await fetch(`${API_BASE_URL}/stt`, { method: 'POST', body: fd })
+          const data = await res.json()
+          if (data.transcript) {
+            onFinish?.(data.transcript)
+          } else {
+            onFinish?.('')
+          }
+        } catch (e) {
+          onFinish?.('')
         }
-      }, 4000)
-    }
-    rec.onend = () => { if (isListeningRef.current) try { rec.start() } catch(_) {} }
-    rec.onerror = e => { if (e.error !== 'no-speech') console.warn('SR:', e.error) }
-    try { rec.start() } catch(e) { console.warn(e) }
-  }, [sessionLang, stopListening])
+        stream.getTracks().forEach(t => t.stop())
+      }
+
+      mediaRecorder.start()
+      silenceTimerRef.current = setTimeout(() => {
+        if (mediaRecorder.state !== 'inactive') mediaRecorder.stop()
+      }, 5000)
+
+    }).catch(err => {
+      console.error("Mic error:", err)
+      setAiStatus('idle')
+      isListeningRef.current = false
+      onFinish?.('')
+    })
+  }, [stopListening])
 
   // ── Start: Ask about approach ─────────────────────────────────────────────
   useEffect(() => {
@@ -274,7 +322,7 @@ export default function VoiceCodingRound({
                 fd.append('candidate_name', sessionDetail?.candidate_name || 'Candidate')
                 fetch(`${API_BASE_URL}/save-answer`, { method: 'POST', body: fd }).catch(()=>{})
               }
-              aiSay("Got it! Keep going — you're doing great.")
+              askAIForReply(answer)
             }
           })
         })
@@ -294,8 +342,9 @@ export default function VoiceCodingRound({
   const handleSendTyped = () => {
     if (!typedInput.trim()) return
     addMessage('user', typedInput)
+    const text = typedInput
     setTypedInput('')
-    aiSay("Thanks for explaining! Keep coding — you're on the right track.")
+    askAIForReply(text)
   }
 
   // ── Run code ──────────────────────────────────────────────────────────────
@@ -326,9 +375,10 @@ export default function VoiceCodingRound({
   const handleSubmit = useCallback(async () => {
     if (submittingRef.current) return
     submittingRef.current = true
+    setIsSubmitting(true)
     stopListening(); window.speechSynthesis?.cancel()
 
-    aiSay("Great work on the coding round! Saving your solution now.", async () => {
+    aiSay("Great work on the coding round! Saving your solution and waiting for uploads...", async () => {
       try {
         await fetch(`${API_BASE_URL}/coding-round/submit`, {
           method: 'POST',
@@ -336,7 +386,10 @@ export default function VoiceCodingRound({
           body: JSON.stringify({ interview_id: interviewId, code, language: selectedLang })
         })
       } catch(_) {}
-      setTimeout(() => onComplete?.(), 1000)
+      // We don't automatically call onComplete here. 
+      // The parent component (VoiceInterviewPage) waits for the video upload to finish 
+      // and handles the full session complete.
+      setTimeout(() => onComplete?.(), 1500)
     })
   }, [stopListening, aiSay, interviewId, code, selectedLang, onComplete])
 
@@ -386,17 +439,46 @@ export default function VoiceCodingRound({
         {/* Left: Problem + AI Chat */}
         <div className="w-[320px] shrink-0 flex flex-col border-r border-white/6 bg-[#0d1117]">
           {/* Problem */}
-          <div className="p-4 border-b border-white/6">
-            <div className="flex items-center gap-2 mb-2">
-              <i className="fas fa-puzzle-piece text-amber-400 text-xs"/>
-              <span className="text-xs font-bold uppercase tracking-widest text-slate-500">Problem</span>
-              <span className="ml-auto text-xs text-emerald-400 bg-emerald-500/10 border border-emerald-500/20 rounded-full px-2 py-0.5">{question?.codingTask?.difficulty || 'Medium'}</span>
+            <div className="p-4 border-b border-white/6 overflow-y-auto max-h-[50%]">
+              <div className="flex items-center gap-2 mb-2">
+                <i className="fas fa-puzzle-piece text-amber-400 text-xs"/>
+                <span className="text-xs font-bold uppercase tracking-widest text-slate-500">Problem</span>
+                <span className="ml-auto text-xs text-emerald-400 bg-emerald-500/10 border border-emerald-500/20 rounded-full px-2 py-0.5">{question?.codingTask?.difficulty || 'Medium'}</span>
+              </div>
+              <p className="text-sm text-slate-300 leading-relaxed font-semibold">{question?.text || question?.codingTask?.title}</p>
+              {question?.codingTask?.description && (
+                <p className="text-xs text-slate-400 mt-2 leading-relaxed whitespace-pre-wrap">{question.codingTask.description}</p>
+              )}
+              {question?.codingTask?.constraints && (
+                <div className="mt-4">
+                  <span className="text-xs font-bold uppercase tracking-widest text-slate-500">Constraints</span>
+                  <p className="text-xs text-slate-400 mt-1 leading-relaxed whitespace-pre-wrap">{question.codingTask.constraints}</p>
+                </div>
+              )}
+              {question?.codingTask?.examples && question.codingTask.examples.length > 0 && (
+                <div className="mt-4">
+                  <span className="text-xs font-bold uppercase tracking-widest text-slate-500">Examples</span>
+                  {question.codingTask.examples.map((ex, i) => (
+                    <div key={i} className="mt-2 bg-white/5 rounded p-2 text-xs font-mono text-slate-300">
+                      <div><span className="text-slate-500">Input:</span> {ex.input}</div>
+                      <div><span className="text-slate-500">Output:</span> {ex.output}</div>
+                      {ex.explanation && <div className="text-slate-400 mt-1 italic">// {ex.explanation}</div>}
+                    </div>
+                  ))}
+                </div>
+              )}
+              {question?.codingTask?.test_cases && question.codingTask.test_cases.length > 0 && (
+                <div className="mt-4">
+                  <span className="text-xs font-bold uppercase tracking-widest text-slate-500">Test Cases</span>
+                  {question.codingTask.test_cases.map((tc, i) => (
+                    <div key={i} className="mt-2 bg-white/5 rounded p-2 text-xs font-mono text-slate-300">
+                      <div><span className="text-slate-500">Input:</span> {tc.input}</div>
+                      <div><span className="text-slate-500">Expected:</span> {tc.expected}</div>
+                    </div>
+                  ))}
+                </div>
+              )}
             </div>
-            <p className="text-sm text-slate-300 leading-relaxed">{question?.text || question?.codingTask?.title}</p>
-            {question?.codingTask?.description && (
-              <p className="text-xs text-slate-500 mt-2 leading-relaxed">{question.codingTask.description}</p>
-            )}
-          </div>
 
           {/* AI Chat */}
           <div className="flex-1 overflow-y-auto p-3 space-y-1">
@@ -443,7 +525,7 @@ export default function VoiceCodingRound({
             ) : (
               <button onClick={() => {
                 if (aiStatus === 'listening') { stopListening() }
-                else { startListening(ans => { if (ans) { addMessage('user', ans); aiSay("Got it! Keep going.") } }) }
+                else { startListening(ans => { if (ans) { addMessage('user', ans); askAIForReply(ans) } }) }
               }} className={`w-full py-2 rounded-lg text-xs font-bold transition-all flex items-center justify-center gap-2 ${
                 aiStatus === 'listening' ? 'bg-rose-500/20 border border-rose-500/30 text-rose-400' : 'bg-emerald-500/10 border border-emerald-500/30 text-emerald-400 hover:bg-emerald-500/20'
               }`}>
@@ -508,6 +590,19 @@ export default function VoiceCodingRound({
           )}
         </div>
       </div>
+
+      {/* Submitting Overlay */}
+      {isSubmitting && (
+        <div className="fixed inset-0 z-50 bg-[#0a0f1e]/90 backdrop-blur-sm flex flex-col items-center justify-center">
+          <div className="w-16 h-16 relative mb-6">
+            <div className="absolute inset-0 rounded-full border-4 border-indigo-500/20"></div>
+            <div className="absolute inset-0 rounded-full border-4 border-indigo-500 border-t-transparent animate-spin"></div>
+            <i className="fas fa-cloud-upload-alt absolute inset-0 flex items-center justify-center text-indigo-400 text-xl"></i>
+          </div>
+          <h2 className="text-2xl font-black text-white tracking-tight mb-2">Saving Solution...</h2>
+          <p className="text-slate-400 font-medium">Please wait while we upload the session recording securely.</p>
+        </div>
+      )}
     </div>
   )
 }

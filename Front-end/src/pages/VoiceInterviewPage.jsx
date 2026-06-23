@@ -96,8 +96,9 @@ export default function VoiceInterviewPage() {
   const [interviewType, setInterviewType] = useState('Technical')
 
   // Round control
-  const [round, setRound]   = useState('intro')
-  // 'intro' | 'verbal' | 'coding' | 'case_study' | 'done'
+  const [round, setRound]   = useState('pre_checks')
+  // 'pre_checks' | 'intro' | 'verbal' | 'coding' | 'case_study' | 'done'
+  const [permissionsGranted, setPermissionsGranted] = useState(false)
 
   // Verbal interview state
   const [chatMessages, setChatMessages]     = useState([])
@@ -139,7 +140,7 @@ export default function VoiceInterviewPage() {
   const questionsRef     = useRef([])
   const interviewIdRef   = useRef('')
   const sessionDetailRef = useRef(null)
-  const roundRef         = useRef('intro')
+  const roundRef         = useRef('pre_checks')
   const chatBottomRef    = useRef(null)
   const wsRef            = useRef(null)
 
@@ -212,26 +213,33 @@ export default function VoiceInterviewPage() {
   }, [linkId])
 
   // ── TTS with female voice ──────────────────────────────────────────────────
-  const speak = useCallback((text, onEnd) => {
-    const synth = window.speechSynthesis; if (!synth) { onEnd?.(); return }
-    synth.cancel()
-    const u = new SpeechSynthesisUtterance(text)
-    u.lang = langMap[language] || 'en-US'; u.rate = 0.92; u.pitch = 1.1
-    u.onend   = () => { setAiStatus('listening'); onEnd?.() }
-    u.onstart = () =>   setAiStatus('speaking')
-    u.onerror = () => { setAiStatus('idle'); onEnd?.() }
-    // Female voice: prefer Google UK English Female, Microsoft Zira, or any female
-    const voices = synth.getVoices()
-    const lang = langMap[language] || 'en'
-    const female = voices.find(v => /zira|samantha|female|woman|google uk english female/i.test(v.name))
-      || voices.find(v => v.lang.startsWith(lang.split('-')[0]) && /zira|samantha|female|woman/i.test(v.name))
-      || voices.find(v => v.lang.startsWith('en') && /zira|samantha|female|woman|google uk/i.test(v.name))
-      || voices.find(v => v.lang.startsWith('en-GB'))
-      || voices.find(v => v.lang.startsWith('en') && v.localService)
-      || voices.find(v => v.lang.startsWith('en'))
-    if (female) u.voice = female
-    synth.speak(u)
-  }, [language])
+  const speak = useCallback(async (text, onEnd) => {
+    try {
+      setAiStatus('speaking')
+      const res = await fetch(`${API_BASE_URL}/tts`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ text, voice: 'nova' })
+      })
+      if (!res.ok) throw new Error('TTS Failed')
+      const blob = await res.blob()
+      const url = URL.createObjectURL(blob)
+      const audio = new Audio(url)
+      audio.onended = () => {
+        setAiStatus('listening')
+        URL.revokeObjectURL(url)
+        onEnd?.()
+      }
+      audio.onerror = () => {
+        setAiStatus('idle')
+        onEnd?.()
+      }
+      audio.play()
+    } catch (e) {
+      setAiStatus('idle')
+      onEnd?.()
+    }
+  }, [])
 
   const addMsg = useCallback((role, text) => setChatMessages(p => [...p, { role, text }]), [])
   const aiSay  = useCallback((text, onEnd) => { addMsg('ai', text); speak(text, onEnd) }, [addMsg, speak])
@@ -514,7 +522,7 @@ export default function VoiceInterviewPage() {
   // ── Cleanup and Tab Monitoring ────────────────────────────────────────────
   useEffect(() => {
     const handleVisibilityChange = () => {
-      if (document.hidden && round !== 'done' && round !== 'intro') {
+      if (document.hidden && round !== 'done' && round !== 'intro' && round !== 'pre_checks') {
         setWarningsCount(p => p + 1)
         console.warn('Tab switch detected!')
       }
@@ -586,6 +594,75 @@ export default function VoiceInterviewPage() {
         <p className="text-slate-400 max-w-md">Excellent work! You answered {answeredCount} question{answeredCount !== 1 ? 's' : ''} across all rounds. Your responses have been sent to the recruiter.</p>
       </div>
       <div className="text-slate-600 text-sm">You may safely close this tab.</div>
+    </div>
+  )
+
+  // ── Pre-Interview Checks Screen ───────────────────────────────────────────
+  if (round === 'pre_checks') return (
+    <div className="min-h-screen bg-[#0a0f1e] flex flex-col items-center justify-center text-white px-6" style={{fontFamily:"'Inter',sans-serif"}}>
+      <div className="max-w-2xl w-full text-center space-y-8">
+        <div className="flex flex-col items-center gap-4 mb-6">
+          <div className="w-16 h-16 rounded-2xl bg-gradient-to-tr from-indigo-500 to-purple-600 flex items-center justify-center shadow-[0_0_40px_rgba(99,102,241,0.3)]">
+            <i className="fas fa-shield-alt text-3xl text-white"/>
+          </div>
+          <h1 className="text-3xl font-black">Pre-Interview Checklist</h1>
+          <p className="text-slate-400">Before we begin, please review the rules and grant the required permissions.</p>
+        </div>
+
+        {/* Rules */}
+        <div className="grid gap-3 text-left bg-[#0d1117] border border-white/10 rounded-2xl p-6 shadow-xl">
+          <h3 className="text-lg font-bold text-white mb-2 border-b border-white/10 pb-2">Interview Rules</h3>
+          {[
+            { i:'fa-volume-mute', c:'text-rose-400', t:'Ensure you are in a quiet environment without background noise.' },
+            { i:'fa-window-close', c:'text-amber-400', t:'Do not close, refresh, or switch away from this tab.' },
+            { i:'fa-user-check', c:'text-emerald-400', t:'Your microphone, camera, and screen will be recorded.' },
+          ].map((rule, idx) => (
+            <div key={idx} className="flex items-center gap-4">
+              <div className="w-8 h-8 rounded-full bg-white/5 flex items-center justify-center shrink-0">
+                <i className={`fas ${rule.i} ${rule.c}`}/>
+              </div>
+              <span className="text-slate-300 text-sm">{rule.t}</span>
+            </div>
+          ))}
+        </div>
+
+        {/* Actions */}
+        <div className="space-y-4">
+          <button onClick={async () => {
+            try {
+              if (document.documentElement.requestFullscreen) {
+                await document.documentElement.requestFullscreen().catch(() => {})
+              }
+              const stream = await navigator.mediaDevices.getUserMedia({ audio: true, video: true })
+              // Stop the streams immediately, we just wanted permission
+              stream.getTracks().forEach(t => t.stop())
+              setPermissionsGranted(true)
+            } catch (err) {
+              alert("Permissions are required to proceed: " + err.message)
+            }
+          }}
+            className={`w-full py-4 rounded-xl font-bold text-sm transition-all flex items-center justify-center gap-3 ${
+              permissionsGranted 
+                ? 'bg-emerald-500/20 text-emerald-400 border border-emerald-500/30 cursor-default' 
+                : 'bg-indigo-500/10 text-indigo-300 border border-indigo-500/30 hover:bg-indigo-500/20'
+            }`}>
+            <i className={`fas ${permissionsGranted ? 'fa-check-circle' : 'fa-lock-open'}`}/>
+            {permissionsGranted ? 'Permissions Granted' : 'Grant Camera & Mic Permissions'}
+          </button>
+
+          <button 
+            disabled={!permissionsGranted}
+            onClick={() => setRound('intro')}
+            className={`w-full py-4 rounded-xl font-bold text-lg transition-all flex items-center justify-center gap-3 ${
+              permissionsGranted 
+                ? 'bg-gradient-to-r from-emerald-500 to-teal-500 text-white shadow-[0_4px_30px_rgba(16,185,129,0.4)] hover:shadow-[0_4px_50px_rgba(16,185,129,0.6)] hover:scale-[1.02]' 
+                : 'bg-slate-800 text-slate-500 cursor-not-allowed'
+            }`}>
+            I Agree & Continue
+            <i className="fas fa-arrow-right"/>
+          </button>
+        </div>
+      </div>
     </div>
   )
 
