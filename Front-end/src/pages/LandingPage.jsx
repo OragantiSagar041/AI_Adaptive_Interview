@@ -173,8 +173,8 @@ const PricingCard = ({ plan, index, isFeatured, badge, formatPrice }) => {
       transition={{ delay: index * 0.12, duration: 0.65, ease: [0.22, 1, 0.36, 1] }}
       whileHover={isFeatured ? { scale: 1.02 } : { y: -5 }}
       className={`relative flex min-h-[420px] flex-col rounded-[28px] border p-7 overflow-hidden transition-all duration-300 ${isFeatured
-          ? 'border-indigo-900/10 bg-gradient-to-b from-indigo-950 to-indigo-800 text-white shadow-[0_32px_80px_rgba(99,102,241,0.35)]'
-          : 'border-slate-200/80 bg-white text-slate-900 shadow-[0_8px_40px_rgba(17,24,39,0.08)]'
+        ? 'border-indigo-900/10 bg-gradient-to-b from-indigo-950 to-indigo-800 text-white shadow-[0_32px_80px_rgba(99,102,241,0.35)]'
+        : 'border-slate-200/80 bg-white text-slate-900 shadow-[0_8px_40px_rgba(17,24,39,0.08)]'
         }`}
     >
       {isFeatured && (
@@ -352,81 +352,41 @@ function LandingPage() {
   return (
     <main className="font-sans">
       {/* ── STICKY NAV ─────────────────────────────────────────────────────── */}
-      <header className="fixed inset-x-0 top-0 z-50 border-b border-white/10 bg-black/70 backdrop-blur-md">
-        <div className="mx-auto flex max-w-7xl items-center justify-between gap-4 px-4 py-4 sm:px-6 lg:px-8">
+      <header className="fixed inset-x-0 top-0 z-50 bg-transparent py-5">
+        <div className="mx-auto flex w-full max-w-none items-center justify-between px-6 md:px-12">
           <Link to="/" className="flex items-center gap-3 no-underline">
-            <img src={logo} alt="Hire IQ Logo" className="h-8 w-auto object-contain brightness-0 invert" />
-            <span className="text-lg font-semibold tracking-wide text-white">Hire IQ</span>
+            <img src={logo} alt="Hire IQ Logo" className="h-7 w-auto object-contain brightness-0 invert" />
+            <span className="text-base font-semibold tracking-wider text-white font-title">Hire IQ</span>
           </Link>
 
-          <nav className="hidden items-center gap-1 lg:flex">
-            {navLinks.map(({ label, href }) => (
-              <a
-                key={label}
-                href={href}
-                className="rounded-full px-4 py-2 text-sm text-white/80 transition-colors hover:bg-white/10 hover:text-white"
-              >
-                {label}
-              </a>
-            ))}
-          </nav>
-
-          <div className="hidden items-center gap-3 lg:flex">
-            <Link to="/login" className="no-underline">
-              <Button variant="secondary" className="!rounded-full !px-5 !py-2.5 !text-sm !shadow-none">
-                Admin Login
-              </Button>
-            </Link>
-            <Link to="/register" className="no-underline">
-              <Button className="!rounded-full !px-5 !py-2.5 !text-sm">
-                Start Subscription
-              </Button>
-            </Link>
-          </div>
-
-          <button
-            type="button"
-            className="rounded-lg p-2 text-white/80 transition-colors hover:bg-white/10 hover:text-white lg:hidden"
-            onClick={() => setMobileMenuOpen((open) => !open)}
-            aria-label="Toggle menu"
-          >
-            <Menu className="h-6 w-6" />
-          </button>
-        </div>
-
-        <AnimatePresence>
-          {mobileMenuOpen && (
-            <motion.div
-              initial={{ opacity: 0, height: 0 }}
-              animate={{ opacity: 1, height: 'auto' }}
-              exit={{ opacity: 0, height: 0 }}
-              className="overflow-hidden border-t border-white/10 bg-black/90 lg:hidden"
+          {/* Capsule menu shown in screenshot */}
+          <nav className="flex items-center bg-black/40 backdrop-blur-xl border border-white/10 rounded-full p-1 shadow-2xl">
+            <a
+              href="#platform"
+              className="text-white px-4.5 py-1.5 text-xs font-semibold rounded-full transition-all bg-white/10 no-underline"
             >
-              <div className="mx-auto flex max-w-7xl flex-col gap-2 px-4 py-4 sm:px-6">
-                {navLinks.map(({ label, href }) => (
-                  <a
-                    key={label}
-                    href={href}
-                    onClick={closeMobileMenu}
-                    className="rounded-xl px-4 py-3 text-sm font-medium text-white/85 transition-colors hover:bg-white/10 hover:text-white"
-                  >
-                    {label}
-                  </a>
-                ))}
-                <Link to="/login" onClick={closeMobileMenu} className="no-underline">
-                  <Button variant="secondary" className="mt-2 w-full !rounded-xl">
-                    Admin Login
-                  </Button>
-                </Link>
-                <Link to="/register" onClick={closeMobileMenu} className="no-underline">
-                  <Button className="w-full !rounded-xl">
-                    Start Subscription
-                  </Button>
-                </Link>
-              </div>
-            </motion.div>
-          )}
-        </AnimatePresence>
+              Platform
+            </a>
+            <a
+              href="#workflow"
+              className="text-white/60 hover:text-white px-4.5 py-1.5 text-xs font-semibold rounded-full transition-all no-underline"
+            >
+              Workflow
+            </a>
+            <a
+              href="#pricing"
+              className="text-white/60 hover:text-white px-4.5 py-1.5 text-xs font-semibold rounded-full transition-all no-underline"
+            >
+              Pricing
+            </a>
+            <Link
+              to="/login"
+              className="flex items-center gap-1 text-white/60 hover:text-white px-4.5 py-1.5 text-xs font-semibold rounded-full transition-all no-underline"
+            >
+              Admin Login <ArrowUpRight className="h-3.5 w-3.5 inline" />
+            </Link>
+          </nav>
+        </div>
       </header>
 
       {/* ── HERO ───────────────────────────────────────────────────────────── */}
@@ -436,39 +396,33 @@ function LandingPage() {
           autoPlay loop muted playsInline
           className="absolute inset-0 h-full w-full object-cover"
         />
-        <div className="relative z-10 mx-auto flex h-full max-w-7xl flex-col px-4 pt-24 sm:px-6 lg:px-8">
+        <div className="relative z-10 mx-auto flex h-full max-w-7xl flex-col px-6 pt-24 sm:px-8">
           <div className="mt-8 grid grid-cols-1 gap-4 lg:grid-cols-2 lg:gap-8">
-            <p className="max-w-md text-sm text-white/80 sm:text-base">Create scheduled interview links, evaluate candidates with AI-generated questions, and monitor sessions live from one workspace.</p>
+            <p className="max-w-md text-xs text-white/60 sm:text-sm tracking-wide leading-relaxed">
+              Create scheduled interview links, evaluate candidates with AI-generated questions, and monitor sessions live from one workspace.
+            </p>
             <div className="flex lg:justify-end">
-              <p className="max-w-sm text-sm text-white/80 sm:text-base lg:text-right">Hiring operations, rebuilt.</p>
+              <p className="max-w-sm text-xs text-white/60 sm:text-sm lg:text-right tracking-wide leading-relaxed">
+                Hiring operations, rebuilt.
+              </p>
             </div>
           </div>
           <div className="flex flex-grow flex-col items-center justify-center pb-20 text-center">
-            <p className="mb-6 text-xs font-medium uppercase tracking-[0.2em] text-white/80 sm:text-sm">AI interview infrastructure for modern teams</p>
+            <p className="mb-6 text-[10px] font-bold uppercase tracking-[0.25em] text-white/50 sm:text-xs">
+              AI interview infrastructure for modern teams
+            </p>
             <h1 className="flex flex-col items-center leading-[0.85] tracking-tighter text-5xl sm:text-6xl md:text-7xl lg:text-8xl xl:text-9xl">
-              <span className="font-medium text-white">Scale With</span>
-              <ShinyText text="AI Interviews." />
+              <span className="font-medium text-white text-8xl">Scale With</span>
+             <span className="inline-block font-bold text-9xl xl:text-[8rem] bg-clip-text text-transparent bg-[linear-gradient(100deg,#64CEFB_0%,#64CEFB_40%,#ffffff_50%,#64CEFB_60%,#64CEFB_100%)] bg-[length:200%_auto] [background-position:-156.267%_center]">
+  AI Interviews.
+</span>
             </h1>
             <Link to="/register" className="no-underline">
-              <button className="group mt-12 flex items-center gap-3 rounded-full bg-black px-6 py-3 text-sm font-medium text-white transition-all hover:bg-gray-900 md:mt-16 md:px-8 md:py-4 md:text-base">
+              <button className="group mt-10 flex items-center gap-2 rounded-full bg-black border border-white/20 hover:bg-white/10 hover:border-white/40 px-6 py-3.5 text-sm font-bold text-white transition-all cursor-pointer shadow-2xl">
                 Create Company Workspace
-                <ArrowRight className="h-4 w-4 transition-transform duration-300 group-hover:translate-x-1.5 md:h-5 md:w-5" />
+                <ArrowRight className="h-4 w-4 transition-transform duration-300 group-hover:translate-x-1" />
               </button>
             </Link>
-            <div className="mt-4 flex flex-col items-center justify-center gap-3 sm:flex-row">
-              <a
-                href="#pricing"
-                className="inline-flex items-center gap-2 rounded-full border border-white/25 bg-white/10 px-6 py-3 text-sm font-medium text-white transition-all hover:bg-white/15 md:px-8 md:py-4 md:text-base"
-              >
-                View Subscription Plans
-              </a>
-              <Link to="/login" className="no-underline">
-                <button className="inline-flex items-center gap-2 rounded-full border border-white/25 px-6 py-3 text-sm font-medium text-white/90 transition-all hover:border-white/40 hover:text-white md:px-8 md:py-4 md:text-base">
-                  Admin Login
-                  <ArrowUpRight className="h-4 w-4" />
-                </button>
-              </Link>
-            </div>
           </div>
         </div>
       </div>

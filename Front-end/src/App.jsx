@@ -5,7 +5,12 @@ import LandingPage from './pages/LandingPage'
 import RegisterPage from './pages/RegisterPage'
 import LoginPage from './pages/LoginPage'
 import CaseStudyPage from './pages/CaseStudyPage'
-import MasterPage from './pages/MasterPage'
+import MasterLayout from './components/master/MasterLayout'
+import MasterDashboard from './pages/master/MasterDashboard'
+import Plans from './pages/master/Plans'
+import Subscribers from './pages/master/Subscribers'
+import CreateTenant from './pages/master/CreateTenant'
+import MasterProfile from './pages/master/MasterProfile'
 
 // Protected Route Guard
 import ProtectedRoute from './components/ProtectedRoute'
@@ -37,7 +42,22 @@ function App() {
         <Route path="/interview" element={<HomePage />} />
         <Route path="/register" element={<RegisterPage />} />
         <Route path="/case-study" element={<CaseStudyPage />} />
-        <Route path="/master" element={<MasterPage />} />
+        {/* Master routes */}
+        <Route
+          path="/master"
+          element={
+            <ProtectedRoute allowedRoles={['master']}>
+              <MasterLayout />
+            </ProtectedRoute>
+          }
+        >
+          <Route index element={<Navigate to="dashboard" replace />} />
+          <Route path="dashboard" element={<MasterDashboard />} />
+          <Route path="plans" element={<Plans />} />
+          <Route path="subscribers" element={<Subscribers />} />
+          <Route path="create-tenant" element={<CreateTenant />} />
+          <Route path="profile" element={<MasterProfile />} />
+        </Route>
 
         {/* SuperAdmin routes — must be above admin routes */}
         <Route

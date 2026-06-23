@@ -1082,7 +1082,7 @@
             margin-bottom: 1.5rem;
         }
 
-        input,
+        input:not([type="checkbox"]):not([type="radio"]),
         textarea,
         select {
             width: 100%;

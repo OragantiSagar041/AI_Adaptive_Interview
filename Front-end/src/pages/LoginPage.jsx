@@ -71,8 +71,9 @@ export default function LoginPage() {
       const planCapabilities = data.plan_capabilities || {}
 
       let finalRole = role
-      if (role === 'super_admin' || role === 'superadmin' || role === 'master') finalRole = 'superadmin'
+      if (role === 'super_admin' || role === 'superadmin') finalRole = 'superadmin'
       if (role === 'tenant' || role === 'admin') finalRole = 'admin'
+      // role === 'master' remains 'master'
 
       // Persist session
       if (data.token) {
@@ -97,6 +98,8 @@ export default function LoginPage() {
         navigate('/superadmin/dashboard')
       } else if (finalRole === 'admin') {
         navigate('/admin/dashboard')
+      } else if (finalRole === 'master') {
+        navigate('/master/dashboard')
       } else {
         navigate('/login')
       }
@@ -266,7 +269,106 @@ export default function LoginPage() {
             </div>
 
             {/* Right Column Form Card */}
+
             <div className="flex justify-center lg:justify-end">
+              <div
+                className="w-full max-w-[420px] rounded-2xl p-8 md:p-10 border border-slate-100 bg-white/95 shadow-[0_20px_40px_rgba(15,23,42,0.06)] backdrop-blur-md"
+              >
+                <div className="flex justify-center mb-8">
+                  <img src={logo} alt="Hire IQ Logo" className="h-16 w-auto object-contain transition-transform hover:scale-105 duration-300" />
+                </div>
+
+                <form onSubmit={handleLogin} className="space-y-5">
+                  <div className="space-y-2">
+                    <label htmlFor="username" className="block text-xs font-bold text-slate-500 uppercase tracking-wider">
+                      Username
+                    </label>
+                    <div className="relative group">
+                      <span className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-400 group-focus-within:text-indigo-600 transition-colors duration-200 pointer-events-none">
+                        <i className="fas fa-user text-sm" />
+                      </span>
+                      <input
+                        type="text"
+                        id="username"
+                        value={username}
+                        onChange={(e) => setUsername(e.target.value)}
+                        placeholder="Enter your email or username"
+                        className="w-full py-3.5 pl-12 pr-4 text-sm text-slate-900 bg-slate-50/50 border border-slate-200 rounded-xl outline-none transition-all duration-200 placeholder-slate-400 focus:bg-white focus:border-indigo-600 focus:ring-4 focus:ring-indigo-50/80"
+                        style={{ paddingLeft: '44px' }}
+                        autoComplete="username"
+                        required
+                      />
+                    </div>
+                  </div>
+
+                  <div className="space-y-2">
+                    <label htmlFor="password" className="block text-xs font-bold text-slate-500 uppercase tracking-wider">
+                      Password
+                    </label>
+                    <div className="relative group">
+                      <span className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-400 group-focus-within:text-indigo-600 transition-colors duration-200 pointer-events-none">
+                        <i className="fas fa-lock text-sm" />
+                      </span>
+                      <input
+                        type={showPassword ? 'text' : 'password'}
+                        id="password"
+                        value={password}
+                        onChange={(e) => setPassword(e.target.value)}
+                        placeholder="Enter your password"
+                        className="w-full py-3.5 pl-12 pr-12 text-sm text-slate-900 bg-slate-50/50 border border-slate-200 rounded-xl outline-none transition-all duration-200 placeholder-slate-400 focus:bg-white focus:border-indigo-600 focus:ring-4 focus:ring-indigo-50/80"
+                        style={{ paddingLeft: '44px', paddingRight: '44px' }}
+                        autoComplete="current-password"
+                        required
+                      />
+                      <button
+                        type="button"
+                        onClick={() => setShowPassword(!showPassword)}
+                        className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-650 p-1.5 rounded-lg hover:bg-slate-100 transition-all cursor-pointer"
+                        title={showPassword ? 'Hide password' : 'Show password'}
+                      >
+                        <i className={showPassword ? 'fas fa-eye-slash text-xs' : 'fas fa-eye text-xs'} />
+                      </button>
+                    </div>
+                  </div>
+
+                  <div className="flex justify-end -mt-1 mb-6">
+                    <button
+                      type="button"
+                      onClick={handleOpenResetModal}
+                      className="text-xs font-bold text-indigo-600 hover:text-indigo-500 transition-colors cursor-pointer outline-none"
+                    >
+                      Forgot Password?
+                    </button>
+                  </div>
+
+                  {loginError && (
+                    <div className="bg-red-50 border border-red-100 text-red-600 text-xs font-semibold rounded-xl p-3.5 flex items-start gap-2.5">
+                      <i className="fas fa-exclamation-circle mt-0.5 text-red-500" />
+                      <span>{loginError}</span>
+                    </div>
+                  )}
+
+                  <button
+                    type="submit"
+                    disabled={loginLoading}
+                    className="w-full py-3.5 rounded-xl font-bold text-sm text-white bg-slate-900 hover:bg-slate-800 transition-all duration-200 shadow-md shadow-indigo-100 hover:shadow-lg hover:shadow-indigo-200 active:scale-[0.98] disabled:opacity-50 disabled:cursor-not-allowed disabled:active:scale-100 cursor-pointer flex items-center justify-center gap-2"
+                  >
+                    {loginLoading ? (
+                      <>
+                        <svg className="animate-spin h-4 w-4 text-white" viewBox="0 0 24 24" fill="none">
+                          <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
+                          <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z" />
+                        </svg>
+                        Signing In...
+                      </>
+                    ) : (
+                      'Sign In'
+                    )}
+                  </button>
+                </form>
+              </div>
+            </div>
+            {/* <div className="flex justify-center lg:justify-end">
               <div
                 className="w-full max-w-[420px] rounded-[5px] p-8 border border-[rgba(17,24,39,0.08)] shadow-[0_18px_50px_rgba(194,194,194,0.22)] backdrop-blur-md"
                 style={{
@@ -357,7 +459,7 @@ export default function LoginPage() {
                   </button>
                 </form>
               </div>
-            </div>
+            </div> */}
           </div>
         </main>
 
@@ -367,7 +469,132 @@ export default function LoginPage() {
       </div>
 
       {/* Forgot Password Reset Modal */}
-      {isResetOpen && (
+
+{isResetOpen && (
+        <div className="fixed inset-0 z-[999] flex items-center justify-center bg-slate-900/40 backdrop-blur-sm p-4">
+          <div className="relative w-full max-w-md bg-white border border-slate-100 rounded-2xl p-8 md:p-10 shadow-[0_20px_50px_rgba(15,23,42,0.15)] text-slate-900">
+            <button
+              onClick={handleCloseResetModal}
+              className="absolute right-4 top-4 text-slate-400 hover:text-slate-600 hover:bg-slate-50 p-1.5 rounded-lg transition-all cursor-pointer"
+            >
+              <i className="fas fa-times" />
+            </button>
+
+            {resetStep === 'identify' && (
+              <div className="space-y-5">
+                <div>
+                  <h3 className="text-xl font-bold tracking-tight text-slate-900">Reset Password</h3>
+                  <p className="text-slate-500 text-xs mt-1.5">Verify your admin account to receive an OTP.</p>
+                </div>
+                <div className="space-y-4">
+                  <div className="space-y-2">
+                    <label className="text-xs font-semibold text-slate-600 uppercase tracking-wider block">Username</label>
+                    <input
+                      type="text"
+                      value={resetUser}
+                      onChange={(e) => setResetUser(e.target.value)}
+                      placeholder="Enter your username"
+                      className="w-full rounded-xl border border-slate-200 bg-slate-50/50 px-4 py-3 text-sm text-slate-900 placeholder-slate-400 outline-none transition-all focus:bg-white focus:border-indigo-600 focus:ring-4 focus:ring-indigo-50/80"
+                    />
+                  </div>
+                  <div className="space-y-2">
+                    <label className="text-xs font-semibold text-slate-600 uppercase tracking-wider block">Email Address</label>
+                    <input
+                      type="email"
+                      value={resetEmail}
+                      onChange={(e) => setResetEmail(e.target.value)}
+                      placeholder="e.g. admin@company.com"
+                      className="w-full rounded-xl border border-slate-200 bg-slate-50/50 px-4 py-3 text-sm text-slate-900 placeholder-slate-400 outline-none transition-all focus:bg-white focus:border-indigo-600 focus:ring-4 focus:ring-indigo-50/80"
+                    />
+                  </div>
+                  <button
+                    onClick={handleSendOTP}
+                    disabled={resetLoading}
+                    className="w-full py-3 mt-2 rounded-xl text-white font-semibold text-sm bg-slate-900 hover:bg-slate-800 transition-all duration-200 active:scale-[0.98] disabled:opacity-50 disabled:cursor-not-allowed cursor-pointer"
+                  >
+                    {resetLoading ? 'Sending...' : 'Send OTP Code'}
+                  </button>
+                </div>
+              </div>
+            )}
+
+            {resetStep === 'verify' && (
+              <div className="space-y-5">
+                <div>
+                  <h3 className="text-xl font-bold tracking-tight text-slate-900">Verify OTP</h3>
+                  <p className="text-slate-500 text-xs mt-1.5">Enter the 6-digit code sent to your email.</p>
+                </div>
+                <div className="space-y-4">
+                  <div className="space-y-2">
+                    <label className="text-xs font-semibold text-slate-600 uppercase tracking-wider block">OTP Code</label>
+                    <input
+                      type="text"
+                      value={resetOTP}
+                      onChange={(e) => setResetOTP(e.target.value)}
+                      placeholder="Enter 6-digit code"
+                      maxLength={6}
+                      className="w-full rounded-xl border border-slate-200 bg-slate-50/50 px-4 py-3 text-center text-2xl font-bold tracking-widest text-slate-900 placeholder-slate-300 outline-none transition-all focus:bg-white focus:border-indigo-600 focus:ring-4 focus:ring-indigo-50/80"
+                    />
+                  </div>
+                  <button
+                    onClick={handleVerifyOTP}
+                    disabled={resetLoading}
+                    className="w-full py-3 mt-2 rounded-xl text-white font-semibold text-sm bg-slate-900 hover:bg-slate-800 transition-all duration-200 active:scale-[0.98] disabled:opacity-50 disabled:cursor-not-allowed cursor-pointer"
+                  >
+                    {resetLoading ? 'Checking...' : 'Verify & Continue'}
+                  </button>
+                  <p className="text-center text-xs text-slate-500 pt-2">
+                    Didn't get code?{' '}
+                    <button
+                      onClick={handleSendOTP}
+                      className="text-indigo-600 hover:text-indigo-500 font-semibold bg-transparent border-none cursor-pointer outline-none hover:underline"
+                    >
+                      Resend
+                    </button>
+                  </p>
+                </div>
+              </div>
+            )}
+
+            {resetStep === 'final' && (
+              <div className="space-y-5">
+                <div>
+                  <h3 className="text-xl font-bold tracking-tight text-slate-900">New Password</h3>
+                  <p className="text-slate-500 text-xs mt-1.5">Choose a strong new password for your account.</p>
+                </div>
+                <div className="space-y-4">
+                  <div className="space-y-2">
+                    <label className="text-xs font-semibold text-slate-600 uppercase tracking-wider block">New Password</label>
+                    <input
+                      type="password"
+                      value={newPassword}
+                      onChange={(e) => setNewPassword(e.target.value)}
+                      placeholder="At least 6 characters"
+                      className="w-full rounded-xl border border-slate-200 bg-slate-50/50 px-4 py-3 text-sm text-slate-900 placeholder-slate-400 outline-none transition-all focus:bg-white focus:border-indigo-600 focus:ring-4 focus:ring-indigo-50/80"
+                    />
+                  </div>
+                  <button
+                    onClick={handleFinalizeReset}
+                    disabled={resetLoading}
+                    className="w-full py-3 mt-2 rounded-xl text-white font-semibold text-sm bg-slate-900 hover:bg-slate-800 transition-all duration-200 active:scale-[0.98] disabled:opacity-50 disabled:cursor-not-allowed cursor-pointer"
+                  >
+                    {resetLoading ? 'Saving...' : 'Update Password'}
+                  </button>
+                </div>
+              </div>
+            )}
+
+            {resetError && (
+              <div className="bg-red-50 border border-red-100 text-red-600 text-xs font-medium rounded-lg p-3.5 flex items-start gap-2.5 mt-4">
+                <i className="fas fa-exclamation-circle mt-0.5 text-red-500" />
+                <span>{resetError}</span>
+              </div>
+            )}
+          </div>
+        </div>
+      )}
+
+      {/* {isResetOpen && (
         <div className="fixed inset-0 z-[999] flex items-center justify-center bg-black/60 backdrop-blur-sm p-4 animate-[fadeIn_0.3s_ease-out]">
           <div className="relative w-full max-w-[450px] bg-white border border-slate-200 rounded-[5px] p-10 shadow-[0_8px_40px_rgba(0,0,0,0.1)] text-[#111827]">
             <button
@@ -500,7 +727,7 @@ export default function LoginPage() {
             )}
           </div>
         </div>
-      )}
+      )} */}
     </div>
   )
 }

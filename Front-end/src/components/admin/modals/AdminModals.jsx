@@ -244,6 +244,211 @@ export function CandidateScorecardModal({
   )
 }
 
+export const convertHtmlToPlainText = (htmlString, candidateName = '', jobDescription = '', duration = '') => {
+  if (!htmlString) return '';
+  
+  try {
+    const parser = new DOMParser();
+    const doc = parser.parseFromString(htmlString, 'text/html');
+    const whiteCard = doc.body.querySelector('div[style*="background: white"]') || doc.body.children[1] || doc.body;
+    const blocks = [];
+    
+    let extractedName = '';
+    const dearPara = Array.from(whiteCard.querySelectorAll('p')).find(p => p.innerText.includes('Dear'));
+    if (dearPara) {
+      extractedName = dearPara.innerText.replace('Dear', '').replace(',', '').trim();
+    }
+    
+    let extractedJd = '';
+    const jdPara = Array.from(whiteCard.querySelectorAll('p')).find(p => p.previousElementSibling && p.previousElementSibling.innerText.includes('Role Details'));
+    if (jdPara) {
+      extractedJd = jdPara.innerText.trim();
+    }
+    
+    let extractedDuration = '';
+    const durationPara = Array.from(whiteCard.querySelectorAll('p')).find(p => p.innerText.includes('Duration:'));
+    if (durationPara) {
+      const match = durationPara.innerText.match(/Duration:\s*(\d+)/i);
+      if (match) extractedDuration = match[1];
+    }
+
+    Array.from(whiteCard.children).forEach(child => {
+      const text = child.innerText || '';
+      
+      if (child.tagName === 'DIV' && (child.style.borderLeft || text.includes('Role Details'))) {
+        blocks.push('📋 Role Details:\n{job_description}');
+        return;
+      }
+      
+      if (child.querySelector('a') || (child.tagName === 'DIV' && child.style.textAlign === 'center' && text.includes('Start Interview'))) {
+        blocks.push('[Start Interview Button]');
+        return;
+      }
+      
+      if (text.includes('Mandatory Interview Guidelines')) {
+        const bulletPoints = Array.from(child.querySelectorAll('li')).map(li => `• ${li.innerText.trim()}`).join('\n');
+        blocks.push(`⚠️ Mandatory Interview Guidelines\n${bulletPoints || '• Full-Screen Mode: You must maintain full-screen mode at all times.\n• Video Proctoring: Your camera will be active.\n• Audio Environment: Please ensure you are in a quiet room.'}`);
+        return;
+      }
+      
+      if (text.includes('Scheduled Time') || text.includes('Scheduled Window') || text.includes('scheduled time window')) {
+        blocks.push('{schedule_info}');
+        return;
+      }
+      
+      if (child.tagName === 'DIV' && (child.style.backgroundColor === 'rgb(254, 243, 199)' || text.includes('Important:') || text.includes('expire'))) {
+        blocks.push(`⚠️ Important: This interview link will expire in exactly 24 hours. Ensure a stable internet connection and a quiet environment.`);
+        return;
+      }
+
+      if (child.tagName === 'HR') {
+        return;
+      }
+      
+      let blockText = text.trim();
+      if (!blockText) return;
+      
+      if (extractedName && blockText.includes(extractedName)) {
+        blockText = blockText.replaceAll(extractedName, '{candidate_name}');
+      }
+      if (candidateName && blockText.includes(candidateName)) {
+        blockText = blockText.replaceAll(candidateName, '{candidate_name}');
+      }
+      blockText = blockText.replace(/Dear\s+Dear\s+\{candidate_name\},/gi, 'Dear {candidate_name},')
+                           .replace(/Dear\s+<b>.*?<\/b>,/gi, 'Dear {candidate_name},')
+                           .replace(/Dear\s+.*?,/gi, 'Dear {candidate_name},');
+      
+      if (extractedDuration && blockText.includes(extractedDuration) && blockText.includes('Duration:')) {
+        blockText = blockText.replaceAll(extractedDuration, '{duration}');
+      }
+      if (duration && blockText.includes(String(duration)) && blockText.includes('Duration:')) {
+        blockText = blockText.replaceAll(String(duration), '{duration}');
+      }
+      
+      if (extractedJd && blockText.includes(extractedJd)) {
+        blockText = blockText.replaceAll(extractedJd, '{job_description}');
+      }
+      if (jobDescription && blockText.includes(jobDescription)) {
+        blockText = blockText.replaceAll(jobDescription, '{job_description}');
+      }
+      
+      blocks.push(blockText);
+    });
+    
+    if (blocks.length === 0) {
+      let clean = htmlString.replace(/<\/?[^>]+(>|$)/g, "\n");
+      clean = clean.replace(/\n\s*\n/g, '\n\n').trim();
+      return clean;
+    }
+    
+    return blocks.join('\n\n');
+  } catch (err) {
+    console.error("Error converting HTML to plain text", err);
+    let clean = htmlString.replace(/<\/?[^>]+(>|$)/g, "\n");
+    clean = clean.replace(/\n\s*\n/g, '\n\n').trim();
+    return clean;
+  }
+};
+
+export const convertPlainTextToHtml = (plainText, candidateName = 'Candidate Name', jobDescription = 'Job description will appear here', duration = 30, scheduleBlock = '') => {
+  if (!plainText) return '';
+  
+  const paragraphs = plainText.split(/\n\n+/);
+  
+  const compiledParagraphs = paragraphs.map(p => {
+    const text = p.trim();
+    if (!text) return '';
+    
+    if (text.includes('Mandatory Interview Guidelines')) {
+      const lines = text.split('\n');
+      const items = lines.slice(1).map(line => {
+        const cleanLine = line.replace(/^[•\-\*\s]+/, '').trim();
+        const colonIndex = cleanLine.indexOf(':');
+        if (colonIndex !== -1) {
+          const title = cleanLine.substring(0, colonIndex + 1);
+          const desc = cleanLine.substring(colonIndex + 1);
+          return `<li><b>${title}</b>${desc}</li>`;
+        }
+        return `<li>${cleanLine}</li>`;
+      }).join('\n');
+      
+      return `
+        <div style="background: #f8fafc; border-radius: 8px; padding: 15px; margin: 20px 0; border: 1px solid #e2e8f0; border-left: 4px solid #ef4444; text-align: left;">
+            <h3 style="margin: 0 0 10px; font-size: 15px; color: #0f172a; font-weight: bold;">⚠️ Mandatory Interview Guidelines</h3>
+            <ul style="margin: 0; padding-left: 20px; color: #334155; font-size: 14px; line-height: 1.6;">
+                ${items || '<li><b>Full-Screen Mode:</b> You must maintain full-screen mode at all times.</li>'}
+            </ul>
+        </div>
+      `;
+    }
+    
+    if (text.includes('Role Details') || text.includes('{job_description}')) {
+      const formattedJd = String(jobDescription || '').replace(/\n/g, '<br/>');
+      return `
+        <div style="background: #f1f5f9; border-radius: 8px; padding: 15px; margin: 15px 0; border-left: 4px solid #6366f1; text-align: left;">
+            <p style="margin: 0 0 5px; font-weight: 600; color: #334155;">📋 Role Details:</p>
+            <p style="margin: 0; color: #64748b; font-size: 14px; line-height: 1.5;">${formattedJd}</p>
+        </div>
+      `;
+    }
+    
+    if (text.includes('[Start Interview Button]')) {
+      return `
+        <div style="text-align: center; margin: 25px 0;">
+            <a href="{{INTERVIEW_LINK}}" style="background: linear-gradient(135deg, #6366f1, #8b5cf6); color: white; padding: 14px 32px; text-decoration: none; border-radius: 8px; font-weight: bold; font-size: 16px; display: inline-block; box-shadow: 0 4px 12px rgba(99,102,241,0.3);">
+                🚀 Start Interview Now
+            </a>
+        </div>
+      `;
+    }
+    
+    if (text.includes('{schedule_info}')) {
+      if (scheduleBlock) return scheduleBlock;
+      return `
+        <div style="background: #f1f5f9; border-radius: 8px; padding: 15px; margin: 15px 0; border-left: 4px solid #6366f1; text-align: left;">
+             <p style="margin: 0; font-size: 14px; color: #334155;"><b>📅 Schedule:</b> Join during the scheduled window.</p>
+        </div>
+      `;
+    }
+    
+    if (text.includes('Important:') || text.includes('expire')) {
+      let cleanText = text.replace('⚠️', '').trim();
+      return `
+        <div style="background: #fef3c7; border-radius: 8px; padding: 12px; margin-top: 15px; text-align: left;">
+            <p style="margin: 0; color: #92400e; font-size: 13px;">⚠️ <b>${cleanText}</b></p>
+        </div>
+      `;
+    }
+    
+    let cleanText = text
+      .replaceAll('{candidate_name}', candidateName)
+      .replaceAll('{duration}', String(duration))
+      .replaceAll('{job_description}', jobDescription);
+      
+    if (cleanText.startsWith('Dear ')) {
+      const greetingName = cleanText.substring(5).replace(/,$/, '').trim();
+      return `<p style="font-size: 16px; color: #334155; text-align: left; margin: 10px 0;">Dear <b>${greetingName}</b>,</p>`;
+    }
+    
+    if (cleanText.startsWith('Best regards,') || cleanText.startsWith('Regards,')) {
+      const lines = cleanText.split('\n');
+      const formattedLines = lines.map((l, idx) => {
+        if (idx === 0) return l;
+        return `<b style="color: #6366f1;">${l}</b>`;
+      }).join('<br/>');
+      return `
+        <hr style="border: none; border-top: 1px solid #e2e8f0; margin: 20px 0;">
+        <p style="color: #94a3b8; font-size: 13px; margin: 0; text-align: left;">${formattedLines}</p>
+      `;
+    }
+    
+    const lines = cleanText.split('\n').join('<br/>');
+    return `<p style="color: #475569; line-height: 1.6; font-size: 14px; margin: 10px 0; text-align: left;">${lines}</p>`;
+  });
+  
+  return compiledParagraphs.filter(Boolean).join('\n');
+};
+
 export function EmailPreviewModal({
   isOpen,
   onClose,
@@ -258,7 +463,7 @@ export function EmailPreviewModal({
       isOpen={isOpen}
       onClose={onClose}
       title="Customize Invitation Email"
-      subtitle="Edit the HTML body of the email. Key placeholders are dynamically parsed by the server."
+      subtitle="Edit the message body of the email. Keep placeholders like {candidate_name}, {job_description}, and {duration} intact."
       maxWidth="max-w-7xl"
       footer={
         <>
@@ -271,27 +476,62 @@ export function EmailPreviewModal({
         </>
       }
     >
-      <div className="email-editor-layout">
-        {/* Left Pane: HTML Editor */}
-        <div className="email-pane">
-          <div className="email-pane-header">
-            <span>HTML Body Editor</span>
-            <span className="email-pane-note">Changes sync immediately with preview</span>
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 h-[500px]">
+        {/* Left Pane: Plain Text Editor */}
+        <div className="flex flex-col border border-slate-200 rounded-xl bg-slate-50/50 overflow-hidden h-full">
+          <div className="flex justify-between items-center bg-slate-100/70 border-b border-slate-200 px-4 py-3 text-xs font-bold text-slate-700 uppercase tracking-wide">
+            <span>Email Template Editor</span>
+            <span className="text-[0.68rem] text-slate-400 font-normal normal-case">No HTML tags. Auto-compiles to styled layout</span>
           </div>
           <textarea
-            className="email-text-editor"
-            value={emailTemplate.bodyInnerHtml}
-            onChange={(e) => setEmailTemplate(prev => ({ ...prev, bodyInnerHtml: e.target.value }))}
-            placeholder="Write your email body HTML here..."
+            className="flex-grow w-full p-4 font-sans text-sm text-slate-800 bg-white border-0 outline-none resize-none focus:ring-0 focus:outline-none leading-relaxed"
+            value={emailTemplate.plainText || ''}
+            onChange={(e) => {
+              const text = e.target.value;
+              const html = convertPlainTextToHtml(
+                text,
+                emailTemplate.candidateName,
+                emailTemplate.jobDescription,
+                emailTemplate.duration,
+                emailTemplate.scheduleHtml
+              );
+              
+              // We compile into the standard wrapper: header banner and white card container
+              const compiledBodyInnerHtml = `
+<div style="background: linear-gradient(135deg, #6366f1, #8b5cf6); border-radius: 12px 12px 0 0; padding: 30px; text-align: center;">
+    <h1 style="color: white; margin: 0; font-size: 24px;">Interview Invitation</h1>
+</div>
+<div style="background: white; border-radius: 0 0 12px 12px; padding: 30px; border: 1px solid #e2e8f0; border-top: none;">
+    ${html}
+</div>
+              `.trim();
+              
+              setEmailTemplate(prev => ({
+                ...prev,
+                plainText: text,
+                bodyInnerHtml: compiledBodyInnerHtml
+              }));
+            }}
+            placeholder="Write your email body here..."
           />
+          <div className="bg-slate-50 border-t border-slate-200 p-3 text-xs text-slate-500">
+            <strong>Supported Placeholders:</strong>
+            <div className="flex flex-wrap gap-x-3 gap-y-1 mt-1 font-mono text-[0.7rem] text-indigo-600">
+              <span>{`{candidate_name}`}</span>
+              <span>{`{job_description}`}</span>
+              <span>{`{duration}`}</span>
+              <span>{`{schedule_info}`}</span>
+              <span>{`[Start Interview Button]`}</span>
+            </div>
+          </div>
         </div>
         {/* Right Pane: Live IFrame Preview */}
-        <div className="email-pane">
-          <div className="email-pane-header">
+        <div className="flex flex-col border border-slate-200 rounded-xl bg-slate-50/50 overflow-hidden h-full">
+          <div className="flex justify-between items-center bg-slate-100/70 border-b border-slate-200 px-4 py-3 text-xs font-bold text-slate-700 uppercase tracking-wide">
             <span>Live Email Preview</span>
           </div>
           <iframe
-            className="email-preview-frame"
+            className="flex-grow w-full bg-white border-0 outline-none"
             title="Email Preview"
             srcDoc={buildEmailHtml()}
           />
