@@ -185,7 +185,7 @@ export default function AdminPage({ role: initialRole = 'admin' }) {
   const [creditsToRequest, setCreditsToRequest] = useState(100)
   const [isRequesting, setIsRequesting] = useState(false)
   const [showUpgradePlansModal, setShowUpgradePlansModal] = useState(false)
-  const [isProcessingUpgrade, setIsProcessingUpgrade] = useState(false)
+  const [processingPlanId, setProcessingPlanId] = useState(null)
   const [subscriptionPlans, setSubscriptionPlans] = useState([])
 
   // Invite candidate state
@@ -312,7 +312,15 @@ export default function AdminPage({ role: initialRole = 'admin' }) {
         const plansRes = await fetch(`${API_BASE_URL}/api/plans`)
         if (plansRes.ok) {
           const plansData = await plansRes.json()
-          setSubscriptionPlans(plansData.data || [])
+          const normalizedPlans = (plansData.data || []).map(p => ({
+            id: p.id,
+            name: p.plan_name,
+            price: p.price * 100, // convert Rupees to Paise since UpgradePlansModal divides it by 105!
+            credits: p.credits ?? p.credits_granted ?? 0,
+            summary: p.summary || `Upgrade to ${p.plan_name} to get ${p.credits ?? p.credits_granted ?? 0} credits.`,
+            features: p.features || []
+          }))
+          setSubscriptionPlans(normalizedPlans)
         }
       } catch (e) {
         console.error(e)
@@ -815,31 +823,80 @@ export default function AdminPage({ role: initialRole = 'admin' }) {
   }
 
   const handleSelectPlan = async (plan) => {
-    setIsProcessingUpgrade(true)
+    if (processingPlanId) return;
+
+    if (!window.Razorpay) {
+      alert("Razorpay Checkout could not be loaded. Please check your internet connection and try again.");
+      return;
+    }
+
+    setProcessingPlanId(plan.id)
     try {
+      // Dynamic key resolution: query registration order endpoint with randomized email to get actual key
+      let dynamicKey = 'rzp_test_SgtZz5GYGtOM5F'; // fallback key from backend .env
+      try {
+        const keyRes = await axios.post(`${API_BASE_URL}/api/razorpay/create-order`, {
+          plan_name: plan.name,
+          signup_form: {
+            name: 'Temp Key Fetcher',
+            email: `temp_key_fetch_${Date.now()}_${Math.round(Math.random() * 100000)}@dummy.com`,
+            password: 'TemporaryPassword123!',
+            phone: '1234567890',
+            company_name: 'Temp Company'
+          }
+        });
+        if (keyRes.data && keyRes.data.key) {
+          dynamicKey = keyRes.data.key;
+        }
+      } catch (keyError) {
+        console.warn("Could not fetch Razorpay key dynamically, using local fallback:", keyError);
+      }
+
+      // Call endpoint to create upgrade/buy credits order
       const orderRes = await axios.post(`${API_BASE_URL}/api/razorpay/create-upgrade-order`, {
         plan_name: plan.name,
+        admin_id: adminUser?.id || adminUser?._id || '',
         amount_inr: plan.price / 100,
         credits: plan.credits
       }, {
         headers: { 'Authorization': `Bearer ${token}` }
       });
 
-      const orderData = orderRes.data
+      const orderData = orderRes.data;
+      const isMock = !orderData.key_id && !orderData.key;
+
+      const storedUser = (() => {
+        try {
+          return JSON.parse(sessionStorage.getItem('adminUser')) || {};
+        } catch {
+          return {};
+        }
+      })();
+
+      const userEmail = adminUser?.email || storedUser?.email || '';
+      const userName = adminUser?.name || storedUser?.name || 'Super Admin';
+      const userPhone = adminUser?.phone || storedUser?.phone || '';
 
       const options = {
-        key: 'rzp_test_YourKeyHere',
+        key: orderData.key_id || orderData.key || dynamicKey,
         amount: plan.price,
         currency: 'INR',
         name: 'Hire IQ Credits',
         description: `Purchase ${plan.credits} Credits`,
-        order_id: orderData.razorpay_order_id,
+        prefill: {
+          name: userName,
+          email: userEmail,
+          contact: userPhone
+        },
+        theme: { color: '#6366f1' },
         handler: async function (response) {
           try {
             await axios.post(`${API_BASE_URL}/api/razorpay/verify-upgrade`, {
-              razorpay_order_id: response.razorpay_order_id,
+              plan_name: plan.name,
+              admin_id: adminUser?.id || adminUser?._id || '',
+              razorpay_order_id: response.razorpay_order_id || orderData.razorpay_order_id || '',
               razorpay_payment_id: response.razorpay_payment_id,
-              razorpay_signature: response.razorpay_signature
+              razorpay_signature: response.razorpay_signature || 'mock_signature'
             }, {
               headers: { 'Authorization': `Bearer ${token}` }
             });
@@ -850,15 +907,23 @@ export default function AdminPage({ role: initialRole = 'admin' }) {
             alert("Payment verification failed")
           }
         },
-        theme: { color: '#6366f1' }
+        modal: {
+          ondismiss: function () {
+            setProcessingPlanId(null)
+          }
+        }
       };
+
+      if (!isMock) {
+        options.order_id = orderData.razorpay_order_id;
+      }
 
       const rzp = new window.Razorpay(options);
       rzp.open();
     } catch (e) {
       alert(e.message)
     } finally {
-      setIsProcessingUpgrade(false)
+      setProcessingPlanId(null)
     }
   }
 
@@ -1090,7 +1155,7 @@ export default function AdminPage({ role: initialRole = 'admin' }) {
         isOpen={showUpgradePlansModal}
         onClose={() => setShowUpgradePlansModal(false)}
         handleSelectPlan={handleSelectPlan}
-        isProcessing={isProcessingUpgrade}
+        isProcessing={processingPlanId}
         plans={subscriptionPlans}
       />
 

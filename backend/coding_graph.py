@@ -72,38 +72,55 @@ def _extract_java_method_name(signature: str) -> str:
 
 
 def _default_task() -> Dict[str, Any]:
-    signature = "def longest_unique_substring(text):"
+    signature = "def winner(donuts, starter):"
     return {
-        "title": "Longest Unique Substring Length",
-        "description": "Write a function that returns the length of the longest substring without repeating characters.",
-        "input_format": "A single string named text.",
-        "output_format": "An integer representing the maximum length of a substring with all unique characters.",
+        "title": "The Ultimate Donut Challenge",
+        "description": (
+            "Its the college Fest night. There is a Donuts Challenge between Alex and Sam. "
+            "There are N donuts arranged in a row. Each player can eat one or two donuts at a time. "
+            "The player who eats the last donut loses the game. Both take alternate turns to eat "
+            "donuts and anyone can start. Consider Alex and Sam try their best to win. "
+            "Your task is to find the winner.\n\n"
+            "Complete the function winner given in the editor. It takes one integer array donuts "
+            "representing the value of N and one string array containing name of the player who starts "
+            "the game as parameters."
+        ),
+        "input_format": (
+            "First line contains the S, the size of quantity array. The S subsequent lines contains the "
+            "value of N for each test case. Next line contains S, the size of the player array. The S "
+            "subsequent lines contains the name of player who starts first."
+        ),
         "constraints": [
-            "Aim for O(n) time complexity.",
-            "Handle empty strings and repeated characters correctly.",
-            "Explain why your window moves when a duplicate is found.",
+            "1 <= S <= 2 x 10^5",
+            "1 <= N <= 2 x 10^7"
         ],
+        "output_format": "Your function must return a string array containing the name of the winner for each test case.",
         "examples": [
             {
-                "input": '"abcabcbb"',
-                "output": "3",
-                "explanation": "The longest substring without repeating characters is 'abc'.",
+                "input": "1\n3\n1\nAlex",
+                "output": "Alex",
+                "explanation": "N = 3, Alex starts first. Alex wins by choosing optimal moves.",
+            },
+            {
+                "input": "1\n2\n1\nSam",
+                "output": "Sam",
+                "explanation": "N = 2, Sam starts first. Sam wins by choosing optimal moves.",
             }
         ],
-        "evaluation_focus": ["correctness", "time complexity", "communication", "edge cases"],
+        "evaluation_focus": ["Correctness", "Game Theory", "Optimization"],
         "starter_function_signature": signature,
         "function_name": _extract_function_name(signature),
         "difficulty": "Medium",
         "recommended_language": "python",
-        "timebox_minutes": 20,
+        "timebox_minutes": 25,
         "test_cases": [
-            {"id": 1, "input": ["abcabcbb"], "expected": 3, "visible": True},
-            {"id": 2, "input": ["bbbbb"], "expected": 1, "visible": True},
-            {"id": 3, "input": ["pwwkew"], "expected": 3, "visible": True},
-            {"id": 4, "input": [""], "expected": 0, "visible": False},
-            {"id": 5, "input": ["dvdf"], "expected": 3, "visible": False},
-            {"id": 6, "input": ["abba"], "expected": 2, "visible": False},
-            {"id": 7, "input": ["anviaj"], "expected": 5, "visible": False},
+            {"id": 1, "input": [[3], ["Alex"]], "expected": ["Alex"], "visible": True},
+            {"id": 2, "input": [[2], ["Sam"]], "expected": ["Sam"], "visible": True},
+            {"id": 3, "input": [[1], ["Alex"]], "expected": ["Sam"], "visible": True},
+            {"id": 4, "input": [[4], ["Sam"]], "expected": ["Alex"], "visible": False},
+            {"id": 5, "input": [[5], ["Alex"]], "expected": ["Alex"], "visible": False},
+            {"id": 6, "input": [[6], ["Sam"]], "expected": ["Sam"], "visible": False},
+            {"id": 7, "input": [[7], ["Alex"]], "expected": ["Sam"], "visible": False},
         ],
     }
 
@@ -198,7 +215,13 @@ def _offline_coding_fallback(profile_text: str) -> Dict[str, Any]:
             "input_format": "A list of strings representing emails.",
             "output_format": "A list of strings containing only the duplicate emails.",
             "constraints": ["O(N) time complexity", "O(N) space complexity"],
-            "examples": [{"input": '["a@x.com", "b@x.com", "a@x.com"]', "output": '["a@x.com"]', "explanation": "a@x.com appears twice"}],
+            "examples": [
+                {
+                    "input": '["a@x.com", "b@x.com", "a@x.com"]',
+                    "output": '["a@x.com"]',
+                    "explanation": "a@x.com appears twice in the input list, making it a duplicate."
+                }
+            ],
             "evaluation_focus": ["Correctness", "Performance"],
             "starter_function_signature": signature,
             "function_name": _extract_function_name(signature),
@@ -223,7 +246,13 @@ def _offline_coding_fallback(profile_text: str) -> Dict[str, Any]:
             "input_format": "A list of integers (timestamps) and an integer delay.",
             "output_format": "An integer representing the execution count.",
             "constraints": ["Assume timestamps are sorted in ascending order."],
-            "examples": [{"input": "[10, 20, 100], 50", "output": "2", "explanation": "Calls at 10 and 20 are grouped, call at 100 is separate."}],
+            "examples": [
+                {
+                    "input": "[10, 20, 100], 50",
+                    "output": "2",
+                    "explanation": "Calls at 10 and 20 are grouped together since they fall within the 50ms delay window. The call at 100 is processed separately."
+                }
+            ],
             "evaluation_focus": ["Correctness", "Understanding of Debounce"],
             "starter_function_signature": signature,
             "function_name": _extract_function_name(signature),

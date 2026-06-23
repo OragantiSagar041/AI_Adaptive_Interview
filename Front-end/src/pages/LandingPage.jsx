@@ -13,7 +13,8 @@ const normalizePlan = (plan) => {
   const planName = plan.plan_name || plan.name || 'Plan'
   const priceInPaise = Boolean(plan.name && !plan.plan_name)
   const price = priceInPaise && plan.price > 0 ? plan.price / 100 : (plan.price ?? 0)
-  return { ...plan, plan_name: planName, price, duration_days: plan.duration_days ?? 30 }
+  const credits = plan.credits ?? plan.credits_granted ?? 0
+  return { ...plan, plan_name: planName, price, credits, duration_days: plan.duration_days ?? 30 }
 }
 
 const getPlanName = (plan) => plan?.plan_name || plan?.name || 'Plan'
@@ -190,6 +191,18 @@ const PricingCard = ({ plan, index, isFeatured, badge, formatPrice }) => {
           }`}>{badge}</span>
         <h3 className="pr-16 text-xl font-extrabold tracking-tight">{getPlanName(plan)}</h3>
         <div className={`mt-1 text-sm ${isFeatured ? 'text-white/60' : 'text-slate-400'}`}>{plan.duration_days ?? 30} days access</div>
+        
+        {/* Prominent Credit Points badge */}
+        <div className="mt-3">
+          <span className={`inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-bold ${
+            isFeatured 
+              ? 'bg-cyan-500/25 text-cyan-200 border border-cyan-500/30' 
+              : 'bg-indigo-50 text-indigo-700 border border-indigo-100'
+          }`}>
+            ⚡ {plan.credits} Credits
+          </span>
+        </div>
+
         <div className="mt-5 text-4xl font-extrabold tracking-tight">
           {formatPrice(plan.price)}
           {plan.price > 0 && <span className={`text-sm font-semibold ${isFeatured ? 'text-white/60' : 'text-slate-400'}`}> /sub</span>}

@@ -829,6 +829,8 @@ export function UpgradePlansModal({
           const isPopular = idx === 1;
           const displayPrice = plan.price / 100;
           
+          const isProcessingThisPlan = isProcessing === plan.id || isProcessing === plan.name || isProcessing === true;
+          
           return (
             <div key={plan.id || idx} className={`bg-white border ${isPopular ? 'border-[#f43f5e]' : 'border-slate-200'} rounded-2xl p-6 shadow-sm hover:shadow-md transition-all flex flex-col items-center text-center relative overflow-hidden`}>
               {isPopular && <div className="absolute top-0 left-0 w-full bg-[#f43f5e] text-white text-[0.65rem] font-bold py-1 uppercase tracking-widest shadow-sm">Most Popular</div>}
@@ -836,8 +838,8 @@ export function UpgradePlansModal({
               <div className="text-4xl font-black text-[#6366f1] mt-3 mb-1 tracking-tight">
                 {displayPrice > 0 ? `₹${displayPrice.toLocaleString()}` : 'Free'}
               </div>
-              <div className="text-sm font-bold text-emerald-600 bg-emerald-50 border border-emerald-200/50 px-3 py-1 rounded-full mb-4 mt-2 inline-flex shadow-sm">
-                +{plan.credits} Credits
+              <div className="text-sm font-bold text-emerald-600 bg-emerald-50 border border-emerald-200/50 px-3.5 py-1.5 rounded-full mb-4 mt-2 inline-flex shadow-sm">
+                {plan.credits} Credits
               </div>
               
               <p className="text-xs text-slate-500 mb-6 font-medium leading-relaxed">{plan.summary}</p>
@@ -852,13 +854,13 @@ export function UpgradePlansModal({
 
               <button
                 onClick={() => handleSelectPlan(plan)}
-                disabled={isProcessing || displayPrice === 0}
+                disabled={isProcessingThisPlan || displayPrice === 0}
                 className={`mt-auto w-full py-3 rounded-full font-bold text-sm shadow-sm transition-all cursor-pointer ${
                   displayPrice === 0 ? 'bg-slate-100 text-slate-400 border border-slate-200 cursor-not-allowed' :
                   isPopular ? 'bg-[#6366f1] text-white hover:bg-[#4f46e5] hover:shadow-md' : 'bg-slate-100 text-slate-700 hover:bg-slate-200 hover:text-slate-900 border border-slate-200'
                 }`}
               >
-                {isProcessing ? 'Processing...' : (displayPrice === 0 ? 'Current Plan' : 'Buy via Razorpay')}
+                {isProcessingThisPlan ? 'Processing...' : (displayPrice === 0 ? 'Current Plan' : 'Buy via Razorpay')}
               </button>
             </div>
           );

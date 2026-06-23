@@ -95,7 +95,7 @@ export default function LoginPage() {
 
       // Redirect based on role
       if (finalRole === 'superadmin') {
-        navigate('/superadmin/dashboard')
+        navigate('/superadmin/super-dashboard')
       } else if (finalRole === 'admin') {
         navigate('/admin/dashboard')
       } else if (finalRole === 'master') {
