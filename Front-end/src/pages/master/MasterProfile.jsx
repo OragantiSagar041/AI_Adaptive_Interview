@@ -1,10 +1,16 @@
 import React, { useState, useEffect } from 'react'
 import { useSelector, useDispatch } from 'react-redux'
+<<<<<<< HEAD
 import { User, Mail, Calendar, Lock, Shield, Coins, RefreshCw, KeyRound, CheckCircle, Eye, EyeOff } from 'lucide-react'
 import Swal from 'sweetalert2'
 import 'sweetalert2/dist/sweetalert2.min.css'
 import { getMasterProfile, updateAdminProfile } from '../../utils/api'
+=======
+import { User, Mail, Calendar, Lock, Shield, Coins, RefreshCw, KeyRound, CheckCircle, Camera, Loader2, AlertCircle, X, Check } from 'lucide-react'
+import { getMasterProfile, updateAdminProfile, uploadProfileImage } from '../../utils/api'
+>>>>>>> c48e4e2c5a10c921d77e4417e719fe4909b7085f
 import { setCredentials } from '../../store/slices/authSlice'
+import { motion, AnimatePresence } from 'framer-motion'
 
 export default function MasterProfile() {
   const dispatch = useDispatch()
@@ -17,6 +23,19 @@ export default function MasterProfile() {
   const [loading, setLoading] = useState(false)
   const [updatingProfile, setUpdatingProfile] = useState(false)
   const [updatingPassword, setUpdatingPassword] = useState(false)
+
+  // Custom modal states replacing SweetAlert
+  const [modalState, setModalState] = useState(null) // null | 'loading' | 'success' | 'error' | 'warning'
+  const [modalTitle, setModalTitle] = useState('')
+  const [modalMessage, setModalMessage] = useState('')
+  const [modalFileName, setModalFileName] = useState('')
+
+  const triggerModal = (state, title, message, filename = '') => {
+    setModalState(state)
+    setModalTitle(title)
+    setModalMessage(message)
+    setModalFileName(filename)
+  }
 
   // Form states
   const [username, setUsername] = useState('')
@@ -31,6 +50,67 @@ export default function MasterProfile() {
   const [showNewPassword, setShowNewPassword] = useState(false)
   const [showConfirmPassword, setShowConfirmPassword] = useState(false)
 
+  const inputStyle = {
+    border: 'none',
+    background: 'transparent',
+    padding: 0,
+    margin: 0,
+    outline: 'none',
+    boxShadow: 'none',
+    width: '100%',
+  }
+
+  const handleAvatarChange = async (e) => {
+    const file = e.target.files[0]
+    if (file) {
+      if (!file.type.startsWith('image/')) {
+        triggerModal('warning', 'Invalid File', 'Please select a valid image file.')
+        return
+      }
+      if (file.size > 2 * 1024 * 1024) {
+        triggerModal('warning', 'File Too Large', 'Image size should be less than 2MB.')
+        return
+      }
+
+      triggerModal('loading', 'Uploading Image', 'Uploading to Cloudinary...', file.name)
+
+      try {
+        const formData = new FormData()
+        formData.append('file', file)
+        formData.append('admin_id', profileData.id)
+
+        const result = await uploadProfileImage(formData)
+
+        if (result.status === 'success') {
+          // Update local profile data
+          setProfileData(prev => ({
+            ...prev,
+            profile_image: result.profile_image,
+            avatar: result.avatar
+          }))
+
+          // Update Redux state so header profile reflects the change
+          dispatch(
+            setCredentials({
+              role: role,
+              token: token,
+              adminUser: {
+                ...adminUser,
+                profile_image: result.profile_image,
+                avatar: result.avatar
+              },
+            })
+          )
+
+          triggerModal('success', 'Success', 'Profile image uploaded successfully!')
+        }
+      } catch (err) {
+        console.error(err)
+        triggerModal('error', 'Upload Failed', err || 'Failed to upload profile image.')
+      }
+    }
+  }
+
   const fetchProfile = async () => {
     setLoading(true)
     try {
@@ -41,13 +121,7 @@ export default function MasterProfile() {
       setCompanyName(data.company_name || '')
     } catch (err) {
       console.error(err)
-      Swal.fire({
-        title: 'Error',
-        text: err || 'Failed to fetch master admin profile data.',
-        icon: 'error',
-        background: '#161c2d',
-        color: '#fff',
-      })
+      triggerModal('error', 'Error', err || 'Failed to fetch master admin profile data.')
     } finally {
       setLoading(false)
     }
@@ -73,13 +147,7 @@ export default function MasterProfile() {
       })
 
       if (response.status === 'success') {
-        Swal.fire({
-          title: 'Success',
-          text: 'Profile updated successfully!',
-          icon: 'success',
-          background: '#161c2d',
-          color: '#fff',
-        })
+        triggerModal('success', 'Success', 'Profile updated successfully!')
 
         // Update local profile data
         const updatedDoc = {
@@ -122,13 +190,7 @@ export default function MasterProfile() {
       }
     } catch (err) {
       console.error(err)
-      Swal.fire({
-        title: 'Update Failed',
-        text: err || 'Failed to update profile settings.',
-        icon: 'error',
-        background: '#161c2d',
-        color: '#fff',
-      })
+      triggerModal('error', 'Update Failed', err || 'Failed to update profile settings.')
     } finally {
       setUpdatingProfile(false)
     }
@@ -139,24 +201,12 @@ export default function MasterProfile() {
     if (!profileData?.id) return
 
     if (!oldPassword || !newPassword || !confirmPassword) {
-      Swal.fire({
-        title: 'Validation Error',
-        text: 'All password fields are required.',
-        icon: 'warning',
-        background: '#161c2d',
-        color: '#fff',
-      })
+      triggerModal('warning', 'Validation Error', 'All password fields are required.')
       return
     }
 
     if (newPassword !== confirmPassword) {
-      Swal.fire({
-        title: 'Validation Error',
-        text: 'New passwords do not match.',
-        icon: 'warning',
-        background: '#161c2d',
-        color: '#fff',
-      })
+      triggerModal('warning', 'Validation Error', 'New passwords do not match.')
       return
     }
 
@@ -169,26 +219,14 @@ export default function MasterProfile() {
       })
 
       if (response.status === 'success') {
-        Swal.fire({
-          title: 'Success',
-          text: 'Password updated successfully!',
-          icon: 'success',
-          background: '#161c2d',
-          color: '#fff',
-        })
+        triggerModal('success', 'Success', 'Password updated successfully!')
         setOldPassword('')
         setNewPassword('')
         setConfirmPassword('')
       }
     } catch (err) {
       console.error(err)
-      Swal.fire({
-        title: 'Update Failed',
-        text: err || 'Failed to change administrator password.',
-        icon: 'error',
-        background: '#161c2d',
-        color: '#fff',
-      })
+      triggerModal('error', 'Update Failed', err || 'Failed to change administrator password.')
     } finally {
       setUpdatingPassword(false)
     }
@@ -209,77 +247,92 @@ export default function MasterProfile() {
 
   if (loading) {
     return (
-      <div className="py-24 text-center text-slate-500">
-        <RefreshCw className="animate-spin text-indigo-600 inline mr-2 h-6 w-6" /> Loading your profile details...
+      <div className="flex flex-col items-center justify-center py-32 text-slate-500 space-y-4">
+        <div className="p-4 bg-primary/5 rounded-2xl border border-primary/10">
+          <RefreshCw className="animate-spin text-primary h-8 w-8" />
+        </div>
+        <p className="text-sm font-medium tracking-wide">Loading your profile details...</p>
       </div>
     )
   }
 
   return (
-    <div className="space-y-6 max-w-6xl">
+    <div className="space-y-8 max-w-6xl">
       {/* Page Title Header */}
-      <div className="flex justify-between items-center bg-white p-6 rounded-2xl border border-slate-200/60 shadow-[0_4px_20px_rgba(0,0,0,0.04)]">
+      <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center bg-white p-6 rounded-3xl border border-slate-200/60 shadow-[0_4px_25px_rgba(0,0,0,0.02)] gap-4">
         <div>
-          <h2 className="text-xl font-bold text-slate-800">My Profile</h2>
-          <p className="text-sm text-slate-500">View and update your Master Control credentials and security preferences.</p>
+          <h2 className="text-xl font-bold text-slate-800 font-sans">My Profile</h2>
+          <p className="text-sm text-slate-500 mt-1">View and update your Master Control credentials and security preferences.</p>
         </div>
         <button
           onClick={fetchProfile}
           disabled={loading}
-          className="px-4 py-2 bg-white border border-slate-200 hover:bg-slate-50 text-slate-700 rounded-lg text-sm font-semibold transition-colors flex items-center gap-1.5 shadow-sm cursor-pointer"
+          className="px-4 py-2 bg-white border border-slate-200/80 hover:bg-slate-50 hover:text-primary hover:border-primary/30 text-slate-700 rounded-xl text-sm font-semibold transition-all flex items-center gap-2 shadow-sm cursor-pointer disabled:opacity-50"
         >
-          <RefreshCw size={14} className={loading ? 'animate-spin' : ''} /> Refresh Details
+          <RefreshCw size={14} className={loading ? 'animate-spin text-primary' : 'text-slate-400'} /> Refresh Details
         </button>
       </div>
 
       {profileData && (
-        <div className="grid gap-6 md:grid-cols-[320px_1fr]">
+        <div className="grid gap-8 grid-cols-1 lg:grid-cols-12">
           {/* Left: Summary Profile Card */}
-          <div className="flex flex-col gap-6">
-            <div className="bg-white border border-slate-200/60 p-6 rounded-2xl shadow-[0_4px_20px_rgba(0,0,0,0.04)] flex flex-col items-center text-center">
-              <div className="relative mb-4">
-                <img
-                  src="https://i.pravatar.cc/150?u=masteradmin"
-                  alt="Avatar"
-                  className="w-24 h-24 rounded-full object-cover border-4 border-indigo-50 shadow-sm"
+          <div className="lg:col-span-4 flex flex-col gap-8">
+            <div className="bg-white border border-slate-200/60 p-8 rounded-3xl shadow-[0_4px_25px_rgba(0,0,0,0.02)] flex flex-col items-center text-center">
+              <div className="relative mb-6 group cursor-pointer" title="Click to upload profile picture" onClick={() => document.getElementById('avatar-upload-input').click()}>
+                <div className="p-1 rounded-full bg-gradient-to-tr from-primary/30 via-slate-100 to-primary/40 transition-all duration-300 group-hover:from-primary/60 group-hover:to-primary/70">
+                  <div className="relative w-32 h-32 rounded-full overflow-hidden border-4 border-white shadow-md">
+                    <img
+                      src={profileData?.profile_image || profileData?.avatar || 'https://i.pravatar.cc/150?u=masteradmin'}
+                      alt="Avatar"
+                      className="w-full h-full object-cover"
+                    />
+                    <div className="absolute inset-0 bg-slate-900/60 flex flex-col items-center justify-center text-white opacity-0 group-hover:opacity-100 transition-opacity duration-200">
+                      <Camera className="h-5 w-5 mb-1" />
+                      <span className="text-[10px] font-bold tracking-wider uppercase">Upload</span>
+                    </div>
+                  </div>
+                </div>
+                <span className="absolute bottom-2 right-2 bg-emerald-500 border-4 border-white w-5.5 h-5.5 rounded-full shadow-sm z-10" title="Active Account" />
+                <input
+                  type="file"
+                  id="avatar-upload-input"
+                  accept="image/*"
+                  onChange={handleAvatarChange}
+                  className="hidden"
                 />
-                <span className="absolute bottom-1 right-1 bg-emerald-500 border-2 border-white w-4.5 h-4.5 rounded-full flex items-center justify-center" title="Active Account" />
               </div>
 
               <h3 className="font-bold text-lg text-slate-800">{profileData.name || 'Master Admin'}</h3>
-              <p className="text-xs text-indigo-600 font-semibold uppercase tracking-wider bg-indigo-50 px-2.5 py-0.5 rounded-full mt-1.5">
+              <span className="text-[11px] text-primary font-bold uppercase tracking-wider bg-primary/10 border border-primary/20 px-3.5 py-1 rounded-full mt-2">
                 {profileData.role || 'master'}
-              </p>
+              </span>
 
-              <hr className="w-full border-slate-100 my-5" />
+              <div className="w-full border-t border-dashed border-slate-200/80 my-6" />
 
-              <div className="w-full space-y-3.5 text-left text-sm text-slate-600">
-                <div className="flex items-center gap-2.5">
+              <div className="w-full space-y-4 text-left text-sm text-slate-600">
+                <div className="flex items-center gap-3 px-3 py-2 hover:bg-slate-50/50 rounded-xl transition-all">
                   <Mail size={16} className="text-slate-400 shrink-0" />
-                  <span className="truncate" title={profileData.email}>{profileData.email}</span>
+                  <span className="truncate text-slate-700 font-medium" title={profileData.email}>{profileData.email}</span>
                 </div>
-                <div className="flex items-center gap-2.5">
+                <div className="flex items-center gap-3 px-3 py-2 hover:bg-slate-50/50 rounded-xl transition-all">
                   <Shield size={16} className="text-slate-400 shrink-0" />
-                  <span>Access: <span className="font-medium text-slate-700">Master Level</span></span>
+                  <span className="text-slate-500">Access: <span className="font-semibold text-slate-800">Master Level</span></span>
                 </div>
-                <div className="flex items-center gap-2.5">
+                <div className="flex items-center gap-3 px-3 py-2 hover:bg-slate-50/50 rounded-xl transition-all">
                   <Calendar size={16} className="text-slate-400 shrink-0" />
-                  <span>Joined: <span className="font-medium text-slate-700">{formatDate(profileData.created_at)}</span></span>
+                  <span className="text-slate-500">Joined: <span className="font-semibold text-slate-800">{formatDate(profileData.created_at)}</span></span>
                 </div>
               </div>
             </div>
 
             {/* Quick Statistics Card */}
-            <div className="bg-white border border-slate-200/60 p-6 rounded-2xl shadow-[0_4px_20px_rgba(0,0,0,0.04)] space-y-4">
-              <h4 className="text-xs font-bold text-slate-400 uppercase tracking-widest">Account Details</h4>
+            <div className="bg-white border border-slate-200/60 p-6 rounded-3xl shadow-[0_4px_25px_rgba(0,0,0,0.02)] space-y-4">
+              <h4 className="text-xs font-bold text-slate-400 uppercase tracking-widest px-1">Account Details</h4>
               <div className="grid gap-4">
-                <div className="bg-slate-50 p-3 rounded-xl border border-slate-100 text-center">
-                 
-                </div>
-                <div className="bg-slate-50 p-3 rounded-xl border border-slate-100 text-center">
-                  <div className="text-xs text-slate-400 font-medium">Plan</div>
-                  <div className="text-sm font-bold text-slate-800 capitalize mt-1 truncate" title={profileData.subscription_plan}>
-                    {profileData.subscription_plan || 'Master'}
+                <div className="bg-slate-50/60 p-3.5 rounded-2xl border border-slate-100/80 text-center">
+                  <div className="text-xs text-slate-400 font-medium">Role / Access Level</div>
+                  <div className="text-sm font-bold text-slate-800 capitalize mt-1 truncate" title={profileData.role}>
+                    {profileData.role || 'Master'}
                   </div>
                 </div>
               </div>
@@ -287,64 +340,72 @@ export default function MasterProfile() {
           </div>
 
           {/* Right: Detailed Settings Forms */}
-          <div className="space-y-6">
+          <div className="lg:col-span-8 space-y-8">
             {/* Card 1: Edit Account Details */}
-            <div className="bg-white border border-slate-200/60 p-6 rounded-2xl shadow-[0_4px_20px_rgba(0,0,0,0.04)]">
-              <h3 className="text-base font-bold text-slate-800 flex items-center gap-2 border-b border-slate-100 pb-3">
-                <User size={18} className="text-indigo-600" /> Account Settings
+            <div className="bg-white border border-slate-200/60 p-8 rounded-3xl shadow-[0_4px_25px_rgba(0,0,0,0.02)]">
+              <h3 className="text-base font-bold text-slate-800 flex items-center gap-2.5 border-b border-slate-100 pb-4">
+                <User size={18} className="text-primary" /> Account Settings
               </h3>
 
-              <form onSubmit={handleUpdateProfile} className="space-y-4 mt-4">
-                <div className="grid gap-4 sm:grid-cols-2">
+              <form onSubmit={handleUpdateProfile} className="space-y-6 mt-6">
+                <div className="grid gap-6 sm:grid-cols-2">
                   <div className="space-y-1">
-                    <label className="text-xs font-semibold text-slate-500">Username / ID</label>
-                    <div className="relative">
-                      <span className="absolute inset-y-0 left-0 pl-3.5 flex items-center text-slate-400 pointer-events-none">
-                        <User size={14} />
+                    <label className="text-xs font-bold text-slate-400 uppercase tracking-wider mb-1.5 block">Username / ID</label>
+                    <div className="flex items-center gap-3 px-4 py-3 rounded-xl border border-slate-200 bg-slate-50/30 transition-all focus-within:border-primary focus-within:ring-2 focus-within:ring-primary/10 focus-within:bg-white">
+                      <span className="text-slate-400 flex-shrink-0">
+                        <User size={16} />
                       </span>
                       <input
                         type="text"
                         required
                         value={username}
                         onChange={(e) => setUsername(e.target.value)}
-                        className="w-full rounded-xl border border-slate-200 bg-slate-50 pl-10 pr-4 py-3 text-sm text-slate-800 outline-none focus:border-indigo-500 transition-colors"
+                        style={inputStyle}
+                        className="text-sm text-slate-800 placeholder-slate-400"
                       />
                     </div>
                   </div>
 
                   <div className="space-y-1">
-                    <label className="text-xs font-semibold text-slate-500">Registered Email Address</label>
-                    <div className="relative">
-                      <span className="absolute inset-y-0 left-0 pl-3.5 flex items-center text-slate-400 pointer-events-none">
-                        <Mail size={14} />
+                    <label className="text-xs font-bold text-slate-400 uppercase tracking-wider mb-1.5 block">Registered Email Address</label>
+                    <div className="flex items-center gap-3 px-4 py-3 rounded-xl border border-slate-200 bg-slate-50/30 transition-all focus-within:border-primary focus-within:ring-2 focus-within:ring-primary/10 focus-within:bg-white">
+                      <span className="text-slate-400 flex-shrink-0">
+                        <Mail size={16} />
                       </span>
                       <input
                         type="email"
                         required
                         value={email}
                         onChange={(e) => setEmail(e.target.value)}
-                        className="w-full rounded-xl border border-slate-200 bg-slate-50 pl-10 pr-4 py-3 text-sm text-slate-800 outline-none focus:border-indigo-500 transition-colors"
+                        style={inputStyle}
+                        className="text-sm text-slate-800 placeholder-slate-400"
                       />
                     </div>
                   </div>
                 </div>
 
                 <div className="space-y-1">
-                  <label className="text-xs font-semibold text-slate-500">Workspace / Owner Name</label>
-                  <input
-                    type="text"
-                    value={companyName}
-                    onChange={(e) => setCompanyName(e.target.value)}
-                    placeholder="Enter Workspace Owner Name"
-                    className="w-full rounded-xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm text-slate-800 outline-none focus:border-indigo-500 transition-colors"
-                  />
+                  <label className="text-xs font-bold text-slate-400 uppercase tracking-wider mb-1.5 block">Workspace / Owner Name</label>
+                  <div className="flex items-center gap-3 px-4 py-3 rounded-xl border border-slate-200 bg-slate-50/30 transition-all focus-within:border-primary focus-within:ring-2 focus-within:ring-primary/10 focus-within:bg-white">
+                    <span className="text-slate-400 flex-shrink-0">
+                      <Shield size={16} />
+                    </span>
+                    <input
+                      type="text"
+                      value={companyName}
+                      onChange={(e) => setCompanyName(e.target.value)}
+                      placeholder="Enter Workspace Owner Name"
+                      style={inputStyle}
+                      className="text-sm text-slate-800 placeholder-slate-400"
+                    />
+                  </div>
                 </div>
 
                 <div className="flex justify-end pt-2">
                   <button
                     type="submit"
                     disabled={updatingProfile}
-                    className="px-5 py-2.5 rounded-xl bg-indigo-600 hover:bg-indigo-500 border-none text-white font-bold text-xs cursor-pointer disabled:opacity-50 transition-colors shadow-sm"
+                    className="px-6 py-3 rounded-xl bg-primary hover:bg-primary-hover active:scale-[0.98] border-none text-white font-bold text-xs cursor-pointer disabled:opacity-50 transition-all shadow-md shadow-primary/10 hover:shadow-primary/20"
                   >
                     {updatingProfile ? 'Saving Details...' : 'Save Profile Changes'}
                   </button>
@@ -353,24 +414,25 @@ export default function MasterProfile() {
             </div>
 
             {/* Card 2: Security & Password Update */}
-            <div className="bg-white border border-slate-200/60 p-6 rounded-2xl shadow-[0_4px_20px_rgba(0,0,0,0.04)]">
-              <h3 className="text-base font-bold text-slate-800 flex items-center gap-2 border-b border-slate-100 pb-3">
-                <Lock size={18} className="text-indigo-600" /> Security Credentials
+            <div className="bg-white border border-slate-200/60 p-8 rounded-3xl shadow-[0_4px_25px_rgba(0,0,0,0.02)]">
+              <h3 className="text-base font-bold text-slate-800 flex items-center gap-2.5 border-b border-slate-100 pb-4">
+                <Lock size={18} className="text-primary" /> Security Credentials
               </h3>
 
-              <form onSubmit={handleUpdatePassword} className="space-y-4 mt-4">
+              <form onSubmit={handleUpdatePassword} className="space-y-6 mt-6">
                 <div className="space-y-1">
-                  <label className="text-xs font-semibold text-slate-500">Current Password</label>
-                  <div className="relative">
-                    <span className="absolute inset-y-0 left-0 pl-3.5 flex items-center text-slate-400 pointer-events-none">
-                      <Lock size={14} />
+                  <label className="text-xs font-bold text-slate-400 uppercase tracking-wider mb-1.5 block">Current Password</label>
+                  <div className="flex items-center gap-3 px-4 py-3 rounded-xl border border-slate-200 bg-slate-50/30 transition-all focus-within:border-primary focus-within:ring-2 focus-within:ring-primary/10 focus-within:bg-white">
+                    <span className="text-slate-400 flex-shrink-0">
+                      <Lock size={16} />
                     </span>
                     <input
                       type={showOldPassword ? "text" : "password"}
                       placeholder="Enter current master password"
                       value={oldPassword}
                       onChange={(e) => setOldPassword(e.target.value)}
-                      className="w-full rounded-xl border border-slate-200 bg-slate-50 pl-10 pr-10 py-3 text-sm text-slate-800 outline-none focus:border-indigo-500 transition-colors"
+                      style={inputStyle}
+                      className="text-sm text-slate-800 placeholder-slate-400"
                     />
                     <button
                       type="button"
@@ -382,19 +444,20 @@ export default function MasterProfile() {
                   </div>
                 </div>
 
-                <div className="grid gap-4 sm:grid-cols-2">
+                <div className="grid gap-6 sm:grid-cols-2">
                   <div className="space-y-1">
-                    <label className="text-xs font-semibold text-slate-500">New Password</label>
-                    <div className="relative">
-                      <span className="absolute inset-y-0 left-0 pl-3.5 flex items-center text-slate-400 pointer-events-none">
-                        <KeyRound size={14} />
+                    <label className="text-xs font-bold text-slate-400 uppercase tracking-wider mb-1.5 block">New Password</label>
+                    <div className="flex items-center gap-3 px-4 py-3 rounded-xl border border-slate-200 bg-slate-50/30 transition-all focus-within:border-primary focus-within:ring-2 focus-within:ring-primary/10 focus-within:bg-white">
+                      <span className="text-slate-400 flex-shrink-0">
+                        <KeyRound size={16} />
                       </span>
                       <input
                         type={showNewPassword ? "text" : "password"}
                         placeholder="At least 6 characters"
                         value={newPassword}
                         onChange={(e) => setNewPassword(e.target.value)}
-                        className="w-full rounded-xl border border-slate-200 bg-slate-50 pl-10 pr-10 py-3 text-sm text-slate-800 outline-none focus:border-indigo-500 transition-colors"
+                        style={inputStyle}
+                        className="text-sm text-slate-800 placeholder-slate-400"
                       />
                       <button
                         type="button"
@@ -407,17 +470,18 @@ export default function MasterProfile() {
                   </div>
 
                   <div className="space-y-1">
-                    <label className="text-xs font-semibold text-slate-500">Confirm New Password</label>
-                    <div className="relative">
-                      <span className="absolute inset-y-0 left-0 pl-3.5 flex items-center text-slate-400 pointer-events-none">
-                        <KeyRound size={14} />
+                    <label className="text-xs font-bold text-slate-400 uppercase tracking-wider mb-1.5 block">Confirm New Password</label>
+                    <div className="flex items-center gap-3 px-4 py-3 rounded-xl border border-slate-200 bg-slate-50/30 transition-all focus-within:border-primary focus-within:ring-2 focus-within:ring-primary/10 focus-within:bg-white">
+                      <span className="text-slate-400 flex-shrink-0">
+                        <KeyRound size={16} />
                       </span>
                       <input
                         type={showConfirmPassword ? "text" : "password"}
                         placeholder="Confirm new password"
                         value={confirmPassword}
                         onChange={(e) => setConfirmPassword(e.target.value)}
-                        className="w-full rounded-xl border border-slate-200 bg-slate-50 pl-10 pr-10 py-3 text-sm text-slate-800 outline-none focus:border-indigo-500 transition-colors"
+                        style={inputStyle}
+                        className="text-sm text-slate-800 placeholder-slate-400"
                       />
                       <button
                         type="button"
@@ -434,7 +498,7 @@ export default function MasterProfile() {
                   <button
                     type="submit"
                     disabled={updatingPassword}
-                    className="px-5 py-2.5 rounded-xl bg-indigo-600 hover:bg-indigo-500 border-none text-white font-bold text-xs cursor-pointer disabled:opacity-50 transition-colors shadow-sm"
+                    className="px-6 py-3 rounded-xl bg-primary hover:bg-primary-hover active:scale-[0.98] border-none text-white font-bold text-xs cursor-pointer disabled:opacity-50 transition-all shadow-md shadow-primary/10 hover:shadow-primary/20"
                   >
                     {updatingPassword ? 'Updating Password...' : 'Update Password'}
                   </button>
@@ -444,6 +508,141 @@ export default function MasterProfile() {
           </div>
         </div>
       )}
+      <AnimatePresence>
+        {modalState && (
+          <motion.div
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/60 backdrop-blur-sm p-4"
+          >
+            <motion.div
+              initial={{ scale: 0.95, y: 15 }}
+              animate={{ scale: 1, y: 0 }}
+              exit={{ scale: 0.95, y: 15 }}
+              transition={{ type: 'spring', duration: 0.4 }}
+              className="bg-white border border-slate-200/80 rounded-3xl p-8 max-w-sm w-full shadow-2xl text-center relative overflow-hidden"
+            >
+              {/* Decorative top background gradient */}
+              <div className={`absolute top-0 inset-x-0 h-2 bg-gradient-to-r ${
+                modalState === 'success' ? 'from-emerald-400 via-teal-500 to-emerald-400' :
+                modalState === 'error' ? 'from-rose-400 via-red-500 to-rose-400' :
+                modalState === 'warning' ? 'from-amber-400 via-orange-500 to-amber-400' :
+                'from-primary/80 via-indigo-500 to-primary/80'
+              }`} />
+
+              {modalState === 'loading' && (
+                <div className="space-y-6 py-4">
+                  <div className="relative flex justify-center">
+                    <div className="absolute inset-0 rounded-full bg-primary/10 blur-xl w-16 h-16 mx-auto" />
+                    <motion.div
+                      animate={{ rotate: 360 }}
+                      transition={{ repeat: Infinity, duration: 1, ease: 'linear' }}
+                      className="text-primary z-10"
+                    >
+                      <Loader2 size={48} className="animate-spin" />
+                    </motion.div>
+                  </div>
+                  <div>
+                    <h3 className="text-lg font-bold text-slate-800">{modalTitle}</h3>
+                    {modalFileName && (
+                      <p className="text-xs text-slate-400 mt-1 truncate max-w-[280px] mx-auto" title={modalFileName}>
+                        {modalFileName}
+                      </p>
+                    )}
+                    <p className="text-sm text-slate-500 mt-3 font-medium">{modalMessage}</p>
+                  </div>
+                  <div className="w-full bg-slate-100 rounded-full h-1.5 overflow-hidden">
+                    <motion.div
+                      initial={{ width: '0%' }}
+                      animate={{ width: '90%' }}
+                      transition={{ duration: 3, ease: 'easeOut' }}
+                      className="bg-primary h-full rounded-full"
+                    />
+                  </div>
+                </div>
+              )}
+
+              {modalState === 'success' && (
+                <div className="space-y-6 py-4">
+                  <div className="relative flex justify-center">
+                    <motion.div
+                      initial={{ scale: 0 }}
+                      animate={{ scale: 1 }}
+                      transition={{ type: 'spring', damping: 15 }}
+                      className="w-16 h-16 rounded-full bg-emerald-50 border border-emerald-200 flex items-center justify-center text-emerald-500 z-10 shadow-sm"
+                    >
+                      <Check size={32} strokeWidth={3} />
+                    </motion.div>
+                  </div>
+                  <div>
+                    <h3 className="text-lg font-bold text-slate-800">{modalTitle}</h3>
+                    <p className="text-sm text-slate-500 mt-1.5 font-medium">{modalMessage}</p>
+                  </div>
+                  <button
+                    onClick={() => setModalState(null)}
+                    className="w-full py-3 bg-emerald-500 hover:bg-emerald-600 active:scale-[0.98] border-none text-white rounded-xl text-xs font-bold transition-all shadow-md shadow-emerald-500/10 cursor-pointer"
+                  >
+                    Done
+                  </button>
+                </div>
+              )}
+
+              {modalState === 'warning' && (
+                <div className="space-y-6 py-4">
+                  <div className="relative flex justify-center">
+                    <motion.div
+                      initial={{ scale: 0 }}
+                      animate={{ scale: 1 }}
+                      transition={{ type: 'spring', damping: 15 }}
+                      className="w-16 h-16 rounded-full bg-amber-50 border border-amber-200 flex items-center justify-center text-amber-500 z-10 shadow-sm"
+                    >
+                      <AlertCircle size={32} />
+                    </motion.div>
+                  </div>
+                  <div>
+                    <h3 className="text-lg font-bold text-slate-800">{modalTitle}</h3>
+                    <p className="text-sm text-slate-500 mt-1.5 font-medium">{modalMessage}</p>
+                  </div>
+                  <button
+                    onClick={() => setModalState(null)}
+                    className="w-full py-3 bg-amber-500 hover:bg-amber-600 active:scale-[0.98] border-none text-white rounded-xl text-xs font-bold transition-all shadow-md shadow-amber-500/10 cursor-pointer"
+                  >
+                    Ok
+                  </button>
+                </div>
+              )}
+
+              {modalState === 'error' && (
+                <div className="space-y-6 py-4">
+                  <div className="relative flex justify-center">
+                    <motion.div
+                      initial={{ scale: 0 }}
+                      animate={{ scale: 1 }}
+                      transition={{ type: 'spring', damping: 15 }}
+                      className="w-16 h-16 rounded-full bg-rose-50 border border-rose-200 flex items-center justify-center text-rose-500 z-10 shadow-sm"
+                    >
+                      <AlertCircle size={32} />
+                    </motion.div>
+                  </div>
+                  <div>
+                    <h3 className="text-lg font-bold text-slate-800">{modalTitle}</h3>
+                    <p className="text-sm text-rose-500/90 mt-2 bg-rose-50/50 border border-rose-100/50 px-3 py-2.5 rounded-xl font-medium text-left text-xs break-words">
+                      {modalMessage}
+                    </p>
+                  </div>
+                  <button
+                    onClick={() => setModalState(null)}
+                    className="w-full py-3 bg-rose-500 hover:bg-rose-600 active:scale-[0.98] border-none text-white rounded-xl text-xs font-bold transition-all shadow-md shadow-rose-500/10 cursor-pointer"
+                  >
+                    Close
+                  </button>
+                </div>
+              )}
+            </motion.div>
+          </motion.div>
+        )}
+      </AnimatePresence>
     </div>
   )
 }

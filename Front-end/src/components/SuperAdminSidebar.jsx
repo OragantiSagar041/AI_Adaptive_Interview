@@ -11,6 +11,8 @@ import {
   Users,
   Radio,
   BarChart2,
+  ChevronLeft,
+  ChevronRight,
 } from 'lucide-react'
 
 export default function SuperAdminSidebar({
@@ -18,6 +20,8 @@ export default function SuperAdminSidebar({
   onTabChange,
   onLogout,
   currentAccent,
+  isCollapsed,
+  setIsCollapsed,
 }) {
   const location = useLocation()
 
@@ -38,7 +42,9 @@ export default function SuperAdminSidebar({
 
   return (
     <aside
-      className="text-white p-6 flex flex-col gap-8 sticky top-0 h-screen z-50 shadow-lg shrink-0 w-[260px] overflow-hidden"
+      className={`text-white flex flex-col z-50 shadow-lg shrink-0 overflow-hidden transition-all duration-300 ${
+        isCollapsed ? 'w-[80px] p-4 items-center gap-4 h-screen' : 'w-[260px] p-5 gap-5 h-screen'
+      }`}
       style={{
         background: `
           radial-gradient(circle at 20% 18%, rgba(255, 255, 255, 0.12), transparent 24%),
@@ -47,17 +53,30 @@ export default function SuperAdminSidebar({
         boxShadow: `0 20px 60px rgba(15, 23, 42, 0.12)`
       }}
     >
-      <div className="flex items-center gap-2.5">
-        <div className="w-8 h-8 rounded-lg flex items-center justify-center bg-white text-primary text-sm font-extrabold shadow-sm">
-          <Shield size={16} fill="currentColor" style={{ color: '#4f46e5' }} />
+      <div className={`flex w-full ${isCollapsed ? 'flex-col items-center gap-4' : 'items-center justify-between gap-2.5'}`}>
+        <div className="flex items-center gap-2.5 overflow-hidden">
+          <div className="w-8 h-8 rounded-lg flex items-center justify-center bg-white text-primary text-sm font-extrabold shrink-0 shadow-sm">
+            <Shield size={16} fill="currentColor" style={{ color: '#4f46e5' }} />
+          </div>
+          {!isCollapsed && (
+            <strong className="text-xl font-bold tracking-tight text-white font-title truncate">Hire IQ</strong>
+          )}
         </div>
-        <strong className="text-xl font-bold tracking-tight text-white font-title">Hire IQ</strong>
+        <button
+          onClick={() => setIsCollapsed(!isCollapsed)}
+          className="p-1 rounded-lg hover:bg-white/10 text-white/80 hover:text-white border-none cursor-pointer outline-none transition-colors shrink-0"
+          title={isCollapsed ? "Expand Sidebar" : "Collapse Sidebar"}
+        >
+          {isCollapsed ? <ChevronRight size={18} /> : <ChevronLeft size={18} />}
+        </button>
       </div>
 
-      <nav className="flex flex-col gap-2 flex-grow overflow-y-auto">
-        <div className="text-[0.62rem] font-bold text-white/50 uppercase tracking-widest px-3 mb-1">
-          Super Admin Control
-        </div>
+      <nav className="flex flex-col gap-1.5 flex-grow overflow-y-auto w-full scrollbar-none">
+        {!isCollapsed && (
+          <div className="text-[0.62rem] font-bold text-white/50 uppercase tracking-widest px-3 mb-1">
+            Super Admin Control
+          </div>
+        )}
         {superNavItems.map(({ id, label, icon: Icon }) => {
           const isActive = activeTab === id
 
@@ -65,34 +84,46 @@ export default function SuperAdminSidebar({
             <button
               key={id}
               onClick={() => handleTabClick(id)}
-              className={`w-full text-left flex items-center gap-3 px-4 py-2.5 rounded-lg text-sm font-semibold transition-all border-none outline-none cursor-pointer ${isActive
+              title={isCollapsed ? label : ""}
+              className={`w-full text-left flex items-center rounded-lg text-sm font-semibold transition-all border-none outline-none cursor-pointer ${
+                isCollapsed ? 'justify-center p-2' : 'px-3.5 py-2 gap-3'
+              } ${isActive
                   ? 'bg-white text-indigo-700 shadow-sm'
                   : 'bg-transparent text-white/80 hover:bg-white/10 hover:text-white'
                 }`}
             >
-              <Icon size={16} /> {label}
+              <Icon size={16} className="shrink-0" />
+              {!isCollapsed && <span>{label}</span>}
             </button>
           )
         })}
 
 
-        <div className="border-t border-white/10 my-2" />
+        <div className="border-t border-white/10 my-2 w-full" />
         <button
           onClick={() => handleTabClick('live')}
-          className={`w-full text-left flex items-center gap-3 px-4 py-2.5 rounded-lg text-sm font-semibold transition-all border-none outline-none cursor-pointer ${activeTab === 'live'
+          title={isCollapsed ? "Live Results" : ""}
+          className={`text-left flex items-center rounded-lg text-sm font-semibold transition-all border-none outline-none cursor-pointer ${
+            isCollapsed ? 'justify-center p-2' : 'px-3.5 py-2 gap-3 w-full'
+          } ${activeTab === 'live'
               ? 'bg-white text-indigo-700 shadow-sm'
               : 'bg-transparent text-white/80 hover:bg-white/10 hover:text-white'
             }`}
         >
-          <Radio size={16} /> Live Results
+          <Radio size={16} className="shrink-0" />
+          {!isCollapsed && <span>Live Results</span>}
         </button>
       </nav>
 
       <button
         onClick={onLogout}
-        className="w-full text-left flex items-center gap-3 px-4 py-2.5 rounded-lg font-medium text-sm border border-white/20 hover:bg-white/10 text-white outline-none cursor-pointer transition-all"
+        title={isCollapsed ? "Logout" : ""}
+        className={`text-left flex items-center border border-white/20 hover:bg-white/10 text-white outline-none cursor-pointer transition-all ${
+          isCollapsed ? 'justify-center p-2 rounded-xl' : 'px-3.5 py-2 rounded-lg gap-3 w-full'
+        }`}
       >
-        <LogOut size={16} /> Logout
+        <LogOut size={16} className="shrink-0" />
+        {!isCollapsed && <span>Logout</span>}
       </button>
     </aside>
   )

@@ -13,6 +13,8 @@ import {
   BarChart2,
   Users,
   Coins,
+  ChevronLeft,
+  ChevronRight
 } from 'lucide-react'
 import { logout, loadSuperAdminProfile } from '../../store/slices/authSlice'
 import { persistor } from '../../store/store'
@@ -69,6 +71,7 @@ export default function SuperAdminLayout() {
   // Live Stream WebRTC State
   const [isLiveStreamOpen, setIsLiveStreamOpen] = useState(false)
   const [liveStreamSession, setLiveStreamSession] = useState(null)
+  const [isCollapsed, setIsCollapsed] = useState(false)
 
   const handleOpenLiveStreamAction = (session) => {
     setLiveStreamSession(session)
@@ -260,8 +263,9 @@ export default function SuperAdminLayout() {
 
   return (
     <div
-      className="grid grid-cols-1 md:grid-cols-[260px_1fr] min-h-screen text-[#0f172a]"
+      className="grid grid-cols-1 min-h-screen text-[#0f172a]"
       style={{
+        gridTemplateColumns: isCollapsed ? '80px 1fr' : '260px 1fr',
         background: `
           radial-gradient(circle at 8% 0%, ${accentWashStrong} 0, transparent 34%),
           radial-gradient(circle at 92% 12%, ${accentWash} 0, transparent 30%),
@@ -271,7 +275,9 @@ export default function SuperAdminLayout() {
     >
       {/* Sidebar */}
       <aside
-        className="text-white p-6 flex flex-col gap-8 sticky top-0 h-screen z-50 shadow-lg shrink-0 w-[260px] overflow-hidden"
+        className={`text-white flex flex-col gap-8 sticky top-0 h-screen z-50 shadow-lg shrink-0 overflow-hidden transition-all duration-300 ${
+          isCollapsed ? 'w-[80px] p-4 items-center' : 'w-[260px] p-6'
+        }`}
         style={{
           background: `
             radial-gradient(circle at 20% 18%, rgba(255, 255, 255, 0.12), transparent 24%),
@@ -280,44 +286,65 @@ export default function SuperAdminLayout() {
           boxShadow: `0 20px 60px rgba(15, 23, 42, 0.12)`
         }}
       >
-        <div className="flex items-center gap-2.5">
-          <div className="w-8 h-8 rounded-lg flex items-center justify-center bg-white text-[#4f46e5] text-sm font-extrabold shadow-sm">
-            <Shield size={16} fill="currentColor" />
+        <div className={`flex w-full ${isCollapsed ? 'flex-col items-center gap-4' : 'items-center justify-between gap-2.5'}`}>
+          <div className="flex items-center gap-2.5 overflow-hidden">
+            <div className="w-8 h-8 rounded-lg flex items-center justify-center bg-white text-[#4f46e5] text-sm font-extrabold shrink-0 shadow-sm">
+              <Shield size={16} fill="currentColor" />
+            </div>
+            {!isCollapsed && (
+              <strong className="text-xl font-bold tracking-tight text-white font-title truncate">Hire IQ</strong>
+            )}
           </div>
-          <strong className="text-xl font-bold tracking-tight text-white font-title">Hire IQ</strong>
+          <button
+            onClick={() => setIsCollapsed(!isCollapsed)}
+            className="p-1 rounded-lg hover:bg-white/10 text-white/80 hover:text-white border-none cursor-pointer outline-none transition-colors shrink-0"
+            title={isCollapsed ? "Expand Sidebar" : "Collapse Sidebar"}
+          >
+            {isCollapsed ? <ChevronRight size={18} /> : <ChevronLeft size={18} />}
+          </button>
         </div>
 
-        <nav className="flex flex-col gap-2 flex-grow overflow-y-auto scrollbar-none">
-          <div className="text-[0.62rem] font-bold text-white/50 uppercase tracking-widest px-3 mb-1">
-            SuperAdmin Control ({role})
-          </div>
+        <nav className="flex flex-col gap-2 flex-grow overflow-y-auto scrollbar-none w-full">
+          {!isCollapsed && (
+            <div className="text-[0.62rem] font-bold text-white/50 uppercase tracking-widest px-3 mb-1">
+              SuperAdmin Control ({role})
+            </div>
+          )}
           {navItems.map(({ id, label, icon: Icon, path }) => (
             <NavLink
               key={id}
               to={path}
+              title={isCollapsed ? label : ""}
               className={({ isActive }) =>
-                `w-full text-left flex items-center gap-3 px-4 py-2.5 rounded-lg text-sm font-semibold transition-all border-none outline-none cursor-pointer no-underline ${isActive && !liveResultsModalOpen && !showCreditsModal
+                `w-full text-left flex items-center rounded-lg text-sm font-semibold transition-all border-none outline-none cursor-pointer no-underline ${
+                  isCollapsed ? 'justify-center p-2.5' : 'px-4 py-2.5 gap-3'
+                } ${isActive && !liveResultsModalOpen && !showCreditsModal
                   ? 'bg-white text-indigo-700 shadow-sm'
                   : 'bg-transparent text-white/80 hover:bg-white/10 hover:text-white'
                 }`
               }
             >
-              <Icon size={16} /> {label}
+              <Icon size={16} className="shrink-0" />
+              {!isCollapsed && <span>{label}</span>}
             </NavLink>
           ))}
 
-          <div className="border-t border-white/10 my-2" />
+          <div className="border-t border-white/10 my-2 w-full" />
           <button
             onClick={() => {
               dispatch(setLiveResultsModalOpen(true))
               setShowCreditsModal(false)
             }}
-            className={`w-full text-left flex items-center gap-3 px-4 py-2.5 rounded-lg text-sm font-semibold transition-all border-none outline-none cursor-pointer ${liveResultsModalOpen && !showCreditsModal
+            title={isCollapsed ? "Live Results" : ""}
+            className={`text-left flex items-center rounded-lg text-sm font-semibold transition-all border-none outline-none cursor-pointer ${
+              isCollapsed ? 'justify-center p-2.5' : 'px-4 py-2.5 gap-3 w-full'
+            } ${liveResultsModalOpen && !showCreditsModal
                 ? 'bg-white text-indigo-700 shadow-sm'
                 : 'bg-transparent text-white/80 hover:bg-white/10 hover:text-white'
               }`}
           >
-            <Radio size={16} /> Live Results
+            <Radio size={16} className="shrink-0" />
+            {!isCollapsed && <span>Live Results</span>}
           </button>
 
           <button
@@ -325,20 +352,28 @@ export default function SuperAdminLayout() {
               dispatch(setLiveResultsModalOpen(false))
               setShowCreditsModal(true)
             }}
-            className={`w-full text-left flex items-center gap-3 px-4 py-2.5 rounded-lg text-sm font-semibold transition-all border-none outline-none cursor-pointer ${showCreditsModal
+            title={isCollapsed ? "Available Credits" : ""}
+            className={`text-left flex items-center rounded-lg text-sm font-semibold transition-all border-none outline-none cursor-pointer ${
+              isCollapsed ? 'justify-center p-2.5' : 'px-4 py-2.5 gap-3 w-full'
+            } ${showCreditsModal
                 ? 'bg-white text-indigo-700 shadow-sm'
                 : 'bg-transparent text-white/80 hover:bg-white/10 hover:text-white'
               }`}
           >
-            <Coins size={16} /> Available Credits
+            <Coins size={16} className="shrink-0" />
+            {!isCollapsed && <span>Available Credits</span>}
           </button>
         </nav>
 
         <button
           onClick={handleLogout}
-          className="w-full text-left flex items-center gap-3 px-4 py-2.5 rounded-lg font-medium text-sm border border-white/20 hover:bg-white/10 text-white outline-none cursor-pointer transition-all"
+          title={isCollapsed ? "Logout" : ""}
+          className={`text-left flex items-center border border-white/20 hover:bg-white/10 text-white outline-none cursor-pointer transition-all ${
+            isCollapsed ? 'justify-center p-2.5 rounded-xl' : 'px-4 py-2.5 rounded-lg gap-3 w-full'
+          }`}
         >
-          <LogOut size={16} /> Logout
+          <LogOut size={16} className="shrink-0" />
+          {!isCollapsed && <span>Logout</span>}
         </button>
       </aside>
 

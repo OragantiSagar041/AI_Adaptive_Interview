@@ -219,8 +219,8 @@ export default function Subscribers() {
   return (
     <div className="space-y-6 max-w-6xl">
       {/* Filters bar */}
-      <div className="bg-white border border-slate-200/60 p-6 rounded-2xl shadow-[0_4px_20px_rgba(0,0,0,0.04)] flex flex-wrap gap-4 items-end">
-        <div className="flex-1 min-w-[220px]">
+      <div className="bg-white border border-slate-200/60 p-4 sm:p-6 rounded-2xl shadow-[0_4px_20px_rgba(0,0,0,0.04)] grid grid-cols-2 sm:flex sm:flex-wrap gap-4 items-end">
+        <div className="col-span-2 sm:flex-1 sm:min-w-[220px]">
           <label className="text-[0.62rem] font-bold text-slate-400 uppercase tracking-widest block mb-2">Search Subscribers</label>
           <div className="relative">
             <span className="absolute left-3.5 top-1/2 -translate-y-1/2 text-slate-400">
@@ -231,17 +231,18 @@ export default function Subscribers() {
               value={search}
               onChange={(e) => setSearch(e.target.value)}
               placeholder="Search company or email..."
-              className="w-full pl-10 pr-4 py-2.5 rounded-xl border border-slate-200 bg-slate-50 text-sm text-slate-800 placeholder-slate-400 outline-none focus:border-indigo-500"
+              style={{ paddingLeft: '2.75rem' }}
+              className="w-full pr-4 py-2.5 rounded-xl border border-slate-200 bg-slate-50 text-sm text-slate-800 placeholder-slate-400 outline-none focus:border-indigo-500"
             />
           </div>
         </div>
 
-        <div>
+        <div className="col-span-1 sm:w-auto">
           <label className="text-[0.62rem] font-bold text-slate-400 uppercase tracking-widest block mb-2">Plan</label>
           <select
             value={planFilter}
             onChange={(e) => setPlanFilter(e.target.value)}
-            className="py-2.5 px-4 rounded-xl border border-slate-200 bg-slate-50 text-sm text-slate-800 outline-none focus:border-indigo-500 cursor-pointer min-w-[140px]"
+            className="w-full sm:min-w-[140px] py-2.5 px-4 rounded-xl border border-slate-200 bg-slate-50 text-sm text-slate-800 outline-none focus:border-indigo-500 cursor-pointer"
           >
             <option value="all">All Plans</option>
             <option value="trial">Free Trial</option>
@@ -250,12 +251,12 @@ export default function Subscribers() {
           </select>
         </div>
 
-        <div>
+        <div className="col-span-1 sm:w-auto">
           <label className="text-[0.62rem] font-bold text-slate-400 uppercase tracking-widest block mb-2">Status</label>
           <select
             value={statusFilter}
             onChange={(e) => setStatusFilter(e.target.value)}
-            className="py-2.5 px-4 rounded-xl border border-slate-200 bg-slate-50 text-sm text-slate-800 outline-none focus:border-indigo-500 cursor-pointer min-w-[140px]"
+            className="w-full sm:min-w-[140px] py-2.5 px-4 rounded-xl border border-slate-200 bg-slate-50 text-sm text-slate-800 outline-none focus:border-indigo-500 cursor-pointer"
           >
             <option value="all">All Statuses</option>
             <option value="active">Active</option>
@@ -263,15 +264,15 @@ export default function Subscribers() {
           </select>
         </div>
 
-        <div>
+        <div className="col-span-2 sm:col-span-1 sm:w-auto">
           <label className="text-[0.62rem] font-bold text-slate-400 uppercase tracking-widest block mb-2">Sort By</label>
           <select
             value={sortBy}
             onChange={(e) => setSortBy(e.target.value)}
-            className="py-2.5 px-4 rounded-xl border border-slate-200 bg-slate-50 text-sm text-slate-800 outline-none focus:border-indigo-500 cursor-pointer min-w-[140px]"
+            className="w-full sm:min-w-[140px] py-2.5 px-4 rounded-xl border border-slate-200 bg-slate-50 text-sm text-slate-800 outline-none focus:border-indigo-500 cursor-pointer"
           >
             <option value="name">Company Name</option>
-            <option value="date">Date Provisioned</option>
+            <option value="date">Date Registered</option>
           </select>
         </div>
 
@@ -282,10 +283,11 @@ export default function Subscribers() {
             setStatusFilter('all')
             setSortBy('name')
           }}
-          className="py-2.5 px-3.5 rounded-xl border border-red-500/20 bg-red-50 text-red-500 hover:bg-red-500 hover:text-white cursor-pointer transition-colors"
+          className="col-span-2 sm:w-auto py-2.5 px-4 rounded-xl border border-rose-200 bg-rose-50/50 hover:bg-rose-100/70 text-rose-600 hover:text-rose-700 cursor-pointer font-semibold text-sm transition-all flex items-center justify-center gap-2"
           title="Reset Filters"
         >
-          <X size={16} />
+          <X size={16} strokeWidth={2.5} />
+          <span>Reset Filters</span>
         </button>
       </div>
 
@@ -440,18 +442,18 @@ export default function Subscribers() {
               <span className="text-[10px] text-slate-400 block -mt-2">Leave as 0 to maintain current values.</span>
             </div>
 
-            <div className="flex gap-3 pt-3 border-t border-slate-200">
+            <div className="flex flex-col-reverse sm:flex-row gap-3 pt-3 border-t border-slate-200">
               <button
                 type="button"
                 onClick={() => setIsUpdateModalOpen(false)}
-                className="flex-1 py-2.5 rounded-xl bg-transparent border border-slate-200 text-slate-500 hover:bg-slate-50 cursor-pointer transition-colors"
+                className="w-full sm:flex-1 py-2.5 rounded-xl bg-transparent border border-slate-200 text-slate-500 hover:bg-slate-50 cursor-pointer transition-colors"
               >
                 Cancel
               </button>
               <button
                 type="submit"
                 disabled={updateLoading}
-                className="flex-1 py-2.5 rounded-xl bg-indigo-600 hover:bg-indigo-500 border-none text-white font-bold cursor-pointer disabled:opacity-50 transition-colors"
+                className="w-full sm:flex-1 py-2.5 rounded-xl bg-indigo-600 hover:bg-indigo-500 border-none text-white font-bold cursor-pointer disabled:opacity-50 transition-colors"
               >
                 {updateLoading ? 'Saving...' : 'Update Plan'}
               </button>

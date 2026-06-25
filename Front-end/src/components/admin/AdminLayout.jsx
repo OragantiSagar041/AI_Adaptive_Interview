@@ -1,4 +1,4 @@
-import React from 'react'
+import React, { useState } from 'react'
 import Sidebar from '../Sidebar'
 import SuperAdminSidebar from '../SuperAdminSidebar'
 import Navbar from '../Navbar'
@@ -30,12 +30,14 @@ export default function AdminLayout({
   const accentPage = hexToRgba(currentAccent.primary, 0.12)
   const accentPageStrong = hexToRgba(currentAccent.primary, 0.20)
 
+  const [isCollapsed, setIsCollapsed] = useState(false)
   const SidebarComponent = role === 'superadmin' ? SuperAdminSidebar : Sidebar;
 
   return (
     <div
-      className="grid grid-cols-1 md:grid-cols-[260px_1fr] min-h-screen text-[#0f172a]"
+      className="grid grid-cols-1 min-h-screen text-[#0f172a]"
       style={{
+        gridTemplateColumns: isCollapsed ? '80px 1fr' : '260px 1fr',
         background: `
           radial-gradient(circle at 8% 0%, ${accentWashStrong} 0, transparent 34%),
           radial-gradient(circle at 92% 12%, ${accentWash} 0, transparent 30%),
@@ -48,6 +50,8 @@ export default function AdminLayout({
         currentAccent={currentAccent}
         onLogout={onLogout}
         onTabChange={onTabChange}
+        isCollapsed={isCollapsed}
+        setIsCollapsed={setIsCollapsed}
       />
 
       <div className="flex flex-col min-w-0">

@@ -390,6 +390,19 @@ export const updateAdminProfile = async (data) => {
   }
 };
 
+export const uploadProfileImage = async (formData) => {
+  try {
+    const response = await api.post("/master/profile/image", formData, {
+      headers: {
+        "Content-Type": "multipart/form-data",
+      },
+    });
+    return response.data;
+  } catch (error) {
+    throw error.response?.data?.detail || error.response?.data?.message || "Failed to upload profile image";
+  }
+};
+
 export const getDashboardStats = async (params) => {
   try {
     const response = await api.get("/admin/dashboard-stats", { params });
