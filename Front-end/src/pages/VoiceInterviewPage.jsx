@@ -122,6 +122,11 @@ export default function VoiceInterviewPage() {
   const recordedChunksRef = useRef([])
   const [isRecording, setIsRecording] = useState(false)
 
+  // Camera recording
+  const cameraRecorderRef = useRef(null)
+  const cameraStreamRef   = useRef(null)
+  const cameraChunksRef   = useRef([])
+
   // Initialize WebRTC
   const telemetryData = {
     round,
@@ -270,45 +275,65 @@ export default function VoiceInterviewPage() {
     if (q?.text) typewrite(q.text)
   }, [currentQIdx, questions]) // eslint-disable-line
 
-  // ── Screen Recording ──────────────────────────────────────────────────────
+  // ── Screen & Camera Recording ───────────────────────────────────────────────
   const startScreenRecording = useCallback(async () => {
     try {
       // Force fullscreen mode
       if (document.documentElement.requestFullscreen) {
         await document.documentElement.requestFullscreen().catch(() => {})
       }
-      const stream = await navigator.mediaDevices.getDisplayMedia({
+      
+      // 1. Get Screen Stream
+      const screenStream = await navigator.mediaDevices.getDisplayMedia({
         video: { displaySurface: 'monitor', frameRate: 15, width: { ideal: 1280 }, height: { ideal: 720 } },
         audio: true
       })
-      // Also capture mic audio and mix in
+      
+      // 2. Get Camera & Mic Stream
+      let micStream = null
       try {
-        const micStream = await navigator.mediaDevices.getUserMedia({ audio: true })
+        micStream = await navigator.mediaDevices.getUserMedia({ video: true, audio: true })
+        cameraStreamRef.current = micStream
+        
+        // Start Camera Recorder
+        const cameraMr = new MediaRecorder(micStream, { mimeType: 'video/webm' })
+        cameraChunksRef.current = []
+        cameraMr.ondataavailable = e => { if (e.data.size > 0) cameraChunksRef.current.push(e.data) }
+        cameraMr.start(5000)
+        cameraRecorderRef.current = cameraMr
+      } catch (err) {
+        console.warn("Could not get camera/mic stream for recording:", err)
+      }
+
+      // 3. Mix audio for Screen Recording (so screen has mic audio too)
+      if (micStream) {
         const ctx = new AudioContext()
         const dest = ctx.createMediaStreamDestination()
         micStream.getAudioTracks().forEach(t => {
           const src = ctx.createMediaStreamSource(new MediaStream([t]))
           src.connect(dest)
         })
-        stream.getAudioTracks().forEach(t => {
+        screenStream.getAudioTracks().forEach(t => {
           const src = ctx.createMediaStreamSource(new MediaStream([t]))
           src.connect(dest)
         })
-        const combined = new MediaStream([...stream.getVideoTracks(), ...dest.stream.getAudioTracks()])
-        mediaStreamRef.current = combined
-        const mr = new MediaRecorder(combined, { mimeType: 'video/webm;codecs=vp8,opus' })
+        const combinedScreen = new MediaStream([...screenStream.getVideoTracks(), ...dest.stream.getAudioTracks()])
+        mediaStreamRef.current = combinedScreen
+        
+        const mr = new MediaRecorder(combinedScreen, { mimeType: 'video/webm;codecs=vp8,opus' })
         recordedChunksRef.current = []
         mr.ondataavailable = e => { if (e.data.size > 0) recordedChunksRef.current.push(e.data) }
         mr.start(5000)
         mediaRecorderRef.current = mr
-      } catch {
-        mediaStreamRef.current = stream
-        const mr = new MediaRecorder(stream, { mimeType: 'video/webm' })
+      } else {
+        mediaStreamRef.current = screenStream
+        const mr = new MediaRecorder(screenStream, { mimeType: 'video/webm' })
         recordedChunksRef.current = []
         mr.ondataavailable = e => { if (e.data.size > 0) recordedChunksRef.current.push(e.data) }
         mr.start(5000)
         mediaRecorderRef.current = mr
       }
+      
       setIsRecording(true)
     } catch (e) {
       console.warn('Screen recording not available or denied:', e)
@@ -316,28 +341,66 @@ export default function VoiceInterviewPage() {
   }, [])
 
   const stopAndUploadRecording = useCallback(async (iid) => {
-    const mr = mediaRecorderRef.current
-    if (!mr || mr.state === 'inactive') return
-    return new Promise(resolve => {
-      mr.onstop = async () => {
-        setIsRecording(false)
-        const blob = new Blob(recordedChunksRef.current, { type: 'video/webm' })
-        if (blob.size < 1000) { resolve(); return } // empty — skip
-        const fd = new FormData()
-        fd.append('interview_id', iid)
-        fd.append('link_id', linkId || '')
-        fd.append('recording_type', 'screen')
-        fd.append('file', blob, 'screen_recording.webm')
-        try {
-          await fetch(`${API_BASE_URL}/upload-full-recording`, { method: 'POST', body: fd })
-          console.log('Screen recording uploaded to Cloudinary')
-        } catch (e) {
-          console.warn('Upload failed:', e)
+    const screenMr = mediaRecorderRef.current
+    const cameraMr = cameraRecorderRef.current
+    
+    setIsRecording(false)
+
+    const uploads = []
+
+    // 1. Upload Screen Recording
+    if (screenMr && screenMr.state !== 'inactive') {
+      const screenPromise = new Promise(resolve => {
+        screenMr.onstop = async () => {
+          const blob = new Blob(recordedChunksRef.current, { type: 'video/webm' })
+          if (blob.size >= 1000) {
+            const fd = new FormData()
+            fd.append('interview_id', iid)
+            fd.append('link_id', linkId || '')
+            fd.append('recording_type', 'screen')
+            fd.append('file', blob, 'screen_recording.webm')
+            try {
+              await fetch(`${API_BASE_URL}/upload-full-recording`, { method: 'POST', body: fd })
+              console.log('Screen recording uploaded to Cloudinary')
+            } catch (e) {
+              console.warn('Screen upload failed:', e)
+            }
+          }
+          resolve()
         }
-        resolve()
-      }
-      mr.stop()
-    })
+        screenMr.stop()
+        mediaStreamRef.current?.getTracks().forEach(t => t.stop())
+      })
+      uploads.push(screenPromise)
+    }
+
+    // 2. Upload Camera Recording
+    if (cameraMr && cameraMr.state !== 'inactive') {
+      const cameraPromise = new Promise(resolve => {
+        cameraMr.onstop = async () => {
+          const blob = new Blob(cameraChunksRef.current, { type: 'video/webm' })
+          if (blob.size >= 1000) {
+            const fd = new FormData()
+            fd.append('interview_id', iid)
+            fd.append('link_id', linkId || '')
+            fd.append('recording_type', 'camera')
+            fd.append('file', blob, 'camera_recording.webm')
+            try {
+              await fetch(`${API_BASE_URL}/upload-full-recording`, { method: 'POST', body: fd })
+              console.log('Camera recording uploaded to Cloudinary')
+            } catch (e) {
+              console.warn('Camera upload failed:', e)
+            }
+          }
+          resolve()
+        }
+        cameraMr.stop()
+        cameraStreamRef.current?.getTracks().forEach(t => t.stop())
+      })
+      uploads.push(cameraPromise)
+    }
+
+    await Promise.all(uploads)
   }, [linkId])
 
   // ── STT ───────────────────────────────────────────────────────────────────

@@ -69,6 +69,10 @@ function RegisterPage() {
     if (name === 'phone') {
       const cleaned = value.replace(/\D/g, '').slice(0, 10)
       setForm(prev => ({ ...prev, [name]: cleaned }))
+    } else if (name === 'name') {
+      // Prevent numbers in full name
+      const cleaned = value.replace(/[\d]/g, '')
+      setForm(prev => ({ ...prev, [name]: cleaned }))
     } else {
       setForm(prev => ({ ...prev, [name]: value }))
     }

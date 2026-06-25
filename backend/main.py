@@ -3416,6 +3416,15 @@ def get_current_admin_details(credentials: HTTPAuthorizationCredentials = Depend
 def get_current_admin(details: dict = Depends(get_current_admin_details)):
     return details["admin_id"]
 
+def require_role(*allowed_roles):
+    """Create a dependency that enforces role-based access. Master role always has access."""
+    def checker(current_admin: dict = Depends(get_current_admin_details)):
+        role = current_admin.get("role", "")
+        if role not in allowed_roles and role != "master":
+            raise HTTPException(status_code=403, detail=f"Access denied. Required role: {', '.join(allowed_roles)}")
+        return current_admin
+    return checker
+
 
 EMAIL_SCHEDULER_STARTED = False
 JOB_DESCRIPTION_PDF_THRESHOLD = 900
@@ -3779,7 +3788,7 @@ class EmailPreviewRequest(BaseModel):
     scheduled_end: str = ""
 
 @app.post("/admin/preview-email")
-def preview_email(data: EmailPreviewRequest):
+def preview_email(data: EmailPreviewRequest, current_admin: dict = Depends(require_role("admin", "super_admin"))):
     """Return the default email HTML for admin to edit before sending."""
     return {
         "html": build_default_interview_email_html(
@@ -4336,16 +4345,6 @@ async def update_profile(data: UpdateProfileRequest, current_admin: str = Depend
         if data.company_name:
             update_fields["company_name"] = data.company_name
             
-        if data.new_password:
-            if not data.old_password:
-                raise HTTPException(status_code=400, detail="Old password is required to set a new password")
-                
-            hashed_old = hash_password(data.old_password)
-            if admin.get("password") != hashed_old:
-                raise HTTPException(status_code=401, detail="Incorrect old password")
-                
-            update_fields["password"] = hash_password(data.new_password)
-            
         if not update_fields:
             return {"status": "success", "message": "No changes made."}
             
@@ -4880,10 +4879,13 @@ async def get_all_sessions(
     return {"status": "success", "sessions": sessions}
 
 @app.delete("/admin/sessions/{link_id}")
-async def delete_session(link_id: str):
+async def delete_session(link_id: str, current_admin: dict = Depends(require_role("admin", "super_admin"))):
     row = interview_sessions_collection.find_one({"link_id": link_id})
     if not row:
         raise HTTPException(status_code=404, detail="Session not found")
+        
+    if current_admin.get("role") != "master" and row.get("company_id") != current_admin.get("company_id"):
+        raise HTTPException(status_code=403, detail="Access denied")
         
     # Delete from interview tracking
     interview_id = row.get("interview_id")
@@ -4899,21 +4901,34 @@ async def delete_session(link_id: str):
     return {"status": "success", "message": "Session deleted"}
 
 @app.post("/admin/sessions/{link_id}/deactivate")
-async def deactivate_session(link_id: str):
-    result = interview_sessions_collection.update_one({"link_id": link_id}, {"$set": {"is_deactivated": True}})
-    if result.matched_count == 0:
+async def deactivate_session(link_id: str, current_admin: dict = Depends(require_role("admin", "super_admin"))):
+    row = interview_sessions_collection.find_one({"link_id": link_id})
+    if not row:
         raise HTTPException(status_code=404, detail="Session not found")
+    if current_admin.get("role") != "master" and row.get("company_id") != current_admin.get("company_id"):
+        raise HTTPException(status_code=403, detail="Access denied")
+        
+    interview_sessions_collection.update_one({"link_id": link_id}, {"$set": {"is_deactivated": True}})
     return {"status": "success"}
 
 @app.post("/admin/sessions/{link_id}/activate")
-async def activate_session(link_id: str):
-    result = interview_sessions_collection.update_one({"link_id": link_id}, {"$set": {"is_deactivated": False}})
-    if result.matched_count == 0:
+async def activate_session(link_id: str, current_admin: dict = Depends(require_role("admin", "super_admin"))):
+    row = interview_sessions_collection.find_one({"link_id": link_id})
+    if not row:
         raise HTTPException(status_code=404, detail="Session not found")
+    if current_admin.get("role") != "master" and row.get("company_id") != current_admin.get("company_id"):
+        raise HTTPException(status_code=403, detail="Access denied")
+        
+    interview_sessions_collection.update_one({"link_id": link_id}, {"$set": {"is_deactivated": False}})
     return {"status": "success"}
 
 @app.post("/admin/sessions/{link_id}/reschedule")
-async def reschedule_session(link_id: str, new_expiry: str = Form(...)):
+async def reschedule_session(link_id: str, new_expiry: str = Form(...), current_admin: dict = Depends(require_role("admin", "super_admin"))):
+    row = interview_sessions_collection.find_one({"link_id": link_id})
+    if not row:
+        raise HTTPException(status_code=404, detail="Session not found")
+    if current_admin.get("role") != "master" and row.get("company_id") != current_admin.get("company_id"):
+        raise HTTPException(status_code=403, detail="Access denied")
     """
     Reschedule an interview by updating its expires_at date 
     and resetting its status to pending (if it was expired).
@@ -5240,7 +5255,7 @@ async def log_violation(interview_id: str, violation: ViolationRequest):
 
 @app.post("/admin/update-decision")
 @app.post("/admin/update_decision")
-async def update_decision(data: DecisionRequest):
+async def update_decision(data: DecisionRequest, current_admin: dict = Depends(require_role("admin", "super_admin"))):
     print(f" Decision Update Request: link_id={data.link_id}, decision={data.decision}")
     try:
         # 1. Fetch candidate details for email
@@ -5248,6 +5263,9 @@ async def update_decision(data: DecisionRequest):
         if not row:
             print(f" Session NOT found for link_id: {data.link_id}")
             raise HTTPException(status_code=404, detail="Session not found")
+        
+        if current_admin.get("role") != "master" and row.get("company_id") != current_admin.get("company_id"):
+            raise HTTPException(status_code=403, detail="Access denied")
         
         name = row.get("candidate_name")
         email = row.get("candidate_email")
@@ -6264,8 +6282,6 @@ async def upsert_plan(data: PlanUpdate, master_id: str = Depends(get_current_adm
         raise HTTPException(status_code=401, detail="Unauthorized")
     
     existing = plans_collection.find_one({"plan_name": data.plan_name})
-    if existing and existing.get("is_owner_plan"):
-        raise HTTPException(status_code=403, detail="Owner plan cannot be modified")
     
     plans_collection.update_one(
         {"plan_name": data.plan_name},
