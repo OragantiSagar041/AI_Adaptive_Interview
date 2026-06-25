@@ -212,11 +212,14 @@ export function CandidateTable({
                       <Badge variant={computedStatus} text={computedStatus === 'expired' ? 'NOT ATTENDED' : computedStatus} />
                     </td>
                     <td className="px-4 py-3.5 text-sm">
-                      {computedStatus === 'completed' && c.score != null ? (
-                        <strong className={Number(c.score) >= 60 ? 'text-success' : 'text-rose-500'}>
-                          {Number(c.score).toFixed(1)}/100
-                        </strong>
-                      ) : '-'}
+                      {(() => {
+                        const score = c.score ?? c.avg_score
+                        return computedStatus === 'completed' && score != null ? (
+                          <strong className={Number(score) >= 60 ? 'text-success' : 'text-rose-500'}>
+                            {Number(score).toFixed(1)}/100
+                          </strong>
+                        ) : '-'
+                      })()}
                     </td>
                     <td className="px-4 py-3.5 text-sm text-right pr-6">
                       <div className="inline-flex items-center gap-2">

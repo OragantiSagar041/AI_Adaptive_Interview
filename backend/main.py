@@ -4717,7 +4717,8 @@ async def get_session(link_id: str):
             "scheduled_end": scheduled_end,
             "record_video": row.get("record_video", True),
             "is_deactivated": row.get("is_deactivated", False),
-            "language": row.get("language", "English")
+            "language": row.get("language", "English"),
+            "interview_type": row.get("interview_type", "Technical")
         }
     else:
         raise HTTPException(status_code=404, detail="Session not found")
@@ -7028,7 +7029,11 @@ def get_dashboard_aggregated_data(admin_id: Optional[str] = None, current_admin:
         for s in sessions_cursor:
             s["id"] = str(s["_id"])
             s["_id"] = str(s["_id"])
+            # Normalize: frontend expects 'score', backend stores 'avg_score'
+            if s.get("score") is None and s.get("avg_score") is not None:
+                s["score"] = s["avg_score"]
             candidates_list.append(s)
+
             
         live_sessions = []
         ongoing_monitored_count = 0
@@ -7272,6 +7277,8 @@ def get_superadmin_profile(current_admin: dict = Depends(get_current_admin_detai
         company = companies_collection.find_one({"_id": ObjectId(admin_doc["company_id"])})
         if company:
             admin_doc["company_name"] = company.get("name", "")
+            if "credits" in company:
+                admin_doc["credits"] = company["credits"]
     return admin_doc
 
 @app.delete("/api/superadmin/candidates/bulk")
@@ -7294,6 +7301,22 @@ def superadmin_patch_credit_request(request_id: str, data: UpdateCreditRequestSc
     if current_admin.get("role") not in ["super_admin", "master"]:
         raise HTTPException(status_code=403, detail="Super Admin access required")
     return update_credit_request_alias(request_id, data, current_admin)
+
+@app.get("/api/superadmin/interview/{link_id}")
+@app.get("/superadmin/interview/{link_id}")
+def superadmin_get_interview_details(link_id: str, current_admin: dict = Depends(get_current_admin_details)):
+    """SuperAdmin alias for the interview detail endpoint — can access any session across all admins"""
+    if current_admin.get("role") not in ["super_admin", "master"]:
+        raise HTTPException(status_code=403, detail="Super Admin access required")
+    # Verify the session belongs to this super admin's company
+    session = interview_sessions_collection.find_one({"link_id": link_id})
+    if not session:
+        raise HTTPException(status_code=404, detail="Session not found")
+    company_id = current_admin.get("company_id")
+    if company_id and session.get("company_id") and session.get("company_id") != company_id:
+        raise HTTPException(status_code=403, detail="Access denied to this session")
+    # Reuse the existing admin endpoint logic
+    return get_interview_details(link_id)
 
 
 # -------------------------------------------------------------------------------------
@@ -7327,8 +7350,8 @@ async def generate_tts(req: TTSRequest):
         raise HTTPException(status_code=500, detail=str(e))
 
 @app.post("/stt")
-async def stt_endpoint(file: UploadFile = File(...)):
-    """Transcribe audio via Groq Whisper for flawless recognition"""
+async def stt_endpoint(file: UploadFile = File(...), language: Optional[str] = None):
+    """Transcribe audio via Groq Whisper with optimized Indian English accent support"""
     try:
         audio_content = await file.read()
         
@@ -7337,9 +7360,15 @@ async def stt_endpoint(file: UploadFile = File(...)):
             f.write(audio_content)
             
         with open(temp_filename, "rb") as f:
+            # Use whisper-large-v3-turbo for better accuracy with Indian accents.
+            # Pass initial_prompt to prime the model with Indian English context which
+            # dramatically reduces hallucinations and accent-related transcription errors.
             transcript = await groq_client.audio.transcriptions.create(
-                model="whisper-large-v3",
-                file=f
+                model="whisper-large-v3-turbo",
+                file=f,
+                language=language or "en",
+                prompt="The speaker has an Indian English accent. Transcribe technical terms, programming concepts, and software engineering terminology accurately.",
+                temperature=0.0,  # Lower temperature = more deterministic, fewer hallucinations
             )
         os.remove(temp_filename)
         

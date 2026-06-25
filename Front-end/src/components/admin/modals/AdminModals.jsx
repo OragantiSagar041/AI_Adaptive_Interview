@@ -75,15 +75,25 @@ export function CandidateScorecardModal({
             <div className="bg-white border border-slate-200 shadow-sm rounded-xl p-5">
               <span className="text-[0.68rem] text-slate-400 font-bold uppercase tracking-wider block mb-2">Average Score</span>
               <div className="flex items-baseline gap-1">
-                <span className="text-4xl font-black text-[#f43f5e] tracking-tight">{selectedCandidate?.score != null ? Number(selectedCandidate.score).toFixed(1) : '--'}</span>
-                <span className="text-sm font-bold text-[#f43f5e]">/100</span>
+                {(() => {
+                  const s = selectedCandidate?.score ?? selectedCandidate?.avg_score ?? candidateDetail?.avg_score
+                  return <>
+                    <span className="text-4xl font-black text-[#f43f5e] tracking-tight">{s != null ? Number(s).toFixed(1) : '--'}</span>
+                    <span className="text-sm font-bold text-[#f43f5e]">/100</span>
+                  </>
+                })()}
               </div>
             </div>
             <div className="bg-white border border-slate-200 shadow-sm rounded-xl p-5">
               <span className="text-[0.68rem] text-slate-400 font-bold uppercase tracking-wider block mb-2">Communication Score</span>
               <div className="flex items-baseline gap-1">
-                <span className="text-4xl font-black text-[#10b981] tracking-tight">{selectedCandidate?.score != null ? Math.floor(selectedCandidate.score) : '--'}</span>
-                <span className="text-sm font-bold text-[#10b981]">/100</span>
+                {(() => {
+                  const s = selectedCandidate?.communication_score ?? candidateDetail?.communication_score ?? selectedCandidate?.score ?? selectedCandidate?.avg_score
+                  return <>
+                    <span className="text-4xl font-black text-[#10b981] tracking-tight">{s != null ? Math.floor(Number(s)) : '--'}</span>
+                    <span className="text-sm font-bold text-[#10b981]">/100</span>
+                  </>
+                })()}
               </div>
             </div>
             <div className="bg-white border border-slate-200 shadow-sm rounded-xl p-5">

@@ -21,7 +21,7 @@ const sessionStorageWrapper = {
 const authPersistConfig = {
   key: 'auth',
   storage: sessionStorageWrapper,
-  whitelist: ['role', 'token', 'adminUser', 'API_BASE_URL'] // only persist these fields
+  whitelist: ['role', 'token', 'adminUser'] // only persist these fields
 }
 
 const rootReducer = combineReducers({

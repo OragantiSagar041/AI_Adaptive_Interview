@@ -14,7 +14,7 @@ import QualifiedCandidatesPage from './admin/QualifiedCandidatesPage'
 import RejectedCandidatesPage from './admin/RejectedCandidatesPage'
 import CreateInterviewPage from './admin/CreateInterviewPage'
 
-import { logout } from '../store/slices/authSlice'
+import { logout, updateCredits } from '../store/slices/authSlice'
 import { persistor } from '../store/store'
 import { loadDashboardData } from '../store/slices/dashboardSlice'
 import {
@@ -611,6 +611,7 @@ export default function AdminPage({ role: initialRole = 'admin' }) {
         setCustomEmailHtml('')
 
         refreshDashboardData()
+        dispatch(updateCredits((adminUser?.credits || 0) - 1))
       } else {
         alert(data.detail || data.message || "Failed to create session.")
       }
@@ -778,6 +779,7 @@ export default function AdminPage({ role: initialRole = 'admin' }) {
         setBulkCandidates([])
         setCustomEmailHtml('')
         refreshDashboardData()
+        dispatch(updateCredits((adminUser?.credits || 0) - (data.successful || 0)))
       } else {
         alert(data.detail || data.message || "Failed to create bulk sessions.")
       }

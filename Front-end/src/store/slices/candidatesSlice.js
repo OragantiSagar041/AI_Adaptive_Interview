@@ -160,7 +160,7 @@ function recomputeFilteredCandidates(state) {
 
   const sorted = [...filtered].sort((a, b) => {
     if (state.sortBy === 'score') {
-      return Number(b.score || 0) - Number(a.score || 0)
+      return Number(b.score ?? b.avg_score ?? 0) - Number(a.score ?? a.avg_score ?? 0)
     }
     return new Date(b.created_at) - new Date(a.created_at)
   })
@@ -214,10 +214,6 @@ const candidatesSlice = createSlice({
     setStatusFilter: (state, action) => {
       state.statusFilter = action.payload
       state.currentPage = 1
-      if (action.payload === 'all') {
-        state.startDate = ''
-        state.endDate = ''
-      }
       recomputeFilteredCandidates(state)
     },
     setSortBy: (state, action) => {

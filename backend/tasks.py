@@ -52,14 +52,18 @@ def score_answer_task(interview_id: str, question_id: int, question_text: str, a
 @celery_app.task(name="tasks.send_email_task")
 def send_email_task(candidate_email: str, candidate_name: str, link_url: str, duration: int, job_description: str, custom_html: str = "", scheduled_start: str = "", scheduled_end: str = ""):
     logger.info(f"Sending email via Celery to {candidate_email}")
-    # We will import the function from main.py, but to avoid circular imports, 
-    # we can redefine the email logic or safely import it here.
-    from main import build_default_interview_email_html, BREVO_API_KEY
+    from main import build_default_interview_email_html
+    
+    BREVO_API_KEY = os.getenv("BREVO_API_KEY", "")
     
     try:
         html_content = custom_html.strip() if custom_html and custom_html.strip() else build_default_interview_email_html(
             candidate_name, duration, job_description, link_url, scheduled_start, scheduled_end
         )
+        
+        if not BREVO_API_KEY:
+            logger.warning("BREVO_API_KEY not set — skipping email send")
+            return {"status": "skipped", "reason": "no_api_key"}
         
         url = "https://api.brevo.com/v3/smtp/email"
         headers = {

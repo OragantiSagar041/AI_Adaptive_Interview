@@ -1,63 +1,55 @@
 /**
  * VoiceCodingRound.jsx
- * AI-powered coding round with Monaco Editor + live code sentinel
- * Inspired by Micro1's "explain-while-solving" IDE
+ * AI-powered coding round — clean, immersive layout
+ * Left: Problem only | Center: Editor | Floating orb: voice indicator
  */
 import React, { useState, useRef, useCallback, useEffect } from 'react'
 import Editor from '@monaco-editor/react'
 import { API_BASE_URL } from '../apiConfig'
-import OrbAvatar from '../components/OrbAvatar'
+
+// ── Language config with brand colors ─────────────────────────────────────
+const LANGUAGES = [
+  { id: 'python',     label: 'Python',     color: '#3b82f6', bg: '#1e3a5f' },
+  { id: 'javascript', label: 'JavaScript', color: '#f59e0b', bg: '#3d2e00' },
+  { id: 'java',       label: 'Java',       color: '#ef4444', bg: '#3d1515' },
+  { id: 'cpp',        label: 'C++',        color: '#8b5cf6', bg: '#2e1f4f' },
+  { id: 'typescript', label: 'TypeScript', color: '#60a5fa', bg: '#1a2f4a' },
+  { id: 'go',         label: 'Go',         color: '#22d3ee', bg: '#0c2e33' },
+  { id: 'rust',       label: 'Rust',       color: '#fb923c', bg: '#3d2200' },
+]
 
 // ── Code Pattern Detector ──────────────────────────────────────────────────
 const CODE_PATTERNS = [
   {
     id: 'nested_loop',
     regex: /for\s*.+:\s*\n\s*(for|while)\s*.+:|for\s*\(.*\)\s*\{[\s\S]*?for\s*\(|for\s+\w+\s+in\s+[\w.]+[\s\S]{0,50}for\s+\w+\s+in/,
-    observation: "I notice a nested loop in your code — that suggests O(n²) complexity. Is that the best approach for this problem, or can we optimize it?",
-    weight: 3
+    observation: "I notice a nested loop — that's O(n²) complexity. Is that the best approach, or can we optimize it?"
   },
   {
     id: 'recursion',
     regex: /def\s+(\w+)\s*\([^)]*\)[\s\S]{0,200}\1\s*\(|function\s+(\w+)\s*\([^)]*\)\s*\{[\s\S]{0,200}\2\s*\(/,
-    observation: "You're using recursion here — nice! Can you walk me through the base case and how you're avoiding infinite recursion?",
-    weight: 3
+    observation: "You're using recursion — nice! Can you walk me through the base case and how you're preventing infinite recursion?"
   },
   {
     id: 'sort',
     regex: /\.sort\s*\(|sorted\s*\(/,
-    observation: "I see you're sorting the data. That's O(n log n). Is there a linear time approach you considered, like using a hash map or counting sort?",
-    weight: 2
+    observation: "I see you're sorting — that's O(n log n). Did you consider a linear-time approach like a hash map or counting sort?"
   },
   {
     id: 'hash_map',
     regex: /\{\s*\}|dict\s*\(\)|Map\s*\(\)|HashMap|{}/,
-    observation: "Good instinct using a hash map! This usually gives O(1) lookups. Can you explain what you're storing as keys and values?",
-    weight: 2
+    observation: "Good instinct using a hash map for O(1) lookups! What are you storing as keys and values here?"
   },
   {
     id: 'two_pointers',
     regex: /left\s*=\s*0[\s\S]{0,100}right\s*=|pointer|head.*next|slow.*fast/,
-    observation: "It looks like you might be using a two-pointer technique — very efficient! Can you explain the intuition behind the pointer movement?",
-    weight: 2
+    observation: "Looks like two-pointer technique — very efficient! Can you explain the intuition behind the pointer movement?"
   },
   {
     id: 'dp_array',
     regex: /dp\s*=\s*\[|memo\s*=\s*\{|cache\s*=|@lru_cache|memoize/,
-    observation: "I see dynamic programming or memoization here — excellent approach! Can you explain what the DP state represents?",
-    weight: 3
+    observation: "Dynamic programming — excellent approach! Can you explain what the DP state represents here?"
   },
-  {
-    id: 'binary_search',
-    regex: /mid\s*=\s*(left|low|start|l)\s*[\+\/]|binarySearch|binary_search/,
-    observation: "Binary search! Great choice for sorted data. Can you explain how you're handling the edge cases — what happens when the element isn't found?",
-    weight: 2
-  },
-  {
-    id: 'stack_queue',
-    regex: /\.append\s*\(|\.push\s*\(|deque|Stack\s*\(\)|Queue\s*\(\)/,
-    observation: "You're using a stack or queue data structure. Can you explain why this is the right data structure for this problem?",
-    weight: 2
-  }
 ]
 
 function detectCodePattern(code) {
@@ -67,25 +59,139 @@ function detectCodePattern(code) {
   return null
 }
 
-// ── AI Chat Bubble ─────────────────────────────────────────────────────────
-function ChatBubble({ role, text, speaking }) {
+// ── Animated Orb ─────────────────────────────────────────────────────────
+function VoiceOrb({ status }) {
+  // status: 'idle' | 'speaking' | 'listening'
+  const isAI = status === 'speaking'
+  const isUser = status === 'listening'
+  const isActive = isAI || isUser
+
   return (
-    <div className={`flex gap-3 ${role === 'user' ? 'flex-row-reverse' : ''} mb-3`}>
-      {role === 'ai' && (
-        <div className={`w-8 h-8 rounded-full flex items-center justify-center shrink-0 ${speaking ? 'ring-2 ring-indigo-400 ring-offset-1 ring-offset-slate-900' : ''}`}>
-          <OrbAvatar status={speaking ? 'speaking' : 'idle'} />
-        </div>
+    <div className="relative flex items-center justify-center" style={{ width: 120, height: 120 }}>
+      {/* Outermost ripple */}
+      {isActive && (
+        <div
+          className="absolute rounded-full"
+          style={{
+            width: 120, height: 120,
+            background: isAI
+              ? 'radial-gradient(circle, rgba(99,102,241,0.12) 0%, transparent 70%)'
+              : 'radial-gradient(circle, rgba(16,185,129,0.12) 0%, transparent 70%)',
+            animation: 'orbRipple 1.6s ease-out infinite',
+          }}
+        />
       )}
-      <div className={`max-w-[75%] rounded-2xl px-4 py-2.5 text-sm leading-relaxed ${
-        role === 'ai' ? 'bg-indigo-500/15 border border-indigo-500/20 text-slate-200 rounded-tl-none' :
-                        'bg-emerald-500/15 border border-emerald-500/20 text-slate-200 rounded-tr-none'
-      }`}>
-        {speaking && role === 'ai' && <span className="inline-flex gap-1 mr-2">{[0,1,2].map(i=><span key={i} className="w-1 h-1 rounded-full bg-indigo-400 animate-bounce inline-block" style={{animationDelay:`${i*0.15}s`}}/>)}</span>}
-        {text}
+      {/* Mid ring */}
+      {isActive && (
+        <div
+          className="absolute rounded-full"
+          style={{
+            width: 90, height: 90,
+            background: isAI
+              ? 'radial-gradient(circle, rgba(99,102,241,0.2) 0%, transparent 70%)'
+              : 'radial-gradient(circle, rgba(16,185,129,0.2) 0%, transparent 70%)',
+            animation: 'orbRipple 1.6s ease-out 0.3s infinite',
+          }}
+        />
+      )}
+      {/* Core orb */}
+      <div
+        className="rounded-full relative z-10 transition-all duration-500"
+        style={{
+          width: isActive ? 72 : 60,
+          height: isActive ? 72 : 60,
+          background: isAI
+            ? 'radial-gradient(circle at 35% 35%, #818cf8, #6366f1 50%, #4f46e5)'
+            : isUser
+            ? 'radial-gradient(circle at 35% 35%, #34d399, #10b981 50%, #059669)'
+            : 'radial-gradient(circle at 35% 35%, #475569, #334155 50%, #1e293b)',
+          boxShadow: isAI
+            ? '0 0 30px rgba(99,102,241,0.8), 0 0 60px rgba(99,102,241,0.4), inset 0 1px 0 rgba(255,255,255,0.2)'
+            : isUser
+            ? '0 0 30px rgba(16,185,129,0.8), 0 0 60px rgba(16,185,129,0.4), inset 0 1px 0 rgba(255,255,255,0.2)'
+            : '0 0 12px rgba(0,0,0,0.5), inset 0 1px 0 rgba(255,255,255,0.1)',
+          animation: isActive ? 'orbBoom 0.8s ease-in-out infinite alternate' : 'none',
+        }}
+      >
+        {/* Gloss highlight */}
+        <div
+          className="absolute rounded-full"
+          style={{
+            top: '15%', left: '20%',
+            width: '35%', height: '25%',
+            background: 'rgba(255,255,255,0.3)',
+            filter: 'blur(2px)',
+          }}
+        />
       </div>
-      {role === 'user' && (
-        <div className="w-8 h-8 rounded-full bg-emerald-500/20 border border-emerald-500/30 flex items-center justify-center shrink-0">
-          <i className="fas fa-user text-xs text-emerald-400" />
+    </div>
+  )
+}
+
+// ── Custom Language Dropdown ───────────────────────────────────────────────
+function LanguageDropdown({ value, onChange }) {
+  const [open, setOpen] = useState(false)
+  const currentLang = LANGUAGES.find(l => l.id === value) || LANGUAGES[0]
+  const ref = useRef(null)
+
+  useEffect(() => {
+    const handleClick = (e) => {
+      if (ref.current && !ref.current.contains(e.target)) setOpen(false)
+    }
+    document.addEventListener('mousedown', handleClick)
+    return () => document.removeEventListener('mousedown', handleClick)
+  }, [])
+
+  return (
+    <div ref={ref} className="relative select-none" style={{ minWidth: 140 }}>
+      <button
+        onClick={() => setOpen(o => !o)}
+        className="flex items-center gap-2 px-3 py-1.5 rounded-lg border text-xs font-bold transition-all"
+        style={{
+          background: currentLang.bg,
+          borderColor: currentLang.color + '60',
+          color: currentLang.color,
+        }}
+      >
+        <span
+          className="w-2 h-2 rounded-full flex-shrink-0"
+          style={{ background: currentLang.color, boxShadow: `0 0 6px ${currentLang.color}` }}
+        />
+        {currentLang.label}
+        <svg className="ml-auto" width="10" height="6" viewBox="0 0 10 6" fill="none">
+          <path d={open ? 'M1 5L5 1L9 5' : 'M1 1L5 5L9 1'} stroke={currentLang.color} strokeWidth="1.5" strokeLinecap="round"/>
+        </svg>
+      </button>
+
+      {open && (
+        <div
+          className="absolute top-full mt-1 left-0 rounded-xl border overflow-hidden z-50"
+          style={{ background: '#0d1117', borderColor: '#ffffff12', minWidth: '100%', boxShadow: '0 8px 32px rgba(0,0,0,0.6)' }}
+        >
+          {LANGUAGES.map(lang => (
+            <button
+              key={lang.id}
+              onClick={() => { onChange(lang.id); setOpen(false) }}
+              className="w-full flex items-center gap-2.5 px-3 py-2 text-xs font-bold transition-all text-left"
+              style={{
+                background: lang.id === value ? lang.bg : 'transparent',
+                color: lang.color,
+              }}
+              onMouseEnter={e => { if (lang.id !== value) e.currentTarget.style.background = lang.bg + '80' }}
+              onMouseLeave={e => { if (lang.id !== value) e.currentTarget.style.background = 'transparent' }}
+            >
+              <span
+                className="w-2 h-2 rounded-full flex-shrink-0"
+                style={{ background: lang.color, boxShadow: lang.id === value ? `0 0 8px ${lang.color}` : 'none' }}
+              />
+              {lang.label}
+              {lang.id === value && (
+                <svg className="ml-auto" width="12" height="12" viewBox="0 0 12 12" fill="none">
+                  <path d="M2 6L5 9L10 3" stroke={lang.color} strokeWidth="1.5" strokeLinecap="round"/>
+                </svg>
+              )}
+            </button>
+          ))}
         </div>
       )}
     </div>
@@ -94,28 +200,24 @@ function ChatBubble({ role, text, speaking }) {
 
 // ── Main Component ─────────────────────────────────────────────────────────
 export default function VoiceCodingRound({
-  question,          // { id, text, type, codingTask, codingTests }
+  question,
   interviewId,
   linkId,
   sessionDetail,
   language: sessionLang,
-  wsRef,             // WebSocket reference for sending answers/observations
-  onComplete         // called when coding round is done
+  wsRef,
+  onComplete
 }) {
   const [code, setCode]               = useState(question?.codingTask?.starter_code || '# Write your solution here\n\n')
   const [selectedLang, setSelectedLang] = useState('python')
-  const [chatMessages, setChatMessages] = useState([])
   const [aiStatus, setAiStatus]       = useState('idle')  // idle | speaking | listening
   const [transcript, setTranscript]   = useState('')
-  const [interimText, setInterimText] = useState('')
-  const [inputMode, setInputMode]     = useState('voice') // voice | text
-  const [typedInput, setTypedInput]   = useState('')
   const [detectedPatterns, setDetectedPatterns] = useState(new Set())
-  const [timeLeft, setTimeLeft]       = useState(900)    // 15 min coding round
+  const [timeLeft, setTimeLeft]       = useState(900)
   const [runOutput, setRunOutput]     = useState('')
   const [running, setRunning]         = useState(false)
   const [isSubmitting, setIsSubmitting] = useState(false)
-  const [phase, setPhase]             = useState('approach') // approach | coding | done
+  const [orbLabel, setOrbLabel]       = useState('Zara is watching')
 
   const recognitionRef    = useRef(null)
   const silenceTimerRef   = useRef(null)
@@ -124,25 +226,24 @@ export default function VoiceCodingRound({
   const mediaRecorderRef  = useRef(null)
   const audioChunksRef    = useRef([])
   const currentTxRef      = useRef('')
-  const chatBottomRef     = useRef(null)
   const submittingRef     = useRef(false)
-  const langMap = { 'Hindi':'hi-IN', 'Telugu':'te-IN', 'Tamil':'ta-IN', 'Malayalam':'ml-IN', 'Kannada':'kn-IN', 'English':'en-US' }
-
-  // Auto-scroll chat
-  useEffect(() => { chatBottomRef.current?.scrollIntoView({ behavior: 'smooth' }) }, [chatMessages])
 
   // Timer
   useEffect(() => {
-    const t = setInterval(() => setTimeLeft(p => { if (p <= 1) { handleSubmit(); return 0 } return p - 1 }), 1000)
+    const t = setInterval(() => setTimeLeft(p => {
+      if (p <= 1) { handleSubmit(); return 0 }
+      return p - 1
+    }), 1000)
     return () => clearInterval(t)
   }, [])
 
-  const fmt = s => `${String(Math.floor(s/60)).padStart(2,'0')}:${String(s%60).padStart(2,'0')}`
+  const fmt = s => `${String(Math.floor(s / 60)).padStart(2, '0')}:${String(s % 60).padStart(2, '0')}`
 
-  // ── TTS ──────────────────────────────────────────────────────────────────
+  // ── TTS ────────────────────────────────────────────────────────────────
   const speak = useCallback(async (text, onEnd) => {
     try {
       setAiStatus('speaking')
+      setOrbLabel('Zara speaking…')
       const res = await fetch(`${API_BASE_URL}/tts`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -154,28 +255,22 @@ export default function VoiceCodingRound({
       const audio = new Audio(url)
       audio.onended = () => {
         setAiStatus('idle')
+        setOrbLabel('Zara is watching')
         URL.revokeObjectURL(url)
         onEnd?.()
       }
-      audio.onerror = () => {
-        setAiStatus('idle')
-        onEnd?.()
-      }
+      audio.onerror = () => { setAiStatus('idle'); setOrbLabel('Zara is watching'); onEnd?.() }
       audio.play()
     } catch (e) {
       setAiStatus('idle')
+      setOrbLabel('Zara is watching')
       onEnd?.()
     }
   }, [])
 
-  const addMessage = useCallback((role, text) => {
-    setChatMessages(p => [...p, { role, text, ts: Date.now() }])
-  }, [])
-
   const aiSay = useCallback((text, onEnd) => {
-    addMessage('ai', text)
     speak(text, onEnd)
-  }, [addMessage, speak])
+  }, [speak])
 
   const askAIForReply = useCallback(async (transcriptText) => {
     try {
@@ -185,28 +280,29 @@ export default function VoiceCodingRound({
         body: JSON.stringify({ interview_id: interviewId, transcript: transcriptText, code })
       })
       const data = await res.json()
-      if (data.reply) {
-        aiSay(data.reply)
-      }
-    } catch(e) {
-      aiSay("I didn't quite catch that. Could you repeat?")
+      if (data.reply) aiSay(data.reply)
+    } catch (e) {
+      aiSay("I didn't catch that — could you repeat?")
     }
   }, [interviewId, code, aiSay])
 
-  // ── STT ──────────────────────────────────────────────────────────────────
+  // ── STT ────────────────────────────────────────────────────────────────
   const stopListening = useCallback(() => {
     if (mediaRecorderRef.current && mediaRecorderRef.current.state !== 'inactive') {
       mediaRecorderRef.current.stop()
     }
     clearTimeout(silenceTimerRef.current)
     setAiStatus('idle')
+    setOrbLabel('Zara is watching')
     isListeningRef.current = false
+    setTranscript('')
   }, [])
 
   const startListening = useCallback((onFinish) => {
     if (isListeningRef.current) return
     isListeningRef.current = true
     setAiStatus('listening')
+    setOrbLabel('Listening to you…')
     setTranscript('')
 
     navigator.mediaDevices.getUserMedia({ audio: true }).then(stream => {
@@ -222,11 +318,13 @@ export default function VoiceCodingRound({
         const audioBlob = new Blob(audioChunksRef.current, { type: 'audio/webm' })
         const fd = new FormData()
         fd.append('file', audioBlob, 'audio.webm')
-        
+
         try {
-          const res = await fetch(`${API_BASE_URL}/stt`, { method: 'POST', body: fd })
+          // Pass language hint for better Indian English recognition
+          const res = await fetch(`${API_BASE_URL}/stt?language=en`, { method: 'POST', body: fd })
           const data = await res.json()
           if (data.transcript) {
+            setTranscript(data.transcript)
             onFinish?.(data.transcript)
           } else {
             onFinish?.('')
@@ -235,30 +333,38 @@ export default function VoiceCodingRound({
           onFinish?.('')
         }
         stream.getTracks().forEach(t => t.stop())
+        setAiStatus('idle')
+        setOrbLabel('Zara is watching')
+        isListeningRef.current = false
+        setTranscript('')
       }
 
       mediaRecorder.start()
+      // Auto-stop after 90s of recording
       silenceTimerRef.current = setTimeout(() => {
         if (mediaRecorder.state !== 'inactive') mediaRecorder.stop()
-      }, 60000)
+      }, 90000)
 
     }).catch(err => {
       console.error("Mic error:", err)
       setAiStatus('idle')
+      setOrbLabel('Zara is watching')
       isListeningRef.current = false
       onFinish?.('')
     })
   }, [stopListening])
 
-  // ── Start: Ask about approach ─────────────────────────────────────────────
+  // ── Initial greeting ──────────────────────────────────────────────────
+  const hasGreeted = useRef(false)
   useEffect(() => {
-    const intro = `Welcome to the coding round! I'm going to give you a programming problem. Before you write any code, I'd like to hear your approach. Here's the problem: ${question?.text || question?.codingTask?.title || 'Implement the required function'}. Now, before you start coding — can you walk me through your initial thoughts and what approach you'd take?`
+    if (hasGreeted.current) return
+    hasGreeted.current = true
+    
+    const intro = `Welcome to the coding round! Here's your problem: ${question?.text || question?.codingTask?.title || 'Implement the required function'}. Before writing code, tell me your approach.`
     setTimeout(() => {
       aiSay(intro, () => {
-        setPhase('approach')
         startListening((answer) => {
           if (answer) {
-            addMessage('user', answer)
             if (wsRef?.current?.readyState === WebSocket.OPEN) {
               wsRef.current.send(JSON.stringify({
                 action: "save_answer",
@@ -276,23 +382,20 @@ export default function VoiceCodingRound({
               fd.append('question_text', 'Coding approach explanation')
               fd.append('answer_text', answer)
               fd.append('candidate_name', sessionDetail?.candidate_name || 'Candidate')
-              fetch(`${API_BASE_URL}/save-answer`, { method: 'POST', body: fd }).catch(()=>{})
+              fetch(`${API_BASE_URL}/save-answer`, { method: 'POST', body: fd }).catch(() => {})
             }
-            setTimeout(() => {
-              aiSay("Great approach! Now go ahead and implement your solution. Talk through your thinking as you code — I'll be watching and may ask follow-up questions.", () => setPhase('coding'))
-            }, 500)
+            setTimeout(() => aiSay("Great! Now implement your solution and talk through your thinking as you code."), 400)
           } else {
-            aiSay("No problem! Let's jump into the coding. Talk through your logic as you write.", () => setPhase('coding'))
+            aiSay("Let's jump into coding — feel free to talk through your logic as you write.")
           }
         })
       })
     }, 800)
   }, []) // eslint-disable-line
 
-  // ── Code Sentinel: Detect patterns while typing ───────────────────────────
+  // ── Code Sentinel ─────────────────────────────────────────────────────
   const handleCodeChange = useCallback((value) => {
     setCode(value || '')
-    if (phase !== 'coding') return
     clearTimeout(codeChangeTimer.current)
     codeChangeTimer.current = setTimeout(() => {
       if (aiStatus === 'speaking' || aiStatus === 'listening') return
@@ -302,7 +405,6 @@ export default function VoiceCodingRound({
         aiSay(pattern.observation, () => {
           startListening((answer) => {
             if (answer) {
-              addMessage('user', answer)
               if (wsRef?.current?.readyState === WebSocket.OPEN) {
                 wsRef.current.send(JSON.stringify({
                   action: "save_answer",
@@ -313,41 +415,16 @@ export default function VoiceCodingRound({
                   candidate_name: sessionDetail?.candidate_name || 'Candidate',
                   timestamp: new Date().toISOString()
                 }))
-              } else {
-                const fd = new FormData()
-                fd.append('interview_id', interviewId)
-                fd.append('question_id', `${question?.id}_code_discussion`)
-                fd.append('question_text', pattern.observation)
-                fd.append('answer_text', answer)
-                fd.append('candidate_name', sessionDetail?.candidate_name || 'Candidate')
-                fetch(`${API_BASE_URL}/save-answer`, { method: 'POST', body: fd }).catch(()=>{})
               }
               askAIForReply(answer)
             }
           })
         })
-        // Send coding observation to background queue via WS
-        if (wsRef?.current?.readyState === WebSocket.OPEN) {
-          wsRef.current.send(JSON.stringify({
-            action: "coding_observation",
-            code: value,
-            language: selectedLang
-          }))
-        }
       }
-    }, 3000) // 3s pause in typing triggers observation
-  }, [phase, aiStatus, detectedPatterns, aiSay, startListening, addMessage, interviewId, question, sessionDetail, wsRef, selectedLang])
+    }, 3000)
+  }, [aiStatus, detectedPatterns, aiSay, startListening, interviewId, question, sessionDetail, wsRef, askAIForReply])
 
-  // ── Submit typed input ────────────────────────────────────────────────────
-  const handleSendTyped = () => {
-    if (!typedInput.trim()) return
-    addMessage('user', typedInput)
-    const text = typedInput
-    setTypedInput('')
-    askAIForReply(text)
-  }
-
-  // ── Run code ──────────────────────────────────────────────────────────────
+  // ── Run code ──────────────────────────────────────────────────────────
   const handleRun = async () => {
     setRunning(true); setRunOutput('')
     try {
@@ -359,55 +436,65 @@ export default function VoiceCodingRound({
       const data = await res.json()
       setRunOutput(data.output || data.error || 'No output')
       if (data.all_passed) {
-        aiSay("Excellent! All test cases passed! Can you walk me through the time and space complexity of your solution?", () => {
-          startListening(ans => { if (ans) addMessage('user', ans) })
+        aiSay("Excellent! All test cases passed! Can you walk me through the time and space complexity?", () => {
+          startListening(ans => { if (ans) askAIForReply(ans) })
         })
       } else {
-        aiSay("Some test cases didn't pass. Can you think about what edge cases might be causing issues?", () => {
-          startListening(ans => { if (ans) addMessage('user', ans) })
+        aiSay("Some test cases didn't pass. What edge cases might be causing issues?", () => {
+          startListening(ans => { if (ans) askAIForReply(ans) })
         })
       }
-    } catch(e) { setRunOutput('Error running code') }
+    } catch (e) { setRunOutput('Error running code') }
     setRunning(false)
   }
 
-  // ── Submit coding round ───────────────────────────────────────────────────
+  // ── Submit ────────────────────────────────────────────────────────────
   const handleSubmit = useCallback(async () => {
     if (submittingRef.current) return
     submittingRef.current = true
     setIsSubmitting(true)
-    stopListening(); window.speechSynthesis?.cancel()
+    stopListening()
 
-    aiSay("Great work on the coding round! Saving your solution and waiting for uploads...", async () => {
+    aiSay("Great work on the coding round! Saving your solution…", async () => {
       try {
         await fetch(`${API_BASE_URL}/coding-round/submit`, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ interview_id: interviewId, code, language: selectedLang })
         })
-      } catch(_) {}
-      // We don't automatically call onComplete here. 
-      // The parent component (VoiceInterviewPage) waits for the video upload to finish 
-      // and handles the full session complete.
+      } catch (_) {}
       setTimeout(() => onComplete?.(), 1500)
     })
   }, [stopListening, aiSay, interviewId, code, selectedLang, onComplete])
 
-  // ── Cleanup ───────────────────────────────────────────────────────────────
+  // ── Cleanup ───────────────────────────────────────────────────────────
   useEffect(() => () => {
-    stopListening(); window.speechSynthesis?.cancel()
-    clearTimeout(codeChangeTimer.current); clearTimeout(silenceTimerRef.current)
+    stopListening()
+    clearTimeout(codeChangeTimer.current)
+    clearTimeout(silenceTimerRef.current)
   }, [stopListening])
+
+  const currentLang = LANGUAGES.find(l => l.id === selectedLang) || LANGUAGES[0]
 
   return (
     <div className="flex flex-col h-screen bg-[#0a0f1e] text-white overflow-hidden" style={{ fontFamily: "'Inter',sans-serif" }}>
       <style>{`
-        @keyframes wave { 0%{height:4px} 100%{height:24px} }
-        @keyframes bounce-dot { 0%,100%{transform:translateY(0)} 50%{transform:translateY(-5px)} }
-        .monaco-scroll { background: #0d1117 !important; }
+        @keyframes orbBoom {
+          0%   { transform: scale(1); }
+          100% { transform: scale(1.18); }
+        }
+        @keyframes orbRipple {
+          0%   { transform: scale(0.85); opacity: 0.8; }
+          100% { transform: scale(1.5);  opacity: 0; }
+        }
+        @keyframes fadeSlideIn {
+          from { opacity: 0; transform: translateY(8px); }
+          to   { opacity: 1; transform: translateY(0); }
+        }
+        .orb-label { animation: fadeSlideIn 0.3s ease; }
       `}</style>
 
-      {/* Header */}
+      {/* ── Header ── */}
       <header className="flex items-center justify-between px-5 py-3 border-b border-white/6 bg-[#0d1117]/90 shrink-0">
         <div className="flex items-center gap-3">
           <div className="w-7 h-7 rounded-lg bg-gradient-to-tr from-indigo-500 to-purple-600 flex items-center justify-center">
@@ -422,135 +509,130 @@ export default function VoiceCodingRound({
           <div className={`text-sm font-mono font-bold px-3 py-1 rounded-full border ${timeLeft < 180 ? 'border-rose-500/50 text-rose-400 bg-rose-500/10' : 'border-amber-500/30 text-amber-300 bg-amber-500/10'}`}>
             <i className="fas fa-clock mr-1.5"/>{fmt(timeLeft)}
           </div>
-          <div className={`flex items-center gap-1.5 text-xs px-3 py-1 rounded-full border ${
-            aiStatus === 'speaking'  ? 'border-indigo-500/50 text-indigo-400 bg-indigo-500/10' :
-            aiStatus === 'listening' ? 'border-emerald-500/50 text-emerald-400 bg-emerald-500/10' :
-            'border-white/10 text-slate-500'
-          }`}>
-            <span className={`w-1.5 h-1.5 rounded-full ${aiStatus === 'speaking' ? 'bg-indigo-400 animate-pulse' : aiStatus === 'listening' ? 'bg-emerald-400 animate-pulse' : 'bg-slate-600'}`}/>
-            {aiStatus === 'speaking' ? 'Zara speaking' : aiStatus === 'listening' ? 'Listening' : 'Zara watching'}
-          </div>
         </div>
       </header>
 
-      {/* Main: 3-column layout */}
+      {/* ── Main: 2-column ── */}
       <div className="flex flex-1 overflow-hidden">
 
-        {/* Left: Problem + AI Chat */}
-        <div className="w-[320px] shrink-0 flex flex-col border-r border-white/6 bg-[#0d1117]">
-          {/* Problem */}
-            <div className="p-4 border-b border-white/6 overflow-y-auto max-h-[50%]">
-              <div className="flex items-center gap-2 mb-2">
-                <i className="fas fa-puzzle-piece text-amber-400 text-xs"/>
-                <span className="text-xs font-bold uppercase tracking-widest text-slate-500">Problem</span>
-                <span className="ml-auto text-xs text-emerald-400 bg-emerald-500/10 border border-emerald-500/20 rounded-full px-2 py-0.5">{question?.codingTask?.difficulty || 'Medium'}</span>
-              </div>
-              <p className="text-sm text-slate-300 leading-relaxed font-semibold">{question?.text || question?.codingTask?.title}</p>
-              {question?.codingTask?.description && (
-                <p className="text-xs text-slate-400 mt-2 leading-relaxed whitespace-pre-wrap">{question.codingTask.description}</p>
-              )}
-              {question?.codingTask?.constraints && (
-                <div className="mt-4">
-                  <span className="text-xs font-bold uppercase tracking-widest text-slate-500">Constraints</span>
-                  <p className="text-xs text-slate-400 mt-1 leading-relaxed whitespace-pre-wrap">{question.codingTask.constraints}</p>
-                </div>
-              )}
-              {question?.codingTask?.examples && question.codingTask.examples.length > 0 && (
-                <div className="mt-4">
-                  <span className="text-xs font-bold uppercase tracking-widest text-slate-500">Examples</span>
-                  {question.codingTask.examples.map((ex, i) => (
-                    <div key={i} className="mt-2 bg-white/5 rounded p-2 text-xs font-mono text-slate-300">
-                      <div><span className="text-slate-500">Input:</span> {ex.input}</div>
-                      <div><span className="text-slate-500">Output:</span> {ex.output}</div>
-                      {ex.explanation && <div className="text-slate-400 mt-1 italic">// {ex.explanation}</div>}
-                    </div>
-                  ))}
-                </div>
-              )}
-              {question?.codingTask?.test_cases && question.codingTask.test_cases.length > 0 && (
-                <div className="mt-4">
-                  <span className="text-xs font-bold uppercase tracking-widest text-slate-500">Test Cases</span>
-                  {question.codingTask.test_cases.map((tc, i) => (
-                    <div key={i} className="mt-2 bg-white/5 rounded p-2 text-xs font-mono text-slate-300">
-                      <div><span className="text-slate-500">Input:</span> {tc.input}</div>
-                      <div><span className="text-slate-500">Expected:</span> {tc.expected}</div>
-                    </div>
-                  ))}
-                </div>
-              )}
+        {/* Left: Problem Statement Only */}
+        <div className="w-[300px] shrink-0 flex flex-col border-r border-white/6 bg-[#0d1117] overflow-y-auto">
+          <div className="p-5">
+            {/* Problem header */}
+            <div className="flex items-center gap-2 mb-3">
+              <i className="fas fa-puzzle-piece text-amber-400 text-xs"/>
+              <span className="text-xs font-bold uppercase tracking-widest text-slate-500">Problem</span>
+              <span className="ml-auto text-xs text-emerald-400 bg-emerald-500/10 border border-emerald-500/20 rounded-full px-2 py-0.5 font-semibold">
+                {question?.codingTask?.difficulty || 'Medium'}
+              </span>
             </div>
 
-          {/* AI Chat */}
-          <div className="flex-1 overflow-y-auto p-3 space-y-1">
-            <div className="flex items-center gap-2 mb-3">
-              <div className="w-8 h-8 rounded-full flex items-center justify-center">
-                <OrbAvatar status={aiStatus} />
-              </div>
-              <span className="text-xs font-bold text-indigo-300">Zara — AI Interviewer</span>
-            </div>
-            {chatMessages.map((m, i) => <ChatBubble key={i} role={m.role} text={m.text} speaking={aiStatus === 'speaking' && i === chatMessages.length - 1 && m.role === 'ai'} />)}
-            {aiStatus === 'listening' && (
-              <div className="flex items-end gap-2 mt-2">
-                <div className="w-6 h-6 rounded-full bg-emerald-500/10 border border-emerald-500/30 flex items-center justify-center shrink-0">
-                  <i className="fas fa-user text-xs text-emerald-400"/>
+            {/* Title */}
+            <h2 className="text-sm font-bold text-white leading-relaxed mb-2">
+              {question?.text || question?.codingTask?.title}
+            </h2>
+
+            {/* Description */}
+            {question?.codingTask?.description && (
+              <p className="text-xs text-slate-400 leading-relaxed whitespace-pre-wrap mb-4">
+                {question.codingTask.description}
+              </p>
+            )}
+
+            {/* Constraints */}
+            {question?.codingTask?.constraints && (
+              <div className="mb-4">
+                <div className="flex items-center gap-1.5 mb-2">
+                  <i className="fas fa-shield-alt text-rose-400 text-xs"/>
+                  <span className="text-xs font-bold uppercase tracking-widest text-slate-500">Constraints</span>
                 </div>
-                <div className="bg-emerald-500/10 border border-emerald-500/20 rounded-2xl rounded-tl-none px-3 py-2 text-xs text-slate-400">
-                  {transcript || <span className="italic">Listening...</span>}
-                  {interimText && <span className="text-slate-600 italic"> {interimText}</span>}
+                <div className="bg-rose-500/5 border border-rose-500/15 rounded-lg p-3">
+                  <p className="text-xs text-rose-300 leading-relaxed whitespace-pre-wrap font-mono">
+                    {question.codingTask.constraints}
+                  </p>
                 </div>
               </div>
             )}
-            <div ref={chatBottomRef}/>
-          </div>
 
-          {/* Input area */}
-          <div className="p-3 border-t border-white/6">
-            <div className="flex gap-2 mb-2">
-              <button onClick={() => setInputMode('voice')} className={`flex-1 py-1.5 rounded-lg text-xs font-semibold transition-all ${inputMode==='voice' ? 'bg-indigo-500/20 text-indigo-300 border border-indigo-500/30' : 'bg-white/5 text-slate-500'}`}>
-                <i className="fas fa-microphone mr-1"/> Voice
-              </button>
-              <button onClick={() => setInputMode('text')} className={`flex-1 py-1.5 rounded-lg text-xs font-semibold transition-all ${inputMode==='text' ? 'bg-indigo-500/20 text-indigo-300 border border-indigo-500/30' : 'bg-white/5 text-slate-500'}`}>
-                <i className="fas fa-keyboard mr-1"/> Type
-              </button>
-            </div>
-            {inputMode === 'text' ? (
-              <div className="flex gap-2">
-                <input value={typedInput} onChange={e => setTypedInput(e.target.value)} onKeyDown={e => e.key === 'Enter' && handleSendTyped()}
-                  placeholder="Type your response..."
-                  className="flex-1 bg-white/5 border border-white/10 rounded-lg px-3 py-2 text-xs text-white placeholder-slate-600 outline-none focus:border-indigo-500/50"/>
-                <button onClick={handleSendTyped} className="w-8 h-8 rounded-lg bg-indigo-500/20 text-indigo-400 flex items-center justify-center hover:bg-indigo-500/30 transition-all">
-                  <i className="fas fa-paper-plane text-xs"/>
-                </button>
+            {/* Examples */}
+            {question?.codingTask?.examples && question.codingTask.examples.length > 0 && (
+              <div className="mb-4">
+                <div className="flex items-center gap-1.5 mb-2">
+                  <i className="fas fa-flask text-indigo-400 text-xs"/>
+                  <span className="text-xs font-bold uppercase tracking-widest text-slate-500">Examples</span>
+                </div>
+                {question.codingTask.examples.map((ex, i) => (
+                  <div key={i} className="mb-2 bg-white/4 border border-white/8 rounded-lg p-3 text-xs font-mono">
+                    <div className="mb-1">
+                      <span className="text-slate-500 mr-1">Input:</span>
+                      <span className="text-emerald-300">{ex.input}</span>
+                    </div>
+                    <div className="mb-1">
+                      <span className="text-slate-500 mr-1">Output:</span>
+                      <span className="text-amber-300">{ex.output}</span>
+                    </div>
+                    {ex.explanation && (
+                      <div className="text-slate-500 italic mt-1 text-[0.68rem]">// {ex.explanation}</div>
+                    )}
+                  </div>
+                ))}
               </div>
-            ) : (
-              <button onClick={() => {
-                if (aiStatus === 'listening') { stopListening() }
-                else { startListening(ans => { if (ans) { addMessage('user', ans); askAIForReply(ans) } }) }
-              }} className={`w-full py-2 rounded-lg text-xs font-bold transition-all flex items-center justify-center gap-2 ${
-                aiStatus === 'listening' ? 'bg-rose-500/20 border border-rose-500/30 text-rose-400' : 'bg-emerald-500/10 border border-emerald-500/30 text-emerald-400 hover:bg-emerald-500/20'
-              }`}>
-                <i className={`fas ${aiStatus === 'listening' ? 'fa-stop-circle' : 'fa-microphone'}`}/>
-                {aiStatus === 'listening' ? 'Stop Recording' : 'Speak Response'}
-              </button>
+            )}
+
+            {/* Test cases (visible ones) */}
+            {question?.codingTask?.test_cases && question.codingTask.test_cases.length > 0 && (
+              <div>
+                <div className="flex items-center gap-1.5 mb-2">
+                  <i className="fas fa-vial text-purple-400 text-xs"/>
+                  <span className="text-xs font-bold uppercase tracking-widest text-slate-500">Test Cases</span>
+                </div>
+                {question.codingTask.test_cases.map((tc, i) => (
+                  <div key={i} className="mb-2 bg-white/4 border border-white/8 rounded-lg p-3 text-xs font-mono">
+                    <div className="mb-1">
+                      <span className="text-slate-500 mr-1">Input:</span>
+                      <span className="text-emerald-300">{tc.input}</span>
+                    </div>
+                    <div>
+                      <span className="text-slate-500 mr-1">Expected:</span>
+                      <span className="text-amber-300">{tc.expected}</span>
+                    </div>
+                  </div>
+                ))}
+              </div>
             )}
           </div>
         </div>
 
-        {/* Center: Monaco Editor */}
+        {/* Right: Editor */}
         <div className="flex-1 flex flex-col overflow-hidden">
           {/* Editor toolbar */}
-          <div className="flex items-center gap-3 px-4 py-2 border-b border-white/6 bg-[#0d1117] shrink-0">
-            <select value={selectedLang} onChange={e => setSelectedLang(e.target.value)}
-              className="bg-white/5 border border-white/10 rounded-lg px-3 py-1.5 text-xs text-slate-300 outline-none cursor-pointer">
-              {['python','javascript','java','cpp','typescript','go','rust'].map(l => <option key={l} value={l}>{l}</option>)}
-            </select>
+          <div className="flex items-center gap-3 px-4 py-2.5 border-b border-white/6 bg-[#0d1117] shrink-0">
+            <LanguageDropdown value={selectedLang} onChange={setSelectedLang} />
             <div className="ml-auto flex gap-2">
-              <button onClick={handleRun} disabled={running}
-                className="flex items-center gap-2 px-4 py-1.5 rounded-lg bg-emerald-500/15 border border-emerald-500/30 text-emerald-400 text-xs font-bold hover:bg-emerald-500/25 transition-all disabled:opacity-40">
-                {running ? <><i className="fas fa-spinner fa-spin"/>Running...</> : <><i className="fas fa-play"/>Run Code</>}
+              <button
+                onClick={handleRun}
+                disabled={running}
+                className="flex items-center gap-2 px-4 py-1.5 rounded-lg text-xs font-bold transition-all disabled:opacity-40"
+                style={{
+                  background: 'rgba(16,185,129,0.1)',
+                  border: '1px solid rgba(16,185,129,0.3)',
+                  color: '#10b981',
+                }}
+              >
+                {running
+                  ? <><i className="fas fa-spinner fa-spin"/>Running…</>
+                  : <><i className="fas fa-play"/>Run Code</>
+                }
               </button>
-              <button onClick={handleSubmit}
-                className="flex items-center gap-2 px-4 py-1.5 rounded-lg bg-indigo-500/15 border border-indigo-500/30 text-indigo-400 text-xs font-bold hover:bg-indigo-500/25 transition-all">
+              <button
+                onClick={handleSubmit}
+                className="flex items-center gap-2 px-4 py-1.5 rounded-lg text-xs font-bold transition-all"
+                style={{
+                  background: 'rgba(99,102,241,0.15)',
+                  border: '1px solid rgba(99,102,241,0.3)',
+                  color: '#818cf8',
+                }}
+              >
                 <i className="fas fa-check"/>Submit
               </button>
             </div>
@@ -584,6 +666,12 @@ export default function VoiceCodingRound({
               <div className="flex items-center gap-2 mb-2">
                 <i className="fas fa-terminal text-xs text-emerald-400"/>
                 <span className="text-xs font-bold text-slate-500 uppercase tracking-widest">Output</span>
+                <button
+                  onClick={() => setRunOutput('')}
+                  className="ml-auto text-slate-600 hover:text-slate-400 transition-colors"
+                >
+                  <i className="fas fa-times text-xs"/>
+                </button>
               </div>
               <pre className="text-xs text-emerald-300 font-mono whitespace-pre-wrap">{runOutput}</pre>
             </div>
@@ -591,15 +679,73 @@ export default function VoiceCodingRound({
         </div>
       </div>
 
-      {/* Submitting Overlay */}
+      {/* ── Floating Voice Orb (bottom center) ── */}
+      <div
+        className="fixed bottom-0 left-0 right-0 flex flex-col items-center pb-5 pointer-events-none"
+        style={{ zIndex: 40 }}
+      >
+        {/* Live transcript strip */}
+        {aiStatus === 'listening' && transcript && (
+          <div
+            className="mb-3 px-4 py-2 rounded-full text-xs font-medium text-white/80 pointer-events-none"
+            style={{
+              background: 'rgba(16,185,129,0.15)',
+              border: '1px solid rgba(16,185,129,0.2)',
+              backdropFilter: 'blur(10px)',
+              maxWidth: 400,
+              textAlign: 'center',
+            }}
+          >
+            {transcript}
+          </div>
+        )}
+
+        <div className="flex flex-col items-center gap-1.5 pointer-events-auto">
+          {/* Orb itself — also acts as mic toggle button */}
+          <button
+            onClick={() => {
+              if (aiStatus === 'listening') {
+                stopListening()
+              } else if (aiStatus === 'idle') {
+                startListening(ans => {
+                  if (ans) askAIForReply(ans)
+                })
+              }
+            }}
+            className="focus:outline-none"
+            title={aiStatus === 'listening' ? 'Click to stop recording' : 'Click to speak'}
+          >
+            <VoiceOrb status={aiStatus} />
+          </button>
+
+          {/* Status label */}
+          <span
+            key={orbLabel}
+            className="orb-label text-xs font-semibold tracking-wide"
+            style={{
+              color: aiStatus === 'speaking'
+                ? '#818cf8'
+                : aiStatus === 'listening'
+                ? '#34d399'
+                : '#475569',
+            }}
+          >
+            {orbLabel}
+          </span>
+          {aiStatus === 'idle' && (
+            <span className="text-[10px] text-slate-600">Click orb to speak</span>
+          )}
+        </div>
+      </div>
+
+      {/* Submitting overlay */}
       {isSubmitting && (
         <div className="fixed inset-0 z-50 bg-[#0a0f1e]/90 backdrop-blur-sm flex flex-col items-center justify-center">
           <div className="w-16 h-16 relative mb-6">
-            <div className="absolute inset-0 rounded-full border-4 border-indigo-500/20"></div>
-            <div className="absolute inset-0 rounded-full border-4 border-indigo-500 border-t-transparent animate-spin"></div>
-            <i className="fas fa-cloud-upload-alt absolute inset-0 flex items-center justify-center text-indigo-400 text-xl"></i>
+            <div className="absolute inset-0 rounded-full border-4 border-indigo-500/20"/>
+            <div className="absolute inset-0 rounded-full border-4 border-indigo-500 border-t-transparent animate-spin"/>
           </div>
-          <h2 className="text-2xl font-black text-white tracking-tight mb-2">Saving Solution...</h2>
+          <h2 className="text-2xl font-black text-white tracking-tight mb-2">Saving Solution…</h2>
           <p className="text-slate-400 font-medium">Please wait while we upload the session recording securely.</p>
         </div>
       )}

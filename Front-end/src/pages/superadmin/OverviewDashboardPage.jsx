@@ -60,7 +60,7 @@ const getFilteredCandidates = (candidatesState) => {
 
   return [...filtered].sort((a, b) => {
     if (sortBy === 'score') {
-      return Number(b.score || 0) - Number(a.score || 0)
+      return Number(b.score ?? b.avg_score ?? 0) - Number(a.score ?? a.avg_score ?? 0)
     }
     return new Date(b.created_at) - new Date(a.created_at)
   })

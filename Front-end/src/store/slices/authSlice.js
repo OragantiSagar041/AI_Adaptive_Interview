@@ -25,7 +25,7 @@ const authSlice = createSlice({
     role: null,
     token: null,
     adminUser: null,
-    API_BASE_URL: import.meta.env.VITE_API_BASE_URL || fallbackBaseUrl || ''
+    API_BASE_URL: fallbackBaseUrl
   },
   reducers: {
     setCredentials: (state, action) => {
@@ -40,6 +40,18 @@ const authSlice = createSlice({
       state.role = null
       state.token = null
       state.adminUser = null
+    },
+    updateCredits: (state, action) => {
+      if (state.adminUser) {
+        state.adminUser.credits = action.payload
+        try {
+          const stored = JSON.parse(sessionStorage.getItem('adminUser')) || {}
+          stored.credits = action.payload
+          sessionStorage.setItem('adminUser', JSON.stringify(stored))
+        } catch (e) {
+          // ignore
+        }
+      }
     }
   },
   extraReducers: (builder) => {
@@ -49,5 +61,5 @@ const authSlice = createSlice({
   }
 })
 
-export const { setCredentials, logout } = authSlice.actions
+export const { setCredentials, logout, updateCredits } = authSlice.actions
 export default authSlice.reducer

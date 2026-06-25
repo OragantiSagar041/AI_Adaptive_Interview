@@ -7,10 +7,25 @@ export const handleOpenScorecard = createAsyncThunk(
   async (candidate, { getState, rejectWithValue }) => {
     try {
       const { API_BASE_URL, token } = getState().auth
+      const role = getState().auth.role
       const linkId = candidate.link_id || candidate.session_id || candidate.id
-      const res = await axios.get(`${API_BASE_URL}/admin/interview/${linkId}`, {
-        headers: { Authorization: `Bearer ${token}` }
-      })
+      
+      // For superadmin/master use the superadmin endpoint which works across all admins
+      // For regular admins use the standard admin endpoint
+      const endpoint = (role === 'super_admin' || role === 'master')
+        ? `${API_BASE_URL}/superadmin/interview/${linkId}`
+        : `${API_BASE_URL}/admin/interview/${linkId}`
+
+      let res
+      try {
+        res = await axios.get(endpoint, { headers: { Authorization: `Bearer ${token}` } })
+      } catch (firstErr) {
+        // Fallback: try the other endpoint
+        const fallback = (role === 'super_admin' || role === 'master')
+          ? `${API_BASE_URL}/admin/interview/${linkId}`
+          : `${API_BASE_URL}/superadmin/interview/${linkId}`
+        res = await axios.get(fallback, { headers: { Authorization: `Bearer ${token}` } })
+      }
       return { candidate, detail: res.data }
     } catch (err) {
       const errorMsg = err.response?.data?.detail || err.response?.data?.message || err.message || 'Failed to open scorecard'
