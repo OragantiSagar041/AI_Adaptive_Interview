@@ -1,14 +1,7 @@
 import React, { useState, useEffect } from 'react'
 import { useSelector, useDispatch } from 'react-redux'
-<<<<<<< HEAD
-import { User, Mail, Calendar, Lock, Shield, Coins, RefreshCw, KeyRound, CheckCircle, Eye, EyeOff } from 'lucide-react'
-import Swal from 'sweetalert2'
-import 'sweetalert2/dist/sweetalert2.min.css'
-import { getMasterProfile, updateAdminProfile } from '../../utils/api'
-=======
 import { User, Mail, Calendar, Lock, Shield, Coins, RefreshCw, KeyRound, CheckCircle, Camera, Loader2, AlertCircle, X, Check } from 'lucide-react'
 import { getMasterProfile, updateAdminProfile, uploadProfileImage } from '../../utils/api'
->>>>>>> c48e4e2c5a10c921d77e4417e719fe4909b7085f
 import { setCredentials } from '../../store/slices/authSlice'
 import { motion, AnimatePresence } from 'framer-motion'
 
