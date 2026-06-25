@@ -19,14 +19,15 @@ export function CandidateFilters({
   handleBulkDelete
 }) {
   return (
-    <div className="flex flex-wrap gap-2.5 items-end ml-auto">
-      <div className="flex flex-col gap-1">
+    <div className="grid grid-cols-2 gap-3 sm:flex sm:flex-wrap sm:items-end w-full sm:w-auto ml-auto">
+      <div className="flex flex-col gap-1 col-span-2 sm:col-span-1">
         <label className="text-[0.68rem] text-slate-500 font-bold uppercase">Search Candidate</label>
         <div className="relative flex items-center">
           <Search size={14} className="absolute left-3 text-slate-400" />
           <input
             type="text"
-            className="bg-white border border-[#dbe4f0] text-[#0f172a] rounded-lg pl-9 pr-3 py-1.5 text-sm outline-none transition-all focus:border-primary focus:ring-2 focus:ring-primary/15 w-[180px]"
+            className="bg-white border border-[#dbe4f0] text-[#0f172a] rounded-lg pr-3 py-1.5 text-xs outline-none transition-all focus:border-primary focus:ring-2 focus:ring-primary/15 w-full sm:w-[180px]"
+            style={{ padding: '0.5rem 0.75rem 0.5rem 2.25rem' }}
             placeholder="Name or Email..."
             value={searchTerm}
             onChange={(e) => setSearchTerm(e.target.value)}
@@ -38,7 +39,8 @@ export function CandidateFilters({
         <label className="text-[0.68rem] text-slate-500 font-bold uppercase">From</label>
         <input
           type="date"
-          className="bg-white border border-[#dbe4f0] text-[#0f172a] rounded-lg px-3 py-1.5 text-sm outline-none transition-all focus:border-primary focus:ring-2 focus:ring-primary/15 w-[130px]"
+          className="bg-white border border-[#dbe4f0] text-[#0f172a] rounded-lg px-3 py-1.5 text-xs outline-none transition-all focus:border-primary focus:ring-2 focus:ring-primary/15 w-full sm:w-[130px]"
+          style={{ padding: '0.5rem 0.75rem' }}
           value={startDate}
           onChange={(e) => setStartDate(e.target.value)}
         />
@@ -48,7 +50,8 @@ export function CandidateFilters({
         <label className="text-[0.68rem] text-slate-500 font-bold uppercase">To</label>
         <input
           type="date"
-          className="bg-white border border-[#dbe4f0] text-[#0f172a] rounded-lg px-3 py-1.5 text-sm outline-none transition-all focus:border-primary focus:ring-2 focus:ring-primary/15 w-[130px]"
+          className="bg-white border border-[#dbe4f0] text-[#0f172a] rounded-lg px-3 py-1.5 text-xs outline-none transition-all focus:border-primary focus:ring-2 focus:ring-primary/15 w-full sm:w-[130px]"
+          style={{ padding: '0.5rem 0.75rem' }}
           value={endDate}
           onChange={(e) => setEndDate(e.target.value)}
         />
@@ -57,7 +60,8 @@ export function CandidateFilters({
       <div className="flex flex-col gap-1">
         <label className="text-[0.68rem] text-slate-500 font-bold uppercase">Status</label>
         <select
-          className="bg-white border border-[#dbe4f0] text-[#0f172a] rounded-lg px-3 py-1.5 text-sm outline-none transition-all focus:border-primary focus:ring-2 focus:ring-primary/15 w-[130px] cursor-pointer"
+          className="bg-white border border-[#dbe4f0] text-[#0f172a] rounded-lg px-3 py-1.5 text-xs outline-none transition-all focus:border-primary focus:ring-2 focus:ring-primary/15 w-full sm:w-[130px] cursor-pointer"
+          style={{ padding: '0.5rem 1.75rem 0.5rem 0.75rem' }}
           value={statusFilter}
           onChange={(e) => setStatusFilter(e.target.value)}
         >
@@ -72,7 +76,8 @@ export function CandidateFilters({
       <div className="flex flex-col gap-1">
         <label className="text-[0.68rem] text-slate-500 font-bold uppercase">Sort By</label>
         <select
-          className="bg-white border border-[#dbe4f0] text-[#0f172a] rounded-lg px-3 py-1.5 text-sm outline-none transition-all focus:border-primary focus:ring-2 focus:ring-primary/15 w-[110px] cursor-pointer"
+          className="bg-white border border-[#dbe4f0] text-[#0f172a] rounded-lg px-3 py-1.5 text-xs outline-none transition-all focus:border-primary focus:ring-2 focus:ring-primary/15 w-full sm:w-[110px] cursor-pointer"
+          style={{ padding: '0.5rem 1.75rem 0.5rem 0.75rem' }}
           value={sortBy}
           onChange={(e) => setSortBy(e.target.value)}
         >
@@ -81,40 +86,42 @@ export function CandidateFilters({
         </select>
       </div>
 
-      <Button
-        onClick={() => {
-          setSearchTerm('')
-          setStartDate('')
-          setEndDate('')
-          setStatusFilter('all')
-          setSortBy('score')
-        }}
-        variant="secondary"
-        className="px-3 py-1.5 h-[36px] bg-rose-50 border-rose-200 text-rose-500 hover:bg-rose-100/50"
-        title="Clear Filters"
-        icon={<X size={14} />}
-      />
-
-      <Button
-        onClick={handleExportExcel}
-        variant="secondary"
-        className="px-4 py-1.5 h-[36px] bg-emerald-50 border-emerald-200 text-emerald-600 hover:bg-emerald-100/50"
-        title="Export to Excel"
-        icon={<Download size={14} />}
-      >
-        Export
-      </Button>
-
-      {selectedIds.length > 0 && (
+      <div className="flex items-center gap-2 col-span-2 sm:col-span-1 w-full sm:w-auto mt-2 sm:mt-0">
         <Button
-          onClick={handleBulkDelete}
-          variant="danger"
-          className="px-4 py-1.5 h-[36px]"
-          icon={<Trash2 size={14} />}
+          onClick={() => {
+            setSearchTerm('')
+            setStartDate('')
+            setEndDate('')
+            setStatusFilter('all')
+            setSortBy('score')
+          }}
+          variant="secondary"
+          className="flex-1 sm:flex-initial px-3 py-1.5 h-[36px] bg-rose-50 border-rose-200 text-rose-500 hover:bg-rose-100/50 justify-center"
+          title="Clear Filters"
+          icon={<X size={14} />}
+        />
+
+        <Button
+          onClick={handleExportExcel}
+          variant="secondary"
+          className="flex-1 sm:flex-initial px-4 py-1.5 h-[36px] bg-emerald-50 border-emerald-200 text-emerald-600 hover:bg-emerald-100/50 justify-center"
+          title="Export to Excel"
+          icon={<Download size={14} />}
         >
-          Delete ({selectedIds.length})
+          Export
         </Button>
-      )}
+
+        {selectedIds.length > 0 && (
+          <Button
+            onClick={handleBulkDelete}
+            variant="danger"
+            className="flex-1 sm:flex-initial px-4 py-1.5 h-[36px] justify-center"
+            icon={<Trash2 size={14} />}
+          >
+            Delete ({selectedIds.length})
+          </Button>
+        )}
+      </div>
     </div>
   )
 }

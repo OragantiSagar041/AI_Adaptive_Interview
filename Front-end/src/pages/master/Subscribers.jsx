@@ -242,7 +242,7 @@ export default function Subscribers() {
           <select
             value={planFilter}
             onChange={(e) => setPlanFilter(e.target.value)}
-            className="w-full sm:min-w-[140px] py-2.5 px-4 rounded-xl border border-slate-200 bg-slate-50 text-sm text-slate-800 outline-none focus:border-indigo-500 cursor-pointer"
+            className=" w-full sm:min-w-[140px] py-2.5 px-4 rounded-xl border border-slate-200 bg-slate-50 text-sm text-slate-800 outline-none focus:border-indigo-500 cursor-pointer"
           >
             <option value="all">All Plans</option>
             <option value="trial">Free Trial</option>

@@ -262,7 +262,7 @@ export default function MasterLayout() {
           </div>
 
           <div className="flex items-center gap-3 sm:gap-4 shrink-0">
-            <div className="hidden md:flex items-center gap-1.5 bg-slate-100 rounded-full p-1 border border-slate-200">
+            <div className="max-md:hidden flex items-center gap-1.5 bg-slate-100 rounded-full p-1 border border-slate-200">
               {Object.keys(accentColors).map(color => (
                 <button
                   key={color}
@@ -277,7 +277,7 @@ export default function MasterLayout() {
               ))}
             </div>
 
-            <span className="text-sm text-slate-600 hidden lg:block">
+            <span className="text-sm text-slate-600 max-lg:hidden block">
               Welcome back, <strong className="text-slate-800">{adminUser?.username || 'Master Admin'}</strong>
             </span>
 

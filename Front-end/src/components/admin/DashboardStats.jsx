@@ -16,7 +16,7 @@ export default function DashboardStats({
   return (
     <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-4">
       <div
-        className="bg-slate-900 border border-emerald-500/30 rounded-xl p-5 relative overflow-hidden cursor-pointer shadow-md hover:shadow-emerald-500/5 transition-all duration-300"
+        className="sm:col-span-2 lg:col-span-1 bg-slate-900 border border-emerald-500/30 rounded-xl p-4 sm:p-5 relative overflow-hidden cursor-pointer shadow-md hover:shadow-emerald-500/5 transition-all duration-300"
         onClick={onOpenLiveResults}
       >
         <div className="absolute top-3 right-3 flex items-center gap-1.5 bg-emerald-500/20 px-2 py-0.5 rounded-full border border-emerald-500/40">
@@ -24,7 +24,7 @@ export default function DashboardStats({
           <span className="text-[0.65rem] text-emerald-400 font-bold uppercase">Live</span>
         </div>
         <div className="text-[0.72rem] text-slate-400 uppercase tracking-wide font-semibold">Ongoing Interviews</div>
-        <div className="text-4xl font-extrabold text-white mt-1.5">{ongoingMonitoredCount}</div>
+        <div className="text-3xl sm:text-4xl font-extrabold text-white mt-1.5">{ongoingMonitoredCount}</div>
 
         <div className="mt-3 grid grid-cols-2 gap-1 text-[0.7rem] text-slate-500">
           <div><span className="text-emerald-400 font-semibold">{ongoingLiveCount}</span> live</div>
@@ -45,13 +45,13 @@ export default function DashboardStats({
       </div>
 
       <Card
-        className="bg-white/82 backdrop-blur-md border border-[#e5edf7] rounded-2xl p-5 relative overflow-hidden cursor-pointer hover:shadow-md transition-all duration-300 text-slate-800"
+        className="bg-white/82 backdrop-blur-md border border-[#e5edf7] rounded-2xl p-4 sm:p-5 relative overflow-hidden cursor-pointer hover:shadow-md transition-all duration-300 text-slate-800"
         onClick={() => onStatusFilter('all')}
       >
         <div className="absolute top-0 right-0 w-16 h-16 bg-primary/5 rounded-bl-full" />
         <div>
           <div className="text-[0.72rem] text-slate-500 uppercase tracking-wide font-semibold">Total Interviews</div>
-          <div className="text-3xl font-extrabold text-primary mt-2">{dbStats.total}</div>
+          <div className="text-2xl sm:text-3xl font-extrabold text-primary mt-2">{dbStats.total}</div>
         </div>
         <div className="text-[0.72rem] text-slate-500 mt-2">
           <strong>{dbStats.today}</strong> today
@@ -59,13 +59,13 @@ export default function DashboardStats({
       </Card>
 
       <Card
-        className="bg-white/82 backdrop-blur-md border border-[#e5edf7] rounded-2xl p-5 relative overflow-hidden cursor-pointer hover:shadow-md transition-all duration-300 text-slate-800"
+        className="bg-white/82 backdrop-blur-md border border-[#e5edf7] rounded-2xl p-4 sm:p-5 relative overflow-hidden cursor-pointer hover:shadow-md transition-all duration-300 text-slate-800"
         onClick={() => onStatusFilter('pending')}
       >
         <div className="absolute top-0 right-0 w-16 h-16 bg-warning/5 rounded-bl-full" />
         <div>
           <div className="text-[0.72rem] text-slate-500 uppercase tracking-wide font-semibold">Pending</div>
-          <div className="text-3xl font-extrabold text-warning mt-2">{dbStats.pending}</div>
+          <div className="text-2xl sm:text-3xl font-extrabold text-warning mt-2">{dbStats.pending}</div>
         </div>
         <div className="text-[0.72rem] text-slate-500 mt-2">
           <strong>{dbStats.started}</strong> in progress
@@ -73,13 +73,13 @@ export default function DashboardStats({
       </Card>
 
       <Card
-        className="bg-white/82 backdrop-blur-md border border-[#e5edf7] rounded-2xl p-5 relative overflow-hidden cursor-pointer hover:shadow-md transition-all duration-300 text-slate-800"
+        className="bg-white/82 backdrop-blur-md border border-[#e5edf7] rounded-2xl p-4 sm:p-5 relative overflow-hidden cursor-pointer hover:shadow-md transition-all duration-300 text-slate-800"
         onClick={() => onStatusFilter('completed')}
       >
         <div className="absolute top-0 right-0 w-16 h-16 bg-success/5 rounded-bl-full" />
         <div>
           <div className="text-[0.72rem] text-slate-500 uppercase tracking-wide font-semibold">Completed</div>
-          <div className="text-3xl font-extrabold text-success mt-2">{dbStats.completed}</div>
+          <div className="text-2xl sm:text-3xl font-extrabold text-success mt-2">{dbStats.completed}</div>
         </div>
         <div className="text-[0.72rem] text-slate-500 mt-2">
           Avg: <strong className="text-slate-800">{dbStats.avg_score}</strong>/100
@@ -87,13 +87,13 @@ export default function DashboardStats({
       </Card>
 
       <Card
-        className="bg-white/82 backdrop-blur-md border border-[#e5edf7] rounded-2xl p-5 relative overflow-hidden cursor-pointer hover:shadow-md transition-all duration-300 text-slate-800"
+        className="bg-white/82 backdrop-blur-md border border-[#e5edf7] rounded-2xl p-4 sm:p-5 relative overflow-hidden cursor-pointer hover:shadow-md transition-all duration-300 text-slate-800"
         onClick={onOpenQualified}
       >
         <div className="absolute top-0 right-0 w-16 h-16 bg-emerald-500/5 rounded-bl-full" />
         <div>
           <div className="text-[0.72rem] text-slate-500 uppercase tracking-wide font-semibold">Selected</div>
-          <div className="text-3xl font-extrabold text-emerald-500 mt-2">{dbStats.selected}</div>
+          <div className="text-2xl sm:text-3xl font-extrabold text-emerald-500 mt-2">{dbStats.selected}</div>
         </div>
         <div className="text-[0.72rem] text-slate-500 mt-2">
           <strong>{dbStats.rejected}</strong> rejected

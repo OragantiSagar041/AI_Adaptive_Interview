@@ -170,7 +170,7 @@ export default function TeamManagementPage() {
       showCancelButton: true,
       confirmButtonText: 'Yes, remove them'
     })
-    
+
     if (result.isConfirmed) {
       try {
         const res = await fetch(`${API_BASE_URL}/super-admin/admins/${adminId}`, {
@@ -209,9 +209,9 @@ export default function TeamManagementPage() {
       try {
         const res = await fetch(`${API_BASE_URL}/super-admin/admins/${adminId}/add-credits`, {
           method: 'POST',
-          headers: { 
+          headers: {
             'Content-Type': 'application/json',
-            Authorization: `Bearer ${token}` 
+            Authorization: `Bearer ${token}`
           },
           body: JSON.stringify({ credits: parseInt(credits, 10) })
         })
@@ -377,7 +377,7 @@ export default function TeamManagementPage() {
       {/* MODAL: ADD ADMIN */}
       {isAddAdminOpen && (
         <div className="fixed inset-0 z-[9999] flex items-center justify-center bg-black/60 backdrop-blur-sm p-4">
-          <form onSubmit={handleAddAdminSubmit} className="w-full max-w-md bg-white border border-slate-200 rounded-2xl p-6 shadow-2xl space-y-4 text-slate-800">
+          <form onSubmit={handleAddAdminSubmit} className="w-full max-w-md bg-white border border-slate-200 rounded-2xl p-6 shadow-2xl space-y-4 text-slate-800 max-h-[90vh] overflow-y-auto">
             <div className="flex justify-between items-center border-b border-slate-250 pb-3">
               <h3 className="font-bold text-slate-800">Add New Admin</h3>
               <button

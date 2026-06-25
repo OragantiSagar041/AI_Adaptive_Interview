@@ -140,67 +140,67 @@ export default function SuperDashboardPage() {
   }, [token])
 
   return (
-    <div className="space-y-8 max-w-6xl">
+    <div className="space-y-6 md:space-y-8 max-w-6xl">
       {/* Stat Cards */}
-      <div className="grid gap-6 sm:grid-cols-2 lg:grid-cols-4">
-        <div className="bg-white border border-slate-200/60 p-6 rounded-2xl shadow-[0_4px_20px_rgba(0,0,0,0.04)] flex justify-between items-center">
+      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 md:gap-6">
+        <div className="bg-white border border-slate-200/60 p-4 md:p-6 rounded-2xl shadow-[0_4px_20px_rgba(0,0,0,0.04)] flex justify-between items-center gap-2">
           <div>
-            <span className="text-[0.68rem] font-bold text-slate-400 uppercase tracking-widest">Available Credits</span>
-            <h3 className="text-3xl font-extrabold mt-1 text-emerald-500">{credits}</h3>
+            <span className="text-[0.62rem] md:text-[0.68rem] font-bold text-slate-400 uppercase tracking-widest block leading-tight">Available Credits</span>
+            <h3 className="text-2xl md:text-3xl font-extrabold mt-1 text-emerald-500">{credits}</h3>
           </div>
-          <div className="w-12 h-12 bg-emerald-50 text-emerald-500 rounded-xl flex items-center justify-center text-xl">
+          <div className="w-10 h-10 md:w-12 md:h-12 bg-emerald-50 text-emerald-500 rounded-xl flex items-center justify-center shrink-0 text-lg md:text-xl">
             <i className="fas fa-coins" />
           </div>
         </div>
 
-        <div className="bg-white border border-slate-200/60 p-6 rounded-2xl shadow-[0_4px_20px_rgba(0,0,0,0.04)] flex justify-between items-center">
+        <div className="bg-white border border-slate-200/60 p-4 md:p-6 rounded-2xl shadow-[0_4px_20px_rgba(0,0,0,0.04)] flex justify-between items-center gap-2">
           <div>
-            <span className="text-[0.68rem] font-bold text-slate-400 uppercase tracking-widest">Total Interviews</span>
-            <h3 className="text-3xl font-extrabold mt-1 text-slate-900">{totalSessions}</h3>
+            <span className="text-[0.62rem] md:text-[0.68rem] font-bold text-slate-400 uppercase tracking-widest block leading-tight">Total Interviews</span>
+            <h3 className="text-2xl md:text-3xl font-extrabold mt-1 text-slate-900">{totalSessions}</h3>
           </div>
-          <div className="w-12 h-12 bg-indigo-50 text-indigo-500 rounded-xl flex items-center justify-center text-xl">
+          <div className="w-10 h-10 md:w-12 md:h-12 bg-indigo-50 text-indigo-500 rounded-xl flex items-center justify-center shrink-0 text-lg md:text-xl">
             <i className="fas fa-video" />
           </div>
         </div>
 
-        <div className="bg-white border border-slate-200/60 p-6 rounded-2xl shadow-[0_4px_20px_rgba(0,0,0,0.04)] flex justify-between items-center">
+        <div className="bg-white border border-slate-200/60 p-4 md:p-6 rounded-2xl shadow-[0_4px_20px_rgba(0,0,0,0.04)] flex justify-between items-center gap-2">
           <div>
-            <span className="text-[0.68rem] font-bold text-slate-400 uppercase tracking-widest">Completed</span>
-            <h3 className="text-3xl font-extrabold mt-1 text-slate-900">{completedSessions}</h3>
+            <span className="text-[0.62rem] md:text-[0.68rem] font-bold text-slate-400 uppercase tracking-widest block leading-tight">Completed</span>
+            <h3 className="text-2xl md:text-3xl font-extrabold mt-1 text-slate-900">{completedSessions}</h3>
           </div>
-          <div className="w-12 h-12 bg-indigo-50 text-indigo-500 rounded-xl flex items-center justify-center text-xl">
+          <div className="w-10 h-10 md:w-12 md:h-12 bg-indigo-50 text-indigo-500 rounded-xl flex items-center justify-center shrink-0 text-lg md:text-xl">
             <i className="fas fa-check-circle" />
           </div>
         </div>
 
-        <div className="bg-white border border-slate-200/60 p-6 rounded-2xl shadow-[0_4px_20px_rgba(0,0,0,0.04)] flex justify-between items-center">
+        <div className="bg-white border border-slate-200/60 p-4 md:p-6 rounded-2xl shadow-[0_4px_20px_rgba(0,0,0,0.04)] flex justify-between items-center gap-2">
           <div>
-            <span className="text-[0.68rem] font-bold text-slate-400 uppercase tracking-widest">Pending</span>
-            <h3 className="text-3xl font-extrabold mt-1 text-slate-900">{pendingSessions}</h3>
+            <span className="text-[0.62rem] md:text-[0.68rem] font-bold text-slate-400 uppercase tracking-widest block leading-tight">Pending</span>
+            <h3 className="text-2xl md:text-3xl font-extrabold mt-1 text-slate-900">{pendingSessions}</h3>
           </div>
-          <div className="w-12 h-12 bg-amber-50 text-amber-500 rounded-xl flex items-center justify-center text-xl">
+          <div className="w-10 h-10 md:w-12 md:h-12 bg-amber-50 text-amber-500 rounded-xl flex items-center justify-center shrink-0 text-lg md:text-xl">
             <i className="fas fa-clock" />
           </div>
         </div>
       </div>
 
       {/* Data Visualization Charts Area */}
-      <div className="grid gap-6 lg:grid-cols-[1.5fr_1fr_1fr]">
-        <div className="bg-white border border-slate-200/60 p-6 rounded-2xl shadow-[0_4px_20px_rgba(0,0,0,0.04)] space-y-4">
+      <div className="grid grid-cols-1 lg:grid-cols-[1.5fr_1fr_1fr] gap-4 md:gap-6">
+        <div className="bg-white border border-slate-200/60 p-4 md:p-6 rounded-2xl shadow-[0_4px_20px_rgba(0,0,0,0.04)] space-y-4">
           <h3 className="text-sm font-bold text-slate-800 uppercase tracking-wider">Interviews Last 7 Days</h3>
           <div className="h-[280px] w-full relative">
             <canvas ref={saUsageChartRef} id="saUsageChart" />
           </div>
         </div>
 
-        <div className="bg-white border border-slate-200/60 p-6 rounded-2xl shadow-[0_4px_20px_rgba(0,0,0,0.04)] space-y-4">
+        <div className="bg-white border border-slate-200/60 p-4 md:p-6 rounded-2xl shadow-[0_4px_20px_rgba(0,0,0,0.04)] space-y-4">
           <h3 className="text-sm font-bold text-slate-800 uppercase tracking-wider">Interviews by Admin</h3>
           <div className="h-[280px] w-full relative">
             <canvas ref={saAdminPieChartRef} id="saAdminPieChart" />
           </div>
         </div>
 
-        <div className="bg-white border border-slate-200/60 p-6 rounded-2xl shadow-[0_4px_20px_rgba(0,0,0,0.04)] space-y-4">
+        <div className="bg-white border border-slate-200/60 p-4 md:p-6 rounded-2xl shadow-[0_4px_20px_rgba(0,0,0,0.04)] space-y-4">
           <h3 className="text-sm font-bold text-slate-800 uppercase tracking-wider">Credits Used vs Available</h3>
           <div className="h-[280px] w-full relative">
             <canvas ref={saCreditsDoughnutChartRef} id="saCreditsDoughnutChart" />

@@ -166,12 +166,13 @@ export default function OverviewDashboardPage() {
 
   return (
     <div className="flex flex-col gap-6">
-      <div className="flex items-center gap-4 bg-white/70 backdrop-blur-md p-4 rounded-2xl border border-slate-100 shadow-sm flex-wrap">
-        <span className="text-sm font-bold text-slate-600">Filter by Tenant Admin:</span>
+      <div className="flex flex-col sm:flex-row sm:items-center gap-2 sm:gap-4 bg-white/70 backdrop-blur-md p-4 rounded-2xl border border-slate-100 shadow-sm">
+        <span className="text-xs sm:text-sm font-bold text-slate-600">Filter by Tenant Admin:</span>
         <select
           value={selectedAdminFilter || ''}
           onChange={(e) => dispatch(setSelectedAdminFilter(e.target.value || null))}
-          className="rounded-xl border border-slate-200 bg-white px-3 py-1.5 text-xs text-slate-800 outline-none focus:border-indigo-500 transition-all font-semibold shadow-sm cursor-pointer"
+          className="w-full sm:w-auto rounded-xl border border-slate-200 bg-white px-3 py-1.5 text-[11px] text-slate-800 outline-none focus:border-indigo-500 transition-all font-semibold shadow-sm cursor-pointer"
+          style={{ padding: '0.5rem 1.75rem 0.5rem 0.75rem' }}
         >
           <option value="">All Admins (Aggregated)</option>
           {subAdmins.map(adm => (
@@ -195,7 +196,7 @@ export default function OverviewDashboardPage() {
       />
 
       <Card className="bg-white/82 backdrop-blur-md border border-[#e5edf7] p-0 shadow-sm flex flex-col gap-5 text-slate-800">
-        <div className="flex justify-between items-start flex-wrap gap-4 px-6 pt-6">
+        <div className="flex flex-col gap-4 px-4 pt-4 sm:flex-row sm:justify-between sm:items-start sm:px-6 sm:pt-6">
           <div className="flex gap-3 items-center">
             <div className="w-10 h-10 rounded-xl flex items-center justify-center bg-indigo-50 text-indigo-600">
               <LayoutDashboard size={18} />
