@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react'
 import { useSelector, useDispatch } from 'react-redux'
-import { User, Mail, Calendar, Lock, Shield, Coins, RefreshCw, KeyRound, CheckCircle, Camera, Loader2, AlertCircle, X, Check } from 'lucide-react'
+import { User, Mail, Calendar, Lock, Shield, Coins, RefreshCw, KeyRound, Eye,CheckCircle, Camera, Loader2, AlertCircle, X, Check } from 'lucide-react'
 import { getMasterProfile, updateAdminProfile, uploadProfileImage } from '../../utils/api'
 import { setCredentials } from '../../store/slices/authSlice'
 import { motion, AnimatePresence } from 'framer-motion'
