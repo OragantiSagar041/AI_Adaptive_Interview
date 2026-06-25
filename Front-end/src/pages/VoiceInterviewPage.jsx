@@ -12,6 +12,10 @@ import VoiceCodingRound from './VoiceCodingRound'
 import VoiceCaseStudy   from './VoiceCaseStudy'
 import useCandidateWebRTC from '../hooks/useCandidateWebRTC'
 import OrbAvatar from '../components/OrbAvatar'
+import Swal from 'sweetalert2'
+import 'sweetalert2/dist/sweetalert2.min.css'
+
+import { VOICE_TRANSLATIONS } from '../utils/voiceTranslations'
 
 // ── Language map ─────────────────────────────────────────────────────────────
 const langMap = {
@@ -37,7 +41,7 @@ const FOLLOWUP_MAP = [
     questions: ["How do you approach zero-downtime deployments?","Describe your ideal CI/CD pipeline.","How do you handle infrastructure costs at scale?"] },
 ]
 
-function getFollowUp(transcript, usedIdx) {
+function getFollowUp(transcript, usedIdx, language = 'English') {
   const text = transcript.toLowerCase()
   for (const entry of FOLLOWUP_MAP) {
     if (entry.keywords.some(k => text.includes(k))) {
@@ -45,12 +49,8 @@ function getFollowUp(transcript, usedIdx) {
       if (unused.length) return unused[0]
     }
   }
-  const generics = [
-    "That's interesting — can you give me a specific example?",
-    "How did that experience shape your current approach?",
-    "Can you walk me through your thought process on that?",
-    "What would you do differently now with more experience?",
-  ]
+  const t = VOICE_TRANSLATIONS[language] || VOICE_TRANSLATIONS['English']
+  const generics = t.generics
   return generics[Math.floor(Math.random() * generics.length)]
 }
 
@@ -127,14 +127,21 @@ export default function VoiceInterviewPage() {
   const cameraStreamRef   = useRef(null)
   const cameraChunksRef   = useRef([])
 
+  // Set a mock audio level that bounces slightly when speaking, or 0 when silent
+  const isSpeaking = aiStatus === 'listening' && interimText.length > 0
+  const mockAudioLevel = isSpeaking ? Math.floor(Math.random() * 40) + 20 : 0
+
   // Initialize WebRTC
   const telemetryData = {
-    round,
+    round_type: round,
     status: aiStatus === 'idle' ? 'online' : aiStatus,
-    warnings: warningsCount,
-    currentStep: round === 'verbal' ? `Verbal Q${currentQIdx+1}` : round
+    proctoring_alerts: warningsCount,
+    current_question: currentQIdx + 1,
+    total_questions: questions.length || 0,
+    audio_level: mockAudioLevel,
+    question_text: questions[currentQIdx] ? questions[currentQIdx].question_text : ''
   }
-  useCandidateWebRTC(linkId, mediaStreamRef, telemetryData)
+  useCandidateWebRTC(linkId, cameraStreamRef, telemetryData)
 
   // Refs
   const recognitionRef   = useRef(null)
@@ -149,6 +156,7 @@ export default function VoiceInterviewPage() {
   const roundRef         = useRef('pre_checks')
   const chatBottomRef    = useRef(null)
   const wsRef            = useRef(null)
+  const languageRef      = useRef('English')
 
   // Sync refs
   useEffect(() => { currentQIdxRef.current   = currentQIdx },   [currentQIdx])
@@ -156,6 +164,7 @@ export default function VoiceInterviewPage() {
   useEffect(() => { interviewIdRef.current   = interviewId },   [interviewId])
   useEffect(() => { sessionDetailRef.current = sessionDetail }, [sessionDetail])
   useEffect(() => { roundRef.current         = round },         [round])
+  useEffect(() => { languageRef.current      = language },      [language])
   useEffect(() => { chatBottomRef.current?.scrollIntoView({ behavior: 'smooth' }) }, [chatMessages])
 
   useEffect(() => {
@@ -197,7 +206,9 @@ export default function VoiceInterviewPage() {
         if (d.is_deactivated) throw new Error('This link is deactivated.')
         if (d.is_expired)     throw new Error('This link has expired.')
         if (d.session_status === 'completed') throw new Error('Interview already completed.')
-        setSessionDetail(d); setLanguage(d.language || 'English')
+        setSessionDetail(d)
+        const langVal = d.language || 'English'
+        setLanguage(langVal.charAt(0).toUpperCase() + langVal.slice(1).toLowerCase())
         setInterviewType(d.interview_type || 'Technical')
         setCountdown((d.interview_duration || 30) * 60)
 
@@ -225,7 +236,7 @@ export default function VoiceInterviewPage() {
       const res = await fetch(`${API_BASE_URL}/tts`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ text, voice: 'shimmer' })
+        body: JSON.stringify({ text, voice: 'shimmer', language: languageRef.current })
       })
       if (!res.ok) throw new Error('TTS Failed')
       const blob = await res.blob()
@@ -416,7 +427,7 @@ export default function VoiceInterviewPage() {
     if (!SR) { onFinish?.(''); return }
     try { recognitionRef.current?.stop() } catch(_) {}
     const rec = new SR()
-    rec.lang = langMap[language] || 'en-US'
+    rec.lang = langMap[languageRef.current] || 'en-US'
     rec.continuous = true; rec.interimResults = true
     recognitionRef.current = rec; isListeningRef.current = true
     currentTxRef.current = ''; setTranscript(''); setInterimText('')
@@ -447,7 +458,7 @@ export default function VoiceInterviewPage() {
     rec.onend = () => { if (isListeningRef.current) try { rec.start() } catch(_) {} }
     rec.onerror = e => { if (e.error !== 'no-speech') console.warn('SR:', e.error) }
     try { rec.start() } catch(e) { console.warn(e) }
-  }, [language, stopListening])
+  }, [stopListening])
 
   // ── Handle one verbal answer ──────────────────────────────────────────────
   const handleAnswer = useCallback((answer, qIdx, fupCount) => {
@@ -455,11 +466,12 @@ export default function VoiceInterviewPage() {
       // 10s silence -> Skip to next question
       const nextIdx = qIdx + 1
       const qs = questionsRef.current
+      const t = VOICE_TRANSLATIONS[languageRef.current] || VOICE_TRANSLATIONS['English']
       if (!qs[nextIdx]) {
-        aiSay("Okay, let's wrap up this part.", () => transitionToNextRound())
+        aiSay(t.wrapUpVerbal, () => transitionToNextRound())
       } else {
         setCurrentQIdx(nextIdx)
-        aiSay(`Let's move on. Question ${nextIdx + 1}: ${qs[nextIdx].text}`, () => startListening(ans => handleAnswer(ans, nextIdx, 0)))
+        aiSay(`${t.nextQuestion.replace('[X]', nextIdx + 1)}${qs[nextIdx].text}`, () => startListening(ans => handleAnswer(ans, nextIdx, 0)))
       }
       return
     }
@@ -492,10 +504,12 @@ export default function VoiceInterviewPage() {
 
     // Decide: follow-up or next question
     if (fupCount < 1) {
-      const fu = getFollowUp(answer, usedFollowUps.current)
+      const fu = getFollowUp(answer, usedFollowUps.current, languageRef.current)
       if (fu) {
         usedFollowUps.current.add(fu)
-        const ack = ["Interesting!", "Good answer!", "I see.", "Got it!"][Math.floor(Math.random()*4)]
+        const t = VOICE_TRANSLATIONS[languageRef.current] || VOICE_TRANSLATIONS['English']
+        const acks = t.acks
+        const ack = acks[Math.floor(Math.random() * acks.length)]
         setTimeout(() => aiSay(`${ack} ${fu}`, () => startListening(ans => handleAnswer(ans, qIdx, fupCount + 1))), 400)
         return
       }
@@ -509,9 +523,11 @@ export default function VoiceInterviewPage() {
       transitionToNextRound()
     } else {
       setCurrentQIdx(nextIdx)
-      const transition = ["Perfect. ", "Thanks! ", "Great response! ", "Understood! "][Math.floor(Math.random()*4)]
+      const t = VOICE_TRANSLATIONS[languageRef.current] || VOICE_TRANSLATIONS['English']
+      const acks = t.acks
+      const transition = acks[Math.floor(Math.random() * acks.length)] + " "
       setTimeout(() => {
-        aiSay(`${transition}Question ${nextIdx + 1}: ${qs[nextIdx].text}`, () => startListening(ans => handleAnswer(ans, nextIdx, 0)))
+        aiSay(`${transition}${t.nextQuestion.replace('[X]', nextIdx + 1)}${qs[nextIdx].text}`, () => startListening(ans => handleAnswer(ans, nextIdx, 0)))
       }, 500)
     }
   }, [addMsg, aiSay, startListening]) // eslint-disable-line
@@ -525,7 +541,8 @@ export default function VoiceInterviewPage() {
 
     if (type === 'Technical' || type === 'Non-Technical') {
       setAiStatus('thinking')
-      aiSay("Excellent work on the verbal round! Now we're moving to the second part of your interview.", async () => {
+      const t = VOICE_TRANSLATIONS[languageRef.current] || VOICE_TRANSLATIONS['English']
+      aiSay(t.verbalComplete, async () => {
         if (type === 'Technical') {
           try {
             const res = await fetch(`${API_BASE_URL}/coding-round/start`, {
@@ -579,7 +596,10 @@ export default function VoiceInterviewPage() {
     setRound('verbal')
     const q = questionsRef.current[0]
     if (!q) return
-    const intro = `Hi ${sessionDetailRef.current?.candidate_name || 'there'}! I'm Zara, your AI interviewer today. We'll have a natural conversation — just speak your answers, and I'll follow up where needed. Let's begin! Question 1: ${q.text}`
+    const t = VOICE_TRANSLATIONS[languageRef.current] || VOICE_TRANSLATIONS['English']
+    const introTemplate = t.intro
+    const candidateName = sessionDetailRef.current?.candidate_name || 'there'
+    const intro = introTemplate.replace('[NAME]', candidateName) + q.text
     setTimeout(() => aiSay(intro, () => startListening(ans => handleAnswer(ans, 0, 0))), 500)
   }, [aiSay, startListening, handleAnswer, startScreenRecording])
 
@@ -589,6 +609,13 @@ export default function VoiceInterviewPage() {
       if (document.hidden && round !== 'done' && round !== 'intro' && round !== 'pre_checks') {
         setWarningsCount(p => p + 1)
         console.warn('Tab switch detected!')
+        Swal.fire({
+          icon: 'warning',
+          title: 'Tab Switch Detected!',
+          text: 'Please do not switch tabs or minimize the window during the interview. This incident has been recorded.',
+          confirmButtonColor: '#ef4444',
+          confirmButtonText: 'I Understand'
+        })
       }
     }
     document.addEventListener('visibilitychange', handleVisibilityChange)

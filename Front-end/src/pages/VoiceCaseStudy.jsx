@@ -6,6 +6,7 @@
 import React, { useState, useRef, useEffect, useCallback } from 'react'
 import { API_BASE_URL } from '../apiConfig'
 import OrbAvatar from '../components/OrbAvatar'
+import { VOICE_TRANSLATIONS } from '../utils/voiceTranslations'
 
 // ── Follow-up question trees by topic keywords ────────────────────────────
 const FOLLOWUP_TREES = {
@@ -70,7 +71,7 @@ const FOLLOWUP_TREES = {
   }
 }
 
-function getFollowup(transcript, usedFollowups) {
+function getFollowup(transcript, usedFollowups, language = 'English') {
   const text = transcript.toLowerCase()
   for (const [key, tree] of Object.entries(FOLLOWUP_TREES)) {
     if (key === 'default') continue
@@ -79,8 +80,9 @@ function getFollowup(transcript, usedFollowups) {
       if (unused.length > 0) return unused[Math.floor(Math.random() * unused.length)]
     }
   }
-  const unused = FOLLOWUP_TREES.default.followups.filter(f => !usedFollowups.has(f))
-  return unused.length > 0 ? unused[Math.floor(Math.random() * unused.length)] : null
+  const t = VOICE_TRANSLATIONS[language] || VOICE_TRANSLATIONS['English']
+  const generics = t.generics
+  return generics[Math.floor(Math.random() * generics.length)]
 }
 
 // ── Chat Bubble ───────────────────────────────────────────────────────────
@@ -155,11 +157,18 @@ export default function VoiceCaseStudy({
     const synth = window.speechSynthesis; if (!synth) { onEnd?.(); return }
     synth.cancel()
     const u = new SpeechSynthesisUtterance(text)
-    u.lang = langMap[sessionLang] || 'en-US'; u.rate = 0.9; u.pitch = 1.08
+    const targetLang = langMap[sessionLang] || 'en-US'
+    u.lang = targetLang; u.rate = 0.9; u.pitch = 1.08
     u.onend = () => { setAiStatus('idle'); onEnd?.() }
     u.onstart = () => setAiStatus('speaking')
     u.onerror = () => { setAiStatus('idle'); onEnd?.() }
-    const v = synth.getVoices().find(v => v.lang.startsWith('en') && v.localService) || synth.getVoices().find(v => v.lang.startsWith('en'))
+    
+    // Find voice matching target language, fallback to any if not found
+    const voices = synth.getVoices()
+    const v = voices.find(v => v.lang === targetLang && v.localService) 
+              || voices.find(v => v.lang === targetLang)
+              || voices.find(v => v.lang.startsWith(targetLang.split('-')[0]))
+              || voices.find(v => v.lang.startsWith('en'))
     if (v) u.voice = v
     synth.speak(u)
   }, [sessionLang])
@@ -189,6 +198,12 @@ export default function VoiceCaseStudy({
     currentTxRef.current = ''; setTranscript(''); setInterimText('')
     setAiStatus('listening')
 
+    // Initial grace period timer
+    clearTimeout(silenceTimerRef.current)
+    silenceTimerRef.current = setTimeout(() => {
+      if (isListeningRef.current) { stopListening(); onFinish?.(currentTxRef.current.trim()) }
+    }, 15000)
+
     rec.onresult = ev => {
       let fin = '', interim = ''
       for (let i = ev.resultIndex; i < ev.results.length; i++) {
@@ -200,7 +215,7 @@ export default function VoiceCaseStudy({
       clearTimeout(silenceTimerRef.current)
       silenceTimerRef.current = setTimeout(() => {
         if (isListeningRef.current) { stopListening(); onFinish?.(currentTxRef.current.trim()) }
-      }, 5000)
+      }, 15000)
     }
     rec.onend = () => { if (isListeningRef.current) try { rec.start() } catch(_) {} }
     rec.onerror = e => { if (e.error !== 'no-speech') console.warn('SR:', e.error) }
@@ -209,7 +224,8 @@ export default function VoiceCaseStudy({
 
   // ── Handle candidate's answer ─────────────────────────────────────────────
   const handleAnswer = useCallback((answer, currentIdx) => {
-    if (!answer?.trim()) { aiSay("Take your time — can you share your initial thoughts?", () => startListening(ans => handleAnswer(ans, currentIdx))); return }
+    const t = VOICE_TRANSLATIONS[sessionLang] || VOICE_TRANSLATIONS['English']
+    if (!answer?.trim()) { aiSay(t.csNeedMore, () => startListening(ans => handleAnswer(ans, currentIdx))); return }
     addMsg('user', answer)
     setQuestionCount(p => p + 1)
 
@@ -238,10 +254,11 @@ export default function VoiceCaseStudy({
     }
 
     // Should we ask a follow-up or move to next scenario?
-    const followup = questionCount < 2 ? getFollowup(answer, usedFollowups) : null
+    const followup = questionCount < 2 ? getFollowup(answer, usedFollowups, sessionLang) : null
     if (followup && questionCount < 3) {
       usedFollowups.add(followup)
-      const transition = ["Interesting perspective!", "Good thinking!", "I like how you approached that.", "That's a solid point."][Math.floor(Math.random()*4)]
+      const ackList = t.csAck
+      const transition = ackList[Math.floor(Math.random() * ackList.length)]
       setTimeout(() => {
         aiSay(`${transition} ${followup}`, () => {
           startListening(ans => handleAnswer(ans, currentIdx))
@@ -253,22 +270,25 @@ export default function VoiceCaseStudy({
       if (nextIdx < scenarios.length) {
         setCurrentScenarioIdx(nextIdx)
         setQuestionCount(0)
-        const transition = ["Let's move to the next scenario.", "Great discussion! Here's another scenario for you.", "Now let's switch gears."][Math.floor(Math.random()*3)]
+        const transList = t.csTransitions
+        const transition = transList[Math.floor(Math.random() * transList.length)]
         setTimeout(() => presentScenario(nextIdx, transition), 600)
       } else {
         handleComplete()
       }
     }
-  }, [questionCount, scenarios, interviewId, sessionDetail, addMsg, aiSay, startListening, usedFollowups])
+  }, [questionCount, scenarios, interviewId, sessionDetail, addMsg, aiSay, startListening, usedFollowups, sessionLang])
 
   // ── Present scenario ───────────────────────────────────────────────────────
   const presentScenario = useCallback((idx, prefix = '') => {
     const sc = scenarios[idx]
     if (!sc) { handleComplete(); return }
-    const scenarioText = `${prefix} Here's your ${idx === 0 ? '' : 'next '}scenario: ${sc.text}`
+    const t = VOICE_TRANSLATIONS[sessionLang] || VOICE_TRANSLATIONS['English']
+    const scenarioPrefix = idx === 0 ? t.csScenarioPrefix : t.csScenarioNextPrefix
+    const scenarioText = `${prefix ? prefix + ' ' : ''}${scenarioPrefix}${sc.text}`
     const prompt = idx === 0
-      ? `${scenarioText}. Take a moment to process this, then walk me through how you'd approach it.`
-      : `${scenarioText}. How would you handle this?`
+      ? `${scenarioText}. ${t.csPromptFirst}`
+      : `${scenarioText}. ${t.csPromptNext}`
 
     setTimeout(() => {
       aiSay(prompt, () => {
@@ -276,11 +296,13 @@ export default function VoiceCaseStudy({
         startListening(ans => handleAnswer(ans, idx))
       })
     }, 400)
-  }, [scenarios, aiSay, startListening, handleAnswer])
+  }, [scenarios, aiSay, startListening, handleAnswer, sessionLang])
 
   // ── Start ─────────────────────────────────────────────────────────────────
   useEffect(() => {
-    const intro = `Welcome to the case study discussion round. I'm going to present you with ${scenarios.length > 1 ? `${scenarios.length} business scenarios` : 'a real-world scenario'}. For each one, I'd like you to think out loud and walk me through your reasoning. There are no wrong answers — I'm interested in how you think. Let's begin.`
+    const t = VOICE_TRANSLATIONS[sessionLang] || VOICE_TRANSLATIONS['English']
+    const introTemplate = scenarios.length > 1 ? t.csIntro : t.csIntroSingle
+    const intro = introTemplate.replace('[COUNT]', scenarios.length)
     setTimeout(() => aiSay(intro, () => presentScenario(0)), 800)
   }, []) // eslint-disable-line
 
@@ -288,11 +310,12 @@ export default function VoiceCaseStudy({
     if (submittingRef.current) return
     submittingRef.current = true
     stopListening(); window.speechSynthesis?.cancel()
-    aiSay("Excellent discussion! You've demonstrated strong analytical thinking. I'm saving your responses now.", async () => {
+    const t = VOICE_TRANSLATIONS[sessionLang] || VOICE_TRANSLATIONS['English']
+    aiSay(t.csComplete, async () => {
       try { await fetch(`${API_BASE_URL}/complete-session/${linkId}`, { method: 'POST' }) } catch(_) {}
       setTimeout(() => onComplete?.(), 1200)
     })
-  }, [stopListening, aiSay, linkId, onComplete])
+  }, [stopListening, aiSay, linkId, onComplete, sessionLang])
 
   useEffect(() => () => { stopListening(); window.speechSynthesis?.cancel() }, [stopListening])
 

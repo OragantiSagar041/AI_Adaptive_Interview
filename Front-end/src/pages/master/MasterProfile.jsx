@@ -1,7 +1,14 @@
 import React, { useState, useEffect } from 'react'
 import { useSelector, useDispatch } from 'react-redux'
+<<<<<<< HEAD
+import { User, Mail, Calendar, Lock, Shield, Coins, RefreshCw, KeyRound, CheckCircle, Eye, EyeOff } from 'lucide-react'
+import Swal from 'sweetalert2'
+import 'sweetalert2/dist/sweetalert2.min.css'
+import { getMasterProfile, updateAdminProfile } from '../../utils/api'
+=======
 import { User, Mail, Calendar, Lock, Shield, Coins, RefreshCw, KeyRound, CheckCircle, Camera, Loader2, AlertCircle, X, Check } from 'lucide-react'
 import { getMasterProfile, updateAdminProfile, uploadProfileImage } from '../../utils/api'
+>>>>>>> c48e4e2c5a10c921d77e4417e719fe4909b7085f
 import { setCredentials } from '../../store/slices/authSlice'
 import { motion, AnimatePresence } from 'framer-motion'
 
@@ -37,6 +44,11 @@ export default function MasterProfile() {
   const [oldPassword, setOldPassword] = useState('')
   const [newPassword, setNewPassword] = useState('')
   const [confirmPassword, setConfirmPassword] = useState('')
+  
+  // Password visibility states
+  const [showOldPassword, setShowOldPassword] = useState(false)
+  const [showNewPassword, setShowNewPassword] = useState(false)
+  const [showConfirmPassword, setShowConfirmPassword] = useState(false)
 
   const inputStyle = {
     border: 'none',
@@ -415,13 +427,20 @@ export default function MasterProfile() {
                       <Lock size={16} />
                     </span>
                     <input
-                      type="password"
+                      type={showOldPassword ? "text" : "password"}
                       placeholder="Enter current master password"
                       value={oldPassword}
                       onChange={(e) => setOldPassword(e.target.value)}
                       style={inputStyle}
                       className="text-sm text-slate-800 placeholder-slate-400"
                     />
+                    <button
+                      type="button"
+                      onClick={() => setShowOldPassword(!showOldPassword)}
+                      className="absolute inset-y-0 right-0 pr-3.5 flex items-center text-slate-400 hover:text-slate-600 cursor-pointer"
+                    >
+                      {showOldPassword ? <EyeOff size={16} /> : <Eye size={16} />}
+                    </button>
                   </div>
                 </div>
 
@@ -433,13 +452,20 @@ export default function MasterProfile() {
                         <KeyRound size={16} />
                       </span>
                       <input
-                        type="password"
-                        placeholder="Create new secure password"
+                        type={showNewPassword ? "text" : "password"}
+                        placeholder="At least 6 characters"
                         value={newPassword}
                         onChange={(e) => setNewPassword(e.target.value)}
                         style={inputStyle}
                         className="text-sm text-slate-800 placeholder-slate-400"
                       />
+                      <button
+                        type="button"
+                        onClick={() => setShowNewPassword(!showNewPassword)}
+                        className="absolute inset-y-0 right-0 pr-3.5 flex items-center text-slate-400 hover:text-slate-600 cursor-pointer"
+                      >
+                        {showNewPassword ? <EyeOff size={16} /> : <Eye size={16} />}
+                      </button>
                     </div>
                   </div>
 
@@ -450,13 +476,20 @@ export default function MasterProfile() {
                         <KeyRound size={16} />
                       </span>
                       <input
-                        type="password"
-                        placeholder="Retype new secure password"
+                        type={showConfirmPassword ? "text" : "password"}
+                        placeholder="Confirm new password"
                         value={confirmPassword}
                         onChange={(e) => setConfirmPassword(e.target.value)}
                         style={inputStyle}
                         className="text-sm text-slate-800 placeholder-slate-400"
                       />
+                      <button
+                        type="button"
+                        onClick={() => setShowConfirmPassword(!showConfirmPassword)}
+                        className="absolute inset-y-0 right-0 pr-3.5 flex items-center text-slate-400 hover:text-slate-600 cursor-pointer"
+                      >
+                        {showConfirmPassword ? <EyeOff size={16} /> : <Eye size={16} />}
+                      </button>
                     </div>
                   </div>
                 </div>

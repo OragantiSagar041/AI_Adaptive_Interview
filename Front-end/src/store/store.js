@@ -24,7 +24,7 @@ const authPersistConfig = {
   whitelist: ['role', 'token', 'adminUser'] // only persist these fields
 }
 
-const rootReducer = combineReducers({
+const appReducer = combineReducers({
   auth: persistReducer(authPersistConfig, authReducer),
   dashboard: dashboardReducer,
   candidates: candidatesReducer,
@@ -32,12 +32,21 @@ const rootReducer = combineReducers({
   credits: creditsReducer
 })
 
+const rootReducer = (state, action) => {
+  if (action.type === 'auth/logout') {
+    // Clear session storage and reset entire Redux state
+    sessionStorage.removeItem('auth')
+    state = undefined
+  }
+  return appReducer(state, action)
+}
+
 export const store = configureStore({
   reducer: rootReducer,
   middleware: (getDefaultMiddleware) =>
     getDefaultMiddleware({
       serializableCheck: {
-        ignoredActions: ['persist/PERSIST', 'persist/REHYDRATE']
+        ignoredActions: ['persist/FLUSH', 'persist/REHYDRATE', 'persist/PAUSE', 'persist/PERSIST', 'persist/PURGE', 'persist/REGISTER']
       }
     })
 })

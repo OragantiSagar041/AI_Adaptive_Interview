@@ -183,11 +183,34 @@ export default function LiveMonitorStreamModal({ isOpen, onClose, session }) {
                 <div className="flex flex-col items-center gap-3">
                   <Activity size={40} className="animate-pulse text-indigo-500" />
                   <p className="text-sm font-semibold tracking-wide">Connecting to Candidate's Stream...</p>
+                  <button 
+                    onClick={() => {
+                      if (wsRef.current && pcRef.current) {
+                        pcRef.current.createOffer().then(offer => {
+                          pcRef.current.setLocalDescription(offer)
+                          wsRef.current.send(JSON.stringify({ type: 'webrtc_offer', sdp: offer }))
+                        })
+                      }
+                    }}
+                    className="mt-2 px-4 py-1.5 bg-indigo-600 hover:bg-indigo-500 transition-colors text-white text-xs font-bold rounded shadow-md"
+                  >
+                    Force Retry Connection
+                  </button>
                 </div>
               ) : (
                 <div className="flex flex-col items-center gap-3">
                   <MonitorOff size={40} className="text-rose-500" />
                   <p className="text-sm font-semibold tracking-wide text-rose-400">Stream Disconnected or Offline</p>
+                  <button 
+                    onClick={() => {
+                      setStatus('connecting')
+                      onClose()
+                      setTimeout(() => { document.querySelector('[data-id="live-monitor-btn"]')?.click() }, 500)
+                    }}
+                    className="mt-2 px-4 py-1.5 bg-rose-600 hover:bg-rose-500 transition-colors text-white text-xs font-bold rounded shadow-md"
+                  >
+                    Close & Reconnect
+                  </button>
                 </div>
               )}
             </div>
