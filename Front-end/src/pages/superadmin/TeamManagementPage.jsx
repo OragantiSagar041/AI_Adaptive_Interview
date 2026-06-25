@@ -46,11 +46,12 @@ export default function TeamManagementPage() {
     setLoadingRequests(true)
     try {
       const res = await axios.get(`${API_BASE_URL}/super-admin/credit-requests`, {
-        headers: { 'Authorization': `Bearer ${token}` }
+        headers: { Authorization: `Bearer ${token}` }
       })
       setCreditRequests(res.data.data || [])
-    } catch (e) {
-      console.error('Error loading credit requests:', e)
+    } catch (err) {
+      console.error("Failed to load credit requests:", err)
+      Swal.fire('Error', 'Failed to load credit requests', 'error')
     } finally {
       setLoadingRequests(false)
     }
@@ -143,6 +144,91 @@ export default function TeamManagementPage() {
     }
   }, [token])
 
+  const handleToggleStatus = async (admin) => {
+    try {
+      const res = await fetch(`${API_BASE_URL}/super-admin/admins/${admin.id}/toggle-status`, {
+        method: 'POST',
+        headers: { Authorization: `Bearer ${token}` }
+      })
+      if (res.ok) {
+        loadTeamManagement()
+      } else {
+        const error = await res.json()
+        Swal.fire('Error', error.detail || 'Failed to toggle status', 'error')
+      }
+    } catch (err) {
+      console.error(err)
+      Swal.fire('Error', 'Network error', 'error')
+    }
+  }
+
+  const handleDeleteAdmin = async (adminId) => {
+    const result = await Swal.fire({
+      title: 'Remove Admin?',
+      text: "They will lose access immediately.",
+      icon: 'warning',
+      showCancelButton: true,
+      confirmButtonText: 'Yes, remove them'
+    })
+    
+    if (result.isConfirmed) {
+      try {
+        const res = await fetch(`${API_BASE_URL}/super-admin/admins/${adminId}`, {
+          method: 'DELETE',
+          headers: { Authorization: `Bearer ${token}` }
+        })
+        if (res.ok) {
+          Swal.fire('Removed!', 'Admin has been removed.', 'success')
+          loadTeamManagement()
+        } else {
+          const error = await res.json()
+          Swal.fire('Error', error.detail || 'Failed to remove', 'error')
+        }
+      } catch (err) {
+        console.error(err)
+        Swal.fire('Error', 'Network error', 'error')
+      }
+    }
+  }
+
+  const handleAddCreditsToAdmin = async (adminId) => {
+    const { value: credits } = await Swal.fire({
+      title: 'Add Credits',
+      input: 'number',
+      inputLabel: 'Amount of credits to add',
+      inputPlaceholder: 'Enter number',
+      showCancelButton: true,
+      inputValidator: (value) => {
+        if (!value || isNaN(value) || value <= 0) {
+          return 'Please enter a valid positive number'
+        }
+      }
+    })
+
+    if (credits) {
+      try {
+        const res = await fetch(`${API_BASE_URL}/super-admin/admins/${adminId}/add-credits`, {
+          method: 'POST',
+          headers: { 
+            'Content-Type': 'application/json',
+            Authorization: `Bearer ${token}` 
+          },
+          body: JSON.stringify({ credits: parseInt(credits, 10) })
+        })
+        if (res.ok) {
+          Swal.fire('Added!', `${credits} credits added.`, 'success')
+          loadTeamManagement()
+        } else {
+          const error = await res.json()
+          Swal.fire('Error', error.detail || 'Failed to add credits', 'error')
+        }
+      } catch (err) {
+        console.error(err)
+        Swal.fire('Error', 'Network error', 'error')
+      }
+    }
+  }
+
   return (
     <div className="space-y-8 max-w-6xl text-slate-800">
       {/* Admins Table List Card */}
@@ -169,6 +255,7 @@ export default function TeamManagementPage() {
                 <th className="p-4 text-[0.68rem] font-bold uppercase text-slate-500">Role</th>
                 <th className="p-4 text-[0.68rem] font-bold uppercase text-slate-500">Credits</th>
                 <th className="p-4 text-[0.68rem] font-bold uppercase text-slate-500">Status</th>
+                <th className="p-4 text-[0.68rem] font-bold uppercase text-slate-500 text-right">Actions</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-slate-100">
@@ -195,6 +282,17 @@ export default function TeamManagementPage() {
                       <span className={`px-2.5 py-0.5 rounded-full text-[0.65rem] font-bold uppercase tracking-wider ${admin.login_enabled === false ? 'bg-red-500/10 text-red-500 border border-red-500/20' : 'bg-emerald-500/10 text-emerald-500 border border-emerald-500/20'}`}>
                         {admin.login_enabled === false ? 'Deactivated' : 'Active'}
                       </span>
+                    </td>
+                    <td className="p-4 text-right space-x-3">
+                      <button onClick={() => handleToggleStatus(admin)} className="text-xs text-indigo-600 hover:text-indigo-800 font-medium cursor-pointer bg-transparent border-none">
+                        {admin.login_enabled === false ? 'Activate' : 'Deactivate'}
+                      </button>
+                      <button onClick={() => handleAddCreditsToAdmin(admin.id)} className="text-xs text-emerald-600 hover:text-emerald-800 font-medium cursor-pointer bg-transparent border-none">
+                        Add Credits
+                      </button>
+                      <button onClick={() => handleDeleteAdmin(admin.id)} className="text-xs text-red-600 hover:text-red-800 font-medium cursor-pointer bg-transparent border-none">
+                        Remove
+                      </button>
                     </td>
                   </tr>
                 ))

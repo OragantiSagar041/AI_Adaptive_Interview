@@ -6865,6 +6865,49 @@ async def create_sub_admin(data: SubAdminCreate, current_admin: dict = Depends(g
     admins_collection.insert_one(new_admin)
     return {"status": "success", "message": "Sub-admin created successfully"}
 
+@app.post("/super-admin/admins/{admin_id}/toggle-status")
+async def toggle_sub_admin_status(admin_id: str, current_admin: dict = Depends(get_current_admin_details)):
+    if current_admin.get("role") != "super_admin":
+        raise HTTPException(status_code=403, detail="Super Admin access required")
+    company_id = current_admin.get("company_id")
+    
+    admin_doc = admins_collection.find_one({"_id": ObjectId(admin_id), "company_id": company_id})
+    if not admin_doc:
+        raise HTTPException(status_code=404, detail="Sub-admin not found")
+        
+    new_status = not admin_doc.get("login_enabled", True)
+    admins_collection.update_one({"_id": ObjectId(admin_id)}, {"$set": {"login_enabled": new_status}})
+    return {"status": "success", "login_enabled": new_status}
+
+@app.delete("/super-admin/admins/{admin_id}")
+async def delete_sub_admin(admin_id: str, current_admin: dict = Depends(get_current_admin_details)):
+    if current_admin.get("role") != "super_admin":
+        raise HTTPException(status_code=403, detail="Super Admin access required")
+    company_id = current_admin.get("company_id")
+    
+    result = admins_collection.delete_one({"_id": ObjectId(admin_id), "company_id": company_id})
+    if result.deleted_count == 0:
+        raise HTTPException(status_code=404, detail="Sub-admin not found")
+    return {"status": "success"}
+
+class AddCreditsRequest(BaseModel):
+    credits: int
+
+@app.post("/super-admin/admins/{admin_id}/add-credits")
+async def add_sub_admin_credits(admin_id: str, data: AddCreditsRequest, current_admin: dict = Depends(get_current_admin_details)):
+    if current_admin.get("role") != "super_admin":
+        raise HTTPException(status_code=403, detail="Super Admin access required")
+    company_id = current_admin.get("company_id")
+    
+    admin_doc = admins_collection.find_one({"_id": ObjectId(admin_id), "company_id": company_id})
+    if not admin_doc:
+        raise HTTPException(status_code=404, detail="Sub-admin not found")
+        
+    new_credits = admin_doc.get("credits", 0) + data.credits
+    admins_collection.update_one({"_id": ObjectId(admin_id)}, {"$set": {"credits": new_credits}})
+    return {"status": "success", "credits": new_credits}
+
+
 @app.get("/super-admin/dashboard-stats")
 async def get_super_admin_dashboard_stats(current_admin: dict = Depends(get_current_admin_details)):
     if current_admin.get("role") != "super_admin":
