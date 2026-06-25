@@ -20,6 +20,11 @@ export default function CreateInterviewPage() {
   const [createTab, setCreateTab] = useState('single') // 'single' | 'bulk'
   const [inviting, setInviting] = useState(false)
 
+  // Collapsible Accordion States
+  const [questionsOpen, setQuestionsOpen] = useState(false)
+  const [instructionsOpen, setInstructionsOpen] = useState(false)
+  const [bulkQuestionsOpen, setBulkQuestionsOpen] = useState(false)
+  const [bulkInstructionsOpen, setBulkInstructionsOpen] = useState(false)
 
   // Single Candidate Form
   const [singleCandidate, setSingleCandidate] = useState({
@@ -158,8 +163,8 @@ export default function CreateInterviewPage() {
               <div class="w-14 h-14 rounded-2xl bg-indigo-50 border border-indigo-100 flex items-center justify-center text-indigo-600 shadow-inner mb-1">
                 <i class="fas fa-user-check text-2xl animate-pulse"></i>
               </div>
-              <p class="text-[0.9rem] text-slate-500 leading-relaxed px-1">
-                An existing profile was found for <strong class="text-indigo-600">${email}</strong>. Would you like to automatically fill the name and resume details?
+              <p class="text-[0.9rem] text-slate-500 leading-relaxed px-1 font-medium">
+                An existing profile was found for <strong class="text-indigo-600 font-bold">${email}</strong>. Would you like to automatically fill the name and resume details?
               </p>
             </div>
           `,
@@ -210,7 +215,12 @@ export default function CreateInterviewPage() {
       })
     } catch (e) {
       console.error("ATS score error:", e)
-      alert("Failed to calculate ATS match score.")
+      Swal.fire({
+        title: 'ATS Calculation Failed',
+        text: 'Failed to calculate ATS match score.',
+        icon: 'error',
+        confirmButtonColor: '#6366f1'
+      })
     } finally {
       setAtsCalculating(false)
     }
@@ -317,20 +327,35 @@ export default function CreateInterviewPage() {
 
       setEmailPreviewModalOpen(true)
     } catch (e) {
-      alert('Could not generate email preview: ' + (e.response?.data?.detail || e.message))
+      Swal.fire({
+        title: 'Preview Generation Failed',
+        text: 'Could not generate email preview: ' + (e.response?.data?.detail || e.message),
+        icon: 'error',
+        confirmButtonColor: '#6366f1'
+      })
     }
   }
 
   const handleSaveEmailPreview = () => {
     setCustomEmailHtml(buildEmailHtml())
     setEmailPreviewModalOpen(false)
-    alert("Custom email template saved and will be used for invitations!")
+    Swal.fire({
+      title: 'Template Saved',
+      text: 'Custom email template saved and will be used for invitations!',
+      icon: 'success',
+      confirmButtonColor: '#6366f1'
+    })
   }
 
   const handleResetEmailPreview = () => {
     setCustomEmailHtml('')
     setEmailPreviewModalOpen(false)
-    alert("Reset to default invitation email template.")
+    Swal.fire({
+      title: 'Template Reset',
+      text: 'Reset to default invitation email template.',
+      icon: 'info',
+      confirmButtonColor: '#6366f1'
+    })
   }
 
   // Generate Single Link Session
@@ -338,12 +363,22 @@ export default function CreateInterviewPage() {
     const { name, email, resumeText, jobDescription, duration, interviewFormat, interviewType, industry, language, caseStudyCount, scheduledStart, scheduledEnd, recordVideo, hrScreening, customQuestions, aiInstructions } = singleCandidate
 
     if (!name || !email || !resumeText || !jobDescription) {
-      alert("Please fill in all required fields (Name, Email, Resume, Job Description).")
+      Swal.fire({
+        title: 'Missing Required Fields',
+        text: 'Please fill in all required fields (Name, Email, Resume, Job Description).',
+        icon: 'warning',
+        confirmButtonColor: '#6366f1'
+      })
       return
     }
 
     if (duration < 5 || duration > 120) {
-      alert("Interview Duration must be between 5 and 120 minutes.")
+      Swal.fire({
+        title: 'Invalid Duration',
+        text: 'Interview Duration must be between 5 and 120 minutes.',
+        icon: 'warning',
+        confirmButtonColor: '#6366f1'
+      })
       return
     }
 
@@ -386,7 +421,13 @@ export default function CreateInterviewPage() {
       } else if (data.email_sent) {
         msg += `\nInvitation email sent successfully to ${email}!`
       }
-      alert(msg)
+
+      Swal.fire({
+        title: 'Success!',
+        text: msg,
+        icon: 'success',
+        confirmButtonColor: '#6366f1'
+      })
 
       setSingleCreatedLinks(prev => [
         ...prev,
@@ -407,7 +448,12 @@ export default function CreateInterviewPage() {
       dispatch(loadDashboardData())
     } catch (e) {
       console.error(e)
-      alert(e.response?.data?.detail || e.response?.data?.message || "Failed to create session.")
+      Swal.fire({
+        title: 'Session Creation Failed',
+        text: e.response?.data?.detail || e.response?.data?.message || "Failed to create session.",
+        icon: 'error',
+        confirmButtonColor: '#6366f1'
+      })
     } finally {
       setInviting(false)
     }
@@ -425,7 +471,12 @@ export default function CreateInterviewPage() {
       const wb = window.XLSX.utils.book_new()
       window.XLSX.utils.book_append_sheet(wb, ws, 'Candidates')
       window.XLSX.writeFile(wb, 'interview_candidates_template.xlsx')
-      alert('Template downloaded successfully!')
+      Swal.fire({
+        title: 'Downloaded',
+        text: 'Template downloaded successfully!',
+        icon: 'success',
+        confirmButtonColor: '#10b981'
+      })
     } else {
       let csvContent = "data:text/csv;charset=utf-8,Name,Email\nJohn Doe,john@example.com\nJane Smith,jane@example.com"
       const encodedUri = encodeURI(csvContent)
@@ -435,7 +486,12 @@ export default function CreateInterviewPage() {
       document.body.appendChild(link)
       link.click()
       document.body.removeChild(link)
-      alert('CSV Template downloaded!')
+      Swal.fire({
+        title: 'Downloaded',
+        text: 'CSV Template downloaded!',
+        icon: 'success',
+        confirmButtonColor: '#10b981'
+      })
     }
   }
 
@@ -473,10 +529,20 @@ export default function CreateInterviewPage() {
 
           setBulkCandidates(newCandidates)
           setBulkCsvLabel(`${file.name} - ${added} candidates imported`)
-          alert(`${added} candidates imported successfully!`)
+          Swal.fire({
+            title: 'Import Successful',
+            text: `${added} candidates imported successfully!`,
+            icon: 'success',
+            confirmButtonColor: '#6366f1'
+          })
         } catch (err) {
           setBulkCsvLabel('Could not read Excel file')
-          alert('Error reading Excel: ' + err.message)
+          Swal.fire({
+            title: 'Error Reading Excel',
+            text: err.message,
+            icon: 'error',
+            confirmButtonColor: '#ef4444'
+          })
         }
       }
       reader.readAsArrayBuffer(file)
@@ -501,10 +567,20 @@ export default function CreateInterviewPage() {
           })
           setBulkCandidates(newCandidates)
           setBulkCsvLabel(`${file.name} - ${added} candidates imported`)
-          alert(`${added} candidates imported successfully!`)
+          Swal.fire({
+            title: 'Import Successful',
+            text: `${added} candidates imported successfully!`,
+            icon: 'success',
+            confirmButtonColor: '#6366f1'
+          })
         } catch (err) {
           setBulkCsvLabel('Could not read CSV file')
-          alert('Error reading CSV: ' + err.message)
+          Swal.fire({
+            title: 'Error Reading CSV',
+            text: err.message,
+            icon: 'error',
+            confirmButtonColor: '#ef4444'
+          })
         }
       }
       reader.readAsText(file)
@@ -516,11 +592,21 @@ export default function CreateInterviewPage() {
     const { jobDescription, customQuestions, aiInstructions, industry, interviewFormat, interviewType, language, caseStudyCount, duration, recordVideo, scheduledStart, scheduledEnd, hrScreening } = bulkConfig
 
     if (!jobDescription) {
-      alert("Please enter a Job Description.")
+      Swal.fire({
+        title: 'Missing Requirements',
+        text: 'Please enter a Job Description.',
+        icon: 'warning',
+        confirmButtonColor: '#6366f1'
+      })
       return
     }
     if (bulkCandidates.length === 0) {
-      alert("Please add at least one candidate.")
+      Swal.fire({
+        title: 'No Candidates Selected',
+        text: 'Please add at least one candidate.',
+        icon: 'warning',
+        confirmButtonColor: '#6366f1'
+      })
       return
     }
 
@@ -560,7 +646,12 @@ export default function CreateInterviewPage() {
       })
 
       const data = response.data
-      alert(`Successfully sent ${data.successful}/${data.total} interviews!`)
+      Swal.fire({
+        title: 'Success!',
+        text: `Successfully sent ${data.successful}/${data.total} interviews!`,
+        icon: 'success',
+        confirmButtonColor: '#6366f1'
+      })
       setBulkResultsData(data)
       setBulkResultsModalOpen(true)
       setBulkCandidates([])
@@ -568,7 +659,12 @@ export default function CreateInterviewPage() {
       dispatch(loadDashboardData())
     } catch (e) {
       console.error(e)
-      alert(e.response?.data?.detail || e.response?.data?.message || "Error sending bulk interviews.")
+      Swal.fire({
+        title: 'Bulk Invitations Failed',
+        text: e.response?.data?.detail || e.response?.data?.message || "Error sending bulk interviews.",
+        icon: 'error',
+        confirmButtonColor: '#ef4444'
+      })
     } finally {
       setInviting(false)
     }
@@ -577,15 +673,28 @@ export default function CreateInterviewPage() {
   return (
     <>
       <div className="flex flex-col gap-8">
+        {/* Page Header */}
+        <div className="flex flex-col gap-1.5 md:flex-row md:justify-between md:items-center bg-white/40 p-6 rounded-2xl border border-slate-200/60 backdrop-blur-md shadow-[0_8px_30px_rgb(0,0,0,0.02)]">
+          <div className="flex items-center gap-4">
+            <div className="w-12 h-12 rounded-2xl bg-indigo-50 border border-indigo-100 flex items-center justify-center text-primary shadow-sm">
+              <i className="fas fa-file-signature text-xl"></i>
+            </div>
+            <div>
+              <h2 className="text-xl font-extrabold text-slate-800 tracking-tight">Create Interview Session</h2>
+              <p className="text-xs text-slate-500 font-medium">Configure settings, parse resumes, and invite candidates to AI-conducted adaptive interviews.</p>
+            </div>
+          </div>
+        </div>
+
         {/* Tab Switcher Capsule */}
-        <div className="flex bg-slate-100/80 p-1.5 rounded-2xl gap-1.5 max-w-md mx-auto w-full border border-slate-200/50 shadow-sm">
+        <div className="flex bg-slate-100/80 p-1.5 rounded-2xl gap-1.5 max-w-md mx-auto w-full border border-slate-200/50 shadow-sm relative overflow-hidden">
           <button
             type="button"
             onClick={() => setCreateTab('single')}
-            className={`flex-1 py-2.5 px-4 rounded-xl font-bold text-xs cursor-pointer transition-all duration-200 outline-none flex items-center justify-center gap-2 ${
+            className={`flex-1 py-2.5 px-4 rounded-xl font-extrabold text-xs cursor-pointer transition-all duration-300 outline-none flex items-center justify-center gap-2 z-10 ${
               createTab === 'single'
-                ? 'bg-primary text-white shadow-md shadow-primary/20'
-                : 'text-slate-600 hover:text-slate-900 hover:bg-slate-200/50'
+                ? 'bg-primary text-white shadow-[0_4px_12px_rgba(99,102,241,0.25)]'
+                : 'text-slate-500 hover:text-slate-800 hover:bg-slate-200/50'
             }`}
           >
             <i className="fas fa-user text-xs"></i> Single Candidate
@@ -593,10 +702,10 @@ export default function CreateInterviewPage() {
           <button
             type="button"
             onClick={() => setCreateTab('bulk')}
-            className={`flex-1 py-2.5 px-4 rounded-xl font-bold text-xs cursor-pointer transition-all duration-200 outline-none flex items-center justify-center gap-2 ${
+            className={`flex-1 py-2.5 px-4 rounded-xl font-extrabold text-xs cursor-pointer transition-all duration-300 outline-none flex items-center justify-center gap-2 z-10 ${
               createTab === 'bulk'
-                ? 'bg-primary text-white shadow-md shadow-primary/20'
-                : 'text-slate-600 hover:text-slate-900 hover:bg-slate-200/50'
+                ? 'bg-primary text-white shadow-[0_4px_12px_rgba(99,102,241,0.25)]'
+                : 'text-slate-500 hover:text-slate-800 hover:bg-slate-200/50'
             }`}
           >
             <i className="fas fa-users text-xs"></i> Bulk Send
@@ -610,13 +719,13 @@ export default function CreateInterviewPage() {
             <div className="lg:col-span-7 flex flex-col gap-6">
               {/* Card 1: Candidate Basic Info */}
               <Card className="bg-white/82 backdrop-blur-md border border-[#e5edf7] text-slate-800 flex flex-col gap-5">
-                <div className="flex gap-3 items-center border-b border-slate-100 pb-4">
-                  <div className="w-10 h-10 rounded-xl flex items-center justify-center bg-primary/8 text-primary">
-                    <i className="fas fa-user-tie text-lg"></i>
+                <div className="flex gap-3.5 items-center border-b border-slate-100/80 pb-4">
+                  <div className="w-10 h-10 rounded-xl flex items-center justify-center bg-indigo-50 border border-indigo-100 text-primary shadow-inner">
+                    <i className="fas fa-user-tie text-base"></i>
                   </div>
                   <div>
-                    <h3 className="text-sm font-bold text-slate-800">Candidate Information</h3>
-                    <p className="text-xs text-slate-500">Provide basic contact and login credentials</p>
+                    <h3 className="text-sm font-extrabold text-slate-800 tracking-tight">Candidate Information</h3>
+                    <p className="text-[0.7rem] text-slate-400 font-medium">Provide basic contact and login credentials</p>
                   </div>
                 </div>
 
@@ -641,34 +750,40 @@ export default function CreateInterviewPage() {
 
               {/* Card 2: Resume & Job Requirements */}
               <Card className="bg-white/82 backdrop-blur-md border border-[#e5edf7] text-slate-800 flex flex-col gap-5">
-                <div className="flex gap-3 items-center border-b border-slate-100 pb-4">
-                  <div className="w-10 h-10 rounded-xl flex items-center justify-center bg-primary/8 text-primary">
-                    <i className="fas fa-file-invoice text-lg"></i>
+                <div className="flex gap-3.5 items-center border-b border-slate-100/80 pb-4">
+                  <div className="w-10 h-10 rounded-xl flex items-center justify-center bg-indigo-50 border border-indigo-100 text-primary shadow-inner">
+                    <i className="fas fa-file-invoice text-base"></i>
                   </div>
                   <div>
-                    <h3 className="text-sm font-bold text-slate-800">Resume & Job Profile</h3>
-                    <p className="text-xs text-slate-500">Input documents for automated AI assessment</p>
+                    <h3 className="text-sm font-extrabold text-slate-800 tracking-tight">Resume & Job Profile</h3>
+                    <p className="text-[0.7rem] text-slate-400 font-medium">Input documents for automated AI assessment</p>
                   </div>
                 </div>
 
                 {/* Upload Resume */}
-                <div className="flex flex-col gap-1.5">
-                  <label className="text-xs font-semibold uppercase tracking-wider text-slate-400">Upload Resume (PDF / DOCX / TXT)</label>
+                <div className="flex flex-col gap-2">
+                  <label className="text-xs font-bold uppercase tracking-wider text-slate-500">Upload Resume (PDF / DOCX / TXT)</label>
                   <div
-                    className={`border-2 border-dashed rounded-xl p-6 text-center cursor-pointer transition-all flex flex-col items-center justify-center gap-2 ${
+                    className={`border-2 border-dashed rounded-2xl p-6 text-center cursor-pointer transition-all duration-300 flex flex-col items-center justify-center gap-2.5 group relative overflow-hidden ${
                       singleCandidate.resumeText
-                        ? 'border-emerald-200 bg-emerald-50/20 hover:bg-emerald-50/40'
-                        : 'border-slate-200 bg-slate-50/40 hover:bg-slate-50/90 hover:border-primary'
+                        ? 'border-emerald-200 bg-emerald-50/20 hover:bg-emerald-50/40 shadow-sm shadow-emerald-500/5'
+                        : 'border-slate-200 bg-slate-50/40 hover:bg-white hover:border-primary/80 hover:shadow-md hover:shadow-indigo-500/5 hover:-translate-y-0.5'
                     }`}
                     onClick={() => document.getElementById('singleResumeInput').click()}
                   >
-                    <div className={`text-2xl mb-1 ${singleCandidate.resumeText ? 'text-success' : 'text-primary'}`}>
-                      <i className={singleCandidate.resumeText ? 'fas fa-file-circle-check' : 'fas fa-file-arrow-up'}></i>
+                    <div className={`w-12 h-12 rounded-xl flex items-center justify-center transition-all duration-300 ${
+                      singleCandidate.resumeText
+                        ? 'bg-emerald-100 text-emerald-650 animate-[pulse_2s_infinite]'
+                        : 'bg-indigo-50 text-indigo-600 group-hover:bg-indigo-100 group-hover:scale-110'
+                    }`}>
+                      <i className={`text-xl ${singleCandidate.resumeText ? 'fas fa-file-circle-check' : 'fas fa-file-arrow-up'}`}></i>
                     </div>
-                    <p className="font-semibold text-slate-700 text-sm">
-                      {singleCandidate.resumeText ? "Resume Loaded & Parsed" : "Click to upload or drag & drop"}
-                    </p>
-                    <p className="text-xs text-slate-400">PDF, DOCX, TXT - Max 5MB</p>
+                    <div>
+                      <p className="font-bold text-slate-700 text-sm">
+                        {singleCandidate.resumeText ? "Resume Loaded & Parsed" : "Click to upload or drag & drop"}
+                      </p>
+                      <p className="text-xs text-slate-400 font-medium mt-0.5">PDF, DOCX, TXT - Max 5MB</p>
+                    </div>
                   </div>
                   <input
                     type="file"
@@ -680,7 +795,12 @@ export default function CreateInterviewPage() {
                       if (!file) return
                       handleParseFile(file, (err, data) => {
                         if (err) {
-                          alert(err)
+                          Swal.fire({
+                            title: 'Parsing Failed',
+                            text: err,
+                            icon: 'error',
+                            confirmButtonColor: '#6366f1'
+                          })
                           setResumeParsing(false)
                         } else {
                           setSingleCandidate(prev => ({
@@ -711,13 +831,13 @@ export default function CreateInterviewPage() {
                 </div>
 
                 {/* Job Description */}
-                <div className="flex flex-col gap-1.5">
+                <div className="flex flex-col gap-2">
                   <div className="flex justify-between items-center">
-                    <label className="text-xs font-semibold uppercase tracking-wider text-slate-400 m-0">Job Description</label>
+                    <label className="text-xs font-bold uppercase tracking-wider text-slate-500 m-0">Job Description</label>
                     <button
                       type="button"
                       onClick={() => document.getElementById('singleJdInput').click()}
-                      className="inline-flex items-center gap-1 text-[0.7rem] font-bold text-primary bg-transparent border border-primary/20 rounded px-2.5 py-1 cursor-pointer hover:bg-primary/5 transition-all"
+                      className="inline-flex items-center gap-1 text-[0.7rem] font-extrabold text-primary bg-indigo-50 hover:bg-indigo-100 border border-primary/15 rounded-lg px-3 py-1 cursor-pointer transition-all"
                     >
                       <i className="fas fa-paperclip"></i> Upload file
                     </button>
@@ -731,7 +851,12 @@ export default function CreateInterviewPage() {
                         if (!file) return
                         handleParseFile(file, (err, data) => {
                           if (err) {
-                            alert(err)
+                            Swal.fire({
+                              title: 'Parsing Failed',
+                              text: err,
+                              icon: 'error',
+                              confirmButtonColor: '#6366f1'
+                            })
                             setJdParsing(false)
                           } else {
                             handleSingleChange('jobDescription', data.text || '')
@@ -768,7 +893,13 @@ export default function CreateInterviewPage() {
                       <div className="flex-shrink-0 text-center mx-auto sm:mx-0">
                         <div className="relative w-20 h-20 flex items-center justify-center">
                           <svg className="w-20 h-20 transform -rotate-90">
-                            <circle cx="40" cy="40" r="34" stroke="#f1f5f9" strokeWidth="6" fill="transparent" />
+                            <defs>
+                              <linearGradient id="scoreGradient" x1="0%" y1="0%" x2="100%" y2="100%">
+                                <stop offset="0%" stopColor="#6366f1" />
+                                <stop offset="100%" stopColor="#4f46e5" />
+                              </linearGradient>
+                            </defs>
+                            <circle cx="40" cy="40" r="34" stroke="#e2e8f0" strokeWidth="6" fill="transparent" />
                             <circle
                               cx="40"
                               cy="40"
@@ -790,19 +921,19 @@ export default function CreateInterviewPage() {
                         <p className="mb-3 font-medium text-slate-700 bg-white/50 p-3 rounded-lg border border-slate-100">{atsScoreData.summary}</p>
                         <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
                           <div className="bg-emerald-500/5 p-3 rounded-xl border border-emerald-500/10">
-                            <strong className="text-emerald-600 block mb-1 text-[0.7rem] uppercase tracking-wide"><i className="fas fa-check mr-1"></i> Matched Skills</strong>
+                            <strong className="text-emerald-600 block mb-1.5 text-[0.7rem] uppercase tracking-wide"><i className="fas fa-check mr-1"></i> Matched Skills</strong>
                             <div className="flex flex-wrap gap-1 mt-1.5">
                               {atsScoreData.matched_skills.map((skill, idx) => (
-                                <span key={idx} className="bg-white border border-slate-200 text-slate-500 px-2 py-0.5 rounded text-[0.65rem] font-medium">{skill}</span>
+                                <span key={idx} className="bg-emerald-50 border border-emerald-100 text-emerald-700 px-2.5 py-0.5 rounded-full text-[0.65rem] font-bold">{skill}</span>
                               ))}
                               {atsScoreData.matched_skills.length === 0 && <span className="text-slate-400">None identified</span>}
                             </div>
                           </div>
                           <div className="bg-rose-500/5 p-3 rounded-xl border border-rose-500/10">
-                            <strong className="text-rose-600 block mb-1 text-[0.7rem] uppercase tracking-wide"><i className="fas fa-triangle-exclamation mr-1"></i> Missing Skills</strong>
+                            <strong className="text-rose-600 block mb-1.5 text-[0.7rem] uppercase tracking-wide"><i className="fas fa-triangle-exclamation mr-1"></i> Missing Skills</strong>
                             <div className="flex flex-wrap gap-1 mt-1.5">
                               {atsScoreData.missing_skills.map((skill, idx) => (
-                                <span key={idx} className="bg-white border border-slate-200 text-slate-500 px-2 py-0.5 rounded text-[0.65rem] font-medium">{skill}</span>
+                                <span key={idx} className="bg-rose-50 border border-rose-100 text-rose-700 px-2.5 py-0.5 rounded-full text-[0.65rem] font-bold">{skill}</span>
                               ))}
                               {atsScoreData.missing_skills.length === 0 && <span className="text-slate-400">None identified</span>}
                             </div>
@@ -823,8 +954,8 @@ export default function CreateInterviewPage() {
               {/* Card 3: Advanced AI Customizations (Accordions) */}
               <div className="flex flex-col gap-4">
                 {/* Custom Questions Section */}
-                <div className="border border-slate-200/80 rounded-2xl overflow-hidden bg-white/82 backdrop-blur-md shadow-sm">
-                  <div className="w-full px-5 py-4 bg-slate-50/50 border-b border-slate-100">
+                <div className="border border-slate-200/80 rounded-2xl overflow-hidden bg-white/82 backdrop-blur-md shadow-sm transition-all duration-200 hover:border-slate-300">
+                  <div className="w-full px-5 py-4 bg-slate-50/50 border-b border-slate-100 flex items-center justify-between">
                     <span className="text-xs font-bold text-slate-700 uppercase tracking-wider flex items-center gap-2">
                       <i className="fas fa-question-circle text-primary"></i> Custom Screening Questions (Optional)
                     </span>
@@ -835,7 +966,7 @@ export default function CreateInterviewPage() {
                       <button
                         type="button"
                         onClick={() => document.getElementById('singleCustomInput').click()}
-                        className="inline-flex items-center gap-1 text-[0.7rem] font-bold text-primary bg-transparent border border-primary/20 rounded px-2.5 py-1 cursor-pointer hover:bg-primary/5 transition-all"
+                        className="inline-flex items-center gap-1 text-[0.7rem] font-extrabold text-primary bg-indigo-50 hover:bg-indigo-100 border border-primary/15 rounded-lg px-2.5 py-1 cursor-pointer transition-all"
                       >
                         <i className="fas fa-paperclip"></i> Upload questions
                       </button>
@@ -849,7 +980,12 @@ export default function CreateInterviewPage() {
                           if (!file) return
                           handleParseFile(file, (err, data) => {
                             if (err) {
-                              alert(err)
+                              Swal.fire({
+                                title: 'Parsing Failed',
+                                text: err,
+                                icon: 'error',
+                                confirmButtonColor: '#6366f1'
+                              })
                               setCustomQuestionsParsing(false)
                             } else {
                               handleSingleChange('customQuestions', data.text || '')
@@ -868,8 +1004,8 @@ export default function CreateInterviewPage() {
                 </div>
 
                 {/* AI Instructions Section */}
-                <div className="border border-slate-200/80 rounded-2xl overflow-hidden bg-white/82 backdrop-blur-md shadow-sm">
-                  <div className="w-full px-5 py-4 bg-slate-50/50 border-b border-slate-100">
+                <div className="border border-slate-200/80 rounded-2xl overflow-hidden bg-white/82 backdrop-blur-md shadow-sm transition-all duration-200 hover:border-slate-300">
+                  <div className="w-full px-5 py-4 bg-slate-50/50 border-b border-slate-100 flex items-center justify-between">
                     <span className="text-xs font-bold text-slate-700 uppercase tracking-wider flex items-center gap-2">
                       <i className="fas fa-robot text-primary"></i> Custom AI Interviewer Instructions (Optional)
                     </span>
@@ -880,7 +1016,7 @@ export default function CreateInterviewPage() {
                       <button
                         type="button"
                         onClick={() => document.getElementById('singleAiInstructionsInput').click()}
-                        className="inline-flex items-center gap-1 text-[0.7rem] font-bold text-primary bg-transparent border border-primary/20 rounded px-2.5 py-1 cursor-pointer hover:bg-primary/5 transition-all"
+                        className="inline-flex items-center gap-1 text-[0.7rem] font-extrabold text-primary bg-indigo-50 hover:bg-indigo-100 border border-primary/15 rounded-lg px-2.5 py-1 cursor-pointer transition-all"
                       >
                         <i className="fas fa-paperclip"></i> Upload instructions
                       </button>
@@ -894,7 +1030,12 @@ export default function CreateInterviewPage() {
                           if (!file) return
                           handleParseFile(file, (err, data) => {
                             if (err) {
-                              alert(err)
+                              Swal.fire({
+                                title: 'Parsing Failed',
+                                text: err,
+                                icon: 'error',
+                                confirmButtonColor: '#6366f1'
+                              })
                               setAiInstructionsParsing(false)
                             } else {
                               handleSingleChange('aiInstructions', data.text || '')
@@ -918,13 +1059,13 @@ export default function CreateInterviewPage() {
             <div className="lg:col-span-5 flex flex-col gap-6">
               {/* Card 1: Configuration Parameters */}
               <Card className="bg-white/82 backdrop-blur-md border border-[#e5edf7] text-slate-800 flex flex-col gap-5">
-                <div className="flex gap-3 items-center border-b border-slate-100 pb-4">
-                  <div className="w-10 h-10 rounded-xl flex items-center justify-center bg-primary/8 text-primary">
-                    <i className="fas fa-sliders text-lg"></i>
+                <div className="flex gap-3.5 items-center border-b border-slate-100/80 pb-4">
+                  <div className="w-10 h-10 rounded-xl flex items-center justify-center bg-indigo-50 border border-indigo-100 text-primary shadow-inner">
+                    <i className="fas fa-sliders text-base"></i>
                   </div>
                   <div>
-                    <h3 className="text-sm font-bold text-slate-800">Interview Settings</h3>
-                    <p className="text-xs text-slate-500">Configure parameters, timing, and languages</p>
+                    <h3 className="text-sm font-extrabold text-slate-800 tracking-tight">Interview Settings</h3>
+                    <p className="text-[0.7rem] text-slate-400 font-medium">Configure parameters, timing, and languages</p>
                   </div>
                 </div>
 
@@ -940,28 +1081,18 @@ export default function CreateInterviewPage() {
                   />
 
                   <Select
-                    label="Industry Type"
-                    value={singleCandidate.industry}
-                    onChange={(e) => handleSingleChange('industry', e.target.value)}
-                    options={[
-                      { value: 'General', label: 'General (No Specific)' },
-                      { value: 'Information Technology', label: 'Info Tech' },
-                      { value: 'Software & SaaS', label: 'Software & SaaS' },
-                      { value: 'Healthcare', label: 'Healthcare' },
-                      { value: 'Financial Services', label: 'Financial' },
-                      { value: 'Education', label: 'Education' },
-                      { value: 'Human Resources & Staffing', label: 'HR & Staffing' }
-                    ]}
-                  />
-
-                  <Select
                     label="Interview Type"
                     value={singleCandidate.interviewType}
                     onChange={(e) => {
                       const type = e.target.value
                       handleSingleChange('interviewType', type)
                       if (type === 'Technical' && singleCandidate.language !== 'English') {
-                        alert("Coding round is currently restricted to English language interviews. Switching language to English.")
+                        Swal.fire({
+                          title: 'Language Limitation',
+                          text: 'Coding round is currently restricted to English language interviews. Switching language to English.',
+                          icon: 'info',
+                          confirmButtonColor: '#6366f1'
+                        })
                         handleSingleChange('language', 'English')
                       }
                     }}
@@ -979,7 +1110,12 @@ export default function CreateInterviewPage() {
                       const lang = e.target.value
                       handleSingleChange('language', lang)
                       if (lang !== 'English' && singleCandidate.interviewType === 'Technical') {
-                        alert("Coding round is currently restricted to English language interviews. Switching to Normal interview type.")
+                        Swal.fire({
+                          title: 'Interview Type Adjusted',
+                          text: 'Coding round is currently restricted to English language interviews. Switching to Normal interview type.',
+                          icon: 'info',
+                          confirmButtonColor: '#6366f1'
+                        })
                         handleSingleChange('interviewType', 'Normal')
                       }
                     }}
@@ -998,32 +1134,51 @@ export default function CreateInterviewPage() {
                       handleSingleChange('duration', val)
                     }}
                   />
-                </div>
 
-                {singleCandidate.interviewType === 'Non-Technical' && (
-                  <Select
-                    label="Number of Case Study Questions (Round 2)"
-                    value={singleCandidate.caseStudyCount}
-                    onChange={(e) => handleSingleChange('caseStudyCount', parseInt(e.target.value))}
-                    options={[
-                      { value: '2', label: '2 Questions' },
-                      { value: '3', label: '3 Questions' },
-                      { value: '4', label: '4 Questions' },
-                      { value: '5', label: '5 Questions' }
-                    ]}
-                  />
-                )}
+                  <div className="sm:col-span-2">
+                    <Select
+                      label="Industry Type"
+                      value={singleCandidate.industry}
+                      onChange={(e) => handleSingleChange('industry', e.target.value)}
+                      options={[
+                        { value: 'General', label: 'General (No Specific)' },
+                        { value: 'Information Technology', label: 'Information Technology' },
+                        { value: 'Software & SaaS', label: 'Software & SaaS' },
+                        { value: 'Healthcare', label: 'Healthcare' },
+                        { value: 'Financial Services', label: 'Financial Services' },
+                        { value: 'Education', label: 'Education' },
+                        { value: 'Human Resources & Staffing', label: 'Human Resources & Staffing' }
+                      ]}
+                    />
+                  </div>
+
+                  {singleCandidate.interviewType === 'Non-Technical' && (
+                    <div className="sm:col-span-2">
+                      <Select
+                        label="Number of Case Study Questions (Round 2)"
+                        value={singleCandidate.caseStudyCount}
+                        onChange={(e) => handleSingleChange('caseStudyCount', parseInt(e.target.value))}
+                        options={[
+                          { value: '2', label: '2 Questions' },
+                          { value: '3', label: '3 Questions' },
+                          { value: '4', label: '4 Questions' },
+                          { value: '5', label: '5 Questions' }
+                        ]}
+                      />
+                    </div>
+                  )}
+                </div>
               </Card>
 
               {/* Card 2: Scheduling Options */}
               <Card className="bg-white/82 backdrop-blur-md border border-[#e5edf7] text-slate-800 flex flex-col gap-4">
-                <div className="flex gap-3 items-center border-b border-slate-100 pb-3.5">
-                  <div className="w-10 h-10 rounded-xl flex items-center justify-center bg-primary/8 text-primary">
-                    <i className="fas fa-calendar-check text-lg"></i>
+                <div className="flex gap-3.5 items-center border-b border-slate-100/80 pb-3.5">
+                  <div className="w-10 h-10 rounded-xl flex items-center justify-center bg-indigo-50 border border-indigo-100 text-primary shadow-inner">
+                    <i className="fas fa-calendar-check text-base"></i>
                   </div>
                   <div>
-                    <h3 className="text-sm font-bold text-slate-800">Interview Schedule</h3>
-                    <p className="text-xs text-slate-500">Enable time restrictions (Optional)</p>
+                    <h3 className="text-sm font-extrabold text-slate-800 tracking-tight">Interview Schedule</h3>
+                    <p className="text-[0.7rem] text-slate-400 font-medium">Enable time restrictions (Optional)</p>
                   </div>
                 </div>
 
@@ -1041,9 +1196,9 @@ export default function CreateInterviewPage() {
                     onChange={(e) => handleSingleChange('scheduledEnd', e.target.value)}
                   />
                 </div>
-                <div className="flex gap-2 items-start bg-slate-50 p-3 rounded-xl border border-slate-200/50 mt-1">
-                  <i className="fas fa-circle-info text-slate-400 text-xs mt-0.5"></i>
-                  <p className="text-[0.7rem] text-slate-500 leading-normal">
+                <div className="flex gap-2.5 items-start bg-slate-50 p-3.5 rounded-2xl border border-slate-150 mt-1">
+                  <i className="fas fa-circle-info text-indigo-500 text-xs mt-0.5"></i>
+                  <p className="text-[0.7rem] text-slate-500 leading-normal font-medium">
                     Leave dates empty for immediate access (24h default expiry). If configured, candidates can only access the assessment within the specified window.
                   </p>
                 </div>
@@ -1051,11 +1206,16 @@ export default function CreateInterviewPage() {
 
               {/* Card 3: Camera Video Config */}
               <div className="bg-white/82 backdrop-blur-md border border-[#e5edf7] rounded-2xl p-5 text-slate-800 flex justify-between items-center shadow-[0_18px_40px_rgba(17,24,39,0.06)] hover:border-slate-300 transition-all duration-200">
-                <div className="flex flex-col gap-0.5">
-                  <label htmlFor="singleRecordVideo" className="text-xs font-bold uppercase tracking-wider text-slate-700 cursor-pointer">
-                    Record Interview Video
-                  </label>
-                  <span className="text-[0.7rem] text-slate-400">Record candidate video via webcam during assessment</span>
+                <div className="flex items-center gap-3.5">
+                  <div className="w-10 h-10 rounded-xl flex items-center justify-center bg-indigo-50 border border-indigo-100 text-primary shadow-inner">
+                    <i className="fas fa-video text-sm"></i>
+                  </div>
+                  <div className="flex flex-col gap-0.5">
+                    <label htmlFor="singleRecordVideo" className="text-xs font-extrabold uppercase tracking-wider text-slate-700 cursor-pointer">
+                      Record Interview Video
+                    </label>
+                    <span className="text-[0.7rem] text-slate-400 font-medium">Record candidate video via webcam during assessment</span>
+                  </div>
                 </div>
                 <label className="relative inline-flex items-center cursor-pointer select-none">
                   <input
@@ -1071,26 +1231,26 @@ export default function CreateInterviewPage() {
 
               {/* Card 4: HR Screening Parameters (Toggles) */}
               <Card className="bg-white/82 backdrop-blur-md border border-[#e5edf7] text-slate-800 flex flex-col gap-4">
-                <div className="flex gap-3 items-center border-b border-slate-100 pb-3.5">
-                  <div className="w-10 h-10 rounded-xl flex items-center justify-center bg-primary/8 text-primary">
-                    <i className="fas fa-clipboard-question text-lg"></i>
+                <div className="flex gap-3.5 items-center border-b border-slate-100/80 pb-3.5">
+                  <div className="w-10 h-10 rounded-xl flex items-center justify-center bg-indigo-50 border border-indigo-100 text-primary shadow-inner">
+                    <i className="fas fa-clipboard-question text-base"></i>
                   </div>
                   <div>
-                    <h3 className="text-sm font-bold text-slate-800">HR Screening Questions</h3>
-                    <p className="text-xs text-slate-500">Collect candidate preferences (Optional)</p>
+                    <h3 className="text-sm font-extrabold text-slate-800 tracking-tight">HR Screening Questions</h3>
+                    <p className="text-[0.7rem] text-slate-400 font-medium">Collect candidate preferences (Optional)</p>
                   </div>
                 </div>
 
-                <p className="text-[0.72rem] text-slate-500 leading-normal mb-1">
+                <p className="text-[0.7rem] text-slate-500 leading-normal mb-1 font-medium">
                   AI will dynamically query and extract candidate responses for the configured attributes at the end of the interview.
                 </p>
 
                 <div className="flex flex-col gap-3">
                   {/* Work Mode Screening */}
-                  <div className="border border-slate-100 rounded-xl p-3 bg-slate-50/50 flex flex-col gap-2.5">
+                  <div className="border border-slate-150 rounded-xl p-3 bg-slate-50/50 flex flex-col gap-2.5">
                     <div className="flex justify-between items-center">
                       <label htmlFor="singleAskWorkMode" className="text-xs font-bold text-slate-700 flex items-center gap-1.5 cursor-pointer">
-                        <i className="fas fa-building text-slate-400"></i> Work Mode Preference
+                        <i className="fas fa-building text-slate-400 text-xs"></i> Work Mode Preference
                       </label>
                       <label className="relative inline-flex items-center cursor-pointer select-none">
                         <input
@@ -1104,16 +1264,16 @@ export default function CreateInterviewPage() {
                       </label>
                     </div>
                     {singleCandidate.hrScreening.askWorkMode && (
-                      <div className="flex gap-2.5 border-t border-slate-100 pt-2.5 flex-wrap">
+                      <div className="flex gap-2 border-t border-slate-100 pt-2.5 flex-wrap">
                         {['On-site', 'Remote', 'Hybrid'].map(mode => (
                           <button
                             key={mode}
                             type="button"
                             onClick={() => handleSingleHrChange('workModeType', mode)}
-                            className={`px-3 py-1 rounded-full text-[0.7rem] font-semibold transition-all cursor-pointer ${
+                            className={`px-3 py-1 rounded-full text-[0.7rem] font-bold transition-all cursor-pointer ${
                               singleCandidate.hrScreening.workModeType === mode
-                                ? 'bg-primary/10 text-primary border border-primary/20 shadow-sm'
-                                : 'bg-white text-slate-600 border border-slate-200 hover:bg-slate-100'
+                                ? 'bg-primary text-white shadow-sm'
+                                : 'bg-white text-slate-600 border border-slate-200 hover:bg-slate-50'
                             }`}
                           >
                             {mode}
@@ -1124,10 +1284,10 @@ export default function CreateInterviewPage() {
                   </div>
 
                   {/* Location Screening */}
-                  <div className="border border-slate-100 rounded-xl p-3 bg-slate-50/50 flex flex-col gap-2.5">
+                  <div className="border border-slate-150 rounded-xl p-3 bg-slate-50/50 flex flex-col gap-2.5">
                     <div className="flex justify-between items-center">
                       <label htmlFor="singleAskLocation" className="text-xs font-bold text-slate-700 flex items-center gap-1.5 cursor-pointer">
-                        <i className="fas fa-map-location-dot text-slate-400"></i> Location Check
+                        <i className="fas fa-map-location-dot text-slate-400 text-xs"></i> Location Check
                       </label>
                       <label className="relative inline-flex items-center cursor-pointer select-none">
                         <input
@@ -1141,16 +1301,16 @@ export default function CreateInterviewPage() {
                       </label>
                     </div>
                     {singleCandidate.hrScreening.askLocation && (
-                      <div className="flex gap-2.5 border-t border-slate-100 pt-2.5 flex-wrap">
+                      <div className="flex gap-2 border-t border-slate-100 pt-2.5 flex-wrap">
                         {['Current', 'Preferred'].map(loc => (
                           <button
                             key={loc}
                             type="button"
                             onClick={() => handleSingleHrChange('locationType', loc)}
-                            className={`px-3 py-1 rounded-full text-[0.7rem] font-semibold transition-all cursor-pointer ${
+                            className={`px-3 py-1 rounded-full text-[0.7rem] font-bold transition-all cursor-pointer ${
                               singleCandidate.hrScreening.locationType === loc
-                                ? 'bg-primary/10 text-primary border border-primary/20 shadow-sm'
-                                : 'bg-white text-slate-600 border border-slate-200 hover:bg-slate-100'
+                                ? 'bg-primary text-white shadow-sm'
+                                : 'bg-white text-slate-600 border border-slate-200 hover:bg-slate-50'
                             }`}
                           >
                             {loc === 'Current' ? 'Current Location' : 'Preferred Location'}
@@ -1161,9 +1321,9 @@ export default function CreateInterviewPage() {
                   </div>
 
                   {/* Bond Screening */}
-                  <div className="border border-slate-100 rounded-xl p-3 bg-slate-50/50 flex justify-between items-center">
+                  <div className="border border-slate-150 rounded-xl p-3 bg-slate-50/50 flex justify-between items-center">
                     <label htmlFor="singleAskBond" className="text-xs font-bold text-slate-700 flex items-center gap-1.5 cursor-pointer">
-                      <i className="fas fa-file-signature text-slate-400"></i> Bond / Notice Period Info
+                      <i className="fas fa-file-signature text-slate-400 text-xs"></i> Bond / Notice Period Info
                     </label>
                     <label className="relative inline-flex items-center cursor-pointer select-none">
                       <input
@@ -1183,7 +1343,7 @@ export default function CreateInterviewPage() {
               <div className="flex gap-3.5 flex-col sm:flex-row mt-2">
                 <Button
                   variant="primary"
-                  className="flex-1 shadow-lg bg-gradient-to-r from-indigo-600 to-indigo-700 hover:from-indigo-750 hover:to-indigo-800"
+                  className="flex-1 shadow-lg bg-gradient-to-r from-indigo-600 to-indigo-700 hover:from-indigo-700 hover:to-indigo-800 rounded-xl"
                   onClick={handleGenerateInterviewLink}
                   disabled={inviting}
                   icon={<i className="fas fa-bolt" />}
@@ -1192,7 +1352,7 @@ export default function CreateInterviewPage() {
                 </Button>
                 <Button
                   variant="warning"
-                  className="flex-1"
+                  className="flex-1 rounded-xl"
                   onClick={() => handlePreviewEmail('single')}
                   icon={<i className="fas fa-eye" />}
                 >
@@ -1210,24 +1370,24 @@ export default function CreateInterviewPage() {
             <div className="lg:col-span-7 flex flex-col gap-6">
               {/* Card 1: Requirement Documents */}
               <Card className="bg-white/82 backdrop-blur-md border border-[#e5edf7] text-slate-800 flex flex-col gap-5">
-                <div className="flex gap-3 items-center border-b border-slate-100 pb-4">
-                  <div className="w-10 h-10 rounded-xl flex items-center justify-center bg-primary/8 text-primary">
-                    <i className="fas fa-file-zipper text-lg"></i>
+                <div className="flex gap-3.5 items-center border-b border-slate-100/80 pb-4">
+                  <div className="w-10 h-10 rounded-xl flex items-center justify-center bg-indigo-50 border border-indigo-100 text-primary shadow-inner">
+                    <i className="fas fa-file-invoice text-base"></i>
                   </div>
                   <div>
-                    <h3 className="text-sm font-bold text-slate-800">Job Description Profile</h3>
-                    <p className="text-xs text-slate-500">Provide description to target questions dynamically</p>
+                    <h3 className="text-sm font-extrabold text-slate-800 tracking-tight">Job Description Profile</h3>
+                    <p className="text-[0.7rem] text-slate-400 font-medium">Provide description to target questions dynamically</p>
                   </div>
                 </div>
 
                 {/* Job Description (Bulk) */}
-                <div className="flex flex-col gap-1.5">
+                <div className="flex flex-col gap-2">
                   <div className="flex justify-between items-center">
-                    <label className="text-xs font-semibold uppercase tracking-wider text-slate-400 m-0">Job Description <span className="text-rose-500">*</span></label>
+                    <label className="text-xs font-bold uppercase tracking-wider text-slate-500 m-0">Job Description <span className="text-rose-500">*</span></label>
                     <button
                       type="button"
                       onClick={() => document.getElementById('bulkJdInput').click()}
-                      className="inline-flex items-center gap-1 text-[0.7rem] font-bold text-primary bg-transparent border border-primary/20 rounded px-2.5 py-1 cursor-pointer hover:bg-primary/5 transition-all"
+                      className="inline-flex items-center gap-1 text-[0.7rem] font-extrabold text-primary bg-indigo-50 hover:bg-indigo-100 border border-primary/15 rounded-lg px-3 py-1 cursor-pointer transition-all"
                     >
                       <i className="fas fa-paperclip"></i> Upload file
                     </button>
@@ -1241,7 +1401,12 @@ export default function CreateInterviewPage() {
                         if (!file) return
                         handleParseFile(file, (err, data) => {
                           if (err) {
-                            alert(err)
+                            Swal.fire({
+                              title: 'Parsing Failed',
+                              text: err,
+                              icon: 'error',
+                              confirmButtonColor: '#6366f1'
+                            })
                             setBulkJdParsing(false)
                           } else {
                             handleBulkConfigChange('jobDescription', data.text || '')
@@ -1262,8 +1427,8 @@ export default function CreateInterviewPage() {
               {/* Card 2: Accordion Options */}
               <div className="flex flex-col gap-4">
                 {/* Custom Questions Section (Bulk) */}
-                <div className="border border-slate-200/80 rounded-2xl overflow-hidden bg-white/82 backdrop-blur-md shadow-sm">
-                  <div className="w-full px-5 py-4 bg-slate-50/50 border-b border-slate-100">
+                <div className="border border-slate-200/80 rounded-2xl overflow-hidden bg-white/82 backdrop-blur-md shadow-sm transition-all duration-200 hover:border-slate-300">
+                  <div className="w-full px-5 py-4 bg-slate-50/50 border-b border-slate-100 flex items-center justify-between">
                     <span className="text-xs font-bold text-slate-700 uppercase tracking-wider flex items-center gap-2">
                       <i className="fas fa-question-circle text-primary"></i> Custom Screening Questions (Optional)
                     </span>
@@ -1274,7 +1439,7 @@ export default function CreateInterviewPage() {
                       <button
                         type="button"
                         onClick={() => document.getElementById('bulkCustomInput').click()}
-                        className="inline-flex items-center gap-1 text-[0.7rem] font-bold text-primary bg-transparent border border-primary/20 rounded px-2.5 py-1 cursor-pointer hover:bg-primary/5 transition-all"
+                        className="inline-flex items-center gap-1 text-[0.7rem] font-extrabold text-primary bg-indigo-50 hover:bg-indigo-100 border border-primary/15 rounded-lg px-2.5 py-1 cursor-pointer transition-all"
                       >
                         <i className="fas fa-paperclip"></i> Upload questions
                       </button>
@@ -1288,7 +1453,12 @@ export default function CreateInterviewPage() {
                           if (!file) return
                           handleParseFile(file, (err, data) => {
                             if (err) {
-                              alert(err)
+                              Swal.fire({
+                                title: 'Parsing Failed',
+                                text: err,
+                                icon: 'error',
+                                confirmButtonColor: '#6366f1'
+                              })
                               setBulkCustomQuestionsParsing(false)
                             } else {
                               handleBulkConfigChange('customQuestions', data.text || '')
@@ -1307,8 +1477,8 @@ export default function CreateInterviewPage() {
                 </div>
 
                 {/* AI Instructions Section (Bulk) */}
-                <div className="border border-slate-200/80 rounded-2xl overflow-hidden bg-white/82 backdrop-blur-md shadow-sm">
-                  <div className="w-full px-5 py-4 bg-slate-50/50 border-b border-slate-100">
+                <div className="border border-slate-200/80 rounded-2xl overflow-hidden bg-white/82 backdrop-blur-md shadow-sm transition-all duration-200 hover:border-slate-300">
+                  <div className="w-full px-5 py-4 bg-slate-50/50 border-b border-slate-100 flex items-center justify-between">
                     <span className="text-xs font-bold text-slate-700 uppercase tracking-wider flex items-center gap-2">
                       <i className="fas fa-robot text-primary"></i> Custom AI Interviewer Instructions (Optional)
                     </span>
@@ -1319,7 +1489,7 @@ export default function CreateInterviewPage() {
                       <button
                         type="button"
                         onClick={() => document.getElementById('bulkAiInstructionsInput').click()}
-                        className="inline-flex items-center gap-1 text-[0.7rem] font-bold text-primary bg-transparent border border-primary/20 rounded px-2.5 py-1 cursor-pointer hover:bg-primary/5 transition-all"
+                        className="inline-flex items-center gap-1 text-[0.7rem] font-extrabold text-primary bg-indigo-50 hover:bg-indigo-100 border border-primary/15 rounded-lg px-2.5 py-1 cursor-pointer transition-all"
                       >
                         <i className="fas fa-paperclip"></i> Upload instructions
                       </button>
@@ -1333,7 +1503,12 @@ export default function CreateInterviewPage() {
                           if (!file) return
                           handleParseFile(file, (err, data) => {
                             if (err) {
-                              alert(err)
+                              Swal.fire({
+                                title: 'Parsing Failed',
+                                text: err,
+                                icon: 'error',
+                                confirmButtonColor: '#6366f1'
+                              })
                               setBulkAiInstructionsParsing(false)
                             } else {
                               handleBulkConfigChange('aiInstructions', data.text || '')
@@ -1357,13 +1532,13 @@ export default function CreateInterviewPage() {
             <div className="lg:col-span-5 flex flex-col gap-6">
               {/* Card 1: Configuration */}
               <Card className="bg-white/82 backdrop-blur-md border border-[#e5edf7] text-slate-800 flex flex-col gap-5">
-                <div className="flex gap-3 items-center border-b border-slate-100 pb-4">
-                  <div className="w-10 h-10 rounded-xl flex items-center justify-center bg-primary/8 text-primary">
-                    <i className="fas fa-sliders text-lg"></i>
+                <div className="flex gap-3.5 items-center border-b border-slate-100/80 pb-4">
+                  <div className="w-10 h-10 rounded-xl flex items-center justify-center bg-indigo-50 border border-indigo-100 text-primary shadow-inner">
+                    <i className="fas fa-sliders text-base"></i>
                   </div>
                   <div>
-                    <h3 className="text-sm font-bold text-slate-800">Interview Settings (Bulk)</h3>
-                    <p className="text-xs text-slate-500">Parameters apply globally to all candidates</p>
+                    <h3 className="text-sm font-extrabold text-slate-800 tracking-tight">Interview Settings (Bulk)</h3>
+                    <p className="text-[0.7rem] text-slate-400 font-medium">Parameters apply globally to all candidates</p>
                   </div>
                 </div>
 
@@ -1379,28 +1554,18 @@ export default function CreateInterviewPage() {
                   />
 
                   <Select
-                    label="Industry Type"
-                    value={bulkConfig.industry}
-                    onChange={(e) => handleBulkConfigChange('industry', e.target.value)}
-                    options={[
-                      { value: 'General', label: 'General (No Specific)' },
-                      { value: 'Information Technology', label: 'Info Tech' },
-                      { value: 'Software & SaaS', label: 'Software & SaaS' },
-                      { value: 'Healthcare', label: 'Healthcare' },
-                      { value: 'Financial Services', label: 'Financial' },
-                      { value: 'Education', label: 'Education' },
-                      { value: 'Human Resources & Staffing', label: 'HR & Staffing' }
-                    ]}
-                  />
-
-                  <Select
                     label="Interview Type"
                     value={bulkConfig.interviewType}
                     onChange={(e) => {
                       const type = e.target.value
                       handleBulkConfigChange('interviewType', type)
                       if (type === 'Technical' && bulkConfig.language !== 'English') {
-                        alert("Coding round is currently restricted to English language interviews. Switching language to English.")
+                        Swal.fire({
+                          title: 'Language Limitation',
+                          text: 'Coding round is currently restricted to English language interviews. Switching language to English.',
+                          icon: 'info',
+                          confirmButtonColor: '#6366f1'
+                        })
                         handleBulkConfigChange('language', 'English')
                       }
                     }}
@@ -1418,7 +1583,12 @@ export default function CreateInterviewPage() {
                       const lang = e.target.value
                       handleBulkConfigChange('language', lang)
                       if (lang !== 'English' && bulkConfig.interviewType === 'Technical') {
-                        alert("Coding round is currently restricted to English language interviews. Switching to Normal interview type.")
+                        Swal.fire({
+                          title: 'Interview Type Adjusted',
+                          text: 'Coding round is currently restricted to English language interviews. Switching to Normal interview type.',
+                          icon: 'info',
+                          confirmButtonColor: '#6366f1'
+                        })
                         handleBulkConfigChange('interviewType', 'Normal')
                       }
                     }}
@@ -1437,32 +1607,51 @@ export default function CreateInterviewPage() {
                       handleBulkConfigChange('duration', val)
                     }}
                   />
-                </div>
 
-                {bulkConfig.interviewType === 'Non-Technical' && (
-                  <Select
-                    label="Number of Case Study Questions (Round 2)"
-                    value={bulkConfig.caseStudyCount}
-                    onChange={(e) => handleBulkConfigChange('caseStudyCount', parseInt(e.target.value))}
-                    options={[
-                      { value: '2', label: '2 Questions' },
-                      { value: '3', label: '3 Questions' },
-                      { value: '4', label: '4 Questions' },
-                      { value: '5', label: '5 Questions' }
-                    ]}
-                  />
-                )}
+                  <div className="sm:col-span-2">
+                    <Select
+                      label="Industry Type"
+                      value={bulkConfig.industry}
+                      onChange={(e) => handleBulkConfigChange('industry', e.target.value)}
+                      options={[
+                        { value: 'General', label: 'General (No Specific)' },
+                        { value: 'Information Technology', label: 'Information Technology' },
+                        { value: 'Software & SaaS', label: 'Software & SaaS' },
+                        { value: 'Healthcare', label: 'Healthcare' },
+                        { value: 'Financial Services', label: 'Financial Services' },
+                        { value: 'Education', label: 'Education' },
+                        { value: 'Human Resources & Staffing', label: 'Human Resources & Staffing' }
+                      ]}
+                    />
+                  </div>
+
+                  {bulkConfig.interviewType === 'Non-Technical' && (
+                    <div className="sm:col-span-2">
+                      <Select
+                        label="Number of Case Study Questions (Round 2)"
+                        value={bulkConfig.caseStudyCount}
+                        onChange={(e) => handleBulkConfigChange('caseStudyCount', parseInt(e.target.value))}
+                        options={[
+                          { value: '2', label: '2 Questions' },
+                          { value: '3', label: '3 Questions' },
+                          { value: '4', label: '4 Questions' },
+                          { value: '5', label: '5 Questions' }
+                        ]}
+                      />
+                    </div>
+                  )}
+                </div>
               </Card>
 
               {/* Card 2: Scheduling Options (Bulk) */}
               <Card className="bg-white/82 backdrop-blur-md border border-[#e5edf7] text-slate-800 flex flex-col gap-4">
-                <div className="flex gap-3 items-center border-b border-slate-100 pb-3.5">
-                  <div className="w-10 h-10 rounded-xl flex items-center justify-center bg-primary/8 text-primary">
-                    <i className="fas fa-calendar-check text-lg"></i>
+                <div className="flex gap-3.5 items-center border-b border-slate-100/80 pb-3.5">
+                  <div className="w-10 h-10 rounded-xl flex items-center justify-center bg-indigo-50 border border-indigo-100 text-primary shadow-inner">
+                    <i className="fas fa-calendar-check text-base"></i>
                   </div>
                   <div>
-                    <h3 className="text-sm font-bold text-slate-800">Interview Schedule</h3>
-                    <p className="text-xs text-slate-500">Global access window restrictions</p>
+                    <h3 className="text-sm font-extrabold text-slate-800 tracking-tight">Interview Schedule</h3>
+                    <p className="text-[0.7rem] text-slate-400 font-medium">Global access window restrictions</p>
                   </div>
                 </div>
 
@@ -1480,9 +1669,9 @@ export default function CreateInterviewPage() {
                     onChange={(e) => handleBulkConfigChange('scheduledEnd', e.target.value)}
                   />
                 </div>
-                <div className="flex gap-2 items-start bg-slate-50 p-3 rounded-xl border border-slate-200/50 mt-1">
-                  <i className="fas fa-circle-info text-slate-400 text-xs mt-0.5"></i>
-                  <p className="text-[0.7rem] text-slate-500 leading-normal">
+                <div className="flex gap-2.5 items-start bg-slate-50 p-3.5 rounded-2xl border border-slate-150 mt-1">
+                  <i className="fas fa-circle-info text-indigo-500 text-xs mt-0.5"></i>
+                  <p className="text-[0.7rem] text-slate-500 leading-normal font-medium">
                     Leave dates empty for immediate access. Configured values enforce global timing access for all candidates.
                   </p>
                 </div>
@@ -1490,11 +1679,16 @@ export default function CreateInterviewPage() {
 
               {/* Card 3: Camera Video Options (Bulk) */}
               <div className="bg-white/82 backdrop-blur-md border border-[#e5edf7] rounded-2xl p-5 text-slate-800 flex justify-between items-center shadow-[0_18px_40px_rgba(17,24,39,0.06)] hover:border-slate-300 transition-all duration-200">
-                <div className="flex flex-col gap-0.5">
-                  <label htmlFor="bulkRecordVideo" className="text-xs font-bold uppercase tracking-wider text-slate-700 cursor-pointer">
-                    Record Interview Video
-                  </label>
-                  <span className="text-[0.7rem] text-slate-400">Webcam video recording default for all bulk candidates</span>
+                <div className="flex items-center gap-3.5">
+                  <div className="w-10 h-10 rounded-xl flex items-center justify-center bg-indigo-50 border border-indigo-100 text-primary shadow-inner">
+                    <i className="fas fa-video text-sm"></i>
+                  </div>
+                  <div className="flex flex-col gap-0.5">
+                    <label htmlFor="bulkRecordVideo" className="text-xs font-extrabold uppercase tracking-wider text-slate-700 cursor-pointer">
+                      Record Interview Video
+                    </label>
+                    <span className="text-[0.7rem] text-slate-400 font-medium">Webcam video recording default for all bulk candidates</span>
+                  </div>
                 </div>
                 <label className="relative inline-flex items-center cursor-pointer select-none">
                   <input
@@ -1510,26 +1704,26 @@ export default function CreateInterviewPage() {
 
               {/* Card 4: HR Screening Parameters (Bulk toggles) */}
               <Card className="bg-white/82 backdrop-blur-md border border-[#e5edf7] text-slate-800 flex flex-col gap-4">
-                <div className="flex gap-3 items-center border-b border-slate-100 pb-3.5">
-                  <div className="w-10 h-10 rounded-xl flex items-center justify-center bg-primary/8 text-primary">
-                    <i className="fas fa-clipboard-question text-lg"></i>
+                <div className="flex gap-3.5 items-center border-b border-slate-100/80 pb-3.5">
+                  <div className="w-10 h-10 rounded-xl flex items-center justify-center bg-indigo-50 border border-indigo-100 text-primary shadow-inner">
+                    <i className="fas fa-clipboard-question text-base"></i>
                   </div>
                   <div>
-                    <h3 className="text-sm font-bold text-slate-800">HR Screening Questions</h3>
-                    <p className="text-xs text-slate-500">Collect candidate preferences (Optional)</p>
+                    <h3 className="text-sm font-extrabold text-slate-800 tracking-tight">HR Screening Questions</h3>
+                    <p className="text-[0.7rem] text-slate-400 font-medium">Collect candidate preferences (Optional)</p>
                   </div>
                 </div>
 
-                <p className="text-[0.72rem] text-slate-500 leading-normal mb-1">
+                <p className="text-[0.7rem] text-slate-500 leading-normal mb-1 font-medium">
                   AI will query preferences at the end of each session.
                 </p>
 
                 <div className="flex flex-col gap-3">
                   {/* Work Mode */}
-                  <div className="border border-slate-100 rounded-xl p-3 bg-slate-50/50 flex flex-col gap-2.5">
+                  <div className="border border-slate-150 rounded-xl p-3 bg-slate-50/50 flex flex-col gap-2.5">
                     <div className="flex justify-between items-center">
                       <label htmlFor="bulkAskWorkMode" className="text-xs font-bold text-slate-700 flex items-center gap-1.5 cursor-pointer">
-                        <i className="fas fa-building text-slate-400"></i> Work Mode Preference
+                        <i className="fas fa-building text-slate-400 text-xs"></i> Work Mode Preference
                       </label>
                       <label className="relative inline-flex items-center cursor-pointer select-none">
                         <input
@@ -1543,16 +1737,16 @@ export default function CreateInterviewPage() {
                       </label>
                     </div>
                     {bulkConfig.hrScreening.askWorkMode && (
-                      <div className="flex gap-2.5 border-t border-slate-100 pt-2.5 flex-wrap">
+                      <div className="flex gap-2 border-t border-slate-100 pt-2.5 flex-wrap">
                         {['On-site', 'Remote', 'Hybrid'].map(mode => (
                           <button
                             key={mode}
                             type="button"
                             onClick={() => handleBulkHrChange('workModeType', mode)}
-                            className={`px-3 py-1 rounded-full text-[0.7rem] font-semibold transition-all cursor-pointer ${
+                            className={`px-3 py-1 rounded-full text-[0.7rem] font-bold transition-all cursor-pointer ${
                               bulkConfig.hrScreening.workModeType === mode
-                                ? 'bg-primary/10 text-primary border border-primary/20 shadow-sm'
-                                : 'bg-white text-slate-600 border border-slate-200 hover:bg-slate-100'
+                                ? 'bg-primary text-white shadow-sm'
+                                : 'bg-white text-slate-600 border border-slate-200 hover:bg-slate-50'
                             }`}
                           >
                             {mode}
@@ -1563,10 +1757,10 @@ export default function CreateInterviewPage() {
                   </div>
 
                   {/* Location */}
-                  <div className="border border-slate-100 rounded-xl p-3 bg-slate-50/50 flex flex-col gap-2.5">
+                  <div className="border border-slate-150 rounded-xl p-3 bg-slate-50/50 flex flex-col gap-2.5">
                     <div className="flex justify-between items-center">
                       <label htmlFor="bulkAskLocation" className="text-xs font-bold text-slate-700 flex items-center gap-1.5 cursor-pointer">
-                        <i className="fas fa-map-location-dot text-slate-400"></i> Location Check
+                        <i className="fas fa-map-location-dot text-slate-400 text-xs"></i> Location Check
                       </label>
                       <label className="relative inline-flex items-center cursor-pointer select-none">
                         <input
@@ -1580,16 +1774,16 @@ export default function CreateInterviewPage() {
                       </label>
                     </div>
                     {bulkConfig.hrScreening.askLocation && (
-                      <div className="flex gap-2.5 border-t border-slate-100 pt-2.5 flex-wrap">
+                      <div className="flex gap-2 border-t border-slate-100 pt-2.5 flex-wrap">
                         {['Current', 'Preferred'].map(loc => (
                           <button
                             key={loc}
                             type="button"
                             onClick={() => handleBulkHrChange('locationType', loc)}
-                            className={`px-3 py-1 rounded-full text-[0.7rem] font-semibold transition-all cursor-pointer ${
+                            className={`px-3 py-1 rounded-full text-[0.7rem] font-bold transition-all cursor-pointer ${
                               bulkConfig.hrScreening.locationType === loc
-                                ? 'bg-primary/10 text-primary border border-primary/20 shadow-sm'
-                                : 'bg-white text-slate-600 border border-slate-200 hover:bg-slate-100'
+                                ? 'bg-primary text-white shadow-sm'
+                                : 'bg-white text-slate-600 border border-slate-200 hover:bg-slate-50'
                             }`}
                           >
                             {loc === 'Current' ? 'Current Location' : 'Preferred Location'}
@@ -1600,9 +1794,9 @@ export default function CreateInterviewPage() {
                   </div>
 
                   {/* Bond */}
-                  <div className="border border-slate-100 rounded-xl p-3 bg-slate-50/50 flex justify-between items-center">
+                  <div className="border border-slate-150 rounded-xl p-3 bg-slate-50/50 flex justify-between items-center">
                     <label htmlFor="bulkAskBond" className="text-xs font-bold text-slate-700 flex items-center gap-1.5 cursor-pointer">
-                      <i className="fas fa-file-signature text-slate-400"></i> Bond / Notice Period Info
+                      <i className="fas fa-file-signature text-slate-400 text-xs"></i> Bond / Notice Period Info
                     </label>
                     <label className="relative inline-flex items-center cursor-pointer select-none">
                       <input
@@ -1619,24 +1813,30 @@ export default function CreateInterviewPage() {
               </Card>
 
               {/* Card 5: Excel/CSV Upload Dropzone */}
-              <div className="bg-white/82 backdrop-blur-md border border-[#e5edf7] rounded-2xl p-5 text-slate-800 flex flex-col gap-3 shadow-[0_18px_40px_rgba(17,24,39,0.06)]">
-                <div className="flex justify-between items-center">
-                  <label className="text-xs font-semibold uppercase tracking-wider text-slate-400 m-0">Upload Excel or CSV</label>
+              <div className="bg-white/82 backdrop-blur-md border border-[#e5edf7] rounded-2xl p-5 text-slate-800 flex flex-col gap-4 shadow-[0_18px_40px_rgba(17,24,39,0.06)] hover:border-slate-300 transition-all duration-200">
+                <div className="flex justify-between items-center border-b border-slate-100 pb-2.5">
+                  <div className="flex items-center gap-2">
+                    <i className="fas fa-file-excel text-emerald-650 text-sm"></i>
+                    <label className="text-xs font-bold uppercase tracking-wider text-slate-700 m-0">Import Candidates</label>
+                  </div>
                   <button
                     type="button"
                     onClick={downloadExcelTemplate}
-                    className="flex items-center gap-1 bg-emerald-500/10 hover:bg-emerald-500/20 text-emerald-600 border border-emerald-500/20 px-2.5 py-1 rounded-lg text-xs font-semibold cursor-pointer transition-all"
+                    className="flex items-center gap-1 bg-emerald-50 hover:bg-emerald-100 text-emerald-700 border border-emerald-500/15 px-3 py-1 rounded-lg text-xs font-extrabold cursor-pointer transition-all"
                   >
                     <i className="fas fa-download"></i> Get Template
                   </button>
                 </div>
 
                 <div
-                  className="border-2 border-dashed border-slate-200 rounded-xl p-4 text-center cursor-pointer bg-slate-50 hover:bg-white hover:border-primary transition-all"
+                  className="border-2 border-dashed border-slate-200 rounded-xl p-6 text-center cursor-pointer bg-slate-50/50 hover:bg-white hover:border-emerald-500/80 hover:shadow-md hover:shadow-emerald-500/5 hover:-translate-y-0.5 transition-all duration-300 flex flex-col items-center justify-center gap-2 group"
                   onClick={() => document.getElementById('bulkExcelInput').click()}
                 >
-                  <p className="font-semibold text-slate-600 text-xs flex items-center justify-center gap-2">
-                    <i className="fas fa-file-excel text-emerald-600"></i> {bulkCsvLabel}
+                  <div className="w-10 h-10 rounded-lg bg-emerald-50 text-emerald-600 flex items-center justify-center group-hover:scale-110 transition-all">
+                    <i className="fas fa-file-arrow-up text-lg"></i>
+                  </div>
+                  <p className="font-bold text-slate-650 text-xs mt-1">
+                    {bulkCsvLabel}
                   </p>
                 </div>
                 <input
@@ -1649,9 +1849,12 @@ export default function CreateInterviewPage() {
               </div>
 
               {/* Card 6: Manual Candidates Addition Form */}
-              <div className="bg-white/82 backdrop-blur-md border border-[#e5edf7] rounded-2xl p-5 text-slate-800 flex flex-col gap-4 shadow-[0_18px_40px_rgba(17,24,39,0.06)]">
-                <h4 className="text-xs font-bold uppercase tracking-wider text-slate-700">Add Candidate Manually</h4>
-                <div className="grid grid-cols-1 sm:grid-cols-[1fr_1fr_auto] gap-3 items-end">
+              <div className="bg-white/82 backdrop-blur-md border border-[#e5edf7] rounded-2xl p-5 text-slate-800 flex flex-col gap-4 shadow-[0_18px_40px_rgba(17,24,39,0.06)] hover:border-slate-350 transition-all duration-200">
+                <div className="flex gap-2 items-center border-b border-slate-100 pb-2.5">
+                  <i className="fas fa-user-plus text-primary text-xs"></i>
+                  <h4 className="text-xs font-bold uppercase tracking-wider text-slate-700 m-0">Add Candidate Manually</h4>
+                </div>
+                <div className="grid grid-cols-1 sm:grid-cols-[1fr_1fr_auto] gap-4 items-end">
                   <Input
                     label="Candidate Name"
                     placeholder="John Doe"
@@ -1667,19 +1870,34 @@ export default function CreateInterviewPage() {
                   <Button
                     type="button"
                     variant="primary"
-                    className="px-5 py-2.5 h-[42px] rounded-lg font-bold"
+                    className="px-5 py-2.5 h-[42px] rounded-lg font-bold shadow-sm"
                     onClick={() => {
                       const { name, email } = bulkCandidateInput
                       if (!name || !email) {
-                        alert("Name and email are required to add a candidate manually.")
+                        Swal.fire({
+                          title: 'Fields Required',
+                          text: 'Name and email are required to add a candidate manually.',
+                          icon: 'warning',
+                          confirmButtonColor: '#6366f1'
+                        })
                         return
                       }
                       if (!email.includes('@')) {
-                        alert("Invalid candidate email format.")
+                        Swal.fire({
+                          title: 'Invalid Email',
+                          text: 'Invalid candidate email format.',
+                          icon: 'warning',
+                          confirmButtonColor: '#6366f1'
+                        })
                         return
                       }
                       if (bulkCandidates.find(c => c.email === email)) {
-                        alert("Candidate already exists in the list.")
+                        Swal.fire({
+                          title: 'Candidate Duplicate',
+                          text: 'Candidate already exists in the list.',
+                          icon: 'warning',
+                          confirmButtonColor: '#6366f1'
+                        })
                         return
                       }
                       setBulkCandidates(prev => [...prev, { name, email, record_video: true }])
@@ -1695,7 +1913,7 @@ export default function CreateInterviewPage() {
               <div className="flex gap-3.5 flex-col sm:flex-row mt-2">
                 <Button
                   variant="primary"
-                  className="flex-1 shadow-lg bg-gradient-to-r from-indigo-600 to-indigo-700 hover:from-indigo-750 hover:to-indigo-800"
+                  className="flex-1 shadow-lg bg-gradient-to-r from-indigo-600 to-indigo-700 hover:from-indigo-700 hover:to-indigo-800 rounded-xl"
                   onClick={handleSendBulkInterviews}
                   disabled={inviting}
                   icon={<i className="fas fa-paper-plane" />}
@@ -1704,7 +1922,7 @@ export default function CreateInterviewPage() {
                 </Button>
                 <Button
                   variant="warning"
-                  className="flex-1"
+                  className="flex-1 rounded-xl"
                   onClick={() => handlePreviewEmail('bulk')}
                   icon={<i className="fas fa-eye" />}
                 >
@@ -1720,12 +1938,12 @@ export default function CreateInterviewPage() {
           <Card className="bg-white/82 backdrop-blur-md border border-[#e5edf7] text-slate-800 flex flex-col gap-4 mt-2">
             <div className="flex justify-between items-center border-b border-slate-100 pb-3">
               <h4 className="text-sm font-bold text-slate-800 flex items-center gap-2">
-                <i className="fas fa-list-check text-primary"></i> Candidates List (<strong className="text-primary">{bulkCandidates.length}</strong>)
+                <i className="fas fa-list-check text-primary text-xs"></i> Candidates List (<strong className="text-primary font-extrabold">{bulkCandidates.length}</strong>)
               </h4>
               {bulkCandidates.length > 0 && (
                 <button
                   type="button"
-                  className="bg-transparent border-none text-rose-500 hover:text-rose-650 text-xs cursor-pointer font-bold flex items-center gap-1"
+                  className="bg-transparent border-none text-rose-500 hover:text-rose-600 text-xs cursor-pointer font-bold flex items-center gap-1"
                   onClick={() => setBulkCandidates([])}
                 >
                   <i className="fas fa-trash-can"></i> Clear All
@@ -1734,19 +1952,19 @@ export default function CreateInterviewPage() {
             </div>
 
             {bulkCandidates.length === 0 ? (
-              <div className="p-8 border border-dashed border-slate-200 rounded-xl text-center text-slate-400 text-xs font-semibold flex flex-col items-center justify-center gap-2">
+              <div className="p-8 border border-dashed border-slate-200 rounded-xl text-center text-slate-400 text-xs font-semibold flex flex-col items-center justify-center gap-2 bg-slate-50/20">
                 <i className="fas fa-users-slash text-2xl opacity-60"></i>
                 <p>No candidates added yet. Upload Excel/CSV template or add manually.</p>
               </div>
             ) : (
-              <div className="overflow-x-auto border border-[#e2e8f0] rounded-xl bg-white">
+              <div className="overflow-x-auto border border-[#e2e8f0] rounded-xl bg-white shadow-sm">
                 <table className="w-full border-collapse text-left">
                   <thead>
                     <tr className="bg-slate-50 border-b border-[#e2e8f0]">
-                      <th className="py-3 px-4 font-bold text-xs text-slate-500 uppercase tracking-wider">Candidate Name</th>
-                      <th className="py-3 px-4 font-bold text-xs text-slate-500 uppercase tracking-wider">Email Address</th>
-                      <th className="py-3 px-4 font-bold text-xs text-slate-500 uppercase tracking-wider w-[140px]">Record Video</th>
-                      <th className="py-3 px-4 font-bold text-xs text-slate-500 uppercase tracking-wider w-[80px] text-center">Action</th>
+                      <th className="py-3.5 px-4 font-bold text-xs text-slate-500 uppercase tracking-wider">Candidate Name</th>
+                      <th className="py-3.5 px-4 font-bold text-xs text-slate-500 uppercase tracking-wider">Email Address</th>
+                      <th className="py-3.5 px-4 font-bold text-xs text-slate-500 uppercase tracking-wider w-[140px]">Record Video</th>
+                      <th className="py-3.5 px-4 font-bold text-xs text-slate-500 uppercase tracking-wider w-[80px] text-center">Action</th>
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-slate-100">
@@ -1795,25 +2013,25 @@ export default function CreateInterviewPage() {
         {/* Created Links Section */}
         {createTab === 'single' && (
           <Card className="bg-white/82 backdrop-blur-md border border-[#e5edf7] text-slate-800 flex flex-col gap-4 mt-2">
-            <div className="flex gap-3 items-center border-b border-slate-100 pb-3">
-              <div className="w-10 h-10 rounded-xl flex items-center justify-center bg-emerald-500/8 text-emerald-500">
-                <i className="fas fa-link text-lg"></i>
+            <div className="flex gap-3.5 items-center border-b border-slate-100 pb-3">
+              <div className="w-10 h-10 rounded-xl flex items-center justify-center bg-emerald-50 border border-emerald-100 text-emerald-500 shadow-inner">
+                <i className="fas fa-link text-base"></i>
               </div>
               <div>
-                <h3 className="text-sm font-bold text-slate-800">Generated Links</h3>
-                <p className="text-xs text-slate-500">Share these with candidates to start interviews</p>
+                <h3 className="text-sm font-extrabold text-slate-800 tracking-tight">Generated Links</h3>
+                <p className="text-[0.7rem] text-slate-450 font-medium">Share these with candidates to start interviews</p>
               </div>
             </div>
 
             {singleCreatedLinks.length === 0 ? (
-              <div className="p-8 text-center border border-dashed border-slate-200 rounded-xl text-slate-400 text-xs font-semibold flex flex-col items-center justify-center gap-2">
+              <div className="p-8 text-center border border-dashed border-slate-200 rounded-xl text-slate-400 text-xs font-semibold flex flex-col items-center justify-center gap-2 bg-slate-50/20">
                 <i className="fas fa-link-slash text-2xl opacity-60"></i>
                 <p>No interview links generated yet in this session.</p>
               </div>
             ) : (
               <div className="flex flex-col gap-2.5">
                 {singleCreatedLinks.map((link, idx) => (
-                  <div key={idx} className="flex justify-between items-center flex-wrap gap-3 p-3 bg-slate-50/70 border border-slate-200 rounded-xl hover:border-slate-300 transition-all">
+                  <div key={idx} className="flex justify-between items-center flex-wrap gap-3 p-3 bg-slate-50/70 border border-slate-200 rounded-xl hover:border-slate-350 transition-all shadow-sm">
                     <div className="flex items-center gap-3">
                       <div className="w-8 h-8 rounded-full bg-emerald-50 text-emerald-600 flex items-center justify-center text-xs font-bold">
                         <i className="fas fa-link"></i>
@@ -1826,10 +2044,18 @@ export default function CreateInterviewPage() {
                     <div className="flex gap-2">
                       <Button
                         variant="secondary"
-                        className="px-3.5 py-1.5 text-xs h-[32px] border-slate-200 rounded-lg bg-white"
+                        className="px-3.5 py-1.5 text-xs h-[32px] border-slate-200 rounded-lg bg-white shadow-sm"
                         onClick={() => {
                           navigator.clipboard.writeText(`${window.location.origin}/interview?session_id=${link.id}`)
-                          alert("Copied link to clipboard!")
+                          Swal.fire({
+                            title: 'Link Copied',
+                            text: 'Copied link to clipboard!',
+                            icon: 'success',
+                            toast: true,
+                            position: 'top-end',
+                            showConfirmButton: false,
+                            timer: 2000
+                          })
                         }}
                       >
                         Copy Link

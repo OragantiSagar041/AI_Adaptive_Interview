@@ -163,12 +163,12 @@ export default function CreateTenant() {
   return (
     <div className="max-w-4xl mx-auto space-y-6">
       {/* Page Header */}
-      <div className="bg-white border border-slate-200/60 p-6 rounded-2xl shadow-[0_4px_20px_rgba(0,0,0,0.04)] flex justify-between items-center">
+      <div className="bg-white border border-slate-200/60 p-6 rounded-2xl shadow-[0_4px_20px_rgba(0,0,0,0.04)] flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
         <div>
           <h2 className="text-xl font-bold text-slate-800">Provision Tenant Account</h2>
           <p className="text-sm text-slate-500">Create new company workspaces and assign credentials on the platform.</p>
         </div>
-        <div className="flex items-center gap-1 bg-indigo-50 text-indigo-600 text-xs font-semibold px-3 py-1.5 rounded-xl">
+        <div className="flex items-center gap-1 bg-indigo-50 text-indigo-600 text-xs font-semibold px-3 py-1.5 rounded-xl shrink-0">
           <Sparkles size={14} className="animate-pulse" /> Smart Provisioning
         </div>
       </div>
@@ -337,7 +337,7 @@ export default function CreateTenant() {
         </div>
 
         {/* Buttons */}
-        <div className="flex justify-end gap-4 bg-white p-6 rounded-2xl border border-slate-200/60 shadow-[0_4px_20px_rgba(0,0,0,0.04)]">
+        <div className="flex flex-col-reverse sm:flex-row justify-end gap-3 bg-white p-6 rounded-2xl border border-slate-200/60 shadow-[0_4px_20px_rgba(0,0,0,0.04)]">
           <button
             type="button"
             onClick={() => {
@@ -348,14 +348,14 @@ export default function CreateTenant() {
               setLastSuggestedUser('')
               setLastSuggestedEmail('')
             }}
-            className="px-6 py-3 border border-slate-200 hover:bg-slate-50 text-slate-700 font-bold text-sm rounded-xl transition-colors cursor-pointer"
+            className="w-full sm:w-auto px-6 py-3 border border-slate-200 hover:bg-slate-50 text-slate-700 font-bold text-sm rounded-xl transition-colors cursor-pointer text-center"
           >
             Reset Form
           </button>
           <button
             type="submit"
             disabled={loading}
-            className="px-8 py-3 bg-indigo-600 hover:bg-indigo-700 text-white font-bold text-sm rounded-xl transition-colors shadow-md flex items-center gap-2 cursor-pointer disabled:opacity-50"
+            className="w-full sm:w-auto px-8 py-3 bg-indigo-600 hover:bg-indigo-700 text-white font-bold text-sm rounded-xl transition-colors shadow-md flex items-center justify-center gap-2 cursor-pointer disabled:opacity-50"
           >
             {loading ? <RefreshCw size={16} className="animate-spin" /> : <Bolt size={16} />} 
             {loading ? 'Creating Tenant...' : 'Create Account Now'}

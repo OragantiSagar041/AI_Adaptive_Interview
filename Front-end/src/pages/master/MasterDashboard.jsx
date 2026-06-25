@@ -146,22 +146,22 @@ export default function MasterDashboard() {
 
   return (
     <div className="space-y-8 max-w-6xl">
-      <div className="flex justify-between items-center">
+      <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
         <div>
           <h2 className="text-2xl font-bold text-slate-800">Master Console Overview</h2>
           <p className="text-sm text-slate-500">Real-time metrics, MRR, and platform analytics.</p>
         </div>
-        <div className="flex gap-3">
+        <div className="flex gap-3 w-full sm:w-auto">
           <button
             onClick={fetchCompanies}
             disabled={loading}
-            className="px-4 py-2 bg-white border border-slate-200 hover:bg-slate-50 text-slate-700 rounded-lg text-sm font-semibold transition-colors flex items-center gap-1.5 shadow-sm"
+            className="flex-1 sm:flex-initial px-4 py-2 bg-white border border-slate-200 hover:bg-slate-50 text-slate-700 rounded-lg text-sm font-semibold transition-colors flex items-center justify-center gap-1.5 shadow-sm"
           >
             <RefreshCw size={14} className={loading ? 'animate-spin' : ''} /> Refresh Data
           </button>
           <button
             onClick={() => navigate('/master/create-tenant')}
-            className="px-4 py-2 bg-indigo-600 hover:bg-indigo-700 text-white rounded-lg text-sm font-semibold transition-colors flex items-center gap-1.5 shadow-md"
+            className="flex-1 sm:flex-initial px-4 py-2 bg-indigo-600 hover:bg-indigo-700 text-white rounded-lg text-sm font-semibold transition-colors flex items-center justify-center gap-1.5 shadow-md"
           >
             <Plus size={16} /> Create Tenant
           </button>
@@ -169,60 +169,60 @@ export default function MasterDashboard() {
       </div>
 
       {/* Enhanced Stat Cards */}
-      <div className="grid gap-6 sm:grid-cols-2 lg:grid-cols-4">
+      <div className="grid grid-cols-2 gap-4 lg:grid-cols-4">
         {/* MRR Card */}
-        <div className="bg-white border border-slate-200/60 p-6 rounded-2xl shadow-[0_4px_20px_rgba(0,0,0,0.04)] flex justify-between items-start">
+        <div className="bg-white border border-slate-200/60 p-4 sm:p-6 rounded-2xl shadow-[0_4px_20px_rgba(0,0,0,0.04)] flex justify-between items-start gap-2">
           <div>
-            <span className="text-[0.68rem] font-bold text-slate-400 uppercase tracking-widest">Monthly Recurring Revenue</span>
-            <h3 className="text-3xl font-extrabold mt-1.5 text-slate-900">$12,450</h3>
-            <span className="text-xs text-emerald-500 font-semibold flex items-center gap-1 mt-2">
-              <ArrowUp size={12} /> 14.2% from last month
+            <span className="text-[0.62rem] sm:text-[0.68rem] font-bold text-slate-400 uppercase tracking-widest block leading-tight">Monthly Recurring Revenue</span>
+            <h3 className="text-xl sm:text-3xl font-extrabold mt-1.5 text-slate-900">$12,450</h3>
+            <span className="text-[10px] sm:text-xs text-emerald-500 font-semibold flex items-center gap-1 mt-2">
+              <ArrowUp size={12} /> 14.2%
             </span>
           </div>
-          <div className="w-11 h-11 bg-emerald-50 text-emerald-500 rounded-xl flex items-center justify-center">
-            <DollarSign size={20} />
+          <div className="w-9 h-9 sm:w-11 sm:h-11 bg-emerald-50 text-emerald-500 rounded-lg sm:rounded-xl flex items-center justify-center shrink-0">
+            <DollarSign className="w-4 h-4 sm:w-5 sm:h-5" />
           </div>
         </div>
 
         {/* Active Companies Card */}
-        <div className="bg-white border border-slate-200/60 p-6 rounded-2xl shadow-[0_4px_20px_rgba(0,0,0,0.04)] flex justify-between items-start">
+        <div className="bg-white border border-slate-200/60 p-4 sm:p-6 rounded-2xl shadow-[0_4px_20px_rgba(0,0,0,0.04)] flex justify-between items-start gap-2">
           <div>
-            <span className="text-[0.68rem] font-bold text-slate-400 uppercase tracking-widest">Active Companies</span>
-            <h3 className="text-3xl font-extrabold mt-1.5 text-slate-900">{companies.length}</h3>
-            <span className="text-xs text-emerald-500 font-semibold flex items-center gap-1 mt-2">
-              <ArrowUp size={12} /> 5 new this week
+            <span className="text-[0.62rem] sm:text-[0.68rem] font-bold text-slate-400 uppercase tracking-widest block leading-tight">Active Companies</span>
+            <h3 className="text-xl sm:text-3xl font-extrabold mt-1.5 text-slate-900">{companies.length}</h3>
+            <span className="text-[10px] sm:text-xs text-emerald-500 font-semibold flex items-center gap-1 mt-2">
+              <ArrowUp size={12} /> 5 new
             </span>
           </div>
-          <div className="w-11 h-11 bg-indigo-50 text-indigo-500 rounded-xl flex items-center justify-center">
-            <Building size={20} />
+          <div className="w-9 h-9 sm:w-11 sm:h-11 bg-indigo-50 text-indigo-500 rounded-lg sm:rounded-xl flex items-center justify-center shrink-0">
+            <Building className="w-4 h-4 sm:w-5 sm:h-5" />
           </div>
         </div>
 
         {/* Interviews Card */}
-        <div className="bg-white border border-slate-200/60 p-6 rounded-2xl shadow-[0_4px_20px_rgba(0,0,0,0.04)] flex justify-between items-start">
+        <div className="bg-white border border-slate-200/60 p-4 sm:p-6 rounded-2xl shadow-[0_4px_20px_rgba(0,0,0,0.04)] flex justify-between items-start gap-2">
           <div>
-            <span className="text-[0.68rem] font-bold text-slate-400 uppercase tracking-widest">Total Conducted</span>
-            <h3 className="text-3xl font-extrabold mt-1.5 text-slate-900">{Math.max(1204, totalInterviewsConducted)}</h3>
-            <span className="text-xs text-slate-400 font-semibold flex items-center gap-1 mt-2">
+            <span className="text-[0.62rem] sm:text-[0.68rem] font-bold text-slate-400 uppercase tracking-widest block leading-tight">Total Conducted</span>
+            <h3 className="text-xl sm:text-3xl font-extrabold mt-1.5 text-slate-900">{Math.max(1204, totalInterviewsConducted)}</h3>
+            <span className="text-[10px] sm:text-xs text-slate-400 font-semibold flex items-center gap-1 mt-2">
               Stable
             </span>
           </div>
-          <div className="w-11 h-11 bg-amber-50 text-amber-500 rounded-xl flex items-center justify-center">
-            <Video size={20} />
+          <div className="w-9 h-9 sm:w-11 sm:h-11 bg-amber-50 text-amber-500 rounded-lg sm:rounded-xl flex items-center justify-center shrink-0">
+            <Video className="w-4 h-4 sm:w-5 sm:h-5" />
           </div>
         </div>
 
         {/* System Health Card */}
-        <div className="bg-white border border-slate-200/60 p-6 rounded-2xl shadow-[0_4px_20px_rgba(0,0,0,0.04)] flex justify-between items-start">
+        <div className="bg-white border border-slate-200/60 p-4 sm:p-6 rounded-2xl shadow-[0_4px_20px_rgba(0,0,0,0.04)] flex justify-between items-start gap-2">
           <div>
-            <span className="text-[0.68rem] font-bold text-slate-400 uppercase tracking-widest">System Health</span>
-            <h3 className="text-3xl font-extrabold mt-1.5 text-slate-900">99.9%</h3>
-            <span className="text-xs text-emerald-500 font-semibold flex items-center gap-1 mt-2">
-              All systems operational
+            <span className="text-[0.62rem] sm:text-[0.68rem] font-bold text-slate-400 uppercase tracking-widest block leading-tight">System Health</span>
+            <h3 className="text-xl sm:text-3xl font-extrabold mt-1.5 text-slate-900">99.9%</h3>
+            <span className="text-[10px] sm:text-xs text-emerald-500 font-semibold flex items-center gap-1 mt-2">
+              Operational
             </span>
           </div>
-          <div className="w-11 h-11 bg-indigo-50 text-indigo-500 rounded-xl flex items-center justify-center">
-            <Server size={20} />
+          <div className="w-9 h-9 sm:w-11 sm:h-11 bg-indigo-50 text-indigo-500 rounded-lg sm:rounded-xl flex items-center justify-center shrink-0">
+            <Server className="w-4 h-4 sm:w-5 sm:h-5" />
           </div>
         </div>
       </div>

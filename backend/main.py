@@ -4365,6 +4365,51 @@ async def update_profile(data: UpdateProfileRequest, current_admin: str = Depend
             raise e
         raise HTTPException(status_code=500, detail=f"Database error: {e}")
 
+@app.post("/api/master/profile/image")
+@app.post("/master/profile/image")
+@app.post("/api/superadmin/profile/image")
+@app.post("/superadmin/profile/image")
+@app.post("/api/admin/profile/image")
+@app.post("/admin/profile/image")
+async def upload_profile_image(
+    admin_id: str = Form(...),
+    file: UploadFile = File(...),
+    current_admin: dict = Depends(get_current_admin_details)
+):
+    try:
+        from bson import ObjectId
+        admin_id_obj = ObjectId(admin_id)
+        admin = admins_collection.find_one({"_id": admin_id_obj})
+        if not admin:
+            raise HTTPException(status_code=404, detail="Admin not found")
+            
+        # Upload to Cloudinary
+        try:
+            upload_result = cloudinary.uploader.upload(
+                file.file,
+                folder="profile_images",
+                resource_type="image"
+            )
+            secure_url = upload_result.get("secure_url")
+        except Exception as e:
+            raise HTTPException(status_code=500, detail=f"Cloudinary upload failed: {str(e)}")
+            
+        # Update db
+        admins_collection.update_one(
+            {"_id": admin_id_obj},
+            {"$set": {"profile_image": secure_url, "avatar": secure_url}}
+        )
+        
+        return {
+            "status": "success",
+            "profile_image": secure_url,
+            "avatar": secure_url
+        }
+    except Exception as e:
+        if isinstance(e, HTTPException):
+            raise e
+        raise HTTPException(status_code=500, detail=str(e))
+
 def extract_info_from_resume(text: str) -> Dict:
     try:
         raw = chat_completion(

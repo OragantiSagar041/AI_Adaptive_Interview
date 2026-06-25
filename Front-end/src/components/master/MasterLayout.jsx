@@ -11,7 +11,11 @@ import {
   LogOut,
   User,
   Settings,
-  ChevronDown
+  ChevronDown,
+  ChevronLeft,
+  ChevronRight,
+  Menu,
+  X
 } from 'lucide-react'
 import { logout } from '../../store/slices/authSlice'
 import { persistor } from '../../store/store'
@@ -38,6 +42,33 @@ export default function MasterLayout() {
   // Local theme states
   const [accentName, setAccentName] = useState('indigo')
   const [dropdownOpen, setDropdownOpen] = useState(false)
+  const [isCollapsed, setIsCollapsed] = useState(false)
+  const [isMobile, setIsMobile] = useState(false)
+  const [isMobileOpen, setIsMobileOpen] = useState(false)
+
+  useEffect(() => {
+    const handleResize = () => {
+      const mobile = window.innerWidth < 768
+      setIsMobile(mobile)
+      if (!mobile) {
+        setIsMobileOpen(false)
+      }
+    }
+    handleResize()
+    window.addEventListener('resize', handleResize)
+    return () => window.removeEventListener('resize', handleResize)
+  }, [])
+
+  useEffect(() => {
+    if (isMobile && isMobileOpen) {
+      document.body.style.overflow = 'hidden'
+    } else {
+      document.body.style.overflow = ''
+    }
+    return () => {
+      document.body.style.overflow = ''
+    }
+  }, [isMobile, isMobileOpen])
 
   const accentColors = {
     teal: { primary: '#0d9488', hover: '#0f766e', glow: 'rgba(13, 148, 136, 0.15)' },
@@ -87,8 +118,9 @@ export default function MasterLayout() {
 
   return (
     <div
-      className="grid grid-cols-1 md:grid-cols-[260px_1fr] min-h-screen text-[#0f172a]"
+      className="grid grid-cols-1 min-h-screen text-[#0f172a]"
       style={{
+        gridTemplateColumns: isMobile ? '1fr' : (isCollapsed ? '80px 1fr' : '260px 1fr'),
         background: `
           radial-gradient(circle at 8% 0%, ${accentWashStrong} 0, transparent 34%),
           radial-gradient(circle at 92% 12%, ${accentWash} 0, transparent 30%),
@@ -96,9 +128,21 @@ export default function MasterLayout() {
         `,
       }}
     >
+      {/* Sidebar Backdrop for Mobile */}
+      {isMobile && isMobileOpen && (
+        <div
+          onClick={() => setIsMobileOpen(false)}
+          className="fixed inset-0 bg-slate-950/40 backdrop-blur-xs z-[45] transition-opacity"
+        />
+      )}
+
       {/* Sidebar */}
       <aside
-        className="text-white p-6 flex flex-col gap-8 sticky top-0 h-screen z-50 shadow-lg shrink-0 w-[260px] overflow-hidden"
+        className={`text-white flex flex-col z-50 shadow-lg shrink-0 overflow-hidden transition-all duration-300 ${
+          isMobile
+            ? `fixed left-0 top-0 ${isMobileOpen ? 'translate-x-0' : '-translate-x-full'} w-[260px] p-5 gap-5 h-[100dvh]`
+            : `sticky top-0 ${isCollapsed ? 'w-[80px] p-4 items-center gap-4 h-screen' : 'w-[260px] p-5 gap-5 h-screen'}`
+        }`}
         style={{
           background: `
             radial-gradient(circle at 20% 18%, rgba(255, 255, 255, 0.12), transparent 24%),
@@ -107,50 +151,91 @@ export default function MasterLayout() {
           boxShadow: `0 20px 60px rgba(15, 23, 42, 0.12)`
         }}
       >
-        <div className="flex items-center gap-2.5">
-          <div className="w-8 h-8 rounded-lg flex items-center justify-center bg-white text-indigo-700 text-sm font-extrabold shadow-sm">
-            <Shield size={16} fill="currentColor" />
+        <div className={`flex w-full ${(isCollapsed && !isMobile) ? 'flex-col items-center gap-4' : 'items-center justify-between gap-2.5'}`}>
+          <div className="flex items-center gap-2.5 overflow-hidden">
+            <div className="w-8 h-8 rounded-lg flex items-center justify-center bg-white text-indigo-700 text-sm font-extrabold shrink-0 shadow-sm">
+              <Shield size={16} fill="currentColor" />
+            </div>
+            {(!isCollapsed || isMobile) && (
+              <strong className="text-xl font-bold tracking-tight text-white font-title truncate">Hire IQ</strong>
+            )}
           </div>
-          <strong className="text-xl font-bold tracking-tight text-white font-title">Hire IQ</strong>
+          {isMobile ? (
+            <button
+              onClick={() => setIsMobileOpen(false)}
+              className="p-1 rounded-lg hover:bg-white/10 text-white/80 hover:text-white border-none cursor-pointer outline-none transition-colors shrink-0"
+              title="Close Sidebar"
+            >
+              <X size={18} />
+            </button>
+          ) : (
+            <button
+              onClick={() => setIsCollapsed(!isCollapsed)}
+              className="p-1 rounded-lg hover:bg-white/10 text-white/80 hover:text-white border-none cursor-pointer outline-none transition-colors shrink-0"
+              title={isCollapsed ? "Expand Sidebar" : "Collapse Sidebar"}
+            >
+              {isCollapsed ? <ChevronRight size={18} /> : <ChevronLeft size={18} />}
+            </button>
+          )}
         </div>
 
-        <nav className="flex flex-col gap-2 flex-grow overflow-y-auto">
-          <div className="text-[0.62rem] font-bold text-white/50 uppercase tracking-widest px-3 mb-1">
-            Master Control
-          </div>
+        <nav className="flex flex-col gap-1.5 flex-grow overflow-y-auto scrollbar-none w-full">
+          {(!isCollapsed || isMobile) && (
+            <div className="text-[0.62rem] font-bold text-white/50 uppercase tracking-widest px-3 mb-1">
+              Master Control
+            </div>
+          )}
           {navItems.map(({ id, label, icon: Icon, path }) => (
             <NavLink
               key={id}
               to={path}
+              onClick={() => isMobile && setIsMobileOpen(false)}
+              title={(isCollapsed && !isMobile) ? label : ""}
               className={({ isActive }) =>
-                `w-full text-left flex items-center gap-3 px-4 py-2.5 rounded-lg text-sm font-semibold transition-all border-none outline-none cursor-pointer no-underline ${
+                `w-full text-left flex items-center rounded-lg text-sm font-semibold transition-all border-none outline-none cursor-pointer no-underline ${
+                  (isCollapsed && !isMobile) ? 'justify-center p-2' : 'px-3.5 py-2 gap-3'
+                } ${
                   isActive
                     ? 'bg-white text-indigo-700 shadow-sm'
                     : 'bg-transparent text-white/80 hover:bg-white/10 hover:text-white'
                 }`
               }
             >
-              <Icon size={16} /> {label}
+              <Icon size={16} className="shrink-0" />
+              {(!isCollapsed || isMobile) && <span>{label}</span>}
             </NavLink>
           ))}
 
-          <div className="border-t border-white/10 my-2" />
+          <div className="border-t border-white/10 my-2 w-full" />
           
           {/* Pulsing Live Monitor Indicator */}
-          <div className="w-full flex items-center gap-3 px-4 py-2.5 rounded-lg text-sm font-semibold bg-emerald-500/10 text-emerald-400 border border-emerald-500/20 select-none">
-            <span className="relative flex h-2 w-2">
-              <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75"></span>
-              <span className="relative inline-flex rounded-full h-2 w-2 bg-emerald-500"></span>
-            </span>
-            Live Monitor Active
-          </div>
+          {(isCollapsed && !isMobile) ? (
+            <div className="flex justify-center p-2 rounded-lg bg-emerald-500/10 text-emerald-400 border border-emerald-500/20 w-full" title="Live Monitor Active">
+              <span className="relative flex h-2 w-2">
+                <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75"></span>
+                <span className="relative inline-flex rounded-full h-2 w-2 bg-emerald-500"></span>
+              </span>
+            </div>
+          ) : (
+            <div className="w-full flex items-center gap-3 px-3.5 py-2 rounded-lg text-sm font-semibold bg-emerald-500/10 text-emerald-400 border border-emerald-500/20 select-none">
+              <span className="relative flex h-2 w-2 shrink-0">
+                <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75"></span>
+                <span className="relative inline-flex rounded-full h-2 w-2 bg-emerald-500"></span>
+              </span>
+              Live Monitor Active
+            </div>
+          )}
         </nav>
 
         <button
           onClick={handleLogout}
-          className="w-full text-left flex items-center gap-3 px-4 py-2.5 rounded-lg font-medium text-sm border border-white/20 hover:bg-white/10 text-white outline-none cursor-pointer transition-all"
+          title={(isCollapsed && !isMobile) ? "Logout" : ""}
+          className={`text-left flex items-center border border-white/20 hover:bg-white/10 text-white outline-none cursor-pointer transition-all ${
+            (isCollapsed && !isMobile) ? 'justify-center p-2 rounded-xl' : 'px-3.5 py-2 rounded-lg gap-3 w-full'
+          }`}
         >
-          <LogOut size={16} /> Logout
+          <LogOut size={16} className="shrink-0" />
+          {(!isCollapsed || isMobile) && <span>Logout</span>}
         </button>
       </aside>
 
@@ -158,18 +243,26 @@ export default function MasterLayout() {
       <div className="flex flex-col min-w-0">
         {/* Navbar */}
         <header
-          className="border-b px-8 py-4 flex justify-between items-center text-[#1e293b] shadow-sm backdrop-blur-md"
+          className="border-b px-4 sm:px-8 py-4 flex justify-between items-center text-[#1e293b] shadow-sm backdrop-blur-md"
           style={{
             background: `linear-gradient(90deg, rgba(255,255,255,0.92), ${hexToRgba(currentAccent.primary, 0.14)})`,
             borderColor: hexToRgba(currentAccent.primary, 0.22),
           }}
         >
-          <div>
-            <h2 className="text-xl font-bold text-slate-800">{getPageTitle()}</h2>
+          <div className="flex items-center gap-2 min-w-0">
+            {isMobile && (
+              <button
+                onClick={() => setIsMobileOpen(true)}
+                className="p-1.5 -ml-1 hover:bg-slate-100 rounded-xl text-slate-600 hover:text-slate-800 transition-colors border-none bg-transparent cursor-pointer outline-none flex items-center justify-center shrink-0"
+              >
+                <Menu size={18} />
+              </button>
+            )}
+            <h2 className="text-sm sm:text-xl font-bold text-slate-800 truncate" title={getPageTitle()}>{getPageTitle()}</h2>
           </div>
 
-          <div className="flex items-center gap-4">
-            <div className="flex items-center gap-1.5 bg-slate-100 rounded-full p-1 border border-slate-200">
+          <div className="flex items-center gap-3 sm:gap-4 shrink-0">
+            <div className="hidden md:flex items-center gap-1.5 bg-slate-100 rounded-full p-1 border border-slate-200">
               {Object.keys(accentColors).map(color => (
                 <button
                   key={color}
@@ -184,7 +277,7 @@ export default function MasterLayout() {
               ))}
             </div>
 
-            <span className="text-sm text-slate-600">
+            <span className="text-sm text-slate-600 hidden lg:block">
               Welcome back, <strong className="text-slate-800">{adminUser?.username || 'Master Admin'}</strong>
             </span>
 
@@ -195,7 +288,7 @@ export default function MasterLayout() {
                 className="flex items-center gap-2 p-1.5 hover:bg-slate-50 rounded-xl transition-all cursor-pointer border border-slate-200 bg-white"
               >
                 <img
-                  src="https://i.pravatar.cc/150?u=masteradmin"
+                  src={adminUser?.profile_image || adminUser?.avatar || "https://i.pravatar.cc/150?u=masteradmin"}
                   alt="Avatar"
                   className="w-8 h-8 rounded-full object-cover"
                 />
@@ -245,7 +338,7 @@ export default function MasterLayout() {
         </header>
 
         <main
-          className="p-8 flex-grow overflow-y-auto"
+          className="p-4 sm:p-8 flex-grow overflow-y-auto"
           style={{
             background: `
               radial-gradient(circle at 0% 0%, ${accentPageStrong} 0, transparent 28%),

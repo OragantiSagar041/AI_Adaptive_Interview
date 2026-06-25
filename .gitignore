@@ -103,3 +103,5 @@ backend/uploads/
 *.webm
 *.db
 
+
+.agents

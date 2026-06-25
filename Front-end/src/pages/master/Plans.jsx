@@ -124,7 +124,7 @@ export default function Plans() {
 
   return (
     <div className="space-y-6 max-w-6xl">
-      <div className="flex justify-between items-center bg-white p-6 rounded-2xl border border-slate-200/60 shadow-[0_4px_20px_rgba(0,0,0,0.04)]">
+      <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 bg-white p-6 rounded-2xl border border-slate-200/60 shadow-[0_4px_20px_rgba(0,0,0,0.04)]">
         <div>
           <h2 className="text-xl font-bold text-slate-800">Subscription Plans</h2>
           <p className="text-sm text-slate-500">Manage pricing, credits, and available features for all plans.</p>
@@ -132,7 +132,7 @@ export default function Plans() {
         <button
           onClick={fetchPlans}
           disabled={loadingPlans}
-          className="px-4 py-2 bg-white border border-slate-200 hover:bg-slate-50 text-slate-700 rounded-lg text-sm font-semibold transition-colors flex items-center gap-1.5 shadow-sm"
+          className="w-full sm:w-auto px-4 py-2 bg-white border border-slate-200 hover:bg-slate-50 text-slate-700 rounded-lg text-sm font-semibold transition-colors flex items-center justify-center gap-1.5 shadow-sm"
         >
           <RefreshCw size={14} className={loadingPlans ? 'animate-spin' : ''} /> Refresh Plans
         </button>
@@ -228,7 +228,7 @@ export default function Plans() {
 
               <div className="space-y-2">
                 <label className="text-xs font-semibold text-slate-500 block">Select Available Features</label>
-                <div className="grid grid-cols-2 gap-2 max-h-[160px] overflow-y-auto border border-slate-200 rounded-xl p-3.5 bg-slate-50">
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 max-h-[160px] overflow-y-auto border border-slate-200 rounded-xl p-3.5 bg-slate-50">
                   {featureOptions.map(f => {
                     const isChecked = editPlanFeatures.includes(f)
                     return (
@@ -253,18 +253,18 @@ export default function Plans() {
               </div>
             </div>
 
-            <div className="flex gap-3 pt-3 border-t border-slate-200">
+            <div className="flex flex-col-reverse sm:flex-row gap-3 pt-3 border-t border-slate-200">
               <button
                 type="button"
                 onClick={() => setIsEditPlanModalOpen(false)}
-                className="flex-1 py-2.5 rounded-xl bg-transparent border border-slate-200 text-slate-500 hover:bg-slate-50 cursor-pointer transition-colors"
+                className="w-full sm:flex-1 py-2.5 rounded-xl bg-transparent border border-slate-200 text-slate-500 hover:bg-slate-50 cursor-pointer transition-colors"
               >
                 Cancel
               </button>
               <button
                 type="submit"
                 disabled={editPlanLoading}
-                className="flex-1 py-2.5 rounded-xl bg-indigo-600 hover:bg-indigo-500 border-none text-white font-bold cursor-pointer disabled:opacity-50 transition-colors"
+                className="w-full sm:flex-1 py-2.5 rounded-xl bg-indigo-600 hover:bg-indigo-500 border-none text-white font-bold cursor-pointer disabled:opacity-50 transition-colors"
               >
                 {editPlanLoading ? 'Saving...' : 'Save Changes'}
               </button>
