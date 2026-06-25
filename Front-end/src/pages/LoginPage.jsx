@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react'
+import { Eye, EyeOff } from 'lucide-react'
 import { useNavigate } from 'react-router-dom'
 import { useDispatch } from 'react-redux'
 import { setCredentials } from '../store/slices/authSlice'
@@ -26,6 +27,7 @@ export default function LoginPage() {
   const [resetEmail, setResetEmail] = useState('')
   const [resetOTP, setResetOTP] = useState('')
   const [newPassword, setNewPassword] = useState('')
+  const [showNewPassword, setShowNewPassword] = useState(false)
   const [resetLoading, setResetLoading] = useState(false)
   const [resetError, setResetError] = useState('')
 
@@ -565,13 +567,22 @@ export default function LoginPage() {
                 <div className="space-y-4">
                   <div className="space-y-2">
                     <label className="text-xs font-semibold text-slate-600 uppercase tracking-wider block">New Password</label>
-                    <input
-                      type="password"
-                      value={newPassword}
-                      onChange={(e) => setNewPassword(e.target.value)}
-                      placeholder="At least 6 characters"
-                      className="w-full rounded-xl border border-slate-200 bg-slate-50/50 px-4 py-3 text-sm text-slate-900 placeholder-slate-400 outline-none transition-all focus:bg-white focus:border-indigo-600 focus:ring-4 focus:ring-indigo-50/80"
-                    />
+                    <div className="relative">
+                      <input
+                        type={showNewPassword ? "text" : "password"}
+                        value={newPassword}
+                        onChange={(e) => setNewPassword(e.target.value)}
+                        placeholder="At least 6 characters"
+                        className="w-full rounded-xl border border-slate-200 bg-slate-50/50 pl-4 pr-10 py-3 text-sm text-slate-900 placeholder-slate-400 outline-none transition-all focus:bg-white focus:border-indigo-600 focus:ring-4 focus:ring-indigo-50/80"
+                      />
+                      <button
+                        type="button"
+                        onClick={() => setShowNewPassword(!showNewPassword)}
+                        className="absolute inset-y-0 right-0 pr-3.5 flex items-center text-slate-400 hover:text-slate-600 cursor-pointer"
+                      >
+                        {showNewPassword ? <EyeOff size={16} /> : <Eye size={16} />}
+                      </button>
+                    </div>
                   </div>
                   <button
                     onClick={handleFinalizeReset}
@@ -697,13 +708,22 @@ export default function LoginPage() {
                 <div className="space-y-3">
                   <div className="space-y-1">
                     <label className="text-xs font-semibold text-[#373a46c0] block mb-2">New Password</label>
-                    <input
-                      type="password"
-                      value={newPassword}
-                      onChange={(e) => setNewPassword(e.target.value)}
-                      placeholder="Minimum 6 characters"
-                      className="w-full rounded-[5px] border border-black/10 bg-[#fcfcfae0] px-4 py-2.5 text-sm text-[#111827] placeholder-slate-400 outline-none focus:border-black/30"
-                    />
+                    <div className="relative">
+                      <input
+                        type={showNewPassword ? "text" : "password"}
+                        value={newPassword}
+                        onChange={(e) => setNewPassword(e.target.value)}
+                        placeholder="Minimum 6 characters"
+                        className="w-full rounded-[5px] border border-black/10 bg-[#fcfcfae0] pl-4 pr-10 py-2.5 text-sm text-[#111827] placeholder-slate-400 outline-none focus:border-black/30"
+                      />
+                      <button
+                        type="button"
+                        onClick={() => setShowNewPassword(!showNewPassword)}
+                        className="absolute inset-y-0 right-0 pr-3.5 flex items-center text-slate-400 hover:text-slate-600 cursor-pointer"
+                      >
+                        {showNewPassword ? <EyeOff size={16} /> : <Eye size={16} />}
+                      </button>
+                    </div>
                   </div>
                   <button
                     onClick={handleFinalizeReset}

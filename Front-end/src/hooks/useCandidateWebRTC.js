@@ -33,7 +33,11 @@ export default function useCandidateWebRTC(linkId, mediaStreamRef, telemetryData
         const adminId = msg.admin_id || "admin"
 
         if (msg.type === 'webrtc_offer') {
-          if (!mediaStreamRef.current) return
+          console.log(`[WebRTC Candidate] Received offer from admin: ${adminId}`)
+          if (!mediaStreamRef.current) {
+            console.warn('[WebRTC Candidate] No mediaStreamRef.current yet! Cannot answer offer.')
+            return
+          }
 
           // Close existing if any
           if (pcsRef.current[adminId]) {
@@ -48,11 +52,13 @@ export default function useCandidateWebRTC(linkId, mediaStreamRef, telemetryData
 
           // Add all active tracks (camera and mic)
           mediaStreamRef.current.getTracks().forEach(track => {
+            console.log(`[WebRTC Candidate] Adding track: ${track.kind}`)
             pc.addTrack(track, mediaStreamRef.current)
           })
 
           pc.onicecandidate = (e) => {
             if (e.candidate && wsRef.current?.readyState === WebSocket.OPEN) {
+              console.log(`[WebRTC Candidate] Sending ICE candidate to admin: ${adminId}`)
               wsRef.current.send(JSON.stringify({ 
                 type: 'webrtc_ice_candidate', 
                 candidate: e.candidate,
@@ -65,6 +71,7 @@ export default function useCandidateWebRTC(linkId, mediaStreamRef, telemetryData
           const answer = await pc.createAnswer()
           await pc.setLocalDescription(answer)
 
+          console.log(`[WebRTC Candidate] Sending answer to admin: ${adminId}`)
           wsRef.current.send(JSON.stringify({
             type: 'webrtc_answer',
             sdp: pc.localDescription,
@@ -72,6 +79,7 @@ export default function useCandidateWebRTC(linkId, mediaStreamRef, telemetryData
           }))
 
         } else if (msg.type === 'webrtc_ice_candidate') {
+          console.log(`[WebRTC Candidate] Received ICE candidate from admin: ${adminId}`)
           const pc = pcsRef.current[adminId]
           if (pc) {
             await pc.addIceCandidate(new RTCIceCandidate(msg.candidate))

@@ -14,10 +14,18 @@ export function CandidateScorecardModal({
   handleUpdateDecision
 }) {
   const getSubScore = (key) => {
-    // If we had specific AI reasoning and sub-scores from the DB, we would use them here.
-    // For now, we mock the sub-scores slightly based on the main score, matching the forenten logic.
+    if (candidateDetail?.multi_dimensional_analysis?.[key]) {
+      return Math.floor(candidateDetail.multi_dimensional_analysis[key].score || 0);
+    }
     const baseScore = selectedCandidate?.score || 0;
     return Math.floor(baseScore);
+  };
+
+  const getSubReasoning = (key) => {
+    if (candidateDetail?.multi_dimensional_analysis?.[key]) {
+      return candidateDetail.multi_dimensional_analysis[key].reasoning || "N/A";
+    }
+    return "N/A";
   };
 
   const getVideoUrl = (url) => {
@@ -177,7 +185,7 @@ export function CandidateScorecardModal({
                     <div className="bg-[#f43f5e] h-full rounded-full" style={{ width: `${getSubScore(dim.title)}%` }}></div>
                   </div>
                   <div className="border-t border-slate-100/60 pt-3 mt-1">
-                     <span className="text-[0.68rem] text-slate-800 font-bold block mb-1">AI Reasoning: <span className="text-slate-500 font-normal">N/A</span></span>
+                     <span className="text-[0.68rem] text-slate-800 font-bold block mb-1">AI Reasoning: <span className="text-slate-500 font-normal">{getSubReasoning(dim.title)}</span></span>
                   </div>
                 </div>
               ))}

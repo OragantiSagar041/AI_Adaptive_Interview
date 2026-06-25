@@ -18,13 +18,22 @@ class RedisConnectionManager:
         # Local state for websockets connected to THIS instance
         self.local_connections: Dict[str, Dict[str, any]] = {}
         self.listener_task: Optional[asyncio.Task] = None
+        self._redis_failed = False
 
     async def connect_redis(self):
-        if not self.redis:
-            self.redis = redis.from_url(REDIS_URL, decode_responses=True)
-            self.pubsub = self.redis.pubsub()
-            self.listener_task = asyncio.create_task(self._listen_to_redis())
-            logger.info(f"Connected to Redis at {REDIS_URL}")
+        if not self.redis and not self._redis_failed:
+            try:
+                temp_redis = redis.from_url(REDIS_URL, decode_responses=True)
+                await temp_redis.ping()
+                self.redis = temp_redis
+                self.pubsub = self.redis.pubsub()
+                self.listener_task = asyncio.create_task(self._listen_to_redis())
+                logger.info(f"Connected to Redis at {REDIS_URL}")
+            except Exception as e:
+                logger.warning(f"Could not connect to Redis: {e}. Falling back to in-memory routing.")
+                self._redis_failed = True
+                self.redis = None
+                self.pubsub = None
 
     async def disconnect_redis(self):
         if self.listener_task:
@@ -76,7 +85,8 @@ class RedisConnectionManager:
         
         # Ensure we are subscribed to messages FOR the candidate
         await self.connect_redis()
-        await self.pubsub.subscribe(f"session:{link_id}:candidate")
+        if self.pubsub:
+            await self.pubsub.subscribe(f"session:{link_id}:candidate")
 
     async def connect_admin(self, websocket: WebSocket, link_id: str):
         await websocket.accept()
@@ -86,7 +96,8 @@ class RedisConnectionManager:
         
         # Ensure we are subscribed to messages FOR the admins
         await self.connect_redis()
-        await self.pubsub.subscribe(f"session:{link_id}:admins")
+        if self.pubsub:
+            await self.pubsub.subscribe(f"session:{link_id}:admins")
 
     def disconnect_candidate(self, link_id: str):
         if link_id in self.local_connections:
@@ -109,11 +120,28 @@ class RedisConnectionManager:
     async def send_to_candidate(self, link_id: str, message: dict):
         """Publish a message to the candidate's channel."""
         await self.connect_redis()
-        await self.redis.publish(f"session:{link_id}:candidate", json.dumps(message))
+        if self.redis:
+            await self.redis.publish(f"session:{link_id}:candidate", json.dumps(message))
+        else:
+            if link_id in self.local_connections:
+                cand_ws = self.local_connections[link_id]["candidate"]
+                if cand_ws:
+                    try:
+                        await cand_ws.send_json(message)
+                    except Exception:
+                        pass
 
     async def send_to_admins(self, link_id: str, message: dict):
         """Publish a message to the admins' channel."""
         await self.connect_redis()
-        await self.redis.publish(f"session:{link_id}:admins", json.dumps(message))
+        if self.redis:
+            await self.redis.publish(f"session:{link_id}:admins", json.dumps(message))
+        else:
+            if link_id in self.local_connections:
+                for admin_ws in self.local_connections[link_id]["admins"]:
+                    try:
+                        await admin_ws.send_json(message)
+                    except Exception:
+                        pass
 
 manager = RedisConnectionManager()

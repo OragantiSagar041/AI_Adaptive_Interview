@@ -308,8 +308,11 @@ def get_admin_plan_context(user: Dict[str, Any]) -> Dict[str, Any]:
     subscription_expiry = company.get("subscription_expiry") if company else user.get("subscription_expiry")
     
     definition = get_plan_definition(subscription_plan)
-    credits = company.get("credits", 0) if company else user.get("credits", 0)
-    
+    if user.get("role") == "admin":
+        credits = user.get("credits", 0)
+    else:
+        credits = company.get("credits", 0) if company else user.get("credits", 0)
+        
     is_expired = credits <= 0
     warning = not is_expired and credits <= 5
     warning_message = "Your plan credits are running low (5 or fewer left). Please renew your subscription to avoid interruption." if warning else ""
@@ -2177,6 +2180,65 @@ async def save_answer(
                 {"$set": {"scoring_status": "failed", "ai_score": 0}}
             )
 
+        # ── Post-scoring checks: Recalculate avg_score and trigger completion events if ready ──
+        try:
+            answers = list(answers_collection.find({"interview_id": interview_id}))
+            scores = [a.get("ai_score", 0) for a in answers if a.get("ai_score") is not None]
+            avg_score = sum(scores) / len(scores) if scores else 0
+            
+            session = interview_sessions_collection.find_one({"interview_id": interview_id})
+            if session:
+                interview_sessions_collection.update_one(
+                    {"_id": session["_id"]},
+                    {"$set": {"avg_score": round(avg_score, 1)}}
+                )
+                
+                # If session is completed, check if all answers are now scored
+                if session.get("status") == "completed" and not session.get("notification_sent"):
+                    all_scored = all(a.get("scoring_status") in ("complete", "failed") for a in answers)
+                    if all_scored:
+                        # NEW: Generate Multi-Dimensional Analysis!
+                        from analyze_dimensions import analyze_interview_dimensions
+                        transcript = [{"Q": a.get("question_text"), "A": a.get("answer_text")} for a in answers]
+                        dimensions = analyze_interview_dimensions(transcript, context, language)
+                        
+                        interview_sessions_collection.update_one(
+                            {"_id": session["_id"]},
+                            {"$set": {
+                                "multi_dimensional_analysis": dimensions,
+                                "notification_sent": True
+                            }}
+                        )
+
+                        # Send notification!
+                        link_id = session.get("link_id")
+                        candidate_name = session.get("candidate_name", "Candidate")
+                        candidate_email = session.get("candidate_email", "")
+                        admin_id = session.get("created_by", "")
+                        admin_email = ""
+                        if admin_id:
+                            try:
+                                from bson import ObjectId
+                                admin = admins_collection.find_one({"_id": ObjectId(admin_id)})
+                                if admin:
+                                    admin_email = admin.get("email", "")
+                            except: pass
+                        
+                        if candidate_email:
+                            send_submission_notification(
+                                candidate_email=candidate_email,
+                                candidate_name=candidate_name,
+                                admin_email=admin_email,
+                                avg_score=avg_score,
+                                total_questions=len(answers)
+                            )
+                            print(f"✅ Submission notification sent for {candidate_name} from background thread")
+                        
+                        import tasks
+                        tasks.generate_report_task.delay(interview_id=interview_id)
+        except Exception as e:
+            print(f"⚠️ Error checking session completion in background thread: {e}")
+
     thread = threading.Thread(target=_score_in_background, daemon=True)
     thread.start()
 
@@ -3957,6 +4019,7 @@ def get_dashboard_stats(admin_id: Optional[str] = None, current_admin: dict = De
                         exp_dt = exp_dt.replace(tzinfo=timezone.utc)
                     if now > exp_dt:
                         status = "expired"
+                        interview_sessions_collection.update_one({"_id": s["_id"]}, {"$set": {"status": "expired"}})
                 except Exception:
                     pass
             elif status == "started":
@@ -3970,6 +4033,7 @@ def get_dashboard_stats(admin_id: Optional[str] = None, current_admin: dict = De
                         buffer_mins = max(120, duration_mins * 2)
                         if (now - time_ref).total_seconds() > (buffer_mins * 60):
                             status = "expired"
+                            interview_sessions_collection.update_one({"_id": s["_id"]}, {"$set": {"status": "expired"}})
                     except Exception:
                         pass
             
@@ -4044,8 +4108,23 @@ async def export_sessions(current_admin: dict = Depends(get_current_admin_detail
                     exp_dt = exp_dt.replace(tzinfo=timezone.utc)
                 if now > exp_dt:
                     current_status = "expired"
+                    interview_sessions_collection.update_one({"_id": row["_id"]}, {"$set": {"status": "expired"}})
             except Exception:
                 pass
+        elif current_status == "started":
+            time_ref_str = row.get("started_at") or row.get("created_at")
+            if time_ref_str:
+                try:
+                    time_ref = datetime.fromisoformat(time_ref_str.replace('Z', '+00:00'))
+                    if time_ref.tzinfo is None:
+                        time_ref = time_ref.replace(tzinfo=timezone.utc)
+                    duration_mins = int(row.get("interview_duration") or 30)
+                    buffer_mins = max(120, duration_mins * 2)
+                    if (now - time_ref).total_seconds() > (buffer_mins * 60):
+                        current_status = "expired"
+                        interview_sessions_collection.update_one({"_id": row["_id"]}, {"$set": {"status": "expired"}})
+                except Exception:
+                    pass
         
         decision = row.get("decision", "")
         
@@ -4797,6 +4876,7 @@ async def get_all_sessions(
                     exp_dt = exp_dt.replace(tzinfo=timezone.utc)
                 if now > exp_dt:
                     status = "expired"
+                    interview_sessions_collection.update_one({"_id": row["_id"]}, {"$set": {"status": "expired"}})
             except Exception:
                 pass
         elif status == "started":
@@ -4810,6 +4890,7 @@ async def get_all_sessions(
                     buffer_mins = max(120, duration_mins * 2)
                     if (now - time_ref).total_seconds() > (buffer_mins * 60):
                         status = "expired"
+                        interview_sessions_collection.update_one({"_id": row["_id"]}, {"$set": {"status": "expired"}})
                 except Exception:
                     pass
 
@@ -5563,57 +5644,55 @@ async def complete_session(link_id: str, warnings: int = 0):
                 
         interview_sessions_collection.update_one({"link_id": link_id}, {"$set": update_data})
         
-        # Task 3: Send submission notification to admin and candidate
+        # Task 3: Trigger submission logic IF all answers are scored.
+        # Otherwise, the background scoring thread will trigger this later.
         try:
             session = interview_sessions_collection.find_one({"link_id": link_id})
             if session:
-                candidate_name = session.get("candidate_name", "Candidate")
-                candidate_email = session.get("candidate_email", "")
                 interview_id = session.get("interview_id", "")
-                admin_id = session.get("created_by", "")
                 
-                # Get admin email
-                admin_email = ""
-                if admin_id:
-                    try:
-                        from bson import ObjectId
-                        admin = admins_collection.find_one({"_id": ObjectId(admin_id)})
-                        if admin:
-                            admin_email = admin.get("email", "")
-                    except Exception:
-                        pass
-                
-                # Calculate score
-                avg_score = 0
-                total_q = 0
                 if interview_id:
                     answers = list(answers_collection.find({"interview_id": interview_id}))
-                    total_q = len(answers)
-                    scores = [a.get("ai_score", 0) for a in answers if a.get("ai_score") is not None]
-                    avg_score = sum(scores) / len(scores) if scores else 0
+                    all_scored = all(a.get("scoring_status") in ("complete", "failed") for a in answers)
                     
-                    # Cache avg_score for dashboard
-                    interview_sessions_collection.update_one(
-                        {"link_id": link_id},
-                        {"$set": {"avg_score": round(avg_score, 1)}}
-                    )
-                
-                # Send notifications
-                if candidate_email:
-                    send_submission_notification(
-                        candidate_email=candidate_email,
-                        candidate_name=candidate_name,
-                        admin_email=admin_email,
-                        avg_score=avg_score,
-                        total_questions=total_q
-                    )
-                    print(f" Submission notification sent for {candidate_name}")
-                
-                # "?"? Celery: Pre-generate PDF report in background
-                if interview_id:
-                    tasks.generate_report_task.delay(interview_id=interview_id)
+                    if all_scored and not session.get("notification_sent"):
+                        # Calculate final score
+                        scores = [a.get("ai_score", 0) for a in answers if a.get("ai_score") is not None]
+                        avg_score = sum(scores) / len(scores) if scores else 0
+                        
+                        interview_sessions_collection.update_one(
+                            {"link_id": link_id},
+                            {"$set": {
+                                "avg_score": round(avg_score, 1),
+                                "notification_sent": True
+                            }}
+                        )
+                        
+                        candidate_name = session.get("candidate_name", "Candidate")
+                        candidate_email = session.get("candidate_email", "")
+                        admin_id = session.get("created_by", "")
+                        admin_email = ""
+                        if admin_id:
+                            try:
+                                from bson import ObjectId
+                                admin = admins_collection.find_one({"_id": ObjectId(admin_id)})
+                                if admin: admin_email = admin.get("email", "")
+                            except: pass
+                            
+                        if candidate_email:
+                            send_submission_notification(
+                                candidate_email=candidate_email,
+                                candidate_name=candidate_name,
+                                admin_email=admin_email,
+                                avg_score=avg_score,
+                                total_questions=len(answers)
+                            )
+                            print(f"✅ Submission notification sent for {candidate_name} from complete_session")
+                            
+                        import tasks
+                        tasks.generate_report_task.delay(interview_id=interview_id)
         except Exception as notify_err:
-            print(f" Submission notification error: {notify_err}")
+            print(f"⚠️ Submission notification error: {notify_err}")
         
         return {"status": "success"}
     except Exception as e:
@@ -7212,9 +7291,29 @@ def export_excel(data: ExportExcelRequest, current_admin: dict = Depends(get_cur
 @app.delete("/api/candidates/bulk")
 def bulk_delete_candidates(data: BulkDeleteRequest, current_admin: dict = Depends(get_current_admin_details)):
     try:
-        object_ids = [ObjectId(id_str) for id_str in data.ids]
-        result = interview_sessions_collection.delete_many({"_id": {"$in": object_ids}})
-        return {"status": "success", "deleted_count": result.deleted_count}
+        deleted_count = 0
+        for id_str in data.ids:
+            # The frontend passes link_id (or _id if link_id is missing)
+            row = interview_sessions_collection.find_one({"$or": [{"link_id": id_str}, {"_id": id_str}]})
+            if not row:
+                try:
+                    from bson import ObjectId
+                    row = interview_sessions_collection.find_one({"_id": ObjectId(id_str)})
+                except:
+                    pass
+            
+            if row:
+                interview_id = row.get("interview_id")
+                if interview_id:
+                    interviews_collection.delete_one({"id": interview_id})
+                    answers_collection.delete_many({"interview_id": interview_id})
+                    if interview_id in interviews:
+                        del interviews[interview_id]
+                
+                interview_sessions_collection.delete_one({"_id": row["_id"]})
+                deleted_count += 1
+
+        return {"status": "success", "deleted_count": deleted_count}
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 
@@ -7385,6 +7484,7 @@ def superadmin_get_interview_details(link_id: str, current_admin: dict = Depends
 class TTSRequest(BaseModel):
     text: str
     voice: str = "nova"
+    language: str = "English"
 
 @app.post("/tts")
 async def generate_tts(req: TTSRequest):
@@ -7395,8 +7495,23 @@ async def generate_tts(req: TTSRequest):
         if req.voice == "shimmer" or req.voice == "nova":
             voice_model = "en-US-JennyNeural"
 
+        # Apply specific regional neural voices based on the requested language
+        # to ensure non-English scripts (like Devanagari) are pronounced correctly
+        # instead of being silently skipped by the English-only voice models.
+        language_map = {
+            "Hindi": "hi-IN-SwaraNeural",
+            "Telugu": "te-IN-ShrutiNeural",
+            "Tamil": "ta-IN-PallaviNeural",
+            "Malayalam": "ml-IN-SobhanaNeural",
+            "Kannada": "kn-IN-SapnaNeural",
+            "English": voice_model
+        }
+        
+        # Override voice model if a supported non-English language is passed
+        selected_voice = language_map.get(req.language.title(), voice_model)
+
         temp_filename = f"temp_tts_{uuid.uuid4().hex}.mp3"
-        communicate = edge_tts.Communicate(req.text, voice_model)
+        communicate = edge_tts.Communicate(req.text, selected_voice)
         await communicate.save(temp_filename)
         
         return FileResponse(
