@@ -191,14 +191,13 @@ const PricingCard = ({ plan, index, isFeatured, badge, formatPrice }) => {
           }`}>{badge}</span>
         <h3 className="pr-16 text-xl font-extrabold tracking-tight">{getPlanName(plan)}</h3>
         <div className={`mt-1 text-sm ${isFeatured ? 'text-white/60' : 'text-slate-400'}`}>{plan.duration_days ?? 30} days access</div>
-        
+
         {/* Prominent Credit Points badge */}
         <div className="mt-3">
-          <span className={`inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-bold ${
-            isFeatured 
-              ? 'bg-cyan-500/25 text-cyan-200 border border-cyan-500/30' 
+          <span className={`inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-bold ${isFeatured
+              ? 'bg-cyan-500/25 text-cyan-200 border border-cyan-500/30'
               : 'bg-indigo-50 text-indigo-700 border border-indigo-100'
-          }`}>
+            }`}>
             ⚡ {plan.credits} Credits
           </span>
         </div>
@@ -426,9 +425,9 @@ function LandingPage() {
             </p>
             <h1 className="flex flex-col items-center leading-[0.85] tracking-tighter text-5xl sm:text-6xl md:text-7xl lg:text-8xl xl:text-9xl">
               <span className="font-medium text-white text-8xl">Scale With</span>
-             <span className="inline-block font-bold text-9xl xl:text-[8rem] bg-clip-text text-transparent bg-[linear-gradient(100deg,#64CEFB_0%,#64CEFB_40%,#ffffff_50%,#64CEFB_60%,#64CEFB_100%)] bg-[length:200%_auto] [background-position:-156.267%_center]">
-  AI Interviews.
-</span>
+              <span className="inline-block font-bold text-9xl xl:text-[8rem] bg-clip-text text-transparent bg-[linear-gradient(100deg,#64CEFB_0%,#64CEFB_40%,#ffffff_50%,#64CEFB_60%,#64CEFB_100%)] bg-[length:200%_auto] [background-position:-156.267%_center]">
+                AI Interviews.
+              </span>
             </h1>
             <Link to="/register" className="no-underline">
               <button className="group mt-10 flex items-center gap-2 rounded-full bg-black border border-white/20 hover:bg-white/10 hover:border-white/40 px-6 py-3.5 text-sm font-bold text-white transition-all cursor-pointer shadow-2xl">
