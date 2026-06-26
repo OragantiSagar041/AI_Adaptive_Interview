@@ -478,6 +478,9 @@ export default function CreateInterviewPage() {
         name: '',
         email: '',
         resumeText: '',
+        jobDescription: '',
+        customQuestions: '',
+        aiInstructions: '',
         scheduledStart: '',
         scheduledEnd: ''
       }))

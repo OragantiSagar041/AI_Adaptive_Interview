@@ -474,7 +474,13 @@ export default function CreateInterviewPage() {
 
       setSingleCreatedLinks(prev => [
         ...prev,
-        { name, url: data.link_url, id: data.link_id, email }
+        { 
+          name, 
+          url: data.link_url, 
+          id: data.link_id, 
+          email,
+          createdAt: new Date().toISOString()
+        }
       ])
 
       setSingleCandidate(prev => ({
@@ -482,11 +488,20 @@ export default function CreateInterviewPage() {
         name: '',
         email: '',
         resumeText: '',
+        jobDescription: '',
+        customQuestions: '',
+        aiInstructions: '',
         scheduledStart: '',
         scheduledEnd: ''
       }))
       setAtsScoreData(null)
       setCustomEmailHtml('')
+
+      const singleIdsToClear = ['singleResumeInput', 'singleJdInput', 'singleCustomInput', 'singleAiInstructionsInput'];
+      singleIdsToClear.forEach(id => {
+        const el = document.getElementById(id);
+        if (el) el.value = '';
+      });
 
       dispatch(loadDashboardData())
     } catch (e) {
@@ -699,6 +714,14 @@ export default function CreateInterviewPage() {
       setBulkResultsModalOpen(true)
       setBulkCandidates([])
       setCustomEmailHtml('')
+      setBulkCsvLabel('Click to upload or drag and drop Excel or CSV template')
+
+      const bulkIdsToClear = ['bulkJdInput', 'bulkCustomInput', 'bulkAiInstructionsInput', 'bulkExcelInput', 'bulkCsvInput'];
+      bulkIdsToClear.forEach(id => {
+        const el = document.getElementById(id);
+        if (el) el.value = '';
+      });
+
       dispatch(loadDashboardData())
     } catch (e) {
       console.error(e)
@@ -2081,7 +2104,23 @@ export default function CreateInterviewPage() {
                       </div>
                       <div>
                         <strong className="text-xs text-slate-800 block font-bold">{link.name}</strong>
-                        <span className="text-[0.7rem] text-slate-500 font-medium">{link.email}</span>
+                        <div className="flex items-center gap-2 mt-0.5">
+                          <span className="text-[0.7rem] text-slate-500 font-medium">{link.email}</span>
+                          {link.createdAt && (
+                            <>
+                              <span className="w-1 h-1 rounded-full bg-slate-300"></span>
+                              <span className="text-[0.65rem] text-slate-450 font-medium">
+                                <i className="far fa-clock mr-1"></i>
+                                {new Date(link.createdAt).toLocaleString(undefined, {
+                                  month: 'short',
+                                  day: 'numeric',
+                                  hour: '2-digit',
+                                  minute: '2-digit'
+                                })}
+                              </span>
+                            </>
+                          )}
+                        </div>
                       </div>
                     </div>
                     <div className="flex gap-2">

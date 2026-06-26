@@ -254,6 +254,111 @@ export function CandidateScorecardModal({
                   <p className="text-slate-500 text-sm font-semibold">No recorded answers available for this candidate.</p>
                 </div>
               )}
+
+              {/* Coding Round Breakdown */}
+              {candidateDetail?.coding_round && candidateDetail.coding_round.task && (
+                <div className="bg-slate-50/50 border border-slate-200 rounded-xl p-5 relative overflow-hidden mt-2">
+                  <h4 className="text-[1rem] font-bold text-slate-900 leading-snug mb-4 border-b border-slate-200 pb-3 flex items-center gap-2">
+                    <i className="fas fa-code text-indigo-500"></i> Coding Round
+                  </h4>
+                  
+                  <div className="mb-4">
+                    <span className="text-[0.68rem] text-slate-500 font-bold uppercase tracking-wider block mb-2">Problem Statement</span>
+                    <p className="text-[0.95rem] text-slate-800 font-bold">{candidateDetail.coding_round.task?.title}</p>
+                    <p className="text-sm text-slate-600 mt-1 whitespace-pre-wrap leading-relaxed">{candidateDetail.coding_round.task?.description}</p>
+                  </div>
+                  
+                  {candidateDetail.coding_round.task?.constraints && (
+                    <div className="mb-4">
+                      <span className="text-[0.68rem] text-slate-500 font-bold uppercase tracking-wider block mb-2">Constraints</span>
+                      <p className="text-xs text-slate-700 font-mono bg-white border border-slate-200 p-2.5 rounded-lg whitespace-pre-wrap">{candidateDetail.coding_round.task.constraints}</p>
+                    </div>
+                  )}
+
+                  {candidateDetail.coding_round.task?.examples && candidateDetail.coding_round.task.examples.length > 0 && (
+                    <div className="mb-5">
+                      <span className="text-[0.68rem] text-slate-500 font-bold uppercase tracking-wider block mb-2">Examples</span>
+                      <div className="space-y-2">
+                        {candidateDetail.coding_round.task.examples.map((ex, i) => (
+                          <div key={i} className="bg-white border border-slate-200 p-3 rounded-lg text-xs font-mono text-slate-700">
+                            <div className="mb-1"><strong className="text-slate-500">Input:</strong> <span className="text-emerald-600">{ex.input}</span></div>
+                            <div><strong className="text-slate-500">Output:</strong> <span className="text-amber-600">{ex.output}</span></div>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+
+                  <div className="mb-5">
+                    <span className="text-[0.68rem] text-slate-500 font-bold uppercase tracking-wider block mb-2">Candidate's Code ({candidateDetail.coding_round.language})</span>
+                    <pre className="bg-[#0d1117] border border-slate-800 text-slate-300 p-4 rounded-lg text-xs font-mono overflow-x-auto whitespace-pre-wrap">
+                      {candidateDetail.coding_round.latest_code || "No code submitted."}
+                    </pre>
+                  </div>
+
+                  <div className="mb-2">
+                    <span className="text-[0.68rem] text-slate-500 font-bold uppercase tracking-wider block mb-2">Test Results</span>
+                    {candidateDetail.coding_round.latest_run ? (
+                      <div className="bg-white border border-slate-200 p-4 rounded-lg">
+                        <div className="font-bold text-sm mb-3 flex items-center gap-2">
+                          Status: 
+                          {candidateDetail.coding_round.latest_run.all_passed 
+                            ? <span className="text-emerald-600 bg-emerald-50 px-2 py-0.5 rounded border border-emerald-200 text-xs uppercase tracking-wide">All Passed</span> 
+                            : <span className="text-rose-600 bg-rose-50 px-2 py-0.5 rounded border border-rose-200 text-xs uppercase tracking-wide">Failed</span>}
+                        </div>
+                        {candidateDetail.coding_round.latest_run.runtime_error && (
+                           <div className="text-xs text-rose-600 font-mono bg-rose-50 border border-rose-100 p-2.5 rounded mb-3 whitespace-pre-wrap">{candidateDetail.coding_round.latest_run.runtime_error}</div>
+                        )}
+                        <div className="grid grid-cols-2 gap-4">
+                          <div className="bg-slate-50 p-3 rounded-lg border border-slate-100">
+                            <div className="text-xs text-slate-500 font-semibold mb-1 uppercase tracking-wide">Visible Tests</div>
+                            <div className="text-lg font-black text-slate-800">
+                              {candidateDetail.coding_round.latest_run.visible_results?.filter(r=>r.passed).length || 0} <span className="text-slate-400 text-sm font-semibold">/ {candidateDetail.coding_round.latest_run.visible_results?.length || 0}</span>
+                            </div>
+                          </div>
+                          <div className="bg-slate-50 p-3 rounded-lg border border-slate-100">
+                            <div className="text-xs text-slate-500 font-semibold mb-1 uppercase tracking-wide">Hidden Tests</div>
+                            <div className="text-lg font-black text-slate-800">
+                              {candidateDetail.coding_round.latest_run.hidden_summary?.passed || 0} <span className="text-slate-400 text-sm font-semibold">/ {candidateDetail.coding_round.latest_run.hidden_summary?.total || 0}</span>
+                            </div>
+                          </div>
+                        </div>
+                      </div>
+                    ) : (
+                      <p className="text-sm text-slate-500 italic bg-white border border-slate-200 p-4 rounded-lg">No run results available.</p>
+                    )}
+                  </div>
+                </div>
+              )}
+
+              {/* Case Study Round Breakdown */}
+              {candidateDetail?.case_study_round && candidateDetail.case_study_round.scenario && (
+                <div className="bg-slate-50/50 border border-slate-200 rounded-xl p-5 relative overflow-hidden mt-2">
+                  <h4 className="text-[1rem] font-bold text-slate-900 leading-snug mb-4 border-b border-slate-200 pb-3 flex items-center gap-2">
+                    <i className="fas fa-briefcase text-amber-500"></i> Case Study Round
+                  </h4>
+                  <div className="mb-5">
+                    <span className="text-[0.68rem] text-slate-500 font-bold uppercase tracking-wider block mb-2">Scenario</span>
+                    <p className="text-[0.95rem] text-slate-700 leading-relaxed whitespace-pre-wrap bg-white border border-slate-200 p-4 rounded-lg">{candidateDetail.case_study_round.scenario}</p>
+                  </div>
+                  
+                  {candidateDetail.case_study_round.messages && candidateDetail.case_study_round.messages.length > 1 && (
+                    <div>
+                      <span className="text-[0.68rem] text-slate-500 font-bold uppercase tracking-wider block mb-3">Conversation Transcript</span>
+                      <div className="space-y-3 bg-white border border-slate-200 p-4 rounded-lg max-h-[400px] overflow-y-auto">
+                        {candidateDetail.case_study_round.messages.filter(m => m.role !== 'system').map((msg, i) => (
+                          <div key={i} className={`p-3 rounded-xl text-sm ${msg.role === 'user' ? 'bg-indigo-50 border-indigo-100 border text-indigo-900 ml-8 rounded-tr-sm' : 'bg-slate-50 border-slate-200 border text-slate-700 mr-8 rounded-tl-sm'}`}>
+                            <strong className={`block mb-1 text-[0.65rem] uppercase tracking-widest ${msg.role === 'user' ? 'text-indigo-400' : 'text-slate-400'}`}>
+                              {msg.role === 'user' ? 'Candidate' : 'Interviewer'}
+                            </strong>
+                            <div className="whitespace-pre-wrap leading-relaxed">{msg.content}</div>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+                </div>
+              )}
             </div>
           </div>
         </div>

@@ -169,8 +169,8 @@ function Bubble({ role, text, isNew }) {
         </div>
       )}
       <div className={`max-w-[72%] rounded-2xl px-4 py-3 text-sm leading-relaxed ${role === 'ai'
-          ? 'bg-indigo-500/10 border border-indigo-500/15 text-slate-200 rounded-tl-none'
-          : 'bg-emerald-500/10 border border-emerald-500/15 text-slate-200 rounded-tr-none'
+        ? 'bg-indigo-500/10 border border-indigo-500/15 text-slate-200 rounded-tl-none'
+        : 'bg-emerald-500/10 border border-emerald-500/15 text-slate-200 rounded-tr-none'
         }`}>
         {role === 'ai' && <span className="text-[10px] font-bold text-indigo-400 uppercase tracking-widest block mb-1">Zara</span>}
         {text}
@@ -222,6 +222,7 @@ export default function VoiceInterviewPage() {
   const mediaStreamRef = useRef(null)
   const recordedChunksRef = useRef([])
   const [isRecording, setIsRecording] = useState(false)
+  const activeAudioRef = useRef(null)
 
   // Camera recording
   const cameraRecorderRef = useRef(null)
@@ -366,17 +367,18 @@ export default function VoiceInterviewPage() {
       const blob = await res.blob()
       const url = URL.createObjectURL(blob)
       const audio = new Audio(url)
-      currentAudioRef.current = audio  // ← store reference so we can stop it anytime
+      activeAudioRef.current = audio
       audio.onended = () => {
         currentAudioRef.current = null
         setAiStatus('listening')
         URL.revokeObjectURL(url)
+        activeAudioRef.current = null
         onEnd?.()
       }
       audio.onerror = () => {
         currentAudioRef.current = null
         setAiStatus('idle')
-        URL.revokeObjectURL(url)
+        activeAudioRef.current = null
         onEnd?.()
       }
       audio.play().catch(() => {
@@ -432,12 +434,12 @@ export default function VoiceInterviewPage() {
         audio: true
       })
 
-      // Hook: detect when user stops sharing screen (via stable ref to avoid closure issues)
-      screenStream.getVideoTracks().forEach(track => {
-        track.addEventListener('ended', () => {
-          screenShareViolationHandlerRef.current?.()
-        })
-      })
+      const videoTrack = screenStream.getVideoTracks()[0];
+      const settings = videoTrack.getSettings();
+      if (settings.displaySurface && settings.displaySurface !== 'monitor') {
+        screenStream.getTracks().forEach(t => t.stop());
+        throw new Error("Please select 'Entire Screen' when sharing. Window or Tab sharing is not allowed.");
+      }
 
       // 2. Get Camera & Mic Stream
       let micStream = null
@@ -750,9 +752,14 @@ export default function VoiceInterviewPage() {
 
   // ── Load coding/case study round questions ────────────────────────────────
   const transitionToNextRound = useCallback(async () => {
-    if (submittingRef.current) return
-    stopListening()   // also kills audio via stopAudio inside
-    window.speechSynthesis?.cancel()
+    if (submittingRef.current || isTransitioningRef.current) return
+    isTransitioningRef.current = true
+    stopListening(); window.speechSynthesis?.cancel()
+    if (activeAudioRef.current) {
+      activeAudioRef.current.pause();
+      activeAudioRef.current = null;
+    }
+
     const type = interviewType
     const iid = interviewIdRef.current
 
@@ -1048,8 +1055,8 @@ export default function VoiceInterviewPage() {
             }
           }}
             className={`w-full py-4 rounded-xl font-bold text-sm transition-all flex items-center justify-center gap-3 ${permissionsGranted
-                ? 'bg-emerald-500/20 text-emerald-400 border border-emerald-500/30 cursor-default'
-                : 'bg-indigo-500/10 text-indigo-300 border border-indigo-500/30 hover:bg-indigo-500/20'
+              ? 'bg-emerald-500/20 text-emerald-400 border border-emerald-500/30 cursor-default'
+              : 'bg-indigo-500/10 text-indigo-300 border border-indigo-500/30 hover:bg-indigo-500/20'
               }`}>
             <i className={`fas ${permissionsGranted ? 'fa-check-circle' : 'fa-lock-open'}`} />
             {permissionsGranted ? 'Permissions Granted' : 'Grant Camera & Mic Permissions'}
@@ -1059,8 +1066,8 @@ export default function VoiceInterviewPage() {
             disabled={!permissionsGranted}
             onClick={() => setRound('intro')}
             className={`w-full py-4 rounded-xl font-bold text-lg transition-all flex items-center justify-center gap-3 ${permissionsGranted
-                ? 'bg-gradient-to-r from-emerald-500 to-teal-500 text-white shadow-[0_4px_30px_rgba(16,185,129,0.4)] hover:shadow-[0_4px_50px_rgba(16,185,129,0.6)] hover:scale-[1.02]'
-                : 'bg-slate-800 text-slate-500 cursor-not-allowed'
+              ? 'bg-gradient-to-r from-emerald-500 to-teal-500 text-white shadow-[0_4px_30px_rgba(16,185,129,0.4)] hover:shadow-[0_4px_50px_rgba(16,185,129,0.6)] hover:scale-[1.02]'
+              : 'bg-slate-800 text-slate-500 cursor-not-allowed'
               }`}>
             I Agree & Continue
             <i className="fas fa-arrow-right" />
@@ -1150,7 +1157,7 @@ export default function VoiceInterviewPage() {
   const progress = questions.length ? ((currentQIdx) / questions.length) * 100 : 0
 
   return (
-    <div className="h-screen bg-[#07091a] flex flex-col text-white overflow-hidden" style={{ fontFamily: "'Inter',sans-serif" }}>
+    <div className="h-screen w-screen overflow-hidden bg-[#07091a] flex flex-col text-white" style={{ fontFamily: "'Inter',sans-serif" }}>
       <style>{`
         @keyframes wave{0%{height:4px;opacity:.5}100%{height:32px;opacity:1}}
         @keyframes glow-speak{0%,100%{box-shadow:0 0 40px rgba(99,102,241,.5),0 0 80px rgba(99,102,241,.2)}50%{box-shadow:0 0 80px rgba(99,102,241,.9),0 0 140px rgba(99,102,241,.4)}}
@@ -1181,16 +1188,18 @@ export default function VoiceInterviewPage() {
       <div className="h-1 bg-white/5"><div className="h-full bg-gradient-to-r from-indigo-500 to-purple-600 transition-all duration-700" style={{ width: `${progress}%` }} /></div>
 
       {/* Main: center avatar layout */}
-      <div className="flex-1 flex flex-col items-center justify-between py-6 px-4 overflow-y-auto">
+      <div className="flex-1 flex flex-col items-center py-8 px-4 overflow-y-auto">
 
         {/* Question number badge */}
-        <div className="text-[11px] font-bold text-slate-500 uppercase tracking-widest mb-2">
+        <div className="text-[11px] font-bold text-slate-500 uppercase tracking-widest mb-2 shrink-0">
           {currentQ?.type || 'Interview'} &nbsp;·&nbsp; Question {currentQIdx + 1} of {questions.length}
         </div>
 
+        <div className="flex-1" />
+
         {/* Center Avatar block */}
-        <div className="flex flex-col items-center gap-6 my-4">
-          {/* Video Avatar */}
+        <div className="flex flex-col items-center gap-6 my-4 shrink-0">
+          {/* Ripple rings */}
           <div className="relative flex items-center justify-center">
             <style>{`
               @keyframes vidRingSpeak { 0%,100%{transform:scale(1);opacity:.8} 50%{transform:scale(1.1);opacity:1} }
@@ -1201,8 +1210,8 @@ export default function VoiceInterviewPage() {
 
           {/* AI Status label */}
           <div className={`text-xs font-bold uppercase tracking-widest flex items-center gap-2 ${aiStatus === 'speaking' ? 'text-indigo-400' :
-              aiStatus === 'listening' ? 'text-emerald-400' :
-                aiStatus === 'thinking' ? 'text-amber-400' : 'text-slate-600'
+            aiStatus === 'listening' ? 'text-emerald-400' :
+              aiStatus === 'thinking' ? 'text-amber-400' : 'text-slate-600'
             }`}>
             {aiStatus === 'speaking' && <><span className="w-1.5 h-1.5 rounded-full bg-indigo-400 animate-pulse" />Zara is Speaking</>}
             {aiStatus === 'listening' && <><span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse" />Listening to you</>}
@@ -1220,18 +1229,17 @@ export default function VoiceInterviewPage() {
           {/* User's live transcript — shows while listening AND after (so user can see what was captured) */}
           {(aiStatus === 'listening' || transcript || interimText) && (
             <div className="max-w-xl w-full mx-auto mt-2">
-              <div className={`rounded-2xl border px-5 py-3 text-center transition-all duration-300 ${
-                aiStatus === 'listening'
+              <div className={`rounded-2xl border px-5 py-3 text-center transition-all duration-300 ${aiStatus === 'listening'
                   ? 'border-emerald-500/30 bg-emerald-500/8'
                   : 'border-white/10 bg-white/4'
-              }`}>
+                }`}>
                 {(transcript || interimText)
                   ? <p className="text-emerald-300 text-sm leading-relaxed">
-                      {transcript}
-                      {interimText && (
-                        <span className="text-emerald-400/60 italic"> {interimText}▌</span>
-                      )}
-                    </p>
+                    {transcript}
+                    {interimText && (
+                      <span className="text-emerald-400/60 italic"> {interimText}▌</span>
+                    )}
+                  </p>
                   : <p className="text-slate-600 text-sm italic flex items-center justify-center gap-2">
                     <i className="fas fa-microphone text-emerald-600" />
                     Listening — speak now...
@@ -1251,8 +1259,10 @@ export default function VoiceInterviewPage() {
           )}
         </div>
 
+        <div className="flex-1" />
+
         {/* Bottom controls */}
-        <div className="w-full max-w-lg space-y-4">
+        <div className="w-full max-w-lg space-y-4 shrink-0 mt-6">
           <div className="flex gap-2">
             <button onClick={() => {
               if (aiStatus === 'listening') {
@@ -1261,8 +1271,8 @@ export default function VoiceInterviewPage() {
               }
               else { startListening(ans => handleAnswer(ans, currentQIdx, 0)) }
             }} className={`flex-1 py-3.5 rounded-2xl text-sm font-bold transition-all flex items-center justify-center gap-2.5 ${aiStatus === 'listening'
-                ? 'bg-rose-500/15 border border-rose-500/30 text-rose-400 shadow-[0_0_30px_rgba(239,68,68,.15)]'
-                : 'bg-indigo-500/10 border border-indigo-500/30 text-indigo-300 hover:bg-indigo-500/20'
+              ? 'bg-rose-500/15 border border-rose-500/30 text-rose-400 shadow-[0_0_30px_rgba(239,68,68,.15)]'
+              : 'bg-indigo-500/10 border border-indigo-500/30 text-indigo-300 hover:bg-indigo-500/20'
               }`}>
               <i className={`fas ${aiStatus === 'listening' ? 'fa-stop-circle' : 'fa-microphone'} text-base`} />
               {aiStatus === 'listening' ? 'Done Speaking' : 'Speak Answer'}
@@ -1279,8 +1289,8 @@ export default function VoiceInterviewPage() {
           <div className="flex items-center justify-center gap-1.5 flex-wrap">
             {questions.map((_, i) => (
               <div key={i} className={`rounded-full transition-all duration-300 ${i < currentQIdx ? 'w-2 h-2 bg-emerald-500' :
-                  i === currentQIdx ? 'w-3.5 h-3.5 bg-indigo-500 shadow-[0_0_10px_rgba(99,102,241,.8)]' :
-                    'w-2 h-2 bg-white/10'
+                i === currentQIdx ? 'w-3.5 h-3.5 bg-indigo-500 shadow-[0_0_10px_rgba(99,102,241,.8)]' :
+                  'w-2 h-2 bg-white/10'
                 }`} />
             ))}
           </div>
