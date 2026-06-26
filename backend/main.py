@@ -613,18 +613,41 @@ def build_coding_test_payload(coding_round: Dict[str, Any]) -> Dict[str, Any]:
     }
 
 
-def _runner_error(message: str) -> Dict[str, Any]:
+def _runner_error(message: str, tests: List[Dict[str, Any]] = None) -> Dict[str, Any]:
+    if tests is None:
+        return {
+            "status": "error",
+            "runtime_error": message,
+            "visible_results": [],
+            "hidden_summary": {"passed": 0, "total": 14},
+        }
+    
+    visible_tests = [t for t in tests if t.get("visible", True)]
+    hidden_tests = [t for t in tests if not t.get("visible", True)]
+    
+    visible_results = [
+        {
+            "id": t.get("id"),
+            "visible": True,
+            "passed": False,
+            "input": t.get("input"),
+            "output": f"Error: {message}",
+            "expected": t.get("expected") if t.get("expected") is not None else t.get("output")
+        }
+        for t in visible_tests
+    ]
+    
     return {
         "status": "error",
         "runtime_error": message,
-        "visible_results": [],
-        "hidden_summary": {"passed": 0, "total": 4},
+        "visible_results": visible_results,
+        "hidden_summary": {"passed": 0, "total": len(hidden_tests)},
     }
 
 
-def _collect_runner_output(result: subprocess.CompletedProcess) -> Dict[str, Any]:
+def _collect_runner_output(result: subprocess.CompletedProcess, tests: List[Dict[str, Any]] = None) -> Dict[str, Any]:
     if result.returncode != 0:
-        return _runner_error((result.stderr or result.stdout or "Unknown execution error").strip())
+        return _runner_error((result.stderr or result.stdout or "Unknown execution error").strip(), tests)
 
     stdout = result.stdout.strip()
     try:
@@ -635,7 +658,7 @@ def _collect_runner_output(result: subprocess.CompletedProcess) -> Dict[str, Any
         console_out = '\n'.join(lines[:-1]).strip()
     except Exception:
         # If no valid JSON, it's either a script or a crash
-        return _runner_error(stdout or result.stderr or "The runner returned an invalid response.")
+        return _runner_error(stdout or result.stderr or "The runner returned an invalid response.", tests)
 
     visible_results = [row for row in all_results if row.get("visible")]
     hidden_results = [row for row in all_results if not row.get("visible")]
@@ -756,13 +779,19 @@ import sys
 # User code
 {code}
 
-# Test cases
-tests = {json.dumps(tests)}
+# Test cases - loaded via json.loads to correctly convert JSON true/false/null to Python True/False/None
+tests = json.loads({json.dumps(json.dumps(tests))})
 results = []
 function_name = "{function_name}"
 
-if function_name in locals():
+if function_name in dir():
+    func = eval(function_name)
+elif function_name in locals():
     func = locals()[function_name]
+else:
+    func = None
+
+if func is not None:
     for test in tests:
         try:
             input_args = test.get("input", [])
@@ -770,7 +799,7 @@ if function_name in locals():
                 input_args = [input_args]
             
             output = func(*input_args)
-            expected = test.get("expected") or test.get("output")
+            expected = test.get("expected") if test.get("expected") is not None else test.get("output")
             
             passed = (output == expected)
             
@@ -789,12 +818,12 @@ if function_name in locals():
                 "passed": False,
                 "input": test.get("input"),
                 "output": f"Runtime Error: {{type(e).__name__}}: {{str(e)}}",
-                "expected": test.get("expected") or test.get("output")
+                "expected": test.get("expected") if test.get("expected") is not None else test.get("output")
             }})
     print("\\n" + json.dumps(results))
 else:
-    # Just running as a script?
-    print(f"\\n[]")
+    sys.stderr.write(f"Execution Error: Function '{function_name}' not found. Please ensure your function is named exactly '{function_name}'.\\n")
+    sys.exit(1)
 """
 
     with tempfile.NamedTemporaryFile(suffix=".py", delete=False, mode="w", encoding="utf-8") as f:
@@ -803,11 +832,11 @@ else:
 
     try:
         result = subprocess.run(["python", temp_path], capture_output=True, text=True, timeout=10)
-        return _collect_runner_output(result)
+        return _collect_runner_output(result, tests)
     except subprocess.TimeoutExpired:
-        return _runner_error("Execution timed out (10s limit).")
+        return _runner_error("Execution timed out (10s limit).", tests)
     except Exception as e:
-        return _runner_error(f"Failed to execute code: {e}")
+        return _runner_error(f"Failed to execute code: {e}", tests)
     finally:
         if os.path.exists(temp_path):
             os.remove(temp_path)
@@ -7691,6 +7720,7 @@ class CodingChatRequest(BaseModel):
     interview_id: str
     transcript: str
     code: str
+    run_result: Optional[Dict[str, Any]] = None
 
 @app.post("/coding-round/chat")
 async def coding_round_chat(req: CodingChatRequest):
@@ -7699,21 +7729,70 @@ async def coding_round_chat(req: CodingChatRequest):
         # Load interview context
         interview = get_interview_or_404(req.interview_id)
         task = interview.get("coding_round", {}).get("task", {})
-        problem_text = task.get("title", "") + "\n" + task.get("description", "")
-        
-        prompt = f"""You are a friendly, human-like AI coding interviewer named Zara.
-The candidate is solving this problem: 
-{problem_text}
+        problem_title = task.get("title", "the given problem")
+        problem_desc  = task.get("description", "")
+        constraints   = task.get("constraints", "")
 
-Their current code is:
+        # ── Build run-result context ──────────────────────────────────────
+        run_context = ""
+        rr = req.run_result
+        if rr:
+            if rr.get("runtime_error"):
+                run_context = f"""
+## Last Run Result: EXECUTION ERROR
+Error message: {rr['runtime_error']}
+All test cases failed due to this error."""
+            else:
+                visible = rr.get("visible_results", [])
+                hidden  = rr.get("hidden_summary", {})
+                passed_v = sum(1 for r in visible if r.get("passed"))
+                total_v  = len(visible)
+                passed_h = hidden.get("passed", 0)
+                total_h  = hidden.get("total", 0)
+                all_passed = rr.get("all_passed", False)
+
+                failed_cases = [r for r in visible if not r.get("passed")]
+                failed_details = ""
+                for fc in failed_cases[:2]:   # Show max 2 failing examples
+                    failed_details += f"  - Input: {fc.get('input')} | Got: {fc.get('output')} | Expected: {fc.get('expected')}\n"
+
+                run_context = f"""
+## Last Run Result
+- Visible tests passed: {passed_v}/{total_v}
+- Hidden tests passed:  {passed_h}/{total_h}
+- Overall: {'ALL PASSED ✓' if all_passed else 'SOME FAILED ✗'}"""
+                if failed_details:
+                    run_context += f"\n- Failing examples:\n{failed_details}"
+
+        # ── Build the system prompt ───────────────────────────────────────
+        prompt = f"""You are Zara, a sharp but friendly AI coding interviewer at HireIQ.
+You are conducting a live technical coding interview.
+
+## Problem
+Title: {problem_title}
+Description: {problem_desc}
+Constraints: {constraints}
+
+## Candidate's Current Code
+```
 {req.code}
+```
+{run_context}
 
-The candidate just said: "{req.transcript}"
+## Candidate Just Said
+"{req.transcript}"
 
-Respond conversationally (max 2-3 sentences).
-If they asked a clarification (e.g. "Come again?"), politely repeat the question or provide a hint.
-If they are explaining their approach, acknowledge it and guide them. 
-Be encouraging and clear. Do not provide full code solutions."""
+## Your Role as Zara
+You must respond in 2-3 conversational sentences. Follow these rules strictly:
+1. NEVER give full code solutions or write code for the candidate.
+2. Ask probing questions about their implementation — "Why did you choose this data structure?", "What happens if the input is empty?", "Can you trace through your logic with this input?"
+3. If there is a runtime error, guide them to the likely cause with a hint (not the fix).
+4. If some test cases fail, point to a specific failing case and ask what they think is wrong.
+5. If all tests pass, ask about time complexity, space complexity, or edge cases they haven't considered.
+6. If they explain an approach, acknowledge it and ask a follow-up: "And how does that handle duplicates?" or "What's the worst-case here?"
+7. If they seem stuck, give a targeted hint without revealing the solution.
+8. Be encouraging — use phrases like "Good thinking!", "You're on the right track.", "Interesting approach."
+9. Keep the conversation going — always end with a question or a call to action."""
 
         reply = await asyncio.to_thread(
             chat_completion,

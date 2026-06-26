@@ -217,7 +217,9 @@ export default function VoiceCodingRound({
   const [timeLeft, setTimeLeft]       = useState(duration || 900)
   const [runOutput, setRunOutput]     = useState('')
   const [runResultData, setRunResultData] = useState(null)
-  const [consoleHeight, setConsoleHeight] = useState(144)
+  const [evaluatedCount, setEvaluatedCount] = useState(0)
+  const [selectedTestCase, setSelectedTestCase] = useState(0)
+  const [consoleHeight, setConsoleHeight] = useState(250)
   const [orbPos, setOrbPos]           = useState({ x: null, y: null })
   const [running, setRunning]         = useState(false)
   const [isSubmitting, setIsSubmitting] = useState(false)
@@ -231,6 +233,7 @@ export default function VoiceCodingRound({
   const audioChunksRef    = useRef([])
   const currentTxRef      = useRef('')
   const submittingRef     = useRef(false)
+  const lastRunResultRef  = useRef(null)  // stores latest run result for chat context
 
   // Timer
   useEffect(() => {
@@ -240,6 +243,23 @@ export default function VoiceCodingRound({
     }), 1000)
     return () => clearInterval(t)
   }, [])
+
+  // Test case animation
+  useEffect(() => {
+    if (runResultData) {
+      setEvaluatedCount(0);
+      const totalToEvaluate = (runResultData.visible_results?.length || 0) + (runResultData.hidden_summary?.total || 0);
+      let count = 0;
+      const interval = setInterval(() => {
+        count++;
+        setEvaluatedCount(count);
+        if (count >= totalToEvaluate) {
+          clearInterval(interval);
+        }
+      }, 400); // 400ms delay per test case
+      return () => clearInterval(interval);
+    }
+  }, [runResultData]);
 
   const fmt = s => `${String(Math.floor(s / 60)).padStart(2, '0')}:${String(s % 60).padStart(2, '0')}`
 
@@ -276,12 +296,17 @@ export default function VoiceCodingRound({
     speak(text, onEnd)
   }, [speak])
 
-  const askAIForReply = useCallback(async (transcriptText) => {
+  const askAIForReply = useCallback(async (transcriptText, runResult) => {
     try {
       const res = await fetch(`${API_BASE_URL}/coding-round/chat`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ interview_id: interviewId, transcript: transcriptText, code })
+        body: JSON.stringify({
+          interview_id: interviewId,
+          transcript: transcriptText,
+          code,
+          run_result: runResult || lastRunResultRef.current || null
+        })
       })
       const data = await res.json()
       if (data.reply) aiSay(data.reply)
@@ -292,20 +317,23 @@ export default function VoiceCodingRound({
 
   // ── STT ────────────────────────────────────────────────────────────────
   const stopListening = useCallback(() => {
-    if (mediaRecorderRef.current && mediaRecorderRef.current.state !== 'inactive') {
-      mediaRecorderRef.current.stop()
-    }
     clearTimeout(silenceTimerRef.current)
-    setAiStatus('idle')
-    setOrbLabel('Zara is watching')
-    isListeningRef.current = false
+    if (mediaRecorderRef.current && mediaRecorderRef.current.state !== 'inactive') {
+      // Stopping the MediaRecorder triggers onstop → STT fetch automatically
+      mediaRecorderRef.current.stop()
+    } else {
+      // Nothing was recording, just reset UI
+      setAiStatus('idle')
+      setOrbLabel('Zara is watching')
+      isListeningRef.current = false
+    }
   }, [])
 
   const startListening = useCallback((onFinish) => {
     if (isListeningRef.current) return
     isListeningRef.current = true
     setAiStatus('listening')
-    setOrbLabel('Listening to you…')
+    setOrbLabel('Listening… tap orb to stop')
     setTranscript('')
 
     navigator.mediaDevices.getUserMedia({ audio: true }).then(stream => {
@@ -318,12 +346,15 @@ export default function VoiceCodingRound({
       }
 
       mediaRecorder.onstop = async () => {
+        // Reset UI immediately so user knows recording ended
+        setAiStatus('idle')
+        setOrbLabel('Processing…')
+
         const audioBlob = new Blob(audioChunksRef.current, { type: 'audio/webm' })
         const fd = new FormData()
         fd.append('file', audioBlob, 'audio.webm')
 
         try {
-          // Pass language hint for better Indian English recognition
           const langMap = { 'Hindi':'hi','Telugu':'te','Tamil':'ta','Malayalam':'ml','Kannada':'kn','English':'en' };
           const sttLang = langMap[sessionLang] || 'en';
           const res = await fetch(`${API_BASE_URL}/stt?language=${sttLang}`, { method: 'POST', body: fd })
@@ -336,27 +367,27 @@ export default function VoiceCodingRound({
           }
         } catch (e) {
           onFinish?.('')
+        } finally {
+          stream.getTracks().forEach(t => t.stop())
+          setOrbLabel('Zara is watching')
+          isListeningRef.current = false
         }
-        stream.getTracks().forEach(t => t.stop())
-        setAiStatus('idle')
-        setOrbLabel('Zara is watching')
-        isListeningRef.current = false
       }
 
       mediaRecorder.start()
-      // Auto-stop after 90s of recording
+      // Auto-stop after 60s of recording
       silenceTimerRef.current = setTimeout(() => {
         if (mediaRecorder.state !== 'inactive') mediaRecorder.stop()
-      }, 90000)
+      }, 60000)
 
     }).catch(err => {
       console.error("Mic error:", err)
       setAiStatus('idle')
-      setOrbLabel('Zara is watching')
+      setOrbLabel('Mic error — check permissions')
       isListeningRef.current = false
       onFinish?.('')
     })
-  }, [stopListening])
+  }, [])
 
   // ── Initial greeting ──────────────────────────────────────────────────
   const hasGreeted = useRef(false)
@@ -430,7 +461,7 @@ export default function VoiceCodingRound({
 
   // ── Run code ──────────────────────────────────────────────────────────
   const handleRun = async () => {
-    setRunning(true); setRunOutput('')
+    setRunning(true); setRunOutput(''); setRunResultData(null)
     try {
       const res = await fetch(`${API_BASE_URL}/coding-round/run`, {
         method: 'POST',
@@ -440,36 +471,56 @@ export default function VoiceCodingRound({
       const data = await res.json()
       const totalTests = question?.codingTask?.test_cases?.length || 14;
       let outputText = '';
-      
-      if (data.run_result?.runtime_error) {
-        outputText = `Execution Error:\n${data.run_result.runtime_error}\n\nPassed 0 / ${totalTests} Test Cases`;
-      } else if (data.run_result?.visible_results?.length) {
-        const passedCount = data.run_result.visible_results.filter(r => r.passed).length + (data.run_result.hidden_summary?.passed || 0);
-        
+      const rr = data.run_result;
+
+      if (rr?.runtime_error) {
+        outputText = `Execution Error:\n${rr.runtime_error}\n\nPassed 0 / ${totalTests} Test Cases`;
+      } else if (rr?.visible_results?.length) {
+        const passedCount = rr.visible_results.filter(r => r.passed).length + (rr.hidden_summary?.passed || 0);
         outputText = `Passed ${passedCount} / ${totalTests} Test Cases\n\n`;
-        outputText += data.run_result.visible_results.map(r => 
+        outputText += rr.visible_results.map(r =>
           `Test ${r.id} (Visible): ${r.passed ? 'PASSED ✅' : 'FAILED ❌'}\nInput: ${JSON.stringify(r.input)}\nExpected: ${JSON.stringify(r.expected)}\nGot: ${JSON.stringify(r.output)}`
         ).join('\n\n');
-        
-        if (data.run_result.hidden_summary) {
-            outputText += `\n\nHidden Tests: ${data.run_result.hidden_summary.passed} / ${data.run_result.hidden_summary.total} Passed`;
+        if (rr.hidden_summary) {
+          outputText += `\n\nHidden Tests: ${rr.hidden_summary.passed} / ${rr.hidden_summary.total} Passed`;
         }
-      } else if (data.run_result?.output) {
-        outputText = `Output:\n${data.run_result.output}`;
+      } else if (rr?.output) {
+        outputText = `Output:\n${rr.output}`;
       }
-      
+
       setRunOutput(outputText || data.error || 'No output')
-      setRunResultData(data.run_result || null)
-      if (data.run_result?.all_passed) {
-        aiSay("Excellent! All test cases passed! Can you walk me through the time and space complexity?", () => {
-          startListening(ans => { if (ans) askAIForReply(ans) })
+      setRunResultData(rr || null)
+      lastRunResultRef.current = rr || null
+
+      // ── Zara speaks about the result ──
+      if (rr?.runtime_error) {
+        // Read out a short version of the error
+        const shortErr = rr.runtime_error.length > 120
+          ? rr.runtime_error.slice(0, 120) + '…'
+          : rr.runtime_error
+        aiSay(`There's an error in your code: ${shortErr}. Can you tell me where you think the bug might be?`, () => {
+          startListening(ans => { if (ans) askAIForReply(ans, rr) })
+        })
+      } else if (rr?.all_passed) {
+        aiSay("Excellent! All test cases passed! Can you walk me through the time and space complexity of your solution?", () => {
+          startListening(ans => { if (ans) askAIForReply(ans, rr) })
         })
       } else {
-        aiSay("Some test cases didn't pass. What edge cases might be causing issues?", () => {
-          startListening(ans => { if (ans) askAIForReply(ans) })
+        const passedVisible = rr?.visible_results?.filter(r => r.passed).length || 0
+        const totalVisible  = rr?.visible_results?.length || 0
+        const failedTc = rr?.visible_results?.find(r => !r.passed)
+        let zaraMsg = `You passed ${passedVisible} out of ${totalVisible} visible test cases.`
+        if (failedTc) {
+          zaraMsg += ` For example, with input ${JSON.stringify(failedTc.input)}, your code returned ${JSON.stringify(failedTc.output)} but I expected ${JSON.stringify(failedTc.expected)}.`
+        }
+        zaraMsg += ` What do you think is causing the failure?`
+        aiSay(zaraMsg, () => {
+          startListening(ans => { if (ans) askAIForReply(ans, rr) })
         })
       }
-    } catch (e) { setRunOutput('Error running code') }
+    } catch (e) {
+      setRunOutput('Error running code — please try again')
+    }
     setRunning(false)
   }
 
@@ -707,53 +758,117 @@ export default function VoiceCodingRound({
                   document.addEventListener('mouseup', onMouseUp);
                 }}
               />
-              <div className="flex items-center gap-2 mb-2 p-3 pb-0 shrink-0">
-                <i className="fas fa-terminal text-xs text-emerald-400"/>
-                <span className="text-xs font-bold text-slate-500 uppercase tracking-widest">Output</span>
-                <button
-                  onClick={() => setRunOutput('')}
-                  className="ml-auto text-slate-600 hover:text-slate-400 transition-colors"
-                >
-                  <i className="fas fa-times text-xs"/>
-                </button>
-              </div>
-              
-              <div className="flex-1 overflow-auto p-3 pt-1">
+              <div className="flex-1 flex overflow-hidden p-0 m-0">
                 {runResultData ? (
-                  <div className="space-y-4">
-                    {runResultData.runtime_error && (
-                      <div className="bg-rose-500/10 border border-rose-500/20 rounded p-2 text-rose-400 text-xs font-mono whitespace-pre-wrap">
+                  <div className="flex flex-col w-full h-full text-slate-300 bg-[#0a0f1e] overflow-hidden">
+                    {runResultData.status === 'error' && runResultData.runtime_error && (
+                      <div className="bg-rose-500/10 border-b border-rose-500/20 p-3 text-rose-400 font-mono text-[11px] whitespace-pre-wrap shrink-0">
+                        <i className="fas fa-exclamation-triangle mr-2"></i>
                         {runResultData.runtime_error}
                       </div>
                     )}
-                    {runResultData.stdout && (
-                      <div className="bg-white/5 rounded p-2 text-slate-300 text-xs font-mono whitespace-pre-wrap">
-                        {runResultData.stdout}
+                    <div className="flex w-full flex-grow overflow-hidden">
+                      {/* LEFT PANEL */}
+                      <div className="w-1/3 border-r border-slate-700/50 flex flex-col h-full bg-slate-900/30 overflow-y-auto scrollbar-none">
+                          {(() => {
+                           const visibleLen = runResultData.visible_results?.length || 0;
+                           const hiddenLen = runResultData.hidden_summary?.total || 0;
+                           const allCount = visibleLen + hiddenLen;
+                           
+                           return Array.from({length: allCount}).map((_, i) => {
+                             const isHidden = i >= visibleLen;
+                             const tc = isHidden ? null : runResultData.visible_results[i];
+                             const passed = isHidden 
+                                ? (i - visibleLen < runResultData.hidden_summary.passed) 
+                                : tc?.passed;
+                             
+                             if (i >= evaluatedCount) {
+                               return (
+                                 <div key={i} className="px-4 py-3 flex items-center gap-2 border-b border-slate-800/50 text-[11px] font-bold text-slate-500 bg-slate-900/20">
+                                   <i className="fas fa-spinner fa-spin text-slate-500 w-4 text-center"/> Test case {i} {isHidden && <i className="fas fa-lock ml-1 text-slate-600"/>}
+                                 </div>
+                               );
+                             }
+
+                             return (
+                               <button 
+                                 key={i} 
+                                 onClick={() => setSelectedTestCase(i)}
+                                 className={`w-full px-4 py-3 flex items-center gap-2 border-b border-slate-800/50 text-[11px] font-bold text-left transition-colors ${selectedTestCase === i ? 'bg-indigo-500/10 text-indigo-300' : 'hover:bg-slate-800/50 text-slate-300'}`}
+                               >
+                                 <i className={`fas ${passed ? 'fa-check text-emerald-500' : 'fa-times text-rose-500'} text-[13px] w-4 text-center`}/> 
+                                 Test case {i} {isHidden && <i className="fas fa-lock ml-1 text-slate-500"/>}
+                               </button>
+                             );
+                           });
+                        })()}
                       </div>
-                    )}
-                    {(runResultData.visible_results?.length > 0 || runResultData.hidden_summary) && (
-                      <div>
-                        <div className="text-xs font-bold text-slate-400 mb-2">Test Cases</div>
-                        <div className="flex flex-wrap gap-2">
-                          {runResultData.visible_results?.map((r, idx) => (
-                            <div key={`vis-${idx}`} className={`px-2.5 py-1 rounded-md border text-[11px] font-bold ${r.passed ? 'bg-emerald-500/10 border-emerald-500/20 text-emerald-400' : 'bg-rose-500/10 border-rose-500/20 text-rose-400'}`} title={`Input: ${JSON.stringify(r.input)}\nExpected: ${JSON.stringify(r.expected)}\nGot: ${JSON.stringify(r.output)}`}>
-                              Case {r.id}: {r.passed ? 'Pass' : 'Fail'}
-                            </div>
-                          ))}
-                          {runResultData.hidden_summary && Array.from({ length: runResultData.hidden_summary.total }).map((_, idx) => {
-                            const isPassed = idx < runResultData.hidden_summary.passed;
-                            return (
-                              <div key={`hid-${idx}`} className={`px-2.5 py-1 rounded-md border text-[11px] font-bold opacity-60 ${isPassed ? 'bg-emerald-500/10 border-emerald-500/20 text-emerald-400' : 'bg-rose-500/10 border-rose-500/20 text-rose-400'}`} title="Hidden Test Case">
-                                Hidden: {isPassed ? 'Pass' : 'Fail'}
-                              </div>
-                            );
-                          })}
-                        </div>
+                      {/* RIGHT PANEL */}
+                      <div className="w-2/3 h-full overflow-y-auto p-4 scrollbar-none">
+                          {(() => {
+                             if (selectedTestCase >= evaluatedCount) {
+                               return <div className="text-slate-500 text-sm italic flex items-center gap-2"><i className="fas fa-spinner fa-spin"/> Evaluating...</div>;
+                             }
+                             
+                             const visibleLen = runResultData.visible_results?.length || 0;
+                             const isHidden = selectedTestCase >= visibleLen;
+                             
+                             if (isHidden) {
+                               const passed = (selectedTestCase - visibleLen) < runResultData.hidden_summary?.passed;
+                               return (
+                                 <div className="flex flex-col items-center justify-center h-full text-slate-500 space-y-4">
+                                   <i className="fas fa-lock text-4xl opacity-50"/>
+                                   <h3 className="text-lg font-bold">Hidden Test Case</h3>
+                                   <p className="text-xs max-w-sm text-center opacity-80 leading-relaxed">Use print or log statements to debug why your hidden test cases are failing. Hidden test cases are used to evaluate if your code can handle different scenarios, including corner cases.</p>
+                                   <div className={`mt-2 px-3 py-1.5 rounded text-xs font-bold border ${passed ? 'bg-emerald-500/10 border-emerald-500/20 text-emerald-400' : 'bg-rose-500/10 border-rose-500/20 text-rose-400'}`}>
+                                     Status: {passed ? 'Passed' : 'Failed'}
+                                   </div>
+                                 </div>
+                               );
+                             }
+
+                             const tc = runResultData.visible_results?.[selectedTestCase];
+                             if (!tc) return null;
+                             
+                             return (
+                               <div className="space-y-4 text-xs">
+                                 <div className="font-bold text-lg mb-2 flex items-center gap-2">
+                                    {tc.passed ? <span className="text-emerald-400">Accepted</span> : <span className="text-rose-400">Wrong Answer</span>}
+                                 </div>
+                                 <div>
+                                   <div className="text-slate-500 mb-1 font-semibold uppercase tracking-wider text-[10px]">Input</div>
+                                   <div className="bg-white/5 rounded p-2.5 font-mono text-emerald-300 break-all">{JSON.stringify(tc.input)}</div>
+                                 </div>
+                                 <div>
+                                   <div className="text-slate-500 mb-1 font-semibold uppercase tracking-wider text-[10px]">Expected Output</div>
+                                   <div className="bg-white/5 rounded p-2.5 font-mono text-amber-300 break-all">{JSON.stringify(tc.expected)}</div>
+                                 </div>
+                                 <div>
+                                   <div className="text-slate-500 mb-1 font-semibold uppercase tracking-wider text-[10px]">Your Output</div>
+                                   <div className="bg-white/5 rounded p-2.5 font-mono text-rose-300 break-all">{JSON.stringify(tc.output)}</div>
+                                 </div>
+                                 {runResultData.output && (
+                                   <div>
+                                     <div className="text-slate-500 mb-1 font-semibold uppercase tracking-wider text-[10px]">Stdout</div>
+                                     <div className="bg-white/5 rounded p-2.5 font-mono text-slate-300 whitespace-pre-wrap">{runResultData.output}</div>
+                                   </div>
+                                 )}
+                                 {runResultData.runtime_error && (
+                                   <div>
+                                     <div className="text-rose-500 mb-1 font-semibold uppercase tracking-wider text-[10px]">Runtime Error</div>
+                                     <div className="bg-rose-500/10 border border-rose-500/20 rounded p-2.5 font-mono text-rose-400 whitespace-pre-wrap">{runResultData.runtime_error}</div>
+                                   </div>
+                                 )}
+                               </div>
+                             );
+                          })()}
                       </div>
-                    )}
+                    </div>
                   </div>
                 ) : (
-                  <pre className="text-xs text-emerald-300 font-mono whitespace-pre-wrap">{runOutput}</pre>
+                  <pre className="text-slate-300 text-xs font-mono whitespace-pre-wrap p-3 overflow-y-auto h-full">
+                    {runOutput || 'Ready...'}
+                  </pre>
                 )}
               </div>
             </div>
@@ -788,50 +903,70 @@ export default function VoiceCodingRound({
           </div>
         )}
 
-        <div className="flex flex-col items-center gap-1.5 pointer-events-auto group">
-          {/* Drag Handle */}
-          <div 
-            className="w-10 h-1.5 bg-white/30 hover:bg-white/50 rounded-full cursor-grab active:cursor-grabbing transition-colors mb-1 opacity-0 group-hover:opacity-100"
-            onMouseDown={(e) => {
+        <div 
+          className="flex flex-col items-center gap-1.5 pointer-events-auto group cursor-move"
+          onMouseDown={(e) => {
+            if (e.button !== 0) return;
+            let startX = e.clientX;
+            let startY = e.clientY;
+            let hasDragged = false;
+            const rect = e.currentTarget.getBoundingClientRect();
+            let currentX = orbPos.x !== null ? orbPos.x : rect.left + rect.width / 2;
+            let currentY = orbPos.y !== null ? orbPos.y : rect.top + rect.height / 2;
+
+            const onMouseMove = (moveEvent) => {
+              hasDragged = true;
+              const deltaX = moveEvent.clientX - startX;
+              const deltaY = moveEvent.clientY - startY;
+              startX = moveEvent.clientX;
+              startY = moveEvent.clientY;
+              currentX += deltaX;
+              currentY += deltaY;
+              setOrbPos({ x: currentX, y: currentY });
+            };
+            const onMouseUp = (upEvent) => {
+              document.removeEventListener('mousemove', onMouseMove);
+              document.removeEventListener('mouseup', onMouseUp);
+              if (hasDragged) {
+                // Prevent click on children if dragged
+                window.__zaraDragged = true;
+                setTimeout(() => {
+                  window.__zaraDragged = false;
+                }, 100);
+              }
+            };
+            document.addEventListener('mousemove', onMouseMove);
+            document.addEventListener('mouseup', onMouseUp);
+          }}
+          onClickCapture={(e) => {
+            if (window.__zaraDragged) {
+              e.stopPropagation();
               e.preventDefault();
-              let startX = e.clientX;
-              let startY = e.clientY;
-              const rect = e.currentTarget.parentElement.getBoundingClientRect();
-              let currentX = orbPos.x !== null ? orbPos.x : rect.left + rect.width / 2;
-              let currentY = orbPos.y !== null ? orbPos.y : rect.top + rect.height / 2;
-
-              const onMouseMove = (moveEvent) => {
-                const deltaX = moveEvent.clientX - startX;
-                const deltaY = moveEvent.clientY - startY;
-                startX = moveEvent.clientX;
-                startY = moveEvent.clientY;
-                currentX += deltaX;
-                currentY += deltaY;
-                setOrbPos({ x: currentX, y: currentY });
-              };
-              const onMouseUp = () => {
-                document.removeEventListener('mousemove', onMouseMove);
-                document.removeEventListener('mouseup', onMouseUp);
-              };
-              document.addEventListener('mousemove', onMouseMove);
-              document.addEventListener('mouseup', onMouseUp);
-            }}
-            title="Drag to move Zara"
-          />
-
-          {/* Orb itself — also acts as mic toggle button */}
+            }
+          }}
+        >
+          {/* Orb itself — tap to start/stop speaking */}
           <button
             onClick={() => {
-              if (aiStatus === 'listening') {
+              if (aiStatus === 'speaking') {
+                // Do nothing while Zara is speaking
+                return
+              } else if (aiStatus === 'listening') {
+                // STOP recording immediately — triggers onstop → STT
                 stopListening()
-              } else if (aiStatus === 'idle') {
+              } else {
+                // Start recording
                 startListening(ans => {
                   if (ans) askAIForReply(ans)
                 })
               }
             }}
-            className="focus:outline-none"
-            title={aiStatus === 'listening' ? 'Click to stop recording' : 'Click to speak'}
+            className="focus:outline-none hover:scale-105 transition-transform"
+            title={
+              aiStatus === 'speaking'  ? 'Zara is speaking…' :
+              aiStatus === 'listening' ? 'Tap to finish speaking' :
+              'Tap to speak to Zara'
+            }
           >
             <VoiceOrb status={aiStatus} />
           </button>

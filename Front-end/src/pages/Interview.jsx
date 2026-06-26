@@ -25,8 +25,11 @@ function Interview() {
   const [loading, setLoading] = useState(true)
   const [showAllSet, setShowAllSet] = useState(false)
   const [error, setError] = useState(null)
+  const _sessionKey = sessionId ? `interview_session_${sessionId}` : null
+  const _savedSession = _sessionKey ? (() => { try { return JSON.parse(sessionStorage.getItem(_sessionKey) || 'null') } catch { return null } })() : null
   const [isDisclaimerAccepted, setIsDisclaimerAccepted] = useState(false)
   const [agreeChecked, setAgreeChecked] = useState(false)
+  const [autoReconnecting, setAutoReconnecting] = useState(!!_savedSession?.accepted)
   
   // Session details from backend
   const [sessionDetail, setSessionDetail] = useState(null)
@@ -53,9 +56,12 @@ function Interview() {
 
   // Answer state
   const [transcriptionText, setTranscriptionText] = useState('')
-  const [codeAnswer, setCodeAnswer] = useState('')
-  const [selectedLanguage, setSelectedLanguage] = useState('python')
+  const [codeAnswer, setCodeAnswer] = useState(_savedSession?.codeAnswer || '')
+  const [selectedLanguage, setSelectedLanguage] = useState(_savedSession?.selectedLanguage || 'python')
   const [codeOutput, setCodeOutput] = useState('')
+  const [runResultData, setRunResultData] = useState(null)
+  const [evaluatedCount, setEvaluatedCount] = useState(0)
+  const [selectedTestCase, setSelectedTestCase] = useState(0)
   const [consoleOutput, setConsoleOutput] = useState('Console output will display here after execution.')
   const [activeConsoleTab, setActiveConsoleTab] = useState('results')
   const [compiling, setCompiling] = useState(false)
@@ -67,6 +73,23 @@ function Interview() {
   const codingRoundStartedRef = useRef(false)
   const [codingRoundLoading, setCodingRoundLoading] = useState(false)
   const [codingRoundData, setCodingRoundData] = useState(null)
+
+  // Test case animation
+  useEffect(() => {
+    if (runResultData) {
+      setEvaluatedCount(0);
+      const totalToEvaluate = (runResultData.visible_results?.length || 0) + (runResultData.hidden_summary?.total || 0);
+      let count = 0;
+      const interval = setInterval(() => {
+        count++;
+        setEvaluatedCount(count);
+        if (count >= totalToEvaluate) {
+          clearInterval(interval);
+        }
+      }, 400); // 400ms delay per test case
+      return () => clearInterval(interval);
+    }
+  }, [runResultData]);
 
   useEffect(() => {
     if (currentQuestion?.type === 'coding' && currentQuestion?.codingTask) {
@@ -232,6 +255,31 @@ function Interview() {
     return () => clearInterval(timer)
   }, [showSkipButton, skipCountdown])
 
+  // Persist session accepted state
+  useEffect(() => {
+    if (!_sessionKey) return
+    if (isDisclaimerAccepted) {
+      const existing = (() => { try { return JSON.parse(sessionStorage.getItem(_sessionKey) || '{}') } catch { return {} } })()
+      if (!existing.startedAt) {
+        sessionStorage.setItem(_sessionKey, JSON.stringify({ ...existing, accepted: true, startedAt: Date.now(), totalDuration, isRoundTwo }))
+      }
+    }
+  }, [isDisclaimerAccepted, _sessionKey])
+
+  // Persist isRoundTwo and countdown tick
+  useEffect(() => {
+    if (!_sessionKey || !isDisclaimerAccepted) return
+    const existing = (() => { try { return JSON.parse(sessionStorage.getItem(_sessionKey) || '{}') } catch { return {} } })()
+    sessionStorage.setItem(_sessionKey, JSON.stringify({ ...existing, isRoundTwo, totalDuration }))
+  }, [isRoundTwo, totalDuration])
+
+  // Persist codeAnswer and selectedLanguage
+  useEffect(() => {
+    if (!_sessionKey || !isDisclaimerAccepted) return
+    const existing = (() => { try { return JSON.parse(sessionStorage.getItem(_sessionKey) || '{}') } catch { return {} } })()
+    sessionStorage.setItem(_sessionKey, JSON.stringify({ ...existing, codeAnswer, selectedLanguage }))
+  }, [codeAnswer, selectedLanguage])
+
   // Interview Countdown Timer
   useEffect(() => {
     let interval;
@@ -351,11 +399,33 @@ function Interview() {
             interview_duration: startPayload.interview_duration
           }))
           const dur = parseInt(startPayload.interview_duration, 10)
-          setTotalDuration(dur * 60)
-          setGlobalCountdown((dur / 2) * 60)
+          const fullDuration = dur * 60
+          setTotalDuration(fullDuration)
+
+          // Restore countdown from sessionStorage if we have a saved start time
+          const savedSess = _sessionKey ? (() => { try { return JSON.parse(sessionStorage.getItem(_sessionKey) || 'null') } catch { return null } })() : null
+          if (savedSess?.startedAt && savedSess?.accepted) {
+            const elapsedSeconds = Math.floor((Date.now() - savedSess.startedAt) / 1000)
+            const halfDur = fullDuration / 2
+            const remaining = Math.max(0, halfDur - elapsedSeconds)
+            setGlobalCountdown(remaining)
+            if (savedSess.isRoundTwo) {
+              setIsRoundTwo(true)
+              isRoundTwoRef.current = true
+            }
+          } else {
+            setGlobalCountdown((dur / 2) * 60)
+          }
         } else {
           setTotalDuration(30 * 60)
-          setGlobalCountdown(15 * 60)
+          const savedSess = _sessionKey ? (() => { try { return JSON.parse(sessionStorage.getItem(_sessionKey) || 'null') } catch { return null } })() : null
+          if (savedSess?.startedAt && savedSess?.accepted) {
+            const elapsedSeconds = Math.floor((Date.now() - savedSess.startedAt) / 1000)
+            const remaining = Math.max(0, 15 * 60 - elapsedSeconds)
+            setGlobalCountdown(remaining)
+          } else {
+            setGlobalCountdown(15 * 60)
+          }
         }
 
         setLoading(false)
@@ -366,6 +436,45 @@ function Interview() {
     }
     verifySession()
   }, [sessionId])
+
+  // Auto-reconnect: if page was refreshed during an active session, silently re-request media
+  useEffect(() => {
+    if (!autoReconnecting || loading || error || questions.length === 0) return
+    const savedSess = _sessionKey ? (() => { try { return JSON.parse(sessionStorage.getItem(_sessionKey) || 'null') } catch { return null } })() : null
+    if (!savedSess?.accepted) { setAutoReconnecting(false); return }
+
+    Swal.fire({
+      title: 'Reconnecting...',
+      html: `<div class="text-slate-300 text-sm text-left space-y-2">
+        <p>Your interview session was detected. Please re-grant your camera, microphone, and screen sharing permissions to continue from where you left off.</p>
+      </div>`,
+      icon: 'info',
+      showCancelButton: true,
+      confirmButtonText: 'Reconnect & Continue',
+      cancelButtonText: 'Start Over',
+      background: '#161c2d',
+      color: '#fff',
+      customClass: {
+        popup: 'border border-white/8 rounded-2xl shadow-2xl',
+        title: 'text-xl font-bold text-white',
+        htmlContainer: 'text-slate-300 text-sm',
+        confirmButton: 'bg-primary hover:bg-primary-hover text-white rounded-full px-6 py-2.5 font-semibold text-sm cursor-pointer border-none outline-none mr-2',
+        cancelButton: 'bg-white/6 hover:bg-white/12 text-white border border-white/8 rounded-full px-6 py-2.5 font-semibold text-sm cursor-pointer outline-none'
+      },
+      buttonsStyling: false,
+      preConfirm: () => {
+        enableFullscreen()
+      }
+    }).then(result => {
+      if (result.isConfirmed) {
+        setupMedia()
+      } else {
+        // User chose to start over — clear saved session
+        if (_sessionKey) sessionStorage.removeItem(_sessionKey)
+        setAutoReconnecting(false)
+      }
+    })
+  }, [autoReconnecting, loading, error, questions.length])
 
   // Proctoring: Fullscreen Checker
   useEffect(() => {
@@ -624,13 +733,18 @@ function Interview() {
         confirmButton: 'bg-primary hover:bg-primary-hover text-white rounded-full px-6 py-2.5 font-semibold text-sm cursor-pointer border-none outline-none mr-2',
         cancelButton: 'bg-white/6 hover:bg-white/12 text-white border border-white/8 rounded-full px-6 py-2.5 font-semibold text-sm cursor-pointer outline-none'
       },
-      buttonsStyling: false
+      buttonsStyling: false,
+      preConfirm: () => {
+        enableFullscreen()
+      }
     }).then(async (result) => {
       if (!result.isConfirmed) return
+      await setupMedia()
+    })
+  }
 
-      try {
-        enableFullscreen()
-
+  const setupMedia = async () => {
+    try {
         // 1. Request Camera & Mic
         let stream
         try {
@@ -665,6 +779,14 @@ function Interview() {
           } else {
             throw new Error(`screenshare_failed: ${err.message || err.name}`)
           }
+        }
+
+        const videoTrack = screenStream.getVideoTracks()[0];
+        const settings = videoTrack.getSettings();
+        if (settings.displaySurface && settings.displaySurface !== 'monitor') {
+          screenStream.getTracks().forEach(t => t.stop());
+          stream.getTracks().forEach(t => t.stop());
+          throw new Error("Please select 'Entire Screen' to proceed. Window or Tab sharing is not allowed.");
         }
 
         mediaStreamRef.current = stream
@@ -719,9 +841,11 @@ function Interview() {
         // Crucial: set these states last so we render the interview workspace
         setIsDisclaimerAccepted(true)
         setIsMediaReady(true)
+        setAutoReconnecting(false)
 
-        // Play introductory prompt text-to-speech for the first question
-        if (questions.length > 0) {
+        // Play introductory prompt text-to-speech for the first question (only on first start, not reconnect)
+        const savedSess = _sessionKey ? (() => { try { return JSON.parse(sessionStorage.getItem(_sessionKey) || 'null') } catch { return null } })() : null
+        if (!savedSess?.accepted && questions.length > 0) {
           speakAIQuestion(questions[0].text || questions[0].question || questions[0].prompt || '')
         }
 
@@ -759,7 +883,6 @@ function Interview() {
           buttonsStyling: false
         })
       }
-    })
   }
 
   // Handle Screen share stop violation
@@ -1196,9 +1319,10 @@ function Interview() {
 
   // Compiler code runner
   const handleRunCode = async () => {
-    if (!codeAnswer) return
+    if (compiling) return
     setCompiling(true)
     setCodeOutput("Compiling and executing code...")
+    setRunResultData(null)
     setConsoleOutput(`Compiling and executing code...\nLanguage: ${selectedLanguage}\nRunning tests...`)
     
     // Helper to safely parse print / console.log / cout statements and extract stdout
@@ -1332,6 +1456,8 @@ function Interview() {
       })
       const payload = await response.json()
       
+      setRunResultData(payload.run_result || null)
+
       // Build output string based on actual test results from backend
       let passedOutputStr = "Code Execution Result:\n";
       let executionError = payload?.run_result?.runtime_error || payload?.run_result?.compiler_error || '';
@@ -1494,6 +1620,8 @@ function Interview() {
 
   // End Interview & Upload Recordings
   const handleSubmitInterview = async (forceClose = false) => {
+    // Clear persisted session so next visit starts fresh
+    if (_sessionKey) sessionStorage.removeItem(_sessionKey)
     visualizerActiveRef.current = false
     // Stop loops
     if (faceDetectionIntervalRef.current) clearInterval(faceDetectionIntervalRef.current)
@@ -1919,12 +2047,122 @@ function Interview() {
                   <div className="coding-console-pane active" style={{ padding: '16px', background: '#fff', flexGrow: 1, overflowY: 'auto', minHeight: '0' }}>
                     {activeConsoleTab === 'results' ? (
                       <>
-                        <pre style={{ margin: 0, fontSize: '12px', fontFamily: 'monospace', color: '#334155', whiteSpace: 'pre-wrap' }}>
-                          {codeOutput || "Run the code to see compiler errors, runtime errors, or pass/fail updates."}
-                        </pre>
-                        <div style={{ marginTop: '12px', fontSize: '11px', color: '#6366f1', fontStyle: 'italic', fontWeight: 500 }}>
-                          💡 Test results are evaluated by AI in this environment.
+                        {runResultData ? (
+                          <div className="flex flex-col w-full h-full text-slate-700 bg-white overflow-hidden rounded border border-slate-200" style={{ minHeight: '300px' }}>
+                            {runResultData.status === 'error' && runResultData.runtime_error && (
+                              <div className="bg-rose-50 border-b border-rose-200 p-3 text-rose-600 font-mono text-[11px] whitespace-pre-wrap shrink-0">
+                                <i className="fas fa-exclamation-triangle mr-2"></i>
+                                {runResultData.runtime_error}
+                              </div>
+                            )}
+                            <div className="flex w-full flex-grow overflow-hidden">
+                              {/* LEFT PANEL */}
+                              <div className="w-1/3 border-r border-slate-200 flex flex-col h-full bg-slate-50 overflow-y-auto scrollbar-none">
+                                  {(() => {
+                                   const visibleLen = runResultData.visible_results?.length || 0;
+                                   const hiddenLen = runResultData.hidden_summary?.total || 0;
+                                   const allCount = visibleLen + hiddenLen;
+                                   
+                                   return Array.from({length: allCount}).map((_, i) => {
+                                     const isHidden = i >= visibleLen;
+                                     const tc = isHidden ? null : runResultData.visible_results[i];
+                                     const passed = isHidden 
+                                        ? (i - visibleLen < runResultData.hidden_summary.passed) 
+                                        : tc?.passed;
+                                     
+                                     if (i >= evaluatedCount) {
+                                       return (
+                                         <div key={i} className="px-4 py-3 flex items-center gap-2 border-b border-slate-200 text-[11px] font-bold text-slate-500 bg-slate-50">
+                                           <i className="fas fa-spinner fa-spin text-slate-400 w-4 text-center"/> Test case {i} {isHidden && <i className="fas fa-lock ml-1 text-slate-400"/>}
+                                         </div>
+                                       );
+                                     }
+
+                                     return (
+                                       <button 
+                                         key={i} 
+                                         onClick={() => setSelectedTestCase(i)}
+                                         className={`w-full px-4 py-3 flex items-center gap-2 border-b border-slate-200 text-[11px] font-bold text-left transition-colors ${selectedTestCase === i ? 'bg-indigo-50 text-indigo-600' : 'bg-white hover:bg-slate-50 text-slate-600'}`}
+                                       >
+                                         <i className={`fas ${passed ? 'fa-check text-emerald-500' : 'fa-times text-rose-500'} text-[13px] w-4 text-center`}/> 
+                                         Test case {i} {isHidden && <i className="fas fa-lock ml-1 text-slate-400"/>}
+                                       </button>
+                                     );
+                                   });
+                                })()}
+                            </div>
+                            {/* RIGHT PANEL */}
+                            <div className="w-2/3 h-full overflow-y-auto p-4 scrollbar-none bg-white">
+                                {(() => {
+                                   if (selectedTestCase >= evaluatedCount) {
+                                     return <div className="text-slate-500 text-sm italic flex items-center gap-2"><i className="fas fa-spinner fa-spin"/> Evaluating...</div>;
+                                   }
+                                   
+                                   const visibleLen = runResultData.visible_results?.length || 0;
+                                   const isHidden = selectedTestCase >= visibleLen;
+                                   
+                                   if (isHidden) {
+                                     const passed = (selectedTestCase - visibleLen) < runResultData.hidden_summary?.passed;
+                                     return (
+                                       <div className="flex flex-col items-center justify-center h-full text-slate-500 space-y-4">
+                                         <i className="fas fa-lock text-4xl opacity-30"/>
+                                         <h3 className="text-lg font-bold text-slate-700">Hidden Test Case</h3>
+                                         <p className="text-xs max-w-sm text-center opacity-80 leading-relaxed">Use print or log statements to debug why your hidden test cases are failing. Hidden test cases are used to evaluate if your code can handle different scenarios, including corner cases.</p>
+                                         <div className={`mt-2 px-3 py-1.5 rounded text-xs font-bold border ${passed ? 'bg-emerald-50 border-emerald-200 text-emerald-600' : 'bg-rose-50 border-rose-200 text-rose-600'}`}>
+                                           Status: {passed ? 'Passed' : 'Failed'}
+                                         </div>
+                                       </div>
+                                     );
+                                   }
+
+                                   const tc = runResultData.visible_results?.[selectedTestCase];
+                                   if (!tc) return null;
+                                   
+                                   return (
+                                     <div className="space-y-4 text-xs">
+                                       <div className="font-bold text-lg mb-2 flex items-center gap-2">
+                                          {tc.passed ? <span className="text-emerald-600">Accepted</span> : <span className="text-rose-600">Wrong Answer</span>}
+                                       </div>
+                                       <div>
+                                         <div className="text-slate-500 mb-1 font-semibold uppercase tracking-wider text-[10px]">Input</div>
+                                         <div className="bg-slate-50 border border-slate-100 rounded p-2.5 font-mono text-slate-700 break-all">{JSON.stringify(tc.input)}</div>
+                                       </div>
+                                       <div>
+                                         <div className="text-slate-500 mb-1 font-semibold uppercase tracking-wider text-[10px]">Expected Output</div>
+                                         <div className="bg-slate-50 border border-slate-100 rounded p-2.5 font-mono text-slate-700 break-all">{JSON.stringify(tc.expected)}</div>
+                                       </div>
+                                       <div>
+                                         <div className="text-slate-500 mb-1 font-semibold uppercase tracking-wider text-[10px]">Your Output</div>
+                                         <div className="bg-slate-50 border border-slate-100 rounded p-2.5 font-mono text-slate-700 break-all">{JSON.stringify(tc.output)}</div>
+                                       </div>
+                                       {runResultData.output && (
+                                         <div>
+                                           <div className="text-slate-500 mb-1 font-semibold uppercase tracking-wider text-[10px]">Stdout</div>
+                                           <div className="bg-slate-50 border border-slate-100 rounded p-2.5 font-mono text-slate-600 whitespace-pre-wrap">{runResultData.output}</div>
+                                         </div>
+                                       )}
+                                       {runResultData.runtime_error && (
+                                         <div>
+                                           <div className="text-rose-500 mb-1 font-semibold uppercase tracking-wider text-[10px]">Runtime Error</div>
+                                           <div className="bg-rose-50 border border-rose-100 rounded p-2.5 font-mono text-rose-600 whitespace-pre-wrap">{runResultData.runtime_error}</div>
+                                         </div>
+                                       )}
+                                     </div>
+                                   );
+                                })()}
+                            </div>
+                          </div>
                         </div>
+                        ) : (
+                          <>
+                            <pre style={{ margin: 0, fontSize: '12px', fontFamily: 'monospace', color: '#334155', whiteSpace: 'pre-wrap' }}>
+                              {codeOutput || "Run the code to see compiler errors, runtime errors, or pass/fail updates."}
+                            </pre>
+                            <div style={{ marginTop: '12px', fontSize: '11px', color: '#6366f1', fontStyle: 'italic', fontWeight: 500 }}>
+                              💡 Test results are evaluated by AI in this environment.
+                            </div>
+                          </>
+                        )}
                       </>
                     ) : (
                       <>

@@ -122,6 +122,7 @@ export default function VoiceInterviewPage() {
   const mediaStreamRef    = useRef(null)
   const recordedChunksRef = useRef([])
   const [isRecording, setIsRecording] = useState(false)
+  const activeAudioRef    = useRef(null)
 
   // Camera recording
   const cameraRecorderRef = useRef(null)
@@ -253,13 +254,16 @@ export default function VoiceInterviewPage() {
       const blob = await res.blob()
       const url = URL.createObjectURL(blob)
       const audio = new Audio(url)
+      activeAudioRef.current = audio
       audio.onended = () => {
         setAiStatus('listening')
         URL.revokeObjectURL(url)
+        activeAudioRef.current = null
         onEnd?.()
       }
       audio.onerror = () => {
         setAiStatus('idle')
+        activeAudioRef.current = null
         onEnd?.()
       }
       audio.play()
@@ -310,6 +314,13 @@ export default function VoiceInterviewPage() {
         video: { displaySurface: 'monitor', frameRate: 15, width: { ideal: 1280 }, height: { ideal: 720 } },
         audio: true
       })
+      
+      const videoTrack = screenStream.getVideoTracks()[0];
+      const settings = videoTrack.getSettings();
+      if (settings.displaySurface && settings.displaySurface !== 'monitor') {
+        screenStream.getTracks().forEach(t => t.stop());
+        throw new Error("Please select 'Entire Screen' when sharing. Window or Tab sharing is not allowed.");
+      }
       
       // 2. Get Camera & Mic Stream
       let micStream = null
@@ -578,6 +589,10 @@ export default function VoiceInterviewPage() {
     if (submittingRef.current || isTransitioningRef.current) return
     isTransitioningRef.current = true
     stopListening(); window.speechSynthesis?.cancel()
+    if (activeAudioRef.current) {
+      activeAudioRef.current.pause();
+      activeAudioRef.current = null;
+    }
     
     const type = interviewType
     const iid  = interviewIdRef.current
@@ -883,7 +898,7 @@ export default function VoiceInterviewPage() {
   const progress = questions.length ? ((currentQIdx) / questions.length) * 100 : 0
 
   return (
-    <div className="min-h-screen bg-[#07091a] flex flex-col text-white" style={{fontFamily:"'Inter',sans-serif"}}>
+    <div className="h-screen w-screen overflow-hidden bg-[#07091a] flex flex-col text-white" style={{fontFamily:"'Inter',sans-serif"}}>
       <style>{`
         @keyframes wave{0%{height:4px;opacity:.5}100%{height:32px;opacity:1}}
         @keyframes glow-speak{0%,100%{box-shadow:0 0 40px rgba(99,102,241,.5),0 0 80px rgba(99,102,241,.2)}50%{box-shadow:0 0 80px rgba(99,102,241,.9),0 0 140px rgba(99,102,241,.4)}}
@@ -914,15 +929,17 @@ export default function VoiceInterviewPage() {
       <div className="h-1 bg-white/5"><div className="h-full bg-gradient-to-r from-indigo-500 to-purple-600 transition-all duration-700" style={{width:`${progress}%`}}/></div>
 
       {/* Main: center avatar layout */}
-      <div className="flex-1 flex flex-col items-center justify-between py-8 px-4 overflow-y-auto">
+      <div className="flex-1 flex flex-col items-center py-8 px-4 overflow-y-auto">
 
         {/* Question number badge */}
-        <div className="text-[11px] font-bold text-slate-500 uppercase tracking-widest mb-2">
+        <div className="text-[11px] font-bold text-slate-500 uppercase tracking-widest mb-2 shrink-0">
           {currentQ?.type || 'Interview'} &nbsp;·&nbsp; Question {currentQIdx + 1} of {questions.length}
         </div>
 
+        <div className="flex-1" />
+
         {/* Center Avatar block */}
-        <div className="flex flex-col items-center gap-6 my-4">
+        <div className="flex flex-col items-center gap-6 my-4 shrink-0">
           {/* Ripple rings */}
           <div className="relative flex items-center justify-center">
             <div className="w-56 h-56">
@@ -972,8 +989,10 @@ export default function VoiceInterviewPage() {
           )}
         </div>
 
+        <div className="flex-1" />
+
         {/* Bottom controls */}
-        <div className="w-full max-w-lg space-y-4">
+        <div className="w-full max-w-lg space-y-4 shrink-0 mt-6">
           <div className="flex gap-2">
             <button onClick={()=>{
               if(aiStatus==='listening'){
