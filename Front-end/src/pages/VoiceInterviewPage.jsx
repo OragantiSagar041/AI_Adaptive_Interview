@@ -620,7 +620,12 @@ export default function VoiceInterviewPage() {
           setCodingQuestion(codingQ)
           setRound('coding')
           setLoading(false)
-        } catch(_) { setRound('done'); setLoading(false) }
+        } catch(err) { 
+          console.error("Coding round start failed:", err)
+          setError('Failed to load coding round. Please retry.')
+          setRound('error')
+          setLoading(false)
+        }
       } else {
         // Non-Technical → case study
         try {
@@ -628,14 +633,20 @@ export default function VoiceInterviewPage() {
             method: 'POST', headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({ interview_id: iid })
           })
+          if (!res.ok) throw new Error(`HTTP ${res.status}`)
           const data = await res.json()
           const cqs = (data.case_study_round?.questions || []).map((q, i) => ({
-            id: `cs_${i}`, type: 'case_study', text: q.text || q.scenario || q.question || '', caseStudyIndex: i
+            id: `cs_${i}`, type: 'case_study', text: q.text, caseStudyIndex: i
           }))
           setCaseStudyQuestions(cqs.length ? cqs : [{ id: 'cs_0', type: 'case_study', text: data.scenario || 'Present your business case.', caseStudyIndex: 0 }])
           setRound('case_study')
           setLoading(false)
-        } catch(_) { setRound('done'); setLoading(false) }
+        } catch(err) { 
+          console.error('Case study start failed:', err)
+          setError('Failed to load case study. Please retry.')
+          setRound('error')
+          setLoading(false)
+        }
       }
     } else {
       completeInterview()
@@ -727,13 +738,18 @@ export default function VoiceInterviewPage() {
     </div>
   )
 
-  if (error) return (
+  if (error || round === 'error') return (
     <div className="min-h-screen bg-[#0a0f1e] flex flex-col items-center justify-center text-white px-6 text-center gap-6">
       <div className="w-16 h-16 rounded-full bg-rose-500/10 border-2 border-rose-500/40 flex items-center justify-center">
         <i className="fas fa-exclamation-triangle text-2xl text-rose-400"/>
       </div>
       <h2 className="text-xl font-bold">Session Error</h2>
       <p className="text-slate-400 max-w-md">{error}</p>
+      {round === 'error' && (
+        <button onClick={() => { setRound('pre_checks'); setError(null); transitionToNextRound(); }} className="px-6 py-2.5 bg-indigo-500 hover:bg-indigo-600 rounded-lg font-bold text-sm transition-colors mt-4">
+          <i className="fas fa-redo mr-2"></i>Retry
+        </button>
+      )}
     </div>
   )
 
