@@ -2685,7 +2685,7 @@ def _generate_case_study_questions_offline(job_description: str, num_questions: 
 
 
 @app.post("/case-study/start")
-def start_case_study_round(req: CaseStudyStartRequest):
+async def start_case_study_round(req: CaseStudyStartRequest):
     interview = get_interview_or_404(req.interview_id)
     
     # Check if case study round already exists
@@ -2709,10 +2709,24 @@ def start_case_study_round(req: CaseStudyStartRequest):
     language = interview.get("language", "English")
     
     # Try AI first, fall back to offline
-    questions = _generate_case_study_questions_ai(job_description, num_questions, profile_text, industry=industry, language=language)
+    import asyncio
+    questions = await asyncio.to_thread(_generate_case_study_questions_ai, job_description, num_questions, profile_text, industry, language)
     if not questions:
         print(f"[CASE STUDY] Using offline fallback for {num_questions} questions")
-        questions = _generate_case_study_questions_offline(job_description, num_questions, industry=industry, language=language)
+        questions = await asyncio.to_thread(_generate_case_study_questions_offline, job_description, num_questions, industry, language)
+        
+    # Normalize question shape
+    normalized_questions = []
+    for idx, q in enumerate(questions):
+        text = q.get('text') or q.get('scenario') or q.get('question') or ''
+        normalized_questions.append({
+            "id": q.get("id") or f"cs_{idx}",
+            "type": "case_study",
+            "text": text,
+            **q
+        })
+        normalized_questions[-1]["text"] = text # Ensure text is strictly set
+    questions = normalized_questions
     
     case_study_round = {
         "status": "active",
@@ -4326,7 +4340,9 @@ async def startup_event_db_and_email():
     try:
         master_row = admins_collection.find_one({"username": "master"})
         if not master_row:
-            hashed_pw = hash_password("master123")
+            import secrets
+            master_pw = os.getenv("DEFAULT_MASTER_PASSWORD") or secrets.token_urlsafe(12)
+            hashed_pw = hash_password(master_pw)
             default_email = os.getenv("BREVO_SENDER_EMAIL", "oragantisagar041@gmail.com")
             admins_collection.insert_one({
                 "username": "master",
@@ -4336,11 +4352,13 @@ async def startup_event_db_and_email():
                 "subscription_plan": "master",
                 "created_at": datetime.now(timezone.utc).isoformat()
             })
-            print(f"Default master created: master / master123 (Email: {default_email})")
+            print(f"Default master created: master / {master_pw} (Email: {default_email})")
             
         row = admins_collection.find_one({"username": "admin"})
         if not row:
-            hashed_pw = hash_password("admin123")
+            import secrets
+            admin_pw = os.getenv("DEFAULT_ADMIN_PASSWORD") or secrets.token_urlsafe(12)
+            hashed_pw = hash_password(admin_pw)
             default_email = os.getenv("BREVO_SENDER_EMAIL", "oragantisagar041@gmail.com")
             admins_collection.insert_one({
                 "username": "admin",
@@ -4352,7 +4370,7 @@ async def startup_event_db_and_email():
                 "subscription_expiry": (datetime.now(timezone.utc) + timedelta(days=365)).isoformat(),
                 "created_at": datetime.now(timezone.utc).isoformat()
             })
-            print(f"Default admin created: admin / admin123 (Email: {default_email})")
+            print(f"Default admin created: admin / {admin_pw} (Email: {default_email})")
         else:
             # Upgrade legacy admin to tenant
             update_data = {}
