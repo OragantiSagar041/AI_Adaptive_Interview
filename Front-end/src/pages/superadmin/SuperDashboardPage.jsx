@@ -5,6 +5,7 @@ import axios from 'axios'
 export default function SuperDashboardPage() {
   const token = useSelector(state => state.auth.token) || ''
   const API_BASE_URL = useSelector(state => state.auth.API_BASE_URL)
+  const adminUser = useSelector(state => state.auth.adminUser)
 
   // Super Admin stats and data states
   const [credits, setCredits] = useState(0)
@@ -48,6 +49,63 @@ export default function SuperDashboardPage() {
       setCompletedSessions(data.completed_sessions || 0)
       setPendingSessions(data.pending_sessions || 0)
 
+      // Fetch sub-admins and dashboard sessions concurrently to build correct admin metrics
+      let subAdmins = []
+      let candidates = []
+      try {
+        const [subAdminsRes, dashboardRes] = await Promise.all([
+          axios.get(`${API_BASE_URL}/super-admin/admins`, {
+            headers: { 'Authorization': `Bearer ${token}` }
+          }),
+          axios.get(`${API_BASE_URL}/superadmin/dashboard`, {
+            headers: { 'Authorization': `Bearer ${token}` }
+          })
+        ])
+        subAdmins = subAdminsRes.data?.data || []
+        candidates = dashboardRes.data?.candidates || []
+      } catch (e) {
+        console.error('Failed to load sub-admins or dashboard sessions', e)
+      }
+
+      // Map admin ID to Name
+      const adminMap = {}
+      const superAdminId = adminUser?.admin_id || adminUser?.id || adminUser?._id
+      const superAdminName = adminUser?.name || adminUser?.username || 'Super Admin'
+      if (superAdminId) {
+        adminMap[superAdminId] = superAdminName
+      }
+      subAdmins.forEach(admin => {
+        const id = admin.id || admin._id
+        const name = admin.name || admin.username || 'Sub Admin'
+        if (id) {
+          adminMap[id] = name
+        }
+      })
+
+      // Count sessions by admin
+      const adminCounts = {}
+      Object.keys(adminMap).forEach(id => {
+        adminCounts[id] = 0
+      })
+
+      candidates.forEach(session => {
+        const createdBy = session.created_by
+        if (createdBy) {
+          if (adminCounts[createdBy] === undefined) {
+            adminCounts[createdBy] = 0
+            adminMap[createdBy] = `Admin (${createdBy.substring(0, 6)})`
+          }
+          adminCounts[createdBy] += 1
+        }
+      })
+
+      const adminLabels = []
+      const adminData = []
+      Object.entries(adminMap).forEach(([id, name]) => {
+        adminLabels.push(name)
+        adminData.push(adminCounts[id] || 0)
+      })
+
       // Draw Charts
       destroyCharts()
 
@@ -81,18 +139,32 @@ export default function SuperDashboardPage() {
       const ctxPie = saAdminPieChartRef.current
       if (ctxPie && window.Chart) {
         saAdminPieChartInstance.current = new window.Chart(ctxPie, {
-          type: 'doughnut',
+          type: 'bar',
           data: {
-            labels: data.admin_labels || ['No Admins'],
+            labels: adminLabels.length > 0 ? adminLabels : ['No Admins'],
             datasets: [{
-              data: data.admin_data || [1],
-              backgroundColor: ['#6366f1', '#10b981', '#f59e0b', '#ef4444', '#8b5cf6', '#ec4899']
+              label: 'Interviews Created',
+              data: adminData.length > 0 ? adminData : [0],
+              backgroundColor: primaryColor,
+              borderRadius: 6,
+              borderWidth: 0
             }]
           },
           options: {
             responsive: true,
             maintainAspectRatio: false,
-            plugins: { legend: { position: 'bottom' } }
+            plugins: {
+              legend: { display: false }
+            },
+            scales: {
+              y: {
+                beginAtZero: true,
+                ticks: { stepSize: 1 }
+              },
+              x: {
+                grid: { display: false }
+              }
+            }
           }
         })
       }
