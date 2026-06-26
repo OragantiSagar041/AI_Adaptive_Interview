@@ -9,7 +9,7 @@ import React, { useState, useEffect, useRef, useCallback } from 'react'
 import { useParams } from 'react-router-dom'
 import { API_BASE_URL } from '../apiConfig'
 import VoiceCodingRound from './VoiceCodingRound'
-import VoiceCaseStudy   from './VoiceCaseStudy'
+import VoiceCaseStudy from './VoiceCaseStudy'
 import useCandidateWebRTC from '../hooks/useCandidateWebRTC'
 import OrbAvatar from '../components/OrbAvatar'
 import Swal from 'sweetalert2'
@@ -27,7 +27,7 @@ function VideoAvatar({ status, size = 220 }) {
     const video = videoRef.current
     if (!video) return
     if (isSpeaking) {
-      video.play().catch(() => {})
+      video.play().catch(() => { })
     } else {
       video.pause()
       // Reset to frame 0 when not speaking so it's ready for next time
@@ -38,14 +38,14 @@ function VideoAvatar({ status, size = 220 }) {
   const ringColor = status === 'speaking'
     ? 'rgba(168,85,247,0.7)'
     : status === 'listening'
-    ? 'rgba(16,185,129,0.6)'
-    : 'rgba(99,102,241,0.35)'
+      ? 'rgba(16,185,129,0.6)'
+      : 'rgba(99,102,241,0.35)'
 
   const glowColor = status === 'speaking'
     ? '0 0 50px rgba(168,85,247,0.6), 0 0 100px rgba(168,85,247,0.25)'
     : status === 'listening'
-    ? '0 0 40px rgba(16,185,129,0.5), 0 0 80px rgba(16,185,129,0.2)'
-    : '0 0 20px rgba(99,102,241,0.2)'
+      ? '0 0 40px rgba(16,185,129,0.5), 0 0 80px rgba(16,185,129,0.2)'
+      : '0 0 20px rgba(99,102,241,0.2)'
 
   return (
     <div style={{ position: 'relative', width: size, height: size, flexShrink: 0 }}>
@@ -57,17 +57,17 @@ function VideoAvatar({ status, size = 220 }) {
           border: `2px solid ${ringColor}`,
           animation: status === 'speaking' ? 'vidRingSpeak 1.4s ease-in-out infinite' : 'vidRingListen 2s ease-in-out infinite alternate',
           pointerEvents: 'none',
-        }}/>
+        }} />
       )}
       {/* Outer glow ring */}
       {(status === 'speaking' || status === 'listening') && (
         <div style={{
           position: 'absolute', inset: -18,
           borderRadius: '50%',
-          border: `1px solid ${ringColor.replace('0.7','0.25').replace('0.6','0.2')}`,
+          border: `1px solid ${ringColor.replace('0.7', '0.25').replace('0.6', '0.2')}`,
           animation: status === 'speaking' ? 'vidRingSpeak 1.4s ease-in-out 0.4s infinite' : 'vidRingListen 2s ease-in-out 0.5s infinite alternate',
           pointerEvents: 'none',
-        }}/>
+        }} />
       )}
       {/* Video circle */}
       <video
@@ -104,26 +104,40 @@ function VideoAvatar({ status, size = 220 }) {
 
 // ── Language map ─────────────────────────────────────────────────────────────
 const langMap = {
-  'Hindi':'hi-IN','Telugu':'te-IN','Tamil':'ta-IN',
-  'Malayalam':'ml-IN','Kannada':'kn-IN','English':'en-US'
+  'Hindi': 'hi-IN', 'Telugu': 'te-IN', 'Tamil': 'ta-IN',
+  'Malayalam': 'ml-IN', 'Kannada': 'kn-IN', 'English': 'en-US'
 }
 
 // ── Conversational follow-up engine ──────────────────────────────────────────
 const FOLLOWUP_MAP = [
-  { keywords: ['react','vue','angular','frontend','ui','component','hook'],
-    questions: ["Can you tell me more about which state management approach you prefer?","How do you handle performance optimization in frontend applications?","Walk me through how you'd architect a complex React app."] },
-  { keywords: ['python','java','node','backend','api','rest','graphql','server'],
-    questions: ["How do you handle error management and logging in your backend services?","Can you describe a time you improved API performance significantly?","How do you approach securing REST APIs?"] },
-  { keywords: ['team','lead','mentor','manage','collaborate','agile','scrum'],
-    questions: ["How do you handle disagreements within your team?","Tell me about a time you had to give critical feedback to a peer.","How do you keep your team aligned when requirements change frequently?"] },
-  { keywords: ['challenge','difficult','problem','solved','debug','issue','bug'],
-    questions: ["What made that problem particularly challenging?","How did that experience change your approach to similar problems?","What would you do differently looking back?"] },
-  { keywords: ['database','sql','nosql','mongo','postgres','redis','query'],
-    questions: ["How do you decide between SQL and NoSQL for a given problem?","Walk me through how you'd optimize a slow database query.","How do you think about data modeling for scalability?"] },
-  { keywords: ['ml','ai','machine learning','model','neural','data science','training'],
-    questions: ["How do you validate that an ML model is production-ready?","How do you handle data drift in deployed models?","Walk me through your feature engineering process."] },
-  { keywords: ['cloud','aws','azure','gcp','docker','kubernetes','devops','deploy','ci'],
-    questions: ["How do you approach zero-downtime deployments?","Describe your ideal CI/CD pipeline.","How do you handle infrastructure costs at scale?"] },
+  {
+    keywords: ['react', 'vue', 'angular', 'frontend', 'ui', 'component', 'hook'],
+    questions: ["Can you tell me more about which state management approach you prefer?", "How do you handle performance optimization in frontend applications?", "Walk me through how you'd architect a complex React app."]
+  },
+  {
+    keywords: ['python', 'java', 'node', 'backend', 'api', 'rest', 'graphql', 'server'],
+    questions: ["How do you handle error management and logging in your backend services?", "Can you describe a time you improved API performance significantly?", "How do you approach securing REST APIs?"]
+  },
+  {
+    keywords: ['team', 'lead', 'mentor', 'manage', 'collaborate', 'agile', 'scrum'],
+    questions: ["How do you handle disagreements within your team?", "Tell me about a time you had to give critical feedback to a peer.", "How do you keep your team aligned when requirements change frequently?"]
+  },
+  {
+    keywords: ['challenge', 'difficult', 'problem', 'solved', 'debug', 'issue', 'bug'],
+    questions: ["What made that problem particularly challenging?", "How did that experience change your approach to similar problems?", "What would you do differently looking back?"]
+  },
+  {
+    keywords: ['database', 'sql', 'nosql', 'mongo', 'postgres', 'redis', 'query'],
+    questions: ["How do you decide between SQL and NoSQL for a given problem?", "Walk me through how you'd optimize a slow database query.", "How do you think about data modeling for scalability?"]
+  },
+  {
+    keywords: ['ml', 'ai', 'machine learning', 'model', 'neural', 'data science', 'training'],
+    questions: ["How do you validate that an ML model is production-ready?", "How do you handle data drift in deployed models?", "Walk me through your feature engineering process."]
+  },
+  {
+    keywords: ['cloud', 'aws', 'azure', 'gcp', 'docker', 'kubernetes', 'devops', 'deploy', 'ci'],
+    questions: ["How do you approach zero-downtime deployments?", "Describe your ideal CI/CD pipeline.", "How do you handle infrastructure costs at scale?"]
+  },
 ]
 
 function getFollowUp(transcript, usedIdx, language = 'English') {
@@ -147,18 +161,17 @@ function Bubble({ role, text, isNew }) {
     <div className={`flex gap-3 mb-4 transition-all duration-500 ${role === 'user' ? 'flex-row-reverse' : ''} ${visible ? 'opacity-100 translate-y-0' : 'opacity-0 translate-y-3'}`}>
       {role === 'ai' ? (
         <div className="w-9 h-9 rounded-full flex items-center justify-center shrink-0 overflow-hidden border-2 border-indigo-500/40">
-          <video src={aiVideoUrl} autoPlay loop muted playsInline style={{ width:'100%', height:'100%', objectFit:'cover', borderRadius:'50%' }}/>
+          <video src={aiVideoUrl} autoPlay loop muted playsInline style={{ width: '100%', height: '100%', objectFit: 'cover', borderRadius: '50%' }} />
         </div>
       ) : (
         <div className="w-9 h-9 rounded-full flex items-center justify-center shrink-0 bg-emerald-500/15 border-2 border-emerald-500/30">
-          <i className="fas fa-user text-sm text-emerald-400"/>
+          <i className="fas fa-user text-sm text-emerald-400" />
         </div>
       )}
-      <div className={`max-w-[72%] rounded-2xl px-4 py-3 text-sm leading-relaxed ${
-        role === 'ai'
+      <div className={`max-w-[72%] rounded-2xl px-4 py-3 text-sm leading-relaxed ${role === 'ai'
           ? 'bg-indigo-500/10 border border-indigo-500/15 text-slate-200 rounded-tl-none'
           : 'bg-emerald-500/10 border border-emerald-500/15 text-slate-200 rounded-tr-none'
-      }`}>
+        }`}>
         {role === 'ai' && <span className="text-[10px] font-bold text-indigo-400 uppercase tracking-widest block mb-1">Zara</span>}
         {text}
       </div>
@@ -171,48 +184,49 @@ export default function VoiceInterviewPage() {
   const { linkId } = useParams()
 
   // Session
-  const [loading, setLoading]             = useState(true)
-  const [error, setError]                 = useState(null)
+  const [loading, setLoading] = useState(true)
+  const [error, setError] = useState(null)
   const [sessionDetail, setSessionDetail] = useState(null)
-  const [questions, setQuestions]         = useState([])
+  const [questions, setQuestions] = useState([])
   const [codingQuestion, setCodingQuestion] = useState(null)
   const [caseStudyQuestions, setCaseStudyQuestions] = useState([])
-  const [interviewId, setInterviewId]     = useState('')
-  const [language, setLanguage]           = useState('English')
+  const [interviewId, setInterviewId] = useState('')
+  const [language, setLanguage] = useState('English')
   const [interviewType, setInterviewType] = useState('Technical')
 
   // Round control
-  const [round, setRound]   = useState('pre_checks')
+  const [round, setRound] = useState('pre_checks')
   // 'pre_checks' | 'intro' | 'verbal' | 'coding' | 'case_study' | 'done'
   const [permissionsGranted, setPermissionsGranted] = useState(false)
 
   // Verbal interview state
-  const [chatMessages, setChatMessages]     = useState([])
-  const [currentQIdx, setCurrentQIdx]       = useState(0)
-  const [aiStatus, setAiStatus]             = useState('idle')
-  const [transcript, setTranscript]         = useState('')
-  const [interimText, setInterimText]       = useState('')
-  const [countdown, setCountdown]           = useState(0)
-  const [answeredCount, setAnsweredCount]   = useState(0)
-  const [followUpCount, setFollowUpCount]   = useState(0)  // follow-ups per question
-  const [warningsCount, setWarningsCount]   = useState(0)
+  const [chatMessages, setChatMessages] = useState([])
+  const [currentQIdx, setCurrentQIdx] = useState(0)
+  const [aiStatus, setAiStatus] = useState('idle')
+  const [transcript, setTranscript] = useState('')
+  const [interimText, setInterimText] = useState('')
+  const [countdown, setCountdown] = useState(0)
+  const [roundDuration, setRoundDuration] = useState(900)
+  const [answeredCount, setAnsweredCount] = useState(0)
+  const [followUpCount, setFollowUpCount] = useState(0)  // follow-ups per question
+  const [warningsCount, setWarningsCount] = useState(0)
   const screenShareViolationsRef = useRef(0)
   const screenShareViolationHandlerRef = useRef(null)  // stable ref to avoid circular deps
   const usedFollowUps = useRef(new Set())
   const [displayedQuestion, setDisplayedQuestion] = useState('')  // typewriter text
-  const [isTyping, setIsTyping]   = useState(false)              // typewriter running
+  const [isTyping, setIsTyping] = useState(false)              // typewriter running
   const typewriterRef = useRef(null)
 
   // Screen recording & WebRTC
-  const mediaRecorderRef  = useRef(null)
-  const mediaStreamRef    = useRef(null)
+  const mediaRecorderRef = useRef(null)
+  const mediaStreamRef = useRef(null)
   const recordedChunksRef = useRef([])
   const [isRecording, setIsRecording] = useState(false)
 
   // Camera recording
   const cameraRecorderRef = useRef(null)
-  const cameraStreamRef   = useRef(null)
-  const cameraChunksRef   = useRef([])
+  const cameraStreamRef = useRef(null)
+  const cameraChunksRef = useRef([])
 
   // Set a mock audio level that bounces slightly when speaking, or 0 when silent
   const isSpeaking = aiStatus === 'listening' && interimText.length > 0
@@ -231,28 +245,29 @@ export default function VoiceInterviewPage() {
   useCandidateWebRTC(linkId, cameraStreamRef, telemetryData)
 
   // Refs
-  const recognitionRef   = useRef(null)
-  const silenceTimerRef  = useRef(null)
-  const isListeningRef   = useRef(false)
-  const currentTxRef     = useRef('')
-  const submittingRef    = useRef(false)
-  const currentQIdxRef   = useRef(0)
-  const questionsRef     = useRef([])
-  const interviewIdRef   = useRef('')
+  const recognitionRef = useRef(null)
+  const silenceTimerRef = useRef(null)
+  const isListeningRef = useRef(false)
+  const currentTxRef = useRef('')
+  const submittingRef = useRef(false)
+  const currentQIdxRef = useRef(0)
+  const questionsRef = useRef([])
+  const interviewIdRef = useRef('')
   const sessionDetailRef = useRef(null)
-  const roundRef         = useRef('pre_checks')
-  const chatBottomRef    = useRef(null)
-  const wsRef            = useRef(null)
-  const languageRef      = useRef('English')
-  const currentAudioRef  = useRef(null)   // ← track active TTS audio so we can stop it
+  const roundRef = useRef('pre_checks')
+  const chatBottomRef = useRef(null)
+  const wsRef = useRef(null)
+  const languageRef = useRef('English')
+  const currentAudioRef = useRef(null)    // ← tracks active TTS audio so stopAudio() can kill it
+  const isTransitioningRef = useRef(false)
 
   // Sync refs
-  useEffect(() => { currentQIdxRef.current   = currentQIdx },   [currentQIdx])
-  useEffect(() => { questionsRef.current     = questions },     [questions])
-  useEffect(() => { interviewIdRef.current   = interviewId },   [interviewId])
+  useEffect(() => { currentQIdxRef.current = currentQIdx }, [currentQIdx])
+  useEffect(() => { questionsRef.current = questions }, [questions])
+  useEffect(() => { interviewIdRef.current = interviewId }, [interviewId])
   useEffect(() => { sessionDetailRef.current = sessionDetail }, [sessionDetail])
-  useEffect(() => { roundRef.current         = round },         [round])
-  useEffect(() => { languageRef.current      = language },      [language])
+  useEffect(() => { roundRef.current = round }, [round])
+  useEffect(() => { languageRef.current = language }, [language])
   useEffect(() => { chatBottomRef.current?.scrollIntoView({ behavior: 'smooth' }) }, [chatMessages])
 
   useEffect(() => {
@@ -265,13 +280,13 @@ export default function VoiceInterviewPage() {
         if (data.type === 'ai_state' && roundRef.current === 'verbal') {
           // Can sync state from backend if needed
         }
-      } catch (e) {}
+      } catch (e) { }
     }
     wsRef.current = ws
     return () => ws.close()
   }, [linkId])
 
-  const fmt = s => `${String(Math.floor(s/60)).padStart(2,'0')}:${String(s%60).padStart(2,'0')}`
+  const fmt = s => `${String(Math.floor(s / 60)).padStart(2, '0')}:${String(s % 60).padStart(2, '0')}`
 
   // ── Countdown ─────────────────────────────────────────────────────────────
   useEffect(() => {
@@ -292,13 +307,22 @@ export default function VoiceInterviewPage() {
         const d = await r.json()
         if (!r.ok || d.status !== 'success') throw new Error(d.detail || 'Session not found.')
         if (d.is_deactivated) throw new Error('This link is deactivated.')
-        if (d.is_expired)     throw new Error('This link has expired.')
+        if (d.is_expired) throw new Error('This link has expired.')
         if (d.session_status === 'completed') throw new Error('Interview already completed.')
         setSessionDetail(d)
         const langVal = d.language || 'English'
         setLanguage(langVal.charAt(0).toUpperCase() + langVal.slice(1).toLowerCase())
         setInterviewType(d.interview_type || 'Technical')
-        setCountdown((d.interview_duration || 30) * 60)
+
+        // Calculate duration based on rounds
+        const typeStr = d.interview_type || 'Technical'
+        let numRounds = 1;
+        if (typeStr.includes('Coding') && typeStr.includes('Case Study')) numRounds = 3;
+        else if (typeStr === 'Technical' || typeStr === 'Non-Technical' || typeStr.includes('Coding') || typeStr.includes('Case Study')) numRounds = 2;
+
+        const durationPerRound = Math.floor((d.interview_duration || 30) * 60 / numRounds);
+        setRoundDuration(durationPerRound);
+        setCountdown(durationPerRound)
 
         const fd = new FormData(); fd.append('link_id', linkId)
         const sr = await fetch(`${API_BASE_URL}/start-session-interview`, { method: 'POST', body: fd })
@@ -312,7 +336,7 @@ export default function VoiceInterviewPage() {
 
         if (!qs.length) throw new Error('No questions found for this session.')
         setQuestions(qs); setInterviewId(sd.interview_id || ''); setLoading(false)
-      } catch(e) { setError(e.message); setLoading(false) }
+      } catch (e) { setError(e.message); setLoading(false) }
     }
     init()
   }, [linkId])
@@ -367,7 +391,7 @@ export default function VoiceInterviewPage() {
   }, [stopAudio])
 
   const addMsg = useCallback((role, text) => setChatMessages(p => [...p, { role, text }]), [])
-  const aiSay  = useCallback((text, onEnd) => { addMsg('ai', text); speak(text, onEnd) }, [addMsg, speak])
+  const aiSay = useCallback((text, onEnd) => { addMsg('ai', text); speak(text, onEnd) }, [addMsg, speak])
 
   // ── Typewriter helper ─────────────────────────────────────────────────────
   const typewrite = useCallback((text, onDone) => {
@@ -399,9 +423,9 @@ export default function VoiceInterviewPage() {
     try {
       // Force fullscreen mode
       if (document.documentElement.requestFullscreen) {
-        await document.documentElement.requestFullscreen().catch(() => {})
+        await document.documentElement.requestFullscreen().catch(() => { })
       }
-      
+
       // 1. Get Screen Stream
       const screenStream = await navigator.mediaDevices.getDisplayMedia({
         video: { displaySurface: 'monitor', frameRate: 15, width: { ideal: 1280 }, height: { ideal: 720 } },
@@ -414,13 +438,13 @@ export default function VoiceInterviewPage() {
           screenShareViolationHandlerRef.current?.()
         })
       })
-      
+
       // 2. Get Camera & Mic Stream
       let micStream = null
       try {
         micStream = await navigator.mediaDevices.getUserMedia({ video: true, audio: true })
         cameraStreamRef.current = micStream
-        
+
         // Start Camera Recorder
         const cameraMr = new MediaRecorder(micStream, { mimeType: 'video/webm' })
         cameraChunksRef.current = []
@@ -445,7 +469,7 @@ export default function VoiceInterviewPage() {
         })
         const combinedScreen = new MediaStream([...screenStream.getVideoTracks(), ...dest.stream.getAudioTracks()])
         mediaStreamRef.current = combinedScreen
-        
+
         const mr = new MediaRecorder(combinedScreen, { mimeType: 'video/webm;codecs=vp8,opus' })
         recordedChunksRef.current = []
         mr.ondataavailable = e => { if (e.data.size > 0) recordedChunksRef.current.push(e.data) }
@@ -459,7 +483,7 @@ export default function VoiceInterviewPage() {
         mr.start(5000)
         mediaRecorderRef.current = mr
       }
-      
+
       setIsRecording(true)
     } catch (e) {
       console.warn('Screen recording not available or denied:', e)
@@ -469,7 +493,7 @@ export default function VoiceInterviewPage() {
   const stopAndUploadRecording = useCallback(async (iid) => {
     const screenMr = mediaRecorderRef.current
     const cameraMr = cameraRecorderRef.current
-    
+
     setIsRecording(false)
 
     const uploads = []
@@ -533,9 +557,10 @@ export default function VoiceInterviewPage() {
   const stopListening = useCallback(() => {
     isListeningRef.current = false
     clearTimeout(silenceTimerRef.current)
-    try { recognitionRef.current?.stop() } catch(_) {}
+    try { recognitionRef.current?.stop() } catch (_) { }
     recognitionRef.current = null
     stopAudio()   // ← also kill any in-flight TTS so it doesn't bleed into next state
+    setInterimText('')   // clear cursor indicator but KEEP transcript so user sees what was captured
     setAiStatus('idle')
   }, [stopAudio])
 
@@ -544,7 +569,7 @@ export default function VoiceInterviewPage() {
     if (!SR) { onFinish?.(''); return }
 
     // Always clean up previous instance first
-    try { recognitionRef.current?.stop() } catch(_) {}
+    try { recognitionRef.current?.stop() } catch (_) { }
     recognitionRef.current = null
 
     const rec = new SR()
@@ -586,12 +611,12 @@ export default function VoiceInterviewPage() {
     rec.onerror = (e) => {
       const err = e.error
       if (err === 'no-speech') return  // harmless — silence, keep listening
-      if (err === 'aborted')  return  // intentional stop — do nothing
+      if (err === 'aborted') return  // intentional stop — do nothing
 
       if (err === 'network') {
         // Network blip: stop current instance, restart after a brief pause
         console.warn('SR: network error — restarting in 1s')
-        try { rec.stop() } catch(_) {}
+        try { rec.stop() } catch (_) { }
         if (isListeningRef.current) {
           setTimeout(() => {
             if (isListeningRef.current) startListening(onFinish)
@@ -614,10 +639,10 @@ export default function VoiceInterviewPage() {
         if (recognitionRef.current === rec) {  // guard: ensure this is still the active instance
           rec.start()
         }
-      } catch(_) {}
+      } catch (_) { }
     }
 
-    try { rec.start() } catch(e) {
+    try { rec.start() } catch (e) {
       console.warn('SR start error:', e)
       stopListening()
       onFinish?.('')
@@ -626,11 +651,39 @@ export default function VoiceInterviewPage() {
 
   // ── Handle one verbal answer ──────────────────────────────────────────────
   const handleAnswer = useCallback((answer, qIdx, fupCount) => {
+    if (isTransitioningRef.current) return // Prevent any action if transitioning
+
+    const qs = questionsRef.current
+    const t = VOICE_TRANSLATIONS[languageRef.current] || VOICE_TRANSLATIONS['English']
+
+    // Check intent
+    const lowerAns = answer?.toLowerCase() || ''
+    const isSkip = /(skip|next question|move to next|move on|next round)/.test(lowerAns)
+    const isRepeat = /(repeat|come again|didn't understand|not understand|what did you say|say that again)/.test(lowerAns)
+
+    if (isSkip) {
+      addMsg('user', answer)
+      const nextIdx = qIdx + 1
+      if (!qs[nextIdx]) {
+        aiSay(t.wrapUpVerbal, () => transitionToNextRound())
+      } else {
+        setCurrentQIdx(nextIdx)
+        aiSay(`${t.nextQuestion.replace('[X]', nextIdx + 1)}${qs[nextIdx].text}`, () => startListening(ans => handleAnswer(ans, nextIdx, 0)))
+      }
+      return
+    }
+
+    if (isRepeat) {
+      addMsg('user', answer)
+      const q = qs[qIdx]
+      const prompt = `${t.intro.replace('[NAME]', sessionDetailRef.current?.candidate_name || 'there')}${q.text}` // simplified repeat
+      aiSay(q.text, () => startListening(ans => handleAnswer(ans, qIdx, fupCount)))
+      return
+    }
+
     if (!answer?.trim()) {
       // 10s silence -> Skip to next question
       const nextIdx = qIdx + 1
-      const qs = questionsRef.current
-      const t = VOICE_TRANSLATIONS[languageRef.current] || VOICE_TRANSLATIONS['English']
       if (!qs[nextIdx]) {
         aiSay(t.wrapUpVerbal, () => transitionToNextRound())
       } else {
@@ -658,11 +711,11 @@ export default function VoiceInterviewPage() {
         // Fallback to HTTP if WS is closed
         const fd = new FormData()
         fd.append('interview_id', interviewIdRef.current)
-        fd.append('question_id',  q.id)
+        fd.append('question_id', q.id)
         fd.append('question_text', q.text)
-        fd.append('answer_text',  answer)
+        fd.append('answer_text', answer)
         fd.append('candidate_name', sessionDetailRef.current?.candidate_name || 'Candidate')
-        fetch(`${API_BASE_URL}/save-answer`, { method: 'POST', body: fd }).catch(()=>{})
+        fetch(`${API_BASE_URL}/save-answer`, { method: 'POST', body: fd }).catch(() => { })
       }
     }
 
@@ -682,7 +735,6 @@ export default function VoiceInterviewPage() {
     // Next question
     setAnsweredCount(p => p + 1)
     const nextIdx = qIdx + 1
-    const qs = questionsRef.current
     if (!qs[nextIdx]) {
       transitionToNextRound()
     } else {
@@ -702,43 +754,48 @@ export default function VoiceInterviewPage() {
     stopListening()   // also kills audio via stopAudio inside
     window.speechSynthesis?.cancel()
     const type = interviewType
-    const iid  = interviewIdRef.current
+    const iid = interviewIdRef.current
 
     if (type === 'Technical' || type === 'Non-Technical') {
       setAiStatus('thinking')
+      setLoading(true) // Immediately show loading state to candidate
       const t = VOICE_TRANSLATIONS[languageRef.current] || VOICE_TRANSLATIONS['English']
-      aiSay(t.verbalComplete, async () => {
-        if (type === 'Technical') {
-          try {
-            const res = await fetch(`${API_BASE_URL}/coding-round/start`, {
-              method: 'POST', headers: { 'Content-Type': 'application/json' },
-              body: JSON.stringify({ interview_id: iid })
-            })
-            const data = await res.json()
-            const task = data.coding_round?.task || {}
-            const codingQ = {
-              id: 'coding_1', type: 'coding', text: task.description || task.title || 'Implement the required function',
-              codingTask: task, codingTests: data.tests || []
-            }
-            setCodingQuestion(codingQ)
-            setTimeout(() => setRound('coding'), 800)
-          } catch(_) { setRound('done') }
-        } else {
-          // Non-Technical → case study
-          try {
-            const res = await fetch(`${API_BASE_URL}/case-study/start`, {
-              method: 'POST', headers: { 'Content-Type': 'application/json' },
-              body: JSON.stringify({ interview_id: iid })
-            })
-            const data = await res.json()
-            const cqs = (data.case_study_round?.questions || []).map((q, i) => ({
-              id: `cs_${i}`, type: 'case_study', text: q.text || q.scenario || q.question || '', caseStudyIndex: i
-            }))
-            setCaseStudyQuestions(cqs.length ? cqs : [{ id: 'cs_0', type: 'case_study', text: data.scenario || 'Present your business case.', caseStudyIndex: 0 }])
-            setTimeout(() => setRound('case_study'), 800)
-          } catch(_) { setRound('done') }
-        }
-      })
+
+      // Speak transition phrase but don't wait for it to finish before fetching
+      aiSay(t.verbalComplete)
+
+      if (type === 'Technical') {
+        try {
+          const res = await fetch(`${API_BASE_URL}/coding-round/start`, {
+            method: 'POST', headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ interview_id: iid })
+          })
+          const data = await res.json()
+          const task = data.coding_round?.task || {}
+          const codingQ = {
+            id: 'coding_1', type: 'coding', text: task.description || task.title || 'Implement the required function',
+            codingTask: task, codingTests: data.tests || []
+          }
+          setCodingQuestion(codingQ)
+          setRound('coding')
+          setLoading(false)
+        } catch (_) { setRound('done'); setLoading(false) }
+      } else {
+        // Non-Technical → case study
+        try {
+          const res = await fetch(`${API_BASE_URL}/case-study/start`, {
+            method: 'POST', headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ interview_id: iid })
+          })
+          const data = await res.json()
+          const cqs = (data.case_study_round?.questions || []).map((q, i) => ({
+            id: `cs_${i}`, type: 'case_study', text: q.text || q.scenario || q.question || '', caseStudyIndex: i
+          }))
+          setCaseStudyQuestions(cqs.length ? cqs : [{ id: 'cs_0', type: 'case_study', text: data.scenario || 'Present your business case.', caseStudyIndex: 0 }])
+          setRound('case_study')
+          setLoading(false)
+        } catch (_) { setRound('done'); setLoading(false) }
+      }
     } else {
       completeInterview()
     }
@@ -751,7 +808,7 @@ export default function VoiceInterviewPage() {
     stopListening(); window.speechSynthesis?.cancel()
     const iid = interviewIdRef.current
     await stopAndUploadRecording(iid)
-    try { await fetch(`${API_BASE_URL}/complete-session/${linkId}?warnings=${warningsCount}`, { method: 'POST' }) } catch(_) {}
+    try { await fetch(`${API_BASE_URL}/complete-session/${linkId}?warnings=${warningsCount}`, { method: 'POST' }) } catch (_) { }
     setRound('done')
   }, [stopListening, linkId, stopAndUploadRecording, warningsCount])
 
@@ -846,9 +903,9 @@ export default function VoiceInterviewPage() {
           // Re-enter fullscreen
           try {
             if (!document.fullscreenElement && document.documentElement.requestFullscreen) {
-              await document.documentElement.requestFullscreen().catch(() => {})
+              await document.documentElement.requestFullscreen().catch(() => { })
             }
-          } catch (_) {}
+          } catch (_) { }
           Swal.fire({
             icon: 'warning',
             title: '⚠️ Fullscreen Required',
@@ -867,8 +924,8 @@ export default function VoiceInterviewPage() {
       if (!document.fullscreenElement && round !== 'done' && round !== 'pre_checks' && round !== 'intro') {
         logProctoringAlert('fullscreen_exit', 'User exited fullscreen')
         try {
-          await document.documentElement.requestFullscreen().catch(() => {})
-        } catch (_) {}
+          await document.documentElement.requestFullscreen().catch(() => { })
+        } catch (_) { }
       }
     }
 
@@ -891,32 +948,32 @@ export default function VoiceInterviewPage() {
   // ─────────────────────────────────────────────────────────────────────────────
 
   if (round === 'coding' && codingQuestion) {
-    return <VoiceCodingRound question={codingQuestion} interviewId={interviewId} linkId={linkId}
-              sessionDetail={sessionDetail} language={language} wsRef={wsRef} onComplete={() => {
-                const type = interviewType
-                if (type === 'Non-Technical') {
-                  // fetch case study after coding
-                  fetch(`${API_BASE_URL}/case-study/start`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ interview_id: interviewId }) })
-                    .then(r => r.json()).then(data => {
-                      const cqs = (data.case_study_round?.questions || []).map((q, i) => ({ id:`cs_${i}`, type:'case_study', text: q.text || q.scenario || '', caseStudyIndex: i }))
-                      setCaseStudyQuestions(cqs); setRound('case_study')
-                    }).catch(() => completeInterview())
-                } else {
-                  completeInterview()
-                }
-              }}/>
+    return <VoiceCodingRound question={codingQuestion} interviewId={interviewId} linkId={linkId} duration={roundDuration}
+      sessionDetail={sessionDetail} language={language} wsRef={wsRef} onComplete={() => {
+        const type = interviewType
+        if (type === 'Non-Technical') {
+          // fetch case study after coding
+          fetch(`${API_BASE_URL}/case-study/start`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ interview_id: interviewId }) })
+            .then(r => r.json()).then(data => {
+              const cqs = (data.case_study_round?.questions || []).map((q, i) => ({ id: `cs_${i}`, type: 'case_study', text: q.text || q.scenario || '', caseStudyIndex: i }))
+              setCaseStudyQuestions(cqs); setRound('case_study')
+            }).catch(() => completeInterview())
+        } else {
+          completeInterview()
+        }
+      }} />
   }
 
   if (round === 'case_study' && caseStudyQuestions.length) {
-    return <VoiceCaseStudy question={caseStudyQuestions[0]} allQuestions={caseStudyQuestions}
-              interviewId={interviewId} linkId={linkId} sessionDetail={sessionDetail}
-              language={language} wsRef={wsRef} onComplete={completeInterview}/>
+    return <VoiceCaseStudy question={caseStudyQuestions[0]} allQuestions={caseStudyQuestions} duration={roundDuration}
+      interviewId={interviewId} linkId={linkId} sessionDetail={sessionDetail}
+      language={language} wsRef={wsRef} onComplete={completeInterview} />
   }
 
   if (loading) return (
     <div className="min-h-screen bg-[#0a0f1e] flex flex-col items-center justify-center text-white gap-5">
       <div className="w-16 h-16 rounded-2xl bg-gradient-to-tr from-indigo-500 to-purple-600 flex items-center justify-center animate-pulse">
-        <i className="fas fa-microphone text-2xl"/>
+        <i className="fas fa-microphone text-2xl" />
       </div>
       <p className="text-slate-400 text-sm animate-pulse">Setting up your AI Interview...</p>
     </div>
@@ -925,7 +982,7 @@ export default function VoiceInterviewPage() {
   if (error) return (
     <div className="min-h-screen bg-[#0a0f1e] flex flex-col items-center justify-center text-white px-6 text-center gap-6">
       <div className="w-16 h-16 rounded-full bg-rose-500/10 border-2 border-rose-500/40 flex items-center justify-center">
-        <i className="fas fa-exclamation-triangle text-2xl text-rose-400"/>
+        <i className="fas fa-exclamation-triangle text-2xl text-rose-400" />
       </div>
       <h2 className="text-xl font-bold">Session Error</h2>
       <p className="text-slate-400 max-w-md">{error}</p>
@@ -935,8 +992,8 @@ export default function VoiceInterviewPage() {
   if (round === 'done') return (
     <div className="min-h-screen bg-[#0a0f1e] flex flex-col items-center justify-center text-white px-6 text-center gap-8">
       <style>{`@keyframes pop{0%{transform:scale(.5);opacity:0}80%{transform:scale(1.1)}100%{transform:scale(1);opacity:1}}`}</style>
-      <div className="w-28 h-28 rounded-full bg-emerald-500/10 border-4 border-emerald-500 flex items-center justify-center shadow-[0_0_60px_rgba(16,185,129,0.4)]" style={{animation:'pop 0.6s ease forwards'}}>
-        <i className="fas fa-check text-5xl text-emerald-400"/>
+      <div className="w-28 h-28 rounded-full bg-emerald-500/10 border-4 border-emerald-500 flex items-center justify-center shadow-[0_0_60px_rgba(16,185,129,0.4)]" style={{ animation: 'pop 0.6s ease forwards' }}>
+        <i className="fas fa-check text-5xl text-emerald-400" />
       </div>
       <div>
         <h1 className="text-3xl font-black mb-2">Interview Complete! 🎉</h1>
@@ -948,11 +1005,11 @@ export default function VoiceInterviewPage() {
 
   // ── Pre-Interview Checks Screen ───────────────────────────────────────────
   if (round === 'pre_checks') return (
-    <div className="min-h-screen bg-[#0a0f1e] flex flex-col items-center justify-center text-white px-6" style={{fontFamily:"'Inter',sans-serif"}}>
+    <div className="min-h-screen bg-[#0a0f1e] flex flex-col items-center justify-center text-white px-6" style={{ fontFamily: "'Inter',sans-serif" }}>
       <div className="max-w-2xl w-full text-center space-y-8">
         <div className="flex flex-col items-center gap-4 mb-6">
           <div className="w-16 h-16 rounded-2xl bg-gradient-to-tr from-indigo-500 to-purple-600 flex items-center justify-center shadow-[0_0_40px_rgba(99,102,241,0.3)]">
-            <i className="fas fa-shield-alt text-3xl text-white"/>
+            <i className="fas fa-shield-alt text-3xl text-white" />
           </div>
           <h1 className="text-3xl font-black">Pre-Interview Checklist</h1>
           <p className="text-slate-400">Before we begin, please review the rules and grant the required permissions.</p>
@@ -962,13 +1019,13 @@ export default function VoiceInterviewPage() {
         <div className="grid gap-3 text-left bg-[#0d1117] border border-white/10 rounded-2xl p-6 shadow-xl">
           <h3 className="text-lg font-bold text-white mb-2 border-b border-white/10 pb-2">Interview Rules</h3>
           {[
-            { i:'fa-volume-mute', c:'text-rose-400', t:'Ensure you are in a quiet environment without background noise.' },
-            { i:'fa-window-close', c:'text-amber-400', t:'Do not close, refresh, or switch away from this tab.' },
-            { i:'fa-user-check', c:'text-emerald-400', t:'Your microphone, camera, and screen will be recorded.' },
+            { i: 'fa-volume-mute', c: 'text-rose-400', t: 'Ensure you are in a quiet environment without background noise.' },
+            { i: 'fa-window-close', c: 'text-amber-400', t: 'Do not close, refresh, or switch away from this tab.' },
+            { i: 'fa-user-check', c: 'text-emerald-400', t: 'Your microphone, camera, and screen will be recorded.' },
           ].map((rule, idx) => (
             <div key={idx} className="flex items-center gap-4">
               <div className="w-8 h-8 rounded-full bg-white/5 flex items-center justify-center shrink-0">
-                <i className={`fas ${rule.i} ${rule.c}`}/>
+                <i className={`fas ${rule.i} ${rule.c}`} />
               </div>
               <span className="text-slate-300 text-sm">{rule.t}</span>
             </div>
@@ -980,7 +1037,7 @@ export default function VoiceInterviewPage() {
           <button onClick={async () => {
             try {
               if (document.documentElement.requestFullscreen) {
-                await document.documentElement.requestFullscreen().catch(() => {})
+                await document.documentElement.requestFullscreen().catch(() => { })
               }
               const stream = await navigator.mediaDevices.getUserMedia({ audio: true, video: true })
               // Stop the streams immediately, we just wanted permission
@@ -990,25 +1047,23 @@ export default function VoiceInterviewPage() {
               alert("Permissions are required to proceed: " + err.message)
             }
           }}
-            className={`w-full py-4 rounded-xl font-bold text-sm transition-all flex items-center justify-center gap-3 ${
-              permissionsGranted 
-                ? 'bg-emerald-500/20 text-emerald-400 border border-emerald-500/30 cursor-default' 
+            className={`w-full py-4 rounded-xl font-bold text-sm transition-all flex items-center justify-center gap-3 ${permissionsGranted
+                ? 'bg-emerald-500/20 text-emerald-400 border border-emerald-500/30 cursor-default'
                 : 'bg-indigo-500/10 text-indigo-300 border border-indigo-500/30 hover:bg-indigo-500/20'
-            }`}>
-            <i className={`fas ${permissionsGranted ? 'fa-check-circle' : 'fa-lock-open'}`}/>
+              }`}>
+            <i className={`fas ${permissionsGranted ? 'fa-check-circle' : 'fa-lock-open'}`} />
             {permissionsGranted ? 'Permissions Granted' : 'Grant Camera & Mic Permissions'}
           </button>
 
-          <button 
+          <button
             disabled={!permissionsGranted}
             onClick={() => setRound('intro')}
-            className={`w-full py-4 rounded-xl font-bold text-lg transition-all flex items-center justify-center gap-3 ${
-              permissionsGranted 
-                ? 'bg-gradient-to-r from-emerald-500 to-teal-500 text-white shadow-[0_4px_30px_rgba(16,185,129,0.4)] hover:shadow-[0_4px_50px_rgba(16,185,129,0.6)] hover:scale-[1.02]' 
+            className={`w-full py-4 rounded-xl font-bold text-lg transition-all flex items-center justify-center gap-3 ${permissionsGranted
+                ? 'bg-gradient-to-r from-emerald-500 to-teal-500 text-white shadow-[0_4px_30px_rgba(16,185,129,0.4)] hover:shadow-[0_4px_50px_rgba(16,185,129,0.6)] hover:scale-[1.02]'
                 : 'bg-slate-800 text-slate-500 cursor-not-allowed'
-            }`}>
+              }`}>
             I Agree & Continue
-            <i className="fas fa-arrow-right"/>
+            <i className="fas fa-arrow-right" />
           </button>
         </div>
       </div>
@@ -1017,7 +1072,7 @@ export default function VoiceInterviewPage() {
 
   // ── Intro Screen ──────────────────────────────────────────────────────────
   if (round === 'intro') return (
-    <div className="min-h-screen bg-[#0a0f1e] flex flex-col items-center justify-center text-white px-6" style={{fontFamily:"'Inter',sans-serif"}}>
+    <div className="min-h-screen bg-[#0a0f1e] flex flex-col items-center justify-center text-white px-6" style={{ fontFamily: "'Inter',sans-serif" }}>
       <style>{`
         @keyframes pulse-ring{0%,100%{transform:scale(1);opacity:.5}50%{transform:scale(1.12);opacity:1}}
         @keyframes wave{0%{height:4px}100%{height:28px}}
@@ -1025,7 +1080,7 @@ export default function VoiceInterviewPage() {
       <div className="max-w-xl w-full text-center space-y-10">
         <div className="flex items-center justify-center gap-3">
           <div className="w-10 h-10 rounded-xl bg-gradient-to-tr from-indigo-500 to-purple-600 flex items-center justify-center shadow-xl">
-            <i className="fas fa-brain text-lg text-white"/>
+            <i className="fas fa-brain text-lg text-white" />
           </div>
           <span className="text-2xl font-black">HireIQ <span className="text-transparent bg-clip-text bg-gradient-to-r from-indigo-400 to-purple-400 font-medium text-xl">Voice AI</span></span>
         </div>
@@ -1044,8 +1099,8 @@ export default function VoiceInterviewPage() {
           <p className="text-slate-400 leading-relaxed">
             Hi, <span className="text-white font-semibold">{sessionDetail?.candidate_name}</span>! I'm Zara. We'll have a natural voice conversation across {
               interviewType === 'Technical' ? '2 rounds — Verbal Q&A + Coding' :
-              interviewType === 'Non-Technical' ? '3 rounds — Verbal Q&A + Coding + Case Study' :
-              '1 round of Verbal Q&A'
+                interviewType === 'Non-Technical' ? '3 rounds — Verbal Q&A + Coding + Case Study' :
+                  '1 round of Verbal Q&A'
             }. I'll ask follow-up questions to dig deeper into your answers.
           </p>
         </div>
@@ -1053,16 +1108,16 @@ export default function VoiceInterviewPage() {
         {/* Round badges */}
         <div className="flex flex-wrap gap-3 justify-center">
           <div className="flex items-center gap-2 px-4 py-2 bg-indigo-500/10 border border-indigo-500/20 rounded-full text-sm">
-            <i className="fas fa-comments text-indigo-400"/> Verbal Q&A ({questions.length} questions)
+            <i className="fas fa-comments text-indigo-400" /> Verbal Q&A ({questions.length} questions)
           </div>
           {(interviewType === 'Technical' || interviewType === 'Non-Technical') && (
             <div className="flex items-center gap-2 px-4 py-2 bg-amber-500/10 border border-amber-500/20 rounded-full text-sm">
-              <i className="fas fa-code text-amber-400"/> Live Coding
+              <i className="fas fa-code text-amber-400" /> Live Coding
             </div>
           )}
           {interviewType === 'Non-Technical' && (
             <div className="flex items-center gap-2 px-4 py-2 bg-violet-500/10 border border-violet-500/20 rounded-full text-sm">
-              <i className="fas fa-briefcase text-violet-400"/> Case Study
+              <i className="fas fa-briefcase text-violet-400" /> Case Study
             </div>
           )}
         </div>
@@ -1070,13 +1125,13 @@ export default function VoiceInterviewPage() {
         {/* Tips */}
         <div className="grid gap-3 text-sm text-left">
           {[
-            { i:'fa-volume-up', c:'text-indigo-400', t:'I speak each question aloud — listen before answering' },
-            { i:'fa-microphone', c:'text-emerald-400', t:'Just talk naturally — your mic captures everything' },
-            { i:'fa-comment-dots', c:'text-violet-400', t:'I\'ll ask follow-up questions based on your answers' },
-            { i:'fa-arrow-right', c:'text-amber-400', t:'After 5 seconds of silence, the interview auto-advances' },
+            { i: 'fa-volume-up', c: 'text-indigo-400', t: 'I speak each question aloud — listen before answering' },
+            { i: 'fa-microphone', c: 'text-emerald-400', t: 'Just talk naturally — your mic captures everything' },
+            { i: 'fa-comment-dots', c: 'text-violet-400', t: 'I\'ll ask follow-up questions based on your answers' },
+            { i: 'fa-arrow-right', c: 'text-amber-400', t: 'After 5 seconds of silence, the interview auto-advances' },
           ].map((tip, idx) => (
             <div key={idx} className="flex items-center gap-3 bg-white/4 border border-white/6 rounded-xl px-5 py-3">
-              <i className={`fas ${tip.i} ${tip.c} w-5 text-center`}/>
+              <i className={`fas ${tip.i} ${tip.c} w-5 text-center`} />
               <span className="text-slate-300">{tip.t}</span>
             </div>
           ))}
@@ -1084,7 +1139,7 @@ export default function VoiceInterviewPage() {
 
         <button onClick={startInterview}
           className="w-full py-4 rounded-2xl bg-gradient-to-r from-indigo-500 to-purple-600 text-white font-bold text-lg shadow-[0_4px_30px_rgba(99,102,241,0.5)] hover:shadow-[0_4px_50px_rgba(99,102,241,0.8)] hover:scale-[1.02] transition-all flex items-center justify-center gap-3">
-          <i className="fas fa-microphone-alt"/> Begin Interview with Zara
+          <i className="fas fa-microphone-alt" /> Begin Interview with Zara
         </button>
       </div>
     </div>
@@ -1095,7 +1150,7 @@ export default function VoiceInterviewPage() {
   const progress = questions.length ? ((currentQIdx) / questions.length) * 100 : 0
 
   return (
-    <div className="h-screen bg-[#07091a] flex flex-col text-white overflow-hidden" style={{fontFamily:"'Inter',sans-serif"}}>
+    <div className="h-screen bg-[#07091a] flex flex-col text-white overflow-hidden" style={{ fontFamily: "'Inter',sans-serif" }}>
       <style>{`
         @keyframes wave{0%{height:4px;opacity:.5}100%{height:32px;opacity:1}}
         @keyframes glow-speak{0%,100%{box-shadow:0 0 40px rgba(99,102,241,.5),0 0 80px rgba(99,102,241,.2)}50%{box-shadow:0 0 80px rgba(99,102,241,.9),0 0 140px rgba(99,102,241,.4)}}
@@ -1107,23 +1162,23 @@ export default function VoiceInterviewPage() {
       <header className="flex items-center justify-between px-6 py-4 border-b border-white/6 bg-[#0a0f1e]/90 backdrop-blur sticky top-0 z-40">
         <div className="flex items-center gap-3">
           <div className="w-8 h-8 rounded-lg bg-gradient-to-tr from-indigo-500 to-purple-600 flex items-center justify-center">
-            <i className="fas fa-brain text-sm text-white"/>
+            <i className="fas fa-brain text-sm text-white" />
           </div>
           <span className="font-black tracking-tight">HireIQ <span className="text-transparent bg-clip-text bg-gradient-to-r from-indigo-400 to-purple-400 font-medium">Voice AI</span></span>
           <span className="ml-2 text-xs font-semibold text-indigo-400 bg-indigo-500/10 border border-indigo-500/20 rounded-full px-2.5 py-0.5 uppercase tracking-widest">
-            <i className="fas fa-comments mr-1"/>Round 1: Verbal
+            <i className="fas fa-comments mr-1" />Round 1: Verbal
           </span>
         </div>
         <div className="flex items-center gap-3">
           <div className={`text-sm font-mono font-bold px-4 py-1.5 rounded-full border ${countdown < 300 ? 'border-rose-500/50 text-rose-400 bg-rose-500/10' : 'border-indigo-500/30 text-indigo-300 bg-indigo-500/10'}`}>
-            <i className="fas fa-clock mr-2"/>{fmt(countdown)}
+            <i className="fas fa-clock mr-2" />{fmt(countdown)}
           </div>
-          <span className="text-sm text-slate-400">Q <span className="text-white font-bold">{currentQIdx+1}</span>/{questions.length}</span>
+          <span className="text-sm text-slate-400">Q <span className="text-white font-bold">{currentQIdx + 1}</span>/{questions.length}</span>
         </div>
       </header>
 
       {/* Progress */}
-      <div className="h-1 bg-white/5"><div className="h-full bg-gradient-to-r from-indigo-500 to-purple-600 transition-all duration-700" style={{width:`${progress}%`}}/></div>
+      <div className="h-1 bg-white/5"><div className="h-full bg-gradient-to-r from-indigo-500 to-purple-600 transition-all duration-700" style={{ width: `${progress}%` }} /></div>
 
       {/* Main: center avatar layout */}
       <div className="flex-1 flex flex-col items-center justify-between py-6 px-4 overflow-y-auto">
@@ -1145,15 +1200,14 @@ export default function VoiceInterviewPage() {
           </div>
 
           {/* AI Status label */}
-          <div className={`text-xs font-bold uppercase tracking-widest flex items-center gap-2 ${
-            aiStatus==='speaking'?'text-indigo-400':
-            aiStatus==='listening'?'text-emerald-400':
-            aiStatus==='thinking'?'text-amber-400':'text-slate-600'
-          }`}>
-            {aiStatus==='speaking'&&<><span className="w-1.5 h-1.5 rounded-full bg-indigo-400 animate-pulse"/>Zara is Speaking</>}
-            {aiStatus==='listening'&&<><span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse"/>Listening to you</>}
-            {aiStatus==='thinking'&&<><span className="w-1.5 h-1.5 rounded-full bg-amber-400 animate-pulse"/>Thinking...</>}
-            {aiStatus==='idle'&&'Ready'}
+          <div className={`text-xs font-bold uppercase tracking-widest flex items-center gap-2 ${aiStatus === 'speaking' ? 'text-indigo-400' :
+              aiStatus === 'listening' ? 'text-emerald-400' :
+                aiStatus === 'thinking' ? 'text-amber-400' : 'text-slate-600'
+            }`}>
+            {aiStatus === 'speaking' && <><span className="w-1.5 h-1.5 rounded-full bg-indigo-400 animate-pulse" />Zara is Speaking</>}
+            {aiStatus === 'listening' && <><span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse" />Listening to you</>}
+            {aiStatus === 'thinking' && <><span className="w-1.5 h-1.5 rounded-full bg-amber-400 animate-pulse" />Thinking...</>}
+            {aiStatus === 'idle' && 'Ready'}
           </div>
 
           {/* Typewriter Question Text */}
@@ -1163,24 +1217,35 @@ export default function VoiceInterviewPage() {
             </p>
           </div>
 
-          {/* User's live transcript while listening */}
-          {aiStatus === 'listening' && (
+          {/* User's live transcript — shows while listening AND after (so user can see what was captured) */}
+          {(aiStatus === 'listening' || transcript || interimText) && (
             <div className="max-w-xl w-full mx-auto mt-2">
-              <div className="rounded-2xl border border-emerald-500/20 bg-emerald-500/5 px-5 py-3 text-center">
-                {transcript
-                  ? <p className="text-emerald-300 text-sm leading-relaxed">{transcript}<span className="text-slate-500 italic">{interimText ? ' ' + interimText : ''}</span></p>
-                  : <p className="text-slate-600 text-sm italic flex items-center justify-center gap-2">
-                      <i className="fas fa-microphone text-emerald-600"/>
-                      Listening — speak now...
+              <div className={`rounded-2xl border px-5 py-3 text-center transition-all duration-300 ${
+                aiStatus === 'listening'
+                  ? 'border-emerald-500/30 bg-emerald-500/8'
+                  : 'border-white/10 bg-white/4'
+              }`}>
+                {(transcript || interimText)
+                  ? <p className="text-emerald-300 text-sm leading-relaxed">
+                      {transcript}
+                      {interimText && (
+                        <span className="text-emerald-400/60 italic"> {interimText}▌</span>
+                      )}
                     </p>
+                  : <p className="text-slate-600 text-sm italic flex items-center justify-center gap-2">
+                    <i className="fas fa-microphone text-emerald-600" />
+                    Listening — speak now...
+                  </p>
                 }
-                {/* Listener waveform */}
-                <div className="flex items-center justify-center gap-1.5 h-5 mt-2">
-                  {[0,1,2,3,4,5,6,7,8].map(i => (
-                    <div key={i} className="w-1 rounded-full bg-emerald-500/50"
-                      style={{height:4,animation:`wave ${.25+i*.06}s ease-in-out infinite alternate`,animationDelay:`${i*.04}s`}}/>
-                  ))}
-                </div>
+                {/* Listener waveform — only while actively listening */}
+                {aiStatus === 'listening' && (
+                  <div className="flex items-center justify-center gap-1.5 h-5 mt-2">
+                    {[0, 1, 2, 3, 4, 5, 6, 7, 8].map(i => (
+                      <div key={i} className="w-1 rounded-full bg-emerald-500/50"
+                        style={{ height: 4, animation: `wave ${.25 + i * .06}s ease-in-out infinite alternate`, animationDelay: `${i * .04}s` }} />
+                    ))}
+                  </div>
+                )}
               </div>
             </div>
           )}
@@ -1189,16 +1254,18 @@ export default function VoiceInterviewPage() {
         {/* Bottom controls */}
         <div className="w-full max-w-lg space-y-4">
           <div className="flex gap-2">
-            <button onClick={()=>{
-              if(aiStatus==='listening'){stopListening()}
-              else{startListening(ans=>handleAnswer(ans,currentQIdx,0))}
-            }} className={`flex-1 py-3.5 rounded-2xl text-sm font-bold transition-all flex items-center justify-center gap-2.5 ${
-              aiStatus==='listening'
-                ?'bg-rose-500/15 border border-rose-500/30 text-rose-400 shadow-[0_0_30px_rgba(239,68,68,.15)]'
-                :'bg-indigo-500/10 border border-indigo-500/30 text-indigo-300 hover:bg-indigo-500/20'
-            }`}>
-              <i className={`fas ${aiStatus==='listening'?'fa-stop-circle':'fa-microphone'} text-base`}/>
-              {aiStatus==='listening'?'Done Speaking':'Speak Answer'}
+            <button onClick={() => {
+              if (aiStatus === 'listening') {
+                stopListening()
+                handleAnswer(currentTxRef.current.trim(), currentQIdx, 0)
+              }
+              else { startListening(ans => handleAnswer(ans, currentQIdx, 0)) }
+            }} className={`flex-1 py-3.5 rounded-2xl text-sm font-bold transition-all flex items-center justify-center gap-2.5 ${aiStatus === 'listening'
+                ? 'bg-rose-500/15 border border-rose-500/30 text-rose-400 shadow-[0_0_30px_rgba(239,68,68,.15)]'
+                : 'bg-indigo-500/10 border border-indigo-500/30 text-indigo-300 hover:bg-indigo-500/20'
+              }`}>
+              <i className={`fas ${aiStatus === 'listening' ? 'fa-stop-circle' : 'fa-microphone'} text-base`} />
+              {aiStatus === 'listening' ? 'Done Speaking' : 'Speak Answer'}
             </button>
             <button onClick={transitionToNextRound} className="px-6 py-3.5 rounded-2xl bg-white/5 text-slate-400 border border-white/8 hover:bg-white/10 text-xs font-bold transition-all uppercase tracking-widest">
               Next Round
@@ -1210,12 +1277,11 @@ export default function VoiceInterviewPage() {
 
           {/* Progress dots */}
           <div className="flex items-center justify-center gap-1.5 flex-wrap">
-            {questions.map((_,i) => (
-              <div key={i} className={`rounded-full transition-all duration-300 ${
-                i<currentQIdx?'w-2 h-2 bg-emerald-500':
-                i===currentQIdx?'w-3.5 h-3.5 bg-indigo-500 shadow-[0_0_10px_rgba(99,102,241,.8)]':
-                'w-2 h-2 bg-white/10'
-              }`}/>
+            {questions.map((_, i) => (
+              <div key={i} className={`rounded-full transition-all duration-300 ${i < currentQIdx ? 'w-2 h-2 bg-emerald-500' :
+                  i === currentQIdx ? 'w-3.5 h-3.5 bg-indigo-500 shadow-[0_0_10px_rgba(99,102,241,.8)]' :
+                    'w-2 h-2 bg-white/10'
+                }`} />
             ))}
           </div>
         </div>

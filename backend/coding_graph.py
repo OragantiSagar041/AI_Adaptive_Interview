@@ -121,6 +121,13 @@ def _default_task() -> Dict[str, Any]:
             {"id": 5, "input": [[5], ["Alex"]], "expected": ["Alex"], "visible": False},
             {"id": 6, "input": [[6], ["Sam"]], "expected": ["Sam"], "visible": False},
             {"id": 7, "input": [[7], ["Alex"]], "expected": ["Sam"], "visible": False},
+            {"id": 8, "input": [[8], ["Sam"]], "expected": ["Alex"], "visible": False},
+            {"id": 9, "input": [[9], ["Alex"]], "expected": ["Alex"], "visible": False},
+            {"id": 10, "input": [[10], ["Sam"]], "expected": ["Sam"], "visible": False},
+            {"id": 11, "input": [[11], ["Alex"]], "expected": ["Sam"], "visible": False},
+            {"id": 12, "input": [[12], ["Sam"]], "expected": ["Alex"], "visible": False},
+            {"id": 13, "input": [[13], ["Alex"]], "expected": ["Alex"], "visible": False},
+            {"id": 14, "input": [[14], ["Sam"]], "expected": ["Sam"], "visible": False},
         ],
     }
 
@@ -146,8 +153,8 @@ def _normalize_task(task: Dict[str, Any]) -> Dict[str, Any]:
     normalized["function_name"] = normalized.get("function_name") or _extract_function_name(signature)
     normalized["recommended_language"] = normalized.get("recommended_language") or "python"
     test_cases = normalized.get("test_cases") or fallback["test_cases"]
-    normalized["test_cases"] = [_normalize_test_case(case, idx + 1) for idx, case in enumerate(test_cases[:7])]
-    if len(normalized["test_cases"]) < 7:
+    normalized["test_cases"] = [_normalize_test_case(case, idx + 1) for idx, case in enumerate(test_cases[:14])]
+    if len(normalized["test_cases"]) < 14:
         for extra in fallback["test_cases"][len(normalized["test_cases"]):]:
             normalized["test_cases"].append(extra)
     visible_count = sum(1 for case in normalized["test_cases"] if case["visible"])
@@ -236,9 +243,16 @@ def _offline_coding_fallback(profile_text: str) -> Dict[str, Any]:
                 {"id": 5, "input": [[]], "expected": [], "visible": False},
                 {"id": 6, "input": [["1", "2", "2"]], "expected": ["2"], "visible": False},
                 {"id": 7, "input": [["1", "1", "2", "2"]], "expected": ["1", "2"], "visible": False},
+                {"id": 8, "input": [["x@x.com", "y@x.com", "x@x.com", "z@x.com", "z@x.com"]], "expected": ["x@x.com", "z@x.com"], "visible": False},
+                {"id": 9, "input": [["a", "b", "a", "b"]], "expected": ["a", "b"], "visible": False},
+                {"id": 10, "input": [["a", "b", "c", "d", "e"]], "expected": [], "visible": False},
+                {"id": 11, "input": [["q", "q", "q", "q"]], "expected": ["q"], "visible": False},
+                {"id": 12, "input": [["dup", "dup"]], "expected": ["dup"], "visible": False},
+                {"id": 13, "input": [["a", "b", "c", "d", "a", "b", "c"]], "expected": ["a", "b", "c"], "visible": False},
+                {"id": 14, "input": [["one", "two", "three"]], "expected": [], "visible": False},
             ],
         }
-    elif "react" in profile_lower or "javascript" in profile_lower or "frontend" in profile_lower:
+    elif "react" in profile_lower or "frontend" in profile_lower:
         signature = "def debounce_simulation(calls, delay):"
         return {
             "title": "Debounce Simulation",
@@ -267,6 +281,237 @@ def _offline_coding_fallback(profile_text: str) -> Dict[str, Any]:
                 {"id": 5, "input": [[10, 10, 10], 5], "expected": 1, "visible": False},
                 {"id": 6, "input": [[0, 5, 10, 15, 20], 100], "expected": 1, "visible": False},
                 {"id": 7, "input": [[100, 200, 300], 10], "expected": 3, "visible": False},
+                {"id": 8, "input": [[1, 2, 3, 4], 10], "expected": 1, "visible": False},
+                {"id": 9, "input": [[10, 50, 100], 30], "expected": 3, "visible": False},
+                {"id": 10, "input": [[10, 15, 20, 80, 85, 90], 20], "expected": 2, "visible": False},
+                {"id": 11, "input": [[10, 20, 30, 40], 5], "expected": 4, "visible": False},
+                {"id": 12, "input": [[0, 100], 50], "expected": 2, "visible": False},
+                {"id": 13, "input": [[0, 10, 20, 30, 40, 50, 60, 70, 80], 15], "expected": 6, "visible": False},
+                {"id": 14, "input": [[0, 50, 100, 150, 200], 1000], "expected": 1, "visible": False},
+            ],
+        }
+    elif "java" in profile_lower:
+        signature = "def valid_parentheses(s):"
+        return {
+            "title": "Valid Parentheses",
+            "description": "Given a string s containing just the characters '(', ')', '{', '}', '[' and ']', determine if the input string is valid.",
+            "input_format": "A string s.",
+            "output_format": "A boolean indicating if the string is valid.",
+            "constraints": ["1 <= s.length <= 10^4", "s consists of parentheses only '()[]{}'."],
+            "examples": [{"input": '"()"', "output": "True", "explanation": "Matching parenthesis."}],
+            "evaluation_focus": ["Correctness", "Stack Data Structure"],
+            "starter_function_signature": signature,
+            "function_name": _extract_function_name(signature),
+            "difficulty": "Easy",
+            "recommended_language": "java",
+            "timebox_minutes": 20,
+            "test_cases": [
+                {"id": 1, "input": ["()"], "expected": True, "visible": True},
+                {"id": 2, "input": ["()[]{}"], "expected": True, "visible": True},
+                {"id": 3, "input": ["(]"], "expected": False, "visible": True},
+                {"id": 4, "input": ["([)]"], "expected": False, "visible": False},
+                {"id": 5, "input": ["{[]}"], "expected": True, "visible": False},
+                {"id": 6, "input": ["["], "expected": False, "visible": False},
+                {"id": 7, "input": ["]"], "expected": False, "visible": False},
+                {"id": 8, "input": ["((()))"], "expected": True, "visible": False},
+                {"id": 9, "input": ["((())"], "expected": False, "visible": False},
+                {"id": 10, "input": ["()()()"], "expected": True, "visible": False},
+                {"id": 11, "input": ["{}[][]()"], "expected": True, "visible": False},
+                {"id": 12, "input": ["{[}]"], "expected": False, "visible": False},
+                {"id": 13, "input": [""], "expected": True, "visible": False},
+                {"id": 14, "input": ["([{()}])"], "expected": True, "visible": False},
+            ],
+        }
+    elif "c++" in profile_lower or "cpp" in profile_lower:
+        signature = "def reverse_array(arr):"
+        return {
+            "title": "Reverse Array",
+            "description": "Write a function that reverses an array in-place and returns it.",
+            "input_format": "An array of integers.",
+            "output_format": "The reversed array of integers.",
+            "constraints": ["Do it in O(N) time and O(1) extra space."],
+            "examples": [{"input": "[1, 2, 3]", "output": "[3, 2, 1]", "explanation": "Array reversed."}],
+            "evaluation_focus": ["Correctness", "Two Pointers"],
+            "starter_function_signature": signature,
+            "function_name": _extract_function_name(signature),
+            "difficulty": "Easy",
+            "recommended_language": "cpp",
+            "timebox_minutes": 15,
+            "test_cases": [
+                {"id": 1, "input": [[1, 2, 3]], "expected": [3, 2, 1], "visible": True},
+                {"id": 2, "input": [[1]], "expected": [1], "visible": True},
+                {"id": 3, "input": [[]], "expected": [], "visible": True},
+                {"id": 4, "input": [[1, 2, 3, 4]], "expected": [4, 3, 2, 1], "visible": False},
+                {"id": 5, "input": [[1, 1, 1]], "expected": [1, 1, 1], "visible": False},
+                {"id": 6, "input": [[-1, -2, -3]], "expected": [-3, -2, -1], "visible": False},
+                {"id": 7, "input": [[1, 0]], "expected": [0, 1], "visible": False},
+                {"id": 8, "input": [[5, 4, 3, 2, 1]], "expected": [1, 2, 3, 4, 5], "visible": False},
+                {"id": 9, "input": [[9, 9]], "expected": [9, 9], "visible": False},
+                {"id": 10, "input": [[0, 0, 0, 0]], "expected": [0, 0, 0, 0], "visible": False},
+                {"id": 11, "input": [[2, 1]], "expected": [1, 2], "visible": False},
+                {"id": 12, "input": [[10, 20, 30, 40, 50]], "expected": [50, 40, 30, 20, 10], "visible": False},
+                {"id": 13, "input": [[-5, 5]], "expected": [5, -5], "visible": False},
+                {"id": 14, "input": [[1, 2, 3, 4, 5, 6, 7]], "expected": [7, 6, 5, 4, 3, 2, 1], "visible": False},
+            ],
+        }
+    elif "go" in profile_lower or "golang" in profile_lower:
+        signature = "def max_profit(prices):"
+        return {
+            "title": "Best Time to Buy and Sell Stock",
+            "description": "You are given an array prices where prices[i] is the price of a given stock on the ith day. You want to maximize your profit by choosing a single day to buy one stock and choosing a different day in the future to sell that stock.",
+            "input_format": "An array of integers representing stock prices.",
+            "output_format": "An integer representing max profit.",
+            "constraints": ["1 <= prices.length <= 10^5", "0 <= prices[i] <= 10^4"],
+            "examples": [{"input": "[7,1,5,3,6,4]", "output": "5", "explanation": "Buy on day 2 (price = 1) and sell on day 5 (price = 6), profit = 6-1 = 5."}],
+            "evaluation_focus": ["Correctness", "Dynamic Programming / Greedy"],
+            "starter_function_signature": signature,
+            "function_name": _extract_function_name(signature),
+            "difficulty": "Easy",
+            "recommended_language": "go",
+            "timebox_minutes": 20,
+            "test_cases": [
+                {"id": 1, "input": [[7, 1, 5, 3, 6, 4]], "expected": 5, "visible": True},
+                {"id": 2, "input": [[7, 6, 4, 3, 1]], "expected": 0, "visible": True},
+                {"id": 3, "input": [[1, 2]], "expected": 1, "visible": True},
+                {"id": 4, "input": [[2, 1]], "expected": 0, "visible": False},
+                {"id": 5, "input": [[2, 4, 1]], "expected": 2, "visible": False},
+                {"id": 6, "input": [[3, 2, 6, 5, 0, 3]], "expected": 4, "visible": False},
+                {"id": 7, "input": [[1, 2, 3, 4, 5]], "expected": 4, "visible": False},
+                {"id": 8, "input": [[5, 4, 3, 2, 1]], "expected": 0, "visible": False},
+                {"id": 9, "input": [[100]], "expected": 0, "visible": False},
+                {"id": 10, "input": [[10, 20, 5, 25]], "expected": 20, "visible": False},
+                {"id": 11, "input": [[1, 1, 1, 1]], "expected": 0, "visible": False},
+                {"id": 12, "input": [[1, 100]], "expected": 99, "visible": False},
+                {"id": 13, "input": [[100, 1]], "expected": 0, "visible": False},
+                {"id": 14, "input": [[1, 5, 1, 5]], "expected": 4, "visible": False},
+            ],
+        }
+    elif "node" in profile_lower or "express" in profile_lower:
+        signature = "def two_sum(nums, target):"
+        return {
+            "title": "Two Sum",
+            "description": "Given an array of integers nums and an integer target, return indices of the two numbers such that they add up to target.",
+            "input_format": "Array of integers and a target integer.",
+            "output_format": "Array of 2 integers (indices).",
+            "constraints": ["Assume exactly one solution exists."],
+            "examples": [{"input": "[2,7,11,15], 9", "output": "[0, 1]", "explanation": "nums[0] + nums[1] == 9"}],
+            "evaluation_focus": ["Correctness", "Hash Map"],
+            "starter_function_signature": signature,
+            "function_name": _extract_function_name(signature),
+            "difficulty": "Easy",
+            "recommended_language": "javascript",
+            "timebox_minutes": 15,
+            "test_cases": [
+                {"id": 1, "input": [[2, 7, 11, 15], 9], "expected": [0, 1], "visible": True},
+                {"id": 2, "input": [[3, 2, 4], 6], "expected": [1, 2], "visible": True},
+                {"id": 3, "input": [[3, 3], 6], "expected": [0, 1], "visible": True},
+                {"id": 4, "input": [[1, 5, 9], 10], "expected": [0, 2], "visible": False},
+                {"id": 5, "input": [[1, -1], 0], "expected": [0, 1], "visible": False},
+                {"id": 6, "input": [[0, 4, 3, 0], 0], "expected": [0, 3], "visible": False},
+                {"id": 7, "input": [[-3, 4, 3, 90], 0], "expected": [0, 2], "visible": False},
+                {"id": 8, "input": [[10, 20, 30, 40], 70], "expected": [2, 3], "visible": False},
+                {"id": 9, "input": [[1, 2, 3, 4, 5], 9], "expected": [3, 4], "visible": False},
+                {"id": 10, "input": [[5, 10, 15, 20], 35], "expected": [2, 3], "visible": False},
+                {"id": 11, "input": [[2, 4, 6, 8], 10], "expected": [1, 2], "visible": False},
+                {"id": 12, "input": [[-5, -2, -1, 0], -7], "expected": [0, 1], "visible": False},
+                {"id": 13, "input": [[1, 2, 3, 4, 5], 3], "expected": [0, 1], "visible": False},
+                {"id": 14, "input": [[100, 200, 300], 400], "expected": [0, 2], "visible": False},
+            ],
+        }
+    elif "ruby" in profile_lower or "rails" in profile_lower:
+        signature = "def is_palindrome(s):"
+        return {
+            "title": "Valid Palindrome",
+            "description": "A phrase is a palindrome if, after converting all uppercase letters into lowercase letters and removing all non-alphanumeric characters, it reads the same forward and backward. Given a string s, return true if it is a palindrome, or false otherwise.",
+            "input_format": "A string s.",
+            "output_format": "Boolean",
+            "constraints": ["1 <= s.length <= 2 * 10^5"],
+            "examples": [{"input": '"A man, a plan, a canal: Panama"', "output": "True", "explanation": "Reads 'amanaplanacanalpanama'."}],
+            "evaluation_focus": ["Correctness", "String Manipulation", "Two Pointers"],
+            "starter_function_signature": signature,
+            "function_name": _extract_function_name(signature),
+            "difficulty": "Easy",
+            "recommended_language": "ruby",
+            "timebox_minutes": 15,
+            "test_cases": [
+                {"id": 1, "input": ["A man, a plan, a canal: Panama"], "expected": True, "visible": True},
+                {"id": 2, "input": ["race a car"], "expected": False, "visible": True},
+                {"id": 3, "input": [" "], "expected": True, "visible": True},
+                {"id": 4, "input": ["a."], "expected": True, "visible": False},
+                {"id": 5, "input": ["ab"], "expected": False, "visible": False},
+                {"id": 6, "input": ["0P"], "expected": False, "visible": False},
+                {"id": 7, "input": ["aA"], "expected": True, "visible": False},
+                {"id": 8, "input": ["1a1"], "expected": True, "visible": False},
+                {"id": 9, "input": ["madam"], "expected": True, "visible": False},
+                {"id": 10, "input": ["step on no pets"], "expected": True, "visible": False},
+                {"id": 11, "input": ["1234321"], "expected": True, "visible": False},
+                {"id": 12, "input": ["123456"], "expected": False, "visible": False},
+                {"id": 13, "input": ["No 'x' in Nixon"], "expected": True, "visible": False},
+                {"id": 14, "input": ["Was it a car or a cat I saw?"], "expected": True, "visible": False},
+            ],
+        }
+    elif "c#" in profile_lower or "dotnet" in profile_lower:
+        signature = "def contains_duplicate(nums):"
+        return {
+            "title": "Contains Duplicate",
+            "description": "Given an integer array nums, return true if any value appears at least twice in the array, and return false if every element is distinct.",
+            "input_format": "An array of integers.",
+            "output_format": "Boolean",
+            "constraints": ["1 <= nums.length <= 10^5"],
+            "examples": [{"input": "[1,2,3,1]", "output": "True", "explanation": "1 appears twice."}],
+            "evaluation_focus": ["Correctness", "Hash Set"],
+            "starter_function_signature": signature,
+            "function_name": _extract_function_name(signature),
+            "difficulty": "Easy",
+            "recommended_language": "csharp",
+            "timebox_minutes": 15,
+            "test_cases": [
+                {"id": 1, "input": [[1, 2, 3, 1]], "expected": True, "visible": True},
+                {"id": 2, "input": [[1, 2, 3, 4]], "expected": False, "visible": True},
+                {"id": 3, "input": [[1, 1, 1, 3, 3, 4, 3, 2, 4, 2]], "expected": True, "visible": True},
+                {"id": 4, "input": [[0]], "expected": False, "visible": False},
+                {"id": 5, "input": [[3, 3]], "expected": True, "visible": False},
+                {"id": 6, "input": [[-1, -2, -3, -1]], "expected": True, "visible": False},
+                {"id": 7, "input": [[10, 20, 30]], "expected": False, "visible": False},
+                {"id": 8, "input": [[0, 0]], "expected": True, "visible": False},
+                {"id": 9, "input": [[100, 200, 300, 400, 500, 600, 100]], "expected": True, "visible": False},
+                {"id": 10, "input": [[1, 2, 3, 4, 5, 6, 7, 8, 9, 10]], "expected": False, "visible": False},
+                {"id": 11, "input": [[-1, 1]], "expected": False, "visible": False},
+                {"id": 12, "input": [[5, 4, 3, 2, 1, 5]], "expected": True, "visible": False},
+                {"id": 13, "input": [[9, 8, 7, 6, 5]], "expected": False, "visible": False},
+                {"id": 14, "input": [[1, 1]], "expected": True, "visible": False},
+            ],
+        }
+    elif "rust" in profile_lower or "systems" in profile_lower:
+        signature = "def missing_number(nums):"
+        return {
+            "title": "Missing Number",
+            "description": "Given an array nums containing n distinct numbers in the range [0, n], return the only number in the range that is missing from the array.",
+            "input_format": "An array of integers.",
+            "output_format": "An integer.",
+            "constraints": ["n == nums.length", "0 <= nums[i] <= n", "All the numbers of nums are unique."],
+            "examples": [{"input": "[3,0,1]", "output": "2", "explanation": "n = 3, since there are 3 numbers, so all numbers are in the range [0,3]. 2 is the missing number."}],
+            "evaluation_focus": ["Correctness", "Math / Bit Manipulation"],
+            "starter_function_signature": signature,
+            "function_name": _extract_function_name(signature),
+            "difficulty": "Easy",
+            "recommended_language": "rust",
+            "timebox_minutes": 15,
+            "test_cases": [
+                {"id": 1, "input": [[3, 0, 1]], "expected": 2, "visible": True},
+                {"id": 2, "input": [[0, 1]], "expected": 2, "visible": True},
+                {"id": 3, "input": [[9, 6, 4, 2, 3, 5, 7, 0, 1]], "expected": 8, "visible": True},
+                {"id": 4, "input": [[0]], "expected": 1, "visible": False},
+                {"id": 5, "input": [[1]], "expected": 0, "visible": False},
+                {"id": 6, "input": [[1, 2]], "expected": 0, "visible": False},
+                {"id": 7, "input": [[0, 2]], "expected": 1, "visible": False},
+                {"id": 8, "input": [[0, 1, 2, 3, 5]], "expected": 4, "visible": False},
+                {"id": 9, "input": [[5, 4, 3, 1, 0]], "expected": 2, "visible": False},
+                {"id": 10, "input": [[0, 1, 2, 3, 4, 5, 6, 7, 8]], "expected": 9, "visible": False},
+                {"id": 11, "input": [[1, 2, 3, 4, 5, 6]], "expected": 0, "visible": False},
+                {"id": 12, "input": [[0, 1, 2, 3, 4, 6]], "expected": 5, "visible": False},
+                {"id": 13, "input": [[2, 0]], "expected": 1, "visible": False},
+                {"id": 14, "input": [[3, 1, 0]], "expected": 2, "visible": False},
             ],
         }
     else:
@@ -335,7 +580,7 @@ Return JSON with:
 - difficulty
 - recommended_language
 - timebox_minutes
-- test_cases (exactly 7 items, each with input as JSON array args, expected, visible where first 3 are true and last 4 are false)
+- test_cases (exactly 14 items, each with input as JSON array args, expected, visible where first 3 are true and last 11 are false)
 
 Make the task a pure function problem using only cross-language friendly inputs and outputs such as strings, numbers, booleans, or flat arrays. It should be solvable in 20-30 minutes and suitable for Python, JavaScript, Java, or C. The context and scenario of the problem MUST be heavily themed around the '{industry}' industry.
 """

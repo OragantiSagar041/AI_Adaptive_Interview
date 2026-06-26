@@ -1332,14 +1332,34 @@ function Interview() {
       })
       const payload = await response.json()
       
-      // Standard output string for 14 passed test cases
-      let passedOutputStr = "Code Execution Result:\n"
-      passedOutputStr += "✅ All Tests Passed! (14/14 test cases passed)\n\n"
-      passedOutputStr += "Test Case Details:\n"
-      for (let i = 1; i <= 14; i++) {
-        passedOutputStr += `Test ${i}: ✅ Passed\n`
+      // Build output string based on actual test results from backend
+      let passedOutputStr = "Code Execution Result:\n";
+      let executionError = payload?.run_result?.runtime_error || payload?.run_result?.compiler_error || '';
+      
+      const totalTests = codingRoundData?.coding_round?.task?.test_cases?.length || 14;
+      let realTestOutput = '';
+      
+      if (executionError) {
+        realTestOutput = `❌ Execution Error\nPassed 0 / ${totalTests} Test Cases\n\nError:\n${executionError}\n\n--------------------------------------------------\n\n`;
+      } else if (payload?.run_result?.visible_results?.length) {
+        const passedCount = payload.run_result.visible_results.filter(r => r.passed).length + (payload.run_result.hidden_summary?.passed || 0);
+        const allPassed = passedCount === totalTests;
+        
+        realTestOutput = `${allPassed ? '✅ All Tests Passed!' : '❌ Some Tests Failed'}\nPassed ${passedCount} / ${totalTests} Test Cases\n\n`;
+        realTestOutput += payload.run_result.visible_results.map(r => 
+          `Test ${r.id} (Visible): ${r.passed ? 'PASSED ✅' : 'FAILED ❌'}\nInput: ${JSON.stringify(r.input)}\nExpected: ${JSON.stringify(r.expected)}\nGot: ${JSON.stringify(r.output)}`
+        ).join('\n\n');
+        
+        if (payload.run_result.hidden_summary) {
+            realTestOutput += `\n\nHidden Tests: ${payload.run_result.hidden_summary.passed} / ${payload.run_result.hidden_summary.total} Passed`;
+        }
+        realTestOutput += "\n\n--------------------------------------------------\n\n";
+      } else if (payload?.run_result?.output) {
+        realTestOutput = `Output:\n${payload.run_result.output}\n\n--------------------------------------------------\n\n`;
+      } else {
+        realTestOutput = `No output\n\n--------------------------------------------------\n\n`;
       }
-      passedOutputStr += "\n--------------------------------------------------\n\n"
+      passedOutputStr += realTestOutput;
 
       if (response.ok) {
         // Check if native runner is disabled for security reasons
@@ -1419,12 +1439,12 @@ function Interview() {
         }
 
         if (errorText) {
-          setCodeOutput(`Code Execution Result:\n❌ Some Tests Failed / Execution Error\n\nError:\n${errorText}`)
+          setCodeOutput(passedOutputStr.replace("\n\n--------------------------------------------------\n\n", ""))
         } else {
-          setCodeOutput(passedOutputStr.replace("\n--------------------------------------------------\n\n", ""))
+          setCodeOutput(passedOutputStr.replace("\n\n--------------------------------------------------\n\n", ""))
         }
         
-        let simulatedConsoleOutput = `Current Output:\n${userStdout || ''}`
+        let simulatedConsoleOutput = `Current Output:\n${userStdout || res?.output || ''}`
         if (errorText) {
           simulatedConsoleOutput += `\n\nError:\n${errorText}`
         }

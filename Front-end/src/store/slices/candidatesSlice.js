@@ -231,6 +231,12 @@ const candidatesSlice = createSlice({
   },
   extraReducers: (builder) => {
     builder
+      .addCase('auth/logout', (state) => {
+        state.selectedIds = []
+        state.candidates = []
+        state.paginatedCandidates = []
+        state.searchTerm = ''
+      })
       .addCase(loadDashboardData.pending, (state) => {
         state.status = 'loading'
       })

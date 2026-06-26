@@ -121,6 +121,9 @@ export default function OverviewDashboardPage() {
 
   useEffect(() => {
     dispatch(loadSuperAdminDashboard(selectedAdminFilter))
+    return () => {
+      dispatch(setSelectedIds([]))
+    }
   }, [dispatch, selectedAdminFilter])
 
   // Loading and error states as specified by Tailwind rules (Task 4)

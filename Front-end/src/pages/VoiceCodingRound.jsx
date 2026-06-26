@@ -12,13 +12,13 @@ import aiVideoUrl from '../assets/ai_avatar.mp4'
 
 // ── Language config with brand colors ─────────────────────────────────────
 const LANGUAGES = [
-  { id: 'python',     label: 'Python',     color: '#3b82f6', bg: '#1e3a5f' },
+  { id: 'python', label: 'Python', color: '#3b82f6', bg: '#1e3a5f' },
   { id: 'javascript', label: 'JavaScript', color: '#f59e0b', bg: '#3d2e00' },
-  { id: 'java',       label: 'Java',       color: '#ef4444', bg: '#3d1515' },
-  { id: 'cpp',        label: 'C++',        color: '#8b5cf6', bg: '#2e1f4f' },
+  { id: 'java', label: 'Java', color: '#ef4444', bg: '#3d1515' },
+  { id: 'cpp', label: 'C++', color: '#8b5cf6', bg: '#2e1f4f' },
   { id: 'typescript', label: 'TypeScript', color: '#60a5fa', bg: '#1a2f4a' },
-  { id: 'go',         label: 'Go',         color: '#22d3ee', bg: '#0c2e33' },
-  { id: 'rust',       label: 'Rust',       color: '#fb923c', bg: '#3d2200' },
+  { id: 'go', label: 'Go', color: '#22d3ee', bg: '#0c2e33' },
+  { id: 'rust', label: 'Rust', color: '#fb923c', bg: '#3d2200' },
 ]
 
 // ── Code Pattern Detector ──────────────────────────────────────────────────
@@ -71,7 +71,7 @@ function VideoAvatarOrb({ status }) {
     const video = videoRef.current
     if (!video) return
     if (isSpeaking) {
-      video.play().catch(() => {})
+      video.play().catch(() => { })
     } else {
       video.pause()
       video.currentTime = 0
@@ -82,13 +82,13 @@ function VideoAvatarOrb({ status }) {
   const ringColor = status === 'speaking'
     ? 'rgba(168,85,247,0.8)'
     : status === 'listening'
-    ? 'rgba(16,185,129,0.7)'
-    : 'rgba(99,102,241,0.3)'
+      ? 'rgba(16,185,129,0.7)'
+      : 'rgba(99,102,241,0.3)'
   const glowColor = status === 'speaking'
     ? '0 0 40px rgba(168,85,247,0.7), 0 0 80px rgba(168,85,247,0.3)'
     : status === 'listening'
-    ? '0 0 30px rgba(16,185,129,0.6), 0 0 60px rgba(16,185,129,0.25)'
-    : '0 0 12px rgba(99,102,241,0.2)'
+      ? '0 0 30px rgba(16,185,129,0.6), 0 0 60px rgba(16,185,129,0.25)'
+      : '0 0 12px rgba(99,102,241,0.2)'
 
   return (
     <div style={{ position: 'relative', width: 96, height: 96, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
@@ -103,7 +103,7 @@ function VideoAvatarOrb({ status }) {
           border: `2px solid ${ringColor}`,
           animation: status === 'speaking' ? 'vidOrbSpeak 1.3s ease-in-out infinite' : 'vidOrbListen 2s ease-in-out infinite alternate',
           pointerEvents: 'none',
-        }}/>
+        }} />
       )}
       <video
         ref={videoRef}
@@ -158,7 +158,7 @@ function LanguageDropdown({ value, onChange }) {
         />
         {currentLang.label}
         <svg className="ml-auto" width="10" height="6" viewBox="0 0 10 6" fill="none">
-          <path d={open ? 'M1 5L5 1L9 5' : 'M1 1L5 5L9 1'} stroke={currentLang.color} strokeWidth="1.5" strokeLinecap="round"/>
+          <path d={open ? 'M1 5L5 1L9 5' : 'M1 1L5 5L9 1'} stroke={currentLang.color} strokeWidth="1.5" strokeLinecap="round" />
         </svg>
       </button>
 
@@ -186,7 +186,7 @@ function LanguageDropdown({ value, onChange }) {
               {lang.label}
               {lang.id === value && (
                 <svg className="ml-auto" width="12" height="12" viewBox="0 0 12 12" fill="none">
-                  <path d="M2 6L5 9L10 3" stroke={lang.color} strokeWidth="1.5" strokeLinecap="round"/>
+                  <path d="M2 6L5 9L10 3" stroke={lang.color} strokeWidth="1.5" strokeLinecap="round" />
                 </svg>
               )}
             </button>
@@ -205,27 +205,31 @@ export default function VoiceCodingRound({
   sessionDetail,
   language: sessionLang,
   wsRef,
+  duration,
   onComplete
 }) {
-  const [code, setCode]               = useState(question?.codingTask?.starter_code || '# Write your solution here\n\n')
+  const [code, setCode] = useState(question?.codingTask?.starter_code || '# Write your solution here\n\n')
   const [selectedLang, setSelectedLang] = useState('python')
-  const [aiStatus, setAiStatus]       = useState('idle')  // idle | speaking | listening
-  const [transcript, setTranscript]   = useState('')
+  const [aiStatus, setAiStatus] = useState('idle')  // idle | speaking | listening
+  const [transcript, setTranscript] = useState('')
   const [detectedPatterns, setDetectedPatterns] = useState(new Set())
-  const [timeLeft, setTimeLeft]       = useState(900)
-  const [runOutput, setRunOutput]     = useState('')
-  const [running, setRunning]         = useState(false)
+  const [timeLeft, setTimeLeft] = useState(duration || 900)
+  const [runOutput, setRunOutput] = useState('')
+  const [runResultData, setRunResultData] = useState(null)
+  const [consoleHeight, setConsoleHeight] = useState(144)
+  const [orbPos, setOrbPos] = useState({ x: null, y: null })
+  const [running, setRunning] = useState(false)
   const [isSubmitting, setIsSubmitting] = useState(false)
-  const [orbLabel, setOrbLabel]       = useState('Zara is watching')
+  const [orbLabel, setOrbLabel] = useState('Zara is watching')
 
-  const recognitionRef    = useRef(null)
-  const silenceTimerRef   = useRef(null)
-  const codeChangeTimer   = useRef(null)
-  const isListeningRef    = useRef(false)
-  const mediaRecorderRef  = useRef(null)
-  const audioChunksRef    = useRef([])
-  const currentTxRef      = useRef('')
-  const submittingRef     = useRef(false)
+  const recognitionRef = useRef(null)
+  const silenceTimerRef = useRef(null)
+  const codeChangeTimer = useRef(null)
+  const isListeningRef = useRef(false)
+  const mediaRecorderRef = useRef(null)
+  const audioChunksRef = useRef([])
+  const currentTxRef = useRef('')
+  const submittingRef = useRef(false)
 
   // Timer
   useEffect(() => {
@@ -294,7 +298,6 @@ export default function VoiceCodingRound({
     setAiStatus('idle')
     setOrbLabel('Zara is watching')
     isListeningRef.current = false
-    setTranscript('')
   }, [])
 
   const startListening = useCallback((onFinish) => {
@@ -320,7 +323,9 @@ export default function VoiceCodingRound({
 
         try {
           // Pass language hint for better Indian English recognition
-          const res = await fetch(`${API_BASE_URL}/stt?language=en`, { method: 'POST', body: fd })
+          const langMap = { 'Hindi': 'hi', 'Telugu': 'te', 'Tamil': 'ta', 'Malayalam': 'ml', 'Kannada': 'kn', 'English': 'en' };
+          const sttLang = langMap[sessionLang] || 'en';
+          const res = await fetch(`${API_BASE_URL}/stt?language=${sttLang}`, { method: 'POST', body: fd })
           const data = await res.json()
           if (data.transcript) {
             setTranscript(data.transcript)
@@ -335,7 +340,6 @@ export default function VoiceCodingRound({
         setAiStatus('idle')
         setOrbLabel('Zara is watching')
         isListeningRef.current = false
-        setTranscript('')
       }
 
       mediaRecorder.start()
@@ -358,7 +362,7 @@ export default function VoiceCodingRound({
   useEffect(() => {
     if (hasGreeted.current) return
     hasGreeted.current = true
-    
+
     const intro = `Welcome to the coding round! Here's your problem: ${question?.text || question?.codingTask?.title || 'Implement the required function'}. Before writing code, tell me your approach.`
     setTimeout(() => {
       aiSay(intro, () => {
@@ -381,7 +385,7 @@ export default function VoiceCodingRound({
               fd.append('question_text', 'Coding approach explanation')
               fd.append('answer_text', answer)
               fd.append('candidate_name', sessionDetail?.candidate_name || 'Candidate')
-              fetch(`${API_BASE_URL}/save-answer`, { method: 'POST', body: fd }).catch(() => {})
+              fetch(`${API_BASE_URL}/save-answer`, { method: 'POST', body: fd }).catch(() => { })
             }
             setTimeout(() => aiSay("Great! Now implement your solution and talk through your thinking as you code."), 400)
           } else {
@@ -433,8 +437,29 @@ export default function VoiceCodingRound({
         body: JSON.stringify({ interview_id: interviewId, code, language: selectedLang })
       })
       const data = await res.json()
-      setRunOutput(data.output || data.error || 'No output')
-      if (data.all_passed) {
+      const totalTests = question?.codingTask?.test_cases?.length || 14;
+      let outputText = '';
+
+      if (data.run_result?.runtime_error) {
+        outputText = `Execution Error:\n${data.run_result.runtime_error}\n\nPassed 0 / ${totalTests} Test Cases`;
+      } else if (data.run_result?.visible_results?.length) {
+        const passedCount = data.run_result.visible_results.filter(r => r.passed).length + (data.run_result.hidden_summary?.passed || 0);
+
+        outputText = `Passed ${passedCount} / ${totalTests} Test Cases\n\n`;
+        outputText += data.run_result.visible_results.map(r =>
+          `Test ${r.id} (Visible): ${r.passed ? 'PASSED ✅' : 'FAILED ❌'}\nInput: ${JSON.stringify(r.input)}\nExpected: ${JSON.stringify(r.expected)}\nGot: ${JSON.stringify(r.output)}`
+        ).join('\n\n');
+
+        if (data.run_result.hidden_summary) {
+          outputText += `\n\nHidden Tests: ${data.run_result.hidden_summary.passed} / ${data.run_result.hidden_summary.total} Passed`;
+        }
+      } else if (data.run_result?.output) {
+        outputText = `Output:\n${data.run_result.output}`;
+      }
+
+      setRunOutput(outputText || data.error || 'No output')
+      setRunResultData(data.run_result || null)
+      if (data.run_result?.all_passed) {
         aiSay("Excellent! All test cases passed! Can you walk me through the time and space complexity?", () => {
           startListening(ans => { if (ans) askAIForReply(ans) })
         })
@@ -461,7 +486,7 @@ export default function VoiceCodingRound({
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ interview_id: interviewId, code, language: selectedLang })
         })
-      } catch (_) {}
+      } catch (_) { }
       setTimeout(() => onComplete?.(), 1500)
     })
   }, [stopListening, aiSay, interviewId, code, selectedLang, onComplete])
@@ -473,9 +498,9 @@ export default function VoiceCodingRound({
         setTimeout(async () => {
           try {
             if (!document.fullscreenElement && document.documentElement.requestFullscreen) {
-              await document.documentElement.requestFullscreen().catch(() => {})
+              await document.documentElement.requestFullscreen().catch(() => { })
             }
-          } catch (_) {}
+          } catch (_) { }
           Swal.fire({
             icon: 'warning',
             title: '⚠️ Fullscreen Required',
@@ -490,7 +515,7 @@ export default function VoiceCodingRound({
     }
     const handleFullscreenChange = async () => {
       if (!document.fullscreenElement) {
-        try { await document.documentElement.requestFullscreen().catch(() => {}) } catch (_) {}
+        try { await document.documentElement.requestFullscreen().catch(() => { }) } catch (_) { }
       }
     }
     document.addEventListener('keydown', handleKeyDown)
@@ -528,16 +553,16 @@ export default function VoiceCodingRound({
       <header className="flex items-center justify-between px-5 py-3 border-b border-white/6 bg-[#0d1117]/90 shrink-0">
         <div className="flex items-center gap-3">
           <div className="w-7 h-7 rounded-lg bg-gradient-to-tr from-indigo-500 to-purple-600 flex items-center justify-center">
-            <i className="fas fa-brain text-xs text-white"/>
+            <i className="fas fa-brain text-xs text-white" />
           </div>
           <span className="font-black text-sm">HireIQ <span className="text-indigo-400">Voice AI</span></span>
           <span className="ml-2 text-xs font-semibold uppercase tracking-widest text-amber-400 bg-amber-500/10 border border-amber-500/20 rounded-full px-2.5 py-0.5">
-            <i className="fas fa-code mr-1"/>Round 2: Coding
+            <i className="fas fa-code mr-1" />Round 2: Coding
           </span>
         </div>
         <div className="flex items-center gap-3">
           <div className={`text-sm font-mono font-bold px-3 py-1 rounded-full border ${timeLeft < 180 ? 'border-rose-500/50 text-rose-400 bg-rose-500/10' : 'border-amber-500/30 text-amber-300 bg-amber-500/10'}`}>
-            <i className="fas fa-clock mr-1.5"/>{fmt(timeLeft)}
+            <i className="fas fa-clock mr-1.5" />{fmt(timeLeft)}
           </div>
         </div>
       </header>
@@ -546,11 +571,11 @@ export default function VoiceCodingRound({
       <div className="flex flex-1 overflow-hidden">
 
         {/* Left: Problem Statement Only */}
-        <div className="w-[300px] shrink-0 flex flex-col border-r border-white/6 bg-[#0d1117] overflow-y-auto">
+        <div className="w-[450px] shrink-0 flex flex-col border-r border-white/6 bg-[#0d1117] overflow-y-auto">
           <div className="p-5">
             {/* Problem header */}
             <div className="flex items-center gap-2 mb-3">
-              <i className="fas fa-puzzle-piece text-amber-400 text-xs"/>
+              <i className="fas fa-puzzle-piece text-amber-400 text-xs" />
               <span className="text-xs font-bold uppercase tracking-widest text-slate-500">Problem</span>
               <span className="ml-auto text-xs text-emerald-400 bg-emerald-500/10 border border-emerald-500/20 rounded-full px-2 py-0.5 font-semibold">
                 {question?.codingTask?.difficulty || 'Medium'}
@@ -558,13 +583,13 @@ export default function VoiceCodingRound({
             </div>
 
             {/* Title */}
-            <h2 className="text-sm font-bold text-white leading-relaxed mb-2">
+            <h2 className="text-base font-bold text-white leading-relaxed mb-4">
               {question?.text || question?.codingTask?.title}
             </h2>
 
             {/* Description */}
             {question?.codingTask?.description && (
-              <p className="text-xs text-slate-400 leading-relaxed whitespace-pre-wrap mb-4">
+              <p className="text-sm text-slate-300 leading-relaxed whitespace-pre-wrap mb-6">
                 {question.codingTask.description}
               </p>
             )}
@@ -573,7 +598,7 @@ export default function VoiceCodingRound({
             {question?.codingTask?.constraints && (
               <div className="mb-4">
                 <div className="flex items-center gap-1.5 mb-2">
-                  <i className="fas fa-shield-alt text-rose-400 text-xs"/>
+                  <i className="fas fa-shield-alt text-rose-400 text-xs" />
                   <span className="text-xs font-bold uppercase tracking-widest text-slate-500">Constraints</span>
                 </div>
                 <div className="bg-rose-500/5 border border-rose-500/15 rounded-lg p-3">
@@ -588,7 +613,7 @@ export default function VoiceCodingRound({
             {question?.codingTask?.examples && question.codingTask.examples.length > 0 && (
               <div className="mb-4">
                 <div className="flex items-center gap-1.5 mb-2">
-                  <i className="fas fa-flask text-indigo-400 text-xs"/>
+                  <i className="fas fa-flask text-indigo-400 text-xs" />
                   <span className="text-xs font-bold uppercase tracking-widest text-slate-500">Examples</span>
                 </div>
                 {question.codingTask.examples.map((ex, i) => (
@@ -613,10 +638,10 @@ export default function VoiceCodingRound({
             {question?.codingTask?.test_cases && question.codingTask.test_cases.length > 0 && (
               <div>
                 <div className="flex items-center gap-1.5 mb-2">
-                  <i className="fas fa-vial text-purple-400 text-xs"/>
+                  <i className="fas fa-vial text-purple-400 text-xs" />
                   <span className="text-xs font-bold uppercase tracking-widest text-slate-500">Test Cases</span>
                 </div>
-                {question.codingTask.test_cases.map((tc, i) => (
+                {question.codingTask.test_cases.filter(tc => tc.visible !== false).map((tc, i) => (
                   <div key={i} className="mb-2 bg-white/4 border border-white/8 rounded-lg p-3 text-xs font-mono">
                     <div className="mb-1">
                       <span className="text-slate-500 mr-1">Input:</span>
@@ -624,7 +649,7 @@ export default function VoiceCodingRound({
                     </div>
                     <div>
                       <span className="text-slate-500 mr-1">Expected:</span>
-                      <span className="text-amber-300">{tc.expected}</span>
+                      <span className="text-amber-300">{tc.expected !== undefined ? tc.expected : tc.output}</span>
                     </div>
                   </div>
                 ))}
@@ -650,8 +675,8 @@ export default function VoiceCodingRound({
                 }}
               >
                 {running
-                  ? <><i className="fas fa-spinner fa-spin"/>Running…</>
-                  : <><i className="fas fa-play"/>Run Code</>
+                  ? <><i className="fas fa-spinner fa-spin" />Running…</>
+                  : <><i className="fas fa-play" />Run Code</>
                 }
               </button>
               <button
@@ -663,7 +688,7 @@ export default function VoiceCodingRound({
                   color: '#818cf8',
                 }}
               >
-                <i className="fas fa-check"/>Submit
+                <i className="fas fa-check" />Submit
               </button>
             </div>
           </div>
@@ -692,27 +717,90 @@ export default function VoiceCodingRound({
 
           {/* Output Panel */}
           {runOutput && (
-            <div className="h-36 shrink-0 border-t border-white/6 bg-[#0a0a0f] p-3 overflow-auto">
-              <div className="flex items-center gap-2 mb-2">
-                <i className="fas fa-terminal text-xs text-emerald-400"/>
+            <div className="relative shrink-0 border-t border-white/6 bg-[#0a0a0f] flex flex-col" style={{ height: consoleHeight }}>
+              {/* Drag Handle */}
+              <div
+                className="absolute top-0 left-0 right-0 h-1.5 cursor-ns-resize hover:bg-indigo-500/50 transition-colors z-10"
+                onMouseDown={(e) => {
+                  e.preventDefault();
+                  const startY = e.clientY;
+                  const startH = consoleHeight;
+                  const onMouseMove = (moveEvent) => {
+                    const deltaY = startY - moveEvent.clientY;
+                    setConsoleHeight(Math.max(100, Math.min(600, startH + deltaY)));
+                  };
+                  const onMouseUp = () => {
+                    document.removeEventListener('mousemove', onMouseMove);
+                    document.removeEventListener('mouseup', onMouseUp);
+                  };
+                  document.addEventListener('mousemove', onMouseMove);
+                  document.addEventListener('mouseup', onMouseUp);
+                }}
+              />
+              <div className="flex items-center gap-2 mb-2 p-3 pb-0 shrink-0">
+                <i className="fas fa-terminal text-xs text-emerald-400" />
                 <span className="text-xs font-bold text-slate-500 uppercase tracking-widest">Output</span>
                 <button
                   onClick={() => setRunOutput('')}
                   className="ml-auto text-slate-600 hover:text-slate-400 transition-colors"
                 >
-                  <i className="fas fa-times text-xs"/>
+                  <i className="fas fa-times text-xs" />
                 </button>
               </div>
-              <pre className="text-xs text-emerald-300 font-mono whitespace-pre-wrap">{runOutput}</pre>
+
+              <div className="flex-1 overflow-auto p-3 pt-1">
+                {runResultData ? (
+                  <div className="space-y-4">
+                    {runResultData.runtime_error && (
+                      <div className="bg-rose-500/10 border border-rose-500/20 rounded p-2 text-rose-400 text-xs font-mono whitespace-pre-wrap">
+                        {runResultData.runtime_error}
+                      </div>
+                    )}
+                    {runResultData.stdout && (
+                      <div className="bg-white/5 rounded p-2 text-slate-300 text-xs font-mono whitespace-pre-wrap">
+                        {runResultData.stdout}
+                      </div>
+                    )}
+                    {(runResultData.visible_results?.length > 0 || runResultData.hidden_summary) && (
+                      <div>
+                        <div className="text-xs font-bold text-slate-400 mb-2">Test Cases</div>
+                        <div className="flex flex-wrap gap-2">
+                          {runResultData.visible_results?.map((r, idx) => (
+                            <div key={`vis-${idx}`} className={`px-2.5 py-1 rounded-md border text-[11px] font-bold ${r.passed ? 'bg-emerald-500/10 border-emerald-500/20 text-emerald-400' : 'bg-rose-500/10 border-rose-500/20 text-rose-400'}`} title={`Input: ${JSON.stringify(r.input)}\nExpected: ${JSON.stringify(r.expected)}\nGot: ${JSON.stringify(r.output)}`}>
+                              Case {r.id}: {r.passed ? 'Pass' : 'Fail'}
+                            </div>
+                          ))}
+                          {runResultData.hidden_summary && Array.from({ length: runResultData.hidden_summary.total }).map((_, idx) => {
+                            const isPassed = idx < runResultData.hidden_summary.passed;
+                            return (
+                              <div key={`hid-${idx}`} className={`px-2.5 py-1 rounded-md border text-[11px] font-bold opacity-60 ${isPassed ? 'bg-emerald-500/10 border-emerald-500/20 text-emerald-400' : 'bg-rose-500/10 border-rose-500/20 text-rose-400'}`} title="Hidden Test Case">
+                                Hidden: {isPassed ? 'Pass' : 'Fail'}
+                              </div>
+                            );
+                          })}
+                        </div>
+                      </div>
+                    )}
+                  </div>
+                ) : (
+                  <pre className="text-xs text-emerald-300 font-mono whitespace-pre-wrap">{runOutput}</pre>
+                )}
+              </div>
             </div>
           )}
         </div>
       </div>
 
-      {/* ── Floating Video Avatar (bottom center) ── */}
+      {/* ── Floating Voice Orb ── */}
       <div
-        className="fixed bottom-0 left-0 right-0 flex flex-col items-center pb-5 pointer-events-none"
-        style={{ zIndex: 40 }}
+        className="fixed flex flex-col items-center pointer-events-none transition-transform"
+        style={{
+          zIndex: 40,
+          left: orbPos.x !== null ? orbPos.x : '50%',
+          top: orbPos.y !== null ? orbPos.y : 'auto',
+          bottom: orbPos.y !== null ? 'auto' : 20,
+          transform: orbPos.x !== null ? 'translate(-50%, -50%)' : 'translateX(-50%)'
+        }}
       >
         {/* Live transcript strip */}
         {aiStatus === 'listening' && transcript && (
@@ -730,8 +818,38 @@ export default function VoiceCodingRound({
           </div>
         )}
 
-        <div className="flex flex-col items-center gap-1.5 pointer-events-auto">
-          {/* VideoAvatarOrb — also acts as mic toggle button */}
+        <div className="flex flex-col items-center gap-1.5 pointer-events-auto group">
+          {/* Drag Handle */}
+          <div
+            className="w-10 h-1.5 bg-white/30 hover:bg-white/50 rounded-full cursor-grab active:cursor-grabbing transition-colors mb-1 opacity-0 group-hover:opacity-100"
+            onMouseDown={(e) => {
+              e.preventDefault();
+              let startX = e.clientX;
+              let startY = e.clientY;
+              const rect = e.currentTarget.parentElement.getBoundingClientRect();
+              let currentX = orbPos.x !== null ? orbPos.x : rect.left + rect.width / 2;
+              let currentY = orbPos.y !== null ? orbPos.y : rect.top + rect.height / 2;
+
+              const onMouseMove = (moveEvent) => {
+                const deltaX = moveEvent.clientX - startX;
+                const deltaY = moveEvent.clientY - startY;
+                startX = moveEvent.clientX;
+                startY = moveEvent.clientY;
+                currentX += deltaX;
+                currentY += deltaY;
+                setOrbPos({ x: currentX, y: currentY });
+              };
+              const onMouseUp = () => {
+                document.removeEventListener('mousemove', onMouseMove);
+                document.removeEventListener('mouseup', onMouseUp);
+              };
+              document.addEventListener('mousemove', onMouseMove);
+              document.addEventListener('mouseup', onMouseUp);
+            }}
+            title="Drag to move Zara"
+          />
+
+          {/* Orb itself — also acts as mic toggle button */}
           <button
             onClick={() => {
               if (aiStatus === 'listening') {
@@ -756,8 +874,8 @@ export default function VoiceCodingRound({
               color: aiStatus === 'speaking'
                 ? '#818cf8'
                 : aiStatus === 'listening'
-                ? '#34d399'
-                : '#475569',
+                  ? '#34d399'
+                  : '#475569',
             }}
           >
             {orbLabel}
@@ -772,8 +890,8 @@ export default function VoiceCodingRound({
       {isSubmitting && (
         <div className="fixed inset-0 z-50 bg-[#0a0f1e]/90 backdrop-blur-sm flex flex-col items-center justify-center">
           <div className="w-16 h-16 relative mb-6">
-            <div className="absolute inset-0 rounded-full border-4 border-indigo-500/20"/>
-            <div className="absolute inset-0 rounded-full border-4 border-indigo-500 border-t-transparent animate-spin"/>
+            <div className="absolute inset-0 rounded-full border-4 border-indigo-500/20" />
+            <div className="absolute inset-0 rounded-full border-4 border-indigo-500 border-t-transparent animate-spin" />
           </div>
           <h2 className="text-2xl font-black text-white tracking-tight mb-2">Saving Solution…</h2>
           <p className="text-slate-400 font-medium">Please wait while we upload the session recording securely.</p>
