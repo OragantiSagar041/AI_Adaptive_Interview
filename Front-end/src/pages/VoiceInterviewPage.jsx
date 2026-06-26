@@ -14,8 +14,93 @@ import useCandidateWebRTC from '../hooks/useCandidateWebRTC'
 import OrbAvatar from '../components/OrbAvatar'
 import Swal from 'sweetalert2'
 import 'sweetalert2/dist/sweetalert2.min.css'
+import aiVideoUrl from '../assets/ai_avatar.mp4'
 
 import { VOICE_TRANSLATIONS } from '../utils/voiceTranslations'
+
+// ── Video Avatar Component ────────────────────────────────────────────────────
+function VideoAvatar({ status, size = 220 }) {
+  const videoRef = useRef(null)
+  const isSpeaking = status === 'speaking'
+
+  useEffect(() => {
+    const video = videoRef.current
+    if (!video) return
+    if (isSpeaking) {
+      video.play().catch(() => {})
+    } else {
+      video.pause()
+      // Reset to frame 0 when not speaking so it's ready for next time
+      if (!isSpeaking) video.currentTime = 0
+    }
+  }, [isSpeaking])
+
+  const ringColor = status === 'speaking'
+    ? 'rgba(168,85,247,0.7)'
+    : status === 'listening'
+    ? 'rgba(16,185,129,0.6)'
+    : 'rgba(99,102,241,0.35)'
+
+  const glowColor = status === 'speaking'
+    ? '0 0 50px rgba(168,85,247,0.6), 0 0 100px rgba(168,85,247,0.25)'
+    : status === 'listening'
+    ? '0 0 40px rgba(16,185,129,0.5), 0 0 80px rgba(16,185,129,0.2)'
+    : '0 0 20px rgba(99,102,241,0.2)'
+
+  return (
+    <div style={{ position: 'relative', width: size, height: size, flexShrink: 0 }}>
+      {/* Animated ring */}
+      {(status === 'speaking' || status === 'listening') && (
+        <div style={{
+          position: 'absolute', inset: -8,
+          borderRadius: '50%',
+          border: `2px solid ${ringColor}`,
+          animation: status === 'speaking' ? 'vidRingSpeak 1.4s ease-in-out infinite' : 'vidRingListen 2s ease-in-out infinite alternate',
+          pointerEvents: 'none',
+        }}/>
+      )}
+      {/* Outer glow ring */}
+      {(status === 'speaking' || status === 'listening') && (
+        <div style={{
+          position: 'absolute', inset: -18,
+          borderRadius: '50%',
+          border: `1px solid ${ringColor.replace('0.7','0.25').replace('0.6','0.2')}`,
+          animation: status === 'speaking' ? 'vidRingSpeak 1.4s ease-in-out 0.4s infinite' : 'vidRingListen 2s ease-in-out 0.5s infinite alternate',
+          pointerEvents: 'none',
+        }}/>
+      )}
+      {/* Video circle */}
+      <video
+        ref={videoRef}
+        src={aiVideoUrl}
+        loop
+        muted={false}
+        playsInline
+        preload="auto"
+        style={{
+          width: size,
+          height: size,
+          objectFit: 'cover',
+          borderRadius: '50%',
+          boxShadow: glowColor,
+          border: `3px solid ${ringColor}`,
+          transition: 'box-shadow 0.5s ease, border-color 0.5s ease',
+          display: 'block',
+          background: '#0a0f1e',
+        }}
+      />
+      {/* Overlay label */}
+      {status === 'idle' && (
+        <div style={{
+          position: 'absolute', bottom: -4, left: '50%', transform: 'translateX(-50%)',
+          background: 'rgba(99,102,241,0.15)', border: '1px solid rgba(99,102,241,0.3)',
+          borderRadius: 20, padding: '2px 10px', fontSize: 10, color: '#818cf8',
+          fontWeight: 700, letterSpacing: '0.1em', whiteSpace: 'nowrap',
+        }}>ZARA · READY</div>
+      )}
+    </div>
+  )
+}
 
 // ── Language map ─────────────────────────────────────────────────────────────
 const langMap = {
@@ -61,8 +146,8 @@ function Bubble({ role, text, isNew }) {
   return (
     <div className={`flex gap-3 mb-4 transition-all duration-500 ${role === 'user' ? 'flex-row-reverse' : ''} ${visible ? 'opacity-100 translate-y-0' : 'opacity-0 translate-y-3'}`}>
       {role === 'ai' ? (
-        <div className="w-9 h-9 rounded-full flex items-center justify-center shrink-0">
-          <OrbAvatar status="idle" />
+        <div className="w-9 h-9 rounded-full flex items-center justify-center shrink-0 overflow-hidden border-2 border-indigo-500/40">
+          <video src={aiVideoUrl} autoPlay loop muted playsInline style={{ width:'100%', height:'100%', objectFit:'cover', borderRadius:'50%' }}/>
         </div>
       ) : (
         <div className="w-9 h-9 rounded-full flex items-center justify-center shrink-0 bg-emerald-500/15 border-2 border-emerald-500/30">
@@ -111,6 +196,8 @@ export default function VoiceInterviewPage() {
   const [answeredCount, setAnsweredCount]   = useState(0)
   const [followUpCount, setFollowUpCount]   = useState(0)  // follow-ups per question
   const [warningsCount, setWarningsCount]   = useState(0)
+  const screenShareViolationsRef = useRef(0)
+  const screenShareViolationHandlerRef = useRef(null)  // stable ref to avoid circular deps
   const usedFollowUps = useRef(new Set())
   const [displayedQuestion, setDisplayedQuestion] = useState('')  // typewriter text
   const [isTyping, setIsTyping]   = useState(false)              // typewriter running
@@ -157,6 +244,7 @@ export default function VoiceInterviewPage() {
   const chatBottomRef    = useRef(null)
   const wsRef            = useRef(null)
   const languageRef      = useRef('English')
+  const currentAudioRef  = useRef(null)   // ← track active TTS audio so we can stop it
 
   // Sync refs
   useEffect(() => { currentQIdxRef.current   = currentQIdx },   [currentQIdx])
@@ -230,7 +318,19 @@ export default function VoiceInterviewPage() {
   }, [linkId])
 
   // ── TTS with female voice ──────────────────────────────────────────────────
+  // Stop any currently-playing TTS audio immediately
+  const stopAudio = useCallback(() => {
+    if (currentAudioRef.current) {
+      currentAudioRef.current.onended = null
+      currentAudioRef.current.onerror = null
+      currentAudioRef.current.pause()
+      currentAudioRef.current.src = ''
+      currentAudioRef.current = null
+    }
+  }, [])
+
   const speak = useCallback(async (text, onEnd) => {
+    stopAudio()  // cancel any previous audio first
     try {
       setAiStatus('speaking')
       const res = await fetch(`${API_BASE_URL}/tts`, {
@@ -242,21 +342,29 @@ export default function VoiceInterviewPage() {
       const blob = await res.blob()
       const url = URL.createObjectURL(blob)
       const audio = new Audio(url)
+      currentAudioRef.current = audio  // ← store reference so we can stop it anytime
       audio.onended = () => {
+        currentAudioRef.current = null
         setAiStatus('listening')
         URL.revokeObjectURL(url)
         onEnd?.()
       }
       audio.onerror = () => {
+        currentAudioRef.current = null
         setAiStatus('idle')
+        URL.revokeObjectURL(url)
         onEnd?.()
       }
-      audio.play()
+      audio.play().catch(() => {
+        currentAudioRef.current = null
+        setAiStatus('idle')
+        onEnd?.()
+      })
     } catch (e) {
       setAiStatus('idle')
       onEnd?.()
     }
-  }, [])
+  }, [stopAudio])
 
   const addMsg = useCallback((role, text) => setChatMessages(p => [...p, { role, text }]), [])
   const aiSay  = useCallback((text, onEnd) => { addMsg('ai', text); speak(text, onEnd) }, [addMsg, speak])
@@ -298,6 +406,13 @@ export default function VoiceInterviewPage() {
       const screenStream = await navigator.mediaDevices.getDisplayMedia({
         video: { displaySurface: 'monitor', frameRate: 15, width: { ideal: 1280 }, height: { ideal: 720 } },
         audio: true
+      })
+
+      // Hook: detect when user stops sharing screen (via stable ref to avoid closure issues)
+      screenStream.getVideoTracks().forEach(track => {
+        track.addEventListener('ended', () => {
+          screenShareViolationHandlerRef.current?.()
+        })
       })
       
       // 2. Get Camera & Mic Stream
@@ -419,21 +534,32 @@ export default function VoiceInterviewPage() {
     isListeningRef.current = false
     clearTimeout(silenceTimerRef.current)
     try { recognitionRef.current?.stop() } catch(_) {}
+    recognitionRef.current = null
+    stopAudio()   // ← also kill any in-flight TTS so it doesn't bleed into next state
     setAiStatus('idle')
-  }, [])
+  }, [stopAudio])
 
   const startListening = useCallback((onFinish) => {
     const SR = window.SpeechRecognition || window.webkitSpeechRecognition
     if (!SR) { onFinish?.(''); return }
+
+    // Always clean up previous instance first
     try { recognitionRef.current?.stop() } catch(_) {}
+    recognitionRef.current = null
+
     const rec = new SR()
     rec.lang = langMap[languageRef.current] || 'en-US'
-    rec.continuous = true; rec.interimResults = true
-    recognitionRef.current = rec; isListeningRef.current = true
-    currentTxRef.current = ''; setTranscript(''); setInterimText('')
+    rec.continuous = true
+    rec.interimResults = true
+    rec.maxAlternatives = 1
+    recognitionRef.current = rec
+    isListeningRef.current = true
+    currentTxRef.current = ''
+    setTranscript('')
+    setInterimText('')
     setAiStatus('listening')
 
-    // Initial 10s grace period timer
+    // Grace period: if nothing heard in 10s, auto-submit
     clearTimeout(silenceTimerRef.current)
     silenceTimerRef.current = setTimeout(() => {
       if (isListeningRef.current) { stopListening(); onFinish?.(currentTxRef.current.trim()) }
@@ -448,16 +574,54 @@ export default function VoiceInterviewPage() {
       }
       if (fin) { currentTxRef.current += fin + ' '; setTranscript(currentTxRef.current) }
       setInterimText(interim)
-      
-      // Reset 10s timer when candidate speaks
+
+      // Reset silence timer whenever speech is heard
       clearTimeout(silenceTimerRef.current)
       silenceTimerRef.current = setTimeout(() => {
         if (isListeningRef.current) { stopListening(); onFinish?.(currentTxRef.current.trim()) }
       }, 10000)
     }
-    rec.onend = () => { if (isListeningRef.current) try { rec.start() } catch(_) {} }
-    rec.onerror = e => { if (e.error !== 'no-speech') console.warn('SR:', e.error) }
-    try { rec.start() } catch(e) { console.warn(e) }
+
+    // ── Smart error handler ────────────────────────────────────────────────
+    rec.onerror = (e) => {
+      const err = e.error
+      if (err === 'no-speech') return  // harmless — silence, keep listening
+      if (err === 'aborted')  return  // intentional stop — do nothing
+
+      if (err === 'network') {
+        // Network blip: stop current instance, restart after a brief pause
+        console.warn('SR: network error — restarting in 1s')
+        try { rec.stop() } catch(_) {}
+        if (isListeningRef.current) {
+          setTimeout(() => {
+            if (isListeningRef.current) startListening(onFinish)
+          }, 1000)
+        }
+        return
+      }
+
+      // Any other fatal error (not-allowed, service-not-allowed, etc.)
+      console.warn('SR:', err)
+      stopListening()
+      onFinish?.(currentTxRef.current.trim())
+    }
+
+    // ── onend: only restart if still intentionally listening ──────────────
+    rec.onend = () => {
+      if (!isListeningRef.current) return  // we stopped on purpose — don't restart
+      // Recognition stopped by itself (common in Chrome) — restart seamlessly
+      try {
+        if (recognitionRef.current === rec) {  // guard: ensure this is still the active instance
+          rec.start()
+        }
+      } catch(_) {}
+    }
+
+    try { rec.start() } catch(e) {
+      console.warn('SR start error:', e)
+      stopListening()
+      onFinish?.('')
+    }
   }, [stopListening])
 
   // ── Handle one verbal answer ──────────────────────────────────────────────
@@ -535,7 +699,8 @@ export default function VoiceInterviewPage() {
   // ── Load coding/case study round questions ────────────────────────────────
   const transitionToNextRound = useCallback(async () => {
     if (submittingRef.current) return
-    stopListening(); window.speechSynthesis?.cancel()
+    stopListening()   // also kills audio via stopAudio inside
+    window.speechSynthesis?.cancel()
     const type = interviewType
     const iid  = interviewIdRef.current
 
@@ -603,30 +768,123 @@ export default function VoiceInterviewPage() {
     setTimeout(() => aiSay(intro, () => startListening(ans => handleAnswer(ans, 0, 0))), 500)
   }, [aiSay, startListening, handleAnswer, startScreenRecording])
 
-  // ── Cleanup and Tab Monitoring ────────────────────────────────────────────
+  // ── Proctoring: ESC + Tab + Screenshare ──────────────────────────────────
+  // Helper to log proctoring events to backend
+  const logProctoringAlert = useCallback((alertType, details = '') => {
+    setWarningsCount(p => {
+      const newCount = p + 1
+      // Send to backend via WebSocket
+      if (wsRef.current?.readyState === WebSocket.OPEN) {
+        wsRef.current.send(JSON.stringify({
+          action: 'save_proctoring_alert',
+          interview_id: interviewIdRef.current,
+          link_id: linkId,
+          alert_type: alertType,
+          details,
+          warnings_count: newCount,
+          timestamp: new Date().toISOString()
+        }))
+      }
+      return newCount
+    })
+  }, [linkId])
+
+  // Handle screenshare track ending
+  const handleScreenShareViolation = useCallback(() => {
+    screenShareViolationsRef.current += 1
+    const count = screenShareViolationsRef.current
+    logProctoringAlert('screenshare_stopped', `Violation #${count}`)
+
+    if (count >= 3) {
+      Swal.fire({
+        icon: 'error',
+        title: '🚫 Interview Terminated',
+        html: `<p>You stopped screen sharing <strong>${count} times</strong>. This interview has been automatically terminated and the incident has been reported.</p>`,
+        confirmButtonColor: '#ef4444',
+        confirmButtonText: 'OK',
+        allowOutsideClick: false,
+        allowEscapeKey: false,
+      }).then(() => completeInterview())
+    } else {
+      Swal.fire({
+        icon: 'warning',
+        title: '⚠️ Screen Sharing Stopped',
+        html: `<p>Please restart screen sharing to continue.<br/><span style="color:#ef4444;font-weight:bold">Warning ${count}/3 — Interview will be terminated after 3 violations.</span></p>`,
+        confirmButtonColor: '#f59e0b',
+        confirmButtonText: 'I Understand',
+        allowOutsideClick: false,
+      })
+    }
+  }, [logProctoringAlert, completeInterview])
+
+  // Keep the stable ref in sync
   useEffect(() => {
+    screenShareViolationHandlerRef.current = handleScreenShareViolation
+  }, [handleScreenShareViolation])
+
+  useEffect(() => {
+    // Tab switch detection
     const handleVisibilityChange = () => {
       if (document.hidden && round !== 'done' && round !== 'intro' && round !== 'pre_checks') {
-        setWarningsCount(p => p + 1)
-        console.warn('Tab switch detected!')
+        logProctoringAlert('tab_switch', 'User switched tab or minimized')
         Swal.fire({
           icon: 'warning',
-          title: 'Tab Switch Detected!',
+          title: '⚠️ Tab Switch Detected!',
           text: 'Please do not switch tabs or minimize the window during the interview. This incident has been recorded.',
           confirmButtonColor: '#ef4444',
           confirmButtonText: 'I Understand'
         })
       }
     }
+
+    // ESC key detection → re-enter fullscreen
+    const handleKeyDown = async (e) => {
+      if (e.key === 'Escape' && round !== 'done' && round !== 'pre_checks') {
+        // Delay slightly so browser has processed the ESC
+        setTimeout(async () => {
+          logProctoringAlert('esc_pressed', 'User pressed ESC key (attempted exit fullscreen)')
+          // Re-enter fullscreen
+          try {
+            if (!document.fullscreenElement && document.documentElement.requestFullscreen) {
+              await document.documentElement.requestFullscreen().catch(() => {})
+            }
+          } catch (_) {}
+          Swal.fire({
+            icon: 'warning',
+            title: '⚠️ Fullscreen Required',
+            text: 'Exiting fullscreen mode is not allowed during the interview. This incident has been logged.',
+            confirmButtonColor: '#ef4444',
+            confirmButtonText: 'Return to Interview',
+            timer: 6000,
+            timerProgressBar: true,
+          })
+        }, 150)
+      }
+    }
+
+    // Fullscreen change detection (handles native ESC that bypasses keydown)
+    const handleFullscreenChange = async () => {
+      if (!document.fullscreenElement && round !== 'done' && round !== 'pre_checks' && round !== 'intro') {
+        logProctoringAlert('fullscreen_exit', 'User exited fullscreen')
+        try {
+          await document.documentElement.requestFullscreen().catch(() => {})
+        } catch (_) {}
+      }
+    }
+
     document.addEventListener('visibilitychange', handleVisibilityChange)
-    
+    document.addEventListener('keydown', handleKeyDown)
+    document.addEventListener('fullscreenchange', handleFullscreenChange)
+
     return () => {
       stopListening()
       window.speechSynthesis?.cancel()
       clearTimeout(silenceTimerRef.current)
       document.removeEventListener('visibilitychange', handleVisibilityChange)
+      document.removeEventListener('keydown', handleKeyDown)
+      document.removeEventListener('fullscreenchange', handleFullscreenChange)
     }
-  }, [stopListening, round])
+  }, [stopListening, round, logProctoringAlert])
 
   // ─────────────────────────────────────────────────────────────────────────────
   // RENDER — delegate to sub-components for coding/case study
@@ -774,9 +1032,11 @@ export default function VoiceInterviewPage() {
 
         {/* Avatar */}
         <div className="relative flex items-center justify-center h-64 mb-4">
-          <div className="w-56 h-56">
-            <OrbAvatar status="idle" />
-          </div>
+          <style>{`
+            @keyframes vidRingSpeak { 0%,100%{transform:scale(1);opacity:.8} 50%{transform:scale(1.08);opacity:1} }
+            @keyframes vidRingListen { 0%{transform:scale(1);opacity:.5} 100%{transform:scale(1.04);opacity:1} }
+          `}</style>
+          <VideoAvatar status="idle" size={220} />
         </div>
 
         <div>
@@ -835,7 +1095,7 @@ export default function VoiceInterviewPage() {
   const progress = questions.length ? ((currentQIdx) / questions.length) * 100 : 0
 
   return (
-    <div className="min-h-screen bg-[#07091a] flex flex-col text-white" style={{fontFamily:"'Inter',sans-serif"}}>
+    <div className="h-screen bg-[#07091a] flex flex-col text-white overflow-hidden" style={{fontFamily:"'Inter',sans-serif"}}>
       <style>{`
         @keyframes wave{0%{height:4px;opacity:.5}100%{height:32px;opacity:1}}
         @keyframes glow-speak{0%,100%{box-shadow:0 0 40px rgba(99,102,241,.5),0 0 80px rgba(99,102,241,.2)}50%{box-shadow:0 0 80px rgba(99,102,241,.9),0 0 140px rgba(99,102,241,.4)}}
@@ -866,7 +1126,7 @@ export default function VoiceInterviewPage() {
       <div className="h-1 bg-white/5"><div className="h-full bg-gradient-to-r from-indigo-500 to-purple-600 transition-all duration-700" style={{width:`${progress}%`}}/></div>
 
       {/* Main: center avatar layout */}
-      <div className="flex-1 flex flex-col items-center justify-between py-8 px-4 overflow-y-auto">
+      <div className="flex-1 flex flex-col items-center justify-between py-6 px-4 overflow-y-auto">
 
         {/* Question number badge */}
         <div className="text-[11px] font-bold text-slate-500 uppercase tracking-widest mb-2">
@@ -875,11 +1135,13 @@ export default function VoiceInterviewPage() {
 
         {/* Center Avatar block */}
         <div className="flex flex-col items-center gap-6 my-4">
-          {/* Ripple rings */}
+          {/* Video Avatar */}
           <div className="relative flex items-center justify-center">
-            <div className="w-56 h-56">
-              <OrbAvatar status={aiStatus} />
-            </div>
+            <style>{`
+              @keyframes vidRingSpeak { 0%,100%{transform:scale(1);opacity:.8} 50%{transform:scale(1.1);opacity:1} }
+              @keyframes vidRingListen { 0%{transform:scale(1);opacity:.5} 100%{transform:scale(1.05);opacity:1} }
+            `}</style>
+            <VideoAvatar status={aiStatus} size={200} />
           </div>
 
           {/* AI Status label */}

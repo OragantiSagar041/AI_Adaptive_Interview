@@ -6,6 +6,9 @@
 import React, { useState, useRef, useCallback, useEffect } from 'react'
 import Editor from '@monaco-editor/react'
 import { API_BASE_URL } from '../apiConfig'
+import Swal from 'sweetalert2'
+import 'sweetalert2/dist/sweetalert2.min.css'
+import aiVideoUrl from '../assets/ai_avatar.mp4'
 
 // ── Language config with brand colors ─────────────────────────────────────
 const LANGUAGES = [
@@ -59,71 +62,67 @@ function detectCodePattern(code) {
   return null
 }
 
-// ── Animated Orb ─────────────────────────────────────────────────────────
-function VoiceOrb({ status }) {
-  // status: 'idle' | 'speaking' | 'listening'
-  const isAI = status === 'speaking'
-  const isUser = status === 'listening'
-  const isActive = isAI || isUser
+// ── Video Avatar Orb (replaces VoiceOrb) ─────────────────────────────────────────────────
+function VideoAvatarOrb({ status }) {
+  const videoRef = useRef(null)
+  const isSpeaking = status === 'speaking'
+
+  useEffect(() => {
+    const video = videoRef.current
+    if (!video) return
+    if (isSpeaking) {
+      video.play().catch(() => {})
+    } else {
+      video.pause()
+      video.currentTime = 0
+    }
+  }, [isSpeaking])
+
+  const size = isSpeaking ? 88 : 72
+  const ringColor = status === 'speaking'
+    ? 'rgba(168,85,247,0.8)'
+    : status === 'listening'
+    ? 'rgba(16,185,129,0.7)'
+    : 'rgba(99,102,241,0.3)'
+  const glowColor = status === 'speaking'
+    ? '0 0 40px rgba(168,85,247,0.7), 0 0 80px rgba(168,85,247,0.3)'
+    : status === 'listening'
+    ? '0 0 30px rgba(16,185,129,0.6), 0 0 60px rgba(16,185,129,0.25)'
+    : '0 0 12px rgba(99,102,241,0.2)'
 
   return (
-    <div className="relative flex items-center justify-center" style={{ width: 120, height: 120 }}>
-      {/* Outermost ripple */}
-      {isActive && (
-        <div
-          className="absolute rounded-full"
-          style={{
-            width: 120, height: 120,
-            background: isAI
-              ? 'radial-gradient(circle, rgba(99,102,241,0.12) 0%, transparent 70%)'
-              : 'radial-gradient(circle, rgba(16,185,129,0.12) 0%, transparent 70%)',
-            animation: 'orbRipple 1.6s ease-out infinite',
-          }}
-        />
+    <div style={{ position: 'relative', width: 96, height: 96, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+      <style>{`
+        @keyframes vidOrbSpeak { 0%,100%{transform:scale(1);opacity:.7} 50%{transform:scale(1.1);opacity:1} }
+        @keyframes vidOrbListen { 0%{transform:scale(1);opacity:.5} 100%{transform:scale(1.05);opacity:1} }
+      `}</style>
+      {/* Pulsing ring */}
+      {(status === 'speaking' || status === 'listening') && (
+        <div style={{
+          position: 'absolute', inset: -6, borderRadius: '50%',
+          border: `2px solid ${ringColor}`,
+          animation: status === 'speaking' ? 'vidOrbSpeak 1.3s ease-in-out infinite' : 'vidOrbListen 2s ease-in-out infinite alternate',
+          pointerEvents: 'none',
+        }}/>
       )}
-      {/* Mid ring */}
-      {isActive && (
-        <div
-          className="absolute rounded-full"
-          style={{
-            width: 90, height: 90,
-            background: isAI
-              ? 'radial-gradient(circle, rgba(99,102,241,0.2) 0%, transparent 70%)'
-              : 'radial-gradient(circle, rgba(16,185,129,0.2) 0%, transparent 70%)',
-            animation: 'orbRipple 1.6s ease-out 0.3s infinite',
-          }}
-        />
-      )}
-      {/* Core orb */}
-      <div
-        className="rounded-full relative z-10 transition-all duration-500"
+      <video
+        ref={videoRef}
+        src={aiVideoUrl}
+        loop
+        muted
+        playsInline
+        preload="auto"
         style={{
-          width: isActive ? 72 : 60,
-          height: isActive ? 72 : 60,
-          background: isAI
-            ? 'radial-gradient(circle at 35% 35%, #818cf8, #6366f1 50%, #4f46e5)'
-            : isUser
-            ? 'radial-gradient(circle at 35% 35%, #34d399, #10b981 50%, #059669)'
-            : 'radial-gradient(circle at 35% 35%, #475569, #334155 50%, #1e293b)',
-          boxShadow: isAI
-            ? '0 0 30px rgba(99,102,241,0.8), 0 0 60px rgba(99,102,241,0.4), inset 0 1px 0 rgba(255,255,255,0.2)'
-            : isUser
-            ? '0 0 30px rgba(16,185,129,0.8), 0 0 60px rgba(16,185,129,0.4), inset 0 1px 0 rgba(255,255,255,0.2)'
-            : '0 0 12px rgba(0,0,0,0.5), inset 0 1px 0 rgba(255,255,255,0.1)',
-          animation: isActive ? 'orbBoom 0.8s ease-in-out infinite alternate' : 'none',
+          width: size, height: size,
+          objectFit: 'cover',
+          borderRadius: '50%',
+          boxShadow: glowColor,
+          border: `2px solid ${ringColor}`,
+          transition: 'all 0.4s ease',
+          display: 'block',
+          background: '#0a0f1e',
         }}
-      >
-        {/* Gloss highlight */}
-        <div
-          className="absolute rounded-full"
-          style={{
-            top: '15%', left: '20%',
-            width: '35%', height: '25%',
-            background: 'rgba(255,255,255,0.3)',
-            filter: 'blur(2px)',
-          }}
-        />
-      </div>
+      />
     </div>
   )
 }
@@ -467,11 +466,42 @@ export default function VoiceCodingRound({
     })
   }, [stopListening, aiSay, interviewId, code, selectedLang, onComplete])
 
-  // ── Cleanup ───────────────────────────────────────────────────────────
-  useEffect(() => () => {
-    stopListening()
-    clearTimeout(codeChangeTimer.current)
-    clearTimeout(silenceTimerRef.current)
+  // ── ESC + Fullscreen proctoring ────────────────────────────────────────────────
+  useEffect(() => {
+    const handleKeyDown = async (e) => {
+      if (e.key === 'Escape') {
+        setTimeout(async () => {
+          try {
+            if (!document.fullscreenElement && document.documentElement.requestFullscreen) {
+              await document.documentElement.requestFullscreen().catch(() => {})
+            }
+          } catch (_) {}
+          Swal.fire({
+            icon: 'warning',
+            title: '⚠️ Fullscreen Required',
+            text: 'Exiting fullscreen is not allowed during the interview.',
+            confirmButtonColor: '#ef4444',
+            confirmButtonText: 'Return to Interview',
+            timer: 5000,
+            timerProgressBar: true,
+          })
+        }, 150)
+      }
+    }
+    const handleFullscreenChange = async () => {
+      if (!document.fullscreenElement) {
+        try { await document.documentElement.requestFullscreen().catch(() => {}) } catch (_) {}
+      }
+    }
+    document.addEventListener('keydown', handleKeyDown)
+    document.addEventListener('fullscreenchange', handleFullscreenChange)
+    return () => {
+      stopListening()
+      clearTimeout(codeChangeTimer.current)
+      clearTimeout(silenceTimerRef.current)
+      document.removeEventListener('keydown', handleKeyDown)
+      document.removeEventListener('fullscreenchange', handleFullscreenChange)
+    }
   }, [stopListening])
 
   const currentLang = LANGUAGES.find(l => l.id === selectedLang) || LANGUAGES[0]
@@ -679,7 +709,7 @@ export default function VoiceCodingRound({
         </div>
       </div>
 
-      {/* ── Floating Voice Orb (bottom center) ── */}
+      {/* ── Floating Video Avatar (bottom center) ── */}
       <div
         className="fixed bottom-0 left-0 right-0 flex flex-col items-center pb-5 pointer-events-none"
         style={{ zIndex: 40 }}
@@ -701,7 +731,7 @@ export default function VoiceCodingRound({
         )}
 
         <div className="flex flex-col items-center gap-1.5 pointer-events-auto">
-          {/* Orb itself — also acts as mic toggle button */}
+          {/* VideoAvatarOrb — also acts as mic toggle button */}
           <button
             onClick={() => {
               if (aiStatus === 'listening') {
@@ -715,7 +745,7 @@ export default function VoiceCodingRound({
             className="focus:outline-none"
             title={aiStatus === 'listening' ? 'Click to stop recording' : 'Click to speak'}
           >
-            <VoiceOrb status={aiStatus} />
+            <VideoAvatarOrb status={aiStatus} />
           </button>
 
           {/* Status label */}
@@ -733,7 +763,7 @@ export default function VoiceCodingRound({
             {orbLabel}
           </span>
           {aiStatus === 'idle' && (
-            <span className="text-[10px] text-slate-600">Click orb to speak</span>
+            <span className="text-[10px] text-slate-600">Click to speak</span>
           )}
         </div>
       </div>

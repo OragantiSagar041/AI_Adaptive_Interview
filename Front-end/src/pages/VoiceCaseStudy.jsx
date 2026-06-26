@@ -7,6 +7,76 @@ import React, { useState, useRef, useEffect, useCallback } from 'react'
 import { API_BASE_URL } from '../apiConfig'
 import OrbAvatar from '../components/OrbAvatar'
 import { VOICE_TRANSLATIONS } from '../utils/voiceTranslations'
+import Swal from 'sweetalert2'
+import 'sweetalert2/dist/sweetalert2.min.css'
+import aiVideoUrl from '../assets/ai_avatar.mp4'
+
+// ── VideoAvatar for case study ─────────────────────────────────────────────────────
+function CaseStudyVideoAvatar({ status, size = 200 }) {
+  const videoRef = useRef(null)
+  const isSpeaking = status === 'speaking'
+
+  useEffect(() => {
+    const video = videoRef.current
+    if (!video) return
+    if (isSpeaking) { video.play().catch(() => {}) }
+    else { video.pause(); video.currentTime = 0 }
+  }, [isSpeaking])
+
+  const ringColor = status === 'speaking'
+    ? 'rgba(139,92,246,0.8)'
+    : status === 'listening'
+    ? 'rgba(16,185,129,0.6)'
+    : 'rgba(139,92,246,0.3)'
+  const glowColor = status === 'speaking'
+    ? '0 0 50px rgba(139,92,246,0.6), 0 0 100px rgba(139,92,246,0.25)'
+    : status === 'listening'
+    ? '0 0 40px rgba(16,185,129,0.5)'
+    : '0 0 20px rgba(139,92,246,0.15)'
+
+  return (
+    <div style={{ position: 'relative', width: size, height: size, flexShrink: 0 }}>
+      <style>{`
+        @keyframes csRingSpeak { 0%,100%{transform:scale(1);opacity:.8} 50%{transform:scale(1.08);opacity:1} }
+        @keyframes csRingListen { 0%{transform:scale(1);opacity:.4} 100%{transform:scale(1.05);opacity:.9} }
+      `}</style>
+      {(status === 'speaking' || status === 'listening') && (
+        <div style={{
+          position: 'absolute', inset: -8, borderRadius: '50%',
+          border: `2px solid ${ringColor}`,
+          animation: status === 'speaking' ? 'csRingSpeak 1.4s ease-in-out infinite' : 'csRingListen 2s ease-in-out infinite alternate',
+          pointerEvents: 'none',
+        }}/>
+      )}
+      {(status === 'speaking' || status === 'listening') && (
+        <div style={{
+          position: 'absolute', inset: -18, borderRadius: '50%',
+          border: `1px solid ${ringColor.replace('0.8','0.2').replace('0.6','0.15')}`,
+          animation: status === 'speaking' ? 'csRingSpeak 1.4s ease-in-out 0.4s infinite' : 'csRingListen 2s ease-in-out 0.6s infinite alternate',
+          pointerEvents: 'none',
+        }}/>
+      )}
+      <video
+        ref={videoRef}
+        src={aiVideoUrl}
+        loop
+        muted={false}
+        playsInline
+        preload="auto"
+        style={{
+          width: size, height: size,
+          objectFit: 'cover',
+          borderRadius: '50%',
+          boxShadow: glowColor,
+          border: `3px solid ${ringColor}`,
+          transition: 'box-shadow 0.5s ease, border-color 0.5s ease',
+          display: 'block',
+          background: '#0a0f1e',
+        }}
+      />
+    </div>
+  )
+}
 
 // ── Follow-up question trees by topic keywords ────────────────────────────
 const FOLLOWUP_TREES = {
@@ -151,6 +221,41 @@ export default function VoiceCaseStudy({
     return () => clearInterval(t)
   }, [])
   const fmt = s => `${String(Math.floor(s/60)).padStart(2,'0')}:${String(s%60).padStart(2,'0')}`
+
+  // ── ESC + Fullscreen proctoring ────────────────────────────────────────────────
+  useEffect(() => {
+    const handleKeyDown = async (e) => {
+      if (e.key === 'Escape') {
+        setTimeout(async () => {
+          try {
+            if (!document.fullscreenElement && document.documentElement.requestFullscreen) {
+              await document.documentElement.requestFullscreen().catch(() => {})
+            }
+          } catch (_) {}
+          Swal.fire({
+            icon: 'warning',
+            title: '⚠️ Fullscreen Required',
+            text: 'Exiting fullscreen is not allowed during the interview.',
+            confirmButtonColor: '#ef4444',
+            confirmButtonText: 'Return to Interview',
+            timer: 5000,
+            timerProgressBar: true,
+          })
+        }, 150)
+      }
+    }
+    const handleFullscreenChange = async () => {
+      if (!document.fullscreenElement) {
+        try { await document.documentElement.requestFullscreen().catch(() => {}) } catch (_) {}
+      }
+    }
+    document.addEventListener('keydown', handleKeyDown)
+    document.addEventListener('fullscreenchange', handleFullscreenChange)
+    return () => {
+      document.removeEventListener('keydown', handleKeyDown)
+      document.removeEventListener('fullscreenchange', handleFullscreenChange)
+    }
+  }, [])
 
   // ── TTS / STT ──────────────────────────────────────────────────────────────
   const speak = useCallback((text, onEnd) => {
@@ -323,7 +428,7 @@ export default function VoiceCaseStudy({
   const currentScenario = scenarios[currentScenarioIdx]
 
   return (
-    <div className="min-h-screen bg-[#0a0f1e] text-white flex flex-col" style={{ fontFamily: "'Inter',sans-serif" }}>
+    <div className="h-screen bg-[#0a0f1e] text-white flex flex-col overflow-hidden" style={{ fontFamily: "'Inter',sans-serif" }}>
       <style>{`
         @keyframes wave { 0%{height:4px} 100%{height:28px} }
         @keyframes bounce-dot { 0%,100%{transform:translateY(0)} 50%{transform:translateY(-6px)} }
@@ -354,10 +459,8 @@ export default function VoiceCaseStudy({
 
         {/* Left: AI Avatar */}
         <div className="lg:w-[360px] flex flex-col items-center justify-center gap-6 px-8 py-8 border-r border-white/6 bg-gradient-to-b from-violet-950/20 to-[#0a0f1e]">
-          {/* Avatar */}
-          <div className="relative w-52 h-52 flex items-center justify-center mb-4">
-            <OrbAvatar status={aiStatus} />
-          </div>
+          {/* Video Avatar */}
+          <CaseStudyVideoAvatar status={aiStatus} size={200} />
 
           {/* Zara ID */}
           <div className="text-center">

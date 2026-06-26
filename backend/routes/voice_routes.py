@@ -87,6 +87,52 @@ async def interview_websocket(websocket: WebSocket, link_id: str):
                 
                 await task_queue.produce(process_coding_insight, payload.get("code"), payload.get("language"))
 
+            elif action == "save_proctoring_alert":
+                # ── Persist proctoring alert to MongoDB ─────────────────────
+                # This appears in the interview report for the admin/recruiter.
+                interview_id   = payload.get("interview_id", "")
+                alert_type     = payload.get("alert_type", "unknown")
+                details        = payload.get("details", "")
+                warnings_count = payload.get("warnings_count", 1)
+                timestamp      = payload.get("timestamp", "")
+
+                alert_entry = {
+                    "type": alert_type,
+                    "details": details,
+                    "timestamp": timestamp,
+                    "link_id": link_id,
+                }
+
+                try:
+                    # Push alert into proctoring_alerts array on the session document
+                    interview_sessions_collection.update_one(
+                        {"link_id": link_id},
+                        {
+                            "$push": {"proctoring_alerts": alert_entry},
+                            "$set": {
+                                "warnings_count": warnings_count,
+                                "last_alert_at": timestamp,
+                            }
+                        },
+                        upsert=False
+                    )
+                    logger.info(
+                        f"[Proctoring] {alert_type} saved for link_id={link_id} "
+                        f"(total warnings: {warnings_count})"
+                    )
+                except Exception as e:
+                    logger.error(f"[Proctoring] Failed to save alert for {link_id}: {e}")
+
+                # Notify admin dashboard in real-time so they see alerts live
+                await pubsub.publish("admin_dashboard", {
+                    "type": "proctoring_alert",
+                    "link_id": link_id,
+                    "alert_type": alert_type,
+                    "details": details,
+                    "warnings_count": warnings_count,
+                    "timestamp": timestamp,
+                })
+
     except WebSocketDisconnect:
         logger.info(f"WebSocket disconnected for {link_id}")
     except Exception as e:
