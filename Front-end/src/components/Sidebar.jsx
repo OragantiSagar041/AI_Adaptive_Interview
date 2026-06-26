@@ -34,8 +34,8 @@ export default function Sidebar({
 
   return (
     <aside
-      className={`text-white flex flex-col z-50 shadow-lg shrink-0 overflow-hidden transition-all duration-300 ${
-        isCollapsed ? 'w-[80px] p-4 items-center gap-4 h-screen' : 'w-[260px] p-5 gap-5 h-screen'
+      className={`text-white flex flex-col z-50 shadow-lg shrink-0 overflow-hidden transition-all duration-300 sticky top-0 h-screen ${
+        isCollapsed ? 'w-[80px] p-4 items-center gap-4' : 'w-[260px] p-5 gap-5'
       }`}
       style={{
         background: `linear-gradient(180deg, ${currentAccent.hover} 0%, ${currentAccent.primary} 56%, ${currentAccent.primary} 100%)`,
