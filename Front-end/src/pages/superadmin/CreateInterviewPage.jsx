@@ -18,7 +18,13 @@ export default function CreateInterviewPage() {
   const API_BASE_URL = useSelector(state => state.auth.API_BASE_URL)
 
   // Form input states
-  const [createTab, setCreateTab] = useState('single') // 'single' | 'bulk'
+  const [createTab, setCreateTab] = useState(() => {
+    return sessionStorage.getItem('createInterview_tab') || 'single'
+  }) // 'single' | 'bulk'
+
+  useEffect(() => {
+    sessionStorage.setItem('createInterview_tab', createTab)
+  }, [createTab])
   const [inviting, setInviting] = useState(false)
 
   // Collapsible Accordion States
@@ -28,30 +34,42 @@ export default function CreateInterviewPage() {
   const [bulkInstructionsOpen, setBulkInstructionsOpen] = useState(false)
 
   // Single Candidate Form
-  const [singleCandidate, setSingleCandidate] = useState({
-    name: '',
-    email: '',
-    resumeText: '',
-    jobDescription: '',
-    customQuestions: '',
-    aiInstructions: '',
-    industry: 'General',
-    interviewFormat: 'Standard',
-    interviewType: 'Technical',
-    language: 'English',
-    caseStudyCount: 3,
-    duration: 30,
-    scheduledStart: '',
-    scheduledEnd: '',
-    recordVideo: true,
-    hrScreening: {
-      askWorkMode: false,
-      workModeType: 'On-site',
-      askLocation: false,
-      locationType: 'Current',
-      askBond: false
+  const [singleCandidate, setSingleCandidate] = useState(() => {
+    try {
+      const stored = sessionStorage.getItem('createInterview_singleCandidate')
+      if (stored) return JSON.parse(stored)
+    } catch (e) {
+      console.error('Failed to parse stored singleCandidate', e)
+    }
+    return {
+      name: '',
+      email: '',
+      resumeText: '',
+      jobDescription: '',
+      customQuestions: '',
+      aiInstructions: '',
+      industry: 'General',
+      interviewFormat: 'Standard',
+      interviewType: 'Technical',
+      language: 'English',
+      caseStudyCount: 3,
+      duration: 30,
+      scheduledStart: '',
+      scheduledEnd: '',
+      recordVideo: true,
+      hrScreening: {
+        askWorkMode: false,
+        workModeType: 'On-site',
+        askLocation: false,
+        locationType: 'Current',
+        askBond: false
+      }
     }
   })
+
+  useEffect(() => {
+    sessionStorage.setItem('createInterview_singleCandidate', JSON.stringify(singleCandidate))
+  }, [singleCandidate])
 
   // Parsing & Calculating statuses
   const [resumeParsing, setResumeParsing] = useState(false)
@@ -72,28 +90,53 @@ export default function CreateInterviewPage() {
   const [singleCreatedLinks, setSingleCreatedLinks] = useState([]) // [{ name, url, id, email }]
 
   // Bulk Send Configurations
-  const [bulkConfig, setBulkConfig] = useState({
-    jobDescription: '',
-    customQuestions: '',
-    aiInstructions: '',
-    industry: 'General',
-    interviewFormat: 'Standard',
-    interviewType: 'Technical',
-    language: 'English',
-    caseStudyCount: 3,
-    duration: 30,
-    scheduledStart: '',
-    scheduledEnd: '',
-    recordVideo: true,
-    hrScreening: {
-      askWorkMode: false,
-      workModeType: 'On-site',
-      askLocation: false,
-      locationType: 'Current',
-      askBond: false
+  const [bulkConfig, setBulkConfig] = useState(() => {
+    try {
+      const stored = sessionStorage.getItem('createInterview_bulkConfig')
+      if (stored) return JSON.parse(stored)
+    } catch (e) {
+      console.error('Failed to parse stored bulkConfig', e)
+    }
+    return {
+      jobDescription: '',
+      customQuestions: '',
+      aiInstructions: '',
+      industry: 'General',
+      interviewFormat: 'Standard',
+      interviewType: 'Technical',
+      language: 'English',
+      caseStudyCount: 3,
+      duration: 30,
+      scheduledStart: '',
+      scheduledEnd: '',
+      recordVideo: true,
+      hrScreening: {
+        askWorkMode: false,
+        workModeType: 'On-site',
+        askLocation: false,
+        locationType: 'Current',
+        askBond: false
+      }
     }
   })
-  const [bulkCandidates, setBulkCandidates] = useState([]) // [{ name, email, record_video }]
+
+  useEffect(() => {
+    sessionStorage.setItem('createInterview_bulkConfig', JSON.stringify(bulkConfig))
+  }, [bulkConfig])
+
+  const [bulkCandidates, setBulkCandidates] = useState(() => {
+    try {
+      const stored = sessionStorage.getItem('createInterview_bulkCandidates')
+      if (stored) return JSON.parse(stored)
+    } catch (e) {
+      console.error('Failed to parse stored bulkCandidates', e)
+    }
+    return []
+  }) // [{ name, email, record_video }]
+
+  useEffect(() => {
+    sessionStorage.setItem('createInterview_bulkCandidates', JSON.stringify(bulkCandidates))
+  }, [bulkCandidates])
   const [bulkCandidateInput, setBulkCandidateInput] = useState({ name: '', email: '' })
   const [bulkJdParsing, setBulkJdParsing] = useState(false)
   const [bulkCustomQuestionsParsing, setBulkCustomQuestionsParsing] = useState(false)

@@ -309,7 +309,11 @@ def get_admin_plan_context(user: Dict[str, Any]) -> Dict[str, Any]:
     
     definition = get_plan_definition(subscription_plan)
     if user.get("role") == "admin":
-        credits = user.get("credits", 0)
+        if "credits" in user:
+            credits = user.get("credits", 0)
+        else:
+            admin_doc = admins_collection.find_one({"_id": ObjectId(user.get("admin_id"))})
+            credits = admin_doc.get("credits", 0) if admin_doc else 0
     else:
         credits = company.get("credits", 0) if company else user.get("credits", 0)
         
@@ -622,16 +626,35 @@ def _collect_runner_output(result: subprocess.CompletedProcess) -> Dict[str, Any
     if result.returncode != 0:
         return _runner_error((result.stderr or result.stdout or "Unknown execution error").strip())
 
+    stdout = result.stdout.strip()
     try:
-        all_results = json.loads(result.stdout.strip() or "[]")
+        # User code might print to stdout. The test harness prints JSON on the last line.
+        lines = stdout.split('\n')
+        json_str = lines[-1] if lines else "[]"
+        all_results = json.loads(json_str)
+        console_out = '\n'.join(lines[:-1]).strip()
     except Exception:
-        return _runner_error("The runner returned an invalid response.")
+        # If no valid JSON, it's either a script or a crash
+        return _runner_error(stdout or result.stderr or "The runner returned an invalid response.")
 
     visible_results = [row for row in all_results if row.get("visible")]
     hidden_results = [row for row in all_results if not row.get("visible")]
+    
+    # If the user script just prints, and there are no results, return their output
+    if not all_results and console_out:
+        return {
+            "status": "ok",
+            "runtime_error": None,
+            "output": console_out,
+            "visible_results": [],
+            "hidden_summary": {"passed": 0, "total": 0},
+            "all_passed": False,
+        }
+
     return {
         "status": "ok",
         "runtime_error": None,
+        "output": console_out,
         "visible_results": visible_results,
         "hidden_summary": {
             "passed": sum(1 for row in hidden_results if row.get("passed")),
@@ -711,6 +734,10 @@ def _c_type(value: Any) -> str:
     raise ValueError("Unsupported C argument type.")
 
 
+import tempfile
+import subprocess
+import os
+
 def run_code_against_tests(code: str, task: Dict[str, Any], language: str) -> Dict[str, Any]:
     function_name = task.get("function_name") or "solve"
     tests = task.get("test_cases", [])
@@ -719,7 +746,71 @@ def run_code_against_tests(code: str, task: Dict[str, Any], language: str) -> Di
     if not code.strip():
         return _runner_error("No code was provided.")
 
-    return _runner_error("Native code execution is disabled for security reasons. Please use the 'Get AI Feedback' button to evaluate your solution.")
+    if language != "python":
+        return _runner_error(f"Native code execution for {language} is not implemented in this local version.")
+
+    harness = f"""
+import json
+import sys
+
+# User code
+{code}
+
+# Test cases
+tests = {json.dumps(tests)}
+results = []
+function_name = "{function_name}"
+
+if function_name in locals():
+    func = locals()[function_name]
+    for test in tests:
+        try:
+            input_args = test.get("input", [])
+            if not isinstance(input_args, list):
+                input_args = [input_args]
+            
+            output = func(*input_args)
+            expected = test.get("expected") or test.get("output")
+            
+            passed = (output == expected)
+            
+            results.append({{
+                "id": test.get("id"),
+                "visible": test.get("visible", True),
+                "passed": passed,
+                "input": input_args,
+                "output": output,
+                "expected": expected
+            }})
+        except Exception as e:
+            results.append({{
+                "id": test.get("id"),
+                "visible": test.get("visible", True),
+                "passed": False,
+                "input": test.get("input"),
+                "output": f"Runtime Error: {{type(e).__name__}}: {{str(e)}}",
+                "expected": test.get("expected") or test.get("output")
+            }})
+    print("\\n" + json.dumps(results))
+else:
+    # Just running as a script?
+    print(f"\\n[]")
+"""
+
+    with tempfile.NamedTemporaryFile(suffix=".py", delete=False, mode="w", encoding="utf-8") as f:
+        f.write(harness)
+        temp_path = f.name
+
+    try:
+        result = subprocess.run(["python", temp_path], capture_output=True, text=True, timeout=10)
+        return _collect_runner_output(result)
+    except subprocess.TimeoutExpired:
+        return _runner_error("Execution timed out (10s limit).")
+    except Exception as e:
+        return _runner_error(f"Failed to execute code: {e}")
+    finally:
+        if os.path.exists(temp_path):
+            os.remove(temp_path)
 
 
 

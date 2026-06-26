@@ -108,6 +108,7 @@ export default function VoiceInterviewPage() {
   const [transcript, setTranscript]         = useState('')
   const [interimText, setInterimText]       = useState('')
   const [countdown, setCountdown]           = useState(0)
+  const [roundDuration, setRoundDuration]   = useState(900)
   const [answeredCount, setAnsweredCount]   = useState(0)
   const [followUpCount, setFollowUpCount]   = useState(0)  // follow-ups per question
   const [warningsCount, setWarningsCount]   = useState(0)
@@ -157,6 +158,7 @@ export default function VoiceInterviewPage() {
   const chatBottomRef    = useRef(null)
   const wsRef            = useRef(null)
   const languageRef      = useRef('English')
+  const isTransitioningRef = useRef(false)
 
   // Sync refs
   useEffect(() => { currentQIdxRef.current   = currentQIdx },   [currentQIdx])
@@ -210,7 +212,16 @@ export default function VoiceInterviewPage() {
         const langVal = d.language || 'English'
         setLanguage(langVal.charAt(0).toUpperCase() + langVal.slice(1).toLowerCase())
         setInterviewType(d.interview_type || 'Technical')
-        setCountdown((d.interview_duration || 30) * 60)
+        
+        // Calculate duration based on rounds
+        const typeStr = d.interview_type || 'Technical'
+        let numRounds = 1;
+        if (typeStr.includes('Coding') && typeStr.includes('Case Study')) numRounds = 3;
+        else if (typeStr === 'Technical' || typeStr === 'Non-Technical' || typeStr.includes('Coding') || typeStr.includes('Case Study')) numRounds = 2;
+        
+        const durationPerRound = Math.floor((d.interview_duration || 30) * 60 / numRounds);
+        setRoundDuration(durationPerRound);
+        setCountdown(durationPerRound)
 
         const fd = new FormData(); fd.append('link_id', linkId)
         const sr = await fetch(`${API_BASE_URL}/start-session-interview`, { method: 'POST', body: fd })
@@ -456,17 +467,48 @@ export default function VoiceInterviewPage() {
       }, 10000)
     }
     rec.onend = () => { if (isListeningRef.current) try { rec.start() } catch(_) {} }
-    rec.onerror = e => { if (e.error !== 'no-speech') console.warn('SR:', e.error) }
+    rec.onerror = e => { 
+      if (e.error === 'aborted') isListeningRef.current = false
+      if (e.error !== 'no-speech') console.warn('SR:', e.error) 
+    }
     try { rec.start() } catch(e) { console.warn(e) }
   }, [stopListening])
 
   // ── Handle one verbal answer ──────────────────────────────────────────────
   const handleAnswer = useCallback((answer, qIdx, fupCount) => {
+    if (isTransitioningRef.current) return // Prevent any action if transitioning
+
+    const qs = questionsRef.current
+    const t = VOICE_TRANSLATIONS[languageRef.current] || VOICE_TRANSLATIONS['English']
+    
+    // Check intent
+    const lowerAns = answer?.toLowerCase() || ''
+    const isSkip = /(skip|next question|move to next|move on|next round)/.test(lowerAns)
+    const isRepeat = /(repeat|come again|didn't understand|not understand|what did you say|say that again)/.test(lowerAns)
+
+    if (isSkip) {
+      addMsg('user', answer)
+      const nextIdx = qIdx + 1
+      if (!qs[nextIdx]) {
+        aiSay(t.wrapUpVerbal, () => transitionToNextRound())
+      } else {
+        setCurrentQIdx(nextIdx)
+        aiSay(`${t.nextQuestion.replace('[X]', nextIdx + 1)}${qs[nextIdx].text}`, () => startListening(ans => handleAnswer(ans, nextIdx, 0)))
+      }
+      return
+    }
+
+    if (isRepeat) {
+      addMsg('user', answer)
+      const q = qs[qIdx]
+      const prompt = `${t.intro.replace('[NAME]', sessionDetailRef.current?.candidate_name || 'there')}${q.text}` // simplified repeat
+      aiSay(q.text, () => startListening(ans => handleAnswer(ans, qIdx, fupCount)))
+      return
+    }
+
     if (!answer?.trim()) {
       // 10s silence -> Skip to next question
       const nextIdx = qIdx + 1
-      const qs = questionsRef.current
-      const t = VOICE_TRANSLATIONS[languageRef.current] || VOICE_TRANSLATIONS['English']
       if (!qs[nextIdx]) {
         aiSay(t.wrapUpVerbal, () => transitionToNextRound())
       } else {
@@ -518,7 +560,6 @@ export default function VoiceInterviewPage() {
     // Next question
     setAnsweredCount(p => p + 1)
     const nextIdx = qIdx + 1
-    const qs = questionsRef.current
     if (!qs[nextIdx]) {
       transitionToNextRound()
     } else {
@@ -534,46 +575,53 @@ export default function VoiceInterviewPage() {
 
   // ── Load coding/case study round questions ────────────────────────────────
   const transitionToNextRound = useCallback(async () => {
-    if (submittingRef.current) return
+    if (submittingRef.current || isTransitioningRef.current) return
+    isTransitioningRef.current = true
     stopListening(); window.speechSynthesis?.cancel()
+    
     const type = interviewType
     const iid  = interviewIdRef.current
 
     if (type === 'Technical' || type === 'Non-Technical') {
       setAiStatus('thinking')
+      setLoading(true) // Immediately show loading state to candidate
       const t = VOICE_TRANSLATIONS[languageRef.current] || VOICE_TRANSLATIONS['English']
-      aiSay(t.verbalComplete, async () => {
-        if (type === 'Technical') {
-          try {
-            const res = await fetch(`${API_BASE_URL}/coding-round/start`, {
-              method: 'POST', headers: { 'Content-Type': 'application/json' },
-              body: JSON.stringify({ interview_id: iid })
-            })
-            const data = await res.json()
-            const task = data.coding_round?.task || {}
-            const codingQ = {
-              id: 'coding_1', type: 'coding', text: task.description || task.title || 'Implement the required function',
-              codingTask: task, codingTests: data.tests || []
-            }
-            setCodingQuestion(codingQ)
-            setTimeout(() => setRound('coding'), 800)
-          } catch(_) { setRound('done') }
-        } else {
-          // Non-Technical → case study
-          try {
-            const res = await fetch(`${API_BASE_URL}/case-study/start`, {
-              method: 'POST', headers: { 'Content-Type': 'application/json' },
-              body: JSON.stringify({ interview_id: iid })
-            })
-            const data = await res.json()
-            const cqs = (data.case_study_round?.questions || []).map((q, i) => ({
-              id: `cs_${i}`, type: 'case_study', text: q.text || q.scenario || q.question || '', caseStudyIndex: i
-            }))
-            setCaseStudyQuestions(cqs.length ? cqs : [{ id: 'cs_0', type: 'case_study', text: data.scenario || 'Present your business case.', caseStudyIndex: 0 }])
-            setTimeout(() => setRound('case_study'), 800)
-          } catch(_) { setRound('done') }
-        }
-      })
+      
+      // Speak transition phrase but don't wait for it to finish before fetching
+      aiSay(t.verbalComplete)
+
+      if (type === 'Technical') {
+        try {
+          const res = await fetch(`${API_BASE_URL}/coding-round/start`, {
+            method: 'POST', headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ interview_id: iid })
+          })
+          const data = await res.json()
+          const task = data.coding_round?.task || {}
+          const codingQ = {
+            id: 'coding_1', type: 'coding', text: task.description || task.title || 'Implement the required function',
+            codingTask: task, codingTests: data.tests || []
+          }
+          setCodingQuestion(codingQ)
+          setRound('coding')
+          setLoading(false)
+        } catch(_) { setRound('done'); setLoading(false) }
+      } else {
+        // Non-Technical → case study
+        try {
+          const res = await fetch(`${API_BASE_URL}/case-study/start`, {
+            method: 'POST', headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ interview_id: iid })
+          })
+          const data = await res.json()
+          const cqs = (data.case_study_round?.questions || []).map((q, i) => ({
+            id: `cs_${i}`, type: 'case_study', text: q.text || q.scenario || q.question || '', caseStudyIndex: i
+          }))
+          setCaseStudyQuestions(cqs.length ? cqs : [{ id: 'cs_0', type: 'case_study', text: data.scenario || 'Present your business case.', caseStudyIndex: 0 }])
+          setRound('case_study')
+          setLoading(false)
+        } catch(_) { setRound('done'); setLoading(false) }
+      }
     } else {
       completeInterview()
     }
@@ -633,7 +681,7 @@ export default function VoiceInterviewPage() {
   // ─────────────────────────────────────────────────────────────────────────────
 
   if (round === 'coding' && codingQuestion) {
-    return <VoiceCodingRound question={codingQuestion} interviewId={interviewId} linkId={linkId}
+    return <VoiceCodingRound question={codingQuestion} interviewId={interviewId} linkId={linkId} duration={roundDuration}
               sessionDetail={sessionDetail} language={language} wsRef={wsRef} onComplete={() => {
                 const type = interviewType
                 if (type === 'Non-Technical') {
@@ -650,7 +698,7 @@ export default function VoiceInterviewPage() {
   }
 
   if (round === 'case_study' && caseStudyQuestions.length) {
-    return <VoiceCaseStudy question={caseStudyQuestions[0]} allQuestions={caseStudyQuestions}
+    return <VoiceCaseStudy question={caseStudyQuestions[0]} allQuestions={caseStudyQuestions} duration={roundDuration}
               interviewId={interviewId} linkId={linkId} sessionDetail={sessionDetail}
               language={language} wsRef={wsRef} onComplete={completeInterview}/>
   }
@@ -928,7 +976,10 @@ export default function VoiceInterviewPage() {
         <div className="w-full max-w-lg space-y-4">
           <div className="flex gap-2">
             <button onClick={()=>{
-              if(aiStatus==='listening'){stopListening()}
+              if(aiStatus==='listening'){
+                stopListening()
+                handleAnswer(currentTxRef.current.trim(), currentQIdx, 0)
+              }
               else{startListening(ans=>handleAnswer(ans,currentQIdx,0))}
             }} className={`flex-1 py-3.5 rounded-2xl text-sm font-bold transition-all flex items-center justify-center gap-2.5 ${
               aiStatus==='listening'

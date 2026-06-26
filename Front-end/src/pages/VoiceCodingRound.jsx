@@ -206,6 +206,7 @@ export default function VoiceCodingRound({
   sessionDetail,
   language: sessionLang,
   wsRef,
+  duration,
   onComplete
 }) {
   const [code, setCode]               = useState(question?.codingTask?.starter_code || '# Write your solution here\n\n')
@@ -213,8 +214,11 @@ export default function VoiceCodingRound({
   const [aiStatus, setAiStatus]       = useState('idle')  // idle | speaking | listening
   const [transcript, setTranscript]   = useState('')
   const [detectedPatterns, setDetectedPatterns] = useState(new Set())
-  const [timeLeft, setTimeLeft]       = useState(900)
+  const [timeLeft, setTimeLeft]       = useState(duration || 900)
   const [runOutput, setRunOutput]     = useState('')
+  const [runResultData, setRunResultData] = useState(null)
+  const [consoleHeight, setConsoleHeight] = useState(144)
+  const [orbPos, setOrbPos]           = useState({ x: null, y: null })
   const [running, setRunning]         = useState(false)
   const [isSubmitting, setIsSubmitting] = useState(false)
   const [orbLabel, setOrbLabel]       = useState('Zara is watching')
@@ -295,7 +299,6 @@ export default function VoiceCodingRound({
     setAiStatus('idle')
     setOrbLabel('Zara is watching')
     isListeningRef.current = false
-    setTranscript('')
   }, [])
 
   const startListening = useCallback((onFinish) => {
@@ -321,7 +324,9 @@ export default function VoiceCodingRound({
 
         try {
           // Pass language hint for better Indian English recognition
-          const res = await fetch(`${API_BASE_URL}/stt?language=en`, { method: 'POST', body: fd })
+          const langMap = { 'Hindi':'hi','Telugu':'te','Tamil':'ta','Malayalam':'ml','Kannada':'kn','English':'en' };
+          const sttLang = langMap[sessionLang] || 'en';
+          const res = await fetch(`${API_BASE_URL}/stt?language=${sttLang}`, { method: 'POST', body: fd })
           const data = await res.json()
           if (data.transcript) {
             setTranscript(data.transcript)
@@ -336,7 +341,6 @@ export default function VoiceCodingRound({
         setAiStatus('idle')
         setOrbLabel('Zara is watching')
         isListeningRef.current = false
-        setTranscript('')
       }
 
       mediaRecorder.start()
@@ -434,8 +438,29 @@ export default function VoiceCodingRound({
         body: JSON.stringify({ interview_id: interviewId, code, language: selectedLang })
       })
       const data = await res.json()
-      setRunOutput(data.output || data.error || 'No output')
-      if (data.all_passed) {
+      const totalTests = question?.codingTask?.test_cases?.length || 14;
+      let outputText = '';
+      
+      if (data.run_result?.runtime_error) {
+        outputText = `Execution Error:\n${data.run_result.runtime_error}\n\nPassed 0 / ${totalTests} Test Cases`;
+      } else if (data.run_result?.visible_results?.length) {
+        const passedCount = data.run_result.visible_results.filter(r => r.passed).length + (data.run_result.hidden_summary?.passed || 0);
+        
+        outputText = `Passed ${passedCount} / ${totalTests} Test Cases\n\n`;
+        outputText += data.run_result.visible_results.map(r => 
+          `Test ${r.id} (Visible): ${r.passed ? 'PASSED ✅' : 'FAILED ❌'}\nInput: ${JSON.stringify(r.input)}\nExpected: ${JSON.stringify(r.expected)}\nGot: ${JSON.stringify(r.output)}`
+        ).join('\n\n');
+        
+        if (data.run_result.hidden_summary) {
+            outputText += `\n\nHidden Tests: ${data.run_result.hidden_summary.passed} / ${data.run_result.hidden_summary.total} Passed`;
+        }
+      } else if (data.run_result?.output) {
+        outputText = `Output:\n${data.run_result.output}`;
+      }
+      
+      setRunOutput(outputText || data.error || 'No output')
+      setRunResultData(data.run_result || null)
+      if (data.run_result?.all_passed) {
         aiSay("Excellent! All test cases passed! Can you walk me through the time and space complexity?", () => {
           startListening(ans => { if (ans) askAIForReply(ans) })
         })
@@ -516,7 +541,7 @@ export default function VoiceCodingRound({
       <div className="flex flex-1 overflow-hidden">
 
         {/* Left: Problem Statement Only */}
-        <div className="w-[300px] shrink-0 flex flex-col border-r border-white/6 bg-[#0d1117] overflow-y-auto">
+        <div className="w-[450px] shrink-0 flex flex-col border-r border-white/6 bg-[#0d1117] overflow-y-auto">
           <div className="p-5">
             {/* Problem header */}
             <div className="flex items-center gap-2 mb-3">
@@ -528,13 +553,13 @@ export default function VoiceCodingRound({
             </div>
 
             {/* Title */}
-            <h2 className="text-sm font-bold text-white leading-relaxed mb-2">
+            <h2 className="text-base font-bold text-white leading-relaxed mb-4">
               {question?.text || question?.codingTask?.title}
             </h2>
 
             {/* Description */}
             {question?.codingTask?.description && (
-              <p className="text-xs text-slate-400 leading-relaxed whitespace-pre-wrap mb-4">
+              <p className="text-sm text-slate-300 leading-relaxed whitespace-pre-wrap mb-6">
                 {question.codingTask.description}
               </p>
             )}
@@ -586,7 +611,7 @@ export default function VoiceCodingRound({
                   <i className="fas fa-vial text-purple-400 text-xs"/>
                   <span className="text-xs font-bold uppercase tracking-widest text-slate-500">Test Cases</span>
                 </div>
-                {question.codingTask.test_cases.map((tc, i) => (
+                {question.codingTask.test_cases.filter(tc => tc.visible !== false).map((tc, i) => (
                   <div key={i} className="mb-2 bg-white/4 border border-white/8 rounded-lg p-3 text-xs font-mono">
                     <div className="mb-1">
                       <span className="text-slate-500 mr-1">Input:</span>
@@ -594,7 +619,7 @@ export default function VoiceCodingRound({
                     </div>
                     <div>
                       <span className="text-slate-500 mr-1">Expected:</span>
-                      <span className="text-amber-300">{tc.expected}</span>
+                      <span className="text-amber-300">{tc.expected !== undefined ? tc.expected : tc.output}</span>
                     </div>
                   </div>
                 ))}
@@ -662,8 +687,27 @@ export default function VoiceCodingRound({
 
           {/* Output Panel */}
           {runOutput && (
-            <div className="h-36 shrink-0 border-t border-white/6 bg-[#0a0a0f] p-3 overflow-auto">
-              <div className="flex items-center gap-2 mb-2">
+            <div className="relative shrink-0 border-t border-white/6 bg-[#0a0a0f] flex flex-col" style={{ height: consoleHeight }}>
+              {/* Drag Handle */}
+              <div 
+                className="absolute top-0 left-0 right-0 h-1.5 cursor-ns-resize hover:bg-indigo-500/50 transition-colors z-10"
+                onMouseDown={(e) => {
+                  e.preventDefault();
+                  const startY = e.clientY;
+                  const startH = consoleHeight;
+                  const onMouseMove = (moveEvent) => {
+                    const deltaY = startY - moveEvent.clientY;
+                    setConsoleHeight(Math.max(100, Math.min(600, startH + deltaY)));
+                  };
+                  const onMouseUp = () => {
+                    document.removeEventListener('mousemove', onMouseMove);
+                    document.removeEventListener('mouseup', onMouseUp);
+                  };
+                  document.addEventListener('mousemove', onMouseMove);
+                  document.addEventListener('mouseup', onMouseUp);
+                }}
+              />
+              <div className="flex items-center gap-2 mb-2 p-3 pb-0 shrink-0">
                 <i className="fas fa-terminal text-xs text-emerald-400"/>
                 <span className="text-xs font-bold text-slate-500 uppercase tracking-widest">Output</span>
                 <button
@@ -673,16 +717,60 @@ export default function VoiceCodingRound({
                   <i className="fas fa-times text-xs"/>
                 </button>
               </div>
-              <pre className="text-xs text-emerald-300 font-mono whitespace-pre-wrap">{runOutput}</pre>
+              
+              <div className="flex-1 overflow-auto p-3 pt-1">
+                {runResultData ? (
+                  <div className="space-y-4">
+                    {runResultData.runtime_error && (
+                      <div className="bg-rose-500/10 border border-rose-500/20 rounded p-2 text-rose-400 text-xs font-mono whitespace-pre-wrap">
+                        {runResultData.runtime_error}
+                      </div>
+                    )}
+                    {runResultData.stdout && (
+                      <div className="bg-white/5 rounded p-2 text-slate-300 text-xs font-mono whitespace-pre-wrap">
+                        {runResultData.stdout}
+                      </div>
+                    )}
+                    {(runResultData.visible_results?.length > 0 || runResultData.hidden_summary) && (
+                      <div>
+                        <div className="text-xs font-bold text-slate-400 mb-2">Test Cases</div>
+                        <div className="flex flex-wrap gap-2">
+                          {runResultData.visible_results?.map((r, idx) => (
+                            <div key={`vis-${idx}`} className={`px-2.5 py-1 rounded-md border text-[11px] font-bold ${r.passed ? 'bg-emerald-500/10 border-emerald-500/20 text-emerald-400' : 'bg-rose-500/10 border-rose-500/20 text-rose-400'}`} title={`Input: ${JSON.stringify(r.input)}\nExpected: ${JSON.stringify(r.expected)}\nGot: ${JSON.stringify(r.output)}`}>
+                              Case {r.id}: {r.passed ? 'Pass' : 'Fail'}
+                            </div>
+                          ))}
+                          {runResultData.hidden_summary && Array.from({ length: runResultData.hidden_summary.total }).map((_, idx) => {
+                            const isPassed = idx < runResultData.hidden_summary.passed;
+                            return (
+                              <div key={`hid-${idx}`} className={`px-2.5 py-1 rounded-md border text-[11px] font-bold opacity-60 ${isPassed ? 'bg-emerald-500/10 border-emerald-500/20 text-emerald-400' : 'bg-rose-500/10 border-rose-500/20 text-rose-400'}`} title="Hidden Test Case">
+                                Hidden: {isPassed ? 'Pass' : 'Fail'}
+                              </div>
+                            );
+                          })}
+                        </div>
+                      </div>
+                    )}
+                  </div>
+                ) : (
+                  <pre className="text-xs text-emerald-300 font-mono whitespace-pre-wrap">{runOutput}</pre>
+                )}
+              </div>
             </div>
           )}
         </div>
       </div>
 
-      {/* ── Floating Voice Orb (bottom center) ── */}
+      {/* ── Floating Voice Orb ── */}
       <div
-        className="fixed bottom-0 left-0 right-0 flex flex-col items-center pb-5 pointer-events-none"
-        style={{ zIndex: 40 }}
+        className="fixed flex flex-col items-center pointer-events-none transition-transform"
+        style={{ 
+          zIndex: 40,
+          left: orbPos.x !== null ? orbPos.x : '50%',
+          top: orbPos.y !== null ? orbPos.y : 'auto',
+          bottom: orbPos.y !== null ? 'auto' : 20,
+          transform: orbPos.x !== null ? 'translate(-50%, -50%)' : 'translateX(-50%)'
+        }}
       >
         {/* Live transcript strip */}
         {aiStatus === 'listening' && transcript && (
@@ -700,7 +788,37 @@ export default function VoiceCodingRound({
           </div>
         )}
 
-        <div className="flex flex-col items-center gap-1.5 pointer-events-auto">
+        <div className="flex flex-col items-center gap-1.5 pointer-events-auto group">
+          {/* Drag Handle */}
+          <div 
+            className="w-10 h-1.5 bg-white/30 hover:bg-white/50 rounded-full cursor-grab active:cursor-grabbing transition-colors mb-1 opacity-0 group-hover:opacity-100"
+            onMouseDown={(e) => {
+              e.preventDefault();
+              let startX = e.clientX;
+              let startY = e.clientY;
+              const rect = e.currentTarget.parentElement.getBoundingClientRect();
+              let currentX = orbPos.x !== null ? orbPos.x : rect.left + rect.width / 2;
+              let currentY = orbPos.y !== null ? orbPos.y : rect.top + rect.height / 2;
+
+              const onMouseMove = (moveEvent) => {
+                const deltaX = moveEvent.clientX - startX;
+                const deltaY = moveEvent.clientY - startY;
+                startX = moveEvent.clientX;
+                startY = moveEvent.clientY;
+                currentX += deltaX;
+                currentY += deltaY;
+                setOrbPos({ x: currentX, y: currentY });
+              };
+              const onMouseUp = () => {
+                document.removeEventListener('mousemove', onMouseMove);
+                document.removeEventListener('mouseup', onMouseUp);
+              };
+              document.addEventListener('mousemove', onMouseMove);
+              document.addEventListener('mouseup', onMouseUp);
+            }}
+            title="Drag to move Zara"
+          />
+
           {/* Orb itself — also acts as mic toggle button */}
           <button
             onClick={() => {

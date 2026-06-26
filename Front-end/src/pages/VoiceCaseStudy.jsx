@@ -121,6 +121,7 @@ export default function VoiceCaseStudy({
   sessionDetail,
   language: sessionLang,
   wsRef,             // WebSocket reference for sending answers
+  duration,
   onComplete
 }) {
   const [chatMessages, setChatMessages] = useState([])
@@ -133,7 +134,7 @@ export default function VoiceCaseStudy({
   const [questionCount, setQuestionCount] = useState(0)
   const [usedFollowups]                 = useState(new Set())
   const [phase, setPhase]               = useState('presenting') // presenting | discussing | transitioning | done
-  const [timeLeft, setTimeLeft]         = useState(600) // 10 min per case study
+  const [timeLeft, setTimeLeft]         = useState(duration || 600) // 10 min per case study
 
   const recognitionRef  = useRef(null)
   const silenceTimerRef = useRef(null)
@@ -218,13 +219,47 @@ export default function VoiceCaseStudy({
       }, 15000)
     }
     rec.onend = () => { if (isListeningRef.current) try { rec.start() } catch(_) {} }
-    rec.onerror = e => { if (e.error !== 'no-speech') console.warn('SR:', e.error) }
+    rec.onerror = e => { 
+      if (e.error === 'aborted') isListeningRef.current = false // prevent infinite restart if aborted
+      if (e.error !== 'no-speech') console.warn('SR:', e.error) 
+    }
     try { rec.start() } catch(e) { console.warn(e) }
   }, [sessionLang, stopListening])
 
   // ── Handle candidate's answer ─────────────────────────────────────────────
   const handleAnswer = useCallback((answer, currentIdx) => {
     const t = VOICE_TRANSLATIONS[sessionLang] || VOICE_TRANSLATIONS['English']
+    
+    // Check intent
+    const lowerAns = answer?.toLowerCase() || ''
+    const isSkip = /(skip|next question|move to next|move on|next scenario)/.test(lowerAns)
+    const isRepeat = /(repeat|come again|didn't understand|not understand|what did you say|say that again)/.test(lowerAns)
+
+    if (isSkip) {
+      addMsg('user', answer)
+      const nextIdx = currentIdx + 1
+      if (nextIdx < scenarios.length) {
+        setCurrentScenarioIdx(nextIdx)
+        setQuestionCount(0)
+        const transList = t.csTransitions
+        const transition = transList[Math.floor(Math.random() * transList.length)]
+        setTimeout(() => presentScenario(nextIdx, transition), 400)
+      } else {
+        handleComplete()
+      }
+      return
+    }
+
+    if (isRepeat) {
+      addMsg('user', answer)
+      const sc = scenarios[currentIdx]
+      const scenarioPrefix = currentIdx === 0 ? t.csScenarioPrefix : t.csScenarioNextPrefix
+      const scenarioText = `${scenarioPrefix}${sc.text}`
+      const prompt = currentIdx === 0 ? `${scenarioText}. ${t.csPromptFirst}` : `${scenarioText}. ${t.csPromptNext}`
+      aiSay(prompt, () => startListening(ans => handleAnswer(ans, currentIdx)))
+      return
+    }
+
     if (!answer?.trim()) { aiSay(t.csNeedMore, () => startListening(ans => handleAnswer(ans, currentIdx))); return }
     addMsg('user', answer)
     setQuestionCount(p => p + 1)
@@ -254,8 +289,8 @@ export default function VoiceCaseStudy({
     }
 
     // Should we ask a follow-up or move to next scenario?
-    const followup = questionCount < 2 ? getFollowup(answer, usedFollowups, sessionLang) : null
-    if (followup && questionCount < 3) {
+    const followup = questionCount < 4 ? getFollowup(answer, usedFollowups, sessionLang) : null
+    if (followup && questionCount < 5) {
       usedFollowups.add(followup)
       const ackList = t.csAck
       const transition = ackList[Math.floor(Math.random() * ackList.length)]
@@ -299,7 +334,12 @@ export default function VoiceCaseStudy({
   }, [scenarios, aiSay, startListening, handleAnswer, sessionLang])
 
   // ── Start ─────────────────────────────────────────────────────────────────
+  const hasStartedRef = useRef(false)
+  
   useEffect(() => {
+    if (hasStartedRef.current) return
+    hasStartedRef.current = true
+    
     const t = VOICE_TRANSLATIONS[sessionLang] || VOICE_TRANSLATIONS['English']
     const introTemplate = scenarios.length > 1 ? t.csIntro : t.csIntroSingle
     const intro = introTemplate.replace('[COUNT]', scenarios.length)
@@ -454,16 +494,27 @@ export default function VoiceCaseStudy({
             ) : (
               <div className="flex gap-2">
                 <button onClick={() => {
-                  if (aiStatus === 'listening') { stopListening() }
-                  else { startListening(ans => handleAnswer(ans, currentScenarioIdx)) }
+                  if (aiStatus === 'listening') {
+                    stopListening()
+                    handleAnswer(currentTxRef.current.trim(), currentScenarioIdx)
+                  } else {
+                    startListening(ans => handleAnswer(ans, currentScenarioIdx))
+                  }
                 }} className={`flex-1 py-3 rounded-xl text-sm font-bold transition-all flex items-center justify-center gap-2 ${
                   aiStatus === 'listening' ? 'bg-rose-500/20 border border-rose-500/30 text-rose-400' : 'bg-emerald-500/10 border border-emerald-500/30 text-emerald-400 hover:bg-emerald-500/20'
                 }`}>
                   <i className={`fas ${aiStatus === 'listening' ? 'fa-stop-circle' : 'fa-microphone'}`}/>
                   {aiStatus === 'listening' ? 'Done Speaking' : 'Speak Your Answer'}
                 </button>
-                <button onClick={handleComplete} className="px-4 py-3 rounded-xl bg-rose-500/10 text-rose-400 border border-rose-500/20 text-xs font-semibold hover:bg-rose-500/20 transition-all">
-                  End
+                <button onClick={() => {
+                  if (currentScenarioIdx < scenarios.length - 1) {
+                    stopListening()
+                    handleAnswer('skip', currentScenarioIdx)
+                  } else {
+                    handleComplete()
+                  }
+                }} className="px-4 py-3 rounded-xl bg-white/5 text-slate-300 border border-white/10 text-xs font-semibold hover:bg-white/10 transition-all uppercase tracking-widest">
+                  {currentScenarioIdx < scenarios.length - 1 ? 'Next Scenario' : 'Submit Interview'}
                 </button>
               </div>
             )}
