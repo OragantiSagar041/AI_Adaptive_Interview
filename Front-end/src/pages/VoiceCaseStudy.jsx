@@ -136,13 +136,13 @@ export default function VoiceCaseStudy({
   const [phase, setPhase]               = useState('presenting') // presenting | discussing | transitioning | done
   const [timeLeft, setTimeLeft]         = useState(duration || 600) // 10 min per case study
 
-  const recognitionRef  = useRef(null)
-  const silenceTimerRef = useRef(null)
-  const isListeningRef  = useRef(false)
-  const currentTxRef    = useRef('')
-  const chatBottomRef   = useRef(null)
-  const submittingRef   = useRef(false)
-  const langMap = { 'Hindi':'hi-IN','Telugu':'te-IN','Tamil':'ta-IN','Malayalam':'ml-IN','Kannada':'kn-IN','English':'en-US' }
+  const mediaRecorderRef = useRef(null)
+  const silenceTimerRef  = useRef(null)
+  const isListeningRef   = useRef(false)
+  const currentTxRef     = useRef('')
+  const chatBottomRef    = useRef(null)
+  const submittingRef    = useRef(false)
+  const langMap = { 'Hindi':'hi','Telugu':'te','Tamil':'ta','Malayalam':'ml','Kannada':'kn','English':'en' }
 
   const scenarios = allQuestions?.length ? allQuestions : [question]
 
@@ -154,24 +154,38 @@ export default function VoiceCaseStudy({
   const fmt = s => `${String(Math.floor(s/60)).padStart(2,'0')}:${String(s%60).padStart(2,'0')}`
 
   // ── TTS / STT ──────────────────────────────────────────────────────────────
-  const speak = useCallback((text, onEnd) => {
-    const synth = window.speechSynthesis; if (!synth) { onEnd?.(); return }
-    synth.cancel()
-    const u = new SpeechSynthesisUtterance(text)
-    const targetLang = langMap[sessionLang] || 'en-US'
-    u.lang = targetLang; u.rate = 0.9; u.pitch = 1.08
-    u.onend = () => { setAiStatus('idle'); onEnd?.() }
-    u.onstart = () => setAiStatus('speaking')
-    u.onerror = () => { setAiStatus('idle'); onEnd?.() }
-    
-    // Find voice matching target language, fallback to any if not found
-    const voices = synth.getVoices()
-    const v = voices.find(v => v.lang === targetLang && v.localService) 
-              || voices.find(v => v.lang === targetLang)
-              || voices.find(v => v.lang.startsWith(targetLang.split('-')[0]))
-              || voices.find(v => v.lang.startsWith('en'))
-    if (v) u.voice = v
-    synth.speak(u)
+  const speak = useCallback(async (text, onEnd) => {
+    try {
+      setAiStatus('speaking')
+      const res = await fetch(`${API_BASE_URL}/tts`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ text, voice: 'shimmer', language: sessionLang })
+      })
+      if (!res.ok) throw new Error('TTS Failed')
+      const blob = await res.blob()
+      const url = URL.createObjectURL(blob)
+      const audio = new Audio(url)
+      
+      audio.onended = () => {
+        setAiStatus('idle')
+        URL.revokeObjectURL(url)
+        setTimeout(() => onEnd?.(), 200) // Race condition guard
+      }
+      audio.onerror = () => {
+        setAiStatus('idle')
+        onEnd?.()
+      }
+      audio.play().catch(e => {
+        console.error('Audio play error:', e)
+        setAiStatus('idle')
+        onEnd?.()
+      })
+    } catch (e) {
+      console.error('TTS error:', e)
+      setAiStatus('idle')
+      onEnd?.()
+    }
   }, [sessionLang])
 
   const addMsg = useCallback((role, text) => setChatMessages(p => [...p, { role, text, ts: Date.now() }]), [])
@@ -184,46 +198,61 @@ export default function VoiceCaseStudy({
   const stopListening = useCallback(() => {
     isListeningRef.current = false
     clearTimeout(silenceTimerRef.current)
-    try { recognitionRef.current?.stop() } catch(_) {}
+    if (mediaRecorderRef.current && mediaRecorderRef.current.state !== 'inactive') {
+      try { mediaRecorderRef.current.stop() } catch(_) {}
+    }
     setAiStatus('idle')
   }, [])
 
-  const startListening = useCallback((onFinish) => {
-    const SR = window.SpeechRecognition || window.webkitSpeechRecognition
-    if (!SR) { onFinish?.(''); return }
-    try { recognitionRef.current?.stop() } catch(_) {}
-    const rec = new SR()
-    rec.lang = langMap[sessionLang] || 'en-US'
-    rec.continuous = true; rec.interimResults = true
-    recognitionRef.current = rec; isListeningRef.current = true
-    currentTxRef.current = ''; setTranscript(''); setInterimText('')
-    setAiStatus('listening')
+  const startListening = useCallback(async (onFinish) => {
+    try {
+      const stream = await navigator.mediaDevices.getUserMedia({ audio: true })
+      const mediaRecorder = new MediaRecorder(stream)
+      mediaRecorderRef.current = mediaRecorder
+      const audioChunks = []
 
-    // Initial grace period timer
-    clearTimeout(silenceTimerRef.current)
-    silenceTimerRef.current = setTimeout(() => {
-      if (isListeningRef.current) { stopListening(); onFinish?.(currentTxRef.current.trim()) }
-    }, 15000)
-
-    rec.onresult = ev => {
-      let fin = '', interim = ''
-      for (let i = ev.resultIndex; i < ev.results.length; i++) {
-        if (ev.results[i].isFinal) fin += ev.results[i][0].transcript
-        else interim += ev.results[i][0].transcript
+      mediaRecorder.ondataavailable = e => {
+        if (e.data.size > 0) audioChunks.push(e.data)
       }
-      if (fin) { currentTxRef.current += fin + ' '; setTranscript(currentTxRef.current) }
-      setInterimText(interim)
+
+      mediaRecorder.onstop = async () => {
+        setAiStatus('idle')
+        const audioBlob = new Blob(audioChunks, { type: 'audio/webm' })
+        const fd = new FormData()
+        fd.append('file', audioBlob, 'audio.webm')
+
+        try {
+          const targetLang = langMap[sessionLang] || 'en'
+          const res = await fetch(`${API_BASE_URL}/stt?language=${targetLang}`, { method: 'POST', body: fd })
+          const data = await res.json()
+          if (data.transcript) {
+            setTranscript(data.transcript)
+            onFinish?.(data.transcript)
+          } else {
+            onFinish?.('')
+          }
+        } catch (e) {
+          onFinish?.('')
+        } finally {
+          stream.getTracks().forEach(t => t.stop())
+          isListeningRef.current = false
+        }
+      }
+
+      isListeningRef.current = true
+      setTranscript('')
+      setAiStatus('listening')
+      mediaRecorder.start()
+
       clearTimeout(silenceTimerRef.current)
       silenceTimerRef.current = setTimeout(() => {
-        if (isListeningRef.current) { stopListening(); onFinish?.(currentTxRef.current.trim()) }
+        if (mediaRecorder.state !== 'inactive') mediaRecorder.stop()
       }, 15000)
+
+    } catch (err) {
+      console.error("Mic access denied or error:", err)
+      onFinish?.('')
     }
-    rec.onend = () => { if (isListeningRef.current) try { rec.start() } catch(_) {} }
-    rec.onerror = e => { 
-      if (e.error === 'aborted') isListeningRef.current = false // prevent infinite restart if aborted
-      if (e.error !== 'no-speech') console.warn('SR:', e.error) 
-    }
-    try { rec.start() } catch(e) { console.warn(e) }
   }, [sessionLang, stopListening])
 
   // ── Handle candidate's answer ─────────────────────────────────────────────

@@ -3,7 +3,7 @@ from datetime import datetime, timezone
 import os
 
 # Connect to MongoDB
-MONGO_URI = os.getenv("MONGO_URI", "mongodb+srv://sagar:kGFoR3gN2uL95KHS@cluster0.b54nt.mongodb.net/?retryWrites=true&w=majority&appName=Cluster0")
+MONGO_URI = os.getenv("MONGO_URI")
 client = pymongo.MongoClient(MONGO_URI)
 db = client["mock_interview_db"]
 interview_sessions_collection = db["interview_sessions"]
