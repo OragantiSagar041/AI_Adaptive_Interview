@@ -6,6 +6,7 @@ import { Video, Volume2, ArrowRight, ShieldAlert, Cpu, AlertTriangle, RefreshCw 
 import Swal from 'sweetalert2'
 import 'sweetalert2/dist/sweetalert2.min.css'
 import useCandidateWebRTC from '../hooks/useCandidateWebRTC'
+import { useProctoring } from '../hooks/useProctoring'
 
 const langMap = {
   'Hindi': 'hi-IN',
@@ -483,18 +484,36 @@ function Interview() {
     const checkFullscreen = () => {
       if (!document.fullscreenElement) {
         setFullscreenWarning(true)
+        Swal.fire({
+          icon: 'warning',
+          title: '⚠️ Fullscreen Required',
+          text: 'Exiting fullscreen mode is not allowed during the interview.',
+          showCancelButton: true,
+          confirmButtonText: 'Enable full screen mode',
+          cancelButtonText: 'Exit interview',
+          allowOutsideClick: false,
+          allowEscapeKey: false
+        }).then((result) => {
+          if (result.isConfirmed) {
+            const elem = document.documentElement
+            if (elem.requestFullscreen) {
+              elem.requestFullscreen().catch(err => console.log(err))
+            }
+            setFullscreenWarning(false)
+          } else {
+            navigate('/dashboard')
+          }
+        })
       } else {
         setFullscreenWarning(false)
       }
     }
     document.addEventListener('fullscreenchange', checkFullscreen)
-    const interval = setInterval(checkFullscreen, 1500)
 
     return () => {
       document.removeEventListener('fullscreenchange', checkFullscreen)
-      clearInterval(interval)
     }
-  }, [isDisclaimerAccepted])
+  }, [isDisclaimerAccepted, navigate])
 
   // Enable Fullscreen
   const enableFullscreen = () => {
@@ -557,78 +576,7 @@ function Interview() {
     recognitionRef.current = rec
   }
 
-  // Setup face proctoring BlazeFace
-  const startFaceProctoring = async (videoElement) => {
-    if (!window.blazeface) return
-    let faceModel = null
-    let cocoModel = null
-    try {
-      faceModel = await window.blazeface.load({
-        maxFaces: 5,
-        scoreThreshold: 0.55,
-        iouThreshold: 0.3
-      })
-      if (window.cocoSsd) {
-        cocoModel = await window.cocoSsd.load()
-      }
-    } catch (e) {
-      console.error("TensorFlow models failed to load", e)
-      return
-    }
 
-    let isProcessing = false
-    faceDetectionIntervalRef.current = setInterval(async () => {
-      if (isProcessing) return
-      const currentVideo = videoElement || videoPreviewRef.current
-      if (!currentVideo || !currentVideo.srcObject) return
-      if (currentVideo.readyState >= 2 && !currentVideo.paused) {
-        isProcessing = true
-        try {
-          const predictions = await faceModel.estimateFaces(currentVideo, false)
-          let phoneDetected = false
-
-          if (cocoModel) {
-            const objects = await cocoModel.detect(currentVideo)
-            phoneDetected = objects.some(obj => obj.class === 'cell phone')
-          }
-
-          if (phoneDetected) {
-            setProctoringAlert("MOBILE PHONE DETECTED")
-            recordAlertMetric("phone_detected")
-          } else if (predictions.length === 0) {
-            setProctoringAlert("YOUR FACE IS NOT VISIBLE")
-            recordAlertMetric("no_face")
-          } else if (predictions.length > 1) {
-            setProctoringAlert("MULTIPLE FACES DETECTED")
-            recordAlertMetric("multiple_faces")
-          } else {
-            // Check eye contact / landmarks
-            const pred = predictions[0]
-            if (pred.landmarks) {
-              const rightEye = pred.landmarks[0]
-              const leftEye = pred.landmarks[1]
-              const nose = pred.landmarks[2]
-              const eyeMidX = (rightEye[0] + leftEye[0]) / 2
-              const eyeDist = Math.abs(rightEye[0] - leftEye[0])
-              const noseDevX = Math.abs(nose[0] - eyeMidX)
-
-              if (noseDevX > (eyeDist * 0.45)) {
-                setProctoringAlert("MAINTAIN EYE CONTACT")
-              } else {
-                setProctoringAlert('')
-              }
-            } else {
-              setProctoringAlert('')
-            }
-          }
-        } catch (e) {
-          console.error(e)
-        } finally {
-          isProcessing = false
-        }
-      }
-    }, 1500)
-  }
 
   useEffect(() => {
     if (!isDisclaimerAccepted || !mediaStreamRef.current || !videoPreviewRef.current) return
@@ -704,6 +652,9 @@ function Interview() {
       */
     } catch (e) {}
   }
+
+  // Use Centralized AI Proctoring Hook
+  useProctoring(videoPreviewRef, isDisclaimerAccepted && !showAllSet && !loading, recordAlertMetric);
 
   // Accept Disclaimer & Start Interview
   const acceptDisclaimer = () => {

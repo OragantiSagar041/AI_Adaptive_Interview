@@ -552,21 +552,29 @@ export default function VoiceCodingRound({
               await document.documentElement.requestFullscreen().catch(() => { })
             }
           } catch (_) { }
-          Swal.fire({
-            icon: 'warning',
-            title: '⚠️ Fullscreen Required',
-            text: 'Exiting fullscreen is not allowed during the interview.',
-            confirmButtonColor: '#ef4444',
-            confirmButtonText: 'Return to Interview',
-            timer: 5000,
-            timerProgressBar: true,
-          })
         }, 150)
       }
     }
     const handleFullscreenChange = async () => {
       if (!document.fullscreenElement) {
-        try { await document.documentElement.requestFullscreen().catch(() => { }) } catch (_) { }
+        Swal.fire({
+          icon: 'warning',
+          title: '⚠️ Fullscreen Required',
+          text: 'Exiting fullscreen mode is not allowed during the interview.',
+          showCancelButton: true,
+          confirmButtonText: 'Enable full screen mode',
+          cancelButtonText: 'Exit interview',
+          allowOutsideClick: false,
+          allowEscapeKey: false
+        }).then((result) => {
+          if (result.isConfirmed) {
+            if (document.documentElement.requestFullscreen) {
+              document.documentElement.requestFullscreen().catch(() => {})
+            }
+          } else {
+            window.location.href = '/dashboard'
+          }
+        })
       }
     }
     document.addEventListener('keydown', handleKeyDown)

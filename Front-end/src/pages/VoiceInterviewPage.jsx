@@ -15,6 +15,7 @@ import OrbAvatar from '../components/OrbAvatar'
 import Swal from 'sweetalert2'
 import 'sweetalert2/dist/sweetalert2.min.css'
 import aiVideoUrl from '../assets/ai_avatar.mp4'
+import { useProctoring } from '../hooks/useProctoring'
 
 import { VOICE_TRANSLATIONS } from '../utils/voiceTranslations'
 
@@ -228,6 +229,7 @@ export default function VoiceInterviewPage() {
   const cameraRecorderRef = useRef(null)
   const cameraStreamRef = useRef(null)
   const cameraChunksRef = useRef([])
+  const candidateVideoRef = useRef(null)
 
   // Set a mock audio level that bounces slightly when speaking, or 0 when silent
   const isSpeaking = aiStatus === 'listening' && interimText.length > 0
@@ -453,6 +455,13 @@ export default function VoiceInterviewPage() {
         cameraMr.ondataavailable = e => { if (e.data.size > 0) cameraChunksRef.current.push(e.data) }
         cameraMr.start(5000)
         cameraRecorderRef.current = cameraMr
+
+        // Attach for Proctoring
+        if (candidateVideoRef.current) {
+          candidateVideoRef.current.srcObject = micStream;
+          candidateVideoRef.current.muted = true;
+          candidateVideoRef.current.play().catch(e => console.log(e));
+        }
       } catch (err) {
         console.warn("Could not get camera/mic stream for recording:", err)
       }
@@ -912,43 +921,33 @@ export default function VoiceInterviewPage() {
       }
     }
 
-    // ESC key detection → re-enter fullscreen
-    const handleKeyDown = async (e) => {
-      if (e.key === 'Escape' && round !== 'done' && round !== 'pre_checks') {
-        // Delay slightly so browser has processed the ESC
-        setTimeout(async () => {
-          logProctoringAlert('esc_pressed', 'User pressed ESC key (attempted exit fullscreen)')
-          // Re-enter fullscreen
-          try {
-            if (!document.fullscreenElement && document.documentElement.requestFullscreen) {
-              await document.documentElement.requestFullscreen().catch(() => { })
-            }
-          } catch (_) { }
-          Swal.fire({
-            icon: 'warning',
-            title: '⚠️ Fullscreen Required',
-            text: 'Exiting fullscreen mode is not allowed during the interview. This incident has been logged.',
-            confirmButtonColor: '#ef4444',
-            confirmButtonText: 'Return to Interview',
-            timer: 6000,
-            timerProgressBar: true,
-          })
-        }, 150)
-      }
-    }
-
-    // Fullscreen change detection (handles native ESC that bypasses keydown)
+    // Fullscreen change detection with interactive modal
     const handleFullscreenChange = async () => {
       if (!document.fullscreenElement && round !== 'done' && round !== 'pre_checks' && round !== 'intro') {
         logProctoringAlert('fullscreen_exit', 'User exited fullscreen')
-        try {
-          await document.documentElement.requestFullscreen().catch(() => { })
-        } catch (_) { }
+        
+        Swal.fire({
+          icon: 'warning',
+          title: '⚠️ Fullscreen Required',
+          text: 'Exiting fullscreen mode is not allowed during the interview.',
+          showCancelButton: true,
+          confirmButtonText: 'Enable full screen mode',
+          cancelButtonText: 'Exit interview',
+          allowOutsideClick: false,
+          allowEscapeKey: false
+        }).then((result) => {
+          if (result.isConfirmed) {
+            if (document.documentElement.requestFullscreen) {
+              document.documentElement.requestFullscreen().catch(() => {})
+            }
+          } else {
+            window.location.href = '/dashboard'
+          }
+        })
       }
     }
 
     document.addEventListener('visibilitychange', handleVisibilityChange)
-    document.addEventListener('keydown', handleKeyDown)
     document.addEventListener('fullscreenchange', handleFullscreenChange)
 
     return () => {
@@ -956,10 +955,14 @@ export default function VoiceInterviewPage() {
       window.speechSynthesis?.cancel()
       clearTimeout(silenceTimerRef.current)
       document.removeEventListener('visibilitychange', handleVisibilityChange)
-      document.removeEventListener('keydown', handleKeyDown)
       document.removeEventListener('fullscreenchange', handleFullscreenChange)
     }
   }, [stopListening, round, logProctoringAlert])
+
+  // Use Centralized AI Proctoring Hook
+  useProctoring(candidateVideoRef, round !== 'done' && round !== 'pre_checks' && round !== 'intro', (type, msg) => {
+    logProctoringAlert(type, msg)
+  })
 
   // ─────────────────────────────────────────────────────────────────────────────
   // RENDER — delegate to sub-components for coding/case study
@@ -1090,6 +1093,8 @@ export default function VoiceInterviewPage() {
           </button>
         </div>
       </div>
+      {/* Hidden Video for AI Proctoring - MUST have valid dimensions for MediaPipe to work properly */}
+      <video ref={candidateVideoRef} style={{ position: 'absolute', opacity: 0, pointerEvents: 'none', width: '640px', height: '480px', left: '-9999px', top: '-9999px', zIndex: -1 }} playsInline muted autoPlay />
     </div>
   )
 
