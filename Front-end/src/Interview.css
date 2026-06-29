@@ -5,19 +5,27 @@
             --danger-color: #ef4444;
             --danger-hover: #dc2626;
             --success-color: #10b981;
-            --background: #f3f4f6;
-            --card-bg: #ffffff;
-            --text-main: #1f2937;
-            --text-muted: #6b7280;
+            --background: #f8fafc;
+            --card-bg: rgba(255, 255, 255, 0.75);
+            --card-border: rgba(255, 255, 255, 0.5);
+            --text-main: #0f172a;
+            --text-muted: #64748b;
+            --shadow-sm: 0 4px 6px -1px rgba(0, 0, 0, 0.05), 0 2px 4px -2px rgba(0, 0, 0, 0.05);
+            --shadow-md: 0 10px 15px -3px rgba(0, 0, 0, 0.05), 0 4px 6px -4px rgba(0, 0, 0, 0.02);
+            --shadow-lg: 0 20px 25px -5px rgba(0, 0, 0, 0.05), 0 8px 10px -6px rgba(0, 0, 0, 0.01);
+            --radius-md: 12px;
+            --radius-lg: 16px;
+            --radius-xl: 24px;
         }
 
         body {
             font-family: 'Inter', system-ui, -apple-system, sans-serif;
-            background-color: var(--background);
+            background: linear-gradient(135deg, #f8fafc 0%, #e2e8f0 100%);
             color: var(--text-main);
             margin: 0;
             padding: 0;
             line-height: 1.6;
+            min-height: 100vh;
         }
 
         html.session-link-mode #uploadSection {
@@ -75,11 +83,19 @@
 
         /* AI Avatar Card */
         .ip-avatar-card {
-            background: #fff;
-            border-radius: 16px;
+            background: var(--card-bg);
+            backdrop-filter: blur(16px);
+            border: 1px solid var(--card-border);
+            border-radius: var(--radius-lg);
             overflow: hidden;
-            box-shadow: 0 4px 20px rgba(0, 0, 0, 0.08);
+            box-shadow: var(--shadow-md);
             position: relative;
+            transition: transform 0.2s ease, box-shadow 0.2s ease;
+        }
+        
+        .ip-avatar-card:hover {
+            transform: translateY(-2px);
+            box-shadow: var(--shadow-lg);
         }
 
         .ip-avatar-card .live-badge {
@@ -123,20 +139,24 @@
         .ip-avatar-card video,
         .ip-avatar-card img {
             width: 100%;
-            height: 230px;
+            aspect-ratio: 1/1;
+            height: auto;
             object-fit: cover;
             display: block;
         }
 
         /* AI Analyzing Card */
         .ip-analyzing-card {
-            background: #fff;
-            border-radius: 14px;
-            padding: 0.9rem 1.1rem;
-            box-shadow: 0 2px 12px rgba(0, 0, 0, 0.07);
+            background: var(--card-bg);
+            backdrop-filter: blur(16px);
+            border: 1px solid var(--card-border);
+            border-radius: var(--radius-md);
+            padding: 1rem 1.25rem;
+            box-shadow: var(--shadow-md);
             display: flex;
             align-items: center;
-            gap: 0.9rem;
+            gap: 1rem;
+            transition: all 0.3s ease;
         }
 
         .ip-analyzing-icon {
@@ -214,14 +234,16 @@
 
         /* Timer Card */
         .ip-timer-card {
-            background: #fff;
-            border-radius: 14px;
-            padding: 1.2rem;
-            box-shadow: 0 2px 12px rgba(0, 0, 0, 0.07);
+            background: var(--card-bg);
+            backdrop-filter: blur(16px);
+            border: 1px solid var(--card-border);
+            border-radius: var(--radius-md);
+            padding: 1.5rem;
+            box-shadow: var(--shadow-md);
             display: flex;
             flex-direction: column;
             align-items: center;
-            gap: 1rem;
+            gap: 1.25rem;
         }
 
         .ip-timer-ring {
@@ -297,10 +319,12 @@
 
         /* AI Insights Card */
         .ip-insights-card {
-            background: #fff;
-            border-radius: 14px;
-            padding: 1.1rem 1.2rem;
-            box-shadow: 0 2px 12px rgba(0, 0, 0, 0.07);
+            background: var(--card-bg);
+            backdrop-filter: blur(16px);
+            border: 1px solid var(--card-border);
+            border-radius: var(--radius-md);
+            padding: 1.25rem 1.5rem;
+            box-shadow: var(--shadow-md);
         }
 
         .ip-insights-card h4 {
@@ -383,10 +407,24 @@
 
         /* Question Card */
         .ip-question-card {
-            background: #fff;
-            border-radius: 16px;
-            padding: 1.4rem 1.5rem;
-            box-shadow: 0 4px 20px rgba(0, 0, 0, 0.07);
+            background: var(--card-bg);
+            backdrop-filter: blur(16px);
+            border: 1px solid var(--card-border);
+            border-radius: var(--radius-xl);
+            padding: 2rem 2.5rem;
+            box-shadow: var(--shadow-md);
+            position: relative;
+            overflow: hidden;
+        }
+
+        .ip-question-card::before {
+            content: '';
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 6px;
+            height: 100%;
+            background: linear-gradient(180deg, var(--primary-color) 0%, var(--success-color) 100%);
         }
 
         .ip-question-meta {
@@ -453,10 +491,12 @@
 
         /* Live Transcript Card */
         .ip-transcript-card {
-            background: #fff;
-            border-radius: 16px;
-            padding: 1.2rem 1.4rem;
-            box-shadow: 0 4px 20px rgba(0, 0, 0, 0.07);
+            background: var(--card-bg);
+            backdrop-filter: blur(16px);
+            border: 1px solid var(--card-border);
+            border-radius: var(--radius-xl);
+            padding: 1.5rem 2rem;
+            box-shadow: var(--shadow-md);
             display: flex;
             flex-direction: column;
             flex: 1;
@@ -502,19 +542,25 @@
         }
 
         .ip-transcript-box {
-            background: #f8fafc;
-            border: 1px solid #e5e7eb;
-            border-radius: 10px;
-            padding: 0.85rem 1rem;
-            min-height: 90px;
-            font-size: 0.9rem;
-            color: #374151;
+            background: rgba(255, 255, 255, 0.5);
+            border: 1px solid rgba(0, 0, 0, 0.05);
+            border-radius: var(--radius-md);
+            padding: 1rem 1.25rem;
+            min-height: 120px;
+            font-size: 1rem;
+            color: var(--text-main);
             font-family: inherit;
             resize: none;
             width: 100%;
             box-sizing: border-box;
             flex: 1;
             overflow-y: auto;
+            transition: border-color 0.2s ease;
+        }
+        
+        .ip-transcript-box:focus {
+            outline: none;
+            border-color: var(--primary-color);
         }
 
         /* Nav Buttons */
@@ -525,37 +571,42 @@
         }
 
         .ip-btn-prev {
-            background: #f3f4f6;
-            color: #374151;
-            border: none;
-            border-radius: 8px;
-            padding: 0.6rem 1.1rem;
+            background: rgba(255, 255, 255, 0.8);
+            color: var(--text-main);
+            border: 1px solid #e2e8f0;
+            border-radius: var(--radius-md);
+            padding: 0.75rem 1.25rem;
             font-weight: 600;
-            font-size: 0.9rem;
+            font-size: 0.95rem;
             cursor: pointer;
-            transition: background 0.2s;
+            transition: all 0.2s ease;
+            box-shadow: var(--shadow-sm);
         }
 
         .ip-btn-prev:hover:not(:disabled) {
-            background: #e5e7eb;
+            background: #fff;
+            box-shadow: var(--shadow-md);
+            transform: translateY(-1px);
         }
 
         .ip-btn-next {
-            background: #10b981;
+            background: linear-gradient(135deg, var(--success-color), #059669);
             color: #fff;
             border: none;
-            border-radius: 8px;
-            padding: 0.6rem 1.5rem;
+            border-radius: var(--radius-md);
+            padding: 0.75rem 2rem;
             font-weight: 700;
-            font-size: 0.9rem;
+            font-size: 0.95rem;
             cursor: pointer;
             flex: 1;
-            transition: background 0.2s, transform 0.15s;
+            transition: all 0.2s ease;
+            box-shadow: 0 4px 12px rgba(16, 185, 129, 0.3);
         }
 
         .ip-btn-next:hover:not(:disabled) {
-            background: #059669;
-            transform: translateY(-1px);
+            background: linear-gradient(135deg, #059669, #047857);
+            transform: translateY(-2px);
+            box-shadow: 0 6px 16px rgba(16, 185, 129, 0.4);
         }
 
         .ip-btn-skip {

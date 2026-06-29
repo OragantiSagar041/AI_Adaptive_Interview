@@ -31,7 +31,7 @@ function Interview() {
   const [isDisclaimerAccepted, setIsDisclaimerAccepted] = useState(false)
   const [agreeChecked, setAgreeChecked] = useState(false)
   const [autoReconnecting, setAutoReconnecting] = useState(!!_savedSession?.accepted)
-  
+
   // Session details from backend
   const [sessionDetail, setSessionDetail] = useState(null)
   const [interviewId, setInterviewId] = useState('')
@@ -39,7 +39,7 @@ function Interview() {
   const [currentQuestionIndex, setCurrentQuestionIndex] = useState(_savedSession?.currentQuestionIndex || 0)
   const currentQuestion = questions[currentQuestionIndex]
   const codingTask = currentQuestion?.codingTask || currentQuestion || {}
-  
+
   // Proctoring/Recording states
   const [isMediaReady, setIsMediaReady] = useState(false)
   const [proctoringAlert, setProctoringAlert] = useState('')
@@ -48,7 +48,7 @@ function Interview() {
   const [fullscreenWarning, setFullscreenWarning] = useState(false)
   const [screenShareWarning, setScreenShareWarning] = useState(false)
   const [screenShareViolations, setScreenShareViolations] = useState(0)
-  
+
   // Upload states
   const [uploadPercentage, setUploadPercentage] = useState(0)
   const [uploadingText, setUploadingText] = useState('')
@@ -65,6 +65,7 @@ function Interview() {
   const [selectedTestCase, setSelectedTestCase] = useState(0)
   const [consoleOutput, setConsoleOutput] = useState('Console output will display here after execution.')
   const [activeConsoleTab, setActiveConsoleTab] = useState('results')
+  const [activeRightTab, setActiveRightTab] = useState('code')
   const [compiling, setCompiling] = useState(false)
   const [globalCountdown, setGlobalCountdown] = useState(0)
   const [totalDuration, setTotalDuration] = useState(0)
@@ -97,18 +98,18 @@ function Interview() {
       const task = currentQuestion.codingTask
       const templates = {
         python: task.starter_function_signature || `def ${task.function_name || 'winner'}(donuts, starter):\n    # Write your code here\n    pass`,
-        javascript: task.function_name === 'winner' 
+        javascript: task.function_name === 'winner'
           ? `function winner(donuts, starter) {\n    // Write your code here\n    \n}`
           : task.function_name === 'find_duplicates'
-          ? `function findDuplicates(records) {\n    // Write your code here\n    \n}`
-          : `function debounceSimulation(calls, delay) {\n    // Write your code here\n    \n}`,
+            ? `function findDuplicates(records) {\n    // Write your code here\n    \n}`
+            : `function debounceSimulation(calls, delay) {\n    // Write your code here\n    \n}`,
         cpp: task.function_name === 'winner'
           ? `#include <vector>\n#include <string>\n\nstd::vector<std::string> winner(std::vector<int> donuts, std::vector<std::string> starter) {\n    // Write your code here\n    \n}`
           : task.function_name === 'find_duplicates'
-          ? `#include <vector>\n#include <string>\n\nstd::vector<std::string> findDuplicates(std::vector<std::string> records) {\n    // Write your code here\n    \n}`
-          : `#include <vector>\n\nint debounceSimulation(std::vector<int> calls, int delay) {\n    // Write your code here\n    \n}`
+            ? `#include <vector>\n#include <string>\n\nstd::vector<std::string> findDuplicates(std::vector<std::string> records) {\n    // Write your code here\n    \n}`
+            : `#include <vector>\n\nint debounceSimulation(std::vector<int> calls, int delay) {\n    // Write your code here\n    \n}`
       }
-      
+
       const isDefault = !codeAnswer || Object.values(templates).some(tmpl => codeAnswer.trim() === tmpl.trim())
       if (isDefault) {
         setCodeAnswer(templates[selectedLanguage] || '')
@@ -118,7 +119,7 @@ function Interview() {
 
   // Recording Ref elements
   const videoPreviewRef = useRef(null)
-  
+
   // Audio context/recorder references
   const cameraRecorderRef = useRef(null)
   const screenRecorderRef = useRef(null)
@@ -126,7 +127,7 @@ function Interview() {
   const screenChunksRef = useRef([])
   const mediaStreamRef = useRef(null)
   const screenStreamRef = useRef(null)
-  
+
   // Speech Recognition Reference
   const recognitionRef = useRef(null)
   const isSpeechRecordingRef = useRef(false)
@@ -216,7 +217,7 @@ function Interview() {
 
     const draw = () => {
       if (!visualizerActiveRef.current) {
-        audioCtx.close().catch(() => {})
+        audioCtx.close().catch(() => { })
         ctx.clearRect(0, 0, canvas.width, canvas.height)
         return
       }
@@ -341,7 +342,7 @@ function Interview() {
         if (!response.ok || payload.status !== 'success') {
           throw new Error(payload.detail || payload.message || "Failed to load session details.")
         }
-        
+
         // Save session info
         setSessionDetail(payload)
 
@@ -366,10 +367,10 @@ function Interview() {
         }
 
         // Step 2: Call start-session-interview to initialize/retrieve questions
-    
+
         const formData = new FormData()
         formData.append('link_id', sessionId)
-        
+
         const startResponse = await fetch(`${API_BASE_URL}/start-session-interview`, {
           method: 'POST',
           body: formData
@@ -393,8 +394,8 @@ function Interview() {
         const rawQuestions = startPayload.questions?.length
           ? startPayload.questions
           : startPayload.first_question
-          ? [startPayload.first_question]
-          : []
+            ? [startPayload.first_question]
+            : []
         const qList = normalizeQuestions(rawQuestions)
         if (qList.length === 0) {
           throw new Error("No interview questions are available for this session. Please contact the recruiter.")
@@ -409,19 +410,11 @@ function Interview() {
           interview_type: startPayload.interview_type || prev?.interview_type,
           record_video: startPayload.record_video ?? prev?.record_video
         }))
-        
-        // Resolve resume index (only applies to verbal questions initially)
+
+        // Resolve resume index
         const resumeQId = Number(startPayload.resume_question_id) || (startPayload.first_question ? Number(startPayload.first_question.id) : 1)
         const qIndex = qList.findIndex(q => Number(q.id) === Number(resumeQId))
-        
-        const savedSess = _sessionKey ? (() => { try { return JSON.parse(sessionStorage.getItem(_sessionKey) || 'null') } catch { return null } })() : null
-        
-        let shouldStartRoundTwo = startPayload.all_verbal_answered || savedSess?.isRoundTwo
-
-        // Don't overwrite currentQuestionIndex if we're restoring a Round 2 state
-        if (!shouldStartRoundTwo) {
-           setCurrentQuestionIndex(qIndex >= 0 ? qIndex : 0)
-        }
+        setCurrentQuestionIndex(qIndex >= 0 ? qIndex : 0)
 
         // Update session duration if returned
         if (startPayload.interview_duration) {
@@ -562,7 +555,7 @@ function Interview() {
   }
 
   // Handle Speech Recognition setup
-  const initSpeechRecognition = () => { 
+  const initSpeechRecognition = () => {
     if (!('webkitSpeechRecognition' in window || 'SpeechRecognition' in window)) {
       console.warn("Speech recognition not supported in this browser.")
       return
@@ -581,7 +574,7 @@ function Interview() {
     rec.onend = () => {
       if (isSpeechRecordingRef.current) {
         behavioralStatsRef.current.pauseCount += 1
-        try { rec.start() } catch (e) {}
+        try { rec.start() } catch (e) { }
       }
     }
 
@@ -687,7 +680,7 @@ function Interview() {
         body: JSON.stringify({ violation_type: type })
       })
       */
-    } catch (e) {}
+    } catch (e) { }
   }
 
   // Use Centralized AI Proctoring Hook
@@ -733,144 +726,144 @@ function Interview() {
 
   const setupMedia = async () => {
     try {
-        // 1. Request Camera & Mic
-        let stream
-        try {
+      // 1. Request Camera & Mic
+      let stream
+      try {
           stream = await navigator.mediaDevices.getUserMedia({
-            video: { width: 640, height: 480, frameRate: 15 },
+            video: { width: { ideal: 720 }, height: { ideal: 1280 }, frameRate: 15 },
             audio: true
           })
-        } catch (err) {
-          console.error("Camera/Mic getUserMedia error:", err)
-          if (err.name === 'NotFoundError' || err.name === 'DevicesNotFoundError') {
-            throw new Error("webcam_mic_not_found")
-          } else if (err.name === 'NotAllowedError' || err.name === 'PermissionDeniedError') {
-            throw new Error("webcam_mic_denied")
-          } else {
-            throw new Error(`webcam_mic_failed: ${err.message || err.name}`)
-          }
-        }
-
-        // 2. Request Screen Share
-        let screenStream
-        try {
-          screenStream = await navigator.mediaDevices.getDisplayMedia({
-            video: { displaySurface: "monitor", frameRate: 15 },
-            audio: false
-          })
-        } catch (err) {
-          console.error("Screen Share getDisplayMedia error:", err)
-          // Stop camera stream since screen share failed
-          stream.getTracks().forEach(t => t.stop())
-          if (err.name === 'NotAllowedError' || err.name === 'PermissionDeniedError') {
-            throw new Error("screenshare_denied")
-          } else {
-            throw new Error(`screenshare_failed: ${err.message || err.name}`)
-          }
-        }
-
-        const videoTrack = screenStream.getVideoTracks()[0];
-        const settings = videoTrack.getSettings();
-        if (settings.displaySurface && settings.displaySurface !== 'monitor') {
-          screenStream.getTracks().forEach(t => t.stop());
-          stream.getTracks().forEach(t => t.stop());
-          throw new Error("Please select 'Entire Screen' to proceed. Window or Tab sharing is not allowed.");
-        }
-
-        mediaStreamRef.current = stream
-        screenStreamRef.current = screenStream
-
-        // Setup preview
-        const previewVideo = videoPreviewRef.current || document.createElement('video')
-        previewVideo.srcObject = stream
-        previewVideo.muted = true
-        previewVideo.playsInline = true
-        previewVideo.play().catch(e => console.log(e))
-
-        // Monitor screen share stop
-        const track = screenStream.getVideoTracks()[0]
-        track.onended = () => {
-          handleScreenShareStop()
-        }
-
-        // Mix Audio tracks into screen share
-        const audioTracks = stream.getAudioTracks()
-        if (audioTracks.length > 0) {
-          screenStream.addTrack(audioTracks[0])
-        }
-
-        // Initialize recorders
-        let options = { videoBitsPerSecond: 800000, audioBitsPerSecond: 64000 }
-        cameraRecorderRef.current = new MediaRecorder(stream, options)
-        cameraChunksRef.current = []
-        cameraRecorderRef.current.ondataavailable = e => {
-          if (e.data.size > 0) cameraChunksRef.current.push(e.data)
-        }
-
-        screenRecorderRef.current = new MediaRecorder(screenStream, options)
-        screenChunksRef.current = []
-        screenRecorderRef.current.ondataavailable = e => {
-          if (e.data.size > 0) screenChunksRef.current.push(e.data)
-        }
-
-        // Start recorders
-        cameraRecorderRef.current.start(2000)
-        screenRecorderRef.current.start(2000)
-
-        // Start triggers
-        initSpeechRecognition()
-        if (recognitionRef.current) {
-          recognitionRef.current.start()
-        }
-
-        startFaceProctoring(previewVideo)
-        startBackgroundNoiseMonitor(stream)
-
-        // Crucial: set these states last so we render the interview workspace
-        setIsDisclaimerAccepted(true)
-        setIsMediaReady(true)
-        setAutoReconnecting(false)
-
-        // Play introductory prompt text-to-speech for the first question (only on first start, not reconnect)
-        const savedSess = _sessionKey ? (() => { try { return JSON.parse(sessionStorage.getItem(_sessionKey) || 'null') } catch { return null } })() : null
-        if (!savedSess?.accepted && questions.length > 0) {
-          speakAIQuestion(questions[0].text || questions[0].question || questions[0].prompt || '')
-        }
-
       } catch (err) {
-        console.error("Setup permissions failure:", err)
-        let errTitle = 'Setup Failed'
-        let errText = 'All permissions (webcam, microphone, and screen share) are required to take this proctored interview.'
-        let errIcon = 'error'
-
-        if (err.message === 'webcam_mic_not_found') {
-          errTitle = 'Camera/Microphone Not Found'
-          errText = 'We could not detect a working camera or microphone. Please make sure they are connected and try again.'
-          errIcon = 'warning'
-        } else if (err.message === 'webcam_mic_denied') {
-          errTitle = 'Camera/Microphone Access Denied'
-          errText = 'Permission to access your camera and microphone was denied. Please check your browser settings and allow access to continue.'
-        } else if (err.message === 'screenshare_denied') {
-          errTitle = 'Screen Sharing Required'
-          errText = 'You must share your entire screen to proceed with the secure proctored interview.'
-          errIcon = 'warning'
+        console.error("Camera/Mic getUserMedia error:", err)
+        if (err.name === 'NotFoundError' || err.name === 'DevicesNotFoundError') {
+          throw new Error("webcam_mic_not_found")
+        } else if (err.name === 'NotAllowedError' || err.name === 'PermissionDeniedError') {
+          throw new Error("webcam_mic_denied")
+        } else {
+          throw new Error(`webcam_mic_failed: ${err.message || err.name}`)
         }
-
-        Swal.fire({
-          title: errTitle,
-          text: errText,
-          icon: errIcon,
-          background: '#161c2d',
-          color: '#fff',
-          customClass: {
-            popup: 'border border-white/8 rounded-2xl shadow-2xl',
-            title: 'text-xl font-bold text-white',
-            htmlContainer: 'text-slate-300 text-sm',
-            confirmButton: 'bg-primary hover:bg-primary-hover text-white rounded-full px-6 py-2.5 font-semibold text-sm cursor-pointer border-none outline-none'
-          },
-          buttonsStyling: false
-        })
       }
+
+      // 2. Request Screen Share
+      let screenStream
+      try {
+        screenStream = await navigator.mediaDevices.getDisplayMedia({
+          video: { displaySurface: "monitor", frameRate: 15 },
+          audio: false
+        })
+      } catch (err) {
+        console.error("Screen Share getDisplayMedia error:", err)
+        // Stop camera stream since screen share failed
+        stream.getTracks().forEach(t => t.stop())
+        if (err.name === 'NotAllowedError' || err.name === 'PermissionDeniedError') {
+          throw new Error("screenshare_denied")
+        } else {
+          throw new Error(`screenshare_failed: ${err.message || err.name}`)
+        }
+      }
+
+      const videoTrack = screenStream.getVideoTracks()[0];
+      const settings = videoTrack.getSettings();
+      if (settings.displaySurface && settings.displaySurface !== 'monitor') {
+        screenStream.getTracks().forEach(t => t.stop());
+        stream.getTracks().forEach(t => t.stop());
+        throw new Error("Please select 'Entire Screen' to proceed. Window or Tab sharing is not allowed.");
+      }
+
+      mediaStreamRef.current = stream
+      screenStreamRef.current = screenStream
+
+      // Setup preview
+      const previewVideo = videoPreviewRef.current || document.createElement('video')
+      previewVideo.srcObject = stream
+      previewVideo.muted = true
+      previewVideo.playsInline = true
+      previewVideo.play().catch(e => console.log(e))
+
+      // Monitor screen share stop
+      const track = screenStream.getVideoTracks()[0]
+      track.onended = () => {
+        handleScreenShareStop()
+      }
+
+      // Mix Audio tracks into screen share
+      const audioTracks = stream.getAudioTracks()
+      if (audioTracks.length > 0) {
+        screenStream.addTrack(audioTracks[0])
+      }
+
+      // Initialize recorders
+      let options = { videoBitsPerSecond: 800000, audioBitsPerSecond: 64000 }
+      cameraRecorderRef.current = new MediaRecorder(stream, options)
+      cameraChunksRef.current = []
+      cameraRecorderRef.current.ondataavailable = e => {
+        if (e.data.size > 0) cameraChunksRef.current.push(e.data)
+      }
+
+      screenRecorderRef.current = new MediaRecorder(screenStream, options)
+      screenChunksRef.current = []
+      screenRecorderRef.current.ondataavailable = e => {
+        if (e.data.size > 0) screenChunksRef.current.push(e.data)
+      }
+
+      // Start recorders
+      cameraRecorderRef.current.start(2000)
+      screenRecorderRef.current.start(2000)
+
+      // Start triggers
+      initSpeechRecognition()
+      if (recognitionRef.current) {
+        recognitionRef.current.start()
+      }
+
+      // startFaceProctoring is now handled by useProctoring hook
+      startBackgroundNoiseMonitor(stream)
+
+      // Crucial: set these states last so we render the interview workspace
+      setIsDisclaimerAccepted(true)
+      setIsMediaReady(true)
+      setAutoReconnecting(false)
+
+      // Play introductory prompt text-to-speech for the first question (only on first start, not reconnect)
+      const savedSess = _sessionKey ? (() => { try { return JSON.parse(sessionStorage.getItem(_sessionKey) || 'null') } catch { return null } })() : null
+      if (!savedSess?.accepted && questions.length > 0) {
+        speakAIQuestion(questions[0].text || questions[0].question || questions[0].prompt || '')
+      }
+
+    } catch (err) {
+      console.error("Setup permissions failure:", err)
+      let errTitle = 'Setup Failed'
+      let errText = 'All permissions (webcam, microphone, and screen share) are required to take this proctored interview.'
+      let errIcon = 'error'
+
+      if (err.message === 'webcam_mic_not_found') {
+        errTitle = 'Camera/Microphone Not Found'
+        errText = 'We could not detect a working camera or microphone. Please make sure they are connected and try again.'
+        errIcon = 'warning'
+      } else if (err.message === 'webcam_mic_denied') {
+        errTitle = 'Camera/Microphone Access Denied'
+        errText = 'Permission to access your camera and microphone was denied. Please check your browser settings and allow access to continue.'
+      } else if (err.message === 'screenshare_denied') {
+        errTitle = 'Screen Sharing Required'
+        errText = 'You must share your entire screen to proceed with the secure proctored interview.'
+        errIcon = 'warning'
+      }
+
+      Swal.fire({
+        title: errTitle,
+        text: errText,
+        icon: errIcon,
+        background: '#161c2d',
+        color: '#fff',
+        customClass: {
+          popup: 'border border-white/8 rounded-2xl shadow-2xl',
+          title: 'text-xl font-bold text-white',
+          htmlContainer: 'text-slate-300 text-sm',
+          confirmButton: 'bg-primary hover:bg-primary-hover text-white rounded-full px-6 py-2.5 font-semibold text-sm cursor-pointer border-none outline-none'
+        },
+        buttonsStyling: false
+      })
+    }
   }
 
   // Handle Screen share stop violation
@@ -915,7 +908,7 @@ function Interview() {
       track.onended = () => {
         handleScreenShareStop()
       }
-      
+
       // Mix microphone
       if (mediaStreamRef.current) {
         const audioTracks = mediaStreamRef.current.getAudioTracks()
@@ -923,7 +916,7 @@ function Interview() {
           screenStream.addTrack(audioTracks[0])
         }
       }
-      
+
       // Setup recorder
       let options = { videoBitsPerSecond: 800000, audioBitsPerSecond: 64000 }
       screenRecorderRef.current = new MediaRecorder(screenStream, options)
@@ -955,15 +948,15 @@ function Interview() {
     if (!window.speechSynthesis) return
     window.speechSynthesis.cancel() // stop any active speech
     const utterance = new SpeechSynthesisUtterance(text)
-    
+
     const targetLang = langMap[sessionDetail?.language] || 'en-IN'
     const targetLangPrefix = targetLang.split('-')[0]
     utterance.lang = targetLang
 
     const setVoiceAndSpeak = () => {
       let voices = window.speechSynthesis.getVoices()
-      let preferredVoice = voices.find(v => 
-        v.lang.startsWith(targetLangPrefix) && 
+      let preferredVoice = voices.find(v =>
+        v.lang.startsWith(targetLangPrefix) &&
         (v.name.includes("Female") || v.name.includes("Google"))
       )
       if (preferredVoice) {
@@ -1016,7 +1009,7 @@ function Interview() {
     }
     setIsRoundTwo(true)
     isRoundTwoRef.current = true
-    
+
     if (totalDuration > 0) {
       setGlobalCountdown(totalDuration / 2)
     }
@@ -1039,7 +1032,7 @@ function Interview() {
 
   const proceedToRoundTwo = async () => {
     setShowRound2Confirm(false)
-    
+
     // Save current answer first
     try {
       const activeQuestion = questions[currentQuestionIndex]
@@ -1085,7 +1078,7 @@ function Interview() {
       if (!res.ok) throw new Error(payload.detail || 'Failed to start case study round')
 
       const caseStudyQuestions = payload.case_study_round?.questions || []
-      
+
       const formattedQs = caseStudyQuestions.map((q, idx) => {
         const text = `📁 CASE STUDY ROUND: ${q.skill_tested || 'Scenario'}\n\n${q.scenario}\n\nQuestion: ${q.question}`
         return {
@@ -1203,7 +1196,7 @@ function Interview() {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(payload)
       })
-    } catch (e) {}
+    } catch (e) { }
 
     // Save answer
     try {
@@ -1258,7 +1251,7 @@ function Interview() {
                 language: selectedLanguage
               })
             })
-          } catch (e) {}
+          } catch (e) { }
           handleSubmitInterview()
         } else if (isCaseStudyQ) {
           handleSubmitInterview()
@@ -1279,7 +1272,7 @@ function Interview() {
         setCodeAnswer('')
         setCodeOutput('')
         behavioralStatsRef.current = { wordCount: 0, fillerCount: 0, pauseCount: 0, faceAlerts: 0, tabSwitches: 0 }
-        
+
         const nextIdx = currentQuestionIndex + 1
         setCurrentQuestionIndex(nextIdx)
         questionStartTimeRef.current = Date.now()
@@ -1319,13 +1312,13 @@ function Interview() {
     setCodeOutput("Compiling and executing code...")
     setRunResultData(null)
     setConsoleOutput(`Compiling and executing code...\nLanguage: ${selectedLanguage}\nRunning tests...`)
-    
+
     // Helper to safely parse print / console.log / cout statements and extract stdout
     const extractStdout = (code, lang) => {
       let outputs = []
       if (!code) return ""
       const lines = code.split('\n')
-      
+
       if (lang === 'python') {
         for (let line of lines) {
           const match = line.match(/^\s*print\s*\(\s*(['"`])(.*?)\1\s*\)/)
@@ -1341,7 +1334,7 @@ function Interview() {
                 } else {
                   outputs.push(val)
                 }
-              } catch(e) {
+              } catch (e) {
                 outputs.push(val)
               }
             }
@@ -1362,7 +1355,7 @@ function Interview() {
                 } else {
                   outputs.push(val)
                 }
-              } catch(e) {
+              } catch (e) {
                 outputs.push(val)
               }
             }
@@ -1387,7 +1380,7 @@ function Interview() {
                     } else {
                       lineOutput += trimmed
                     }
-                  } catch(e) {
+                  } catch (e) {
                     lineOutput += trimmed
                   }
                 }
@@ -1405,7 +1398,7 @@ function Interview() {
     // We need interviewId for the coding round
     const iid = interviewId || sessionDetail?.interview_id || sessionId
     let errorText = null
-    
+
     // Check frontend syntax errors
     if (selectedLanguage === 'javascript') {
       try {
@@ -1450,29 +1443,29 @@ function Interview() {
         })
       })
       const payload = await response.json()
-      
+
       setRunResultData(payload.run_result || null)
 
       // Build output string based on actual test results from backend
       let passedOutputStr = "Code Execution Result:\n";
       let executionError = payload?.run_result?.runtime_error || payload?.run_result?.compiler_error || '';
-      
+
       const totalTests = codingRoundData?.coding_round?.task?.test_cases?.length || 14;
       let realTestOutput = '';
-      
+
       if (executionError) {
         realTestOutput = `❌ Execution Error\nPassed 0 / ${totalTests} Test Cases\n\nError:\n${executionError}\n\n--------------------------------------------------\n\n`;
       } else if (payload?.run_result?.visible_results?.length) {
         const passedCount = payload.run_result.visible_results.filter(r => r.passed).length + (payload.run_result.hidden_summary?.passed || 0);
         const allPassed = passedCount === totalTests;
-        
+
         realTestOutput = `${allPassed ? '✅ All Tests Passed!' : '❌ Some Tests Failed'}\nPassed ${passedCount} / ${totalTests} Test Cases\n\n`;
-        realTestOutput += payload.run_result.visible_results.map(r => 
+        realTestOutput += payload.run_result.visible_results.map(r =>
           `Test ${r.id} (Visible): ${r.passed ? 'PASSED ✅' : 'FAILED ❌'}\nInput: ${JSON.stringify(r.input)}\nExpected: ${JSON.stringify(r.expected)}\nGot: ${JSON.stringify(r.output)}`
         ).join('\n\n');
-        
+
         if (payload.run_result.hidden_summary) {
-            realTestOutput += `\n\nHidden Tests: ${payload.run_result.hidden_summary.passed} / ${payload.run_result.hidden_summary.total} Passed`;
+          realTestOutput += `\n\nHidden Tests: ${payload.run_result.hidden_summary.passed} / ${payload.run_result.hidden_summary.total} Passed`;
         }
         realTestOutput += "\n\n--------------------------------------------------\n\n";
       } else if (payload?.run_result?.output) {
@@ -1490,7 +1483,7 @@ function Interview() {
 
         if (isNativeDisabled) {
           setCodeOutput("Native runner is unavailable. Getting AI feedback on your solution instead...")
-          
+
           // Fallback: Get AI Feedback checkpoint
           const aiResponse = await fetch(`${API_BASE_URL}/coding-round/checkpoint`, {
             method: 'POST',
@@ -1526,7 +1519,7 @@ function Interview() {
                 formattedFeedback += `• Communication: ${fb.scorecard.communication ?? '--'}/100\n`
                 formattedFeedback += `• Overall: ${fb.scorecard.overall ?? '--'}/100\n`
               }
-              
+
               if (errorText) {
                 setCodeOutput(`Code Execution Result:\n❌ Some Tests Failed / Execution Error\n\nError:\n${errorText}\n\n--------------------------------------------------\n\n${formattedFeedback}`)
               } else {
@@ -1564,7 +1557,7 @@ function Interview() {
         } else {
           setCodeOutput(passedOutputStr.replace("\n\n--------------------------------------------------\n\n", ""))
         }
-        
+
         let simulatedConsoleOutput = `Current Output:\n${userStdout || res?.output || ''}`
         if (errorText) {
           simulatedConsoleOutput += `\n\nError:\n${errorText}`
@@ -1623,7 +1616,7 @@ function Interview() {
     if (noiseMonitorFrameRef.current) cancelAnimationFrame(noiseMonitorFrameRef.current)
     isSpeechRecordingRef.current = false
     if (recognitionRef.current) {
-      try { recognitionRef.current.stop() } catch (e) {}
+      try { recognitionRef.current.stop() } catch (e) { }
     }
 
     // Stop streams
@@ -1660,7 +1653,7 @@ function Interview() {
 
           const xhr = new XMLHttpRequest()
           xhr.open('POST', `${API_BASE_URL}/upload-full-recording`, true)
-          
+
           xhr.upload.onprogress = (e) => {
             if (e.lengthComputable && type === 'camera') {
               const percent = Math.floor((e.loaded / e.total) * 100)
@@ -1691,9 +1684,9 @@ function Interview() {
     // Complete session
     try {
       await fetch(`${API_BASE_URL}/complete-session/${sessionId}`, { method: 'POST' })
-    } catch (e) {}
+    } catch (e) { }
 
-        // Complete UI screen
+    // Complete UI screen
     setShowSkipButton(false)
     setUploadPercentage(100)
     setTimeout(() => {
@@ -1862,9 +1855,12 @@ function Interview() {
               <h2>Live Coding Task</h2>
               <p>Round 2 has {Math.floor(globalCountdown / 60).toString().padStart(2, '0')}:{(globalCountdown % 60).toString().padStart(2, '0')} remaining. Explain your logic to the AI while you code.</p>
             </div>
-            <div className="coding-round-actions">
-              <button className="btn btn-primary" onClick={handleRunCode} disabled={compiling}>Get AI Feedback</button>
-              <button className="btn btn-danger" onClick={handleSubmitCodingAndInterview}>Submit Code</button>
+            <div className="coding-round-actions" style={{ display: 'flex', alignItems: 'center', gap: '16px' }}>
+              <div style={{ width: '56px', height: '56px', borderRadius: '50%', overflow: 'hidden', border: '3px solid var(--primary-color)', boxShadow: 'var(--shadow-md)', flexShrink: 0 }}>
+                <video ref={videoPreviewRef} autoPlay muted playsInline style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+              </div>
+              <button className="ip-btn-prev" onClick={handleRunCode} disabled={compiling}>Get AI Feedback</button>
+              <button className="ip-btn-next" onClick={handleSubmitCodingAndInterview}>Submit Code</button>
             </div>
           </div>
 
@@ -1885,7 +1881,7 @@ function Interview() {
                   {currentQuestion.type === 'coding' ? '1. ' : ''}{codingTask.title || 'Technical Assessment'}
                 </h3>
                 <div style={{ height: '1px', backgroundColor: '#eef2f6', margin: '12px 0 20px 0' }}></div>
-                
+
                 {codingTask.description ? (
                   <div style={{ color: '#3c4d57', fontSize: '14.5px', lineHeight: '1.6', fontFamily: '-apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif' }}>
                     {/* Description */}
@@ -1957,35 +1953,31 @@ function Interview() {
                   <p style={{ color: '#475569', lineHeight: '1.6', marginBottom: '24px' }}>{currentQuestionText}</p>
                 )}
 
-                {/* Floating Video for Coding Round */}
-                <div style={{ position: 'absolute', bottom: '24px', left: '24px', width: '120px', height: '120px', borderRadius: '50%', overflow: 'hidden', border: '3px solid #6366f1', boxShadow: '0 10px 25px rgba(0,0,0,0.2)', zIndex: 50 }}>
-                   <video ref={videoPreviewRef} autoPlay muted playsInline style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
-                </div>
               </div>
             </div>
 
             <div className="coding-editor-card" style={{ display: 'flex', flexDirection: 'column', height: '100%', overflow: 'hidden' }}>
               <div className="coding-editor-topbar" style={{ display: 'flex', justifyContent: 'space-between', borderBottom: '1px solid #e2e8f0', padding: '0 16px', flexShrink: 0 }}>
                 <div className="coding-right-tabs" style={{ display: 'flex', gap: '24px' }}>
-                  <button className="coding-right-tab active" style={{ borderBottom: '2px solid #4f46e5', color: '#1e293b', fontWeight: '600', padding: '16px 0', background: 'transparent', borderTop: 'none', borderLeft: 'none', borderRight: 'none' }}>Code</button>
-                  <button className="coding-right-tab" style={{ color: '#64748b', fontWeight: '500', padding: '16px 0', background: 'transparent', border: 'none' }}>Testcase</button>
-                  <button className="coding-right-tab" style={{ color: '#64748b', fontWeight: '500', padding: '16px 0', background: 'transparent', border: 'none' }}>Result</button>
+                  <button onClick={() => setActiveRightTab('code')} className={`coding-right-tab ${activeRightTab === 'code' ? 'active' : ''}`} style={activeRightTab === 'code' ? { borderBottom: '2px solid var(--primary-color)', color: 'var(--text-main)', fontWeight: '600', padding: '16px 0', background: 'transparent', borderTop: 'none', borderLeft: 'none', borderRight: 'none', cursor: 'pointer' } : { color: 'var(--text-muted)', fontWeight: '500', padding: '16px 0', background: 'transparent', border: 'none', cursor: 'pointer' }}>Code</button>
+                  <button onClick={() => { setActiveRightTab('testcase'); setActiveConsoleTab('results'); }} className={`coding-right-tab ${activeRightTab === 'testcase' ? 'active' : ''}`} style={activeRightTab === 'testcase' ? { borderBottom: '2px solid var(--primary-color)', color: 'var(--text-main)', fontWeight: '600', padding: '16px 0', background: 'transparent', borderTop: 'none', borderLeft: 'none', borderRight: 'none', cursor: 'pointer' } : { color: 'var(--text-muted)', fontWeight: '500', padding: '16px 0', background: 'transparent', border: 'none', cursor: 'pointer' }}>Testcase</button>
+                  <button onClick={() => { setActiveRightTab('result'); setActiveConsoleTab('results'); }} className={`coding-right-tab ${activeRightTab === 'result' ? 'active' : ''}`} style={activeRightTab === 'result' ? { borderBottom: '2px solid var(--primary-color)', color: 'var(--text-main)', fontWeight: '600', padding: '16px 0', background: 'transparent', borderTop: 'none', borderLeft: 'none', borderRight: 'none', cursor: 'pointer' } : { color: 'var(--text-muted)', fontWeight: '500', padding: '16px 0', background: 'transparent', border: 'none', cursor: 'pointer' }}>Result</button>
                 </div>
               </div>
 
-              <div className="coding-toolbar" style={{ padding: '12px 16px', display: 'flex', gap: '16px', alignItems: 'center', background: '#f8fafc', borderBottom: '1px solid #e2e8f0', flexShrink: 0 }}>
-                <label style={{ fontSize: '14px', color: '#64748b', fontWeight: '500' }}>Language</label>
+              <div className="coding-toolbar" style={{ padding: '12px 16px', display: 'flex', gap: '16px', alignItems: 'center', background: 'var(--card-bg)', backdropFilter: 'blur(8px)', borderBottom: '1px solid var(--card-border)', flexShrink: 0 }}>
+                <label style={{ fontSize: '14px', color: 'var(--text-muted)', fontWeight: '600' }}>Language</label>
                 <select
                   value={selectedLanguage}
                   onChange={(e) => setSelectedLanguage(e.target.value)}
-                  style={{ padding: '8px 12px', borderRadius: '8px', border: '1px solid #cbd5e1', outline: 'none', background: '#fff' }}
+                  style={{ padding: '8px 16px', borderRadius: 'var(--radius-md)', border: '1px solid #cbd5e1', outline: 'none', background: '#fff', fontWeight: '500', color: 'var(--text-main)' }}
                 >
                   <option value="python">Python</option>
                   <option value="javascript">JavaScript</option>
                   <option value="cpp">C++</option>
                 </select>
-                <button style={{ background: '#4f46e5', color: 'white', border: 'none', borderRadius: '8px', padding: '8px 16px', fontWeight: '600' }}>Start Voice Notes</button>
-                <button style={{ background: '#4f46e5', color: 'white', border: 'none', borderRadius: '8px', padding: '8px 16px', fontWeight: '600' }} onClick={handleRunCode}>Run & Evaluate</button>
+                <button className="ip-btn-prev" style={{ padding: '8px 20px', marginLeft: 'auto' }}>Start Voice Notes</button>
+                <button className="ip-btn-next" style={{ padding: '8px 20px' }} onClick={handleRunCode}>Run & Evaluate</button>
               </div>
 
               <div className="coding-editor-wrap" style={{ flexGrow: 1, display: 'flex', flexDirection: 'column', minHeight: '0', overflow: 'hidden' }}>
@@ -1996,17 +1988,19 @@ function Interview() {
                   </div>
                   <div style={{ fontSize: '12px', color: '#94a3b8', fontStyle: 'italic' }}>Autosave by language</div>
                 </div>
-                
-                <textarea
-                  className="coding-codebox"
-                  spellCheck="false"
-                  placeholder="// Write your solution here..."
-                  value={codeAnswer}
-                  onChange={(e) => setCodeAnswer(e.target.value)}
-                  style={{ flexGrow: 1, width: '100%', border: 'none', outline: 'none', padding: '16px', fontFamily: 'monospace', fontSize: '14px', resize: 'none', background: '#fff', minHeight: '100px', overflowY: 'auto' }}
-                ></textarea>
 
-                <div className="coding-console-shell" style={{ borderTop: '1px solid #e2e8f0', background: '#f8fafc', display: 'flex', flexDirection: 'column', maxHeight: '40%', minHeight: '160px' }}>
+                {activeRightTab === 'code' && (
+                  <textarea
+                    className="coding-codebox"
+                    spellCheck="false"
+                    placeholder="// Write your solution here..."
+                    value={codeAnswer}
+                    onChange={(e) => setCodeAnswer(e.target.value)}
+                    style={{ flexGrow: 1, width: '100%', border: 'none', outline: 'none', padding: '16px', fontFamily: 'monospace', fontSize: '14px', resize: 'none', background: '#fff', minHeight: '100px', overflowY: 'auto' }}
+                  ></textarea>
+                )}
+
+                <div className="coding-console-shell" style={{ borderTop: activeRightTab === 'code' ? '1px solid #e2e8f0' : 'none', background: '#f8fafc', display: 'flex', flexDirection: 'column', maxHeight: activeRightTab === 'code' ? '40%' : '100%', minHeight: activeRightTab === 'code' ? '160px' : '0', flexGrow: activeRightTab === 'code' ? 0 : 1 }}>
                   <div className="coding-console-tabs" style={{ display: 'flex', gap: '2px', background: '#e2e8f0', padding: '8px 8px 0 8px', flexShrink: 0 }}>
                     <button
                       className={`coding-console-tab ${activeConsoleTab === 'results' ? 'active' : ''}`}
@@ -2053,101 +2047,101 @@ function Interview() {
                             <div className="flex w-full flex-grow overflow-hidden">
                               {/* LEFT PANEL */}
                               <div className="w-1/3 border-r border-slate-200 flex flex-col h-full bg-slate-50 overflow-y-auto scrollbar-none">
-                                  {(() => {
-                                   const visibleLen = runResultData.visible_results?.length || 0;
-                                   const hiddenLen = runResultData.hidden_summary?.total || 0;
-                                   const allCount = visibleLen + hiddenLen;
-                                   
-                                   return Array.from({length: allCount}).map((_, i) => {
-                                     const isHidden = i >= visibleLen;
-                                     const tc = isHidden ? null : runResultData.visible_results[i];
-                                     const passed = isHidden 
-                                        ? (i - visibleLen < runResultData.hidden_summary.passed) 
-                                        : tc?.passed;
-                                     
-                                     if (i >= evaluatedCount) {
-                                       return (
-                                         <div key={i} className="px-4 py-3 flex items-center gap-2 border-b border-slate-200 text-[11px] font-bold text-slate-500 bg-slate-50">
-                                           <i className="fas fa-spinner fa-spin text-slate-400 w-4 text-center"/> Test case {i} {isHidden && <i className="fas fa-lock ml-1 text-slate-400"/>}
-                                         </div>
-                                       );
-                                     }
-
-                                     return (
-                                       <button 
-                                         key={i} 
-                                         onClick={() => setSelectedTestCase(i)}
-                                         className={`w-full px-4 py-3 flex items-center gap-2 border-b border-slate-200 text-[11px] font-bold text-left transition-colors ${selectedTestCase === i ? 'bg-indigo-50 text-indigo-600' : 'bg-white hover:bg-slate-50 text-slate-600'}`}
-                                       >
-                                         <i className={`fas ${passed ? 'fa-check text-emerald-500' : 'fa-times text-rose-500'} text-[13px] w-4 text-center`}/> 
-                                         Test case {i} {isHidden && <i className="fas fa-lock ml-1 text-slate-400"/>}
-                                       </button>
-                                     );
-                                   });
-                                })()}
-                            </div>
-                            {/* RIGHT PANEL */}
-                            <div className="w-2/3 h-full overflow-y-auto p-4 scrollbar-none bg-white">
                                 {(() => {
-                                   if (selectedTestCase >= evaluatedCount) {
-                                     return <div className="text-slate-500 text-sm italic flex items-center gap-2"><i className="fas fa-spinner fa-spin"/> Evaluating...</div>;
-                                   }
-                                   
-                                   const visibleLen = runResultData.visible_results?.length || 0;
-                                   const isHidden = selectedTestCase >= visibleLen;
-                                   
-                                   if (isHidden) {
-                                     const passed = (selectedTestCase - visibleLen) < runResultData.hidden_summary?.passed;
-                                     return (
-                                       <div className="flex flex-col items-center justify-center h-full text-slate-500 space-y-4">
-                                         <i className="fas fa-lock text-4xl opacity-30"/>
-                                         <h3 className="text-lg font-bold text-slate-700">Hidden Test Case</h3>
-                                         <p className="text-xs max-w-sm text-center opacity-80 leading-relaxed">Use print or log statements to debug why your hidden test cases are failing. Hidden test cases are used to evaluate if your code can handle different scenarios, including corner cases.</p>
-                                         <div className={`mt-2 px-3 py-1.5 rounded text-xs font-bold border ${passed ? 'bg-emerald-50 border-emerald-200 text-emerald-600' : 'bg-rose-50 border-rose-200 text-rose-600'}`}>
-                                           Status: {passed ? 'Passed' : 'Failed'}
-                                         </div>
-                                       </div>
-                                     );
-                                   }
+                                  const visibleLen = runResultData.visible_results?.length || 0;
+                                  const hiddenLen = runResultData.hidden_summary?.total || 0;
+                                  const allCount = visibleLen + hiddenLen;
 
-                                   const tc = runResultData.visible_results?.[selectedTestCase];
-                                   if (!tc) return null;
-                                   
-                                   return (
-                                     <div className="space-y-4 text-xs">
-                                       <div className="font-bold text-lg mb-2 flex items-center gap-2">
-                                          {tc.passed ? <span className="text-emerald-600">Accepted</span> : <span className="text-rose-600">Wrong Answer</span>}
-                                       </div>
-                                       <div>
-                                         <div className="text-slate-500 mb-1 font-semibold uppercase tracking-wider text-[10px]">Input</div>
-                                         <div className="bg-slate-50 border border-slate-100 rounded p-2.5 font-mono text-slate-700 break-all">{JSON.stringify(tc.input)}</div>
-                                       </div>
-                                       <div>
-                                         <div className="text-slate-500 mb-1 font-semibold uppercase tracking-wider text-[10px]">Expected Output</div>
-                                         <div className="bg-slate-50 border border-slate-100 rounded p-2.5 font-mono text-slate-700 break-all">{JSON.stringify(tc.expected)}</div>
-                                       </div>
-                                       <div>
-                                         <div className="text-slate-500 mb-1 font-semibold uppercase tracking-wider text-[10px]">Your Output</div>
-                                         <div className="bg-slate-50 border border-slate-100 rounded p-2.5 font-mono text-slate-700 break-all">{JSON.stringify(tc.output)}</div>
-                                       </div>
-                                       {runResultData.output && (
-                                         <div>
-                                           <div className="text-slate-500 mb-1 font-semibold uppercase tracking-wider text-[10px]">Stdout</div>
-                                           <div className="bg-slate-50 border border-slate-100 rounded p-2.5 font-mono text-slate-600 whitespace-pre-wrap">{runResultData.output}</div>
-                                         </div>
-                                       )}
-                                       {runResultData.runtime_error && (
-                                         <div>
-                                           <div className="text-rose-500 mb-1 font-semibold uppercase tracking-wider text-[10px]">Runtime Error</div>
-                                           <div className="bg-rose-50 border border-rose-100 rounded p-2.5 font-mono text-rose-600 whitespace-pre-wrap">{runResultData.runtime_error}</div>
-                                         </div>
-                                       )}
-                                     </div>
-                                   );
+                                  return Array.from({ length: allCount }).map((_, i) => {
+                                    const isHidden = i >= visibleLen;
+                                    const tc = isHidden ? null : runResultData.visible_results[i];
+                                    const passed = isHidden
+                                      ? (i - visibleLen < runResultData.hidden_summary.passed)
+                                      : tc?.passed;
+
+                                    if (i >= evaluatedCount) {
+                                      return (
+                                        <div key={i} className="px-4 py-3 flex items-center gap-2 border-b border-slate-200 text-[11px] font-bold text-slate-500 bg-slate-50">
+                                          <i className="fas fa-spinner fa-spin text-slate-400 w-4 text-center" /> Test case {i} {isHidden && <i className="fas fa-lock ml-1 text-slate-400" />}
+                                        </div>
+                                      );
+                                    }
+
+                                    return (
+                                      <button
+                                        key={i}
+                                        onClick={() => setSelectedTestCase(i)}
+                                        className={`w-full px-4 py-3 flex items-center gap-2 border-b border-slate-200 text-[11px] font-bold text-left transition-colors ${selectedTestCase === i ? 'bg-indigo-50 text-indigo-600' : 'bg-white hover:bg-slate-50 text-slate-600'}`}
+                                      >
+                                        <i className={`fas ${passed ? 'fa-check text-emerald-500' : 'fa-times text-rose-500'} text-[13px] w-4 text-center`} />
+                                        Test case {i} {isHidden && <i className="fas fa-lock ml-1 text-slate-400" />}
+                                      </button>
+                                    );
+                                  });
                                 })()}
+                              </div>
+                              {/* RIGHT PANEL */}
+                              <div className="w-2/3 h-full overflow-y-auto p-4 scrollbar-none bg-white">
+                                {(() => {
+                                  if (selectedTestCase >= evaluatedCount) {
+                                    return <div className="text-slate-500 text-sm italic flex items-center gap-2"><i className="fas fa-spinner fa-spin" /> Evaluating...</div>;
+                                  }
+
+                                  const visibleLen = runResultData.visible_results?.length || 0;
+                                  const isHidden = selectedTestCase >= visibleLen;
+
+                                  if (isHidden) {
+                                    const passed = (selectedTestCase - visibleLen) < runResultData.hidden_summary?.passed;
+                                    return (
+                                      <div className="flex flex-col items-center justify-center h-full text-slate-500 space-y-4">
+                                        <i className="fas fa-lock text-4xl opacity-30" />
+                                        <h3 className="text-lg font-bold text-slate-700">Hidden Test Case</h3>
+                                        <p className="text-xs max-w-sm text-center opacity-80 leading-relaxed">Use print or log statements to debug why your hidden test cases are failing. Hidden test cases are used to evaluate if your code can handle different scenarios, including corner cases.</p>
+                                        <div className={`mt-2 px-3 py-1.5 rounded text-xs font-bold border ${passed ? 'bg-emerald-50 border-emerald-200 text-emerald-600' : 'bg-rose-50 border-rose-200 text-rose-600'}`}>
+                                          Status: {passed ? 'Passed' : 'Failed'}
+                                        </div>
+                                      </div>
+                                    );
+                                  }
+
+                                  const tc = runResultData.visible_results?.[selectedTestCase];
+                                  if (!tc) return null;
+
+                                  return (
+                                    <div className="space-y-4 text-xs">
+                                      <div className="font-bold text-lg mb-2 flex items-center gap-2">
+                                        {tc.passed ? <span className="text-emerald-600">Accepted</span> : <span className="text-rose-600">Wrong Answer</span>}
+                                      </div>
+                                      <div>
+                                        <div className="text-slate-500 mb-1 font-semibold uppercase tracking-wider text-[10px]">Input</div>
+                                        <div className="bg-slate-50 border border-slate-100 rounded p-2.5 font-mono text-slate-700 break-all">{JSON.stringify(tc.input)}</div>
+                                      </div>
+                                      <div>
+                                        <div className="text-slate-500 mb-1 font-semibold uppercase tracking-wider text-[10px]">Expected Output</div>
+                                        <div className="bg-slate-50 border border-slate-100 rounded p-2.5 font-mono text-slate-700 break-all">{JSON.stringify(tc.expected)}</div>
+                                      </div>
+                                      <div>
+                                        <div className="text-slate-500 mb-1 font-semibold uppercase tracking-wider text-[10px]">Your Output</div>
+                                        <div className="bg-slate-50 border border-slate-100 rounded p-2.5 font-mono text-slate-700 break-all">{JSON.stringify(tc.output)}</div>
+                                      </div>
+                                      {runResultData.output && (
+                                        <div>
+                                          <div className="text-slate-500 mb-1 font-semibold uppercase tracking-wider text-[10px]">Stdout</div>
+                                          <div className="bg-slate-50 border border-slate-100 rounded p-2.5 font-mono text-slate-600 whitespace-pre-wrap">{runResultData.output}</div>
+                                        </div>
+                                      )}
+                                      {runResultData.runtime_error && (
+                                        <div>
+                                          <div className="text-rose-500 mb-1 font-semibold uppercase tracking-wider text-[10px]">Runtime Error</div>
+                                          <div className="bg-rose-50 border border-rose-100 rounded p-2.5 font-mono text-rose-600 whitespace-pre-wrap">{runResultData.runtime_error}</div>
+                                        </div>
+                                      )}
+                                    </div>
+                                  );
+                                })()}
+                              </div>
                             </div>
                           </div>
-                        </div>
                         ) : (
                           <>
                             <pre style={{ margin: 0, fontSize: '12px', fontFamily: 'monospace', color: '#334155', whiteSpace: 'pre-wrap' }}>
@@ -2188,10 +2182,10 @@ function Interview() {
               <video ref={videoPreviewRef} autoPlay muted playsInline id="videoPreview" />
               <div className="live-badge">LIVE</div>
               {proctoringAlert && (
-                 <div style={{ position: 'absolute', top: 0, left: 0, width: '100%', height: '100%', background: 'rgba(0,0,0,0.8)', color: '#ef4444', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 10, fontSize: '1.2rem', fontWeight: 'bold', flexDirection: 'column', textAlign: 'center', padding: '20px' }}>
-                   <span style={{ fontSize: '3rem', marginBottom: '10px' }}>⚠️</span>
-                   <div>{proctoringAlert}</div>
-                 </div>
+                <div style={{ position: 'absolute', top: 0, left: 0, width: '100%', height: '100%', background: 'rgba(0,0,0,0.8)', color: '#ef4444', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 10, fontSize: '1.2rem', fontWeight: 'bold', flexDirection: 'column', textAlign: 'center', padding: '20px' }}>
+                  <span style={{ fontSize: '3rem', marginBottom: '10px' }}>⚠️</span>
+                  <div>{proctoringAlert}</div>
+                </div>
               )}
             </div>
 
@@ -2224,7 +2218,7 @@ function Interview() {
               </div>
 
               {!isRoundTwo && sessionDetail?.interview_type !== 'Normal' && (
-                <button 
+                <button
                   onClick={handleStartRound2Click}
                   className="w-full py-2.5 px-4 rounded-full font-bold text-sm bg-blue-600 hover:bg-blue-700 text-white transition-all cursor-pointer border-none shadow-[0_4px_12px_rgba(37,99,235,0.2)] flex items-center justify-center gap-2 mb-2"
                 >
@@ -2298,17 +2292,17 @@ function Interview() {
                   RECORDING
                 </div>
               </div>
-              <textarea 
-                className="ip-transcript-box" 
+              <textarea
+                className="ip-transcript-box"
                 placeholder="Your speech will appear here automatically..."
-                readOnly 
-                value={transcriptionText} 
+                readOnly
+                value={transcriptionText}
               />
             </div>
 
             <div className="ip-nav-row" style={{ display: 'flex', gap: '10px', alignItems: 'center' }}>
-              <button className="ip-btn-prev" onClick={() => setCurrentQuestionIndex(prev => Math.max(0, prev - 1))} disabled={currentQuestionIndex === 0}>← Prev</button>
-              
+              {/* <button className="ip-btn-prev" onClick={() => setCurrentQuestionIndex(prev => Math.max(0, prev - 1))} disabled={currentQuestionIndex === 0}>← Prev</button> */}
+
               {currentQuestionIndex === questions.length - 1 ? (
                 !isRoundTwo && sessionDetail?.interview_type !== 'Normal' ? (
                   <div style={{ marginLeft: 'auto', display: 'flex', alignItems: 'center', gap: '8px' }}>
@@ -2339,13 +2333,13 @@ function Interview() {
               Round 1 is not complete. Are you sure you want to move to Round 2?
             </p>
             <div className="flex justify-end gap-3">
-              <button 
+              <button
                 onClick={() => setShowRound2Confirm(false)}
                 className="px-4 py-2 rounded-lg font-semibold text-sm text-slate-700 bg-slate-100 hover:bg-slate-200 transition-colors border-none cursor-pointer"
               >
                 Cancel
               </button>
-              <button 
+              <button
                 onClick={proceedToRoundTwo}
                 className="px-4 py-2 rounded-lg font-semibold text-sm text-white bg-blue-600 hover:bg-blue-700 transition-colors border-none cursor-pointer"
               >

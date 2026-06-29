@@ -7,7 +7,7 @@ import Button from '../../components/Button'
 import Input from '../../components/Input'
 import Textarea from '../../components/Textarea'
 import Select from '../../components/Select'
-import { EmailPreviewModal, BulkResultsModal, convertHtmlToPlainText } from '../../components/admin/modals/AdminModals'
+import { EmailPreviewModal, BulkResultsModal, convertHtmlToPlainText, convertPlainTextToHtml } from '../../components/admin/modals/AdminModals'
 import { loadSuperAdminDashboard } from '../../store/slices/dashboardSlice'
 import { createSuperAdminInterview } from '../../store/slices/interviewSlice'
 
@@ -358,10 +358,27 @@ export default function CreateInterviewPage() {
       const bodyHtml = doc.body ? doc.body.innerHTML : data.html
       const plainText = convertHtmlToPlainText(bodyHtml, name, jd, duration)
 
+      const frontendHtml = convertPlainTextToHtml(plainText, name, jd, duration, scheduleHtml)
+      const compiledBodyInnerHtml = `
+<div style="background-color: #f1f5f9; padding: 40px 20px; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif; min-height: 100%;">
+    <div style="max-width: 600px; margin: 0 auto; background-color: #ffffff; border-radius: 12px; border: 1px solid #e2e8f0; overflow: hidden; box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.05);">
+        <div style="background-color: #ffffff; border-bottom: 1px solid #e2e8f0; padding: 24px 32px; text-align: left;">
+            <h1 style="color: #0f172a; margin: 0; font-size: 20px; font-weight: 700; letter-spacing: -0.02em;">Interview Invitation</h1>
+        </div>
+        <div style="padding: 32px; background-color: #ffffff;">
+            ${frontendHtml}
+        </div>
+    </div>
+    <div style="max-width: 600px; margin: 24px auto 0; text-align: center;">
+        <p style="color: #94a3b8; font-size: 12px; margin: 0;">Powered by Hire IQ AI Assessments</p>
+    </div>
+</div>
+      `.trim();
+
       setEmailTemplate({
         headHtml: doc.head ? doc.head.innerHTML : '',
         bodyAttributes,
-        bodyInnerHtml: bodyHtml,
+        bodyInnerHtml: compiledBodyInnerHtml,
         plainText,
         candidateName: name,
         jobDescription: jd,

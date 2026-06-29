@@ -528,9 +528,9 @@ export const convertPlainTextToHtml = (plainText, candidateName = 'Candidate Nam
       }).join('\n');
       
       return `
-        <div style="background: #f8fafc; border-radius: 8px; padding: 15px; margin: 20px 0; border: 1px solid #e2e8f0; border-left: 4px solid #ef4444; text-align: left;">
-            <h3 style="margin: 0 0 10px; font-size: 15px; color: #0f172a; font-weight: bold;">⚠️ Mandatory Interview Guidelines</h3>
-            <ul style="margin: 0; padding-left: 20px; color: #334155; font-size: 14px; line-height: 1.6;">
+        <div style="background-color: #f8fafc; border-radius: 8px; padding: 20px; margin: 24px 0; border: 1px solid #e2e8f0; border-left: 4px solid #ef4444; text-align: left;">
+            <h3 style="margin: 0 0 12px; font-size: 14px; color: #0f172a; font-weight: 700; text-transform: uppercase; letter-spacing: 0.05em;">⚠️ Mandatory Interview Guidelines</h3>
+            <ul style="margin: 0; padding-left: 20px; color: #475569; font-size: 14px; line-height: 1.6;">
                 ${items || '<li><b>Full-Screen Mode:</b> You must maintain full-screen mode at all times.</li>'}
             </ul>
         </div>
@@ -540,18 +540,18 @@ export const convertPlainTextToHtml = (plainText, candidateName = 'Candidate Nam
     if (text.includes('Role Details') || text.includes('{job_description}')) {
       const formattedJd = String(jobDescription || '').replace(/\n/g, '<br/>');
       return `
-        <div style="background: #f1f5f9; border-radius: 8px; padding: 15px; margin: 15px 0; border-left: 4px solid #6366f1; text-align: left;">
-            <p style="margin: 0 0 5px; font-weight: 600; color: #334155;">📋 Role Details:</p>
-            <p style="margin: 0; color: #64748b; font-size: 14px; line-height: 1.5;">${formattedJd}</p>
+        <div style="background-color: #f8fafc; border-radius: 8px; padding: 20px; margin: 24px 0; border: 1px solid #e2e8f0; border-left: 4px solid #6366f1; text-align: left;">
+            <h3 style="margin: 0 0 8px; font-size: 14px; color: #0f172a; font-weight: 700; text-transform: uppercase; letter-spacing: 0.05em;">📋 Role Details</h3>
+            <p style="margin: 0; color: #475569; font-size: 14px; line-height: 1.6;">${formattedJd}</p>
         </div>
       `;
     }
     
     if (text.includes('[Start Interview Button]')) {
       return `
-        <div style="text-align: center; margin: 25px 0;">
-            <a href="{{INTERVIEW_LINK}}" style="background: linear-gradient(135deg, #6366f1, #8b5cf6); color: white; padding: 14px 32px; text-decoration: none; border-radius: 8px; font-weight: bold; font-size: 16px; display: inline-block; box-shadow: 0 4px 12px rgba(99,102,241,0.3);">
-                🚀 Start Interview Now
+        <div style="text-align: center; margin: 32px 0;">
+            <a href="{{INTERVIEW_LINK}}" style="background-color: #4f46e5; color: #ffffff; padding: 14px 32px; text-decoration: none; border-radius: 8px; font-weight: 600; font-size: 16px; display: inline-block;">
+                Start Interview
             </a>
         </div>
       `;
@@ -560,8 +560,8 @@ export const convertPlainTextToHtml = (plainText, candidateName = 'Candidate Nam
     if (text.includes('{schedule_info}')) {
       if (scheduleBlock) return scheduleBlock;
       return `
-        <div style="background: #f1f5f9; border-radius: 8px; padding: 15px; margin: 15px 0; border-left: 4px solid #6366f1; text-align: left;">
-             <p style="margin: 0; font-size: 14px; color: #334155;"><b>📅 Schedule:</b> Join during the scheduled window.</p>
+        <div style="background-color: #f8fafc; border-radius: 8px; padding: 20px; margin: 24px 0; border: 1px solid #e2e8f0; border-left: 4px solid #6366f1; text-align: left;">
+             <p style="margin: 0; font-size: 14px; color: #475569; line-height: 1.6;"><b>📅 Schedule:</b> Join during the scheduled window.</p>
         </div>
       `;
     }
@@ -569,8 +569,8 @@ export const convertPlainTextToHtml = (plainText, candidateName = 'Candidate Nam
     if (text.includes('Important:') || text.includes('expire')) {
       let cleanText = text.replace('⚠️', '').trim();
       return `
-        <div style="background: #fef3c7; border-radius: 8px; padding: 12px; margin-top: 15px; text-align: left;">
-            <p style="margin: 0; color: #92400e; font-size: 13px;">⚠️ <b>${cleanText}</b></p>
+        <div style="background-color: #fef2f2; border: 1px solid #fecaca; border-radius: 8px; padding: 16px; margin: 24px 0; text-align: left;">
+            <p style="margin: 0; color: #b91c1c; font-size: 14px; font-weight: 500;">⚠️ ${cleanText}</p>
         </div>
       `;
     }
@@ -582,7 +582,7 @@ export const convertPlainTextToHtml = (plainText, candidateName = 'Candidate Nam
       
     if (cleanText.startsWith('Dear ')) {
       const greetingName = cleanText.substring(5).replace(/,$/, '').trim();
-      return `<p style="font-size: 16px; color: #334155; text-align: left; margin: 10px 0;">Dear <b>${greetingName}</b>,</p>`;
+      return `<p style="font-size: 16px; color: #0f172a; text-align: left; margin: 0 0 20px 0;">Dear <b>${greetingName}</b>,</p>`;
     }
     
     if (cleanText.startsWith('Best regards,') || cleanText.startsWith('Regards,')) {
@@ -592,8 +592,8 @@ export const convertPlainTextToHtml = (plainText, candidateName = 'Candidate Nam
         return `<b style="color: #6366f1;">${l}</b>`;
       }).join('<br/>');
       return `
-        <hr style="border: none; border-top: 1px solid #e2e8f0; margin: 20px 0;">
-        <p style="color: #94a3b8; font-size: 13px; margin: 0; text-align: left;">${formattedLines}</p>
+        <hr style="border: none; border-top: 1px solid #e2e8f0; margin: 32px 0 24px 0;">
+        <p style="color: #64748b; font-size: 14px; margin: 0; text-align: left; line-height: 1.6;">${formattedLines}</p>
       `;
     }
     
@@ -653,11 +653,18 @@ export function EmailPreviewModal({
               
               // We compile into the standard wrapper: header banner and white card container
               const compiledBodyInnerHtml = `
-<div style="background: linear-gradient(135deg, #6366f1, #8b5cf6); border-radius: 12px 12px 0 0; padding: 30px; text-align: center;">
-    <h1 style="color: white; margin: 0; font-size: 24px;">Interview Invitation</h1>
-</div>
-<div style="background: white; border-radius: 0 0 12px 12px; padding: 30px; border: 1px solid #e2e8f0; border-top: none;">
-    ${html}
+<div style="background-color: #f1f5f9; padding: 40px 20px; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif; min-height: 100%;">
+    <div style="max-width: 600px; margin: 0 auto; background-color: #ffffff; border-radius: 12px; border: 1px solid #e2e8f0; overflow: hidden; box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.05);">
+        <div style="background-color: #ffffff; border-bottom: 1px solid #e2e8f0; padding: 24px 32px; text-align: left;">
+            <h1 style="color: #0f172a; margin: 0; font-size: 20px; font-weight: 700; letter-spacing: -0.02em;">Interview Invitation</h1>
+        </div>
+        <div style="padding: 32px; background-color: #ffffff;">
+            ${html}
+        </div>
+    </div>
+    <div style="max-width: 600px; margin: 24px auto 0; text-align: center;">
+        <p style="color: #94a3b8; font-size: 12px; margin: 0;">Powered by Hire IQ AI Assessments</p>
+    </div>
 </div>
               `.trim();
               
