@@ -1821,39 +1821,48 @@ def build_default_interview_email_html(candidate_name: str, duration: int, job_d
 
     return f"""
     <html>
-    <body style="font-family: 'Segoe UI', Arial, sans-serif; max-width: 600px; margin: 0 auto; padding: 20px; background-color: #f8fafc;">
-        <div style="background: linear-gradient(135deg, #6366f1, #8b5cf6); border-radius: 12px 12px 0 0; padding: 30px; text-align: center;">
-            <h1 style="color: white; margin: 0; font-size: 24px;">Interview Invitation</h1>
-        </div>
-        <div style="background: white; border-radius: 0 0 12px 12px; padding: 30px; border: 1px solid #e2e8f0; border-top: none;">
-            <p style="font-size: 16px; color: #334155;">Dear <b>{html.escape(candidate_name)}</b>,</p>
-            <p style="color: #475569; line-height: 1.6;">You have been invited to an AI-powered interview by <b style="color: #6366f1;">Arah Info Tech</b>.</p>
-            <div style="background: #f1f5f9; border-radius: 8px; padding: 15px; margin: 15px 0; border-left: 4px solid #6366f1;">
-                <p style="margin: 0 0 5px; font-weight: 600; color: #334155;">Role Details:</p>
-                {job_description_block}
+    <body style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif; margin: 0; padding: 40px 20px; background-color: #f1f5f9; min-height: 100%;">
+        <div style="max-width: 600px; margin: 0 auto; background-color: #ffffff; border-radius: 12px; border: 1px solid #e2e8f0; overflow: hidden; box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.05);">
+            <div style="background-color: #ffffff; border-bottom: 1px solid #e2e8f0; padding: 24px 32px; text-align: left;">
+                <h1 style="color: #0f172a; margin: 0; font-size: 20px; font-weight: 700; letter-spacing: -0.02em;">Interview Invitation</h1>
             </div>
-            <p style="color: #475569;"><b>Duration:</b> {duration} minutes</p>
-            {schedule_block}
-            <div style="text-align: center; margin: 25px 0;">
-                <a href="{full_link}" style="background: linear-gradient(135deg, #6366f1, #8b5cf6); color: white; padding: 14px 32px; text-decoration: none; border-radius: 8px; font-weight: bold; font-size: 16px; display: inline-block; box-shadow: 0 4px 12px rgba(99,102,241,0.3);">
-                    Start Interview
-                </a>
-            </div>
-            
-            <div style="background: #f8fafc; border-radius: 8px; padding: 15px; margin: 20px 0; border: 1px solid #e2e8f0; border-left: 4px solid #ef4444;">
-                <h3 style="margin: 0 0 10px; font-size: 15px; color: #0f172a;">⚠️ Mandatory Interview Guidelines</h3>
-                <ul style="margin: 0; padding-left: 20px; color: #334155; font-size: 14px; line-height: 1.6;">
-                    <li><b>Full-Screen Mode:</b> You must maintain full-screen mode at all times. Tab switching or exiting full-screen will be recorded as a violation.</li>
-                    <li><b>Video Proctoring:</b> Your camera will be active. The system uses advanced face tracking and multi-face detection to ensure integrity.</li>
-                    <li><b>Audio Environment:</b> Please ensure you are in a quiet room. Background noise or additional voices may negatively impact your evaluation.</li>
-                </ul>
-            </div>
+            <div style="padding: 32px; background-color: #ffffff;">
+                <p style="font-size: 16px; color: #0f172a; text-align: left; margin: 0 0 20px 0;">Dear <b>{html.escape(candidate_name)}</b>,</p>
+                <p style="color: #475569; line-height: 1.6; font-size: 14px; margin: 10px 0; text-align: left;">You have been invited to an AI-powered interview by <b style="color: #4f46e5;">Arah Info Tech</b>.</p>
+                
+                <div style="background-color: #f8fafc; border-radius: 8px; padding: 20px; margin: 24px 0; border: 1px solid #e2e8f0; border-left: 4px solid #6366f1; text-align: left;">
+                    <h3 style="margin: 0 0 8px; font-size: 14px; color: #0f172a; font-weight: 700; text-transform: uppercase; letter-spacing: 0.05em;">📋 Role Details</h3>
+                    {job_description_block}
+                </div>
+                
+                <p style="color: #475569; line-height: 1.6; font-size: 14px; margin: 10px 0; text-align: left;"><b>⏱️ Duration:</b> {duration} minutes</p>
+                {schedule_block}
+                
+                <div style="text-align: center; margin: 32px 0;">
+                    <a href="{full_link}" style="background-color: #4f46e5; color: #ffffff; padding: 14px 32px; text-decoration: none; border-radius: 8px; font-weight: 600; font-size: 16px; display: inline-block;">
+                        Start Interview
+                    </a>
+                </div>
+                
+                <div style="background-color: #f8fafc; border-radius: 8px; padding: 20px; margin: 24px 0; border: 1px solid #e2e8f0; border-left: 4px solid #ef4444; text-align: left;">
+                    <h3 style="margin: 0 0 12px; font-size: 14px; color: #0f172a; font-weight: 700; text-transform: uppercase; letter-spacing: 0.05em;">⚠️ Mandatory Interview Guidelines</h3>
+                    <ul style="margin: 0; padding-left: 20px; color: #475569; font-size: 14px; line-height: 1.6;">
+                        <li><b>Full-Screen Mode:</b> You must maintain full-screen mode at all times. Tab switching or exiting full-screen will be recorded as a violation.</li>
+                        <li><b>Video Proctoring:</b> Your camera will be active. The system uses advanced face tracking and multi-face detection to ensure integrity.</li>
+                        <li><b>Audio Environment:</b> Please ensure you are in a quiet room. Background noise or additional voices may negatively impact your evaluation.</li>
+                    </ul>
+                </div>
 
-            <div style="background: #fef3c7; border-radius: 8px; padding: 12px; margin-top: 15px;">
-                <p style="margin: 0; color: #92400e; font-size: 13px;"><b>Important:</b> Please join only during the scheduled time window. If no schedule is set, the link remains valid for 24 hours.</p>
+                <div style="background-color: #fef2f2; border: 1px solid #fecaca; border-radius: 8px; padding: 16px; margin: 24px 0; text-align: left;">
+                    <p style="margin: 0; color: #b91c1c; font-size: 14px; font-weight: 500;">⚠️ <b>Important:</b> Please join only during the scheduled time window. If no schedule is set, the link remains valid for 24 hours.</p>
+                </div>
+                
+                <hr style="border: none; border-top: 1px solid #e2e8f0; margin: 32px 0 24px 0;">
+                <p style="color: #64748b; font-size: 14px; margin: 0; text-align: left; line-height: 1.6;">Best regards,<br/><b style="color: #4f46e5;">Arah Info Tech Pvt Ltd</b></p>
             </div>
-            <hr style="border: none; border-top: 1px solid #e2e8f0; margin: 20px 0;">
-            <p style="color: #94a3b8; font-size: 13px; margin: 0;">Best regards,<br/><b style="color: #6366f1;">Arah Info Tech Pvt Ltd</b></p>
+        </div>
+        <div style="max-width: 600px; margin: 24px auto 0; text-align: center;">
+            <p style="color: #94a3b8; font-size: 12px; margin: 0;">Powered by Hire IQ AI Assessments</p>
         </div>
     </body>
     </html>
@@ -1966,29 +1975,39 @@ def send_interview_email(candidate_email: str, candidate_name: str, link_url: st
     else:
         html_content = f"""
     <html>
-    <body style="font-family: 'Segoe UI', Arial, sans-serif; max-width: 600px; margin: 0 auto; padding: 20px; background-color: #f8fafc;">
-        <div style="background: linear-gradient(135deg, #6366f1, #8b5cf6); border-radius: 12px 12px 0 0; padding: 30px; text-align: center;">
-            <h1 style="color: white; margin: 0; font-size: 24px;">Interview Invitation</h1>
+    <body style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif; margin: 0; padding: 40px 20px; background-color: #f1f5f9; min-height: 100%;">
+        <div style="max-width: 600px; margin: 0 auto; background-color: #ffffff; border-radius: 12px; border: 1px solid #e2e8f0; overflow: hidden; box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.05);">
+            <div style="background-color: #ffffff; border-bottom: 1px solid #e2e8f0; padding: 24px 32px; text-align: left;">
+                <h1 style="color: #0f172a; margin: 0; font-size: 20px; font-weight: 700; letter-spacing: -0.02em;">Interview Invitation</h1>
+            </div>
+            <div style="padding: 32px; background-color: #ffffff;">
+                <p style="font-size: 16px; color: #0f172a; text-align: left; margin: 0 0 20px 0;">Dear <b>{candidate_name}</b>,</p>
+                <p style="color: #475569; line-height: 1.6; font-size: 14px; margin: 10px 0; text-align: left;">You have been invited to an AI-powered interview by <b style="color: #4f46e5;">Arah Info Tech</b>.</p>
+                
+                <div style="background-color: #f8fafc; border-radius: 8px; padding: 20px; margin: 24px 0; border: 1px solid #e2e8f0; border-left: 4px solid #6366f1; text-align: left;">
+                    <h3 style="margin: 0 0 8px; font-size: 14px; color: #0f172a; font-weight: 700; text-transform: uppercase; letter-spacing: 0.05em;">📋 Role Details</h3>
+                    <p style="margin: 0; color: #475569; font-size: 14px; line-height: 1.6;">{formatted_jd}</p>
+                </div>
+                
+                <p style="color: #475569; line-height: 1.6; font-size: 14px; margin: 10px 0; text-align: left;"><b>⏱️ Duration:</b> {duration} minutes</p>
+                {schedule_block}
+                
+                <div style="text-align: center; margin: 32px 0;">
+                    <a href="{full_link}" style="background-color: #4f46e5; color: #ffffff; padding: 14px 32px; text-decoration: none; border-radius: 8px; font-weight: 600; font-size: 16px; display: inline-block;">
+                        Start Interview Now
+                    </a>
+                </div>
+
+                <div style="background-color: #fef2f2; border: 1px solid #fecaca; border-radius: 8px; padding: 16px; margin: 24px 0; text-align: left;">
+                    <p style="margin: 0; color: #b91c1c; font-size: 14px; font-weight: 500;">⚠️ <b>Important:</b> This interview link will expire in exactly <b>24 hours</b>. Ensure a stable internet connection and a quiet environment.</p>
+                </div>
+                
+                <hr style="border: none; border-top: 1px solid #e2e8f0; margin: 32px 0 24px 0;">
+                <p style="color: #64748b; font-size: 14px; margin: 0; text-align: left; line-height: 1.6;">Best regards,<br/><b style="color: #4f46e5;">Arah Info Tech Pvt Ltd</b></p>
+            </div>
         </div>
-        <div style="background: white; border-radius: 0 0 12px 12px; padding: 30px; border: 1px solid #e2e8f0; border-top: none;">
-            <p style="font-size: 16px; color: #334155;">Dear <b>{candidate_name}</b>,</p>
-            <p style="color: #475569; line-height: 1.6;">You have been invited to an AI-powered interview by <b style="color: #6366f1;">Arah Info Tech</b>.</p>
-            <div style="background: #f1f5f9; border-radius: 8px; padding: 15px; margin: 15px 0; border-left: 4px solid #6366f1;">
-                <p style="margin: 0 0 5px; font-weight: 600; color: #334155;">📋 Role Details:</p>
-                <p style="margin: 0; color: #64748b; font-size: 14px; line-height: 1.5;">{formatted_jd}</p>
-            </div>
-            <p style="color: #475569;"><b>⏱️ Duration:</b> {duration} minutes</p>
-            {schedule_block}
-            <div style="text-align: center; margin: 25px 0;">
-                <a href="{full_link}" style="background: linear-gradient(135deg, #6366f1, #8b5cf6); color: white; padding: 14px 32px; text-decoration: none; border-radius: 8px; font-weight: bold; font-size: 16px; display: inline-block; box-shadow: 0 4px 12px rgba(99,102,241,0.3);">
-                    🚀 Start Interview Now
-                </a>
-            </div>
-            <div style="background: #fef3c7; border-radius: 8px; padding: 12px; margin-top: 15px;">
-                <p style="margin: 0; color: #92400e; font-size: 13px;">⚠️ <b>Important:</b> This interview link will expire in exactly <b>24 hours</b>. Ensure a stable internet connection and a quiet environment.</p>
-            </div>
-            <hr style="border: none; border-top: 1px solid #e2e8f0; margin: 20px 0;">
-            <p style="color: #94a3b8; font-size: 13px; margin: 0;">Best regards,<br/><b style="color: #6366f1;">Arah Info Tech Pvt Ltd</b></p>
+        <div style="max-width: 600px; margin: 24px auto 0; text-align: center;">
+            <p style="color: #94a3b8; font-size: 12px; margin: 0;">Powered by Hire IQ AI Assessments</p>
         </div>
     </body>
     </html>

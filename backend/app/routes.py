@@ -1841,18 +1841,24 @@ def send_submission_notification(candidate_email: str, candidate_name: str, admi
 
     # Email to candidate
     candidate_html = f"""
-    <html><body style="font-family: 'Segoe UI', Arial, sans-serif; max-width: 600px; margin: 0 auto; padding: 20px;">
-        <div style="background: linear-gradient(135deg, #10b981, #059669); border-radius: 12px 12px 0 0; padding: 25px; text-align: center;">
-            <h2 style="color: white; margin: 0;">✅ Interview Submitted Successfully</h2>
-        </div>
-        <div style="background: white; border-radius: 0 0 12px 12px; padding: 25px; border: 1px solid #e2e8f0;">
-            <p>Dear <b>{candidate_name}</b>,</p>
-            <p>Thank you for completing your AI-powered interview. Your responses have been successfully submitted and are now being reviewed.</p>
-            <div style="background: #f0fdf4; border-radius: 8px; padding: 15px; margin: 15px 0; text-align: center;">
-                <p style="margin: 0; color: #166534; font-size: 14px;">📊 <b>Questions Answered:</b> {total_questions}</p>
+    <html><body style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif; margin: 0; padding: 40px 20px; background-color: #f1f5f9; min-height: 100%;">
+        <div style="max-width: 600px; margin: 0 auto; background-color: #ffffff; border-radius: 12px; border: 1px solid #e2e8f0; overflow: hidden; box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.05);">
+            <div style="background-color: #ffffff; border-bottom: 1px solid #e2e8f0; padding: 24px 32px; text-align: left;">
+                <h2 style="color: #0f172a; margin: 0; font-size: 20px; font-weight: 700; letter-spacing: -0.02em;">✅ Interview Submitted Successfully</h2>
             </div>
-            <p style="color: #64748b;">Our recruitment team will review your performance and get back to you shortly. Please keep an eye on your email for further updates.</p>
-            <p style="color: #94a3b8; font-size: 13px;">Best regards,<br/><b style="color: #6366f1;">Arah Info Tech Pvt Ltd</b></p>
+            <div style="padding: 32px; background-color: #ffffff;">
+                <p style="font-size: 16px; color: #0f172a; text-align: left; margin: 0 0 20px 0;">Dear <b>{candidate_name}</b>,</p>
+                <p style="color: #475569; line-height: 1.6; font-size: 14px; margin: 10px 0; text-align: left;">Thank you for completing your AI-powered interview. Your responses have been successfully submitted and are now being reviewed.</p>
+                <div style="background-color: #f0fdf4; border-radius: 8px; padding: 15px; margin: 24px 0; border: 1px solid #bbf7d0; text-align: left;">
+                    <p style="margin: 0; color: #166534; font-size: 14px;">📊 <b>Questions Answered:</b> {total_questions}</p>
+                </div>
+                <p style="color: #475569; line-height: 1.6; font-size: 14px; margin: 10px 0; text-align: left;">Our recruitment team will review your performance and get back to you shortly. Please keep an eye on your email for further updates.</p>
+                <hr style="border: none; border-top: 1px solid #e2e8f0; margin: 32px 0 24px 0;">
+                <p style="color: #64748b; font-size: 14px; margin: 0; text-align: left; line-height: 1.6;">Best regards,<br/><b style="color: #4f46e5;">Arah Info Tech Pvt Ltd</b></p>
+            </div>
+        </div>
+        <div style="max-width: 600px; margin: 24px auto 0; text-align: center;">
+            <p style="color: #94a3b8; font-size: 12px; margin: 0;">Powered by Hire IQ AI Assessments</p>
         </div>
     </body></html>
     """
@@ -1860,20 +1866,23 @@ def send_submission_notification(candidate_email: str, candidate_name: str, admi
     # Email to admin
     score_color = "#10b981" if avg_score >= 60 else "#ef4444"
     admin_html = f"""
-    <html><body style="font-family: 'Segoe UI', Arial, sans-serif; max-width: 600px; margin: 0 auto; padding: 20px;">
-        <div style="background: linear-gradient(135deg, #6366f1, #8b5cf6); border-radius: 12px 12px 0 0; padding: 25px; text-align: center;">
-            <h2 style="color: white; margin: 0;">📋 New Interview Submission</h2>
-        </div>
-        <div style="background: white; border-radius: 0 0 12px 12px; padding: 25px; border: 1px solid #e2e8f0;">
-            <p>A candidate has completed their interview:</p>
-            <div style="background: #f1f5f9; border-radius: 8px; padding: 15px; margin: 15px 0;">
-                <p style="margin: 5px 0;"><b>👤 Candidate:</b> {candidate_name}</p>
-                <p style="margin: 5px 0;"><b>📧 Email:</b> {candidate_email}</p>
-                <p style="margin: 5px 0;"><b>📊 Questions Answered:</b> {total_questions}</p>
-                <p style="margin: 5px 0;"><b>🏆 Average Score:</b> <span style="color: {score_color}; font-weight: 700; font-size: 18px;">{avg_score:.1f}/100</span></p>
+    <html><body style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif; margin: 0; padding: 40px 20px; background-color: #f1f5f9; min-height: 100%;">
+        <div style="max-width: 600px; margin: 0 auto; background-color: #ffffff; border-radius: 12px; border: 1px solid #e2e8f0; overflow: hidden; box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.05);">
+            <div style="background-color: #ffffff; border-bottom: 1px solid #e2e8f0; padding: 24px 32px; text-align: left;">
+                <h2 style="color: #0f172a; margin: 0; font-size: 20px; font-weight: 700; letter-spacing: -0.02em;">📋 New Interview Submission</h2>
             </div>
-            <p style="color: #64748b;">Login to the admin panel to review the full results, video recording, and AI analysis.</p>
-            <p style="color: #94a3b8; font-size: 13px;">— AI Interview System</p>
+            <div style="padding: 32px; background-color: #ffffff;">
+                <p style="font-size: 16px; color: #0f172a; text-align: left; margin: 0 0 20px 0;">A candidate has completed their interview:</p>
+                <div style="background-color: #f8fafc; border-radius: 8px; padding: 20px; margin: 24px 0; border: 1px solid #e2e8f0; border-left: 4px solid #6366f1; text-align: left;">
+                    <p style="margin: 5px 0; color: #475569; font-size: 14px;"><b>👤 Candidate:</b> {candidate_name}</p>
+                    <p style="margin: 5px 0; color: #475569; font-size: 14px;"><b>📧 Email:</b> {candidate_email}</p>
+                    <p style="margin: 5px 0; color: #475569; font-size: 14px;"><b>📊 Questions Answered:</b> {total_questions}</p>
+                    <p style="margin: 5px 0; color: #475569; font-size: 14px;"><b>🏆 Average Score:</b> <span style="color: {score_color}; font-weight: 700; font-size: 18px;">{avg_score:.1f}/100</span></p>
+                </div>
+                <p style="color: #475569; line-height: 1.6; font-size: 14px; margin: 10px 0; text-align: left;">Login to the admin panel to review the full results, video recording, and AI analysis.</p>
+                <hr style="border: none; border-top: 1px solid #e2e8f0; margin: 32px 0 24px 0;">
+                <p style="color: #64748b; font-size: 14px; margin: 0; text-align: left; line-height: 1.6;">— AI Interview System</p>
+            </div>
         </div>
     </body></html>
     """
