@@ -804,7 +804,7 @@ export default function AdminPage({ role: initialRole = 'admin' }) {
     setIsRequesting(true);
     try {
       await axios.post(`${API_BASE_URL}/admin/credit-requests`, {
-        requested_amount: parseInt(creditsToRequest)
+        amount: parseInt(creditsToRequest)
       }, {
         headers: {
           'Authorization': `Bearer ${token}`

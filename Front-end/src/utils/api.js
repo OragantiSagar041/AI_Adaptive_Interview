@@ -726,6 +726,45 @@ export const masterLogin = async (data) => {
   }
 };
 
+/* ===== MASTER & USER NOTIFICATIONS ===== */
+export const getNotifications = async () => {
+  try {
+    const response = await api.get("/api/notifications");
+    return response.data;
+  } catch (error) {
+    throw error.response?.data?.detail || error.response?.data?.message || "Failed to fetch notifications";
+  }
+};
+
+export const getMasterNotifications = getNotifications;
+
+export const markNotificationAsRead = async (notificationId) => {
+  try {
+    const response = await api.put(`/api/notifications/${notificationId}/read`);
+    return response.data;
+  } catch (error) {
+    throw error.response?.data?.detail || error.response?.data?.message || "Failed to mark notification as read";
+  }
+};
+
+export const markAllNotificationsAsRead = async () => {
+  try {
+    const response = await api.post("/api/notifications/read-all");
+    return response.data;
+  } catch (error) {
+    throw error.response?.data?.detail || error.response?.data?.message || "Failed to mark all notifications as read";
+  }
+};
+
+export const deleteNotification = async (notificationId) => {
+  try {
+    const response = await api.delete(`/api/notifications/${notificationId}`);
+    return response.data;
+  } catch (error) {
+    throw error.response?.data?.detail || error.response?.data?.message || "Failed to delete notification";
+  }
+};
+
 /* ===== MASTER PROFILE ===== */
 export const getMasterProfile = async () => {
   try {

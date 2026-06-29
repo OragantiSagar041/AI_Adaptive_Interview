@@ -114,7 +114,7 @@ export default function TeamManagementPage() {
     if (!confirm.isConfirmed) return
 
     try {
-      await axios.post(`${API_BASE_URL}/super-admin/credit-requests/${requestId}`, { action: status }, {
+      await axios.put(`${API_BASE_URL}/super-admin/credit-requests/${requestId}`, { status: status }, {
         headers: { 'Authorization': `Bearer ${token}` }
       })
       Swal.fire({

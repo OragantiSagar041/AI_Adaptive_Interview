@@ -235,7 +235,7 @@ export default function OverviewDashboardPage(props) {
                   {creditRequests.map(req => (
                     <tr key={req.id || req._id} className="hover:bg-slate-50/50 transition-colors">
                       <td className="p-4 text-sm font-semibold text-slate-700">{req.admin_id}</td>
-                      <td className="p-4 text-sm text-[#6366f1] font-black">+{req.requested_amount}</td>
+                      <td className="p-4 text-sm text-[#6366f1] font-black">+{req.amount || req.requested_amount}</td>
                       <td className="p-4 text-sm text-slate-500">{new Date(req.created_at).toLocaleDateString()}</td>
                       <td className="p-4">
                         <span className="bg-amber-100/50 border border-amber-200 text-amber-700 text-xs font-bold px-2.5 py-1 rounded-full shadow-sm">Pending</span>

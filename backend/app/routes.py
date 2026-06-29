@@ -4153,6 +4153,20 @@ async def create_tenant(data: TenantCreate, master_id: str = Depends(get_current
     }
     
     admins_collection.insert_one(new_tenant)
+    
+    # Create notification for master admin
+    try:
+        notifications_collection.insert_one({
+            "title": "New Tenant Registered",
+            "message": f"Tenant '{data.company_name}' has been created with plan '{data.subscription_plan}'.",
+            "type": "tenant_created",
+            "recipient_role": "master",
+            "read": False,
+            "created_at": start.isoformat()
+        })
+    except Exception as ne:
+        print(f"Failed to insert tenant notification: {ne}")
+
     return {"status": "success", "message": "Tenant created successfully"}
 
 @router.put("/master/companies/{company_id}")
@@ -4219,6 +4233,183 @@ async def delete_company(company_id: str, master_id: str = Depends(get_current_a
         "message": "Company and related data deleted",
         "deleted_sessions": len(sessions),
     }
+
+
+# --------------------------------------------------------------------------------
+# MASTER & ADMIN & SUPERADMIN NOTIFICATION APIs
+# --------------------------------------------------------------------------------
+
+@router.get("/api/notifications")
+async def get_notifications(current_admin: dict = Depends(get_current_admin_details)):
+    role = current_admin["role"]
+    company_id = current_admin["company_id"]
+    
+    # Filter based on role
+    if role == "master":
+        query = {"recipient_role": "master"}
+    elif role in ["super_admin", "superadmin"]:
+        query = {"recipient_role": "superadmin", "company_id": company_id}
+    else:
+        query = {"recipient_role": "admin", "company_id": company_id}
+        
+    notifications = list(notifications_collection.find(query).sort("created_at", -1))
+    
+    # Seed mock data if empty
+    if not notifications:
+        import datetime
+        now = datetime.datetime.now(datetime.timezone.utc)
+        if role == "master":
+            mock_data = [
+                {
+                    "title": "Welcome to Master Console",
+                    "message": "Welcome to the Hire IQ Master Control Panel. Here you can monitor system status, subscription plans, and manage tenants.",
+                    "type": "system",
+                    "recipient_role": "master",
+                    "read": False,
+                    "created_at": (now - datetime.timedelta(hours=2)).isoformat()
+                },
+                {
+                    "title": "Subscription Renewed",
+                    "message": "Tenant 'Google Cloud Partner' renewed their Advanced plan successfully.",
+                    "type": "payment",
+                    "recipient_role": "master",
+                    "read": False,
+                    "created_at": (now - datetime.timedelta(hours=6)).isoformat()
+                },
+                {
+                    "title": "System Check Completed",
+                    "message": "Automatic daily backup and database indexes health check succeeded.",
+                    "type": "system",
+                    "recipient_role": "master",
+                    "read": True,
+                    "created_at": (now - datetime.timedelta(days=1)).isoformat()
+                }
+            ]
+        elif role in ["super_admin", "superadmin"]:
+            mock_data = [
+                {
+                    "title": "Welcome to Hire IQ",
+                    "message": "Welcome to your Super Admin console. You can manage your team, check candidate results, and provision interviews.",
+                    "type": "system",
+                    "recipient_role": "superadmin",
+                    "company_id": company_id,
+                    "read": False,
+                    "created_at": (now - datetime.timedelta(hours=1)).isoformat()
+                },
+                {
+                    "title": "Interview Created",
+                    "message": "A new interview template 'Senior React Developer' has been created successfully.",
+                    "type": "activity",
+                    "recipient_role": "superadmin",
+                    "company_id": company_id,
+                    "read": False,
+                    "created_at": (now - datetime.timedelta(hours=4)).isoformat()
+                },
+                {
+                    "title": "Credits Request Approved",
+                    "message": "Your request for additional interview credits was approved by the master administrator.",
+                    "type": "credits",
+                    "recipient_role": "superadmin",
+                    "company_id": company_id,
+                    "read": True,
+                    "created_at": (now - datetime.timedelta(days=1)).isoformat()
+                }
+            ]
+        else: # admin / tenant
+            mock_data = [
+                {
+                    "title": "Welcome to Hire IQ",
+                    "message": "Welcome to the Admin console. Create, run, and review candidate coding and voice interviews.",
+                    "type": "system",
+                    "recipient_role": "admin",
+                    "company_id": company_id,
+                    "read": False,
+                    "created_at": (now - datetime.timedelta(hours=3)).isoformat()
+                },
+                {
+                    "title": "New Interview Complete",
+                    "message": "Candidate 'John Doe' has completed Python Technical Interview. Avg score: 8.5/10.",
+                    "type": "candidate",
+                    "recipient_role": "admin",
+                    "company_id": company_id,
+                    "read": False,
+                    "created_at": (now - datetime.timedelta(hours=5)).isoformat()
+                },
+                {
+                    "title": "Credits Assigned",
+                    "message": "Your team leader has assigned 20 credits to your admin account.",
+                    "type": "credits",
+                    "recipient_role": "admin",
+                    "company_id": company_id,
+                    "read": True,
+                    "created_at": (now - datetime.timedelta(days=2)).isoformat()
+                }
+            ]
+        notifications_collection.insert_many(mock_data)
+        notifications = list(notifications_collection.find(query).sort("created_at", -1))
+        
+    for n in notifications:
+        n["id"] = str(n["_id"])
+        n["_id"] = str(n["_id"])
+        
+    return {"status": "success", "data": notifications}
+
+@router.put("/api/notifications/{notification_id}/read")
+async def mark_notification_read(notification_id: str, current_admin: dict = Depends(get_current_admin_details)):
+    role = current_admin["role"]
+    company_id = current_admin["company_id"]
+    
+    # Security filter: ensure notification matches user's role and company
+    notif = notifications_collection.find_one({"_id": ObjectId(notification_id)})
+    if not notif:
+        raise HTTPException(status_code=404, detail="Notification not found")
+        
+    if role == "master" and notif.get("recipient_role") != "master":
+        raise HTTPException(status_code=403, detail="Forbidden")
+    elif role in ["super_admin", "superadmin"] and (notif.get("recipient_role") != "superadmin" or notif.get("company_id") != company_id):
+        raise HTTPException(status_code=403, detail="Forbidden")
+    elif role == "tenant" and (notif.get("recipient_role") != "admin" or notif.get("company_id") != company_id):
+        raise HTTPException(status_code=403, detail="Forbidden")
+        
+    notifications_collection.update_one(
+        {"_id": ObjectId(notification_id)},
+        {"$set": {"read": True}}
+    )
+    return {"status": "success", "message": "Notification marked as read"}
+
+@router.post("/api/notifications/read-all")
+async def mark_all_notifications_read(current_admin: dict = Depends(get_current_admin_details)):
+    role = current_admin["role"]
+    company_id = current_admin["company_id"]
+    
+    if role == "master":
+        query = {"recipient_role": "master", "read": False}
+    elif role in ["super_admin", "superadmin"]:
+        query = {"recipient_role": "superadmin", "company_id": company_id, "read": False}
+    else:
+        query = {"recipient_role": "admin", "company_id": company_id, "read": False}
+        
+    notifications_collection.update_many(query, {"$set": {"read": True}})
+    return {"status": "success", "message": "All notifications marked as read"}
+
+@router.delete("/api/notifications/{notification_id}")
+async def delete_master_notification(notification_id: str, current_admin: dict = Depends(get_current_admin_details)):
+    role = current_admin["role"]
+    company_id = current_admin["company_id"]
+    
+    notif = notifications_collection.find_one({"_id": ObjectId(notification_id)})
+    if not notif:
+        raise HTTPException(status_code=404, detail="Notification not found")
+        
+    if role == "master" and notif.get("recipient_role") != "master":
+        raise HTTPException(status_code=403, detail="Forbidden")
+    elif role in ["super_admin", "superadmin"] and (notif.get("recipient_role") != "superadmin" or notif.get("company_id") != company_id):
+        raise HTTPException(status_code=403, detail="Forbidden")
+    elif role == "tenant" and (notif.get("recipient_role") != "admin" or notif.get("company_id") != company_id):
+        raise HTTPException(status_code=403, detail="Forbidden")
+        
+    notifications_collection.delete_one({"_id": ObjectId(notification_id)})
+    return {"status": "success", "message": "Notification deleted"}
 
 # 4. Modify existing Admin Login endpoint to return subscription details
 class FirebaseAuthRequest(BaseModel):
@@ -5183,6 +5374,23 @@ async def request_credits(data: CreditRequestCreate, current_admin: dict = Depen
     }
     
     credit_requests_collection.insert_one(request_doc)
+    
+    # Send notification to superadmin
+    try:
+        admin_user = admins_collection.find_one({"_id": ObjectId(admin_id)})
+        admin_name = admin_user.get("name") or admin_user.get("username") or "An admin"
+        notifications_collection.insert_one({
+            "title": "Credits Requested",
+            "message": f"{admin_name} has requested {data.amount} additional credits.",
+            "type": "credits",
+            "recipient_role": "superadmin",
+            "company_id": company_id,
+            "read": False,
+            "created_at": request_doc["created_at"]
+        })
+    except Exception as ne:
+        print(f"Failed to create credit request notification: {ne}")
+        
     return {"status": "success", "message": "Credit request submitted successfully"}
 
 @router.get("/super-admin/credit-requests")
@@ -5238,6 +5446,20 @@ async def update_credit_request(request_id: str, data: CreditRequestUpdate, curr
             companies_collection.update_one({"_id": ObjectId(company_id)}, {"$inc": {"credits": -amount}})
         # Add to the requesting admin
         admins_collection.update_one({"_id": ObjectId(req["admin_id"])}, {"$inc": {"credits": amount}})
+        
+    # Send notification to the requesting admin
+    try:
+        notifications_collection.insert_one({
+            "title": f"Credits Request {data.status.capitalize()}",
+            "message": f"Your request for {req['amount']} additional credits has been {data.status}.",
+            "type": "credits",
+            "recipient_role": "admin",
+            "company_id": company_id,
+            "read": False,
+            "created_at": datetime.now(timezone.utc).isoformat()
+        })
+    except Exception as ne:
+        print(f"Failed to create credit request resolution notification: {ne}")
         
     return {"status": "success", "message": f"Request {data.status} successfully"}
 

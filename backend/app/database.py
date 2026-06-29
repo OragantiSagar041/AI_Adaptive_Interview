@@ -9,6 +9,7 @@ from mongo_db import (
     interview_sessions_collection,
     plans_collection,
     credit_requests_collection,
+    notifications_collection,
 )
 
 load_dotenv()
@@ -22,4 +23,5 @@ __all__ = [
     "interview_sessions_collection",
     "plans_collection",
     "credit_requests_collection",
+    "notifications_collection",
 ]
