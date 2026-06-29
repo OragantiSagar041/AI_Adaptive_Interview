@@ -20,6 +20,7 @@ import {
 } from 'lucide-react'
 import { logout, loadSuperAdminProfile } from '../../store/slices/authSlice'
 import { persistor } from '../../store/store'
+import AdminCopilot from '../admin/copilot/AdminCopilot'
 import {
   UpgradePlansModal,
   CandidateScorecardModal,
@@ -643,6 +644,9 @@ export default function SuperAdminLayout() {
         }}
         session={liveStreamSession}
       />
+
+      {/* Global Copilot */}
+      <AdminCopilot />
     </div>
   )
 }

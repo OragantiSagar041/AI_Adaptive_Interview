@@ -1233,6 +1233,23 @@ def interview_ai_summary(interview_id: str):
         "total_questions": len(scores)
     }
 
+from pydantic import BaseModel
+class InterviewAlert(BaseModel):
+    type: str
+    message: str
+
+@router.post("/interview/{interview_id}/alert")
+def log_interview_alert(interview_id: str, alert: InterviewAlert):
+    interview_sessions_collection.update_one(
+        {"link_id": interview_id},
+        {"$push": {"alerts": {
+            "timestamp": datetime.now(timezone.utc).isoformat(),
+            "type": alert.type,
+            "message": alert.message
+        }}}
+    )
+    return {"status": "success"}
+
 # ─── Helper: Generate AI Summary (Recommendation + S&W) ─────────────────────
 def generate_interview_summary(candidate_name: str, answers_data: list) -> dict:
     """
@@ -1526,6 +1543,7 @@ def get_interview_details(link_id: str):
             "total_face_alerts": total_face_alerts,
             "total_time_minutes": round(total_time / 60, 1)
         },
+        "alerts": session_data.get("alerts", []),
         "answers": results
     }
     
@@ -1834,25 +1852,31 @@ def send_submission_notification(candidate_email: str, candidate_name: str, admi
     env_path = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), ".env")
     load_dotenv(env_path, override=True)
     api_key = os.getenv("BREVO_API_KEY")
-    sender_name = os.getenv("BREVO_SENDER_NAME", "Arah Info Tech Pvt ltd")
+    sender_name = os.getenv("BREVO_SENDER_NAME", "Mock Interview")
     sender_email_addr = os.getenv("BREVO_SENDER_EMAIL")
     if not api_key:
         return False
 
     # Email to candidate
     candidate_html = f"""
-    <html><body style="font-family: 'Segoe UI', Arial, sans-serif; max-width: 600px; margin: 0 auto; padding: 20px;">
-        <div style="background: linear-gradient(135deg, #10b981, #059669); border-radius: 12px 12px 0 0; padding: 25px; text-align: center;">
-            <h2 style="color: white; margin: 0;">✅ Interview Submitted Successfully</h2>
-        </div>
-        <div style="background: white; border-radius: 0 0 12px 12px; padding: 25px; border: 1px solid #e2e8f0;">
-            <p>Dear <b>{candidate_name}</b>,</p>
-            <p>Thank you for completing your AI-powered interview. Your responses have been successfully submitted and are now being reviewed.</p>
-            <div style="background: #f0fdf4; border-radius: 8px; padding: 15px; margin: 15px 0; text-align: center;">
-                <p style="margin: 0; color: #166534; font-size: 14px;">📊 <b>Questions Answered:</b> {total_questions}</p>
+    <html><body style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif; margin: 0; padding: 40px 20px; background-color: #f1f5f9; min-height: 100%;">
+        <div style="max-width: 600px; margin: 0 auto; background-color: #ffffff; border-radius: 12px; border: 1px solid #e2e8f0; overflow: hidden; box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.05);">
+            <div style="background-color: #ffffff; border-bottom: 1px solid #e2e8f0; padding: 24px 32px; text-align: left;">
+                <h2 style="color: #0f172a; margin: 0; font-size: 20px; font-weight: 700; letter-spacing: -0.02em;">✅ Interview Submitted Successfully</h2>
             </div>
-            <p style="color: #64748b;">Our recruitment team will review your performance and get back to you shortly. Please keep an eye on your email for further updates.</p>
-            <p style="color: #94a3b8; font-size: 13px;">Best regards,<br/><b style="color: #6366f1;">Arah Info Tech Pvt Ltd</b></p>
+            <div style="padding: 32px; background-color: #ffffff;">
+                <p style="font-size: 16px; color: #0f172a; text-align: left; margin: 0 0 20px 0;">Dear <b>{candidate_name}</b>,</p>
+                <p style="color: #475569; line-height: 1.6; font-size: 14px; margin: 10px 0; text-align: left;">Thank you for completing your AI-powered interview. Your responses have been successfully submitted and are now being reviewed.</p>
+                <div style="background-color: #f0fdf4; border-radius: 8px; padding: 15px; margin: 24px 0; border: 1px solid #bbf7d0; text-align: left;">
+                    <p style="margin: 0; color: #166534; font-size: 14px;">📊 <b>Questions Answered:</b> {total_questions}</p>
+                </div>
+                <p style="color: #475569; line-height: 1.6; font-size: 14px; margin: 10px 0; text-align: left;">Our recruitment team will review your performance and get back to you shortly. Please keep an eye on your email for further updates.</p>
+                <hr style="border: none; border-top: 1px solid #e2e8f0; margin: 32px 0 24px 0;">
+                <p style="color: #64748b; font-size: 14px; margin: 0; text-align: left; line-height: 1.6;">Best regards,<br/><b style="color: #4f46e5;">Arah Info Tech Pvt Ltd</b></p>
+            </div>
+        </div>
+        <div style="max-width: 600px; margin: 24px auto 0; text-align: center;">
+            <p style="color: #94a3b8; font-size: 12px; margin: 0;">Powered by Hire IQ AI Assessments</p>
         </div>
     </body></html>
     """
@@ -1860,20 +1884,23 @@ def send_submission_notification(candidate_email: str, candidate_name: str, admi
     # Email to admin
     score_color = "#10b981" if avg_score >= 60 else "#ef4444"
     admin_html = f"""
-    <html><body style="font-family: 'Segoe UI', Arial, sans-serif; max-width: 600px; margin: 0 auto; padding: 20px;">
-        <div style="background: linear-gradient(135deg, #6366f1, #8b5cf6); border-radius: 12px 12px 0 0; padding: 25px; text-align: center;">
-            <h2 style="color: white; margin: 0;">📋 New Interview Submission</h2>
-        </div>
-        <div style="background: white; border-radius: 0 0 12px 12px; padding: 25px; border: 1px solid #e2e8f0;">
-            <p>A candidate has completed their interview:</p>
-            <div style="background: #f1f5f9; border-radius: 8px; padding: 15px; margin: 15px 0;">
-                <p style="margin: 5px 0;"><b>👤 Candidate:</b> {candidate_name}</p>
-                <p style="margin: 5px 0;"><b>📧 Email:</b> {candidate_email}</p>
-                <p style="margin: 5px 0;"><b>📊 Questions Answered:</b> {total_questions}</p>
-                <p style="margin: 5px 0;"><b>🏆 Average Score:</b> <span style="color: {score_color}; font-weight: 700; font-size: 18px;">{avg_score:.1f}/100</span></p>
+    <html><body style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif; margin: 0; padding: 40px 20px; background-color: #f1f5f9; min-height: 100%;">
+        <div style="max-width: 600px; margin: 0 auto; background-color: #ffffff; border-radius: 12px; border: 1px solid #e2e8f0; overflow: hidden; box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.05);">
+            <div style="background-color: #ffffff; border-bottom: 1px solid #e2e8f0; padding: 24px 32px; text-align: left;">
+                <h2 style="color: #0f172a; margin: 0; font-size: 20px; font-weight: 700; letter-spacing: -0.02em;">📋 New Interview Submission</h2>
             </div>
-            <p style="color: #64748b;">Login to the admin panel to review the full results, video recording, and AI analysis.</p>
-            <p style="color: #94a3b8; font-size: 13px;">— AI Interview System</p>
+            <div style="padding: 32px; background-color: #ffffff;">
+                <p style="font-size: 16px; color: #0f172a; text-align: left; margin: 0 0 20px 0;">A candidate has completed their interview:</p>
+                <div style="background-color: #f8fafc; border-radius: 8px; padding: 20px; margin: 24px 0; border: 1px solid #e2e8f0; border-left: 4px solid #6366f1; text-align: left;">
+                    <p style="margin: 5px 0; color: #475569; font-size: 14px;"><b>👤 Candidate:</b> {candidate_name}</p>
+                    <p style="margin: 5px 0; color: #475569; font-size: 14px;"><b>📧 Email:</b> {candidate_email}</p>
+                    <p style="margin: 5px 0; color: #475569; font-size: 14px;"><b>📊 Questions Answered:</b> {total_questions}</p>
+                    <p style="margin: 5px 0; color: #475569; font-size: 14px;"><b>🏆 Average Score:</b> <span style="color: {score_color}; font-weight: 700; font-size: 18px;">{avg_score:.1f}/100</span></p>
+                </div>
+                <p style="color: #475569; line-height: 1.6; font-size: 14px; margin: 10px 0; text-align: left;">Login to the admin panel to review the full results, video recording, and AI analysis.</p>
+                <hr style="border: none; border-top: 1px solid #e2e8f0; margin: 32px 0 24px 0;">
+                <p style="color: #64748b; font-size: 14px; margin: 0; text-align: left; line-height: 1.6;">— AI Interview System</p>
+            </div>
         </div>
     </body></html>
     """
@@ -1887,7 +1914,7 @@ def send_submission_notification(candidate_email: str, candidate_name: str, admi
         res = requests.post(url, json={
             "sender": {"name": sender_name, "email": sender_email_addr},
             "to": [{"email": candidate_email, "name": candidate_name}],
-            "subject": "Your Interview Has Been Submitted — Arah Info Tech",
+            "subject": "Your Interview Has Been Submitted — Mock Interview",
             "htmlContent": candidate_html
         }, headers=headers)
         results.append(res.status_code < 300)
@@ -2157,7 +2184,7 @@ async def startup_event_db_and_email():
             import secrets
             master_pw = os.getenv("DEFAULT_MASTER_PASSWORD") or secrets.token_urlsafe(12)
             hashed_pw = hash_password(master_pw)
-            default_email = os.getenv("BREVO_SENDER_EMAIL", "oragantisagar041@gmail.com")
+            default_email = os.getenv("BREVO_SENDER_EMAIL", "no-reply@mockinterview.com")
             admins_collection.insert_one({
                 "username": "master",
                 "password": hashed_pw,
@@ -2173,7 +2200,7 @@ async def startup_event_db_and_email():
             import secrets
             admin_pw = os.getenv("DEFAULT_ADMIN_PASSWORD") or secrets.token_urlsafe(12)
             hashed_pw = hash_password(admin_pw)
-            default_email = os.getenv("BREVO_SENDER_EMAIL", "oragantisagar041@gmail.com")
+            default_email = os.getenv("BREVO_SENDER_EMAIL", "no-reply@mockinterview.com")
             admins_collection.insert_one({
                 "username": "admin",
                 "password": hashed_pw,
@@ -2188,7 +2215,7 @@ async def startup_event_db_and_email():
         else:
             # Upgrade legacy admin to tenant
             update_data = {}
-            if not row.get("email"): update_data["email"] = os.getenv("BREVO_SENDER_EMAIL", "oragantisagar041@gmail.com")
+            if not row.get("email"): update_data["email"] = os.getenv("BREVO_SENDER_EMAIL", "no-reply@mockinterview.com")
             if not row.get("role"): update_data["role"] = "tenant"
             if not row.get("subscription_plan"):
                 update_data["subscription_plan"] = "advance"
@@ -2318,7 +2345,7 @@ def send_otp_email(email: str, name: str, otp: str):
     env_path = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), ".env")
     load_dotenv(env_path, override=True)
     api_key = os.getenv("BREVO_API_KEY")
-    sender_name = os.getenv("BREVO_SENDER_NAME", "Arah Info Tech Pvt ltd")
+    sender_name = os.getenv("BREVO_SENDER_NAME", "Mock Interview")
     sender_email = os.getenv("BREVO_SENDER_EMAIL")
     
     if not api_key: return False
@@ -2330,7 +2357,7 @@ def send_otp_email(email: str, name: str, otp: str):
         <p>You requested to reset your admin password. Please use the following One-Time Password (OTP) to proceed:</p>
         <h2 style='color: #6366f1; letter-spacing: 5px; font-size: 2rem;'>{otp}</h2>
         <p>This code is valid for 10 minutes. If you did not request this, please ignore this email.</p>
-        <p>Best Regards,<br/>Arah Info Tech Pvt ltd</p>
+        <p>Best Regards,<br/>Mock Interview</p>
     </body></html>
     """
 
@@ -2687,8 +2714,20 @@ async def bulk_create_sessions(data: BulkCreateSession, current_admin: dict = De
         }
         if data.scheduled_start:
             session_doc["scheduled_start"] = data.scheduled_start
+            start_dt = parse_iso_datetime(data.scheduled_start)
+            if start_dt:
+                send_at = start_dt - timedelta(minutes=15)
+                if send_at > now:
+                    session_doc["invite_email_status"] = "pending"
+                    session_doc["invite_email_send_at"] = send_at.isoformat()
+                    session_doc["invite_email_sent_at"] = None
         if data.scheduled_end:
             session_doc["scheduled_end"] = data.scheduled_end
+
+        if "invite_email_status" not in session_doc:
+            session_doc["invite_email_status"] = "sent"
+            session_doc["invite_email_send_at"] = now.isoformat()
+            session_doc["invite_email_sent_at"] = now.isoformat()
             
         session_docs.append(session_doc)
         
@@ -2726,7 +2765,7 @@ async def bulk_create_sessions(data: BulkCreateSession, current_admin: dict = De
         if r["status"] == "success":
             doc = r.pop("session_doc") # Remove temp doc before returning JSON
             try:
-                email_result = queue_or_send_interview_email(doc, r["link_url"])
+                email_result = queue_or_send_interview_email(doc, r["link_url"], skip_db_update=True)
                 r["email_sent"] = email_result["email_sent"]
                 r["email_scheduled"] = email_result["email_scheduled"]
                 r["email_send_at"] = email_result["email_send_at"]
@@ -2971,15 +3010,15 @@ async def activate_session(link_id: str, current_admin: dict = Depends(require_r
 
 @router.post("/admin/sessions/{link_id}/reschedule")
 async def reschedule_session(link_id: str, new_expiry: str = Form(...), current_admin: dict = Depends(require_role("admin", "super_admin"))):
+    """
+    Reschedule an interview by updating its expires_at date 
+    and resetting its status to pending (if it was expired).
+    """
     row = interview_sessions_collection.find_one({"link_id": link_id})
     if not row:
         raise HTTPException(status_code=404, detail="Session not found")
     if current_admin.get("role") != "master" and row.get("company_id") != current_admin.get("company_id"):
         raise HTTPException(status_code=403, detail="Access denied")
-    """
-    Reschedule an interview by updating its expires_at date 
-    and resetting its status to pending (if it was expired).
-    """
     update_data = {
         "expires_at": new_expiry,
         "status": "pending",
@@ -3344,7 +3383,7 @@ def send_decision_email(email: str, name: str, decision: str, jd: str):
     env_path = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), ".env")
     load_dotenv(env_path, override=True)
     api_key = os.getenv("BREVO_API_KEY")
-    sender_name = os.getenv("BREVO_SENDER_NAME", "Arah Info Tech Pvt ltd")
+    sender_name = os.getenv("BREVO_SENDER_NAME", "Mock Interview")
     sender_email = os.getenv("BREVO_SENDER_EMAIL")
     
     if not api_key: return False
@@ -3399,49 +3438,95 @@ class CopilotRequest(BaseModel):
     admin_id: Optional[str] = None
 
 @router.post("/admin/copilot")
-async def admin_copilot_chat(request: CopilotRequest):
+async def admin_copilot_chat(request: CopilotRequest, current_admin: dict = Depends(get_current_admin_details)):
     try:
         from ai_client import chat_completion
         
-        system_prompt = """You are the 'Hire IQ Admin Copilot', a specialized AI assistant embedded within the Admin Dashboard of the Hire IQ Mock Interview platform.
+        role = current_admin.get("role", "admin")
+        admin_id = current_admin.get("admin_id")
+        company_id = current_admin.get("company_id")
+        
+        system_prompt = f"""You are the 'Hire IQ Admin Copilot', a specialized AI assistant embedded within the Admin Dashboard of the Hire IQ Mock Interview platform.
+You are currently talking to a user with the role: {role.upper()}.
 Your ONLY purpose is to help the admin understand and navigate this website, AND to perform specific administrative actions when requested.
 
 CRITICAL RULES:
 1. ONLY answer questions related to the Hire IQ website, its features, and how to use it.
 2. BE EXTREMELY CONCISE. Provide ONLY the direct, valid answer. Do NOT generate long explanations, filler text, or conversational fluff. Use short bullet points if necessary.
 3. If the user asks about ANYTHING ELSE, you MUST politely decline in exactly one short sentence.
-4. If the admin asks you to perform an action (e.g., "Send a feedback email to candidate X"), output exactly one short sentence confirming the action (e.g., "Here is the drafted email:"), followed IMMEDIATELY by a specific JSON block.
+4. When asked to perform an action (e.g., "Send a feedback email", "Send credits"), output exactly one short sentence confirming the action, followed IMMEDIATELY by a JSON block.
    The JSON block MUST be exactly in this format:
    ```json
-   {
-       "action": "send_feedback",
-       "candidate_email": "candidate@example.com",
-       "content": "Subject: ...\n\nBody: ..."
-   }
+   {{
+       "action": "action_name",
+       ... (other required fields)
+   }}
    ```
-5. Do NOT echo or repeat the user's question in your response. Just provide the answer directly.
-6. You DO have access to recent candidate scores. If the admin asks about candidate rankings or scores, answer directly using ONLY the Recent Candidate Data provided below."""
+5. Do NOT echo or repeat the user's question. Just provide the answer directly.
+"""
 
-        if request.admin_id:
+        context_data = ""
+
+        if role == "admin":
+            system_prompt += """
+AVAILABLE ACTIONS FOR ADMIN:
+- draft_email: Draft a feedback/selection email. `{"action": "send_feedback", "candidate_email": "...", "content": "..."}`
+- request_credits: Request credits from super admin. `{"action": "request_credits", "amount": 100, "reason": "..."}`
+"""
             recent_sessions = list(interview_sessions_collection.find(
-                {"created_by": request.admin_id, "status": "completed"},
-                {"candidate_name": 1, "avg_score": 1, "decision": 1, "_id": 0}
+                {"created_by": admin_id, "status": "completed"},
+                {"candidate_name": 1, "candidate_email": 1, "avg_score": 1, "decision": 1, "_id": 0}
             ).sort("created_at", -1).limit(50))
-            
             if recent_sessions:
-                candidate_context = "\n\n--- RECENT CANDIDATE DATA ---\n"
+                context_data += "\n--- YOUR RECENT CANDIDATES ---\n"
                 for s in recent_sessions:
-                    candidate_context += f"- Candidate: {s.get('candidate_name', 'Unknown')} | Score: {s.get('avg_score', 'N/A')}/100 | Decision: {s.get('decision', 'None')}\n"
-                system_prompt += candidate_context
+                    context_data += f"- Candidate: {s.get('candidate_name', 'Unknown')} | Email: {s.get('candidate_email', 'Unknown')} | Score: {s.get('avg_score', 'N/A')}/100 | Decision: {s.get('decision', 'None')}\n"
 
-        messages = [{"role": "system", "content": system_prompt}]
+        elif role == "super_admin":
+            system_prompt += """
+AVAILABLE ACTIONS FOR SUPER ADMIN:
+- draft_email: Draft a feedback email to a candidate. `{"action": "send_feedback", "candidate_email": "...", "content": "..."}`
+- buy_credits: Generate checkout link. `{"action": "buy_credits", "amount": 100}`
+- transfer_credits: Send credits to a sub-admin. `{"action": "transfer_credits", "admin_username": "...", "amount": 50}`
+- create_admin: Create a new sub-admin. `{"action": "create_admin", "username": "...", "email": "..."}`
+"""
+            sub_admins = list(admins_collection.find({"created_by": admin_id}, {"username": 1, "email": 1, "credits": 1, "_id": 0}))
+            if sub_admins:
+                context_data += "\n--- YOUR SUB-ADMINS ---\n"
+                for sa in sub_admins:
+                    context_data += f"- Username: {sa.get('username')} | Email: {sa.get('email')} | Credits: {sa.get('credits')}\n"
+                    
+            recent_sessions = list(interview_sessions_collection.find(
+                {"company_id": company_id, "status": "completed"},
+                {"candidate_name": 1, "candidate_email": 1, "avg_score": 1, "decision": 1, "created_by": 1, "_id": 0}
+            ).sort("created_at", -1).limit(50))
+            if recent_sessions:
+                context_data += "\n--- COMPANY CANDIDATES ---\n"
+                for s in recent_sessions:
+                    context_data += f"- Candidate: {s.get('candidate_name')} | Email: {s.get('candidate_email')} | Score: {s.get('avg_score')} | Created By ID: {s.get('created_by')}\n"
+
+        elif role == "master":
+            system_prompt += """
+AVAILABLE ACTIONS FOR MASTER:
+- Currently no JSON actions. You can answer queries about the platform metrics provided below.
+"""
+            total_super_admins = tenant_collection.count_documents({})
+            total_admins = admins_collection.count_documents({})
+            total_interviews = interview_sessions_collection.count_documents({})
+            completed_interviews = interview_sessions_collection.count_documents({"status": "completed"})
+            
+            context_data += f"\n--- PLATFORM METRICS ---\n"
+            context_data += f"- Total Super Admins (Tenants): {total_super_admins}\n"
+            context_data += f"- Total Sub-Admins: {total_admins}\n"
+            context_data += f"- Total Interviews Created: {total_interviews}\n"
+            context_data += f"- Total Interviews Completed: {completed_interviews}\n"
+
+        system_prompt += f"\n{context_data}"
         
-        # Add history
+        messages = [{"role": "system", "content": system_prompt}]
         for msg in request.history:
             if msg.role in ["user", "assistant"]:
                 messages.append({"role": msg.role, "content": msg.content})
-                
-        # Add the latest message
         messages.append({"role": "user", "content": request.message})
         
         try:
@@ -3460,12 +3545,12 @@ CRITICAL RULES:
                     action_data = json.loads(json_match.group(1))
                     if "action" in action_data:
                         action_required = action_data
-                        # Remove the JSON block from the conversational reply
                         response_text = response_text.replace(json_match.group(0), "").strip()
                 except:
                     pass
                     
             return {"reply": response_text, "action_required": action_required}
+            
         except Exception as e:
             print(f"Warning: Copilot AI failed: {e}")
             
@@ -3475,35 +3560,21 @@ CRITICAL RULES:
             offline_responses = {
                 "generate interview questions": "To generate interview questions, go to 'Create Interview' or 'Bulk Send' and type a Job Description. The system will automatically generate questions tailored to the JD.",
                 "rank candidates": "To rank candidates, go to the Results dashboard. Candidates are ranked by their ATS Score and overall interview performance score automatically.",
-                "suggest follow-ups": "The platform automatically provides follow-up suggestions in the candidate's detailed scorecard after they complete an interview.",
-                "highlight red flags": "Red flags, such as tab switching, looking away, or AI-generated responses, are automatically flagged in the Live Monitoring and Session Results dashboards.",
-                "recommend hiring decisions": "Hiring decisions are recommended based on the candidate's overall score. You can view the 'Hire/No Hire' suggestion in the final scorecard.",
                 "draft feedback emails": "To draft feedback emails, go to the candidate's result page and click 'Send Feedback Email'. The system will generate a custom template.",
-                "create scorecards": "Scorecards are automatically created once a candidate finishes their interview. Check the Results tab to view them.",
                 "api": "API keys can be configured in the Settings tab. If you run out of quota, the system has offline fallbacks for ATS scoring and this copilot.",
-                "quota": "If your API quota is over, the platform will use built-in offline fallbacks for essential features like ATS scoring.",
-                "ats": "ATS Scoring is done automatically when you upload a candidate's resume. It compares the resume keywords against the Job Description.",
-                "bulk": "You can send bulk interviews using the Bulk Candidate panel. You can define industry types, technical/non-technical roles, and custom email templates.",
-                "create interview": "To create a single interview, go to the 'Create Interview' section, fill in the candidate details, job description, and any custom questions, then hit Send.",
-                "results": "The Results dashboard displays all completed and pending interviews. You can see ATS scores, view the recorded video, and read the detailed AI feedback.",
-                "live monitoring": "Live Monitoring allows you to watch candidates in real-time while they take the interview. It flags tab-switches and displays their internet speed and audio levels.",
-                "export": "You can export session results to a CSV file from the Results dashboard if your plan supports it.",
-                "plan": "You can view and upgrade your subscription plan from the 'Plan & Usage' tab in the navigation menu.",
-                "upgrade": "You can view and upgrade your subscription plan from the 'Plan & Usage' tab in the navigation menu.",
-                "deactivate": "To deactivate a candidate's session link, go to the Results dashboard and click the Deactivate button next to their name.",
-                "dashboard": "The Overview dashboard shows your total completed interviews, pending invitations, and live active candidates right now.",
-                "overview": "The Overview dashboard shows your total completed interviews, pending invitations, and live active candidates right now.",
-                "settings": "In the Settings panel, you can update your API keys, change your password, and customize the fallback offline settings.",
-                "hello": "Hello! I am operating in offline fallback mode because the API quota is exceeded. I can still answer basic questions about the admin console and platform.",
-                "hi": "Hi there! I am currently in offline mode but I can still help you navigate the admin console's features."
+                "quota": "If your API quota is over, the platform will use built-in offline fallbacks for essential features.",
+                "buy credits": "To buy credits, go to the Plan & Usage section or contact the master administrator.",
+                "transfer credits": "To transfer credits to your sub-admins, navigate to the Admins dashboard and use the 'Add Credits' button.",
+                "create admin": "To create a new sub-admin, go to the Admins dashboard and click 'Create Admin'.",
+                "hello": f"Hello! I am operating in offline fallback mode for your {role} account because the API quota is exceeded. I can still answer basic platform questions.",
+                "hi": f"Hi there! I am currently in offline mode but I can still help you navigate the {role} features."
             }
             
-            # Find the best matching offline response
             for keyword, response in offline_responses.items():
                 if keyword in msg_lower:
                     return {"reply": f"[Offline Mode] {response}"}
                     
-            return {"reply": "[Offline Mode] I'm sorry, my AI connection is currently offline due to quota limits, and I don't have a pre-programmed answer for that specific question. Please try asking about creating interviews, ranking candidates, or ATS scoring!"}
+            return {"reply": f"[Offline Mode] I'm sorry, my AI connection is currently offline due to quota limits. I can only answer basic FAQ questions for your {role} account right now."}
 
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
@@ -3513,22 +3584,66 @@ class CopilotExecuteRequest(BaseModel):
     data: dict
 
 @router.post("/admin/copilot/execute")
-async def admin_copilot_execute(request: CopilotExecuteRequest):
+async def admin_copilot_execute(request: CopilotExecuteRequest, current_admin: dict = Depends(get_current_admin_details)):
     try:
+        role = current_admin.get("role", "admin")
+        admin_id = current_admin.get("admin_id")
+        
         if request.action == "send_feedback":
-            # Dummy logic for actually executing the email sending. 
-            # It just simulates the real sending or triggers `queue_or_send_interview_email` if appropriate.
             email = request.data.get("candidate_email")
             content = request.data.get("content")
-            
             if not email or not content:
                 raise HTTPException(status_code=400, detail="Missing email or content")
                 
-            print(f"[Copilot Execute] Sent feedback email to {email}")
+            from app.services import send_interview_email
+            # Simulate sending the plain text email using our existing service (it expects HTML but plain text works)
+            send_interview_email(email, "Candidate", "", 30, "", custom_html=content.replace("\n", "<br>"))
             return {"status": "success", "message": f"Successfully sent feedback email to {email}."}
-        
+            
+        elif request.action == "request_credits" and role == "admin":
+            amount = request.data.get("amount", 10)
+            reason = request.data.get("reason", "Requested via Copilot")
+            
+            from bson import ObjectId
+            admin_doc = admins_collection.find_one({"_id": ObjectId(admin_id)})
+            if not admin_doc:
+                raise HTTPException(status_code=404, detail="Admin not found")
+                
+            req = {
+                "admin_id": admin_id,
+                "admin_username": admin_doc.get("username", "Unknown"),
+                "super_admin_id": admin_doc.get("created_by"),
+                "amount": amount,
+                "reason": reason,
+                "status": "pending",
+                "created_at": datetime.utcnow().isoformat()
+            }
+            credit_requests_collection.insert_one(req)
+            return {"status": "success", "message": f"Successfully requested {amount} credits."}
+            
+        elif request.action == "transfer_credits" and role == "super_admin":
+            target_username = request.data.get("admin_username")
+            amount = request.data.get("amount")
+            if not target_username or not amount:
+                raise HTTPException(status_code=400, detail="Missing username or amount")
+            
+            # Find the admin
+            target_admin = admins_collection.find_one({"username": target_username, "created_by": admin_id})
+            if not target_admin:
+                raise HTTPException(status_code=404, detail="Sub-admin not found")
+                
+            from bson import ObjectId
+            # Perform transfer
+            super_admin_doc = tenant_collection.find_one({"_id": ObjectId(admin_id)})
+            if super_admin_doc.get("credits", 0) < amount:
+                raise HTTPException(status_code=400, detail="Insufficient credits")
+                
+            tenant_collection.update_one({"_id": ObjectId(admin_id)}, {"$inc": {"credits": -amount}})
+            admins_collection.update_one({"_id": target_admin["_id"]}, {"$inc": {"credits": amount}})
+            return {"status": "success", "message": f"Successfully transferred {amount} credits to {target_username}."}
+            
         else:
-            raise HTTPException(status_code=400, detail=f"Unknown action: {request.action}")
+            raise HTTPException(status_code=400, detail=f"Unknown or unauthorized action: {request.action}")
             
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))

@@ -36,7 +36,7 @@ function Interview() {
   const [sessionDetail, setSessionDetail] = useState(null)
   const [interviewId, setInterviewId] = useState('')
   const [questions, setQuestions] = useState([])
-  const [currentQuestionIndex, setCurrentQuestionIndex] = useState(0)
+  const [currentQuestionIndex, setCurrentQuestionIndex] = useState(_savedSession?.currentQuestionIndex || 0)
   const currentQuestion = questions[currentQuestionIndex]
   const codingTask = currentQuestion?.codingTask || currentQuestion || {}
 
@@ -176,6 +176,28 @@ function Interview() {
     document.addEventListener("visibilitychange", handleVisibilityChange)
     return () => document.removeEventListener("visibilitychange", handleVisibilityChange)
   }, [])
+
+  // Track unload events (Refresh or Close tab)
+  useEffect(() => {
+    const handleUnload = () => {
+      if (sessionId && isDisclaimerAccepted) {
+        // Send a beacon so it fires reliably during page unload
+        navigator.sendBeacon(`${API_BASE_URL}/interview/${sessionId}/alert`, JSON.stringify({
+          type: "warning",
+          message: "Candidate refreshed or closed the window."
+        }))
+      }
+    }
+    window.addEventListener("beforeunload", handleUnload)
+    return () => window.removeEventListener("beforeunload", handleUnload)
+  }, [sessionId, isDisclaimerAccepted])
+
+  // Persist current question index
+  useEffect(() => {
+    if (!_sessionKey || !isDisclaimerAccepted) return
+    const existing = (() => { try { return JSON.parse(sessionStorage.getItem(_sessionKey) || '{}') } catch { return {} } })()
+    sessionStorage.setItem(_sessionKey, JSON.stringify({ ...existing, currentQuestionIndex }))
+  }, [currentQuestionIndex, isDisclaimerAccepted, _sessionKey])
 
   // Audio Visualizer
   const visualizeAudio = (stream) => {
@@ -405,7 +427,6 @@ function Interview() {
           setTotalDuration(fullDuration)
 
           // Restore countdown from sessionStorage if we have a saved start time
-          const savedSess = _sessionKey ? (() => { try { return JSON.parse(sessionStorage.getItem(_sessionKey) || 'null') } catch { return null } })() : null
           if (savedSess?.startedAt && savedSess?.accepted) {
             const elapsedSeconds = Math.floor((Date.now() - savedSess.startedAt) / 1000)
             const halfDur = fullDuration / 2
@@ -420,13 +441,21 @@ function Interview() {
           }
         } else {
           setTotalDuration(30 * 60)
-          const savedSess = _sessionKey ? (() => { try { return JSON.parse(sessionStorage.getItem(_sessionKey) || 'null') } catch { return null } })() : null
           if (savedSess?.startedAt && savedSess?.accepted) {
             const elapsedSeconds = Math.floor((Date.now() - savedSess.startedAt) / 1000)
             const remaining = Math.max(0, 15 * 60 - elapsedSeconds)
             setGlobalCountdown(remaining)
           } else {
             setGlobalCountdown(15 * 60)
+          }
+        }
+
+        if (shouldStartRoundTwo) {
+          const type = startPayload.interview_type || 'Technical'
+          if (type === 'Non-Technical') {
+            startCaseStudyRound(qList.length, savedSess?.currentQuestionIndex)
+          } else if (type !== 'Normal') {
+            startCodingRound(qList.length, savedSess?.currentQuestionIndex)
           }
         }
 
@@ -1033,7 +1062,7 @@ function Interview() {
     startNextRound()
   }
 
-  const startCaseStudyRound = async (verbalQuestionsLength) => {
+  const startCaseStudyRound = async (verbalQuestionsLength, savedIndex = null) => {
     if (codingRoundStartedRef.current) return
     codingRoundStartedRef.current = true
     setCodingRoundLoading(true)
@@ -1065,7 +1094,12 @@ function Interview() {
       })
 
       setQuestions(prev => [...prev, ...formattedQs])
-      setCurrentQuestionIndex(verbalQuestionsLength)
+      
+      const targetIndex = (savedIndex !== null && savedIndex >= verbalQuestionsLength && savedIndex < verbalQuestionsLength + formattedQs.length) 
+        ? savedIndex 
+        : verbalQuestionsLength;
+      
+      setCurrentQuestionIndex(targetIndex)
     } catch (err) {
       console.error('Case study round start failed:', err)
       handleSubmitInterview()
@@ -1075,7 +1109,7 @@ function Interview() {
   }
 
   // Start Coding Round: called after all verbal questions are answered
-  const startCodingRound = async (verbalQuestionsLength) => {
+  const startCodingRound = async (verbalQuestionsLength, savedIndex = null) => {
     if (codingRoundStartedRef.current) return
     codingRoundStartedRef.current = true
     setCodingRoundLoading(true)
@@ -1124,7 +1158,9 @@ function Interview() {
         codingTests: payload.tests || []
       }
       setQuestions(prev => [...prev, codingQ])
-      setCurrentQuestionIndex(verbalQuestionsLength)
+      
+      const targetIndex = (savedIndex !== null && savedIndex >= verbalQuestionsLength) ? savedIndex : verbalQuestionsLength;
+      setCurrentQuestionIndex(targetIndex)
     } catch (err) {
       console.error('Coding round start failed:', err)
       // Fallback: skip coding round gracefully if it fails

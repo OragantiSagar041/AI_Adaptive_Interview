@@ -243,6 +243,20 @@ export default function VoiceCodingRound({
     return () => clearInterval(t)
   }, [])
 
+  // Unload Tracking
+  useEffect(() => {
+    const handleUnload = () => {
+      if (linkId) {
+        navigator.sendBeacon(`${API_BASE_URL}/interview/${linkId}/alert`, JSON.stringify({
+          type: "warning",
+          message: "Candidate refreshed or closed the window during the coding round."
+        }))
+      }
+    }
+    window.addEventListener("beforeunload", handleUnload)
+    return () => window.removeEventListener("beforeunload", handleUnload)
+  }, [linkId])
+
   // Test case animation
   useEffect(() => {
     if (runResultData) {
@@ -704,11 +718,17 @@ export default function VoiceCodingRound({
                   <div key={i} className="mb-2 bg-white/4 border border-white/8 rounded-lg p-3 text-xs font-mono">
                     <div className="mb-1">
                       <span className="text-slate-500 mr-1">Input:</span>
-                      <span className="text-emerald-300">{tc.input}</span>
+                      <span className="text-emerald-300">
+                        {typeof tc.input === 'object' ? JSON.stringify(tc.input) : String(tc.input)}
+                      </span>
                     </div>
                     <div>
                       <span className="text-slate-500 mr-1">Expected:</span>
-                      <span className="text-amber-300">{tc.expected !== undefined ? tc.expected : tc.output}</span>
+                      <span className="text-amber-300">
+                        {typeof (tc.expected !== undefined ? tc.expected : tc.output) === 'object' 
+                          ? JSON.stringify(tc.expected !== undefined ? tc.expected : tc.output) 
+                          : String(tc.expected !== undefined ? tc.expected : tc.output)}
+                      </span>
                     </div>
                   </div>
                 ))}
