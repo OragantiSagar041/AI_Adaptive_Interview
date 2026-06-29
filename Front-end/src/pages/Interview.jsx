@@ -145,6 +145,7 @@ function Interview() {
   const silenceTimeoutRef = useRef(null)
   const questionStartTimeRef = useRef(Date.now())
   const behavioralStatsRef = useRef({ wordCount: 0, fillerCount: 0, pauseCount: 0, faceAlerts: 0, tabSwitches: 0 })
+  const [proctoringBanner, setProctoringBanner] = useState(null)
   const handleNextQuestionRef = useRef(null)
 
   // WebRTC Candidate Logic
@@ -169,13 +170,23 @@ function Interview() {
 
   useEffect(() => {
     const handleVisibilityChange = () => {
-      if (document.hidden) {
+      if (document.hidden && sessionId && isDisclaimerAccepted) {
         behavioralStatsRef.current.tabSwitches += 1
+        const count = behavioralStatsRef.current.tabSwitches
+        // Log to backend
+        fetch(`${API_BASE_URL}/interview/${sessionId}/alert`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ type: 'tab_switch', message: `Tab switch detected (count: ${count})` })
+        }).catch(() => {})
+        // Show visible banner
+        setProctoringBanner({ type: 'tab_switch', message: `⚠️ Tab switch detected! (${count} total)` })
+        setTimeout(() => setProctoringBanner(null), 4000)
       }
     }
     document.addEventListener("visibilitychange", handleVisibilityChange)
     return () => document.removeEventListener("visibilitychange", handleVisibilityChange)
-  }, [])
+  }, [sessionId, isDisclaimerAccepted])
 
   // Track unload events (Refresh or Close tab)
   useEffect(() => {
@@ -670,17 +681,28 @@ function Interview() {
   }
 
   // Record proctoring metrics
-  const recordAlertMetric = async (type) => {
+  const recordAlertMetric = async (type, message) => {
     behavioralStatsRef.current.faceAlerts += 1
-    try {
-      /* Backend endpoint doesn't exist yet
-      await fetch(`${API_BASE_URL}/record-proctoring-violation/${sessionId}`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ violation_type: type })
-      })
-      */
-    } catch (e) { }
+    const alertMessages = {
+      'multi_person': '⚠️ Multiple faces detected in frame!',
+      'no_face': '⚠️ No face detected — please face the camera!',
+      'phone': '🚫 Mobile phone detected in frame!',
+      'eye_contact': '👁️ Please maintain eye contact with the screen.',
+    }
+    const displayMsg = alertMessages[type] || `⚠️ Proctoring alert: ${type}`
+    // Show visible overlay banner
+    setProctoringBanner({ type, message: displayMsg })
+    setTimeout(() => setProctoringBanner(null), 4000)
+    // Log to backend
+    if (sessionId) {
+      try {
+        await fetch(`${API_BASE_URL}/interview/${sessionId}/alert`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ type, message: message || displayMsg })
+        })
+      } catch (e) { }
+    }
   }
 
   // Use Centralized AI Proctoring Hook
@@ -2168,6 +2190,23 @@ function Interview() {
         </div>
       ) : (
         <div id="interviewSection">
+          {/* Proctoring violation banner - shown for all alert types */}
+          {proctoringBanner && (
+            <div style={{
+              position: 'fixed', top: 0, left: 0, right: 0, zIndex: 9999,
+              background: proctoringBanner.type === 'tab_switch' ? 'linear-gradient(90deg,#b91c1c,#dc2626)' : 'linear-gradient(90deg,#7c3aed,#6d28d9)',
+              color: 'white', padding: '12px 24px',
+              display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '12px',
+              fontSize: '15px', fontWeight: '700', letterSpacing: '0.01em',
+              boxShadow: '0 4px 20px rgba(0,0,0,0.4)',
+              animation: 'fadeIn 0.2s ease'
+            }}>
+              <span style={{ fontSize: '20px' }}>{proctoringBanner.type === 'tab_switch' ? '🔀' : proctoringBanner.type === 'multi_person' ? '👥' : proctoringBanner.type === 'no_face' ? '👤' : '⚠️'}</span>
+              <span>{proctoringBanner.message}</span>
+              <span style={{ fontSize: '12px', opacity: 0.8, fontWeight: 500 }}>— Recorded &amp; logged</span>
+            </div>
+          )}
+
           <svg width="0" height="0" style={{ position: 'absolute' }}>
             <defs>
               <linearGradient id="timerGradient" x1="0%" y1="0%" x2="100%" y2="0%">
@@ -2181,10 +2220,10 @@ function Interview() {
             <div className="ip-avatar-card">
               <video ref={videoPreviewRef} autoPlay muted playsInline id="videoPreview" />
               <div className="live-badge">LIVE</div>
-              {proctoringAlert && (
-                <div style={{ position: 'absolute', top: 0, left: 0, width: '100%', height: '100%', background: 'rgba(0,0,0,0.8)', color: '#ef4444', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 10, fontSize: '1.2rem', fontWeight: 'bold', flexDirection: 'column', textAlign: 'center', padding: '20px' }}>
-                  <span style={{ fontSize: '3rem', marginBottom: '10px' }}>⚠️</span>
-                  <div>{proctoringAlert}</div>
+              {proctoringBanner && (
+                <div style={{ position: 'absolute', top: 0, left: 0, width: '100%', background: 'rgba(185,28,28,0.9)', color: '#fff', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 10, fontSize: '0.8rem', fontWeight: 'bold', padding: '6px 8px', gap: '6px', textAlign: 'center' }}>
+                  <span>⚠️</span>
+                  <span>{proctoringBanner.type === 'tab_switch' ? 'Tab switch!' : proctoringBanner.type === 'multi_person' ? 'Multiple faces!' : proctoringBanner.type === 'no_face' ? 'No face!' : 'Alert!'}</span>
                 </div>
               )}
             </div>

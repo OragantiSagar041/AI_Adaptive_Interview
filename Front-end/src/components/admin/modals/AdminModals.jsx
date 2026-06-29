@@ -115,11 +115,37 @@ export function CandidateScorecardModal({
             <div className="bg-white border border-slate-200 shadow-sm rounded-xl p-5">
               <span className="text-[0.68rem] text-slate-400 font-bold uppercase tracking-wider block mb-2">Time Taken</span>
               <div className="flex items-baseline gap-1 mt-1">
-                <span className="text-4xl font-black text-slate-800 tracking-tight">10</span>
+                <span className="text-4xl font-black text-slate-800 tracking-tight">{candidateDetail?.integrity?.total_time_minutes || 0}</span>
                 <span className="text-sm font-bold text-slate-800">m</span>
               </div>
             </div>
           </div>
+
+          {/* Proctoring & Integrity */}
+          {candidateDetail?.integrity && (
+            <div className="flex flex-col gap-4 mt-2">
+              <h3 className="text-lg font-bold text-slate-900 tracking-tight border-b border-slate-100 pb-2 flex items-center gap-2">
+                <ShieldAlert className="text-rose-500 w-5 h-5" /> 
+                Proctoring & Integrity
+              </h3>
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <div className={`border rounded-xl p-4 flex items-center justify-between ${candidateDetail.integrity.total_tab_switches > 0 ? 'bg-rose-50 border-rose-200' : 'bg-emerald-50 border-emerald-200'}`}>
+                  <div className="flex flex-col">
+                    <span className={`text-[0.68rem] font-bold uppercase tracking-wider ${candidateDetail.integrity.total_tab_switches > 0 ? 'text-rose-600' : 'text-emerald-700'}`}>Tab Switches</span>
+                    <span className="text-xs text-slate-500 mt-0.5">Times candidate left the interview window</span>
+                  </div>
+                  <span className={`text-3xl font-black ${candidateDetail.integrity.total_tab_switches > 0 ? 'text-rose-600' : 'text-emerald-600'}`}>{candidateDetail.integrity.total_tab_switches}</span>
+                </div>
+                <div className={`border rounded-xl p-4 flex items-center justify-between ${candidateDetail.integrity.total_face_alerts > 0 ? 'bg-rose-50 border-rose-200' : 'bg-emerald-50 border-emerald-200'}`}>
+                  <div className="flex flex-col">
+                    <span className={`text-[0.68rem] font-bold uppercase tracking-wider ${candidateDetail.integrity.total_face_alerts > 0 ? 'text-rose-600' : 'text-emerald-700'}`}>Face / Camera Alerts</span>
+                    <span className="text-xs text-slate-500 mt-0.5">Missing face, multiple faces, or devices</span>
+                  </div>
+                  <span className={`text-3xl font-black ${candidateDetail.integrity.total_face_alerts > 0 ? 'text-rose-600' : 'text-emerald-600'}`}>{candidateDetail.integrity.total_face_alerts}</span>
+                </div>
+              </div>
+            </div>
+          )}
 
           {/* Session Alerts & Warnings */}
           {candidateDetail?.alerts && candidateDetail.alerts.length > 0 && (
@@ -131,7 +157,17 @@ export function CandidateScorecardModal({
               <div className="flex flex-col gap-3 bg-slate-50 border border-slate-200 rounded-xl p-4">
                 {candidateDetail.alerts.map((alert, idx) => (
                   <div key={idx} className="flex items-start gap-3 bg-white border border-slate-200 p-3 rounded-lg shadow-sm">
-                    {alert.type === 'warning' ? (
+                    {alert.type === 'tab_switch' ? (
+                      <i className="fas fa-external-link-alt text-rose-500 mt-0.5"></i>
+                    ) : alert.type === 'multi_person' ? (
+                      <i className="fas fa-users text-rose-500 mt-0.5"></i>
+                    ) : alert.type === 'no_face' ? (
+                      <i className="fas fa-user-slash text-amber-500 mt-0.5"></i>
+                    ) : alert.type === 'phone' ? (
+                      <i className="fas fa-mobile-alt text-rose-600 mt-0.5"></i>
+                    ) : alert.type === 'eye_contact' ? (
+                      <i className="fas fa-eye text-amber-500 mt-0.5"></i>
+                    ) : alert.type === 'warning' ? (
                       <i className="fas fa-exclamation-circle text-amber-500 mt-0.5"></i>
                     ) : alert.type === 'error' ? (
                       <i className="fas fa-times-circle text-rose-500 mt-0.5"></i>
