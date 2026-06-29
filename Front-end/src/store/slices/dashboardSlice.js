@@ -78,6 +78,19 @@ const dashboardSlice = createSlice({
   reducers: {
     setSelectedAdminFilter: (state, action) => {
       state.selectedAdminFilter = action.payload
+    },
+    updateLiveSnapshot: (state, action) => {
+      const { link_id, data } = action.payload;
+      const sessionIndex = state.liveSessions.findIndex(s => s.link_id === link_id);
+      if (sessionIndex !== -1) {
+        const session = state.liveSessions[sessionIndex];
+        state.liveSessions[sessionIndex] = {
+          ...session,
+          online: true,
+          audio_level: data.audio_level || 0,
+          current_question: data.current_question || session.current_question
+        };
+      }
     }
   },
   extraReducers: (builder) => {
@@ -127,5 +140,5 @@ const dashboardSlice = createSlice({
   }
 })
 
-export const { setSelectedAdminFilter } = dashboardSlice.actions
+export const { setSelectedAdminFilter, updateLiveSnapshot } = dashboardSlice.actions
 export default dashboardSlice.reducer

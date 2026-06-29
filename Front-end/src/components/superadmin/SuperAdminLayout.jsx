@@ -33,7 +33,7 @@ import LiveMonitorStreamModal from '../admin/modals/LiveMonitorStreamModal'
 import axios from 'axios'
 import { getNotifications, markNotificationAsRead, markAllNotificationsAsRead } from '../../utils/api'
 import { setSelectedCandidate, setLiveResultsModalOpen } from '../../store/slices/interviewSlice'
-import { loadSuperAdminDashboard } from '../../store/slices/dashboardSlice'
+import { loadSuperAdminDashboard, setSelectedAdminFilter, updateLiveSnapshot } from '../../store/slices/dashboardSlice'
 
 function hexToRgba(hex, alpha) {
   const cleanHex = hex.replace('#', '')
@@ -221,16 +221,30 @@ export default function SuperAdminLayout() {
     document.documentElement.style.setProperty('--primary-glow', currentAccent.glow)
   }, [accentName])
 
-  // Polling for telemetry and profile updates
+  // Initial load and WebSocket setup
   useEffect(() => {
     if (!token) return
     dispatch(loadSuperAdminDashboard(selectedAdminFilter))
     dispatch(loadSuperAdminProfile())
-    const pollInterval = setInterval(() => {
-      dispatch(loadSuperAdminDashboard(selectedAdminFilter))
-      dispatch(loadSuperAdminProfile())
-    }, 12000)
-    return () => clearInterval(pollInterval)
+
+    const wsProtocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:'
+    const wsUrl = `${wsProtocol}//${window.location.host}/ws/dashboard`
+    const ws = new WebSocket(wsUrl)
+
+    ws.onmessage = (event) => {
+      try {
+        const data = JSON.parse(event.data)
+        if (data.type === 'live_snapshot') {
+          dispatch(updateLiveSnapshot(data))
+        }
+      } catch (err) {
+        console.error('Error parsing dashboard ws message:', err)
+      }
+    }
+
+    return () => {
+      ws.close()
+    }
   }, [dispatch, token, selectedAdminFilter])
 
   // Fetch subscription plans on mount

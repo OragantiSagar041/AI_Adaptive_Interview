@@ -1937,8 +1937,18 @@ def send_submission_notification(candidate_email: str, candidate_name: str, admi
 
 # ── Task 8: Dashboard Stats Endpoint ────────────────────────────────────────
 @router.get("/admin/dashboard-stats")
-def get_dashboard_stats(admin_id: Optional[str] = None, current_admin: dict = Depends(get_current_admin_details)):
+async def get_dashboard_stats(admin_id: Optional[str] = None, current_admin: dict = Depends(get_current_admin_details)):
     """Return aggregated stats for the admin dashboard."""
+    from redis_manager import manager
+    import json
+    
+    # Try cache first
+    cache_key = f"dashboard_stats:{current_admin.get('company_id')}:{current_admin.get('admin_id')}:{admin_id or 'none'}"
+    if manager.redis:
+        cached = await manager.redis.get(cache_key)
+        if cached:
+            return json.loads(cached)
+
     try:
         query = {"company_id": current_admin.get("company_id")}
         
@@ -2039,7 +2049,7 @@ def get_dashboard_stats(admin_id: Optional[str] = None, current_admin: dict = De
         
         avg_score = round(total_score / scored_count, 1) if scored_count > 0 else 0
         
-        return {
+        stats = {
             "total": total,
             "pending": pending,
             "completed": completed,
@@ -2052,6 +2062,11 @@ def get_dashboard_stats(admin_id: Optional[str] = None, current_admin: dict = De
             "this_week": week_count,
             "credits": credits
         }
+        
+        if manager.redis:
+            await manager.redis.setex(cache_key, 30, json.dumps(stats))
+            
+        return stats
     except Exception as e:
         return {"error": str(e)}
 
@@ -3849,7 +3864,7 @@ class LiveHeartbeatRequest(BaseModel):
 @router.post("/live-heartbeat")
 async def live_heartbeat(data: LiveHeartbeatRequest):
     """Candidate browser sends a heartbeat every ~5 s with camera snapshot and quality metrics."""
-    _live_snapshots[data.link_id] = {
+    snap_data = {
         "ts": datetime.now(timezone.utc).isoformat(),
         "snapshot": data.snapshot_dataurl,
         "audio_level": data.audio_level,
@@ -3861,13 +3876,34 @@ async def live_heartbeat(data: LiveHeartbeatRequest):
         "tab_active": data.tab_active,
         "face_visible": data.face_visible,
     }
+    
+    from redis_manager import manager
+    import json
+    if manager.redis:
+        await manager.redis.setex(f"live_snapshot:{data.link_id}", 60, json.dumps(snap_data))
+        # Publish update to dashboard websocket channel
+        payload = {"type": "live_snapshot", "link_id": data.link_id, "data": snap_data}
+        await manager.redis.publish("dashboard:updates", json.dumps(payload))
+    else:
+        _live_snapshots[data.link_id] = snap_data
+        
     return {"status": "ok"}
 
 
 @router.get("/admin/live-snapshot/{link_id}")
-def get_live_snapshot(link_id: str):
+async def get_live_snapshot(link_id: str):
     """Admin polls latest candidate live snapshot and quality metrics."""
-    snap = _live_snapshots.get(link_id)
+    from redis_manager import manager
+    import json
+    
+    snap = None
+    if manager.redis:
+        snap_json = await manager.redis.get(f"live_snapshot:{link_id}")
+        if snap_json:
+            snap = json.loads(snap_json)
+    else:
+        snap = _live_snapshots.get(link_id)
+
     if not snap:
         return {"online": False}
 
@@ -5471,28 +5507,31 @@ class BulkDeleteRequest(BaseModel):
 class UpdateCreditRequestSchema(BaseModel):
     status: str
 
-@router.get("/dashboard")
-def get_dashboard_aggregated_data(admin_id: Optional[str] = None, current_admin: dict = Depends(get_current_admin_details)):
-    try:
-        stats_data = get_dashboard_stats(admin_id=admin_id, current_admin=current_admin)
-        
-        query = {"company_id": current_admin.get("company_id")}
-        if current_admin.get("role") == "admin":
-            query["created_by"] = current_admin["admin_id"]
-        elif admin_id:
-            query["created_by"] = admin_id
-            
-        sessions_cursor = list(interview_sessions_collection.find(query).sort("created_at", -1))
-        candidates_list = []
-        for s in sessions_cursor:
-            s["id"] = str(s["_id"])
-            s["_id"] = str(s["_id"])
-            # Normalize: frontend expects 'score', backend stores 'avg_score'
-            if s.get("score") is None and s.get("avg_score") is not None:
-                s["score"] = s["avg_score"]
-            candidates_list.append(s)
+from fastapi import WebSocket, WebSocketDisconnect
 
-            
+@router.websocket("/ws/dashboard")
+async def dashboard_websocket(websocket: WebSocket):
+    from redis_manager import manager
+    await manager.connect_dashboard(websocket)
+    try:
+        while True:
+            # Keep connection alive
+            await websocket.receive_text()
+    except WebSocketDisconnect:
+        manager.disconnect_dashboard(websocket)
+
+@router.get("/dashboard")
+async def get_dashboard_aggregated_data(admin_id: Optional[str] = None, current_admin: dict = Depends(get_current_admin_details)):
+    try:
+        from redis_manager import manager
+        import json
+        
+        stats_data = await get_dashboard_stats(admin_id=admin_id, current_admin=current_admin)
+        
+        
+        # NOTE: Removed massive candidate query for performance. 
+        # The dashboard polling endpoint should not fetch the entire history of candidates.
+        candidates_list = []            
         live_sessions = []
         ongoing_monitored_count = 0
         ongoing_live_count = 0
@@ -5524,7 +5563,14 @@ def get_dashboard_aggregated_data(admin_id: Optional[str] = None, current_admin:
             ongoing_monitored_count = len(rows)
             for row in rows:
                 link_id = row.get("link_id", "")
-                snap = _live_snapshots.get(link_id, {}) if "_live_snapshots" in globals() else {}
+                
+                snap = {}
+                if manager.redis:
+                    snap_json = await manager.redis.get(f"live_snapshot:{link_id}")
+                    if snap_json:
+                        snap = json.loads(snap_json)
+                else:
+                    snap = _live_snapshots.get(link_id, {}) if "_live_snapshots" in globals() else {}
                 online = False
                 if snap.get("ts"):
                     try:
@@ -5690,10 +5736,10 @@ def update_credit_request_alias(request_id: str, data: UpdateCreditRequestSchema
 
 @router.get("/api/superadmin/dashboard")
 @router.get("/superadmin/dashboard")
-def superadmin_dashboard(adminId: Optional[str] = None, current_admin: dict = Depends(get_current_admin_details)):
+async def superadmin_dashboard(adminId: Optional[str] = None, current_admin: dict = Depends(get_current_admin_details)):
     if current_admin.get("role") not in ["super_admin", "master"]:
         raise HTTPException(status_code=403, detail="Super Admin access required")
-    return get_dashboard_aggregated_data(admin_id=adminId, current_admin=current_admin)
+    return await get_dashboard_aggregated_data(admin_id=adminId, current_admin=current_admin)
 
 @router.get("/api/superadmin/candidates/qualified")
 @router.get("/superadmin/candidates/qualified")
