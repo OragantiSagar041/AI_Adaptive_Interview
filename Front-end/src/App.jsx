@@ -12,6 +12,7 @@ import Plans from './pages/master/Plans'
 import Subscribers from './pages/master/Subscribers'
 import CreateTenant from './pages/master/CreateTenant'
 import MasterProfile from './pages/master/MasterProfile'
+import MasterNotifications from './pages/master/MasterNotifications'
 
 // Protected Route Guard
 import ProtectedRoute from './components/ProtectedRoute'
@@ -23,6 +24,7 @@ import QualifiedCandidatesPage from './pages/admin/QualifiedCandidatesPage'
 import RejectedCandidatesPage from './pages/admin/RejectedCandidatesPage'
 import CreateInterviewPage from './pages/admin/CreateInterviewPage'
 import ProfileSettings from './components/admin/ProfileSettings'
+import AdminNotifications from './pages/admin/AdminNotifications'
 
 // SuperAdmin
 import SuperAdminLayout from './components/superadmin/SuperAdminLayout'
@@ -33,6 +35,7 @@ import SuperAdminQualifiedCandidatesPage from './pages/superadmin/QualifiedCandi
 import SuperAdminRejectedCandidatesPage from './pages/superadmin/RejectedCandidatesPage'
 import SuperAdminCreateInterviewPage from './pages/superadmin/CreateInterviewPage'
 import SuperAdminProfileSettings from './components/superadmin/ProfileSettings'
+import SuperAdminNotifications from './pages/superadmin/SuperAdminNotifications'
 
 function App() {
   return (
@@ -59,6 +62,7 @@ function App() {
           <Route path="subscribers" element={<Subscribers />} />
           <Route path="create-tenant" element={<CreateTenant />} />
           <Route path="profile" element={<MasterProfile />} />
+          <Route path="notifications" element={<MasterNotifications />} />
         </Route>
 
         {/* SuperAdmin routes — must be above admin routes */}
@@ -78,6 +82,7 @@ function App() {
           <Route path="rejected-candidates" element={<SuperAdminRejectedCandidatesPage />} />
           <Route path="create-interview" element={<SuperAdminCreateInterviewPage />} />
           <Route path="profile-settings" element={<SuperAdminProfileSettings />} />
+          <Route path="notifications" element={<SuperAdminNotifications />} />
         </Route>
 
         {/* Legacy URL aliases */}
@@ -99,6 +104,7 @@ function App() {
           <Route path="rejected-candidates" element={<RejectedCandidatesPage />} />
           <Route path="create-interview" element={<CreateInterviewPage />} />
           <Route path="profile-settings" element={<ProfileSettings />} />
+          <Route path="notifications" element={<AdminNotifications />} />
         </Route>
 
         {/* Fallback route */}
