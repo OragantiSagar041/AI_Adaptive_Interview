@@ -2650,76 +2650,93 @@ async def bulk_create_sessions(data: BulkCreateSession, current_admin: dict = De
         if not admin_doc or admin_doc.get("credits", 0) < num_candidates:
             raise HTTPException(status_code=403, detail=f"You have insufficient credits. Please request more from your Super Admin.")
 
+    session_docs = []
     results = []
     now = datetime.now(timezone.utc)
+    scheduled_expiry = parse_iso_datetime(data.scheduled_end)
+    expiry_iso = scheduled_expiry.isoformat() if scheduled_expiry else (now + timedelta(hours=24)).isoformat()
 
+    # Step 1: Prepare documents
     for candidate in data.candidates:
         link_id = str(uuid.uuid4())
         link_url = f"{FRONTEND_URL}/interview?session_id={link_id}"
-        candidate_error = None
-
-        try:
-            scheduled_expiry = parse_iso_datetime(data.scheduled_end)
-            session_doc = {
-                "link_id": link_id,
-                "candidate_id": f"CAN{random.randint(1000, 9999)}",
-                "candidate_name": candidate.candidate_name,
-                "candidate_email": candidate.candidate_email,
-                "resume_text": candidate.resume_text,
-                "job_description": data.job_description,
-                "custom_email_html": data.custom_email_html,
-                "created_by": data.admin_id,
-                "company_id": current_admin.get("company_id"),
-                "created_at": now.isoformat(),
-                "expires_at": (scheduled_expiry.isoformat() if scheduled_expiry else (now + timedelta(hours=24)).isoformat()),
-                "interview_duration": data.interview_duration,
-                "interview_format": data.interview_format,
-                "interview_type": data.interview_type,
-                "industry_type": data.industry_type,
-                "language": data.language,
-                "case_study_count": data.case_study_count,
-                "record_video": candidate.record_video,  # Task 5: Per-candidate video
-                "status": "pending",
-                "hr_screening": data.hr_screening.dict(),
-                "custom_questions": data.custom_questions,
-                "ai_instructions": data.ai_instructions
-            }
-            if data.scheduled_start:
-                session_doc["scheduled_start"] = data.scheduled_start
-            if data.scheduled_end:
-                session_doc["scheduled_end"] = data.scheduled_end
-            insert_result = interview_sessions_collection.insert_one(session_doc)
-            session_doc["_id"] = insert_result.inserted_id
-        except Exception as db_err:
-            print(f" DB Error for {candidate.candidate_email}: {db_err}")
-            candidate_error = f"DB error: {db_err}"
-
-        # Send email invitation
-        email_sent = False
-        email_scheduled = False
-        email_send_at = ""
-        if not candidate_error:
-            try:
-                email_result = queue_or_send_interview_email(session_doc, link_url)
-                email_sent = email_result["email_sent"]
-                email_scheduled = email_result["email_scheduled"]
-                email_send_at = email_result["email_send_at"]
-            except Exception as email_err:
-                print(f" Email Error for {candidate.candidate_email}: {email_err}")
-
+        
+        session_doc = {
+            "link_id": link_id,
+            "candidate_id": f"CAN{random.randint(1000, 9999)}",
+            "candidate_name": candidate.candidate_name,
+            "candidate_email": candidate.candidate_email,
+            "resume_text": candidate.resume_text,
+            "job_description": data.job_description,
+            "custom_email_html": data.custom_email_html,
+            "created_by": data.admin_id,
+            "company_id": current_admin.get("company_id"),
+            "created_at": now.isoformat(),
+            "expires_at": expiry_iso,
+            "interview_duration": data.interview_duration,
+            "interview_format": data.interview_format,
+            "interview_type": data.interview_type,
+            "industry_type": data.industry_type,
+            "language": data.language,
+            "case_study_count": data.case_study_count,
+            "record_video": candidate.record_video,  # Task 5: Per-candidate video
+            "status": "pending",
+            "hr_screening": data.hr_screening.dict(),
+            "custom_questions": data.custom_questions,
+            "ai_instructions": data.ai_instructions
+        }
+        if data.scheduled_start:
+            session_doc["scheduled_start"] = data.scheduled_start
+        if data.scheduled_end:
+            session_doc["scheduled_end"] = data.scheduled_end
+            
+        session_docs.append(session_doc)
+        
         results.append({
             "candidate_name": candidate.candidate_name,
             "candidate_email": candidate.candidate_email,
-            "link_id": link_id if not candidate_error else None,
-            "link_url": link_url if not candidate_error else None,
-            "email_sent": email_sent,
-            "email_scheduled": email_scheduled,
-            "email_send_at": email_send_at,
-            "status": "error" if candidate_error else "success",
-            "error": candidate_error
+            "link_id": link_id,
+            "link_url": link_url,
+            "email_sent": False,
+            "email_scheduled": False,
+            "email_send_at": "",
+            "status": "success",
+            "error": None,
+            "session_doc": session_doc # Temp storage for email queueing
         })
 
-    successful = sum(1 for r in results if r["status"] == "success")
+    # Step 2: Batch Insert to MongoDB
+    try:
+        if session_docs:
+            insert_result = interview_sessions_collection.insert_many(session_docs)
+            for doc, object_id in zip(session_docs, insert_result.inserted_ids):
+                doc["_id"] = object_id
+    except Exception as db_err:
+        print(f" Bulk DB Insert Error: {db_err}")
+        # If the batch fails, mark all as failed
+        for r in results:
+            r["status"] = "error"
+            r["error"] = f"DB batch error: {db_err}"
+            r["link_id"] = None
+            r["link_url"] = None
+
+    # Step 3: Trigger Background Emails
+    successful = 0
+    for r in results:
+        if r["status"] == "success":
+            doc = r.pop("session_doc") # Remove temp doc before returning JSON
+            try:
+                email_result = queue_or_send_interview_email(doc, r["link_url"])
+                r["email_sent"] = email_result["email_sent"]
+                r["email_scheduled"] = email_result["email_scheduled"]
+                r["email_send_at"] = email_result["email_send_at"]
+                successful += 1
+            except Exception as email_err:
+                print(f" Email Error for {r['candidate_email']}: {email_err}")
+                successful += 1 # DB inserted successfully, so still counts against credits
+        else:
+            r.pop("session_doc", None)
+
     print(f" Bulk sessions created: {successful}/{len(results)}")
     
     if successful > 0:
