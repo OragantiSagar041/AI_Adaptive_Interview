@@ -189,7 +189,7 @@ export default function MasterLayout() {
     document.documentElement.style.setProperty('--primary-color', currentAccent.primary)
     document.documentElement.style.setProperty('--primary-hover', currentAccent.hover)
     document.documentElement.style.setProperty('--primary-glow', currentAccent.glow)
-  }, [accentName, currentAccent])
+  }, [accentName])
 
   const handleLogout = () => {
     sessionStorage.clear()

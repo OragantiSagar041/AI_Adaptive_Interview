@@ -128,21 +128,6 @@ class RazorpayOrderRequest(BaseModel):
     amount_inr: float
     credits: int
 
-@router.post("/api/razorpay/create-upgrade-order")
-async def create_upgrade_order(req: RazorpayOrderRequest):
-    import uuid
-    # Mock order creation for Razorpay
-    return {"status": "success", "razorpay_order_id": f"order_{uuid.uuid4().hex[:14]}"}
-
-class RazorpayVerifyRequest(BaseModel):
-    razorpay_order_id: str
-    razorpay_payment_id: str
-    razorpay_signature: str
-
-@router.post("/api/razorpay/verify-upgrade")
-async def verify_upgrade(req: RazorpayVerifyRequest):
-    # Mock successful verification
-    return {"status": "success", "message": "Payment verified successfully"}
 
 @router.on_event("startup")
 def startup_event_cloudinary():
@@ -1238,14 +1223,27 @@ class InterviewAlert(BaseModel):
     type: str
     message: str
 
+from fastapi import Request
+import json
+
 @router.post("/interview/{interview_id}/alert")
-def log_interview_alert(interview_id: str, alert: InterviewAlert):
+async def log_interview_alert(interview_id: str, request: Request):
+    try:
+        body_bytes = await request.body()
+        data = json.loads(body_bytes)
+        alert_type = data.get("type", "warning")
+        alert_message = data.get("message", "Unknown alert")
+    except Exception:
+        # Fallback if invalid JSON
+        alert_type = "warning"
+        alert_message = "Invalid alert data received"
+        
     interview_sessions_collection.update_one(
         {"link_id": interview_id},
         {"$push": {"alerts": {
             "timestamp": datetime.now(timezone.utc).isoformat(),
-            "type": alert.type,
-            "message": alert.message
+            "type": alert_type,
+            "message": alert_message
         }}}
     )
     return {"status": "success"}

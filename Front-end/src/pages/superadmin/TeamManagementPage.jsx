@@ -125,6 +125,10 @@ export default function TeamManagementPage() {
         color: '#fff'
       })
       loadCreditRequests()
+      loadTeamManagement()
+      setTimeout(() => {
+        window.location.reload()
+      }, 500)
     } catch (err) {
       Swal.fire({
         title: 'Action Failed',
@@ -338,8 +342,8 @@ export default function TeamManagementPage() {
                 creditRequests.map(r => (
                   <tr key={r.id || r._id} className="hover:bg-slate-50/50">
                     <td className="p-4 text-xs text-slate-500">{r.created_at ? new Date(r.created_at).toLocaleDateString() : '-'}</td>
-                    <td className="p-4 font-bold text-slate-850 text-sm">{r.admin_username}</td>
-                    <td className="p-4 text-xs font-bold text-amber-500">{r.amount_requested} credits</td>
+                    <td className="p-4 font-bold text-slate-850 text-sm">{r.admin_name || r.admin_username}</td>
+                    <td className="p-4 text-xs font-bold text-amber-500">{r.amount || r.amount_requested} credits</td>
                     <td className="p-4 text-xs text-slate-500 max-w-xs truncate">{r.reason || '-'}</td>
                     <td className="p-4 capitalize">
                       <span className={`px-2.5 py-0.5 rounded-full text-[0.65rem] font-bold uppercase tracking-wider ${r.status === 'approved' ? 'bg-emerald-500/10 text-emerald-500 border border-emerald-500/20' : r.status === 'rejected' ? 'bg-red-500/10 text-red-500 border border-red-500/20' : 'bg-amber-500/10 text-amber-500 border border-amber-500/20'}`}>
