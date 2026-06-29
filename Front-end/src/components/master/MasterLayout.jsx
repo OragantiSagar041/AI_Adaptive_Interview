@@ -17,7 +17,7 @@ import {
   Menu,
   X
 } from 'lucide-react'
-import { logout } from '../../store/slices/authSlice'
+import { logout, loadSuperAdminProfile } from '../../store/slices/authSlice'
 import { persistor } from '../../store/store'
 
 function hexToRgba(hex, alpha) {
@@ -38,6 +38,12 @@ export default function MasterLayout() {
   const token = useSelector(state => state.auth.token)
   const role = useSelector(state => state.auth.role)
   const adminUser = useSelector(state => state.auth.adminUser)
+
+  useEffect(() => {
+    if (token) {
+      dispatch(loadSuperAdminProfile())
+    }
+  }, [dispatch, token])
 
   // Local theme states
   const [accentName, setAccentName] = useState('indigo')
@@ -288,7 +294,7 @@ export default function MasterLayout() {
                 className="flex items-center gap-2 p-1.5 hover:bg-slate-50 rounded-xl transition-all cursor-pointer border border-slate-200 bg-white"
               >
                 <img
-                  src={adminUser?.profile_image || adminUser?.avatar || "https://i.pravatar.cc/150?u=masteradmin"}
+                  src={adminUser?.profile_image || adminUser?.avatar}
                   alt="Avatar"
                   className="w-8 h-8 rounded-full object-cover"
                 />

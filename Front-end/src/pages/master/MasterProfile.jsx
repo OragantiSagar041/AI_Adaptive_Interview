@@ -275,7 +275,7 @@ export default function MasterProfile() {
                 <div className="p-1 rounded-full bg-gradient-to-tr from-primary/30 via-slate-100 to-primary/40 transition-all duration-300 group-hover:from-primary/60 group-hover:to-primary/70">
                   <div className="relative w-32 h-32 rounded-full overflow-hidden border-4 border-white shadow-md">
                     <img
-                      src={profileData?.profile_image || profileData?.avatar || 'https://i.pravatar.cc/150?u=masteradmin'}
+                      src={profileData?.profile_image || profileData?.avatar}
                       alt="Avatar"
                       className="w-full h-full object-cover"
                     />
