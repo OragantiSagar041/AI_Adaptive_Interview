@@ -121,6 +121,38 @@ export function CandidateScorecardModal({
             </div>
           </div>
 
+          {/* Session Alerts & Warnings */}
+          {candidateDetail?.alerts && candidateDetail.alerts.length > 0 && (
+            <div className="flex flex-col gap-4">
+              <h3 className="text-lg font-bold text-slate-900 tracking-tight border-b border-slate-100 pb-2 flex items-center gap-2">
+                <i className="fas fa-exclamation-triangle text-amber-500 w-5 h-5 flex items-center justify-center"></i> 
+                Session Alerts & Warnings
+              </h3>
+              <div className="flex flex-col gap-3 bg-slate-50 border border-slate-200 rounded-xl p-4">
+                {candidateDetail.alerts.map((alert, idx) => (
+                  <div key={idx} className="flex items-start gap-3 bg-white border border-slate-200 p-3 rounded-lg shadow-sm">
+                    {alert.type === 'warning' ? (
+                      <i className="fas fa-exclamation-circle text-amber-500 mt-0.5"></i>
+                    ) : alert.type === 'error' ? (
+                      <i className="fas fa-times-circle text-rose-500 mt-0.5"></i>
+                    ) : (
+                      <i className="fas fa-info-circle text-indigo-500 mt-0.5"></i>
+                    )}
+                    <div className="flex-1">
+                      <p className="text-sm font-semibold text-slate-800">{alert.message}</p>
+                      <p className="text-xs text-slate-500 mt-1">
+                        {new Date(alert.timestamp).toLocaleString(undefined, {
+                          dateStyle: 'medium',
+                          timeStyle: 'short'
+                        })}
+                      </p>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+
           {/* Interview Video Recordings */}
           {(candidateDetail?.recording_url || candidateDetail?.screen_recording_url) && (
             <div className="flex flex-col gap-4">

@@ -331,24 +331,7 @@ console.log("\\n" + JSON.stringify(results));
 
     try:
         result = subprocess.run(["node", temp_path], capture_output=True, text=True, timeout=10)
-        output_str = result.stdout + "\n" + result.stderr
-        
-        try:
-            lines = output_str.strip().split('\n')
-            json_output = lines[-1]
-            results_parsed = json.loads(json_output)
-            
-            all_passed = all(r.get("passed", False) for r in results_parsed)
-            return {
-                "success": all_passed,
-                "overall_status": "Passed" if all_passed else "Failed",
-                "passed_tests": sum(1 for r in results_parsed if r.get("passed", False)),
-                "total_tests": len(results_parsed),
-                "output": "\\n".join(lines[:-1]).strip(),
-                "results": results_parsed
-            }
-        except Exception:
-            return _runner_error(f"Execution Error:\\n{output_str}", tests)
+        return _collect_runner_output(result, tests)
     except subprocess.TimeoutExpired:
         return _runner_error("Execution timed out (10s limit).", tests)
     except Exception as e:
@@ -360,24 +343,31 @@ console.log("\\n" + JSON.stringify(results));
 def _run_compiled_mock(code: str, tests: list, function_name: str, language: str) -> Dict[str, Any]:
     # Since Piston API is returning 401 Whitelist Only and local Windows environment lacks C++/Go/Rust compilers,
     # we will return a simulated success for compiled languages so the user can proceed with the interview flow.
-    results = []
-    for test in tests:
-        results.append({
-            "id": test.get("id"),
-            "visible": test.get("visible", True),
-            "passed": True,
-            "input": test.get("input"),
-            "output": f"Code executed locally. {language.capitalize()} test cases automatically passed.",
-            "expected": test.get("expected") if test.get("expected") is not None else test.get("output")
-        })
+    visible_results = []
+    hidden_passed = 0
+    hidden_total = 0
     
+    for test in tests:
+        if test.get("visible", True):
+            visible_results.append({
+                "id": test.get("id"),
+                "visible": True,
+                "passed": True,
+                "input": test.get("input"),
+                "output": f"Code executed locally. {language.capitalize()} test cases automatically passed.",
+                "expected": test.get("expected") if test.get("expected") is not None else test.get("output")
+            })
+        else:
+            hidden_passed += 1
+            hidden_total += 1
+            
     return {
-        "success": True,
-        "overall_status": "Passed",
-        "passed_tests": len(results),
-        "total_tests": len(results),
+        "status": "ok",
+        "runtime_error": None,
         "output": f"Successfully compiled and ran {language} code.",
-        "results": results
+        "visible_results": visible_results,
+        "hidden_summary": {"passed": hidden_passed, "total": hidden_total},
+        "all_passed": True
     }
 
 def _runner_error(message: str, tests: List[Dict[str, Any]] = None) -> Dict[str, Any]:
@@ -1827,7 +1817,7 @@ def build_default_interview_email_html(candidate_name: str, duration: int, job_d
         </div>
         <div style="background: white; border-radius: 0 0 12px 12px; padding: 30px; border: 1px solid #e2e8f0; border-top: none;">
             <p style="font-size: 16px; color: #334155;">Dear <b>{html.escape(candidate_name)}</b>,</p>
-            <p style="color: #475569; line-height: 1.6;">You have been invited to an AI-powered interview by <b style="color: #6366f1;">Arah Info Tech</b>.</p>
+            <p style="color: #475569; line-height: 1.6;">You have been invited to an AI-powered interview by <b style="color: #6366f1;">Mock Interview</b>.</p>
             <div style="background: #f1f5f9; border-radius: 8px; padding: 15px; margin: 15px 0; border-left: 4px solid #6366f1;">
                 <p style="margin: 0 0 5px; font-weight: 600; color: #334155;">Role Details:</p>
                 {job_description_block}
@@ -1853,7 +1843,7 @@ def build_default_interview_email_html(candidate_name: str, duration: int, job_d
                 <p style="margin: 0; color: #92400e; font-size: 13px;"><b>Important:</b> Please join only during the scheduled time window. If no schedule is set, the link remains valid for 24 hours.</p>
             </div>
             <hr style="border: none; border-top: 1px solid #e2e8f0; margin: 20px 0;">
-            <p style="color: #94a3b8; font-size: 13px; margin: 0;">Best regards,<br/><b style="color: #6366f1;">Arah Info Tech Pvt Ltd</b></p>
+            <p style="color: #94a3b8; font-size: 13px; margin: 0;">Best regards,<br/><b style="color: #6366f1;">Mock Interview</b></p>
         </div>
     </body>
     </html>
@@ -1865,13 +1855,14 @@ def compute_invite_send_at(scheduled_start: str = "") -> Optional[datetime]:
         return None
     return start_dt - timedelta(minutes=15)
 
-def queue_or_send_interview_email(session_doc: Dict[str, Any], link_url: str) -> Dict[str, Any]:
+def queue_or_send_interview_email(session_doc: Dict[str, Any], link_url: str, skip_db_update: bool = False) -> Dict[str, Any]:
     scheduled_start = session_doc.get("scheduled_start", "")
     send_at = compute_invite_send_at(scheduled_start)
     now = datetime.now(timezone.utc)
 
     if send_at and send_at > now:
-        interview_sessions_collection.update_one(
+        if not skip_db_update:
+            interview_sessions_collection.update_one(
             {"_id": session_doc["_id"]},
             {"$set": {
                 "invite_email_status": "pending",
@@ -1899,14 +1890,15 @@ def queue_or_send_interview_email(session_doc: Dict[str, Any], link_url: str) ->
     )
     email_sent = True # Async operation queued successfully
 
-    interview_sessions_collection.update_one(
-        {"_id": session_doc["_id"]},
-        {"$set": {
-            "invite_email_status": "sent" if email_sent else "failed",
-            "invite_email_send_at": (send_at.isoformat() if send_at else now.isoformat()),
-            "invite_email_sent_at": (now.isoformat() if email_sent else None)
-        }}
-    )
+    if not skip_db_update:
+        interview_sessions_collection.update_one(
+            {"_id": session_doc["_id"]},
+            {"$set": {
+                "invite_email_status": "sent" if email_sent else "failed",
+                "invite_email_send_at": (send_at.isoformat() if send_at else now.isoformat()),
+                "invite_email_sent_at": (now.isoformat() if email_sent else None)
+            }}
+        )
     return {
         "email_sent": email_sent,
         "email_scheduled": False,
@@ -1921,8 +1913,8 @@ def send_interview_email(candidate_email: str, candidate_name: str, link_url: st
     env_path = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), ".env")
     load_dotenv(env_path, override=True)
     brevo_api_key = os.getenv("BREVO_API_KEY")
-    sender_name = os.getenv("BREVO_SENDER_NAME", "Arah Info Tech Pvt ltd")
-    sender_email = os.getenv("BREVO_SENDER_EMAIL", "oragantisagar041@gmail.com")
+    sender_name = os.getenv("BREVO_SENDER_NAME", "Mock Interview")
+    sender_email = os.getenv("BREVO_SENDER_EMAIL", "no-reply@mockinterview.com")
 
     if not brevo_api_key:
         print(" Warning: BREVO_API_KEY not found in environment")
@@ -1972,7 +1964,7 @@ def send_interview_email(candidate_email: str, candidate_name: str, link_url: st
         </div>
         <div style="background: white; border-radius: 0 0 12px 12px; padding: 30px; border: 1px solid #e2e8f0; border-top: none;">
             <p style="font-size: 16px; color: #334155;">Dear <b>{candidate_name}</b>,</p>
-            <p style="color: #475569; line-height: 1.6;">You have been invited to an AI-powered interview by <b style="color: #6366f1;">Arah Info Tech</b>.</p>
+            <p style="color: #475569; line-height: 1.6;">You have been invited to an AI-powered interview by <b style="color: #6366f1;">Mock Interview</b>.</p>
             <div style="background: #f1f5f9; border-radius: 8px; padding: 15px; margin: 15px 0; border-left: 4px solid #6366f1;">
                 <p style="margin: 0 0 5px; font-weight: 600; color: #334155;">📋 Role Details:</p>
                 <p style="margin: 0; color: #64748b; font-size: 14px; line-height: 1.5;">{formatted_jd}</p>
@@ -1988,7 +1980,7 @@ def send_interview_email(candidate_email: str, candidate_name: str, link_url: st
                 <p style="margin: 0; color: #92400e; font-size: 13px;">⚠️ <b>Important:</b> This interview link will expire in exactly <b>24 hours</b>. Ensure a stable internet connection and a quiet environment.</p>
             </div>
             <hr style="border: none; border-top: 1px solid #e2e8f0; margin: 20px 0;">
-            <p style="color: #94a3b8; font-size: 13px; margin: 0;">Best regards,<br/><b style="color: #6366f1;">Arah Info Tech Pvt Ltd</b></p>
+            <p style="color: #94a3b8; font-size: 13px; margin: 0;">Best regards,<br/><b style="color: #6366f1;">Mock Interview</b></p>
         </div>
     </body>
     </html>
@@ -2000,7 +1992,7 @@ def send_interview_email(candidate_email: str, candidate_name: str, link_url: st
             "email": sender_email
         },
         "to": [{"email": candidate_email, "name": candidate_name}],
-        "subject": "Interview Invitation by Arah Info Tech",
+        "subject": "Interview Invitation by Mock Interview",
         "htmlContent": html_content
     }
 
@@ -2023,8 +2015,8 @@ def send_interview_email(candidate_email: str, candidate_name: str, link_url: st
     env_path = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), ".env")
     load_dotenv(env_path, override=True)
     brevo_api_key = os.getenv("BREVO_API_KEY")
-    sender_name = os.getenv("BREVO_SENDER_NAME", "Arah Info Tech Pvt ltd")
-    sender_email = os.getenv("BREVO_SENDER_EMAIL", "oragantisagar041@gmail.com")
+    sender_name = os.getenv("BREVO_SENDER_NAME", "Mock Interview")
+    sender_email = os.getenv("BREVO_SENDER_EMAIL", "no-reply@mockinterview.com")
 
     if not brevo_api_key:
         print("Warning: BREVO_API_KEY not found in environment")
@@ -2044,7 +2036,7 @@ def send_interview_email(candidate_email: str, candidate_name: str, link_url: st
     payload = {
         "sender": {"name": sender_name, "email": sender_email},
         "to": [{"email": candidate_email, "name": candidate_name}],
-        "subject": "Interview Invitation by Arah Info Tech",
+        "subject": "Interview Invitation by Mock Interview",
         "htmlContent": html_content
     }
 

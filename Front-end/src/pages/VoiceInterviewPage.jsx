@@ -184,6 +184,9 @@ function Bubble({ role, text, isNew }) {
 export default function VoiceInterviewPage() {
   const { linkId } = useParams()
 
+  const _sessionKey = linkId ? `voice_session_${linkId}` : null
+  const _savedSession = _sessionKey ? (() => { try { return JSON.parse(sessionStorage.getItem(_sessionKey) || 'null') } catch { return null } })() : null
+
   // Session
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState(null)
@@ -202,7 +205,7 @@ export default function VoiceInterviewPage() {
 
   // Verbal interview state
   const [chatMessages, setChatMessages] = useState([])
-  const [currentQIdx, setCurrentQIdx] = useState(0)
+  const [currentQIdx, setCurrentQIdx] = useState(_savedSession?.currentQIdx || 0)
   const [aiStatus, setAiStatus] = useState('idle')
   const [transcript, setTranscript] = useState('')
   const [interimText, setInterimText] = useState('')
@@ -301,6 +304,34 @@ export default function VoiceInterviewPage() {
     return () => clearInterval(t)
   }, [round]) // eslint-disable-line
 
+  // ── Persistence & Unload Tracking ──────────────────────────────────────────
+  useEffect(() => {
+    const handleUnload = () => {
+      if (linkId) {
+        navigator.sendBeacon(`${API_BASE_URL}/interview/${linkId}/alert`, JSON.stringify({
+          type: "warning",
+          message: "Candidate refreshed or closed the window."
+        }))
+      }
+    }
+    window.addEventListener("beforeunload", handleUnload)
+    return () => window.removeEventListener("beforeunload", handleUnload)
+  }, [linkId])
+
+  useEffect(() => {
+    if (!_sessionKey) return
+    const existing = (() => { try { return JSON.parse(sessionStorage.getItem(_sessionKey) || '{}') } catch { return {} } })()
+    if (round === 'verbal' && !existing.startedAt) {
+      sessionStorage.setItem(_sessionKey, JSON.stringify({ ...existing, startedAt: Date.now() }))
+    }
+  }, [round, _sessionKey])
+
+  useEffect(() => {
+    if (!_sessionKey) return
+    const existing = (() => { try { return JSON.parse(sessionStorage.getItem(_sessionKey) || '{}') } catch { return {} } })()
+    sessionStorage.setItem(_sessionKey, JSON.stringify({ ...existing, currentQIdx }))
+  }, [currentQIdx, _sessionKey])
+
   // ── Load Session ──────────────────────────────────────────────────────────
   useEffect(() => {
     if (!linkId) { setError('Missing session ID.'); setLoading(false); return }
@@ -325,7 +356,12 @@ export default function VoiceInterviewPage() {
 
         const durationPerRound = Math.floor((d.interview_duration || 30) * 60 / numRounds);
         setRoundDuration(durationPerRound);
-        setCountdown(durationPerRound)
+        if (_savedSession?.startedAt) {
+          const elapsed = Math.floor((Date.now() - _savedSession.startedAt) / 1000);
+          setCountdown(Math.max(0, durationPerRound - elapsed));
+        } else {
+          setCountdown(durationPerRound);
+        }
 
         const fd = new FormData(); fd.append('link_id', linkId)
         const sr = await fetch(`${API_BASE_URL}/start-session-interview`, { method: 'POST', body: fd })

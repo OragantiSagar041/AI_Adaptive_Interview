@@ -221,6 +221,21 @@ export default function VoiceCaseStudy({
     const t = setInterval(() => setTimeLeft(p => { if (p <= 1) { handleComplete(); return 0 } return p - 1 }), 1000)
     return () => clearInterval(t)
   }, [])
+
+  // Unload Tracking
+  useEffect(() => {
+    const handleUnload = () => {
+      if (linkId) {
+        navigator.sendBeacon(`${API_BASE_URL}/interview/${linkId}/alert`, JSON.stringify({
+          type: "warning",
+          message: "Candidate refreshed or closed the window during the case study round."
+        }))
+      }
+    }
+    window.addEventListener("beforeunload", handleUnload)
+    return () => window.removeEventListener("beforeunload", handleUnload)
+  }, [linkId])
+
   const fmt = s => `${String(Math.floor(s/60)).padStart(2,'0')}:${String(s%60).padStart(2,'0')}`
 
   // ── ESC + Fullscreen proctoring ────────────────────────────────────────────────

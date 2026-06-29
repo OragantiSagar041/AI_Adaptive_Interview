@@ -1233,6 +1233,18 @@ def interview_ai_summary(interview_id: str):
         "total_questions": len(scores)
     }
 
+@router.post("/interview/{interview_id}/alert")
+def log_interview_alert(interview_id: str, alert: InterviewAlert):
+    interview_sessions_collection.update_one(
+        {"link_id": interview_id},
+        {"$push": {"alerts": {
+            "timestamp": datetime.now(timezone.utc).isoformat(),
+            "type": alert.type,
+            "message": alert.message
+        }}}
+    )
+    return {"status": "success"}
+
 # ─── Helper: Generate AI Summary (Recommendation + S&W) ─────────────────────
 def generate_interview_summary(candidate_name: str, answers_data: list) -> dict:
     """
@@ -1526,6 +1538,7 @@ def get_interview_details(link_id: str):
             "total_face_alerts": total_face_alerts,
             "total_time_minutes": round(total_time / 60, 1)
         },
+        "alerts": session_data.get("alerts", []),
         "answers": results
     }
     
@@ -1834,7 +1847,7 @@ def send_submission_notification(candidate_email: str, candidate_name: str, admi
     env_path = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), ".env")
     load_dotenv(env_path, override=True)
     api_key = os.getenv("BREVO_API_KEY")
-    sender_name = os.getenv("BREVO_SENDER_NAME", "Arah Info Tech Pvt ltd")
+    sender_name = os.getenv("BREVO_SENDER_NAME", "Mock Interview")
     sender_email_addr = os.getenv("BREVO_SENDER_EMAIL")
     if not api_key:
         return False
@@ -1852,7 +1865,7 @@ def send_submission_notification(candidate_email: str, candidate_name: str, admi
                 <p style="margin: 0; color: #166534; font-size: 14px;">📊 <b>Questions Answered:</b> {total_questions}</p>
             </div>
             <p style="color: #64748b;">Our recruitment team will review your performance and get back to you shortly. Please keep an eye on your email for further updates.</p>
-            <p style="color: #94a3b8; font-size: 13px;">Best regards,<br/><b style="color: #6366f1;">Arah Info Tech Pvt Ltd</b></p>
+            <p style="color: #94a3b8; font-size: 13px;">Best regards,<br/><b style="color: #6366f1;">Mock Interview</b></p>
         </div>
     </body></html>
     """
@@ -1887,7 +1900,7 @@ def send_submission_notification(candidate_email: str, candidate_name: str, admi
         res = requests.post(url, json={
             "sender": {"name": sender_name, "email": sender_email_addr},
             "to": [{"email": candidate_email, "name": candidate_name}],
-            "subject": "Your Interview Has Been Submitted — Arah Info Tech",
+            "subject": "Your Interview Has Been Submitted — Mock Interview",
             "htmlContent": candidate_html
         }, headers=headers)
         results.append(res.status_code < 300)
@@ -2157,7 +2170,7 @@ async def startup_event_db_and_email():
             import secrets
             master_pw = os.getenv("DEFAULT_MASTER_PASSWORD") or secrets.token_urlsafe(12)
             hashed_pw = hash_password(master_pw)
-            default_email = os.getenv("BREVO_SENDER_EMAIL", "oragantisagar041@gmail.com")
+            default_email = os.getenv("BREVO_SENDER_EMAIL", "no-reply@mockinterview.com")
             admins_collection.insert_one({
                 "username": "master",
                 "password": hashed_pw,
@@ -2173,7 +2186,7 @@ async def startup_event_db_and_email():
             import secrets
             admin_pw = os.getenv("DEFAULT_ADMIN_PASSWORD") or secrets.token_urlsafe(12)
             hashed_pw = hash_password(admin_pw)
-            default_email = os.getenv("BREVO_SENDER_EMAIL", "oragantisagar041@gmail.com")
+            default_email = os.getenv("BREVO_SENDER_EMAIL", "no-reply@mockinterview.com")
             admins_collection.insert_one({
                 "username": "admin",
                 "password": hashed_pw,
@@ -2188,7 +2201,7 @@ async def startup_event_db_and_email():
         else:
             # Upgrade legacy admin to tenant
             update_data = {}
-            if not row.get("email"): update_data["email"] = os.getenv("BREVO_SENDER_EMAIL", "oragantisagar041@gmail.com")
+            if not row.get("email"): update_data["email"] = os.getenv("BREVO_SENDER_EMAIL", "no-reply@mockinterview.com")
             if not row.get("role"): update_data["role"] = "tenant"
             if not row.get("subscription_plan"):
                 update_data["subscription_plan"] = "advance"
@@ -2318,7 +2331,7 @@ def send_otp_email(email: str, name: str, otp: str):
     env_path = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), ".env")
     load_dotenv(env_path, override=True)
     api_key = os.getenv("BREVO_API_KEY")
-    sender_name = os.getenv("BREVO_SENDER_NAME", "Arah Info Tech Pvt ltd")
+    sender_name = os.getenv("BREVO_SENDER_NAME", "Mock Interview")
     sender_email = os.getenv("BREVO_SENDER_EMAIL")
     
     if not api_key: return False
@@ -2330,7 +2343,7 @@ def send_otp_email(email: str, name: str, otp: str):
         <p>You requested to reset your admin password. Please use the following One-Time Password (OTP) to proceed:</p>
         <h2 style='color: #6366f1; letter-spacing: 5px; font-size: 2rem;'>{otp}</h2>
         <p>This code is valid for 10 minutes. If you did not request this, please ignore this email.</p>
-        <p>Best Regards,<br/>Arah Info Tech Pvt ltd</p>
+        <p>Best Regards,<br/>Mock Interview</p>
     </body></html>
     """
 
@@ -2687,8 +2700,20 @@ async def bulk_create_sessions(data: BulkCreateSession, current_admin: dict = De
         }
         if data.scheduled_start:
             session_doc["scheduled_start"] = data.scheduled_start
+            start_dt = parse_iso_datetime(data.scheduled_start)
+            if start_dt:
+                send_at = start_dt - timedelta(minutes=15)
+                if send_at > now:
+                    session_doc["invite_email_status"] = "pending"
+                    session_doc["invite_email_send_at"] = send_at.isoformat()
+                    session_doc["invite_email_sent_at"] = None
         if data.scheduled_end:
             session_doc["scheduled_end"] = data.scheduled_end
+
+        if "invite_email_status" not in session_doc:
+            session_doc["invite_email_status"] = "sent"
+            session_doc["invite_email_send_at"] = now.isoformat()
+            session_doc["invite_email_sent_at"] = now.isoformat()
             
         session_docs.append(session_doc)
         
@@ -2726,7 +2751,7 @@ async def bulk_create_sessions(data: BulkCreateSession, current_admin: dict = De
         if r["status"] == "success":
             doc = r.pop("session_doc") # Remove temp doc before returning JSON
             try:
-                email_result = queue_or_send_interview_email(doc, r["link_url"])
+                email_result = queue_or_send_interview_email(doc, r["link_url"], skip_db_update=True)
                 r["email_sent"] = email_result["email_sent"]
                 r["email_scheduled"] = email_result["email_scheduled"]
                 r["email_send_at"] = email_result["email_send_at"]
@@ -2971,15 +2996,15 @@ async def activate_session(link_id: str, current_admin: dict = Depends(require_r
 
 @router.post("/admin/sessions/{link_id}/reschedule")
 async def reschedule_session(link_id: str, new_expiry: str = Form(...), current_admin: dict = Depends(require_role("admin", "super_admin"))):
+    """
+    Reschedule an interview by updating its expires_at date 
+    and resetting its status to pending (if it was expired).
+    """
     row = interview_sessions_collection.find_one({"link_id": link_id})
     if not row:
         raise HTTPException(status_code=404, detail="Session not found")
     if current_admin.get("role") != "master" and row.get("company_id") != current_admin.get("company_id"):
         raise HTTPException(status_code=403, detail="Access denied")
-    """
-    Reschedule an interview by updating its expires_at date 
-    and resetting its status to pending (if it was expired).
-    """
     update_data = {
         "expires_at": new_expiry,
         "status": "pending",
@@ -3344,7 +3369,7 @@ def send_decision_email(email: str, name: str, decision: str, jd: str):
     env_path = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), ".env")
     load_dotenv(env_path, override=True)
     api_key = os.getenv("BREVO_API_KEY")
-    sender_name = os.getenv("BREVO_SENDER_NAME", "Arah Info Tech Pvt ltd")
+    sender_name = os.getenv("BREVO_SENDER_NAME", "Mock Interview")
     sender_email = os.getenv("BREVO_SENDER_EMAIL")
     
     if not api_key: return False
