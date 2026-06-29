@@ -118,5 +118,5 @@ export default function useCandidateWebRTC(linkId, mediaStreamRef, telemetryData
     return () => clearInterval(intervalId)
   }, [JSON.stringify(telemetryData)])
 
-  return wsRef.current
+  return wsRef
 }

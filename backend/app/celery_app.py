@@ -7,7 +7,7 @@ celery_app = Celery(
     "ai_interview_worker",
     broker=REDIS_URL,
     backend=REDIS_URL,
-    include=["tasks"]
+    include=["app.tasks"],  # tasks live inside the app package
 )
 
 celery_app.conf.update(
@@ -17,9 +17,9 @@ celery_app.conf.update(
     timezone="UTC",
     enable_utc=True,
     task_track_started=True,
-    task_time_limit=3600, # 1 hour max
-    
-    # Run tasks synchronously if running locally to avoid requiring Redis
+    task_time_limit=3600,  # 1 hour max
+
+    # Run tasks synchronously locally to avoid requiring Redis
     task_always_eager=os.getenv("ENV", "local") == "local",
     task_eager_propagates=True,
 )

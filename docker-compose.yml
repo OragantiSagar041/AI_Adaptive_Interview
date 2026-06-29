@@ -30,7 +30,7 @@ services:
     build:
       context: ./backend
     container_name: interview_celery_worker
-    command: celery -A celery_app worker --loglevel=info
+    command: celery -A app.celery_app.celery_app worker --loglevel=info
     environment:
       - REDIS_URL=redis://redis:6379/0
     env_file:

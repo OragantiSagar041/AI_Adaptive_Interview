@@ -111,7 +111,7 @@ export default function CaseStudyPage() {
   }
 
   // Timer logic
-  const startTimer = () => {
+  function startTimer() {
     stopTimer()
     timerIntervalRef.current = setInterval(() => {
       setSecondsLeft(prev => {
@@ -133,7 +133,7 @@ export default function CaseStudyPage() {
     }, 1000)
   }
 
-  const stopTimer = () => {
+  function stopTimer() {
     if (timerIntervalRef.current) {
       clearInterval(timerIntervalRef.current)
       timerIntervalRef.current = null
@@ -141,7 +141,7 @@ export default function CaseStudyPage() {
   }
 
   // Speech Recognition initialization
-  const initSpeechRecognition = () => {
+  function initSpeechRecognition() {
     if (!('webkitSpeechRecognition' in window || 'SpeechRecognition' in window)) {
       console.warn('Speech recognition not supported in this browser.')
       return
@@ -194,7 +194,7 @@ export default function CaseStudyPage() {
     recognitionRef.current = rec
   }
 
-  const startMic = () => {
+  function startMic() {
     if (!recognitionRef.current) {
       Swal.fire({
         title: 'Not Supported',
@@ -212,7 +212,7 @@ export default function CaseStudyPage() {
     }
   }
 
-  const stopMic = () => {
+  function stopMic() {
     if (recognitionRef.current) {
       try {
         recognitionRef.current.stop()
@@ -223,7 +223,7 @@ export default function CaseStudyPage() {
     setIsListening(false)
   }
 
-  const toggleMic = () => {
+  function toggleMic() {
     if (isListening) {
       stopMic()
     } else {

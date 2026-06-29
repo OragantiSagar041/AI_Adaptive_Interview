@@ -210,7 +210,7 @@ export function CandidateScorecardModal({
                   {/* Behavioral Tags Row */}
                   <div className="flex flex-wrap gap-2 mb-4">
                     <div className="bg-slate-100 border border-slate-200 px-3 py-1.5 rounded-lg flex items-center gap-1.5 text-xs font-semibold text-slate-700">
-                      <i className="far fa-clock"></i> {Math.floor(Math.random() * 3) + 1}m {Math.floor(Math.random() * 59)}s
+                      <i className="far fa-clock"></i> {(idx % 3) + 1}m {(idx * 17) % 60}s
                     </div>
                     <div className="bg-slate-100 border border-slate-200 px-3 py-1.5 rounded-lg flex items-center gap-1.5 text-xs font-semibold text-slate-400">
                       N/A
