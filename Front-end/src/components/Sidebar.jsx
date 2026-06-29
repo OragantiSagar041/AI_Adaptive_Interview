@@ -34,9 +34,8 @@ export default function Sidebar({
 
   return (
     <aside
-      className={`text-white flex flex-col z-50 shadow-lg shrink-0 overflow-hidden transition-all duration-300 sticky top-0 h-screen ${
-        isCollapsed ? 'w-[80px] p-4 items-center gap-4' : 'w-[260px] p-5 gap-5'
-      }`}
+      className={`text-white flex flex-col z-50 shadow-lg shrink-0 overflow-hidden transition-all duration-300 sticky top-0 h-screen ${isCollapsed ? 'w-[80px] p-4 items-center gap-4' : 'w-[260px] p-5 gap-5'
+        }`}
       style={{
         background: `linear-gradient(180deg, ${currentAccent.hover} 0%, ${currentAccent.primary} 56%, ${currentAccent.primary} 100%)`,
         boxShadow: `0 18px 45px ${currentAccent.glow}`,
@@ -68,10 +67,8 @@ export default function Sidebar({
               to={path}
               title={isCollapsed ? label : ""}
               className={({ isActive }) =>
-                `w-full text-left flex items-center rounded-lg font-medium text-sm transition-all border-none outline-none cursor-pointer no-underline ${
-                  isCollapsed ? 'justify-center p-2' : 'px-3.5 py-2 gap-3'
-                } ${
-                  isActive && activeTab !== 'live' ? 'bg-white/18 text-white font-semibold' : 'text-white/70 hover:bg-white/8 hover:text-white'
+                `w-full text-left flex items-center rounded-lg font-medium text-sm transition-all border-none outline-none cursor-pointer no-underline ${isCollapsed ? 'justify-center p-2' : 'px-3.5 py-2 gap-3'
+                } ${isActive && activeTab !== 'live' ? 'bg-white/18 text-white font-semibold' : 'text-white/70 hover:bg-white/8 hover:text-white'
                 }`
               }
             >
@@ -85,11 +82,9 @@ export default function Sidebar({
         <button
           onClick={() => onTabChange('live')}
           title={isCollapsed ? "Live Results" : ""}
-          className={`text-left flex items-center rounded-lg font-medium text-sm transition-all border-none outline-none cursor-pointer ${
-            isCollapsed ? 'justify-center p-2' : 'px-3.5 py-2 gap-3 w-full'
-          } ${
-            activeTab === 'live' ? 'bg-white/18 text-white font-semibold' : 'text-white/70 hover:bg-white/8 hover:text-white'
-          }`}
+          className={`text-left flex items-center rounded-lg font-medium text-sm transition-all border-none outline-none cursor-pointer ${isCollapsed ? 'justify-center p-2' : 'px-3.5 py-2 gap-3 w-full'
+            } ${activeTab === 'live' ? 'bg-white/18 text-white font-semibold' : 'text-white/70 hover:bg-white/8 hover:text-white'
+            }`}
         >
           <Radio size={16} className="shrink-0" />
           {!isCollapsed && <span>Live Results</span>}
@@ -99,9 +94,8 @@ export default function Sidebar({
       <button
         onClick={onLogout}
         title={isCollapsed ? "Logout" : ""}
-        className={`text-left flex items-center border border-white/20 hover:bg-white/10 text-white outline-none cursor-pointer transition-all ${
-          isCollapsed ? 'justify-center p-2 rounded-xl' : 'px-3.5 py-2 rounded-lg gap-3 w-full'
-        }`}
+        className={`text-left flex items-center border border-white/20 hover:bg-white/10 text-white outline-none cursor-pointer transition-all ${isCollapsed ? 'justify-center p-2 rounded-xl' : 'px-3.5 py-2 rounded-lg gap-3 w-full'
+          }`}
       >
         <LogOut size={16} className="shrink-0" />
         {!isCollapsed && <span>Logout</span>}
