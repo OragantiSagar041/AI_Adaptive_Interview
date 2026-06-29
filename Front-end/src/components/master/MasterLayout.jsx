@@ -19,6 +19,7 @@ import {
 } from 'lucide-react'
 import { logout } from '../../store/slices/authSlice'
 import { persistor } from '../../store/store'
+import AdminCopilot from '../admin/copilot/AdminCopilot'
 
 function hexToRgba(hex, alpha) {
   const cleanHex = hex.replace('#', '')
@@ -350,6 +351,9 @@ export default function MasterLayout() {
           <Outlet />
         </main>
       </div>
+      
+      {/* Global Copilot */}
+      <AdminCopilot />
     </div>
   )
 }

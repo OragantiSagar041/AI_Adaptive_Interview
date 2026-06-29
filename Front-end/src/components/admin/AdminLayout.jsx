@@ -2,6 +2,7 @@ import React, { useState } from 'react'
 import Sidebar from '../Sidebar'
 import SuperAdminSidebar from '../SuperAdminSidebar'
 import Navbar from '../Navbar'
+import AdminCopilot from './copilot/AdminCopilot'
 
 function hexToRgba(hex, alpha) {
   const cleanHex = hex.replace('#', '')
@@ -78,6 +79,9 @@ export default function AdminLayout({
           {children}
         </main>
       </div>
+      
+      {/* Global Admin Copilot */}
+      <AdminCopilot />
     </div>
   )
 }

@@ -111,7 +111,7 @@ def send_email_task(
         payload = {
             "sender": {
                 "name": "HireIQ Recruiting",
-                "email": os.getenv("BREVO_SENDER_EMAIL", "oragantisagar041@gmail.com"),
+                "email": os.getenv("BREVO_SENDER_EMAIL", "no-reply@mockinterview.com"),
             },
             "to": [{"email": candidate_email, "name": candidate_name}],
             "subject": "Invitation to your AI Mock Interview",
