@@ -1901,7 +1901,7 @@ def build_default_interview_email_html(candidate_name: str, duration: int, job_d
                 </div>
                 
                 <hr style="border: none; border-top: 1px solid #e2e8f0; margin: 32px 0 24px 0;">
-                <p style="color: #64748b; font-size: 14px; margin: 0; text-align: left; line-height: 1.6;">Best regards,<br/><b style="color: #4f46e5;">Arah Info Tech Pvt Ltd</b></p>
+                <p style="color: #64748b; font-size: 14px; margin: 0; text-align: left; line-height: 1.6;">Best regards,<br/><b style="color: #4f46e5;">Hire IQ Recruiting</b></p>
             </div>
             <hr style="border: none; border-top: 1px solid #e2e8f0; margin: 20px 0;">
             <p style="color: #94a3b8; font-size: 13px; margin: 0;">Best regards,<br/><b style="color: #6366f1;">Mock Interview</b></p>
@@ -1975,7 +1975,7 @@ def send_interview_email(candidate_email: str, candidate_name: str, link_url: st
     env_path = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), ".env")
     load_dotenv(env_path, override=True)
     brevo_api_key = os.getenv("BREVO_API_KEY")
-    sender_name = os.getenv("BREVO_SENDER_NAME", "Mock Interview")
+    sender_name = "Hire IQ Recruiting"
     sender_email = os.getenv("BREVO_SENDER_EMAIL", "no-reply@mockinterview.com")
 
     if not brevo_api_key:
