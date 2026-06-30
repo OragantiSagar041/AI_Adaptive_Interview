@@ -598,6 +598,9 @@ async def save_answer(
                     "content_score": ai_result.get("content_score", 0),
                     "relevance_score": ai_result.get("relevance_score", 0),
                     "time_score": ai_result.get("time_score", 0),
+                    "clarity_score": ai_result.get("clarity_score", 50),
+                    "technical_depth_score": ai_result.get("technical_depth_score", 50),
+                    "confidence_score": ai_result.get("confidence_score", 50),
                     "ai_feedback": ai_result.get("feedback", "No feedback"),
                     "ai_keywords": keywords_str,
                     "corrected_answer": ai_result.get("corrected_answer", "N/A"),
@@ -2291,6 +2294,38 @@ async def startup_event_db_and_email():
         threading.Thread(target=invitation_email_scheduler_loop, daemon=True).start()
         EMAIL_SCHEDULER_STARTED = True
 
+@router.get("/api/interview/{interview_id}/insights")
+async def get_interview_insights(interview_id: str):
+    answers = list(answers_collection.find({"interview_id": interview_id}))
+    
+    if not answers:
+        return {
+            "clarity": 50,
+            "technicalDepth": 50,
+            "confidence": 50
+        }
+        
+    scored_answers = [a for a in answers if a.get("scoring_status") == "complete"]
+    
+    if not scored_answers:
+         return {
+            "clarity": 50,
+            "technicalDepth": 50,
+            "confidence": 50
+        }
+        
+    total_clarity = sum(a.get("clarity_score", 50) for a in scored_answers)
+    total_technical = sum(a.get("technical_depth_score", 50) for a in scored_answers)
+    total_confidence = sum(a.get("confidence_score", 50) for a in scored_answers)
+    
+    count = len(scored_answers)
+    
+    return {
+        "clarity": round(total_clarity / count),
+        "technicalDepth": round(total_technical / count),
+        "confidence": round(total_confidence / count)
+    }
+
 @router.post("/admin/forgot-password")
 async def forgot_password(data: ForgotPasswordRequest):
     user = admins_collection.find_one({"username": data.username, "email": data.email})
@@ -3527,7 +3562,7 @@ AVAILABLE ACTIONS FOR SUPER ADMIN:
 AVAILABLE ACTIONS FOR MASTER:
 - Currently no JSON actions. You can answer queries about the platform metrics provided below.
 """
-            total_super_admins = tenant_collection.count_documents({})
+            total_super_admins = admins_collection.count_documents({"role": "tenant"})
             total_admins = admins_collection.count_documents({})
             total_interviews = interview_sessions_collection.count_documents({})
             completed_interviews = interview_sessions_collection.count_documents({"status": "completed"})
@@ -3651,11 +3686,11 @@ async def admin_copilot_execute(request: CopilotExecuteRequest, current_admin: d
                 
             from bson import ObjectId
             # Perform transfer
-            super_admin_doc = tenant_collection.find_one({"_id": ObjectId(admin_id)})
+            super_admin_doc = admins_collection.find_one({"_id": ObjectId(admin_id)})
             if super_admin_doc.get("credits", 0) < amount:
                 raise HTTPException(status_code=400, detail="Insufficient credits")
                 
-            tenant_collection.update_one({"_id": ObjectId(admin_id)}, {"$inc": {"credits": -amount}})
+            admins_collection.update_one({"_id": ObjectId(admin_id)}, {"$inc": {"credits": -amount}})
             admins_collection.update_one({"_id": target_admin["_id"]}, {"$inc": {"credits": amount}})
             return {"status": "success", "message": f"Successfully transferred {amount} credits to {target_username}."}
             
