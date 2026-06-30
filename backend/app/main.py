@@ -34,7 +34,7 @@ from app import config
 # Application factory
 # ---------------------------------------------------------------------------
 from pymongo import ASCENDING, DESCENDING
-from app.mongo_db import interview_sessions_collection
+from mongo_db import interview_sessions_collection
 
 app = FastAPI(
     title="HireIQ AI Interview Platform",
