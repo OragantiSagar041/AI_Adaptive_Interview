@@ -427,12 +427,12 @@ function Interview() {
           setTotalDuration(fullDuration)
 
           // Restore countdown from sessionStorage if we have a saved start time
-          if (savedSess?.startedAt && savedSess?.accepted) {
-            const elapsedSeconds = Math.floor((Date.now() - savedSess.startedAt) / 1000)
+          if (_savedSession?.startedAt && _savedSession?.accepted) {
+            const elapsedSeconds = Math.floor((Date.now() - _savedSession.startedAt) / 1000)
             const halfDur = fullDuration / 2
             const remaining = Math.max(0, halfDur - elapsedSeconds)
             setGlobalCountdown(remaining)
-            if (savedSess.isRoundTwo) {
+            if (_savedSession.isRoundTwo) {
               setIsRoundTwo(true)
               isRoundTwoRef.current = true
             }
@@ -441,8 +441,8 @@ function Interview() {
           }
         } else {
           setTotalDuration(30 * 60)
-          if (savedSess?.startedAt && savedSess?.accepted) {
-            const elapsedSeconds = Math.floor((Date.now() - savedSess.startedAt) / 1000)
+          if (_savedSession?.startedAt && _savedSession?.accepted) {
+            const elapsedSeconds = Math.floor((Date.now() - _savedSession.startedAt) / 1000)
             const remaining = Math.max(0, 15 * 60 - elapsedSeconds)
             setGlobalCountdown(remaining)
           } else {
@@ -450,12 +450,12 @@ function Interview() {
           }
         }
 
-        if (shouldStartRoundTwo) {
+        if (_savedSession?.isRoundTwo) {
           const type = startPayload.interview_type || 'Technical'
           if (type === 'Non-Technical') {
-            startCaseStudyRound(qList.length, savedSess?.currentQuestionIndex)
+            startCaseStudyRound(qList.length, _savedSession?.currentQuestionIndex)
           } else if (type !== 'Normal') {
-            startCodingRound(qList.length, savedSess?.currentQuestionIndex)
+            startCodingRound(qList.length, _savedSession?.currentQuestionIndex)
           }
         }
 
