@@ -427,6 +427,18 @@ export function CandidateScorecardModal({
                   )}
                 </div>
               )}
+
+              {/* Candidate Feedback */}
+              {candidateDetail?.candidate_feedback && (
+                <div className="bg-indigo-50/50 border border-indigo-100 rounded-xl p-5 relative mt-4 shadow-sm">
+                  <h4 className="text-[1rem] font-bold text-indigo-900 leading-snug mb-3 flex items-center gap-2">
+                    <i className="fas fa-comment-dots text-indigo-500"></i> Candidate Feedback
+                  </h4>
+                  <p className="text-[0.95rem] text-slate-700 leading-relaxed whitespace-pre-wrap bg-white border border-indigo-100/50 p-4 rounded-lg shadow-sm">
+                    {candidateDetail.candidate_feedback}
+                  </p>
+                </div>
+              )}
             </div>
           </div>
         </div>

@@ -1542,7 +1542,8 @@ def get_interview_details(link_id: str):
             "total_time_minutes": round(total_time / 60, 1)
         },
         "alerts": session_data.get("alerts", []),
-        "answers": results
+        "answers": results,
+        "candidate_feedback": session_data.get("candidate_feedback", "")
     }
     
     # Include full question list so admin can see which questions were skipped
@@ -3771,6 +3772,26 @@ Output EXACTLY a JSON object with this structure:
         print(f" ATS Score endpoint error: {e}")
         raise HTTPException(status_code=500, detail=str(e))
 
+class CandidateFeedbackRequest(BaseModel):
+    feedback_text: str
+
+@router.post("/submit-feedback/{link_id}")
+async def submit_feedback(link_id: str, payload: CandidateFeedbackRequest):
+    """Save candidate feedback into the interview session."""
+    try:
+        session = interview_sessions_collection.find_one({"link_id": link_id})
+        if not session:
+            raise HTTPException(status_code=404, detail="Session not found")
+            
+        interview_sessions_collection.update_one(
+            {"link_id": link_id}, 
+            {"$set": {"candidate_feedback": payload.feedback_text}}
+        )
+        return {"status": "success", "message": "Feedback submitted successfully."}
+    except Exception as e:
+        print(f"Submit Feedback Error: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
 @router.post("/complete-session/{link_id}")
 async def complete_session(link_id: str, warnings: int = 0):
     """Mark a session as completed and send notification emails (Task 3)."""
@@ -5569,9 +5590,22 @@ async def get_dashboard_aggregated_data(admin_id: Optional[str] = None, current_
         stats_data = await get_dashboard_stats(admin_id=admin_id, current_admin=current_admin)
         
         
-        # NOTE: Removed massive candidate query for performance. 
-        # The dashboard polling endpoint should not fetch the entire history of candidates.
-        candidates_list = []            
+        # Restore candidate query for initial load since polling was removed
+        c_query_filter = {
+            "company_id": current_admin.get("company_id"),
+            "$or": [{"is_deactivated": False}, {"is_deactivated": {"$exists": False}}]
+        }
+        if current_admin.get("role") == "admin":
+            c_query_filter["created_by"] = current_admin["admin_id"]
+        elif admin_id:
+            c_query_filter["created_by"] = admin_id
+            
+        candidates_cursor = list(interview_sessions_collection.find(c_query_filter).sort("created_at", -1))
+        candidates_list = []
+        for c in candidates_cursor:
+            c["id"] = str(c["_id"])
+            c["_id"] = str(c["_id"])
+            candidates_list.append(c)
         live_sessions = []
         ongoing_monitored_count = 0
         ongoing_live_count = 0
