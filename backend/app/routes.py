@@ -3793,11 +3793,11 @@ async def submit_feedback(link_id: str, payload: CandidateFeedbackRequest):
         raise HTTPException(status_code=500, detail=str(e))
 
 @router.post("/complete-session/{link_id}")
-async def complete_session(link_id: str, warnings: int = 0):
+async def complete_session(link_id: str, warnings: int = 0, reason: str = "normal"):
     """Mark a session as completed and send notification emails (Task 3)."""
     try:
         session = interview_sessions_collection.find_one({"link_id": link_id})
-        update_data = {"status": "completed", "warnings": warnings}
+        update_data = {"status": "completed", "warnings": warnings, "completion_reason": reason}
         if session:
             candidate_id = session.get("candidate_id")
             if candidate_id and not candidate_id.endswith("IQ"):

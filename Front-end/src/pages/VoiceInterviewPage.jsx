@@ -347,16 +347,25 @@ export default function VoiceInterviewPage() {
   // ── Persistence & Unload Tracking ──────────────────────────────────────────
   useEffect(() => {
     const handleUnload = () => {
-      if (linkId) {
-        navigator.sendBeacon(`${API_BASE_URL}/interview/${linkId}/alert`, JSON.stringify({
-          type: "warning",
-          message: "Candidate refreshed or closed the window."
-        }))
+      if (!linkId) return
+      const roundNow = roundRef.current
+      // If interview is actively in progress (not done/intro/pre_checks), auto-complete it
+      if (roundNow && roundNow !== 'done' && roundNow !== 'intro' && roundNow !== 'pre_checks') {
+        // sendBeacon is the ONLY reliable way to fire a request on tab close
+        navigator.sendBeacon(
+          `${API_BASE_URL}/complete-session/${linkId}?warnings=${warningsCount}&reason=tab_closed`,
+          JSON.stringify({ reason: 'candidate_exited', timestamp: new Date().toISOString() })
+        )
       }
     }
-    window.addEventListener("beforeunload", handleUnload)
-    return () => window.removeEventListener("beforeunload", handleUnload)
-  }, [linkId])
+    // pagehide fires on mobile browsers where beforeunload is unreliable
+    window.addEventListener('beforeunload', handleUnload)
+    window.addEventListener('pagehide', handleUnload)
+    return () => {
+      window.removeEventListener('beforeunload', handleUnload)
+      window.removeEventListener('pagehide', handleUnload)
+    }
+  }, [linkId, warningsCount])
 
   useEffect(() => {
     if (!_sessionKey) return
@@ -1016,23 +1025,43 @@ export default function VoiceInterviewPage() {
   }, [handleScreenShareViolation])
 
   useEffect(() => {
+    // Tab switch counter — auto-end after 3 switches
+    let tabSwitchCount = 0
+    const MAX_TAB_SWITCHES = 3
+
     // Tab switch detection
     const handleVisibilityChange = () => {
-      if (document.hidden && round !== 'done' && round !== 'intro' && round !== 'pre_checks') {
-        logProctoringAlert('tab_switch', 'User switched tab or minimized')
-        Swal.fire({
-          icon: 'warning',
-          title: '⚠️ Tab Switch Detected!',
-          text: 'Please do not switch tabs or minimize the window during the interview. This incident has been recorded.',
-          confirmButtonColor: '#ef4444',
-          confirmButtonText: 'I Understand'
-        })
+      if (document.hidden && round !== 'done' && round !== 'intro' && round !== 'pre_checks' && round !== 'submitting') {
+        tabSwitchCount++
+        logProctoringAlert('tab_switch', `Tab switch #${tabSwitchCount}`)
+
+        if (tabSwitchCount >= MAX_TAB_SWITCHES) {
+          // Auto-end interview after too many tab switches
+          Swal.fire({
+            icon: 'error',
+            title: '🚨 Interview Terminated!',
+            text: `You have switched tabs ${MAX_TAB_SWITCHES} times. The interview has been automatically ended and saved.`,
+            confirmButtonColor: '#ef4444',
+            confirmButtonText: 'OK',
+            allowOutsideClick: false,
+          }).then(() => completeInterview())
+        } else {
+          Swal.fire({
+            icon: 'warning',
+            title: `⚠️ Tab Switch Detected! (${tabSwitchCount}/${MAX_TAB_SWITCHES})`,
+            text: `Please do not switch tabs or minimize the window. You have ${MAX_TAB_SWITCHES - tabSwitchCount} warning(s) remaining before the interview is automatically ended.`,
+            confirmButtonColor: '#ef4444',
+            confirmButtonText: 'I Understand',
+            timer: 8000,
+            timerProgressBar: true,
+          })
+        }
       }
     }
 
     // Fullscreen change detection with interactive modal
     const handleFullscreenChange = async () => {
-      if (!document.fullscreenElement && round !== 'done' && round !== 'pre_checks' && round !== 'intro') {
+      if (!document.fullscreenElement && round !== 'done' && round !== 'pre_checks' && round !== 'intro' && round !== 'submitting') {
         logProctoringAlert('fullscreen_exit', 'User exited fullscreen')
 
         Swal.fire({
@@ -1050,7 +1079,7 @@ export default function VoiceInterviewPage() {
               document.documentElement.requestFullscreen().catch(() => { })
             }
           } else {
-            window.location.href = '/dashboard'
+            completeInterview()
           }
         })
       }
@@ -1066,7 +1095,7 @@ export default function VoiceInterviewPage() {
       document.removeEventListener('visibilitychange', handleVisibilityChange)
       document.removeEventListener('fullscreenchange', handleFullscreenChange)
     }
-  }, [stopListening, round, logProctoringAlert])
+  }, [stopListening, round, logProctoringAlert, completeInterview])
 
   // Use Centralized AI Proctoring Hook
   useProctoring(
