@@ -31,6 +31,7 @@ function Interview() {
   const [isDisclaimerAccepted, setIsDisclaimerAccepted] = useState(false)
   const [agreeChecked, setAgreeChecked] = useState(false)
   const [autoReconnecting, setAutoReconnecting] = useState(!!_savedSession?.accepted)
+  const [isMobileDevice, setIsMobileDevice] = useState(false)
 
   // Session details from backend
   const [sessionDetail, setSessionDetail] = useState(null)
@@ -76,6 +77,40 @@ function Interview() {
   const [codingRoundLoading, setCodingRoundLoading] = useState(false)
   const [codingRoundData, setCodingRoundData] = useState(null)
   const [aiInsights, setAiInsights] = useState({ clarity: 50, technicalDepth: 50, confidence: 50 })
+
+  // Mobile Screen Detection
+  useEffect(() => {
+    const checkMobile = () => {
+      const userAgent = navigator.userAgent || navigator.vendor || window.opera;
+      const mobileRegex = /android|webos|iphone|ipad|ipod|blackberry|iemobile|opera mini/i;
+      const isMobile = mobileRegex.test(userAgent.toLowerCase()) || window.innerWidth <= 768;
+      
+      if (isMobile) {
+        setIsMobileDevice(true);
+        Swal.fire({
+          icon: 'error',
+          title: 'Device Not Supported',
+          text: 'This proctored interview requires a desktop or laptop computer. Mobile devices and small screens are not supported.',
+          allowOutsideClick: false,
+          allowEscapeKey: false,
+          showConfirmButton: false,
+          background: '#161c2d',
+          color: '#fff',
+          customClass: {
+            popup: 'border border-white/8 rounded-2xl shadow-2xl',
+            title: 'text-xl font-bold text-white',
+            htmlContainer: 'text-slate-300 text-sm'
+          }
+        });
+      } else {
+        setIsMobileDevice(false);
+      }
+    };
+
+    checkMobile();
+    window.addEventListener('resize', checkMobile);
+    return () => window.removeEventListener('resize', checkMobile);
+  }, []);
 
   // Fetch AI Insights dynamically
   useEffect(() => {
@@ -215,6 +250,23 @@ function Interview() {
         // Show visible banner
         setProctoringBanner({ type: 'tab_switch', message: `⚠️ Tab switch detected! (${count} total)` })
         setTimeout(() => setProctoringBanner(null), 4000)
+
+        // Show blocking SweetAlert
+        Swal.fire({
+          icon: 'warning',
+          title: '⚠️ Tab Switch Detected',
+          text: `You have switched tabs or minimized the window. This is a violation of the proctoring rules. (Warning ${count})`,
+          confirmButtonText: 'I Understand',
+          background: '#161c2d',
+          color: '#fff',
+          customClass: {
+            popup: 'border border-white/8 rounded-2xl shadow-2xl',
+            title: 'text-xl font-bold text-white',
+            htmlContainer: 'text-slate-300 text-sm',
+            confirmButton: 'bg-primary hover:bg-primary-hover text-white rounded-full px-6 py-2.5 font-semibold text-sm cursor-pointer border-none outline-none'
+          },
+          buttonsStyling: false
+        })
       }
     }
     document.addEventListener("visibilitychange", handleVisibilityChange)
@@ -536,10 +588,7 @@ function Interview() {
         confirmButton: 'bg-primary hover:bg-primary-hover text-white rounded-full px-6 py-2.5 font-semibold text-sm cursor-pointer border-none outline-none mr-2',
         cancelButton: 'bg-white/6 hover:bg-white/12 text-white border border-white/8 rounded-full px-6 py-2.5 font-semibold text-sm cursor-pointer outline-none'
       },
-      buttonsStyling: false,
-      preConfirm: () => {
-        enableFullscreen()
-      }
+      buttonsStyling: false
     }).then(result => {
       if (result.isConfirmed) {
         setupMedia()
@@ -551,52 +600,40 @@ function Interview() {
     })
   }, [autoReconnecting, loading, error, questions.length])
 
+  // Enable Fullscreen
+  function enableFullscreen() {
+    const elem = document.documentElement
+    if (elem.requestFullscreen) {
+      elem.requestFullscreen().catch(err => console.log(err))
+    } else if (elem.webkitRequestFullscreen) { /* Safari */
+      elem.webkitRequestFullscreen().catch(err => console.log(err));
+    } else if (elem.msRequestFullscreen) { /* IE11 */
+      elem.msRequestFullscreen().catch(err => console.log(err));
+    }
+    setFullscreenWarning(false)
+  }
+
   // Proctoring: Fullscreen Checker
   useEffect(() => {
     if (!isDisclaimerAccepted) return
 
     const checkFullscreen = () => {
-      if (!document.fullscreenElement) {
+      if (!document.fullscreenElement && !document.webkitFullscreenElement && !document.msFullscreenElement) {
         setFullscreenWarning(true)
-        Swal.fire({
-          icon: 'warning',
-          title: '⚠️ Fullscreen Required',
-          text: 'Exiting fullscreen mode is not allowed during the interview.',
-          showCancelButton: true,
-          confirmButtonText: 'Enable full screen mode',
-          cancelButtonText: 'Exit interview',
-          allowOutsideClick: false,
-          allowEscapeKey: false
-        }).then((result) => {
-          if (result.isConfirmed) {
-            const elem = document.documentElement
-            if (elem.requestFullscreen) {
-              elem.requestFullscreen().catch(err => console.log(err))
-            }
-            setFullscreenWarning(false)
-          } else {
-            navigate('/dashboard')
-          }
-        })
       } else {
         setFullscreenWarning(false)
       }
     }
     document.addEventListener('fullscreenchange', checkFullscreen)
+    document.addEventListener('webkitfullscreenchange', checkFullscreen)
+    document.addEventListener('MSFullscreenChange', checkFullscreen)
 
     return () => {
       document.removeEventListener('fullscreenchange', checkFullscreen)
+      document.removeEventListener('webkitfullscreenchange', checkFullscreen)
+      document.removeEventListener('MSFullscreenChange', checkFullscreen)
     }
   }, [isDisclaimerAccepted, navigate])
-
-  // Enable Fullscreen
-  const enableFullscreen = () => {
-    const elem = document.documentElement
-    if (elem.requestFullscreen) {
-      elem.requestFullscreen().catch(err => console.log(err))
-    }
-    setFullscreenWarning(false)
-  }
 
   // Handle Speech Recognition setup
   const initSpeechRecognition = () => {
@@ -727,6 +764,25 @@ function Interview() {
     // Show visible overlay banner
     setProctoringBanner({ type, message: displayMsg })
     setTimeout(() => setProctoringBanner(null), 4000)
+
+    if (type === 'eye_contact') {
+      Swal.fire({
+        icon: 'warning',
+        title: '⚠️ Eye Contact Lost',
+        text: 'Please maintain eye contact with the screen. Looking away is a violation of the proctoring rules.',
+        confirmButtonText: 'I Understand',
+        background: '#161c2d',
+        color: '#fff',
+        customClass: {
+          popup: 'border border-white/8 rounded-2xl shadow-2xl',
+          title: 'text-xl font-bold text-white',
+          htmlContainer: 'text-slate-300 text-sm',
+          confirmButton: 'bg-primary hover:bg-primary-hover text-white rounded-full px-6 py-2.5 font-semibold text-sm cursor-pointer border-none outline-none'
+        },
+        buttonsStyling: false
+      })
+    }
+
     // Log to backend
     if (sessionId) {
       try {
@@ -823,10 +879,7 @@ function Interview() {
         confirmButton: 'bg-primary hover:bg-primary-hover text-white rounded-full px-6 py-2.5 font-semibold text-sm cursor-pointer border-none outline-none mr-2',
         cancelButton: 'bg-white/6 hover:bg-white/12 text-white border border-white/8 rounded-full px-6 py-2.5 font-semibold text-sm cursor-pointer outline-none'
       },
-      buttonsStyling: false,
-      preConfirm: () => {
-        enableFullscreen()
-      }
+      buttonsStyling: false
     }).then(async (result) => {
       if (!result.isConfirmed) return
       await setupMedia()
@@ -928,16 +981,43 @@ function Interview() {
       // startFaceProctoring is now handled by useProctoring hook
       startBackgroundNoiseMonitor(stream)
 
-      // Crucial: set these states last so we render the interview workspace
-      setIsDisclaimerAccepted(true)
-      setIsMediaReady(true)
-      setAutoReconnecting(false)
+      // Show fullscreen prompt before entering workspace
+      Swal.fire({
+        title: 'Setup Complete',
+        text: 'Your camera, microphone, and screen sharing are ready. Click below to enter full screen and begin the interview.',
+        icon: 'success',
+        confirmButtonText: 'Enter Fullscreen & Begin',
+        allowOutsideClick: false,
+        allowEscapeKey: false,
+        background: '#161c2d',
+        color: '#fff',
+        customClass: {
+          popup: 'border border-white/8 rounded-2xl shadow-2xl',
+          title: 'text-xl font-bold text-white',
+          htmlContainer: 'text-slate-300 text-sm',
+          confirmButton: 'bg-primary hover:bg-primary-hover text-white rounded-full px-6 py-2.5 font-semibold text-sm cursor-pointer border-none outline-none'
+        },
+        buttonsStyling: false,
+        didOpen: () => {
+          const confirmBtn = Swal.getConfirmButton();
+          if (confirmBtn) {
+            confirmBtn.addEventListener('click', () => {
+              enableFullscreen();
+            });
+          }
+        }
+      }).then(() => {
+        // Crucial: set these states last so we render the interview workspace
+        setIsDisclaimerAccepted(true)
+        setIsMediaReady(true)
+        setAutoReconnecting(false)
 
-      // Play introductory prompt text-to-speech for the first question (only on first start, not reconnect)
-      const savedSess = _sessionKey ? (() => { try { return JSON.parse(sessionStorage.getItem(_sessionKey) || 'null') } catch { return null } })() : null
-      if (!savedSess?.accepted && questions.length > 0) {
-        speakAIQuestion(questions[0].text || questions[0].question || questions[0].prompt || '')
-      }
+        // Play introductory prompt text-to-speech for the first question (only on first start, not reconnect)
+        const savedSess = _sessionKey ? (() => { try { return JSON.parse(sessionStorage.getItem(_sessionKey) || 'null') } catch { return null } })() : null
+        if (!savedSess?.accepted && questions.length > 0) {
+          speakAIQuestion(questions[0].text || questions[0].question || questions[0].prompt || '')
+        }
+      })
 
     } catch (err) {
       console.error("Setup permissions failure:", err)
@@ -1720,6 +1800,13 @@ function Interview() {
     // Clear persisted session so next visit starts fresh
     if (_sessionKey) sessionStorage.removeItem(_sessionKey)
     visualizerActiveRef.current = false
+    
+    // Stop AI speech to prevent it from continuing to ask questions
+    if (window.speechSynthesis) {
+      window.speechSynthesis.cancel();
+    }
+    if (silenceTimeoutRef.current) clearTimeout(silenceTimeoutRef.current);
+
     // Stop loops
     if (faceDetectionIntervalRef.current) clearInterval(faceDetectionIntervalRef.current)
     if (noiseMonitorFrameRef.current) cancelAnimationFrame(noiseMonitorFrameRef.current)
@@ -1925,6 +2012,16 @@ function Interview() {
     )
   }
 
+  if (isMobileDevice) {
+    return (
+      <div style={{ position: 'fixed', inset: 0, background: '#161c2d', zIndex: 999999, display: 'flex', flexDirection: 'column', justifyContent: 'center', alignItems: 'center', gap: '20px', textAlign: 'center', padding: '24px' }}>
+        <ShieldAlert size={60} color="#ef4444" />
+        <h2 style={{ fontSize: '30px', fontWeight: '800', color: '#fff' }}>Device Not Supported</h2>
+        <p style={{ fontSize: '16px', color: '#94a3b8', maxWidth: '500px', lineHeight: '1.5' }}>This proctored interview requires a desktop or laptop computer with screen sharing capabilities. Mobile devices and small screens are not supported.</p>
+      </div>
+    )
+  }
+
   return (
     <div className={currentQuestion?.type === 'coding' ? "w-screen h-screen p-0 m-0 max-w-none overflow-hidden flex flex-col" : "container"}>
       {/* Alerts */}
@@ -1943,7 +2040,10 @@ function Interview() {
           <ShieldAlert size={60} color="#ef4444" style={{ animation: 'pulse 2s infinite' }} />
           <h2 style={{ fontSize: '30px', fontWeight: '800', color: '#fff' }}>⚠️ Anti-Cheating Alert</h2>
           <p style={{ fontSize: '16px', color: '#94a3b8', maxWidth: '500px', lineHeight: '1.5' }}>Full Screen Mode is REQUIRED to take this interview. Exiting fullscreen compromises proctoring validation.</p>
-          <button onClick={enableFullscreen} style={{ padding: '12px 32px', borderRadius: '9999px', background: '#4f46e5', color: '#fff', fontWeight: 'bold', border: 'none', cursor: 'pointer' }}>Enable Full Screen</button>
+          <div style={{ display: 'flex', gap: '16px' }}>
+            <button onClick={enableFullscreen} style={{ padding: '12px 32px', borderRadius: '9999px', background: '#4f46e5', color: '#fff', fontWeight: 'bold', border: 'none', cursor: 'pointer' }}>Enable Full Screen</button>
+            <button onClick={() => { setFullscreenWarning(false); handleSubmitInterview(true); }} style={{ padding: '12px 32px', borderRadius: '9999px', background: 'transparent', color: '#ef4444', fontWeight: 'bold', border: '2px solid #ef4444', cursor: 'pointer' }}>Exit Interview</button>
+          </div>
         </div>
       )}
 
