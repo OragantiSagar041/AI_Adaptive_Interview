@@ -1,5 +1,5 @@
 import React from 'react'
-import { RefreshCw, Video, X, Monitor, Eye } from 'lucide-react'
+import { RefreshCw, Video, X, Monitor, Eye, ShieldAlert } from 'lucide-react'
 import { API_BASE_URL } from '../../../apiConfig'
 import Modal from '../../Modal'
 import Button from '../../Button'

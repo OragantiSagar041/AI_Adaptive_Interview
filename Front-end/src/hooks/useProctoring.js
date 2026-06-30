@@ -226,17 +226,21 @@ export const useProctoring = (videoRef, isInterviewActive = true, logAlert = nul
         if (alertType) {
           console.log(`[Proctoring] 🚨 ALERT FIRING: ${alertType}`);
           Swal.fire({
-            toast: true,
-            position: 'top',
             icon: 'warning',
             title: '⚠️ Proctoring Alert',
             text: alertMsg,
-            showConfirmButton: false,
-            timer: 4000,
-            timerProgressBar: true,
-            background: alertType === 'multi_person' ? '#7c3aed' : '#b91c1c',
+            confirmButtonText: 'I Understand',
+            allowOutsideClick: false,
+            allowEscapeKey: false,
+            background: '#161c2d',
             color: '#fff',
-            iconColor: '#fbbf24',
+            customClass: {
+              popup: 'border border-white/8 rounded-2xl shadow-2xl',
+              title: 'text-xl font-bold text-white',
+              htmlContainer: 'text-slate-300 text-sm',
+              confirmButton: 'bg-primary hover:bg-primary-hover text-white rounded-full px-6 py-2.5 font-semibold text-sm cursor-pointer border-none outline-none'
+            },
+            buttonsStyling: false
           });
           logAlertRef.current?.(alertType, alertMsg);
 
