@@ -5395,8 +5395,12 @@ async def get_super_admin_dashboard_stats(current_admin: dict = Depends(get_curr
     if not company_id:
         raise HTTPException(status_code=400, detail="Super Admin is not associated with a company")
         
+    admin_doc = admins_collection.find_one({"_id": ObjectId(current_admin["admin_id"])})
+    credits = admin_doc.get("credits", 0) if admin_doc else 0
+    
     company = companies_collection.find_one({"_id": ObjectId(company_id)})
-    credits = company.get("credits", 0) if company else 0
+    if company and "credits" in company:
+        credits = company["credits"]
     
     session_filter = {"company_id": company_id}
     total_sessions = interview_sessions_collection.count_documents(session_filter)
@@ -5971,20 +5975,22 @@ async def stt_endpoint(file: UploadFile = File(...), language: Optional[str] = N
         with open(temp_filename, "wb") as f:
             f.write(audio_content)
             
-        with open(temp_filename, "rb") as f:
-            # Use whisper-large-v3-turbo for better accuracy with Indian accents.
-            # Pass initial_prompt to prime the model with Indian English context which
-            # dramatically reduces hallucinations and accent-related transcription errors.
-            transcript = await groq_client.audio.transcriptions.create(
-                model="whisper-large-v3-turbo",
-                file=f,
-                language=language or "en",
-                prompt="The speaker has an Indian English accent. Transcribe technical terms, programming concepts, and software engineering terminology accurately.",
-                temperature=0.0,  # Lower temperature = more deterministic, fewer hallucinations
-            )
-        os.remove(temp_filename)
-        
-        return {"transcript": transcript.text}
+        try:
+            with open(temp_filename, "rb") as f:
+                # Use whisper-large-v3-turbo for better accuracy with Indian accents.
+                # Pass initial_prompt to prime the model with Indian English context which
+                # dramatically reduces hallucinations and accent-related transcription errors.
+                transcript = await groq_client.audio.transcriptions.create(
+                    model="whisper-large-v3-turbo",
+                    file=f,
+                    language=language or "en",
+                    prompt="The speaker has an Indian English accent. Transcribe technical terms, programming concepts, and software engineering terminology accurately.",
+                    temperature=0.0,  # Lower temperature = more deterministic, fewer hallucinations
+                )
+            return {"transcript": transcript.text}
+        finally:
+            if os.path.exists(temp_filename):
+                os.remove(temp_filename)
     except Exception as e:
         print(f"STT Error: {e}")
         raise HTTPException(status_code=500, detail=str(e))
