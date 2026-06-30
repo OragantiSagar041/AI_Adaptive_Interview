@@ -208,12 +208,22 @@ export default function VoiceInterviewPage() {
   const [currentQIdx, setCurrentQIdx] = useState(_savedSession?.currentQIdx || 0)
   const [aiStatus, setAiStatus] = useState('idle')
   const [transcript, setTranscript] = useState('')
+  const [proctoringBanner, setProctoringBanner] = useState(null)
   const [interimText, setInterimText] = useState('')
   const [countdown, setCountdown] = useState(0)
   const [roundDuration, setRoundDuration] = useState(900)
   const [answeredCount, setAnsweredCount] = useState(0)
   const [followUpCount, setFollowUpCount] = useState(0)  // follow-ups per question
   const [warningsCount, setWarningsCount] = useState(0)
+  const [proctoringState, setProctoringState] = useState({
+    modelsReady: false,
+    faceVisible: null,
+    faceCount: 0,
+    multiFace: false,
+    phoneDetected: false,
+    eyeContactLost: false,
+    lastAlertType: ''
+  })
   const screenShareViolationsRef = useRef(0)
   const screenShareViolationHandlerRef = useRef(null)  // stable ref to avoid circular deps
   const usedFollowUps = useRef(new Set())
@@ -243,6 +253,7 @@ export default function VoiceInterviewPage() {
     round_type: round,
     status: aiStatus === 'idle' ? 'online' : aiStatus,
     proctoring_alerts: warningsCount,
+    proctoring_status: proctoringState,
     current_question: currentQIdx + 1,
     total_questions: questions.length || 0,
     audio_level: mockAudioLevel,
@@ -266,6 +277,32 @@ export default function VoiceInterviewPage() {
   const languageRef = useRef('English')
   const currentAudioRef = useRef(null)    // ← tracks active TTS audio so stopAudio() can kill it
   const isTransitioningRef = useRef(false)
+  // Camera preview element for proctoring - must remain VISIBLE (even if small) for browser to
+  // keep decoding frames. A fully hidden/off-screen video gets throttled by Chrome and freezes
+  // causing MediaPipe to never detect faces.
+  const candidateVideoElement = (
+    <video
+      ref={candidateVideoRef}
+      playsInline
+      muted
+      autoPlay
+      style={{
+        position: 'fixed',
+        bottom: '16px',
+        left: '16px',
+        width: '96px',
+        height: '72px',
+        objectFit: 'cover',
+        borderRadius: '10px',
+        border: '2px solid rgba(99,102,241,0.4)',
+        zIndex: 50,
+        opacity: 1,
+        pointerEvents: 'none',
+        boxShadow: '0 4px 16px rgba(0,0,0,0.5)',
+        transform: 'scaleX(-1)', // mirror effect
+      }}
+    />
+  )
 
   // Sync refs
   useEffect(() => { currentQIdxRef.current = currentQIdx }, [currentQIdx])
@@ -381,15 +418,18 @@ export default function VoiceInterviewPage() {
   }, [linkId])
 
   // ── TTS with female voice ──────────────────────────────────────────────────
-  // Stop any currently-playing TTS audio immediately
   const stopAudio = useCallback(() => {
-    if (currentAudioRef.current) {
-      currentAudioRef.current.onended = null
-      currentAudioRef.current.onerror = null
-      currentAudioRef.current.pause()
-      currentAudioRef.current.src = ''
-      currentAudioRef.current = null
+    const clearAudio = (ref) => {
+      if (ref.current) {
+        ref.current.onended = null
+        ref.current.onerror = null
+        ref.current.pause()
+        ref.current.src = ''
+        ref.current = null
+      }
     }
+    clearAudio(currentAudioRef)
+    clearAudio(activeAudioRef)
   }, [])
 
   const speak = useCallback(async (text, onEnd) => {
@@ -431,7 +471,10 @@ export default function VoiceInterviewPage() {
   }, [stopAudio])
 
   const addMsg = useCallback((role, text) => setChatMessages(p => [...p, { role, text }]), [])
-  const aiSay = useCallback((text, onEnd) => { addMsg('ai', text); speak(text, onEnd) }, [addMsg, speak])
+  const aiSay = useCallback((text, onEnd) => {
+    if (submittingRef.current || isTransitioningRef.current || roundRef.current === 'done') return;
+    addMsg('ai', text); speak(text, onEnd)
+  }, [addMsg, speak])
 
   // ── Typewriter helper ─────────────────────────────────────────────────────
   const typewrite = useCallback((text, onDone) => {
@@ -868,12 +911,12 @@ export default function VoiceInterviewPage() {
   const completeInterview = useCallback(async () => {
     if (submittingRef.current) return
     submittingRef.current = true
-    stopListening(); window.speechSynthesis?.cancel()
+    stopListening(); window.speechSynthesis?.cancel(); stopAudio()
     const iid = interviewIdRef.current
     await stopAndUploadRecording(iid)
     try { await fetch(`${API_BASE_URL}/complete-session/${linkId}?warnings=${warningsCount}`, { method: 'POST' }) } catch (_) { }
     setRound('done')
-  }, [stopListening, linkId, stopAndUploadRecording, warningsCount])
+  }, [stopListening, linkId, stopAndUploadRecording, warningsCount, stopAudio])
 
   // ── Start verbal interview ────────────────────────────────────────────────
   const startInterview = useCallback(async () => {
@@ -891,8 +934,20 @@ export default function VoiceInterviewPage() {
   // ── Proctoring: ESC + Tab + Screenshare ──────────────────────────────────
   // Helper to log proctoring events to backend
   const logProctoringAlert = useCallback((alertType, details = '') => {
+    const alertMessages = {
+      'multi_person': '👀 Multiple faces detected in frame!',
+      'no_face': '👤 No face detected - please face the camera!',
+      'phone': '📱 Mobile phone detected in frame!',
+      'eye_contact': '👁️‍🗨️ Please maintain eye contact with the screen.',
+      'tab_switch': '🚨 Tab switch detected!'
+    }
+    const displayMsg = alertMessages[alertType] || `⚠️ Proctoring alert: ${alertType}`
+    setProctoringBanner({ type: alertType, message: displayMsg })
+    setTimeout(() => setProctoringBanner(null), 4000)
+
     setWarningsCount(p => {
       const newCount = p + 1
+      setProctoringState(prev => ({ ...prev, lastAlertType: alertType }))
       // Send to backend via WebSocket
       if (wsRef.current?.readyState === WebSocket.OPEN) {
         wsRef.current.send(JSON.stringify({
@@ -996,35 +1051,114 @@ export default function VoiceInterviewPage() {
   }, [stopListening, round, logProctoringAlert])
 
   // Use Centralized AI Proctoring Hook
-  useProctoring(candidateVideoRef, round !== 'done' && round !== 'pre_checks' && round !== 'intro', (type, msg) => {
-    logProctoringAlert(type, msg)
-  })
+  useProctoring(
+    candidateVideoRef,
+    round !== 'done' && round !== 'pre_checks' && round !== 'intro',
+    (type, msg) => {
+      logProctoringAlert(type, msg)
+    },
+    setProctoringState
+  )
+
+  useEffect(() => {
+    if (!linkId || round === 'done' || round === 'pre_checks' || round === 'intro') return
+
+    const captureSnapshot = () => {
+      const video = candidateVideoRef.current
+      if (!video || video.readyState < 2 || !video.videoWidth || !video.videoHeight) return null
+      try {
+        const canvas = document.createElement('canvas')
+        canvas.width = 320
+        canvas.height = Math.max(1, Math.round((video.videoHeight / video.videoWidth) * canvas.width))
+        const ctx = canvas.getContext('2d')
+        ctx.drawImage(video, 0, 0, canvas.width, canvas.height)
+        return canvas.toDataURL('image/jpeg', 0.55)
+      } catch (_) {
+        return null
+      }
+    }
+
+    const sendHeartbeat = () => {
+      const alertTypes = []
+      if (proctoringState.multiFace) alertTypes.push('multi_person')
+      if (proctoringState.faceVisible === false) alertTypes.push('no_face')
+      if (proctoringState.phoneDetected) alertTypes.push('phone')
+      if (proctoringState.eyeContactLost) alertTypes.push('eye_contact')
+      if (proctoringState.lastAlertType) alertTypes.push(proctoringState.lastAlertType)
+
+      fetch(`${API_BASE_URL}/live-heartbeat`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          link_id: linkId,
+          snapshot_dataurl: captureSnapshot(),
+          audio_level: mockAudioLevel,
+          current_question: currentQIdx + 1,
+          total_questions: questions.length || 0,
+          tab_active: !document.hidden,
+          face_visible: proctoringState.faceVisible,
+          proctoring_alerts: warningsCount,
+          alert_types: [...new Set(alertTypes)],
+          last_alert_type: proctoringState.lastAlertType || null,
+          face_count: proctoringState.faceCount || 0,
+          multi_face: !!proctoringState.multiFace,
+          phone_detected: !!proctoringState.phoneDetected,
+          eye_contact_lost: !!proctoringState.eyeContactLost
+        })
+      }).catch(() => {})
+    }
+
+    sendHeartbeat()
+    const heartbeatInterval = setInterval(sendHeartbeat, 5000)
+    return () => clearInterval(heartbeatInterval)
+  }, [linkId, round, mockAudioLevel, currentQIdx, questions.length, proctoringState, warningsCount])
+
+  // Ensure video element gets the camera stream when the verbal round mounts
+  useEffect(() => {
+    if (round === 'verbal' && candidateVideoRef.current && cameraStreamRef.current) {
+      if (candidateVideoRef.current.srcObject !== cameraStreamRef.current) {
+        candidateVideoRef.current.srcObject = cameraStreamRef.current;
+        candidateVideoRef.current.muted = true;
+        candidateVideoRef.current.play().catch(e => console.log(e));
+      }
+    }
+  }, [round])
 
   // ─────────────────────────────────────────────────────────────────────────────
   // RENDER — delegate to sub-components for coding/case study
   // ─────────────────────────────────────────────────────────────────────────────
 
   if (round === 'coding' && codingQuestion) {
-    return <VoiceCodingRound question={codingQuestion} interviewId={interviewId} linkId={linkId} duration={roundDuration}
-      sessionDetail={sessionDetail} language={language} wsRef={wsRef} onComplete={() => {
-        const type = interviewType
-        if (type === 'Non-Technical') {
-          // fetch case study after coding
-          fetch(`${API_BASE_URL}/case-study/start`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ interview_id: interviewId }) })
-            .then(r => r.json()).then(data => {
-              const cqs = (data.case_study_round?.questions || []).map((q, i) => ({ id: `cs_${i}`, type: 'case_study', text: q.text || q.scenario || '', caseStudyIndex: i }))
-              setCaseStudyQuestions(cqs); setRound('case_study')
-            }).catch(() => completeInterview())
-        } else {
-          completeInterview()
-        }
-      }} />
+    return (
+      <>
+        <VoiceCodingRound question={codingQuestion} interviewId={interviewId} linkId={linkId} duration={roundDuration}
+          sessionDetail={sessionDetail} language={language} wsRef={wsRef} onComplete={() => {
+            const type = interviewType
+            if (type === 'Non-Technical') {
+              // fetch case study after coding
+              fetch(`${API_BASE_URL}/case-study/start`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ interview_id: interviewId }) })
+                .then(r => r.json()).then(data => {
+                  const cqs = (data.case_study_round?.questions || []).map((q, i) => ({ id: `cs_${i}`, type: 'case_study', text: q.text || q.scenario || '', caseStudyIndex: i }))
+                  setCaseStudyQuestions(cqs); setRound('case_study')
+                }).catch(() => completeInterview())
+            } else {
+              completeInterview()
+            }
+          }} />
+        {candidateVideoElement}
+      </>
+    )
   }
 
   if (round === 'case_study' && caseStudyQuestions.length) {
-    return <VoiceCaseStudy question={caseStudyQuestions[0]} allQuestions={caseStudyQuestions} duration={roundDuration}
-      interviewId={interviewId} linkId={linkId} sessionDetail={sessionDetail}
-      language={language} wsRef={wsRef} onComplete={completeInterview} />
+    return (
+      <>
+        <VoiceCaseStudy question={caseStudyQuestions[0]} allQuestions={caseStudyQuestions} duration={roundDuration}
+          interviewId={interviewId} linkId={linkId} sessionDetail={sessionDetail}
+          language={language} wsRef={wsRef} onComplete={completeInterview} />
+        {candidateVideoElement}
+      </>
+    )
   }
 
   if (loading) return (
@@ -1129,8 +1263,6 @@ export default function VoiceInterviewPage() {
           </button>
         </div>
       </div>
-      {/* Hidden Video for AI Proctoring - MUST have valid dimensions for MediaPipe to work properly */}
-      <video ref={candidateVideoRef} style={{ position: 'absolute', opacity: 0, pointerEvents: 'none', width: '640px', height: '480px', left: '-9999px', top: '-9999px', zIndex: -1 }} playsInline muted autoPlay />
     </div>
   )
 
@@ -1221,6 +1353,23 @@ export default function VoiceInterviewPage() {
         @keyframes glow-listen{0%,100%{box-shadow:0 0 40px rgba(16,185,129,.4)}50%{box-shadow:0 0 80px rgba(16,185,129,.8)}}
         @keyframes spin-slow{from{transform:rotate(0deg)}to{transform:rotate(360deg)}}
       `}</style>
+
+      {/* Proctoring Banner */}
+      {proctoringBanner && (
+        <div style={{
+          position: 'fixed', top: 0, left: 0, right: 0, zIndex: 9999,
+          background: proctoringBanner.type === 'tab_switch' ? 'linear-gradient(90deg,#b91c1c,#dc2626)' : 'linear-gradient(90deg,#7c3aed,#6d28d9)',
+          color: 'white', padding: '12px 24px',
+          display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '12px',
+          fontSize: '15px', fontWeight: '700', letterSpacing: '0.01em',
+          boxShadow: '0 4px 20px rgba(0,0,0,0.4)',
+          animation: 'fadeIn 0.2s ease'
+        }}>
+          <span style={{ fontSize: '20px' }}>{proctoringBanner.type === 'tab_switch' ? '🚨' : proctoringBanner.type === 'multi_person' ? '👥' : proctoringBanner.type === 'no_face' ? '👤' : '⚠️'}</span>
+          <span>{proctoringBanner.message}</span>
+          <span style={{ fontSize: '12px', opacity: 0.8, fontWeight: 500 }}>- Recorded &amp; logged</span>
+        </div>
+      )}
 
       {/* Header */}
       <header className="flex items-center justify-between px-6 py-4 border-b border-white/6 bg-[#0a0f1e]/90 backdrop-blur sticky top-0 z-40">
@@ -1353,6 +1502,8 @@ export default function VoiceInterviewPage() {
           </div>
         </div>
       </div>
+      {/* Hidden Video for AI Proctoring - MUST have valid dimensions for MediaPipe to work properly */}
+      {candidateVideoElement}
     </div>
   )
 }

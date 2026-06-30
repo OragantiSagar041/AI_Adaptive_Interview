@@ -128,21 +128,6 @@ class RazorpayOrderRequest(BaseModel):
     amount_inr: float
     credits: int
 
-@router.post("/api/razorpay/create-upgrade-order")
-async def create_upgrade_order(req: RazorpayOrderRequest):
-    import uuid
-    # Mock order creation for Razorpay
-    return {"status": "success", "razorpay_order_id": f"order_{uuid.uuid4().hex[:14]}"}
-
-class RazorpayVerifyRequest(BaseModel):
-    razorpay_order_id: str
-    razorpay_payment_id: str
-    razorpay_signature: str
-
-@router.post("/api/razorpay/verify-upgrade")
-async def verify_upgrade(req: RazorpayVerifyRequest):
-    # Mock successful verification
-    return {"status": "success", "message": "Payment verified successfully"}
 
 @router.on_event("startup")
 def startup_event_cloudinary():
@@ -1238,14 +1223,27 @@ class InterviewAlert(BaseModel):
     type: str
     message: str
 
+from fastapi import Request
+import json
+
 @router.post("/interview/{interview_id}/alert")
-def log_interview_alert(interview_id: str, alert: InterviewAlert):
+async def log_interview_alert(interview_id: str, request: Request):
+    try:
+        body_bytes = await request.body()
+        data = json.loads(body_bytes)
+        alert_type = data.get("type", "warning")
+        alert_message = data.get("message", "Unknown alert")
+    except Exception:
+        # Fallback if invalid JSON
+        alert_type = "warning"
+        alert_message = "Invalid alert data received"
+        
     interview_sessions_collection.update_one(
         {"link_id": interview_id},
         {"$push": {"alerts": {
             "timestamp": datetime.now(timezone.utc).isoformat(),
-            "type": alert.type,
-            "message": alert.message
+            "type": alert_type,
+            "message": alert_message
         }}}
     )
     return {"status": "success"}
@@ -3846,6 +3844,13 @@ class LiveHeartbeatRequest(BaseModel):
     video_fps: Optional[float] = None
     tab_active: Optional[bool] = True
     face_visible: Optional[bool] = None
+    proctoring_alerts: int = 0
+    alert_types: Optional[List[str]] = None
+    last_alert_type: Optional[str] = None
+    face_count: int = 0
+    multi_face: bool = False
+    phone_detected: bool = False
+    eye_contact_lost: bool = False
 
 
 @router.post("/live-heartbeat")
@@ -3862,6 +3867,13 @@ async def live_heartbeat(data: LiveHeartbeatRequest):
         "video_fps": data.video_fps,
         "tab_active": data.tab_active,
         "face_visible": data.face_visible,
+        "proctoring_alerts": data.proctoring_alerts,
+        "alert_types": data.alert_types or [],
+        "last_alert_type": data.last_alert_type,
+        "face_count": data.face_count,
+        "multi_face": data.multi_face,
+        "phone_detected": data.phone_detected,
+        "eye_contact_lost": data.eye_contact_lost,
     }
     return {"status": "ok"}
 
@@ -3893,6 +3905,13 @@ def get_live_snapshot(link_id: str):
         "video_fps": snap.get("video_fps"),
         "tab_active": snap.get("tab_active", True),
         "face_visible": snap.get("face_visible"),
+        "proctoring_alerts": snap.get("proctoring_alerts", 0),
+        "alert_types": snap.get("alert_types", []),
+        "last_alert_type": snap.get("last_alert_type"),
+        "face_count": snap.get("face_count", 0),
+        "multi_face": snap.get("multi_face", False),
+        "phone_detected": snap.get("phone_detected", False),
+        "eye_contact_lost": snap.get("eye_contact_lost", False),
     }
 
 
@@ -3979,6 +3998,13 @@ async def get_ongoing_interviews(admin_id: Optional[str] = None, current_admin: 
             "video_fps": snap.get("video_fps"),
             "tab_active": snap.get("tab_active", True),
             "face_visible": snap.get("face_visible"),
+            "proctoring_alerts": snap.get("proctoring_alerts", 0),
+            "alert_types": snap.get("alert_types", []),
+            "last_alert_type": snap.get("last_alert_type"),
+            "face_count": snap.get("face_count", 0),
+            "multi_face": snap.get("multi_face", False),
+            "phone_detected": snap.get("phone_detected", False),
+            "eye_contact_lost": snap.get("eye_contact_lost", False),
         })
 
     return {"sessions": sessions, "count": len(sessions)}
@@ -4027,10 +4053,22 @@ async def webrtc_endpoint(websocket: WebSocket, role: str, link_id: str, token: 
                 if data.get("type") == "telemetry":
                     if "_live_snapshots" not in globals():
                         globals()["_live_snapshots"] = {}
+                    existing_snapshot = globals()["_live_snapshots"].get(link_id, {})
+                    telemetry_payload = data.get("data", {}) or {}
+                    proctoring_status = telemetry_payload.get("proctoring_status", {}) or {}
                     globals()["_live_snapshots"][link_id] = {
+                        **existing_snapshot,
                         "ts": datetime.now(timezone.utc).isoformat(),
-                        "audio_level": data.get("data", {}).get("audio_level", 0),
-                        "current_question": data.get("data", {}).get("current_question", "")
+                        "audio_level": telemetry_payload.get("audio_level", existing_snapshot.get("audio_level", 0)),
+                        "current_question": telemetry_payload.get("current_question", existing_snapshot.get("current_question", "")),
+                        "total_questions": telemetry_payload.get("total_questions", existing_snapshot.get("total_questions")),
+                        "proctoring_alerts": telemetry_payload.get("proctoring_alerts", existing_snapshot.get("proctoring_alerts", 0)),
+                        "last_alert_type": proctoring_status.get("lastAlertType") or existing_snapshot.get("last_alert_type"),
+                        "face_visible": proctoring_status.get("faceVisible", existing_snapshot.get("face_visible")),
+                        "face_count": proctoring_status.get("faceCount", existing_snapshot.get("face_count", 0)),
+                        "multi_face": proctoring_status.get("multiFace", existing_snapshot.get("multi_face", False)),
+                        "phone_detected": proctoring_status.get("phoneDetected", existing_snapshot.get("phone_detected", False)),
+                        "eye_contact_lost": proctoring_status.get("eyeContactLost", existing_snapshot.get("eye_contact_lost", False)),
                     }
             elif role == "admin":
                 await manager.send_to_candidate(link_id, data)
@@ -5543,6 +5581,14 @@ def get_dashboard_aggregated_data(admin_id: Optional[str] = None, current_admin:
                     "online": online,
                     "audio_level": audio_level,
                     "current_question": current_question,
+                    "proctoring_alerts": snap.get("proctoring_alerts", 0),
+                    "alert_types": snap.get("alert_types", []),
+                    "last_alert_type": snap.get("last_alert_type"),
+                    "face_visible": snap.get("face_visible"),
+                    "face_count": snap.get("face_count", 0),
+                    "multi_face": snap.get("multi_face", False),
+                    "phone_detected": snap.get("phone_detected", False),
+                    "eye_contact_lost": snap.get("eye_contact_lost", False),
                     "link_id": row.get("link_id", ""),
                     "candidate_name": row.get("candidate_name", ""),
                     "candidate_email": row.get("candidate_email", ""),

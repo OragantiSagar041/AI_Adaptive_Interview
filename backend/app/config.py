@@ -152,7 +152,7 @@ PLAN_ALIASES = {
 LAST_422_ERROR = None
 
 request_counts = defaultdict(list)
-RATE_LIMIT = 50  # requests per minute per IP
+RATE_LIMIT = 300  # requests per minute per IP
 RATE_LIMIT_WINDOW = 60
 RATE_LIMIT_EXEMPT_PATHS = {
     "/",
@@ -163,6 +163,9 @@ RATE_LIMIT_EXEMPT_PREFIXES = (
     "/uploads",
     "/admin/ongoing-interviews",
     "/admin/live-snapshot",
+    "/superadmin/dashboard",
+    "/superadmin/profile",
+    "/api/notifications",
 )
 
 # ---------------------------------------------------------------------------

@@ -893,7 +893,7 @@ export default function AdminPage({ role: initialRole = 'admin' }) {
         theme: { color: '#6366f1' },
         handler: async function (response) {
           try {
-            await axios.post(`${API_BASE_URL}/api/razorpay/verify-upgrade`, {
+            const verifyRes = await axios.post(`${API_BASE_URL}/api/razorpay/verify-upgrade`, {
               plan_name: plan.name,
               admin_id: adminUser?.id || adminUser?._id || '',
               razorpay_order_id: response.razorpay_order_id || orderData.razorpay_order_id || '',
@@ -904,7 +904,9 @@ export default function AdminPage({ role: initialRole = 'admin' }) {
             });
             alert("Credits added successfully!")
             setShowUpgradePlansModal(false)
-            window.location.reload()
+            if (dispatch && verifyRes.data?.credits_added) {
+              dispatch({ type: 'auth/updateCredits', payload: adminUser.credits + verifyRes.data.credits_added })
+            }
           } catch (e) {
             alert("Payment verification failed")
           }

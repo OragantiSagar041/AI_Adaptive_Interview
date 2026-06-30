@@ -118,6 +118,13 @@ def send_email_task(
             "htmlContent": html_content,
         }
 
+        from app.services import should_attach_job_description_pdf, generate_job_description_pdf_base64
+        if should_attach_job_description_pdf(job_description):
+            payload["attachment"] = [{
+                "name": "job_description.pdf",
+                "content": generate_job_description_pdf_base64(job_description)
+            }]
+
         response = requests.post(url, json=payload, headers=headers)
         logger.info(f"Email sent status: {response.status_code}")
         return {"status": response.status_code}

@@ -875,6 +875,9 @@ export default function CreateInterviewPage() {
                             email: data.email || prev.email,
                             resumeText: data.text || ''
                           }))
+                          if (data.email) {
+                            handleCheckCandidate(data.email)
+                          }
                         }
                       }, setResumeParsing)
                     }}
@@ -1211,8 +1214,32 @@ export default function CreateInterviewPage() {
                         { value: 'Information Technology', label: 'Information Technology' },
                         { value: 'Software & SaaS', label: 'Software & SaaS' },
                         { value: 'Healthcare', label: 'Healthcare' },
+                        { value: 'Pharmaceuticals', label: 'Pharmaceuticals' },
+                        { value: 'Banking', label: 'Banking' },
                         { value: 'Financial Services', label: 'Financial Services' },
+                        { value: 'Insurance', label: 'Insurance' },
+                        { value: 'FinTech', label: 'FinTech' },
                         { value: 'Education', label: 'Education' },
+                        { value: 'Manufacturing', label: 'Manufacturing' },
+                        { value: 'Automotive', label: 'Automotive' },
+                        { value: 'Telecommunications', label: 'Telecommunications' },
+                        { value: 'Retail', label: 'Retail' },
+                        { value: 'E-commerce', label: 'E-commerce' },
+                        { value: 'Logistics & Supply Chain', label: 'Logistics & Supply Chain' },
+                        { value: 'Transportation', label: 'Transportation' },
+                        { value: 'Aviation', label: 'Aviation' },
+                        { value: 'Hospitality', label: 'Hospitality' },
+                        { value: 'Tourism', label: 'Tourism' },
+                        { value: 'Real Estate', label: 'Real Estate' },
+                        { value: 'Construction', label: 'Construction' },
+                        { value: 'Energy & Utilities', label: 'Energy & Utilities' },
+                        { value: 'Oil & Gas', label: 'Oil & Gas' },
+                        { value: 'Media & Entertainment', label: 'Media & Entertainment' },
+                        { value: 'Marketing & Advertising', label: 'Marketing & Advertising' },
+                        { value: 'Legal Services', label: 'Legal Services' },
+                        { value: 'Government & Public Sector', label: 'Government & Public Sector' },
+                        { value: 'Non-Profit Organizations', label: 'Non-Profit Organizations' },
+                        { value: 'Agriculture & Food Processing', label: 'Agriculture & Food Processing' },
                         { value: 'Human Resources & Staffing', label: 'Human Resources & Staffing' }
                       ]}
                     />

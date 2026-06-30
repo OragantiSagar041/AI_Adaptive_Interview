@@ -906,6 +906,7 @@ def generate_jd_questions(jd_text: str, ai_instructions: str = "", interview_typ
         1. IDENTIFY the specific Job Role/Title from the Job Description and tailor all questions specifically for that level and position.
         2. EXTRACT top 5 critical business, management, or functional keywords from the Job Description (e.g., 'Team Management', 'Stakeholder Communication', 'Agile Delivery', 'Conflict Resolution').
         3. GENERATE 6 Case Study and Scenario questions testing these exact keywords.
+           - CRITICAL INDUSTRY ALIGNMENT: EVERY SINGLE QUESTION MUST be explicitly framed within the '{industry}' industry. Use industry-specific terminology, business models, and common scenarios. Do not use generic software or business examples.
            - Instead of generic "Tell me about a time" questions, present a sharp, focused business scenario or case study situated within the '{industry}' industry and ask how they would solve it.
            - The extracted keywords MUST be the central theme of the case studies.
            - Do NOT ask technical coding or syntax questions. Focus on problem-solving, leadership, team management, and strategic thinking.
@@ -923,6 +924,7 @@ def generate_jd_questions(jd_text: str, ai_instructions: str = "", interview_typ
         1. IDENTIFY the specific Job Role/Title from the Job Description and tailor all questions specifically for that level and position.
         2. EXTRACT top 5 critical technical keywords/skills from the Job Description (e.g., 'React', 'AWS', 'System Design').
         3. GENERATE 6 specific interview questions testing these exact skills.
+           - CRITICAL INDUSTRY ALIGNMENT: EVERY SINGLE QUESTION MUST be explicitly framed within the '{industry}' industry. Use industry-specific terminology, technical challenges, and use-cases. Do not use generic examples.
            - The questions and scenarios should be highly relevant to the '{industry}' industry.
            - The extracted keywords MUST be the focus of the questions.
            - Do NOT ask generic "soft skill" questions unless the JD emphasizes them.
@@ -1214,44 +1216,67 @@ def _generate_offline_questions(resume_text: str, jd_text: str, total_count: int
     # ── If language is NOT English, use fully translated offline questions ──
     if language != "English":
         try:
-            from offline_language_fallback import OFFLINE_LANGUAGE_TECHNICAL_QUESTIONS, OFFLINE_LANGUAGE_TEMPLATE_QUESTIONS
+            from offline_language_fallback import OFFLINE_LANGUAGE_TECHNICAL_QUESTIONS, OFFLINE_LANGUAGE_TEMPLATE_QUESTIONS, OFFLINE_LANGUAGE_CASE_STUDY_TEMPLATES
             lang_tech = OFFLINE_LANGUAGE_TECHNICAL_QUESTIONS.get(language, [])
             lang_tmpl = OFFLINE_LANGUAGE_TEMPLATE_QUESTIONS.get(language, [])
+            lang_case = OFFLINE_LANGUAGE_CASE_STUDY_TEMPLATES.get(language, [])
         except ImportError:
             lang_tech = []
             lang_tmpl = []
-        
-        # Get skills from resume/JD to personalize template questions
-        skills_to_ask = resume_skills if resume_skills else jd_skills
-        if not skills_to_ask:
-            skills_to_ask = generic_skills
-        
-        # Add all the pre-translated technical questions
-        for i, q_text in enumerate(lang_tech):
-            questions.append({
-                "question": q_text,
-                "difficulty": ["Easy", "Medium", "Hard"][i % 3],
-                "type": "Technical",
-                "category": "Technical Expertise"
-            })
-        
-        # Add skill-specific questions using translated templates
-        if lang_tmpl:
-            for i in range(max(10, target - len(questions))):
-                skill = skills_to_ask[i % len(skills_to_ask)]
-                template = lang_tmpl[i % len(lang_tmpl)]
-                try:
-                    q_text = template.format(skill=skill, industry=industry)
-                except (KeyError, IndexError):
-                    q_text = template.replace("{skill}", skill).replace("{industry}", industry)
+            lang_case = []
+            
+        if interview_type == "Non-Technical":
+            non_tech_keywords = ["Team Management", "Leadership", "Stakeholder Management", "Conflict Resolution", "Project Management", "Agile", "Budgeting", "Client Relations"]
+            jd_non_tech = [kw for kw in non_tech_keywords if kw.lower() in jd_lower]
+            if not jd_non_tech: jd_non_tech = ["Team Collaboration", "Problem Solving", "Time Management"]
+            
+            if lang_case:
+                for i in range(max(10, target)):
+                    skill = jd_non_tech[i % len(jd_non_tech)]
+                    template = lang_case[i % len(lang_case)]
+                    try:
+                        q_text = template.format(skill=skill, industry=industry)
+                    except (KeyError, IndexError):
+                        q_text = template.replace("{skill}", skill).replace("{industry}", industry)
+                    questions.append({
+                        "question": q_text,
+                        "difficulty": ["Medium", "Hard"][i % 2],
+                        "type": "Behavioral",
+                        "category": f"{skill} Case Study"
+                    })
+            return questions[:target]
+        else:
+            # Get skills from resume/JD to personalize template questions
+            skills_to_ask = resume_skills if resume_skills else jd_skills
+            if not skills_to_ask:
+                skills_to_ask = generic_skills
+            
+            # Add all the pre-translated technical questions
+            for i, q_text in enumerate(lang_tech):
                 questions.append({
                     "question": q_text,
-                    "difficulty": ["Medium", "Hard"][i % 2],
+                    "difficulty": ["Easy", "Medium", "Hard"][i % 3],
                     "type": "Technical",
-                    "category": f"{skill} Expertise"
+                    "category": "Technical Expertise"
                 })
-        
-        return questions[:target]
+            
+            # Add skill-specific questions using translated templates
+            if lang_tmpl:
+                for i in range(max(10, target - len(questions))):
+                    skill = skills_to_ask[i % len(skills_to_ask)]
+                    template = lang_tmpl[i % len(lang_tmpl)]
+                    try:
+                        q_text = template.format(skill=skill, industry=industry)
+                    except (KeyError, IndexError):
+                        q_text = template.replace("{skill}", skill).replace("{industry}", industry)
+                    questions.append({
+                        "question": q_text,
+                        "difficulty": ["Medium", "Hard"][i % 2],
+                        "type": "Technical",
+                        "category": f"{skill} Expertise"
+                    })
+            
+            return questions[:target]
     
     # --- PHASE 1: SELF-INTRO / BACKGROUND ---
     if has_resume:
@@ -1769,39 +1794,43 @@ def generate_job_description_pdf_base64(job_description: str) -> str:
 def build_job_description_block(job_description: str) -> str:
     text = (job_description or "").strip()
     if not text:
-        return '<p style="margin: 0; color: #64748b; font-size: 14px; line-height: 1.5;">Job description will be shared separately.</p>'
+        return '<p style="margin: 0; color: #4b5563; font-size: 14px; line-height: 1.6;">Job description will be shared separately.</p>'
 
     if should_attach_job_description_pdf(text):
         summary = html.escape(textwrap.shorten(" ".join(text.split()), width=260, placeholder="..."))
         return (
-            '<p style="margin: 0 0 8px; color: #64748b; font-size: 14px; line-height: 1.6;">'
+            '<p style="margin: 0 0 12px 0; color: #4b5563; font-size: 14px; line-height: 1.6; text-align: left;">'
             f'{summary}</p>'
-            '<p style="margin: 0; color: #475569; font-size: 13px; line-height: 1.5;">'
+            '<p style="margin: 0; color: #6b7280; font-size: 13px; line-height: 1.5; font-style: italic; text-align: left;">'
             'The full job description is attached as a PDF so the email stays clean and easy to read.'
             '</p>'
         )
 
     formatted_jd = "<br/>".join(html.escape(line) for line in text.splitlines()) or html.escape(text)
-    return f'<p style="margin: 0; color: #64748b; font-size: 14px; line-height: 1.5;">{formatted_jd}</p>'
+    return f'<p style="margin: 0; color: #4b5563; font-size: 14px; line-height: 1.6; text-align: left;">{formatted_jd}</p>'
 
 def build_schedule_block(scheduled_start: str = "", scheduled_end: str = "") -> str:
     if not scheduled_start:
         return ""
 
-    schedule_block = f'<p><b>Scheduled Time:</b> {format_datetime_for_display(scheduled_start)}'
+    schedule_block = f'<p style="color: #4b5563; line-height: 1.6; font-size: 14px; margin: 0 0 4px 0;">'
+    schedule_block += f'<strong style="color: #111827;">Scheduled Date & Time:</strong> {format_datetime_for_display(scheduled_start)}'
+    
     end_dt = parse_iso_datetime(scheduled_end) if scheduled_end else None
     if end_dt:
-        # For the end time, we just need the time part in IST
         ist_offset = timezone(timedelta(hours=5, minutes=30))
         ist_end_dt = end_dt.astimezone(ist_offset)
         schedule_block += f' - {ist_end_dt.strftime("%I:%M %p")} (IST)'
     else:
         schedule_block += ' (IST)'
     schedule_block += '</p>'
+    
     schedule_block += (
-        '<p style="color: #e74c3c;"><b>Important:</b> '
-        'This interview can only be accessed during the scheduled timeline, and the invitation email is sent 15 minutes before the start time.'
+        '<div style="background-color: #f9fafb; border-left: 3px solid #6b7280; padding: 12px 16px; margin-top: 12px;">'
+        '<p style="margin: 0; color: #374151; font-size: 13px; line-height: 1.5;">'
+        '<b>Note:</b> The assessment link will only be active during the scheduled time window. Access will be granted 15 minutes prior to the start time.'
         '</p>'
+        '</div>'
     )
     return schedule_block
 
@@ -1809,162 +1838,67 @@ def build_default_interview_email_html(candidate_name: str, duration: int, job_d
     schedule_block = build_schedule_block(scheduled_start, scheduled_end)
     job_description_block = build_job_description_block(job_description)
 
-    return f"""<!DOCTYPE html>
-<html lang="en">
-<head>
-  <meta charset="UTF-8"/>
-  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
-  <title>Interview Invitation</title>
-</head>
-<body style="margin:0;padding:0;background-color:#f0f4f8;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Helvetica,Arial,sans-serif;">
-  <table role="presentation" width="100%" cellspacing="0" cellpadding="0" border="0" style="background-color:#f0f4f8;padding:40px 0;">
-    <tr><td align="center">
-      <table role="presentation" width="600" cellspacing="0" cellpadding="0" border="0" style="max-width:600px;width:100%;">
+    expiry_message = ""
+    if not scheduled_start:
+        expiry_message = (
+            '<div style="background-color: #f9fafb; border-left: 3px solid #6b7280; padding: 12px 16px; margin-top: 12px;">'
+            '<p style="margin: 0; color: #374151; font-size: 13px; line-height: 1.5;">'
+            '<b>Note:</b> This assessment link is valid for exactly <b>24 hours</b> from the time of this email.'
+            '</p>'
+            '</div>'
+        )
 
-        <!-- HEADER LOGO BAND -->
-        <tr>
-          <td style="background-color:#4f46e5;border-radius:12px 12px 0 0;padding:28px 40px;text-align:left;">
-            <table role="presentation" width="100%" cellspacing="0" cellpadding="0">
-              <tr>
-                <td>
-                  <span style="display:inline-block;background:rgba(255,255,255,0.15);border-radius:8px;padding:6px 14px;font-size:13px;font-weight:700;color:#c7d2fe;letter-spacing:0.08em;text-transform:uppercase;">Hire IQ Platform</span>
-                  <h1 style="margin:14px 0 0;color:#ffffff;font-size:26px;font-weight:800;letter-spacing:-0.03em;line-height:1.2;">You've Been Invited<br/>to an AI Interview</h1>
-                </td>
-                <td style="text-align:right;vertical-align:top;">
-                  <div style="width:48px;height:48px;background:rgba(255,255,255,0.18);border-radius:12px;display:inline-flex;align-items:center;justify-content:center;font-size:24px;line-height:48px;text-align:center;">🎯</div>
-                </td>
-              </tr>
-            </table>
-          </td>
-        </tr>
-
-        <!-- THIN ACCENT BAR -->
-        <tr><td style="background:linear-gradient(90deg,#6366f1,#8b5cf6,#4f46e5);height:3px;"></td></tr>
-
-        <!-- MAIN BODY CARD -->
-        <tr>
-          <td style="background:#ffffff;padding:40px 40px 32px;border-left:1px solid #e2e8f0;border-right:1px solid #e2e8f0;">
-
-            <!-- GREETING -->
-            <p style="margin:0 0 8px;font-size:17px;color:#0f172a;font-weight:600;">Dear {html.escape(candidate_name)},</p>
-            <p style="margin:0 0 28px;font-size:14px;color:#64748b;line-height:1.7;">Congratulations! You have been selected for an AI-powered interview. Please review the details below and click the button to begin when you're ready.</p>
-
-            <!-- ROLE DETAILS BOX -->
-            <table role="presentation" width="100%" cellspacing="0" cellpadding="0" border="0" style="background:#f8fafc;border:1px solid #e2e8f0;border-left:4px solid #6366f1;border-radius:8px;margin-bottom:20px;">
-              <tr>
-                <td style="padding:20px 24px;">
-                  <p style="margin:0 0 10px;font-size:11px;font-weight:700;color:#6366f1;text-transform:uppercase;letter-spacing:0.1em;">📋 Role Details</p>
-                  {job_description_block}
-                </td>
-              </tr>
-            </table>
-
-            <!-- INTERVIEW META (Duration + Schedule) -->
-            <table role="presentation" width="100%" cellspacing="0" cellpadding="0" border="0" style="margin-bottom:28px;">
-              <tr>
-                <td width="50%" style="padding-right:8px;">
-                  <div style="background:#f8fafc;border:1px solid #e2e8f0;border-radius:8px;padding:16px 20px;">
-                    <p style="margin:0 0 4px;font-size:11px;font-weight:700;color:#94a3b8;text-transform:uppercase;letter-spacing:0.08em;">⏱ Duration</p>
-                    <p style="margin:0;font-size:18px;font-weight:700;color:#0f172a;">{duration} <span style="font-size:14px;color:#64748b;font-weight:500;">minutes</span></p>
-                  </div>
-                </td>
-                <td width="50%" style="padding-left:8px;">
-                  <div style="background:#f8fafc;border:1px solid #e2e8f0;border-radius:8px;padding:16px 20px;">
-                    <p style="margin:0 0 4px;font-size:11px;font-weight:700;color:#94a3b8;text-transform:uppercase;letter-spacing:0.08em;">📡 Format</p>
-                    <p style="margin:0;font-size:18px;font-weight:700;color:#0f172a;">AI <span style="font-size:14px;color:#64748b;font-weight:500;">Adaptive</span></p>
-                  </div>
-                </td>
-              </tr>
-            </table>
-
-            {schedule_block}
-
-            <!-- CTA BUTTON -->
-            <div style="text-align:center;margin:32px 0;">
-              <a href="{full_link}" style="display:inline-block;background:#4f46e5;color:#ffffff;text-decoration:none;padding:15px 44px;border-radius:10px;font-size:16px;font-weight:700;letter-spacing:0.02em;">
-                Begin My Interview →
-              </a>
-              <p style="margin:12px 0 0;font-size:12px;color:#94a3b8;">Button not working? <a href="{full_link}" style="color:#6366f1;text-decoration:underline;">Copy this link</a></p>
+    return f"""
+    <!DOCTYPE html>
+    <html>
+    <body style="font-family: Arial, Helvetica, sans-serif; margin: 0; padding: 40px 20px; background-color: #f3f4f6; min-height: 100%;">
+        <div style="max-width: 600px; margin: 0 auto; background-color: #ffffff; border: 1px solid #e5e7eb; border-top: 4px solid #1e3a8a; overflow: hidden;">
+            
+            <!-- Header -->
+            <div style="padding: 40px 40px 20px 40px;">
+                <h1 style="color: #111827; margin: 0; font-size: 24px; font-weight: 600; letter-spacing: -0.01em;">Interview Invitation</h1>
             </div>
 
-          </td>
-        </tr>
-
-        <!-- GUIDELINES SECTION (Red-accented) -->
-        <tr>
-          <td style="background:#fff8f8;border:1px solid #fecaca;border-top:none;border-left:1px solid #e2e8f0;border-right:1px solid #e2e8f0;padding:24px 40px;">
-            <p style="margin:0 0 14px;font-size:13px;font-weight:800;color:#b91c1c;text-transform:uppercase;letter-spacing:0.08em;">⚠️ Mandatory Interview Rules</p>
-            <table role="presentation" width="100%" cellspacing="0" cellpadding="0" border="0">
-              <tr>
-                <td style="padding:8px 0;border-bottom:1px solid #fee2e2;">
-                  <table role="presentation" cellspacing="0" cellpadding="0">
-                    <tr>
-                      <td style="width:28px;vertical-align:top;padding-top:2px;font-size:16px;">🖥️</td>
-                      <td style="font-size:13px;color:#7f1d1d;line-height:1.6;"><b>Full-Screen Only:</b> You must remain in full-screen mode. Exiting or switching tabs is flagged as a violation.</td>
-                    </tr>
-                  </table>
-                </td>
-              </tr>
-              <tr>
-                <td style="padding:8px 0;border-bottom:1px solid #fee2e2;">
-                  <table role="presentation" cellspacing="0" cellpadding="0">
-                    <tr>
-                      <td style="width:28px;vertical-align:top;padding-top:2px;font-size:16px;">📷</td>
-                      <td style="font-size:13px;color:#7f1d1d;line-height:1.6;"><b>Camera Active:</b> AI-powered face tracking and multi-face detection will be active throughout the session.</td>
-                    </tr>
-                  </table>
-                </td>
-              </tr>
-              <tr>
-                <td style="padding:8px 0;">
-                  <table role="presentation" cellspacing="0" cellpadding="0">
-                    <tr>
-                      <td style="width:28px;vertical-align:top;padding-top:2px;font-size:16px;">🔇</td>
-                      <td style="font-size:13px;color:#7f1d1d;line-height:1.6;"><b>Quiet Environment:</b> Background noise or additional voices may negatively impact your evaluation score.</td>
-                    </tr>
-                  </table>
-                </td>
-              </tr>
-            </table>
-          </td>
-        </tr>
-
-        <!-- IMPORTANT NOTE -->
-        <tr>
-          <td style="background:#fffbeb;border:1px solid #fde68a;border-top:none;border-left:1px solid #e2e8f0;border-right:1px solid #e2e8f0;padding:16px 40px;">
-            <p style="margin:0;font-size:13px;color:#92400e;line-height:1.6;">🔔 <b>Note:</b> Please join only during the scheduled time window. If no schedule is configured, the link is valid for <b>24 hours</b>. Ensure a stable internet connection before starting.</p>
-          </td>
-        </tr>
-
-        <!-- FOOTER -->
-        <tr>
-          <td style="background:#f8fafc;border:1px solid #e2e8f0;border-top:3px solid #e2e8f0;border-radius:0 0 12px 12px;padding:24px 40px;">
-            <table role="presentation" width="100%" cellspacing="0" cellpadding="0">
-              <tr>
-                <td>
-                  <p style="margin:0 0 2px;font-size:14px;font-weight:700;color:#0f172a;">Hire IQ Recruitment Team</p>
-                  <p style="margin:0;font-size:12px;color:#94a3b8;">Powered by AI Adaptive Interview Platform</p>
-                </td>
-                <td style="text-align:right;vertical-align:middle;">
-                  <span style="font-size:11px;color:#cbd5e1;font-weight:500;">HIRE IQ</span>
-                </td>
-              </tr>
-            </table>
-          </td>
-        </tr>
-
-        <!-- BOTTOM DISCLAIMER -->
-        <tr>
-          <td style="padding:20px 0;text-align:center;">
-            <p style="margin:0;font-size:11px;color:#94a3b8;line-height:1.6;">This email was sent to you because you are a candidate in an interview process.<br/>If you believe this is an error, please disregard this email.</p>
-          </td>
-        </tr>
-
-      </table>
-    </td></tr>
-  </table>
-</body>
-</html>
+            <!-- Body -->
+            <div style="padding: 0 40px 40px 40px; background-color: #ffffff;">
+                <p style="font-size: 15px; color: #374151; text-align: left; margin: 0 0 20px 0; line-height: 1.6;">Dear {html.escape(candidate_name)},</p>
+                <p style="color: #4b5563; line-height: 1.6; font-size: 14px; margin: 0 0 24px 0; text-align: left;">We are pleased to invite you to an online assessment as part of our interview process. This assessment is designed to give you an opportunity to showcase your skills and experience.</p>
+                
+                <!-- Role Details Box -->
+                <div style="border: 1px solid #e5e7eb; padding: 20px; margin: 0 0 24px 0; background-color: #ffffff;">
+                    <h3 style="margin: 0 0 12px 0; font-size: 13px; color: #6b7280; font-weight: 600; text-transform: uppercase; letter-spacing: 0.05em;">Role Information</h3>
+                    {job_description_block}
+                </div>
+                
+                <!-- Details grid -->
+                <div style="margin: 0 0 32px 0;">
+                    <p style="color: #4b5563; line-height: 1.6; font-size: 14px; margin: 0 0 8px 0;">
+                        <strong style="color: #111827;">Assessment Duration:</strong> {duration} minutes
+                    </p>
+                    {schedule_block}
+                    {expiry_message}
+                </div>
+                
+                <!-- CTA Button -->
+                <div style="text-align: center; margin: 40px 0;">
+                    <a href="{full_link}" style="background-color: #4f46e5; background-image: linear-gradient(135deg, #4f46e5 0%, #6366f1 100%); color: #ffffff; padding: 16px 40px; text-decoration: none; border-radius: 50px; font-weight: 700; font-size: 16px; display: inline-block; box-shadow: 0 4px 15px rgba(79, 70, 229, 0.3); text-transform: uppercase; letter-spacing: 0.02em;">
+                        Start Interview
+                    </a>
+                </div>
+                
+                <!-- Guidelines -->
+                <div style="background-color: #fff1f2; border-radius: 12px; padding: 24px; margin: 30px 0 0 0; border: 1px solid #fecaca; border-left: 5px solid #e11d48;">
+                    <h3 style="margin: 0 0 16px; font-size: 15px; color: #9f1239; font-weight: 700; text-transform: uppercase; letter-spacing: 0.05em;">⚠️ Important Guidelines</h3>
+                    <ul style="margin: 0; padding-left: 20px; color: #be123c; font-size: 14px; line-height: 1.6;">
+                        <li style="margin-bottom: 8px;"><b>Full-Screen Mode:</b> Must be maintained at all times. Tab switching is recorded as a violation.</li>
+                        <li style="margin-bottom: 8px;"><b>Video Proctoring:</b> Your camera remains active for face tracking and integrity checks.</li>
+                        <li><b>Environment:</b> Join from a quiet, well-lit room. Background noise or voices may affect your evaluation.</li>
+                    </ul>
+                </div>
+            </div>
+        </div>
+    </body>
+    </html>
     """
 
 def compute_invite_send_at(scheduled_start: str = "") -> Optional[datetime]:
@@ -1981,13 +1915,13 @@ def queue_or_send_interview_email(session_doc: Dict[str, Any], link_url: str, sk
     if send_at and send_at > now:
         if not skip_db_update:
             interview_sessions_collection.update_one(
-            {"_id": session_doc["_id"]},
-            {"$set": {
-                "invite_email_status": "pending",
-                "invite_email_send_at": send_at.isoformat(),
-                "invite_email_sent_at": None
-            }}
-        )
+                {"_id": session_doc["_id"]},
+                {"$set": {
+                    "invite_email_status": "pending",
+                    "invite_email_send_at": send_at.isoformat(),
+                    "invite_email_sent_at": None
+                }}
+            )
         return {
             "email_sent": False,
             "email_scheduled": True,
@@ -2023,183 +1957,6 @@ def queue_or_send_interview_email(session_doc: Dict[str, Any], link_url: str, sk
         "email_send_at": (send_at.isoformat() if send_at else now.isoformat())
     }
 
-def send_interview_email(candidate_email: str, candidate_name: str, link_url: str, duration: int, job_description: str, custom_html: str = "", scheduled_start: str = "", scheduled_end: str = ""):
-    import os
-    import requests
-    from dotenv import load_dotenv
-    # Use absolute path for .env, overriding system variables to prevent stale cache
-    env_path = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), ".env")
-    load_dotenv(env_path, override=True)
-    brevo_api_key = os.getenv("BREVO_API_KEY")
-    sender_name = os.getenv("BREVO_SENDER_NAME", "Mock Interview")
-    sender_email = os.getenv("BREVO_SENDER_EMAIL", "no-reply@mockinterview.com")
-
-    if not brevo_api_key:
-        print(" Warning: BREVO_API_KEY not found in environment")
-        return False
-    
-    print(f"DEBUG: Using Brevo API key: {brevo_api_key[:10]}...{brevo_api_key[-5:] if len(brevo_api_key) > 5 else ''}")
-    print(f"DEBUG: Sender Email: {sender_email}")
-        
-    # Prepare the job description by replacing newlines with HTML line breaks
-    formatted_jd = job_description.replace("\n", "<br/>")
-
-    url = "https://api.brevo.com/v3/smtp/email"
-    headers = {
-        "accept": "application/json",
-        "api-key": brevo_api_key,
-        "content-type": "application/json"
-    }
-
-    # Construct the base URL for the interview link
-    # On Render, FRONTEND_URL should be set to your Vercel URL
-    full_link = link_url if link_url.startswith("http") else f"{os.getenv('FRONTEND_URL', 'https://ai-adaptive-interview.vercel.app')}{link_url}"
-
-    # Task 4: Build schedule info block
-    schedule_block = ""
-    if scheduled_start:
-        try:
-            from datetime import datetime as dt_parse
-            start_dt = dt_parse.fromisoformat(scheduled_start)
-            schedule_block = f'<p><b>Scheduled Time:</b> {start_dt.strftime("%d %b %Y, %I:%M %p")}'
-            if scheduled_end:
-                end_dt = dt_parse.fromisoformat(scheduled_end)
-                schedule_block += f' — {end_dt.strftime("%I:%M %p")}'
-            schedule_block += '</p>'
-            schedule_block += '<p style="color: #e74c3c;"><b>⚠️ Important:</b> This link will only be accessible during the scheduled time window. It will be sent 15 minutes before the start time.</p>'
-        except Exception:
-            pass
-
-    # Task 1: Use custom HTML if provided by admin, else use default template
-    if custom_html and custom_html.strip():
-        html_content = custom_html
-    else:
-        html_content = f"""<!DOCTYPE html>
-<html lang="en">
-<head>
-  <meta charset="UTF-8"/>
-  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
-  <title>Interview Invitation</title>
-</head>
-<body style="margin:0;padding:0;background-color:#f0f4f8;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Helvetica,Arial,sans-serif;">
-  <table role="presentation" width="100%" cellspacing="0" cellpadding="0" border="0" style="background-color:#f0f4f8;padding:40px 0;">
-    <tr><td align="center">
-      <table role="presentation" width="600" cellspacing="0" cellpadding="0" border="0" style="max-width:600px;width:100%;">
-
-        <!-- HEADER -->
-        <tr>
-          <td style="background-color:#4f46e5;border-radius:12px 12px 0 0;padding:28px 40px;text-align:left;">
-            <table role="presentation" width="100%" cellspacing="0" cellpadding="0">
-              <tr>
-                <td>
-                  <span style="display:inline-block;background:rgba(255,255,255,0.15);border-radius:8px;padding:6px 14px;font-size:13px;font-weight:700;color:#c7d2fe;letter-spacing:0.08em;text-transform:uppercase;">Hire IQ Platform</span>
-                  <h1 style="margin:14px 0 0;color:#ffffff;font-size:26px;font-weight:800;letter-spacing:-0.03em;line-height:1.2;">You've Been Invited<br/>to an AI Interview</h1>
-                </td>
-                <td style="text-align:right;vertical-align:top;"><div style="width:48px;height:48px;background:rgba(255,255,255,0.18);border-radius:12px;font-size:24px;line-height:48px;text-align:center;">🎯</div></td>
-              </tr>
-            </table>
-          </td>
-        </tr>
-        <tr><td style="background:linear-gradient(90deg,#6366f1,#8b5cf6,#4f46e5);height:3px;"></td></tr>
-
-        <!-- BODY -->
-        <tr>
-          <td style="background:#ffffff;padding:40px 40px 32px;border-left:1px solid #e2e8f0;border-right:1px solid #e2e8f0;">
-            <p style="margin:0 0 8px;font-size:17px;color:#0f172a;font-weight:600;">Dear {candidate_name},</p>
-            <p style="margin:0 0 28px;font-size:14px;color:#64748b;line-height:1.7;">Congratulations! You have been selected for an AI-powered interview. Please review the details below and begin when you're ready.</p>
-
-            <table role="presentation" width="100%" cellspacing="0" cellpadding="0" border="0" style="background:#f8fafc;border:1px solid #e2e8f0;border-left:4px solid #6366f1;border-radius:8px;margin-bottom:20px;">
-              <tr><td style="padding:20px 24px;">
-                <p style="margin:0 0 10px;font-size:11px;font-weight:700;color:#6366f1;text-transform:uppercase;letter-spacing:0.1em;">📋 Role Details</p>
-                <p style="margin:0;font-size:14px;color:#475569;line-height:1.6;">{formatted_jd}</p>
-              </td></tr>
-            </table>
-
-            <table role="presentation" width="100%" cellspacing="0" cellpadding="0" border="0" style="margin-bottom:28px;">
-              <tr>
-                <td width="50%" style="padding-right:8px;">
-                  <div style="background:#f8fafc;border:1px solid #e2e8f0;border-radius:8px;padding:16px 20px;">
-                    <p style="margin:0 0 4px;font-size:11px;font-weight:700;color:#94a3b8;text-transform:uppercase;letter-spacing:0.08em;">⏱ Duration</p>
-                    <p style="margin:0;font-size:18px;font-weight:700;color:#0f172a;">{duration} <span style="font-size:14px;color:#64748b;font-weight:500;">minutes</span></p>
-                  </div>
-                </td>
-                <td width="50%" style="padding-left:8px;">
-                  <div style="background:#f8fafc;border:1px solid #e2e8f0;border-radius:8px;padding:16px 20px;">
-                    <p style="margin:0 0 4px;font-size:11px;font-weight:700;color:#94a3b8;text-transform:uppercase;letter-spacing:0.08em;">📡 Format</p>
-                    <p style="margin:0;font-size:18px;font-weight:700;color:#0f172a;">AI <span style="font-size:14px;color:#64748b;font-weight:500;">Adaptive</span></p>
-                  </div>
-                </td>
-              </tr>
-            </table>
-
-            {schedule_block}
-
-            <div style="text-align:center;margin:32px 0;">
-              <a href="{full_link}" style="display:inline-block;background:#4f46e5;color:#ffffff;text-decoration:none;padding:15px 44px;border-radius:10px;font-size:16px;font-weight:700;letter-spacing:0.02em;">Begin My Interview →</a>
-              <p style="margin:12px 0 0;font-size:12px;color:#94a3b8;">Button not working? <a href="{full_link}" style="color:#6366f1;text-decoration:underline;">Copy this link</a></p>
-            </div>
-          </td>
-        </tr>
-
-        <!-- RULES -->
-        <tr>
-          <td style="background:#fff8f8;border:1px solid #fecaca;border-top:none;border-left:1px solid #e2e8f0;border-right:1px solid #e2e8f0;padding:24px 40px;">
-            <p style="margin:0 0 14px;font-size:13px;font-weight:800;color:#b91c1c;text-transform:uppercase;letter-spacing:0.08em;">⚠️ Mandatory Interview Rules</p>
-            <table role="presentation" width="100%" cellspacing="0" cellpadding="0">
-              <tr><td style="padding:8px 0;border-bottom:1px solid #fee2e2;"><table role="presentation" cellspacing="0" cellpadding="0"><tr><td style="width:28px;vertical-align:top;font-size:16px;">🖥️</td><td style="font-size:13px;color:#7f1d1d;line-height:1.6;"><b>Full-Screen Only:</b> You must remain in full-screen mode. Exiting or switching tabs is flagged as a violation.</td></tr></table></td></tr>
-              <tr><td style="padding:8px 0;border-bottom:1px solid #fee2e2;"><table role="presentation" cellspacing="0" cellpadding="0"><tr><td style="width:28px;vertical-align:top;font-size:16px;">📷</td><td style="font-size:13px;color:#7f1d1d;line-height:1.6;"><b>Camera Active:</b> AI-powered face tracking and multi-face detection will be active throughout the session.</td></tr></table></td></tr>
-              <tr><td style="padding:8px 0;"><table role="presentation" cellspacing="0" cellpadding="0"><tr><td style="width:28px;vertical-align:top;font-size:16px;">🔇</td><td style="font-size:13px;color:#7f1d1d;line-height:1.6;"><b>Quiet Environment:</b> Background noise or additional voices may negatively impact your evaluation score.</td></tr></table></td></tr>
-            </table>
-          </td>
-        </tr>
-
-        <!-- NOTE -->
-        <tr>
-          <td style="background:#fffbeb;border:1px solid #fde68a;border-top:none;border-left:1px solid #e2e8f0;border-right:1px solid #e2e8f0;padding:16px 40px;">
-            <p style="margin:0;font-size:13px;color:#92400e;line-height:1.6;">🔔 <b>Note:</b> Please join only during the scheduled time window. If no schedule is configured, the link is valid for <b>24 hours</b>. Ensure a stable internet connection before starting.</p>
-          </td>
-        </tr>
-
-        <!-- FOOTER -->
-        <tr>
-          <td style="background:#f8fafc;border:1px solid #e2e8f0;border-top:3px solid #e2e8f0;border-radius:0 0 12px 12px;padding:24px 40px;">
-            <table role="presentation" width="100%" cellspacing="0" cellpadding="0">
-              <tr>
-                <td><p style="margin:0 0 2px;font-size:14px;font-weight:700;color:#0f172a;">Hire IQ Recruitment Team</p><p style="margin:0;font-size:12px;color:#94a3b8;">Powered by AI Adaptive Interview Platform</p></td>
-                <td style="text-align:right;vertical-align:middle;"><span style="font-size:11px;color:#cbd5e1;font-weight:500;">HIRE IQ</span></td>
-              </tr>
-            </table>
-          </td>
-        </tr>
-        <tr><td style="padding:20px 0;text-align:center;"><p style="margin:0;font-size:11px;color:#94a3b8;line-height:1.6;">This email was sent to you because you are a candidate in an interview process.<br/>If you believe this is an error, please disregard this email.</p></td></tr>
-      </table>
-    </td></tr>
-  </table>
-</body>
-</html>
-    """
-
-    payload = {
-        "sender": {
-            "name": sender_name,
-            "email": sender_email
-        },
-        "to": [{"email": candidate_email, "name": candidate_name}],
-        "subject": "Interview Invitation by Mock Interview",
-        "htmlContent": html_content
-    }
-
-    try:
-        response = requests.post(url, json=payload, headers=headers)
-        response.raise_for_status()
-        print(f"Email successfully sent to {candidate_email}")
-        return True
-    except Exception as e:
-        print(f"Failed to send email to {candidate_email}: {e}")
-        return False
-
-
-# ── Task 1: Email Preview Endpoint ──────────────────────────────────────────
 def send_interview_email(candidate_email: str, candidate_name: str, link_url: str, duration: int, job_description: str, custom_html: str = "", scheduled_start: str = "", scheduled_end: str = ""):
     import os
     import requests

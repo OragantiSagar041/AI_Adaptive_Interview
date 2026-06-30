@@ -219,7 +219,7 @@ export default function SuperAdminLayout() {
     document.documentElement.style.setProperty('--primary-color', currentAccent.primary)
     document.documentElement.style.setProperty('--primary-hover', currentAccent.hover)
     document.documentElement.style.setProperty('--primary-glow', currentAccent.glow)
-  }, [accentName, currentAccent])
+  }, [accentName])
 
   // Polling for telemetry and profile updates
   useEffect(() => {
@@ -335,7 +335,7 @@ export default function SuperAdminLayout() {
         theme: { color: '#6366f1' },
         handler: async function (response) {
           try {
-            await axios.post(`${API_BASE_URL}/api/razorpay/verify-upgrade`, {
+            const verifyRes = await axios.post(`${API_BASE_URL}/api/razorpay/verify-upgrade`, {
               plan_name: plan.name,
               admin_id: adminUser?.id || adminUser?._id || '',
               razorpay_order_id: response.razorpay_order_id || orderData.razorpay_order_id || '',
@@ -346,7 +346,13 @@ export default function SuperAdminLayout() {
             });
             alert("Credits added successfully!")
             setShowUpgradePlansModal(false)
-            window.location.reload()
+            if (dispatch) {
+              if (verifyRes.data?.credits_added) {
+                dispatch({ type: 'auth/updateCredits', payload: (adminUser?.credits || 0) + verifyRes.data.credits_added })
+              }
+              dispatch(loadSuperAdminProfile())
+              dispatch(loadSuperAdminDashboard())
+            }
           } catch (e) {
             alert("Payment verification failed")
           }

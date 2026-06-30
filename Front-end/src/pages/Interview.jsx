@@ -146,6 +146,15 @@ function Interview() {
   const questionStartTimeRef = useRef(Date.now())
   const behavioralStatsRef = useRef({ wordCount: 0, fillerCount: 0, pauseCount: 0, faceAlerts: 0, tabSwitches: 0 })
   const [proctoringBanner, setProctoringBanner] = useState(null)
+  const [proctoringState, setProctoringState] = useState({
+    modelsReady: false,
+    faceVisible: null,
+    faceCount: 0,
+    multiFace: false,
+    phoneDetected: false,
+    eyeContactLost: false,
+    lastAlertType: ''
+  })
   const handleNextQuestionRef = useRef(null)
 
   // WebRTC Candidate Logic
@@ -155,7 +164,8 @@ function Interview() {
     total_questions: questions.length,
     question_text: questions[currentQuestionIndex]?.text || '',
     audio_level: 50, // Static or dynamically retrieved if needed
-    proctoring_alerts: screenShareViolations + noiseAlertCount + behavioralStatsRef.current.faceAlerts + behavioralStatsRef.current.tabSwitches
+    proctoring_alerts: screenShareViolations + noiseAlertCount + behavioralStatsRef.current.faceAlerts + behavioralStatsRef.current.tabSwitches,
+    proctoring_status: proctoringState
   }
   useCandidateWebRTC(sessionId, mediaStreamRef, telemetryData)
 
@@ -683,6 +693,7 @@ function Interview() {
   // Record proctoring metrics
   const recordAlertMetric = async (type, message) => {
     behavioralStatsRef.current.faceAlerts += 1
+    setProctoringState(prev => ({ ...prev, lastAlertType: type }))
     const alertMessages = {
       'multi_person': '⚠️ Multiple faces detected in frame!',
       'no_face': '⚠️ No face detected — please face the camera!',
@@ -706,7 +717,60 @@ function Interview() {
   }
 
   // Use Centralized AI Proctoring Hook
-  useProctoring(videoPreviewRef, isDisclaimerAccepted && !showAllSet && !loading, recordAlertMetric);
+  useProctoring(videoPreviewRef, isDisclaimerAccepted && !showAllSet && !loading, recordAlertMetric, setProctoringState);
+
+  useEffect(() => {
+    if (!sessionId || !isDisclaimerAccepted || showAllSet || loading) return
+
+    const captureSnapshot = () => {
+      const video = videoPreviewRef.current
+      if (!video || video.readyState < 2 || !video.videoWidth || !video.videoHeight) return null
+      try {
+        const canvas = document.createElement('canvas')
+        canvas.width = 320
+        canvas.height = Math.max(1, Math.round((video.videoHeight / video.videoWidth) * canvas.width))
+        const ctx = canvas.getContext('2d')
+        ctx.drawImage(video, 0, 0, canvas.width, canvas.height)
+        return canvas.toDataURL('image/jpeg', 0.55)
+      } catch (_) {
+        return null
+      }
+    }
+
+    const sendHeartbeat = () => {
+      const alertTypes = []
+      if (proctoringState.multiFace) alertTypes.push('multi_person')
+      if (proctoringState.faceVisible === false) alertTypes.push('no_face')
+      if (proctoringState.phoneDetected) alertTypes.push('phone')
+      if (proctoringState.eyeContactLost) alertTypes.push('eye_contact')
+      if (proctoringState.lastAlertType) alertTypes.push(proctoringState.lastAlertType)
+
+      fetch(`${API_BASE_URL}/live-heartbeat`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          link_id: sessionId,
+          snapshot_dataurl: captureSnapshot(),
+          audio_level: 50,
+          current_question: currentQuestionIndex + 1,
+          total_questions: questions.length || 0,
+          tab_active: !document.hidden,
+          face_visible: proctoringState.faceVisible,
+          proctoring_alerts: screenShareViolations + noiseAlertCount + behavioralStatsRef.current.faceAlerts + behavioralStatsRef.current.tabSwitches,
+          alert_types: [...new Set(alertTypes)],
+          last_alert_type: proctoringState.lastAlertType || null,
+          face_count: proctoringState.faceCount || 0,
+          multi_face: !!proctoringState.multiFace,
+          phone_detected: !!proctoringState.phoneDetected,
+          eye_contact_lost: !!proctoringState.eyeContactLost
+        })
+      }).catch(() => {})
+    }
+
+    sendHeartbeat()
+    const heartbeatInterval = setInterval(sendHeartbeat, 5000)
+    return () => clearInterval(heartbeatInterval)
+  }, [sessionId, isDisclaimerAccepted, showAllSet, loading, currentQuestionIndex, questions.length, proctoringState, screenShareViolations, noiseAlertCount])
 
   // Accept Disclaimer & Start Interview
   const acceptDisclaimer = () => {
