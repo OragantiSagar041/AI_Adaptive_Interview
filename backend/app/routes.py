@@ -1857,7 +1857,7 @@ def send_submission_notification(candidate_email: str, candidate_name: str, admi
     env_path = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), ".env")
     load_dotenv(env_path, override=True)
     api_key = os.getenv("BREVO_API_KEY")
-    sender_name = os.getenv("BREVO_SENDER_NAME", "Mock Interview")
+    sender_name = "Hire IQ Recruiting"
     sender_email_addr = os.getenv("BREVO_SENDER_EMAIL")
     if not api_key:
         return False
@@ -1877,7 +1877,7 @@ def send_submission_notification(candidate_email: str, candidate_name: str, admi
                 </div>
                 <p style="color: #475569; line-height: 1.6; font-size: 14px; margin: 10px 0; text-align: left;">Our recruitment team will review your performance and get back to you shortly. Please keep an eye on your email for further updates.</p>
                 <hr style="border: none; border-top: 1px solid #e2e8f0; margin: 32px 0 24px 0;">
-                <p style="color: #64748b; font-size: 14px; margin: 0; text-align: left; line-height: 1.6;">Best regards,<br/><b style="color: #4f46e5;">Arah Info Tech Pvt Ltd</b></p>
+                <p style="color: #64748b; font-size: 14px; margin: 0; text-align: left; line-height: 1.6;">Best regards,<br/><b style="color: #4f46e5;">Hire IQ Recruiting</b></p>
             </div>
         </div>
         <div style="max-width: 600px; margin: 24px auto 0; text-align: center;">
@@ -2397,7 +2397,7 @@ def send_otp_email(email: str, name: str, otp: str):
     env_path = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), ".env")
     load_dotenv(env_path, override=True)
     api_key = os.getenv("BREVO_API_KEY")
-    sender_name = os.getenv("BREVO_SENDER_NAME", "Mock Interview")
+    sender_name = "Hire IQ Recruiting"
     sender_email = os.getenv("BREVO_SENDER_EMAIL")
     
     if not api_key: return False
@@ -3435,7 +3435,7 @@ def send_decision_email(email: str, name: str, decision: str, jd: str):
     env_path = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), ".env")
     load_dotenv(env_path, override=True)
     api_key = os.getenv("BREVO_API_KEY")
-    sender_name = os.getenv("BREVO_SENDER_NAME", "Mock Interview")
+    sender_name = "Hire IQ Recruiting"
     sender_email = os.getenv("BREVO_SENDER_EMAIL")
     
     if not api_key: return False
@@ -3448,7 +3448,7 @@ def send_decision_email(email: str, name: str, decision: str, jd: str):
             <h3>Congratulations {name}!</h3>
             <p>We are pleased to inform you that you have successfully cleared the AI interview for the role.</p>
             <p><b>Next Steps:</b> Our recruitment team will reach out to you shortly for the final technical/HR round. Please stay reachable on this email.</p>
-            <p>Best Regards,<br/>Arah Team</p>
+            <p>Best Regards,<br/>Hire IQ Recruiting Team</p>
         </body></html>
         """
     else:
@@ -3458,7 +3458,7 @@ def send_decision_email(email: str, name: str, decision: str, jd: str):
             <p>Dear {name},</p>
             <p>Thank you for taking the time to interview with us. Unfortunately, we have decided not to move forward with your application at this time.</p>
             <p>We were impressed with your background, but we had many qualified candidates for this role. We wish you the very best in your job search.</p>
-            <p>Best Regards,<br/>Arah Team</p>
+            <p>Best Regards,<br/>Hire IQ Recruiting Team</p>
         </body></html>
         """
 
@@ -5435,8 +5435,12 @@ async def get_super_admin_dashboard_stats(current_admin: dict = Depends(get_curr
     if not company_id:
         raise HTTPException(status_code=400, detail="Super Admin is not associated with a company")
         
+    admin_doc = admins_collection.find_one({"_id": ObjectId(current_admin["admin_id"])})
+    credits = admin_doc.get("credits", 0) if admin_doc else 0
+    
     company = companies_collection.find_one({"_id": ObjectId(company_id)})
-    credits = company.get("credits", 0) if company else 0
+    if company and "credits" in company:
+        credits = company["credits"]
     
     session_filter = {"company_id": company_id}
     total_sessions = interview_sessions_collection.count_documents(session_filter)
@@ -6019,20 +6023,22 @@ async def stt_endpoint(file: UploadFile = File(...), language: Optional[str] = N
         with open(temp_filename, "wb") as f:
             f.write(audio_content)
             
-        with open(temp_filename, "rb") as f:
-            # Use whisper-large-v3-turbo for better accuracy with Indian accents.
-            # Pass initial_prompt to prime the model with Indian English context which
-            # dramatically reduces hallucinations and accent-related transcription errors.
-            transcript = await groq_client.audio.transcriptions.create(
-                model="whisper-large-v3-turbo",
-                file=f,
-                language=language or "en",
-                prompt="The speaker has an Indian English accent. Transcribe technical terms, programming concepts, and software engineering terminology accurately.",
-                temperature=0.0,  # Lower temperature = more deterministic, fewer hallucinations
-            )
-        os.remove(temp_filename)
-        
-        return {"transcript": transcript.text}
+        try:
+            with open(temp_filename, "rb") as f:
+                # Use whisper-large-v3-turbo for better accuracy with Indian accents.
+                # Pass initial_prompt to prime the model with Indian English context which
+                # dramatically reduces hallucinations and accent-related transcription errors.
+                transcript = await groq_client.audio.transcriptions.create(
+                    model="whisper-large-v3-turbo",
+                    file=f,
+                    language=language or "en",
+                    prompt="The speaker has an Indian English accent. Transcribe technical terms, programming concepts, and software engineering terminology accurately.",
+                    temperature=0.0,  # Lower temperature = more deterministic, fewer hallucinations
+                )
+            return {"transcript": transcript.text}
+        finally:
+            if os.path.exists(temp_filename):
+                os.remove(temp_filename)
     except Exception as e:
         print(f"STT Error: {e}")
         raise HTTPException(status_code=500, detail=str(e))

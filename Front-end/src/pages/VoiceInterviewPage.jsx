@@ -14,6 +14,7 @@ import useCandidateWebRTC from '../hooks/useCandidateWebRTC'
 import OrbAvatar from '../components/OrbAvatar'
 import Swal from 'sweetalert2'
 import 'sweetalert2/dist/sweetalert2.min.css'
+import { RefreshCw } from 'lucide-react'
 import aiVideoUrl from '../assets/ai_avatar.mp4'
 import { useProctoring } from '../hooks/useProctoring'
 
@@ -618,7 +619,7 @@ export default function VoiceInterviewPage() {
             fd.append('file', blob, 'screen_recording.webm')
             try {
               await fetch(`${API_BASE_URL}/upload-full-recording`, { method: 'POST', body: fd })
-              console.log('Screen recording uploaded to Cloudinary')
+              // Screen recording successfully uploaded
             } catch (e) {
               console.warn('Screen upload failed:', e)
             }
@@ -644,7 +645,7 @@ export default function VoiceInterviewPage() {
             fd.append('file', blob, 'camera_recording.webm')
             try {
               await fetch(`${API_BASE_URL}/upload-full-recording`, { method: 'POST', body: fd })
-              console.log('Camera recording uploaded to Cloudinary')
+              // Camera recording successfully uploaded
             } catch (e) {
               console.warn('Camera upload failed:', e)
             }

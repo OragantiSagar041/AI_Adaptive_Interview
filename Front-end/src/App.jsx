@@ -1,6 +1,7 @@
 import React from 'react'
 import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom'
 import Interview from './pages/Interview'
+import { InterviewTechnical, InterviewNormal, InterviewNonTechnical } from './pages/interview/index'
 import LandingPage from './pages/LandingPage'
 import RegisterPage from './pages/RegisterPage'
 import LoginPage from './pages/LoginPage'
@@ -44,6 +45,9 @@ function App() {
         <Route path="/" element={<LandingPage />} />
         <Route path="/login" element={<LoginPage />} />
         <Route path="/interview" element={<Interview />} />
+        <Route path="/interview/technical" element={<InterviewTechnical />} />
+        <Route path="/interview/normal" element={<InterviewNormal />} />
+        <Route path="/interview/non-technical" element={<InterviewNonTechnical />} />
         <Route path="/register" element={<RegisterPage />} />
         <Route path="/case-study" element={<CaseStudyPage />} />
         <Route path="/voice-interview/:linkId" element={<VoiceInterviewPage />} />

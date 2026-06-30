@@ -13,6 +13,13 @@ export function CandidateScorecardModal({
   candidateDetail,
   handleUpdateDecision
 }) {
+  const [activeTab, setActiveTab] = React.useState('verbal');
+
+  // Reset tab when modal opens for a new candidate
+  React.useEffect(() => {
+    if (isOpen) setActiveTab('verbal');
+  }, [isOpen, selectedCandidate]);
+
   const getSubScore = (key) => {
     if (candidateDetail?.multi_dimensional_analysis?.[key]) {
       return Math.floor(candidateDetail.multi_dimensional_analysis[key].score || 0);
@@ -260,12 +267,50 @@ export function CandidateScorecardModal({
             </div>
           </div>
 
-          {/* Detailed Breakdown */}
-          <div className="flex flex-col gap-4 mt-2">
-            <h3 className="text-sm font-bold text-slate-500 uppercase tracking-widest flex items-center gap-2">
-              <i className="fas fa-list-ul"></i> Detailed Breakdown
-            </h3>
-            <div className="flex flex-col gap-6">
+          {/* Tabs Navigation */}
+          <div className="flex flex-col gap-4 mt-4">
+            <div className="flex items-center gap-2 border-b border-slate-200">
+              <button
+                onClick={() => setActiveTab('verbal')}
+                className={`pb-3 px-4 text-sm font-bold transition-all border-b-2 flex items-center gap-2 ${
+                  activeTab === 'verbal' 
+                    ? 'border-[#6366f1] text-[#6366f1]' 
+                    : 'border-transparent text-slate-500 hover:text-slate-700 hover:border-slate-300'
+                }`}
+              >
+                <i className="fas fa-comments"></i> Verbal Round
+              </button>
+
+              {candidateDetail?.coding_round?.task && (
+                <button
+                  onClick={() => setActiveTab('coding')}
+                  className={`pb-3 px-4 text-sm font-bold transition-all border-b-2 flex items-center gap-2 ${
+                    activeTab === 'coding' 
+                      ? 'border-[#6366f1] text-[#6366f1]' 
+                      : 'border-transparent text-slate-500 hover:text-slate-700 hover:border-slate-300'
+                  }`}
+                >
+                  <i className="fas fa-code"></i> Coding Round
+                </button>
+              )}
+
+              {candidateDetail?.case_study_round?.scenario && (
+                <button
+                  onClick={() => setActiveTab('case_study')}
+                  className={`pb-3 px-4 text-sm font-bold transition-all border-b-2 flex items-center gap-2 ${
+                    activeTab === 'case_study' 
+                      ? 'border-[#6366f1] text-[#6366f1]' 
+                      : 'border-transparent text-slate-500 hover:text-slate-700 hover:border-slate-300'
+                  }`}
+                >
+                  <i className="fas fa-briefcase"></i> Case Study Round
+                </button>
+              )}
+            </div>
+
+            {/* TAB CONTENT: Verbal Round */}
+            {activeTab === 'verbal' && (
+              <div className="flex flex-col gap-6 pt-2">
               {candidateDetail?.answers?.map((ans, idx) => (
                 <div key={idx} className="bg-slate-50/50 border border-slate-200 rounded-xl p-5 relative overflow-hidden">
                   <div className="flex justify-between items-start mb-4 gap-4">
@@ -322,9 +367,11 @@ export function CandidateScorecardModal({
                   <p className="text-slate-500 text-sm font-semibold">No recorded answers available for this candidate.</p>
                 </div>
               )}
+              </div>
+            )}
 
-              {/* Coding Round Breakdown */}
-              {candidateDetail?.coding_round && candidateDetail.coding_round.task && (
+            {/* TAB CONTENT: Coding Round Breakdown */}
+            {activeTab === 'coding' && candidateDetail?.coding_round?.task && (
                 <div className="bg-slate-50/50 border border-slate-200 rounded-xl p-5 relative overflow-hidden mt-2">
                   <h4 className="text-[1rem] font-bold text-slate-900 leading-snug mb-4 border-b border-slate-200 pb-3 flex items-center gap-2">
                     <i className="fas fa-code text-indigo-500"></i> Coding Round
@@ -399,8 +446,8 @@ export function CandidateScorecardModal({
                 </div>
               )}
 
-              {/* Case Study Round Breakdown */}
-              {candidateDetail?.case_study_round && candidateDetail.case_study_round.scenario && (
+            {/* TAB CONTENT: Case Study Round Breakdown */}
+            {activeTab === 'case_study' && candidateDetail?.case_study_round?.scenario && (
                 <div className="bg-slate-50/50 border border-slate-200 rounded-xl p-5 relative overflow-hidden mt-2">
                   <h4 className="text-[1rem] font-bold text-slate-900 leading-snug mb-4 border-b border-slate-200 pb-3 flex items-center gap-2">
                     <i className="fas fa-briefcase text-amber-500"></i> Case Study Round
@@ -428,8 +475,8 @@ export function CandidateScorecardModal({
                 </div>
               )}
 
-              {/* Candidate Feedback */}
-              {candidateDetail?.candidate_feedback && (
+            {/* Candidate Feedback (Always visible below tabs) */}
+            {candidateDetail?.candidate_feedback && (
                 <div className="bg-indigo-50/50 border border-indigo-100 rounded-xl p-5 relative mt-4 shadow-sm">
                   <h4 className="text-[1rem] font-bold text-indigo-900 leading-snug mb-3 flex items-center gap-2">
                     <i className="fas fa-comment-dots text-indigo-500"></i> Candidate Feedback
@@ -441,9 +488,8 @@ export function CandidateScorecardModal({
               )}
             </div>
           </div>
-        </div>
-      )}
-    </Modal>
+        )}
+      </Modal>
   )
 }
 

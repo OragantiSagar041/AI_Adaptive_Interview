@@ -1,30 +1,12 @@
-import React, { useState, useEffect, useRef } from 'react'
-import '../Interview.css'
-import { useSearchParams, useNavigate, Link } from 'react-router-dom'
-import { API_BASE_URL } from '../apiConfig'
-import { Video, Volume2, ArrowRight, ShieldAlert, Cpu, AlertTriangle, RefreshCw } from 'lucide-react'
-import Swal from 'sweetalert2'
-import 'sweetalert2/dist/sweetalert2.min.css'
-import useCandidateWebRTC from '../hooks/useCandidateWebRTC'
-import { useProctoring } from '../hooks/useProctoring'
+import React, { useEffect, useState } from 'react'
+import { useSearchParams, useNavigate } from 'react-router-dom'
+import { RefreshCw, AlertTriangle } from 'lucide-react'
+import api from '../utils/api'
 
-const langMap = {
-  'Hindi': 'hi-IN',
-  'Telugu': 'te-IN',
-  'Tamil': 'ta-IN',
-  'Malayalam': 'ml-IN',
-  'Kannada': 'kn-IN',
-  'English': 'en-IN'
-}
-
-function Interview() {
+export default function Interview() {
   const [searchParams] = useSearchParams()
   const navigate = useNavigate()
   const sessionId = searchParams.get('session_id') || searchParams.get('session')
-
-  // Screen States
-  const [loading, setLoading] = useState(true)
-  const [showAllSet, setShowAllSet] = useState(false)
   const [error, setError] = useState(null)
   const _sessionKey = sessionId ? `interview_session_${sessionId}` : null
   const _savedSession = _sessionKey ? (() => { try { return JSON.parse(sessionStorage.getItem(_sessionKey) || 'null') } catch { return null } })() : null
@@ -84,7 +66,7 @@ function Interview() {
       const userAgent = navigator.userAgent || navigator.vendor || window.opera;
       const mobileRegex = /android|webos|iphone|ipad|ipod|blackberry|iemobile|opera mini/i;
       const isMobile = mobileRegex.test(userAgent.toLowerCase()) || window.innerWidth <= 768;
-      
+
       if (isMobile) {
         setIsMobileDevice(true);
         Swal.fire({
@@ -425,33 +407,21 @@ function Interview() {
   useEffect(() => {
     if (!sessionId) {
       setError("Missing Session ID in URL parameters. Please check your secure interview invitation link.")
-      setLoading(false)
       return
     }
 
-    // Verify session details
-    async function verifySession() {
+    const resolveSession = async () => {
       try {
-        // Step 1: Check session status and details
-        const response = await fetch(`${API_BASE_URL}/session/${sessionId}`)
-        const payload = await response.json()
-        if (!response.ok || payload.status !== 'success') {
+        const payload = await api.get(`/session/${sessionId}`).then(r => r.data)
+
+        if (payload.status !== 'success') {
           throw new Error(payload.detail || payload.message || "Failed to load session details.")
         }
-
-        // Save session info
-        setSessionDetail(payload)
-
-        // Handle error cases first
         if (payload.is_deactivated) {
           throw new Error("This interview link has been temporarily deactivated by the recruiter.")
         }
         if (payload.is_expired) {
           throw new Error("This interview link has expired. Please contact the recruiter for a new link.")
-        }
-        if (payload.is_before_schedule && payload.scheduled_start) {
-          const startTime = new Date(payload.scheduled_start.endsWith('Z') || payload.scheduled_start.includes('+') ? payload.scheduled_start : payload.scheduled_start + 'Z')
-          throw new Error(`This interview is scheduled to start on ${startTime.toLocaleString()}. Please try again at the scheduled time.`)
         }
         if (payload.session_status === 'completed') {
           throw new Error("This interview session has already been completed.")
@@ -462,100 +432,14 @@ function Interview() {
           return
         }
 
-        // Step 2: Call start-session-interview to initialize/retrieve questions
-
-        const formData = new FormData()
-        formData.append('link_id', sessionId)
-
-        const startResponse = await fetch(`${API_BASE_URL}/start-session-interview`, {
-          method: 'POST',
-          body: formData
-        })
-        const startPayload = await startResponse.json()
-        if (!startResponse.ok) {
-          throw new Error(startPayload.detail || "Failed to start interview session.")
-        }
-
-        if (startPayload.is_expired) {
-          throw new Error(startPayload.message || "This interview link has expired.")
-        }
-        if (startPayload.is_before_schedule) {
-          throw new Error("This interview session is scheduled for a future time window.")
-        }
-        if (startPayload.session_status === 'completed') {
-          throw new Error("This interview session has already been completed.")
-        }
-
-        // Hydrate questions and states
-        const rawQuestions = startPayload.questions?.length
-          ? startPayload.questions
-          : startPayload.first_question
-            ? [startPayload.first_question]
-            : []
-        const qList = normalizeQuestions(rawQuestions)
-        if (qList.length === 0) {
-          throw new Error("No interview questions are available for this session. Please contact the recruiter.")
-        }
-        setQuestions(qList)
-        setInterviewId(startPayload.interview_id || '')
-        setSessionDetail(prev => ({
-          ...prev,
-          interview_id: startPayload.interview_id || prev?.interview_id,
-          candidate_name: startPayload.candidate_name || prev?.candidate_name,
-          interview_duration: startPayload.interview_duration || prev?.interview_duration,
-          interview_type: startPayload.interview_type || prev?.interview_type,
-          record_video: startPayload.record_video ?? prev?.record_video
-        }))
-
-        // Resolve resume index
-        const resumeQId = Number(startPayload.resume_question_id) || (startPayload.first_question ? Number(startPayload.first_question.id) : 1)
-        const qIndex = qList.findIndex(q => Number(q.id) === Number(resumeQId))
-        setCurrentQuestionIndex(qIndex >= 0 ? qIndex : 0)
-
-        // Update session duration if returned
-        if (startPayload.interview_duration) {
-          setSessionDetail(prev => ({
-            ...prev,
-            interview_duration: startPayload.interview_duration
-          }))
-          const dur = parseInt(startPayload.interview_duration, 10)
-          const fullDuration = dur * 60
-          setTotalDuration(fullDuration)
-
-          // Restore countdown from sessionStorage if we have a saved start time
-          if (_savedSession?.startedAt && _savedSession?.accepted) {
-            const elapsedSeconds = Math.floor((Date.now() - _savedSession.startedAt) / 1000)
-            const halfDur = fullDuration / 2
-            const remaining = Math.max(0, halfDur - elapsedSeconds)
-            setGlobalCountdown(remaining)
-            if (_savedSession.isRoundTwo) {
-              setIsRoundTwo(true)
-              isRoundTwoRef.current = true
-            }
-          } else {
-            setGlobalCountdown((dur / 2) * 60)
-          }
+        const type = payload.interview_type || 'Technical'
+        if (type === 'Technical') {
+          navigate(`/interview/technical?session_id=${sessionId}`, { replace: true })
+        } else if (type === 'Non-Technical') {
+          navigate(`/interview/non-technical?session_id=${sessionId}`, { replace: true })
         } else {
-          setTotalDuration(30 * 60)
-          if (_savedSession?.startedAt && _savedSession?.accepted) {
-            const elapsedSeconds = Math.floor((Date.now() - _savedSession.startedAt) / 1000)
-            const remaining = Math.max(0, 15 * 60 - elapsedSeconds)
-            setGlobalCountdown(remaining)
-          } else {
-            setGlobalCountdown(15 * 60)
-          }
+          navigate(`/interview/normal?session_id=${sessionId}`, { replace: true })
         }
-
-        if (_savedSession?.isRoundTwo) {
-          const type = startPayload.interview_type || 'Technical'
-          if (type === 'Non-Technical') {
-            startCaseStudyRound(qList.length, _savedSession?.currentQuestionIndex)
-          } else if (type !== 'Normal') {
-            startCodingRound(qList.length, _savedSession?.currentQuestionIndex)
-          }
-        }
-
-        setLoading(false)
       } catch (err) {
         setError(err.message || "Unable to access this interview session.")
         setLoading(false)
@@ -1800,7 +1684,7 @@ function Interview() {
     // Clear persisted session so next visit starts fresh
     if (_sessionKey) sessionStorage.removeItem(_sessionKey)
     visualizerActiveRef.current = false
-    
+
     // Stop AI speech to prevent it from continuing to ask questions
     if (window.speechSynthesis) {
       window.speechSynthesis.cancel();
@@ -1909,105 +1793,7 @@ function Interview() {
         <AlertTriangle className="text-danger mb-4" size={48} />
         <h2 className="text-2xl font-bold text-slate-900 tracking-tight">Access Denied</h2>
         <p className="text-slate-600 mt-2 max-w-md text-sm">{error}</p>
-        <Link to="/" className="inline-flex items-center justify-center gap-2 px-6 py-3 rounded-full font-semibold text-sm bg-primary hover:bg-primary-hover text-white transition-all shadow-[0_4px_14px_rgba(99,102,241,0.15)] mt-6 no-underline">Go to Platform Page</Link>
-      </div>
-    )
-  }
-
-  const currentQuestionText = currentQuestion?.text || currentQuestion?.question || currentQuestion?.prompt || ''
-
-  // Render Disclaimer Page first
-  if (!isDisclaimerAccepted) {
-    return (
-      <div className="max-w-2xl mx-auto my-16 px-6">
-        <div className="bg-white/90 backdrop-blur-md border border-slate-200 rounded-3xl p-6 shadow-[0_18px_45px_rgba(15,23,42,0.12)] flex flex-col gap-6">
-          <div className="text-center">
-            <h2 className="text-2xl font-bold text-slate-900 tracking-tight">Secure Interview Environment</h2>
-            <p className="text-slate-500 text-sm mt-1">Acme Proctoring Portal — {sessionDetail?.interview_title}</p>
-          </div>
-
-          <div className="flex flex-col gap-3.5 bg-slate-50 p-5 rounded-2xl border border-slate-200 text-sm">
-            <strong className="text-warning block">⚠️ Security Guidelines & Integrity Checks:</strong>
-            <ul className="pl-5 flex flex-col gap-2 text-slate-600 list-disc">
-              <li>Entire screen share and webcam streams will be recorded continuously.</li>
-              <li>Leaving full-screen or switching tabs will flag alerts in the system.</li>
-              <li>AI face detection checks eye contact and flags cell phone usage.</li>
-              <li>Please complete the assessment individually in a quiet room.</li>
-            </ul>
-          </div>
-
-          <div className="flex gap-2.5 items-center">
-            <input
-              type="checkbox"
-              id="agree"
-              checked={agreeChecked}
-              onChange={(e) => setAgreeChecked(e.target.checked)}
-              className="w-4 h-4 cursor-pointer"
-            />
-            <label htmlFor="agree" className="cursor-pointer font-semibold text-sm text-slate-900 select-none">I agree to follow the proctoring guidelines above.</label>
-          </div>
-
-          <button
-            onClick={acceptDisclaimer}
-            disabled={!agreeChecked}
-            className="w-full py-3.5 rounded-full font-semibold text-sm bg-primary hover:bg-primary-hover text-white transition-all disabled:opacity-45 disabled:cursor-not-allowed cursor-pointer border-none shadow-[0_4px_14px_rgba(99,102,241,0.15)]"
-          >
-            I Understand & Start Interview
-          </button>
-        </div>
-      </div>
-    )
-  }
-
-  // Render Video uploading progress & "All Set!" screen
-  if (showAllSet || uploadingText) {
-    return (
-      <div className="container">
-        <div style={{ marginTop: '3rem', background: '#fff', padding: '5rem 2rem', borderRadius: '20px', boxShadow: '0 10px 40px rgba(0,0,0,0.08)', textAlign: 'center', border: '1px solid #eff6ff' }}>
-          <div>
-            <h1 style={{ color: '#6366f1', fontSize: '3rem', marginBottom: '0.5rem', fontWeight: '800' }}>🎉 Thank You!</h1>
-            <p style={{ fontSize: '1.25rem', color: '#4b5563', marginBottom: '3rem', fontWeight: '500' }}>Your interview has been successfully submitted.</p>
-          </div>
-
-          {!showAllSet ? (
-            <div style={{ background: '#f8fafc', padding: '2.5rem', borderRadius: '16px', border: '1px dashed #cbd5e1', maxWidth: '500px', margin: '0 auto' }}>
-              <div style={{ fontSize: '3rem', marginBottom: '1.5rem', animation: 'spin 2s linear infinite' }}>⏳</div>
-              <h3 style={{ color: '#1e293b', marginBottom: '0.75rem', fontSize: '1.5rem', fontWeight: 'bold' }}>Saving Your Recording</h3>
-              <p style={{ fontSize: '1rem', color: '#64748b', marginBottom: '1.5rem' }}>
-                We are uploading your video interview. Time depends on your connection speed and interview length.
-              </p>
-              <div style={{ background: '#fee2e2', color: '#dc2626', padding: '12px', borderRadius: '8px', fontWeight: '700', display: 'inline-flex', alignItems: 'center', gap: '8px' }}>
-                ⚠️ PLEASE DO NOT CLOSE THIS TAB
-              </div>
-              <div style={{ marginTop: '1.5rem', width: '100%', height: '10px', background: '#e2e8f0', borderRadius: '5px', overflow: 'hidden', position: 'relative' }}>
-                <div style={{ width: `${uploadPercentage}%`, height: '100%', background: '#6366f1', transition: 'width 0.3s ease' }}></div>
-              </div>
-              <div style={{ display: 'flex', justifyContent: 'space-between', marginTop: '0.5rem' }}>
-                <div style={{ fontSize: '0.85rem', color: '#6366f1', fontWeight: '700' }}>{uploadingText || 'Preparing video file...'}</div>
-                <div style={{ fontSize: '0.85rem', color: '#64748b', fontWeight: '600' }}>Est: 1-2 mins</div>
-              </div>
-
-              {showSkipButton && (
-                <div style={{ marginTop: '1.5rem', fontSize: '0.8rem', color: '#64748b', borderTop: '1px solid #f1f5f9', paddingTop: '1rem' }}>
-                  Taking too long? <a href="#" onClick={(e) => { e.preventDefault(); if (skipCountdown <= 0) handleSkipUpload(); }} style={{ color: skipCountdown <= 0 ? '#6366f1' : '#94a3b8', textDecoration: skipCountdown <= 0 ? 'underline' : 'none', fontWeight: '600', cursor: skipCountdown <= 0 ? 'pointer' : 'not-allowed' }}>Finish & Exit anyway</a>
-                  {skipCountdown > 0 && <span style={{ color: '#94a3b8' }}> (available in <span>{skipCountdown}</span>s)</span>}
-                  <div style={{ fontSize: '0.75rem', marginTop: '4px', color: '#94a3b8' }}>(Your interview responses are already safely submitted)</div>
-                </div>
-              )}
-            </div>
-          ) : (
-            <div style={{ background: '#f0fdf4', padding: '3rem 2rem', borderRadius: '16px', border: '1px dashed #bbf7d0', maxWidth: '500px', margin: '0 auto' }}>
-              <div style={{ background: '#22c55e', width: '60px', height: '60px', borderRadius: '50%', display: 'flex', alignItems: 'center', justifyContent: 'center', margin: '0 auto 1.5rem auto' }}>
-                <svg style={{ width: '30px', height: '30px', color: '#fff' }} fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="3" d="M5 13l4 4L19 7"></path></svg>
-              </div>
-              <h2 style={{ color: '#166534', marginBottom: '1rem', fontSize: '2rem', fontWeight: 'bold' }}>All Set!</h2>
-              <p style={{ fontSize: '1.1rem', color: '#15803d', marginBottom: '2rem', lineHeight: '1.6' }}>Your recording has been safe-stored. You may now safely close this window or exit the browser.</p>
-              <button onClick={() => navigate('/')} style={{ background: '#1e293b', color: 'white', padding: '12px 32px', borderRadius: '9999px', fontSize: '1.1rem', fontWeight: '600', border: 'none', cursor: 'pointer', boxShadow: '0 4px 10px rgba(0,0,0,0.1)' }}>
-                Exit Now
-              </button>
-            </div>
-          )}
-        </div>
+        <a href="/" className="inline-flex items-center justify-center gap-2 px-6 py-3 rounded-full font-semibold text-sm bg-primary hover:bg-primary-hover text-white transition-all shadow-[0_4px_14px_rgba(99,102,241,0.15)] mt-6 no-underline">Go to Platform Page</a>
       </div>
     )
   }
@@ -2491,10 +2277,10 @@ function Interview() {
                   {currentQuestion?.category || currentQuestion?.type || 'Case Analysis'}
                 </span>
                 <span className={`px-3 py-1 rounded-full text-[10px] font-bold tracking-wide uppercase border ${String(currentQuestion?.difficulty || 'Easy').toLowerCase() === 'easy'
-                    ? 'bg-emerald-50 text-emerald-600 border-emerald-100'
-                    : String(currentQuestion?.difficulty || 'Easy').toLowerCase() === 'medium'
-                      ? 'bg-amber-50 text-amber-600 border-amber-100'
-                      : 'bg-red-50 text-red-600 border-red-100'
+                  ? 'bg-emerald-50 text-emerald-600 border-emerald-100'
+                  : String(currentQuestion?.difficulty || 'Easy').toLowerCase() === 'medium'
+                    ? 'bg-amber-50 text-amber-600 border-amber-100'
+                    : 'bg-red-50 text-red-600 border-red-100'
                   }`}>
                   {currentQuestion?.difficulty || 'Easy'}
                 </span>
@@ -2609,7 +2395,3 @@ function Interview() {
     </div>
   )
 }
-
-
-export default Interview
-
