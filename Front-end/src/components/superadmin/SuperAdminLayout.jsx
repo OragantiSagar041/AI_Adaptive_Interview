@@ -272,8 +272,7 @@ export default function SuperAdminLayout() {
   }, [token, API_BASE_URL])
 
   const handleLogout = () => {
-    sessionStorage.removeItem('adminToken')
-    sessionStorage.removeItem('adminUser')
+    sessionStorage.clear()
     dispatch(logout())
     persistor.purge()
     navigate('/login')

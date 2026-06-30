@@ -932,8 +932,7 @@ export default function AdminPage({ role: initialRole = 'admin' }) {
   }
 
   const handleLogout = () => {
-    sessionStorage.removeItem('adminToken')
-    sessionStorage.removeItem('adminUser')
+    sessionStorage.clear()
     dispatch(logout())
     persistor.purge()
     navigate('/login')
