@@ -33,12 +33,26 @@ from app import config
 # ---------------------------------------------------------------------------
 # Application factory
 # ---------------------------------------------------------------------------
+from pymongo import ASCENDING, DESCENDING
+from mongo_db import interview_sessions_collection
 
 app = FastAPI(
     title="HireIQ AI Interview Platform",
     description="Backend API for AI-powered mock interviews",
     version="2.0.0",
 )
+
+@app.on_event("startup")
+async def startup_event():
+    print("Initializing MongoDB Indexes...")
+    try:
+        interview_sessions_collection.create_index([("company_id", ASCENDING), ("status", ASCENDING)])
+        interview_sessions_collection.create_index([("company_id", ASCENDING), ("created_at", DESCENDING)])
+        interview_sessions_collection.create_index([("link_id", ASCENDING)], unique=True)
+        print("MongoDB Indexes Initialized Successfully!")
+    except Exception as e:
+        print(f"Failed to initialize indexes: {e}")
+
 
 class RateLimitMiddleware(BaseHTTPMiddleware):
     async def dispatch(self, request: Request, call_next):

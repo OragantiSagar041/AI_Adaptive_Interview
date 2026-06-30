@@ -17,6 +17,7 @@ class RedisConnectionManager:
         self.pubsub = None
         # Local state for websockets connected to THIS instance
         self.local_connections: Dict[str, Dict[str, any]] = {}
+        self.dashboard_connections: List[WebSocket] = []
         self.listener_task: Optional[asyncio.Task] = None
         self._redis_failed = False
 
@@ -72,6 +73,13 @@ class RedisConnectionManager:
                                         await admin_ws.send_json(data)
                                     except Exception as e:
                                         logger.error(f"Error sending to local admin: {e}")
+                    elif channel == "dashboard:updates":
+                        # Push to all connected dashboard websockets
+                        for ws in self.dashboard_connections:
+                            try:
+                                await ws.send_json(data)
+                            except Exception as e:
+                                logger.error(f"Error sending dashboard update: {e}")
         except asyncio.CancelledError:
             pass
         except Exception as e:
@@ -116,6 +124,17 @@ class RedisConnectionManager:
                 del self.local_connections[link_id]
                 if self.pubsub:
                     asyncio.create_task(self.pubsub.unsubscribe(f"session:{link_id}:candidate", f"session:{link_id}:admins"))
+
+    async def connect_dashboard(self, websocket: WebSocket):
+        await websocket.accept()
+        self.dashboard_connections.append(websocket)
+        await self.connect_redis()
+        if self.pubsub:
+            await self.pubsub.subscribe("dashboard:updates")
+
+    def disconnect_dashboard(self, websocket: WebSocket):
+        if websocket in self.dashboard_connections:
+            self.dashboard_connections.remove(websocket)
 
     async def send_to_candidate(self, link_id: str, message: dict):
         """Publish a message to the candidate's channel."""
