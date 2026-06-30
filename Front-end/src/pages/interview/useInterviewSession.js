@@ -27,6 +27,11 @@ export const useInterviewSession = (sessionId, interviewType, startRoundTwo) => 
   const [agreeChecked, setAgreeChecked] = useState(false)
   const [autoReconnecting, setAutoReconnecting] = useState(!!_savedSession?.accepted)
 
+  // Voice Cloning intermediate state
+  const [showVoiceCloneSetup, setShowVoiceCloneSetup] = useState(false)
+  const [clonedVoiceId, setClonedVoiceId] = useState(null)
+  const clonedVoiceIdRef = useRef(null)
+
   // Session details from backend
   const [sessionDetail, setSessionDetail] = useState(null)
   const [interviewId, setInterviewId] = useState('')
@@ -796,7 +801,11 @@ export const useInterviewSession = (sessionId, interviewType, startRoundTwo) => 
       setAutoReconnecting(false)
 
       const savedSess = _sessionKey ? (() => { try { return JSON.parse(sessionStorage.getItem(_sessionKey) || 'null') } catch { return null } })() : null
-      if (!savedSess?.accepted && questions.length > 0) {
+      
+      // If voice cloning is enabled, show setup screen first and defer first question
+      if (!savedSess?.accepted && sessionDetail?.voice_clone) {
+        setShowVoiceCloneSetup(true)
+      } else if (!savedSess?.accepted && questions.length > 0) {
         speakAIQuestion(questions[0].text || questions[0].question || questions[0].prompt || '')
       }
 
@@ -833,6 +842,18 @@ export const useInterviewSession = (sessionId, interviewType, startRoundTwo) => 
         },
         buttonsStyling: false
       })
+    }
+  }
+
+  const completeVoiceCloneSetup = (voiceId = null) => {
+    if (voiceId) {
+      setClonedVoiceId(voiceId)
+      clonedVoiceIdRef.current = voiceId
+    }
+    setShowVoiceCloneSetup(false)
+    
+    if (questions.length > 0) {
+      speakAIQuestion(questions[0].text || questions[0].question || questions[0].prompt || '')
     }
   }
 
@@ -909,7 +930,36 @@ export const useInterviewSession = (sessionId, interviewType, startRoundTwo) => 
     }
   }
 
-  const speakAIQuestion = (text) => {
+  const speakAIQuestion = async (text) => {
+    if (clonedVoiceIdRef.current) {
+      // --- Cloned Voice TTS (Backend) ---
+      try {
+        if (window.speechSynthesis) window.speechSynthesis.cancel()
+        const res = await fetch(`${api.defaults.baseURL || ''}/tts`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ text, voice: 'shimmer', language: sessionDetail?.language || 'English', voice_id: clonedVoiceIdRef.current })
+        })
+        if (!res.ok) throw new Error('TTS failed')
+        const blob = await res.blob()
+        const url = URL.createObjectURL(blob)
+        const audio = new Audio(url)
+        audio.onended = () => {
+          if (!isRoundTwoRef.current) {
+            if (silenceTimeoutRef.current) clearTimeout(silenceTimeoutRef.current)
+            silenceTimeoutRef.current = setTimeout(() => {
+              if (handleNextQuestionRef.current) handleNextQuestionRef.current()
+            }, 10000)
+          }
+        }
+        audio.play()
+        return // Successfully used cloned voice
+      } catch (err) {
+        console.error("Cloned TTS failed, falling back to browser TTS", err)
+      }
+    }
+
+    // --- Browser TTS (Fallback/Default) ---
     if (!window.speechSynthesis) return
     window.speechSynthesis.cancel()
     const utterance = new SpeechSynthesisUtterance(text)
@@ -1136,6 +1186,9 @@ export const useInterviewSession = (sessionId, interviewType, startRoundTwo) => 
   }, [handleNextQuestion])
 
   const handleSubmitInterview = async (forceClose = false) => {
+    // Stop any currently-speaking TTS immediately
+    if (window.speechSynthesis) window.speechSynthesis.cancel()
+    if (silenceTimeoutRef.current) { clearTimeout(silenceTimeoutRef.current); silenceTimeoutRef.current = null }
     if (_sessionKey) sessionStorage.removeItem(_sessionKey)
     visualizerActiveRef.current = false
     if (faceDetectionIntervalRef.current) clearInterval(faceDetectionIntervalRef.current)
@@ -1286,6 +1339,8 @@ export const useInterviewSession = (sessionId, interviewType, startRoundTwo) => 
     enableFullscreen,
     restartScreenShare,
     speakAIQuestion,
+    showVoiceCloneSetup,
+    completeVoiceCloneSetup,
     handleStartRound2Click,
     proceedToRoundTwo,
     handleNextQuestion,

@@ -1,7 +1,8 @@
-import React from 'react'
+import React, { useState, useRef } from 'react'
 import { useSearchParams, Link } from 'react-router-dom'
 import { Video, Volume2, ArrowRight, ShieldAlert, Cpu, AlertTriangle, RefreshCw } from 'lucide-react'
 import { useInterviewSession } from './useInterviewSession'
+import { API_BASE_URL } from '../../apiConfig'
 import '../../Interview.css'
 
 export const InterviewBase = ({
@@ -47,12 +48,60 @@ export const InterviewBase = ({
     enableFullscreen,
     restartScreenShare,
     speakAIQuestion,
+    showVoiceCloneSetup,
+    completeVoiceCloneSetup,
     handleStartRound2Click,
     proceedToRoundTwo,
     handleNextQuestion,
     handleSubmitInterview,
     handleSkipUpload
   } = session
+
+  // ── Voice Cloning Setup State (UI only) ──────────────────────────────────
+  const [vcStep, setVcStep] = useState('idle') // 'idle' | 'recording' | 'uploading' | 'done' | 'error'
+  const [vcError, setVcError] = useState('')
+  const [localVoiceId, setLocalVoiceId] = useState(null)
+  const vcMediaRecorderRef = useRef(null)
+  const vcChunksRef = useRef([])
+
+  const startVcRecording = async () => {
+    setVcStep('recording')
+    setVcError('')
+    vcChunksRef.current = []
+    try {
+      const stream = await navigator.mediaDevices.getUserMedia({ audio: true })
+      const mr = new MediaRecorder(stream, { mimeType: 'audio/webm' })
+      vcMediaRecorderRef.current = mr
+      mr.ondataavailable = (e) => { if (e.data.size > 0) vcChunksRef.current.push(e.data) }
+      mr.onstop = async () => {
+        stream.getTracks().forEach(t => t.stop())
+        setVcStep('uploading')
+        try {
+          const blob = new Blob(vcChunksRef.current, { type: 'audio/webm' })
+          const fd = new FormData()
+          fd.append('audio', blob, 'voice_sample.webm')
+          fd.append('voice_name', `Candidate_${sessionId}`)
+          const resp = await fetch(`${API_BASE_URL}/voice-clone-instant`, { method: 'POST', body: fd })
+          const data = await resp.json()
+          if (!resp.ok) throw new Error(data.detail || 'Cloning failed')
+          setLocalVoiceId(data.voice_id)
+          setVcStep('done')
+        } catch (err) {
+          setVcError(err.message || 'Voice cloning failed. Default voice will be used.')
+          setVcStep('error')
+        }
+      }
+      mr.start()
+      setTimeout(() => { if (mr.state === 'recording') mr.stop() }, 10000)
+    } catch (err) {
+      setVcError('Microphone access denied: ' + err.message)
+      setVcStep('error')
+    }
+  }
+
+  const stopVcRecording = () => {
+    if (vcMediaRecorderRef.current?.state === 'recording') vcMediaRecorderRef.current.stop()
+  }
 
   if (loading) {
     return (
@@ -116,6 +165,80 @@ export const InterviewBase = ({
       </div>
     )
   }
+
+  // ── Voice Clone Setup Screen ──────────────────────────────────────────────
+  if (showVoiceCloneSetup) return (
+    <div style={{ minHeight: '100vh', background: '#0a0f1e', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', color: 'white', padding: '24px', fontFamily: "'Inter',sans-serif" }}>
+      <style>{`
+        @keyframes vcWave{0%,100%{transform:scaleY(.4)}50%{transform:scaleY(1)}}
+        .vc-bar{animation:vcWave 0.9s ease-in-out infinite;transform-origin:bottom;background:linear-gradient(to top,#7c3aed,#a78bfa);width:5px;border-radius:99px;height:32px;}
+      `}</style>
+      <div style={{ maxWidth: '520px', width: '100%', textAlign: 'center' }}>
+        <div style={{ width: '64px', height: '64px', borderRadius: '16px', background: 'linear-gradient(135deg,#7c3aed,#6366f1)', display: 'flex', alignItems: 'center', justifyContent: 'center', margin: '0 auto 24px', boxShadow: '0 0 40px rgba(139,92,246,0.4)' }}>
+          <i className="fas fa-waveform-lines" style={{ fontSize: '28px' }} />
+        </div>
+        <h1 style={{ fontSize: '28px', fontWeight: '900', marginBottom: '8px' }}>Voice Cloning Setup</h1>
+        <p style={{ color: '#94a3b8', marginBottom: '32px', fontSize: '15px' }}>Read the sentence below aloud so we can clone your voice for the AI interviewer.</p>
+
+        <div style={{ background: '#0d1117', border: '1px solid rgba(139,92,246,0.3)', borderRadius: '16px', padding: '24px', marginBottom: '28px' }}>
+          <p style={{ fontSize: '11px', fontWeight: '800', textTransform: 'uppercase', letterSpacing: '2px', color: '#a78bfa', marginBottom: '12px' }}>Read this clearly:</p>
+          <p style={{ color: 'white', fontSize: '18px', fontWeight: '600', lineHeight: '1.6', fontStyle: 'italic' }}>"The quick brown fox jumps over the lazy dog. Please read this sentence clearly."</p>
+        </div>
+
+        {vcStep === 'recording' && (
+          <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '16px', marginBottom: '20px' }}>
+            <div style={{ display: 'flex', alignItems: 'flex-end', gap: '4px', height: '40px' }}>
+              {Array.from({length: 9}).map((_,i) => <div key={i} className="vc-bar" style={{animationDelay:`${i*0.1}s`}} />)}
+            </div>
+            <p style={{ color: '#c4b5fd', fontSize: '14px', fontWeight: '600' }}>🔴 Recording... speak now</p>
+            <button onClick={stopVcRecording} style={{ padding: '10px 24px', background: '#dc2626', color: 'white', borderRadius: '8px', border: 'none', cursor: 'pointer', fontWeight: '700', fontSize: '14px' }}>
+              ⏹ Stop Recording
+            </button>
+          </div>
+        )}
+
+        {vcStep === 'uploading' && (
+          <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '12px', marginBottom: '20px' }}>
+            <div style={{ width: '44px', height: '44px', borderRadius: '50%', border: '4px solid rgba(139,92,246,0.3)', borderTop: '4px solid #7c3aed', animation: 'spin 0.8s linear infinite' }} />
+            <p style={{ color: '#a78bfa', fontSize: '14px' }}>Cloning your voice with ElevenLabs AI...</p>
+          </div>
+        )}
+
+        {vcStep === 'done' && (
+          <div style={{ background: 'rgba(16,185,129,0.1)', border: '1px solid rgba(16,185,129,0.3)', borderRadius: '16px', padding: '20px', marginBottom: '20px', color: '#34d399' }}>
+            <div style={{ fontSize: '32px', marginBottom: '8px' }}>✅</div>
+            <p style={{ fontWeight: '700', marginBottom: '4px' }}>Voice Cloned Successfully!</p>
+            <p style={{ fontSize: '13px', color: '#6ee7b7' }}>The AI will now speak in your voice during the interview.</p>
+          </div>
+        )}
+
+        {vcStep === 'error' && (
+          <div style={{ background: 'rgba(239,68,68,0.1)', border: '1px solid rgba(239,68,68,0.3)', borderRadius: '16px', padding: '20px', marginBottom: '20px', color: '#f87171' }}>
+            <div style={{ fontSize: '24px', marginBottom: '8px' }}>⚠️</div>
+            <p style={{ fontSize: '13px' }}>{vcError || 'An error occurred. The interview will use the default AI voice.'}</p>
+          </div>
+        )}
+
+        <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
+          {vcStep === 'idle' && (
+            <button onClick={startVcRecording} style={{ padding: '16px', background: 'linear-gradient(90deg,#7c3aed,#6366f1)', color: 'white', borderRadius: '12px', border: 'none', cursor: 'pointer', fontWeight: '700', fontSize: '16px', boxShadow: '0 4px 30px rgba(139,92,246,0.4)' }}>
+              🎙️ Start Recording (max 10s)
+            </button>
+          )}
+          {(vcStep === 'done' || vcStep === 'error') && (
+            <button onClick={() => completeVoiceCloneSetup(localVoiceId)} style={{ padding: '16px', background: 'linear-gradient(90deg,#10b981,#059669)', color: 'white', borderRadius: '12px', border: 'none', cursor: 'pointer', fontWeight: '700', fontSize: '16px', boxShadow: '0 4px 30px rgba(16,185,129,0.4)' }}>
+              Continue to Interview →
+            </button>
+          )}
+          {vcStep === 'idle' && (
+            <button onClick={() => completeVoiceCloneSetup(null)} style={{ padding: '12px', background: 'rgba(255,255,255,0.05)', color: '#94a3b8', borderRadius: '12px', border: '1px solid rgba(255,255,255,0.1)', cursor: 'pointer', fontSize: '14px' }}>
+              Skip — use default AI voice
+            </button>
+          )}
+        </div>
+      </div>
+    </div>
+  )
 
   // Render Video uploading progress & "All Set!" screen
   if (showAllSet || uploadingText) {

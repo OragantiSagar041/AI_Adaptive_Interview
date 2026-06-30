@@ -57,6 +57,7 @@ export default function CreateInterviewPage() {
       scheduledStart: '',
       scheduledEnd: '',
       recordVideo: true,
+      voiceCloning: false,
       hrScreening: {
         askWorkMode: false,
         workModeType: 'On-site',
@@ -110,6 +111,7 @@ export default function CreateInterviewPage() {
       scheduledStart: '',
       scheduledEnd: '',
       recordVideo: true,
+      voiceCloning: false,
       hrScreening: {
         askWorkMode: false,
         workModeType: 'On-site',
@@ -421,7 +423,7 @@ export default function CreateInterviewPage() {
 
   // Generate Single Link Session
   const handleGenerateInterviewLink = async () => {
-    const { name, email, resumeText, jobDescription, duration, interviewFormat, interviewType, industry, language, caseStudyCount, scheduledStart, scheduledEnd, recordVideo, hrScreening, customQuestions, aiInstructions } = singleCandidate
+    const { name, email, resumeText, jobDescription, duration, interviewFormat, interviewType, industry, language, caseStudyCount, scheduledStart, scheduledEnd, recordVideo, voiceCloning, hrScreening, customQuestions, aiInstructions } = singleCandidate
 
     if (!name || !email || !resumeText || !jobDescription) {
       Swal.fire({
@@ -468,7 +470,8 @@ export default function CreateInterviewPage() {
         hr_screening: hrScreening,
         custom_questions: customQuestions,
         ai_instructions: aiInstructions,
-        case_study_count: interviewType === 'Non-Technical' ? Number(caseStudyCount) : 0
+        case_study_count: interviewType === 'Non-Technical' ? Number(caseStudyCount) : 0,
+        voice_clone: voiceCloning
       })).unwrap()
 
       let msg = `Secure interview link created successfully!`
@@ -1301,6 +1304,31 @@ export default function CreateInterviewPage() {
                     className="sr-only peer"
                   />
                   <div className="w-11 h-6 bg-slate-200 rounded-full peer peer-focus:outline-none peer-checked:after:translate-x-full after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-slate-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-primary"></div>
+                </label>
+              </div>
+
+              {/* Card 3b: Voice Cloning */}
+              <div className="bg-white/82 backdrop-blur-md border border-[#e5edf7] rounded-2xl p-5 text-slate-800 flex justify-between items-center shadow-[0_18px_40px_rgba(17,24,39,0.06)] hover:border-slate-300 transition-all duration-200">
+                <div className="flex items-center gap-3.5">
+                  <div className="w-10 h-10 rounded-xl flex items-center justify-center bg-violet-50 border border-violet-100 text-violet-600 shadow-inner">
+                    <i className="fas fa-waveform-lines text-sm"></i>
+                  </div>
+                  <div className="flex flex-col gap-0.5">
+                    <label htmlFor="singleVoiceCloning" className="text-xs font-extrabold uppercase tracking-wider text-slate-700 cursor-pointer">
+                      Voice Cloning
+                    </label>
+                    <span className="text-[0.7rem] text-slate-400 font-medium">AI will speak in the candidate's own cloned voice (requires ElevenLabs API key)</span>
+                  </div>
+                </div>
+                <label className="relative inline-flex items-center cursor-pointer select-none">
+                  <input
+                    type="checkbox"
+                    id="singleVoiceCloning"
+                    checked={singleCandidate.voiceCloning}
+                    onChange={(e) => handleSingleChange('voiceCloning', e.target.checked)}
+                    className="sr-only peer"
+                  />
+                  <div className="w-11 h-6 bg-slate-200 rounded-full peer peer-focus:outline-none peer-checked:after:translate-x-full after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-slate-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-violet-600"></div>
                 </label>
               </div>
 

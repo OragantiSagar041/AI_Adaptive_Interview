@@ -2636,7 +2636,8 @@ async def create_session(data: CreateSession, current_admin: dict = Depends(get_
         "custom_questions": data.custom_questions,
         "ai_instructions": data.ai_instructions,
         "case_study_count": data.case_study_count,
-        "industry": data.industry
+        "industry": data.industry,
+        "voice_clone": data.voice_clone
     }
     
     # Task 4: Store scheduled time window
@@ -2696,6 +2697,7 @@ class BulkCreateSession(BaseModel):
     hr_screening: HRScreening = HRScreening()  # HR screening preferences
     custom_questions: str = ""
     ai_instructions: str = ""
+    voice_clone: bool = False
 
 @router.post("/admin/bulk-create-sessions")
 async def bulk_create_sessions(data: BulkCreateSession, current_admin: dict = Depends(get_current_admin_details)):
@@ -2759,6 +2761,7 @@ async def bulk_create_sessions(data: BulkCreateSession, current_admin: dict = De
             "language": data.language,
             "case_study_count": data.case_study_count,
             "record_video": candidate.record_video,  # Task 5: Per-candidate video
+            "voice_clone": data.voice_clone,
             "status": "pending",
             "hr_screening": data.hr_screening.dict(),
             "custom_questions": data.custom_questions,
@@ -2900,7 +2903,8 @@ async def get_session(link_id: str):
             "record_video": row.get("record_video", True),
             "is_deactivated": row.get("is_deactivated", False),
             "language": row.get("language", "English"),
-            "interview_type": row.get("interview_type", "Technical")
+            "interview_type": row.get("interview_type", "Technical"),
+            "voice_clone": row.get("voice_clone", False)
         }
     else:
         raise HTTPException(status_code=404, detail="Session not found")
@@ -5927,43 +5931,168 @@ class TTSRequest(BaseModel):
     text: str
     voice: str = "nova"
     language: str = "English"
+    voice_id: Optional[str] = None   # Per-session cloned voice override
+
+
+@router.post("/voice-clone-instant")
+async def voice_clone_instant(audio: UploadFile = File(...), voice_name: Optional[str] = "CandidateVoice"):
+    """
+    ElevenLabs Instant Voice Cloning endpoint.
+    Accepts a short audio sample (webm/mp3/wav), sends it to ElevenLabs,
+    and returns a temporary voice_id that can be used for the session's TTS calls.
+    Requires ELEVENLABS_API_KEY in the .env file.
+    """
+    import asyncio
+
+    load_dotenv(os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), ".env"), override=True)
+    api_key = os.getenv("ELEVENLABS_API_KEY", "").strip()
+    if not api_key:
+        raise HTTPException(status_code=503, detail="ElevenLabs API key not configured. Voice cloning is unavailable.")
+
+    # Save the uploaded file to a temp location
+    ext = "webm"
+    if audio.filename:
+        ext = audio.filename.rsplit(".", 1)[-1].lower() if "." in audio.filename else "webm"
+    temp_audio = f"temp_voice_sample_{uuid.uuid4().hex}.{ext}"
+    try:
+        audio_bytes = await audio.read()
+        with open(temp_audio, "wb") as f:
+            f.write(audio_bytes)
+
+        def _do_clone():
+            with open(temp_audio, "rb") as af:
+                response = requests.post(
+                    "https://api.elevenlabs.io/v1/voices/add",
+                    headers={"xi-api-key": api_key},
+                    data={
+                        "name": voice_name or "CandidateVoice",
+                        "description": "Auto-cloned from interview voice sample",
+                        "labels": '{"use_case":"interview","auto_delete":"true"}',
+                    },
+                    files={"files": (f"sample.{ext}", af, f"audio/{ext}")},
+                    timeout=30,
+                )
+            return response
+
+        resp = await asyncio.get_event_loop().run_in_executor(None, _do_clone)
+
+        if resp.status_code == 200:
+            data = resp.json()
+            voice_id = data.get("voice_id")
+            print(f"[VoiceClone] Created voice_id={voice_id}")
+            return {"voice_id": voice_id, "status": "success"}
+        elif resp.status_code == 429:
+            raise HTTPException(status_code=429, detail="ElevenLabs quota exhausted. Voice cloning unavailable.")
+        else:
+            print(f"[VoiceClone] Error {resp.status_code}: {resp.text[:300]}")
+            raise HTTPException(status_code=500, detail=f"ElevenLabs error: {resp.status_code}")
+    finally:
+        if os.path.exists(temp_audio):
+            os.remove(temp_audio)
 
 @router.post("/tts")
 async def generate_tts(req: TTSRequest):
-    """Generate high-quality TTS audio via Edge TTS"""
-    try:
-        # Default to Microsoft Neural Aria voice (clean, clear female)
-        voice_model = "en-US-AriaNeural"
-        if req.voice == "shimmer" or req.voice == "nova":
-            voice_model = "en-US-JennyNeural"
+    """
+    Hybrid TTS: ElevenLabs Voice Cloning (primary) → Microsoft Edge TTS (fallback).
 
-        # Apply specific regional neural voices based on the requested language
-        # to ensure non-English scripts (like Devanagari) are pronounced correctly
-        # instead of being silently skipped by the English-only voice models.
-        language_map = {
-            "Hindi": "hi-IN-SwaraNeural",
-            "Telugu": "te-IN-ShrutiNeural",
-            "Tamil": "ta-IN-PallaviNeural",
-            "Malayalam": "ml-IN-SobhanaNeural",
-            "Kannada": "kn-IN-SapnaNeural",
-            "English": voice_model
-        }
-        
-        # Override voice model if a supported non-English language is passed
-        selected_voice = language_map.get(req.language.title(), voice_model)
+    Strategy:
+    - ElevenLabs is used for English when ELEVENLABS_API_KEY + ELEVENLABS_VOICE_ID are set.
+      The eleven_multilingual_v2 model is used so the cloned voice can handle multilingual text.
+    - Regional languages (Hindi, Telugu, Tamil, Malayalam, Kannada) always route directly to
+      the native Microsoft Edge TTS neural voice for that language, because these voices have
+      superior regional accent accuracy that even ElevenLabs cannot match for Indian scripts.
+    - If ElevenLabs quota is exceeded (HTTP 429), the API key is missing, or any other error
+      occurs, the system silently falls back to the free Microsoft Edge TTS voice.
+    """
+    load_dotenv(os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), ".env"), override=True)
+    elevenlabs_api_key = os.getenv("ELEVENLABS_API_KEY", "").strip()
+    # Per-session cloned voice (from /voice-clone-instant) takes priority over the global static voice
+    elevenlabs_voice_id = (req.voice_id or "").strip() or os.getenv("ELEVENLABS_VOICE_ID", "").strip()
 
-        temp_filename = f"temp_tts_{uuid.uuid4().hex}.mp3"
-        communicate = edge_tts.Communicate(req.text, selected_voice)
-        await communicate.save(temp_filename)
-        
-        return FileResponse(
-            temp_filename, 
-            media_type="audio/mpeg", 
-            background=BackgroundTask(os.remove, temp_filename)
-        )
-    except Exception as e:
-        print(f"TTS Error: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
+    # ──────────────────────────────────────────────────────────────────────────
+    # 1. Build Edge TTS regional voice map (used as fallback AND for regional languages)
+    # ──────────────────────────────────────────────────────────────────────────
+    base_edge_voice = "en-US-JennyNeural" if req.voice in ("shimmer", "nova") else "en-US-AriaNeural"
+    edge_language_map = {
+        "Hindi":     "hi-IN-SwaraNeural",
+        "Telugu":    "te-IN-ShrutiNeural",
+        "Tamil":     "ta-IN-PallaviNeural",
+        "Malayalam": "ml-IN-SobhanaNeural",
+        "Kannada":   "kn-IN-SapnaNeural",
+        "English":   base_edge_voice,
+    }
+    requested_lang = req.language.title()
+    edge_voice = edge_language_map.get(requested_lang, base_edge_voice)
+    is_regional = requested_lang in edge_language_map and requested_lang != "English"
+
+    # ──────────────────────────────────────────────────────────────────────────
+    # 2. ElevenLabs path — only for English (or unsupported languages where Edge
+    #    has no dedicated voice) when keys are configured
+    # ──────────────────────────────────────────────────────────────────────────
+    used_elevenlabs = False
+    temp_filename = f"temp_tts_{uuid.uuid4().hex}.mp3"
+
+    if elevenlabs_api_key and elevenlabs_voice_id and not is_regional:
+        try:
+            el_url = f"https://api.elevenlabs.io/v1/text-to-speech/{elevenlabs_voice_id}"
+            el_headers = {
+                "xi-api-key": elevenlabs_api_key,
+                "Content-Type": "application/json",
+                "Accept": "audio/mpeg",
+            }
+            el_payload = {
+                "text": req.text,
+                # eleven_multilingual_v2 handles English + Indian regional scripts if needed
+                "model_id": "eleven_multilingual_v2",
+                "voice_settings": {
+                    "stability": 0.50,
+                    "similarity_boost": 0.80,
+                    "style": 0.20,
+                    "use_speaker_boost": True,
+                },
+            }
+
+            # Run the blocking HTTP call in a thread pool to avoid blocking the async event loop
+            import asyncio
+            def _call_elevenlabs():
+                return requests.post(el_url, json=el_payload, headers=el_headers, timeout=15)
+
+            el_response = await asyncio.get_event_loop().run_in_executor(None, _call_elevenlabs)
+
+            if el_response.status_code == 200:
+                with open(temp_filename, "wb") as f:
+                    f.write(el_response.content)
+                used_elevenlabs = True
+                print(f"[TTS] ElevenLabs: OK ({len(el_response.content)} bytes) | voice={elevenlabs_voice_id}")
+            elif el_response.status_code == 429:
+                # Quota exhausted — log and fall through to Edge TTS fallback
+                print("[TTS] ElevenLabs quota exhausted (429). Falling back to Microsoft Edge TTS.")
+            else:
+                print(f"[TTS] ElevenLabs error {el_response.status_code}: {el_response.text[:200]}. Falling back to Edge TTS.")
+
+        except Exception as el_err:
+            print(f"[TTS] ElevenLabs exception: {el_err}. Falling back to Edge TTS.")
+
+    # ──────────────────────────────────────────────────────────────────────────
+    # 3. Edge TTS fallback — runs if ElevenLabs was skipped, failed, or quota hit,
+    #    AND always runs for regional languages regardless of ElevenLabs config
+    # ──────────────────────────────────────────────────────────────────────────
+    if not used_elevenlabs:
+        try:
+            print(f"[TTS] Using Microsoft Edge TTS | voice={edge_voice} | lang={requested_lang}")
+            communicate = edge_tts.Communicate(req.text, edge_voice)
+            await communicate.save(temp_filename)
+        except Exception as edge_err:
+            print(f"[TTS] Edge TTS Error: {edge_err}")
+            raise HTTPException(status_code=500, detail=f"TTS generation failed: {edge_err}")
+
+    return FileResponse(
+        temp_filename,
+        media_type="audio/mpeg",
+        background=BackgroundTask(os.remove, temp_filename),
+    )
+
+
 
 @router.post("/stt")
 async def stt_endpoint(file: UploadFile = File(...), language: Optional[str] = None):

@@ -201,8 +201,18 @@ export default function VoiceInterviewPage() {
 
   // Round control
   const [round, setRound] = useState('pre_checks')
-  // 'pre_checks' | 'intro' | 'verbal' | 'coding' | 'case_study' | 'done'
+  // 'pre_checks' | 'voice_clone_setup' | 'intro' | 'verbal' | 'coding' | 'case_study' | 'done'
   const [permissionsGranted, setPermissionsGranted] = useState(false)
+
+  // Voice Cloning
+  const [voiceCloneId, setVoiceCloneId] = useState(null)   // ElevenLabs voice_id for this session
+  const voiceCloneIdRef = useRef(null)
+  const voiceCloningEnabledRef = useRef(false)
+  const [vcStep, setVcStep] = useState('idle')             // 'idle' | 'recording' | 'uploading' | 'done' | 'error'
+  const [vcError, setVcError] = useState('')
+  const vcMediaRecorderRef = useRef(null)
+  const vcChunksRef = useRef([])
+  useEffect(() => { voiceCloneIdRef.current = voiceCloneId }, [voiceCloneId])
 
   // Verbal interview state
   const [chatMessages, setChatMessages] = useState([])
@@ -351,6 +361,8 @@ export default function VoiceInterviewPage() {
         const langVal = d.language || 'English'
         setLanguage(langVal.charAt(0).toUpperCase() + langVal.slice(1).toLowerCase())
         setInterviewType(d.interview_type || 'Technical')
+        // Read voice_clone flag set by admin when creating the session
+        voiceCloningEnabledRef.current = !!(d.voice_clone)
 
         // Calculate duration based on rounds
         const typeStr = d.interview_type || 'Technical'
@@ -410,7 +422,13 @@ export default function VoiceInterviewPage() {
       const res = await fetch(`${API_BASE_URL}/tts`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ text, voice: 'shimmer', language: languageRef.current })
+        body: JSON.stringify({
+          text,
+          voice: 'shimmer',
+          language: languageRef.current,
+          // Pass the per-session cloned voice id if available
+          ...(voiceCloneIdRef.current ? { voice_id: voiceCloneIdRef.current } : {})
+        })
       })
       if (!res.ok) throw new Error('TTS Failed')
       const blob = await res.blob()
@@ -1198,7 +1216,7 @@ export default function VoiceInterviewPage() {
 
           <button
             disabled={!permissionsGranted}
-            onClick={() => setRound('intro')}
+            onClick={() => setRound(voiceCloningEnabledRef.current ? 'voice_clone_setup' : 'intro')}
             className={`w-full py-4 rounded-xl font-bold text-lg transition-all flex items-center justify-center gap-3 ${permissionsGranted
               ? 'bg-gradient-to-r from-emerald-500 to-teal-500 text-white shadow-[0_4px_30px_rgba(16,185,129,0.4)] hover:shadow-[0_4px_50px_rgba(16,185,129,0.6)] hover:scale-[1.02]'
               : 'bg-slate-800 text-slate-500 cursor-not-allowed'
@@ -1212,6 +1230,137 @@ export default function VoiceInterviewPage() {
       <video ref={candidateVideoRef} style={{ position: 'absolute', opacity: 0, pointerEvents: 'none', width: '640px', height: '480px', left: '-9999px', top: '-9999px', zIndex: -1 }} playsInline muted autoPlay />
     </div>
   )
+
+  // ── Voice Clone Setup Screen ──────────────────────────────────────────────
+  if (round === 'voice_clone_setup') {
+    const SAMPLE_SENTENCE = "The quick brown fox jumps over the lazy dog. Please record this sentence clearly so we can match your voice."
+
+    const startVcRecording = async () => {
+      setVcStep('recording')
+      setVcError('')
+      vcChunksRef.current = []
+      try {
+        const stream = await navigator.mediaDevices.getUserMedia({ audio: true })
+        const mr = new MediaRecorder(stream, { mimeType: 'audio/webm' })
+        vcMediaRecorderRef.current = mr
+        mr.ondataavailable = (e) => { if (e.data.size > 0) vcChunksRef.current.push(e.data) }
+        mr.onstop = async () => {
+          stream.getTracks().forEach(t => t.stop())
+          setVcStep('uploading')
+          try {
+            const blob = new Blob(vcChunksRef.current, { type: 'audio/webm' })
+            const fd = new FormData()
+            fd.append('audio', blob, 'voice_sample.webm')
+            fd.append('voice_name', `Candidate_${linkId}`)
+            const resp = await fetch(`${API_BASE_URL}/voice-clone-instant`, { method: 'POST', body: fd })
+            const data = await resp.json()
+            if (!resp.ok) throw new Error(data.detail || 'Cloning failed')
+            setVoiceCloneId(data.voice_id)
+            voiceCloneIdRef.current = data.voice_id
+            setVcStep('done')
+          } catch (err) {
+            setVcError(err.message || 'Voice cloning failed. The interview will use the default AI voice.')
+            setVcStep('error')
+          }
+        }
+        mr.start()
+        // Auto-stop after 10 seconds
+        setTimeout(() => { if (mr.state === 'recording') mr.stop() }, 10000)
+      } catch (err) {
+        setVcError('Microphone access denied: ' + err.message)
+        setVcStep('error')
+      }
+    }
+
+    const stopVcRecording = () => {
+      if (vcMediaRecorderRef.current?.state === 'recording') {
+        vcMediaRecorderRef.current.stop()
+      }
+    }
+
+    return (
+      <div className="min-h-screen bg-[#0a0f1e] flex flex-col items-center justify-center text-white px-6" style={{ fontFamily: "'Inter',sans-serif" }}>
+        <style>{`
+          @keyframes vcPulse{0%,100%{box-shadow:0 0 0 0 rgba(139,92,246,.5)}70%{box-shadow:0 0 0 18px rgba(139,92,246,0)}}
+          @keyframes vcWave{0%,100%{transform:scaleY(.4)}50%{transform:scaleY(1)}}
+          .vc-bar{animation:vcWave 0.9s ease-in-out infinite;transform-origin:bottom;background:linear-gradient(to top,#7c3aed,#a78bfa);width:5px;border-radius:99px;height:32px;}
+        `}</style>
+        <div className="max-w-xl w-full text-center space-y-8">
+
+          {/* Header */}
+          <div className="flex flex-col items-center gap-4">
+            <div className="w-16 h-16 rounded-2xl bg-gradient-to-tr from-violet-600 to-indigo-500 flex items-center justify-center shadow-[0_0_40px_rgba(139,92,246,0.4)]">
+              <i className="fas fa-waveform-lines text-2xl text-white" />
+            </div>
+            <h1 className="text-3xl font-black">Voice Cloning Setup</h1>
+            <p className="text-slate-400 max-w-sm">Read the sentence below aloud. We'll clone your voice so the AI interviewer sounds just like you!</p>
+          </div>
+
+          {/* Sentence card */}
+          <div className="bg-[#0d1117] border border-violet-500/30 rounded-2xl p-6 shadow-xl">
+            <p className="text-[0.7rem] font-bold uppercase tracking-widest text-violet-400 mb-3">Read this sentence clearly:</p>
+            <p className="text-white text-lg font-semibold leading-relaxed italic">"{SAMPLE_SENTENCE}"</p>
+          </div>
+
+          {/* Status indicator */}
+          {vcStep === 'recording' && (
+            <div className="flex flex-col items-center gap-4">
+              <div className="flex items-end gap-1 h-10">
+                {Array.from({length:9}).map((_,i) => (
+                  <div key={i} className="vc-bar" style={{animationDelay:`${i*0.1}s`}} />
+                ))}
+              </div>
+              <p className="text-violet-300 text-sm font-semibold animate-pulse">🔴 Recording... speak the sentence now</p>
+              <button onClick={stopVcRecording} className="px-6 py-2.5 bg-rose-600 hover:bg-rose-700 rounded-lg font-bold text-sm transition-colors">
+                <i className="fas fa-stop mr-2" />Stop Recording
+              </button>
+            </div>
+          )}
+
+          {vcStep === 'uploading' && (
+            <div className="flex flex-col items-center gap-3">
+              <div className="w-12 h-12 rounded-full border-4 border-violet-500/30 border-t-violet-500 animate-spin" />
+              <p className="text-violet-300 text-sm">Cloning your voice with ElevenLabs AI...</p>
+            </div>
+          )}
+
+          {vcStep === 'done' && (
+            <div className="bg-emerald-500/10 border border-emerald-500/30 rounded-2xl p-5 text-emerald-300">
+              <i className="fas fa-check-circle text-3xl mb-2 block" />
+              <p className="font-bold">Voice Cloned Successfully!</p>
+              <p className="text-sm text-emerald-400/80 mt-1">The AI interviewer will now speak in your voice.</p>
+            </div>
+          )}
+
+          {(vcStep === 'error') && (
+            <div className="bg-rose-500/10 border border-rose-500/30 rounded-2xl p-5 text-rose-300">
+              <i className="fas fa-exclamation-triangle text-2xl mb-2 block" />
+              <p className="text-sm">{vcError || 'An error occurred. Proceeding with default voice.'}</p>
+            </div>
+          )}
+
+          {/* Action buttons */}
+          <div className="space-y-3">
+            {vcStep === 'idle' && (
+              <button onClick={startVcRecording} className="w-full py-4 rounded-xl bg-gradient-to-r from-violet-600 to-indigo-600 text-white font-bold text-lg shadow-[0_4px_30px_rgba(139,92,246,0.4)] hover:shadow-[0_4px_50px_rgba(139,92,246,0.7)] hover:scale-[1.02] transition-all flex items-center justify-center gap-3">
+                <i className="fas fa-microphone" />Start Recording (max 10s)
+              </button>
+            )}
+            {(vcStep === 'done' || vcStep === 'error') && (
+              <button onClick={() => setRound('intro')} className="w-full py-4 rounded-xl bg-gradient-to-r from-emerald-500 to-teal-500 text-white font-bold text-lg shadow-[0_4px_30px_rgba(16,185,129,0.4)] hover:scale-[1.02] transition-all flex items-center justify-center gap-3">
+                Continue to Interview <i className="fas fa-arrow-right" />
+              </button>
+            )}
+            {vcStep === 'idle' && (
+              <button onClick={() => setRound('intro')} className="w-full py-3 rounded-xl bg-white/5 border border-white/10 text-slate-400 hover:text-white text-sm font-medium transition-all">
+                Skip voice cloning — use default AI voice
+              </button>
+            )}
+          </div>
+        </div>
+      </div>
+    )
+  }
 
   // ── Intro Screen ──────────────────────────────────────────────────────────
   if (round === 'intro') return (
