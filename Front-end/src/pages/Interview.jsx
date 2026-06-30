@@ -188,7 +188,7 @@ function Interview() {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ type: 'tab_switch', message: `Tab switch detected (count: ${count})` })
-        }).catch(() => {})
+        }).catch(() => { })
         // Show visible banner
         setProctoringBanner({ type: 'tab_switch', message: `⚠️ Tab switch detected! (${count} total)` })
         setTimeout(() => setProctoringBanner(null), 4000)
@@ -764,7 +764,7 @@ function Interview() {
           phone_detected: !!proctoringState.phoneDetected,
           eye_contact_lost: !!proctoringState.eyeContactLost
         })
-      }).catch(() => {})
+      }).catch(() => { })
     }
 
     sendHeartbeat()
@@ -815,10 +815,10 @@ function Interview() {
       // 1. Request Camera & Mic
       let stream
       try {
-          stream = await navigator.mediaDevices.getUserMedia({
-            video: { width: { ideal: 720 }, height: { ideal: 1280 }, frameRate: 15 },
-            audio: true
-          })
+        stream = await navigator.mediaDevices.getUserMedia({
+          video: { width: { ideal: 720 }, height: { ideal: 1280 }, frameRate: 15 },
+          audio: true
+        })
       } catch (err) {
         console.error("Camera/Mic getUserMedia error:", err)
         if (err.name === 'NotFoundError' || err.name === 'DevicesNotFoundError') {
@@ -1180,11 +1180,11 @@ function Interview() {
       })
 
       setQuestions(prev => [...prev, ...formattedQs])
-      
-      const targetIndex = (savedIndex !== null && savedIndex >= verbalQuestionsLength && savedIndex < verbalQuestionsLength + formattedQs.length) 
-        ? savedIndex 
+
+      const targetIndex = (savedIndex !== null && savedIndex >= verbalQuestionsLength && savedIndex < verbalQuestionsLength + formattedQs.length)
+        ? savedIndex
         : verbalQuestionsLength;
-      
+
       setCurrentQuestionIndex(targetIndex)
     } catch (err) {
       console.error('Case study round start failed:', err)
@@ -1244,7 +1244,7 @@ function Interview() {
         codingTests: payload.tests || []
       }
       setQuestions(prev => [...prev, codingQ])
-      
+
       const targetIndex = (savedIndex !== null && savedIndex >= verbalQuestionsLength) ? savedIndex : verbalQuestionsLength;
       setCurrentQuestionIndex(targetIndex)
     } catch (err) {
@@ -1942,9 +1942,6 @@ function Interview() {
               <p>Round 2 has {Math.floor(globalCountdown / 60).toString().padStart(2, '0')}:{(globalCountdown % 60).toString().padStart(2, '0')} remaining. Explain your logic to the AI while you code.</p>
             </div>
             <div className="coding-round-actions" style={{ display: 'flex', alignItems: 'center', gap: '16px' }}>
-              <div style={{ width: '56px', height: '56px', borderRadius: '50%', overflow: 'hidden', border: '3px solid var(--primary-color)', boxShadow: 'var(--shadow-md)', flexShrink: 0 }}>
-                <video ref={videoPreviewRef} autoPlay muted playsInline style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
-              </div>
               <button className="ip-btn-prev" onClick={handleRunCode} disabled={compiling}>Get AI Feedback</button>
               <button className="ip-btn-next" onClick={handleSubmitCodingAndInterview}>Submit Code</button>
             </div>
@@ -2253,24 +2250,7 @@ function Interview() {
           </div>
         </div>
       ) : (
-        <div id="interviewSection">
-          {/* Proctoring violation banner - shown for all alert types */}
-          {proctoringBanner && (
-            <div style={{
-              position: 'fixed', top: 0, left: 0, right: 0, zIndex: 9999,
-              background: proctoringBanner.type === 'tab_switch' ? 'linear-gradient(90deg,#b91c1c,#dc2626)' : 'linear-gradient(90deg,#7c3aed,#6d28d9)',
-              color: 'white', padding: '12px 24px',
-              display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '12px',
-              fontSize: '15px', fontWeight: '700', letterSpacing: '0.01em',
-              boxShadow: '0 4px 20px rgba(0,0,0,0.4)',
-              animation: 'fadeIn 0.2s ease'
-            }}>
-              <span style={{ fontSize: '20px' }}>{proctoringBanner.type === 'tab_switch' ? '🔀' : proctoringBanner.type === 'multi_person' ? '👥' : proctoringBanner.type === 'no_face' ? '👤' : '⚠️'}</span>
-              <span>{proctoringBanner.message}</span>
-              <span style={{ fontSize: '12px', opacity: 0.8, fontWeight: 500 }}>— Recorded &amp; logged</span>
-            </div>
-          )}
-
+        <div id="interviewSection" className="grid grid-cols-1 md:grid-cols-[320px_1fr] lg:grid-cols-[360px_1fr] gap-6 flex-1 min-h-0 overflow-hidden p-2">
           <svg width="0" height="0" style={{ position: 'absolute' }}>
             <defs>
               <linearGradient id="timerGradient" x1="0%" y1="0%" x2="100%" y2="0%">
@@ -2280,106 +2260,130 @@ function Interview() {
             </defs>
           </svg>
 
-          <div className="ip-left">
-            <div className="ip-avatar-card">
-              <video ref={videoPreviewRef} autoPlay muted playsInline id="videoPreview" />
-              <div className="live-badge">LIVE</div>
-              {proctoringBanner && (
-                <div style={{ position: 'absolute', top: 0, left: 0, width: '100%', background: 'rgba(185,28,28,0.9)', color: '#fff', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 10, fontSize: '0.8rem', fontWeight: 'bold', padding: '6px 8px', gap: '6px', textAlign: 'center' }}>
-                  <span>⚠️</span>
-                  <span>{proctoringBanner.type === 'tab_switch' ? 'Tab switch!' : proctoringBanner.type === 'multi_person' ? 'Multiple faces!' : proctoringBanner.type === 'no_face' ? 'No face!' : 'Alert!'}</span>
-                </div>
-              )}
-            </div>
-
-            <div className="ip-analyzing-card">
-              <div className="ip-analyzing-icon">
-                <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+          <div className="ip-left flex flex-col gap-4 h-full overflow-y-auto pr-1 scrollbar-none">
+            {/* AI Analyzing Status Card */}
+            <div className="bg-white/80 backdrop-blur-md border border-slate-200/80 rounded-2xl p-4 shadow-sm flex items-center gap-4 transition-all duration-300 hover:shadow-md hover:scale-[1.01] hover:border-indigo-100">
+              <div className="w-10 h-10 rounded-full bg-gradient-to-tr from-indigo-500 to-purple-600 flex items-center justify-center shrink-0 shadow-sm animate-pulse">
+                <svg xmlns="http://www.w3.org/2000/svg" className="w-5 h-5 text-white" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
                   <circle cx="12" cy="8" r="4" />
                   <path d="M6 20v-2a6 6 0 0 1 12 0v2" />
                 </svg>
               </div>
-              <div className="ip-analyzing-text">
-                <h4>AI Analyzing</h4>
-                <p>AI is Reading the Question...</p>
+              <div className="flex-1">
+                <h4 className="m-0 text-sm font-bold text-slate-800">AI Analyzing</h4>
+                <p className="m-0 text-[11px] text-slate-500 font-medium">AI is Reading the Question...</p>
               </div>
-              <div className="ip-audio-bars">
-                <span></span><span></span><span></span><span></span>
+              <div className="flex items-end gap-0.5 h-6 shrink-0">
+                <span className="w-1 bg-emerald-500 rounded-full h-2 animate-[audioBar_0.8s_ease-in-out_infinite_alternate]"></span>
+                <span className="w-1 bg-emerald-500 rounded-full h-4 animate-[audioBar_0.8s_ease-in-out_infinite_alternate_0.15s]"></span>
+                <span className="w-1 bg-emerald-500 rounded-full h-3 animate-[audioBar_0.8s_ease-in-out_infinite_alternate_0.3s]"></span>
+                <span className="w-1 bg-emerald-500 rounded-full h-5 animate-[audioBar_0.8s_ease-in-out_infinite_alternate_0.1s]"></span>
               </div>
             </div>
 
-            <div className="ip-timer-card">
-              <div className="ip-timer-ring">
-                <svg width="110" height="110" viewBox="0 0 110 110">
-                  <circle className="track" cx="55" cy="55" r="47" />
-                  <circle className="fill" cx="55" cy="55" r="47" />
+            {/* Timer Card */}
+            <div className="bg-white/80 backdrop-blur-md border border-slate-200/80 rounded-2xl p-5 shadow-sm flex flex-col items-center gap-4 transition-all duration-300 hover:shadow-md">
+              <div className="relative w-28 h-28">
+                <svg className="-rotate-90 w-28 h-28" viewBox="0 0 110 110">
+                  <circle className="fill-none stroke-slate-100 stroke-[8px]" cx="55" cy="55" r="47" />
+                  <circle className="fill-none stroke-[8px] stroke-[url(#timerGradient)] [stroke-linecap:round] [stroke-dasharray:295.3] [stroke-dashoffset:0] transition-[stroke-dashoffset] duration-1000 ease-linear" cx="55" cy="55" r="47" />
                 </svg>
-                <div className="ip-timer-label">
-                  <span>{Math.floor(globalCountdown / 60).toString().padStart(2, '0')}:{(globalCountdown % 60).toString().padStart(2, '0')}</span>
-                  <span className="remaining-lbl">Remaining</span>
+                <div className="absolute inset-0 flex flex-col items-center justify-center">
+                  <span className="text-xl font-extrabold text-slate-800 font-mono leading-none">
+                    {Math.floor(globalCountdown / 60).toString().padStart(2, '0')}:{(globalCountdown % 60).toString().padStart(2, '0')}
+                  </span>
+                  <span className="text-[10px] text-slate-400 font-bold uppercase tracking-wider mt-1">Remaining</span>
                 </div>
               </div>
 
               {!isRoundTwo && sessionDetail?.interview_type !== 'Normal' && (
                 <button
                   onClick={handleStartRound2Click}
-                  className="w-full py-2.5 px-4 rounded-full font-bold text-sm bg-blue-600 hover:bg-blue-700 text-white transition-all cursor-pointer border-none shadow-[0_4px_12px_rgba(37,99,235,0.2)] flex items-center justify-center gap-2 mb-2"
+                  className="w-full py-2.5 px-4 rounded-full font-bold text-xs bg-indigo-600 hover:bg-indigo-700 text-white transition-all cursor-pointer border-none shadow-[0_4px_12px_rgba(99,102,241,0.2)] flex items-center justify-center gap-2"
                 >
                   🚀 Start Round 2 &rarr;
                 </button>
               )}
 
-              <button className="ip-end-btn" onClick={() => handleSubmitInterview(false)}>
+              <button
+                className="w-full py-2.5 px-4 rounded-full font-bold text-xs bg-slate-800 hover:bg-slate-900 text-white transition-all cursor-pointer border-none shadow-sm flex items-center justify-center gap-2"
+                onClick={() => handleSubmitInterview(false)}
+              >
                 ⏹ End Interview
               </button>
             </div>
 
-            <div className="ip-insights-card">
-              <h4>AI Insights</h4>
-              <div className="insight-row">
-                <div className="insight-row-header">
-                  <span className="insight-label">CLARITY</span>
-                  <span className="insight-value" style={{ color: '#10b981' }}>60%</span>
+            {/* AI insights Card */}
+            <div className="bg-white/80 backdrop-blur-md border border-slate-200/80 rounded-2xl p-5 shadow-sm transition-all duration-300 hover:shadow-md">
+              <h4 className="m-0 mb-4 text-[13px] font-bold text-slate-800 tracking-wide uppercase">AI Live Evaluation</h4>
+
+              <div className="mb-4">
+                <div className="flex justify-between items-center mb-1">
+                  <span className="text-[11px] font-extrabold text-slate-500 tracking-wider">CLARITY & COMMUNICATION</span>
+                  <span className="text-xs font-bold text-emerald-500">65%</span>
                 </div>
-                <div className="insight-bar-track">
-                  <div className="insight-bar-fill clarity" style={{ width: '60%' }}></div>
-                </div>
-              </div>
-              <div className="insight-row">
-                <div className="insight-row-header">
-                  <span className="insight-label">TECHNICAL DEPTH</span>
-                  <span className="insight-value" style={{ color: '#6366f1' }}>30%</span>
-                </div>
-                <div className="insight-bar-track">
-                  <div className="insight-bar-fill techDepth" style={{ width: '30%' }}></div>
+                <div className="h-2 bg-slate-100 rounded-full overflow-hidden">
+                  <div className="h-full bg-gradient-to-r from-emerald-500 to-teal-400 rounded-full transition-all duration-1000" style={{ width: '65%' }}></div>
                 </div>
               </div>
-              <div className="insight-row">
-                <div className="insight-row-header">
-                  <span className="insight-label">CONFIDENCE</span>
-                  <span className="insight-value" style={{ color: '#f59e0b' }}>80%</span>
+
+              <div className="mb-4">
+                <div className="flex justify-between items-center mb-1">
+                  <span className="text-[11px] font-extrabold text-slate-500 tracking-wider">
+                    {sessionDetail?.interview_type === 'Non-Technical' || sessionDetail?.interview_type === 'Normal'
+                      ? 'STRUCTURED THINKING'
+                      : 'TECHNICAL DEPTH'}
+                  </span>
+                  <span className="text-xs font-bold text-indigo-500">55%</span>
                 </div>
-                <div className="insight-bar-track">
-                  <div className="insight-bar-fill confidence" style={{ width: '80%' }}></div>
+                <div className="h-2 bg-slate-100 rounded-full overflow-hidden">
+                  <div className="h-full bg-gradient-to-r from-indigo-500 to-purple-500 rounded-full transition-all duration-1000" style={{ width: '55%' }}></div>
+                </div>
+              </div>
+
+              <div>
+                <div className="flex justify-between items-center mb-1">
+                  <span className="text-[11px] font-extrabold text-slate-500 tracking-wider">
+                    {sessionDetail?.interview_type === 'Non-Technical' || sessionDetail?.interview_type === 'Normal'
+                      ? 'CASE RESOLUTION'
+                      : 'CONFIDENCE'}
+                  </span>
+                  <span className="text-xs font-bold text-amber-500">70%</span>
+                </div>
+                <div className="h-2 bg-slate-100 rounded-full overflow-hidden">
+                  <div className="h-full bg-gradient-to-r from-amber-500 to-orange-400 rounded-full transition-all duration-1000" style={{ width: '70%' }}></div>
                 </div>
               </div>
             </div>
           </div>
 
-          <div className="ip-right">
-            <div className="ip-question-card">
-              <div style={{ fontSize: '0.78rem', color: '#9ca3af', fontWeight: 600, marginBottom: '0.5rem' }}>
-                Question <span id="questionNumber">{currentQuestionIndex + 1}</span> of <span id="totalQuestions">{questions.length}</span>
+          <div className="ip-right flex flex-col gap-4 h-full min-h-0">
+            {/* Question Card */}
+            <div className="bg-white/90 backdrop-blur-md border border-slate-200/80 rounded-3xl p-5 md:p-6 shadow-sm relative overflow-hidden transition-all duration-300 hover:shadow-md before:content-[''] before:absolute before:top-0 before:left-0 before:w-1.5 before:h-full before:bg-gradient-to-b before:from-indigo-500 before:to-emerald-500">
+              <div className="text-[11px] text-slate-400 font-extrabold tracking-wider uppercase mb-2">
+                Question <span id="questionNumber" className="text-indigo-600 font-black">{currentQuestionIndex + 1}</span> of <span id="totalQuestions">{questions.length}</span>
               </div>
-              <div className="ip-question-meta">
-                <span className="ip-tag type">{currentQuestion?.type || 'Self-Introduction'}</span>
-                <span className="ip-tag difficulty">Easy</span>
+              <div className="flex gap-2 justify-end mb-4">
+                <span className="px-3 py-1 rounded-full text-[10px] font-bold tracking-wide uppercase bg-indigo-50 text-indigo-600 border border-indigo-100">
+                  {currentQuestion?.category || currentQuestion?.type || 'Case Analysis'}
+                </span>
+                <span className={`px-3 py-1 rounded-full text-[10px] font-bold tracking-wide uppercase border ${String(currentQuestion?.difficulty || 'Easy').toLowerCase() === 'easy'
+                    ? 'bg-emerald-50 text-emerald-600 border-emerald-100'
+                    : String(currentQuestion?.difficulty || 'Easy').toLowerCase() === 'medium'
+                      ? 'bg-amber-50 text-amber-600 border-amber-100'
+                      : 'bg-red-50 text-red-600 border-red-100'
+                  }`}>
+                  {currentQuestion?.difficulty || 'Easy'}
+                </span>
               </div>
-              <div className="ip-question-body">
-                <div className="q-bar"></div>
-                <p>{currentQuestionText || 'Question is loading...'}</p>
-                <button className="ip-mute-btn" onClick={() => speakAIQuestion(currentQuestionText)}>
-                  <svg xmlns="http://www.w3.org/2000/svg" width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+              <div className="flex gap-4 items-start">
+                <div className="w-1.5 bg-indigo-600 self-stretch rounded-full shrink-0 min-h-[60px]" />
+                <p className="flex-1 text-slate-800 text-base md:text-lg font-semibold leading-relaxed m-0">{currentQuestionText || 'Question is loading...'}</p>
+                <button
+                  className="bg-slate-50 hover:bg-slate-100 text-slate-500 hover:text-indigo-600 border border-slate-200 hover:border-indigo-100 cursor-pointer p-2.5 rounded-full transition-all duration-200 shrink-0"
+                  onClick={() => speakAIQuestion(currentQuestionText)}
+                >
+                  <svg xmlns="http://www.w3.org/2000/svg" className="w-5 h-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
                     <path d="M11 5L6 9H2v6h4l5 4V5z"></path>
                     <path d="M19.07 4.93a10 10 0 0 1 0 14.14M15.54 8.46a5 5 0 0 1 0 7.07"></path>
                   </svg>
@@ -2387,44 +2391,71 @@ function Interview() {
               </div>
             </div>
 
-            <div className="ip-transcript-card">
-              <div className="ip-transcript-header">
-                <div className="ip-transcript-title">🎙 Live Transcript</div>
-                <div className="ip-recording-badge">
-                  <div className="rec-dot"></div>
+            {/* Transcript Card */}
+            <div className="bg-white/90 backdrop-blur-md border border-slate-200/80 rounded-3xl p-5 shadow-sm flex flex-col flex-1 min-h-0 transition-all duration-300 hover:shadow-md">
+              <div className="flex items-center justify-between mb-3">
+                <div className="flex items-center gap-2 text-sm font-extrabold text-slate-800 tracking-wide uppercase">
+                  <span>🎙</span> Live Transcript
+                </div>
+                <div className="flex items-center gap-1.5 bg-red-50 border border-red-200 text-red-500 text-[10px] font-bold tracking-wider px-3 py-1 rounded-full">
+                  <span className="w-1.5 h-1.5 bg-red-500 rounded-full animate-ping" />
                   RECORDING
                 </div>
               </div>
               <textarea
-                className="ip-transcript-box"
+                className="bg-slate-50/50 border border-slate-200/60 rounded-xl p-4 text-base leading-relaxed text-slate-800 placeholder:text-slate-400 outline-none focus:border-indigo-500 focus:ring-2 focus:ring-indigo-100 shadow-inner resize-none w-full flex-1 h-28 min-h-[80px] overflow-y-auto transition-all"
                 placeholder="Your speech will appear here automatically..."
                 readOnly
                 value={transcriptionText}
               />
             </div>
 
-            <div className="ip-nav-row" style={{ display: 'flex', gap: '10px', alignItems: 'center' }}>
-              {/* <button className="ip-btn-prev" onClick={() => setCurrentQuestionIndex(prev => Math.max(0, prev - 1))} disabled={currentQuestionIndex === 0}>← Prev</button> */}
-
+            {/* Navigation buttons */}
+            <div className="flex gap-3 justify-center items-center mt-2 shrink-0">
               {currentQuestionIndex === questions.length - 1 ? (
                 !isRoundTwo && sessionDetail?.interview_type !== 'Normal' ? (
-                  <div style={{ marginLeft: 'auto', display: 'flex', alignItems: 'center', gap: '8px' }}>
-                    <span style={{ fontSize: '0.85rem', color: '#4f46e5', fontWeight: '600' }}>
+                  <div className="flex items-center gap-2 bg-indigo-50 border border-indigo-100 px-4 py-2.5 rounded-xl">
+                    <span className="text-xs font-semibold text-indigo-600">
                       Round 1 complete. Click "Start Round 2" in the sidebar to proceed.
                     </span>
                   </div>
                 ) : (
-                  <button className="ip-btn-next" style={{ background: '#ef4444', marginLeft: 'auto' }} onClick={() => handleSubmitInterview(false)}>
+                  <button
+                    className="px-8 py-3.5 rounded-xl font-bold text-sm text-white bg-red-500 hover:bg-red-600 shadow-lg shadow-red-500/20 hover:shadow-red-500/30 transition-all duration-200 cursor-pointer border-none"
+                    onClick={() => handleSubmitInterview(false)}
+                  >
                     Submit Interview
                   </button>
                 )
               ) : (
-                <button className="ip-btn-next" style={{ marginLeft: 'auto' }} onClick={handleNextQuestion}>Next →</button>
+                <button
+                  className="px-8 py-3.5 rounded-xl font-bold text-sm text-white bg-emerald-500 hover:bg-emerald-600 shadow-lg shadow-emerald-500/20 hover:shadow-emerald-500/30 transition-all duration-200 cursor-pointer border-none"
+                  onClick={handleNextQuestion}
+                >
+                  Next &rarr;
+                </button>
               )}
             </div>
           </div>
         </div>
       )}
+
+      {/* Floating Camera Preview Widget */}
+      {isDisclaimerAccepted && !showAllSet && !loading && (
+        <div className="fixed bottom-6 right-6 w-56 h-36 rounded-xl overflow-hidden shadow-2xl border-2 border-indigo-600 z-[9999] bg-black transition-all duration-300 hover:-translate-y-1 hover:scale-[1.02] hover:shadow-[0_15px_30px_rgba(99,102,241,0.25)] hover:border-violet-500">
+          <video ref={videoPreviewRef} autoPlay muted playsInline id="videoPreview" className="w-full h-full object-cover" />
+          <div className="absolute bottom-3 left-3 bg-red-500 text-white text-[10px] font-bold tracking-wider px-2 py-0.5 rounded-full flex items-center gap-1 shadow-sm">
+            <span className="w-1.5 h-1.5 bg-white rounded-full animate-pulse" /> LIVE
+          </div>
+          {proctoringAlert && (
+            <div className="absolute inset-0 bg-black/85 text-red-500 flex flex-col items-center justify-center p-3 text-center z-10">
+              <span className="text-xl mb-1 animate-bounce">⚠️</span>
+              <div className="text-[10px] font-bold leading-tight">{proctoringAlert}</div>
+            </div>
+          )}
+        </div>
+      )}
+
       {showRound2Confirm && (
         <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-[99999] flex items-center justify-center p-4">
           <div className="bg-white rounded-2xl max-w-md w-full p-6 shadow-2xl border border-slate-100 transform transition-all text-left">
