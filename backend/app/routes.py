@@ -174,6 +174,7 @@ def load_interview_from_db(interview_id: str) -> Optional[Dict[str, Any]]:
         "answers": {},
         "created_at": row.get("created_at"),
         "coding_round": row.get("coding_round"),
+        "case_study_round": row.get("case_study_round"),
     }
     interviews[interview_id] = interview
     return interview
@@ -1052,6 +1053,8 @@ async def start_case_study_round(req: CaseStudyStartRequest):
         {"id": req.interview_id},
         {"$set": {"case_study_round": case_study_round}}
     )
+    if req.interview_id in interviews:
+        interviews[req.interview_id]["case_study_round"] = case_study_round
     
     return {
         "interview_id": req.interview_id,
@@ -1075,7 +1078,7 @@ def submit_case_study_answer(req: CaseStudyAnswerRequest):
         }
     
     interviews_collection.update_one(
-        {"_id": interview["_id"]},
+        {"id": req.interview_id},
         {"$set": {
             "case_study_round.answers": answers,
             "case_study_round.current_question": req.question_index + 1
