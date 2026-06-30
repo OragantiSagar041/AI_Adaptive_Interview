@@ -207,12 +207,15 @@ export default function VoiceCaseStudy({
   const [timeLeft, setTimeLeft]         = useState(duration || 600) // 10 min per case study
 
   const mediaRecorderRef = useRef(null)
+  const recognitionRef   = useRef(null)
   const silenceTimerRef  = useRef(null)
   const isListeningRef   = useRef(false)
   const currentTxRef     = useRef('')
   const chatBottomRef    = useRef(null)
   const submittingRef    = useRef(false)
-  const langMap = { 'Hindi':'hi','Telugu':'te','Tamil':'ta','Malayalam':'ml','Kannada':'kn','English':'en' }
+  const isTransitioningRef = useRef(false)
+  const playingAudioRef  = useRef(null)
+  const langMap = { 'Hindi':'hi-IN','Telugu':'te-IN','Tamil':'ta-IN','Malayalam':'ml-IN','Kannada':'kn-IN','English':'en-US' }
 
   const scenarios = allQuestions?.length ? allQuestions : [question]
 
@@ -285,6 +288,11 @@ export default function VoiceCaseStudy({
   const speak = useCallback(async (text, onEnd) => {
     try {
       setAiStatus('speaking')
+      if (playingAudioRef.current) {
+        playingAudioRef.current.pause()
+        playingAudioRef.current = null
+      }
+      
       const res = await fetch(`${API_BASE_URL}/tts`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -294,18 +302,22 @@ export default function VoiceCaseStudy({
       const blob = await res.blob()
       const url = URL.createObjectURL(blob)
       const audio = new Audio(url)
+      playingAudioRef.current = audio
       
       audio.onended = () => {
+        if (playingAudioRef.current === audio) playingAudioRef.current = null
         setAiStatus('idle')
         URL.revokeObjectURL(url)
         setTimeout(() => onEnd?.(), 200) // Race condition guard
       }
       audio.onerror = () => {
+        if (playingAudioRef.current === audio) playingAudioRef.current = null
         setAiStatus('idle')
         onEnd?.()
       }
       audio.play().catch(e => {
         console.error('Audio play error:', e)
+        if (playingAudioRef.current === audio) playingAudioRef.current = null
         setAiStatus('idle')
         onEnd?.()
       })
@@ -329,6 +341,9 @@ export default function VoiceCaseStudy({
     if (mediaRecorderRef.current && mediaRecorderRef.current.state !== 'inactive') {
       try { mediaRecorderRef.current.stop() } catch(_) {}
     }
+    if (recognitionRef.current) {
+      try { recognitionRef.current.stop() } catch(_) {}
+    }
     setAiStatus('idle')
   }, [])
 
@@ -338,6 +353,41 @@ export default function VoiceCaseStudy({
       const mediaRecorder = new MediaRecorder(stream)
       mediaRecorderRef.current = mediaRecorder
       const audioChunks = []
+      
+      let localTranscript = ''
+      currentTxRef.current = ''
+      setTranscript('')
+      setInterimText('')
+
+      const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition
+      if (SpeechRecognition) {
+        const recognition = new SpeechRecognition()
+        recognitionRef.current = recognition
+        recognition.continuous = true
+        recognition.interimResults = true
+        recognition.lang = langMap[sessionLang] || 'en-US'
+
+        recognition.onresult = (event) => {
+          let interim = ''
+          let final = ''
+          for (let i = event.resultIndex; i < event.results.length; ++i) {
+            if (event.results[i].isFinal) final += event.results[i][0].transcript
+            else interim += event.results[i][0].transcript
+          }
+          if (final) {
+            localTranscript += (localTranscript ? ' ' : '') + final.trim()
+            setTranscript(localTranscript)
+          }
+          setInterimText(interim)
+          currentTxRef.current = localTranscript + (interim ? ' ' + interim : '')
+
+          clearTimeout(silenceTimerRef.current)
+          silenceTimerRef.current = setTimeout(() => {
+            if (mediaRecorder.state !== 'inactive') mediaRecorder.stop()
+          }, 5000)
+        }
+        recognition.start()
+      }
 
       mediaRecorder.ondataavailable = e => {
         if (e.data.size > 0) audioChunks.push(e.data)
@@ -345,37 +395,43 @@ export default function VoiceCaseStudy({
 
       mediaRecorder.onstop = async () => {
         setAiStatus('idle')
-        const audioBlob = new Blob(audioChunks, { type: 'audio/webm' })
-        const fd = new FormData()
-        fd.append('file', audioBlob, 'audio.webm')
-
-        try {
-          const targetLang = langMap[sessionLang] || 'en'
-          const res = await fetch(`${API_BASE_URL}/stt?language=${targetLang}`, { method: 'POST', body: fd })
-          const data = await res.json()
-          if (data.transcript) {
-            setTranscript(data.transcript)
-            onFinish?.(data.transcript)
-          } else {
+        if (recognitionRef.current) {
+          try { recognitionRef.current.stop() } catch(e) {}
+        }
+        
+        const finalTx = currentTxRef.current.trim()
+        if (finalTx) {
+          onFinish?.(finalTx)
+        } else {
+          const audioBlob = new Blob(audioChunks, { type: 'audio/webm' })
+          const fd = new FormData()
+          fd.append('file', audioBlob, 'audio.webm')
+          try {
+            const targetLang = langMap[sessionLang] || 'en-US'
+            const res = await fetch(`${API_BASE_URL}/stt?language=${targetLang.split('-')[0]}`, { method: 'POST', body: fd })
+            const data = await res.json()
+            if (data.transcript) {
+              setTranscript(data.transcript)
+              onFinish?.(data.transcript)
+            } else {
+              onFinish?.('')
+            }
+          } catch (e) {
             onFinish?.('')
           }
-        } catch (e) {
-          onFinish?.('')
-        } finally {
-          stream.getTracks().forEach(t => t.stop())
-          isListeningRef.current = false
         }
+        stream.getTracks().forEach(t => t.stop())
+        isListeningRef.current = false
       }
 
       isListeningRef.current = true
-      setTranscript('')
       setAiStatus('listening')
       mediaRecorder.start()
 
       clearTimeout(silenceTimerRef.current)
       silenceTimerRef.current = setTimeout(() => {
         if (mediaRecorder.state !== 'inactive') mediaRecorder.stop()
-      }, 15000)
+      }, 5000)
 
     } catch (err) {
       console.error("Mic access denied or error:", err)
@@ -385,6 +441,7 @@ export default function VoiceCaseStudy({
 
   // ── Handle candidate's answer ─────────────────────────────────────────────
   const handleAnswer = useCallback((answer, currentIdx) => {
+    if (isTransitioningRef.current) return
     const t = VOICE_TRANSLATIONS[sessionLang] || VOICE_TRANSLATIONS['English']
     
     // Check intent
@@ -393,14 +450,20 @@ export default function VoiceCaseStudy({
     const isRepeat = /(repeat|come again|didn't understand|not understand|what did you say|say that again)/.test(lowerAns)
 
     if (isSkip) {
-      addMsg('user', answer)
+      isTransitioningRef.current = true
+      addMsg('user', answer || 'Skip Scenario')
+      if (playingAudioRef.current) playingAudioRef.current.pause()
+      
       const nextIdx = currentIdx + 1
       if (nextIdx < scenarios.length) {
         setCurrentScenarioIdx(nextIdx)
         setQuestionCount(0)
         const transList = t.csTransitions
         const transition = transList[Math.floor(Math.random() * transList.length)]
-        setTimeout(() => presentScenario(nextIdx, transition), 400)
+        setTimeout(() => {
+          isTransitioningRef.current = false
+          presentScenario(nextIdx, transition)
+        }, 100)
       } else {
         handleComplete()
       }
@@ -458,13 +521,17 @@ export default function VoiceCaseStudy({
       }, 400)
     } else {
       // Move to next scenario or finish
+      isTransitioningRef.current = true
       const nextIdx = currentIdx + 1
       if (nextIdx < scenarios.length) {
         setCurrentScenarioIdx(nextIdx)
         setQuestionCount(0)
         const transList = t.csTransitions
         const transition = transList[Math.floor(Math.random() * transList.length)]
-        setTimeout(() => presentScenario(nextIdx, transition), 600)
+        setTimeout(() => {
+          isTransitioningRef.current = false
+          presentScenario(nextIdx, transition)
+        }, 100)
       } else {
         handleComplete()
       }
@@ -506,15 +573,25 @@ export default function VoiceCaseStudy({
   const handleComplete = useCallback(async () => {
     if (submittingRef.current) return
     submittingRef.current = true
-    stopListening(); window.speechSynthesis?.cancel()
-    const t = VOICE_TRANSLATIONS[sessionLang] || VOICE_TRANSLATIONS['English']
-    aiSay(t.csComplete, async () => {
-      try { await fetch(`${API_BASE_URL}/complete-session/${linkId}`, { method: 'POST' }) } catch(_) {}
-      setTimeout(() => onComplete?.(), 1200)
-    })
-  }, [stopListening, aiSay, linkId, onComplete, sessionLang])
+    
+    stopListening()
+    window.speechSynthesis?.cancel()
+    if (playingAudioRef.current) {
+      playingAudioRef.current.pause()
+      playingAudioRef.current = null
+    }
+    
+    try { await fetch(`${API_BASE_URL}/complete-session/${linkId}`, { method: 'POST' }) } catch(_) {}
+    onComplete?.()
+  }, [stopListening, linkId, onComplete])
 
-  useEffect(() => () => { stopListening(); window.speechSynthesis?.cancel() }, [stopListening])
+  useEffect(() => {
+    return () => {
+      stopListening()
+      window.speechSynthesis?.cancel()
+      if (playingAudioRef.current) playingAudioRef.current.pause()
+    }
+  }, [stopListening])
 
   // ── Render ─────────────────────────────────────────────────────────────────
   const currentScenario = scenarios[currentScenarioIdx]
@@ -651,7 +728,7 @@ export default function VoiceCaseStudy({
                 <button onClick={() => {
                   if (aiStatus === 'listening') {
                     stopListening()
-                    handleAnswer(currentTxRef.current.trim(), currentScenarioIdx)
+                    // do not call handleAnswer here, startListening's onstop handles it
                   } else {
                     startListening(ans => handleAnswer(ans, currentScenarioIdx))
                   }
@@ -668,7 +745,7 @@ export default function VoiceCaseStudy({
                   } else {
                     handleComplete()
                   }
-                }} className="px-4 py-3 rounded-xl bg-white/5 text-slate-300 border border-white/10 text-xs font-semibold hover:bg-white/10 transition-all uppercase tracking-widest">
+                }} disabled={isTransitioningRef.current} className="px-4 py-3 rounded-xl bg-white/5 text-slate-300 border border-white/10 text-xs font-semibold hover:bg-white/10 transition-all uppercase tracking-widest disabled:opacity-50 disabled:cursor-not-allowed">
                   {currentScenarioIdx < scenarios.length - 1 ? 'Next Scenario' : 'Submit Interview'}
                 </button>
               </div>

@@ -227,8 +227,7 @@ export default function SuperAdminLayout() {
     dispatch(loadSuperAdminDashboard(selectedAdminFilter))
     dispatch(loadSuperAdminProfile())
 
-    const wsProtocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:'
-    const wsUrl = `${wsProtocol}//${window.location.host}/ws/dashboard`
+    const wsUrl = API_BASE_URL.replace(/^http/, 'ws') + '/ws/dashboard'
     const ws = new WebSocket(wsUrl)
 
     ws.onmessage = (event) => {

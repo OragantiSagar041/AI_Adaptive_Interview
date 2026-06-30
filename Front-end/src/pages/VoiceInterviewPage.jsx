@@ -226,6 +226,9 @@ export default function VoiceInterviewPage() {
   const mediaStreamRef = useRef(null)
   const recordedChunksRef = useRef([])
   const [isRecording, setIsRecording] = useState(false)
+  const [feedback, setFeedback] = useState('')
+  const [isSubmittingFeedback, setIsSubmittingFeedback] = useState(false)
+  const [feedbackSuccess, setFeedbackSuccess] = useState(false)
   const activeAudioRef = useRef(null)
 
   // Camera recording
@@ -383,6 +386,13 @@ export default function VoiceInterviewPage() {
   // ── TTS with female voice ──────────────────────────────────────────────────
   // Stop any currently-playing TTS audio immediately
   const stopAudio = useCallback(() => {
+    if (activeAudioRef.current) {
+      activeAudioRef.current.onended = null
+      activeAudioRef.current.onerror = null
+      activeAudioRef.current.pause()
+      activeAudioRef.current.src = ''
+      activeAudioRef.current = null
+    }
     if (currentAudioRef.current) {
       currentAudioRef.current.onended = null
       currentAudioRef.current.onerror = null
@@ -813,16 +823,19 @@ export default function VoiceInterviewPage() {
       setLoading(true) // Immediately show loading state to candidate
       const t = VOICE_TRANSLATIONS[languageRef.current] || VOICE_TRANSLATIONS['English']
 
-      // Speak transition phrase but don't wait for it to finish before fetching
-      aiSay(t.verbalComplete)
+      // Speak transition phrase and wait for it to finish in parallel with fetching
+      const speakPromise = new Promise(resolve => {
+        aiSay(t.verbalComplete, resolve)
+      })
 
       if (type === 'Technical') {
         try {
-          const res = await fetch(`${API_BASE_URL}/coding-round/start`, {
+          const fetchPromise = fetch(`${API_BASE_URL}/coding-round/start`, {
             method: 'POST', headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({ interview_id: iid })
-          })
-          const data = await res.json()
+          }).then(r => r.json())
+          
+          const [_, data] = await Promise.all([speakPromise, fetchPromise])
           const task = data.coding_round?.task || {}
           const codingQ = {
             id: 'coding_1', type: 'coding', text: task.description || task.title || 'Implement the required function',
@@ -840,12 +853,15 @@ export default function VoiceInterviewPage() {
       } else {
         // Non-Technical → case study
         try {
-          const res = await fetch(`${API_BASE_URL}/case-study/start`, {
+          const fetchPromise = fetch(`${API_BASE_URL}/case-study/start`, {
             method: 'POST', headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({ interview_id: iid })
+          }).then(res => {
+            if (!res.ok) throw new Error(`HTTP ${res.status}`)
+            return res.json()
           })
-          if (!res.ok) throw new Error(`HTTP ${res.status}`)
-          const data = await res.json()
+
+          const [_, data] = await Promise.all([speakPromise, fetchPromise])
           const cqs = (data.case_study_round?.questions || []).map((q, i) => ({
             id: `cs_${i}`, type: 'case_study', text: q.text, caseStudyIndex: i
           }))
@@ -870,6 +886,10 @@ export default function VoiceInterviewPage() {
     submittingRef.current = true
     stopListening(); window.speechSynthesis?.cancel()
     const iid = interviewIdRef.current
+    
+    // Switch UI to submitting immediately
+    setRound('submitting')
+
     await stopAndUploadRecording(iid)
     try { await fetch(`${API_BASE_URL}/complete-session/${linkId}?warnings=${warningsCount}`, { method: 'POST' }) } catch (_) { }
     setRound('done')
@@ -1051,17 +1071,75 @@ export default function VoiceInterviewPage() {
     </div>
   )
 
+  if (round === 'submitting') return (
+    <div className="min-h-screen bg-[#0a0f1e] flex flex-col items-center justify-center text-white gap-5">
+      <div className="w-16 h-16 rounded-2xl bg-gradient-to-tr from-indigo-500 to-purple-600 flex items-center justify-center animate-pulse shadow-[0_0_40px_rgba(99,102,241,0.4)]">
+        <RefreshCw size={32} className="animate-spin text-white" />
+      </div>
+      <h2 className="text-xl font-bold">Submitting Interview...</h2>
+      <p className="text-slate-400 text-sm animate-pulse">Please wait, your video and audio are being securely uploaded.</p>
+    </div>
+  )
+
   if (round === 'done') return (
-    <div className="min-h-screen bg-[#0a0f1e] flex flex-col items-center justify-center text-white px-6 text-center gap-8">
+    <div className="min-h-screen bg-[#0a0f1e] flex flex-col items-center justify-center text-white px-6 text-center gap-8 py-10 overflow-y-auto">
       <style>{`@keyframes pop{0%{transform:scale(.5);opacity:0}80%{transform:scale(1.1)}100%{transform:scale(1);opacity:1}}`}</style>
-      <div className="w-28 h-28 rounded-full bg-emerald-500/10 border-4 border-emerald-500 flex items-center justify-center shadow-[0_0_60px_rgba(16,185,129,0.4)]" style={{ animation: 'pop 0.6s ease forwards' }}>
-        <i className="fas fa-check text-5xl text-emerald-400" />
-      </div>
-      <div>
-        <h1 className="text-3xl font-black mb-2">Interview Complete! 🎉</h1>
-        <p className="text-slate-400 max-w-md">Excellent work! You answered {answeredCount} question{answeredCount !== 1 ? 's' : ''} across all rounds. Your responses have been sent to the recruiter.</p>
-      </div>
-      <div className="text-slate-600 text-sm">You may safely close this tab.</div>
+      
+      {!feedbackSuccess ? (
+        <div className="max-w-xl w-full flex flex-col items-center gap-6">
+          <div className="w-24 h-24 rounded-full bg-emerald-500/10 border-4 border-emerald-500 flex items-center justify-center shadow-[0_0_60px_rgba(16,185,129,0.4)]" style={{ animation: 'pop 0.6s ease forwards' }}>
+            <i className="fas fa-check text-5xl text-emerald-400" />
+          </div>
+          <div>
+            <h1 className="text-3xl font-black mb-2">Interview Complete! 🎉</h1>
+            <p className="text-slate-400 max-w-md">Excellent work! You answered {answeredCount} question{answeredCount !== 1 ? 's' : ''} across all rounds. Your responses have been sent to the recruiter.</p>
+          </div>
+
+          <div className="w-full bg-[#0d1117] border border-white/10 rounded-2xl p-6 shadow-xl mt-4 text-left">
+            <h3 className="text-lg font-bold text-white mb-2">How was your experience?</h3>
+            <p className="text-sm text-slate-400 mb-4">Your feedback helps us improve the AI interview experience.</p>
+            <textarea 
+              value={feedback}
+              onChange={(e) => setFeedback(e.target.value)}
+              placeholder="Tell us about your interview experience..."
+              className="w-full bg-[#161b22] border border-white/10 rounded-xl p-4 text-white text-sm min-h-[120px] focus:outline-none focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500 transition-all resize-none mb-4"
+            />
+            <button
+              onClick={async () => {
+                if (!feedback.trim()) return
+                setIsSubmittingFeedback(true)
+                try {
+                  await fetch(`${API_BASE_URL}/submit-feedback/${linkId}`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ feedback_text: feedback })
+                  })
+                  setFeedbackSuccess(true)
+                } catch (e) {
+                  console.error(e)
+                } finally {
+                  setIsSubmittingFeedback(false)
+                }
+              }}
+              disabled={isSubmittingFeedback || !feedback.trim()}
+              className="w-full py-3 bg-indigo-500 hover:bg-indigo-600 disabled:bg-slate-700 disabled:text-slate-400 rounded-xl font-bold text-sm transition-all"
+            >
+              {isSubmittingFeedback ? <RefreshCw className="inline animate-spin mr-2" size={16} /> : null}
+              {isSubmittingFeedback ? 'Submitting...' : 'Submit Feedback'}
+            </button>
+          </div>
+        </div>
+      ) : (
+        <div className="max-w-xl w-full flex flex-col items-center gap-6" style={{ animation: 'pop 0.6s ease forwards' }}>
+          <div className="w-24 h-24 rounded-full bg-indigo-500/10 border-4 border-indigo-500 flex items-center justify-center shadow-[0_0_60px_rgba(99,102,241,0.4)]">
+            <i className="fas fa-heart text-4xl text-indigo-400" />
+          </div>
+          <div>
+            <h1 className="text-3xl font-black mb-2">Thank You!</h1>
+            <p className="text-slate-400 max-w-md">Your feedback has been recorded. You can now close this tab.</p>
+          </div>
+        </div>
+      )}
     </div>
   )
 
