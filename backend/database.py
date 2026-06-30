@@ -74,6 +74,7 @@ add_column_if_not_exists("interviews", "recording_path", "TEXT")
 add_column_if_not_exists("interviews", "profile_text", "TEXT")
 add_column_if_not_exists("interviews", "questions", "TEXT") # JSON string
 add_column_if_not_exists("interview_sessions", "interview_id", "TEXT")
+add_column_if_not_exists("interview_sessions", "candidate_feedback", "TEXT")
 
 # --- Behavioral metrics per question ---
 add_column_if_not_exists("answers", "wpm", "REAL")
