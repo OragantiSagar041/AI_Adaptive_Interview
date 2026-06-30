@@ -118,6 +118,11 @@ CRITICAL RULES:
 - Be honest and calibrated. A score of 75+ should mean the candidate would likely pass this question in a real panel.
 - Scores of 50–74 indicate average performance. Below 40 is poor.
 
+Additionally, provide these three scores on a scale of 0 to 100 for the Live Evaluation UI:
+- clarity_score: Evaluates how well structured and communicated the answer is.
+- technical_depth_score: Evaluates the depth of technical knowledge or logical structured thinking.
+- confidence_score: Evaluates decisiveness and lack of hesitation/hedging language.
+
 ════════════════ OUTPUT ════════════════
 
 Also provide:
@@ -133,8 +138,9 @@ Return VALID JSON ONLY — no markdown, no extra text.
   "relevance_score": 0,
   "time_score": 0,
   "overall_score": 0,
-  "grammar_score": 0,
   "clarity_score": 0,
+  "technical_depth_score": 0,
+  "confidence_score": 0,
   "feedback": "...",
   "keywords": ["key1", "key2"]
 }}
@@ -215,12 +221,55 @@ Return VALID JSON ONLY — no markdown, no extra text.
 
         overall = min(100, content_score + relevance_score + time_score)
 
+        # ── DYNAMIC INSIGHTS HEURISTICS (Offline Mode) ─────────────────
+        # 1. Clarity (Based on WPM)
+        wpm = 0
+        clarity_score = 50
+        if time_spent_seconds > 0:
+            wpm = (word_count / time_spent_seconds) * 60
+            if 110 <= wpm <= 160:
+                clarity_score = 85  # Good conversational pace
+            elif 80 <= wpm < 110 or 160 < wpm <= 190:
+                clarity_score = 65  # A bit slow or fast
+            else:
+                clarity_score = 45  # Too slow or too fast
+                
+        # 2. Confidence (Based on hedging words)
+        hedging_words = [" um ", " uh ", " like ", " i mean ", " sort of ", " kind of ", " maybe ", " probably ", " i guess ", " not sure "]
+        lower_ans = " " + answer.lower() + " "
+        hedge_count = sum(lower_ans.count(h) for h in hedging_words)
+        confidence_score = max(20, 90 - (hedge_count * 5))
+        if word_count < 20: 
+            confidence_score = min(confidence_score, 40)
+            
+        # 3. Technical Depth (Based on vocabulary richness / long words)
+        words = answer.split()
+        long_words = [w for w in words if len(w) > 7]
+        richness_ratio = len(long_words) / word_count if word_count > 0 else 0
+        if richness_ratio > 0.30:
+            technical_depth_score = 85
+        elif richness_ratio > 0.15:
+            technical_depth_score = 65
+        else:
+            technical_depth_score = 45
+        if word_count < 20:
+            technical_depth_score = min(technical_depth_score, 40)
+            
+        # Hard fail if no words spoken
+        if word_count == 0:
+            clarity_score = 0
+            confidence_score = 0
+            technical_depth_score = 0
+
         return {
             "corrected_answer": "Analysis unavailable (Offline Mode)",
             "content_score": content_score,
             "relevance_score": relevance_score,
             "time_score": time_score,
             "overall_score": overall,
+            "clarity_score": clarity_score,
+            "technical_depth_score": technical_depth_score,
+            "confidence_score": confidence_score,
             "feedback": feedback,
             "keywords": ["Offline"],
         }

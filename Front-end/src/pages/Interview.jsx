@@ -75,6 +75,29 @@ function Interview() {
   const codingRoundStartedRef = useRef(false)
   const [codingRoundLoading, setCodingRoundLoading] = useState(false)
   const [codingRoundData, setCodingRoundData] = useState(null)
+  const [aiInsights, setAiInsights] = useState({ clarity: 50, technicalDepth: 50, confidence: 50 })
+
+  // Fetch AI Insights dynamically
+  useEffect(() => {
+    const iid = interviewId || sessionDetail?.interview_id || sessionId
+    if (!iid) return
+
+    const fetchInsights = async () => {
+      try {
+        const response = await fetch(`${API_BASE_URL}/api/interview/${iid}/insights`)
+        if (response.ok) {
+          const data = await response.json()
+          setAiInsights(data)
+        }
+      } catch (err) {
+        console.error("Failed to fetch AI insights", err)
+      }
+    }
+
+    fetchInsights()
+    const interval = setInterval(fetchInsights, 15000)
+    return () => clearInterval(interval)
+  }, [interviewId, sessionDetail?.interview_id, sessionId])
 
   // Test case animation
   useEffect(() => {
@@ -2320,10 +2343,10 @@ function Interview() {
               <div className="mb-4">
                 <div className="flex justify-between items-center mb-1">
                   <span className="text-[11px] font-extrabold text-slate-500 tracking-wider">CLARITY & COMMUNICATION</span>
-                  <span className="text-xs font-bold text-emerald-500">65%</span>
+                  <span className="text-xs font-bold text-emerald-500">{aiInsights.clarity}%</span>
                 </div>
                 <div className="h-2 bg-slate-100 rounded-full overflow-hidden">
-                  <div className="h-full bg-gradient-to-r from-emerald-500 to-teal-400 rounded-full transition-all duration-1000" style={{ width: '65%' }}></div>
+                  <div className="h-full bg-gradient-to-r from-emerald-500 to-teal-400 rounded-full transition-all duration-1000" style={{ width: `${aiInsights.clarity}%` }}></div>
                 </div>
               </div>
 
@@ -2334,10 +2357,10 @@ function Interview() {
                       ? 'STRUCTURED THINKING'
                       : 'TECHNICAL DEPTH'}
                   </span>
-                  <span className="text-xs font-bold text-indigo-500">55%</span>
+                  <span className="text-xs font-bold text-indigo-500">{aiInsights.technicalDepth}%</span>
                 </div>
                 <div className="h-2 bg-slate-100 rounded-full overflow-hidden">
-                  <div className="h-full bg-gradient-to-r from-indigo-500 to-purple-500 rounded-full transition-all duration-1000" style={{ width: '55%' }}></div>
+                  <div className="h-full bg-gradient-to-r from-indigo-500 to-purple-500 rounded-full transition-all duration-1000" style={{ width: `${aiInsights.technicalDepth}%` }}></div>
                 </div>
               </div>
 
@@ -2348,10 +2371,10 @@ function Interview() {
                       ? 'CASE RESOLUTION'
                       : 'CONFIDENCE'}
                   </span>
-                  <span className="text-xs font-bold text-amber-500">70%</span>
+                  <span className="text-xs font-bold text-amber-500">{aiInsights.confidence}%</span>
                 </div>
                 <div className="h-2 bg-slate-100 rounded-full overflow-hidden">
-                  <div className="h-full bg-gradient-to-r from-amber-500 to-orange-400 rounded-full transition-all duration-1000" style={{ width: '70%' }}></div>
+                  <div className="h-full bg-gradient-to-r from-amber-500 to-orange-400 rounded-full transition-all duration-1000" style={{ width: `${aiInsights.confidence}%` }}></div>
                 </div>
               </div>
             </div>
