@@ -2777,6 +2777,7 @@ def bulk_create_sessions(data: BulkCreateSession, current_admin: dict = Depends(
             "case_study_count": data.case_study_count,
             "record_video": candidate.record_video,  # Task 5: Per-candidate video
             "voice_clone": data.voice_clone,
+            "custom_voice_id": data.custom_voice_id,
             "status": "pending",
             "hr_screening": data.hr_screening.dict(),
             "custom_questions": data.custom_questions,

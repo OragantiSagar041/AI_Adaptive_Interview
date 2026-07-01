@@ -186,6 +186,9 @@ export const useInterviewSession = (sessionId, interviewType, startRoundTwo) => 
   // Speech Recognition Reference
   const recognitionRef = useRef(null)
   const isSpeechRecordingRef = useRef(false)
+  const whisperMediaRecorderRef = useRef(null)
+  const whisperAudioChunksRef = useRef([])
+  const whisperPauseTimeoutRef = useRef(null)
 
   // Proctoring Loops
   const faceDetectionIntervalRef = useRef(null)
@@ -604,6 +607,43 @@ export const useInterviewSession = (sessionId, interviewType, startRoundTwo) => 
 
     rec.onstart = () => {
       isSpeechRecordingRef.current = true
+      
+      // Start Whisper MediaRecorder if not already running
+      if (mediaStreamRef.current && !whisperMediaRecorderRef.current) {
+        try {
+          const mr = new MediaRecorder(mediaStreamRef.current, { mimeType: 'audio/webm' })
+          mr.ondataavailable = (e) => {
+            if (e.data.size > 0) whisperAudioChunksRef.current.push(e.data)
+          }
+          mr.onstop = async () => {
+            const blob = new Blob(whisperAudioChunksRef.current, { type: 'audio/webm' })
+            whisperAudioChunksRef.current = [] // reset for next chunk
+            
+            if (blob.size > 1000) { // prevent empty or silent blobs
+              const formData = new FormData()
+              formData.append('audio', blob, 'audio.webm')
+              formData.append('candidate_name', sessionDetail?.candidate_name || 'Candidate')
+              
+              try {
+                // Post directly to backend Whisper endpoint
+                const res = await api.post('/transcribe', formData, {
+                  headers: { 'Content-Type': 'multipart/form-data' }
+                })
+                if (res.data && res.data.text) {
+                  // Append perfect Whisper text instead of Google's transcript
+                  setTranscriptionText(prev => prev + res.data.text + ' ')
+                }
+              } catch (err) {
+                console.error("Whisper transcription failed:", err)
+              }
+            }
+          }
+          whisperMediaRecorderRef.current = mr
+          mr.start()
+        } catch(e) {
+          console.error("Failed to start Whisper MediaRecorder:", e)
+        }
+      }
     }
 
     rec.onend = () => {
@@ -614,16 +654,19 @@ export const useInterviewSession = (sessionId, interviewType, startRoundTwo) => 
     }
 
     rec.onresult = (event) => {
-      let finalChunk = ''
-      for (let i = event.resultIndex; i < event.results.length; ++i) {
-        if (event.results[i].isFinal) {
-          finalChunk += event.results[i][0].transcript
+      // We are using Google SpeechRecognition PURELY as a Voice Activity Detector (VAD) now!
+      // DO NOT use event.results[i][0].transcript because it fails on Indian accents.
+      
+      // Stop and restart Whisper recording to trigger transcription if they pause for 1.5s
+      if (whisperPauseTimeoutRef.current) clearTimeout(whisperPauseTimeoutRef.current)
+      whisperPauseTimeoutRef.current = setTimeout(() => {
+        if (whisperMediaRecorderRef.current && whisperMediaRecorderRef.current.state === 'recording') {
+          whisperMediaRecorderRef.current.stop()
+          whisperMediaRecorderRef.current.start()
         }
-      }
-      if (finalChunk) {
-        setTranscriptionText(prev => prev + finalChunk + ' ')
-      }
+      }, 1500)
 
+      // Existing 10-second absolute silence timeout to auto-skip question
       if (silenceTimeoutRef.current) clearTimeout(silenceTimeoutRef.current)
       if (!isRoundTwoRef.current) {
         silenceTimeoutRef.current = setTimeout(() => {
@@ -1251,6 +1294,12 @@ export const useInterviewSession = (sessionId, interviewType, startRoundTwo) => 
     if (recognitionRef.current) {
       try { recognitionRef.current.stop() } catch (e) { }
     }
+    
+    if (whisperMediaRecorderRef.current && whisperMediaRecorderRef.current.state !== 'inactive') {
+      try { whisperMediaRecorderRef.current.stop() } catch (e) { }
+      whisperMediaRecorderRef.current = null
+    }
+    if (whisperPauseTimeoutRef.current) clearTimeout(whisperPauseTimeoutRef.current)
 
     if (mediaStreamRef.current) {
       mediaStreamRef.current.getTracks().forEach(track => track.stop())
