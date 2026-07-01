@@ -1892,11 +1892,10 @@ def build_default_interview_email_html(candidate_name: str, duration: int, job_d
                     <ul style="margin: 0; padding-left: 20px; color: #be123c; font-size: 14px; line-height: 1.6;">
                         <li style="margin-bottom: 8px;"><b>Full-Screen Mode:</b> Must be maintained at all times. Tab switching is recorded as a violation.</li>
                         <li style="margin-bottom: 8px;"><b>Video Proctoring:</b> Your camera remains active for face tracking and integrity checks.</li>
-                        <li><b>Environment:</b> Join from a quiet, well-lit room. Background noise or voices may affect your evaluation.</li>
+                        <li style="margin-bottom: 8px;"><b>Environment:</b> Join from a quiet, well-lit room. Background noise or voices may affect your evaluation.</li>
+                        <li><b>Screen Sharing:</b> You must share your entire screen during the session.</li>
                     </ul>
                 </div>
-<<<<<<< HEAD
-=======
 
                 <div style="background-color: #fef2f2; border: 1px solid #fecaca; border-radius: 8px; padding: 16px; margin: 24px 0; text-align: left;">
                     <p style="margin: 0; color: #b91c1c; font-size: 14px; font-weight: 500;">⚠️ <b>Important:</b> Please join only during the scheduled time window. If no schedule is set, the link remains valid for 24 hours.</p>
@@ -1904,7 +1903,6 @@ def build_default_interview_email_html(candidate_name: str, duration: int, job_d
                 
                 <hr style="border: none; border-top: 1px solid #e2e8f0; margin: 32px 0 24px 0;">
                 <p style="color: #64748b; font-size: 14px; margin: 0; text-align: left; line-height: 1.6;">Best regards,<br/><b style="color: #4f46e5;">Hire IQ Recruiting</b></p>
->>>>>>> 713f9af7766b998c5818fbc7ca0c7c2b59addc53
             </div>
         </div>
     </body>

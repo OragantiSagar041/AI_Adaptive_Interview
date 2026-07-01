@@ -1,9 +1,67 @@
-import React from 'react'
+import React, { useState, useEffect, useRef } from 'react'
 import { RefreshCw, Video, X, Monitor, Eye, ShieldAlert } from 'lucide-react'
 import { API_BASE_URL } from '../../../apiConfig'
 import Modal from '../../Modal'
 import Button from '../../Button'
 import Badge from '../../Badge'
+
+// Lightweight WYSIWYG Editor using native iframe designMode
+function IframeWYSIWYG({ initialHtml, onChange }) {
+  const iframeRef = useRef(null);
+  const isInitialized = useRef(false);
+  const onChangeRef = useRef(onChange);
+
+  useEffect(() => {
+    onChangeRef.current = onChange;
+  }, [onChange]);
+
+  useEffect(() => {
+    const iframe = iframeRef.current;
+    if (!iframe) return;
+    
+    const doc = iframe.contentDocument || iframe.contentWindow?.document;
+    if (!doc) return;
+    
+    if (!isInitialized.current) {
+      doc.open();
+      doc.write(initialHtml);
+      doc.close();
+      doc.designMode = "on";
+      isInitialized.current = true;
+      
+      const handleInput = () => {
+        if (onChangeRef.current) {
+          onChangeRef.current(doc.body.innerHTML);
+        }
+      };
+      
+      // MutationObserver guarantees we catch all text edits, deletions, and formatting changes
+      const observer = new MutationObserver(handleInput);
+      observer.observe(doc.body, { 
+        childList: true, 
+        subtree: true, 
+        characterData: true 
+      });
+      
+      doc.body.addEventListener('input', handleInput);
+      doc.body.addEventListener('keyup', handleInput);
+      
+      return () => {
+        observer.disconnect();
+        doc.body.removeEventListener('input', handleInput);
+        doc.body.removeEventListener('keyup', handleInput);
+      };
+    }
+  }, []); // Run only once to prevent cursor jumping
+
+  return (
+    <iframe
+      ref={iframeRef}
+      className="flex-grow w-full bg-white border-0 outline-none"
+      title="WYSIWYG Editor"
+    />
+  );
+}
 
 export function CandidateScorecardModal({
   isOpen,
@@ -707,6 +765,20 @@ export function EmailPreviewModal({
   handleResetEmailPreview,
   handleSaveEmailPreview
 }) {
+  const [draftInnerHtml, setDraftInnerHtml] = useState(emailTemplate.bodyInnerHtml || '');
+
+  // Keep draft in sync if emailTemplate gets reset from outside
+  useEffect(() => {
+    setDraftInnerHtml(emailTemplate.bodyInnerHtml || '');
+  }, [emailTemplate.bodyInnerHtml]);
+
+  const handleApplyChanges = () => {
+    setEmailTemplate(prev => ({
+      ...prev,
+      bodyInnerHtml: draftInnerHtml
+    }));
+  };
+
   return (
     <Modal
       isOpen={isOpen}
@@ -729,46 +801,19 @@ export function EmailPreviewModal({
         {/* Left Pane: Plain Text Editor */}
         <div className="flex flex-col border border-slate-200 rounded-xl bg-slate-50/50 overflow-hidden h-full">
           <div className="flex justify-between items-center bg-slate-100/70 border-b border-slate-200 px-4 py-3 text-xs font-bold text-slate-700 uppercase tracking-wide">
-            <span>Email Template Editor</span>
-            <span className="text-[0.68rem] text-slate-400 font-normal normal-case">No HTML tags. Auto-compiles to styled layout</span>
+            <span>Email Template Editor (WYSIWYG)</span>
+            <button 
+              onClick={handleApplyChanges} 
+              className="bg-indigo-600 hover:bg-indigo-700 text-white transition-colors py-1 px-3 rounded-md text-[0.65rem] shadow-sm font-semibold tracking-wide"
+            >
+              Apply to Preview
+            </button>
           </div>
-          <textarea
-            className="flex-grow w-full p-4 font-sans text-sm text-slate-800 bg-white border-0 outline-none resize-none focus:ring-0 focus:outline-none leading-relaxed"
-            value={emailTemplate.plainText || ''}
-            onChange={(e) => {
-              const text = e.target.value;
-              const html = convertPlainTextToHtml(
-                text,
-                emailTemplate.candidateName,
-                emailTemplate.jobDescription,
-                emailTemplate.duration,
-                emailTemplate.scheduleHtml
-              );
-              
-              // We compile into the standard wrapper: header banner and white card container
-              const compiledBodyInnerHtml = `
-<div style="background-color: #f1f5f9; padding: 40px 20px; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif; min-height: 100%;">
-    <div style="max-width: 600px; margin: 0 auto; background-color: #ffffff; border-radius: 12px; border: 1px solid #e2e8f0; overflow: hidden; box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.05);">
-        <div style="background-color: #ffffff; border-bottom: 1px solid #e2e8f0; padding: 24px 32px; text-align: left;">
-            <h1 style="color: #0f172a; margin: 0; font-size: 20px; font-weight: 700; letter-spacing: -0.02em;">Interview Invitation</h1>
-        </div>
-        <div style="padding: 32px; background-color: #ffffff;">
-            ${html}
-        </div>
-    </div>
-    <div style="max-width: 600px; margin: 24px auto 0; text-align: center;">
-        <p style="color: #94a3b8; font-size: 12px; margin: 0;">Powered by Hire IQ AI Assessments</p>
-    </div>
-</div>
-              `.trim();
-              
-              setEmailTemplate(prev => ({
-                ...prev,
-                plainText: text,
-                bodyInnerHtml: compiledBodyInnerHtml
-              }));
+          <IframeWYSIWYG 
+            initialHtml={buildEmailHtml()}
+            onChange={(newBodyInnerHtml) => {
+              setDraftInnerHtml(newBodyInnerHtml);
             }}
-            placeholder="Write your email body here..."
           />
           <div className="bg-slate-50 border-t border-slate-200 p-3 text-xs text-slate-500">
             <strong>Supported Placeholders:</strong>
