@@ -5985,17 +5985,21 @@ class TTSRequest(BaseModel):
 @router.post("/voice-clone-instant")
 async def voice_clone_instant(audio: UploadFile = File(...), voice_name: Optional[str] = "CandidateVoice"):
     """
-    ElevenLabs Instant Voice Cloning endpoint.
-    Accepts a short audio sample (webm/mp3/wav), sends it to ElevenLabs,
+    Cartesia Instant Voice Cloning endpoint.
+    Accepts a short audio sample (webm/mp3/wav), sends it to Cartesia,
     and returns a temporary voice_id that can be used for the session's TTS calls.
-    Requires ELEVENLABS_API_KEY in the .env file.
+    Requires CARTESIA_API_KEY in the .env file.
     """
     import asyncio
+    try:
+        from cartesia import Cartesia
+    except ImportError:
+        raise HTTPException(status_code=500, detail="Cartesia SDK not installed. Run `pip install cartesia`.")
 
     load_dotenv(os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), ".env"), override=True)
-    api_key = os.getenv("ELEVENLABS_API_KEY", "").strip()
+    api_key = os.getenv("CARTESIA_API_KEY", "").strip()
     if not api_key:
-        raise HTTPException(status_code=503, detail="ElevenLabs API key not configured. Voice cloning is unavailable.")
+        raise HTTPException(status_code=503, detail="Cartesia API key not configured. Voice cloning is unavailable.")
 
     # Save the uploaded file to a temp location
     ext = "webm"
@@ -6008,32 +6012,29 @@ async def voice_clone_instant(audio: UploadFile = File(...), voice_name: Optiona
             f.write(audio_bytes)
 
         def _do_clone():
-            with open(temp_audio, "rb") as af:
-                response = requests.post(
-                    "https://api.elevenlabs.io/v1/voices/add",
-                    headers={"xi-api-key": api_key},
-                    data={
-                        "name": voice_name or "CandidateVoice",
-                        "description": "Auto-cloned from interview voice sample",
-                        "labels": '{"use_case":"interview","auto_delete":"true"}',
-                    },
-                    files={"files": (f"sample.{ext}", af, f"audio/{ext}")},
-                    timeout=30,
-                )
-            return response
+            client = Cartesia(api_key=api_key)
+            # 1. Clone the embedding from the clip
+            embedding = client.voices.clone(filepath=temp_audio)
+            # 2. Create the actual voice object so we get an ID
+            new_voice = client.voices.create(
+                name=voice_name or "CandidateVoice",
+                description="Auto-cloned from interview voice sample",
+                embedding=embedding
+            )
+            return new_voice
 
-        resp = await asyncio.get_event_loop().run_in_executor(None, _do_clone)
+        new_voice_data = await asyncio.get_event_loop().run_in_executor(None, _do_clone)
+        voice_id = new_voice_data.get("id")
+        
+        if not voice_id:
+            raise Exception("No voice ID returned from Cartesia.")
+            
+        print(f"[VoiceClone] Created Cartesia voice_id={voice_id}")
+        return {"voice_id": voice_id, "status": "success"}
 
-        if resp.status_code == 200:
-            data = resp.json()
-            voice_id = data.get("voice_id")
-            print(f"[VoiceClone] Created voice_id={voice_id}")
-            return {"voice_id": voice_id, "status": "success"}
-        elif resp.status_code == 429:
-            raise HTTPException(status_code=429, detail="ElevenLabs quota exhausted. Voice cloning unavailable.")
-        else:
-            print(f"[VoiceClone] Error {resp.status_code}: {resp.text[:300]}")
-            raise HTTPException(status_code=500, detail=f"ElevenLabs error: {resp.status_code}")
+    except Exception as e:
+        print(f"[VoiceClone] Cartesia Error: {e}")
+        raise HTTPException(status_code=500, detail=f"Cartesia error: {str(e)}")
     finally:
         if os.path.exists(temp_audio):
             os.remove(temp_audio)
@@ -6041,21 +6042,20 @@ async def voice_clone_instant(audio: UploadFile = File(...), voice_name: Optiona
 @router.post("/tts")
 async def generate_tts(req: TTSRequest):
     """
-    Hybrid TTS: ElevenLabs Voice Cloning (primary) → Microsoft Edge TTS (fallback).
+    Hybrid TTS: Cartesia (primary) → Microsoft Edge TTS (fallback).
 
     Strategy:
-    - ElevenLabs is used for English when ELEVENLABS_API_KEY + ELEVENLABS_VOICE_ID are set.
-      The eleven_multilingual_v2 model is used so the cloned voice can handle multilingual text.
-    - Regional languages (Hindi, Telugu, Tamil, Malayalam, Kannada) always route directly to
-      the native Microsoft Edge TTS neural voice for that language, because these voices have
-      superior regional accent accuracy that even ElevenLabs cannot match for Indian scripts.
-    - If ElevenLabs quota is exceeded (HTTP 429), the API key is missing, or any other error
+    - Cartesia is used for English when CARTESIA_API_KEY + CARTESIA_VOICE_ID are set.
+      The sonic model is used for the cloned voice.
+    - Regional languages always route directly to
+      the native Microsoft Edge TTS neural voice for that language.
+    - If Cartesia quota is exceeded, the API key is missing, or any other error
       occurs, the system silently falls back to the free Microsoft Edge TTS voice.
     """
     load_dotenv(os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), ".env"), override=True)
-    elevenlabs_api_key = os.getenv("ELEVENLABS_API_KEY", "").strip()
+    cartesia_api_key = os.getenv("CARTESIA_API_KEY", "").strip()
     # Per-session cloned voice (from /voice-clone-instant) takes priority over the global static voice
-    elevenlabs_voice_id = (req.voice_id or "").strip() or os.getenv("ELEVENLABS_VOICE_ID", "").strip()
+    cartesia_voice_id = (req.voice_id or "").strip() or os.getenv("CARTESIA_VOICE_ID", "").strip()
 
     # ──────────────────────────────────────────────────────────────────────────
     # 1. Build Edge TTS regional voice map (used as fallback AND for regional languages)
@@ -6074,58 +6074,48 @@ async def generate_tts(req: TTSRequest):
     is_regional = requested_lang in edge_language_map and requested_lang != "English"
 
     # ──────────────────────────────────────────────────────────────────────────
-    # 2. ElevenLabs path — only for English (or unsupported languages where Edge
-    #    has no dedicated voice) when keys are configured
+    # 2. Cartesia path — only for English when keys are configured
     # ──────────────────────────────────────────────────────────────────────────
-    used_elevenlabs = False
+    used_cartesia = False
     temp_filename = f"temp_tts_{uuid.uuid4().hex}.mp3"
 
-    if elevenlabs_api_key and elevenlabs_voice_id and not is_regional:
+    if cartesia_api_key and cartesia_voice_id and not is_regional:
         try:
-            el_url = f"https://api.elevenlabs.io/v1/text-to-speech/{elevenlabs_voice_id}"
-            el_headers = {
-                "xi-api-key": elevenlabs_api_key,
-                "Content-Type": "application/json",
-                "Accept": "audio/mpeg",
-            }
-            el_payload = {
-                "text": req.text,
-                # eleven_multilingual_v2 handles English + Indian regional scripts if needed
-                "model_id": "eleven_multilingual_v2",
-                "voice_settings": {
-                    "stability": 0.50,
-                    "similarity_boost": 0.80,
-                    "style": 0.20,
-                    "use_speaker_boost": True,
-                },
-            }
-
-            # Run the blocking HTTP call in a thread pool to avoid blocking the async event loop
             import asyncio
-            def _call_elevenlabs():
-                return requests.post(el_url, json=el_payload, headers=el_headers, timeout=15)
+            from cartesia import Cartesia
 
-            el_response = await asyncio.get_event_loop().run_in_executor(None, _call_elevenlabs)
+            def _call_cartesia():
+                client = Cartesia(api_key=cartesia_api_key)
+                response = client.tts.bytes(
+                    model_id="sonic", # or "sonic-english"
+                    transcript=req.text,
+                    voice_id=cartesia_voice_id,
+                    output_format={
+                        "container": "mp3",
+                        "encoding": "pcm_f32le",
+                        "sample_rate": 44100,
+                    },
+                )
+                return response
 
-            if el_response.status_code == 200:
+            audio_bytes = await asyncio.get_event_loop().run_in_executor(None, _call_cartesia)
+
+            if audio_bytes:
                 with open(temp_filename, "wb") as f:
-                    f.write(el_response.content)
-                used_elevenlabs = True
-                print(f"[TTS] ElevenLabs: OK ({len(el_response.content)} bytes) | voice={elevenlabs_voice_id}")
-            elif el_response.status_code == 429:
-                # Quota exhausted — log and fall through to Edge TTS fallback
-                print("[TTS] ElevenLabs quota exhausted (429). Falling back to Microsoft Edge TTS.")
+                    f.write(audio_bytes)
+                used_cartesia = True
+                print(f"[TTS] Cartesia: OK ({len(audio_bytes)} bytes) | voice={cartesia_voice_id}")
             else:
-                print(f"[TTS] ElevenLabs error {el_response.status_code}: {el_response.text[:200]}. Falling back to Edge TTS.")
+                print(f"[TTS] Cartesia error: No audio returned. Falling back to Edge TTS.")
 
-        except Exception as el_err:
-            print(f"[TTS] ElevenLabs exception: {el_err}. Falling back to Edge TTS.")
+        except Exception as err:
+            print(f"[TTS] Cartesia exception: {err}. Falling back to Edge TTS.")
 
     # ──────────────────────────────────────────────────────────────────────────
-    # 3. Edge TTS fallback — runs if ElevenLabs was skipped, failed, or quota hit,
-    #    AND always runs for regional languages regardless of ElevenLabs config
+    # 3. Edge TTS fallback — runs if Cartesia was skipped, failed, or quota hit,
+    #    AND always runs for regional languages regardless of Cartesia config
     # ──────────────────────────────────────────────────────────────────────────
-    if not used_elevenlabs:
+    if not used_cartesia:
         try:
             print(f"[TTS] Using Microsoft Edge TTS | voice={edge_voice} | lang={requested_lang}")
             communicate = edge_tts.Communicate(req.text, edge_voice)
