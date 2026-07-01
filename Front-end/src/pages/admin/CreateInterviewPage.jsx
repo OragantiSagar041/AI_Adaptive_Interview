@@ -1383,7 +1383,7 @@ export default function CreateInterviewPage() {
                         ...availableVoices.map(v => ({ value: v.id, label: v.name }))
                       ]}
                       value={singleCandidate.customVoiceId || ''}
-                      onChange={(val) => handleSingleChange('customVoiceId', val)}
+                      onChange={(e) => handleSingleChange('customVoiceId', e.target.value)}
                     />
                   </div>
                 )}
@@ -1897,7 +1897,7 @@ export default function CreateInterviewPage() {
                         ...availableVoices.map(v => ({ value: v.id, label: v.name }))
                       ]}
                       value={bulkConfig.customVoiceId || ''}
-                      onChange={(val) => handleBulkConfigChange('customVoiceId', val)}
+                      onChange={(e) => handleBulkConfigChange('customVoiceId', e.target.value)}
                     />
                   </div>
                 )}

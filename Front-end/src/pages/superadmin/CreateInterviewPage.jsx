@@ -149,6 +149,23 @@ export default function CreateInterviewPage() {
   const [bulkResultsModalOpen, setBulkResultsModalOpen] = useState(false)
   const [bulkResultsData, setBulkResultsData] = useState(null)
 
+  // Custom Voices
+  const [availableVoices, setAvailableVoices] = useState([])
+  useEffect(() => {
+    async function fetchVoices() {
+      try {
+        const res = await axios.get(`${API_BASE_URL}/admin/voices`, {
+          headers: { Authorization: `Bearer ${token}` }
+        })
+        if (res.data.status === 'success') {
+          setAvailableVoices(res.data.voices)
+        }
+      } catch (err) {
+        console.error("Failed to fetch available voices:", err)
+      }
+    }
+    if (token) fetchVoices()
+  }, [token, API_BASE_URL])
   // Form input setters
   const handleSingleChange = (key, value) => {
     setSingleCandidate(prev => ({ ...prev, [key]: value }))
@@ -536,7 +553,8 @@ export default function CreateInterviewPage() {
         custom_questions: customQuestions,
         ai_instructions: aiInstructions,
         case_study_count: interviewType === 'Non-Technical' ? Number(caseStudyCount) : 0,
-        voice_clone: voiceCloning
+        voice_clone: voiceCloning,
+        custom_voice_id: singleCandidate.customVoiceId || ""
       })).unwrap()
 
       let msg = `Secure interview link created successfully!`
@@ -765,7 +783,9 @@ export default function CreateInterviewPage() {
         scheduled_end: toUtcIso(scheduledEnd),
         hr_screening: hrScreening,
         custom_questions: customQuestions,
-        ai_instructions: aiInstructions
+        ai_instructions: aiInstructions,
+        voice_clone: bulkConfig.voiceCloning,
+        custom_voice_id: bulkConfig.customVoiceId || ""
       })).unwrap()
 
       Swal.fire({
@@ -1373,28 +1393,44 @@ export default function CreateInterviewPage() {
               </div>
 
               {/* Card 3b: Voice Cloning */}
-              <div className="bg-white/82 backdrop-blur-md border border-[#e5edf7] rounded-2xl p-5 text-slate-800 flex justify-between items-center shadow-[0_18px_40px_rgba(17,24,39,0.06)] hover:border-slate-300 transition-all duration-200">
-                <div className="flex items-center gap-3.5">
-                  <div className="w-10 h-10 rounded-xl flex items-center justify-center bg-violet-50 border border-violet-100 text-violet-600 shadow-inner">
-                    <i className="fas fa-waveform-lines text-sm"></i>
+              <div className="bg-white/82 backdrop-blur-md border border-[#e5edf7] rounded-2xl p-5 text-slate-800 flex flex-col gap-4 shadow-[0_18px_40px_rgba(17,24,39,0.06)] hover:border-slate-300 transition-all duration-200">
+                <div className="flex justify-between items-center">
+                  <div className="flex items-center gap-3.5">
+                    <div className="w-10 h-10 rounded-xl flex items-center justify-center bg-violet-50 border border-violet-100 text-violet-600 shadow-inner">
+                      <i className="fas fa-waveform-lines text-sm"></i>
+                    </div>
+                    <div className="flex flex-col gap-0.5">
+                      <label htmlFor="singleVoiceCloning" className="text-xs font-extrabold uppercase tracking-wider text-slate-700 cursor-pointer">
+                        Voice Cloning
+                      </label>
+                      <span className="text-[0.7rem] text-slate-400 font-medium">AI will speak in a custom Cartesia voice</span>
+                    </div>
                   </div>
-                  <div className="flex flex-col gap-0.5">
-                    <label htmlFor="singleVoiceCloning" className="text-xs font-extrabold uppercase tracking-wider text-slate-700 cursor-pointer">
-                      Voice Cloning
-                    </label>
-                    <span className="text-[0.7rem] text-slate-400 font-medium">AI will speak in the candidate's own cloned voice (requires ElevenLabs API key)</span>
-                  </div>
+                  <label className="relative inline-flex items-center cursor-pointer select-none">
+                    <input
+                      type="checkbox"
+                      id="singleVoiceCloning"
+                      checked={singleCandidate.voiceCloning}
+                      onChange={(e) => handleSingleChange('voiceCloning', e.target.checked)}
+                      className="sr-only peer"
+                    />
+                    <div className="w-11 h-6 bg-slate-200 rounded-full peer peer-focus:outline-none peer-checked:after:translate-x-full after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-slate-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-violet-600"></div>
+                  </label>
                 </div>
-                <label className="relative inline-flex items-center cursor-pointer select-none">
-                  <input
-                    type="checkbox"
-                    id="singleVoiceCloning"
-                    checked={singleCandidate.voiceCloning}
-                    onChange={(e) => handleSingleChange('voiceCloning', e.target.checked)}
-                    className="sr-only peer"
-                  />
-                  <div className="w-11 h-6 bg-slate-200 rounded-full peer peer-focus:outline-none peer-checked:after:translate-x-full after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-slate-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-violet-600"></div>
-                </label>
+                
+                {singleCandidate.voiceCloning && availableVoices.length > 0 && (
+                  <div className="mt-2 pt-4 border-t border-slate-100">
+                    <label className="text-xs font-semibold text-slate-500 mb-2 block">Select Voice</label>
+                    <Select
+                      options={[
+                        { value: '', label: 'Default Cartesia Voice' },
+                        ...availableVoices.map(v => ({ value: v.id, label: v.name }))
+                      ]}
+                      value={singleCandidate.customVoiceId || ''}
+                      onChange={(e) => handleSingleChange('customVoiceId', e.target.value)}
+                    />
+                  </div>
+                )}
               </div>
 
               {/* Card 4: HR Screening Parameters (Toggles) */}
@@ -1868,6 +1904,47 @@ export default function CreateInterviewPage() {
                   />
                   <div className="w-11 h-6 bg-slate-200 rounded-full peer peer-focus:outline-none peer-checked:after:translate-x-full after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-slate-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-primary"></div>
                 </label>
+              </div>
+
+              {/* Card 3b: Voice Cloning (Bulk) */}
+              <div className="bg-white/82 backdrop-blur-md border border-[#e5edf7] rounded-2xl p-5 text-slate-800 flex flex-col gap-4 shadow-[0_18px_40px_rgba(17,24,39,0.06)] hover:border-slate-300 transition-all duration-200">
+                <div className="flex justify-between items-center">
+                  <div className="flex items-center gap-3.5">
+                    <div className="w-10 h-10 rounded-xl flex items-center justify-center bg-violet-50 border border-violet-100 text-violet-600 shadow-inner">
+                      <i className="fas fa-waveform-lines text-sm"></i>
+                    </div>
+                    <div className="flex flex-col gap-0.5">
+                      <label htmlFor="bulkVoiceCloning" className="text-xs font-extrabold uppercase tracking-wider text-slate-700 cursor-pointer">
+                        Voice Cloning
+                      </label>
+                      <span className="text-[0.7rem] text-slate-400 font-medium">AI will speak in a custom Cartesia voice</span>
+                    </div>
+                  </div>
+                  <label className="relative inline-flex items-center cursor-pointer select-none">
+                    <input
+                      type="checkbox"
+                      id="bulkVoiceCloning"
+                      checked={bulkConfig.voiceCloning}
+                      onChange={(e) => handleBulkConfigChange('voiceCloning', e.target.checked)}
+                      className="sr-only peer"
+                    />
+                    <div className="w-11 h-6 bg-slate-200 rounded-full peer peer-focus:outline-none peer-checked:after:translate-x-full after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-slate-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-violet-600"></div>
+                  </label>
+                </div>
+                
+                {bulkConfig.voiceCloning && availableVoices.length > 0 && (
+                  <div className="mt-2 pt-4 border-t border-slate-100">
+                    <label className="text-xs font-semibold text-slate-500 mb-2 block">Select Voice</label>
+                    <Select
+                      options={[
+                        { value: '', label: 'Default Cartesia Voice' },
+                        ...availableVoices.map(v => ({ value: v.id, label: v.name }))
+                      ]}
+                      value={bulkConfig.customVoiceId || ''}
+                      onChange={(e) => handleBulkConfigChange('customVoiceId', e.target.value)}
+                    />
+                  </div>
+                )}
               </div>
 
               {/* Card 4: HR Screening Parameters (Bulk toggles) */}
