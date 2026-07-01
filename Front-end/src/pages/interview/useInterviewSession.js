@@ -591,7 +591,11 @@ export const useInterviewSession = (sessionId, interviewType, startRoundTwo) => 
         }
       }).then(result => {
         if (result.isConfirmed) {
-          setupMedia()
+          setupMedia().then(() => {
+            setAutoReconnecting(false)
+          }).catch(() => {
+            setAutoReconnecting(false)
+          })
         } else {
           if (_sessionKey) sessionStorage.removeItem(_sessionKey)
           setAutoReconnecting(false)
@@ -891,6 +895,15 @@ export const useInterviewSession = (sessionId, interviewType, startRoundTwo) => 
       // Skip the setup screen and go directly to the first question.
       if (!savedSess?.accepted && questions.length > 0) {
         speakAIQuestion(questions[0].text || questions[0].question || questions[0].prompt || '')
+      }
+
+      setIsDisclaimerAccepted(true)
+
+      if (_sessionKey) {
+        const sess = JSON.parse(sessionStorage.getItem(_sessionKey) || '{}')
+        sess.accepted = true
+        sess.startedAt = sess.startedAt || Date.now()
+        sessionStorage.setItem(_sessionKey, JSON.stringify(sess))
       }
 
       })
