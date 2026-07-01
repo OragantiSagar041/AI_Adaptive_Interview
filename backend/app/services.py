@@ -1892,7 +1892,8 @@ def build_default_interview_email_html(candidate_name: str, duration: int, job_d
                     <ul style="margin: 0; padding-left: 20px; color: #be123c; font-size: 14px; line-height: 1.6;">
                         <li style="margin-bottom: 8px;"><b>Full-Screen Mode:</b> Must be maintained at all times. Tab switching is recorded as a violation.</li>
                         <li style="margin-bottom: 8px;"><b>Video Proctoring:</b> Your camera remains active for face tracking and integrity checks.</li>
-                        <li><b>Environment:</b> Join from a quiet, well-lit room. Background noise or voices may affect your evaluation.</li>
+                        <li style="margin-bottom: 8px;"><b>Environment:</b> Join from a quiet, well-lit room. Background noise or voices may affect your evaluation.</li>
+                        <li><b>Screen Sharing:</b> You must share your entire screen during the session.</li>
                     </ul>
                 </div>
 

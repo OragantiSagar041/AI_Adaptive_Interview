@@ -435,7 +435,8 @@ export default function CreateInterviewPage() {
             <table role="presentation" width="100%" cellspacing="0" cellpadding="0">
               <tr><td style="padding:8px 0;border-bottom:1px solid #fee2e2;"><table cellspacing="0" cellpadding="0"><tr><td style="width:28px;vertical-align:top;font-size:16px;">🖥️</td><td style="font-size:13px;color:#7f1d1d;line-height:1.6;"><b>Full-Screen Only:</b> You must remain in full-screen mode. Exiting or switching tabs is flagged as a violation.</td></tr></table></td></tr>
               <tr><td style="padding:8px 0;border-bottom:1px solid #fee2e2;"><table cellspacing="0" cellpadding="0"><tr><td style="width:28px;vertical-align:top;font-size:16px;">📷</td><td style="font-size:13px;color:#7f1d1d;line-height:1.6;"><b>Camera Active:</b> AI-powered face tracking and multi-face detection will be active throughout the session.</td></tr></table></td></tr>
-              <tr><td style="padding:8px 0;"><table cellspacing="0" cellpadding="0"><tr><td style="width:28px;vertical-align:top;font-size:16px;">🔇</td><td style="font-size:13px;color:#7f1d1d;line-height:1.6;"><b>Quiet Environment:</b> Background noise or additional voices may negatively impact your evaluation score.</td></tr></table></td></tr>
+              <tr><td style="padding:8px 0;border-bottom:1px solid #fee2e2;"><table cellspacing="0" cellpadding="0"><tr><td style="width:28px;vertical-align:top;font-size:16px;">🔇</td><td style="font-size:13px;color:#7f1d1d;line-height:1.6;"><b>Quiet Environment:</b> Background noise or additional voices may negatively impact your evaluation score.</td></tr></table></td></tr>
+              <tr><td style="padding:8px 0;"><table cellspacing="0" cellpadding="0"><tr><td style="width:28px;vertical-align:top;font-size:16px;">📺</td><td style="font-size:13px;color:#7f1d1d;line-height:1.6;"><b>Screen Sharing:</b> You must share your entire screen during the session.</td></tr></table></td></tr>
             </table>
           </td>
         </tr>
@@ -458,6 +459,23 @@ export default function CreateInterviewPage() {
   </table>
 </body>
 </html>`.trim()
+
+      const plainText = `Dear {candidate_name},
+
+Congratulations! You have been selected for an AI-powered interview. Please review the details below and click the button to begin when you're ready.
+
+📋 Role Details:
+{job_description}
+
+[Start Interview Button]
+
+⚠️ Mandatory Interview Guidelines
+• Full-Screen Only: You must remain in full-screen mode. Exiting or switching tabs is flagged as a violation.
+• Camera Active: AI-powered face tracking and multi-face detection will be active throughout the session.
+• Quiet Environment: Background noise or additional voices may negatively impact your evaluation score.
+• Screen Sharing: You must share your entire screen during the session.
+
+{schedule_info}`
 
       setEmailTemplate({
         headHtml: doc.head ? doc.head.innerHTML : '',

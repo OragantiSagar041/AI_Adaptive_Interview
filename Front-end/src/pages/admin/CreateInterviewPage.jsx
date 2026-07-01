@@ -377,7 +377,22 @@ export default function CreateInterviewPage() {
       }
 
       const bodyHtml = doc.body ? doc.body.innerHTML : data.html
-      const plainText = convertHtmlToPlainText(bodyHtml, name, jd, duration)
+      const plainText = `Dear {candidate_name},
+
+Congratulations! You have been selected for an AI-powered interview. Please review the details below and click the button to begin when you're ready.
+
+📋 Role Details:
+{job_description}
+
+[Start Interview Button]
+
+⚠️ Mandatory Interview Guidelines
+• Full-Screen Only: You must remain in full-screen mode. Exiting or switching tabs is flagged as a violation.
+• Camera Active: AI-powered face tracking and multi-face detection will be active throughout the session.
+• Quiet Environment: Background noise or additional voices may negatively impact your evaluation score.
+• Screen Sharing: You must share your entire screen during the session.
+
+{schedule_info}`
 
       setEmailTemplate({
         headHtml: doc.head ? doc.head.innerHTML : '',
