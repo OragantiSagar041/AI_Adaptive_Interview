@@ -662,6 +662,7 @@ export const useInterviewSession = (sessionId, interviewType, startRoundTwo) => 
               const formData = new FormData()
               formData.append('audio', blob, 'audio.webm')
               formData.append('candidate_name', sessionDetail?.candidate_name || 'Candidate')
+              formData.append('language', sessionDetail?.language || 'English')
               
               try {
                 // Post directly to backend Whisper endpoint

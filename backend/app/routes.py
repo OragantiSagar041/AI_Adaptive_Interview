@@ -2622,7 +2622,7 @@ def create_session(data: CreateSession, current_admin: dict = Depends(get_curren
     session_doc = {
         "link_id": link_id,
         "candidate_id": f"CAN{random.randint(1000, 9999)}",
-        "candidate_name": data.candidate_name,
+        "candidate_name": data.candidate_name.title(),
         "candidate_email": data.candidate_email,
         "resume_text": data.resume_text,
         "job_description": data.job_description,
@@ -2767,7 +2767,7 @@ def bulk_create_sessions(data: BulkCreateSession, background_tasks: BackgroundTa
         session_doc = {
             "link_id": link_id,
             "candidate_id": f"CAN{random.randint(1000, 9999)}",
-            "candidate_name": candidate.candidate_name,
+            "candidate_name": candidate.candidate_name.title(),
             "candidate_email": candidate.candidate_email,
             "resume_text": candidate.resume_text,
             "job_description": data.job_description,
@@ -2810,7 +2810,7 @@ def bulk_create_sessions(data: BulkCreateSession, background_tasks: BackgroundTa
         session_docs.append(session_doc)
         
         results.append({
-            "candidate_name": candidate.candidate_name,
+            "candidate_name": candidate.candidate_name.title(),
             "candidate_email": candidate.candidate_email,
             "link_id": link_id,
             "link_url": link_url,

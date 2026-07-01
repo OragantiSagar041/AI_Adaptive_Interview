@@ -19,7 +19,8 @@ def fix_name(text, name):
 @router.post("/transcribe")
 async def transcribe_audio(
     audio: UploadFile = File(...),
-    candidate_name: str = Form(...)
+    candidate_name: str = Form(...),
+    language: str = Form("English")
 ):
     data = await audio.read()
 
@@ -34,12 +35,29 @@ async def transcribe_audio(
             return {"error": "GROQ_API_KEY not found in environment."}
 
         client = Groq(api_key=groq_api_key)
+        
+        # Map frontend language names to ISO-639-1 for Whisper
+        lang_map = {
+            "Hindi": "hi",
+            "Telugu": "te",
+            "Tamil": "ta",
+            "Malayalam": "ml",
+            "Kannada": "kn",
+            "English": "en"
+        }
+        iso_lang = lang_map.get(language, "en")
+        
+        if iso_lang == "en":
+            sys_prompt = f"The speaker has an Indian English accent. This is a highly technical software engineering job interview. The candidate's name is {candidate_name}. Transcribe technical terms, acronyms, and programming concepts accurately."
+        else:
+            sys_prompt = f"This is a job interview. The candidate's name is {candidate_name}. Proper nouns and technical terms may appear."
 
         with open(path, "rb") as file:
             transcription = client.audio.transcriptions.create(
                 file=(os.path.basename(path), file.read()),
                 model="whisper-large-v3-turbo",
-                prompt=f"This is a job interview. The candidate's name is {candidate_name}. Proper nouns and technical terms may appear.",
+                language=iso_lang,
+                prompt=sys_prompt,
                 response_format="json"
             )
 
