@@ -76,6 +76,7 @@ class CreateSession(BaseModel):
     ai_instructions: str = ""
     case_study_count: int = 0
     voice_clone: bool = False
+    custom_voice_id: str = ""
 
 class ForgotPasswordRequest(BaseModel):
     username: str

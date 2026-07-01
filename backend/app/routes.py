@@ -2637,7 +2637,8 @@ async def create_session(data: CreateSession, current_admin: dict = Depends(get_
         "ai_instructions": data.ai_instructions,
         "case_study_count": data.case_study_count,
         "industry": data.industry,
-        "voice_clone": data.voice_clone
+        "voice_clone": data.voice_clone,
+        "custom_voice_id": data.custom_voice_id
     }
     
     # Task 4: Store scheduled time window
@@ -2698,6 +2699,7 @@ class BulkCreateSession(BaseModel):
     custom_questions: str = ""
     ai_instructions: str = ""
     voice_clone: bool = False
+    custom_voice_id: str = ""
 
 @router.post("/admin/bulk-create-sessions")
 async def bulk_create_sessions(data: BulkCreateSession, current_admin: dict = Depends(get_current_admin_details)):
@@ -5980,6 +5982,7 @@ class TTSRequest(BaseModel):
     voice: str = "nova"
     language: str = "English"
     voice_id: Optional[str] = None   # Per-session cloned voice override
+    use_custom_voice: bool = True    # Flag to determine if Cartesia should be used
 
 
 @router.post("/voice-clone-instant")
@@ -5997,6 +6000,31 @@ async def voice_clone_instant(audio: UploadFile = File(...), voice_name: Optiona
         raise HTTPException(status_code=500, detail="Cartesia SDK not installed. Run `pip install cartesia`.")
 
     load_dotenv(os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), ".env"), override=True)
+
+@router.get("/admin/voices")
+async def get_admin_voices(current_admin: dict = Depends(get_current_admin_details)):
+    """
+    Returns available Cartesia custom voices configured in the backend .env file.
+    Keys like CARTESIA_VOICE_ID and CARTESIA_VOICE_ID_MALE are loaded.
+    """
+    env_path = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), ".env")
+    load_dotenv(env_path, override=True)
+    
+    voices = []
+    
+    # Check for the default one
+    default_voice_id = os.getenv("CARTESIA_VOICE_ID")
+    if default_voice_id:
+        voices.append({"name": "Default Voice", "id": default_voice_id})
+        
+    # Check for anything starting with CARTESIA_VOICE_ID_
+    for key, value in os.environ.items():
+        if key.startswith("CARTESIA_VOICE_ID_") and value:
+            # e.g., CARTESIA_VOICE_ID_MALE -> "Male"
+            name_part = key.replace("CARTESIA_VOICE_ID_", "").replace("_", " ").title()
+            voices.append({"name": name_part, "id": value})
+            
+    return {"status": "success", "voices": voices}
     api_key = os.getenv("CARTESIA_API_KEY", "").strip()
     if not api_key:
         raise HTTPException(status_code=503, detail="Cartesia API key not configured. Voice cloning is unavailable.")
@@ -6078,25 +6106,28 @@ async def generate_tts(req: TTSRequest):
     # ──────────────────────────────────────────────────────────────────────────
     used_cartesia = False
     temp_filename = f"temp_tts_{uuid.uuid4().hex}.mp3"
+    
+    # Determine the actual voice ID to use
+    actual_cartesia_voice_id = req.voice_id if req.voice_id else cartesia_voice_id
 
-    if cartesia_api_key and cartesia_voice_id and not is_regional:
+    if req.use_custom_voice and cartesia_api_key and actual_cartesia_voice_id and not is_regional:
         try:
             import asyncio
             from cartesia import Cartesia
 
             def _call_cartesia():
                 client = Cartesia(api_key=cartesia_api_key)
-                response = client.tts.bytes(
-                    model_id="sonic", # or "sonic-english"
+                result = client.tts.generate(
+                    model_id="sonic-2",
                     transcript=req.text,
-                    voice_id=cartesia_voice_id,
+                    voice={"mode": "id", "id": actual_cartesia_voice_id},
                     output_format={
                         "container": "mp3",
-                        "encoding": "pcm_f32le",
+                        "encoding": "mp3",
                         "sample_rate": 44100,
                     },
                 )
-                return response
+                return result.read()
 
             audio_bytes = await asyncio.get_event_loop().run_in_executor(None, _call_cartesia)
 
