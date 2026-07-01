@@ -23,7 +23,7 @@ export default function CaseStudyPage() {
   // Mic & Speech Recognition state
   const [isListening, setIsListening] = useState(false)
   const [transcriptionText, setTranscriptionText] = useState('')
-  
+
   // Timer state
   const [secondsLeft, setSecondsLeft] = useState(durationParam * 60)
 
@@ -86,7 +86,7 @@ export default function CaseStudyPage() {
     return () => {
       stopTimer()
       if (recognitionRef.current) {
-        try { recognitionRef.current.stop() } catch (e) {}
+        try { recognitionRef.current.stop() } catch (e) { }
       }
     }
   }, [interviewId])
@@ -94,7 +94,7 @@ export default function CaseStudyPage() {
   // Sync active question details when index changes
   const handleIndexChange = (idx) => {
     if (idx < 0 || idx >= questions.length) return
-    
+
     // Silent save current answer first
     handleSaveAnswer(true)
 
@@ -104,7 +104,7 @@ export default function CaseStudyPage() {
     }
 
     setCurrentIndex(idx)
-    
+
     // Set transcription to saved answer for new index
     const saved = answers[idx]
     setTranscriptionText(saved ? saved.answer_text || '' : '')
@@ -392,9 +392,8 @@ export default function CaseStudyPage() {
           <div className="flex items-center gap-2 border border-slate-200 rounded-full px-4 py-1.5 bg-slate-50 text-xs font-bold">
             <span className={`w-2 h-2 rounded-full bg-emerald-500 ${isListening ? 'animate-ping' : ''}`} />
             <span
-              className={`font-mono text-sm ${
-                isTimerUrgent ? 'text-red-500 font-extrabold' : isTimerWarning ? 'text-amber-500 font-bold' : 'text-slate-800'
-              }`}
+              className={`font-mono text-sm ${isTimerUrgent ? 'text-red-500 font-extrabold' : isTimerWarning ? 'text-amber-500 font-bold' : 'text-slate-800'
+                }`}
             >
               {getTimerDisplay()}
             </span>
@@ -473,11 +472,10 @@ export default function CaseStudyPage() {
           {/* Mic Trigger */}
           <button
             onClick={toggleMic}
-            className={`w-full py-4 rounded-xl border-2 border-dashed flex items-center justify-center gap-2 font-bold text-sm cursor-pointer transition-all ${
-              isListening
+            className={`w-full py-4 rounded-xl border-2 border-dashed flex items-center justify-center gap-2 font-bold text-sm cursor-pointer transition-all ${isListening
                 ? 'border-red-500 bg-red-50 text-red-500 shadow-md ring-4 ring-red-100'
                 : 'border-slate-200 bg-slate-50 hover:bg-slate-100 hover:border-indigo-500 text-slate-600 hover:text-indigo-600'
-            }`}
+              }`}
           >
             <span className={`text-base ${isListening ? 'animate-bounce' : ''}`}>
               {isListening ? '⏹' : '🎤'}

@@ -200,6 +200,7 @@ export const useInterviewSession = (sessionId, interviewType, startRoundTwo) => 
   // Feature Migration Refs
   const visualizerCanvasRef = useRef(null)
   const visualizerActiveRef = useRef(false)
+  const visualizerAudioCtxRef = useRef(null)
   const silenceTimeoutRef = useRef(null)
   const questionStartTimeRef = useRef(Date.now())
   const behavioralStatsRef = useRef({ wordCount: 0, fillerCount: 0, pauseCount: 0, faceAlerts: 0, tabSwitches: 0 })
@@ -277,71 +278,105 @@ export const useInterviewSession = (sessionId, interviewType, startRoundTwo) => 
   const visualizeAudio = (stream) => {
     const canvas = visualizerCanvasRef.current
     if (!canvas) return
+    
+    if (visualizerAudioCtxRef.current) {
+      visualizerAudioCtxRef.current.close().catch(()=>{})
+      visualizerAudioCtxRef.current = null
+    }
+
     const ctx = canvas.getContext("2d")
-    const audioCtx = new (window.AudioContext || window.webkitAudioContext)()
-    const source = audioCtx.createMediaStreamSource(stream)
-    const analyser = audioCtx.createAnalyser()
-    analyser.fftSize = 256
-    source.connect(analyser)
-
-    const bufferLength = analyser.frequencyBinCount
-    const dataArray = new Uint8Array(bufferLength)
-
-    visualizerActiveRef.current = true
-
-    const draw = () => {
-      if (!visualizerActiveRef.current) {
-        audioCtx.close().catch(() => { })
-        ctx.clearRect(0, 0, canvas.width, canvas.height)
-        return
+    
+    try {
+      const audioCtx = new (window.AudioContext || window.webkitAudioContext)()
+      visualizerAudioCtxRef.current = audioCtx
+      if (audioCtx.state === 'suspended') {
+        audioCtx.resume().catch(e => console.log("AudioContext resume failed:", e))
       }
+      
+      const source = audioCtx.createMediaStreamSource(stream)
+      const analyser = audioCtx.createAnalyser()
+      analyser.fftSize = 256
+      source.connect(analyser)
+
+      const bufferLength = analyser.frequencyBinCount
+      const dataArray = new Uint8Array(bufferLength)
+
+      visualizerActiveRef.current = true
+
+      const draw = () => {
+        if (!visualizerActiveRef.current) {
+          ctx.clearRect(0, 0, canvas.width, canvas.height)
+          return
+        }
 
       requestAnimationFrame(draw)
       analyser.getByteFrequencyData(dataArray)
 
-      ctx.clearRect(0, 0, canvas.width, canvas.height)
-      ctx.lineWidth = 2.5
-      ctx.lineCap = 'round'
-      ctx.lineJoin = 'round'
+      // Ensure canvas dimensions match actual size to prevent distortion
+      if (canvas.width !== canvas.clientWidth) canvas.width = canvas.clientWidth
+      if (canvas.height !== canvas.clientHeight) canvas.height = canvas.clientHeight
 
-      const gradient = ctx.createLinearGradient(0, 0, canvas.width, 0)
-      gradient.addColorStop(0, 'rgba(99, 102, 241, 0.4)')
-      gradient.addColorStop(0.5, 'rgba(79, 70, 229, 1)')
-      gradient.addColorStop(1, 'rgba(99, 102, 241, 0.4)')
-      ctx.strokeStyle = gradient
-
-      ctx.beginPath()
-
-      const drawLength = Math.floor(bufferLength * 0.6)
-      const sliceWidth = canvas.width / drawLength
+      const width = canvas.width
+      const height = canvas.height
+      
+      ctx.clearRect(0, 0, width, height)
+      
+      // Draw frequency bars
+      const numBars = 32 // limit bars for aesthetics
+      const barWidth = width / numBars
+      const step = Math.floor(analyser.frequencyBinCount / numBars)
+      
       let x = 0
-
-      for (let i = 0; i < drawLength; i++) {
-        const v = dataArray[i] / 255.0
-        const amplitude = (canvas.height / 2) * 0.8
-        const y = (canvas.height / 2) + (v * amplitude * (i % 2 === 0 ? 1 : -1))
-
-        if (i === 0) {
-          ctx.moveTo(x, canvas.height / 2)
-        } else {
-          ctx.lineTo(x, y)
+      for (let i = 0; i < numBars; i++) {
+        // Average the frequencies in this step range for smoother bars
+        let sum = 0
+        for(let j = 0; j < step; j++) {
+           sum += dataArray[i * step + j] || 0
         }
-        x += sliceWidth
+        const avg = sum / step
+        
+        // Map 0-255 to 10%-90% height
+        const barHeight = Math.max(height * 0.1, (avg / 255) * height * 0.9)
+        
+        const gradient = ctx.createLinearGradient(0, height, 0, 0)
+        gradient.addColorStop(0, '#6366f1') // Indigo
+        gradient.addColorStop(1, '#a855f7') // Purple
+        
+        ctx.fillStyle = gradient
+        ctx.beginPath()
+        ctx.roundRect(x + 2, height - barHeight, barWidth - 4, barHeight, [4, 4, 0, 0])
+        ctx.fill()
+        
+        x += barWidth
       }
-
-      ctx.stroke()
     }
     draw()
+    } catch (err) {
+      console.error("Audio visualizer failed to start:", err)
+    }
   }
 
   useEffect(() => {
-    if (isMediaReady && mediaStreamRef.current && visualizerCanvasRef.current) {
-      visualizeAudio(mediaStreamRef.current)
+    let timeout;
+    if (isMediaReady && mediaStreamRef.current && isDisclaimerAccepted) {
+      const tryStart = () => {
+        if (visualizerCanvasRef.current) {
+          visualizeAudio(mediaStreamRef.current)
+        } else {
+          timeout = setTimeout(tryStart, 100)
+        }
+      }
+      tryStart()
     }
     return () => {
       visualizerActiveRef.current = false
+      if (visualizerAudioCtxRef.current) {
+        visualizerAudioCtxRef.current.close().catch(()=>{})
+        visualizerAudioCtxRef.current = null
+      }
+      if (timeout) clearTimeout(timeout)
     }
-  }, [isMediaReady, currentQuestionIndex])
+  }, [isMediaReady, isDisclaimerAccepted])
 
   useEffect(() => {
     let timer;
@@ -559,7 +594,11 @@ export const useInterviewSession = (sessionId, interviewType, startRoundTwo) => 
         }
       }).then(result => {
         if (result.isConfirmed) {
-          setupMedia()
+          setupMedia().then(() => {
+            setAutoReconnecting(false)
+          }).catch(() => {
+            setAutoReconnecting(false)
+          })
         } else {
           if (_sessionKey) sessionStorage.removeItem(_sessionKey)
           setAutoReconnecting(false)
@@ -790,10 +829,10 @@ export const useInterviewSession = (sessionId, interviewType, startRoundTwo) => 
     try {
       let stream
       try {
-          stream = await navigator.mediaDevices.getUserMedia({
-            video: { width: { ideal: 720 }, height: { ideal: 1280 }, frameRate: 15 },
-            audio: true
-          })
+        stream = await navigator.mediaDevices.getUserMedia({
+          video: { width: { ideal: 720 }, height: { ideal: 1280 }, frameRate: 15 },
+          audio: true
+        })
       } catch (err) {
         console.error("Camera/Mic getUserMedia error:", err)
         if (err.name === 'NotFoundError' || err.name === 'DevicesNotFoundError') {
@@ -901,6 +940,15 @@ export const useInterviewSession = (sessionId, interviewType, startRoundTwo) => 
         speakAIQuestion(questions[0].text || questions[0].question || questions[0].prompt || '')
       }
 
+      setIsDisclaimerAccepted(true)
+
+      if (_sessionKey) {
+        const sess = JSON.parse(sessionStorage.getItem(_sessionKey) || '{}')
+        sess.accepted = true
+        sess.startedAt = sess.startedAt || Date.now()
+        sessionStorage.setItem(_sessionKey, JSON.stringify(sess))
+      }
+
       })
     } catch (err) {
       console.error("Setup permissions failure:", err)
@@ -944,7 +992,7 @@ export const useInterviewSession = (sessionId, interviewType, startRoundTwo) => 
       clonedVoiceIdRef.current = voiceId
     }
     setShowVoiceCloneSetup(false)
-    
+
     if (questions.length > 0) {
       speakAIQuestion(questions[0].text || questions[0].question || questions[0].prompt || '')
     }
@@ -1284,7 +1332,7 @@ export const useInterviewSession = (sessionId, interviewType, startRoundTwo) => 
     if (silenceTimeoutRef.current) { clearTimeout(silenceTimeoutRef.current); silenceTimeoutRef.current = null }
     if (_sessionKey) sessionStorage.removeItem(_sessionKey)
     visualizerActiveRef.current = false
-    
+
     if (window.speechSynthesis) window.speechSynthesis.cancel()
     if (silenceTimeoutRef.current) clearTimeout(silenceTimeoutRef.current)
 
@@ -1449,6 +1497,8 @@ export const useInterviewSession = (sessionId, interviewType, startRoundTwo) => 
     handleNextQuestion,
     handleSubmitInterview,
     handleSkipUpload,
-    isMobileDevice
+    isMobileDevice,
+    recognitionRef,
+    isSpeechRecordingRef
   }
 }
