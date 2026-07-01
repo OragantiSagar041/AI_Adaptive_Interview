@@ -63,8 +63,8 @@ export const useProctoring = (videoRef, isInterviewActive = true, logAlert = nul
     return () => {
       active = false;
       modelsLoadedRef.current = false;
-      try { faceLandmarkerRef.current?.close(); } catch (_) {}
-      try { objectDetectorRef.current?.close(); } catch (_) {}
+      try { faceLandmarkerRef.current?.close(); } catch (_) { }
+      try { objectDetectorRef.current?.close(); } catch (_) { }
     };
   }, []);
 

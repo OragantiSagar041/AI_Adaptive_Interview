@@ -294,9 +294,20 @@ export default function VoiceInterviewPage() {
   // Camera preview element for proctoring - must remain VISIBLE (even if small) for browser to
   // keep decoding frames. A fully hidden/off-screen video gets throttled by Chrome and freezes
   // causing MediaPipe to never detect faces.
+  const attachVideo = useCallback((node) => {
+    candidateVideoRef.current = node
+    if (node && cameraStreamRef.current) {
+      if (node.srcObject !== cameraStreamRef.current) {
+        node.srcObject = cameraStreamRef.current
+        node.muted = true
+        node.play().catch(e => console.log(e))
+      }
+    }
+  }, [])
+
   const candidateVideoElement = (
     <video
-      ref={candidateVideoRef}
+      ref={attachVideo}
       playsInline
       muted
       autoPlay
@@ -548,6 +559,11 @@ export default function VoiceInterviewPage() {
         audio: true
       })
 
+      // Re-request fullscreen after the picker closes, as browsers typically exit fullscreen to show the dialog
+      if (document.documentElement.requestFullscreen && !document.fullscreenElement) {
+        await document.documentElement.requestFullscreen().catch(() => { })
+      }
+
       const videoTrack = screenStream.getVideoTracks()[0];
       const settings = videoTrack.getSettings();
       if (settings.displaySurface && settings.displaySurface !== 'monitor') {
@@ -556,10 +572,12 @@ export default function VoiceInterviewPage() {
       }
 
       // 2. Get Camera & Mic Stream
-      let micStream = null
+      let micStream = cameraStreamRef.current
       try {
-        micStream = await navigator.mediaDevices.getUserMedia({ video: true, audio: true })
-        cameraStreamRef.current = micStream
+        if (!micStream || micStream.getTracks().some(t => t.readyState === 'ended')) {
+          micStream = await navigator.mediaDevices.getUserMedia({ video: true, audio: true })
+          cameraStreamRef.current = micStream
+        }
 
         // Start Camera Recorder
         const cameraMr = new MediaRecorder(micStream, { mimeType: 'video/webm' })
@@ -1177,16 +1195,7 @@ export default function VoiceInterviewPage() {
     return () => clearInterval(heartbeatInterval)
   }, [linkId, round, mockAudioLevel, currentQIdx, questions.length, proctoringState, warningsCount])
 
-  // Ensure video element gets the camera stream when the verbal round mounts
-  useEffect(() => {
-    if (round === 'verbal' && candidateVideoRef.current && cameraStreamRef.current) {
-      if (candidateVideoRef.current.srcObject !== cameraStreamRef.current) {
-        candidateVideoRef.current.srcObject = cameraStreamRef.current;
-        candidateVideoRef.current.muted = true;
-        candidateVideoRef.current.play().catch(e => console.log(e));
-      }
-    }
-  }, [round])
+  // (Removed old round === 'verbal' useEffect for video srcObject, handled by callback ref now)
 
   // ─────────────────────────────────────────────────────────────────────────────
   // RENDER — delegate to sub-components for coding/case study
@@ -1358,8 +1367,7 @@ export default function VoiceInterviewPage() {
                 await document.documentElement.requestFullscreen().catch(() => { })
               }
               const stream = await navigator.mediaDevices.getUserMedia({ audio: true, video: true })
-              // Stop the streams immediately, we just wanted permission
-              stream.getTracks().forEach(t => t.stop())
+              cameraStreamRef.current = stream
               setPermissionsGranted(true)
             } catch (err) {
               alert("Permissions are required to proceed: " + err.message)
@@ -1397,12 +1405,17 @@ export default function VoiceInterviewPage() {
       setVcError('')
       vcChunksRef.current = []
       try {
-        const stream = await navigator.mediaDevices.getUserMedia({ audio: true })
+        let stream = cameraStreamRef.current
+        if (!stream || stream.getAudioTracks().length === 0) {
+          stream = await navigator.mediaDevices.getUserMedia({ audio: true })
+        }
         const mr = new MediaRecorder(stream, { mimeType: 'audio/webm' })
         vcMediaRecorderRef.current = mr
         mr.ondataavailable = (e) => { if (e.data.size > 0) vcChunksRef.current.push(e.data) }
         mr.onstop = async () => {
-          stream.getTracks().forEach(t => t.stop())
+          if (stream !== cameraStreamRef.current) {
+            stream.getTracks().forEach(t => t.stop())
+          }
           setVcStep('uploading')
           try {
             const blob = new Blob(vcChunksRef.current, { type: 'audio/webm' })
@@ -1463,8 +1476,8 @@ export default function VoiceInterviewPage() {
           {vcStep === 'recording' && (
             <div className="flex flex-col items-center gap-4">
               <div className="flex items-end gap-1 h-10">
-                {Array.from({length:9}).map((_,i) => (
-                  <div key={i} className="vc-bar" style={{animationDelay:`${i*0.1}s`}} />
+                {Array.from({ length: 9 }).map((_, i) => (
+                  <div key={i} className="vc-bar" style={{ animationDelay: `${i * 0.1}s` }} />
                 ))}
               </div>
               <p className="text-violet-300 text-sm font-semibold animate-pulse">🔴 Recording... speak the sentence now</p>
