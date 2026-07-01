@@ -474,8 +474,7 @@ export const InterviewTechnical = () => {
                 <option value="javascript">JavaScript</option>
                 <option value="cpp">C++</option>
               </select>
-              <button className="ip-btn-prev" style={{ padding: '8px 20px', marginLeft: 'auto' }}>Start Voice Notes</button>
-              <button className="ip-btn-next" style={{ padding: '8px 20px' }} onClick={handleRunCode}>Run & Evaluate</button>
+              <button className="ip-btn-next" style={{ padding: '8px 20px', marginLeft: 'auto' }} onClick={handleRunCode}>Run & Evaluate</button>
             </div>
 
             <div className="coding-editor-wrap" style={{ flexGrow: 1, display: 'flex', flexDirection: 'column', minHeight: '0', overflow: 'hidden' }}>

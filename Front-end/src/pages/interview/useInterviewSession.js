@@ -1230,11 +1230,11 @@ export const useInterviewSession = (sessionId, interviewType, startRoundTwo) => 
     const payload = {
       interview_id: interviewId || sessionDetail?.interview_id || sessionId,
       question_id: currentQuestion.id,
-      filler_words_count: countFillers(transcriptionText),
-      speaking_pace_wpm: wpm,
+      filler_count: countFillers(transcriptionText),
+      wpm: wpm,
       pause_count: behavioralStatsRef.current.pauseCount,
       tab_switches: behavioralStatsRef.current.tabSwitches,
-      face_not_visible_alerts: behavioralStatsRef.current.faceAlerts
+      face_alerts: behavioralStatsRef.current.faceAlerts
     }
     try {
       await api.post(`/save-behavioral-data`, payload)
