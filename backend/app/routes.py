@@ -48,7 +48,7 @@ from starlette.background import BackgroundTask
 
 from fastapi import (
     APIRouter, Depends, File, Form, HTTPException, Request, UploadFile,
-    WebSocket, WebSocketDisconnect,
+    WebSocket, WebSocketDisconnect, BackgroundTasks
 )
 from fastapi.exceptions import RequestValidationError
 from fastapi.middleware.gzip import GZipMiddleware
@@ -2706,8 +2706,15 @@ class BulkCreateSession(BaseModel):
     voice_clone: bool = False
     custom_voice_id: str = ""
 
+def process_bulk_emails_background(jobs: list):
+    for job in jobs:
+        try:
+            queue_or_send_interview_email(job["doc"], job["link_url"], skip_db_update=True)
+        except Exception as email_err:
+            print(f"Background Email Error for {job['doc'].get('candidate_email')}: {email_err}")
+
 @router.post("/admin/bulk-create-sessions")
-def bulk_create_sessions(data: BulkCreateSession, current_admin: dict = Depends(get_current_admin_details)):
+def bulk_create_sessions(data: BulkCreateSession, background_tasks: BackgroundTasks, current_admin: dict = Depends(get_current_admin_details)):
     from bson import ObjectId
     from bson.errors import InvalidId
     
@@ -2777,6 +2784,7 @@ def bulk_create_sessions(data: BulkCreateSession, current_admin: dict = Depends(
             "case_study_count": data.case_study_count,
             "record_video": candidate.record_video,  # Task 5: Per-candidate video
             "voice_clone": data.voice_clone,
+            "custom_voice_id": data.custom_voice_id,
             "status": "pending",
             "hr_screening": data.hr_screening.dict(),
             "custom_questions": data.custom_questions,
@@ -2830,21 +2838,22 @@ def bulk_create_sessions(data: BulkCreateSession, current_admin: dict = Depends(
             r["link_url"] = None
 
     # Step 3: Trigger Background Emails
-    successful = 0
+    successful = len(results)  # Since DB insert succeeded, we count them all as successful for credit purposes
+    email_jobs = []
+    
     for r in results:
         if r["status"] == "success":
             doc = r.pop("session_doc") # Remove temp doc before returning JSON
-            try:
-                email_result = queue_or_send_interview_email(doc, r["link_url"], skip_db_update=True)
-                r["email_sent"] = email_result["email_sent"]
-                r["email_scheduled"] = email_result["email_scheduled"]
-                r["email_send_at"] = email_result["email_send_at"]
-                successful += 1
-            except Exception as email_err:
-                print(f" Email Error for {r['candidate_email']}: {email_err}")
-                successful += 1 # DB inserted successfully, so still counts against credits
+            email_jobs.append({"doc": doc, "link_url": r["link_url"]})
+            # Optimistically mark as sent/scheduled since we dispatch to background
+            r["email_sent"] = not doc.get("invite_email_send_at") or doc["invite_email_status"] == "sent"
+            r["email_scheduled"] = doc.get("invite_email_status") == "pending"
+            r["email_send_at"] = doc.get("invite_email_send_at") or ""
         else:
             r.pop("session_doc", None)
+
+    # Queue the slow email sending process to run in the background
+    background_tasks.add_task(process_bulk_emails_background, email_jobs)
 
     print(f" Bulk sessions created: {successful}/{len(results)}")
     
@@ -5914,7 +5923,7 @@ def get_superadmin_rejected(adminId: Optional[str] = None, current_admin: dict =
 
 @router.post("/api/superadmin/interview/create")
 @router.post("/superadmin/interview/create")
-async def superadmin_interview_create(data: dict, current_admin: dict = Depends(get_current_admin_details)):
+async def superadmin_interview_create(data: dict, background_tasks: BackgroundTasks, current_admin: dict = Depends(get_current_admin_details)):
     if current_admin.get("role") not in ["super_admin", "master"]:
         raise HTTPException(status_code=403, detail="Super Admin access required")
     if "candidates" in data:
@@ -5922,7 +5931,7 @@ async def superadmin_interview_create(data: dict, current_admin: dict = Depends(
             bulk_data = BulkCreateSession(**data)
         except Exception as e:
             raise HTTPException(status_code=422, detail=str(e))
-        return bulk_create_sessions(bulk_data, current_admin)
+        return bulk_create_sessions(bulk_data, background_tasks, current_admin)
     else:
         try:
             single_data = CreateSession(**data)
