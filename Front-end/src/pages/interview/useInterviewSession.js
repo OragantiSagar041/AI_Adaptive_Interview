@@ -54,6 +54,41 @@ export const useInterviewSession = (sessionId, interviewType, startRoundTwo) => 
   const [uploadingText, setUploadingText] = useState('')
   const [skipCountdown, setSkipCountdown] = useState(30)
   const [showSkipButton, setShowSkipButton] = useState(false)
+  const [isMobileDevice, setIsMobileDevice] = useState(false)
+
+  // Mobile Screen Detection
+  useEffect(() => {
+    const checkMobile = () => {
+      const userAgent = navigator.userAgent || navigator.vendor || window.opera;
+      const mobileRegex = /android|webos|iphone|ipad|ipod|blackberry|iemobile|opera mini/i;
+      const isMobile = mobileRegex.test(userAgent.toLowerCase()) || window.innerWidth <= 768;
+
+      if (isMobile) {
+        setIsMobileDevice(true);
+        Swal.fire({
+          icon: 'error',
+          title: 'Device Not Supported',
+          text: 'This proctored interview requires a desktop or laptop computer. Mobile devices and small screens are not supported.',
+          allowOutsideClick: false,
+          allowEscapeKey: false,
+          showConfirmButton: false,
+          background: '#161c2d',
+          color: '#fff',
+          customClass: {
+            popup: 'border border-white/8 rounded-2xl shadow-2xl',
+            title: 'text-xl font-bold text-white',
+            htmlContainer: 'text-slate-300 text-sm'
+          }
+        });
+      } else {
+        setIsMobileDevice(false);
+      }
+    };
+
+    checkMobile();
+    window.addEventListener('resize', checkMobile);
+    return () => window.removeEventListener('resize', checkMobile);
+  }, []);
 
   // Answer state
   const [transcriptionText, setTranscriptionText] = useState('')
@@ -189,13 +224,30 @@ export const useInterviewSession = (sessionId, interviewType, startRoundTwo) => 
 
   useEffect(() => {
     const handleVisibilityChange = () => {
-      if (document.hidden) {
+      if (document.hidden && isDisclaimerAccepted && !showAllSet) {
         behavioralStatsRef.current.tabSwitches += 1
+        Swal.fire({
+          icon: 'error',
+          title: 'Tab Switch Detected',
+          text: 'Switching tabs or minimizing the browser is not allowed during this proctored interview. Your action has been recorded.',
+          confirmButtonText: 'I Understand',
+          allowOutsideClick: false,
+          allowEscapeKey: false,
+          background: '#161c2d',
+          color: '#fff',
+          customClass: {
+            popup: 'border border-white/8 rounded-2xl shadow-2xl',
+            title: 'text-xl font-bold text-white',
+            htmlContainer: 'text-slate-300 text-sm',
+            confirmButton: 'bg-primary hover:bg-primary-hover text-white rounded-full px-6 py-2.5 font-semibold text-sm cursor-pointer border-none outline-none'
+          },
+          buttonsStyling: false
+        })
       }
     }
     document.addEventListener("visibilitychange", handleVisibilityChange)
     return () => document.removeEventListener("visibilitychange", handleVisibilityChange)
-  }, [])
+  }, [isDisclaimerAccepted, showAllSet])
 
   // Track unload events (Refresh or Close tab)
   useEffect(() => {
@@ -519,26 +571,6 @@ export const useInterviewSession = (sessionId, interviewType, startRoundTwo) => 
     const checkFullscreen = () => {
       if (!document.fullscreenElement) {
         setFullscreenWarning(true)
-        Swal.fire({
-          icon: 'warning',
-          title: '⚠️ Fullscreen Required',
-          text: 'Exiting fullscreen mode is not allowed during the interview.',
-          showCancelButton: true,
-          confirmButtonText: 'Enable full screen mode',
-          cancelButtonText: 'Exit interview',
-          allowOutsideClick: false,
-          allowEscapeKey: false
-        }).then((result) => {
-          if (result.isConfirmed) {
-            const elem = document.documentElement
-            if (elem.requestFullscreen) {
-              elem.requestFullscreen().catch(err => console.log(err))
-            }
-            setFullscreenWarning(false)
-          } else {
-            navigate('/dashboard')
-          }
-        })
       } else {
         setFullscreenWarning(false)
       }
@@ -789,16 +821,34 @@ export const useInterviewSession = (sessionId, interviewType, startRoundTwo) => 
       cameraRecorderRef.current.start(2000)
       screenRecorderRef.current.start(2000)
 
-      initSpeechRecognition()
-      if (recognitionRef.current) {
-        recognitionRef.current.start()
-      }
+      Swal.fire({
+        icon: 'success',
+        title: 'Setup Complete',
+        text: 'Camera and screen share connected successfully. Click below to enter fullscreen and begin your interview.',
+        confirmButtonText: 'Start Interview',
+        allowOutsideClick: false,
+        allowEscapeKey: false,
+        background: '#161c2d',
+        color: '#fff',
+        customClass: {
+          popup: 'border border-white/8 rounded-2xl shadow-2xl',
+          title: 'text-xl font-bold text-white',
+          htmlContainer: 'text-slate-300 text-sm',
+          confirmButton: 'bg-primary hover:bg-primary-hover text-white rounded-full px-6 py-2.5 font-semibold text-sm cursor-pointer border-none outline-none'
+        },
+        buttonsStyling: false
+      }).then(() => {
+        const elem = document.documentElement;
+        if (elem.requestFullscreen) {
+          elem.requestFullscreen().catch(err => console.log(err));
+        }
 
-      startBackgroundNoiseMonitor(stream)
+        initSpeechRecognition()
+        if (recognitionRef.current) {
+          recognitionRef.current.start()
+        }
 
-      setIsDisclaimerAccepted(true)
-      setIsMediaReady(true)
-      setAutoReconnecting(false)
+        startBackgroundNoiseMonitor(stream)
 
       const savedSess = _sessionKey ? (() => { try { return JSON.parse(sessionStorage.getItem(_sessionKey) || 'null') } catch { return null } })() : null
       
@@ -809,6 +859,7 @@ export const useInterviewSession = (sessionId, interviewType, startRoundTwo) => 
         speakAIQuestion(questions[0].text || questions[0].question || questions[0].prompt || '')
       }
 
+      })
     } catch (err) {
       console.error("Setup permissions failure:", err)
       let errTitle = 'Setup Failed'
@@ -1191,6 +1242,10 @@ export const useInterviewSession = (sessionId, interviewType, startRoundTwo) => 
     if (silenceTimeoutRef.current) { clearTimeout(silenceTimeoutRef.current); silenceTimeoutRef.current = null }
     if (_sessionKey) sessionStorage.removeItem(_sessionKey)
     visualizerActiveRef.current = false
+    
+    if (window.speechSynthesis) window.speechSynthesis.cancel()
+    if (silenceTimeoutRef.current) clearTimeout(silenceTimeoutRef.current)
+
     if (faceDetectionIntervalRef.current) clearInterval(faceDetectionIntervalRef.current)
     if (noiseMonitorFrameRef.current) cancelAnimationFrame(noiseMonitorFrameRef.current)
     isSpeechRecordingRef.current = false
@@ -1345,6 +1400,7 @@ export const useInterviewSession = (sessionId, interviewType, startRoundTwo) => 
     proceedToRoundTwo,
     handleNextQuestion,
     handleSubmitInterview,
-    handleSkipUpload
+    handleSkipUpload,
+    isMobileDevice
   }
 }

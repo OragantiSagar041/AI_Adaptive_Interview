@@ -1895,6 +1895,8 @@ def build_default_interview_email_html(candidate_name: str, duration: int, job_d
                         <li><b>Environment:</b> Join from a quiet, well-lit room. Background noise or voices may affect your evaluation.</li>
                     </ul>
                 </div>
+<<<<<<< HEAD
+=======
 
                 <div style="background-color: #fef2f2; border: 1px solid #fecaca; border-radius: 8px; padding: 16px; margin: 24px 0; text-align: left;">
                     <p style="margin: 0; color: #b91c1c; font-size: 14px; font-weight: 500;">⚠️ <b>Important:</b> Please join only during the scheduled time window. If no schedule is set, the link remains valid for 24 hours.</p>
@@ -1902,9 +1904,8 @@ def build_default_interview_email_html(candidate_name: str, duration: int, job_d
                 
                 <hr style="border: none; border-top: 1px solid #e2e8f0; margin: 32px 0 24px 0;">
                 <p style="color: #64748b; font-size: 14px; margin: 0; text-align: left; line-height: 1.6;">Best regards,<br/><b style="color: #4f46e5;">Hire IQ Recruiting</b></p>
+>>>>>>> 713f9af7766b998c5818fbc7ca0c7c2b59addc53
             </div>
-            <hr style="border: none; border-top: 1px solid #e2e8f0; margin: 20px 0;">
-            <p style="color: #94a3b8; font-size: 13px; margin: 0;">Best regards,<br/><b style="color: #6366f1;">Mock Interview</b></p>
         </div>
     </body>
     </html>
@@ -1924,13 +1925,13 @@ def queue_or_send_interview_email(session_doc: Dict[str, Any], link_url: str, sk
     if send_at and send_at > now:
         if not skip_db_update:
             interview_sessions_collection.update_one(
-            {"_id": session_doc["_id"]},
-            {"$set": {
-                "invite_email_status": "pending",
-                "invite_email_send_at": send_at.isoformat(),
-                "invite_email_sent_at": None
-            }}
-        )
+                {"_id": session_doc["_id"]},
+                {"$set": {
+                    "invite_email_status": "pending",
+                    "invite_email_send_at": send_at.isoformat(),
+                    "invite_email_sent_at": None
+                }}
+            )
         return {
             "email_sent": False,
             "email_scheduled": True,
@@ -1965,7 +1966,6 @@ def queue_or_send_interview_email(session_doc: Dict[str, Any], link_url: str, sk
         "email_scheduled": False,
         "email_send_at": (send_at.isoformat() if send_at else now.isoformat())
     }
-
 
 def send_interview_email(candidate_email: str, candidate_name: str, link_url: str, duration: int, job_description: str, custom_html: str = "", scheduled_start: str = "", scheduled_end: str = ""):
     import os

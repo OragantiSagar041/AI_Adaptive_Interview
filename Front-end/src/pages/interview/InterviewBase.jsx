@@ -54,7 +54,8 @@ export const InterviewBase = ({
     proceedToRoundTwo,
     handleNextQuestion,
     handleSubmitInterview,
-    handleSkipUpload
+    handleSkipUpload,
+    isMobileDevice
   } = session
 
   // ── Voice Cloning Setup State (UI only) ──────────────────────────────────
@@ -318,7 +319,10 @@ export const InterviewBase = ({
           <ShieldAlert size={60} color="#ef4444" style={{ animation: 'pulse 2s infinite' }} />
           <h2 style={{ fontSize: '30px', fontWeight: '800', color: '#fff' }}>⚠️ Anti-Cheating Alert</h2>
           <p style={{ fontSize: '16px', color: '#94a3b8', maxWidth: '500px', lineHeight: '1.5' }}>Full Screen Mode is REQUIRED to take this interview. Exiting fullscreen compromises proctoring validation.</p>
-          <button onClick={enableFullscreen} style={{ padding: '12px 32px', borderRadius: '9999px', background: '#4f46e5', color: '#fff', fontWeight: 'bold', border: 'none', cursor: 'pointer' }}>Enable Full Screen</button>
+          <div style={{ display: 'flex', gap: '16px' }}>
+            <button onClick={enableFullscreen} style={{ padding: '12px 32px', borderRadius: '9999px', background: '#4f46e5', color: '#fff', fontWeight: 'bold', border: 'none', cursor: 'pointer' }}>Enable Full Screen</button>
+            <button onClick={() => handleSubmitInterview(true)} style={{ padding: '12px 32px', borderRadius: '9999px', background: 'transparent', color: '#ef4444', fontWeight: 'bold', border: '2px solid #ef4444', cursor: 'pointer' }}>Exit Interview</button>
+          </div>
         </div>
       )}
 

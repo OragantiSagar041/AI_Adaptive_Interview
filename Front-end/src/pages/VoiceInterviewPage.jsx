@@ -219,12 +219,22 @@ export default function VoiceInterviewPage() {
   const [currentQIdx, setCurrentQIdx] = useState(_savedSession?.currentQIdx || 0)
   const [aiStatus, setAiStatus] = useState('idle')
   const [transcript, setTranscript] = useState('')
+  const [proctoringBanner, setProctoringBanner] = useState(null)
   const [interimText, setInterimText] = useState('')
   const [countdown, setCountdown] = useState(0)
   const [roundDuration, setRoundDuration] = useState(900)
   const [answeredCount, setAnsweredCount] = useState(0)
   const [followUpCount, setFollowUpCount] = useState(0)  // follow-ups per question
   const [warningsCount, setWarningsCount] = useState(0)
+  const [proctoringState, setProctoringState] = useState({
+    modelsReady: false,
+    faceVisible: null,
+    faceCount: 0,
+    multiFace: false,
+    phoneDetected: false,
+    eyeContactLost: false,
+    lastAlertType: ''
+  })
   const screenShareViolationsRef = useRef(0)
   const screenShareViolationHandlerRef = useRef(null)  // stable ref to avoid circular deps
   const usedFollowUps = useRef(new Set())
@@ -257,6 +267,7 @@ export default function VoiceInterviewPage() {
     round_type: round,
     status: aiStatus === 'idle' ? 'online' : aiStatus,
     proctoring_alerts: warningsCount,
+    proctoring_status: proctoringState,
     current_question: currentQIdx + 1,
     total_questions: questions.length || 0,
     audio_level: mockAudioLevel,
@@ -280,6 +291,32 @@ export default function VoiceInterviewPage() {
   const languageRef = useRef('English')
   const currentAudioRef = useRef(null)    // ← tracks active TTS audio so stopAudio() can kill it
   const isTransitioningRef = useRef(false)
+  // Camera preview element for proctoring - must remain VISIBLE (even if small) for browser to
+  // keep decoding frames. A fully hidden/off-screen video gets throttled by Chrome and freezes
+  // causing MediaPipe to never detect faces.
+  const candidateVideoElement = (
+    <video
+      ref={candidateVideoRef}
+      playsInline
+      muted
+      autoPlay
+      style={{
+        position: 'fixed',
+        bottom: '16px',
+        left: '16px',
+        width: '96px',
+        height: '72px',
+        objectFit: 'cover',
+        borderRadius: '10px',
+        border: '2px solid rgba(99,102,241,0.4)',
+        zIndex: 50,
+        opacity: 1,
+        pointerEvents: 'none',
+        boxShadow: '0 4px 16px rgba(0,0,0,0.5)',
+        transform: 'scaleX(-1)', // mirror effect
+      }}
+    />
+  )
 
   // Sync refs
   useEffect(() => { currentQIdxRef.current = currentQIdx }, [currentQIdx])
@@ -321,16 +358,25 @@ export default function VoiceInterviewPage() {
   // ── Persistence & Unload Tracking ──────────────────────────────────────────
   useEffect(() => {
     const handleUnload = () => {
-      if (linkId) {
-        navigator.sendBeacon(`${API_BASE_URL}/interview/${linkId}/alert`, JSON.stringify({
-          type: "warning",
-          message: "Candidate refreshed or closed the window."
-        }))
+      if (!linkId) return
+      const roundNow = roundRef.current
+      // If interview is actively in progress (not done/intro/pre_checks), auto-complete it
+      if (roundNow && roundNow !== 'done' && roundNow !== 'intro' && roundNow !== 'pre_checks') {
+        // sendBeacon is the ONLY reliable way to fire a request on tab close
+        navigator.sendBeacon(
+          `${API_BASE_URL}/complete-session/${linkId}?warnings=${warningsCount}&reason=tab_closed`,
+          JSON.stringify({ reason: 'candidate_exited', timestamp: new Date().toISOString() })
+        )
       }
     }
-    window.addEventListener("beforeunload", handleUnload)
-    return () => window.removeEventListener("beforeunload", handleUnload)
-  }, [linkId])
+    // pagehide fires on mobile browsers where beforeunload is unreliable
+    window.addEventListener('beforeunload', handleUnload)
+    window.addEventListener('pagehide', handleUnload)
+    return () => {
+      window.removeEventListener('beforeunload', handleUnload)
+      window.removeEventListener('pagehide', handleUnload)
+    }
+  }, [linkId, warningsCount])
 
   useEffect(() => {
     if (!_sessionKey) return
@@ -397,7 +443,6 @@ export default function VoiceInterviewPage() {
   }, [linkId])
 
   // ── TTS with female voice ──────────────────────────────────────────────────
-  // Stop any currently-playing TTS audio immediately
   const stopAudio = useCallback(() => {
     if (activeAudioRef.current) {
       activeAudioRef.current.onended = null
@@ -414,7 +459,6 @@ export default function VoiceInterviewPage() {
       currentAudioRef.current = null
     }
   }, [])
-
   const speak = useCallback(async (text, onEnd) => {
     stopAudio()  // cancel any previous audio first
     try {
@@ -460,7 +504,10 @@ export default function VoiceInterviewPage() {
   }, [stopAudio])
 
   const addMsg = useCallback((role, text) => setChatMessages(p => [...p, { role, text }]), [])
-  const aiSay = useCallback((text, onEnd) => { addMsg('ai', text); speak(text, onEnd) }, [addMsg, speak])
+  const aiSay = useCallback((text, onEnd) => {
+    if (submittingRef.current || isTransitioningRef.current || roundRef.current === 'done') return;
+    addMsg('ai', text); speak(text, onEnd)
+  }, [addMsg, speak])
 
   // ── Typewriter helper ─────────────────────────────────────────────────────
   const typewrite = useCallback((text, onDone) => {
@@ -844,7 +891,8 @@ export default function VoiceInterviewPage() {
 
       // Speak transition phrase and wait for it to finish in parallel with fetching
       const speakPromise = new Promise(resolve => {
-        aiSay(t.verbalComplete, resolve)
+        addMsg('ai', t.verbalComplete)
+        speak(t.verbalComplete, resolve)
       })
 
       if (type === 'Technical') {
@@ -853,7 +901,7 @@ export default function VoiceInterviewPage() {
             method: 'POST', headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({ interview_id: iid })
           }).then(r => r.json())
-          
+
           const [_, data] = await Promise.all([speakPromise, fetchPromise])
           const task = data.coding_round?.task || {}
           const codingQ = {
@@ -903,16 +951,16 @@ export default function VoiceInterviewPage() {
   const completeInterview = useCallback(async () => {
     if (submittingRef.current) return
     submittingRef.current = true
-    stopListening(); window.speechSynthesis?.cancel()
+    stopListening(); window.speechSynthesis?.cancel(); stopAudio()
     const iid = interviewIdRef.current
-    
+
     // Switch UI to submitting immediately
     setRound('submitting')
 
     await stopAndUploadRecording(iid)
     try { await fetch(`${API_BASE_URL}/complete-session/${linkId}?warnings=${warningsCount}`, { method: 'POST' }) } catch (_) { }
     setRound('done')
-  }, [stopListening, linkId, stopAndUploadRecording, warningsCount])
+  }, [stopListening, linkId, stopAndUploadRecording, warningsCount, stopAudio])
 
   // ── Start verbal interview ────────────────────────────────────────────────
   const startInterview = useCallback(async () => {
@@ -930,8 +978,20 @@ export default function VoiceInterviewPage() {
   // ── Proctoring: ESC + Tab + Screenshare ──────────────────────────────────
   // Helper to log proctoring events to backend
   const logProctoringAlert = useCallback((alertType, details = '') => {
+    const alertMessages = {
+      'multi_person': '👀 Multiple faces detected in frame!',
+      'no_face': '👤 No face detected - please face the camera!',
+      'phone': '📱 Mobile phone detected in frame!',
+      'eye_contact': '👁️‍🗨️ Please maintain eye contact with the screen.',
+      'tab_switch': '🚨 Tab switch detected!'
+    }
+    const displayMsg = alertMessages[alertType] || `⚠️ Proctoring alert: ${alertType}`
+    setProctoringBanner({ type: alertType, message: displayMsg })
+    setTimeout(() => setProctoringBanner(null), 4000)
+
     setWarningsCount(p => {
       const newCount = p + 1
+      setProctoringState(prev => ({ ...prev, lastAlertType: alertType }))
       // Send to backend via WebSocket
       if (wsRef.current?.readyState === WebSocket.OPEN) {
         wsRef.current.send(JSON.stringify({
@@ -982,25 +1042,45 @@ export default function VoiceInterviewPage() {
   }, [handleScreenShareViolation])
 
   useEffect(() => {
+    // Tab switch counter — auto-end after 3 switches
+    let tabSwitchCount = 0
+    const MAX_TAB_SWITCHES = 3
+
     // Tab switch detection
     const handleVisibilityChange = () => {
-      if (document.hidden && round !== 'done' && round !== 'intro' && round !== 'pre_checks') {
-        logProctoringAlert('tab_switch', 'User switched tab or minimized')
-        Swal.fire({
-          icon: 'warning',
-          title: '⚠️ Tab Switch Detected!',
-          text: 'Please do not switch tabs or minimize the window during the interview. This incident has been recorded.',
-          confirmButtonColor: '#ef4444',
-          confirmButtonText: 'I Understand'
-        })
+      if (document.hidden && round !== 'done' && round !== 'intro' && round !== 'pre_checks' && round !== 'submitting') {
+        tabSwitchCount++
+        logProctoringAlert('tab_switch', `Tab switch #${tabSwitchCount}`)
+
+        if (tabSwitchCount >= MAX_TAB_SWITCHES) {
+          // Auto-end interview after too many tab switches
+          Swal.fire({
+            icon: 'error',
+            title: '🚨 Interview Terminated!',
+            text: `You have switched tabs ${MAX_TAB_SWITCHES} times. The interview has been automatically ended and saved.`,
+            confirmButtonColor: '#ef4444',
+            confirmButtonText: 'OK',
+            allowOutsideClick: false,
+          }).then(() => completeInterview())
+        } else {
+          Swal.fire({
+            icon: 'warning',
+            title: `⚠️ Tab Switch Detected! (${tabSwitchCount}/${MAX_TAB_SWITCHES})`,
+            text: `Please do not switch tabs or minimize the window. You have ${MAX_TAB_SWITCHES - tabSwitchCount} warning(s) remaining before the interview is automatically ended.`,
+            confirmButtonColor: '#ef4444',
+            confirmButtonText: 'I Understand',
+            timer: 8000,
+            timerProgressBar: true,
+          })
+        }
       }
     }
 
     // Fullscreen change detection with interactive modal
     const handleFullscreenChange = async () => {
-      if (!document.fullscreenElement && round !== 'done' && round !== 'pre_checks' && round !== 'intro') {
+      if (!document.fullscreenElement && round !== 'done' && round !== 'pre_checks' && round !== 'intro' && round !== 'submitting') {
         logProctoringAlert('fullscreen_exit', 'User exited fullscreen')
-        
+
         Swal.fire({
           icon: 'warning',
           title: '⚠️ Fullscreen Required',
@@ -1013,10 +1093,10 @@ export default function VoiceInterviewPage() {
         }).then((result) => {
           if (result.isConfirmed) {
             if (document.documentElement.requestFullscreen) {
-              document.documentElement.requestFullscreen().catch(() => {})
+              document.documentElement.requestFullscreen().catch(() => { })
             }
           } else {
-            window.location.href = '/dashboard'
+            completeInterview()
           }
         })
       }
@@ -1032,38 +1112,117 @@ export default function VoiceInterviewPage() {
       document.removeEventListener('visibilitychange', handleVisibilityChange)
       document.removeEventListener('fullscreenchange', handleFullscreenChange)
     }
-  }, [stopListening, round, logProctoringAlert])
+  }, [stopListening, round, logProctoringAlert, completeInterview])
 
   // Use Centralized AI Proctoring Hook
-  useProctoring(candidateVideoRef, round !== 'done' && round !== 'pre_checks' && round !== 'intro', (type, msg) => {
-    logProctoringAlert(type, msg)
-  })
+  useProctoring(
+    candidateVideoRef,
+    round !== 'done' && round !== 'pre_checks' && round !== 'intro',
+    (type, msg) => {
+      logProctoringAlert(type, msg)
+    },
+    setProctoringState
+  )
+
+  useEffect(() => {
+    if (!linkId || round === 'done' || round === 'pre_checks' || round === 'intro') return
+
+    const captureSnapshot = () => {
+      const video = candidateVideoRef.current
+      if (!video || video.readyState < 2 || !video.videoWidth || !video.videoHeight) return null
+      try {
+        const canvas = document.createElement('canvas')
+        canvas.width = 320
+        canvas.height = Math.max(1, Math.round((video.videoHeight / video.videoWidth) * canvas.width))
+        const ctx = canvas.getContext('2d')
+        ctx.drawImage(video, 0, 0, canvas.width, canvas.height)
+        return canvas.toDataURL('image/jpeg', 0.55)
+      } catch (_) {
+        return null
+      }
+    }
+
+    const sendHeartbeat = () => {
+      const alertTypes = []
+      if (proctoringState.multiFace) alertTypes.push('multi_person')
+      if (proctoringState.faceVisible === false) alertTypes.push('no_face')
+      if (proctoringState.phoneDetected) alertTypes.push('phone')
+      if (proctoringState.eyeContactLost) alertTypes.push('eye_contact')
+      if (proctoringState.lastAlertType) alertTypes.push(proctoringState.lastAlertType)
+
+      fetch(`${API_BASE_URL}/live-heartbeat`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          link_id: linkId,
+          snapshot_dataurl: captureSnapshot(),
+          audio_level: mockAudioLevel,
+          current_question: currentQIdx + 1,
+          total_questions: questions.length || 0,
+          tab_active: !document.hidden,
+          face_visible: proctoringState.faceVisible,
+          proctoring_alerts: warningsCount,
+          alert_types: [...new Set(alertTypes)],
+          last_alert_type: proctoringState.lastAlertType || null,
+          face_count: proctoringState.faceCount || 0,
+          multi_face: !!proctoringState.multiFace,
+          phone_detected: !!proctoringState.phoneDetected,
+          eye_contact_lost: !!proctoringState.eyeContactLost
+        })
+      }).catch(() => { })
+    }
+
+    sendHeartbeat()
+    const heartbeatInterval = setInterval(sendHeartbeat, 5000)
+    return () => clearInterval(heartbeatInterval)
+  }, [linkId, round, mockAudioLevel, currentQIdx, questions.length, proctoringState, warningsCount])
+
+  // Ensure video element gets the camera stream when the verbal round mounts
+  useEffect(() => {
+    if (round === 'verbal' && candidateVideoRef.current && cameraStreamRef.current) {
+      if (candidateVideoRef.current.srcObject !== cameraStreamRef.current) {
+        candidateVideoRef.current.srcObject = cameraStreamRef.current;
+        candidateVideoRef.current.muted = true;
+        candidateVideoRef.current.play().catch(e => console.log(e));
+      }
+    }
+  }, [round])
 
   // ─────────────────────────────────────────────────────────────────────────────
   // RENDER — delegate to sub-components for coding/case study
   // ─────────────────────────────────────────────────────────────────────────────
 
   if (round === 'coding' && codingQuestion) {
-    return <VoiceCodingRound question={codingQuestion} interviewId={interviewId} linkId={linkId} duration={roundDuration}
-      sessionDetail={sessionDetail} language={language} wsRef={wsRef} onComplete={() => {
-        const type = interviewType
-        if (type === 'Non-Technical') {
-          // fetch case study after coding
-          fetch(`${API_BASE_URL}/case-study/start`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ interview_id: interviewId }) })
-            .then(r => r.json()).then(data => {
-              const cqs = (data.case_study_round?.questions || []).map((q, i) => ({ id: `cs_${i}`, type: 'case_study', text: q.text || q.scenario || '', caseStudyIndex: i }))
-              setCaseStudyQuestions(cqs); setRound('case_study')
-            }).catch(() => completeInterview())
-        } else {
-          completeInterview()
-        }
-      }} />
+    return (
+      <>
+        <VoiceCodingRound question={codingQuestion} interviewId={interviewId} linkId={linkId} duration={roundDuration}
+          sessionDetail={sessionDetail} language={language} wsRef={wsRef} onComplete={() => {
+            const type = interviewType
+            if (type === 'Non-Technical') {
+              // fetch case study after coding
+              fetch(`${API_BASE_URL}/case-study/start`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ interview_id: interviewId }) })
+                .then(r => r.json()).then(data => {
+                  const cqs = (data.case_study_round?.questions || []).map((q, i) => ({ id: `cs_${i}`, type: 'case_study', text: q.text || q.scenario || '', caseStudyIndex: i }))
+                  setCaseStudyQuestions(cqs); setRound('case_study')
+                }).catch(() => completeInterview())
+            } else {
+              completeInterview()
+            }
+          }} />
+        {candidateVideoElement}
+      </>
+    )
   }
 
   if (round === 'case_study' && caseStudyQuestions.length) {
-    return <VoiceCaseStudy question={caseStudyQuestions[0]} allQuestions={caseStudyQuestions} duration={roundDuration}
-      interviewId={interviewId} linkId={linkId} sessionDetail={sessionDetail}
-      language={language} wsRef={wsRef} onComplete={completeInterview} />
+    return (
+      <>
+        <VoiceCaseStudy question={caseStudyQuestions[0]} allQuestions={caseStudyQuestions} duration={roundDuration}
+          interviewId={interviewId} linkId={linkId} sessionDetail={sessionDetail}
+          language={language} wsRef={wsRef} onComplete={completeInterview} />
+        {candidateVideoElement}
+      </>
+    )
   }
 
   if (loading) return (
@@ -1103,7 +1262,7 @@ export default function VoiceInterviewPage() {
   if (round === 'done') return (
     <div className="min-h-screen bg-[#0a0f1e] flex flex-col items-center justify-center text-white px-6 text-center gap-8 py-10 overflow-y-auto">
       <style>{`@keyframes pop{0%{transform:scale(.5);opacity:0}80%{transform:scale(1.1)}100%{transform:scale(1);opacity:1}}`}</style>
-      
+
       {!feedbackSuccess ? (
         <div className="max-w-xl w-full flex flex-col items-center gap-6">
           <div className="w-24 h-24 rounded-full bg-emerald-500/10 border-4 border-emerald-500 flex items-center justify-center shadow-[0_0_60px_rgba(16,185,129,0.4)]" style={{ animation: 'pop 0.6s ease forwards' }}>
@@ -1117,7 +1276,7 @@ export default function VoiceInterviewPage() {
           <div className="w-full bg-[#0d1117] border border-white/10 rounded-2xl p-6 shadow-xl mt-4 text-left">
             <h3 className="text-lg font-bold text-white mb-2">How was your experience?</h3>
             <p className="text-sm text-slate-400 mb-4">Your feedback helps us improve the AI interview experience.</p>
-            <textarea 
+            <textarea
               value={feedback}
               onChange={(e) => setFeedback(e.target.value)}
               placeholder="Tell us about your interview experience..."
@@ -1226,8 +1385,6 @@ export default function VoiceInterviewPage() {
           </button>
         </div>
       </div>
-      {/* Hidden Video for AI Proctoring - MUST have valid dimensions for MediaPipe to work properly */}
-      <video ref={candidateVideoRef} style={{ position: 'absolute', opacity: 0, pointerEvents: 'none', width: '640px', height: '480px', left: '-9999px', top: '-9999px', zIndex: -1 }} playsInline muted autoPlay />
     </div>
   )
 
@@ -1450,6 +1607,23 @@ export default function VoiceInterviewPage() {
         @keyframes spin-slow{from{transform:rotate(0deg)}to{transform:rotate(360deg)}}
       `}</style>
 
+      {/* Proctoring Banner */}
+      {proctoringBanner && (
+        <div style={{
+          position: 'fixed', top: 0, left: 0, right: 0, zIndex: 9999,
+          background: proctoringBanner.type === 'tab_switch' ? 'linear-gradient(90deg,#b91c1c,#dc2626)' : 'linear-gradient(90deg,#7c3aed,#6d28d9)',
+          color: 'white', padding: '12px 24px',
+          display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '12px',
+          fontSize: '15px', fontWeight: '700', letterSpacing: '0.01em',
+          boxShadow: '0 4px 20px rgba(0,0,0,0.4)',
+          animation: 'fadeIn 0.2s ease'
+        }}>
+          <span style={{ fontSize: '20px' }}>{proctoringBanner.type === 'tab_switch' ? '🚨' : proctoringBanner.type === 'multi_person' ? '👥' : proctoringBanner.type === 'no_face' ? '👤' : '⚠️'}</span>
+          <span>{proctoringBanner.message}</span>
+          <span style={{ fontSize: '12px', opacity: 0.8, fontWeight: 500 }}>- Recorded &amp; logged</span>
+        </div>
+      )}
+
       {/* Header */}
       <header className="flex items-center justify-between px-6 py-4 border-b border-white/6 bg-[#0a0f1e]/90 backdrop-blur sticky top-0 z-40">
         <div className="flex items-center gap-3">
@@ -1581,6 +1755,8 @@ export default function VoiceInterviewPage() {
           </div>
         </div>
       </div>
+      {/* Hidden Video for AI Proctoring - MUST have valid dimensions for MediaPipe to work properly */}
+      {candidateVideoElement}
     </div>
   )
 }

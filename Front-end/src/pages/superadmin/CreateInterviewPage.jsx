@@ -357,25 +357,90 @@ export default function CreateInterviewPage() {
         }
       }
 
-      const bodyHtml = doc.body ? doc.body.innerHTML : data.html
-      const plainText = convertHtmlToPlainText(bodyHtml, name, jd, duration)
-
-      const frontendHtml = convertPlainTextToHtml(plainText, name, jd, duration, scheduleHtml)
-      const compiledBodyInnerHtml = `
-<div style="background-color: #f1f5f9; padding: 40px 20px; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif; min-height: 100%;">
-    <div style="max-width: 600px; margin: 0 auto; background-color: #ffffff; border-radius: 12px; border: 1px solid #e2e8f0; overflow: hidden; box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.05);">
-        <div style="background-color: #ffffff; border-bottom: 1px solid #e2e8f0; padding: 24px 32px; text-align: left;">
-            <h1 style="color: #0f172a; margin: 0; font-size: 20px; font-weight: 700; letter-spacing: -0.02em;">Interview Invitation</h1>
-        </div>
-        <div style="padding: 32px; background-color: #ffffff;">
-            ${frontendHtml}
-        </div>
-    </div>
-    <div style="max-width: 600px; margin: 24px auto 0; text-align: center;">
-        <p style="color: #94a3b8; font-size: 12px; margin: 0;">Powered by Hire IQ AI Assessments</p>
-    </div>
-</div>
-      `.trim();
+      const formattedJd = String(jd || '').replace(/\n/g, '<br/>')
+      const compiledBodyInnerHtml = `<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8"/>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>Interview Invitation</title>
+</head>
+<body style="margin:0;padding:0;background-color:#f0f4f8;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Helvetica,Arial,sans-serif;">
+  <table role="presentation" width="100%" cellspacing="0" cellpadding="0" border="0" style="background-color:#f0f4f8;padding:40px 0;">
+    <tr><td align="center">
+      <table role="presentation" width="600" cellspacing="0" cellpadding="0" border="0" style="max-width:600px;width:100%;">
+        <tr>
+          <td style="background-color:#4f46e5;border-radius:12px 12px 0 0;padding:28px 40px;text-align:left;">
+            <table role="presentation" width="100%" cellspacing="0" cellpadding="0"><tr>
+              <td>
+                <span style="display:inline-block;background:rgba(255,255,255,0.15);border-radius:8px;padding:6px 14px;font-size:13px;font-weight:700;color:#c7d2fe;letter-spacing:0.08em;text-transform:uppercase;">Hire IQ Platform</span>
+                <h1 style="margin:14px 0 0;color:#ffffff;font-size:26px;font-weight:800;letter-spacing:-0.03em;line-height:1.2;">You've Been Invited<br/>to an AI Interview</h1>
+              </td>
+              <td style="text-align:right;vertical-align:top;"><div style="width:48px;height:48px;background:rgba(255,255,255,0.18);border-radius:12px;font-size:24px;line-height:48px;text-align:center;">🎯</div></td>
+            </tr></table>
+          </td>
+        </tr>
+        <tr><td style="background:linear-gradient(90deg,#6366f1,#8b5cf6,#4f46e5);height:3px;"></td></tr>
+        <tr>
+          <td style="background:#ffffff;padding:40px 40px 32px;border-left:1px solid #e2e8f0;border-right:1px solid #e2e8f0;">
+            <p style="margin:0 0 8px;font-size:17px;color:#0f172a;font-weight:600;">Dear ${name},</p>
+            <p style="margin:0 0 28px;font-size:14px;color:#64748b;line-height:1.7;">Congratulations! You have been selected for an AI-powered interview. Please review the details below and click the button to begin when you're ready.</p>
+            <table role="presentation" width="100%" cellspacing="0" cellpadding="0" border="0" style="background:#f8fafc;border:1px solid #e2e8f0;border-left:4px solid #6366f1;border-radius:8px;margin-bottom:20px;">
+              <tr><td style="padding:20px 24px;">
+                <p style="margin:0 0 10px;font-size:11px;font-weight:700;color:#6366f1;text-transform:uppercase;letter-spacing:0.1em;">📋 Role Details</p>
+                <p style="margin:0;font-size:14px;color:#475569;line-height:1.6;">${formattedJd}</p>
+              </td></tr>
+            </table>
+            <table role="presentation" width="100%" cellspacing="0" cellpadding="0" border="0" style="margin-bottom:28px;"><tr>
+              <td width="50%" style="padding-right:8px;">
+                <div style="background:#f8fafc;border:1px solid #e2e8f0;border-radius:8px;padding:16px 20px;">
+                  <p style="margin:0 0 4px;font-size:11px;font-weight:700;color:#94a3b8;text-transform:uppercase;letter-spacing:0.08em;">⏱ Duration</p>
+                  <p style="margin:0;font-size:18px;font-weight:700;color:#0f172a;">${duration} <span style="font-size:14px;color:#64748b;font-weight:500;">minutes</span></p>
+                </div>
+              </td>
+              <td width="50%" style="padding-left:8px;">
+                <div style="background:#f8fafc;border:1px solid #e2e8f0;border-radius:8px;padding:16px 20px;">
+                  <p style="margin:0 0 4px;font-size:11px;font-weight:700;color:#94a3b8;text-transform:uppercase;letter-spacing:0.08em;">📡 Format</p>
+                  <p style="margin:0;font-size:18px;font-weight:700;color:#0f172a;">AI <span style="font-size:14px;color:#64748b;font-weight:500;">Adaptive</span></p>
+                </div>
+              </td>
+            </tr></table>
+            ${scheduleHtml || ''}
+            <div style="text-align:center;margin:32px 0;">
+              <a href="#" style="display:inline-block;background:#4f46e5;color:#ffffff;text-decoration:none;padding:15px 44px;border-radius:10px;font-size:16px;font-weight:700;letter-spacing:0.02em;">Begin My Interview →</a>
+              <p style="margin:12px 0 0;font-size:12px;color:#94a3b8;">Button not working? <a href="#" style="color:#6366f1;text-decoration:underline;">Copy this link</a></p>
+            </div>
+          </td>
+        </tr>
+        <tr>
+          <td style="background:#fff8f8;border:1px solid #fecaca;border-top:none;border-left:1px solid #e2e8f0;border-right:1px solid #e2e8f0;padding:24px 40px;">
+            <p style="margin:0 0 14px;font-size:13px;font-weight:800;color:#b91c1c;text-transform:uppercase;letter-spacing:0.08em;">⚠️ Mandatory Interview Rules</p>
+            <table role="presentation" width="100%" cellspacing="0" cellpadding="0">
+              <tr><td style="padding:8px 0;border-bottom:1px solid #fee2e2;"><table cellspacing="0" cellpadding="0"><tr><td style="width:28px;vertical-align:top;font-size:16px;">🖥️</td><td style="font-size:13px;color:#7f1d1d;line-height:1.6;"><b>Full-Screen Only:</b> You must remain in full-screen mode. Exiting or switching tabs is flagged as a violation.</td></tr></table></td></tr>
+              <tr><td style="padding:8px 0;border-bottom:1px solid #fee2e2;"><table cellspacing="0" cellpadding="0"><tr><td style="width:28px;vertical-align:top;font-size:16px;">📷</td><td style="font-size:13px;color:#7f1d1d;line-height:1.6;"><b>Camera Active:</b> AI-powered face tracking and multi-face detection will be active throughout the session.</td></tr></table></td></tr>
+              <tr><td style="padding:8px 0;"><table cellspacing="0" cellpadding="0"><tr><td style="width:28px;vertical-align:top;font-size:16px;">🔇</td><td style="font-size:13px;color:#7f1d1d;line-height:1.6;"><b>Quiet Environment:</b> Background noise or additional voices may negatively impact your evaluation score.</td></tr></table></td></tr>
+            </table>
+          </td>
+        </tr>
+        <tr>
+          <td style="background:#fffbeb;border:1px solid #fde68a;border-top:none;border-left:1px solid #e2e8f0;border-right:1px solid #e2e8f0;padding:16px 40px;">
+            <p style="margin:0;font-size:13px;color:#92400e;line-height:1.6;">🔔 <b>Note:</b> Please join only during the scheduled time window. If no schedule is configured, the link is valid for <b>24 hours</b>. Ensure a stable internet connection before starting.</p>
+          </td>
+        </tr>
+        <tr>
+          <td style="background:#f8fafc;border:1px solid #e2e8f0;border-top:3px solid #e2e8f0;border-radius:0 0 12px 12px;padding:24px 40px;">
+            <table role="presentation" width="100%" cellspacing="0" cellpadding="0"><tr>
+              <td><p style="margin:0 0 2px;font-size:14px;font-weight:700;color:#0f172a;">Hire IQ Recruitment Team</p><p style="margin:0;font-size:12px;color:#94a3b8;">Powered by AI Adaptive Interview Platform</p></td>
+              <td style="text-align:right;vertical-align:middle;"><span style="font-size:11px;color:#cbd5e1;font-weight:500;">HIRE IQ</span></td>
+            </tr></table>
+          </td>
+        </tr>
+        <tr><td style="padding:20px 0;text-align:center;"><p style="margin:0;font-size:11px;color:#94a3b8;line-height:1.6;">This email was sent to you because you are a candidate in an interview process.<br/>If you believe this is an error, please disregard this email.</p></td></tr>
+      </table>
+    </td></tr>
+  </table>
+</body>
+</html>`.trim()
 
       setEmailTemplate({
         headHtml: doc.head ? doc.head.innerHTML : '',

@@ -8,17 +8,19 @@ export default function Interview() {
   const navigate = useNavigate()
   const sessionId = searchParams.get('session_id') || searchParams.get('session')
   const [error, setError] = useState(null)
+  const [loading, setLoading] = useState(true)
 
   useEffect(() => {
     if (!sessionId) {
       setError("Missing Session ID in URL parameters. Please check your secure interview invitation link.")
+      setLoading(false)
       return
     }
 
     const resolveSession = async () => {
       try {
         const payload = await api.get(`/session/${sessionId}`).then(r => r.data)
-        
+
         if (payload.status !== 'success') {
           throw new Error(payload.detail || payload.message || "Failed to load session details.")
         }
@@ -46,12 +48,22 @@ export default function Interview() {
           navigate(`/interview/normal?session_id=${sessionId}`, { replace: true })
         }
       } catch (err) {
-        setError(err.response?.data?.detail || err.response?.data?.message || err.message || "Unable to access this interview session.")
+        setError(err.message || "Unable to access this interview session.")
+        setLoading(false)
       }
     }
-
+    
     resolveSession()
   }, [sessionId, navigate])
+
+  if (loading) {
+    return (
+      <div className="flex justify-center items-center h-screen flex-col gap-4 text-slate-600">
+        <RefreshCw className="animate-spin text-primary" size={32} />
+        <span>Loading secure candidate interview environment...</span>
+      </div>
+    )
+  }
 
   if (error) {
     return (
@@ -64,10 +76,5 @@ export default function Interview() {
     )
   }
 
-  return (
-    <div className="flex justify-center items-center h-screen flex-col gap-4 text-slate-600">
-      <RefreshCw className="animate-spin text-primary" size={32} />
-      <span>Redirecting to secure interview environment...</span>
-    </div>
-  )
+  return null
 }
