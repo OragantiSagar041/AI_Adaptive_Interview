@@ -885,23 +885,13 @@ export const useInterviewSession = (sessionId, interviewType, startRoundTwo) => 
 
         startBackgroundNoiseMonitor(stream)
 
-        const savedSess = _sessionKey ? (() => { try { return JSON.parse(sessionStorage.getItem(_sessionKey) || 'null') } catch { return null } })() : null
-
-        // If voice cloning is enabled, show setup screen first and defer first question
-        if (!savedSess?.accepted && sessionDetail?.voice_clone) {
-          setShowVoiceCloneSetup(true)
-        } else if (!savedSess?.accepted && questions.length > 0) {
-          speakAIQuestion(questions[0].text || questions[0].question || questions[0].prompt || '')
-        }
-
-        setIsDisclaimerAccepted(true)
-
-        if (_sessionKey) {
-          const sess = JSON.parse(sessionStorage.getItem(_sessionKey) || '{}')
-          sess.accepted = true
-          sess.startedAt = sess.startedAt || Date.now()
-          sessionStorage.setItem(_sessionKey, JSON.stringify(sess))
-        }
+      const savedSess = _sessionKey ? (() => { try { return JSON.parse(sessionStorage.getItem(_sessionKey) || 'null') } catch { return null } })() : null
+      
+      // Voice cloning setup is now handled server-side via CARTESIA_VOICE_ID env var.
+      // Skip the setup screen and go directly to the first question.
+      if (!savedSess?.accepted && questions.length > 0) {
+        speakAIQuestion(questions[0].text || questions[0].question || questions[0].prompt || '')
+      }
 
       })
     } catch (err) {

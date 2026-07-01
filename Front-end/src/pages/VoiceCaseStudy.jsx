@@ -296,7 +296,13 @@ export default function VoiceCaseStudy({
       const res = await fetch(`${API_BASE_URL}/tts`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ text, voice: 'shimmer', language: sessionLang })
+        body: JSON.stringify({ 
+          text, 
+          voice: 'shimmer', 
+          language: sessionLang,
+          use_custom_voice: !!sessionDetail?.voice_clone,
+          ...(sessionDetail?.custom_voice_id ? { voice_id: sessionDetail.custom_voice_id } : {})
+        })
       })
       if (!res.ok) throw new Error('TTS Failed')
       const blob = await res.blob()
@@ -384,7 +390,7 @@ export default function VoiceCaseStudy({
           clearTimeout(silenceTimerRef.current)
           silenceTimerRef.current = setTimeout(() => {
             if (mediaRecorder.state !== 'inactive') mediaRecorder.stop()
-          }, 5000)
+          }, 15000)  // 15s grace after last detected speech
         }
         recognition.start()
       }
@@ -431,7 +437,7 @@ export default function VoiceCaseStudy({
       clearTimeout(silenceTimerRef.current)
       silenceTimerRef.current = setTimeout(() => {
         if (mediaRecorder.state !== 'inactive') mediaRecorder.stop()
-      }, 5000)
+      }, 15000)  // 15s initial grace period before first speech
 
     } catch (err) {
       console.error("Mic access denied or error:", err)

@@ -23,6 +23,7 @@ import traceback
 from collections import defaultdict
 from datetime import datetime, timedelta, timezone
 from typing import Any, Dict, List, Optional
+from app.services import parse_iso_datetime
 
 sys.stdout.reconfigure(encoding='utf-8')
 sys.stderr.reconfigure(encoding='utf-8')
@@ -85,11 +86,11 @@ router = APIRouter()
 
 
 @router.get("/admin/last-error")
-async def get_last_error():
+def get_last_error():
     return LAST_422_ERROR or {"status": "no errors"}
 
 @router.get("/api/plans")
-async def get_plans():
+def get_plans():
     plans_list = []
     try:
         plans_cursor = plans_collection.find({})
@@ -316,7 +317,7 @@ def api_gen_next_question(req: NextQuestionRequest):
 
 @router.post("/upload-resume")
 @router.post("/upload-resume/")
-async def upload_resume(
+def upload_resume(
     file: UploadFile = File(...),
     source: str = Form("resume")
 ):
@@ -331,7 +332,7 @@ async def upload_resume(
         print(f"Uploading resume with source: {source}")
 
         # Read file content
-        content = await file.read()
+        content = file.file.read()
 
         # Extract text based on file type
         content_str = extract_text_from_file(content, file.filename)
@@ -389,7 +390,7 @@ async def upload_resume(
 
 @router.post("/start-interview")
 @router.post("/start-interview/")
-async def start_interview(
+def start_interview(
     content: str = Form(...),
     source: str = Form("resume")
 ):
@@ -440,7 +441,7 @@ async def start_interview(
         raise HTTPException(status_code=500, detail=str(e))
 
 @router.get("/interview/{interview_id}/question/{question_id}")
-async def get_question(interview_id: str, question_id: int):
+def get_question(interview_id: str, question_id: int):
     # Restore from DB if not in RAM
     if interview_id not in interviews:
         row = interviews_collection.find_one({"id": interview_id})
@@ -477,7 +478,7 @@ async def get_question(interview_id: str, question_id: int):
 # Add this import at the top
 
 @router.post("/upload-answer")
-async def upload_answer(
+def upload_answer(
     interview_id: str = Form(...),
     question_id: int = Form(...),
     video: UploadFile = File(...)
@@ -487,7 +488,7 @@ async def upload_answer(
     raise HTTPException(status_code=501, detail="Upload answer with video is not implemented yet.")
 
 @router.get("/interview/{interview_id}/summary")
-async def get_interview_summary(interview_id: str):
+def get_interview_summary(interview_id: str):
     """Get a summary of the interview including all questions and answers."""
     if interview_id not in interviews:
         raise HTTPException(status_code=404, detail="Interview not found")
@@ -530,7 +531,7 @@ class AnswerRequest(BaseModel):
 
 
 @router.post("/save-answer")
-async def save_answer(
+def save_answer(
     interview_id: str = Form(...),
     question_id: int = Form(...),
     question_text: str = Form(...),
@@ -1575,9 +1576,13 @@ def get_interview_details(link_id: str):
     # If the interview ended early, only show questions up to the last one attempted
     # so that unreached questions don't appear as "Not Answered"
     if all_questions and results:
-        max_answered_id = max((r.get("question_id", 0) for r in results if r), default=0)
+        def _safe_int(val):
+            try: return int(val)
+            except: return 0
+            
+        max_answered_id = max((_safe_int(r.get("question_id", 0)) for r in results if r), default=0)
         if max_answered_id > 0:
-            response_payload["all_questions"] = [q for q in all_questions if (q.get("id") or 0) <= max_answered_id]
+            response_payload["all_questions"] = [q for q in all_questions if _safe_int(q.get("id")) <= max_answered_id]
 
 
     if actual_interview_id:
@@ -1636,7 +1641,7 @@ def analyze(req: AnalyzeRequest):
     return result
 
 @router.post("/upload-full-recording")
-async def upload_full_recording(
+def upload_full_recording(
     interview_id: str = Form(...),
     link_id: Optional[str] = Form(None),
     recording_type: Optional[str] = Form("camera"),
@@ -2080,7 +2085,7 @@ async def get_dashboard_stats(admin_id: Optional[str] = None, current_admin: dic
 
 # ── Task 2: Export Sessions Data Endpoint ───────────────────────────────────
 @router.get("/admin/export-sessions")
-async def export_sessions(current_admin: dict = Depends(get_current_admin_details), status_filter: str = ""):
+def export_sessions(current_admin: dict = Depends(get_current_admin_details), status_filter: str = ""):
     """Return session data for Excel export, filtered by status."""
     admin_id = current_admin["admin_id"]
     company_id = current_admin.get("company_id")
@@ -2295,7 +2300,7 @@ async def startup_event_db_and_email():
         EMAIL_SCHEDULER_STARTED = True
 
 @router.get("/api/interview/{interview_id}/insights")
-async def get_interview_insights(interview_id: str):
+def get_interview_insights(interview_id: str):
     answers = list(answers_collection.find({"interview_id": interview_id}))
     
     if not answers:
@@ -2327,7 +2332,7 @@ async def get_interview_insights(interview_id: str):
     }
 
 @router.post("/admin/forgot-password")
-async def forgot_password(data: ForgotPasswordRequest):
+def forgot_password(data: ForgotPasswordRequest):
     user = admins_collection.find_one({"username": data.username, "email": data.email})
     if not user:
         raise HTTPException(status_code=404, detail="Username and email do not match our records.")
@@ -2345,7 +2350,7 @@ async def forgot_password(data: ForgotPasswordRequest):
         raise HTTPException(status_code=500, detail="Failed to send OTP. Please try again later.")
 
 @router.post("/admin/verify-otp")
-async def verify_otp(data: VerifyOTPRequest):
+def verify_otp(data: VerifyOTPRequest):
     row = admins_collection.find_one({"username": data.username})
     if not row or not row.get("otp"):
         raise HTTPException(status_code=400, detail="No OTP found for this user.")
@@ -2369,7 +2374,7 @@ async def verify_otp(data: VerifyOTPRequest):
     return {"status": "success", "message": "OTP verified successfully."}
 
 @router.post("/admin/reset-password")
-async def reset_password(data: ResetPasswordRequest):
+def reset_password(data: ResetPasswordRequest):
     # Verify OTP one last time for safety
     row = admins_collection.find_one({"username": data.username})
     if not row:
@@ -2433,7 +2438,7 @@ def send_otp_email(email: str, name: str, otp: str):
         raise HTTPException(status_code=401, detail="Invalid credentials")
 
 @router.post("/admin/profile")
-async def update_profile(data: UpdateProfileRequest, current_admin: str = Depends(get_current_admin)):
+def update_profile(data: UpdateProfileRequest, current_admin: str = Depends(get_current_admin)):
     try:
         from bson import ObjectId
         
@@ -2481,7 +2486,7 @@ async def update_profile(data: UpdateProfileRequest, current_admin: str = Depend
 @router.post("/superadmin/profile/image")
 @router.post("/api/admin/profile/image")
 @router.post("/admin/profile/image")
-async def upload_profile_image(
+def upload_profile_image(
     admin_id: str = Form(...),
     file: UploadFile = File(...),
     current_admin: dict = Depends(get_current_admin_details)
@@ -2555,7 +2560,7 @@ def extract_info_from_resume(text: str) -> Dict:
         return {"name": name, "email": email}
 
 @router.post("/admin/parse-resume")
-async def parse_resume(file: UploadFile = File(...)):
+def parse_resume(file: UploadFile = File(...)):
     ALLOWED_MIMES = ["application/pdf", "application/vnd.openxmlformats-officedocument.wordprocessingml.document", "application/msword", "text/plain"]
     if file.content_type and file.content_type not in ALLOWED_MIMES:
         raise HTTPException(status_code=400, detail="Invalid file type. Only PDF, DOCX, and TXT are allowed for security reasons.")
@@ -2563,7 +2568,7 @@ async def parse_resume(file: UploadFile = File(...)):
     if getattr(file, "size", 0) and file.size > 10 * 1024 * 1024:
         raise HTTPException(status_code=413, detail="File too large. Maximum size is 10MB.")
         
-    content = await file.read()
+    content = file.file.read()
     text = extract_text_from_file(content, file.filename)
     info = extract_info_from_resume(text)
     return {
@@ -2574,7 +2579,7 @@ async def parse_resume(file: UploadFile = File(...)):
     }
 
 @router.get("/admin/candidate/check")
-async def check_candidate(email: str, current_admin: dict = Depends(get_current_admin_details)):
+def check_candidate(email: str, current_admin: dict = Depends(get_current_admin_details)):
     try:
         # Check if candidate exists for this company
         session = interview_sessions_collection.find_one(
@@ -2592,7 +2597,7 @@ async def check_candidate(email: str, current_admin: dict = Depends(get_current_
         return {"exists": False, "error": str(e)}
 
 @router.post("/admin/create-session")
-async def create_session(data: CreateSession, current_admin: dict = Depends(get_current_admin_details)):
+def create_session(data: CreateSession, current_admin: dict = Depends(get_current_admin_details)):
     plan_context = get_admin_plan_context(current_admin)
     if plan_context.get("credits", 0) <= 0:
         raise HTTPException(status_code=403, detail="Company has insufficient credits to create a session")
@@ -2637,7 +2642,8 @@ async def create_session(data: CreateSession, current_admin: dict = Depends(get_
         "ai_instructions": data.ai_instructions,
         "case_study_count": data.case_study_count,
         "industry": data.industry,
-        "voice_clone": data.voice_clone
+        "voice_clone": data.voice_clone,
+        "custom_voice_id": data.custom_voice_id
     }
     
     # Task 4: Store scheduled time window
@@ -2698,20 +2704,29 @@ class BulkCreateSession(BaseModel):
     custom_questions: str = ""
     ai_instructions: str = ""
     voice_clone: bool = False
+    custom_voice_id: str = ""
 
 @router.post("/admin/bulk-create-sessions")
-async def bulk_create_sessions(data: BulkCreateSession, current_admin: dict = Depends(get_current_admin_details)):
+def bulk_create_sessions(data: BulkCreateSession, current_admin: dict = Depends(get_current_admin_details)):
     from bson import ObjectId
+    from bson.errors import InvalidId
+    
     # ENFORCE SUBSCRIPTION PLAN
-    admin_user = admins_collection.find_one({"_id": ObjectId(data.admin_id)})
-    if not admin_user:
-        raise HTTPException(status_code=404, detail="Admin not found")
-    if admin_user.get("role") != "master":
-        require_admin_capability(
-            data.admin_id,
-            "bulk_interviews",
-            "Bulk interviews require the Advance subscription plan. Please upgrade to continue.",
-        )
+    if current_admin.get("role") not in ["super_admin", "master"]:
+        try:
+            admin_oid = ObjectId(data.admin_id)
+        except InvalidId:
+            raise HTTPException(status_code=400, detail="Invalid admin ID format")
+            
+        admin_user = admins_collection.find_one({"_id": admin_oid})
+        if not admin_user:
+            raise HTTPException(status_code=404, detail="Admin not found")
+        if admin_user.get("role") != "master":
+            require_admin_capability(
+                data.admin_id,
+                "bulk_interviews",
+                "Bulk interviews require the Advance subscription plan. Please upgrade to continue.",
+            )
 
     """
     Create interview sessions for multiple candidates at once.
@@ -2853,7 +2868,7 @@ async def bulk_create_sessions(data: BulkCreateSession, current_admin: dict = De
 
 
 @router.get("/session/{link_id}")
-async def get_session(link_id: str):
+def get_session(link_id: str):
     row = interview_sessions_collection.find_one({"link_id": link_id})
     if row:
         expires_at = row.get("expires_at")
@@ -2909,7 +2924,7 @@ async def get_session(link_id: str):
     else:
         raise HTTPException(status_code=404, detail="Session not found")
 @router.get("/admin/sessions")
-async def get_all_sessions(
+def get_all_sessions(
     current_admin: dict = Depends(get_current_admin_details), 
     start_date: Optional[str] = None, 
     end_date: Optional[str] = None, 
@@ -3021,7 +3036,7 @@ async def get_all_sessions(
     return {"status": "success", "sessions": sessions}
 
 @router.delete("/admin/sessions/{link_id}")
-async def delete_session(link_id: str, current_admin: dict = Depends(require_role("admin", "super_admin"))):
+def delete_session(link_id: str, current_admin: dict = Depends(require_role("admin", "super_admin"))):
     row = interview_sessions_collection.find_one({"link_id": link_id})
     if not row:
         raise HTTPException(status_code=404, detail="Session not found")
@@ -3043,7 +3058,7 @@ async def delete_session(link_id: str, current_admin: dict = Depends(require_rol
     return {"status": "success", "message": "Session deleted"}
 
 @router.post("/admin/sessions/{link_id}/deactivate")
-async def deactivate_session(link_id: str, current_admin: dict = Depends(require_role("admin", "super_admin"))):
+def deactivate_session(link_id: str, current_admin: dict = Depends(require_role("admin", "super_admin"))):
     row = interview_sessions_collection.find_one({"link_id": link_id})
     if not row:
         raise HTTPException(status_code=404, detail="Session not found")
@@ -3054,7 +3069,7 @@ async def deactivate_session(link_id: str, current_admin: dict = Depends(require
     return {"status": "success"}
 
 @router.post("/admin/sessions/{link_id}/activate")
-async def activate_session(link_id: str, current_admin: dict = Depends(require_role("admin", "super_admin"))):
+def activate_session(link_id: str, current_admin: dict = Depends(require_role("admin", "super_admin"))):
     row = interview_sessions_collection.find_one({"link_id": link_id})
     if not row:
         raise HTTPException(status_code=404, detail="Session not found")
@@ -3065,7 +3080,7 @@ async def activate_session(link_id: str, current_admin: dict = Depends(require_r
     return {"status": "success"}
 
 @router.post("/admin/sessions/{link_id}/reschedule")
-async def reschedule_session(link_id: str, new_expiry: str = Form(...), current_admin: dict = Depends(require_role("admin", "super_admin"))):
+def reschedule_session(link_id: str, new_expiry: str = Form(...), current_admin: dict = Depends(require_role("admin", "super_admin"))):
     """
     Reschedule an interview by updating its expires_at date 
     and resetting its status to pending (if it was expired).
@@ -3105,7 +3120,7 @@ async def reschedule_session(link_id: str, new_expiry: str = Form(...), current_
     }
 
 @router.post("/start-session-interview")
-async def start_session_interview(link_id: str = Form(...)):
+def start_session_interview(link_id: str = Form(...)):
     row = interview_sessions_collection.find_one({"link_id": link_id})
     
     if not row:
@@ -3383,7 +3398,7 @@ async def start_session_interview(link_id: str = Form(...)):
     }
 
 @router.post("/session/{interview_id}/violation")
-async def log_violation(interview_id: str, violation: ViolationRequest):
+def log_violation(interview_id: str, violation: ViolationRequest):
     print(f" VIOLATION detected for session {interview_id}: {violation.type} (#{violation.count}) at {violation.timestamp}")
     try:
         interview_sessions_collection.update_one(
@@ -3397,7 +3412,7 @@ async def log_violation(interview_id: str, violation: ViolationRequest):
 
 @router.post("/admin/update-decision")
 @router.post("/admin/update_decision")
-async def update_decision(data: DecisionRequest, current_admin: dict = Depends(require_role("admin", "super_admin"))):
+def update_decision(data: DecisionRequest, current_admin: dict = Depends(require_role("admin", "super_admin"))):
     print(f" Decision Update Request: link_id={data.link_id}, decision={data.decision}")
     try:
         # 1. Fetch candidate details for email
@@ -3494,7 +3509,7 @@ class CopilotRequest(BaseModel):
     admin_id: Optional[str] = None
 
 @router.post("/admin/copilot")
-async def admin_copilot_chat(request: CopilotRequest, current_admin: dict = Depends(get_current_admin_details)):
+def admin_copilot_chat(request: CopilotRequest, current_admin: dict = Depends(get_current_admin_details)):
     try:
         from ai_client import chat_completion
         
@@ -3640,7 +3655,7 @@ class CopilotExecuteRequest(BaseModel):
     data: dict
 
 @router.post("/admin/copilot/execute")
-async def admin_copilot_execute(request: CopilotExecuteRequest, current_admin: dict = Depends(get_current_admin_details)):
+def admin_copilot_execute(request: CopilotExecuteRequest, current_admin: dict = Depends(get_current_admin_details)):
     try:
         role = current_admin.get("role", "admin")
         admin_id = current_admin.get("admin_id")
@@ -3709,7 +3724,7 @@ class ATSRequest(BaseModel):
     jd_text: str
 
 @router.post("/admin/ats-score")
-async def calculate_ats_score(request: ATSRequest):
+def calculate_ats_score(request: ATSRequest):
     try:
         resume_text = request.resume_text.strip()
         jd_text = request.jd_text.strip()
@@ -3818,7 +3833,7 @@ class CandidateFeedbackRequest(BaseModel):
     feedback_text: str
 
 @router.post("/submit-feedback/{link_id}")
-async def submit_feedback(link_id: str, payload: CandidateFeedbackRequest):
+def submit_feedback(link_id: str, payload: CandidateFeedbackRequest):
     """Save candidate feedback into the interview session."""
     try:
         session = interview_sessions_collection.find_one({"link_id": link_id})
@@ -3835,7 +3850,7 @@ async def submit_feedback(link_id: str, payload: CandidateFeedbackRequest):
         raise HTTPException(status_code=500, detail=str(e))
 
 @router.post("/complete-session/{link_id}")
-async def complete_session(link_id: str, warnings: int = 0, reason: str = "normal"):
+def complete_session(link_id: str, warnings: int = 0, reason: str = "normal"):
     """Mark a session as completed and send notification emails (Task 3)."""
     try:
         session = interview_sessions_collection.find_one({"link_id": link_id})
@@ -4015,7 +4030,7 @@ async def get_live_snapshot(link_id: str):
 
 
 @router.get("/admin/ongoing-interviews")
-async def get_ongoing_interviews(admin_id: Optional[str] = None, current_admin: dict = Depends(get_current_admin_details)):
+def get_ongoing_interviews(admin_id: Optional[str] = None, current_admin: dict = Depends(get_current_admin_details)):
     """Return all in-progress (status=started) sessions for this admin with live status."""
     admin_uuid = current_admin["admin_id"]
     require_admin_capability(
@@ -4188,7 +4203,7 @@ async def webrtc_endpoint(websocket: WebSocket, role: str, link_id: str, token: 
 # MASTER & SUBSCRIPTION APIs
 # --------------------------------------------------------------------------------
 @router.post("/master/login")
-async def master_login(data: AdminLogin):
+def master_login(data: AdminLogin):
     user = admins_collection.find_one({"username": data.username, "role": "master"})
     if not user:
         raise HTTPException(status_code=401, detail="Invalid master credentials")
@@ -4205,7 +4220,7 @@ async def master_login(data: AdminLogin):
     }
 
 @router.get("/master/companies")
-async def get_companies(master_id: str = Depends(get_current_admin)):
+def get_companies(master_id: str = Depends(get_current_admin)):
     require_master_user(master_id)
         
     companies = list(companies_collection.find())
@@ -4255,7 +4270,7 @@ async def get_companies(master_id: str = Depends(get_current_admin)):
     return {"status": "success", "data": result}
 
 @router.post("/master/tenants")
-async def create_tenant(data: TenantCreate, master_id: str = Depends(get_current_admin), current_admin: str = Depends(get_current_admin)):
+def create_tenant(data: TenantCreate, master_id: str = Depends(get_current_admin), current_admin: str = Depends(get_current_admin)):
     require_master_user(master_id)
         
     if admins_collection.find_one({"username": data.username}):
@@ -4307,7 +4322,7 @@ async def create_tenant(data: TenantCreate, master_id: str = Depends(get_current
     return {"status": "success", "message": "Tenant created successfully"}
 
 @router.put("/master/companies/{company_id}")
-async def update_company(company_id: str, data: TenantUpdate, master_id: str = Depends(get_current_admin)):
+def update_company(company_id: str, data: TenantUpdate, master_id: str = Depends(get_current_admin)):
     require_master_user(master_id)
         
     company = companies_collection.find_one({"_id": ObjectId(company_id)})
@@ -4338,7 +4353,7 @@ async def update_company(company_id: str, data: TenantUpdate, master_id: str = D
     return {"status": "success", "message": "Company updated successfully"}
 
 @router.post("/master/companies/{company_id}/login")
-async def set_company_login(company_id: str, payload: Dict[str, bool], master_id: str = Depends(get_current_admin)):
+def set_company_login(company_id: str, payload: Dict[str, bool], master_id: str = Depends(get_current_admin)):
     require_master_user(master_id)
     enabled = bool(payload.get("login_enabled", True))
     result = admins_collection.update_many(
@@ -4350,7 +4365,7 @@ async def set_company_login(company_id: str, payload: Dict[str, bool], master_id
     return {"status": "success", "message": "Tenant login updated", "login_enabled": enabled}
 
 @router.delete("/master/companies/{company_id}")
-async def delete_company(company_id: str, master_id: str = Depends(get_current_admin)):
+def delete_company(company_id: str, master_id: str = Depends(get_current_admin)):
     require_master_user(master_id)
     company = companies_collection.find_one({"_id": ObjectId(company_id)})
     if not company:
@@ -4377,7 +4392,7 @@ async def delete_company(company_id: str, master_id: str = Depends(get_current_a
 # --------------------------------------------------------------------------------
 
 @router.get("/api/notifications")
-async def get_notifications(current_admin: dict = Depends(get_current_admin_details)):
+def get_notifications(current_admin: dict = Depends(get_current_admin_details)):
     role = current_admin["role"]
     company_id = current_admin["company_id"]
     
@@ -4492,7 +4507,7 @@ async def get_notifications(current_admin: dict = Depends(get_current_admin_deta
     return {"status": "success", "data": notifications}
 
 @router.put("/api/notifications/{notification_id}/read")
-async def mark_notification_read(notification_id: str, current_admin: dict = Depends(get_current_admin_details)):
+def mark_notification_read(notification_id: str, current_admin: dict = Depends(get_current_admin_details)):
     role = current_admin["role"]
     company_id = current_admin["company_id"]
     
@@ -4515,7 +4530,7 @@ async def mark_notification_read(notification_id: str, current_admin: dict = Dep
     return {"status": "success", "message": "Notification marked as read"}
 
 @router.post("/api/notifications/read-all")
-async def mark_all_notifications_read(current_admin: dict = Depends(get_current_admin_details)):
+def mark_all_notifications_read(current_admin: dict = Depends(get_current_admin_details)):
     role = current_admin["role"]
     company_id = current_admin["company_id"]
     
@@ -4530,7 +4545,7 @@ async def mark_all_notifications_read(current_admin: dict = Depends(get_current_
     return {"status": "success", "message": "All notifications marked as read"}
 
 @router.delete("/api/notifications/{notification_id}")
-async def delete_master_notification(notification_id: str, current_admin: dict = Depends(get_current_admin_details)):
+def delete_master_notification(notification_id: str, current_admin: dict = Depends(get_current_admin_details)):
     role = current_admin["role"]
     company_id = current_admin["company_id"]
     
@@ -4554,7 +4569,7 @@ class FirebaseAuthRequest(BaseModel):
     name: str = ""
 
 @router.post("/admin/firebase-auth")
-async def firebase_auth(data: FirebaseAuthRequest):
+def firebase_auth(data: FirebaseAuthRequest):
     normalized_email = data.email.strip().lower()
     
     # Try email match first, then username match
@@ -4623,7 +4638,7 @@ async def firebase_auth(data: FirebaseAuthRequest):
     }
 
 @router.post("/admin/login")
-async def admin_login(data: AdminLogin):
+def admin_login(data: AdminLogin):
     # Try username match first, then email match (for self-registered users)
     user = admins_collection.find_one({"username": data.username, "role": {"$ne": "master"}})
     if not user:
@@ -4725,7 +4740,7 @@ class RazorpayUpgradeVerifyRequest(BaseModel):
 
 
 @router.get("/master/plans")
-async def get_all_plans_master(master_id: str = Depends(get_current_admin)):
+def get_all_plans_master(master_id: str = Depends(get_current_admin)):
     """Master-only: fetch ALL plans including owner"""
     master = admins_collection.find_one({"_id": ObjectId(master_id), "role": "master"})
     if not master:
@@ -4737,7 +4752,7 @@ async def get_all_plans_master(master_id: str = Depends(get_current_admin)):
     return {"status": "success", "data": result}
 
 @router.post("/master/plans")
-async def upsert_plan(data: PlanUpdate, master_id: str = Depends(get_current_admin), current_admin: str = Depends(get_current_admin)):
+def upsert_plan(data: PlanUpdate, master_id: str = Depends(get_current_admin), current_admin: str = Depends(get_current_admin)):
     """Master-only: create or update a plan"""
     master = admins_collection.find_one({"_id": ObjectId(master_id), "role": "master"})
     if not master:
@@ -4758,7 +4773,7 @@ async def upsert_plan(data: PlanUpdate, master_id: str = Depends(get_current_adm
     return {"status": "success", "message": f"Plan '{data.plan_name}' saved"}
 
 @router.delete("/master/plans/{plan_id}")
-async def delete_plan(plan_id: str, master_id: str = Depends(get_current_admin)):
+def delete_plan(plan_id: str, master_id: str = Depends(get_current_admin)):
     """Master-only: delete a plan"""
     master = admins_collection.find_one({"_id": ObjectId(master_id), "role": "master"})
     if not master:
@@ -4776,7 +4791,7 @@ async def delete_plan(plan_id: str, master_id: str = Depends(get_current_admin))
 # --------------------------------------------------------------------------------
 
 @router.post("/api/register")
-async def register_admin(data: AdminRegister):
+def register_admin(data: AdminRegister):
     """Public: Self-register from landing page pricing cards"""
     normalized_email = data.email.strip().lower()
     normalized_name = data.name.strip()
@@ -4852,7 +4867,7 @@ def validate_signup_form(signup_form: dict):
     }
 
 @router.post("/api/razorpay/create-order")
-async def create_razorpay_order(data: RazorpayOrderRequest):
+def create_razorpay_order(data: RazorpayOrderRequest):
     """Create a Razorpay order for a paid subscription."""
     key_id, key_secret = get_razorpay_credentials()
     signup = validate_signup_form(data.signup_form or {})
@@ -4922,7 +4937,7 @@ async def create_razorpay_order(data: RazorpayOrderRequest):
         raise HTTPException(status_code=500, detail=f"Unable to initialize Razorpay payment: {str(exc)}")
 
 @router.post("/api/razorpay/verify-payment")
-async def verify_razorpay_payment(data: RazorpayVerifyRequest):
+def verify_razorpay_payment(data: RazorpayVerifyRequest):
     """Verify Razorpay signature and activate the paid subscription."""
     _, key_secret = get_razorpay_credentials()
     signup = validate_signup_form(data.signup_form or {})
@@ -5032,7 +5047,7 @@ async def verify_razorpay_payment(data: RazorpayVerifyRequest):
 
 
 @router.post("/api/razorpay/create-upgrade-order")
-async def create_razorpay_upgrade_order(data: RazorpayUpgradeOrderRequest):
+def create_razorpay_upgrade_order(data: RazorpayUpgradeOrderRequest):
     """Create a Razorpay order for purchasing credits / upgrading."""
     key_id, key_secret = get_razorpay_credentials()
     admin = admins_collection.find_one({"_id": ObjectId(data.admin_id)})
@@ -5079,7 +5094,7 @@ async def create_razorpay_upgrade_order(data: RazorpayUpgradeOrderRequest):
         raise HTTPException(status_code=500, detail=str(e))
 
 @router.post("/api/razorpay/verify-upgrade")
-async def verify_razorpay_upgrade(data: RazorpayUpgradeVerifyRequest):
+def verify_razorpay_upgrade(data: RazorpayUpgradeVerifyRequest):
     """Verify Razorpay signature and add credits to the user/company."""
     key_id, key_secret = get_razorpay_credentials()
     
@@ -5147,7 +5162,7 @@ async def verify_razorpay_upgrade(data: RazorpayUpgradeVerifyRequest):
 # --------------------------------------------------------------------------------
 
 @router.post("/api/stripe/create-checkout-session")
-async def create_stripe_checkout(data: StripeCheckoutRequest):
+def create_stripe_checkout(data: StripeCheckoutRequest):
     """Create a Stripe Checkout session for paid plan subscription"""
     import stripe
     
@@ -5264,7 +5279,7 @@ async def stripe_webhook(request):
 # --------------------------------------------------------------------------------
 
 @router.get("/master/admins")
-async def get_all_admins(master_id: str = Depends(get_current_admin)):
+def get_all_admins(master_id: str = Depends(get_current_admin)):
     """Master-only: Get all admins with subscription & revenue stats"""
     master = admins_collection.find_one({"_id": ObjectId(master_id), "role": "master"})
     if not master:
@@ -5321,7 +5336,7 @@ async def get_all_admins(master_id: str = Depends(get_current_admin)):
     }
 
 @router.put("/master/admins/{admin_id}/toggle-login")
-async def toggle_admin_login(admin_id: str, master_id: str = Depends(get_current_admin)):
+def toggle_admin_login(admin_id: str, master_id: str = Depends(get_current_admin)):
     """Master-only: Enable/disable an admin's login access"""
     master = admins_collection.find_one({"_id": ObjectId(master_id), "role": "master"})
     if not master:
@@ -5343,7 +5358,7 @@ async def toggle_admin_login(admin_id: str, master_id: str = Depends(get_current
 # --------------------------------------------------------------------------------
 
 @router.get("/super-admin/admins")
-async def get_sub_admins(current_admin: dict = Depends(get_current_admin_details)):
+def get_sub_admins(current_admin: dict = Depends(get_current_admin_details)):
     if current_admin.get("role") != "super_admin":
         raise HTTPException(status_code=403, detail="Super Admin access required")
     company_id = current_admin.get("company_id")
@@ -5362,7 +5377,7 @@ async def get_sub_admins(current_admin: dict = Depends(get_current_admin_details
     return {"status": "success", "data": admins}
 
 @router.post("/super-admin/admins")
-async def create_sub_admin(data: SubAdminCreate, current_admin: dict = Depends(get_current_admin_details)):
+def create_sub_admin(data: SubAdminCreate, current_admin: dict = Depends(get_current_admin_details)):
     if current_admin.get("role") != "super_admin":
         raise HTTPException(status_code=403, detail="Super Admin access required")
     company_id = current_admin.get("company_id")
@@ -5389,7 +5404,7 @@ async def create_sub_admin(data: SubAdminCreate, current_admin: dict = Depends(g
     return {"status": "success", "message": "Sub-admin created successfully"}
 
 @router.post("/super-admin/admins/{admin_id}/toggle-status")
-async def toggle_sub_admin_status(admin_id: str, current_admin: dict = Depends(get_current_admin_details)):
+def toggle_sub_admin_status(admin_id: str, current_admin: dict = Depends(get_current_admin_details)):
     if current_admin.get("role") != "super_admin":
         raise HTTPException(status_code=403, detail="Super Admin access required")
     company_id = current_admin.get("company_id")
@@ -5403,7 +5418,7 @@ async def toggle_sub_admin_status(admin_id: str, current_admin: dict = Depends(g
     return {"status": "success", "login_enabled": new_status}
 
 @router.delete("/super-admin/admins/{admin_id}")
-async def delete_sub_admin(admin_id: str, current_admin: dict = Depends(get_current_admin_details)):
+def delete_sub_admin(admin_id: str, current_admin: dict = Depends(get_current_admin_details)):
     if current_admin.get("role") != "super_admin":
         raise HTTPException(status_code=403, detail="Super Admin access required")
     company_id = current_admin.get("company_id")
@@ -5417,7 +5432,7 @@ class AddCreditsRequest(BaseModel):
     credits: int
 
 @router.post("/super-admin/admins/{admin_id}/add-credits")
-async def add_sub_admin_credits(admin_id: str, data: AddCreditsRequest, current_admin: dict = Depends(get_current_admin_details)):
+def add_sub_admin_credits(admin_id: str, data: AddCreditsRequest, current_admin: dict = Depends(get_current_admin_details)):
     if current_admin.get("role") != "super_admin":
         raise HTTPException(status_code=403, detail="Super Admin access required")
     company_id = current_admin.get("company_id")
@@ -5432,7 +5447,7 @@ async def add_sub_admin_credits(admin_id: str, data: AddCreditsRequest, current_
 
 
 @router.get("/super-admin/dashboard-stats")
-async def get_super_admin_dashboard_stats(current_admin: dict = Depends(get_current_admin_details)):
+def get_super_admin_dashboard_stats(current_admin: dict = Depends(get_current_admin_details)):
     if current_admin.get("role") != "super_admin":
         raise HTTPException(status_code=403, detail="Super Admin access required")
     company_id = current_admin.get("company_id")
@@ -5498,7 +5513,7 @@ async def get_super_admin_dashboard_stats(current_admin: dict = Depends(get_curr
 # --------------------------------------------------------------------------------
 
 @router.post("/admin/credit-requests")
-async def request_credits(data: CreditRequestCreate, current_admin: dict = Depends(get_current_admin_details)):
+def request_credits(data: CreditRequestCreate, current_admin: dict = Depends(get_current_admin_details)):
     if current_admin.get("role") != "admin":
         raise HTTPException(status_code=403, detail="Only tenant admins can request credits")
         
@@ -5535,7 +5550,7 @@ async def request_credits(data: CreditRequestCreate, current_admin: dict = Depen
     return {"status": "success", "message": "Credit request submitted successfully"}
 
 @router.get("/super-admin/credit-requests")
-async def get_credit_requests(current_admin: dict = Depends(get_current_admin_details)):
+def get_credit_requests(current_admin: dict = Depends(get_current_admin_details)):
     if current_admin.get("role") != "super_admin":
         raise HTTPException(status_code=403, detail="Super Admin access required")
         
@@ -5556,7 +5571,7 @@ async def get_credit_requests(current_admin: dict = Depends(get_current_admin_de
     return {"status": "success", "data": requests}
 
 @router.put("/super-admin/credit-requests/{request_id}")
-async def update_credit_request(request_id: str, data: CreditRequestUpdate, current_admin: dict = Depends(get_current_admin_details)):
+def update_credit_request(request_id: str, data: CreditRequestUpdate, current_admin: dict = Depends(get_current_admin_details)):
     if current_admin.get("role") != "super_admin":
         raise HTTPException(status_code=403, detail="Super Admin access required")
         
@@ -5907,13 +5922,13 @@ async def superadmin_interview_create(data: dict, current_admin: dict = Depends(
             bulk_data = BulkCreateSession(**data)
         except Exception as e:
             raise HTTPException(status_code=422, detail=str(e))
-        return await bulk_create_sessions(bulk_data, current_admin)
+        return bulk_create_sessions(bulk_data, current_admin)
     else:
         try:
             single_data = CreateSession(**data)
         except Exception as e:
             raise HTTPException(status_code=422, detail=str(e))
-        return await create_session(single_data, current_admin)
+        return create_session(single_data, current_admin)
 
 @router.get("/api/superadmin/profile")
 @router.get("/superadmin/profile")
@@ -5980,22 +5995,53 @@ class TTSRequest(BaseModel):
     voice: str = "nova"
     language: str = "English"
     voice_id: Optional[str] = None   # Per-session cloned voice override
+    use_custom_voice: bool = True    # Flag to determine if Cartesia should be used
 
+@router.get("/admin/voices")
+def get_admin_voices(current_admin: dict = Depends(get_current_admin_details)):
+    """
+    Returns available Cartesia custom voices configured in the backend .env file.
+    Keys like CARTESIA_VOICE_ID and CARTESIA_VOICE_ID_MALE are loaded.
+    """
+    env_path = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), ".env")
+    load_dotenv(env_path, override=True)
+    
+    voices = []
+    
+    # Check for the default one
+    default_voice_id = os.getenv("CARTESIA_VOICE_ID")
+    if default_voice_id:
+        voices.append({"name": "Default Voice", "id": default_voice_id})
+        
+    # Check for anything starting with CARTESIA_VOICE_ID_
+    for key, value in os.environ.items():
+        if key.startswith("CARTESIA_VOICE_ID_") and value:
+            # e.g., CARTESIA_VOICE_ID_MALE -> "Male"
+            name_part = key.replace("CARTESIA_VOICE_ID_", "").replace("_", " ").title()
+            voices.append({"name": name_part, "id": value})
+            
+    return {"status": "success", "voices": voices}
 
 @router.post("/voice-clone-instant")
 async def voice_clone_instant(audio: UploadFile = File(...), voice_name: Optional[str] = "CandidateVoice"):
     """
-    ElevenLabs Instant Voice Cloning endpoint.
-    Accepts a short audio sample (webm/mp3/wav), sends it to ElevenLabs,
+    Cartesia Instant Voice Cloning endpoint.
+    Accepts a short audio sample (webm/mp3/wav), sends it to Cartesia,
     and returns a temporary voice_id that can be used for the session's TTS calls.
-    Requires ELEVENLABS_API_KEY in the .env file.
+    Requires CARTESIA_API_KEY in the .env file.
     """
     import asyncio
+    try:
+        from cartesia import Cartesia
+    except ImportError:
+        raise HTTPException(status_code=500, detail="Cartesia SDK not installed. Run `pip install cartesia`.")
 
     load_dotenv(os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), ".env"), override=True)
-    api_key = os.getenv("ELEVENLABS_API_KEY", "").strip()
+
+
+    api_key = os.getenv("CARTESIA_API_KEY", "").strip()
     if not api_key:
-        raise HTTPException(status_code=503, detail="ElevenLabs API key not configured. Voice cloning is unavailable.")
+        raise HTTPException(status_code=503, detail="Cartesia API key not configured. Voice cloning is unavailable.")
 
     # Save the uploaded file to a temp location
     ext = "webm"
@@ -6008,32 +6054,29 @@ async def voice_clone_instant(audio: UploadFile = File(...), voice_name: Optiona
             f.write(audio_bytes)
 
         def _do_clone():
-            with open(temp_audio, "rb") as af:
-                response = requests.post(
-                    "https://api.elevenlabs.io/v1/voices/add",
-                    headers={"xi-api-key": api_key},
-                    data={
-                        "name": voice_name or "CandidateVoice",
-                        "description": "Auto-cloned from interview voice sample",
-                        "labels": '{"use_case":"interview","auto_delete":"true"}',
-                    },
-                    files={"files": (f"sample.{ext}", af, f"audio/{ext}")},
-                    timeout=30,
-                )
-            return response
+            client = Cartesia(api_key=api_key)
+            # 1. Clone the embedding from the clip
+            embedding = client.voices.clone(filepath=temp_audio)
+            # 2. Create the actual voice object so we get an ID
+            new_voice = client.voices.create(
+                name=voice_name or "CandidateVoice",
+                description="Auto-cloned from interview voice sample",
+                embedding=embedding
+            )
+            return new_voice
 
-        resp = await asyncio.get_event_loop().run_in_executor(None, _do_clone)
+        new_voice_data = await asyncio.get_event_loop().run_in_executor(None, _do_clone)
+        voice_id = new_voice_data.get("id")
+        
+        if not voice_id:
+            raise Exception("No voice ID returned from Cartesia.")
+            
+        print(f"[VoiceClone] Created Cartesia voice_id={voice_id}")
+        return {"voice_id": voice_id, "status": "success"}
 
-        if resp.status_code == 200:
-            data = resp.json()
-            voice_id = data.get("voice_id")
-            print(f"[VoiceClone] Created voice_id={voice_id}")
-            return {"voice_id": voice_id, "status": "success"}
-        elif resp.status_code == 429:
-            raise HTTPException(status_code=429, detail="ElevenLabs quota exhausted. Voice cloning unavailable.")
-        else:
-            print(f"[VoiceClone] Error {resp.status_code}: {resp.text[:300]}")
-            raise HTTPException(status_code=500, detail=f"ElevenLabs error: {resp.status_code}")
+    except Exception as e:
+        print(f"[VoiceClone] Cartesia Error: {e}")
+        raise HTTPException(status_code=500, detail=f"Cartesia error: {str(e)}")
     finally:
         if os.path.exists(temp_audio):
             os.remove(temp_audio)
@@ -6041,21 +6084,20 @@ async def voice_clone_instant(audio: UploadFile = File(...), voice_name: Optiona
 @router.post("/tts")
 async def generate_tts(req: TTSRequest):
     """
-    Hybrid TTS: ElevenLabs Voice Cloning (primary) → Microsoft Edge TTS (fallback).
+    Hybrid TTS: Cartesia (primary) → Microsoft Edge TTS (fallback).
 
     Strategy:
-    - ElevenLabs is used for English when ELEVENLABS_API_KEY + ELEVENLABS_VOICE_ID are set.
-      The eleven_multilingual_v2 model is used so the cloned voice can handle multilingual text.
-    - Regional languages (Hindi, Telugu, Tamil, Malayalam, Kannada) always route directly to
-      the native Microsoft Edge TTS neural voice for that language, because these voices have
-      superior regional accent accuracy that even ElevenLabs cannot match for Indian scripts.
-    - If ElevenLabs quota is exceeded (HTTP 429), the API key is missing, or any other error
+    - Cartesia is used for English when CARTESIA_API_KEY + CARTESIA_VOICE_ID are set.
+      The sonic model is used for the cloned voice.
+    - Regional languages always route directly to
+      the native Microsoft Edge TTS neural voice for that language.
+    - If Cartesia quota is exceeded, the API key is missing, or any other error
       occurs, the system silently falls back to the free Microsoft Edge TTS voice.
     """
     load_dotenv(os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), ".env"), override=True)
-    elevenlabs_api_key = os.getenv("ELEVENLABS_API_KEY", "").strip()
+    cartesia_api_key = os.getenv("CARTESIA_API_KEY", "").strip()
     # Per-session cloned voice (from /voice-clone-instant) takes priority over the global static voice
-    elevenlabs_voice_id = (req.voice_id or "").strip() or os.getenv("ELEVENLABS_VOICE_ID", "").strip()
+    cartesia_voice_id = (req.voice_id or "").strip() or os.getenv("CARTESIA_VOICE_ID", "").strip()
 
     # ──────────────────────────────────────────────────────────────────────────
     # 1. Build Edge TTS regional voice map (used as fallback AND for regional languages)
@@ -6074,58 +6116,51 @@ async def generate_tts(req: TTSRequest):
     is_regional = requested_lang in edge_language_map and requested_lang != "English"
 
     # ──────────────────────────────────────────────────────────────────────────
-    # 2. ElevenLabs path — only for English (or unsupported languages where Edge
-    #    has no dedicated voice) when keys are configured
+    # 2. Cartesia path — only for English when keys are configured
     # ──────────────────────────────────────────────────────────────────────────
-    used_elevenlabs = False
+    used_cartesia = False
     temp_filename = f"temp_tts_{uuid.uuid4().hex}.mp3"
+    
+    # Determine the actual voice ID to use
+    actual_cartesia_voice_id = req.voice_id if req.voice_id else cartesia_voice_id
 
-    if elevenlabs_api_key and elevenlabs_voice_id and not is_regional:
+    if req.use_custom_voice and cartesia_api_key and actual_cartesia_voice_id and not is_regional:
         try:
-            el_url = f"https://api.elevenlabs.io/v1/text-to-speech/{elevenlabs_voice_id}"
-            el_headers = {
-                "xi-api-key": elevenlabs_api_key,
-                "Content-Type": "application/json",
-                "Accept": "audio/mpeg",
-            }
-            el_payload = {
-                "text": req.text,
-                # eleven_multilingual_v2 handles English + Indian regional scripts if needed
-                "model_id": "eleven_multilingual_v2",
-                "voice_settings": {
-                    "stability": 0.50,
-                    "similarity_boost": 0.80,
-                    "style": 0.20,
-                    "use_speaker_boost": True,
-                },
-            }
-
-            # Run the blocking HTTP call in a thread pool to avoid blocking the async event loop
             import asyncio
-            def _call_elevenlabs():
-                return requests.post(el_url, json=el_payload, headers=el_headers, timeout=15)
+            from cartesia import Cartesia
 
-            el_response = await asyncio.get_event_loop().run_in_executor(None, _call_elevenlabs)
+            def _call_cartesia():
+                client = Cartesia(api_key=cartesia_api_key)
+                result = client.tts.generate(
+                    model_id="sonic-2",
+                    transcript=req.text,
+                    voice={"mode": "id", "id": actual_cartesia_voice_id},
+                    output_format={
+                        "container": "mp3",
+                        "encoding": "mp3",
+                        "sample_rate": 44100,
+                    },
+                )
+                return result.read()
 
-            if el_response.status_code == 200:
+            audio_bytes = await asyncio.get_event_loop().run_in_executor(None, _call_cartesia)
+
+            if audio_bytes:
                 with open(temp_filename, "wb") as f:
-                    f.write(el_response.content)
-                used_elevenlabs = True
-                print(f"[TTS] ElevenLabs: OK ({len(el_response.content)} bytes) | voice={elevenlabs_voice_id}")
-            elif el_response.status_code == 429:
-                # Quota exhausted — log and fall through to Edge TTS fallback
-                print("[TTS] ElevenLabs quota exhausted (429). Falling back to Microsoft Edge TTS.")
+                    f.write(audio_bytes)
+                used_cartesia = True
+                print(f"[TTS] Cartesia: OK ({len(audio_bytes)} bytes) | voice={cartesia_voice_id}")
             else:
-                print(f"[TTS] ElevenLabs error {el_response.status_code}: {el_response.text[:200]}. Falling back to Edge TTS.")
+                print(f"[TTS] Cartesia error: No audio returned. Falling back to Edge TTS.")
 
-        except Exception as el_err:
-            print(f"[TTS] ElevenLabs exception: {el_err}. Falling back to Edge TTS.")
+        except Exception as err:
+            print(f"[TTS] Cartesia exception: {err}. Falling back to Edge TTS.")
 
     # ──────────────────────────────────────────────────────────────────────────
-    # 3. Edge TTS fallback — runs if ElevenLabs was skipped, failed, or quota hit,
-    #    AND always runs for regional languages regardless of ElevenLabs config
+    # 3. Edge TTS fallback — runs if Cartesia was skipped, failed, or quota hit,
+    #    AND always runs for regional languages regardless of Cartesia config
     # ──────────────────────────────────────────────────────────────────────────
-    if not used_elevenlabs:
+    if not used_cartesia:
         try:
             print(f"[TTS] Using Microsoft Edge TTS | voice={edge_voice} | lang={requested_lang}")
             communicate = edge_tts.Communicate(req.text, edge_voice)

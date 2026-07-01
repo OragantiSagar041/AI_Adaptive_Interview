@@ -833,22 +833,22 @@ export function BulkResultsModal({
           </div>
 
           <div className="flex flex-col gap-2.5">
-            <h4 className="text-xs font-bold text-white uppercase tracking-wider">Detailed Logs</h4>
-            <div className="border border-white/5 rounded-xl overflow-hidden bg-slate-900/10">
+            <h4 className="text-xs font-bold text-slate-500 uppercase tracking-wider">Detailed Logs</h4>
+            <div className="border border-slate-200 rounded-xl overflow-hidden bg-white">
               <table className="w-full border-collapse text-left">
                 <thead>
-                  <tr className="bg-slate-900/40 border-b border-white/5 text-slate-400">
+                  <tr className="bg-slate-50 border-b border-slate-200 text-slate-500">
                     <th className="py-2.5 px-4 font-semibold text-xs uppercase tracking-wider">Candidate</th>
                     <th className="py-2.5 px-4 font-semibold text-xs uppercase tracking-wider">Status</th>
                     <th className="py-2.5 px-4 font-semibold text-xs uppercase tracking-wider">Detail / Link</th>
                   </tr>
                 </thead>
-                <tbody className="divide-y divide-white/5">
+                <tbody className="divide-y divide-slate-100">
                   {(bulkResultsData.results || []).map((res, i) => (
                     <tr key={i}>
                       <td className="px-4 py-2.5 text-xs text-slate-300">
-                        <div className="font-bold text-white">{res.name}</div>
-                        <div className="text-slate-400 mt-0.5">{res.email}</div>
+                        <div className="font-bold text-slate-800">{res.candidate_name}</div>
+                        <div className="text-slate-500 mt-0.5">{res.candidate_email}</div>
                       </td>
                       <td className="px-4 py-2.5 text-xs">
                         <Badge variant={res.status === 'success' ? 'success' : 'danger'} text={res.status} />
@@ -858,9 +858,9 @@ export function BulkResultsModal({
                           <div className="flex items-center gap-2">
                             <Button
                               variant="secondary"
-                              className="px-2.5 py-1 text-[0.7rem] h-[24px] border-white/10 hover:bg-white/10"
+                              className="px-2.5 py-1 text-[0.7rem] h-[24px] border-slate-200 hover:bg-slate-50 text-slate-700"
                               onClick={() => {
-                                navigator.clipboard.writeText(res.link)
+                                navigator.clipboard.writeText(res.link_url)
                                 alert("Link copied!")
                               }}
                             >

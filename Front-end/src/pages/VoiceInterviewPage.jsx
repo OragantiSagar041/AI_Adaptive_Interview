@@ -420,6 +420,9 @@ export default function VoiceInterviewPage() {
         setInterviewType(d.interview_type || 'Technical')
         // Read voice_clone flag set by admin when creating the session
         voiceCloningEnabledRef.current = !!(d.voice_clone)
+        if (d.custom_voice_id) {
+          voiceCloneIdRef.current = d.custom_voice_id;
+        }
 
         // Calculate duration based on rounds
         const typeStr = d.interview_type || 'Technical'
@@ -481,7 +484,9 @@ export default function VoiceInterviewPage() {
           text,
           voice: 'shimmer',
           language: languageRef.current,
-          // Pass the per-session cloned voice id if available
+          use_custom_voice: voiceCloningEnabledRef.current,
+          // voice_id from CARTESIA_VOICE_ID env var is used server-side by default
+          // Per-session override only if explicitly set (e.g. future cloning flow)
           ...(voiceCloneIdRef.current ? { voice_id: voiceCloneIdRef.current } : {})
         })
       })
@@ -1383,7 +1388,7 @@ export default function VoiceInterviewPage() {
 
           <button
             disabled={!permissionsGranted}
-            onClick={() => setRound(voiceCloningEnabledRef.current ? 'voice_clone_setup' : 'intro')}
+            onClick={() => setRound('intro')}
             className={`w-full py-4 rounded-xl font-bold text-lg transition-all flex items-center justify-center gap-3 ${permissionsGranted
               ? 'bg-gradient-to-r from-emerald-500 to-teal-500 text-white shadow-[0_4px_30px_rgba(16,185,129,0.4)] hover:shadow-[0_4px_50px_rgba(16,185,129,0.6)] hover:scale-[1.02]'
               : 'bg-slate-800 text-slate-500 cursor-not-allowed'
