@@ -42,21 +42,6 @@ export const useProctoring = (videoRef, isInterviewActive = true, logAlert = nul
         console.log('[Proctoring] Web Worker Models Ready');
       } else if (type === 'models_failed') {
         console.error('[Proctoring] Web Worker failed to load models:', error);
-        Swal.fire({
-          icon: 'error',
-          title: 'Proctoring Unavailable',
-          text: 'Failed to load AI proctoring models. Please check your internet connection.',
-          confirmButtonText: 'I Understand',
-          background: '#161c2d',
-          color: '#fff',
-          customClass: {
-            popup: 'border border-white/8 rounded-2xl shadow-2xl',
-            title: 'text-xl font-bold text-white',
-            htmlContainer: 'text-slate-300 text-sm',
-            confirmButton: 'bg-primary hover:bg-primary-hover text-white rounded-full px-6 py-2.5 font-semibold text-sm cursor-pointer border-none outline-none'
-          },
-          buttonsStyling: false
-        });
       } else if (type === 'detect_result') {
         processDetectionResult(data, timestamp);
       }
