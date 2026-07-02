@@ -21,7 +21,7 @@ self.onmessage = async (e) => {
           delegate: 'CPU',
         },
         outputFaceBlendshapes: true,
-        runningMode: 'IMAGE',
+        runningMode: 'VIDEO',
         numFaces: 3,
       });
 
@@ -31,7 +31,7 @@ self.onmessage = async (e) => {
           modelAssetPath: 'https://storage.googleapis.com/mediapipe-models/object_detector/efficientdet_lite0/int8/1/efficientdet_lite0.tflite',
           delegate: 'CPU',
         },
-        runningMode: 'IMAGE',
+        runningMode: 'VIDEO',
         scoreThreshold: 0.4,
       });
 
@@ -48,8 +48,8 @@ self.onmessage = async (e) => {
     const { bitmap, timestamp } = data;
     
     try {
-      const faceResults = faceLandmarker.detect(bitmap);
-      const objResults = objectDetector.detect(bitmap);
+      const faceResults = faceLandmarker.detectForVideo(bitmap, timestamp);
+      const objResults = objectDetector.detectForVideo(bitmap, timestamp);
 
       self.postMessage({
         type: 'detect_result',

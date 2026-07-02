@@ -2,6 +2,7 @@ import React, { useState, useRef, useEffect } from 'react'
 import { useSearchParams, Link } from 'react-router-dom'
 import { Video, Volume2, ArrowRight, ShieldAlert, Cpu, AlertTriangle, RefreshCw } from 'lucide-react'
 import { useInterviewSession } from './useInterviewSession'
+import DeviceCheckModal from '../../components/DeviceCheckModal'
 import { API_BASE_URL } from '../../apiConfig'
 import api from '../../utils/api'
 import '../../Interview.css'
@@ -95,7 +96,10 @@ export const InterviewTechnical = () => {
       interviewId,
       sessionDetail,
       sessionId,
-      handleSubmitInterview
+      handleSubmitInterview,
+      showDeviceCheck,
+      setShowDeviceCheck,
+      promptScreenShare
     } = session
 
     const handleRunCode = async () => {
@@ -859,6 +863,17 @@ export const InterviewTechnical = () => {
             I Understand & Start Interview
           </button>
         </div>
+
+        {/* Device Check Modal */}
+        {session.showDeviceCheck && (
+          <DeviceCheckModal 
+            onSuccess={() => {
+              session.setShowDeviceCheck(false);
+              session.promptScreenShare();
+            }} 
+            onCancel={() => session.setShowDeviceCheck(false)} 
+          />
+        )}
       </div>
     )
   }

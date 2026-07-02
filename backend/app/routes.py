@@ -699,6 +699,7 @@ class BehavioralData(BaseModel):
     keyword_match_pct: float = 0
     tab_switches: int = 0
     face_alerts: int = 0
+    noise_alerts: int = 0
 
 @router.post("/save-behavioral-data")
 def save_behavioral_data(data: BehavioralData):
@@ -713,7 +714,8 @@ def save_behavioral_data(data: BehavioralData):
                 "time_spent_seconds": data.time_spent_seconds,
                 "keyword_match_pct": data.keyword_match_pct,
                 "tab_switches": data.tab_switches,
-                "face_alerts": data.face_alerts
+                "face_alerts": data.face_alerts,
+                "noise_alerts": data.noise_alerts
             }}
         )
         return {"status": "ok"}
@@ -1427,6 +1429,7 @@ def get_interview_details(link_id: str):
     results = []
     total_tab_switches = 0
     total_face_alerts = 0
+    total_noise_alerts = 0
     total_time = 0
 
     if actual_interview_id:
@@ -1434,8 +1437,10 @@ def get_interview_details(link_id: str):
         for row in rows:
             tab_sw = row.get("tab_switches") or 0
             face_al = row.get("face_alerts") or 0
+            noise_al = row.get("noise_alerts") or 0
             total_tab_switches += tab_sw
             total_face_alerts += face_al
+            total_noise_alerts += noise_al
             total_time += (row.get("time_spent_seconds") or 0)
             results.append({
                 "question_id": row.get("question_id"),
@@ -1454,7 +1459,8 @@ def get_interview_details(link_id: str):
                 "filler_count": row.get("filler_count") or 0,
                 "keyword_match_pct": round(row.get("keyword_match_pct") or 0, 1),
                 "tab_switches": tab_sw,
-                "face_alerts": face_al
+                "face_alerts": face_al,
+                "noise_alerts": noise_al
             })
 
     # 2. Calculate or restore AI summary
@@ -1557,6 +1563,7 @@ def get_interview_details(link_id: str):
         "integrity": {
             "total_tab_switches": total_tab_switches,
             "total_face_alerts": total_face_alerts,
+            "total_noise_alerts": total_noise_alerts,
             "total_time_minutes": round(total_time / 60, 1)
         },
         "alerts": session_data.get("alerts", []),

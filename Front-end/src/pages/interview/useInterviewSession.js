@@ -61,6 +61,8 @@ export const useInterviewSession = (sessionId, interviewType, startRoundTwo) => 
   const [isMediaReady, setIsMediaReady] = useState(false)
   const [proctoringAlert, setProctoringAlert] = useState('')
   const [noiseAlertCount, setNoiseAlertCount] = useState(0)
+  const noiseAlertCountRef = useRef(0)
+  const isSubmittingRef = useRef(false)
   const [showNoiseBanner, setShowNoiseBanner] = useState(false)
   const [fullscreenWarning, setFullscreenWarning] = useState(false)
   const [screenShareWarning, setScreenShareWarning] = useState(false)
@@ -128,6 +130,7 @@ export const useInterviewSession = (sessionId, interviewType, startRoundTwo) => 
   const [codingRoundLoading, setCodingRoundLoading] = useState(false)
   const [codingRoundData, setCodingRoundData] = useState(null)
   const [aiInsights, setAiInsights] = useState({ clarity: 50, technicalDepth: 50, confidence: 50 })
+  const [showDeviceCheck, setShowDeviceCheck] = useState(false)
 
   // Fetch AI Insights dynamically
   useEffect(() => {
@@ -173,7 +176,7 @@ export const useInterviewSession = (sessionId, interviewType, startRoundTwo) => 
         javascript: task.function_name === 'winner'
           ? `function winner(donuts, starter) {\n    // Write your code here\n    \n}`
           : task.function_name === 'find_duplicates'
-            ? `function findDuplicates(records) {\n    // Write your code here\n    \n}`
+            ? `function find_duplicates(records) {\n    // Write your code here\n    \n}`
             : `function debounceSimulation(calls, delay) {\n    // Write your code here\n    \n}`,
         cpp: task.function_name === 'winner'
           ? `#include <vector>\n#include <string>\n\nstd::vector<std::string> winner(std::vector<int> donuts, std::vector<std::string> starter) {\n    // Write your code here\n    \n}`
@@ -213,6 +216,7 @@ export const useInterviewSession = (sessionId, interviewType, startRoundTwo) => 
   const noiseMonitorFrameRef = useRef(null)
   const noiseFrameCountRef = useRef(0)
   const noiseCooldownRef = useRef(0)
+  const audioRmsRef = useRef(0)
 
   // Feature Migration Refs
   const visualizerCanvasRef = useRef(null)
@@ -220,7 +224,7 @@ export const useInterviewSession = (sessionId, interviewType, startRoundTwo) => 
   const visualizerAudioCtxRef = useRef(null)
   const silenceTimeoutRef = useRef(null)
   const questionStartTimeRef = useRef(Date.now())
-  const behavioralStatsRef = useRef({ wordCount: 0, fillerCount: 0, pauseCount: 0, faceAlerts: 0, tabSwitches: 0 })
+  const behavioralStatsRef = useRef({ wordCount: 0, fillerCount: 0, pauseCount: 0, faceAlerts: 0, tabSwitches: 0, noiseAlerts: 0 })
   const handleNextQuestionRef = useRef(null)
 
   // WebRTC Candidate Logic
@@ -245,7 +249,7 @@ export const useInterviewSession = (sessionId, interviewType, startRoundTwo) => 
 
   useEffect(() => {
     const handleVisibilityChange = () => {
-      if (document.hidden && isDisclaimerAccepted && !showAllSet) {
+      if (document.hidden && isDisclaimerAccepted && !showAllSet && !isSubmittingRef.current) {
         behavioralStatsRef.current.tabSwitches += 1
         Swal.fire({
           icon: 'error',
@@ -675,6 +679,10 @@ export const useInterviewSession = (sessionId, interviewType, startRoundTwo) => 
             const blob = new Blob(whisperAudioChunksRef.current, { type: 'audio/webm' })
             whisperAudioChunksRef.current = [] // reset for next chunk
             
+            if (isSpeechRecordingRef.current && whisperMediaRecorderRef.current) {
+              try { whisperMediaRecorderRef.current.start() } catch (e) { console.error("mr.start error", e) }
+            }
+            
             if (blob.size > 1000) { // prevent empty or silent blobs
               const formData = new FormData()
               formData.append('audio', blob, 'audio.webm')
@@ -718,8 +726,7 @@ export const useInterviewSession = (sessionId, interviewType, startRoundTwo) => 
       if (whisperPauseTimeoutRef.current) clearTimeout(whisperPauseTimeoutRef.current)
       whisperPauseTimeoutRef.current = setTimeout(() => {
         if (whisperMediaRecorderRef.current && whisperMediaRecorderRef.current.state === 'recording') {
-          whisperMediaRecorderRef.current.stop()
-          whisperMediaRecorderRef.current.start()
+          try { whisperMediaRecorderRef.current.stop() } catch(e) {}
         }
       }, 1500)
 
@@ -774,6 +781,9 @@ export const useInterviewSession = (sessionId, interviewType, startRoundTwo) => 
           sumSquares += normalized * normalized
         }
         const rms = Math.sqrt(sumSquares / dataArray.length)
+        
+        audioRmsRef.current = rms
+
         const now = Date.now()
 
         if (rms > 0.18 && now > noiseCooldownRef.current) {
@@ -787,6 +797,8 @@ export const useInterviewSession = (sessionId, interviewType, startRoundTwo) => 
           noiseFrameCountRef.current = 0
           setNoiseAlertCount(prev => {
             const next = prev + 1
+            noiseAlertCountRef.current = next
+            behavioralStatsRef.current.noiseAlerts += 1
             recordAlertMetric("noise_alert")
             return next
           })
@@ -801,46 +813,44 @@ export const useInterviewSession = (sessionId, interviewType, startRoundTwo) => 
   }
 
   const recordAlertMetric = async (type) => {
-    behavioralStatsRef.current.faceAlerts += 1
+    if (type !== 'noise_alert') {
+      behavioralStatsRef.current.faceAlerts += 1
+    }
+    
+    const totalAlerts = behavioralStatsRef.current.faceAlerts + noiseAlertCountRef.current + screenShareViolations
+    if (totalAlerts >= 10) {
+      Swal.fire({
+        title: 'Interview Terminated',
+        text: `Your interview has been automatically submitted because you exceeded the maximum allowed proctoring alerts (10). Last alert reason: ${type}`,
+        icon: 'error',
+        background: '#161c2d',
+        color: '#fff',
+        confirmButtonText: 'Close Interview',
+        allowOutsideClick: false,
+        allowEscapeKey: false,
+        customClass: {
+          popup: 'border border-white/8 rounded-2xl shadow-2xl',
+          title: 'text-xl font-bold text-white',
+          htmlContainer: 'text-slate-300 text-sm',
+          confirmButton: 'bg-red-500 hover:bg-red-600 text-white rounded-full px-6 py-2.5 font-semibold text-sm cursor-pointer border-none outline-none'
+        },
+        buttonsStyling: false
+      }).then(() => {
+        handleSubmitInterview(true)
+      })
+    }
   }
 
-  useProctoring(videoPreviewRef, isDisclaimerAccepted && !showAllSet && !loading, recordAlertMetric);
+  useProctoring(videoPreviewRef, isDisclaimerAccepted && !showAllSet && !loading, recordAlertMetric, audioRmsRef);
 
   const acceptDisclaimer = () => {
-    Swal.fire({
-      title: 'Media Access Required',
-      html: `
-        <div class="text-left space-y-3">
-          <p class="text-slate-300">This proctored assessment requires permissions to access your:</p>
-          <ul class="list-disc pl-5 text-slate-300 text-sm space-y-1">
-            <li><strong>Webcam</strong> (for face detection & identity verification)</li>
-            <li><strong>Microphone</strong> (for speech-to-text recording)</li>
-            <li><strong>Entire Screen</strong> (for browser proctoring verification)</li>
-          </ul>
-          <p class="text-xs text-amber-500 mt-3 font-semibold">⚠️ Note: Please select your "Entire Screen" when prompted for screen sharing.</p>
-        </div>
-      `,
-      icon: 'info',
-      showCancelButton: true,
-      confirmButtonText: 'Start Setup',
-      cancelButtonText: 'Cancel',
-      background: '#161c2d',
-      color: '#fff',
-      customClass: {
-        popup: 'border border-white/8 rounded-2xl shadow-2xl',
-        title: 'text-xl font-bold text-white',
-        htmlContainer: 'text-slate-300 text-sm',
-        confirmButton: 'bg-primary hover:bg-primary-hover text-white rounded-full px-6 py-2.5 font-semibold text-sm cursor-pointer border-none outline-none mr-2',
-        cancelButton: 'bg-white/6 hover:bg-white/12 text-white border border-white/8 rounded-full px-6 py-2.5 font-semibold text-sm cursor-pointer outline-none'
-      },
-      buttonsStyling: false,
-      preConfirm: () => {
-        enableFullscreen()
-      }
-    }).then(async (result) => {
-      if (!result.isConfirmed) return
-      await setupMedia()
-    })
+    setShowDeviceCheck(true)
+  }
+
+  const promptScreenShare = async () => {
+    // Wait for previous tracks from DeviceCheckModal to release
+    enableFullscreen()
+    setTimeout(setupMedia, 500)
   }
 
   const setupMedia = async () => {
@@ -936,34 +946,17 @@ export const useInterviewSession = (sessionId, interviewType, startRoundTwo) => 
       cameraRecorderRef.current.start(2000)
       screenRecorderRef.current.start(2000)
 
-      Swal.fire({
-        icon: 'success',
-        title: 'Setup Complete',
-        text: 'Camera and screen share connected successfully. Click below to enter fullscreen and begin your interview.',
-        confirmButtonText: 'Start Interview',
-        allowOutsideClick: false,
-        allowEscapeKey: false,
-        background: '#161c2d',
-        color: '#fff',
-        customClass: {
-          popup: 'border border-white/8 rounded-2xl shadow-2xl',
-          title: 'text-xl font-bold text-white',
-          htmlContainer: 'text-slate-300 text-sm',
-          confirmButton: 'bg-primary hover:bg-primary-hover text-white rounded-full px-6 py-2.5 font-semibold text-sm cursor-pointer border-none outline-none'
-        },
-        buttonsStyling: false
-      }).then(() => {
-        const elem = document.documentElement;
-        if (elem.requestFullscreen) {
-          elem.requestFullscreen().catch(err => console.log(err));
-        }
+      const elem = document.documentElement;
+      if (elem.requestFullscreen) {
+        elem.requestFullscreen().catch(err => console.log(err));
+      }
 
-        initSpeechRecognition()
-        if (recognitionRef.current) {
-          recognitionRef.current.start()
-        }
+      initSpeechRecognition()
+      if (recognitionRef.current) {
+        recognitionRef.current.start()
+      }
 
-        startBackgroundNoiseMonitor(stream)
+      startBackgroundNoiseMonitor(stream)
 
       const savedSess = _sessionKey ? (() => { try { return JSON.parse(sessionStorage.getItem(_sessionKey) || 'null') } catch { return null } })() : null
       
@@ -974,6 +967,7 @@ export const useInterviewSession = (sessionId, interviewType, startRoundTwo) => 
       }
 
       setIsDisclaimerAccepted(true)
+      setIsMediaReady(true)
 
       if (_sessionKey) {
         const sess = JSON.parse(sessionStorage.getItem(_sessionKey) || '{}')
@@ -981,8 +975,6 @@ export const useInterviewSession = (sessionId, interviewType, startRoundTwo) => 
         sess.startedAt = sess.startedAt || Date.now()
         sessionStorage.setItem(_sessionKey, JSON.stringify(sess))
       }
-
-      })
     } catch (err) {
       console.error("Setup permissions failure:", err)
       let errTitle = 'Setup Failed'
@@ -1072,7 +1064,12 @@ export const useInterviewSession = (sessionId, interviewType, startRoundTwo) => 
         handleScreenShareStop()
       }
 
-      if (mediaStreamRef.current) {
+      if (audioMixerDestRef.current) {
+        const mixedTrack = audioMixerDestRef.current.stream.getAudioTracks()[0]
+        if (mixedTrack) {
+          screenStream.addTrack(mixedTrack)
+        }
+      } else if (mediaStreamRef.current) {
         const audioTracks = mediaStreamRef.current.getAudioTracks()
         if (audioTracks.length > 0) {
           screenStream.addTrack(audioTracks[0])
@@ -1230,7 +1227,8 @@ export const useInterviewSession = (sessionId, interviewType, startRoundTwo) => 
       answerForm.append('question_text', activeQuestion?.text || activeQuestion?.question || '')
       answerForm.append('answer_text', activeQuestion?.type === 'coding' ? (codeAnswer || ' ') : (transcriptionText || ' '))
       answerForm.append('candidate_name', sessionDetail?.candidate_name || 'Candidate')
-      answerForm.append('time_spent_seconds', '0')
+      const timeSpent = Math.round((Date.now() - questionStartTimeRef.current) / 1000)
+      answerForm.append('time_spent_seconds', timeSpent.toString())
       answerForm.append('time_limit_seconds', '120')
 
       await api.post(`/save-answer`, answerForm, {
@@ -1243,7 +1241,7 @@ export const useInterviewSession = (sessionId, interviewType, startRoundTwo) => 
     setTranscriptionText('')
     setCodeAnswer('')
     setCodeOutput('')
-    behavioralStatsRef.current = { wordCount: 0, fillerCount: 0, pauseCount: 0, faceAlerts: 0, tabSwitches: 0 }
+    behavioralStatsRef.current = { wordCount: 0, fillerCount: 0, pauseCount: 0, faceAlerts: 0, tabSwitches: 0, noiseAlerts: 0 }
     questionStartTimeRef.current = Date.now()
     startNextRound()
   }
@@ -1264,7 +1262,8 @@ export const useInterviewSession = (sessionId, interviewType, startRoundTwo) => 
       wpm: wpm,
       pause_count: behavioralStatsRef.current.pauseCount,
       tab_switches: behavioralStatsRef.current.tabSwitches,
-      face_alerts: behavioralStatsRef.current.faceAlerts
+      face_alerts: behavioralStatsRef.current.faceAlerts,
+      noise_alerts: behavioralStatsRef.current.noiseAlerts
     }
     try {
       await api.post(`/save-behavioral-data`, payload)
@@ -1287,7 +1286,7 @@ export const useInterviewSession = (sessionId, interviewType, startRoundTwo) => 
         answerForm.append('question_text', currentQuestion.text || currentQuestion.question || '')
         answerForm.append('answer_text', currentQuestion.type === 'coding' ? (codeAnswer || ' ') : (transcriptionText || ' '))
         answerForm.append('candidate_name', sessionDetail?.candidate_name || 'Candidate')
-        answerForm.append('time_spent_seconds', '0')
+        answerForm.append('time_spent_seconds', timeSpent.toString())
         answerForm.append('time_limit_seconds', '120')
 
         await api.post(`/save-answer`, answerForm, {
@@ -1315,7 +1314,7 @@ export const useInterviewSession = (sessionId, interviewType, startRoundTwo) => 
           setTranscriptionText('')
           setCodeAnswer('')
           setCodeOutput('')
-          behavioralStatsRef.current = { wordCount: 0, fillerCount: 0, pauseCount: 0, faceAlerts: 0, tabSwitches: 0 }
+          behavioralStatsRef.current = { wordCount: 0, fillerCount: 0, pauseCount: 0, faceAlerts: 0, tabSwitches: 0, noiseAlerts: 0 }
           questionStartTimeRef.current = Date.now()
           startNextRound()
         } else {
@@ -1325,7 +1324,7 @@ export const useInterviewSession = (sessionId, interviewType, startRoundTwo) => 
         setTranscriptionText('')
         setCodeAnswer('')
         setCodeOutput('')
-        behavioralStatsRef.current = { wordCount: 0, fillerCount: 0, pauseCount: 0, faceAlerts: 0, tabSwitches: 0 }
+        behavioralStatsRef.current = { wordCount: 0, fillerCount: 0, pauseCount: 0, faceAlerts: 0, tabSwitches: 0, noiseAlerts: 0 }
 
         const nextIdx = currentQuestionIndex + 1
         setCurrentQuestionIndex(nextIdx)
@@ -1358,14 +1357,12 @@ export const useInterviewSession = (sessionId, interviewType, startRoundTwo) => 
   }, [handleNextQuestion])
 
   const handleSubmitInterview = async (forceClose = false) => {
+    isSubmittingRef.current = true
     // Stop any currently-speaking TTS immediately
     if (window.speechSynthesis) window.speechSynthesis.cancel()
     if (silenceTimeoutRef.current) { clearTimeout(silenceTimeoutRef.current); silenceTimeoutRef.current = null }
     if (_sessionKey) sessionStorage.removeItem(_sessionKey)
     visualizerActiveRef.current = false
-
-    if (window.speechSynthesis) window.speechSynthesis.cancel()
-    if (silenceTimeoutRef.current) clearTimeout(silenceTimeoutRef.current)
 
     if (faceDetectionIntervalRef.current) clearInterval(faceDetectionIntervalRef.current)
     if (noiseMonitorFrameRef.current) cancelAnimationFrame(noiseMonitorFrameRef.current)
@@ -1461,6 +1458,10 @@ export const useInterviewSession = (sessionId, interviewType, startRoundTwo) => 
     agreeChecked,
     setAgreeChecked,
     acceptDisclaimer,
+    promptScreenShare,
+    showDeviceCheck,
+    setShowDeviceCheck,
+    setupMedia,
     autoReconnecting,
     sessionDetail,
     interviewId,

@@ -1,7 +1,7 @@
 import { useEffect, useRef } from 'react';
 import Swal from 'sweetalert2';
 
-export const useProctoring = (videoRef, isInterviewActive = true, logAlert = null, onStateChange = null) => {
+export const useProctoring = (videoRef, isInterviewActive = true, logAlert = null, audioRmsRef = null, onStateChange = null) => {
   const workerRef = useRef(null);
   const logAlertRef = useRef(logAlert);
   const onStateChangeRef = useRef(onStateChange);
@@ -17,6 +17,7 @@ export const useProctoring = (videoRef, isInterviewActive = true, logAlert = nul
     consecutiveMultiFace: 0,
     consecutivePhone: 0,
     consecutiveLookingAway: 0,
+    consecutiveLipSync: 0,
     tickCount: 0,
     multiFaceWindow: []
   });
@@ -41,6 +42,21 @@ export const useProctoring = (videoRef, isInterviewActive = true, logAlert = nul
         console.log('[Proctoring] Web Worker Models Ready');
       } else if (type === 'models_failed') {
         console.error('[Proctoring] Web Worker failed to load models:', error);
+        Swal.fire({
+          icon: 'error',
+          title: 'Proctoring Unavailable',
+          text: 'Failed to load AI proctoring models. Please check your internet connection.',
+          confirmButtonText: 'I Understand',
+          background: '#161c2d',
+          color: '#fff',
+          customClass: {
+            popup: 'border border-white/8 rounded-2xl shadow-2xl',
+            title: 'text-xl font-bold text-white',
+            htmlContainer: 'text-slate-300 text-sm',
+            confirmButton: 'bg-primary hover:bg-primary-hover text-white rounded-full px-6 py-2.5 font-semibold text-sm cursor-pointer border-none outline-none'
+          },
+          buttonsStyling: false
+        });
       } else if (type === 'detect_result') {
         processDetectionResult(data, timestamp);
       }
@@ -99,8 +115,18 @@ export const useProctoring = (videoRef, isInterviewActive = true, logAlert = nul
       );
       if (lookingAway) c.consecutiveLookingAway++;
       else c.consecutiveLookingAway = 0;
+      
+      const jawOpen = score('jawOpen');
+      const audioRms = audioRmsRef?.current || 0;
+      
+      if (audioRms > 0.18 && jawOpen < 0.05) {
+        c.consecutiveLipSync++;
+      } else {
+        c.consecutiveLipSync = 0;
+      }
     } else {
       c.consecutiveLookingAway = 0;
+      c.consecutiveLipSync = 0;
     }
 
     let hasPhone = false;
@@ -140,6 +166,9 @@ export const useProctoring = (videoRef, isInterviewActive = true, logAlert = nul
     } else if (c.consecutiveLookingAway > 10) {
       alertType = 'eye_contact';
       alertMsg = 'Please maintain eye contact with the screen.';
+    } else if (c.consecutiveLipSync > 15) {
+      alertType = 'lip_sync';
+      alertMsg = 'Lip sync anomaly detected. Please answer naturally.';
     }
 
     if (alertType) {
@@ -167,6 +196,7 @@ export const useProctoring = (videoRef, isInterviewActive = true, logAlert = nul
       c.consecutiveMultiFace = 0;
       c.consecutiveNoFace = 0;
       c.consecutiveLookingAway = 0;
+      c.consecutiveLipSync = 0;
       c.multiFaceWindow = [];
       c.tickCount = 0;
     }

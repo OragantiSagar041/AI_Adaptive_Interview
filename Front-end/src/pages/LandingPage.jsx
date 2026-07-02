@@ -14,7 +14,7 @@ const normalizePlan = (plan) => {
   const priceInPaise = Boolean(plan.name && !plan.plan_name)
   const price = priceInPaise && plan.price > 0 ? plan.price / 100 : (plan.price ?? 0)
   const credits = plan.credits ?? plan.credits_granted ?? 0
-  return { ...plan, plan_name: planName, price, credits, duration_days: plan.duration_days ?? 30 }
+  return { ...plan, plan_name: planName, price, credits }
 }
 
 const getPlanName = (plan) => plan?.plan_name || plan?.name || 'Plan'
@@ -190,7 +190,7 @@ const PricingCard = ({ plan, index, isFeatured, badge, formatPrice }) => {
         <span className={`absolute right-0 top-0 rounded-full px-3 py-1.5 text-xs font-extrabold uppercase tracking-wide ${isFeatured ? 'bg-white/15 text-white/90' : 'bg-indigo-500/10 text-indigo-700'
           }`}>{badge}</span>
         <h3 className="pr-16 text-xl font-extrabold tracking-tight">{getPlanName(plan)}</h3>
-        <div className={`mt-1 text-sm ${isFeatured ? 'text-white/60' : 'text-slate-400'}`}>{plan.duration_days ?? 30} days access</div>
+        <div className={`mt-1 text-sm ${isFeatured ? 'text-white/60' : 'text-slate-400'}`}>{plan.credits === 0 ? 'Trial' : plan.credits} credits</div>
 
         {/* Prominent Credit Points badge */}
         <div className="mt-3">

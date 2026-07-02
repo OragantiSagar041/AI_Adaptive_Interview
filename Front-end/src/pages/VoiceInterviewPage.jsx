@@ -17,6 +17,7 @@ import 'sweetalert2/dist/sweetalert2.min.css'
 import { RefreshCw } from 'lucide-react'
 import aiVideoUrl from '../assets/ai_avatar.mp4'
 import { useProctoring } from '../hooks/useProctoring'
+import DeviceCheckModal from '../components/DeviceCheckModal'
 
 import { VOICE_TRANSLATIONS } from '../utils/voiceTranslations'
 
@@ -203,6 +204,7 @@ export default function VoiceInterviewPage() {
   const [round, setRound] = useState('pre_checks')
   // 'pre_checks' | 'voice_clone_setup' | 'intro' | 'verbal' | 'coding' | 'case_study' | 'done'
   const [permissionsGranted, setPermissionsGranted] = useState(false)
+  const [showDeviceCheck, setShowDeviceCheck] = useState(false)
 
   // Voice Cloning
   const [voiceCloneId, setVoiceCloneId] = useState(null)   // ElevenLabs voice_id for this session
@@ -1381,24 +1383,13 @@ export default function VoiceInterviewPage() {
 
         {/* Actions */}
         <div className="space-y-4">
-          <button onClick={async () => {
-            try {
-              if (document.documentElement.requestFullscreen) {
-                await document.documentElement.requestFullscreen().catch(() => { })
-              }
-              const stream = await navigator.mediaDevices.getUserMedia({ audio: true, video: true })
-              cameraStreamRef.current = stream
-              setPermissionsGranted(true)
-            } catch (err) {
-              alert("Permissions are required to proceed: " + err.message)
-            }
-          }}
+          <button onClick={() => setShowDeviceCheck(true)}
             className={`w-full py-4 rounded-xl font-bold text-sm transition-all flex items-center justify-center gap-3 ${permissionsGranted
               ? 'bg-emerald-500/20 text-emerald-400 border border-emerald-500/30 cursor-default'
               : 'bg-indigo-500/10 text-indigo-300 border border-indigo-500/30 hover:bg-indigo-500/20'
               }`}>
             <i className={`fas ${permissionsGranted ? 'fa-check-circle' : 'fa-lock-open'}`} />
-            {permissionsGranted ? 'Permissions Granted' : 'Grant Camera & Mic Permissions'}
+            {permissionsGranted ? 'Hardware Checked & Permissions Granted' : 'Test Hardware & Grant Permissions'}
           </button>
 
           <button
@@ -1413,6 +1404,24 @@ export default function VoiceInterviewPage() {
           </button>
         </div>
       </div>
+
+      {showDeviceCheck && (
+        <DeviceCheckModal 
+          onSuccess={() => {
+            if (document.documentElement.requestFullscreen) {
+              document.documentElement.requestFullscreen().catch(() => { })
+            }
+            navigator.mediaDevices.getUserMedia({ audio: true, video: true }).then(stream => {
+              cameraStreamRef.current = stream;
+              setPermissionsGranted(true);
+            }).catch(err => {
+              alert("Permissions are required to proceed: " + err.message);
+            });
+            setShowDeviceCheck(false);
+          }}
+          onCancel={() => setShowDeviceCheck(false)}
+        />
+      )}
     </div>
   )
 
