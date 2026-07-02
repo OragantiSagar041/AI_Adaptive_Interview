@@ -198,7 +198,7 @@ const PricingCard = ({ plan, index, isFeatured, badge, formatPrice }) => {
               ? 'bg-cyan-500/25 text-cyan-200 border border-cyan-500/30'
               : 'bg-indigo-50 text-indigo-700 border border-indigo-100'
             }`}>
-            ⚡ {plan.credits} Credits
+            ⚡ {plan.credits === 0 ? 'Trial' : plan.credits} Credits
           </span>
         </div>
 
