@@ -4,6 +4,7 @@ import Swal from 'sweetalert2'
 import api from '../../utils/api'
 import useCandidateWebRTC from '../../hooks/useCandidateWebRTC'
 import { useProctoring } from '../../hooks/useProctoring'
+import { countFillers } from './interviewUtils'
 
 const langMap = {
   'Hindi': 'hi-IN',
@@ -23,6 +24,22 @@ export const useInterviewSession = (sessionId, interviewType, startRoundTwo) => 
   const [error, setError] = useState(null)
   const _sessionKey = sessionId ? `interview_session_${sessionId}` : null
   const _savedSession = _sessionKey ? (() => { try { return JSON.parse(sessionStorage.getItem(_sessionKey) || 'null') } catch { return null } })() : null
+
+  // Web Audio Mixer for Screen Recording
+  const audioMixerCtxRef = useRef(null)
+  const audioMixerDestRef = useRef(null)
+
+  // WebRTC Global Cleanup
+  useEffect(() => {
+    return () => {
+      if (mediaStreamRef.current) {
+        mediaStreamRef.current.getTracks().forEach(t => t.stop())
+      }
+      if (screenStreamRef.current) {
+        screenStreamRef.current.getTracks().forEach(t => t.stop())
+      }
+    }
+  }, [])
   const [isDisclaimerAccepted, setIsDisclaimerAccepted] = useState(false)
   const [agreeChecked, setAgreeChecked] = useState(false)
   const [autoReconnecting, setAutoReconnecting] = useState(!!_savedSession?.accepted)
@@ -883,9 +900,24 @@ export const useInterviewSession = (sessionId, interviewType, startRoundTwo) => 
         handleScreenShareStop()
       }
 
+      // Web Audio Mixer setup
+      if (!audioMixerCtxRef.current) {
+        const AudioCtx = window.AudioContext || window.webkitAudioContext
+        audioMixerCtxRef.current = new AudioCtx()
+        audioMixerDestRef.current = audioMixerCtxRef.current.createMediaStreamDestination()
+      }
+
       const audioTracks = stream.getAudioTracks()
       if (audioTracks.length > 0) {
-        screenStream.addTrack(audioTracks[0])
+        // Mix candidate mic into destination
+        const micSource = audioMixerCtxRef.current.createMediaStreamSource(new MediaStream([audioTracks[0]]))
+        micSource.connect(audioMixerDestRef.current)
+      }
+
+      // Add the master mixed track to the screen stream
+      const mixedTrack = audioMixerDestRef.current.stream.getAudioTracks()[0]
+      if (mixedTrack) {
+        screenStream.addTrack(mixedTrack)
       }
 
       let options = { videoBitsPerSecond: 800000, audioBitsPerSecond: 64000 }
@@ -1086,6 +1118,15 @@ export const useInterviewSession = (sessionId, interviewType, startRoundTwo) => 
         const blob = await res.blob()
         const url = URL.createObjectURL(blob)
         const audio = new Audio(url)
+        
+        // --- Web Audio Mixer Routing ---
+        if (audioMixerCtxRef.current && audioMixerDestRef.current) {
+          audio.crossOrigin = "anonymous"
+          const source = audioMixerCtxRef.current.createMediaElementSource(audio)
+          source.connect(audioMixerCtxRef.current.destination) // Play to speakers
+          source.connect(audioMixerDestRef.current) // Send to screen recorder mixer
+        }
+
         audio.onended = () => {
           if (!isRoundTwoRef.current) {
             if (silenceTimeoutRef.current) clearTimeout(silenceTimeoutRef.current)
@@ -1139,17 +1180,6 @@ export const useInterviewSession = (sessionId, interviewType, startRoundTwo) => 
     }
   }
 
-  const countFillers = (text) => {
-    const FILLER_WORDS = ["um", "uh", "er", "like", "you know", "basically", "actually", "literally", "sort of", "kind of"]
-    let count = 0
-    const lower = text.toLowerCase()
-    for (let fw of FILLER_WORDS) {
-      const regex = new RegExp(`\\b${fw}\\b`, 'g')
-      const matches = lower.match(regex)
-      if (matches) count += matches.length
-    }
-    return count
-  }
 
   const startNextRound = async () => {
     if (isRoundTwoRef.current) return

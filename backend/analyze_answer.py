@@ -1,6 +1,30 @@
 import json
 from ai_client import chat_completion, extract_json
 
+# Route AI scoring through typed_ai_layer for type-safe, validated outputs
+try:
+    from typed_ai_layer import score_answer as _typed_score
+    _TYPED_LAYER_AVAILABLE = True
+except ImportError:
+    _TYPED_LAYER_AVAILABLE = False
+
+# STATIC SYSTEM PROMPT — extracted so OpenRouter can cache it between calls.
+# This saves ~400 tokens on every answer scored.
+_SCORING_SYSTEM_PROMPT = """You are a senior technical interview evaluator calibrated to the same standards as HireVue, Karat, and Google hiring panels.
+
+SCORING RUBRIC:
+1. CONTENT QUALITY (0-50 pts): depth, accuracy, examples, STAR structure.
+   40-50=Exceptional, 28-39=Good, 15-27=Weak, 0-14=Poor
+2. RELEVANCE (0-30 pts): how directly the answer addresses the question.
+   25-30=Direct, 17-24=Mostly, 8-16=Partial, 0-7=Irrelevant
+3. TIME EFFICIENCY (0-20 pts): optimal use of allotted time.
+
+RULES:
+- Score the CANDIDATE'S ANSWER only, not the suggested answer.
+- overall_score = content_score + relevance_score + time_score (max 100).
+- Also score clarity_score, technical_depth_score, confidence_score (each 0-100).
+- Return VALID JSON ONLY."""
+
 
 def analyze_answer(
     question: str,
@@ -74,64 +98,21 @@ def analyze_answer(
         time_context = "Time data not available."
         time_score_hint = "time_score should be 12 (neutral default when time data is missing)."
 
-    prompt = f"""
-You are a senior technical interview evaluator calibrated to the same standards as HireVue, Karat, and Google hiring panels.
+    # TOKEN SAVE: Cap answer at 600 words — adequate for full scoring
+    answer_words = answer.split()
+    if len(answer_words) > 600:
+        answer = " ".join(answer_words[:600]) + " ...[truncated]"
 
-Context (Candidate Resume / Job Description):
-{context}
+    # USER message — concise, variable data only (system prompt is cached above)
+    prompt = f"""Score this interview answer. Language for feedback: {language}.
 
-Question Asked: "{question}"
-Candidate's Answer: "{answer}"
+Context: {context[:500] if context else 'N/A'}
+Question: "{question[:300]}"
+Answer: "{answer}"
+Time: {time_context}
+{time_score_hint}
 
-Time Information:
-{time_context}
-
-CRITICAL LANGUAGE REQUIREMENT:
-You MUST provide your analysis, feedback, and suggested answers STRICTLY in the {language} language. Do NOT use English unless {language} is English.
-
-════════════════ SCORING RUBRIC ════════════════
-
-Score the CANDIDATE'S ANSWER (not your suggested answer) across THREE dimensions:
-
-1. CONTENT QUALITY (0–50 pts)
-   - Measures: depth, technical accuracy, use of concrete examples, STAR structure, completeness.
-   - 40–50: Exceptional — detailed, accurate, well-structured, memorable examples.
-   - 28–39: Good — solid points, minor gaps, acceptable structure.
-   - 15–27: Weak — generic, lacks examples or accuracy, partially relevant.
-   - 0–14: Poor — off-topic, too vague, wrong, or essentially no content.
-
-2. RELEVANCE (0–30 pts)
-   - Measures: how directly and specifically the answer addresses THIS exact question.
-   - 25–30: Directly answers the question with no tangents.
-   - 17–24: Mostly on-topic, minor drift.
-   - 8–16: Partially relevant, significant tangents or misses the core ask.
-   - 0–7: Largely irrelevant or doesn't address the question at all.
-
-3. TIME EFFICIENCY (0–20 pts)
-   - {time_score_hint}
-   - Ideal is 40–85% of allotted time — enough depth without padding.
-
-CRITICAL RULES:
-- If the answer is "hello", "I don't know", very short, or clearly irrelevant → content_score ≤ 10, relevance_score ≤ 5.
-- Do NOT score your own "Suggested Answer" — only the candidate's actual answer.
-- overall_score = content_score + relevance_score + time_score (max 100).
-- Be honest and calibrated. A score of 75+ should mean the candidate would likely pass this question in a real panel.
-- Scores of 50–74 indicate average performance. Below 40 is poor.
-
-Additionally, provide these three scores on a scale of 0 to 100 for the Live Evaluation UI:
-- clarity_score: Evaluates how well structured and communicated the answer is.
-- technical_depth_score: Evaluates the depth of technical knowledge or logical structured thinking.
-- confidence_score: Evaluates decisiveness and lack of hesitation/hedging language.
-
-════════════════ OUTPUT ════════════════
-
-Also provide:
-- corrected_answer: If the candidate's answer was good, polish it lightly. If poor/irrelevant, write a FULL model answer starting with "Suggested Answer:".
-- feedback: 2–4 sentences. Be specific about what was missing or done well. Mention time usage if it impacted quality.
-- keywords: Key concepts from the ideal answer (list of strings).
-
-Return VALID JSON ONLY — no markdown, no extra text.
-
+Return VALID JSON ONLY:
 {{
   "corrected_answer": "...",
   "content_score": 0,
@@ -143,20 +124,35 @@ Return VALID JSON ONLY — no markdown, no extra text.
   "confidence_score": 0,
   "feedback": "...",
   "keywords": ["key1", "key2"]
-}}
-"""
+}}"""
 
     try:
-        content = chat_completion(
-            messages=[{"role": "user", "content": prompt}],
-            model="openai/gpt-4o-mini",
-            temperature=0.01,
-            timeout=45,
-        )
-
-        result = extract_json(content)
-        if not result:
-            raise Exception("No JSON found in AI response")
+        # Use Typed AI layer for type-safe, validated JSON output
+        if _TYPED_LAYER_AVAILABLE:
+            result = _typed_score(
+                question=question,
+                answer=answer,
+                context=context,
+                time_spent_seconds=time_spent_seconds,
+                time_limit_seconds=time_limit_seconds,
+                language=language,
+                time_context=time_context,
+                time_score_hint=time_score_hint,
+            )
+        else:
+            # Direct fallback if typed_ai_layer not available
+            content = chat_completion(
+                messages=[
+                    {"role": "system", "content": _SCORING_SYSTEM_PROMPT},
+                    {"role": "user", "content": prompt}
+                ],
+                model="openai/gpt-4o-mini",
+                temperature=0.01,
+                timeout=45,
+            )
+            result = extract_json(content)
+            if not result:
+                raise Exception("No JSON found in AI response")
 
         # ── Safety checks ──────────────────────────────────────────────────
         word_count = len(answer.split())

@@ -3,7 +3,7 @@ sys.stdout.reconfigure(encoding='utf-8')
 sys.stderr.reconfigure(encoding='utf-8')
 
 from typing import Any, Dict, List, Optional
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 
 
 # ---------------------------------------------------------------------------
@@ -52,9 +52,14 @@ class TenantUpdate(BaseModel):
     add_credits: int = 0
 
 class HRScreening(BaseModel):
-    work_mode: str = ""
-    location: str = ""
-    ask_bond: bool = False
+    work_mode: str = Field(default="", alias="workModeType")
+    location: str = Field(default="", alias="locationType")
+    ask_bond: bool = Field(default=False, alias="askBond")
+    ask_work_mode: bool = Field(default=False, alias="askWorkMode")
+    ask_location: bool = Field(default=False, alias="askLocation")
+
+    class Config:
+        populate_by_name = True
 
 class CreateSession(BaseModel):
     candidate_name: str

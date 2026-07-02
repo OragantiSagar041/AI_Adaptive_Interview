@@ -360,11 +360,11 @@ export default function VoiceInterviewPage() {
   useEffect(() => {
     if (round !== 'verbal' || countdown <= 0) return
     const t = setInterval(() => setCountdown(p => {
-      if (p <= 1) { clearInterval(t); transitionToNextRound(); return 0 }
+      if (p <= 1) { clearInterval(t); transitionToNextRound(true); return 0 }
       return p - 1
     }), 1000)
     return () => clearInterval(t)
-  }, [round]) // eslint-disable-line
+  }, [round, transitionToNextRound])
 
   // ── Persistence & Unload Tracking ──────────────────────────────────────────
   useEffect(() => {
@@ -552,6 +552,8 @@ export default function VoiceInterviewPage() {
 
   // ── Screen & Camera Recording ───────────────────────────────────────────────
   const startScreenRecording = useCallback(async () => {
+    if (!sessionDetailRef.current?.record_video) return;
+
     try {
       // Force fullscreen mode
       if (document.documentElement.requestFullscreen) {
@@ -894,8 +896,33 @@ export default function VoiceInterviewPage() {
     }
   }, [addMsg, aiSay, startListening]) // eslint-disable-line
 
+  // ── Complete interview ────────────────────────────────────────────────────
+  const completeInterview = useCallback(async (isTimeout = false) => {
+    if (submittingRef.current) return
+    submittingRef.current = true
+    stopListening(); window.speechSynthesis?.cancel(); stopAudio()
+    const iid = interviewIdRef.current
+
+    // Switch UI to submitting immediately
+    setRound('submitting')
+    
+    const timeoutFlag = typeof isTimeout === 'boolean' ? isTimeout : false;
+    const message = timeoutFlag 
+      ? "Thank you for the interview. We are saving your interview, please wait."
+      : "We are saving your interview, please wait.";
+      
+    // Speak asynchronously
+    aiSay(message)
+
+    await stopAndUploadRecording(iid)
+    try { await fetch(`${API_BASE_URL}/complete-session/${linkId}?warnings=${warningsCount}`, { method: 'POST' }) } catch (_) { }
+    
+    stopAudio() // stop audio once everything is fully saved
+    setRound('done')
+  }, [stopListening, linkId, stopAndUploadRecording, warningsCount, stopAudio, aiSay])
+
   // ── Load coding/case study round questions ────────────────────────────────
-  const transitionToNextRound = useCallback(async () => {
+  const transitionToNextRound = useCallback(async (isTimeout = false) => {
     if (submittingRef.current || isTransitioningRef.current) return
     isTransitioningRef.current = true
     stopListening(); window.speechSynthesis?.cancel()
@@ -906,6 +933,9 @@ export default function VoiceInterviewPage() {
 
     const type = interviewType
     const iid = interviewIdRef.current
+    
+    // Check timeout flag
+    const timeoutFlag = typeof isTimeout === 'boolean' ? isTimeout : false;
 
     if (type === 'Technical' || type === 'Non-Technical') {
       setAiStatus('thinking')
@@ -966,24 +996,9 @@ export default function VoiceInterviewPage() {
         }
       }
     } else {
-      completeInterview()
+      completeInterview(timeoutFlag)
     }
-  }, [interviewType, stopListening, aiSay]) // eslint-disable-line
-
-  // ── Complete interview ────────────────────────────────────────────────────
-  const completeInterview = useCallback(async () => {
-    if (submittingRef.current) return
-    submittingRef.current = true
-    stopListening(); window.speechSynthesis?.cancel(); stopAudio()
-    const iid = interviewIdRef.current
-
-    // Switch UI to submitting immediately
-    setRound('submitting')
-
-    await stopAndUploadRecording(iid)
-    try { await fetch(`${API_BASE_URL}/complete-session/${linkId}?warnings=${warningsCount}`, { method: 'POST' }) } catch (_) { }
-    setRound('done')
-  }, [stopListening, linkId, stopAndUploadRecording, warningsCount, stopAudio])
+  }, [interviewType, stopListening, aiSay, completeInterview])
 
   // ── Start verbal interview ────────────────────────────────────────────────
   const startInterview = useCallback(async () => {
@@ -1566,7 +1581,7 @@ export default function VoiceInterviewPage() {
           <p className="text-slate-400 leading-relaxed">
             Hi, <span className="text-white font-semibold">{sessionDetail?.candidate_name}</span>! I'm Zara. We'll have a natural voice conversation across {
               interviewType === 'Technical' ? '2 rounds — Verbal Q&A + Coding' :
-                interviewType === 'Non-Technical' ? '3 rounds — Verbal Q&A + Coding + Case Study' :
+                interviewType === 'Non-Technical' ? '2 rounds — Verbal Q&A + Case Study' :
                   '1 round of Verbal Q&A'
             }. I'll ask follow-up questions to dig deeper into your answers.
           </p>
@@ -1577,7 +1592,7 @@ export default function VoiceInterviewPage() {
           <div className="flex items-center gap-2 px-4 py-2 bg-indigo-500/10 border border-indigo-500/20 rounded-full text-sm">
             <i className="fas fa-comments text-indigo-400" /> Verbal Q&A ({questions.length} questions)
           </div>
-          {(interviewType === 'Technical' || interviewType === 'Non-Technical') && (
+          {interviewType === 'Technical' && (
             <div className="flex items-center gap-2 px-4 py-2 bg-amber-500/10 border border-amber-500/20 rounded-full text-sm">
               <i className="fas fa-code text-amber-400" /> Live Coding
             </div>

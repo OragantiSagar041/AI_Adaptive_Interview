@@ -533,7 +533,7 @@ class AnswerRequest(BaseModel):
 @router.post("/save-answer")
 def save_answer(
     interview_id: str = Form(...),
-    question_id: int = Form(...),
+    question_id: str = Form(...),
     question_text: str = Form(...),
     answer_text: str = Form(...),
     candidate_name: str = Form("Candidate"),
@@ -816,9 +816,9 @@ IMPORTANT: Do NOT ask coding or technical questions. Focus on leadership, manage
     user_prompt = f"""Based on the following Job Description, create exactly {num_questions} scenario-based case study questions.
 
 Job Description:
-{job_description[:3000]}
+{job_description[:1500]}
 
-{f'Candidate Profile: {profile_text[:1000]}' if profile_text else ''}
+{f'Candidate Profile: {profile_text[:500]}' if profile_text else ''}
 
 Extract key non-technical skills from the JD (like team management, stakeholder communication, project planning, conflict resolution, etc.) and create realistic business scenarios that test those skills.
 
@@ -1258,9 +1258,18 @@ async def log_interview_alert(interview_id: str, request: Request):
 # ─── Helper: Generate AI Summary (Recommendation + S&W) ─────────────────────
 def generate_interview_summary(candidate_name: str, answers_data: list) -> dict:
     """
-    Given list of {question, answer, ai_score, ai_feedback},
-    produce an overall recommendation and strengths/weaknesses summary.
+    Generate interview summary via typed_ai_layer (type-safe, compressed, token-optimized).
     """
+    # Priority 1: Typed AI layer (type-safe validated output)
+    try:
+        from typed_ai_layer import generate_summary as _typed_summary
+        result = _typed_summary(candidate_name, answers_data)
+        if result and "recommendation" in result:
+            return result
+    except Exception as e:
+        print(f"[typed_ai_layer] summary failed, using direct call: {e}")
+
+    # ── Direct fallback (original logic) ──────────────────────────────────
     if not answers_data:
         return {
             "recommendation": "No Data",
@@ -1270,42 +1279,44 @@ def generate_interview_summary(candidate_name: str, answers_data: list) -> dict:
 
     avg = sum(a.get("ai_score", 0) or 0 for a in answers_data) / len(answers_data)
 
-    qa_block = "\n".join(
-        f"Q{i+1}: {a['question_text']}\nA: {a['answer_text']}\nWPM (Words per Minute): {a.get('wpm', 0)}\nScore: {a.get('ai_score',0)}/100"
+    # TOKEN SAVE: Send compressed feedback instead of full answer text
+    compressed_qa = "\n".join(
+        f"Q{i+1}: {a.get('question_text','')[:120]}\n"
+        f"Score: {a.get('ai_score', 0)}/100 | "
+        f"Feedback: {(a.get('ai_feedback') or '')[:200]}"
         for i, a in enumerate(answers_data)
     )
 
-    prompt = f"""
-You are a senior hiring manager and industrial psychologist reviewing an interview for {candidate_name}.
-Here is the full transcript:
+    SYSTEM = (
+        "You are a senior hiring manager. Analyze interview performance and return ONLY valid JSON. "
+        "No markdown, no explanation."
+    )
+    USER = f"""Candidate: {candidate_name}
+Average Score: {avg:.1f}/100
 
-{qa_block}
+Interview Summary (Compressed):
+{compressed_qa}
 
-Average score: {avg:.1f}/100
+Return JSON with keys: recommendation (one of: Strong Hire, Hire, Borderline, No Hire),
+strengths (2-3 sentences), weaknesses (2-3 sentences),
+communication_score (0-100), communication_reasoning,
+skills_score (0-100), skills_reasoning,
+competencies_score (0-100), competencies_reasoning,
+personality_score (0-100), personality_reasoning,
+culture_fit_score (0-100), culture_fit_reasoning,
+job_success_score (0-100), job_success_reasoning,
+detected_accent (short string)."""
 
-Please respond in JSON with the following keys:
-- "recommendation": one of "Strong Hire", "Hire", "Borderline", "No Hire"
-- "strengths": 2-3 sentence paragraph on what the candidate did well
-- "weaknesses": 2-3 sentence paragraph on where the candidate needs improvement
-- "communication_score": an integer from 0 to 100 assessing communication skills.
-- "communication_reasoning": a short sentence explaining the communication score.
-- "skills_score": an integer from 0 to 100 assessing technical/domain skills.
-- "skills_reasoning": a short sentence explaining the skills score.
-- "competencies_score": an integer from 0 to 100 assessing behavioral competencies and leadership.
-- "competencies_reasoning": a short sentence explaining the competencies score.
-- "personality_score": an integer from 0 to 100 assessing HEXACO/Big Five personality fit.
-- "personality_reasoning": a short sentence explaining the dominant personality traits observed.
-- "culture_fit_score": an integer from 0 to 100 assessing alignment with company culture.
-- "culture_fit_reasoning": a short sentence explaining the culture fit score.
-- "job_success_score": an integer from 0 to 100 predicting overall job success.
-- "job_success_reasoning": a short sentence explaining the prediction.
-- "detected_accent": a short string estimating the candidate's likely accent/dialect.
-"""
+    prompt = USER  # kept for backward compat
 
     try:
         raw = chat_completion(
-            messages=[{"role": "user", "content": prompt}],
-            model="openai/gpt-4o-mini"
+            messages=[
+                {"role": "system", "content": SYSTEM},
+                {"role": "user", "content": USER}
+            ],
+            model="openai/gpt-4o-mini",
+            temperature=0.1,
         )
         res = extract_json(raw)
         if res: return res
@@ -1810,6 +1821,55 @@ def generate_report(interview_id: str):
         # story.append(Paragraph("_" * 80, normal_style)) 
         
         story.append(Spacer(1, 15))
+
+    # ── CODING ROUND ──
+    coding_round = interview_data.get("coding_round")
+    if coding_round and (coding_round.get("latest_code") or coding_round.get("final_evaluation")):
+        story.append(Spacer(1, 20))
+        story.append(Paragraph("<b>Coding Round Results</b>", styles['Heading2']))
+        story.append(Spacer(1, 10))
+        
+        if coding_round.get("latest_code"):
+            story.append(Paragraph("<b>Submitted Code:</b>", normal_style))
+            safe_code = coding_round["latest_code"].replace("&", "&amp;").replace("<", "&lt;").replace(">", "&gt;").replace("\n", "<br/>")
+            
+            code_style = ParagraphStyle(
+                'Code', parent=normal_style, fontName='Courier', fontSize=9, 
+                leading=11, backColor='#f4f4f4', borderPadding=5, borderRadius=3
+            )
+            story.append(Paragraph(safe_code, code_style))
+            story.append(Spacer(1, 15))
+            
+        if coding_round.get("final_evaluation"):
+            story.append(Paragraph("<b>AI Evaluation:</b>", normal_style))
+            safe_eval = coding_round["final_evaluation"].replace("&", "&amp;").replace("<", "&lt;").replace(">", "&gt;").replace("\n", "<br/>")
+            story.append(Paragraph(safe_eval, normal_style))
+            story.append(Spacer(1, 15))
+            
+    # ── CASE STUDY ROUND ──
+    case_study = interview_data.get("case_study_round")
+    if case_study and case_study.get("answers"):
+        story.append(Spacer(1, 20))
+        story.append(Paragraph("<b>Case Study Round Results</b>", styles['Heading2']))
+        story.append(Spacer(1, 10))
+        
+        questions = case_study.get("questions", [])
+        for i, ans in enumerate(case_study.get("answers", [])):
+            if ans is None:
+                continue
+            
+            q_text = questions[i].get("text", f"Question {i+1}") if i < len(questions) else f"Question {i+1}"
+            story.append(Paragraph(f"<b>Q{i+1}: {q_text}</b>", styles['Heading3']))
+            story.append(Spacer(1, 5))
+            
+            a_text = ans.get("answer_text", "")
+            if a_text:
+                a_text_disp = a_text.replace("&", "&amp;").replace("<", "&lt;").replace(">", "&gt;").replace("\n", "<br/>")
+            else:
+                a_text_disp = "(No answer recorded)"
+                
+            story.append(Paragraph(f"<b>Your Answer:</b> {a_text_disp}", normal_style))
+            story.append(Spacer(1, 15))
 
     doc.build(story)
     
@@ -2928,7 +2988,8 @@ def get_session(link_id: str):
             "is_deactivated": row.get("is_deactivated", False),
             "language": row.get("language", "English"),
             "interview_type": row.get("interview_type", "Technical"),
-            "voice_clone": row.get("voice_clone", False)
+            "voice_clone": row.get("voice_clone", False),
+            "custom_voice_id": row.get("custom_voice_id", "")
         }
     else:
         raise HTTPException(status_code=404, detail="Session not found")
@@ -3725,6 +3786,8 @@ def admin_copilot_execute(request: CopilotExecuteRequest, current_admin: dict = 
         else:
             raise HTTPException(status_code=400, detail=f"Unknown or unauthorized action: {request.action}")
             
+    except HTTPException as he:
+        raise he
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 
