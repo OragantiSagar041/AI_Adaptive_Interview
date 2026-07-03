@@ -1,14 +1,14 @@
 import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-app.js";
 import { getAuth, signInWithEmailAndPassword, sendPasswordResetEmail, GoogleAuthProvider, signInWithPopup } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-auth.js";
 
-const firebaseConfig = {
-  apiKey: "AIzaSyBo12Pv1iW_B1D1AxXJBP7t78OTdexY_PQ",
-  authDomain: "plantation-e904c.firebaseapp.com",
-  projectId: "plantation-e904c",
-  storageBucket: "plantation-e904c.firebasestorage.app",
-  messagingSenderId: "199528896150",
-  appId: "1:199528896150:web:5271caefdd8332d67354b7",
-  measurementId: "G-CEG8TDNDY8"
+const firebaseConfig = window.__FIREBASE__ || {
+  apiKey: "LOCAL_DEV_KEY",
+  authDomain: "localhost",
+  projectId: "local-dev",
+  storageBucket: "local-dev.appspot.com",
+  messagingSenderId: "000000000000",
+  appId: "1:000000000000:web:0000000000000000000000",
+  measurementId: "G-0000000000"
 };
 
 const app = initializeApp(firebaseConfig);

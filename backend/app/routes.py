@@ -78,6 +78,7 @@ from .models import *
 from .database import *
 from .config import *
 from .services import *
+from app.session_store import get_session, set_session, delete_session
 
 load_dotenv()
 
@@ -86,7 +87,7 @@ router = APIRouter()
 
 
 @router.get("/admin/last-error")
-def get_last_error():
+def get_last_error(current_admin: dict = Depends(get_current_admin_details)):
     return LAST_422_ERROR or {"status": "no errors"}
 
 @router.get("/api/plans")
@@ -130,7 +131,7 @@ class RazorpayOrderRequest(BaseModel):
     credits: int
 
 
-@router.on_event("startup")
+# Startup functions (to be called by main.py lifespan)
 def startup_event_cloudinary():
     global CLOUDINARY_CLEANUP_STARTED
     if not CLOUDINARY_CLEANUP_STARTED:
@@ -140,7 +141,7 @@ def startup_event_cloudinary():
 
 
 # In-memory storage (replace with database in production)
-interviews = {}
+    # interviews = {}
 
 
 
@@ -177,12 +178,12 @@ def load_interview_from_db(interview_id: str) -> Optional[Dict[str, Any]]:
         "coding_round": row.get("coding_round"),
         "case_study_round": row.get("case_study_round"),
     }
-    interviews[interview_id] = interview
+    set_session(interview_id, interview)
     return interview
 
 
 def get_interview_or_404(interview_id: str) -> Dict[str, Any]:
-    interview = interviews.get(interview_id) or load_interview_from_db(interview_id)
+    interview = get_session(interview_id) or load_interview_from_db(interview_id)
     if not interview:
         raise HTTPException(status_code=404, detail="Interview not found")
     return interview
@@ -210,8 +211,10 @@ def build_answer_summary(answers_data: List[Dict[str, Any]]) -> str:
 
 
 def persist_coding_round(interview_id: str, coding_round: Dict[str, Any]) -> None:
-    if interview_id in interviews:
-        interviews[interview_id]["coding_round"] = coding_round
+    interview = get_session(interview_id)
+    if interview:
+        interview["coding_round"] = coding_round
+        set_session(interview_id, interview)
     interviews_collection.update_one(
         {"id": interview_id},
         {"$set": {"coding_round": coding_round}},
@@ -240,10 +243,10 @@ def build_coding_test_payload(coding_round: Dict[str, Any]) -> Dict[str, Any]:
 
 @router.post("/generate-next-question")
 def api_gen_next_question(req: NextQuestionRequest):
-    if req.interview_id not in interviews:
+    if not get_session(req.interview_id):
         raise HTTPException(status_code=404, detail="Interview not found")
         
-    interview = interviews[req.interview_id]
+    interview = get_session(req.interview_id)
     followup_streak = interview.get("followup_streak", 0)
     
     try:
@@ -303,6 +306,7 @@ def api_gen_next_question(req: NextQuestionRequest):
                  q["id"] = int(q["id"]) + 1
                  
         interview["questions"].insert(current_idx + 1, new_question)
+        set_session(req.interview_id, interview)
         
         # Update DB with new question list
         interviews_collection.update_one(
@@ -353,7 +357,7 @@ def upload_resume(
             raise HTTPException(status_code=400, detail="Failed to generate questions")
 
         # Store interview data (RAM)
-        interviews[interview_id] = {
+        set_session(interview_id, {
             "id": interview_id,
             "source": source,
             "profile_text": content_str[:5000], # Store more text
@@ -361,7 +365,7 @@ def upload_resume(
             "questions": questions,
             "answers": {},
             "created_at": datetime.now(timezone.utc).isoformat()
-        }
+        })
 
         # Store interview data (DB)
         try:
@@ -409,7 +413,7 @@ def start_interview(
             raise HTTPException(status_code=400, detail="Failed to generate questions")
 
         # ✅ STEP-3.3 → STORE ANALYSIS HERE (RAM)
-        interviews[interview_id] = {
+        set_session(interview_id, {
             "id": interview_id,
             "source": source,
             "profile_text": content[:5000],
@@ -417,7 +421,7 @@ def start_interview(
             "questions": questions,
             "answers": {},
             "created_at": datetime.now(timezone.utc).isoformat()
-        }
+        })
 
         # Store interview data (DB)
         try:
@@ -443,27 +447,27 @@ def start_interview(
 @router.get("/interview/{interview_id}/question/{question_id}")
 def get_question(interview_id: str, question_id: int):
     # Restore from DB if not in RAM
-    if interview_id not in interviews:
+    if not get_session(interview_id):
         row = interviews_collection.find_one({"id": interview_id})
         if row:
             print(f" Restoring interview {interview_id} from DB...")
             try:
                 loaded_questions = json.loads(row.get("questions", "[]"))
-                interviews[interview_id] = {
+                set_session(interview_id, {
                     "id": interview_id,
                     "source": row.get("source"),
                     "profile_text": row.get("profile_text"),
                     "questions": loaded_questions,
                     "answers": {},
                     "created_at": row.get("created_at")
-                }
+                })
             except Exception as e:
                 print(f"Restore failed: {e}")
     
-    if interview_id not in interviews:
+    if not get_session(interview_id):
         raise HTTPException(status_code=404, detail="Interview not found")
     
-    interview = interviews[interview_id]
+    interview = get_session(interview_id)
     # Ensure ID comparison works (cast both to int)
     question = next((q for q in interview["questions"] if int(q["id"]) == int(question_id)), None)
     
@@ -490,10 +494,10 @@ def upload_answer(
 @router.get("/interview/{interview_id}/summary")
 def get_interview_summary(interview_id: str):
     """Get a summary of the interview including all questions and answers."""
-    if interview_id not in interviews:
+    if not get_session(interview_id):
         raise HTTPException(status_code=404, detail="Interview not found")
     
-    interview = interviews[interview_id]
+    interview = get_session(interview_id)
     return {
         "interview_id": interview_id,
         "source": interview["source"],
@@ -546,10 +550,10 @@ def save_answer(
     context = ""
     language = "English"
     if interview_id in interviews:
-        profile_text = interviews[interview_id].get("profile_text", "")
-        source = interviews[interview_id].get("source", "Resume")
+        profile_text = get_session(interview_id).get("profile_text", "")
+        source = get_session(interview_id).get("source", "Resume")
         context = f"Candidate's {source}: {profile_text}"
-        language = interviews[interview_id].get("language", "English")
+        language = get_session(interview_id).get("language", "English")
     else:
         try:
             row = interviews_collection.find_one({"id": interview_id})
@@ -1059,8 +1063,11 @@ async def start_case_study_round(req: CaseStudyStartRequest):
         {"id": req.interview_id},
         {"$set": {"case_study_round": case_study_round}}
     )
-    if req.interview_id in interviews:
-        interviews[req.interview_id]["case_study_round"] = case_study_round
+    if get_session(req.interview_id):
+        interview = get_session(req.interview_id)
+        if interview:
+            interview["case_study_round"] = case_study_round
+            set_session(req.interview_id, interview)
     
     return {
         "interview_id": req.interview_id,
@@ -1629,10 +1636,10 @@ def analyze(req: AnalyzeRequest):
     context = ""
     language = "English"
     # Retrieve Resume/JD context from the CURRENT in-memory session (not historical DB data)
-    if req.interview_id and req.interview_id in interviews:
-         profile_text = interviews[req.interview_id].get("profile_text", "")
-         source = interviews[req.interview_id].get("source", "Resume")
-         language = interviews[req.interview_id].get("language", "English")
+    if req.interview_id and get_session(req.interview_id):
+         profile_text = get_session(req.interview_id).get("profile_text", "")
+         source = get_session(req.interview_id).get("source", "Resume")
+         language = get_session(req.interview_id).get("language", "English")
          context = f"Candidate's {source}: {profile_text}"
     
     result = analyze_answer(req.question, req.answer, context, language=language)
@@ -2264,7 +2271,7 @@ def invitation_email_scheduler_loop():
             print(f"Email scheduler error: {e}")
         time.sleep(30)
 
-@router.on_event("startup")
+# Startup functions (to be called by main.py lifespan)
 async def startup_event_db_and_email():
     import mongo_db
     await mongo_db.init_db_indexes()
@@ -2627,7 +2634,7 @@ def extract_info_from_resume(text: str) -> Dict:
         return {"name": name, "email": email}
 
 @router.post("/admin/parse-resume")
-def parse_resume(file: UploadFile = File(...)):
+def parse_resume(file: UploadFile = File(...), current_admin: dict = Depends(get_current_admin_details)):
     ALLOWED_MIMES = ["application/pdf", "application/vnd.openxmlformats-officedocument.wordprocessingml.document", "application/msword", "text/plain"]
     if file.content_type and file.content_type not in ALLOWED_MIMES:
         raise HTTPException(status_code=400, detail="Invalid file type. Only PDF, DOCX, and TXT are allowed for security reasons.")
@@ -3126,8 +3133,8 @@ def delete_session(link_id: str, current_admin: dict = Depends(require_role("adm
     if interview_id:
         interviews_collection.delete_one({"id": interview_id})
         answers_collection.delete_many({"interview_id": interview_id})
-        if interview_id in interviews:
-            del interviews[interview_id]
+        if get_session(interview_id):
+            delete_session(interview_id)
             
     # Delete the session link
     interview_sessions_collection.delete_one({"link_id": link_id})
@@ -3285,7 +3292,7 @@ def start_session_interview(link_id: str = Form(...)):
             }
         
         # Status is 'started' — reload the existing interview and return first question
-        existing = interviews.get(existing_interview_id)
+        existing = get_session(existing_interview_id)
         if not existing:
             row2 = interviews_collection.find_one({"id": existing_interview_id})
             if row2:
@@ -3299,7 +3306,7 @@ def start_session_interview(link_id: str = Form(...)):
                         "answers": {},
                         "created_at": row2.get("created_at")
                     }
-                    interviews[existing_interview_id] = existing
+                    set_session(existing_interview_id, existing)
                 except Exception:
                     existing = None
         
@@ -3423,7 +3430,7 @@ def start_session_interview(link_id: str = Form(...)):
     interview_id = f"int_{int(datetime.now(timezone.utc).timestamp())}_{uuid.uuid4().hex[:8]}"
 
     # Store interview data (RAM)
-    interviews[interview_id] = {
+    set_session(interview_id, {
         "id": interview_id,
         "source": source,
         "profile_text": content_str[:5000],
@@ -3435,7 +3442,7 @@ def start_session_interview(link_id: str = Form(...)):
         "candidate_email": candidate_email,
         "status": status,
         "language": language
-    }
+    })
     
     # Store interview data (DB)
     try:
@@ -4975,7 +4982,7 @@ def create_razorpay_order(data: RazorpayOrderRequest):
     try:
         response = requests.post(
             "https://api.razorpay.com/v1/orders",
-            auth=(key_id, key_secret, timeout=10),
+            auth=(key_id, key_secret),
             json=payload,
             timeout=30,
         )
@@ -5047,7 +5054,7 @@ def verify_razorpay_payment(data: RazorpayVerifyRequest):
     try:
         order_response = requests.get(
             f"https://api.razorpay.com/v1/orders/{data.razorpay_order_id}",
-            auth=(key_id, key_secret, timeout=10),
+            auth=(key_id, key_secret),
             timeout=30,
         )
         if order_response.ok:
@@ -5066,7 +5073,7 @@ def verify_razorpay_payment(data: RazorpayVerifyRequest):
     try:
         payment_response = requests.get(
             f"https://api.razorpay.com/v1/payments/{data.razorpay_payment_id}",
-            auth=(key_id, key_secret, timeout=10),
+            auth=(key_id, key_secret),
             timeout=30,
         )
         if payment_response.ok:
@@ -5153,7 +5160,7 @@ def create_razorpay_upgrade_order(data: RazorpayUpgradeOrderRequest):
     try:
         response = requests.post(
             "https://api.razorpay.com/v1/orders",
-            auth=(key_id, key_secret, timeout=10),
+            auth=(key_id, key_secret),
             json=payload,
             timeout=15,
         )
@@ -5895,8 +5902,8 @@ def bulk_delete_candidates(data: BulkDeleteRequest, current_admin: dict = Depend
                 if interview_id:
                     interviews_collection.delete_one({"id": interview_id})
                     answers_collection.delete_many({"interview_id": interview_id})
-                    if interview_id in interviews:
-                        del interviews[interview_id]
+                    if get_session(interview_id):
+                        delete_session(interview_id)
                 
                 interview_sessions_collection.delete_one({"_id": row["_id"]})
                 deleted_count += 1
@@ -5917,8 +5924,8 @@ def delete_session_alias(link_id: str, current_admin: dict = Depends(get_current
         if interview_id:
             interviews_collection.delete_one({"id": interview_id})
             answers_collection.delete_many({"interview_id": interview_id})
-            if interview_id in interviews:
-                del interviews[interview_id]
+            if get_session(interview_id):
+                delete_session(interview_id)
 
         # Delete the session link itself
         interview_sessions_collection.delete_one({"link_id": link_id})
