@@ -550,7 +550,7 @@ export default function VoiceInterviewPage() {
   useEffect(() => {
     const q = questions[currentQIdx]
     if (q?.text) typewrite(q.text)
-  }, [currentQIdx, questions]) // eslint-disable-line
+  }, [currentQIdx, questions])  
 
   // ── Screen & Camera Recording ───────────────────────────────────────────────
   const startScreenRecording = useCallback(async () => {
@@ -896,7 +896,7 @@ export default function VoiceInterviewPage() {
         aiSay(`${transition}${t.nextQuestion.replace('[X]', nextIdx + 1)}${qs[nextIdx].text}`, () => startListening(ans => handleAnswer(ans, nextIdx, 0)))
       }, 500)
     }
-  }, [addMsg, aiSay, startListening]) // eslint-disable-line
+  }, [addMsg, aiSay, startListening])  
 
   // ── Complete interview ────────────────────────────────────────────────────
   const completeInterview = useCallback(async (isTimeout = false) => {
@@ -916,11 +916,15 @@ export default function VoiceInterviewPage() {
     // Speak asynchronously
     aiSay(message)
 
-    await stopAndUploadRecording(iid)
+    // Fire backend completion immediately to unblock user
     try { await fetch(`${API_BASE_URL}/complete-session/${linkId}?warnings=${warningsCount}`, { method: 'POST' }) } catch (_) { }
     
-    stopAudio() // stop audio once everything is fully saved
+    // Stop audio and mark done instantly
+    stopAudio() 
     setRound('done')
+
+    // Upload heavy recording entirely in the background (fire and forget)
+    stopAndUploadRecording(iid).catch(err => console.error("Background upload failed:", err))
   }, [stopListening, linkId, stopAndUploadRecording, warningsCount, stopAudio, aiSay])
 
   // ── Load coding/case study round questions ────────────────────────────────

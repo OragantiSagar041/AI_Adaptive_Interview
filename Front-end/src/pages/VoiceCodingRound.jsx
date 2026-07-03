@@ -446,7 +446,7 @@ export default function VoiceCodingRound({
         })
       })
     }, 800)
-  }, []) // eslint-disable-line
+  }, [])  
 
   // ── Code Sentinel ─────────────────────────────────────────────────────
   const handleCodeChange = useCallback((value) => {

@@ -1993,7 +1993,7 @@ def send_submission_notification(candidate_email: str, candidate_name: str, admi
             "to": [{"email": candidate_email, "name": candidate_name}],
             "subject": "Your Interview Has Been Submitted — Mock Interview",
             "htmlContent": candidate_html
-        }, headers=headers)
+        }, headers=headers, timeout=10)
         results.append(res.status_code < 300)
     except Exception:
         results.append(False)
@@ -2006,7 +2006,7 @@ def send_submission_notification(candidate_email: str, candidate_name: str, admi
                 "to": [{"email": admin_email, "name": "Admin"}],
                 "subject": f"Interview Submitted: {candidate_name}",
                 "htmlContent": admin_html
-            }, headers=headers)
+            }, headers=headers, timeout=10)
             results.append(res.status_code < 300)
         except Exception:
             results.append(False)
@@ -2495,7 +2495,7 @@ def send_otp_email(email: str, name: str, otp: str):
     try:
         url = "https://api.brevo.com/v3/smtp/email"
         headers = {"accept": "application/json", "api-key": api_key, "content-type": "application/json"}
-        response = requests.post(url, json=payload, headers=headers)
+        response = requests.post(url, json=payload, headers=headers, timeout=10)
         return response.status_code < 300
     except:
         return False
@@ -2905,7 +2905,7 @@ def bulk_create_sessions(data: BulkCreateSession, background_tasks: BackgroundTa
             r["link_url"] = None
 
     # Step 3: Trigger Background Emails
-    successful = len(results)  # Since DB insert succeeded, we count them all as successful for credit purposes
+    successful = sum(1 for r in results if r["status"] == "success")  # Only deduct credits for actually successful DB inserts
     email_jobs = []
     
     for r in results:
@@ -3568,7 +3568,7 @@ def send_decision_email(email: str, name: str, decision: str, jd: str):
     try:
         res = requests.post("https://api.brevo.com/v3/smtp/email", json=payload, headers={
             "api-key": api_key, "content-type": "application/json"
-        })
+        }, timeout=10)
         if res.status_code >= 300:
             print(f" Brevo Error: {res.status_code} - {res.text}")
         return res.status_code < 300
@@ -4975,7 +4975,7 @@ def create_razorpay_order(data: RazorpayOrderRequest):
     try:
         response = requests.post(
             "https://api.razorpay.com/v1/orders",
-            auth=(key_id, key_secret),
+            auth=(key_id, key_secret, timeout=10),
             json=payload,
             timeout=30,
         )
@@ -5047,7 +5047,7 @@ def verify_razorpay_payment(data: RazorpayVerifyRequest):
     try:
         order_response = requests.get(
             f"https://api.razorpay.com/v1/orders/{data.razorpay_order_id}",
-            auth=(key_id, key_secret),
+            auth=(key_id, key_secret, timeout=10),
             timeout=30,
         )
         if order_response.ok:
@@ -5066,7 +5066,7 @@ def verify_razorpay_payment(data: RazorpayVerifyRequest):
     try:
         payment_response = requests.get(
             f"https://api.razorpay.com/v1/payments/{data.razorpay_payment_id}",
-            auth=(key_id, key_secret),
+            auth=(key_id, key_secret, timeout=10),
             timeout=30,
         )
         if payment_response.ok:
@@ -5153,7 +5153,7 @@ def create_razorpay_upgrade_order(data: RazorpayUpgradeOrderRequest):
     try:
         response = requests.post(
             "https://api.razorpay.com/v1/orders",
-            auth=(key_id, key_secret),
+            auth=(key_id, key_secret, timeout=10),
             json=payload,
             timeout=15,
         )

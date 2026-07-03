@@ -1,3 +1,4 @@
+ 
 import React, { useState, useEffect, useRef } from 'react'
 import { useSelector, useDispatch } from 'react-redux'
 import { useNavigate, useLocation, NavLink, Outlet } from 'react-router-dom'
@@ -48,6 +49,7 @@ export default function MasterLayout() {
     if (token) {
       dispatch(loadSuperAdminProfile())
     }
+   
   }, [dispatch, token])
 
   // Local theme states
@@ -74,6 +76,7 @@ export default function MasterLayout() {
       const interval = setInterval(fetchNotifications, 30000)
       return () => clearInterval(interval)
     }
+   
   }, [token])
 
   const handleMarkRead = async (id) => {
@@ -144,6 +147,7 @@ export default function MasterLayout() {
     return () => {
       document.removeEventListener("mousedown", handleClickOutside)
     }
+   
   }, [])
   const [isCollapsed, setIsCollapsed] = useState(false)
   const [isMobile, setIsMobile] = useState(false)
@@ -160,6 +164,7 @@ export default function MasterLayout() {
     handleResize()
     window.addEventListener('resize', handleResize)
     return () => window.removeEventListener('resize', handleResize)
+   
   }, [])
 
   useEffect(() => {
@@ -171,6 +176,7 @@ export default function MasterLayout() {
     return () => {
       document.body.style.overflow = ''
     }
+   
   }, [isMobile, isMobileOpen])
 
   const accentColors = {
@@ -189,6 +195,7 @@ export default function MasterLayout() {
     document.documentElement.style.setProperty('--primary-color', currentAccent.primary)
     document.documentElement.style.setProperty('--primary-hover', currentAccent.hover)
     document.documentElement.style.setProperty('--primary-glow', currentAccent.glow)
+   
   }, [accentName])
 
   const handleLogout = () => {

@@ -1425,15 +1425,13 @@ export const useInterviewSession = (sessionId, interviewType, startRoundTwo) => 
         })
       }
 
-      try {
-        await Promise.all([
-          uploadPromise(cameraChunksRef.current, 'camera'),
-          uploadPromise(screenChunksRef.current, 'screen')
-        ])
+      // Fire and forget background upload
+      Promise.all([
+        uploadPromise(cameraChunksRef.current, 'camera'),
+        uploadPromise(screenChunksRef.current, 'screen')
+      ]).then(() => {
         setUploadPercentage(100)
-      } catch (err) {
-        console.error(err)
-      }
+      }).catch(err => console.error("Background upload failed:", err))
     }
 
     try {

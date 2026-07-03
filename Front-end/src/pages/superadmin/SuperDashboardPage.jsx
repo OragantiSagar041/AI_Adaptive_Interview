@@ -1,3 +1,4 @@
+ 
 import React, { useState, useEffect, useRef } from 'react'
 import { useSelector } from 'react-redux'
 import axios from 'axios'
@@ -200,6 +201,7 @@ export default function SuperDashboardPage() {
     return () => {
       destroyCharts()
     }
+   
   }, [token])
 
   // Observe HTML style changes (accent changes) to trigger chart redraws
@@ -209,6 +211,7 @@ export default function SuperDashboardPage() {
     })
     observer.observe(document.documentElement, { attributes: true, attributeFilter: ['style'] })
     return () => observer.disconnect()
+   
   }, [token])
 
   return (

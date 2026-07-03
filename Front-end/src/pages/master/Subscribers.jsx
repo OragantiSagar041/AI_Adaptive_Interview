@@ -1,3 +1,4 @@
+ 
 import React, { useState, useEffect } from 'react'
 import { useSelector } from 'react-redux'
 import { Search, Calendar, Trash2, Power, PowerOff, X, RefreshCw } from 'lucide-react'
@@ -188,6 +189,7 @@ export default function Subscribers() {
     if (token) {
       fetchCompanies()
     }
+   
   }, [token])
 
   // Filters logic

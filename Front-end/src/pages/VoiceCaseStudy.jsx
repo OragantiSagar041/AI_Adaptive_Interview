@@ -574,7 +574,7 @@ export default function VoiceCaseStudy({
     const introTemplate = scenarios.length > 1 ? t.csIntro : t.csIntroSingle
     const intro = introTemplate.replace('[COUNT]', scenarios.length)
     setTimeout(() => aiSay(intro, () => presentScenario(0)), 800)
-  }, []) // eslint-disable-line
+  }, [])  
 
   const handleComplete = useCallback(async () => {
     if (submittingRef.current) return

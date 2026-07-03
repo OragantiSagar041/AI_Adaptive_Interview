@@ -334,20 +334,55 @@ for (const test of tests) {{
 console.log("\\n" + JSON.stringify(results));
 """
 
-    with tempfile.NamedTemporaryFile(suffix=".js", delete=False, mode="w", encoding="utf-8") as f:
-        f.write(harness)
-        temp_path = f.name
-
+    import requests
+    
+    payload = {
+        "language": "javascript",
+        "version": "18.15.0",
+        "files": [
+            {
+                "name": "main.js",
+                "content": harness
+            }
+        ]
+    }
+    
     try:
-        result = subprocess.run(["node", temp_path], capture_output=True, text=True, timeout=10)
-        return _collect_runner_output(result, tests)
-    except subprocess.TimeoutExpired:
+        response = requests.post("https://emkc.org/api/v2/piston/execute", json=payload, timeout=10)
+        response.raise_for_status()
+        data = response.json()
+        
+        if "run" in data:
+            run_result = data["run"]
+            stdout = run_result.get("stdout", "").strip()
+            stderr = run_result.get("stderr", "").strip()
+            
+            if stdout:
+                try:
+                    lines = stdout.split("\\n")
+                    for line in reversed(lines):
+                        if line.startswith("[") and line.endswith("]"):
+                            results_obj = json.loads(line)
+                            class MockResult:
+                                pass
+                            mock_res = MockResult()
+                            mock_res.stdout = line
+                            mock_res.stderr = stderr
+                            return _collect_runner_output(mock_res, tests)
+                except Exception:
+                    pass
+            
+            if stderr:
+                return _runner_error(f"Execution Error: {stderr}", tests)
+            else:
+                return _runner_error(f"Execution failed or produced invalid output.\\nOutput: {stdout}", tests)
+        else:
+            return _runner_error(f"Invalid response from Piston API: {data}", tests)
+            
+    except requests.exceptions.Timeout:
         return _runner_error("Execution timed out (10s limit).", tests)
     except Exception as e:
-        return _runner_error(f"Failed to execute code: {e}", tests)
-    finally:
-        if os.path.exists(temp_path):
-            os.remove(temp_path)
+        return _runner_error(f"Failed to execute code securely: {e}", tests)
 
 def _evaluate_code_with_llm(code: str, tests: list, function_name: str, language: str) -> Dict[str, Any]:
     system_prompt = (
@@ -465,9 +500,14 @@ def _run_jdoodle_api(code: str, tests: list, function_name: str, language: str) 
     }
     
     import requests
-    res = requests.post("https://api.jdoodle.com/v1/execute", json=payload)
-    if res.status_code != 200:
-        raise ValueError(f"JDoodle API returned {res.status_code}: {res.text}")
+    try:
+        res = requests.post("https://api.jdoodle.com/v1/execute", json=payload, timeout=15)
+        if res.status_code != 200:
+            raise ValueError(f"JDoodle API returned {res.status_code}: {res.text}")
+    except requests.exceptions.Timeout:
+        return _runner_error("JDoodle compilation timed out (15s limit). Please try again.", tests)
+    except Exception as e:
+        return _runner_error(f"JDoodle execution failed: {e}", tests)
         
     data = res.json()
     if data.get("error"):
@@ -527,33 +567,11 @@ def _run_compiled_mock(code: str, tests: list, function_name: str, language: str
     except Exception as e:
         print(f"LLM Code Evaluation failed (Quota exceeded or error): {e}")
         
-    # 4. Final Fallback: Offline Mocked Success
-    visible_results = []
-    hidden_passed = 0
-    hidden_total = 0
-    
-    for test in tests:
-        if test.get("visible", True):
-            visible_results.append({
-                "id": test.get("id"),
-                "visible": True,
-                "passed": True,
-                "input": test.get("input"),
-                "output": f"[Offline Mode] Code simulated locally. {language.capitalize()} test cases automatically passed.",
-                "expected": test.get("expected") if test.get("expected") is not None else test.get("output")
-            })
-        else:
-            hidden_passed += 1
-            hidden_total += 1
-            
-    return {
-        "status": "ok",
-        "runtime_error": None,
-        "output": f"[Offline Mode] Successfully simulated {language} code execution due to API quota exhaustion.",
-        "visible_results": visible_results,
-        "hidden_summary": {"passed": hidden_passed, "total": hidden_total},
-        "all_passed": True
-    }
+    # 4. Final Fallback: Return Error instead of auto-passing
+    return _runner_error(
+        f"API Quota Exhausted: Could not compile {language} code. Please try again later.",
+        tests
+    )
 
 def _runner_error(message: str, tests: List[Dict[str, Any]] = None) -> Dict[str, Any]:
     if tests is None:
@@ -809,23 +827,59 @@ else:
     sys.exit(1)
 """
 
-    import tempfile
-    import os
-    import subprocess
-    with tempfile.NamedTemporaryFile(suffix=".py", delete=False, mode="w", encoding="utf-8") as f:
-        f.write(harness)
-        temp_path = f.name
-
+    import requests
+    
+    payload = {
+        "language": "python",
+        "version": "3.10.0",
+        "files": [
+            {
+                "name": "main.py",
+                "content": harness
+            }
+        ]
+    }
+    
     try:
-        result = subprocess.run(["python", temp_path], capture_output=True, text=True, timeout=10)
-        return _collect_runner_output(result, tests)
-    except subprocess.TimeoutExpired:
+        response = requests.post("https://emkc.org/api/v2/piston/execute", json=payload, timeout=10)
+        response.raise_for_status()
+        data = response.json()
+        
+        if "run" in data:
+            run_result = data["run"]
+            # Try to parse the stdout as our JSON results array
+            stdout = run_result.get("stdout", "").strip()
+            stderr = run_result.get("stderr", "").strip()
+            
+            if stdout:
+                try:
+                    # Look for the last JSON array in the output (since candidate might have print statements)
+                    lines = stdout.split("\\n")
+                    for line in reversed(lines):
+                        if line.startswith("[") and line.endswith("]"):
+                            results_obj = json.loads(line)
+                            # Mock the result object to pass to _collect_runner_output
+                            class MockResult:
+                                pass
+                            mock_res = MockResult()
+                            mock_res.stdout = line
+                            mock_res.stderr = stderr
+                            return _collect_runner_output(mock_res, tests)
+                except Exception:
+                    pass
+            
+            # If we couldn't parse the JSON or it crashed
+            if stderr:
+                return _runner_error(f"Execution Error: {stderr}", tests)
+            else:
+                return _runner_error(f"Execution failed or produced invalid output.\\nOutput: {stdout}", tests)
+        else:
+            return _runner_error(f"Invalid response from Piston API: {data}", tests)
+            
+    except requests.exceptions.Timeout:
         return _runner_error("Execution timed out (10s limit).", tests)
     except Exception as e:
-        return _runner_error(f"Failed to execute code: {e}", tests)
-    finally:
-        if os.path.exists(temp_path):
-            os.remove(temp_path)
+        return _runner_error(f"Failed to execute code securely: {e}", tests)
 def extract_skills(text: str) -> List[str]:
     """Extract skills from resume text."""
     skills = []
@@ -2266,7 +2320,7 @@ def send_interview_email(candidate_email: str, candidate_name: str, link_url: st
                 "api-key": brevo_api_key,
                 "content-type": "application/json"
             }
-        )
+        , timeout=10)
         response.raise_for_status()
         print(f"Email successfully sent to {candidate_email}")
         return True
