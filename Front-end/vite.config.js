@@ -8,4 +8,13 @@ export default defineConfig({
     react(),
     tailwindcss(),
   ],
+  optimizeDeps: {
+    // MediaPipe's WASM loader uses a custom Module factory that breaks when
+    // Vite pre-bundles it — exclude it so the worker gets the raw ESM files.
+    exclude: ['@mediapipe/tasks-vision'],
+  },
+  worker: {
+    format: 'es',
+  },
 })
+

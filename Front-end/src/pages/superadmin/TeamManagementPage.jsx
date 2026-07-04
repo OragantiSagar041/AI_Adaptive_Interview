@@ -152,19 +152,35 @@ export default function TeamManagementPage() {
 
   const handleToggleStatus = async (admin) => {
     try {
-      const res = await fetch(`${API_BASE_URL}/super-admin/admins/${admin.id}/toggle-status`, {
-        method: 'POST',
+      // Optimistically update UI
+      const newStatus = admin.login_enabled === false ? true : false;
+      setAdmins(admins.map(a => a.id === admin.id ? { ...a, login_enabled: newStatus } : a));
+
+      const res = await axios.post(`${API_BASE_URL}/super-admin/admins/${admin.id}/toggle-status`, {}, {
         headers: { Authorization: `Bearer ${token}` }
       })
-      if (res.ok) {
-        loadTeamManagement()
+      
+      if (res.data.status === 'success') {
+        Swal.fire({
+          title: newStatus ? 'Activated!' : 'Deactivated!',
+          text: `Admin access has been ${newStatus ? 'enabled' : 'disabled'}.`,
+          icon: 'success',
+          toast: true,
+          position: 'top-end',
+          showConfirmButton: false,
+          timer: 3000
+        });
+        loadTeamManagement() // Refresh background
       } else {
-        const error = await res.json()
-        Swal.fire('Error', error.detail || 'Failed to toggle status', 'error')
+        // Revert on failure
+        setAdmins(admins.map(a => a.id === admin.id ? { ...a, login_enabled: admin.login_enabled } : a));
+        Swal.fire('Error', 'Failed to toggle status', 'error')
       }
     } catch (err) {
+      // Revert on failure
+      setAdmins(admins.map(a => a.id === admin.id ? { ...a, login_enabled: admin.login_enabled } : a));
       console.error(err)
-      Swal.fire('Error', 'Network error', 'error')
+      Swal.fire('Error', err.response?.data?.detail || 'Network error', 'error')
     }
   }
 

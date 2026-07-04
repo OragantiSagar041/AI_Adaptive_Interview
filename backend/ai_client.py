@@ -34,7 +34,6 @@ load_dotenv()
 
 OPENROUTER_API_KEY = os.getenv("OPENROUTER_API_KEY", "")
 HF_API_KEY = os.getenv("HF_API_KEY", "")  # Optional — HF free tier works without key but with rate limits
-
 # HuggingFace model choices (in priority order — first available wins)
 HF_MODELS = [
     "mistralai/Mistral-7B-Instruct-v0.3",
@@ -96,7 +95,7 @@ def _call_openrouter(
     messages: List[Dict[str, str]],
     model: str = "openai/gpt-4o-mini",
     temperature: float = 0.1,
-    timeout: int = 45,
+    timeout: int = 15,
 ) -> str:
     """Call OpenRouter using the OpenAI-compatible endpoint via requests."""
     url = "https://openrouter.ai/api/v1/chat/completions"
@@ -185,66 +184,39 @@ def chat_completion(
     messages: List[Dict[str, str]],
     model: str = "openai/gpt-4o-mini",
     temperature: float = 0.1,
-    timeout: int = 45,
+    timeout: int = 15,
 ) -> str:
     """
-    Send a chat completion request with automatic fallback.
-    
-    1. If OpenRouter is available and not in cool-down → use OpenRouter
-    2. If quota exhausted or OpenRouter fails → fall back to HuggingFace
-    
-    Returns: raw assistant message text (caller parses JSON as needed)
+    Send a chat completion request.
+    If OpenRouter fails or is out of quota, instantly fails so the backend 
+    falls back to the OFFLINE smart question generator (no lagging).
     """
-    # Determine the HF equivalent for fallback
-    hf_model = OPENROUTER_TO_HF.get(model, _active_hf_model)
+    if _is_in_cooldown():
+        raise RuntimeError("QUOTA_EXHAUSTED_INSTANT_OFFLINE")
 
-    # ── Check if we should skip OpenRouter entirely ──
-    if _is_in_cooldown() or not OPENROUTER_API_KEY:
-        provider = "huggingface"
-    else:
-        provider = "openrouter"
+    if not OPENROUTER_API_KEY:
+        raise RuntimeError("No API key available")
 
-    # Allow env-var override for testing
-    if _provider_override:
-        provider = _provider_override
-
-    # ── Try primary provider ──
-    if provider == "openrouter":
-        try:
-            return _call_openrouter(messages, model, temperature, timeout)
-        except QuotaExhaustedError:
-            if INSTANT_OFFLINE_ON_QUOTA:
-                # Kill-switch ON: don't waste time on HuggingFace, fail fast
-                print("⚡ Kill-switch: quota exhausted → instant offline mode (no HF attempt)")
-                raise RuntimeError("QUOTA_EXHAUSTED_INSTANT_OFFLINE")
-            print(" Falling back to HuggingFace (quota exhausted)...")
-        except Exception as exc:
-            if _is_quota_error(exc):
-                _mark_quota_exhausted()
-                if INSTANT_OFFLINE_ON_QUOTA:
-                    print("⚡ Kill-switch: quota error → instant offline mode (no HF attempt)")
-                    raise RuntimeError("QUOTA_EXHAUSTED_INSTANT_OFFLINE")
-                print(" Falling back to HuggingFace (quota error in exception)...")
-            else:
-                # Non-quota error — still try HF as safety net
-                print(f"  OpenRouter error: {exc}  trying HuggingFace fallback...")
-
-    # ── Fallback to HuggingFace (only if kill-switch is OFF or non-quota error) ──
     try:
-        hf_timeout = HF_TIMEOUT_SECONDS  # fast timeout to avoid hanging
-        return _call_huggingface(messages, hf_model, temperature, hf_timeout)
-    except Exception as hf_exc:
-        raise RuntimeError(
-            f"Both OpenRouter and HuggingFace failed.\n"
-            f"HuggingFace error: {hf_exc}"
-        )
+        return _call_openrouter(messages, model, temperature, timeout)
+    except QuotaExhaustedError:
+        print("⚡ Kill-switch: quota exhausted → instant offline mode")
+        raise RuntimeError("QUOTA_EXHAUSTED_INSTANT_OFFLINE")
+    except Exception as exc:
+        if _is_quota_error(exc):
+            _mark_quota_exhausted()
+            print("⚡ Kill-switch: quota error → instant offline mode")
+            raise RuntimeError("QUOTA_EXHAUSTED_INSTANT_OFFLINE")
+        else:
+            print(f"  OpenRouter error: {exc}. Instantly falling back to offline mode to prevent lag.")
+            raise RuntimeError(f"OpenRouter Failed: {exc}")
 
 
 def chat_completion_safe(
     messages: List[Dict[str, str]],
     model: str = "openai/gpt-4o-mini",
     temperature: float = 0.1,
-    timeout: int = 45,
+    timeout: int = 15,
     fallback_text: str = '{"error": "AI service unavailable"}',
 ) -> str:
     """

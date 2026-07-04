@@ -541,28 +541,35 @@ def save_answer(
     question_text: str = Form(...),
     answer_text: str = Form(...),
     candidate_name: str = Form("Candidate"),
-    time_spent_seconds: int = Form(0),
-    time_limit_seconds: int = Form(120),
+    time_spent_seconds: str = Form("0"),
+    time_limit_seconds: str = Form("120"),
 ):
     print(f"⚡ Instant save for Q{question_id} — AI scoring in background...")
 
     # ── STEP 1: Get context (fast — RAM first) ──────────────────────────────
     context = ""
     language = "English"
-    if interview_id in interviews:
-        profile_text = get_session(interview_id).get("profile_text", "")
-        source = get_session(interview_id).get("source", "Resume")
-        context = f"Candidate's {source}: {profile_text}"
-        language = get_session(interview_id).get("language", "English")
-    else:
-        try:
-            row = interviews_collection.find_one({"id": interview_id})
-            if row:
-                context = f"Candidate's {row.get('source')}: {row.get('profile_text')}"
-        except Exception as e:
-            print(f" Context fetch error: {e}")
+    try:
+        row = interviews_collection.find_one({"id": interview_id})
+        if row:
+            source = row.get("source", "Resume")
+            profile_text = row.get("profile_text", "")
+            context = f"Candidate's {source}: {profile_text}"
+            language = row.get("language", "English")
+    except Exception as e:
+        print(f" Context fetch error: {e}")
 
     # ── STEP 2: Save to MongoDB INSTANTLY with pending status ───────────────
+    try:
+        t_spent = int(float(time_spent_seconds)) if time_spent_seconds.lower() != 'nan' else 0
+    except:
+        t_spent = 0
+        
+    try:
+        t_limit = int(float(time_limit_seconds)) if time_limit_seconds.lower() != 'nan' else 120
+    except:
+        t_limit = 120
+
     answers_collection.delete_many({"interview_id": interview_id, "question_id": question_id})
     answers_collection.insert_one({
         "interview_id": interview_id,
@@ -573,8 +580,8 @@ def save_answer(
         "content_score": None,
         "relevance_score": None,
         "time_score": None,
-        "time_spent_seconds": time_spent_seconds,
-        "time_limit_seconds": time_limit_seconds,
+        "time_spent_seconds": t_spent,
+        "time_limit_seconds": t_limit,
         "ai_feedback": "Scoring in progress...",
         "ai_keywords": "",
         "corrected_answer": "Scoring in progress...",
@@ -589,8 +596,8 @@ def save_answer(
                 question_text,
                 answer_text,
                 context,
-                time_spent_seconds=time_spent_seconds,
-                time_limit_seconds=time_limit_seconds,
+                time_spent_seconds=t_spent,
+                time_limit_seconds=t_limit,
                 language=language
             )
             keywords = ai_result.get("keywords", [])
@@ -695,7 +702,7 @@ def save_answer(
 # ─── NEW: Save Behavioral / Proctoring Metrics per Question ───────────────────
 class BehavioralData(BaseModel):
     interview_id: str
-    question_id: int
+    question_id: str
     wpm: float = 0
     pause_count: int = 0
     filler_count: int = 0
@@ -2600,41 +2607,24 @@ def upload_profile_image(
         raise HTTPException(status_code=500, detail=str(e))
 
 def extract_info_from_resume(text: str) -> Dict:
-    try:
-        raw = chat_completion(
-            messages=[{
-                "role": "system",
-                "content": "You are a professional recruiting assistant. Extract the candidate's full name and email address from the provided resume text. Return ONLY a valid JSON object with keys 'name' and 'email'. If either cannot be found, use null."
-            }, {
-                "role": "user",
-                "content": text[:5000] # Use first block of text
-            }],
-            model="openai/gpt-4o-mini"
-        )
-        res = extract_json(raw)
-        if res: return res
-        return {"name": None, "email": None}
-    except Exception as e:
-        print(f"Error extracting candidate info: {e}")
-        # OFFLINE FALLBACK: Use regex to extract email and heuristics for name
-        import re
-        email = None
-        email_match = re.search(r'[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}', text)
-        if email_match:
-            email = email_match.group(0)
-            
-        name = None
-        lines = [line.strip() for line in text.split('\n') if line.strip()]
-        # First non-empty line that doesn't look like an email or phone
-        for line in lines[:10]:
-            if len(line) < 40 and not re.search(r'[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}', line) and not re.search(r'\d{10}', line):
-                name = line
-                break
+    import re
+    email = None
+    email_match = re.search(r'[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}', text)
+    if email_match:
+        email = email_match.group(0)
         
-        return {"name": name, "email": email}
+    name = None
+    lines = [line.strip() for line in text.split('\n') if line.strip()]
+    # First non-empty line that doesn't look like an email or phone
+    for line in lines[:10]:
+        if len(line) < 40 and not re.search(r'[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}', line) and not re.search(r'\d{10}', line):
+            name = line
+            break
+    
+    return {"name": name, "email": email}
 
 @router.post("/admin/parse-resume")
-def parse_resume(file: UploadFile = File(...), current_admin: dict = Depends(get_current_admin_details)):
+async def parse_resume(file: UploadFile = File(...), current_admin: dict = Depends(get_current_admin_details)):
     ALLOWED_MIMES = ["application/pdf", "application/vnd.openxmlformats-officedocument.wordprocessingml.document", "application/msword", "text/plain"]
     if file.content_type and file.content_type not in ALLOWED_MIMES:
         raise HTTPException(status_code=400, detail="Invalid file type. Only PDF, DOCX, and TXT are allowed for security reasons.")
@@ -2642,7 +2632,7 @@ def parse_resume(file: UploadFile = File(...), current_admin: dict = Depends(get
     if getattr(file, "size", 0) and file.size > 10 * 1024 * 1024:
         raise HTTPException(status_code=413, detail="File too large. Maximum size is 10MB.")
         
-    content = file.file.read()
+    content = await file.read()
     text = extract_text_from_file(content, file.filename)
     info = extract_info_from_resume(text)
     return {
@@ -2671,15 +2661,34 @@ def check_candidate(email: str, current_admin: dict = Depends(get_current_admin_
         return {"exists": False, "error": str(e)}
 
 @router.post("/admin/create-session")
-def create_session(data: CreateSession, current_admin: dict = Depends(get_current_admin_details)):
-    plan_context = get_admin_plan_context(current_admin)
-    if plan_context.get("credits", 0) <= 0:
-        raise HTTPException(status_code=403, detail="Company has insufficient credits to create a session")
-        
+async def create_session(data: CreateSession, current_admin: dict = Depends(get_current_admin_details)):
+    company_id = current_admin.get("company_id")
+    
+    # ATOMIC DEDUCTION (Prevents race conditions leading to negative credits)
+    if company_id:
+        res = companies_collection.update_one(
+            {"_id": ObjectId(company_id), "credits": {"$gte": 1}},
+            {"$inc": {"credits": -1}}
+        )
+        if res.modified_count == 0:
+            raise HTTPException(status_code=403, detail="Insufficient company credits (or concurrent request).")
+            
     if current_admin.get("role") == "admin":
-        admin_doc = admins_collection.find_one({"_id": ObjectId(current_admin["admin_id"])})
-        if not admin_doc or admin_doc.get("credits", 0) <= 0:
-            raise HTTPException(status_code=403, detail="You have insufficient credits. Please request more from your Super Admin.")
+        res = admins_collection.update_one(
+            {"_id": ObjectId(current_admin["admin_id"]), "credits": {"$gte": 1}},
+            {"$inc": {"credits": -1}}
+        )
+        if res.modified_count == 0:
+            if company_id:
+                companies_collection.update_one({"_id": ObjectId(company_id)}, {"$inc": {"credits": 1}})
+            raise HTTPException(status_code=403, detail="Insufficient admin credits (or concurrent request).")
+    elif not company_id:
+        res = admins_collection.update_one(
+            {"_id": ObjectId(current_admin["admin_id"]), "credits": {"$gte": 1}},
+            {"$inc": {"credits": -1}}
+        )
+        if res.modified_count == 0:
+            raise HTTPException(status_code=403, detail="Insufficient admin credits.")
 
     link_id = str(uuid.uuid4())
     now = datetime.now(timezone.utc)
@@ -2728,16 +2737,8 @@ def create_session(data: CreateSession, current_admin: dict = Depends(get_curren
     
     interview_sessions_collection.insert_one(session_doc)
     
-    # Deduct credit
-    company_id = current_admin.get("company_id")
-    if company_id:
-        companies_collection.update_one({"_id": ObjectId(company_id)}, {"$inc": {"credits": -1}})
-    
-    if current_admin.get("role") == "admin":
-        admins_collection.update_one({"_id": ObjectId(current_admin["admin_id"])}, {"$inc": {"credits": -1}})
-    elif not company_id:
-        admins_collection.update_one({"_id": ObjectId(current_admin["admin_id"])}, {"$inc": {"credits": -1}})
-    session_doc["_id"] = interview_sessions_collection.find_one({"link_id": link_id}, {"_id": 1})["_id"]
+    # Credits were already deducted atomically at the beginning of the request.
+    # _id is already populated by insert_one
     
     link_url = f"{FRONTEND_URL}/interview?session_id={link_id}"
     
@@ -2818,14 +2819,33 @@ def bulk_create_sessions(data: BulkCreateSession, background_tasks: BackgroundTa
         raise HTTPException(status_code=400, detail="No candidates provided")
         
     num_candidates = len(data.candidates)
-    plan_context = get_admin_plan_context(current_admin)
-    if plan_context.get("credits", 0) < num_candidates:
-        raise HTTPException(status_code=403, detail=f"Company has insufficient credits. You need {num_candidates} credits to bulk create these interviews.")
-
+    company_id = current_admin.get("company_id")
+    
+    # ATOMIC DEDUCTION (Prevents race conditions leading to negative credits)
+    if company_id:
+        res = companies_collection.update_one(
+            {"_id": ObjectId(company_id), "credits": {"$gte": num_candidates}},
+            {"$inc": {"credits": -num_candidates}}
+        )
+        if res.modified_count == 0:
+            raise HTTPException(status_code=403, detail=f"Insufficient company credits (or concurrent request). You need {num_candidates} credits.")
+            
     if current_admin.get("role") == "admin":
-        admin_doc = admins_collection.find_one({"_id": ObjectId(current_admin["admin_id"])})
-        if not admin_doc or admin_doc.get("credits", 0) < num_candidates:
-            raise HTTPException(status_code=403, detail=f"You have insufficient credits. Please request more from your Super Admin.")
+        res = admins_collection.update_one(
+            {"_id": ObjectId(current_admin["admin_id"]), "credits": {"$gte": num_candidates}},
+            {"$inc": {"credits": -num_candidates}}
+        )
+        if res.modified_count == 0:
+            if company_id:
+                companies_collection.update_one({"_id": ObjectId(company_id)}, {"$inc": {"credits": num_candidates}})
+            raise HTTPException(status_code=403, detail=f"Insufficient admin credits (or concurrent request). You need {num_candidates} credits.")
+    elif not company_id:
+        res = admins_collection.update_one(
+            {"_id": ObjectId(current_admin["admin_id"]), "credits": {"$gte": num_candidates}},
+            {"$inc": {"credits": -num_candidates}}
+        )
+        if res.modified_count == 0:
+            raise HTTPException(status_code=403, detail=f"Insufficient admin credits. You need {num_candidates} credits.")
 
     session_docs = []
     results = []
@@ -2931,15 +2951,17 @@ def bulk_create_sessions(data: BulkCreateSession, background_tasks: BackgroundTa
 
     print(f" Bulk sessions created: {successful}/{len(results)}")
     
-    if successful > 0:
+    # Refund failed candidates (credits were deducted atomically beforehand)
+    failed = num_candidates - successful
+    if failed > 0:
         company_id = current_admin.get("company_id")
         if company_id:
-            companies_collection.update_one({"_id": ObjectId(company_id)}, {"$inc": {"credits": -successful}})
+            companies_collection.update_one({"_id": ObjectId(company_id)}, {"$inc": {"credits": failed}})
             
         if current_admin.get("role") == "admin":
-            admins_collection.update_one({"_id": ObjectId(current_admin["admin_id"])}, {"$inc": {"credits": -successful}})
+            admins_collection.update_one({"_id": ObjectId(current_admin["admin_id"])}, {"$inc": {"credits": failed}})
         elif not company_id:
-            admins_collection.update_one({"_id": ObjectId(current_admin["admin_id"])}, {"$inc": {"credits": -successful}})
+            admins_collection.update_one({"_id": ObjectId(current_admin["admin_id"])}, {"$inc": {"credits": failed}})
 
     return {
         "status": "success",
@@ -2951,7 +2973,7 @@ def bulk_create_sessions(data: BulkCreateSession, background_tasks: BackgroundTa
 
 
 @router.get("/session/{link_id}")
-def get_session(link_id: str):
+def get_session_by_link(link_id: str):
     row = interview_sessions_collection.find_one({"link_id": link_id})
     if row:
         expires_at = row.get("expires_at")
@@ -3204,6 +3226,7 @@ def reschedule_session(link_id: str, new_expiry: str = Form(...), current_admin:
     }
 
 @router.post("/start-session-interview")
+@router.post("/start_session_interview")
 def start_session_interview(link_id: str = Form(...)):
     row = interview_sessions_collection.find_one({"link_id": link_id})
     
@@ -3810,49 +3833,15 @@ class ATSRequest(BaseModel):
     jd_text: str
 
 @router.post("/admin/ats-score")
-def calculate_ats_score(request: ATSRequest):
+async def calculate_ats_score(request: ATSRequest):
     try:
-        resume_text = request.resume_text.strip()
-        jd_text = request.jd_text.strip()
+        resume_text = request.resume_text.strip()[:3000]
+        jd_text = request.jd_text.strip()[:3000]
         
         if not resume_text or not jd_text:
             raise HTTPException(status_code=400, detail="Resume or JD is empty")
             
-        system_prompt = "You are an expert ATS (Applicant Tracking System) algorithm. Evaluate the candidate's resume against the Job Description."
-        user_prompt = f"""
-Job Description:
-{jd_text}
-
-Resume:
-{resume_text}
-
-Output EXACTLY a JSON object with this structure:
-{{
-    "score": <integer between 0 and 100 representing match percentage>,
-    "matched_skills": [<array of key skills found in both>],
-    "missing_skills": [<array of key skills in JD but missing from resume>],
-    "summary": "<2-3 sentence qualitative analysis>"
-}}
-"""
-        
-        messages = [
-            {"role": "system", "content": system_prompt},
-            {"role": "user", "content": user_prompt}
-        ]
-        
-        from ai_client import chat_completion, extract_json
-        
-        try:
-            response_text = chat_completion(messages, temperature=0.1)
-            result = extract_json(response_text)
-            
-            if not result or "score" not in result:
-                raise ValueError("Invalid JSON from AI")
-                
-            return result
-        except Exception as e:
-            print(f" ATS Score AI failed: {e}")
-            # Offline Fallback logic: High-Accuracy Keyword Dictionary Match
+        # Offline Fallback logic: High-Accuracy Keyword Dictionary Match
             import re
             try:
                 from offline_skills_dict import COMMON_SKILLS
@@ -4479,118 +4468,125 @@ def delete_company(company_id: str, master_id: str = Depends(get_current_admin))
 
 @router.get("/api/notifications")
 def get_notifications(current_admin: dict = Depends(get_current_admin_details)):
-    role = current_admin["role"]
-    company_id = current_admin["company_id"]
-    
-    # Filter based on role
-    if role == "master":
-        query = {"recipient_role": "master"}
-    elif role in ["super_admin", "superadmin"]:
-        query = {"recipient_role": "superadmin", "company_id": company_id}
-    else:
-        query = {"recipient_role": "admin", "company_id": company_id}
+    try:
+        role = current_admin["role"]
+        company_id = current_admin["company_id"]
         
-    notifications = list(notifications_collection.find(query).sort("created_at", -1))
-    
-    # Seed mock data if empty
-    if not notifications:
-        import datetime
-        now = datetime.datetime.now(datetime.timezone.utc)
+        # Filter based on role
         if role == "master":
-            mock_data = [
-                {
-                    "title": "Welcome to Master Console",
-                    "message": "Welcome to the Hire IQ Master Control Panel. Here you can monitor system status, subscription plans, and manage tenants.",
-                    "type": "system",
-                    "recipient_role": "master",
-                    "read": False,
-                    "created_at": (now - datetime.timedelta(hours=2)).isoformat()
-                },
-                {
-                    "title": "Subscription Renewed",
-                    "message": "Tenant 'Google Cloud Partner' renewed their Advanced plan successfully.",
-                    "type": "payment",
-                    "recipient_role": "master",
-                    "read": False,
-                    "created_at": (now - datetime.timedelta(hours=6)).isoformat()
-                },
-                {
-                    "title": "System Check Completed",
-                    "message": "Automatic daily backup and database indexes health check succeeded.",
-                    "type": "system",
-                    "recipient_role": "master",
-                    "read": True,
-                    "created_at": (now - datetime.timedelta(days=1)).isoformat()
-                }
-            ]
+            query = {"recipient_role": "master"}
         elif role in ["super_admin", "superadmin"]:
-            mock_data = [
-                {
-                    "title": "Welcome to Hire IQ",
-                    "message": "Welcome to your Super Admin console. You can manage your team, check candidate results, and provision interviews.",
-                    "type": "system",
-                    "recipient_role": "superadmin",
-                    "company_id": company_id,
-                    "read": False,
-                    "created_at": (now - datetime.timedelta(hours=1)).isoformat()
-                },
-                {
-                    "title": "Interview Created",
-                    "message": "A new interview template 'Senior React Developer' has been created successfully.",
-                    "type": "activity",
-                    "recipient_role": "superadmin",
-                    "company_id": company_id,
-                    "read": False,
-                    "created_at": (now - datetime.timedelta(hours=4)).isoformat()
-                },
-                {
-                    "title": "Credits Request Approved",
-                    "message": "Your request for additional interview credits was approved by the master administrator.",
-                    "type": "credits",
-                    "recipient_role": "superadmin",
-                    "company_id": company_id,
-                    "read": True,
-                    "created_at": (now - datetime.timedelta(days=1)).isoformat()
-                }
-            ]
-        else: # admin / tenant
-            mock_data = [
-                {
-                    "title": "Welcome to Hire IQ",
-                    "message": "Welcome to the Admin console. Create, run, and review candidate coding and voice interviews.",
-                    "type": "system",
-                    "recipient_role": "admin",
-                    "company_id": company_id,
-                    "read": False,
-                    "created_at": (now - datetime.timedelta(hours=3)).isoformat()
-                },
-                {
-                    "title": "New Interview Complete",
-                    "message": "Candidate 'John Doe' has completed Python Technical Interview. Avg score: 8.5/10.",
-                    "type": "candidate",
-                    "recipient_role": "admin",
-                    "company_id": company_id,
-                    "read": False,
-                    "created_at": (now - datetime.timedelta(hours=5)).isoformat()
-                },
-                {
-                    "title": "Credits Assigned",
-                    "message": "Your team leader has assigned 20 credits to your admin account.",
-                    "type": "credits",
-                    "recipient_role": "admin",
-                    "company_id": company_id,
-                    "read": True,
-                    "created_at": (now - datetime.timedelta(days=2)).isoformat()
-                }
-            ]
-        notifications_collection.insert_many(mock_data)
+            query = {"recipient_role": "superadmin", "company_id": company_id}
+        else:
+            query = {"recipient_role": "admin", "company_id": company_id}
+            
         notifications = list(notifications_collection.find(query).sort("created_at", -1))
         
-    for n in notifications:
-        n["id"] = str(n["_id"])
-        n["_id"] = str(n["_id"])
-        
-    return {"status": "success", "data": notifications}
+        # Seed mock data if empty
+        if not notifications:
+            import datetime
+            now = datetime.datetime.now(datetime.timezone.utc)
+            if role == "master":
+                mock_data = [
+                    {
+                        "title": "Welcome to Master Console",
+                        "message": "Welcome to the Hire IQ Master Control Panel. Here you can monitor system status, subscription plans, and manage tenants.",
+                        "type": "system",
+                        "recipient_role": "master",
+                        "read": False,
+                        "created_at": (now - datetime.timedelta(hours=2)).isoformat()
+                    },
+                    {
+                        "title": "Subscription Renewed",
+                        "message": "Tenant 'Google Cloud Partner' renewed their Advanced plan successfully.",
+                        "type": "payment",
+                        "recipient_role": "master",
+                        "read": False,
+                        "created_at": (now - datetime.timedelta(hours=6)).isoformat()
+                    },
+                    {
+                        "title": "System Check Completed",
+                        "message": "Automatic daily backup and database indexes health check succeeded.",
+                        "type": "system",
+                        "recipient_role": "master",
+                        "read": True,
+                        "created_at": (now - datetime.timedelta(days=1)).isoformat()
+                    }
+                ]
+            elif role in ["super_admin", "superadmin"]:
+                mock_data = [
+                    {
+                        "title": "Welcome to Hire IQ",
+                        "message": "Welcome to your Super Admin console. You can manage your team, check candidate results, and provision interviews.",
+                        "type": "system",
+                        "recipient_role": "superadmin",
+                        "company_id": company_id,
+                        "read": False,
+                        "created_at": (now - datetime.timedelta(hours=1)).isoformat()
+                    },
+                    {
+                        "title": "Interview Created",
+                        "message": "A new interview template 'Senior React Developer' has been created successfully.",
+                        "type": "activity",
+                        "recipient_role": "superadmin",
+                        "company_id": company_id,
+                        "read": False,
+                        "created_at": (now - datetime.timedelta(hours=4)).isoformat()
+                    },
+                    {
+                        "title": "Credits Request Approved",
+                        "message": "Your request for additional interview credits was approved by the master administrator.",
+                        "type": "credits",
+                        "recipient_role": "superadmin",
+                        "company_id": company_id,
+                        "read": True,
+                        "created_at": (now - datetime.timedelta(days=1)).isoformat()
+                    }
+                ]
+            else: # admin / tenant
+                mock_data = [
+                    {
+                        "title": "Welcome to Hire IQ",
+                        "message": "Welcome to the Admin console. Create, run, and review candidate coding and voice interviews.",
+                        "type": "system",
+                        "recipient_role": "admin",
+                        "company_id": company_id,
+                        "read": False,
+                        "created_at": (now - datetime.timedelta(hours=3)).isoformat()
+                    },
+                    {
+                        "title": "New Interview Complete",
+                        "message": "Candidate 'John Doe' has completed Python Technical Interview. Avg score: 8.5/10.",
+                        "type": "candidate",
+                        "recipient_role": "admin",
+                        "company_id": company_id,
+                        "read": False,
+                        "created_at": (now - datetime.timedelta(hours=5)).isoformat()
+                    },
+                    {
+                        "title": "Credits Assigned",
+                        "message": "Your team leader has assigned 20 credits to your admin account.",
+                        "type": "credits",
+                        "recipient_role": "admin",
+                        "company_id": company_id,
+                        "read": True,
+                        "created_at": (now - datetime.timedelta(days=2)).isoformat()
+                    }
+                ]
+            notifications_collection.insert_many(mock_data)
+            notifications = list(notifications_collection.find(query).sort("created_at", -1))
+            
+        for n in notifications:
+            n["id"] = str(n["_id"])
+            n["_id"] = str(n["_id"])
+            
+        return {"status": "success", "data": notifications}
+
+    except Exception as e:
+        import traceback
+        print(f"ERROR IN /api/notifications: {e}")
+        traceback.print_exc()
+        raise HTTPException(status_code=500, detail=str(e))
 
 @router.put("/api/notifications/{notification_id}/read")
 def mark_notification_read(notification_id: str, current_admin: dict = Depends(get_current_admin_details)):
@@ -4699,13 +4695,9 @@ def firebase_auth(data: FirebaseAuthRequest):
     plan = plan_context["plan_label"]
     expiry = user.get("subscription_expiry")
             
-    # If expired, block
+    # Do NOT block login if expired, because they need to be able to access the dashboard to buy more credits!
     if plan_context["is_expired"]:
-        return {
-            "status": "expired",
-            "message": f"Your {plan} subscription has expired. Please contact the administrator.",
-            "plan": plan
-        }
+        print(f"User {user['username']} logged in with an expired subscription (Credits: {plan_context.get('credits')})")
         
     return {
         "status": "success",
@@ -4751,13 +4743,9 @@ def admin_login(data: AdminLogin):
     plan = plan_context["plan_label"]
     expiry = user.get("subscription_expiry")
             
-    # If expired, block
+    # Do NOT block login if expired, because they need to be able to access the dashboard to buy more credits!
     if plan_context["is_expired"]:
-        return {
-            "status": "expired",
-            "message": f"Your {plan} subscription has expired. Please contact the administrator.",
-            "plan": plan
-        }
+        print(f"User {user['username']} logged in with an expired subscription (Credits: {plan_context.get('credits')})")
         
     access_token = create_access_token(data={"sub": str(user["_id"]), "role": user.get("role", "tenant"), "company_id": str(user.get("company_id", ""))})
     return {
@@ -6032,6 +6020,9 @@ def get_superadmin_profile(current_admin: dict = Depends(get_current_admin_detai
             admin_doc["company_name"] = company.get("name", "")
             if "credits" in company:
                 admin_doc["credits"] = company["credits"]
+    plan_context = get_admin_plan_context(admin_doc)
+    admin_doc["is_expired"] = plan_context["is_expired"]
+    admin_doc["subscription_plan_key"] = plan_context["plan_key"]
     return admin_doc
 
 @router.delete("/api/superadmin/candidates/bulk")

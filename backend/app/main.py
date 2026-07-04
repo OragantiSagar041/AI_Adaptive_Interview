@@ -37,13 +37,6 @@ from app import config
 from pymongo import ASCENDING, DESCENDING
 from mongo_db import interview_sessions_collection
 
-app = FastAPI(
-    title="HireIQ AI Interview Platform",
-    description="Backend API for AI-powered mock interviews",
-    version="2.0.0",
-    lifespan=lifespan,
-)
-
 from app.routes import startup_event_cloudinary, startup_event_db_and_email
 
 @asynccontextmanager
@@ -61,6 +54,13 @@ async def lifespan(app: FastAPI):
     await startup_event_db_and_email()
     yield
 
+app = FastAPI(
+    title="HireIQ AI Interview Platform",
+    description="Backend API for AI-powered mock interviews",
+    version="2.0.0",
+    lifespan=lifespan,
+)
+
 
 class RateLimitMiddleware(BaseHTTPMiddleware):
     async def dispatch(self, request: Request, call_next):
@@ -72,15 +72,26 @@ class RateLimitMiddleware(BaseHTTPMiddleware):
         client_ip = forwarded_for.split(",")[0].strip() if forwarded_for else (request.client.host if request.client else "unknown")
         
         import os, redis
+        import time
         _redis_url = os.environ.get("REDIS_URL", "redis://localhost:6379/0")
-        _redis = redis.Redis.from_url(_redis_url)
         
-        key = f"rl:{client_ip}"
-        count = _redis.incr(key)
-        if count == 1:
-            _redis.expire(key, config.RATE_LIMIT_WINDOW)
-        if count > config.RATE_LIMIT:
-            return JSONResponse(status_code=429, content={"detail": "Too many requests. Please slow down."})
+        try:
+            _redis = redis.Redis.from_url(_redis_url)
+            key = f"rl:{client_ip}"
+            count = _redis.incr(key)
+            if count == 1:
+                _redis.expire(key, config.RATE_LIMIT_WINDOW)
+            if count > config.RATE_LIMIT:
+                return JSONResponse(status_code=429, content={"detail": "Too many requests. Please slow down."})
+        except redis.exceptions.ConnectionError:
+            # Fallback for local dev
+            now = time.time()
+            if client_ip not in config.request_counts:
+                config.request_counts[client_ip] = []
+            config.request_counts[client_ip] = [timestamp for timestamp in config.request_counts[client_ip] if now - timestamp < config.RATE_LIMIT_WINDOW]
+            if len(config.request_counts[client_ip]) >= config.RATE_LIMIT:
+                return JSONResponse(status_code=429, content={"detail": "Too many requests. Please slow down. (Local Mode)"})
+            config.request_counts[client_ip].append(now)
         return await call_next(request)
 
 # --- Middleware ---

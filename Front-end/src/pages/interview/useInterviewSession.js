@@ -471,6 +471,12 @@ export const useInterviewSession = (sessionId, interviewType, startRoundTwo) => 
         }
 
         setSessionDetail(payload)
+        
+        // Ensure Voice Cloning works for Standard interviews
+        if (payload.voice_clone && payload.custom_voice_id) {
+          clonedVoiceIdRef.current = payload.custom_voice_id
+          setClonedVoiceId(payload.custom_voice_id)
+        }
 
         if (payload.is_deactivated) {
           throw new Error("This interview link has been temporarily deactivated by the recruiter.")
@@ -671,12 +677,13 @@ export const useInterviewSession = (sessionId, interviewType, startRoundTwo) => 
       // Start Whisper MediaRecorder if not already running
       if (mediaStreamRef.current && !whisperMediaRecorderRef.current) {
         try {
-          const mr = new MediaRecorder(mediaStreamRef.current, { mimeType: 'audio/webm' })
+          const audioStream = new MediaStream(mediaStreamRef.current.getAudioTracks())
+          const mr = new MediaRecorder(audioStream)
           mr.ondataavailable = (e) => {
             if (e.data.size > 0) whisperAudioChunksRef.current.push(e.data)
           }
           mr.onstop = async () => {
-            const blob = new Blob(whisperAudioChunksRef.current, { type: 'audio/webm' })
+            const blob = new Blob(whisperAudioChunksRef.current, { type: mr.mimeType })
             whisperAudioChunksRef.current = [] // reset for next chunk
             
             if (isSpeechRecordingRef.current && whisperMediaRecorderRef.current) {
@@ -840,8 +847,37 @@ export const useInterviewSession = (sessionId, interviewType, startRoundTwo) => 
       })
     }
   }
+  const proctoring = useProctoring({
+    videoRef: videoPreviewRef,
+    enabled: isDisclaimerAccepted && !showAllSet && !loading,
+    maxAlerts: 10,
+    onViolation: (v) => {
+      recordAlertMetric(v.type)
+      if (v.type !== 'noise_alert') {
+        Swal.fire({
+          icon: 'warning',
+          title: '⚠️ Proctoring Alert',
+          text: v.message,
+          toast: true,
+          position: 'top-end',
+          showConfirmButton: false,
+          timer: 3000,
+          background: '#161c2d',
+          color: '#fff',
+        })
+      }
+    }
+  });
 
-  useProctoring(videoPreviewRef, isDisclaimerAccepted && !showAllSet && !loading, recordAlertMetric, audioRmsRef);
+  // Track lip sync anomaly
+  useEffect(() => {
+    if (proctoring.jawOpenScore > 0 && audioRmsRef.current > 0.18) {
+      if (proctoring.checkLipSync(proctoring.jawOpenScore, audioRmsRef.current > 0.18)) {
+        // We could track a streak here or just fire an alert
+        // A full robust implementation would track a streak.
+      }
+    }
+  }, [proctoring.jawOpenScore, proctoring.checkLipSync])
 
   const acceptDisclaimer = () => {
     setShowDeviceCheck(true)
@@ -1102,41 +1138,47 @@ export const useInterviewSession = (sessionId, interviewType, startRoundTwo) => 
   }
 
   const speakAIQuestion = async (text) => {
-    if (clonedVoiceIdRef.current) {
-      // --- Cloned Voice TTS (Backend) ---
-      try {
-        if (window.speechSynthesis) window.speechSynthesis.cancel()
-        const res = await fetch(`${api.defaults.baseURL || ''}/tts`, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ text, voice: 'shimmer', language: sessionDetail?.language || 'English', voice_id: clonedVoiceIdRef.current })
-        })
-        if (!res.ok) throw new Error('TTS failed')
-        const blob = await res.blob()
-        const url = URL.createObjectURL(blob)
-        const audio = new Audio(url)
-        
-        // --- Web Audio Mixer Routing ---
-        if (audioMixerCtxRef.current && audioMixerDestRef.current) {
-          audio.crossOrigin = "anonymous"
-          const source = audioMixerCtxRef.current.createMediaElementSource(audio)
-          source.connect(audioMixerCtxRef.current.destination) // Play to speakers
-          source.connect(audioMixerDestRef.current) // Send to screen recorder mixer
-        }
-
-        audio.onended = () => {
-          if (!isRoundTwoRef.current) {
-            if (silenceTimeoutRef.current) clearTimeout(silenceTimeoutRef.current)
-            silenceTimeoutRef.current = setTimeout(() => {
-              if (handleNextQuestionRef.current) handleNextQuestionRef.current()
-            }, 10000)
-          }
-        }
-        audio.play()
-        return // Successfully used cloned voice
-      } catch (err) {
-        console.error("Cloned TTS failed, falling back to browser TTS", err)
+    // --- High-Quality TTS (Backend: Cartesia or Edge TTS) ---
+    try {
+      if (window.speechSynthesis) window.speechSynthesis.cancel()
+      const bodyPayload = { 
+        text, 
+        voice: 'shimmer', 
+        language: sessionDetail?.language || 'English',
+        use_custom_voice: !!sessionDetail?.voice_clone
       }
+      if (clonedVoiceIdRef.current) bodyPayload.voice_id = clonedVoiceIdRef.current
+      
+      const res = await fetch(`${api.defaults.baseURL || ''}/tts`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(bodyPayload)
+      })
+      if (!res.ok) throw new Error('TTS failed')
+      const blob = await res.blob()
+      const url = URL.createObjectURL(blob)
+      const audio = new Audio(url)
+      
+      // --- Web Audio Mixer Routing ---
+      if (audioMixerCtxRef.current && audioMixerDestRef.current) {
+        audio.crossOrigin = "anonymous"
+        const source = audioMixerCtxRef.current.createMediaElementSource(audio)
+        source.connect(audioMixerCtxRef.current.destination) // Play to speakers
+        source.connect(audioMixerDestRef.current) // Send to screen recorder mixer
+      }
+
+      audio.onended = () => {
+        if (!isRoundTwoRef.current) {
+          if (silenceTimeoutRef.current) clearTimeout(silenceTimeoutRef.current)
+          silenceTimeoutRef.current = setTimeout(() => {
+            if (handleNextQuestionRef.current) handleNextQuestionRef.current()
+          }, 10000)
+        }
+      }
+      audio.play()
+      return // Successfully used backend high-quality TTS
+    } catch (err) {
+      console.error("Backend TTS failed, falling back to browser TTS", err)
     }
 
     // --- Browser TTS (Fallback/Default) ---
@@ -1231,9 +1273,7 @@ export const useInterviewSession = (sessionId, interviewType, startRoundTwo) => 
       answerForm.append('time_spent_seconds', timeSpent.toString())
       answerForm.append('time_limit_seconds', '120')
 
-      await api.post(`/save-answer`, answerForm, {
-        headers: { 'Content-Type': 'multipart/form-data' }
-      })
+      await api.post(`/save-answer`, answerForm)
     } catch (e) {
       console.error("Failed to save answer during transition:", e)
     }
@@ -1289,9 +1329,7 @@ export const useInterviewSession = (sessionId, interviewType, startRoundTwo) => 
         answerForm.append('time_spent_seconds', timeSpent.toString())
         answerForm.append('time_limit_seconds', '120')
 
-        await api.post(`/save-answer`, answerForm, {
-          headers: { 'Content-Type': 'multipart/form-data' }
-        })
+        await api.post(`/save-answer`, answerForm)
       }
 
       if (currentQuestionIndex === questions.length - 1) {
@@ -1335,6 +1373,7 @@ export const useInterviewSession = (sessionId, interviewType, startRoundTwo) => 
         }
       }
     } catch (e) {
+      console.error("Save answer error:", e?.response?.data || e.message || e)
       Swal.fire({
         title: 'Save Failed',
         text: 'Failed to save your response. Please try again.',

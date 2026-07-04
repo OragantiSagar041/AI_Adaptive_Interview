@@ -358,15 +358,6 @@ export default function VoiceInterviewPage() {
 
   const fmt = s => `${String(Math.floor(s / 60)).padStart(2, '0')}:${String(s % 60).padStart(2, '0')}`
 
-  // ── Countdown ─────────────────────────────────────────────────────────────
-  useEffect(() => {
-    if (round !== 'verbal' || countdown <= 0) return
-    const t = setInterval(() => setCountdown(p => {
-      if (p <= 1) { clearInterval(t); transitionToNextRound(true); return 0 }
-      return p - 1
-    }), 1000)
-    return () => clearInterval(t)
-  }, [round, transitionToNextRound])
 
   // ── Persistence & Unload Tracking ──────────────────────────────────────────
   useEffect(() => {
@@ -1006,6 +997,16 @@ export default function VoiceInterviewPage() {
     }
   }, [interviewType, stopListening, aiSay, completeInterview])
 
+  // ── Countdown ─────────────────────────────────────────────────────────────
+  useEffect(() => {
+    if (round !== 'verbal' || countdown <= 0) return
+    const t = setInterval(() => setCountdown(p => {
+      if (p <= 1) { clearInterval(t); transitionToNextRound(true); return 0 }
+      return p - 1
+    }), 1000)
+    return () => clearInterval(t)
+  }, [round, transitionToNextRound])
+
   // ── Start verbal interview ────────────────────────────────────────────────
   const startInterview = useCallback(async () => {
     await startScreenRecording()
@@ -1159,14 +1160,40 @@ export default function VoiceInterviewPage() {
   }, [stopListening, round, logProctoringAlert, completeInterview])
 
   // Use Centralized AI Proctoring Hook
-  useProctoring(
-    candidateVideoRef,
-    round !== 'done' && round !== 'pre_checks' && round !== 'intro',
-    (type, msg) => {
-      logProctoringAlert(type, msg)
+  const proctoring = useProctoring({
+    videoRef: candidateVideoRef,
+    enabled: round !== 'done' && round !== 'pre_checks' && round !== 'intro',
+    maxAlerts: 10,
+    onViolation: (v) => {
+      logProctoringAlert(v.type, v.message)
+      Swal.fire({
+        icon: 'warning',
+        title: '⚠️ Proctoring Alert',
+        text: v.message,
+        toast: true,
+        position: 'top-end',
+        showConfirmButton: false,
+        timer: 3000,
+        background: '#161c2d',
+        color: '#fff',
+      })
     },
+    onTerminate: () => completeInterview()
+  })
+
+  useEffect(() => {
+    if (setProctoringState) {
+      setProctoringState(proctoring)
+    }
+  }, [
+    proctoring.faceVisible,
+    proctoring.modelsReady,
+    proctoring.faceCount,
+    proctoring.multiFace,
+    proctoring.phoneDetected,
+    proctoring.eyeContactLost,
     setProctoringState
-  )
+  ])
 
   useEffect(() => {
     if (!linkId || round === 'done' || round === 'pre_checks' || round === 'intro') return

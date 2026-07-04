@@ -773,11 +773,21 @@ export function EmailPreviewModal({
   handleSaveEmailPreview
 }) {
   const [draftInnerHtml, setDraftInnerHtml] = useState(emailTemplate.bodyInnerHtml || '');
+  const [debouncedHtml, setDebouncedHtml] = useState(emailTemplate.bodyInnerHtml || '');
 
   // Keep draft in sync if emailTemplate gets reset from outside
   useEffect(() => {
     setDraftInnerHtml(emailTemplate.bodyInnerHtml || '');
+    setDebouncedHtml(emailTemplate.bodyInnerHtml || '');
   }, [emailTemplate.bodyInnerHtml]);
+
+  // Debounce the live preview update so typing isn't slow
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      setDebouncedHtml(draftInnerHtml);
+    }, 400); // 400ms debounce
+    return () => clearTimeout(timer);
+  }, [draftInnerHtml]);
 
   const handleApplyChanges = () => {
     setEmailTemplate(prev => ({
@@ -841,7 +851,7 @@ export function EmailPreviewModal({
           <iframe
             className="flex-grow w-full bg-white border-0 outline-none"
             title="Email Preview"
-            srcDoc={buildEmailHtml()}
+            srcDoc={buildEmailHtml(debouncedHtml)}
           />
         </div>
       </div>

@@ -364,6 +364,9 @@ export default function AdminPage({ role: initialRole = 'admin' }) {
     try {
       const response = await fetch(`${API_BASE_URL}/admin/parse-resume`, {
         method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${sessionStorage.getItem('adminToken')}`
+        },
         body: formData
       })
       if (response.ok) {
@@ -446,12 +449,13 @@ export default function AdminPage({ role: initialRole = 'admin' }) {
   }, [singleCandidate.resumeText, singleCandidate.jobDescription])
 
   // Email template builder and editor sync
-  const buildEmailHtml = () => {
+  const buildEmailHtml = (overrideBody) => {
     const { headHtml, bodyAttributes, bodyInnerHtml } = emailTemplate
     const attrs = Object.entries(bodyAttributes || {})
       .map(([key, value]) => `${key}="${String(value).replace(/"/g, '&quot;')}"`)
       .join(' ')
-    return `<!DOCTYPE html><html><head>${headHtml || ''}</head><body ${attrs}>${bodyInnerHtml || ''}</body></html>`
+    const content = overrideBody !== undefined ? overrideBody : bodyInnerHtml
+    return `<!DOCTYPE html><html><head>${headHtml || ''}</head><body ${attrs}>${content || ''}</body></html>`
   }
 
   const handlePreviewEmail = async (type) => {
