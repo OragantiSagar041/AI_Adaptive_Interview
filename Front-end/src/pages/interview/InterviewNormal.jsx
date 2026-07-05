@@ -20,6 +20,7 @@ export const InterviewNormal = () => {
     loading,
     showAllSet,
     error,
+    isCompleted,
     isDisclaimerAccepted,
     agreeChecked,
     setAgreeChecked,
@@ -39,6 +40,7 @@ export const InterviewNormal = () => {
     skipCountdown,
     showSkipButton,
     transcriptionText,
+    interimTranscriptText,
     globalCountdown,
     isRoundTwo,
     showRound2Confirm,
@@ -166,6 +168,25 @@ export const InterviewNormal = () => {
         <h2 className="text-2xl font-bold text-slate-900 tracking-tight">Access Denied</h2>
         <p className="text-slate-600 mt-2 max-w-md text-sm">{error}</p>
         <Link to="/" className="inline-flex items-center justify-center gap-2 px-6 py-3 rounded-full font-semibold text-sm bg-primary hover:bg-primary-hover text-white transition-all shadow-[0_4px_14px_rgba(99,102,241,0.15)] mt-6 no-underline">Go to Platform Page</Link>
+      </div>
+    )
+  }
+
+  if (isCompleted) {
+    return (
+      <div className="flex justify-center items-center h-screen flex-col p-6 text-center">
+        <div className="w-16 h-16 bg-emerald-100 rounded-full flex items-center justify-center mb-6">
+          <svg className="w-8 h-8 text-emerald-600" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
+          </svg>
+        </div>
+        <h2 className="text-3xl font-bold text-slate-900 tracking-tight mb-2">Interview Already Completed</h2>
+        <p className="text-slate-600 mt-2 max-w-md text-base">
+          Thank you for your time. Your interview session has already been completed and submitted successfully.
+        </p>
+        <p className="text-slate-500 mt-4 text-sm">
+          Please contact the recruiter or HR via email for any further updates or questions.
+        </p>
       </div>
     )
   }
@@ -638,7 +659,7 @@ export const InterviewNormal = () => {
                     className="bg-slate-50/50 border border-slate-200/60 rounded-xl p-4 text-base leading-relaxed text-slate-800 placeholder:text-slate-400 outline-none focus:border-indigo-500 focus:ring-2 focus:ring-indigo-100 shadow-inner resize-none w-full flex-1 overflow-y-auto transition-all"
                     placeholder="Your speech will appear here automatically..."
                     readOnly
-                    value={transcriptionText}
+                    value={transcriptionText + (interimTranscriptText ? interimTranscriptText : '')}
                   />
                 </div>
 

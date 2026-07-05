@@ -24,7 +24,13 @@ async def transcribe_audio(
 ):
     data = await audio.read()
 
-    with tempfile.NamedTemporaryFile(delete=False, suffix=".webm") as f:
+    # Use the original filename extension so Groq gets correct format
+    original_filename = audio.filename or 'audio.webm'
+    ext = original_filename.rsplit('.', 1)[-1] if '.' in original_filename else 'webm'
+    if ext not in ('webm', 'ogg', 'mp4', 'wav', 'm4a', 'mp3'):
+        ext = 'webm'
+
+    with tempfile.NamedTemporaryFile(delete=False, suffix=f".{ext}") as f:
         f.write(data)
         path = f.name
 
