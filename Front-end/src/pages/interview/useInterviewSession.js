@@ -1201,10 +1201,11 @@ export const useInterviewSession = (sessionId, interviewType, startRoundTwo) => 
     // This fires even if TTS fails, ensuring grace period always works
     if (silenceTimeoutRef.current) clearTimeout(silenceTimeoutRef.current)
     if (!isRoundTwoRef.current) {
-      // Start with 30s window (covers TTS playback time + 10s after)
+      // Start with dynamic window based on text length (approx 150 words/min -> ~60ms per char + 15s grace period)
+      const estimatedDurationMs = Math.max(30000, text.length * 60 + 15000);
       silenceTimeoutRef.current = setTimeout(() => {
         if (handleNextQuestionRef.current) handleNextQuestionRef.current()
-      }, 30000)
+      }, estimatedDurationMs)
     }
 
     // --- High-Quality TTS (Backend: Cartesia or Edge TTS) ---

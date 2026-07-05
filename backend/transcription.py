@@ -26,7 +26,7 @@ async def transcribe_audio(
 
     # Use the original filename extension so Groq gets correct format
     original_filename = audio.filename or 'audio.webm'
-    ext = original_filename.rsplit('.', 1)[-1] if '.' in original_filename else 'webm'
+    ext = original_filename.rsplit('.', 1)[-1].lower() if '.' in original_filename else 'webm'
     if ext not in ('webm', 'ogg', 'mp4', 'wav', 'm4a', 'mp3'):
         ext = 'webm'
 
