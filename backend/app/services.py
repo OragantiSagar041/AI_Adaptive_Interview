@@ -68,6 +68,15 @@ from coding_graph import generate_coding_task, observe_coding_intent, run_coding
 from industry_fallback_data import INDUSTRY_TECHNICAL_QUESTIONS, INDUSTRY_CASE_STUDIES
 from redis_manager import manager
 
+try:
+    from typed_ai_layer import parse_resume as _typed_parse_resume
+    from typed_ai_layer import generate_summary as _typed_generate_summary
+    from typed_ai_layer import generate_followup as _typed_generate_followup
+    _TYPED_LAYER_AVAILABLE = True
+except ImportError:
+    _TYPED_LAYER_AVAILABLE = False
+    print("[WARN] typed_ai_layer not available")
+
 from .models import *
 from .database import *
 from .config import *
@@ -325,50 +334,244 @@ for (const test of tests) {{
 console.log("\\n" + JSON.stringify(results));
 """
 
-    with tempfile.NamedTemporaryFile(suffix=".js", delete=False, mode="w", encoding="utf-8") as f:
-        f.write(harness)
-        temp_path = f.name
-
+    import requests
+    
+    payload = {
+        "language": "javascript",
+        "version": "18.15.0",
+        "files": [
+            {
+                "name": "main.js",
+                "content": harness
+            }
+        ]
+    }
+    
     try:
-        result = subprocess.run(["node", temp_path], capture_output=True, text=True, timeout=10)
-        return _collect_runner_output(result, tests)
-    except subprocess.TimeoutExpired:
+        response = requests.post("https://emkc.org/api/v2/piston/execute", json=payload, timeout=10)
+        response.raise_for_status()
+        data = response.json()
+        
+        if "run" in data:
+            run_result = data["run"]
+            stdout = run_result.get("stdout", "").strip()
+            stderr = run_result.get("stderr", "").strip()
+            
+            if stdout:
+                try:
+                    lines = stdout.split("\\n")
+                    for line in reversed(lines):
+                        if line.startswith("[") and line.endswith("]"):
+                            results_obj = json.loads(line)
+                            class MockResult:
+                                pass
+                            mock_res = MockResult()
+                            mock_res.stdout = line
+                            mock_res.stderr = stderr
+                            return _collect_runner_output(mock_res, tests)
+                except Exception:
+                    pass
+            
+            if stderr:
+                return _runner_error(f"Execution Error: {stderr}", tests)
+            else:
+                return _runner_error(f"Execution failed or produced invalid output.\\nOutput: {stdout}", tests)
+        else:
+            return _runner_error(f"Invalid response from Piston API: {data}", tests)
+            
+    except requests.exceptions.Timeout:
         return _runner_error("Execution timed out (10s limit).", tests)
     except Exception as e:
-        return _runner_error(f"Failed to execute code: {e}", tests)
-    finally:
-        if os.path.exists(temp_path):
-            os.remove(temp_path)
+        return _runner_error(f"Failed to execute code securely: {e}", tests)
 
-def _run_compiled_mock(code: str, tests: list, function_name: str, language: str) -> Dict[str, Any]:
-    # Since Piston API is returning 401 Whitelist Only and local Windows environment lacks C++/Go/Rust compilers,
-    # we will return a simulated success for compiled languages so the user can proceed with the interview flow.
+def _evaluate_code_with_llm(code: str, tests: list, function_name: str, language: str) -> Dict[str, Any]:
+    system_prompt = (
+        f"You are a strict {language} compiler and code evaluator. You must evaluate the user's code against the provided test cases. "
+        "Return ONLY a valid JSON object matching this schema. NO markdown, NO explanations.\n"
+        "{\n"
+        "  \"status\": \"ok\" | \"error\",\n"
+        "  \"runtime_error\": \"<string if compilation or runtime fails, else null>\",\n"
+        "  \"output\": \"<any stdout printed by code, else empty string>\",\n"
+        "  \"all_passed\": <boolean>,\n"
+        "  \"visible_results\": [\n"
+        "    { \"id\": \"...\", \"visible\": true, \"passed\": <bool>, \"input\": [...], \"output\": \"<actual output>\", \"expected\": \"<expected output>\" }\n"
+        "  ],\n"
+        "  \"hidden_summary\": { \"passed\": <int>, \"total\": <int> }\n"
+        "}"
+    )
+    
+    user_prompt = f"Language: {language}\nFunction: {function_name}\n\nCode:\n```\n{code}\n```\n\nTest Cases:\n{json.dumps(tests, indent=2)}\n\nEvaluate the code against these tests and return the JSON results."
+    
+    messages = [
+        {"role": "system", "content": system_prompt},
+        {"role": "user", "content": user_prompt}
+    ]
+    
+    # This automatically uses OpenRouter, falling back to HuggingFace if quota is exceeded
+    raw_response = chat_completion(messages, model="openai/gpt-4o-mini", temperature=0.1)
+    
+    result = extract_json(raw_response)
+    if not result:
+        raise ValueError("Failed to extract JSON from LLM evaluator")
+        
+    return result
+
+def _generate_jdoodle_script(code: str, tests: list, function_name: str, language: str) -> str:
+    script = ""
+    if language == "go":
+        calls = "\n".join([f'    fmt.Printf("%%v\\n", {function_name}({", ".join([_go_literal(arg) for arg in (t["input"] if isinstance(t["input"], list) else [t["input"]])])}))' for t in tests])
+        script = f"""package main
+import "fmt"
+{code}
+func main() {{
+{calls}
+}}"""
+    elif language == "rust":
+        calls = "\n".join([f'    println!("{{:?}}", {function_name}({", ".join([_rust_literal(arg) for arg in (t["input"] if isinstance(t["input"], list) else [t["input"]])])}));' for t in tests])
+        script = f"""{code}
+fn main() {{
+{calls}
+}}"""
+    elif language == "cpp" or language == "cpp17":
+        calls = "\n".join([f'    print_val({function_name}({", ".join([_cpp_literal(arg) for arg in (t["input"] if isinstance(t["input"], list) else [t["input"]])])}));' for t in tests])
+        script = f"""#include <iostream>
+#include <vector>
+#include <string>
+
+template<typename T> void print_val(T t) {{ std::cout << t << "\\n"; }}
+template<typename T> void print_val(std::vector<T> v) {{
+    std::cout << "[";
+    for(size_t i=0; i<v.size(); ++i) {{ std::cout << v[i] << (i==v.size()-1 ? "" : ","); }}
+    std::cout << "]\\n";
+}}
+
+{code}
+
+int main() {{
+{calls}
+    return 0;
+}}"""
+    elif language == "java":
+        calls = "\n".join([f'        printVal({function_name}({", ".join([_java_literal(arg) for arg in (t["input"] if isinstance(t["input"], list) else [t["input"]])])}));' for t in tests])
+        # Find if the user provided a class name, otherwise default to Main
+        class_name = "Solution" if "class Solution" in code else "Main"
+        # We wrap their code if they didn't write a class, else we just inject the main method
+        if "class " not in code:
+            code = f"public class Main {{\n{code}\n}}"
+            class_name = "Main"
+            
+        # Instead of parsing their class, for JDoodle we can just make a Main class that calls their Solution class.
+        # If they wrote `class Solution`, we just append a Main class.
+        script = f"""import java.util.*;
+
+{code}
+
+public class JdoodleMain {{
+    static void printVal(Object o) {{
+        if (o instanceof int[]) System.out.println(Arrays.toString((int[])o));
+        else if (o instanceof String[]) System.out.println(Arrays.toString((String[])o));
+        else if (o instanceof Object[]) System.out.println(Arrays.toString((Object[])o));
+        else System.out.println(o);
+    }}
+    public static void main(String[] args) {{
+{calls.replace(function_name, class_name + "." + function_name if "class" in code and "static" in code else "new " + class_name + "()." + function_name)}
+    }}
+}}"""
+    return script
+
+def _run_jdoodle_api(code: str, tests: list, function_name: str, language: str) -> Dict[str, Any]:
+    client_id = os.getenv("JDOODLE_CLIENT_ID")
+    client_secret = os.getenv("JDOODLE_CLIENT_SECRET")
+    
+    if not client_id or not client_secret:
+        raise ValueError("JDoodle credentials missing from .env")
+        
+    jdoodle_langs = {"go": "go", "cpp": "cpp17", "rust": "rust", "java": "java"}
+    jdoodle_lang = jdoodle_langs.get(language, language)
+    
+    script = _generate_jdoodle_script(code, tests, function_name, language)
+    
+    payload = {
+        "clientId": client_id,
+        "clientSecret": client_secret,
+        "script": script,
+        "language": jdoodle_lang,
+        "versionIndex": "0"
+    }
+    
+    import requests
+    try:
+        res = requests.post("https://api.jdoodle.com/v1/execute", json=payload, timeout=15)
+        if res.status_code != 200:
+            raise ValueError(f"JDoodle API returned {res.status_code}: {res.text}")
+    except requests.exceptions.Timeout:
+        return _runner_error("JDoodle compilation timed out (15s limit). Please try again.", tests)
+    except Exception as e:
+        return _runner_error(f"JDoodle execution failed: {e}", tests)
+        
+    data = res.json()
+    if data.get("error"):
+        return _runner_error(data["error"], tests)
+        
+    output_lines = data.get("output", "").strip().split("\n")
+    
+    # Map the output lines back to tests
     visible_results = []
     hidden_passed = 0
     hidden_total = 0
     
-    for test in tests:
+    for i, test in enumerate(tests):
+        out_val = output_lines[i] if i < len(output_lines) else ""
+        expected_val = str(test.get("expected"))
+        # Basic normalization for comparison
+        passed = out_val.strip().replace(" ", "") == expected_val.strip().replace(" ", "")
+        
         if test.get("visible", True):
             visible_results.append({
                 "id": test.get("id"),
                 "visible": True,
-                "passed": True,
+                "passed": passed,
                 "input": test.get("input"),
-                "output": f"Code executed locally. {language.capitalize()} test cases automatically passed.",
-                "expected": test.get("expected") if test.get("expected") is not None else test.get("output")
+                "output": out_val,
+                "expected": test.get("expected")
             })
         else:
-            hidden_passed += 1
+            if passed: hidden_passed += 1
             hidden_total += 1
             
     return {
         "status": "ok",
         "runtime_error": None,
-        "output": f"Successfully compiled and ran {language} code.",
+        "output": data.get("output", ""),
         "visible_results": visible_results,
         "hidden_summary": {"passed": hidden_passed, "total": hidden_total},
-        "all_passed": True
+        "all_passed": (hidden_passed == hidden_total) and all(r["passed"] for r in visible_results)
     }
+
+def _run_compiled_mock(code: str, tests: list, function_name: str, language: str) -> Dict[str, Any]:
+    # 1. Base validation
+    if not code.strip() or (len(code.strip()) < 50 and "Write your solution here" in code):
+        return _runner_error(f"Cannot compile {language}: Code is empty or missing implementation.", tests)
+        
+    # 2. Try JDoodle True Compiler (Priority 1)
+    try:
+        return _run_jdoodle_api(code, tests, function_name, language)
+    except Exception as e:
+        print(f"JDoodle API failed (Quota exceeded or missing keys): {e}")
+        
+    # 3. Try LLM Execution (Priority 2 Fallback)
+    try:
+        llm_result = _evaluate_code_with_llm(code, tests, function_name, language)
+        if "visible_results" in llm_result and "hidden_summary" in llm_result:
+            return llm_result
+    except Exception as e:
+        print(f"LLM Code Evaluation failed (Quota exceeded or error): {e}")
+        
+    # 4. Final Fallback: Return Error instead of auto-passing
+    return _runner_error(
+        f"API Quota Exhausted: Could not compile {language} code. Please try again later.",
+        tests
+    )
 
 def _runner_error(message: str, tests: List[Dict[str, Any]] = None) -> Dict[str, Any]:
     if tests is None:
@@ -475,6 +678,58 @@ def _java_literal(value: Any) -> str:
     raise ValueError("This test input is not supported for Java execution.")
 
 
+def _go_literal(value: Any) -> str:
+    if isinstance(value, bool):
+        return "true" if value else "false"
+    if isinstance(value, int) or isinstance(value, float):
+        return str(value)
+    if isinstance(value, str):
+        return json.dumps(value)
+    if isinstance(value, list):
+        if not value:
+            return "[]int{}"
+        if all(isinstance(item, int) for item in value):
+            return "[]int{" + ", ".join(str(item) for item in value) + "}"
+        if all(isinstance(item, str) for item in value):
+            return "[]string{" + ", ".join(json.dumps(item) for item in value) + "}"
+    raise ValueError("Unsupported Go argument type.")
+
+
+def _cpp_literal(value: Any) -> str:
+    if isinstance(value, bool):
+        return "true" if value else "false"
+    if isinstance(value, int) or isinstance(value, float):
+        return str(value)
+    if isinstance(value, str):
+        return json.dumps(value)
+    if isinstance(value, list):
+        if not value:
+            return "std::vector<int>{}"
+        if all(isinstance(item, int) for item in value):
+            return "std::vector<int>{" + ", ".join(str(item) for item in value) + "}"
+        if all(isinstance(item, str) for item in value):
+            return "std::vector<std::string>{" + ", ".join(json.dumps(item) for item in value) + "}"
+    raise ValueError("Unsupported C++ argument type.")
+
+
+def _rust_literal(value: Any) -> str:
+    if isinstance(value, bool):
+        return "true" if value else "false"
+    if isinstance(value, int) or isinstance(value, float):
+        return str(value)
+    if isinstance(value, str):
+        # Rust json.dumps outputs standard quotes which usually works for String::from("...")
+        return f"String::from({json.dumps(value)})"
+    if isinstance(value, list):
+        if not value:
+            return "vec![]"
+        if all(isinstance(item, int) for item in value):
+            return "vec![" + ", ".join(str(item) for item in value) + "]"
+        if all(isinstance(item, str) for item in value):
+            return "vec![" + ", ".join(f"String::from({json.dumps(item)})" for item in value) + "]"
+    raise ValueError("Unsupported Rust argument type.")
+
+
 def _java_type(value: Any) -> str:
     if isinstance(value, bool):
         return "boolean"
@@ -572,23 +827,59 @@ else:
     sys.exit(1)
 """
 
-    import tempfile
-    import os
-    import subprocess
-    with tempfile.NamedTemporaryFile(suffix=".py", delete=False, mode="w", encoding="utf-8") as f:
-        f.write(harness)
-        temp_path = f.name
-
+    import requests
+    
+    payload = {
+        "language": "python",
+        "version": "3.10.0",
+        "files": [
+            {
+                "name": "main.py",
+                "content": harness
+            }
+        ]
+    }
+    
     try:
-        result = subprocess.run(["python", temp_path], capture_output=True, text=True, timeout=10)
-        return _collect_runner_output(result, tests)
-    except subprocess.TimeoutExpired:
+        response = requests.post("https://emkc.org/api/v2/piston/execute", json=payload, timeout=10)
+        response.raise_for_status()
+        data = response.json()
+        
+        if "run" in data:
+            run_result = data["run"]
+            # Try to parse the stdout as our JSON results array
+            stdout = run_result.get("stdout", "").strip()
+            stderr = run_result.get("stderr", "").strip()
+            
+            if stdout:
+                try:
+                    # Look for the last JSON array in the output (since candidate might have print statements)
+                    lines = stdout.split("\\n")
+                    for line in reversed(lines):
+                        if line.startswith("[") and line.endswith("]"):
+                            results_obj = json.loads(line)
+                            # Mock the result object to pass to _collect_runner_output
+                            class MockResult:
+                                pass
+                            mock_res = MockResult()
+                            mock_res.stdout = line
+                            mock_res.stderr = stderr
+                            return _collect_runner_output(mock_res, tests)
+                except Exception:
+                    pass
+            
+            # If we couldn't parse the JSON or it crashed
+            if stderr:
+                return _runner_error(f"Execution Error: {stderr}", tests)
+            else:
+                return _runner_error(f"Execution failed or produced invalid output.\\nOutput: {stdout}", tests)
+        else:
+            return _runner_error(f"Invalid response from Piston API: {data}", tests)
+            
+    except requests.exceptions.Timeout:
         return _runner_error("Execution timed out (10s limit).", tests)
     except Exception as e:
-        return _runner_error(f"Failed to execute code: {e}", tests)
-    finally:
-        if os.path.exists(temp_path):
-            os.remove(temp_path)
+        return _runner_error(f"Failed to execute code securely: {e}", tests)
 def extract_skills(text: str) -> List[str]:
     """Extract skills from resume text."""
     skills = []
@@ -614,29 +905,45 @@ def extract_skills(text: str) -> List[str]:
     return list(dict.fromkeys(skills))[:8]  # Remove duplicates and limit to 8 skills
 
 def analyze_resume_or_jd(text: str):
-    prompt = f"""
-    Analyze the following resume or job description and return STRICT JSON only:
-    {{
-      "skills": [],
-      "projects": [],
-      "tools_and_technologies": [],
-      "experience_level": "",
-      "domains": [],
-      "important_keywords": []
-    }}
-    Content: {text}
-    """
+    """Parse resume/JD via typed_ai_layer (type-safe, cached, token-optimized)."""
+    # Priority 1: Typed AI layer (type-safe validated output)
+    if _TYPED_LAYER_AVAILABLE:
+        try:
+            return _typed_parse_resume(text)
+        except Exception as e:
+            print(f"[typed_ai_layer] parse_resume failed, falling back: {e}")
+
+    # Priority 2: Direct fallback with 2000-char truncation
+    profile_text = (text or "").strip()[:2000]
+    SYSTEM = (
+        "You are a resume parser. Extract key information and return ONLY valid JSON. "
+        "No markdown, no explanation."
+    )
+    USER = f"""Extract from this resume/JD:
+{{
+  "skills": [],
+  "projects": [],
+  "tools_and_technologies": [],
+  "experience_level": "",
+  "domains": [],
+  "important_keywords": []
+}}
+Content: {profile_text}"""
 
     try:
         raw_text = chat_completion(
-            messages=[{"role": "user", "content": prompt}],
-            model="openai/gpt-4o-mini"
+            messages=[
+                {"role": "system", "content": SYSTEM},
+                {"role": "user", "content": USER}
+            ],
+            model="openai/gpt-4o-mini",
+            temperature=0.0,
         )
         res = extract_json(raw_text)
         if res: return res
         return {"skills": [], "projects": [], "tools_and_technologies": [], "experience_level": "Unknown", "domains": [], "important_keywords": []}
     except Exception as e:
-        print(f"OpenRouter Analysis Error: {e}")
+        print(f"Resume Analysis Error: {e}")
         return {"skills": [], "projects": [], "tools_and_technologies": [], "experience_level": "Unknown", "domains": [], "important_keywords": []}
     
 def extract_experiences(text: str) -> List[Dict]:
@@ -2013,7 +2320,7 @@ def send_interview_email(candidate_email: str, candidate_name: str, link_url: st
                 "api-key": brevo_api_key,
                 "content-type": "application/json"
             }
-        )
+        , timeout=10)
         response.raise_for_status()
         print(f"Email successfully sent to {candidate_email}")
         return True

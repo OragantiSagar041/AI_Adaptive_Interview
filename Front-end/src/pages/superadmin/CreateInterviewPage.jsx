@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react'
+import React, { useState, useEffect, useRef } from 'react'
 import { useSelector, useDispatch } from 'react-redux'
 import axios from 'axios'
 import Swal from 'sweetalert2'
@@ -192,13 +192,18 @@ export default function CreateInterviewPage() {
   // Parse file content
   const handleParseFile = async (file, onParsed, onLoading) => {
     if (!file) return
+    if (file.size > 5 * 1024 * 1024) {
+      onParsed('File exceeds 5MB limit')
+      return
+    }
     onLoading(true)
     const formData = new FormData()
     formData.append('file', file)
     try {
       const response = await axios.post(`${API_BASE_URL}/admin/parse-resume`, formData, {
         headers: {
-          'Content-Type': 'multipart/form-data'
+          'Content-Type': 'multipart/form-data',
+          'Authorization': `Bearer ${sessionStorage.getItem('adminToken')}`
         }
       })
       onParsed(null, response.data)
@@ -261,14 +266,25 @@ export default function CreateInterviewPage() {
   }
 
   // Calculate ATS match score
+  const lastAtsKeyRef = useRef('')
+  const atsAbortRef = useRef(null)
+
   const handleCalculateAts = async (resume, jd) => {
     if (!resume || !jd) return
+    const key = resume + '|' + jd
+    if (key === lastAtsKeyRef.current) return
+    lastAtsKeyRef.current = key
+
+    atsAbortRef.current?.abort()
+    const controller = new AbortController()
+    atsAbortRef.current = controller
+
     setAtsCalculating(true)
     try {
       const response = await axios.post(`${API_BASE_URL}/admin/ats-score`, {
         resume_text: resume,
         jd_text: jd
-      })
+      }, { signal: controller.signal })
       const data = response.data
       setAtsScoreData({
         score: data.score || 0,
@@ -277,6 +293,7 @@ export default function CreateInterviewPage() {
         missing_skills: data.missing_skills || []
       })
     } catch (e) {
+      if (axios.isCancel(e) || e.code === 'ERR_CANCELED') return
       console.error("ATS score error:", e)
       Swal.fire({
         title: 'ATS Calculation Failed',
@@ -285,7 +302,7 @@ export default function CreateInterviewPage() {
         confirmButtonColor: '#6366f1'
       })
     } finally {
-      setAtsCalculating(false)
+      if (atsAbortRef.current === controller) setAtsCalculating(false)
     }
   }
 
@@ -295,17 +312,18 @@ export default function CreateInterviewPage() {
       if (singleCandidate.resumeText && singleCandidate.jobDescription) {
         handleCalculateAts(singleCandidate.resumeText, singleCandidate.jobDescription)
       }
-    }, 1500)
+    }, 800)
     return () => clearTimeout(timer)
   }, [singleCandidate.resumeText, singleCandidate.jobDescription])
 
   // Email template builder and editor sync
-  const buildEmailHtml = () => {
+  const buildEmailHtml = (overrideBody) => {
     const { headHtml, bodyAttributes, bodyInnerHtml } = emailTemplate
     const attrs = Object.entries(bodyAttributes || {})
       .map(([key, value]) => `${key}="${String(value).replace(/"/g, '&quot;')}"`)
       .join(' ')
-    return `<!DOCTYPE html><html><head>${headHtml || ''}</head><body ${attrs}>${bodyInnerHtml || ''}</body></html>`
+    const content = overrideBody !== undefined ? overrideBody : bodyInnerHtml
+    return `<!DOCTYPE html><html><head>${headHtml || ''}</head><body ${attrs}>${content || ''}</body></html>`
   }
 
   const handlePreviewEmail = async (type) => {

@@ -330,7 +330,7 @@ function RegisterPage() {
                               <span className="rounded-full bg-primary/10 px-2 py-0.5 text-[0.65rem] font-bold uppercase tracking-wider text-primary">Popular</span>
                             )}
                           </div>
-                          <span className="text-[0.75rem] text-slate-500">{p.duration_days} days access</span>
+                          <span className="text-[0.75rem] text-slate-500">{p.credits === 0 ? 'Trial' : p.credits} credits</span>
                           <strong className="mt-1 text-lg text-slate-900">{formatPrice(p.price)}</strong>
                         </button>
                       )
@@ -369,8 +369,8 @@ function RegisterPage() {
                   <strong className="font-semibold text-slate-900">{formatPrice(selectedPlan.price)}</strong>
                 </div>
                 <div className="flex justify-between text-sm">
-                  <span className="text-slate-500">Duration</span>
-                  <strong className="font-semibold text-slate-900">{selectedPlan.duration_days} days</strong>
+                  <span className="text-slate-500">Credits Included</span>
+                  <strong className="font-semibold text-slate-900">{selectedPlan.credits === 0 ? 'Trial' : selectedPlan.credits} credits</strong>
                 </div>
 
                 <div className="border-t border-slate-200 pt-4">

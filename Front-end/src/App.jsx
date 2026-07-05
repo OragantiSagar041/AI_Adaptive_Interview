@@ -8,40 +8,40 @@ import RegisterPage from './pages/RegisterPage'
 import LoginPage from './pages/LoginPage'
 import CaseStudyPage from './pages/CaseStudyPage'
 import VoiceInterviewPage from './pages/VoiceInterviewPage'
-import MasterLayout from './components/master/MasterLayout'
-import MasterDashboard from './pages/master/MasterDashboard'
-import Plans from './pages/master/Plans'
-import Subscribers from './pages/master/Subscribers'
-import CreateTenant from './pages/master/CreateTenant'
-import MasterProfile from './pages/master/MasterProfile'
-import MasterNotifications from './pages/master/MasterNotifications'
-
 // Protected Route Guard
 import ProtectedRoute from './components/ProtectedRoute'
 
-// Admin & SuperAdmin layouts and pages
-import AdminPage from './pages/AdminPage'
-import OverviewDashboardPage from './pages/admin/OverviewDashboardPage'
-import QualifiedCandidatesPage from './pages/admin/QualifiedCandidatesPage'
-import RejectedCandidatesPage from './pages/admin/RejectedCandidatesPage'
-import CreateInterviewPage from './pages/admin/CreateInterviewPage'
-import ProfileSettings from './components/admin/ProfileSettings'
-import AdminNotifications from './pages/admin/AdminNotifications'
+// Lazy loaded heavy admin/master routes for code splitting
+const MasterLayout = React.lazy(() => import('./components/master/MasterLayout'))
+const MasterDashboard = React.lazy(() => import('./pages/master/MasterDashboard'))
+const Plans = React.lazy(() => import('./pages/master/Plans'))
+const Subscribers = React.lazy(() => import('./pages/master/Subscribers'))
+const CreateTenant = React.lazy(() => import('./pages/master/CreateTenant'))
+const MasterProfile = React.lazy(() => import('./pages/master/MasterProfile'))
+const MasterNotifications = React.lazy(() => import('./pages/master/MasterNotifications'))
 
-// SuperAdmin
-import SuperAdminLayout from './components/superadmin/SuperAdminLayout'
-import SuperDashboardPage from './pages/superadmin/SuperDashboardPage'
-import TeamManagementPage from './pages/superadmin/TeamManagementPage'
-import SuperAdminOverviewDashboardPage from './pages/superadmin/OverviewDashboardPage'
-import SuperAdminQualifiedCandidatesPage from './pages/superadmin/QualifiedCandidatesPage'
-import SuperAdminRejectedCandidatesPage from './pages/superadmin/RejectedCandidatesPage'
-import SuperAdminCreateInterviewPage from './pages/superadmin/CreateInterviewPage'
-import SuperAdminProfileSettings from './components/superadmin/ProfileSettings'
-import SuperAdminNotifications from './pages/superadmin/SuperAdminNotifications'
+const AdminPage = React.lazy(() => import('./pages/AdminPage'))
+const OverviewDashboardPage = React.lazy(() => import('./pages/admin/OverviewDashboardPage'))
+const QualifiedCandidatesPage = React.lazy(() => import('./pages/admin/QualifiedCandidatesPage'))
+const RejectedCandidatesPage = React.lazy(() => import('./pages/admin/RejectedCandidatesPage'))
+const CreateInterviewPage = React.lazy(() => import('./pages/admin/CreateInterviewPage'))
+const ProfileSettings = React.lazy(() => import('./components/admin/ProfileSettings'))
+const AdminNotifications = React.lazy(() => import('./pages/admin/AdminNotifications'))
+
+const SuperAdminLayout = React.lazy(() => import('./components/superadmin/SuperAdminLayout'))
+const SuperDashboardPage = React.lazy(() => import('./pages/superadmin/SuperDashboardPage'))
+const TeamManagementPage = React.lazy(() => import('./pages/superadmin/TeamManagementPage'))
+const SuperAdminOverviewDashboardPage = React.lazy(() => import('./pages/superadmin/OverviewDashboardPage'))
+const SuperAdminQualifiedCandidatesPage = React.lazy(() => import('./pages/superadmin/QualifiedCandidatesPage'))
+const SuperAdminRejectedCandidatesPage = React.lazy(() => import('./pages/superadmin/RejectedCandidatesPage'))
+const SuperAdminCreateInterviewPage = React.lazy(() => import('./pages/superadmin/CreateInterviewPage'))
+const SuperAdminProfileSettings = React.lazy(() => import('./components/superadmin/ProfileSettings'))
+const SuperAdminNotifications = React.lazy(() => import('./pages/superadmin/SuperAdminNotifications'))
 
 function App() {
   return (
     <BrowserRouter>
+      <React.Suspense fallback={<div className="flex h-screen items-center justify-center bg-gray-900 text-white font-semibold text-lg tracking-wide">Loading Interface...</div>}>
       <Routes>
         <Route path="/" element={<LandingPage />} />
         <Route path="/voice-recruiter" element={<AiRecruiterLandingPage />} />
@@ -116,6 +116,7 @@ function App() {
         {/* Fallback route */}
         <Route path="*" element={<Navigate to="/" replace />} />
       </Routes>
+      </React.Suspense>
     </BrowserRouter>
   )
 }

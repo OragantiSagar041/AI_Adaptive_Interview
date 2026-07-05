@@ -200,7 +200,8 @@ export default function CreateInterviewPage() {
     try {
       const response = await axios.post(`${API_BASE_URL}/admin/parse-resume`, formData, {
         headers: {
-          'Content-Type': 'multipart/form-data'
+          'Content-Type': 'multipart/form-data',
+          'Authorization': `Bearer ${sessionStorage.getItem('adminToken')}`
         }
       })
       onParsed(null, response.data)
@@ -302,12 +303,13 @@ export default function CreateInterviewPage() {
   }, [singleCandidate.resumeText, singleCandidate.jobDescription])
 
   // Email template builder and editor sync
-  const buildEmailHtml = () => {
+  const buildEmailHtml = (overrideBody) => {
     const { headHtml, bodyAttributes, bodyInnerHtml } = emailTemplate
     const attrs = Object.entries(bodyAttributes || {})
       .map(([key, value]) => `${key}="${String(value).replace(/"/g, '&quot;')}"`)
       .join(' ')
-    return `<!DOCTYPE html><html><head>${headHtml || ''}</head><body ${attrs}>${bodyInnerHtml || ''}</body></html>`
+    const content = overrideBody !== undefined ? overrideBody : bodyInnerHtml
+    return `<!DOCTYPE html><html><head>${headHtml || ''}</head><body ${attrs}>${content || ''}</body></html>`
   }
 
   const handlePreviewEmail = async (type) => {

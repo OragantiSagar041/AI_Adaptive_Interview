@@ -4,6 +4,7 @@ import Swal from 'sweetalert2'
 import api from '../../utils/api'
 import useCandidateWebRTC from '../../hooks/useCandidateWebRTC'
 import { useProctoring } from '../../hooks/useProctoring'
+import { countFillers } from './interviewUtils'
 
 const langMap = {
   'Hindi': 'hi-IN',
@@ -23,6 +24,22 @@ export const useInterviewSession = (sessionId, interviewType, startRoundTwo) => 
   const [error, setError] = useState(null)
   const _sessionKey = sessionId ? `interview_session_${sessionId}` : null
   const _savedSession = _sessionKey ? (() => { try { return JSON.parse(sessionStorage.getItem(_sessionKey) || 'null') } catch { return null } })() : null
+
+  // Web Audio Mixer for Screen Recording
+  const audioMixerCtxRef = useRef(null)
+  const audioMixerDestRef = useRef(null)
+
+  // WebRTC Global Cleanup
+  useEffect(() => {
+    return () => {
+      if (mediaStreamRef.current) {
+        mediaStreamRef.current.getTracks().forEach(t => t.stop())
+      }
+      if (screenStreamRef.current) {
+        screenStreamRef.current.getTracks().forEach(t => t.stop())
+      }
+    }
+  }, [])
   const [isDisclaimerAccepted, setIsDisclaimerAccepted] = useState(false)
   const [agreeChecked, setAgreeChecked] = useState(false)
   const [autoReconnecting, setAutoReconnecting] = useState(!!_savedSession?.accepted)
@@ -44,6 +61,8 @@ export const useInterviewSession = (sessionId, interviewType, startRoundTwo) => 
   const [isMediaReady, setIsMediaReady] = useState(false)
   const [proctoringAlert, setProctoringAlert] = useState('')
   const [noiseAlertCount, setNoiseAlertCount] = useState(0)
+  const noiseAlertCountRef = useRef(0)
+  const isSubmittingRef = useRef(false)
   const [showNoiseBanner, setShowNoiseBanner] = useState(false)
   const [fullscreenWarning, setFullscreenWarning] = useState(false)
   const [screenShareWarning, setScreenShareWarning] = useState(false)
@@ -111,6 +130,7 @@ export const useInterviewSession = (sessionId, interviewType, startRoundTwo) => 
   const [codingRoundLoading, setCodingRoundLoading] = useState(false)
   const [codingRoundData, setCodingRoundData] = useState(null)
   const [aiInsights, setAiInsights] = useState({ clarity: 50, technicalDepth: 50, confidence: 50 })
+  const [showDeviceCheck, setShowDeviceCheck] = useState(false)
 
   // Fetch AI Insights dynamically
   useEffect(() => {
@@ -156,7 +176,7 @@ export const useInterviewSession = (sessionId, interviewType, startRoundTwo) => 
         javascript: task.function_name === 'winner'
           ? `function winner(donuts, starter) {\n    // Write your code here\n    \n}`
           : task.function_name === 'find_duplicates'
-            ? `function findDuplicates(records) {\n    // Write your code here\n    \n}`
+            ? `function find_duplicates(records) {\n    // Write your code here\n    \n}`
             : `function debounceSimulation(calls, delay) {\n    // Write your code here\n    \n}`,
         cpp: task.function_name === 'winner'
           ? `#include <vector>\n#include <string>\n\nstd::vector<std::string> winner(std::vector<int> donuts, std::vector<std::string> starter) {\n    // Write your code here\n    \n}`
@@ -196,6 +216,7 @@ export const useInterviewSession = (sessionId, interviewType, startRoundTwo) => 
   const noiseMonitorFrameRef = useRef(null)
   const noiseFrameCountRef = useRef(0)
   const noiseCooldownRef = useRef(0)
+  const audioRmsRef = useRef(0)
 
   // Feature Migration Refs
   const visualizerCanvasRef = useRef(null)
@@ -203,7 +224,7 @@ export const useInterviewSession = (sessionId, interviewType, startRoundTwo) => 
   const visualizerAudioCtxRef = useRef(null)
   const silenceTimeoutRef = useRef(null)
   const questionStartTimeRef = useRef(Date.now())
-  const behavioralStatsRef = useRef({ wordCount: 0, fillerCount: 0, pauseCount: 0, faceAlerts: 0, tabSwitches: 0 })
+  const behavioralStatsRef = useRef({ wordCount: 0, fillerCount: 0, pauseCount: 0, faceAlerts: 0, tabSwitches: 0, noiseAlerts: 0 })
   const handleNextQuestionRef = useRef(null)
 
   // WebRTC Candidate Logic
@@ -228,7 +249,7 @@ export const useInterviewSession = (sessionId, interviewType, startRoundTwo) => 
 
   useEffect(() => {
     const handleVisibilityChange = () => {
-      if (document.hidden && isDisclaimerAccepted && !showAllSet) {
+      if (document.hidden && isDisclaimerAccepted && !showAllSet && !isSubmittingRef.current) {
         behavioralStatsRef.current.tabSwitches += 1
         Swal.fire({
           icon: 'error',
@@ -450,6 +471,12 @@ export const useInterviewSession = (sessionId, interviewType, startRoundTwo) => 
         }
 
         setSessionDetail(payload)
+        
+        // Ensure Voice Cloning works for Standard interviews
+        if (payload.voice_clone && payload.custom_voice_id) {
+          clonedVoiceIdRef.current = payload.custom_voice_id
+          setClonedVoiceId(payload.custom_voice_id)
+        }
 
         if (payload.is_deactivated) {
           throw new Error("This interview link has been temporarily deactivated by the recruiter.")
@@ -650,13 +677,18 @@ export const useInterviewSession = (sessionId, interviewType, startRoundTwo) => 
       // Start Whisper MediaRecorder if not already running
       if (mediaStreamRef.current && !whisperMediaRecorderRef.current) {
         try {
-          const mr = new MediaRecorder(mediaStreamRef.current, { mimeType: 'audio/webm' })
+          const audioStream = new MediaStream(mediaStreamRef.current.getAudioTracks())
+          const mr = new MediaRecorder(audioStream)
           mr.ondataavailable = (e) => {
             if (e.data.size > 0) whisperAudioChunksRef.current.push(e.data)
           }
           mr.onstop = async () => {
-            const blob = new Blob(whisperAudioChunksRef.current, { type: 'audio/webm' })
+            const blob = new Blob(whisperAudioChunksRef.current, { type: mr.mimeType })
             whisperAudioChunksRef.current = [] // reset for next chunk
+            
+            if (isSpeechRecordingRef.current && whisperMediaRecorderRef.current) {
+              try { whisperMediaRecorderRef.current.start() } catch (e) { console.error("mr.start error", e) }
+            }
             
             if (blob.size > 1000) { // prevent empty or silent blobs
               const formData = new FormData()
@@ -701,8 +733,7 @@ export const useInterviewSession = (sessionId, interviewType, startRoundTwo) => 
       if (whisperPauseTimeoutRef.current) clearTimeout(whisperPauseTimeoutRef.current)
       whisperPauseTimeoutRef.current = setTimeout(() => {
         if (whisperMediaRecorderRef.current && whisperMediaRecorderRef.current.state === 'recording') {
-          whisperMediaRecorderRef.current.stop()
-          whisperMediaRecorderRef.current.start()
+          try { whisperMediaRecorderRef.current.stop() } catch(e) {}
         }
       }, 1500)
 
@@ -757,6 +788,9 @@ export const useInterviewSession = (sessionId, interviewType, startRoundTwo) => 
           sumSquares += normalized * normalized
         }
         const rms = Math.sqrt(sumSquares / dataArray.length)
+        
+        audioRmsRef.current = rms
+
         const now = Date.now()
 
         if (rms > 0.18 && now > noiseCooldownRef.current) {
@@ -770,6 +804,8 @@ export const useInterviewSession = (sessionId, interviewType, startRoundTwo) => 
           noiseFrameCountRef.current = 0
           setNoiseAlertCount(prev => {
             const next = prev + 1
+            noiseAlertCountRef.current = next
+            behavioralStatsRef.current.noiseAlerts += 1
             recordAlertMetric("noise_alert")
             return next
           })
@@ -784,46 +820,73 @@ export const useInterviewSession = (sessionId, interviewType, startRoundTwo) => 
   }
 
   const recordAlertMetric = async (type) => {
-    behavioralStatsRef.current.faceAlerts += 1
+    if (type !== 'noise_alert') {
+      behavioralStatsRef.current.faceAlerts += 1
+    }
+    
+    const totalAlerts = behavioralStatsRef.current.faceAlerts + noiseAlertCountRef.current + screenShareViolations
+    if (totalAlerts >= 10) {
+      Swal.fire({
+        title: 'Interview Terminated',
+        text: `Your interview has been automatically submitted because you exceeded the maximum allowed proctoring alerts (10). Last alert reason: ${type}`,
+        icon: 'error',
+        background: '#161c2d',
+        color: '#fff',
+        confirmButtonText: 'Close Interview',
+        allowOutsideClick: false,
+        allowEscapeKey: false,
+        customClass: {
+          popup: 'border border-white/8 rounded-2xl shadow-2xl',
+          title: 'text-xl font-bold text-white',
+          htmlContainer: 'text-slate-300 text-sm',
+          confirmButton: 'bg-red-500 hover:bg-red-600 text-white rounded-full px-6 py-2.5 font-semibold text-sm cursor-pointer border-none outline-none'
+        },
+        buttonsStyling: false
+      }).then(() => {
+        handleSubmitInterview(true)
+      })
+    }
   }
+  const proctoring = useProctoring({
+    videoRef: videoPreviewRef,
+    enabled: isDisclaimerAccepted && !showAllSet && !loading,
+    maxAlerts: 10,
+    onViolation: (v) => {
+      recordAlertMetric(v.type)
+      if (v.type !== 'noise_alert') {
+        Swal.fire({
+          icon: 'warning',
+          title: '⚠️ Proctoring Alert',
+          text: v.message,
+          toast: true,
+          position: 'top-end',
+          showConfirmButton: false,
+          timer: 3000,
+          background: '#161c2d',
+          color: '#fff',
+        })
+      }
+    }
+  });
 
-  useProctoring(videoPreviewRef, isDisclaimerAccepted && !showAllSet && !loading, recordAlertMetric);
+  // Track lip sync anomaly
+  useEffect(() => {
+    if (proctoring.jawOpenScore > 0 && audioRmsRef.current > 0.18) {
+      if (proctoring.checkLipSync(proctoring.jawOpenScore, audioRmsRef.current > 0.18)) {
+        // We could track a streak here or just fire an alert
+        // A full robust implementation would track a streak.
+      }
+    }
+  }, [proctoring.jawOpenScore, proctoring.checkLipSync])
 
   const acceptDisclaimer = () => {
-    Swal.fire({
-      title: 'Media Access Required',
-      html: `
-        <div class="text-left space-y-3">
-          <p class="text-slate-300">This proctored assessment requires permissions to access your:</p>
-          <ul class="list-disc pl-5 text-slate-300 text-sm space-y-1">
-            <li><strong>Webcam</strong> (for face detection & identity verification)</li>
-            <li><strong>Microphone</strong> (for speech-to-text recording)</li>
-            <li><strong>Entire Screen</strong> (for browser proctoring verification)</li>
-          </ul>
-          <p class="text-xs text-amber-500 mt-3 font-semibold">⚠️ Note: Please select your "Entire Screen" when prompted for screen sharing.</p>
-        </div>
-      `,
-      icon: 'info',
-      showCancelButton: true,
-      confirmButtonText: 'Start Setup',
-      cancelButtonText: 'Cancel',
-      background: '#161c2d',
-      color: '#fff',
-      customClass: {
-        popup: 'border border-white/8 rounded-2xl shadow-2xl',
-        title: 'text-xl font-bold text-white',
-        htmlContainer: 'text-slate-300 text-sm',
-        confirmButton: 'bg-primary hover:bg-primary-hover text-white rounded-full px-6 py-2.5 font-semibold text-sm cursor-pointer border-none outline-none mr-2',
-        cancelButton: 'bg-white/6 hover:bg-white/12 text-white border border-white/8 rounded-full px-6 py-2.5 font-semibold text-sm cursor-pointer outline-none'
-      },
-      buttonsStyling: false,
-      preConfirm: () => {
-        enableFullscreen()
-      }
-    }).then(async (result) => {
-      if (!result.isConfirmed) return
-      await setupMedia()
-    })
+    setShowDeviceCheck(true)
+  }
+
+  const promptScreenShare = async () => {
+    // Wait for previous tracks from DeviceCheckModal to release
+    enableFullscreen()
+    setTimeout(setupMedia, 500)
   }
 
   const setupMedia = async () => {
@@ -883,9 +946,24 @@ export const useInterviewSession = (sessionId, interviewType, startRoundTwo) => 
         handleScreenShareStop()
       }
 
+      // Web Audio Mixer setup
+      if (!audioMixerCtxRef.current) {
+        const AudioCtx = window.AudioContext || window.webkitAudioContext
+        audioMixerCtxRef.current = new AudioCtx()
+        audioMixerDestRef.current = audioMixerCtxRef.current.createMediaStreamDestination()
+      }
+
       const audioTracks = stream.getAudioTracks()
       if (audioTracks.length > 0) {
-        screenStream.addTrack(audioTracks[0])
+        // Mix candidate mic into destination
+        const micSource = audioMixerCtxRef.current.createMediaStreamSource(new MediaStream([audioTracks[0]]))
+        micSource.connect(audioMixerDestRef.current)
+      }
+
+      // Add the master mixed track to the screen stream
+      const mixedTrack = audioMixerDestRef.current.stream.getAudioTracks()[0]
+      if (mixedTrack) {
+        screenStream.addTrack(mixedTrack)
       }
 
       let options = { videoBitsPerSecond: 800000, audioBitsPerSecond: 64000 }
@@ -904,34 +982,17 @@ export const useInterviewSession = (sessionId, interviewType, startRoundTwo) => 
       cameraRecorderRef.current.start(2000)
       screenRecorderRef.current.start(2000)
 
-      Swal.fire({
-        icon: 'success',
-        title: 'Setup Complete',
-        text: 'Camera and screen share connected successfully. Click below to enter fullscreen and begin your interview.',
-        confirmButtonText: 'Start Interview',
-        allowOutsideClick: false,
-        allowEscapeKey: false,
-        background: '#161c2d',
-        color: '#fff',
-        customClass: {
-          popup: 'border border-white/8 rounded-2xl shadow-2xl',
-          title: 'text-xl font-bold text-white',
-          htmlContainer: 'text-slate-300 text-sm',
-          confirmButton: 'bg-primary hover:bg-primary-hover text-white rounded-full px-6 py-2.5 font-semibold text-sm cursor-pointer border-none outline-none'
-        },
-        buttonsStyling: false
-      }).then(() => {
-        const elem = document.documentElement;
-        if (elem.requestFullscreen) {
-          elem.requestFullscreen().catch(err => console.log(err));
-        }
+      const elem = document.documentElement;
+      if (elem.requestFullscreen) {
+        elem.requestFullscreen().catch(err => console.log(err));
+      }
 
-        initSpeechRecognition()
-        if (recognitionRef.current) {
-          recognitionRef.current.start()
-        }
+      initSpeechRecognition()
+      if (recognitionRef.current) {
+        recognitionRef.current.start()
+      }
 
-        startBackgroundNoiseMonitor(stream)
+      startBackgroundNoiseMonitor(stream)
 
       const savedSess = _sessionKey ? (() => { try { return JSON.parse(sessionStorage.getItem(_sessionKey) || 'null') } catch { return null } })() : null
       
@@ -942,6 +1003,7 @@ export const useInterviewSession = (sessionId, interviewType, startRoundTwo) => 
       }
 
       setIsDisclaimerAccepted(true)
+      setIsMediaReady(true)
 
       if (_sessionKey) {
         const sess = JSON.parse(sessionStorage.getItem(_sessionKey) || '{}')
@@ -949,8 +1011,6 @@ export const useInterviewSession = (sessionId, interviewType, startRoundTwo) => 
         sess.startedAt = sess.startedAt || Date.now()
         sessionStorage.setItem(_sessionKey, JSON.stringify(sess))
       }
-
-      })
     } catch (err) {
       console.error("Setup permissions failure:", err)
       let errTitle = 'Setup Failed'
@@ -1040,7 +1100,12 @@ export const useInterviewSession = (sessionId, interviewType, startRoundTwo) => 
         handleScreenShareStop()
       }
 
-      if (mediaStreamRef.current) {
+      if (audioMixerDestRef.current) {
+        const mixedTrack = audioMixerDestRef.current.stream.getAudioTracks()[0]
+        if (mixedTrack) {
+          screenStream.addTrack(mixedTrack)
+        }
+      } else if (mediaStreamRef.current) {
         const audioTracks = mediaStreamRef.current.getAudioTracks()
         if (audioTracks.length > 0) {
           screenStream.addTrack(audioTracks[0])
@@ -1073,32 +1138,47 @@ export const useInterviewSession = (sessionId, interviewType, startRoundTwo) => 
   }
 
   const speakAIQuestion = async (text) => {
-    if (clonedVoiceIdRef.current) {
-      // --- Cloned Voice TTS (Backend) ---
-      try {
-        if (window.speechSynthesis) window.speechSynthesis.cancel()
-        const res = await fetch(`${api.defaults.baseURL || ''}/tts`, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ text, voice: 'shimmer', language: sessionDetail?.language || 'English', voice_id: clonedVoiceIdRef.current })
-        })
-        if (!res.ok) throw new Error('TTS failed')
-        const blob = await res.blob()
-        const url = URL.createObjectURL(blob)
-        const audio = new Audio(url)
-        audio.onended = () => {
-          if (!isRoundTwoRef.current) {
-            if (silenceTimeoutRef.current) clearTimeout(silenceTimeoutRef.current)
-            silenceTimeoutRef.current = setTimeout(() => {
-              if (handleNextQuestionRef.current) handleNextQuestionRef.current()
-            }, 10000)
-          }
-        }
-        audio.play()
-        return // Successfully used cloned voice
-      } catch (err) {
-        console.error("Cloned TTS failed, falling back to browser TTS", err)
+    // --- High-Quality TTS (Backend: Cartesia or Edge TTS) ---
+    try {
+      if (window.speechSynthesis) window.speechSynthesis.cancel()
+      const bodyPayload = { 
+        text, 
+        voice: 'shimmer', 
+        language: sessionDetail?.language || 'English',
+        use_custom_voice: !!sessionDetail?.voice_clone
       }
+      if (clonedVoiceIdRef.current) bodyPayload.voice_id = clonedVoiceIdRef.current
+      
+      const res = await fetch(`${api.defaults.baseURL || ''}/tts`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(bodyPayload)
+      })
+      if (!res.ok) throw new Error('TTS failed')
+      const blob = await res.blob()
+      const url = URL.createObjectURL(blob)
+      const audio = new Audio(url)
+      
+      // --- Web Audio Mixer Routing ---
+      if (audioMixerCtxRef.current && audioMixerDestRef.current) {
+        audio.crossOrigin = "anonymous"
+        const source = audioMixerCtxRef.current.createMediaElementSource(audio)
+        source.connect(audioMixerCtxRef.current.destination) // Play to speakers
+        source.connect(audioMixerDestRef.current) // Send to screen recorder mixer
+      }
+
+      audio.onended = () => {
+        if (!isRoundTwoRef.current) {
+          if (silenceTimeoutRef.current) clearTimeout(silenceTimeoutRef.current)
+          silenceTimeoutRef.current = setTimeout(() => {
+            if (handleNextQuestionRef.current) handleNextQuestionRef.current()
+          }, 10000)
+        }
+      }
+      audio.play()
+      return // Successfully used backend high-quality TTS
+    } catch (err) {
+      console.error("Backend TTS failed, falling back to browser TTS", err)
     }
 
     // --- Browser TTS (Fallback/Default) ---
@@ -1139,17 +1219,6 @@ export const useInterviewSession = (sessionId, interviewType, startRoundTwo) => 
     }
   }
 
-  const countFillers = (text) => {
-    const FILLER_WORDS = ["um", "uh", "er", "like", "you know", "basically", "actually", "literally", "sort of", "kind of"]
-    let count = 0
-    const lower = text.toLowerCase()
-    for (let fw of FILLER_WORDS) {
-      const regex = new RegExp(`\\b${fw}\\b`, 'g')
-      const matches = lower.match(regex)
-      if (matches) count += matches.length
-    }
-    return count
-  }
 
   const startNextRound = async () => {
     if (isRoundTwoRef.current) return
@@ -1200,7 +1269,8 @@ export const useInterviewSession = (sessionId, interviewType, startRoundTwo) => 
       answerForm.append('question_text', activeQuestion?.text || activeQuestion?.question || '')
       answerForm.append('answer_text', activeQuestion?.type === 'coding' ? (codeAnswer || ' ') : (transcriptionText || ' '))
       answerForm.append('candidate_name', sessionDetail?.candidate_name || 'Candidate')
-      answerForm.append('time_spent_seconds', '0')
+      const timeSpent = Math.round((Date.now() - questionStartTimeRef.current) / 1000)
+      answerForm.append('time_spent_seconds', timeSpent.toString())
       answerForm.append('time_limit_seconds', '120')
 
       await api.post(`/save-answer`, answerForm, {
@@ -1213,7 +1283,7 @@ export const useInterviewSession = (sessionId, interviewType, startRoundTwo) => 
     setTranscriptionText('')
     setCodeAnswer('')
     setCodeOutput('')
-    behavioralStatsRef.current = { wordCount: 0, fillerCount: 0, pauseCount: 0, faceAlerts: 0, tabSwitches: 0 }
+    behavioralStatsRef.current = { wordCount: 0, fillerCount: 0, pauseCount: 0, faceAlerts: 0, tabSwitches: 0, noiseAlerts: 0 }
     questionStartTimeRef.current = Date.now()
     startNextRound()
   }
@@ -1229,12 +1299,13 @@ export const useInterviewSession = (sessionId, interviewType, startRoundTwo) => 
     const wpm = timeSpent > 0 ? Math.round((words / timeSpent) * 60) : 0
     const payload = {
       interview_id: interviewId || sessionDetail?.interview_id || sessionId,
-      question_id: currentQuestion.id,
+      question_id: (currentQuestion.id || (currentQuestionIndex + 1)).toString(),
       filler_count: countFillers(transcriptionText),
       wpm: wpm,
       pause_count: behavioralStatsRef.current.pauseCount,
       tab_switches: behavioralStatsRef.current.tabSwitches,
-      face_alerts: behavioralStatsRef.current.faceAlerts
+      face_alerts: behavioralStatsRef.current.faceAlerts,
+      noise_alerts: behavioralStatsRef.current.noiseAlerts
     }
     try {
       await api.post(`/save-behavioral-data`, payload)
@@ -1257,7 +1328,7 @@ export const useInterviewSession = (sessionId, interviewType, startRoundTwo) => 
         answerForm.append('question_text', currentQuestion.text || currentQuestion.question || '')
         answerForm.append('answer_text', currentQuestion.type === 'coding' ? (codeAnswer || ' ') : (transcriptionText || ' '))
         answerForm.append('candidate_name', sessionDetail?.candidate_name || 'Candidate')
-        answerForm.append('time_spent_seconds', '0')
+        answerForm.append('time_spent_seconds', timeSpent.toString())
         answerForm.append('time_limit_seconds', '120')
 
         await api.post(`/save-answer`, answerForm, {
@@ -1285,7 +1356,7 @@ export const useInterviewSession = (sessionId, interviewType, startRoundTwo) => 
           setTranscriptionText('')
           setCodeAnswer('')
           setCodeOutput('')
-          behavioralStatsRef.current = { wordCount: 0, fillerCount: 0, pauseCount: 0, faceAlerts: 0, tabSwitches: 0 }
+          behavioralStatsRef.current = { wordCount: 0, fillerCount: 0, pauseCount: 0, faceAlerts: 0, tabSwitches: 0, noiseAlerts: 0 }
           questionStartTimeRef.current = Date.now()
           startNextRound()
         } else {
@@ -1295,7 +1366,7 @@ export const useInterviewSession = (sessionId, interviewType, startRoundTwo) => 
         setTranscriptionText('')
         setCodeAnswer('')
         setCodeOutput('')
-        behavioralStatsRef.current = { wordCount: 0, fillerCount: 0, pauseCount: 0, faceAlerts: 0, tabSwitches: 0 }
+        behavioralStatsRef.current = { wordCount: 0, fillerCount: 0, pauseCount: 0, faceAlerts: 0, tabSwitches: 0, noiseAlerts: 0 }
 
         const nextIdx = currentQuestionIndex + 1
         setCurrentQuestionIndex(nextIdx)
@@ -1328,14 +1399,12 @@ export const useInterviewSession = (sessionId, interviewType, startRoundTwo) => 
   }, [handleNextQuestion])
 
   const handleSubmitInterview = async (forceClose = false) => {
+    isSubmittingRef.current = true
     // Stop any currently-speaking TTS immediately
     if (window.speechSynthesis) window.speechSynthesis.cancel()
     if (silenceTimeoutRef.current) { clearTimeout(silenceTimeoutRef.current); silenceTimeoutRef.current = null }
     if (_sessionKey) sessionStorage.removeItem(_sessionKey)
     visualizerActiveRef.current = false
-
-    if (window.speechSynthesis) window.speechSynthesis.cancel()
-    if (silenceTimeoutRef.current) clearTimeout(silenceTimeoutRef.current)
 
     if (faceDetectionIntervalRef.current) clearInterval(faceDetectionIntervalRef.current)
     if (noiseMonitorFrameRef.current) cancelAnimationFrame(noiseMonitorFrameRef.current)
@@ -1398,15 +1467,13 @@ export const useInterviewSession = (sessionId, interviewType, startRoundTwo) => 
         })
       }
 
-      try {
-        await Promise.all([
-          uploadPromise(cameraChunksRef.current, 'camera'),
-          uploadPromise(screenChunksRef.current, 'screen')
-        ])
+      // Fire and forget background upload
+      Promise.all([
+        uploadPromise(cameraChunksRef.current, 'camera'),
+        uploadPromise(screenChunksRef.current, 'screen')
+      ]).then(() => {
         setUploadPercentage(100)
-      } catch (err) {
-        console.error(err)
-      }
+      }).catch(err => console.error("Background upload failed:", err))
     }
 
     try {
@@ -1431,6 +1498,10 @@ export const useInterviewSession = (sessionId, interviewType, startRoundTwo) => 
     agreeChecked,
     setAgreeChecked,
     acceptDisclaimer,
+    promptScreenShare,
+    showDeviceCheck,
+    setShowDeviceCheck,
+    setupMedia,
     autoReconnecting,
     sessionDetail,
     interviewId,

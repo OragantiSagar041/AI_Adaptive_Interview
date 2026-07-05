@@ -125,7 +125,7 @@ def send_email_task(
                 "content": generate_job_description_pdf_base64(job_description)
             }]
 
-        response = requests.post(url, json=payload, headers=headers)
+        response = requests.post(url, json=payload, headers=headers, timeout=10)
         logger.info(f"Email sent status: {response.status_code}")
         return {"status": response.status_code}
     except Exception as e:

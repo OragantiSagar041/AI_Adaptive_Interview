@@ -686,7 +686,7 @@ export default function SuperAdminLayout() {
         </header>
 
         <main
-          className="p-4 sm:p-8 flex-grow overflow-y-auto"
+          className="flex-1 overflow-y-auto p-4 sm:p-6 lg:p-8 relative"
           style={{
             background: `
               radial-gradient(circle at 0% 0%, ${accentPageStrong} 0, transparent 28%),

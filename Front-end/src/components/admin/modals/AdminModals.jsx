@@ -193,7 +193,7 @@ export function CandidateScorecardModal({
                 <ShieldAlert className="text-rose-500 w-5 h-5" /> 
                 Proctoring & Integrity
               </h3>
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
                 <div className={`border rounded-xl p-4 flex items-center justify-between ${candidateDetail.integrity.total_tab_switches > 0 ? 'bg-rose-50 border-rose-200' : 'bg-emerald-50 border-emerald-200'}`}>
                   <div className="flex flex-col">
                     <span className={`text-[0.68rem] font-bold uppercase tracking-wider ${candidateDetail.integrity.total_tab_switches > 0 ? 'text-rose-600' : 'text-emerald-700'}`}>Tab Switches</span>
@@ -207,6 +207,13 @@ export function CandidateScorecardModal({
                     <span className="text-xs text-slate-500 mt-0.5">Missing face, multiple faces, or devices</span>
                   </div>
                   <span className={`text-3xl font-black ${candidateDetail.integrity.total_face_alerts > 0 ? 'text-rose-600' : 'text-emerald-600'}`}>{candidateDetail.integrity.total_face_alerts}</span>
+                </div>
+                <div className={`border rounded-xl p-4 flex items-center justify-between ${(candidateDetail.integrity.total_noise_alerts || 0) > 0 ? 'bg-rose-50 border-rose-200' : 'bg-emerald-50 border-emerald-200'}`}>
+                  <div className="flex flex-col">
+                    <span className={`text-[0.68rem] font-bold uppercase tracking-wider ${(candidateDetail.integrity.total_noise_alerts || 0) > 0 ? 'text-rose-600' : 'text-emerald-700'}`}>Background Noise</span>
+                    <span className="text-xs text-slate-500 mt-0.5">Heavy background noise detected</span>
+                  </div>
+                  <span className={`text-3xl font-black ${(candidateDetail.integrity.total_noise_alerts || 0) > 0 ? 'text-rose-600' : 'text-emerald-600'}`}>{candidateDetail.integrity.total_noise_alerts || 0}</span>
                 </div>
               </div>
             </div>
@@ -766,11 +773,21 @@ export function EmailPreviewModal({
   handleSaveEmailPreview
 }) {
   const [draftInnerHtml, setDraftInnerHtml] = useState(emailTemplate.bodyInnerHtml || '');
+  const [debouncedHtml, setDebouncedHtml] = useState(emailTemplate.bodyInnerHtml || '');
 
   // Keep draft in sync if emailTemplate gets reset from outside
   useEffect(() => {
     setDraftInnerHtml(emailTemplate.bodyInnerHtml || '');
+    setDebouncedHtml(emailTemplate.bodyInnerHtml || '');
   }, [emailTemplate.bodyInnerHtml]);
+
+  // Debounce the live preview update so typing isn't slow
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      setDebouncedHtml(draftInnerHtml);
+    }, 400); // 400ms debounce
+    return () => clearTimeout(timer);
+  }, [draftInnerHtml]);
 
   const handleApplyChanges = () => {
     setEmailTemplate(prev => ({
@@ -834,7 +851,7 @@ export function EmailPreviewModal({
           <iframe
             className="flex-grow w-full bg-white border-0 outline-none"
             title="Email Preview"
-            srcDoc={buildEmailHtml()}
+            srcDoc={buildEmailHtml(debouncedHtml)}
           />
         </div>
       </div>

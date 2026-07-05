@@ -1,3 +1,4 @@
+ 
 import React, { useState, useEffect, useRef } from 'react'
 import { useSelector } from 'react-redux'
 import { NavLink } from 'react-router-dom'
@@ -37,6 +38,7 @@ export default function Navbar({
     return () => {
       document.removeEventListener("mousedown", handleClickOutside)
     }
+   
   }, [])
 
   const fetchNotifications = async () => {
@@ -56,6 +58,7 @@ export default function Navbar({
       const interval = setInterval(fetchNotifications, 30000)
       return () => clearInterval(interval)
     }
+   
   }, [token])
 
   const handleMarkRead = async (id) => {

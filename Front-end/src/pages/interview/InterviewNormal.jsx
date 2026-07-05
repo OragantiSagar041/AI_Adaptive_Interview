@@ -2,6 +2,7 @@ import React, { useState, useRef, useEffect } from 'react'
 import { useSearchParams, Link } from 'react-router-dom'
 import { Video, Volume2, ArrowRight, ShieldAlert, Cpu, AlertTriangle, RefreshCw } from 'lucide-react'
 import { useInterviewSession } from './useInterviewSession'
+import DeviceCheckModal from '../../components/DeviceCheckModal'
 import { API_BASE_URL } from '../../apiConfig'
 import '../../Interview.css'
 
@@ -57,7 +58,10 @@ export const InterviewNormal = () => {
     handleSkipUpload,
     isMobileDevice,
     recognitionRef,
-    isSpeechRecordingRef
+    isSpeechRecordingRef,
+    showDeviceCheck,
+    setShowDeviceCheck,
+    promptScreenShare
   } = session
 
   // ── Voice Cloning Setup State (UI only) ──────────────────────────────────
@@ -205,6 +209,17 @@ export const InterviewNormal = () => {
             I Understand & Start Interview
           </button>
         </div>
+
+        {/* Device Check Modal */}
+        {session.showDeviceCheck && (
+          <DeviceCheckModal 
+            onSuccess={() => {
+              session.setShowDeviceCheck(false);
+              session.promptScreenShare();
+            }} 
+            onCancel={() => session.setShowDeviceCheck(false)} 
+          />
+        )}
       </div>
     )
   }
@@ -359,7 +374,7 @@ export const InterviewNormal = () => {
           <Volume2 size={20} style={{ animation: 'bounce 1s infinite' }} />
           <div>
             <strong style={{ fontSize: '14px', display: 'block' }}>Background Noise Alert</strong>
-            <p style={{ fontSize: '12px', opacity: 0.9, margin: '2px 0 0 0' }}>Please maintain silence. Alerts: {noiseAlertCount}/20</p>
+            <p style={{ fontSize: '12px', opacity: 0.9, margin: '2px 0 0 0' }}>Please maintain silence. Alerts: {noiseAlertCount}/10</p>
           </div>
         </div>
       )}

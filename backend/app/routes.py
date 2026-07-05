@@ -78,6 +78,7 @@ from .models import *
 from .database import *
 from .config import *
 from .services import *
+from app.session_store import get_session, set_session, delete_session
 
 load_dotenv()
 
@@ -86,7 +87,7 @@ router = APIRouter()
 
 
 @router.get("/admin/last-error")
-def get_last_error():
+def get_last_error(current_admin: dict = Depends(get_current_admin_details)):
     return LAST_422_ERROR or {"status": "no errors"}
 
 @router.get("/api/plans")
@@ -130,7 +131,7 @@ class RazorpayOrderRequest(BaseModel):
     credits: int
 
 
-@router.on_event("startup")
+# Startup functions (to be called by main.py lifespan)
 def startup_event_cloudinary():
     global CLOUDINARY_CLEANUP_STARTED
     if not CLOUDINARY_CLEANUP_STARTED:
@@ -140,7 +141,7 @@ def startup_event_cloudinary():
 
 
 # In-memory storage (replace with database in production)
-interviews = {}
+    # interviews = {}
 
 
 
@@ -177,12 +178,12 @@ def load_interview_from_db(interview_id: str) -> Optional[Dict[str, Any]]:
         "coding_round": row.get("coding_round"),
         "case_study_round": row.get("case_study_round"),
     }
-    interviews[interview_id] = interview
+    set_session(interview_id, interview)
     return interview
 
 
 def get_interview_or_404(interview_id: str) -> Dict[str, Any]:
-    interview = interviews.get(interview_id) or load_interview_from_db(interview_id)
+    interview = get_session(interview_id) or load_interview_from_db(interview_id)
     if not interview:
         raise HTTPException(status_code=404, detail="Interview not found")
     return interview
@@ -210,8 +211,10 @@ def build_answer_summary(answers_data: List[Dict[str, Any]]) -> str:
 
 
 def persist_coding_round(interview_id: str, coding_round: Dict[str, Any]) -> None:
-    if interview_id in interviews:
-        interviews[interview_id]["coding_round"] = coding_round
+    interview = get_session(interview_id)
+    if interview:
+        interview["coding_round"] = coding_round
+        set_session(interview_id, interview)
     interviews_collection.update_one(
         {"id": interview_id},
         {"$set": {"coding_round": coding_round}},
@@ -240,10 +243,10 @@ def build_coding_test_payload(coding_round: Dict[str, Any]) -> Dict[str, Any]:
 
 @router.post("/generate-next-question")
 def api_gen_next_question(req: NextQuestionRequest):
-    if req.interview_id not in interviews:
+    if not get_session(req.interview_id):
         raise HTTPException(status_code=404, detail="Interview not found")
         
-    interview = interviews[req.interview_id]
+    interview = get_session(req.interview_id)
     followup_streak = interview.get("followup_streak", 0)
     
     try:
@@ -303,6 +306,7 @@ def api_gen_next_question(req: NextQuestionRequest):
                  q["id"] = int(q["id"]) + 1
                  
         interview["questions"].insert(current_idx + 1, new_question)
+        set_session(req.interview_id, interview)
         
         # Update DB with new question list
         interviews_collection.update_one(
@@ -353,7 +357,7 @@ def upload_resume(
             raise HTTPException(status_code=400, detail="Failed to generate questions")
 
         # Store interview data (RAM)
-        interviews[interview_id] = {
+        set_session(interview_id, {
             "id": interview_id,
             "source": source,
             "profile_text": content_str[:5000], # Store more text
@@ -361,7 +365,7 @@ def upload_resume(
             "questions": questions,
             "answers": {},
             "created_at": datetime.now(timezone.utc).isoformat()
-        }
+        })
 
         # Store interview data (DB)
         try:
@@ -409,7 +413,7 @@ def start_interview(
             raise HTTPException(status_code=400, detail="Failed to generate questions")
 
         # ✅ STEP-3.3 → STORE ANALYSIS HERE (RAM)
-        interviews[interview_id] = {
+        set_session(interview_id, {
             "id": interview_id,
             "source": source,
             "profile_text": content[:5000],
@@ -417,7 +421,7 @@ def start_interview(
             "questions": questions,
             "answers": {},
             "created_at": datetime.now(timezone.utc).isoformat()
-        }
+        })
 
         # Store interview data (DB)
         try:
@@ -443,27 +447,27 @@ def start_interview(
 @router.get("/interview/{interview_id}/question/{question_id}")
 def get_question(interview_id: str, question_id: int):
     # Restore from DB if not in RAM
-    if interview_id not in interviews:
+    if not get_session(interview_id):
         row = interviews_collection.find_one({"id": interview_id})
         if row:
             print(f" Restoring interview {interview_id} from DB...")
             try:
                 loaded_questions = json.loads(row.get("questions", "[]"))
-                interviews[interview_id] = {
+                set_session(interview_id, {
                     "id": interview_id,
                     "source": row.get("source"),
                     "profile_text": row.get("profile_text"),
                     "questions": loaded_questions,
                     "answers": {},
                     "created_at": row.get("created_at")
-                }
+                })
             except Exception as e:
                 print(f"Restore failed: {e}")
     
-    if interview_id not in interviews:
+    if not get_session(interview_id):
         raise HTTPException(status_code=404, detail="Interview not found")
     
-    interview = interviews[interview_id]
+    interview = get_session(interview_id)
     # Ensure ID comparison works (cast both to int)
     question = next((q for q in interview["questions"] if int(q["id"]) == int(question_id)), None)
     
@@ -490,10 +494,10 @@ def upload_answer(
 @router.get("/interview/{interview_id}/summary")
 def get_interview_summary(interview_id: str):
     """Get a summary of the interview including all questions and answers."""
-    if interview_id not in interviews:
+    if not get_session(interview_id):
         raise HTTPException(status_code=404, detail="Interview not found")
     
-    interview = interviews[interview_id]
+    interview = get_session(interview_id)
     return {
         "interview_id": interview_id,
         "source": interview["source"],
@@ -533,32 +537,39 @@ class AnswerRequest(BaseModel):
 @router.post("/save-answer")
 def save_answer(
     interview_id: str = Form(...),
-    question_id: int = Form(...),
+    question_id: str = Form(...),
     question_text: str = Form(...),
     answer_text: str = Form(...),
     candidate_name: str = Form("Candidate"),
-    time_spent_seconds: int = Form(0),
-    time_limit_seconds: int = Form(120),
+    time_spent_seconds: str = Form("0"),
+    time_limit_seconds: str = Form("120"),
 ):
     print(f"⚡ Instant save for Q{question_id} — AI scoring in background...")
 
     # ── STEP 1: Get context (fast — RAM first) ──────────────────────────────
     context = ""
     language = "English"
-    if interview_id in interviews:
-        profile_text = interviews[interview_id].get("profile_text", "")
-        source = interviews[interview_id].get("source", "Resume")
-        context = f"Candidate's {source}: {profile_text}"
-        language = interviews[interview_id].get("language", "English")
-    else:
-        try:
-            row = interviews_collection.find_one({"id": interview_id})
-            if row:
-                context = f"Candidate's {row.get('source')}: {row.get('profile_text')}"
-        except Exception as e:
-            print(f" Context fetch error: {e}")
+    try:
+        row = interviews_collection.find_one({"id": interview_id})
+        if row:
+            source = row.get("source", "Resume")
+            profile_text = row.get("profile_text", "")
+            context = f"Candidate's {source}: {profile_text}"
+            language = row.get("language", "English")
+    except Exception as e:
+        print(f" Context fetch error: {e}")
 
     # ── STEP 2: Save to MongoDB INSTANTLY with pending status ───────────────
+    try:
+        t_spent = int(float(time_spent_seconds)) if time_spent_seconds.lower() != 'nan' else 0
+    except:
+        t_spent = 0
+        
+    try:
+        t_limit = int(float(time_limit_seconds)) if time_limit_seconds.lower() != 'nan' else 120
+    except:
+        t_limit = 120
+
     answers_collection.delete_many({"interview_id": interview_id, "question_id": question_id})
     answers_collection.insert_one({
         "interview_id": interview_id,
@@ -569,8 +580,8 @@ def save_answer(
         "content_score": None,
         "relevance_score": None,
         "time_score": None,
-        "time_spent_seconds": time_spent_seconds,
-        "time_limit_seconds": time_limit_seconds,
+        "time_spent_seconds": t_spent,
+        "time_limit_seconds": t_limit,
         "ai_feedback": "Scoring in progress...",
         "ai_keywords": "",
         "corrected_answer": "Scoring in progress...",
@@ -585,8 +596,8 @@ def save_answer(
                 question_text,
                 answer_text,
                 context,
-                time_spent_seconds=time_spent_seconds,
-                time_limit_seconds=time_limit_seconds,
+                time_spent_seconds=t_spent,
+                time_limit_seconds=t_limit,
                 language=language
             )
             keywords = ai_result.get("keywords", [])
@@ -691,7 +702,7 @@ def save_answer(
 # ─── NEW: Save Behavioral / Proctoring Metrics per Question ───────────────────
 class BehavioralData(BaseModel):
     interview_id: str
-    question_id: int
+    question_id: str
     wpm: float = 0
     pause_count: int = 0
     filler_count: int = 0
@@ -699,6 +710,7 @@ class BehavioralData(BaseModel):
     keyword_match_pct: float = 0
     tab_switches: int = 0
     face_alerts: int = 0
+    noise_alerts: int = 0
 
 @router.post("/save-behavioral-data")
 def save_behavioral_data(data: BehavioralData):
@@ -713,7 +725,8 @@ def save_behavioral_data(data: BehavioralData):
                 "time_spent_seconds": data.time_spent_seconds,
                 "keyword_match_pct": data.keyword_match_pct,
                 "tab_switches": data.tab_switches,
-                "face_alerts": data.face_alerts
+                "face_alerts": data.face_alerts,
+                "noise_alerts": data.noise_alerts
             }}
         )
         return {"status": "ok"}
@@ -816,9 +829,9 @@ IMPORTANT: Do NOT ask coding or technical questions. Focus on leadership, manage
     user_prompt = f"""Based on the following Job Description, create exactly {num_questions} scenario-based case study questions.
 
 Job Description:
-{job_description[:3000]}
+{job_description[:1500]}
 
-{f'Candidate Profile: {profile_text[:1000]}' if profile_text else ''}
+{f'Candidate Profile: {profile_text[:500]}' if profile_text else ''}
 
 Extract key non-technical skills from the JD (like team management, stakeholder communication, project planning, conflict resolution, etc.) and create realistic business scenarios that test those skills.
 
@@ -1057,8 +1070,11 @@ async def start_case_study_round(req: CaseStudyStartRequest):
         {"id": req.interview_id},
         {"$set": {"case_study_round": case_study_round}}
     )
-    if req.interview_id in interviews:
-        interviews[req.interview_id]["case_study_round"] = case_study_round
+    if get_session(req.interview_id):
+        interview = get_session(req.interview_id)
+        if interview:
+            interview["case_study_round"] = case_study_round
+            set_session(req.interview_id, interview)
     
     return {
         "interview_id": req.interview_id,
@@ -1258,9 +1274,18 @@ async def log_interview_alert(interview_id: str, request: Request):
 # ─── Helper: Generate AI Summary (Recommendation + S&W) ─────────────────────
 def generate_interview_summary(candidate_name: str, answers_data: list) -> dict:
     """
-    Given list of {question, answer, ai_score, ai_feedback},
-    produce an overall recommendation and strengths/weaknesses summary.
+    Generate interview summary via typed_ai_layer (type-safe, compressed, token-optimized).
     """
+    # Priority 1: Typed AI layer (type-safe validated output)
+    try:
+        from typed_ai_layer import generate_summary as _typed_summary
+        result = _typed_summary(candidate_name, answers_data)
+        if result and "recommendation" in result:
+            return result
+    except Exception as e:
+        print(f"[typed_ai_layer] summary failed, using direct call: {e}")
+
+    # ── Direct fallback (original logic) ──────────────────────────────────
     if not answers_data:
         return {
             "recommendation": "No Data",
@@ -1270,42 +1295,44 @@ def generate_interview_summary(candidate_name: str, answers_data: list) -> dict:
 
     avg = sum(a.get("ai_score", 0) or 0 for a in answers_data) / len(answers_data)
 
-    qa_block = "\n".join(
-        f"Q{i+1}: {a['question_text']}\nA: {a['answer_text']}\nWPM (Words per Minute): {a.get('wpm', 0)}\nScore: {a.get('ai_score',0)}/100"
+    # TOKEN SAVE: Send compressed feedback instead of full answer text
+    compressed_qa = "\n".join(
+        f"Q{i+1}: {a.get('question_text','')[:120]}\n"
+        f"Score: {a.get('ai_score', 0)}/100 | "
+        f"Feedback: {(a.get('ai_feedback') or '')[:200]}"
         for i, a in enumerate(answers_data)
     )
 
-    prompt = f"""
-You are a senior hiring manager and industrial psychologist reviewing an interview for {candidate_name}.
-Here is the full transcript:
+    SYSTEM = (
+        "You are a senior hiring manager. Analyze interview performance and return ONLY valid JSON. "
+        "No markdown, no explanation."
+    )
+    USER = f"""Candidate: {candidate_name}
+Average Score: {avg:.1f}/100
 
-{qa_block}
+Interview Summary (Compressed):
+{compressed_qa}
 
-Average score: {avg:.1f}/100
+Return JSON with keys: recommendation (one of: Strong Hire, Hire, Borderline, No Hire),
+strengths (2-3 sentences), weaknesses (2-3 sentences),
+communication_score (0-100), communication_reasoning,
+skills_score (0-100), skills_reasoning,
+competencies_score (0-100), competencies_reasoning,
+personality_score (0-100), personality_reasoning,
+culture_fit_score (0-100), culture_fit_reasoning,
+job_success_score (0-100), job_success_reasoning,
+detected_accent (short string)."""
 
-Please respond in JSON with the following keys:
-- "recommendation": one of "Strong Hire", "Hire", "Borderline", "No Hire"
-- "strengths": 2-3 sentence paragraph on what the candidate did well
-- "weaknesses": 2-3 sentence paragraph on where the candidate needs improvement
-- "communication_score": an integer from 0 to 100 assessing communication skills.
-- "communication_reasoning": a short sentence explaining the communication score.
-- "skills_score": an integer from 0 to 100 assessing technical/domain skills.
-- "skills_reasoning": a short sentence explaining the skills score.
-- "competencies_score": an integer from 0 to 100 assessing behavioral competencies and leadership.
-- "competencies_reasoning": a short sentence explaining the competencies score.
-- "personality_score": an integer from 0 to 100 assessing HEXACO/Big Five personality fit.
-- "personality_reasoning": a short sentence explaining the dominant personality traits observed.
-- "culture_fit_score": an integer from 0 to 100 assessing alignment with company culture.
-- "culture_fit_reasoning": a short sentence explaining the culture fit score.
-- "job_success_score": an integer from 0 to 100 predicting overall job success.
-- "job_success_reasoning": a short sentence explaining the prediction.
-- "detected_accent": a short string estimating the candidate's likely accent/dialect.
-"""
+    prompt = USER  # kept for backward compat
 
     try:
         raw = chat_completion(
-            messages=[{"role": "user", "content": prompt}],
-            model="openai/gpt-4o-mini"
+            messages=[
+                {"role": "system", "content": SYSTEM},
+                {"role": "user", "content": USER}
+            ],
+            model="openai/gpt-4o-mini",
+            temperature=0.1,
         )
         res = extract_json(raw)
         if res: return res
@@ -1416,6 +1443,7 @@ def get_interview_details(link_id: str):
     results = []
     total_tab_switches = 0
     total_face_alerts = 0
+    total_noise_alerts = 0
     total_time = 0
 
     if actual_interview_id:
@@ -1423,8 +1451,10 @@ def get_interview_details(link_id: str):
         for row in rows:
             tab_sw = row.get("tab_switches") or 0
             face_al = row.get("face_alerts") or 0
+            noise_al = row.get("noise_alerts") or 0
             total_tab_switches += tab_sw
             total_face_alerts += face_al
+            total_noise_alerts += noise_al
             total_time += (row.get("time_spent_seconds") or 0)
             results.append({
                 "question_id": row.get("question_id"),
@@ -1443,7 +1473,8 @@ def get_interview_details(link_id: str):
                 "filler_count": row.get("filler_count") or 0,
                 "keyword_match_pct": round(row.get("keyword_match_pct") or 0, 1),
                 "tab_switches": tab_sw,
-                "face_alerts": face_al
+                "face_alerts": face_al,
+                "noise_alerts": noise_al
             })
 
     # 2. Calculate or restore AI summary
@@ -1546,6 +1577,7 @@ def get_interview_details(link_id: str):
         "integrity": {
             "total_tab_switches": total_tab_switches,
             "total_face_alerts": total_face_alerts,
+            "total_noise_alerts": total_noise_alerts,
             "total_time_minutes": round(total_time / 60, 1)
         },
         "alerts": session_data.get("alerts", []),
@@ -1611,10 +1643,10 @@ def analyze(req: AnalyzeRequest):
     context = ""
     language = "English"
     # Retrieve Resume/JD context from the CURRENT in-memory session (not historical DB data)
-    if req.interview_id and req.interview_id in interviews:
-         profile_text = interviews[req.interview_id].get("profile_text", "")
-         source = interviews[req.interview_id].get("source", "Resume")
-         language = interviews[req.interview_id].get("language", "English")
+    if req.interview_id and get_session(req.interview_id):
+         profile_text = get_session(req.interview_id).get("profile_text", "")
+         source = get_session(req.interview_id).get("source", "Resume")
+         language = get_session(req.interview_id).get("language", "English")
          context = f"Candidate's {source}: {profile_text}"
     
     result = analyze_answer(req.question, req.answer, context, language=language)
@@ -1811,6 +1843,55 @@ def generate_report(interview_id: str):
         
         story.append(Spacer(1, 15))
 
+    # ── CODING ROUND ──
+    coding_round = interview_data.get("coding_round")
+    if coding_round and (coding_round.get("latest_code") or coding_round.get("final_evaluation")):
+        story.append(Spacer(1, 20))
+        story.append(Paragraph("<b>Coding Round Results</b>", styles['Heading2']))
+        story.append(Spacer(1, 10))
+        
+        if coding_round.get("latest_code"):
+            story.append(Paragraph("<b>Submitted Code:</b>", normal_style))
+            safe_code = coding_round["latest_code"].replace("&", "&amp;").replace("<", "&lt;").replace(">", "&gt;").replace("\n", "<br/>")
+            
+            code_style = ParagraphStyle(
+                'Code', parent=normal_style, fontName='Courier', fontSize=9, 
+                leading=11, backColor='#f4f4f4', borderPadding=5, borderRadius=3
+            )
+            story.append(Paragraph(safe_code, code_style))
+            story.append(Spacer(1, 15))
+            
+        if coding_round.get("final_evaluation"):
+            story.append(Paragraph("<b>AI Evaluation:</b>", normal_style))
+            safe_eval = coding_round["final_evaluation"].replace("&", "&amp;").replace("<", "&lt;").replace(">", "&gt;").replace("\n", "<br/>")
+            story.append(Paragraph(safe_eval, normal_style))
+            story.append(Spacer(1, 15))
+            
+    # ── CASE STUDY ROUND ──
+    case_study = interview_data.get("case_study_round")
+    if case_study and case_study.get("answers"):
+        story.append(Spacer(1, 20))
+        story.append(Paragraph("<b>Case Study Round Results</b>", styles['Heading2']))
+        story.append(Spacer(1, 10))
+        
+        questions = case_study.get("questions", [])
+        for i, ans in enumerate(case_study.get("answers", [])):
+            if ans is None:
+                continue
+            
+            q_text = questions[i].get("text", f"Question {i+1}") if i < len(questions) else f"Question {i+1}"
+            story.append(Paragraph(f"<b>Q{i+1}: {q_text}</b>", styles['Heading3']))
+            story.append(Spacer(1, 5))
+            
+            a_text = ans.get("answer_text", "")
+            if a_text:
+                a_text_disp = a_text.replace("&", "&amp;").replace("<", "&lt;").replace(">", "&gt;").replace("\n", "<br/>")
+            else:
+                a_text_disp = "(No answer recorded)"
+                
+            story.append(Paragraph(f"<b>Your Answer:</b> {a_text_disp}", normal_style))
+            story.append(Spacer(1, 15))
+
     doc.build(story)
     
     # Return the PDF file directly for download
@@ -1926,7 +2007,7 @@ def send_submission_notification(candidate_email: str, candidate_name: str, admi
             "to": [{"email": candidate_email, "name": candidate_name}],
             "subject": "Your Interview Has Been Submitted — Mock Interview",
             "htmlContent": candidate_html
-        }, headers=headers)
+        }, headers=headers, timeout=10)
         results.append(res.status_code < 300)
     except Exception:
         results.append(False)
@@ -1939,7 +2020,7 @@ def send_submission_notification(candidate_email: str, candidate_name: str, admi
                 "to": [{"email": admin_email, "name": "Admin"}],
                 "subject": f"Interview Submitted: {candidate_name}",
                 "htmlContent": admin_html
-            }, headers=headers)
+            }, headers=headers, timeout=10)
             results.append(res.status_code < 300)
         except Exception:
             results.append(False)
@@ -2197,7 +2278,7 @@ def invitation_email_scheduler_loop():
             print(f"Email scheduler error: {e}")
         time.sleep(30)
 
-@router.on_event("startup")
+# Startup functions (to be called by main.py lifespan)
 async def startup_event_db_and_email():
     import mongo_db
     await mongo_db.init_db_indexes()
@@ -2428,7 +2509,7 @@ def send_otp_email(email: str, name: str, otp: str):
     try:
         url = "https://api.brevo.com/v3/smtp/email"
         headers = {"accept": "application/json", "api-key": api_key, "content-type": "application/json"}
-        response = requests.post(url, json=payload, headers=headers)
+        response = requests.post(url, json=payload, headers=headers, timeout=10)
         return response.status_code < 300
     except:
         return False
@@ -2526,41 +2607,24 @@ def upload_profile_image(
         raise HTTPException(status_code=500, detail=str(e))
 
 def extract_info_from_resume(text: str) -> Dict:
-    try:
-        raw = chat_completion(
-            messages=[{
-                "role": "system",
-                "content": "You are a professional recruiting assistant. Extract the candidate's full name and email address from the provided resume text. Return ONLY a valid JSON object with keys 'name' and 'email'. If either cannot be found, use null."
-            }, {
-                "role": "user",
-                "content": text[:5000] # Use first block of text
-            }],
-            model="openai/gpt-4o-mini"
-        )
-        res = extract_json(raw)
-        if res: return res
-        return {"name": None, "email": None}
-    except Exception as e:
-        print(f"Error extracting candidate info: {e}")
-        # OFFLINE FALLBACK: Use regex to extract email and heuristics for name
-        import re
-        email = None
-        email_match = re.search(r'[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}', text)
-        if email_match:
-            email = email_match.group(0)
-            
-        name = None
-        lines = [line.strip() for line in text.split('\n') if line.strip()]
-        # First non-empty line that doesn't look like an email or phone
-        for line in lines[:10]:
-            if len(line) < 40 and not re.search(r'[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}', line) and not re.search(r'\d{10}', line):
-                name = line
-                break
+    import re
+    email = None
+    email_match = re.search(r'[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}', text)
+    if email_match:
+        email = email_match.group(0)
         
-        return {"name": name, "email": email}
+    name = None
+    lines = [line.strip() for line in text.split('\n') if line.strip()]
+    # First non-empty line that doesn't look like an email or phone
+    for line in lines[:10]:
+        if len(line) < 40 and not re.search(r'[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}', line) and not re.search(r'\d{10}', line):
+            name = line
+            break
+    
+    return {"name": name, "email": email}
 
 @router.post("/admin/parse-resume")
-def parse_resume(file: UploadFile = File(...)):
+async def parse_resume(file: UploadFile = File(...), current_admin: dict = Depends(get_current_admin_details)):
     ALLOWED_MIMES = ["application/pdf", "application/vnd.openxmlformats-officedocument.wordprocessingml.document", "application/msword", "text/plain"]
     if file.content_type and file.content_type not in ALLOWED_MIMES:
         raise HTTPException(status_code=400, detail="Invalid file type. Only PDF, DOCX, and TXT are allowed for security reasons.")
@@ -2568,7 +2632,7 @@ def parse_resume(file: UploadFile = File(...)):
     if getattr(file, "size", 0) and file.size > 10 * 1024 * 1024:
         raise HTTPException(status_code=413, detail="File too large. Maximum size is 10MB.")
         
-    content = file.file.read()
+    content = await file.read()
     text = extract_text_from_file(content, file.filename)
     info = extract_info_from_resume(text)
     return {
@@ -2597,15 +2661,34 @@ def check_candidate(email: str, current_admin: dict = Depends(get_current_admin_
         return {"exists": False, "error": str(e)}
 
 @router.post("/admin/create-session")
-def create_session(data: CreateSession, current_admin: dict = Depends(get_current_admin_details)):
-    plan_context = get_admin_plan_context(current_admin)
-    if plan_context.get("credits", 0) <= 0:
-        raise HTTPException(status_code=403, detail="Company has insufficient credits to create a session")
-        
+async def create_session(data: CreateSession, current_admin: dict = Depends(get_current_admin_details)):
+    company_id = current_admin.get("company_id")
+    
+    # ATOMIC DEDUCTION (Prevents race conditions leading to negative credits)
+    if company_id:
+        res = companies_collection.update_one(
+            {"_id": ObjectId(company_id), "credits": {"$gte": 1}},
+            {"$inc": {"credits": -1}}
+        )
+        if res.modified_count == 0:
+            raise HTTPException(status_code=403, detail="Insufficient company credits (or concurrent request).")
+            
     if current_admin.get("role") == "admin":
-        admin_doc = admins_collection.find_one({"_id": ObjectId(current_admin["admin_id"])})
-        if not admin_doc or admin_doc.get("credits", 0) <= 0:
-            raise HTTPException(status_code=403, detail="You have insufficient credits. Please request more from your Super Admin.")
+        res = admins_collection.update_one(
+            {"_id": ObjectId(current_admin["admin_id"]), "credits": {"$gte": 1}},
+            {"$inc": {"credits": -1}}
+        )
+        if res.modified_count == 0:
+            if company_id:
+                companies_collection.update_one({"_id": ObjectId(company_id)}, {"$inc": {"credits": 1}})
+            raise HTTPException(status_code=403, detail="Insufficient admin credits (or concurrent request).")
+    elif not company_id:
+        res = admins_collection.update_one(
+            {"_id": ObjectId(current_admin["admin_id"]), "credits": {"$gte": 1}},
+            {"$inc": {"credits": -1}}
+        )
+        if res.modified_count == 0:
+            raise HTTPException(status_code=403, detail="Insufficient admin credits.")
 
     link_id = str(uuid.uuid4())
     now = datetime.now(timezone.utc)
@@ -2654,16 +2737,8 @@ def create_session(data: CreateSession, current_admin: dict = Depends(get_curren
     
     interview_sessions_collection.insert_one(session_doc)
     
-    # Deduct credit
-    company_id = current_admin.get("company_id")
-    if company_id:
-        companies_collection.update_one({"_id": ObjectId(company_id)}, {"$inc": {"credits": -1}})
-    
-    if current_admin.get("role") == "admin":
-        admins_collection.update_one({"_id": ObjectId(current_admin["admin_id"])}, {"$inc": {"credits": -1}})
-    elif not company_id:
-        admins_collection.update_one({"_id": ObjectId(current_admin["admin_id"])}, {"$inc": {"credits": -1}})
-    session_doc["_id"] = interview_sessions_collection.find_one({"link_id": link_id}, {"_id": 1})["_id"]
+    # Credits were already deducted atomically at the beginning of the request.
+    # _id is already populated by insert_one
     
     link_url = f"{FRONTEND_URL}/interview?session_id={link_id}"
     
@@ -2744,14 +2819,33 @@ def bulk_create_sessions(data: BulkCreateSession, background_tasks: BackgroundTa
         raise HTTPException(status_code=400, detail="No candidates provided")
         
     num_candidates = len(data.candidates)
-    plan_context = get_admin_plan_context(current_admin)
-    if plan_context.get("credits", 0) < num_candidates:
-        raise HTTPException(status_code=403, detail=f"Company has insufficient credits. You need {num_candidates} credits to bulk create these interviews.")
-
+    company_id = current_admin.get("company_id")
+    
+    # ATOMIC DEDUCTION (Prevents race conditions leading to negative credits)
+    if company_id:
+        res = companies_collection.update_one(
+            {"_id": ObjectId(company_id), "credits": {"$gte": num_candidates}},
+            {"$inc": {"credits": -num_candidates}}
+        )
+        if res.modified_count == 0:
+            raise HTTPException(status_code=403, detail=f"Insufficient company credits (or concurrent request). You need {num_candidates} credits.")
+            
     if current_admin.get("role") == "admin":
-        admin_doc = admins_collection.find_one({"_id": ObjectId(current_admin["admin_id"])})
-        if not admin_doc or admin_doc.get("credits", 0) < num_candidates:
-            raise HTTPException(status_code=403, detail=f"You have insufficient credits. Please request more from your Super Admin.")
+        res = admins_collection.update_one(
+            {"_id": ObjectId(current_admin["admin_id"]), "credits": {"$gte": num_candidates}},
+            {"$inc": {"credits": -num_candidates}}
+        )
+        if res.modified_count == 0:
+            if company_id:
+                companies_collection.update_one({"_id": ObjectId(company_id)}, {"$inc": {"credits": num_candidates}})
+            raise HTTPException(status_code=403, detail=f"Insufficient admin credits (or concurrent request). You need {num_candidates} credits.")
+    elif not company_id:
+        res = admins_collection.update_one(
+            {"_id": ObjectId(current_admin["admin_id"]), "credits": {"$gte": num_candidates}},
+            {"$inc": {"credits": -num_candidates}}
+        )
+        if res.modified_count == 0:
+            raise HTTPException(status_code=403, detail=f"Insufficient admin credits. You need {num_candidates} credits.")
 
     session_docs = []
     results = []
@@ -2838,7 +2932,7 @@ def bulk_create_sessions(data: BulkCreateSession, background_tasks: BackgroundTa
             r["link_url"] = None
 
     # Step 3: Trigger Background Emails
-    successful = len(results)  # Since DB insert succeeded, we count them all as successful for credit purposes
+    successful = sum(1 for r in results if r["status"] == "success")  # Only deduct credits for actually successful DB inserts
     email_jobs = []
     
     for r in results:
@@ -2857,15 +2951,17 @@ def bulk_create_sessions(data: BulkCreateSession, background_tasks: BackgroundTa
 
     print(f" Bulk sessions created: {successful}/{len(results)}")
     
-    if successful > 0:
+    # Refund failed candidates (credits were deducted atomically beforehand)
+    failed = num_candidates - successful
+    if failed > 0:
         company_id = current_admin.get("company_id")
         if company_id:
-            companies_collection.update_one({"_id": ObjectId(company_id)}, {"$inc": {"credits": -successful}})
+            companies_collection.update_one({"_id": ObjectId(company_id)}, {"$inc": {"credits": failed}})
             
         if current_admin.get("role") == "admin":
-            admins_collection.update_one({"_id": ObjectId(current_admin["admin_id"])}, {"$inc": {"credits": -successful}})
+            admins_collection.update_one({"_id": ObjectId(current_admin["admin_id"])}, {"$inc": {"credits": failed}})
         elif not company_id:
-            admins_collection.update_one({"_id": ObjectId(current_admin["admin_id"])}, {"$inc": {"credits": -successful}})
+            admins_collection.update_one({"_id": ObjectId(current_admin["admin_id"])}, {"$inc": {"credits": failed}})
 
     return {
         "status": "success",
@@ -2877,7 +2973,7 @@ def bulk_create_sessions(data: BulkCreateSession, background_tasks: BackgroundTa
 
 
 @router.get("/session/{link_id}")
-def get_session(link_id: str):
+def get_session_by_link(link_id: str):
     row = interview_sessions_collection.find_one({"link_id": link_id})
     if row:
         expires_at = row.get("expires_at")
@@ -2928,7 +3024,8 @@ def get_session(link_id: str):
             "is_deactivated": row.get("is_deactivated", False),
             "language": row.get("language", "English"),
             "interview_type": row.get("interview_type", "Technical"),
-            "voice_clone": row.get("voice_clone", False)
+            "voice_clone": row.get("voice_clone", False),
+            "custom_voice_id": row.get("custom_voice_id", "")
         }
     else:
         raise HTTPException(status_code=404, detail="Session not found")
@@ -3058,8 +3155,8 @@ def delete_session(link_id: str, current_admin: dict = Depends(require_role("adm
     if interview_id:
         interviews_collection.delete_one({"id": interview_id})
         answers_collection.delete_many({"interview_id": interview_id})
-        if interview_id in interviews:
-            del interviews[interview_id]
+        if get_session(interview_id):
+            delete_session(interview_id)
             
     # Delete the session link
     interview_sessions_collection.delete_one({"link_id": link_id})
@@ -3129,6 +3226,7 @@ def reschedule_session(link_id: str, new_expiry: str = Form(...), current_admin:
     }
 
 @router.post("/start-session-interview")
+@router.post("/start_session_interview")
 def start_session_interview(link_id: str = Form(...)):
     row = interview_sessions_collection.find_one({"link_id": link_id})
     
@@ -3217,7 +3315,7 @@ def start_session_interview(link_id: str = Form(...)):
             }
         
         # Status is 'started' — reload the existing interview and return first question
-        existing = interviews.get(existing_interview_id)
+        existing = get_session(existing_interview_id)
         if not existing:
             row2 = interviews_collection.find_one({"id": existing_interview_id})
             if row2:
@@ -3231,7 +3329,7 @@ def start_session_interview(link_id: str = Form(...)):
                         "answers": {},
                         "created_at": row2.get("created_at")
                     }
-                    interviews[existing_interview_id] = existing
+                    set_session(existing_interview_id, existing)
                 except Exception:
                     existing = None
         
@@ -3355,7 +3453,7 @@ def start_session_interview(link_id: str = Form(...)):
     interview_id = f"int_{int(datetime.now(timezone.utc).timestamp())}_{uuid.uuid4().hex[:8]}"
 
     # Store interview data (RAM)
-    interviews[interview_id] = {
+    set_session(interview_id, {
         "id": interview_id,
         "source": source,
         "profile_text": content_str[:5000],
@@ -3367,7 +3465,7 @@ def start_session_interview(link_id: str = Form(...)):
         "candidate_email": candidate_email,
         "status": status,
         "language": language
-    }
+    })
     
     # Store interview data (DB)
     try:
@@ -3500,7 +3598,7 @@ def send_decision_email(email: str, name: str, decision: str, jd: str):
     try:
         res = requests.post("https://api.brevo.com/v3/smtp/email", json=payload, headers={
             "api-key": api_key, "content-type": "application/json"
-        })
+        }, timeout=10)
         if res.status_code >= 300:
             print(f" Brevo Error: {res.status_code} - {res.text}")
         return res.status_code < 300
@@ -3725,6 +3823,8 @@ def admin_copilot_execute(request: CopilotExecuteRequest, current_admin: dict = 
         else:
             raise HTTPException(status_code=400, detail=f"Unknown or unauthorized action: {request.action}")
             
+    except HTTPException as he:
+        raise he
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 
@@ -3733,104 +3833,70 @@ class ATSRequest(BaseModel):
     jd_text: str
 
 @router.post("/admin/ats-score")
-def calculate_ats_score(request: ATSRequest):
+async def calculate_ats_score(request: ATSRequest):
     try:
-        resume_text = request.resume_text.strip()
-        jd_text = request.jd_text.strip()
+        resume_text = request.resume_text.strip()[:3000]
+        jd_text = request.jd_text.strip()[:3000]
         
         if not resume_text or not jd_text:
             raise HTTPException(status_code=400, detail="Resume or JD is empty")
             
-        system_prompt = "You are an expert ATS (Applicant Tracking System) algorithm. Evaluate the candidate's resume against the Job Description."
-        user_prompt = f"""
-Job Description:
-{jd_text}
-
-Resume:
-{resume_text}
-
-Output EXACTLY a JSON object with this structure:
-{{
-    "score": <integer between 0 and 100 representing match percentage>,
-    "matched_skills": [<array of key skills found in both>],
-    "missing_skills": [<array of key skills in JD but missing from resume>],
-    "summary": "<2-3 sentence qualitative analysis>"
-}}
-"""
-        
-        messages = [
-            {"role": "system", "content": system_prompt},
-            {"role": "user", "content": user_prompt}
-        ]
-        
-        from ai_client import chat_completion, extract_json
-        
+        # Offline Fallback logic: High-Accuracy Keyword Dictionary Match
+        import re
         try:
-            response_text = chat_completion(messages, temperature=0.1)
-            result = extract_json(response_text)
+            from offline_skills_dict import COMMON_SKILLS
+        except ImportError:
+            COMMON_SKILLS = set()
             
-            if not result or "score" not in result:
-                raise ValueError("Invalid JSON from AI")
-                
-            return result
-        except Exception as e:
-            print(f" ATS Score AI failed: {e}")
-            # Offline Fallback logic: High-Accuracy Keyword Dictionary Match
-            import re
-            try:
-                from offline_skills_dict import COMMON_SKILLS
-            except ImportError:
-                COMMON_SKILLS = set()
-            
-            resume_lower = resume_text.lower()
-            jd_lower = jd_text.lower()
-            
-            # Extract common skills that exist in the Job Description
-            jd_keywords = set()
-            for skill in COMMON_SKILLS:
-                # Use regex to match whole words/phrases to prevent partial matches
-                pattern = r'\b' + re.escape(skill) + r'\b'
-                if re.search(pattern, jd_lower):
-                    jd_keywords.add(skill)
-            
-            # If JD has no known keywords, fall back to basic extraction
-            if not jd_keywords:
-                words = set(re.findall(r'\b[a-z]{5,}\b', jd_lower))
-                stop_words = {"about", "above", "after", "again", "against", "because", "before", "below", "between", "cannot", "could", "doing", "during", "further", "having", "herself", "himself", "itself", "myself", "ought", "ourselves", "themselves", "there", "these", "those", "through", "under", "until", "where", "which", "while", "would", "yourself", "yourselves", "experience", "years", "skills", "ability", "working", "knowledge", "strong", "understanding", "preferred", "required", "responsibilities", "requirements", "including"}
-                jd_keywords = {w for w in words if w not in stop_words}
-            
-            matched = []
-            missing = []
-            
-            for word in jd_keywords:
-                pattern = r'\b' + re.escape(word) + r'\b'
-                if re.search(pattern, resume_lower):
-                    matched.append(word.title())
-                else:
-                    missing.append(word.title())
-                    
-            # Sort lists (limit to top 15 for UI clarity)
-            matched = sorted(matched)[:15]
-            missing = sorted(missing)[:15]
-            
-            # Calculate score based ONLY on the validated dictionary skills
-            total_keywords = len(jd_keywords)
-            matched_count = len(matched)
-            if total_keywords > 0:
-                score = min(100, int((matched_count / total_keywords) * 100))
+        resume_lower = resume_text.lower()
+        jd_lower = jd_text.lower()
+        
+        # Extract common skills that exist in the Job Description
+        jd_keywords = set()
+        for skill in COMMON_SKILLS:
+            # Use regex to match whole words/phrases to prevent partial matches
+            pattern = r'\b' + re.escape(skill) + r'\b'
+            if re.search(pattern, jd_lower):
+                jd_keywords.add(skill)
+        
+        # If JD has no known keywords, fall back to basic extraction
+        if not jd_keywords:
+            words = set(re.findall(r'\b[a-z]{5,}\b', jd_lower))
+            stop_words = {"about", "above", "after", "again", "against", "because", "before", "below", "between", "cannot", "could", "doing", "during", "further", "having", "herself", "himself", "itself", "myself", "ought", "ourselves", "themselves", "there", "these", "those", "through", "under", "until", "where", "which", "while", "would", "yourself", "yourselves", "experience", "years", "skills", "ability", "working", "knowledge", "strong", "understanding", "preferred", "required", "responsibilities", "requirements", "including"}
+            jd_keywords = {w for w in words if w not in stop_words}
+        
+        matched = []
+        missing = []
+        
+        for word in jd_keywords:
+            pattern = r'\b' + re.escape(word) + r'\b'
+            if re.search(pattern, resume_lower):
+                matched.append(word.title())
             else:
-                score = 0
-            
-            if not matched and not missing:
-                matched.append("No clear skills found")
-                missing.append("No clear skills found")
+                missing.append(word.title())
                 
-            return {
-                "score": score,
-                "matched_skills": matched,
-                "missing_skills": missing,
-                "summary": "Offline Mode Active: This score is calculated using an offline keyword-matching algorithm because the AI Quota has been exceeded."
-            }
+        # Sort lists (limit to top 15 for UI clarity)
+        matched = sorted(matched)[:15]
+        missing = sorted(missing)[:15]
+        
+        # Calculate score based ONLY on the validated dictionary skills
+        total_keywords = len(jd_keywords)
+        matched_count = len(matched)
+        if total_keywords > 0:
+            score = min(100, int((matched_count / total_keywords) * 100))
+        else:
+            score = 0
+        
+        if not matched and not missing:
+            matched.append("No clear skills found")
+            missing.append("No clear skills found")
+            
+        return {
+            "score": score,
+            "matched_skills": matched,
+            "missing_skills": missing,
+            "summary": "Offline Mode Active: This score is calculated using an offline keyword-matching algorithm because the AI Quota has been exceeded."
+        }
             
     except HTTPException:
         raise
@@ -4402,118 +4468,125 @@ def delete_company(company_id: str, master_id: str = Depends(get_current_admin))
 
 @router.get("/api/notifications")
 def get_notifications(current_admin: dict = Depends(get_current_admin_details)):
-    role = current_admin["role"]
-    company_id = current_admin["company_id"]
-    
-    # Filter based on role
-    if role == "master":
-        query = {"recipient_role": "master"}
-    elif role in ["super_admin", "superadmin"]:
-        query = {"recipient_role": "superadmin", "company_id": company_id}
-    else:
-        query = {"recipient_role": "admin", "company_id": company_id}
+    try:
+        role = current_admin["role"]
+        company_id = current_admin["company_id"]
         
-    notifications = list(notifications_collection.find(query).sort("created_at", -1))
-    
-    # Seed mock data if empty
-    if not notifications:
-        import datetime
-        now = datetime.datetime.now(datetime.timezone.utc)
+        # Filter based on role
         if role == "master":
-            mock_data = [
-                {
-                    "title": "Welcome to Master Console",
-                    "message": "Welcome to the Hire IQ Master Control Panel. Here you can monitor system status, subscription plans, and manage tenants.",
-                    "type": "system",
-                    "recipient_role": "master",
-                    "read": False,
-                    "created_at": (now - datetime.timedelta(hours=2)).isoformat()
-                },
-                {
-                    "title": "Subscription Renewed",
-                    "message": "Tenant 'Google Cloud Partner' renewed their Advanced plan successfully.",
-                    "type": "payment",
-                    "recipient_role": "master",
-                    "read": False,
-                    "created_at": (now - datetime.timedelta(hours=6)).isoformat()
-                },
-                {
-                    "title": "System Check Completed",
-                    "message": "Automatic daily backup and database indexes health check succeeded.",
-                    "type": "system",
-                    "recipient_role": "master",
-                    "read": True,
-                    "created_at": (now - datetime.timedelta(days=1)).isoformat()
-                }
-            ]
+            query = {"recipient_role": "master"}
         elif role in ["super_admin", "superadmin"]:
-            mock_data = [
-                {
-                    "title": "Welcome to Hire IQ",
-                    "message": "Welcome to your Super Admin console. You can manage your team, check candidate results, and provision interviews.",
-                    "type": "system",
-                    "recipient_role": "superadmin",
-                    "company_id": company_id,
-                    "read": False,
-                    "created_at": (now - datetime.timedelta(hours=1)).isoformat()
-                },
-                {
-                    "title": "Interview Created",
-                    "message": "A new interview template 'Senior React Developer' has been created successfully.",
-                    "type": "activity",
-                    "recipient_role": "superadmin",
-                    "company_id": company_id,
-                    "read": False,
-                    "created_at": (now - datetime.timedelta(hours=4)).isoformat()
-                },
-                {
-                    "title": "Credits Request Approved",
-                    "message": "Your request for additional interview credits was approved by the master administrator.",
-                    "type": "credits",
-                    "recipient_role": "superadmin",
-                    "company_id": company_id,
-                    "read": True,
-                    "created_at": (now - datetime.timedelta(days=1)).isoformat()
-                }
-            ]
-        else: # admin / tenant
-            mock_data = [
-                {
-                    "title": "Welcome to Hire IQ",
-                    "message": "Welcome to the Admin console. Create, run, and review candidate coding and voice interviews.",
-                    "type": "system",
-                    "recipient_role": "admin",
-                    "company_id": company_id,
-                    "read": False,
-                    "created_at": (now - datetime.timedelta(hours=3)).isoformat()
-                },
-                {
-                    "title": "New Interview Complete",
-                    "message": "Candidate 'John Doe' has completed Python Technical Interview. Avg score: 8.5/10.",
-                    "type": "candidate",
-                    "recipient_role": "admin",
-                    "company_id": company_id,
-                    "read": False,
-                    "created_at": (now - datetime.timedelta(hours=5)).isoformat()
-                },
-                {
-                    "title": "Credits Assigned",
-                    "message": "Your team leader has assigned 20 credits to your admin account.",
-                    "type": "credits",
-                    "recipient_role": "admin",
-                    "company_id": company_id,
-                    "read": True,
-                    "created_at": (now - datetime.timedelta(days=2)).isoformat()
-                }
-            ]
-        notifications_collection.insert_many(mock_data)
+            query = {"recipient_role": "superadmin", "company_id": company_id}
+        else:
+            query = {"recipient_role": "admin", "company_id": company_id}
+            
         notifications = list(notifications_collection.find(query).sort("created_at", -1))
         
-    for n in notifications:
-        n["id"] = str(n["_id"])
-        n["_id"] = str(n["_id"])
-        
-    return {"status": "success", "data": notifications}
+        # Seed mock data if empty
+        if not notifications:
+            import datetime
+            now = datetime.datetime.now(datetime.timezone.utc)
+            if role == "master":
+                mock_data = [
+                    {
+                        "title": "Welcome to Master Console",
+                        "message": "Welcome to the Hire IQ Master Control Panel. Here you can monitor system status, subscription plans, and manage tenants.",
+                        "type": "system",
+                        "recipient_role": "master",
+                        "read": False,
+                        "created_at": (now - datetime.timedelta(hours=2)).isoformat()
+                    },
+                    {
+                        "title": "Subscription Renewed",
+                        "message": "Tenant 'Google Cloud Partner' renewed their Advanced plan successfully.",
+                        "type": "payment",
+                        "recipient_role": "master",
+                        "read": False,
+                        "created_at": (now - datetime.timedelta(hours=6)).isoformat()
+                    },
+                    {
+                        "title": "System Check Completed",
+                        "message": "Automatic daily backup and database indexes health check succeeded.",
+                        "type": "system",
+                        "recipient_role": "master",
+                        "read": True,
+                        "created_at": (now - datetime.timedelta(days=1)).isoformat()
+                    }
+                ]
+            elif role in ["super_admin", "superadmin"]:
+                mock_data = [
+                    {
+                        "title": "Welcome to Hire IQ",
+                        "message": "Welcome to your Super Admin console. You can manage your team, check candidate results, and provision interviews.",
+                        "type": "system",
+                        "recipient_role": "superadmin",
+                        "company_id": company_id,
+                        "read": False,
+                        "created_at": (now - datetime.timedelta(hours=1)).isoformat()
+                    },
+                    {
+                        "title": "Interview Created",
+                        "message": "A new interview template 'Senior React Developer' has been created successfully.",
+                        "type": "activity",
+                        "recipient_role": "superadmin",
+                        "company_id": company_id,
+                        "read": False,
+                        "created_at": (now - datetime.timedelta(hours=4)).isoformat()
+                    },
+                    {
+                        "title": "Credits Request Approved",
+                        "message": "Your request for additional interview credits was approved by the master administrator.",
+                        "type": "credits",
+                        "recipient_role": "superadmin",
+                        "company_id": company_id,
+                        "read": True,
+                        "created_at": (now - datetime.timedelta(days=1)).isoformat()
+                    }
+                ]
+            else: # admin / tenant
+                mock_data = [
+                    {
+                        "title": "Welcome to Hire IQ",
+                        "message": "Welcome to the Admin console. Create, run, and review candidate coding and voice interviews.",
+                        "type": "system",
+                        "recipient_role": "admin",
+                        "company_id": company_id,
+                        "read": False,
+                        "created_at": (now - datetime.timedelta(hours=3)).isoformat()
+                    },
+                    {
+                        "title": "New Interview Complete",
+                        "message": "Candidate 'John Doe' has completed Python Technical Interview. Avg score: 8.5/10.",
+                        "type": "candidate",
+                        "recipient_role": "admin",
+                        "company_id": company_id,
+                        "read": False,
+                        "created_at": (now - datetime.timedelta(hours=5)).isoformat()
+                    },
+                    {
+                        "title": "Credits Assigned",
+                        "message": "Your team leader has assigned 20 credits to your admin account.",
+                        "type": "credits",
+                        "recipient_role": "admin",
+                        "company_id": company_id,
+                        "read": True,
+                        "created_at": (now - datetime.timedelta(days=2)).isoformat()
+                    }
+                ]
+            notifications_collection.insert_many(mock_data)
+            notifications = list(notifications_collection.find(query).sort("created_at", -1))
+            
+        for n in notifications:
+            n["id"] = str(n["_id"])
+            n["_id"] = str(n["_id"])
+            
+        return {"status": "success", "data": notifications}
+
+    except Exception as e:
+        import traceback
+        print(f"ERROR IN /api/notifications: {e}")
+        traceback.print_exc()
+        raise HTTPException(status_code=500, detail=str(e))
 
 @router.put("/api/notifications/{notification_id}/read")
 def mark_notification_read(notification_id: str, current_admin: dict = Depends(get_current_admin_details)):
@@ -4622,13 +4695,9 @@ def firebase_auth(data: FirebaseAuthRequest):
     plan = plan_context["plan_label"]
     expiry = user.get("subscription_expiry")
             
-    # If expired, block
+    # Do NOT block login if expired, because they need to be able to access the dashboard to buy more credits!
     if plan_context["is_expired"]:
-        return {
-            "status": "expired",
-            "message": f"Your {plan} subscription has expired. Please contact the administrator.",
-            "plan": plan
-        }
+        print(f"User {user['username']} logged in with an expired subscription (Credits: {plan_context.get('credits')})")
         
     return {
         "status": "success",
@@ -4674,13 +4743,9 @@ def admin_login(data: AdminLogin):
     plan = plan_context["plan_label"]
     expiry = user.get("subscription_expiry")
             
-    # If expired, block
+    # Do NOT block login if expired, because they need to be able to access the dashboard to buy more credits!
     if plan_context["is_expired"]:
-        return {
-            "status": "expired",
-            "message": f"Your {plan} subscription has expired. Please contact the administrator.",
-            "plan": plan
-        }
+        print(f"User {user['username']} logged in with an expired subscription (Credits: {plan_context.get('credits')})")
         
     access_token = create_access_token(data={"sub": str(user["_id"]), "role": user.get("role", "tenant"), "company_id": str(user.get("company_id", ""))})
     return {
@@ -5825,8 +5890,8 @@ def bulk_delete_candidates(data: BulkDeleteRequest, current_admin: dict = Depend
                 if interview_id:
                     interviews_collection.delete_one({"id": interview_id})
                     answers_collection.delete_many({"interview_id": interview_id})
-                    if interview_id in interviews:
-                        del interviews[interview_id]
+                    if get_session(interview_id):
+                        delete_session(interview_id)
                 
                 interview_sessions_collection.delete_one({"_id": row["_id"]})
                 deleted_count += 1
@@ -5847,8 +5912,8 @@ def delete_session_alias(link_id: str, current_admin: dict = Depends(get_current
         if interview_id:
             interviews_collection.delete_one({"id": interview_id})
             answers_collection.delete_many({"interview_id": interview_id})
-            if interview_id in interviews:
-                del interviews[interview_id]
+            if get_session(interview_id):
+                delete_session(interview_id)
 
         # Delete the session link itself
         interview_sessions_collection.delete_one({"link_id": link_id})
@@ -5937,7 +6002,7 @@ async def superadmin_interview_create(data: dict, background_tasks: BackgroundTa
             single_data = CreateSession(**data)
         except Exception as e:
             raise HTTPException(status_code=422, detail=str(e))
-        return create_session(single_data, current_admin)
+        return await create_session(single_data, current_admin)
 
 @router.get("/api/superadmin/profile")
 @router.get("/superadmin/profile")
@@ -5955,6 +6020,9 @@ def get_superadmin_profile(current_admin: dict = Depends(get_current_admin_detai
             admin_doc["company_name"] = company.get("name", "")
             if "credits" in company:
                 admin_doc["credits"] = company["credits"]
+    plan_context = get_admin_plan_context(admin_doc)
+    admin_doc["is_expired"] = plan_context["is_expired"]
+    admin_doc["subscription_plan_key"] = plan_context["plan_key"]
     return admin_doc
 
 @router.delete("/api/superadmin/candidates/bulk")

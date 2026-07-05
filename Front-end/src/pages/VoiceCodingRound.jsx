@@ -233,15 +233,7 @@ export default function VoiceCodingRound({
   const currentTxRef = useRef('')
   const submittingRef = useRef(false)
   const lastRunResultRef = useRef(null)  // stores latest run result for chat context
-
-  // Timer
-  useEffect(() => {
-    const t = setInterval(() => setTimeLeft(p => {
-      if (p <= 1) { handleSubmit(); return 0 }
-      return p - 1
-    }), 1000)
-    return () => clearInterval(t)
-  }, [])
+  const activeAudioRef = useRef(null)    // prevents overlapping audio
 
   // Unload Tracking
   useEffect(() => {
@@ -279,24 +271,39 @@ export default function VoiceCodingRound({
   // ── TTS ────────────────────────────────────────────────────────────────
   const speak = useCallback(async (text, onEnd) => {
     try {
+      if (activeAudioRef.current) {
+        activeAudioRef.current.pause()
+        activeAudioRef.current = null
+      }
       setAiStatus('speaking')
       setOrbLabel('Zara speaking…')
       const res = await fetch(`${API_BASE_URL}/tts`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ text, voice: 'shimmer' })
+        body: JSON.stringify({ 
+          text, 
+          voice: 'shimmer',
+          voice_id: sessionDetail?.custom_voice_id || null
+        })
       })
       if (!res.ok) throw new Error('TTS Failed')
       const blob = await res.blob()
       const url = URL.createObjectURL(blob)
       const audio = new Audio(url)
+      activeAudioRef.current = audio
       audio.onended = () => {
         setAiStatus('idle')
         setOrbLabel('Zara is watching')
         URL.revokeObjectURL(url)
+        activeAudioRef.current = null
         onEnd?.()
       }
-      audio.onerror = () => { setAiStatus('idle'); setOrbLabel('Zara is watching'); onEnd?.() }
+      audio.onerror = () => { 
+        setAiStatus('idle')
+        setOrbLabel('Zara is watching')
+        activeAudioRef.current = null
+        onEnd?.() 
+      }
       audio.play()
     } catch (e) {
       setAiStatus('idle')
@@ -439,7 +446,7 @@ export default function VoiceCodingRound({
         })
       })
     }, 800)
-  }, []) // eslint-disable-line
+  }, [])  
 
   // ── Code Sentinel ─────────────────────────────────────────────────────
   const handleCodeChange = useCallback((value) => {
@@ -538,23 +545,57 @@ export default function VoiceCodingRound({
   }
 
   // ── Submit ────────────────────────────────────────────────────────────
-  const handleSubmit = useCallback(async () => {
+  const handleSubmit = useCallback(async (isTimeout = false) => {
     if (submittingRef.current) return
     submittingRef.current = true
     setIsSubmitting(true)
     stopListening()
+    
+    // Stop ongoing audio immediately
+    if (window.speechSynthesis) window.speechSynthesis.cancel()
+    if (activeAudioRef.current) {
+      activeAudioRef.current.pause()
+      activeAudioRef.current = null
+    }
+    setAiStatus('idle')
 
-    aiSay("Great work on the coding round! Saving your solution…", async () => {
-      try {
-        await fetch(`${API_BASE_URL}/coding-round/submit`, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ interview_id: interviewId, code, language: selectedLang })
-        })
-      } catch (_) { }
-      setTimeout(() => onComplete?.(), 1500)
+    const timeoutFlag = typeof isTimeout === 'boolean' ? isTimeout : false;
+    const message = timeoutFlag 
+      ? "Thank you for the interview."
+      : "We are saving your interview, please wait.";
+
+    // Speak the message and submit the code concurrently, wait for both
+    const speakPromise = new Promise(resolve => {
+      aiSay(message, resolve)
     })
-  }, [stopListening, aiSay, interviewId, code, selectedLang, onComplete])
+
+    const fetchPromise = fetch(`${API_BASE_URL}/coding-round/submit`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ interview_id: interviewId, code, language: selectedLang })
+    }).then(res => {
+      if (!res.ok) throw new Error(`HTTP ${res.status}`)
+    })
+
+    try {
+      await Promise.all([speakPromise, fetchPromise])
+      setTimeout(() => onComplete?.(), 500)
+    } catch (err) {
+      console.error("Failed to submit coding round:", err)
+      alert("Failed to save your code. Please check your connection and try submitting again.")
+      setIsSubmitting(false)
+      submittingRef.current = false
+    }
+  }, [stopListening, interviewId, code, selectedLang, onComplete, aiSay])
+
+  // Timer
+  useEffect(() => {
+    const t = setInterval(() => setTimeLeft(p => {
+      if (p <= 1) { handleSubmit(true); return 0 }
+      return p - 1
+    }), 1000)
+    return () => clearInterval(t)
+  }, [handleSubmit])
 
   // ── ESC + Fullscreen proctoring ────────────────────────────────────────────────
   useEffect(() => {

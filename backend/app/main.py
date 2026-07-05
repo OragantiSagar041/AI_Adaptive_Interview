@@ -15,6 +15,7 @@ sys.stdout.reconfigure(encoding='utf-8')
 sys.stderr.reconfigure(encoding='utf-8')
 
 import time
+from contextlib import asynccontextmanager
 from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.middleware.gzip import GZipMiddleware
@@ -36,14 +37,10 @@ from app import config
 from pymongo import ASCENDING, DESCENDING
 from mongo_db import interview_sessions_collection
 
-app = FastAPI(
-    title="HireIQ AI Interview Platform",
-    description="Backend API for AI-powered mock interviews",
-    version="2.0.0",
-)
+from app.routes import startup_event_cloudinary, startup_event_db_and_email
 
-@app.on_event("startup")
-async def startup_event():
+@asynccontextmanager
+async def lifespan(app: FastAPI):
     print("Initializing MongoDB Indexes...")
     try:
         interview_sessions_collection.create_index([("company_id", ASCENDING), ("status", ASCENDING)])
@@ -52,6 +49,17 @@ async def startup_event():
         print("MongoDB Indexes Initialized Successfully!")
     except Exception as e:
         print(f"Failed to initialize indexes: {e}")
+        
+    startup_event_cloudinary()
+    await startup_event_db_and_email()
+    yield
+
+app = FastAPI(
+    title="HireIQ AI Interview Platform",
+    description="Backend API for AI-powered mock interviews",
+    version="2.0.0",
+    lifespan=lifespan,
+)
 
 
 class RateLimitMiddleware(BaseHTTPMiddleware):
@@ -62,15 +70,28 @@ class RateLimitMiddleware(BaseHTTPMiddleware):
             
         forwarded_for = request.headers.get("x-forwarded-for", "")
         client_ip = forwarded_for.split(",")[0].strip() if forwarded_for else (request.client.host if request.client else "unknown")
-        now = time.time()
         
-        # Filter out old requests
-        config.request_counts[client_ip] = [timestamp for timestamp in config.request_counts[client_ip] if now - timestamp < config.RATE_LIMIT_WINDOW]
+        import os, redis
+        import time
+        _redis_url = os.environ.get("REDIS_URL", "redis://localhost:6379/0")
         
-        if len(config.request_counts[client_ip]) >= config.RATE_LIMIT:
-            return JSONResponse(status_code=429, content={"detail": "Too many requests. Please slow down."})
-        
-        config.request_counts[client_ip].append(now)
+        try:
+            _redis = redis.Redis.from_url(_redis_url)
+            key = f"rl:{client_ip}"
+            count = _redis.incr(key)
+            if count == 1:
+                _redis.expire(key, config.RATE_LIMIT_WINDOW)
+            if count > config.RATE_LIMIT:
+                return JSONResponse(status_code=429, content={"detail": "Too many requests. Please slow down."})
+        except redis.exceptions.ConnectionError:
+            # Fallback for local dev
+            now = time.time()
+            if client_ip not in config.request_counts:
+                config.request_counts[client_ip] = []
+            config.request_counts[client_ip] = [timestamp for timestamp in config.request_counts[client_ip] if now - timestamp < config.RATE_LIMIT_WINDOW]
+            if len(config.request_counts[client_ip]) >= config.RATE_LIMIT:
+                return JSONResponse(status_code=429, content={"detail": "Too many requests. Please slow down. (Local Mode)"})
+            config.request_counts[client_ip].append(now)
         return await call_next(request)
 
 # --- Middleware ---
