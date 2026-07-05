@@ -1273,7 +1273,9 @@ export const useInterviewSession = (sessionId, interviewType, startRoundTwo) => 
       answerForm.append('time_spent_seconds', timeSpent.toString())
       answerForm.append('time_limit_seconds', '120')
 
-      await api.post(`/save-answer`, answerForm)
+      await api.post(`/save-answer`, answerForm, {
+        headers: { 'Content-Type': 'multipart/form-data' }
+      })
     } catch (e) {
       console.error("Failed to save answer during transition:", e)
     }
@@ -1297,7 +1299,7 @@ export const useInterviewSession = (sessionId, interviewType, startRoundTwo) => 
     const wpm = timeSpent > 0 ? Math.round((words / timeSpent) * 60) : 0
     const payload = {
       interview_id: interviewId || sessionDetail?.interview_id || sessionId,
-      question_id: currentQuestion.id,
+      question_id: (currentQuestion.id || (currentQuestionIndex + 1)).toString(),
       filler_count: countFillers(transcriptionText),
       wpm: wpm,
       pause_count: behavioralStatsRef.current.pauseCount,
@@ -1329,7 +1331,9 @@ export const useInterviewSession = (sessionId, interviewType, startRoundTwo) => 
         answerForm.append('time_spent_seconds', timeSpent.toString())
         answerForm.append('time_limit_seconds', '120')
 
-        await api.post(`/save-answer`, answerForm)
+        await api.post(`/save-answer`, answerForm, {
+          headers: { 'Content-Type': 'multipart/form-data' }
+        })
       }
 
       if (currentQuestionIndex === questions.length - 1) {
@@ -1373,7 +1377,6 @@ export const useInterviewSession = (sessionId, interviewType, startRoundTwo) => 
         }
       }
     } catch (e) {
-      console.error("Save answer error:", e?.response?.data || e.message || e)
       Swal.fire({
         title: 'Save Failed',
         text: 'Failed to save your response. Please try again.',

@@ -907,15 +907,19 @@ export default function VoiceInterviewPage() {
     // Speak asynchronously
     aiSay(message)
 
-    // Fire backend completion immediately to unblock user
+    // Fire backend completion
     try { await fetch(`${API_BASE_URL}/complete-session/${linkId}?warnings=${warningsCount}`, { method: 'POST' }) } catch (_) { }
     
-    // Stop audio and mark done instantly
+    // Upload heavy recording and WAIT for it so it's not lost
+    try {
+      await stopAndUploadRecording(iid)
+    } catch (err) {
+      console.error("Recording upload failed:", err)
+    }
+    
+    // Stop audio and mark done ONLY after upload finishes
     stopAudio() 
     setRound('done')
-
-    // Upload heavy recording entirely in the background (fire and forget)
-    stopAndUploadRecording(iid).catch(err => console.error("Background upload failed:", err))
   }, [stopListening, linkId, stopAndUploadRecording, warningsCount, stopAudio, aiSay])
 
   // ── Load coding/case study round questions ────────────────────────────────

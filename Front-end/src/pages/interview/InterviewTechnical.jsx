@@ -1028,7 +1028,7 @@ export const InterviewTechnical = () => {
           <Volume2 size={20} style={{ animation: 'bounce 1s infinite' }} />
           <div>
             <strong style={{ fontSize: '14px', display: 'block' }}>Background Noise Alert</strong>
-            <p style={{ fontSize: '12px', opacity: 0.9, margin: '2px 0 0 0' }}>Please maintain silence. Alerts: {noiseAlertCount}/20</p>
+            <p style={{ fontSize: '12px', opacity: 0.9, margin: '2px 0 0 0' }}>Please maintain silence. Alerts: {noiseAlertCount}/10</p>
           </div>
         </div>
       )}

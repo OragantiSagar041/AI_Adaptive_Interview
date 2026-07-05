@@ -3842,61 +3842,61 @@ async def calculate_ats_score(request: ATSRequest):
             raise HTTPException(status_code=400, detail="Resume or JD is empty")
             
         # Offline Fallback logic: High-Accuracy Keyword Dictionary Match
-            import re
-            try:
-                from offline_skills_dict import COMMON_SKILLS
-            except ImportError:
-                COMMON_SKILLS = set()
+        import re
+        try:
+            from offline_skills_dict import COMMON_SKILLS
+        except ImportError:
+            COMMON_SKILLS = set()
             
-            resume_lower = resume_text.lower()
-            jd_lower = jd_text.lower()
-            
-            # Extract common skills that exist in the Job Description
-            jd_keywords = set()
-            for skill in COMMON_SKILLS:
-                # Use regex to match whole words/phrases to prevent partial matches
-                pattern = r'\b' + re.escape(skill) + r'\b'
-                if re.search(pattern, jd_lower):
-                    jd_keywords.add(skill)
-            
-            # If JD has no known keywords, fall back to basic extraction
-            if not jd_keywords:
-                words = set(re.findall(r'\b[a-z]{5,}\b', jd_lower))
-                stop_words = {"about", "above", "after", "again", "against", "because", "before", "below", "between", "cannot", "could", "doing", "during", "further", "having", "herself", "himself", "itself", "myself", "ought", "ourselves", "themselves", "there", "these", "those", "through", "under", "until", "where", "which", "while", "would", "yourself", "yourselves", "experience", "years", "skills", "ability", "working", "knowledge", "strong", "understanding", "preferred", "required", "responsibilities", "requirements", "including"}
-                jd_keywords = {w for w in words if w not in stop_words}
-            
-            matched = []
-            missing = []
-            
-            for word in jd_keywords:
-                pattern = r'\b' + re.escape(word) + r'\b'
-                if re.search(pattern, resume_lower):
-                    matched.append(word.title())
-                else:
-                    missing.append(word.title())
-                    
-            # Sort lists (limit to top 15 for UI clarity)
-            matched = sorted(matched)[:15]
-            missing = sorted(missing)[:15]
-            
-            # Calculate score based ONLY on the validated dictionary skills
-            total_keywords = len(jd_keywords)
-            matched_count = len(matched)
-            if total_keywords > 0:
-                score = min(100, int((matched_count / total_keywords) * 100))
+        resume_lower = resume_text.lower()
+        jd_lower = jd_text.lower()
+        
+        # Extract common skills that exist in the Job Description
+        jd_keywords = set()
+        for skill in COMMON_SKILLS:
+            # Use regex to match whole words/phrases to prevent partial matches
+            pattern = r'\b' + re.escape(skill) + r'\b'
+            if re.search(pattern, jd_lower):
+                jd_keywords.add(skill)
+        
+        # If JD has no known keywords, fall back to basic extraction
+        if not jd_keywords:
+            words = set(re.findall(r'\b[a-z]{5,}\b', jd_lower))
+            stop_words = {"about", "above", "after", "again", "against", "because", "before", "below", "between", "cannot", "could", "doing", "during", "further", "having", "herself", "himself", "itself", "myself", "ought", "ourselves", "themselves", "there", "these", "those", "through", "under", "until", "where", "which", "while", "would", "yourself", "yourselves", "experience", "years", "skills", "ability", "working", "knowledge", "strong", "understanding", "preferred", "required", "responsibilities", "requirements", "including"}
+            jd_keywords = {w for w in words if w not in stop_words}
+        
+        matched = []
+        missing = []
+        
+        for word in jd_keywords:
+            pattern = r'\b' + re.escape(word) + r'\b'
+            if re.search(pattern, resume_lower):
+                matched.append(word.title())
             else:
-                score = 0
-            
-            if not matched and not missing:
-                matched.append("No clear skills found")
-                missing.append("No clear skills found")
+                missing.append(word.title())
                 
-            return {
-                "score": score,
-                "matched_skills": matched,
-                "missing_skills": missing,
-                "summary": "Offline Mode Active: This score is calculated using an offline keyword-matching algorithm because the AI Quota has been exceeded."
-            }
+        # Sort lists (limit to top 15 for UI clarity)
+        matched = sorted(matched)[:15]
+        missing = sorted(missing)[:15]
+        
+        # Calculate score based ONLY on the validated dictionary skills
+        total_keywords = len(jd_keywords)
+        matched_count = len(matched)
+        if total_keywords > 0:
+            score = min(100, int((matched_count / total_keywords) * 100))
+        else:
+            score = 0
+        
+        if not matched and not missing:
+            matched.append("No clear skills found")
+            missing.append("No clear skills found")
+            
+        return {
+            "score": score,
+            "matched_skills": matched,
+            "missing_skills": missing,
+            "summary": "Offline Mode Active: This score is calculated using an offline keyword-matching algorithm because the AI Quota has been exceeded."
+        }
             
     except HTTPException:
         raise
@@ -6002,7 +6002,7 @@ async def superadmin_interview_create(data: dict, background_tasks: BackgroundTa
             single_data = CreateSession(**data)
         except Exception as e:
             raise HTTPException(status_code=422, detail=str(e))
-        return create_session(single_data, current_admin)
+        return await create_session(single_data, current_admin)
 
 @router.get("/api/superadmin/profile")
 @router.get("/superadmin/profile")
