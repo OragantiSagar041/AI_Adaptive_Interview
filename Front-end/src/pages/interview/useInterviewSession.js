@@ -22,6 +22,7 @@ export const useInterviewSession = (sessionId, interviewType, startRoundTwo) => 
   const [loading, setLoading] = useState(true)
   const [showAllSet, setShowAllSet] = useState(false)
   const [error, setError] = useState(null)
+  const [isCompleted, setIsCompleted] = useState(false)
   const _sessionKey = sessionId ? `interview_session_${sessionId}` : null
   const _savedSession = _sessionKey ? (() => { try { return JSON.parse(sessionStorage.getItem(_sessionKey) || 'null') } catch { return null } })() : null
 
@@ -111,6 +112,7 @@ export const useInterviewSession = (sessionId, interviewType, startRoundTwo) => 
 
   // Answer state
   const [transcriptionText, setTranscriptionText] = useState('')
+  const [interimTranscriptText, setInterimTranscriptText] = useState('')
   const [codeAnswer, setCodeAnswer] = useState(_savedSession?.codeAnswer || '')
   const [selectedLanguage, setSelectedLanguage] = useState(_savedSession?.selectedLanguage || 'python')
   const [codeOutput, setCodeOutput] = useState('')
@@ -491,7 +493,9 @@ export const useInterviewSession = (sessionId, interviewType, startRoundTwo) => 
           throw new Error(`This interview is scheduled to start on ${startTime.toLocaleString()}. Please try again at the scheduled time.`)
         }
         if (payload.session_status === 'completed') {
-          throw new Error("This interview session has already been completed.")
+          setIsCompleted(true)
+          setLoading(false)
+          return
         }
 
         if (payload.interview_format === 'Voice') {
@@ -512,7 +516,9 @@ export const useInterviewSession = (sessionId, interviewType, startRoundTwo) => 
           throw new Error("This interview session is scheduled for a future time window.")
         }
         if (startPayload.session_status === 'completed') {
-          throw new Error("This interview session has already been completed.")
+          setIsCompleted(true)
+          setLoading(false)
+          return
         }
 
         const rawQuestions = startPayload.questions?.length
@@ -668,70 +674,118 @@ export const useInterviewSession = (sessionId, interviewType, startRoundTwo) => 
     }
     const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition
     const rec = new SpeechRecognition()
-    rec.continuous = false
+    rec.continuous = true  // Keep listening continuously without restarting
     rec.interimResults = true
     const targetLang = langMap[sessionDetail?.language] || 'en-IN'
     rec.lang = targetLang
 
-    rec.onstart = () => {
-      isSpeechRecordingRef.current = true
-      
-      // Start Whisper MediaRecorder if not already running
-      if (mediaStreamRef.current && !whisperMediaRecorderRef.current) {
-        try {
-          const audioStream = new MediaStream(mediaStreamRef.current.getAudioTracks())
-          const mr = new MediaRecorder(audioStream)
-          mr.ondataavailable = (e) => {
-            if (e.data.size > 0) whisperAudioChunksRef.current.push(e.data)
-          }
-          mr.onstop = async () => {
-            const blob = new Blob(whisperAudioChunksRef.current, { type: mr.mimeType })
-            whisperAudioChunksRef.current = [] // reset for next chunk
-            
-            if (isSpeechRecordingRef.current && whisperMediaRecorderRef.current) {
-              try { whisperMediaRecorderRef.current.start() } catch (e) { console.error("mr.start error", e) }
-            }
-            
-            if (blob.size > 1000) { // prevent empty or silent blobs
-              const formData = new FormData()
-              formData.append('audio', blob, 'audio.webm')
-              formData.append('candidate_name', sessionDetail?.candidate_name || 'Candidate')
-              formData.append('language', sessionDetail?.language || 'English')
-              
-              try {
-                // Post directly to backend Whisper endpoint
-                const res = await api.post('/transcribe', formData, {
-                  headers: { 'Content-Type': 'multipart/form-data' }
-                })
-                if (res.data && res.data.text) {
-                  // Append perfect Whisper text instead of Google's transcript
-                  setTranscriptionText(prev => prev + res.data.text + ' ')
-                }
-              } catch (err) {
-                console.error("Whisper transcription failed:", err)
-              }
-            }
-          }
-          whisperMediaRecorderRef.current = mr
-          mr.start()
-        } catch(e) {
-          console.error("Failed to start Whisper MediaRecorder:", e)
+    // Helper to (re)start the Whisper MediaRecorder cleanly
+    const ensureWhisperRunning = () => {
+      if (!mediaStreamRef.current) return
+      if (whisperMediaRecorderRef.current && whisperMediaRecorderRef.current.state === 'recording') return
+
+      const audioTracks = mediaStreamRef.current.getAudioTracks()
+      if (!audioTracks || audioTracks.length === 0) {
+        console.warn('No audio tracks available for Whisper recorder')
+        return
+      }
+
+      try {
+        const audioStream = new MediaStream(audioTracks)
+
+        // Detect supported MIME type at runtime
+        const mimeTypes = [
+          'audio/webm;codecs=opus',
+          'audio/webm',
+          'audio/ogg;codecs=opus',
+          'audio/ogg',
+          'audio/mp4',
+          ''  // browser default
+        ]
+        const supportedMime = mimeTypes.find(m => {
+          try { return !m || MediaRecorder.isTypeSupported(m) } catch { return false }
+        }) || ''
+
+        const mrOptions = supportedMime ? { mimeType: supportedMime } : {}
+        const mr = new MediaRecorder(audioStream, mrOptions)
+        whisperAudioChunksRef.current = []
+
+        mr.ondataavailable = (e) => {
+          if (e.data.size > 0) whisperAudioChunksRef.current.push(e.data)
         }
+        mr.onstop = async () => {
+          const chunks = [...whisperAudioChunksRef.current]
+          whisperAudioChunksRef.current = []
+          const actualMime = mr.mimeType || supportedMime || 'audio/webm'
+          const blob = new Blob(chunks, { type: actualMime })
+
+          // Restart immediately so we keep capturing
+          if (isSpeechRecordingRef.current) {
+            try { mr.start() } catch (e) { console.error('mr.restart error', e) }
+          }
+
+          if (blob.size > 1000) {
+            // Pick correct file extension for backend
+            const ext = actualMime.includes('ogg') ? 'ogg' : actualMime.includes('mp4') ? 'mp4' : 'webm'
+            const formData = new FormData()
+            formData.append('audio', blob, `audio.${ext}`)
+            formData.append('candidate_name', sessionDetail?.candidate_name || 'Candidate')
+            formData.append('language', sessionDetail?.language || 'English')
+            try {
+              const res = await api.post('/transcribe', formData, {
+                headers: { 'Content-Type': 'multipart/form-data' },
+                timeout: 10000
+              })
+              if (res.data && res.data.text && res.data.text.trim()) {
+                setTranscriptionText(prev => prev + res.data.text.trim() + ' ')
+              }
+            } catch (err) {
+              console.error('Whisper transcription failed:', err)
+            }
+          }
+        }
+        whisperMediaRecorderRef.current = mr
+        mr.start()
+      } catch(e) {
+        console.error('Failed to start Whisper MediaRecorder:', e)
+        whisperMediaRecorderRef.current = null
       }
     }
 
+    rec.onstart = () => {
+      isSpeechRecordingRef.current = true
+      ensureWhisperRunning()
+    }
+
     rec.onend = () => {
+      // With continuous=true this fires only on error/abort, restart it
       if (isSpeechRecordingRef.current) {
-        behavioralStatsRef.current.pauseCount += 1
         try { rec.start() } catch (e) { }
       }
     }
 
     rec.onresult = (event) => {
-      // We are using Google SpeechRecognition PURELY as a Voice Activity Detector (VAD) now!
-      // DO NOT use event.results[i][0].transcript because it fails on Indian accents.
-      
-      // Stop and restart Whisper recording to trigger transcription if they pause for 1.5s
+      // Show Google's live transcript immediately as fallback text
+      // Whisper will replace/append more accurate text asynchronously
+      let interimText = ''
+      let finalText = ''
+      for (let i = event.resultIndex; i < event.results.length; i++) {
+        const t = event.results[i][0].transcript
+        if (event.results[i].isFinal) {
+          finalText += t + ' '
+        } else {
+          interimText += t
+        }
+      }
+      // Show interim text in real time (visible while speaking)
+      setInterimTranscriptText(interimText)
+      if (finalText) {
+        // Final result — append to transcript; clear interim
+        setTranscriptionText(prev => prev + finalText)
+        setInterimTranscriptText('')
+      }
+
+      // Trigger Whisper transcription after 1.5s pause in speech
       if (whisperPauseTimeoutRef.current) clearTimeout(whisperPauseTimeoutRef.current)
       whisperPauseTimeoutRef.current = setTimeout(() => {
         if (whisperMediaRecorderRef.current && whisperMediaRecorderRef.current.state === 'recording') {
@@ -739,7 +793,7 @@ export const useInterviewSession = (sessionId, interviewType, startRoundTwo) => 
         }
       }, 1500)
 
-      // Existing 10-second absolute silence timeout to auto-skip question
+      // Reset 10-second silence auto-advance timer on every speech event
       if (silenceTimeoutRef.current) clearTimeout(silenceTimeoutRef.current)
       if (!isRoundTwoRef.current) {
         silenceTimeoutRef.current = setTimeout(() => {
@@ -749,8 +803,13 @@ export const useInterviewSession = (sessionId, interviewType, startRoundTwo) => 
     }
 
     rec.onerror = (e) => {
-      if (e.error !== 'no-speech') {
-        console.error("Speech Recognition Error:", e.error)
+      if (e.error === 'not-allowed' || e.error === 'service-not-allowed') {
+        console.error("Microphone permission denied:", e.error)
+        return
+      }
+      // For no-speech or other transient errors, just restart
+      if (isSpeechRecordingRef.current) {
+        setTimeout(() => { try { rec.start() } catch (err) { } }, 300)
       }
     }
 
@@ -1162,6 +1221,17 @@ export const useInterviewSession = (sessionId, interviewType, startRoundTwo) => 
   }
 
   const speakAIQuestion = async (text) => {
+    // --- Always set a guaranteed silence timer when a question starts ---
+    // This fires even if TTS fails, ensuring grace period always works
+    if (silenceTimeoutRef.current) clearTimeout(silenceTimeoutRef.current)
+    if (!isRoundTwoRef.current) {
+      // Start with dynamic window based on text length (approx 150 words/min -> ~60ms per char + 15s grace period)
+      const estimatedDurationMs = Math.max(30000, text.length * 60 + 15000);
+      silenceTimeoutRef.current = setTimeout(() => {
+        if (handleNextQuestionRef.current) handleNextQuestionRef.current()
+      }, estimatedDurationMs)
+    }
+
     // --- High-Quality TTS (Backend: Cartesia or Edge TTS) ---
     try {
       if (window.speechSynthesis) window.speechSynthesis.cancel()
@@ -1170,6 +1240,7 @@ export const useInterviewSession = (sessionId, interviewType, startRoundTwo) => 
         voice: 'shimmer', 
         language: sessionDetail?.language || 'English',
         use_custom_voice: !!sessionDetail?.voice_clone
+
       }
       if (clonedVoiceIdRef.current) bodyPayload.voice_id = clonedVoiceIdRef.current
       
@@ -1297,7 +1368,9 @@ export const useInterviewSession = (sessionId, interviewType, startRoundTwo) => 
       answerForm.append('time_spent_seconds', timeSpent.toString())
       answerForm.append('time_limit_seconds', '120')
 
-      await api.post(`/save-answer`, answerForm)
+      await api.post(`/save-answer`, answerForm, {
+        headers: { 'Content-Type': 'multipart/form-data' }
+      })
     } catch (e) {
       console.error("Failed to save answer during transition:", e)
     }
@@ -1321,7 +1394,7 @@ export const useInterviewSession = (sessionId, interviewType, startRoundTwo) => 
     const wpm = timeSpent > 0 ? Math.round((words / timeSpent) * 60) : 0
     const payload = {
       interview_id: interviewId || sessionDetail?.interview_id || sessionId,
-      question_id: currentQuestion.id,
+      question_id: (currentQuestion.id || (currentQuestionIndex + 1)).toString(),
       filler_count: countFillers(transcriptionText),
       wpm: wpm,
       pause_count: behavioralStatsRef.current.pauseCount,
@@ -1353,7 +1426,9 @@ export const useInterviewSession = (sessionId, interviewType, startRoundTwo) => 
         answerForm.append('time_spent_seconds', timeSpent.toString())
         answerForm.append('time_limit_seconds', '120')
 
-        await api.post(`/save-answer`, answerForm)
+        await api.post(`/save-answer`, answerForm, {
+          headers: { 'Content-Type': 'multipart/form-data' }
+        })
       }
 
       if (currentQuestionIndex === questions.length - 1) {
@@ -1374,6 +1449,7 @@ export const useInterviewSession = (sessionId, interviewType, startRoundTwo) => 
           handleSubmitInterview()
         } else if (!isRoundTwo && sessionDetail?.interview_type !== 'Normal') {
           setTranscriptionText('')
+          setInterimTranscriptText('')
           setCodeAnswer('')
           setCodeOutput('')
           behavioralStatsRef.current = { wordCount: 0, fillerCount: 0, pauseCount: 0, faceAlerts: 0, tabSwitches: 0, noiseAlerts: 0 }
@@ -1384,6 +1460,7 @@ export const useInterviewSession = (sessionId, interviewType, startRoundTwo) => 
         }
       } else {
         setTranscriptionText('')
+        setInterimTranscriptText('')
         setCodeAnswer('')
         setCodeOutput('')
         behavioralStatsRef.current = { wordCount: 0, fillerCount: 0, pauseCount: 0, faceAlerts: 0, tabSwitches: 0, noiseAlerts: 0 }
@@ -1397,7 +1474,6 @@ export const useInterviewSession = (sessionId, interviewType, startRoundTwo) => 
         }
       }
     } catch (e) {
-      console.error("Save answer error:", e?.response?.data || e.message || e)
       Swal.fire({
         title: 'Save Failed',
         text: 'Failed to save your response. Please try again.',
@@ -1592,6 +1668,8 @@ export const useInterviewSession = (sessionId, interviewType, startRoundTwo) => 
     handleSkipUpload,
     isMobileDevice,
     recognitionRef,
-    isSpeechRecordingRef
+    isSpeechRecordingRef,
+    interimTranscriptText,
+    isCompleted
   }
 }

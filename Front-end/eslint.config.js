@@ -21,7 +21,7 @@ export default defineConfig([
   {
     rules: {
       'no-unused-vars': 'off',
-      'react-hooks/exhaustive-deps': 'off',
+      'react-hooks/exhaustive-deps': 'warn',
       'react-hooks/set-state-in-effect': 'off',
       'react/react-in-jsx-scope': 'off',
       'react/prop-types': 'off',

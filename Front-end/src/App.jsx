@@ -3,6 +3,7 @@ import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom'
 import Interview from './pages/Interview'
 import { InterviewTechnical, InterviewNormal, InterviewNonTechnical } from './pages/interview/index'
 import LandingPage from './pages/LandingPage'
+import AiRecruiterLandingPage from './pages/AiRecruiterLandingPage'
 import RegisterPage from './pages/RegisterPage'
 import LoginPage from './pages/LoginPage'
 import CaseStudyPage from './pages/CaseStudyPage'
@@ -43,6 +44,7 @@ function App() {
       <React.Suspense fallback={<div className="flex h-screen items-center justify-center bg-gray-900 text-white font-semibold text-lg tracking-wide">Loading Interface...</div>}>
       <Routes>
         <Route path="/" element={<LandingPage />} />
+        <Route path="/voice-recruiter" element={<AiRecruiterLandingPage />} />
         <Route path="/login" element={<LoginPage />} />
         <Route path="/interview" element={<Interview />} />
         <Route path="/interview/technical" element={<InterviewTechnical />} />

@@ -71,6 +71,10 @@ const DeviceCheckModal = ({ onSuccess, onCancel }) => {
         setIsReady(true);
       } catch (err) {
         if (!active) return;
+        if (streamRef.current) {
+          streamRef.current.getTracks().forEach(t => t.stop());
+          streamRef.current = null;
+        }
         console.error("Device check error:", err);
         if (err.name === 'NotFoundError' || err.name === 'DevicesNotFoundError') {
           setError("No camera or microphone found. Please connect your devices.");
