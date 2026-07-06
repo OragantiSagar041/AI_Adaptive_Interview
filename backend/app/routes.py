@@ -6002,7 +6002,7 @@ async def superadmin_interview_create(data: dict, background_tasks: BackgroundTa
             single_data = CreateSession(**data)
         except Exception as e:
             raise HTTPException(status_code=422, detail=str(e))
-        return create_session(single_data, current_admin)
+        return await create_session(single_data, current_admin)
 
 @router.get("/api/superadmin/profile")
 @router.get("/superadmin/profile")

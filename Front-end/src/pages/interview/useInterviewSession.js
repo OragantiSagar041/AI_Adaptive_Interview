@@ -217,6 +217,8 @@ export const useInterviewSession = (sessionId, interviewType, startRoundTwo) => 
   const noiseFrameCountRef = useRef(0)
   const noiseCooldownRef = useRef(0)
   const audioRmsRef = useRef(0)
+  const lipSyncStreakRef = useRef(0)
+  const lipSyncCooldownRef = useRef(0)
 
   // Feature Migration Refs
   const visualizerCanvasRef = useRef(null)
@@ -869,13 +871,35 @@ export const useInterviewSession = (sessionId, interviewType, startRoundTwo) => 
     }
   });
 
-  // Track lip sync anomaly
+  // Track lip sync anomaly (audio is active but mouth isn't moving — suggests a
+  // pre-recorded/played-back voice rather than the candidate actually speaking)
   useEffect(() => {
-    if (proctoring.jawOpenScore > 0 && audioRmsRef.current > 0.18) {
-      if (proctoring.checkLipSync(proctoring.jawOpenScore, audioRmsRef.current > 0.18)) {
-        // We could track a streak here or just fire an alert
-        // A full robust implementation would track a streak.
-      }
+    const isAudioActive = audioRmsRef.current > 0.18
+    const mismatch = proctoring.checkLipSync(proctoring.jawOpenScore, isAudioActive)
+    const now = Date.now()
+
+    if (mismatch && now > lipSyncCooldownRef.current) {
+      lipSyncStreakRef.current += 1
+    } else if (!mismatch) {
+      lipSyncStreakRef.current = Math.max(0, lipSyncStreakRef.current - 1)
+    }
+
+    // ~5 consecutive detection ticks (700ms each) of sustained mismatch before alerting
+    if (lipSyncStreakRef.current >= 5) {
+      lipSyncCooldownRef.current = now + 8000
+      lipSyncStreakRef.current = 0
+      recordAlertMetric('lip_sync')
+      Swal.fire({
+        icon: 'warning',
+        title: '⚠️ Proctoring Alert',
+        text: 'Audio detected without matching lip movement',
+        toast: true,
+        position: 'top-end',
+        showConfirmButton: false,
+        timer: 3000,
+        background: '#161c2d',
+        color: '#fff',
+      })
     }
   }, [proctoring.jawOpenScore, proctoring.checkLipSync])
 
