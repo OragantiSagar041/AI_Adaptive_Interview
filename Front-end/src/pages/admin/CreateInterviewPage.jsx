@@ -2288,7 +2288,6 @@ Congratulations! You have been selected for an AI-powered interview. Please revi
                       </Button>
                       <a
                         href={`/interview?session_id=${link.id}`}
-                        target="_blank"
                         rel="noreferrer"
                         className="px-3.5 py-1.5 bg-primary hover:bg-primary-hover text-white text-xs font-semibold rounded-lg border border-transparent shadow-[0_2px_8px_rgba(99,102,241,0.1)] hover:-translate-y-0.5 transition-all text-center flex items-center justify-center text-white no-underline leading-none"
                       >

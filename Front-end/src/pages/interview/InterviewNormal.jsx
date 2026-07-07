@@ -470,14 +470,6 @@ export const InterviewNormal = () => {
                 </div>
               </div>
 
-              {!isRoundTwo && sessionDetail?.interview_type !== 'Normal' && (
-                <button
-                  onClick={handleStartRound2Click}
-                  className="w-full py-2.5 px-4 rounded-full font-bold text-xs bg-indigo-600 hover:bg-indigo-700 text-white transition-all cursor-pointer border-none shadow-[0_4px_12px_rgba(99,102,241,0.2)] flex items-center justify-center gap-2"
-                >
-                  🚀 Start Round 2 &rarr;
-                </button>
-              )}
 
               <button 
                 className="w-full py-2.5 px-4 rounded-full font-bold text-xs bg-slate-800 hover:bg-slate-900 text-white transition-all cursor-pointer border-none shadow-sm flex items-center justify-center gap-2" 
@@ -666,20 +658,12 @@ export const InterviewNormal = () => {
                 {/* Navigation buttons */}
                 <div className="flex gap-3 justify-center items-center mt-2 shrink-0">
                   {currentQuestionIndex === questions.length - 1 ? (
-                    !isRoundTwo && sessionDetail?.interview_type !== 'Normal' ? (
-                      <div className="flex items-center gap-2 bg-indigo-50 border border-indigo-100 px-4 py-2.5 rounded-xl">
-                        <span className="text-xs font-semibold text-indigo-600">
-                          Round 1 complete. Click "Start Round 2" in the sidebar to proceed.
-                        </span>
-                      </div>
-                    ) : (
-                      <button 
-                        className="px-8 py-3.5 rounded-xl font-bold text-sm text-white bg-red-500 hover:bg-red-600 shadow-lg shadow-red-500/20 hover:shadow-red-500/30 transition-all duration-200 cursor-pointer border-none"
-                        onClick={() => handleSubmitInterview(false)}
-                      >
-                        Submit Interview
-                      </button>
-                    )
+                    <button 
+                      className="px-8 py-3.5 rounded-xl font-bold text-sm text-white bg-red-500 hover:bg-red-600 shadow-lg shadow-red-500/20 hover:shadow-red-500/30 transition-all duration-200 cursor-pointer border-none"
+                      onClick={() => handleSubmitInterview(false)}
+                    >
+                      Submit Interview
+                    </button>
                   ) : (
                     <button 
                       className="px-8 py-3.5 rounded-xl font-bold text-sm text-white bg-emerald-500 hover:bg-emerald-600 shadow-lg shadow-emerald-500/20 hover:shadow-emerald-500/30 transition-all duration-200 cursor-pointer border-none"

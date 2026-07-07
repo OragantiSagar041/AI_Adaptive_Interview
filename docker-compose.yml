@@ -17,6 +17,7 @@ services:
       - "8000"
     environment:
       - REDIS_URL=redis://redis:6379/0
+      - ENV=production  # ensures Celery task_always_eager=False (truly async)
     env_file:
       - ./backend/.env
     depends_on:
@@ -33,6 +34,7 @@ services:
     command: celery -A app.celery_app.celery_app worker --loglevel=info
     environment:
       - REDIS_URL=redis://redis:6379/0
+      - ENV=production  # ensures Celery task_always_eager=False (truly async)
     env_file:
       - ./backend/.env
     depends_on:

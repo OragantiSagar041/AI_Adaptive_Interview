@@ -280,10 +280,10 @@ export function CandidateTable({
                         )}
                         <button
                           onClick={() => handleDeleteSession(c.link_id || c.id)}
-                          className="bg-transparent border-none text-rose-500 hover:text-rose-600 cursor-pointer p-1 transition-colors"
+                          className="flex items-center justify-center w-[28px] h-[28px] bg-rose-50 text-rose-500 hover:bg-rose-500 hover:text-white rounded border border-rose-100 transition-colors cursor-pointer shadow-sm"
                           title="Delete Session"
                         >
-                          <X size={16} />
+                          <X size={14} />
                         </button>
                       </div>
                     </td>

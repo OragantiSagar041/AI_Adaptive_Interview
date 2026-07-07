@@ -23,6 +23,8 @@
 
 import { FaceLandmarker, FilesetResolver, ObjectDetector } from '@mediapipe/tasks-vision';
 
+// Set DEBUG = true locally to verify worker payload shapes in DevTools console.
+// Always set back to false before committing to production.
 const DEBUG = false;
 
 const MODEL_URLS = {
@@ -260,6 +262,7 @@ self.onmessage = async (event) => {
 
     try {
       const features = extractFrameFeatures(bitmap);
+      log('detect_result payload:', features);
       self.postMessage({ type: 'detect_result', timestamp, data: features });
     } catch (err) {
       self.postMessage({ type: 'detect_error', timestamp, error: err?.message ?? String(err) });

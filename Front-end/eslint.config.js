@@ -7,6 +7,9 @@ import { defineConfig, globalIgnores } from 'eslint/config'
 export default defineConfig([
   globalIgnores(['dist', 'public/models/**']),
   {
+    // Single config object: plugins declared here, so all rules below can resolve them.
+    // Previously the rules were in a SEPARATE config object without plugin access,
+    // causing react-hooks/exhaustive-deps (and others) to fail silently.
     files: ['**/*.{js,jsx}'],
     extends: [
       js.configs.recommended,
@@ -16,24 +19,16 @@ export default defineConfig([
     languageOptions: {
       globals: globals.browser,
       parserOptions: { ecmaFeatures: { jsx: true } },
-    }
-  },
-  {
+    },
     rules: {
       'no-unused-vars': 'off',
       'react-hooks/exhaustive-deps': 'warn',
-      'react-hooks/set-state-in-effect': 'off',
       'react/react-in-jsx-scope': 'off',
       'react/prop-types': 'off',
       'no-useless-assignment': 'off',
       'no-empty': 'off',
-      'react-hooks/immutability': 'off',
-      'react-hooks/purity': 'off',
-      'preserve-caught-error': 'off',
-      'react-refresh/only-export-components': 'off',
       'no-useless-escape': 'off',
-      'react-hooks/preserve-manual-memoization': 'off',
-      'react-hooks/refs': 'off'
+      'react-refresh/only-export-components': 'off',
     }
   }
 ])
