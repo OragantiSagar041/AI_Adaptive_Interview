@@ -24,6 +24,7 @@ from collections import defaultdict
 from datetime import datetime, timedelta, timezone
 from typing import Any, Dict, List, Optional
 from app.services import parse_iso_datetime
+from app.session_store import get_session, delete_session
 
 sys.stdout.reconfigure(encoding='utf-8')
 sys.stderr.reconfigure(encoding='utf-8')
@@ -1441,9 +1442,15 @@ def get_interview_details(link_id: str):
     screen_recording_url = get_url_from_raw_path(raw_screen_path)
 
     results = []
-    total_tab_switches = 0
-    total_face_alerts = 0
-    total_noise_alerts = 0
+    
+    # Calculate integrity totals from the violations array, as it accurately tracks all events
+    # even if the interview terminates before any questions are answered.
+    violations = session_data.get("violations", [])
+    total_tab_switches = sum(1 for v in violations if v.get("type") == "tab_switch")
+    total_face_alerts = sum(1 for v in violations if v.get("type") not in ("tab_switch", "noise_alert"))
+    total_noise_alerts = sum(1 for v in violations if v.get("type") == "noise_alert")
+    
+    total_time = 0
     total_time = 0
 
     if actual_interview_id:
@@ -1452,9 +1459,10 @@ def get_interview_details(link_id: str):
             tab_sw = row.get("tab_switches") or 0
             face_al = row.get("face_alerts") or 0
             noise_al = row.get("noise_alerts") or 0
-            total_tab_switches += tab_sw
-            total_face_alerts += face_al
-            total_noise_alerts += noise_al
+            # We no longer sum these from answers since we pull directly from the violations array
+            # total_tab_switches += tab_sw
+            # total_face_alerts += face_al
+            # total_noise_alerts += noise_al
             total_time += (row.get("time_spent_seconds") or 0)
             results.append({
                 "question_id": row.get("question_id"),
@@ -1574,6 +1582,7 @@ def get_interview_details(link_id: str):
         "detected_accent": detected_accent,
         "recording_url": recording_url,
         "screen_recording_url": screen_recording_url,
+        "completion_reason": session_data.get("completion_reason"),
         "integrity": {
             "total_tab_switches": total_tab_switches,
             "total_face_alerts": total_face_alerts,

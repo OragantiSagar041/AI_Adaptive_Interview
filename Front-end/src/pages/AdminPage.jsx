@@ -292,14 +292,21 @@ export default function AdminPage({ role: initialRole = 'admin' }) {
     document.documentElement.style.setProperty('--primary-glow', currentAccent.glow)
   }, [accentName, currentAccent])
 
-  // Polling Effect for dashboard stats and ongoing interviews
+  // Polling Effect for dashboard stats and ongoing interviews.
+  // - Interval raised from 12s → 60s to reduce backend load.
+  // - Polling pauses when the tab is backgrounded (visibilityState !== 'visible')
+  //   to avoid unnecessary requests when the admin isn't actively watching.
   useEffect(() => {
     if (!token) return
 
-    dispatch(loadDashboardData(selectedAdminId))
-    const statsInterval = setInterval(() => {
-      dispatch(loadDashboardData(selectedAdminId))
-    }, 12000)
+    const poll = () => {
+      if (document.visibilityState === 'visible') {
+        dispatch(loadDashboardData(selectedAdminId))
+      }
+    }
+
+    poll() // immediate first fetch
+    const statsInterval = setInterval(poll, 60000) // was 12 000ms
 
     return () => clearInterval(statsInterval)
   }, [dispatch, token, selectedAdminId])

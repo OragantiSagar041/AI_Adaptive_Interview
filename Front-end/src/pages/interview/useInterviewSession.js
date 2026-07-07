@@ -53,6 +53,12 @@ export const useInterviewSession = (sessionId, interviewType, startRoundTwo) => 
   // Session details from backend
   const [sessionDetail, setSessionDetail] = useState(null)
   const [interviewId, setInterviewId] = useState('')
+  const interviewIdRef = useRef('') // Add ref for interviewId to access in async functions
+
+  useEffect(() => {
+    interviewIdRef.current = interviewId
+  }, [interviewId])
+
   const [questions, setQuestions] = useState([])
   const [currentQuestionIndex, setCurrentQuestionIndex] = useState(_savedSession?.currentQuestionIndex || 0)
   const currentQuestion = questions[currentQuestionIndex]
@@ -80,15 +86,17 @@ export const useInterviewSession = (sessionId, interviewType, startRoundTwo) => 
   useEffect(() => {
     const checkMobile = () => {
       const userAgent = navigator.userAgent || navigator.vendor || window.opera;
+      // Only block actual mobile devices — do NOT check window width.
+      // Narrow browser windows (e.g. DevTools open) must not trigger this.
       const mobileRegex = /android|webos|iphone|ipad|ipod|blackberry|iemobile|opera mini/i;
-      const isMobile = mobileRegex.test(userAgent.toLowerCase()) || window.innerWidth <= 768;
+      const isMobile = mobileRegex.test(userAgent.toLowerCase());
 
       if (isMobile) {
         setIsMobileDevice(true);
         Swal.fire({
           icon: 'error',
           title: 'Device Not Supported',
-          text: 'This proctored interview requires a desktop or laptop computer. Mobile devices and small screens are not supported.',
+          text: 'This proctored interview requires a desktop or laptop computer. Mobile devices are not supported.',
           allowOutsideClick: false,
           allowEscapeKey: false,
           showConfirmButton: false,
@@ -106,8 +114,7 @@ export const useInterviewSession = (sessionId, interviewType, startRoundTwo) => 
     };
 
     checkMobile();
-    window.addEventListener('resize', checkMobile);
-    return () => window.removeEventListener('resize', checkMobile);
+    // No resize listener needed since we no longer check window width
   }, []);
 
   // Answer state
@@ -211,6 +218,12 @@ export const useInterviewSession = (sessionId, interviewType, startRoundTwo) => 
   const whisperMediaRecorderRef = useRef(null)
   const whisperAudioChunksRef = useRef([])
   const whisperPauseTimeoutRef = useRef(null)
+  // Refs that hold session-data values used in async transcription callbacks.
+  // Using refs (not state) prevents the stale-closure / race-condition where
+  // sessionDetail state is not yet populated when the MediaRecorder onstop fires.
+  const candidateNameRef = useRef('Candidate')
+  const interviewLanguageRef = useRef('English')
+  const transcribeInFlightRef = useRef(false) // prevent overlapping Whisper API calls
 
   // Proctoring Loops
   const faceDetectionIntervalRef = useRef(null)
@@ -224,10 +237,18 @@ export const useInterviewSession = (sessionId, interviewType, startRoundTwo) => 
   const visualizerCanvasRef = useRef(null)
   const visualizerActiveRef = useRef(false)
   const visualizerAudioCtxRef = useRef(null)
+  const silenceIntervalRef = useRef(null)
   const silenceTimeoutRef = useRef(null)
+  const lastSpeechTimeRef = useRef(0)
   const questionStartTimeRef = useRef(Date.now())
   const behavioralStatsRef = useRef({ wordCount: 0, fillerCount: 0, pauseCount: 0, faceAlerts: 0, tabSwitches: 0, noiseAlerts: 0 })
+  const globalTabSwitchesRef = useRef(0)
+  const globalFaceAlertsRef = useRef(0)
   const handleNextQuestionRef = useRef(null)
+  // TTS cache: Map<cacheKey, blobUrl> — avoids re-fetching identical questions.
+  // Capped at 20 entries (FIFO) to prevent unbounded memory growth.
+  const ttsCacheRef = useRef(new Map())
+  const TTS_CACHE_MAX = 20
 
   // WebRTC Candidate Logic
   const telemetryData = {
@@ -253,23 +274,43 @@ export const useInterviewSession = (sessionId, interviewType, startRoundTwo) => 
     const handleVisibilityChange = () => {
       if (document.hidden && isDisclaimerAccepted && !showAllSet && !isSubmittingRef.current) {
         behavioralStatsRef.current.tabSwitches += 1
-        Swal.fire({
-          icon: 'error',
-          title: 'Tab Switch Detected',
-          text: 'Switching tabs or minimizing the browser is not allowed during this proctored interview. Your action has been recorded.',
-          confirmButtonText: 'I Understand',
-          allowOutsideClick: false,
-          allowEscapeKey: false,
-          background: '#161c2d',
-          color: '#fff',
-          customClass: {
-            popup: 'border border-white/8 rounded-2xl shadow-2xl',
-            title: 'text-xl font-bold text-white',
-            htmlContainer: 'text-slate-300 text-sm',
-            confirmButton: 'bg-primary hover:bg-primary-hover text-white rounded-full px-6 py-2.5 font-semibold text-sm cursor-pointer border-none outline-none'
-          },
-          buttonsStyling: false
-        })
+        globalTabSwitchesRef.current += 1
+        
+        recordAlertMetric('tab_switch')
+
+        if (globalTabSwitchesRef.current >= 3) {
+          Swal.fire({
+            title: 'Interview Terminated',
+            text: 'Your interview has been automatically submitted because you exceeded the maximum allowed tab switches (3).',
+            icon: 'error',
+            background: '#161c2d',
+            color: '#fff',
+            confirmButtonColor: '#ef4444',
+            allowOutsideClick: false,
+            allowEscapeKey: false,
+            customClass: { popup: 'z-[99999]' }
+          }).then(() => {
+            handleSubmitInterview(true, "Terminated: Exceeded Tab Switches (3)")
+          })
+        } else {
+          Swal.fire({
+            icon: 'error',
+            title: 'Tab Switch Detected',
+            text: `Switching tabs or minimizing the browser is not allowed during this proctored interview. Warning ${globalTabSwitchesRef.current} of 3.`,
+            confirmButtonText: 'I Understand',
+            allowOutsideClick: false,
+            allowEscapeKey: false,
+            background: '#161c2d',
+            color: '#fff',
+            customClass: {
+              popup: 'border border-white/8 rounded-2xl shadow-2xl z-[99999]',
+              title: 'text-xl font-bold text-white',
+              htmlContainer: 'text-slate-300 text-sm',
+              confirmButton: 'bg-primary hover:bg-primary-hover text-white rounded-full px-6 py-2.5 font-semibold text-sm cursor-pointer border-none outline-none'
+            },
+            buttonsStyling: false
+          })
+        }
       }
     }
     document.addEventListener("visibilitychange", handleVisibilityChange)
@@ -530,6 +571,12 @@ export const useInterviewSession = (sessionId, interviewType, startRoundTwo) => 
         }
         setQuestions(qList)
         setInterviewId(startPayload.interview_id || '')
+        // Snapshot candidate details into refs NOW (synchronously) so that the
+        // async Whisper MediaRecorder onstop callback always has correct values.
+        // Using refs avoids the race condition where sessionDetail state hasn't
+        // updated yet when the first audio blob is ready to send.
+        candidateNameRef.current = startPayload.candidate_name || payload.candidate_name || 'Candidate'
+        interviewLanguageRef.current = startPayload.language || payload.language || 'English'
         setSessionDetail(prev => ({
           ...prev,
           interview_id: startPayload.interview_id || prev?.interview_id,
@@ -717,18 +764,21 @@ export const useInterviewSession = (sessionId, interviewType, startRoundTwo) => 
           const actualMime = mr.mimeType || supportedMime || 'audio/webm'
           const blob = new Blob(chunks, { type: actualMime })
 
-          // Restart immediately so we keep capturing
-          if (isSpeechRecordingRef.current) {
-            try { mr.start() } catch (e) { console.error('mr.restart error', e) }
-          }
+          // VAD handles restarting; we no longer automatically restart here.
 
           if (blob.size > 1000) {
+            // We no longer skip blobs if a transcription is in-flight.
+            // Skipping blobs causes speech to be permanently lost (typing stops).
+            // Fast API can handle overlapping POST requests safely.
             // Pick correct file extension for backend
             const ext = actualMime.includes('ogg') ? 'ogg' : actualMime.includes('mp4') ? 'mp4' : 'webm'
             const formData = new FormData()
             formData.append('audio', blob, `audio.${ext}`)
-            formData.append('candidate_name', sessionDetail?.candidate_name || 'Candidate')
-            formData.append('language', sessionDetail?.language || 'English')
+            // Use refs (populated synchronously at session-load) instead of
+            // sessionDetail?.  to avoid stale-closure / race-condition 422 errors.
+            formData.append('candidate_name', candidateNameRef.current)
+            formData.append('language', interviewLanguageRef.current)
+            transcribeInFlightRef.current = true
             try {
               const res = await api.post('/transcribe', formData, {
                 headers: { 'Content-Type': 'multipart/form-data' },
@@ -739,11 +789,13 @@ export const useInterviewSession = (sessionId, interviewType, startRoundTwo) => 
               }
             } catch (err) {
               console.error('Whisper transcription failed:', err)
+            } finally {
+              transcribeInFlightRef.current = false
             }
           }
         }
         whisperMediaRecorderRef.current = mr
-        mr.start()
+        // Do NOT start automatically. The VAD logic in tick() will start it on speech.
       } catch(e) {
         console.error('Failed to start Whisper MediaRecorder:', e)
         whisperMediaRecorderRef.current = null
@@ -778,26 +830,10 @@ export const useInterviewSession = (sessionId, interviewType, startRoundTwo) => 
       // Show interim text in real time (visible while speaking)
       setInterimTranscriptText(interimText)
       if (finalText) {
-        // Final result — append to transcript; clear interim
-        setTranscriptionText(prev => prev + finalText)
+        // We no longer append Google's final text to avoid duplication with Whisper
         setInterimTranscriptText('')
-      }
-
-      // Trigger Whisper transcription after 1.5s pause in speech
-      if (whisperPauseTimeoutRef.current) clearTimeout(whisperPauseTimeoutRef.current)
-      whisperPauseTimeoutRef.current = setTimeout(() => {
-        if (whisperMediaRecorderRef.current && whisperMediaRecorderRef.current.state === 'recording') {
-          try { whisperMediaRecorderRef.current.stop() } catch(e) {}
-        }
-      }, 1500)
-
-      // Reset 10-second silence auto-advance timer on every speech event
-      if (silenceTimeoutRef.current) clearTimeout(silenceTimeoutRef.current)
-      if (!isRoundTwoRef.current) {
-        silenceTimeoutRef.current = setTimeout(() => {
-          if (handleNextQuestionRef.current) handleNextQuestionRef.current()
-        }, 10000)
-      }
+      }      // Trigger Whisper transcription after 1.5s pause in speech
+      // Removed: We now rely purely on VAD (audio volume) rather than Google SpeechRecognition timeouts.
     }
 
     rec.onerror = (e) => {
@@ -851,6 +887,27 @@ export const useInterviewSession = (sessionId, interviewType, startRoundTwo) => 
         audioRmsRef.current = rms
 
         const now = Date.now()
+        
+        // Treat RMS > 0.03 as speech and bump the silence timer
+        if (rms > 0.03) {
+          lastSpeechTimeRef.current = now
+        }
+
+        // True Voice Activity Detection (VAD) for Whisper
+        const mr = whisperMediaRecorderRef.current
+        if (mr && isSpeechRecordingRef.current) {
+          if (rms > 0.03) {
+            // Speech detected: ensure recorder is capturing
+            if (mr.state === 'inactive') {
+              try { mr.start() } catch (e) { }
+            }
+          } else {
+            // Silence detected: if silent for > 1.5s, stop and flush to backend
+            if (mr.state === 'recording' && (now - lastSpeechTimeRef.current > 1500)) {
+              try { mr.stop() } catch (e) { }
+            }
+          }
+        }
 
         if (rms > 0.18 && now > noiseCooldownRef.current) {
           noiseFrameCountRef.current++
@@ -878,40 +935,89 @@ export const useInterviewSession = (sessionId, interviewType, startRoundTwo) => 
     }
   }
 
+  const lastAlertTimeRef = useRef({})
+
   const recordAlertMetric = async (type) => {
-    if (type !== 'noise_alert') {
+    const now = Date.now()
+    if (lastAlertTimeRef.current[type] && (now - lastAlertTimeRef.current[type] < 5000)) {
+      return false // Throttle same alert type to once every 5 seconds
+    }
+    lastAlertTimeRef.current[type] = now
+
+    // Send violation to backend so it shows in Candidate Report
+    if (interviewIdRef.current) {
+      try {
+        await api.post(`/session/${interviewIdRef.current}/violation`, {
+          type,
+          count: 1,
+          timestamp: new Date().toISOString()
+        })
+      } catch (e) {
+        console.warn("Failed to log violation to backend", e)
+      }
+    }
+
+    if (type === 'noise_alert') {
+      if (noiseAlertCountRef.current >= 10) {
+        Swal.fire({
+          title: 'Interview Terminated',
+          text: `Your interview has been automatically submitted because you exceeded the maximum allowed background noise alerts (10).`,
+          icon: 'error',
+          background: '#161c2d',
+          color: '#fff',
+          confirmButtonText: 'Close Interview',
+          allowOutsideClick: false,
+          allowEscapeKey: false,
+          customClass: {
+            popup: 'border border-white/8 rounded-2xl shadow-2xl z-[99999]',
+            title: 'text-xl font-bold text-white',
+            htmlContainer: 'text-slate-300 text-sm',
+            confirmButton: 'bg-red-500 hover:bg-red-600 text-white rounded-full px-6 py-2.5 font-semibold text-sm cursor-pointer border-none outline-none'
+          },
+          buttonsStyling: false
+        }).then(() => {
+          handleSubmitInterview(true, "Terminated: Exceeded Background Noise Alerts (10)")
+        })
+      }
+    } else if (type !== 'tab_switch') {
+      // It's a face/proctoring alert (e.g. no_face, eye_contact, phone, multi_person)
       behavioralStatsRef.current.faceAlerts += 1
+      globalFaceAlertsRef.current += 1
+      
+      if (globalFaceAlertsRef.current >= 20) {
+        Swal.fire({
+          title: 'Interview Terminated',
+          text: `Your interview has been automatically submitted because you exceeded the maximum allowed face alerts (20). Last alert reason: ${type}`,
+          icon: 'error',
+          background: '#161c2d',
+          color: '#fff',
+          confirmButtonText: 'Close Interview',
+          allowOutsideClick: false,
+          allowEscapeKey: false,
+          customClass: {
+            popup: 'border border-white/8 rounded-2xl shadow-2xl z-[99999]',
+            title: 'text-xl font-bold text-white',
+            htmlContainer: 'text-slate-300 text-sm',
+            confirmButton: 'bg-red-500 hover:bg-red-600 text-white rounded-full px-6 py-2.5 font-semibold text-sm cursor-pointer border-none outline-none'
+          },
+          buttonsStyling: false
+        }).then(() => {
+          handleSubmitInterview(true, `Terminated: Exceeded Face Alerts (20) - Last: ${type}`)
+        })
+      }
     }
-    
-    const totalAlerts = behavioralStatsRef.current.faceAlerts + noiseAlertCountRef.current + screenShareViolations
-    if (totalAlerts >= 10) {
-      Swal.fire({
-        title: 'Interview Terminated',
-        text: `Your interview has been automatically submitted because you exceeded the maximum allowed proctoring alerts (10). Last alert reason: ${type}`,
-        icon: 'error',
-        background: '#161c2d',
-        color: '#fff',
-        confirmButtonText: 'Close Interview',
-        allowOutsideClick: false,
-        allowEscapeKey: false,
-        customClass: {
-          popup: 'border border-white/8 rounded-2xl shadow-2xl',
-          title: 'text-xl font-bold text-white',
-          htmlContainer: 'text-slate-300 text-sm',
-          confirmButton: 'bg-red-500 hover:bg-red-600 text-white rounded-full px-6 py-2.5 font-semibold text-sm cursor-pointer border-none outline-none'
-        },
-        buttonsStyling: false
-      }).then(() => {
-        handleSubmitInterview(true)
-      })
-    }
+    return true
   }
   const proctoring = useProctoring({
     videoRef: videoPreviewRef,
     enabled: isDisclaimerAccepted && !showAllSet && !loading,
     maxAlerts: 10,
-    onViolation: (v) => {
-      recordAlertMetric(v.type)
+    onViolation: async (v) => {
+      const recorded = await recordAlertMetric(v.type)
+      if (!recorded) return // skip UI popups if throttled
+
+      setProctoringAlert(v.message)
+      setTimeout(() => setProctoringAlert(''), 3000)
       if (v.type !== 'noise_alert') {
         Swal.fire({
           icon: 'warning',
@@ -923,6 +1029,9 @@ export const useInterviewSession = (sessionId, interviewType, startRoundTwo) => 
           timer: 3000,
           background: '#161c2d',
           color: '#fff',
+          customClass: {
+            popup: 'z-[99999]'
+          }
         })
       }
     }
@@ -1196,17 +1305,30 @@ export const useInterviewSession = (sessionId, interviewType, startRoundTwo) => 
     }
   }
 
-  const speakAIQuestion = async (text) => {
-    // --- Always set a guaranteed silence timer when a question starts ---
-    // This fires even if TTS fails, ensuring grace period always works
-    if (silenceTimeoutRef.current) clearTimeout(silenceTimeoutRef.current)
+  const startSilenceTimer = (delayMs = 10000) => {
     if (!isRoundTwoRef.current) {
-      // Start with dynamic window based on text length (approx 150 words/min -> ~60ms per char + 15s grace period)
-      const estimatedDurationMs = Math.max(30000, text.length * 60 + 15000);
-      silenceTimeoutRef.current = setTimeout(() => {
-        if (handleNextQuestionRef.current) handleNextQuestionRef.current()
-      }, estimatedDurationMs)
+      if (silenceIntervalRef.current) clearInterval(silenceIntervalRef.current)
+      lastSpeechTimeRef.current = Date.now()
+      silenceIntervalRef.current = setInterval(() => {
+        // Only trigger if no speech (RMS > 0.15) was detected in the last delayMs
+        if (Date.now() - lastSpeechTimeRef.current >= delayMs) {
+          clearInterval(silenceIntervalRef.current)
+          if (handleNextQuestionRef.current) handleNextQuestionRef.current()
+        }
+      }, 1000)
     }
+  }
+
+  const stopSilenceTimer = () => {
+    if (silenceIntervalRef.current) clearInterval(silenceIntervalRef.current)
+    if (silenceTimeoutRef.current) clearTimeout(silenceTimeoutRef.current)
+  }
+
+  const speakAIQuestion = async (text) => {
+    // The silence timer is started in audio.onended (after TTS finishes playing)
+    // so the candidate gets exactly 10 seconds of silence before auto-advancing.
+    // We do NOT set a timer here before TTS plays — that would give extra-long wait.
+    if (silenceIntervalRef.current) clearInterval(silenceIntervalRef.current)
 
     // --- High-Quality TTS (Backend: Cartesia or Edge TTS) ---
     try {
@@ -1219,15 +1341,29 @@ export const useInterviewSession = (sessionId, interviewType, startRoundTwo) => 
 
       }
       if (clonedVoiceIdRef.current) bodyPayload.voice_id = clonedVoiceIdRef.current
-      
-      const res = await fetch(`${api.defaults.baseURL || ''}/tts`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(bodyPayload)
-      })
-      if (!res.ok) throw new Error('TTS failed')
-      const blob = await res.blob()
-      const url = URL.createObjectURL(blob)
+
+      // Check TTS cache first — same question text + voice doesn't need a new network call.
+      const ttsCacheKey = `${text}::${clonedVoiceIdRef.current || 'default'}`
+      let url = ttsCacheRef.current.get(ttsCacheKey)
+
+      if (!url) {
+        const res = await fetch(`${api.defaults.baseURL || ''}/tts`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(bodyPayload)
+        })
+        if (!res.ok) throw new Error('TTS failed')
+        const blob = await res.blob()
+        url = URL.createObjectURL(blob)
+        // Store in cache with FIFO eviction
+        if (ttsCacheRef.current.size >= TTS_CACHE_MAX) {
+          const firstKey = ttsCacheRef.current.keys().next().value
+          URL.revokeObjectURL(ttsCacheRef.current.get(firstKey)) // free evicted blob
+          ttsCacheRef.current.delete(firstKey)
+        }
+        ttsCacheRef.current.set(ttsCacheKey, url)
+      }
+
       const audio = new Audio(url)
       
       // --- Web Audio Mixer Routing ---
@@ -1239,12 +1375,12 @@ export const useInterviewSession = (sessionId, interviewType, startRoundTwo) => 
       }
 
       audio.onended = () => {
-        if (!isRoundTwoRef.current) {
-          if (silenceTimeoutRef.current) clearTimeout(silenceTimeoutRef.current)
-          silenceTimeoutRef.current = setTimeout(() => {
-            if (handleNextQuestionRef.current) handleNextQuestionRef.current()
-          }, 10000)
+        // Revoke object URL after playback to free browser memory.
+        // Only revoke if not in the cache (cached URLs must stay valid for replay).
+        if (!ttsCacheRef.current.has(ttsCacheKey)) {
+          URL.revokeObjectURL(url)
         }
+        startSilenceTimer(10000)
       }
       audio.play()
       return // Successfully used backend high-quality TTS
@@ -1253,7 +1389,12 @@ export const useInterviewSession = (sessionId, interviewType, startRoundTwo) => 
     }
 
     // --- Browser TTS (Fallback/Default) ---
-    if (!window.speechSynthesis) return
+    // If browser speechSynthesis is also missing, set a 15s fallback silence timer
+    // so the interview never gets permanently stuck.
+    if (!window.speechSynthesis) {
+      startSilenceTimer(15000)
+      return
+    }
     window.speechSynthesis.cancel()
     const utterance = new SpeechSynthesisUtterance(text)
 
@@ -1272,12 +1413,7 @@ export const useInterviewSession = (sessionId, interviewType, startRoundTwo) => 
       }
 
       utterance.onend = () => {
-        if (!isRoundTwoRef.current) {
-          if (silenceTimeoutRef.current) clearTimeout(silenceTimeoutRef.current)
-          silenceTimeoutRef.current = setTimeout(() => {
-            if (handleNextQuestionRef.current) handleNextQuestionRef.current()
-          }, 10000)
-        }
+        startSilenceTimer(10000)
       }
 
       window.speechSynthesis.speak(utterance)
@@ -1301,23 +1437,35 @@ export const useInterviewSession = (sessionId, interviewType, startRoundTwo) => 
       handleSubmitInterview()
       return
     }
-    setIsRoundTwo(true)
-    isRoundTwoRef.current = true
+    try {
+      await startRoundTwo({
+        verbalQuestionsLength: questions.length,
+        interviewId: interviewId || sessionDetail?.interview_id || sessionId,
+        setQuestions,
+        setCurrentQuestionIndex,
+        setCodingRoundLoading,
+        setCodingRoundData,
+        setSelectedLanguage,
+        setCodeAnswer
+      })
 
-    if (totalDuration > 0) {
-      setGlobalCountdown(totalDuration / 2)
+      setIsRoundTwo(true)
+      isRoundTwoRef.current = true
+
+      if (totalDuration > 0) {
+        setGlobalCountdown(totalDuration / 2)
+      }
+    } catch (err) {
+      console.error("Failed to start round 2:", err)
+      Swal.fire({
+        icon: 'error',
+        title: 'Failed to start Round 2',
+        text: 'An error occurred while generating the next round. Please try again.',
+        background: '#161c2d',
+        color: '#fff',
+        confirmButtonColor: '#6366f1'
+      })
     }
-
-    await startRoundTwo({
-      verbalQuestionsLength: questions.length,
-      interviewId: interviewId || sessionDetail?.interview_id || sessionId,
-      setQuestions,
-      setCurrentQuestionIndex,
-      setCodingRoundLoading,
-      setCodingRoundData,
-      setSelectedLanguage,
-      setCodeAnswer
-    })
   }
 
   const handleStartRound2Click = () => {
@@ -1329,6 +1477,7 @@ export const useInterviewSession = (sessionId, interviewType, startRoundTwo) => 
   }
 
   const proceedToRoundTwo = async () => {
+    stopSilenceTimer()
     setShowRound2Confirm(false)
 
     try {
@@ -1347,6 +1496,19 @@ export const useInterviewSession = (sessionId, interviewType, startRoundTwo) => 
       await api.post(`/save-answer`, answerForm, {
         headers: { 'Content-Type': 'multipart/form-data' }
       })
+
+      const words = transcriptionText.trim().split(/\s+/).filter(w => w.length > 0).length
+      const wpm = timeSpent > 0 ? Math.round((words / timeSpent) * 60) : 0
+      await api.post(`/save-behavioral-data`, {
+        interview_id: iid,
+        question_id: (activeQuestion?.id || (currentQuestionIndex + 1)).toString(),
+        filler_count: countFillers(transcriptionText),
+        wpm: wpm,
+        pause_count: behavioralStatsRef.current.pauseCount,
+        tab_switches: behavioralStatsRef.current.tabSwitches,
+        face_alerts: behavioralStatsRef.current.faceAlerts,
+        noise_alerts: behavioralStatsRef.current.noiseAlerts
+      })
     } catch (e) {
       console.error("Failed to save answer during transition:", e)
     }
@@ -1362,29 +1524,13 @@ export const useInterviewSession = (sessionId, interviewType, startRoundTwo) => 
   const handleNextQuestion = async () => {
     if (currentQuestionIndex >= questions.length) return
     const currentQuestion = questions[currentQuestionIndex]
-
-    if (silenceTimeoutRef.current) clearTimeout(silenceTimeoutRef.current)
+    stopSilenceTimer()
 
     const timeSpent = Math.round((Date.now() - questionStartTimeRef.current) / 1000)
     const words = transcriptionText.trim().split(/\s+/).filter(w => w.length > 0).length
     const wpm = timeSpent > 0 ? Math.round((words / timeSpent) * 60) : 0
-    const payload = {
-      interview_id: interviewId || sessionDetail?.interview_id || sessionId,
-      question_id: (currentQuestion.id || (currentQuestionIndex + 1)).toString(),
-      filler_count: countFillers(transcriptionText),
-      wpm: wpm,
-      pause_count: behavioralStatsRef.current.pauseCount,
-      tab_switches: behavioralStatsRef.current.tabSwitches,
-      face_alerts: behavioralStatsRef.current.faceAlerts,
-      noise_alerts: behavioralStatsRef.current.noiseAlerts
-    }
-    try {
-      await api.post(`/save-behavioral-data`, payload)
-    } catch (e) { }
-
     try {
       const iid = interviewId || sessionDetail?.interview_id || sessionId
-
       if (currentQuestion.type === 'case_study') {
         const response = await api.post(`/case-study/submit-answer`, {
           interview_id: iid,
@@ -1406,6 +1552,21 @@ export const useInterviewSession = (sessionId, interviewType, startRoundTwo) => 
           headers: { 'Content-Type': 'multipart/form-data' }
         })
       }
+
+      // Save behavioral data AFTER save-answer, so the record exists to be updated
+      const payload = {
+        interview_id: iid,
+        question_id: (currentQuestion.id || (currentQuestionIndex + 1)).toString(),
+        filler_count: countFillers(transcriptionText),
+        wpm: wpm,
+        pause_count: behavioralStatsRef.current.pauseCount,
+        tab_switches: behavioralStatsRef.current.tabSwitches,
+        face_alerts: behavioralStatsRef.current.faceAlerts,
+        noise_alerts: behavioralStatsRef.current.noiseAlerts
+      }
+      try {
+        await api.post(`/save-behavioral-data`, payload)
+      } catch (e) { }
 
       if (currentQuestionIndex === questions.length - 1) {
         const isCodingQ = currentQuestion.type === 'coding'
@@ -1471,11 +1632,10 @@ export const useInterviewSession = (sessionId, interviewType, startRoundTwo) => 
     handleNextQuestionRef.current = handleNextQuestion
   }, [handleNextQuestion])
 
-  const handleSubmitInterview = async (forceClose = false) => {
+  const handleSubmitInterview = async (forceClose = false, terminationReason = null) => {
     isSubmittingRef.current = true
-    // Stop any currently-speaking TTS immediately
     if (window.speechSynthesis) window.speechSynthesis.cancel()
-    if (silenceTimeoutRef.current) { clearTimeout(silenceTimeoutRef.current); silenceTimeoutRef.current = null }
+    stopSilenceTimer()
     if (_sessionKey) sessionStorage.removeItem(_sessionKey)
     visualizerActiveRef.current = false
 
@@ -1550,7 +1710,47 @@ export const useInterviewSession = (sessionId, interviewType, startRoundTwo) => 
     }
 
     try {
-      await api.post(`/complete-session/${sessionId}`)
+      const timeSpent = Math.round((Date.now() - questionStartTimeRef.current) / 1000)
+      const words = transcriptionText.trim().split(/\s+/).filter(w => w.length > 0).length
+      const wpm = timeSpent > 0 ? Math.round((words / timeSpent) * 60) : 0
+      const currentQuestion = questions[currentQuestionIndex] || {}
+      
+      // If forced termination (e.g., proctoring alert), save the answer first!
+      if (isForceSubmit && currentQuestion) {
+        const iid = interviewIdRef.current || sessionId
+        const answerForm = new FormData()
+        answerForm.append('interview_id', iid)
+        answerForm.append('question_id', currentQuestion.id || (currentQuestionIndex + 1))
+        answerForm.append('question_text', currentQuestion.text || currentQuestion.question || '')
+        answerForm.append('answer_text', currentQuestion.type === 'coding' ? (codeAnswer || ' ') : (transcriptionText || ' '))
+        answerForm.append('candidate_name', sessionDetail?.candidate_name || 'Candidate')
+        answerForm.append('time_spent_seconds', timeSpent.toString())
+        answerForm.append('time_limit_seconds', '120')
+        try {
+          await api.post(`/save-answer`, answerForm, {
+            headers: { 'Content-Type': 'multipart/form-data' }
+          })
+        } catch (e) { }
+      }
+
+      const payload = {
+        interview_id: interviewIdRef.current || sessionId,
+        question_id: (currentQuestion.id || (currentQuestionIndex + 1)).toString(),
+        wpm: wpm,
+        pause_count: behavioralStatsRef.current.pauseCount,
+        filler_count: countFillers(transcriptionText),
+        time_spent_seconds: timeSpent,
+        keyword_match_pct: 0,
+        tab_switches: behavioralStatsRef.current.tabSwitches,
+        face_alerts: behavioralStatsRef.current.faceAlerts,
+        noise_alerts: behavioralStatsRef.current.noiseAlerts
+      }
+      await api.post(`/save-behavioral-data`, payload)
+    } catch (e) { console.error("Failed to save final behavioral data:", e) }
+
+    try {
+      const queryParams = terminationReason ? `?reason=${encodeURIComponent(terminationReason)}` : ''
+      await api.post(`/complete-session/${sessionId}${queryParams}`)
     } catch (e) { }
 
     setShowSkipButton(false)

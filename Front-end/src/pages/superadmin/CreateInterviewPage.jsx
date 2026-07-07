@@ -1450,7 +1450,7 @@ Congratulations! You have been selected for an AI-powered interview. Please revi
                   </label>
                 </div>
                 
-                {singleCandidate.voiceCloning && availableVoices.length > 0 && (
+                {singleCandidate.voiceCloning && (
                   <div className="mt-2 pt-4 border-t border-slate-100">
                     <label className="text-xs font-semibold text-slate-500 mb-2 block">Select Voice</label>
                     <Select
@@ -1962,7 +1962,7 @@ Congratulations! You have been selected for an AI-powered interview. Please revi
                   </label>
                 </div>
                 
-                {bulkConfig.voiceCloning && availableVoices.length > 0 && (
+                {bulkConfig.voiceCloning && (
                   <div className="mt-2 pt-4 border-t border-slate-100">
                     <label className="text-xs font-semibold text-slate-500 mb-2 block">Select Voice</label>
                     <Select
@@ -2335,7 +2335,6 @@ Congratulations! You have been selected for an AI-powered interview. Please revi
                       </Button>
                       <a
                         href={`/interview?session_id=${link.id}`}
-                        target="_blank"
                         rel="noreferrer"
                         className="px-3.5 py-1.5 bg-primary hover:bg-primary-hover text-white text-xs font-semibold rounded-lg border border-transparent shadow-[0_2px_8px_rgba(99,102,241,0.1)] hover:-translate-y-0.5 transition-all text-center flex items-center justify-center text-white no-underline leading-none"
                       >

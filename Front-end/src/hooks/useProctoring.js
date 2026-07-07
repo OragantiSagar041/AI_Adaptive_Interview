@@ -5,14 +5,14 @@ import ProctoringWorker from './proctoring.worker.js?worker'
 const DETECT_INTERVAL_MS = 700          // how often a frame is sent to the worker
 
 const PHONE_ALERT_CONFIDENCE = 0.15     // min score for a phone candidate to count
-const PHONE_CONSECUTIVE_FRAMES = 2      // frames in a row before raising the alert
+const PHONE_CONSECUTIVE_FRAMES = 1      // 1 confirmed frame is enough → immediate alert
 
-const MULTI_FACE_CONSECUTIVE_FRAMES = 3
-const NO_FACE_CONSECUTIVE_FRAMES = 5    // ~3.5s of no face at 700ms interval
+const MULTI_FACE_CONSECUTIVE_FRAMES = 2 // 2 frames (~1.4s) before raising the alert
+const NO_FACE_CONSECUTIVE_FRAMES = 4    // ~2.8s of no face at 700ms interval
 
-const EYE_CONTACT_YAW_THRESHOLD = 0.35    // head turned left/right
-const EYE_CONTACT_PITCH_THRESHOLD = 0.30  // head tilted up/down
-const EYE_CONTACT_CONSECUTIVE_FRAMES = 10 // ~7s of sustained gaze-away
+const EYE_CONTACT_YAW_THRESHOLD = 0.25    // head turned left/right (lowered to be more sensitive)
+const EYE_CONTACT_PITCH_THRESHOLD = 0.20  // head tilted up/down
+const EYE_CONTACT_CONSECUTIVE_FRAMES = 4  // ~2.8s of sustained gaze-away
 
 const DEFAULT_MAX_ALERTS = 3
 
@@ -38,6 +38,13 @@ export function useProctoring({
   const inFlightRef = useRef(false) // avoid overlapping detect calls if a frame is slow
   const streakRef = useRef({ multiFace: 0, noFace: 0, phone: 0, eyeAway: 0 })
 
+  const onViolationRef = useRef(onViolation)
+  const onTerminateRef = useRef(onTerminate)
+  useEffect(() => {
+    onViolationRef.current = onViolation
+    onTerminateRef.current = onTerminate
+  }, [onViolation, onTerminate])
+
   const [state, setState] = useState({
     modelsReady: false,
     modelsFailed: false,
@@ -52,17 +59,30 @@ export function useProctoring({
   const [alertCount, setAlertCount] = useState(0)
 
   const raiseViolation = useCallback((alertType, message) => {
+    console.warn(`[useProctoring] 🚨 Violation: ${alertType} — ${message}`)
     setState((s) => ({ ...s, lastAlertType: alertType }))
     setAlertCount((prev) => {
       if (prev >= maxAlerts) return prev // already terminated, don't keep counting
       const next = prev + 1
-      onViolation?.({ type: alertType, message, count: next })
-      if (next >= maxAlerts) onTerminate?.({ type: alertType, message })
+      onViolationRef.current?.({ type: alertType, message, count: next })
+      if (next >= maxAlerts) onTerminateRef.current?.({ type: alertType, message })
       return next
     })
-  }, [maxAlerts, onViolation, onTerminate])
+  }, [maxAlerts])
 
   const handleFrameResult = useCallback((features) => {
+    // Guard: validate the worker payload shape. The old workers/proctoring.worker.js stub
+    // sends raw landmark arrays (wrong shape) — catch it immediately so it is visible.
+    if (typeof features?.faceCount === 'undefined') {
+      console.error(
+        '[useProctoring] ❌ Worker payload shape mismatch! ' +
+        'Expected {faceCount, secondaryFaceWidths, phoneCandidates, ...} but got:',
+        features,
+        '\n→ Ensure ONLY src/hooks/proctoring.worker.js is used, not src/workers/proctoring.worker.js'
+      )
+      return
+    }
+
     const { faceCount, secondaryFaceWidths, headYaw, headPitch, phoneCandidates, jawOpenScore } = features
     const streak = streakRef.current
 
@@ -71,13 +91,15 @@ export function useProctoring({
     const isMultiFace = faceCount > 1 || (secondaryFaceWidths?.length ?? 0) > 0
 
     streak.noFace = !faceVisible ? streak.noFace + 1 : 0
-    if (streak.noFace === NO_FACE_CONSECUTIVE_FRAMES) {
+    if (streak.noFace >= NO_FACE_CONSECUTIVE_FRAMES) {
       raiseViolation('no_face', 'No face detected — candidate not visible')
+      streak.noFace = 0 // reset so it can fire again
     }
 
     streak.multiFace = isMultiFace ? streak.multiFace + 1 : 0
-    if (streak.multiFace === MULTI_FACE_CONSECUTIVE_FRAMES) {
+    if (streak.multiFace >= MULTI_FACE_CONSECUTIVE_FRAMES) {
       raiseViolation('multi_person', 'Multiple faces detected in frame')
+      streak.multiFace = 0 // reset so it can fire again
     }
 
     // 3. Eye contact / gaze tracking
@@ -86,15 +108,17 @@ export function useProctoring({
       Math.abs(headPitch) > EYE_CONTACT_PITCH_THRESHOLD
     streak.eyeAway = faceVisible && lookingAway ? streak.eyeAway + 1 : 0
     const eyeContactLost = streak.eyeAway >= EYE_CONTACT_CONSECUTIVE_FRAMES
-    if (streak.eyeAway === EYE_CONTACT_CONSECUTIVE_FRAMES) {
-      raiseViolation('eye_contact', 'Candidate looking away from screen')
+    if (streak.eyeAway >= EYE_CONTACT_CONSECUTIVE_FRAMES) {
+      raiseViolation('eye_contact', 'Please maintain eye contact with the screen')
+      streak.eyeAway = 0 // reset so it can fire again
     }
 
     // 4. Mobile / phone detection
-    const phoneDetected = (phoneCandidates ?? []).some((c) => c.score >= PHONE_ALERT_CONFIDENCE)
-    streak.phone = phoneDetected ? streak.phone + 1 : 0
-    if (streak.phone === PHONE_CONSECUTIVE_FRAMES) {
-      raiseViolation('phone', 'Mobile phone detected')
+    const isPhone = phoneCandidates?.length > 0 && phoneCandidates[0].score > PHONE_ALERT_CONFIDENCE
+    streak.phone = isPhone ? streak.phone + 1 : 0
+    if (streak.phone >= PHONE_CONSECUTIVE_FRAMES) {
+      raiseViolation('phone', 'Mobile phone detected in frame')
+      streak.phone = 0 // reset so it can fire again
     }
 
     setState((s) => ({
@@ -102,7 +126,7 @@ export function useProctoring({
       faceCount,
       faceVisible,
       multiFace: isMultiFace,
-      phoneDetected,
+      phoneDetected: isPhone,  // isPhone is the variable declared above
       eyeContactLost,
       jawOpenScore,
     }))
@@ -153,6 +177,11 @@ export function useProctoring({
     if (!enabled || !state.modelsReady) return
 
     intervalRef.current = setInterval(async () => {
+      // Pause frame capture when the tab is backgrounded.
+      // The tab-switch detector (in useInterviewSession) already logs this as
+      // a violation — no need to waste CPU on ML inference while invisible.
+      if (document.visibilityState !== 'visible') return
+
       const video = videoRef?.current
       const worker = workerRef.current
       if (!video || !worker || video.readyState < 2 || video.videoWidth === 0 || video.videoHeight === 0) return

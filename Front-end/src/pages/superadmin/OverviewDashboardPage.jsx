@@ -168,22 +168,23 @@ export default function OverviewDashboardPage() {
   }
 
   return (
-    <div className="flex flex-col gap-6">
-      <div className="flex flex-col sm:flex-row sm:items-center gap-2 sm:gap-4 bg-white/70 backdrop-blur-md p-4 rounded-2xl border border-slate-100 shadow-sm">
-        <span className="text-xs sm:text-sm font-bold text-slate-600">Filter by Tenant Admin:</span>
-        <select
-          value={selectedAdminFilter || ''}
-          onChange={(e) => dispatch(setSelectedAdminFilter(e.target.value || null))}
-          className="w-full sm:w-auto rounded-xl border border-slate-200 bg-white px-3 py-1.5 text-[11px] text-slate-800 outline-none focus:border-indigo-500 transition-all font-semibold shadow-sm cursor-pointer"
-          style={{ padding: '0.5rem 1.75rem 0.5rem 0.75rem' }}
-        >
-          <option value="">All Admins (Aggregated)</option>
-          {subAdmins.map(adm => (
-            <option key={adm.id || adm._id} value={adm.id || adm._id}>
-              {adm.name || adm.username}
-            </option>
-          ))}
-        </select>
+    <div className="flex flex-col gap-6 pb-24">
+      <div className="flex justify-end items-center -mb-2 mt-2 px-2 z-10 relative">
+        <div className="flex items-center gap-3 bg-white px-4 py-1.5 rounded-xl border border-slate-200 shadow-sm hover:border-slate-300 transition-colors">
+          <span className="text-[11px] font-bold text-slate-500 uppercase tracking-wider">Filter by Tenant Admin:</span>
+          <select
+            value={selectedAdminFilter || ''}
+            onChange={(e) => dispatch(setSelectedAdminFilter(e.target.value || null))}
+            className="w-full sm:w-auto rounded bg-slate-50 hover:bg-slate-100 px-3 py-1 text-xs text-slate-800 outline-none border border-transparent focus:border-indigo-500 transition-all font-semibold cursor-pointer"
+          >
+            <option value="">All Admins (Aggregated)</option>
+            {subAdmins.map(adm => (
+              <option key={adm.id || adm._id} value={adm.id || adm._id}>
+                {adm.name || adm.username}
+              </option>
+            ))}
+          </select>
+        </div>
       </div>
 
       <DashboardStats
