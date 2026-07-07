@@ -1,5 +1,5 @@
 import React from 'react'
-import { Search, X, Download, Trash2, Video, Eye } from 'lucide-react'
+import { Search, X, Download, Trash2, Video, Eye, Calendar } from 'lucide-react'
 import Button from '../Button'
 import Badge from '../Badge'
 
@@ -19,14 +19,14 @@ export function CandidateFilters({
   handleBulkDelete
 }) {
   return (
-    <div className="grid grid-cols-2 gap-3 sm:flex sm:flex-wrap sm:items-end w-full sm:w-auto ml-auto">
+    <div className="grid grid-cols-2 gap-2 sm:flex sm:flex-wrap xl:flex-nowrap sm:items-end sm:justify-end w-full sm:w-auto ml-auto overflow-x-auto [&::-webkit-scrollbar]:hidden" style={{ scrollbarWidth: 'none' }}>
       <div className="flex flex-col gap-1 col-span-2 sm:col-span-1">
         <label className="text-[0.68rem] text-slate-500 font-bold uppercase">Search Candidate</label>
         <div className="relative flex items-center">
           <Search size={14} className="absolute left-3 text-slate-400" />
           <input
             type="text"
-            className="bg-white border border-[#dbe4f0] text-[#0f172a] rounded-lg pr-3 py-1.5 text-xs outline-none transition-all focus:border-primary focus:ring-2 focus:ring-primary/15 w-full sm:w-[180px]"
+            className="bg-white border border-[#dbe4f0] text-[#0f172a] rounded-lg pr-3 py-1.5 text-xs outline-none transition-all focus:border-primary focus:ring-2 focus:ring-primary/15 w-full sm:w-[150px]"
             style={{ padding: '0.5rem 0.75rem 0.5rem 2.25rem' }}
             placeholder="Name or Email..."
             value={searchTerm}
@@ -35,26 +35,31 @@ export function CandidateFilters({
         </div>
       </div>
 
-      <div className="flex flex-col gap-1">
-        <label className="text-[0.68rem] text-slate-500 font-bold uppercase">From</label>
-        <input
-          type="date"
-          className="bg-white border border-[#dbe4f0] text-[#0f172a] rounded-lg px-3 py-1.5 text-xs outline-none transition-all focus:border-primary focus:ring-2 focus:ring-primary/15 w-full sm:w-[130px]"
-          style={{ padding: '0.5rem 0.75rem' }}
-          value={startDate}
-          onChange={(e) => setStartDate(e.target.value)}
-        />
-      </div>
-
-      <div className="flex flex-col gap-1">
-        <label className="text-[0.68rem] text-slate-500 font-bold uppercase">To</label>
-        <input
-          type="date"
-          className="bg-white border border-[#dbe4f0] text-[#0f172a] rounded-lg px-3 py-1.5 text-xs outline-none transition-all focus:border-primary focus:ring-2 focus:ring-primary/15 w-full sm:w-[130px]"
-          style={{ padding: '0.5rem 0.75rem' }}
-          value={endDate}
-          onChange={(e) => setEndDate(e.target.value)}
-        />
+      <div className="flex flex-col gap-1 col-span-2 sm:col-span-1 w-full sm:w-auto">
+        <label className="text-[0.68rem] text-slate-500 font-bold uppercase">Date Range</label>
+        <div className="flex items-center bg-white border border-[#dbe4f0] rounded-lg focus-within:border-primary focus-within:ring-2 focus-within:ring-primary/15 transition-all overflow-hidden h-[36px]">
+          <div className="relative flex items-center h-full">
+            <input
+              type="date"
+              className="text-xs text-[#0f172a] outline-none bg-transparent h-full cursor-pointer w-[130px]"
+              style={{ padding: '0 0.5rem' }}
+              value={startDate}
+              onChange={(e) => setStartDate(e.target.value)}
+              title="From Date"
+            />
+          </div>
+          <div className="w-px h-4 bg-slate-200 mx-1"></div>
+          <div className="relative flex items-center h-full">
+            <input
+              type="date"
+              className="text-xs text-[#0f172a] outline-none bg-transparent h-full cursor-pointer w-[130px]"
+              style={{ padding: '0 0.5rem' }}
+              value={endDate}
+              onChange={(e) => setEndDate(e.target.value)}
+              title="To Date"
+            />
+          </div>
+        </div>
       </div>
 
       <div className="flex flex-col gap-1">
@@ -96,31 +101,32 @@ export function CandidateFilters({
             setSortBy('score')
           }}
           variant="secondary"
-          className="flex-1 sm:flex-initial px-3 py-1.5 h-[36px] bg-rose-50 border-rose-200 text-rose-500 hover:bg-rose-100/50 justify-center"
+          className="flex-1 sm:flex-initial px-2.5 py-1.5 h-[36px] bg-rose-50 border-rose-200 text-rose-500 hover:bg-rose-100/50 justify-center"
           title="Clear Filters"
           icon={<X size={14} />}
-        />
+        >
+          Clear
+        </Button>
 
         <Button
           onClick={handleExportExcel}
           variant="secondary"
-          className="flex-1 sm:flex-initial px-4 py-1.5 h-[36px] bg-emerald-50 border-emerald-200 text-emerald-600 hover:bg-emerald-100/50 justify-center"
+          className="flex-1 sm:flex-initial px-2.5 py-1.5 h-[36px] bg-emerald-50 border-emerald-200 text-emerald-600 hover:bg-emerald-100/50 justify-center"
           title="Export to Excel"
           icon={<Download size={14} />}
         >
           Export
         </Button>
 
-        {selectedIds.length > 0 && (
-          <Button
-            onClick={handleBulkDelete}
-            variant="danger"
-            className="flex-1 sm:flex-initial px-4 py-1.5 h-[36px] justify-center"
-            icon={<Trash2 size={14} />}
-          >
-            Delete ({selectedIds.length})
-          </Button>
-        )}
+        <Button
+          onClick={(selectedIds || []).length > 0 ? handleBulkDelete : undefined}
+          variant="danger"
+          disabled={(selectedIds || []).length === 0}
+          className={`flex-1 sm:flex-initial px-2.5 py-1.5 h-[36px] justify-center ${(selectedIds || []).length === 0 ? 'opacity-50 cursor-not-allowed' : ''}`}
+          icon={<Trash2 size={14} />}
+        >
+          Delete {(selectedIds || []).length > 0 ? `(${(selectedIds || []).length})` : ''}
+        </Button>
       </div>
     </div>
   )
@@ -283,7 +289,7 @@ export function CandidateTable({
                           className="flex items-center justify-center w-[28px] h-[28px] bg-rose-50 text-rose-500 hover:bg-rose-500 hover:text-white rounded border border-rose-100 transition-colors cursor-pointer shadow-sm"
                           title="Delete Session"
                         >
-                          <X size={14} />
+                          <Trash2 size={14} />
                         </button>
                       </div>
                     </td>
