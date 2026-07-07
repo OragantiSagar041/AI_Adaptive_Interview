@@ -405,17 +405,13 @@ export default function SuperAdminLayout() {
   ]
 
   return (
-    <div
-      className="grid grid-cols-1 min-h-screen text-[#0f172a]"
-      style={{
-        gridTemplateColumns: isMobile ? '1fr' : (isCollapsed ? '80px 1fr' : '260px 1fr'),
-        background: `
-          radial-gradient(circle at 8% 0%, ${accentWashStrong} 0, transparent 34%),
-          radial-gradient(circle at 92% 12%, ${accentWash} 0, transparent 30%),
-          linear-gradient(180deg, ${hexToRgba(currentAccent.primary, 0.08)} 0%, #ffffff 42%, ${hexToRgba(currentAccent.primary, 0.10)} 100%)
-        `,
-      }}
-    >
+      <div
+        className="grid grid-cols-1 min-h-screen text-[#0f172a]"
+        style={{
+          gridTemplateColumns: isMobile ? '1fr' : (isCollapsed ? '80px 1fr' : '260px 1fr'),
+          background: `linear-gradient(135deg, ${accentWashStrong} 0%, #ffffff 35%, #ffffff 65%, ${accentWash} 100%)`,
+        }}
+      >
       {/* Sidebar Backdrop for Mobile */}
       {isMobile && sidebarOpen && (
         <div
@@ -638,6 +634,10 @@ export default function SuperAdminLayout() {
                             key={n.id}
                             onClick={() => {
                               if (!n.read) handleMarkRead(n.id)
+                              setNotifDropdownOpen(false)
+                              if (n.type === 'credits') navigate('/superadmin/team')
+                              else if (n.type === 'activity') navigate('/superadmin/super-dashboard')
+                              else navigate('/superadmin/super-dashboard')
                             }}
                             className={`p-3 text-left hover:bg-slate-50 cursor-pointer transition-colors flex gap-2.5 items-start ${
                               !n.read ? 'bg-slate-50/30' : ''
@@ -686,13 +686,9 @@ export default function SuperAdminLayout() {
         </header>
 
         <main
-          className="flex-1 overflow-y-auto p-4 sm:p-6 lg:p-8 relative"
+          className="p-4 lg:p-8 flex-grow overflow-y-auto"
           style={{
-            background: `
-              radial-gradient(circle at 0% 0%, ${accentPageStrong} 0, transparent 28%),
-              radial-gradient(circle at 100% 18%, ${accentPage} 0, transparent 30%),
-              linear-gradient(180deg, ${hexToRgba(currentAccent.primary, 0.10)} 0%, rgba(255,255,255,0.66) 38%, ${hexToRgba(currentAccent.primary, 0.08)} 100%)
-            `,
+            background: `linear-gradient(135deg, ${accentPageStrong} 0%, rgba(255,255,255,0.85) 30%, rgba(255,255,255,0.85) 70%, ${accentPage} 100%)`,
           }}
         >
           <Outlet />
