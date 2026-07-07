@@ -30,6 +30,7 @@ export const InterviewNormal = () => {
     currentQuestionIndex,
     currentQuestion,
     proctoringAlert,
+    faceAlertCount,
     noiseAlertCount,
     showNoiseBanner,
     fullscreenWarning,
@@ -400,6 +401,17 @@ export const InterviewNormal = () => {
         </div>
       )}
 
+      {/* Face / Proctoring Alert Banner */}
+      {faceAlertCount > 0 && (
+        <div style={{ position: 'fixed', top: showNoiseBanner ? '100px' : '20px', right: '20px', zIndex: 99998, padding: '14px 16px', borderRadius: '12px', background: 'rgba(239, 68, 68, 0.1)', border: '1px solid #ef4444', color: '#ef4444', display: 'flex', alignItems: 'center', gap: '12px', boxShadow: '0 4px 6px rgba(0,0,0,0.15)', maxWidth: '380px', transition: 'top 0.3s ease' }}>
+          <span style={{ fontSize: '18px' }}>👁️</span>
+          <div>
+            <strong style={{ fontSize: '14px', display: 'block' }}>Face Alert</strong>
+            <p style={{ fontSize: '12px', opacity: 0.9, margin: '2px 0 0 0' }}>{proctoringAlert || 'Proctoring violation detected'}. Alerts: {faceAlertCount}/20</p>
+          </div>
+        </div>
+      )}
+
       {fullscreenWarning && (
         <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.95)', zIndex: 99999, display: 'flex', flexDirection: 'column', justifyContent: 'center', alignItems: 'center', gap: '20px', textAlign: 'center', padding: '24px' }}>
           <ShieldAlert size={60} color="#ef4444" style={{ animation: 'pulse 2s infinite' }} />
@@ -686,6 +698,12 @@ export const InterviewNormal = () => {
           <div className="absolute bottom-3 left-3 bg-red-500 text-white text-[10px] font-bold tracking-wider px-2 py-0.5 rounded-full flex items-center gap-1 shadow-sm">
             <span className="w-1.5 h-1.5 bg-white rounded-full animate-pulse" /> LIVE
           </div>
+          {/* Face alert badge on camera widget */}
+          {faceAlertCount > 0 && (
+            <div className="absolute top-2 left-2 bg-red-600/90 text-white text-[9px] font-bold px-2 py-0.5 rounded-full flex items-center gap-1">
+              👁️ {faceAlertCount}/20
+            </div>
+          )}
           {proctoringAlert && (
             <div className="absolute inset-0 bg-black/85 text-red-500 flex flex-col items-center justify-center p-3 text-center z-10">
               <span className="text-xl mb-1 animate-bounce">⚠️</span>

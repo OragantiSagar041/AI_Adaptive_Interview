@@ -244,6 +244,7 @@ export const useInterviewSession = (sessionId, interviewType, startRoundTwo) => 
   const behavioralStatsRef = useRef({ wordCount: 0, fillerCount: 0, pauseCount: 0, faceAlerts: 0, tabSwitches: 0, noiseAlerts: 0 })
   const globalTabSwitchesRef = useRef(0)
   const globalFaceAlertsRef = useRef(0)
+  const [faceAlertCount, setFaceAlertCount] = useState(0)
   const handleNextQuestionRef = useRef(null)
   // TTS cache: Map<cacheKey, blobUrl> — avoids re-fetching identical questions.
   // Capped at 20 entries (FIFO) to prevent unbounded memory growth.
@@ -983,6 +984,7 @@ export const useInterviewSession = (sessionId, interviewType, startRoundTwo) => 
       // It's a face/proctoring alert (e.g. no_face, eye_contact, phone, multi_person)
       behavioralStatsRef.current.faceAlerts += 1
       globalFaceAlertsRef.current += 1
+      setFaceAlertCount(globalFaceAlertsRef.current)
       
       if (globalFaceAlertsRef.current >= 20) {
         Swal.fire({
@@ -1011,7 +1013,7 @@ export const useInterviewSession = (sessionId, interviewType, startRoundTwo) => 
   const proctoring = useProctoring({
     videoRef: videoPreviewRef,
     enabled: isDisclaimerAccepted && !showAllSet && !loading,
-    maxAlerts: 10,
+    maxAlerts: 999, // Real termination is managed by recordAlertMetric (20 face / 10 noise caps)
     onViolation: async (v) => {
       const recorded = await recordAlertMetric(v.type)
       if (!recorded) return // skip UI popups if throttled
@@ -1786,6 +1788,7 @@ export const useInterviewSession = (sessionId, interviewType, startRoundTwo) => 
     codingTask,
     isMediaReady,
     proctoringAlert,
+    faceAlertCount,
     noiseAlertCount,
     showNoiseBanner,
     fullscreenWarning,

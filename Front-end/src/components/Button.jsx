@@ -16,8 +16,8 @@ export default function Button({
   const variants = {
     primary: 'bg-primary hover:bg-primary-hover text-white shadow-[0_18px_40px_rgba(99,102,241,0.18)] hover:-translate-y-0.5 hover:shadow-[0_22px_48px_rgba(99,102,241,0.22)]',
     secondary: 'bg-white/75 hover:bg-white text-slate-900 border border-slate-200 shadow-[0_10px_28px_rgba(15,23,42,0.06)] hover:-translate-y-0.5',
-    danger: 'bg-danger hover:bg-red-600 text-white shadow-[0_4px_14px_rgba(239,68,68,0.15)] hover:-translate-y-0.5',
-    warning: 'bg-warning hover:bg-amber-600 text-white shadow-[0_4px_14px_rgba(245,158,11,0.15)] hover:-translate-y-0.5',
+    danger: 'bg-red-500 hover:bg-red-600 text-white shadow-[0_4px_14px_rgba(239,68,68,0.15)] hover:-translate-y-0.5',
+    warning: 'bg-amber-500 hover:bg-amber-600 text-white shadow-[0_4px_14px_rgba(245,158,11,0.15)] hover:-translate-y-0.5',
     ghost: 'bg-transparent hover:bg-slate-900/5 text-slate-700 border border-transparent hover:-translate-y-0.5'
   }
 
