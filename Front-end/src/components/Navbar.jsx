@@ -1,7 +1,7 @@
  
 import React, { useState, useEffect, useRef } from 'react'
 import { useSelector } from 'react-redux'
-import { NavLink } from 'react-router-dom'
+import { NavLink, useNavigate } from 'react-router-dom'
 import { LogOut, Bell, CreditCard, AlertCircle, UserCheck } from 'lucide-react'
 import { getNotifications, markNotificationAsRead, markAllNotificationsAsRead } from '../utils/api'
 
@@ -25,6 +25,7 @@ export default function Navbar({
 }) {
   const token = useSelector(state => state.auth.token)
   const [notifications, setNotifications] = useState([])
+  const navigate = useNavigate()
   const [notifDropdownOpen, setNotifDropdownOpen] = useState(false)
   const notifRef = useRef(null)
 
@@ -196,6 +197,10 @@ export default function Navbar({
                         key={n.id}
                         onClick={() => {
                           if (!n.read) handleMarkRead(n.id)
+                          setNotifDropdownOpen(false)
+                          if (n.type === 'candidate') navigate('/admin/dashboard')
+                          else if (n.type === 'credits') navigate('/admin/profile-settings')
+                          else navigate('/admin/dashboard')
                         }}
                         className={`p-3 text-left hover:bg-slate-50 cursor-pointer transition-colors flex gap-2.5 items-start ${
                           !n.read ? 'bg-slate-50/30' : ''

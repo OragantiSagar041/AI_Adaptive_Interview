@@ -3978,7 +3978,18 @@ def complete_session(link_id: str, warnings: int = 0, reason: str = "normal"):
                             try:
                                 from bson import ObjectId
                                 admin = admins_collection.find_one({"_id": ObjectId(admin_id)})
-                                if admin: admin_email = admin.get("email", "")
+                                if admin: 
+                                    admin_email = admin.get("email", "")
+                                    admin_company_id = admin.get("company_id")
+                                    notifications_collection.insert_one({
+                                        "title": "Interview Complete",
+                                        "message": f"Candidate '{candidate_name}' has completed their interview. Avg score: {round(avg_score, 1)}/10.",
+                                        "type": "candidate",
+                                        "recipient_role": "admin",
+                                        "company_id": admin_company_id,
+                                        "read": False,
+                                        "created_at": datetime.now(timezone.utc).isoformat()
+                                    })
                             except: pass
                             
                         if candidate_email:
