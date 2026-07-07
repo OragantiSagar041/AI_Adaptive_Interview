@@ -637,6 +637,7 @@ export default function SuperAdminLayout() {
                               setNotifDropdownOpen(false)
                               if (n.type === 'credits') navigate('/superadmin/team')
                               else if (n.type === 'activity') navigate('/superadmin/super-dashboard')
+                              else navigate('/superadmin/super-dashboard')
                             }}
                             className={`p-3 text-left hover:bg-slate-50 cursor-pointer transition-colors flex gap-2.5 items-start ${
                               !n.read ? 'bg-slate-50/30' : ''
