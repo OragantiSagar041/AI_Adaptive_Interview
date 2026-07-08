@@ -382,6 +382,72 @@ export default function VoiceInterviewPage() {
     }
   }, [linkId, warningsCount])
 
+  // ── Screenshot / Screen-capture Prevention ───────────────────────────────
+  // Active while the interview is in progress. Silently swallows PrintScreen,
+  // Win+Shift+S, Ctrl+P, Ctrl+Shift+S, Alt+PrintScreen. No alerts shown.
+  // Also applies @media print guard so print-to-PDF capture shows a blank page.
+  useEffect(() => {
+    const interviewActive = round && round !== 'pre_checks' && round !== 'done'
+    if (!interviewActive) return
+
+    const BLOCKED_KEYS = new Set(['PrintScreen', 'Snapshot'])
+
+    const handleKeyDown = (e) => {
+      const key = e.key
+      const ctrl = e.ctrlKey || e.metaKey
+      const shift = e.shiftKey
+      const alt = e.altKey
+
+      if (BLOCKED_KEYS.has(key)) { e.preventDefault(); e.stopImmediatePropagation(); return }
+      if ((e.metaKey || key === 'Meta') && shift && key === 'S') { e.preventDefault(); e.stopImmediatePropagation(); return }
+      if (ctrl && shift && key === 'S') { e.preventDefault(); e.stopImmediatePropagation(); return }
+      if (ctrl && (key === 'p' || key === 'P')) { e.preventDefault(); e.stopImmediatePropagation(); return }
+      if (ctrl && shift && (key === 'p' || key === 'P')) { e.preventDefault(); e.stopImmediatePropagation(); return }
+      if (alt && BLOCKED_KEYS.has(key)) { e.preventDefault(); e.stopImmediatePropagation(); return }
+    }
+
+    const handleKeyUp = (e) => {
+      if (BLOCKED_KEYS.has(e.key)) { e.preventDefault(); e.stopImmediatePropagation() }
+    }
+
+    const handleKeyPress = (e) => {
+      if (BLOCKED_KEYS.has(e.key)) {
+        e.preventDefault(); e.stopImmediatePropagation()
+        try { navigator.clipboard.writeText('') } catch (_) { /* no-op */ }
+      }
+    }
+
+    const styleEl = document.createElement('style')
+    styleEl.id = 'voice-interview-screenshot-guard'
+    styleEl.textContent = `
+      @media print {
+        body * { visibility: hidden !important; }
+        body::after {
+          content: '' !important;
+          visibility: visible !important;
+          display: block !important;
+          background: #000 !important;
+          position: fixed !important;
+          inset: 0 !important;
+        }
+      }
+    `
+    document.head.appendChild(styleEl)
+
+    document.addEventListener('keydown',  handleKeyDown,  true)
+    document.addEventListener('keyup',    handleKeyUp,    true)
+    document.addEventListener('keypress', handleKeyPress, true)
+
+    return () => {
+      document.removeEventListener('keydown',  handleKeyDown,  true)
+      document.removeEventListener('keyup',    handleKeyUp,    true)
+      document.removeEventListener('keypress', handleKeyPress, true)
+      document.getElementById('voice-interview-screenshot-guard')?.remove()
+    }
+  }, [round])
+  // ─────────────────────────────────────────────────────────────────────────
+
+
   useEffect(() => {
     if (!_sessionKey) return
     const existing = (() => { try { return JSON.parse(sessionStorage.getItem(_sessionKey) || '{}') } catch { return {} } })()
@@ -389,6 +455,7 @@ export default function VoiceInterviewPage() {
       sessionStorage.setItem(_sessionKey, JSON.stringify({ ...existing, startedAt: Date.now() }))
     }
   }, [round, _sessionKey])
+
 
   useEffect(() => {
     if (!_sessionKey) return
