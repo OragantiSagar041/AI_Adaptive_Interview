@@ -4,6 +4,8 @@ import Swal from 'sweetalert2'
 import api from '../../utils/api'
 import useCandidateWebRTC from '../../hooks/useCandidateWebRTC'
 import { useProctoring } from '../../hooks/useProctoring'
+import { useScreenshotProtection } from '../../hooks/useScreenshotProtection'
+import { useExamSecurity } from '../../hooks/useExamSecurity'
 import { countFillers } from './interviewUtils'
 
 const langMap = {
@@ -52,12 +54,17 @@ export const useInterviewSession = (sessionId, interviewType, startRoundTwo) => 
 
   // Session details from backend
   const [sessionDetail, setSessionDetail] = useState(null)
+  const sessionDetailRef = useRef(null)   // ref so async callbacks always read the latest value
   const [interviewId, setInterviewId] = useState('')
   const interviewIdRef = useRef('') // Add ref for interviewId to access in async functions
 
   useEffect(() => {
     interviewIdRef.current = interviewId
   }, [interviewId])
+
+  useEffect(() => {
+    sessionDetailRef.current = sessionDetail
+  }, [sessionDetail])
 
   const [questions, setQuestions] = useState([])
   const [currentQuestionIndex, setCurrentQuestionIndex] = useState(_savedSession?.currentQuestionIndex || 0)
@@ -232,6 +239,8 @@ export const useInterviewSession = (sessionId, interviewType, startRoundTwo) => 
   const noiseFrameCountRef = useRef(0)
   const noiseCooldownRef = useRef(0)
   const audioRmsRef = useRef(0)
+  const lipSyncStreakRef = useRef(0)
+  const lipSyncCooldownRef = useRef(0)
 
   // Feature Migration Refs
   const visualizerCanvasRef = useRef(null)
@@ -919,11 +928,15 @@ export const useInterviewSession = (sessionId, interviewType, startRoundTwo) => 
         if (noiseFrameCountRef.current >= 18) {
           noiseCooldownRef.current = now + 5000
           noiseFrameCountRef.current = 0
+          // recordAlertMetric must be called OUTSIDE the setState updater.
+          // setState updaters must be pure/synchronous; calling an async function
+          // inside one causes the promise to be silently dropped and React may
+          // invoke the updater multiple times (strict mode), duplicating the call.
+          recordAlertMetric("noise_alert")
           setNoiseAlertCount(prev => {
             const next = prev + 1
             noiseAlertCountRef.current = next
             behavioralStatsRef.current.noiseAlerts += 1
-            recordAlertMetric("noise_alert")
             return next
           })
           setShowNoiseBanner(true)
@@ -938,23 +951,38 @@ export const useInterviewSession = (sessionId, interviewType, startRoundTwo) => 
 
   const lastAlertTimeRef = useRef({})
 
-  const recordAlertMetric = async (type) => {
+  const recordAlertMetric = async (type, details = '') => {
     const now = Date.now()
     if (lastAlertTimeRef.current[type] && (now - lastAlertTimeRef.current[type] < 5000)) {
       return false // Throttle same alert type to once every 5 seconds
     }
     lastAlertTimeRef.current[type] = now
 
-    // Send violation to backend so it shows in Candidate Report
-    if (interviewIdRef.current) {
-      try {
-        await api.post(`/session/${interviewIdRef.current}/violation`, {
-          type,
-          count: 1,
-          timestamp: new Date().toISOString()
-        })
-      } catch (e) {
-        console.warn("Failed to log violation to backend", e)
+    const ts = new Date().toISOString()
+
+    // POST to unified proctoring endpoint — stores interview_id, candidate_id,
+    // violation_type, details, and timestamp in session.violations[]
+    try {
+      await api.post('/proctoring/violation', {
+        interview_id: interviewIdRef.current || '',
+        candidate_id: sessionDetailRef.current?.candidate_id || '',
+        violation_type: type,
+        details: details || type,
+        timestamp: ts,
+      })
+    } catch (e) {
+      // Fallback to legacy endpoint if new one is unavailable
+      if (interviewIdRef.current) {
+        try {
+          await api.post(`/session/${interviewIdRef.current}/violation`, {
+            type,
+            count: 1,
+            timestamp: ts,
+            details: details || type,
+          })
+        } catch (e2) {
+          console.warn('Failed to log violation to backend', e2)
+        }
       }
     }
 
@@ -980,8 +1008,22 @@ export const useInterviewSession = (sessionId, interviewType, startRoundTwo) => 
           handleSubmitInterview(true, "Terminated: Exceeded Background Noise Alerts (10)")
         })
       }
-    } else if (type !== 'tab_switch') {
-      // It's a face/proctoring alert (e.g. no_face, eye_contact, phone, multi_person)
+    } else if (type === 'tab_switch') {
+      // Tab-switch termination is handled by the visibilitychange listener — no-op here
+    } else if (
+      // Advisory-only types: logged to backend but do NOT count toward
+      // the face-alert termination cap (not security-critical enough).
+      type === 'window_blur'       ||
+      type === 'devtools_open'     ||
+      type === 'multi_monitor'     ||
+      type === 'clipboard_attempt' ||
+      type === 'print_attempt'     ||
+      type === 'save_attempt'
+    ) {
+      // Logged via POST above — no UI counter increment
+    } else {
+      // Terminating face/security alerts: no_face, multi_person, phone,
+      // eye_contact, lip_sync, screenshot_shortcut, etc.
       behavioralStatsRef.current.faceAlerts += 1
       globalFaceAlertsRef.current += 1
       setFaceAlertCount(globalFaceAlertsRef.current)
@@ -1039,15 +1081,94 @@ export const useInterviewSession = (sessionId, interviewType, startRoundTwo) => 
     }
   });
 
-  // Track lip sync anomaly
+// Screenshot / capture-attempt deterrence & logging.
+  // NOTE: this can only catch in-browser vectors (shortcuts, right-click,
+  // DevTools) — OS-level screenshot tools cannot be blocked from the page.
+  // Every attempt is routed through recordAlertMetric so it is throttled,
+  // POSTed to /session/:id/violation, and counted toward the same
+  // termination threshold as face alerts (see recordAlertMetric above).
+  const SCREENSHOT_ALERT_MESSAGES = {
+    screenshot_shortcut: 'Screenshots are not allowed during this interview.',
+  }
+
+  useScreenshotProtection({
+    enabled: isDisclaimerAccepted && !showAllSet && !isSubmittingRef.current,
+    onAttempt: async (v) => {
+      const recorded = await recordAlertMetric(v.type)
+      if (!recorded) return // throttled — skip duplicate popups
+
+      const message = SCREENSHOT_ALERT_MESSAGES[v.type] || 'Screenshots are not allowed during this interview.'
+      setProctoringAlert(message)
+      setTimeout(() => setProctoringAlert(''), 4000)
+      Swal.fire({
+        icon: 'warning',
+        title: '📸 Screenshots Not Allowed',
+        text: message,
+        toast: true,
+        position: 'top-end',
+        showConfirmButton: false,
+        timer: 4000,
+        background: '#161c2d',
+        color: '#fff',
+        customClass: { popup: 'z-[99999]' }
+      })
+    }
+  })
+  // Track lip sync anomaly (audio is active but mouth isn't moving — suggests a
+  // pre-recorded/played-back voice rather than the candidate actually speaking)
   useEffect(() => {
-    if (proctoring.jawOpenScore > 0 && audioRmsRef.current > 0.18) {
-      if (proctoring.checkLipSync(proctoring.jawOpenScore, audioRmsRef.current > 0.18)) {
-        // We could track a streak here or just fire an alert
-        // A full robust implementation would track a streak.
-      }
+    const isAudioActive = audioRmsRef.current > 0.18
+    const mismatch = proctoring.checkLipSync(proctoring.jawOpenScore, isAudioActive)
+    const now = Date.now()
+
+    if (mismatch && now > lipSyncCooldownRef.current) {
+      lipSyncStreakRef.current += 1
+    } else if (!mismatch) {
+      lipSyncStreakRef.current = Math.max(0, lipSyncStreakRef.current - 1)
+    }
+
+    // ~5 consecutive detection ticks (700ms each) of sustained mismatch before alerting
+    if (lipSyncStreakRef.current >= 5) {
+      lipSyncCooldownRef.current = now + 8000
+      lipSyncStreakRef.current = 0
+      recordAlertMetric('lip_sync')
+      Swal.fire({
+        icon: 'warning',
+        title: '⚠️ Proctoring Alert',
+        text: 'Audio detected without matching lip movement',
+        toast: true,
+        position: 'top-end',
+        showConfirmButton: false,
+        timer: 3000,
+        background: '#161c2d',
+        color: '#fff',
+      })
     }
   }, [proctoring.jawOpenScore, proctoring.checkLipSync])
+
+  // ── Browser exam security (copy/paste blocking, DevTools, window blur, etc.) ──
+  useExamSecurity({
+    enabled: isDisclaimerAccepted && !showAllSet && !isSubmittingRef.current,
+    onViolation: async ({ type, message }) => {
+      const recorded = await recordAlertMetric(type)
+      if (!recorded) return  // throttled by recordAlertMetric's 5-second per-type gate
+
+      setProctoringAlert(message)
+      setTimeout(() => setProctoringAlert(''), 4000)
+      Swal.fire({
+        icon: 'warning',
+        title: '⚠️ Security Alert',
+        text: message,
+        toast: true,
+        position: 'top-end',
+        showConfirmButton: false,
+        timer: 4000,
+        background: '#161c2d',
+        color: '#fff',
+        customClass: { popup: 'z-[99999]' }
+      })
+    },
+  })
 
   const acceptDisclaimer = () => {
     setShowDeviceCheck(true)

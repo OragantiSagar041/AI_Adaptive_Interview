@@ -17,6 +17,8 @@ import 'sweetalert2/dist/sweetalert2.min.css'
 import { RefreshCw } from 'lucide-react'
 import aiVideoUrl from '../assets/ai_avatar.mp4'
 import { useProctoring } from '../hooks/useProctoring'
+import { useScreenshotProtection } from '../hooks/useScreenshotProtection'
+import { useExamSecurity } from '../hooks/useExamSecurity'
 import DeviceCheckModal from '../components/DeviceCheckModal'
 
 import { VOICE_TRANSLATIONS } from '../utils/voiceTranslations'
@@ -1057,7 +1059,15 @@ export default function VoiceInterviewPage() {
       'no_face': '👤 No face detected - please face the camera!',
       'phone': '📱 Mobile phone detected in frame!',
       'eye_contact': '👁️‍🗨️ Please maintain eye contact with the screen.',
-      'tab_switch': '🚨 Tab switch detected!'
+      'tab_switch': '🚨 Tab switch detected!',
+      'screenshot_shortcut': '📸 Screenshots are not allowed during this interview.',
+      'devtools_attempt': '🔧 Developer tools access detected!',
+      'save_attempt': '💾 Page save attempt detected!',
+      'clipboard_attempt': '📋 Copying or pasting is not allowed.',
+      'print_attempt': '🖨️ Printing is not allowed.',
+      'devtools_open': '🔧 Developer tools are not allowed during the interview.',
+      'window_blur': '⚠️ Switching applications is not allowed.',
+      'multi_monitor': '🖥️ Multiple monitors detected — please use a single display.',
     }
     const displayMsg = alertMessages[alertType] || `⚠️ Proctoring alert: ${alertType}`
     setProctoringBanner({ type: alertType, message: displayMsg })
@@ -1075,7 +1085,10 @@ export default function VoiceInterviewPage() {
       const newCount = p + 1
       warningsCountRef.current = newCount
       setProctoringState(prev => ({ ...prev, lastAlertType: alertType }))
-      // Send to backend via WebSocket
+
+      const ts = new Date().toISOString()
+
+      // 1. Send via WebSocket (real-time admin dashboard)
       if (wsRef.current?.readyState === WebSocket.OPEN) {
         wsRef.current.send(JSON.stringify({
           action: 'save_proctoring_alert',
@@ -1084,9 +1097,34 @@ export default function VoiceInterviewPage() {
           alert_type: alertType,
           details,
           warnings_count: newCount,
-          timestamp: new Date().toISOString()
+          timestamp: ts,
         }))
       }
+
+      // 2. POST to unified violation endpoint (persistent DB record)
+      // Fire-and-forget — we don't block the alert flow on network latency.
+      fetch(`${API_BASE_URL}/proctoring/violation`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          interview_id: interviewIdRef.current || '',
+          link_id: linkId || '',
+          candidate_id: sessionDetailRef.current?.candidate_id || '',
+          violation_type: alertType,
+          details: details || displayMsg,
+          timestamp: ts,
+        }),
+      }).catch(() => {
+        // Fallback to legacy endpoint if new one is unavailable
+        if (interviewIdRef.current) {
+          fetch(`${API_BASE_URL}/session/${interviewIdRef.current}/violation`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ type: alertType, count: newCount, timestamp: ts, details }),
+          }).catch(() => {})
+        }
+      })
+
       return newCount
     })
   }, [linkId])
@@ -1234,6 +1272,45 @@ export default function VoiceInterviewPage() {
     proctoring.eyeContactLost,
     setProctoringState
   ])
+
+  // ── Screenshot / snipping-tool deterrence ────────────────────────────
+  useScreenshotProtection({
+    enabled: round !== 'done' && round !== 'pre_checks' && round !== 'intro',
+    onAttempt: (v) => {
+      const message = 'Screenshots are not allowed during this interview.'
+      logProctoringAlert(v.type, message)
+      Swal.fire({
+        icon: 'warning',
+        title: '📸 Screenshots Not Allowed',
+        text: message,
+        toast: true,
+        position: 'top-end',
+        showConfirmButton: false,
+        timer: 4000,
+        background: '#161c2d',
+        color: '#fff',
+      })
+    },
+  })
+
+  // ── Browser exam security (copy/paste blocking, DevTools, window blur, multi-monitor) ──
+  useExamSecurity({
+    enabled: round !== 'done' && round !== 'pre_checks' && round !== 'intro',
+    onViolation: ({ type, message }) => {
+      logProctoringAlert(type, message)
+      Swal.fire({
+        icon: 'warning',
+        title: '⚠️ Security Alert',
+        text: message,
+        toast: true,
+        position: 'top-end',
+        showConfirmButton: false,
+        timer: 4000,
+        background: '#161c2d',
+        color: '#fff',
+      })
+    },
+  })
 
   useEffect(() => {
     if (!linkId || round === 'done' || round === 'pre_checks' || round === 'intro') return

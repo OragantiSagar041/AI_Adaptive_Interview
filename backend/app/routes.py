@@ -3523,6 +3523,65 @@ def log_violation(interview_id: str, violation: ViolationRequest):
         print(f" Error logging violation: {e}")
         return {"status": "error", "message": str(e)}
 
+
+class ProctoringViolationRequest(BaseModel):
+    interview_id: Optional[str] = ""
+    link_id: Optional[str] = ""
+    candidate_id: Optional[str] = ""
+    violation_type: str
+    details: Optional[str] = ""
+    timestamp: Optional[str] = ""
+
+
+@router.post("/proctoring/violation")
+def log_proctoring_violation(data: ProctoringViolationRequest):
+    """
+    Unified proctoring violation endpoint.
+    Accepts interview_id OR link_id to locate the session.
+    Stores violation in session.violations[] and increments violation_count.
+    Returns current violation_count so the caller can enforce termination threshold.
+    """
+    ts = data.timestamp or datetime.now(timezone.utc).isoformat()
+
+    violation_doc = {
+        "type": data.violation_type,
+        "details": data.details or "",
+        "candidate_id": data.candidate_id or "",
+        "timestamp": ts,
+    }
+
+    try:
+        # Locate session by interview_id first, then link_id as fallback
+        query: dict = {}
+        if data.interview_id:
+            query = {"interview_id": data.interview_id}
+        elif data.link_id:
+            query = {"link_id": data.link_id}
+        else:
+            return {"status": "error", "message": "interview_id or link_id required"}
+
+        result = interview_sessions_collection.find_one_and_update(
+            query,
+            {
+                "$push": {"violations": violation_doc},
+                "$inc":  {"violation_count": 1},
+            },
+            return_document=True,   # return updated document
+            projection={"violation_count": 1, "_id": 0},
+        )
+
+        violation_count = result.get("violation_count", 1) if result else 1
+        print(f"[Proctoring] {data.violation_type} | session={data.interview_id or data.link_id} | total={violation_count}")
+
+        return {
+            "status": "success",
+            "violation_count": violation_count,
+        }
+    except Exception as e:
+        print(f"[Proctoring] Error logging violation: {e}")
+        return {"status": "error", "message": str(e)}
+
+
 @router.post("/admin/update-decision")
 @router.post("/admin/update_decision")
 def update_decision(data: DecisionRequest, current_admin: dict = Depends(require_role("admin", "super_admin"))):
