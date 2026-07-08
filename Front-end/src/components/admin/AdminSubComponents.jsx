@@ -19,8 +19,8 @@ export function CandidateFilters({
   handleBulkDelete
 }) {
   return (
-    <div className="grid grid-cols-2 gap-2 sm:flex sm:flex-wrap xl:flex-nowrap sm:items-end sm:justify-end w-full sm:w-auto ml-auto overflow-x-auto [&::-webkit-scrollbar]:hidden" style={{ scrollbarWidth: 'none' }}>
-      <div className="flex flex-col gap-1 col-span-2 sm:col-span-1">
+    <div className="flex flex-nowrap items-end gap-3 w-full overflow-x-auto pb-3">
+      <div className="flex flex-col gap-1 flex-shrink-0">
         <label className="text-[0.68rem] text-slate-500 font-bold uppercase">Search Candidate</label>
         <div className="relative flex items-center">
           <Search size={14} className="absolute left-3 text-slate-400" />
@@ -35,7 +35,7 @@ export function CandidateFilters({
         </div>
       </div>
 
-      <div className="flex flex-col gap-1 col-span-2 sm:col-span-1 w-full sm:w-auto">
+      <div className="flex flex-col gap-1 flex-shrink-0">
         <label className="text-[0.68rem] text-slate-500 font-bold uppercase">Date Range</label>
         <div className="flex items-center bg-white border border-[#dbe4f0] rounded-lg focus-within:border-primary focus-within:ring-2 focus-within:ring-primary/15 transition-all overflow-hidden h-[36px]">
           <div className="relative flex items-center h-full">
@@ -62,7 +62,7 @@ export function CandidateFilters({
         </div>
       </div>
 
-      <div className="flex flex-col gap-1">
+      <div className="flex flex-col gap-1 flex-shrink-0">
         <label className="text-[0.68rem] text-slate-500 font-bold uppercase">Status</label>
         <select
           className="bg-white border border-[#dbe4f0] text-[#0f172a] rounded-lg px-3 py-1.5 text-xs outline-none transition-all focus:border-primary focus:ring-2 focus:ring-primary/15 w-full sm:w-[130px] cursor-pointer"
@@ -78,7 +78,7 @@ export function CandidateFilters({
         </select>
       </div>
 
-      <div className="flex flex-col gap-1">
+      <div className="flex flex-col gap-1 flex-shrink-0">
         <label className="text-[0.68rem] text-slate-500 font-bold uppercase">Sort By</label>
         <select
           className="bg-white border border-[#dbe4f0] text-[#0f172a] rounded-lg px-3 py-1.5 text-xs outline-none transition-all focus:border-primary focus:ring-2 focus:ring-primary/15 w-full sm:w-[110px] cursor-pointer"
@@ -91,7 +91,7 @@ export function CandidateFilters({
         </select>
       </div>
 
-      <div className="flex items-center gap-2 col-span-2 sm:col-span-1 w-full sm:w-auto mt-2 sm:mt-0">
+      <div className="flex items-center gap-2 flex-shrink-0 mt-2 sm:mt-0">
         <Button
           onClick={() => {
             setSearchTerm('')

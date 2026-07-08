@@ -8,8 +8,8 @@
 import React, { useState, useEffect, useRef, useCallback } from 'react'
 import { useParams } from 'react-router-dom'
 import { API_BASE_URL } from '../apiConfig'
-import VoiceCodingRound from './VoiceCodingRound'
-import VoiceCaseStudy from './VoiceCaseStudy'
+const VoiceCodingRound = React.lazy(() => import('./VoiceCodingRound'))
+const VoiceCaseStudy = React.lazy(() => import('./VoiceCaseStudy'))
 import useCandidateWebRTC from '../hooks/useCandidateWebRTC'
 import OrbAvatar from '../components/OrbAvatar'
 import Swal from 'sweetalert2'
