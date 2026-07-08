@@ -766,45 +766,51 @@ export default function AdminPage({ role: initialRole = 'admin' }) {
         setBulkUploadProgress(`Uploading chunk ${i + 1} of ${totalChunks}...`)
         const chunk = bulkCandidates.slice(i * CHUNK_SIZE, (i + 1) * CHUNK_SIZE);
 
-        const response = await fetch(`${API_BASE_URL}/admin/bulk-create-sessions`, {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-            'Authorization': `Bearer ${token}`
-          },
-          body: JSON.stringify({
-            candidates: chunk.map(c => ({
-              candidate_name: c.name,
-              candidate_email: c.email,
-              resume_text: '',
-              record_video: c.record_video !== undefined ? c.record_video : recordVideo
-            })),
-            job_description: jobDescription,
-            industry_type: industry,
-            interview_type: interviewType,
-            language: language,
-            case_study_count: interviewType === 'Non-Technical' ? Number(caseStudyCount) : 0,
-            admin_id: adminUser?.admin_id || 'admin',
-            interview_duration: Number(duration),
-            record_video: recordVideo,
-            custom_email_html: customEmailHtml || "",
-            scheduled_start: toUtcIso(scheduledStart),
-            scheduled_end: toUtcIso(scheduledEnd),
-            hr_screening: hrScreening,
-            custom_questions: customQuestions,
-            ai_instructions: aiInstructions
+        try {
+          const response = await fetch(`${API_BASE_URL}/admin/bulk-create-sessions`, {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json',
+              'Authorization': `Bearer ${token}`
+            },
+            body: JSON.stringify({
+              candidates: chunk.map(c => ({
+                candidate_name: c.name,
+                candidate_email: c.email,
+                resume_text: '',
+                record_video: c.record_video !== undefined ? c.record_video : recordVideo
+              })),
+              job_description: jobDescription,
+              industry_type: industry,
+              interview_type: interviewType,
+              language: language,
+              case_study_count: interviewType === 'Non-Technical' ? Number(caseStudyCount) : 0,
+              admin_id: adminUser?.admin_id || 'admin',
+              interview_duration: Number(duration),
+              record_video: recordVideo,
+              custom_email_html: customEmailHtml || "",
+              scheduled_start: toUtcIso(scheduledStart),
+              scheduled_end: toUtcIso(scheduledEnd),
+              hr_screening: hrScreening,
+              custom_questions: customQuestions,
+              ai_instructions: aiInstructions
+            })
           })
-        })
 
-        const data = await response.json()
-        if (!response.ok) {
-           throw new Error(data.detail || data.message || "Failed to create bulk sessions.")
-        }
-        
-        totalSuccessful += data.successful || 0;
-        totalCount += data.total || 0;
-        if (data.results) {
-          allResults = [...allResults, ...data.results];
+          const data = await response.json()
+          if (!response.ok) {
+             console.error(`Chunk ${i+1} failed:`, data.detail || data.message)
+             continue // skip to next chunk on failure
+          }
+          
+          totalSuccessful += data.successful || 0;
+          totalCount += data.total || 0;
+          if (data.results) {
+            allResults = [...allResults, ...data.results];
+          }
+        } catch (chunkError) {
+          console.error(`Network error on chunk ${i+1}:`, chunkError)
+          // Continue to next chunk instead of breaking the entire loop
         }
       }
 
@@ -819,7 +825,7 @@ export default function AdminPage({ role: initialRole = 'admin' }) {
     } catch (e) {
       console.error(e)
       setBulkUploadProgress(null)
-      alert(e.message || "Error sending bulk interviews.")
+      alert(e.message || "Error during setup of bulk interviews.")
     } finally {
       setInviting(false)
     }

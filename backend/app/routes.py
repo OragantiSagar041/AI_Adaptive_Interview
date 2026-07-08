@@ -2940,6 +2940,9 @@ def bulk_create_sessions(data: BulkCreateSession, background_tasks: BackgroundTa
     for r in results:
         if r["status"] == "success":
             doc = r.pop("session_doc") # Remove temp doc before returning JSON
+            # ObjectId is not JSON serializable for Celery
+            if "_id" in doc:
+                doc["_id"] = str(doc["_id"])
             email_jobs.append({"doc": doc, "link_url": r["link_url"]})
             # Optimistically mark as sent/scheduled since we dispatch to background
             r["email_sent"] = not doc.get("invite_email_send_at") or doc["invite_email_status"] == "sent"
@@ -3927,12 +3930,28 @@ def submit_feedback(link_id: str, payload: CandidateFeedbackRequest):
         print(f"Submit Feedback Error: {e}")
         raise HTTPException(status_code=500, detail=str(e))
 
+class CompleteSessionRequest(BaseModel):
+    warnings: int = 0
+    reason: str = "normal"
+    total_tab_switches: int = 0
+    total_face_alerts: int = 0
+    total_noise_alerts: int = 0
+
 @router.post("/complete-session/{link_id}")
-def complete_session(link_id: str, warnings: int = 0, reason: str = "normal"):
+def complete_session(link_id: str, payload: CompleteSessionRequest):
     """Mark a session as completed and send notification emails (Task 3)."""
     try:
         session = interview_sessions_collection.find_one({"link_id": link_id})
-        update_data = {"status": "completed", "warnings": warnings, "completion_reason": reason}
+        update_data = {
+            "status": "completed", 
+            "warnings": payload.warnings, 
+            "completion_reason": payload.reason,
+            "integrity": {
+                "total_tab_switches": payload.total_tab_switches,
+                "total_face_alerts": payload.total_face_alerts,
+                "total_noise_alerts": payload.total_noise_alerts
+            }
+        }
         if session:
             candidate_id = session.get("candidate_id")
             if candidate_id and not candidate_id.endswith("IQ"):

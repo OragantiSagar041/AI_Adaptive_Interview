@@ -237,6 +237,12 @@ export default function VoiceInterviewPage() {
     eyeContactLost: false,
     lastAlertType: ''
   })
+  const integrityMetricsRef = useRef({
+    tabSwitches: 0,
+    faceAlerts: 0,
+    noiseAlerts: 0,
+    reason: 'normal'
+  })
   const screenShareViolationsRef = useRef(0)
   const screenShareViolationHandlerRef = useRef(null)  // stable ref to avoid circular deps
   const usedFollowUps = useRef(new Set())
@@ -890,25 +896,43 @@ export default function VoiceInterviewPage() {
   }, [addMsg, aiSay, startListening])  
 
   // ── Complete interview ────────────────────────────────────────────────────
-  const completeInterview = useCallback(async (isTimeout = false) => {
+  const completeInterview = useCallback(async (options = {}) => {
     if (submittingRef.current) return
     submittingRef.current = true
+    
+    // Fallback for legacy calls that pass a boolean (isTimeout)
+    const isTimeout = typeof options === 'boolean' ? options : (options.isTimeout || false)
+    const completionReason = typeof options === 'object' && options.reason ? options.reason : 'normal'
+    
+    integrityMetricsRef.current.reason = completionReason
+
     stopListening(); window.speechSynthesis?.cancel(); stopAudio()
     const iid = interviewIdRef.current
 
     // Switch UI to submitting immediately
     setRound('submitting')
     
-    const timeoutFlag = typeof isTimeout === 'boolean' ? isTimeout : false;
-    const message = timeoutFlag 
+    const message = isTimeout 
       ? "Thank you for the interview. We are saving your interview, please wait."
       : "We are saving your interview, please wait.";
       
     // Speak asynchronously
     aiSay(message)
 
-    // Fire backend completion
-    try { await fetch(`${API_BASE_URL}/complete-session/${linkId}?warnings=${warningsCount}`, { method: 'POST' }) } catch (_) { }
+    // Fire backend completion with detailed integrity metrics
+    try {
+      await fetch(`${API_BASE_URL}/complete-session/${linkId}`, { 
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          warnings: warningsCountRef.current || warningsCount, // use ref if available to avoid stale closures
+          reason: integrityMetricsRef.current.reason,
+          total_tab_switches: integrityMetricsRef.current.tabSwitches,
+          total_face_alerts: integrityMetricsRef.current.faceAlerts,
+          total_noise_alerts: integrityMetricsRef.current.noiseAlerts
+        })
+      })
+    } catch (_) { }
     
     // Upload heavy recording and WAIT for it so it's not lost
     try {
@@ -1026,6 +1050,7 @@ export default function VoiceInterviewPage() {
 
   // ── Proctoring: ESC + Tab + Screenshare ──────────────────────────────────
   // Helper to log proctoring events to backend
+  const warningsCountRef = useRef(0)
   const logProctoringAlert = useCallback((alertType, details = '') => {
     const alertMessages = {
       'multi_person': '👀 Multiple faces detected in frame!',
@@ -1038,8 +1063,17 @@ export default function VoiceInterviewPage() {
     setProctoringBanner({ type: alertType, message: displayMsg })
     setTimeout(() => setProctoringBanner(null), 4000)
 
+    if (['multi_person', 'no_face', 'phone', 'eye_contact'].includes(alertType)) {
+      integrityMetricsRef.current.faceAlerts += 1
+    } else if (alertType === 'tab_switch' || alertType === 'fullscreen_exit') {
+      integrityMetricsRef.current.tabSwitches += 1
+    } else if (alertType === 'background_noise') {
+      integrityMetricsRef.current.noiseAlerts += 1
+    }
+
     setWarningsCount(p => {
       const newCount = p + 1
+      warningsCountRef.current = newCount
       setProctoringState(prev => ({ ...prev, lastAlertType: alertType }))
       // Send to backend via WebSocket
       if (wsRef.current?.readyState === WebSocket.OPEN) {
@@ -1110,7 +1144,7 @@ export default function VoiceInterviewPage() {
             confirmButtonColor: '#ef4444',
             confirmButtonText: 'OK',
             allowOutsideClick: false,
-          }).then(() => completeInterview())
+          }).then(() => completeInterview({ reason: 'Terminated due to multiple tab switching violations.' }))
         } else {
           Swal.fire({
             icon: 'warning',
@@ -1145,7 +1179,7 @@ export default function VoiceInterviewPage() {
               document.documentElement.requestFullscreen().catch(() => { })
             }
           } else {
-            completeInterview()
+            completeInterview({ reason: 'Terminated due to fullscreen mode exit.' })
           }
         })
       }
@@ -1155,13 +1189,15 @@ export default function VoiceInterviewPage() {
     document.addEventListener('fullscreenchange', handleFullscreenChange)
 
     return () => {
-      stopListening()
-      window.speechSynthesis?.cancel()
-      clearTimeout(silenceTimerRef.current)
+      // NOTE: We DO NOT call window.speechSynthesis?.cancel() here anymore.
+      // This cleanup function was accidentally getting triggered whenever a proctoring
+      // alert changed the completeInterview or logProctoringAlert reference, muting the AI.
       document.removeEventListener('visibilitychange', handleVisibilityChange)
       document.removeEventListener('fullscreenchange', handleFullscreenChange)
     }
-  }, [stopListening, round, logProctoringAlert, completeInterview])
+    // We intentionally omit logProctoringAlert and completeInterview to prevent re-bind loops muting the AI.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [stopListening, round])
 
   // Use Centralized AI Proctoring Hook
   const proctoring = useProctoring({
@@ -1182,7 +1218,7 @@ export default function VoiceInterviewPage() {
         color: '#fff',
       })
     },
-    onTerminate: () => completeInterview()
+    onTerminate: () => completeInterview({ reason: 'Terminated due to multiple AI proctoring alerts (Face/Camera violations).' })
   })
 
   useEffect(() => {
