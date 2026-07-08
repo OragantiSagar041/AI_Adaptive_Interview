@@ -145,6 +145,7 @@ export default function CreateInterviewPage() {
   const [bulkCustomQuestionsParsing, setBulkCustomQuestionsParsing] = useState(false)
   const [bulkAiInstructionsParsing, setBulkAiInstructionsParsing] = useState(false)
   const [bulkCsvLabel, setBulkCsvLabel] = useState('Click to upload or drag and drop Excel or CSV template')
+  const [bulkUploadProgress, setBulkUploadProgress] = useState(null)
 
   // Bulk submission results
   const [bulkResultsModalOpen, setBulkResultsModalOpen] = useState(false)
@@ -715,45 +716,66 @@ Congratulations! You have been selected for an AI-powered interview. Please revi
     }
 
     setInviting(true)
+    setBulkUploadProgress('Preparing chunks...')
     try {
-      const response = await axios.post(`${API_BASE_URL}/admin/bulk-create-sessions`, {
-        candidates: bulkCandidates.map(c => ({
-          candidate_name: c.name,
-          candidate_email: c.email,
-          resume_text: '',
-          record_video: c.record_video !== undefined ? c.record_video : recordVideo
-        })),
-        job_description: jobDescription,
-        interview_format: interviewFormat,
-        industry_type: industry,
-        interview_type: interviewType,
-        language: language,
-        case_study_count: interviewType === 'Non-Technical' ? Number(caseStudyCount) : 0,
-        admin_id: adminUser?.admin_id || 'admin',
-        interview_duration: Number(duration),
-        record_video: recordVideo,
-        custom_email_html: customEmailHtml || "",
-        scheduled_start: toUtcIso(scheduledStart),
-        scheduled_end: toUtcIso(scheduledEnd),
-        hr_screening: hrScreening,
-        custom_questions: customQuestions,
-        ai_instructions: aiInstructions,
-        voice_clone: bulkConfig.voiceCloning,
-        custom_voice_id: bulkConfig.customVoiceId
-      }, {
-        headers: {
-          'Authorization': `Bearer ${token}`
+      const CHUNK_SIZE = 500;
+      const totalCandidates = bulkCandidates.length;
+      const totalChunks = Math.ceil(totalCandidates / CHUNK_SIZE);
+      
+      let totalSuccessful = 0;
+      let totalCount = 0;
+      let allResults = [];
+      
+      for (let i = 0; i < totalChunks; i++) {
+        setBulkUploadProgress(`Uploading chunk ${i + 1} of ${totalChunks}...`)
+        const chunk = bulkCandidates.slice(i * CHUNK_SIZE, (i + 1) * CHUNK_SIZE);
+        
+        const response = await axios.post(`${API_BASE_URL}/admin/bulk-create-sessions`, {
+          candidates: chunk.map(c => ({
+            candidate_name: c.name,
+            candidate_email: c.email,
+            resume_text: '',
+            record_video: c.record_video !== undefined ? c.record_video : recordVideo
+          })),
+          job_description: jobDescription,
+          interview_format: interviewFormat,
+          industry_type: industry,
+          interview_type: interviewType,
+          language: language,
+          case_study_count: interviewType === 'Non-Technical' ? Number(caseStudyCount) : 0,
+          admin_id: adminUser?.admin_id || 'admin',
+          interview_duration: Number(duration),
+          record_video: recordVideo,
+          custom_email_html: customEmailHtml || "",
+          scheduled_start: toUtcIso(scheduledStart),
+          scheduled_end: toUtcIso(scheduledEnd),
+          hr_screening: hrScreening,
+          custom_questions: customQuestions,
+          ai_instructions: aiInstructions,
+          voice_clone: bulkConfig.voiceCloning,
+          custom_voice_id: bulkConfig.customVoiceId
+        }, {
+          headers: {
+            'Authorization': `Bearer ${token}`
+          }
+        })
+        
+        const data = response.data;
+        totalSuccessful += data.successful || 0;
+        totalCount += data.total || 0;
+        if (data.results) {
+          allResults = [...allResults, ...data.results];
         }
-      })
+      }
 
-      const data = response.data
+      setBulkUploadProgress(null)
       Swal.fire({
         title: 'Success!',
-        text: `Successfully sent ${data.successful}/${data.total} interviews!`,
+        text: `Successfully sent ${totalSuccessful}/${totalCount} interviews!`,
         icon: 'success',
         confirmButtonColor: '#6366f1'
       })
-      setBulkResultsData(data)
+      setBulkResultsData({ successful: totalSuccessful, total: totalCount, results: allResults })
       setBulkResultsModalOpen(true)
       setBulkCandidates([])
       setCustomEmailHtml('')
@@ -768,6 +790,7 @@ Congratulations! You have been selected for an AI-powered interview. Please revi
       dispatch(loadDashboardData())
     } catch (e) {
       console.error(e)
+      setBulkUploadProgress(null)
       Swal.fire({
         title: 'Bulk Invitations Failed',
         text: e.response?.data?.detail || e.response?.data?.message || "Error sending bulk interviews.",
@@ -2126,9 +2149,9 @@ Congratulations! You have been selected for an AI-powered interview. Please revi
                   className="flex-1 shadow-lg bg-gradient-to-r from-indigo-600 to-indigo-700 hover:from-indigo-700 hover:to-indigo-800 rounded-xl"
                   onClick={handleSendBulkInterviews}
                   disabled={inviting}
-                  icon={<i className="fas fa-paper-plane" />}
+                  icon={bulkUploadProgress ? <i className="fas fa-spinner fa-spin" /> : <i className="fas fa-paper-plane" />}
                 >
-                  Send to All
+                  {bulkUploadProgress || (inviting ? 'Sending...' : 'Send to All')}
                 </Button>
                 <Button
                   variant="warning"

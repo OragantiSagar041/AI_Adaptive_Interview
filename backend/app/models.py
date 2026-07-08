@@ -19,6 +19,8 @@ class ViolationRequest(BaseModel):
     type: str
     count: int
     timestamp: str
+    details: Optional[str] = ""
+    candidate_id: Optional[str] = ""
 
 class AdminLogin(BaseModel):
     username: str

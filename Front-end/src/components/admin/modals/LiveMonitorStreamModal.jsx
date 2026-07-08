@@ -2,15 +2,90 @@ import React, { useState, useEffect, useRef } from 'react'
 import { API_BASE_URL } from '../../../apiConfig'
 import Modal from '../../Modal'
 import { useSelector } from 'react-redux'
-import { Video, Mic, MicOff, MonitorOff, Activity, ShieldAlert, Code, MessageSquare, Briefcase } from 'lucide-react'
+import { Video, Mic, MicOff, MonitorOff, Activity, ShieldAlert, Code, MessageSquare, Briefcase, AlertTriangle } from 'lucide-react'
+
+// Maps violation_type values to a human-readable label + colour class
+const VIOLATION_META = {
+  tab_switch:          { label: 'Tab Switch',          color: 'text-rose-600',   bg: 'bg-rose-50   border-rose-200' },
+  screenshot_shortcut: { label: 'Screenshot Attempt',  color: 'text-orange-600', bg: 'bg-orange-50 border-orange-200' },
+  clipboard_attempt:   { label: 'Copy / Paste',        color: 'text-amber-600',  bg: 'bg-amber-50  border-amber-200' },
+  print_attempt:       { label: 'Print Attempt',       color: 'text-amber-600',  bg: 'bg-amber-50  border-amber-200' },
+  save_attempt:        { label: 'Save Page',           color: 'text-amber-600',  bg: 'bg-amber-50  border-amber-200' },
+  devtools_open:       { label: 'DevTools Opened',     color: 'text-rose-600',   bg: 'bg-rose-50   border-rose-200' },
+  devtools_attempt:    { label: 'DevTools Attempt',    color: 'text-rose-600',   bg: 'bg-rose-50   border-rose-200' },
+  window_blur:         { label: 'App Switch',          color: 'text-orange-600', bg: 'bg-orange-50 border-orange-200' },
+  multi_monitor:       { label: 'Multi-Monitor',       color: 'text-amber-600',  bg: 'bg-amber-50  border-amber-200' },
+  no_face:             { label: 'No Face Detected',    color: 'text-rose-600',   bg: 'bg-rose-50   border-rose-200' },
+  multi_person:        { label: 'Multiple Faces',      color: 'text-rose-600',   bg: 'bg-rose-50   border-rose-200' },
+  phone:               { label: 'Phone Detected',      color: 'text-rose-600',   bg: 'bg-rose-50   border-rose-200' },
+  eye_contact:         { label: 'Eye Contact Lost',    color: 'text-orange-600', bg: 'bg-orange-50 border-orange-200' },
+  lip_sync:            { label: 'Lip-Sync Mismatch',   color: 'text-amber-600',  bg: 'bg-amber-50  border-amber-200' },
+  noise_alert:         { label: 'Background Noise',    color: 'text-amber-600',  bg: 'bg-amber-50  border-amber-200' },
+}
+
+function violationMeta(type) {
+  return VIOLATION_META[type] || { label: type, color: 'text-slate-600', bg: 'bg-slate-50 border-slate-200' }
+}
+
+function formatTs(ts) {
+  if (!ts) return ''
+  try {
+    return new Date(ts).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' })
+  } catch { return ts }
+}
 
 export default function LiveMonitorStreamModal({ isOpen, onClose, session }) {
   const [status, setStatus] = useState('connecting')
   const [telemetry, setTelemetry] = useState(null)
+  // ── violations feed ─────────────────────────────────────────────────────────
+  // Polled from GET /admin/interview/{link_id} every 5 s so the admin sees
+  // all proctoring events that were stored via POST /proctoring/violation,
+  // in addition to the real-time count from the WebRTC telemetry stream.
+  const [violations, setViolations] = useState([])
+  const violationsPollRef = useRef(null)
+  // ────────────────────────────────────────────────────────────────────────────
   const videoRef = useRef(null)
   const wsRef = useRef(null)
   const pcRef = useRef(null)
   const token = useSelector(state => state.auth.token)
+
+  // ── Violations polling ──────────────────────────────────────────────────────
+  useEffect(() => {
+    if (!isOpen || !session) return
+
+    const linkId = session.link_id || session.session_id || session.id
+    if (!linkId) return
+
+    const fetchViolations = async () => {
+      try {
+        const res = await fetch(`${API_BASE_URL}/admin/interview/${linkId}`, {
+          headers: { Authorization: `Bearer ${token}` },
+        })
+        if (!res.ok) return
+        const data = await res.json()
+        // violations[] lives on the session document
+        const raw = data?.violations ?? data?.proctoring_alerts ?? []
+        if (Array.isArray(raw)) {
+          // Normalise: backend stores {type, violation_type, details, timestamp, ...}
+          const normalised = raw.map(v => ({
+            type: v.violation_type || v.type || v.alert_type || 'unknown',
+            details: v.details || v.message || '',
+            timestamp: v.timestamp || v.ts || '',
+          }))
+          setViolations(normalised)
+        }
+      } catch { /* non-fatal — polling will retry */ }
+    }
+
+    fetchViolations() // immediate first fetch
+    violationsPollRef.current = setInterval(fetchViolations, 5000)
+
+    return () => {
+      clearInterval(violationsPollRef.current)
+      setViolations([])
+    }
+  }, [isOpen, session, token])
+  // ────────────────────────────────────────────────────────────────────────────
 
   useEffect(() => {
     if (!isOpen || !session) return
@@ -123,7 +198,7 @@ export default function LiveMonitorStreamModal({ isOpen, onClose, session }) {
     >
       <div className="flex flex-col gap-4 text-slate-800 bg-white">
         
-        {/* Top Telemetry Bar */}
+        {/* Top Telemetry Bar — unchanged */}
         <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
           <div className="bg-slate-50 border border-slate-200 rounded-lg p-3 flex flex-col justify-center">
             <span className="text-[0.65rem] font-bold text-slate-500 uppercase tracking-wider mb-1">Status</span>
@@ -160,13 +235,13 @@ export default function LiveMonitorStreamModal({ isOpen, onClose, session }) {
             <div className="flex items-center gap-1.5 font-bold text-sm">
               <ShieldAlert size={16} className={telemetry?.proctoring_alerts > 0 ? "text-rose-500" : "text-emerald-500"} />
               <span className={telemetry?.proctoring_alerts > 0 ? "text-rose-600" : "text-emerald-600"}>
-                {telemetry?.proctoring_alerts || 0} Alerts
+                {telemetry?.proctoring_alerts ?? violations.length} Alerts
               </span>
             </div>
           </div>
         </div>
 
-        {/* Video Player Area */}
+        {/* Video Player Area — unchanged */}
         <div className="relative w-full aspect-video bg-black rounded-xl overflow-hidden border border-slate-200 shadow-inner flex items-center justify-center">
           
           <video
@@ -216,7 +291,7 @@ export default function LiveMonitorStreamModal({ isOpen, onClose, session }) {
             </div>
           )}
 
-          {/* Telemetry Overlay */}
+          {/* Telemetry Overlay — unchanged */}
           {status === 'streaming' && telemetry && (
             <div className="absolute bottom-4 left-4 right-4 flex justify-between items-end pointer-events-none">
               <div className="bg-black/60 backdrop-blur-md px-3 py-1.5 rounded-lg border border-white/10 text-white flex items-center gap-2 pointer-events-auto">
@@ -234,6 +309,61 @@ export default function LiveMonitorStreamModal({ isOpen, onClose, session }) {
             </div>
           )}
         </div>
+
+        {/* ── Violations Feed ──────────────────────────────────────────────── */}
+        {/* Reads session.violations[] polled every 5 s from /admin/interview/{link_id}.
+            Shows all proctoring events stored via POST /proctoring/violation.
+            Real-time WebRTC telemetry count (above) remains unchanged. */}
+        <div className="border border-slate-200 rounded-xl overflow-hidden">
+          <div className="flex items-center justify-between px-4 py-2.5 bg-slate-50 border-b border-slate-200">
+            <div className="flex items-center gap-2">
+              <AlertTriangle size={14} className={violations.length > 0 ? 'text-rose-500' : 'text-slate-400'} />
+              <span className="text-xs font-bold text-slate-600 uppercase tracking-wider">
+                Security Events
+              </span>
+            </div>
+            <span className={`text-xs font-bold px-2 py-0.5 rounded-full ${
+              violations.length === 0
+                ? 'bg-emerald-100 text-emerald-700'
+                : violations.length < 3
+                  ? 'bg-amber-100 text-amber-700'
+                  : 'bg-rose-100 text-rose-700'
+            }`}>
+              {violations.length} event{violations.length !== 1 ? 's' : ''}
+            </span>
+          </div>
+
+          {violations.length === 0 ? (
+            <div className="px-4 py-5 text-center text-xs text-slate-400 font-medium">
+              No security violations recorded yet. Updates every 5 s.
+            </div>
+          ) : (
+            <ul className="max-h-48 overflow-y-auto divide-y divide-slate-100">
+              {[...violations].reverse().map((v, i) => {
+                const meta = violationMeta(v.type)
+                return (
+                  <li
+                    key={i}
+                    className={`flex items-start gap-3 px-4 py-2.5 text-xs ${meta.bg} border-l-2 ${meta.color.replace('text-', 'border-')}`}
+                  >
+                    <ShieldAlert size={13} className={`mt-0.5 shrink-0 ${meta.color}`} />
+                    <div className="flex-1 min-w-0">
+                      <span className={`font-bold ${meta.color}`}>{meta.label}</span>
+                      {v.details && v.details !== v.type && (
+                        <span className="ml-1.5 text-slate-500 truncate">{v.details}</span>
+                      )}
+                    </div>
+                    {v.timestamp && (
+                      <span className="text-slate-400 shrink-0 font-mono">{formatTs(v.timestamp)}</span>
+                    )}
+                  </li>
+                )
+              })}
+            </ul>
+          )}
+        </div>
+        {/* ── End Violations Feed ──────────────────────────────────────────── */}
+
       </div>
     </Modal>
   )

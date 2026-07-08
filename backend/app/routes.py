@@ -2670,7 +2670,7 @@ def check_candidate(email: str, current_admin: dict = Depends(get_current_admin_
         return {"exists": False, "error": str(e)}
 
 @router.post("/admin/create-session")
-async def create_session(data: CreateSession, current_admin: dict = Depends(get_current_admin_details)):
+def create_session(data: CreateSession, current_admin: dict = Depends(get_current_admin_details)):
     company_id = current_admin.get("company_id")
     
     # ATOMIC DEDUCTION (Prevents race conditions leading to negative credits)
@@ -2789,13 +2789,6 @@ class BulkCreateSession(BaseModel):
     ai_instructions: str = ""
     voice_clone: bool = False
     custom_voice_id: str = ""
-
-def process_bulk_emails_background(jobs: list):
-    for job in jobs:
-        try:
-            queue_or_send_interview_email(job["doc"], job["link_url"], skip_db_update=True)
-        except Exception as email_err:
-            print(f"Background Email Error for {job['doc'].get('candidate_email')}: {email_err}")
 
 @router.post("/admin/bulk-create-sessions")
 def bulk_create_sessions(data: BulkCreateSession, background_tasks: BackgroundTasks, current_admin: dict = Depends(get_current_admin_details)):
@@ -2947,6 +2940,9 @@ def bulk_create_sessions(data: BulkCreateSession, background_tasks: BackgroundTa
     for r in results:
         if r["status"] == "success":
             doc = r.pop("session_doc") # Remove temp doc before returning JSON
+            # ObjectId is not JSON serializable for Celery
+            if "_id" in doc:
+                doc["_id"] = str(doc["_id"])
             email_jobs.append({"doc": doc, "link_url": r["link_url"]})
             # Optimistically mark as sent/scheduled since we dispatch to background
             r["email_sent"] = not doc.get("invite_email_send_at") or doc["invite_email_status"] == "sent"
@@ -2955,8 +2951,9 @@ def bulk_create_sessions(data: BulkCreateSession, background_tasks: BackgroundTa
         else:
             r.pop("session_doc", None)
 
-    # Queue the slow email sending process to run in the background
-    background_tasks.add_task(process_bulk_emails_background, email_jobs)
+    # Queue the slow email sending process to run in the background (Celery)
+    from app.tasks import process_bulk_emails_task
+    process_bulk_emails_task.delay(email_jobs)
 
     print(f" Bulk sessions created: {successful}/{len(results)}")
     
@@ -3526,6 +3523,65 @@ def log_violation(interview_id: str, violation: ViolationRequest):
         print(f" Error logging violation: {e}")
         return {"status": "error", "message": str(e)}
 
+
+class ProctoringViolationRequest(BaseModel):
+    interview_id: Optional[str] = ""
+    link_id: Optional[str] = ""
+    candidate_id: Optional[str] = ""
+    violation_type: str
+    details: Optional[str] = ""
+    timestamp: Optional[str] = ""
+
+
+@router.post("/proctoring/violation")
+def log_proctoring_violation(data: ProctoringViolationRequest):
+    """
+    Unified proctoring violation endpoint.
+    Accepts interview_id OR link_id to locate the session.
+    Stores violation in session.violations[] and increments violation_count.
+    Returns current violation_count so the caller can enforce termination threshold.
+    """
+    ts = data.timestamp or datetime.now(timezone.utc).isoformat()
+
+    violation_doc = {
+        "type": data.violation_type,
+        "details": data.details or "",
+        "candidate_id": data.candidate_id or "",
+        "timestamp": ts,
+    }
+
+    try:
+        # Locate session by interview_id first, then link_id as fallback
+        query: dict = {}
+        if data.interview_id:
+            query = {"interview_id": data.interview_id}
+        elif data.link_id:
+            query = {"link_id": data.link_id}
+        else:
+            return {"status": "error", "message": "interview_id or link_id required"}
+
+        result = interview_sessions_collection.find_one_and_update(
+            query,
+            {
+                "$push": {"violations": violation_doc},
+                "$inc":  {"violation_count": 1},
+            },
+            return_document=True,   # return updated document
+            projection={"violation_count": 1, "_id": 0},
+        )
+
+        violation_count = result.get("violation_count", 1) if result else 1
+        print(f"[Proctoring] {data.violation_type} | session={data.interview_id or data.link_id} | total={violation_count}")
+
+        return {
+            "status": "success",
+            "violation_count": violation_count,
+        }
+    except Exception as e:
+        print(f"[Proctoring] Error logging violation: {e}")
+        return {"status": "error", "message": str(e)}
+
+
 @router.post("/admin/update-decision")
 @router.post("/admin/update_decision")
 def update_decision(data: DecisionRequest, current_admin: dict = Depends(require_role("admin", "super_admin"))):
@@ -3933,12 +3989,28 @@ def submit_feedback(link_id: str, payload: CandidateFeedbackRequest):
         print(f"Submit Feedback Error: {e}")
         raise HTTPException(status_code=500, detail=str(e))
 
+class CompleteSessionRequest(BaseModel):
+    warnings: int = 0
+    reason: str = "normal"
+    total_tab_switches: int = 0
+    total_face_alerts: int = 0
+    total_noise_alerts: int = 0
+
 @router.post("/complete-session/{link_id}")
-def complete_session(link_id: str, warnings: int = 0, reason: str = "normal"):
+def complete_session(link_id: str, payload: CompleteSessionRequest):
     """Mark a session as completed and send notification emails (Task 3)."""
     try:
         session = interview_sessions_collection.find_one({"link_id": link_id})
-        update_data = {"status": "completed", "warnings": warnings, "completion_reason": reason}
+        update_data = {
+            "status": "completed", 
+            "warnings": payload.warnings, 
+            "completion_reason": payload.reason,
+            "integrity": {
+                "total_tab_switches": payload.total_tab_switches,
+                "total_face_alerts": payload.total_face_alerts,
+                "total_noise_alerts": payload.total_noise_alerts
+            }
+        }
         if session:
             candidate_id = session.get("candidate_id")
             if candidate_id and not candidate_id.endswith("IQ"):
@@ -6008,7 +6080,7 @@ def get_superadmin_rejected(adminId: Optional[str] = None, current_admin: dict =
 
 @router.post("/api/superadmin/interview/create")
 @router.post("/superadmin/interview/create")
-async def superadmin_interview_create(data: dict, background_tasks: BackgroundTasks, current_admin: dict = Depends(get_current_admin_details)):
+def superadmin_interview_create(data: dict, background_tasks: BackgroundTasks, current_admin: dict = Depends(get_current_admin_details)):
     if current_admin.get("role") not in ["super_admin", "master"]:
         raise HTTPException(status_code=403, detail="Super Admin access required")
     if "candidates" in data:
@@ -6022,7 +6094,7 @@ async def superadmin_interview_create(data: dict, background_tasks: BackgroundTa
             single_data = CreateSession(**data)
         except Exception as e:
             raise HTTPException(status_code=422, detail=str(e))
-        return await create_session(single_data, current_admin)
+        return create_session(single_data, current_admin)
 
 @router.get("/api/superadmin/profile")
 @router.get("/superadmin/profile")
@@ -6196,6 +6268,9 @@ async def generate_tts(req: TTSRequest):
     # Per-session cloned voice (from /voice-clone-instant) takes priority over the global static voice
     cartesia_voice_id = (req.voice_id or "").strip() or os.getenv("CARTESIA_VOICE_ID", "").strip()
 
+    from fastapi.responses import StreamingResponse
+    import io
+
     # ──────────────────────────────────────────────────────────────────────────
     # 1. Build Edge TTS regional voice map (used as fallback AND for regional languages)
     # ──────────────────────────────────────────────────────────────────────────
@@ -6243,10 +6318,8 @@ async def generate_tts(req: TTSRequest):
             audio_bytes = await asyncio.get_event_loop().run_in_executor(None, _call_cartesia)
 
             if audio_bytes:
-                with open(temp_filename, "wb") as f:
-                    f.write(audio_bytes)
-                used_cartesia = True
                 print(f"[TTS] Cartesia: OK ({len(audio_bytes)} bytes) | voice={cartesia_voice_id}")
+                return StreamingResponse(io.BytesIO(audio_bytes), media_type="audio/mpeg")
             else:
                 print(f"[TTS] Cartesia error: No audio returned. Falling back to Edge TTS.")
 
@@ -6254,23 +6327,21 @@ async def generate_tts(req: TTSRequest):
             print(f"[TTS] Cartesia exception: {err}. Falling back to Edge TTS.")
 
     # ──────────────────────────────────────────────────────────────────────────
-    # 3. Edge TTS fallback — runs if Cartesia was skipped, failed, or quota hit,
-    #    AND always runs for regional languages regardless of Cartesia config
+    # 3. Edge TTS fallback 
     # ──────────────────────────────────────────────────────────────────────────
-    if not used_cartesia:
-        try:
-            print(f"[TTS] Using Microsoft Edge TTS | voice={edge_voice} | lang={requested_lang}")
-            communicate = edge_tts.Communicate(req.text, edge_voice)
-            await communicate.save(temp_filename)
-        except Exception as edge_err:
-            print(f"[TTS] Edge TTS Error: {edge_err}")
-            raise HTTPException(status_code=500, detail=f"TTS generation failed: {edge_err}")
-
-    return FileResponse(
-        temp_filename,
-        media_type="audio/mpeg",
-        background=BackgroundTask(os.remove, temp_filename),
-    )
+    try:
+        print(f"[TTS] Using Microsoft Edge TTS | voice={edge_voice} | lang={requested_lang}")
+        communicate = edge_tts.Communicate(req.text, edge_voice)
+        
+        async def edge_tts_stream():
+            async for chunk in communicate.stream():
+                if chunk["type"] == "audio":
+                    yield chunk["data"]
+                    
+        return StreamingResponse(edge_tts_stream(), media_type="audio/mpeg")
+    except Exception as edge_err:
+        print(f"[TTS] Edge TTS Error: {edge_err}")
+        raise HTTPException(status_code=500, detail=f"TTS generation failed: {edge_err}")
 
 
 

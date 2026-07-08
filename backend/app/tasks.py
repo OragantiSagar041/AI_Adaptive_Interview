@@ -151,3 +151,20 @@ def generate_report_task(interview_id: str):
     except Exception as e:
         logger.error(f"Failed to generate report: {e}")
         return {"status": "failed", "error": str(e)}
+
+# ---------------------------------------------------------------------------
+# Task: process bulk emails in background (offloads the loop from FastAPI)
+# ---------------------------------------------------------------------------
+
+@celery_app.task(name="app.tasks.process_bulk_emails_task")
+def process_bulk_emails_task(jobs: list):
+    logger.info(f"Processing {len(jobs)} bulk email jobs in Celery...")
+    # Import here to avoid circular dependencies
+    from app.services import queue_or_send_interview_email
+    for job in jobs:
+        try:
+            queue_or_send_interview_email(job["doc"], job["link_url"], skip_db_update=True)
+        except Exception as email_err:
+            logger.error(f"Bulk Email Error for {job['doc'].get('candidate_email')}: {email_err}")
+    logger.info(f"Finished processing {len(jobs)} bulk email jobs.")
+    return {"status": "success", "jobs_processed": len(jobs)}

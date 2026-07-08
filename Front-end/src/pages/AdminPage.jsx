@@ -268,6 +268,7 @@ export default function AdminPage({ role: initialRole = 'admin' }) {
   const [bulkCustomQuestionsParsing, setBulkCustomQuestionsParsing] = useState(false)
   const [bulkAiInstructionsParsing, setBulkAiInstructionsParsing] = useState(false)
   const [bulkCsvLabel, setBulkCsvLabel] = useState('Click to upload or drag and drop Excel or CSV template')
+  const [bulkUploadProgress, setBulkUploadProgress] = useState(null)
 
   // Bulk submission results
   const [bulkResultsModalOpen, setBulkResultsModalOpen] = useState(false)
@@ -751,52 +752,80 @@ export default function AdminPage({ role: initialRole = 'admin' }) {
     }
 
     setInviting(true)
+    setBulkUploadProgress('Preparing chunks...')
     try {
-      const response = await fetch(`${API_BASE_URL}/admin/bulk-create-sessions`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${token}`
-        },
-        body: JSON.stringify({
-          candidates: bulkCandidates.map(c => ({
-            candidate_name: c.name,
-            candidate_email: c.email,
-            resume_text: '',
-            record_video: c.record_video !== undefined ? c.record_video : recordVideo
-          })),
-          job_description: jobDescription,
-          industry_type: industry,
-          interview_type: interviewType,
-          language: language,
-          case_study_count: interviewType === 'Non-Technical' ? Number(caseStudyCount) : 0,
-          admin_id: adminUser?.admin_id || 'admin',
-          interview_duration: Number(duration),
-          record_video: recordVideo,
-          custom_email_html: customEmailHtml || "",
-          scheduled_start: toUtcIso(scheduledStart),
-          scheduled_end: toUtcIso(scheduledEnd),
-          hr_screening: hrScreening,
-          custom_questions: customQuestions,
-          ai_instructions: aiInstructions
-        })
-      })
+      const CHUNK_SIZE = 500;
+      const totalCandidates = bulkCandidates.length;
+      const totalChunks = Math.ceil(totalCandidates / CHUNK_SIZE);
+      
+      let totalSuccessful = 0;
+      let totalCount = 0;
+      let allResults = [];
+      
+      for (let i = 0; i < totalChunks; i++) {
+        setBulkUploadProgress(`Uploading chunk ${i + 1} of ${totalChunks}...`)
+        const chunk = bulkCandidates.slice(i * CHUNK_SIZE, (i + 1) * CHUNK_SIZE);
 
-      const data = await response.json()
-      if (response.ok) {
-        alert(`Successfully sent ${data.successful}/${data.total} interviews!`)
-        setBulkResultsData(data)
-        setBulkResultsModalOpen(true)
-        setBulkCandidates([])
-        setCustomEmailHtml('')
-        refreshDashboardData()
-        dispatch(updateCredits((adminUser?.credits || 0) - (data.successful || 0)))
-      } else {
-        alert(data.detail || data.message || "Failed to create bulk sessions.")
+        try {
+          const response = await fetch(`${API_BASE_URL}/admin/bulk-create-sessions`, {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json',
+              'Authorization': `Bearer ${token}`
+            },
+            body: JSON.stringify({
+              candidates: chunk.map(c => ({
+                candidate_name: c.name,
+                candidate_email: c.email,
+                resume_text: '',
+                record_video: c.record_video !== undefined ? c.record_video : recordVideo
+              })),
+              job_description: jobDescription,
+              industry_type: industry,
+              interview_type: interviewType,
+              language: language,
+              case_study_count: interviewType === 'Non-Technical' ? Number(caseStudyCount) : 0,
+              admin_id: adminUser?.admin_id || 'admin',
+              interview_duration: Number(duration),
+              record_video: recordVideo,
+              custom_email_html: customEmailHtml || "",
+              scheduled_start: toUtcIso(scheduledStart),
+              scheduled_end: toUtcIso(scheduledEnd),
+              hr_screening: hrScreening,
+              custom_questions: customQuestions,
+              ai_instructions: aiInstructions
+            })
+          })
+
+          const data = await response.json()
+          if (!response.ok) {
+             console.error(`Chunk ${i+1} failed:`, data.detail || data.message)
+             continue // skip to next chunk on failure
+          }
+          
+          totalSuccessful += data.successful || 0;
+          totalCount += data.total || 0;
+          if (data.results) {
+            allResults = [...allResults, ...data.results];
+          }
+        } catch (chunkError) {
+          console.error(`Network error on chunk ${i+1}:`, chunkError)
+          // Continue to next chunk instead of breaking the entire loop
+        }
       }
+
+      setBulkUploadProgress(null)
+      alert(`Successfully sent ${totalSuccessful}/${totalCount} interviews!`)
+      setBulkResultsData({ successful: totalSuccessful, total: totalCount, results: allResults })
+      setBulkResultsModalOpen(true)
+      setBulkCandidates([])
+      setCustomEmailHtml('')
+      refreshDashboardData()
+      dispatch(updateCredits((adminUser?.credits || 0) - totalSuccessful))
     } catch (e) {
       console.error(e)
-      alert("Error sending bulk interviews.")
+      setBulkUploadProgress(null)
+      alert(e.message || "Error during setup of bulk interviews.")
     } finally {
       setInviting(false)
     }
