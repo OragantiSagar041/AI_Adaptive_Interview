@@ -1374,20 +1374,22 @@ export default function VoiceInterviewPage() {
   if (round === 'coding' && codingQuestion) {
     return (
       <>
-        <VoiceCodingRound question={codingQuestion} interviewId={interviewId} linkId={linkId} duration={roundDuration}
-          sessionDetail={sessionDetail} language={language} wsRef={wsRef} onComplete={() => {
-            const type = interviewType
-            if (type === 'Non-Technical') {
-              // fetch case study after coding
-              fetch(`${API_BASE_URL}/case-study/start`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ interview_id: interviewId }) })
-                .then(r => r.json()).then(data => {
-                  const cqs = (data.case_study_round?.questions || []).map((q, i) => ({ id: `cs_${i}`, type: 'case_study', text: q.text || q.scenario || '', caseStudyIndex: i }))
-                  setCaseStudyQuestions(cqs); setRound('case_study')
-                }).catch(() => completeInterview())
-            } else {
-              completeInterview()
-            }
-          }} />
+        <React.Suspense fallback={<div className="flex h-screen items-center justify-center text-white text-xl bg-[#0a0f1e]">Loading coding environment...</div>}>
+          <VoiceCodingRound question={codingQuestion} interviewId={interviewId} linkId={linkId} duration={roundDuration}
+            sessionDetail={sessionDetail} language={language} wsRef={wsRef} onComplete={() => {
+              const type = interviewType
+              if (type === 'Non-Technical') {
+                // fetch case study after coding
+                fetch(`${API_BASE_URL}/case-study/start`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ interview_id: interviewId }) })
+                  .then(r => r.json()).then(data => {
+                    const cqs = (data.case_study_round?.questions || []).map((q, i) => ({ id: `cs_${i}`, type: 'case_study', text: q.text || q.scenario || '', caseStudyIndex: i }))
+                    setCaseStudyQuestions(cqs); setRound('case_study')
+                  }).catch(() => completeInterview())
+              } else {
+                completeInterview()
+              }
+            }} />
+        </React.Suspense>
         {candidateVideoElement}
       </>
     )
@@ -1396,9 +1398,11 @@ export default function VoiceInterviewPage() {
   if (round === 'case_study' && caseStudyQuestions.length) {
     return (
       <>
-        <VoiceCaseStudy question={caseStudyQuestions[0]} allQuestions={caseStudyQuestions} duration={roundDuration}
-          interviewId={interviewId} linkId={linkId} sessionDetail={sessionDetail}
-          language={language} wsRef={wsRef} onComplete={completeInterview} />
+        <React.Suspense fallback={<div className="flex h-screen items-center justify-center text-white text-xl bg-[#0a0f1e]">Loading case study environment...</div>}>
+          <VoiceCaseStudy question={caseStudyQuestions[0]} allQuestions={caseStudyQuestions} duration={roundDuration}
+            interviewId={interviewId} linkId={linkId} sessionDetail={sessionDetail}
+            language={language} wsRef={wsRef} onComplete={completeInterview} />
+        </React.Suspense>
         {candidateVideoElement}
       </>
     )
