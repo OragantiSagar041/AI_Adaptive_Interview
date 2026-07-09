@@ -11,6 +11,7 @@ import {
   Radio,
   ChevronLeft,
   ChevronRight,
+  PhoneCall,
 } from 'lucide-react'
 
 export default function Sidebar({

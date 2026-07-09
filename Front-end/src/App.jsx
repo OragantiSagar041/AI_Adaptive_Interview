@@ -47,6 +47,7 @@ const SuperAdminRejectedCandidatesPage = React.lazy(() => import('./pages/supera
 const SuperAdminCreateInterviewPage = React.lazy(() => import('./pages/superadmin/CreateInterviewPage'))
 const SuperAdminProfileSettings = React.lazy(() => import('./components/superadmin/ProfileSettings'))
 const SuperAdminNotifications = React.lazy(() => import('./pages/superadmin/SuperAdminNotifications'))
+const AICallPage = React.lazy(() => import('./pages/admin/AICallPage'))
 
 function App() {
   return (
