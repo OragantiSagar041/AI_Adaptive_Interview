@@ -5,11 +5,19 @@
  *   Round 2: Coding (Monaco Editor + live code sentinel)
  *   Round 3: Case Study (branching AI discussion)
  */
-import React, { useState, useEffect, useRef, useCallback } from 'react'
-import { useParams } from 'react-router-dom'
-import { API_BASE_URL } from '../apiConfig'
+import React, { useState, useEffect, useRef, useCallback, Suspense } from 'react'
+import { useParams, useNavigate } from 'react-router-dom'
+import {
+  Mic, MicOff,
+  CheckCircle, Video, Monitor, Info, Camera,
+  AlertCircle
+} from 'lucide-react'
+
+// Internal Components
+import ErrorBoundary from '../components/ErrorBoundary'
 const VoiceCodingRound = React.lazy(() => import('./VoiceCodingRound'))
 const VoiceCaseStudy = React.lazy(() => import('./VoiceCaseStudy'))
+import { API_BASE_URL } from '../apiConfig'
 import useCandidateWebRTC from '../hooks/useCandidateWebRTC'
 import OrbAvatar from '../components/OrbAvatar'
 import Swal from 'sweetalert2'
@@ -240,10 +248,11 @@ export default function VoiceInterviewPage() {
     lastAlertType: ''
   })
   const integrityMetricsRef = useRef({
+    reason: 'normal',
     tabSwitches: 0,
     faceAlerts: 0,
     noiseAlerts: 0,
-    reason: 'normal'
+    fullscreenExits: 0
   })
   const screenShareViolationsRef = useRef(0)
   const screenShareViolationHandlerRef = useRef(null)  // stable ref to avoid circular deps
@@ -267,6 +276,8 @@ export default function VoiceInterviewPage() {
   const cameraStreamRef = useRef(null)
   const cameraChunksRef = useRef([])
   const candidateVideoRef = useRef(null)
+  
+
 
   // Set a mock audio level that bounces slightly when speaking, or 0 when silent
   const isSpeaking = aiStatus === 'listening' && interimText.length > 0
@@ -338,6 +349,17 @@ export default function VoiceInterviewPage() {
       }}
     />
   )
+
+  // Ensure stream stays attached across round transitions
+  useEffect(() => {
+    if (candidateVideoRef.current && cameraStreamRef.current) {
+      if (candidateVideoRef.current.srcObject !== cameraStreamRef.current) {
+        candidateVideoRef.current.srcObject = cameraStreamRef.current
+        candidateVideoRef.current.muted = true
+        candidateVideoRef.current.play().catch(e => console.log(e))
+      }
+    }
+  }, [round])
 
   // Sync refs
   useEffect(() => { currentQIdxRef.current = currentQIdx }, [currentQIdx])
@@ -522,7 +544,7 @@ export default function VoiceInterviewPage() {
 
   const addMsg = useCallback((role, text) => setChatMessages(p => [...p, { role, text }]), [])
   const aiSay = useCallback((text, onEnd) => {
-    if (submittingRef.current || isTransitioningRef.current || roundRef.current === 'done') return;
+    if (isTransitioningRef.current || roundRef.current === 'done') return;
     addMsg('ai', text); speak(text, onEnd)
   }, [addMsg, speak])
 
@@ -931,7 +953,8 @@ export default function VoiceInterviewPage() {
           reason: integrityMetricsRef.current.reason,
           total_tab_switches: integrityMetricsRef.current.tabSwitches,
           total_face_alerts: integrityMetricsRef.current.faceAlerts,
-          total_noise_alerts: integrityMetricsRef.current.noiseAlerts
+          total_noise_alerts: integrityMetricsRef.current.noiseAlerts,
+          total_fullscreen_exits: integrityMetricsRef.current.fullscreenExits
         })
       })
     } catch (_) { }
@@ -1075,8 +1098,10 @@ export default function VoiceInterviewPage() {
 
     if (['multi_person', 'no_face', 'phone', 'eye_contact'].includes(alertType)) {
       integrityMetricsRef.current.faceAlerts += 1
-    } else if (alertType === 'tab_switch' || alertType === 'fullscreen_exit') {
+    } else if (alertType === 'tab_switch') {
       integrityMetricsRef.current.tabSwitches += 1
+    } else if (alertType === 'fullscreen_exit') {
+      integrityMetricsRef.current.fullscreenExits += 1
     } else if (alertType === 'background_noise') {
       integrityMetricsRef.current.noiseAlerts += 1
     }
@@ -1240,7 +1265,7 @@ export default function VoiceInterviewPage() {
   // Use Centralized AI Proctoring Hook
   const proctoring = useProctoring({
     videoRef: candidateVideoRef,
-    enabled: round !== 'done' && round !== 'pre_checks' && round !== 'intro',
+    enabled: round !== 'done' && round !== 'pre_checks' && round !== 'intro' && round !== 'submitting',
     maxAlerts: 10,
     onViolation: (v) => {
       logProctoringAlert(v.type, v.message)
@@ -1275,7 +1300,7 @@ export default function VoiceInterviewPage() {
 
   // ── Screenshot / snipping-tool deterrence ────────────────────────────
   useScreenshotProtection({
-    enabled: round !== 'done' && round !== 'pre_checks' && round !== 'intro',
+    enabled: round !== 'done' && round !== 'pre_checks' && round !== 'intro' && round !== 'submitting',
     onAttempt: (v) => {
       const message = 'Screenshots are not allowed during this interview.'
       logProctoringAlert(v.type, message)
@@ -1295,7 +1320,7 @@ export default function VoiceInterviewPage() {
 
   // ── Browser exam security (copy/paste blocking, DevTools, window blur, multi-monitor) ──
   useExamSecurity({
-    enabled: round !== 'done' && round !== 'pre_checks' && round !== 'intro',
+    enabled: round !== 'done' && round !== 'pre_checks' && round !== 'intro' && round !== 'submitting',
     onViolation: ({ type, message }) => {
       logProctoringAlert(type, message)
       Swal.fire({
@@ -1374,9 +1399,10 @@ export default function VoiceInterviewPage() {
   if (round === 'coding' && codingQuestion) {
     return (
       <>
-        <React.Suspense fallback={<div className="flex h-screen items-center justify-center text-white text-xl bg-[#0a0f1e]">Loading coding environment...</div>}>
-          <VoiceCodingRound question={codingQuestion} interviewId={interviewId} linkId={linkId} duration={roundDuration}
-            sessionDetail={sessionDetail} language={language} wsRef={wsRef} onComplete={() => {
+        <ErrorBoundary>
+          <React.Suspense fallback={<div className="flex h-screen items-center justify-center text-white text-xl bg-[#0a0f1e]">Loading coding environment...</div>}>
+            <VoiceCodingRound question={codingQuestion} interviewId={interviewId} linkId={linkId} duration={roundDuration}
+              sessionDetail={sessionDetail} language={language} wsRef={wsRef} onComplete={() => {
               const type = interviewType
               if (type === 'Non-Technical') {
                 // fetch case study after coding
@@ -1389,7 +1415,8 @@ export default function VoiceInterviewPage() {
                 completeInterview()
               }
             }} />
-        </React.Suspense>
+          </React.Suspense>
+        </ErrorBoundary>
         {candidateVideoElement}
       </>
     )
@@ -1398,11 +1425,13 @@ export default function VoiceInterviewPage() {
   if (round === 'case_study' && caseStudyQuestions.length) {
     return (
       <>
-        <React.Suspense fallback={<div className="flex h-screen items-center justify-center text-white text-xl bg-[#0a0f1e]">Loading case study environment...</div>}>
-          <VoiceCaseStudy question={caseStudyQuestions[0]} allQuestions={caseStudyQuestions} duration={roundDuration}
+        <ErrorBoundary>
+          <React.Suspense fallback={<div className="flex h-screen items-center justify-center text-white text-xl bg-[#0a0f1e]">Loading case study environment...</div>}>
+            <VoiceCaseStudy question={caseStudyQuestions[0]} allQuestions={caseStudyQuestions} duration={roundDuration}
             interviewId={interviewId} linkId={linkId} sessionDetail={sessionDetail}
             language={language} wsRef={wsRef} onComplete={completeInterview} />
-        </React.Suspense>
+          </React.Suspense>
+        </ErrorBoundary>
         {candidateVideoElement}
       </>
     )

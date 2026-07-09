@@ -300,7 +300,7 @@ export default function VoiceCaseStudy({
           text, 
           voice: 'shimmer', 
           language: sessionLang,
-          use_custom_voice: sessionDetail?.voice_cloning_enabled || false,
+          use_custom_voice: sessionDetail?.voice_clone || sessionDetail?.voice_cloning_enabled || false,
           ...(sessionDetail?.custom_voice_id ? { voice_id: sessionDetail.custom_voice_id } : {})
         })
       })

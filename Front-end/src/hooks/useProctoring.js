@@ -59,17 +59,20 @@ export function useProctoring({
     lastAlertType: null,
   })
   const [alertCount, setAlertCount] = useState(0)
+  const alertCountRef = useRef(0)
 
   const raiseViolation = useCallback((alertType, message) => {
+    if (alertCountRef.current >= maxAlerts) return // already terminated
+
+    const next = alertCountRef.current + 1
+    alertCountRef.current = next
+    setAlertCount(next)
+
     console.warn(`[useProctoring] 🚨 Violation: ${alertType} — ${message}`)
     setState((s) => ({ ...s, lastAlertType: alertType }))
-    setAlertCount((prev) => {
-      if (prev >= maxAlerts) return prev // already terminated, don't keep counting
-      const next = prev + 1
-      onViolationRef.current?.({ type: alertType, message, count: next })
-      if (next >= maxAlerts) onTerminateRef.current?.({ type: alertType, message })
-      return next
-    })
+    
+    onViolationRef.current?.({ type: alertType, message, count: next })
+    if (next >= maxAlerts) onTerminateRef.current?.({ type: alertType, message })
   }, [maxAlerts])
 
   const handleFrameResult = useCallback((features) => {

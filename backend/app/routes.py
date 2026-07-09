@@ -3995,6 +3995,7 @@ class CompleteSessionRequest(BaseModel):
     total_tab_switches: int = 0
     total_face_alerts: int = 0
     total_noise_alerts: int = 0
+    total_fullscreen_exits: int = 0
 
 @router.post("/complete-session/{link_id}")
 def complete_session(link_id: str, payload: CompleteSessionRequest):
@@ -4008,7 +4009,8 @@ def complete_session(link_id: str, payload: CompleteSessionRequest):
             "integrity": {
                 "total_tab_switches": payload.total_tab_switches,
                 "total_face_alerts": payload.total_face_alerts,
-                "total_noise_alerts": payload.total_noise_alerts
+                "total_noise_alerts": payload.total_noise_alerts,
+                "total_fullscreen_exits": payload.total_fullscreen_exits
             }
         }
         if session:

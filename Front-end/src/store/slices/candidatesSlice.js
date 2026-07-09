@@ -91,7 +91,10 @@ export const handleSuperAdminBulkDelete = createAsyncThunk(
       const { API_BASE_URL, token } = getState().auth
       const selectedAdminFilter = getState().dashboard.selectedAdminFilter
       const res = await axios.delete(`${API_BASE_URL}/superadmin/candidates/bulk`, {
-        headers: { Authorization: `Bearer ${token}` },
+        headers: { 
+          Authorization: `Bearer ${token}`,
+          'Content-Type': 'application/json'
+        },
         data: { ids }
       })
       alert(`Deleted ${ids.length} sessions successfully.`)
