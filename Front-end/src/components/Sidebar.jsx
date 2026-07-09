@@ -11,6 +11,7 @@ import {
   Radio,
   ChevronLeft,
   ChevronRight,
+  PhoneCall,
 } from 'lucide-react'
 
 export default function Sidebar({
@@ -29,6 +30,7 @@ export default function Sidebar({
     { id: 'qualified', label: 'Qualified Candidates', icon: CheckCircle, path: '/admin/qualified-candidates' },
     { id: 'rejected', label: 'Rejected Candidates', icon: XCircle, path: '/admin/rejected-candidates' },
     { id: 'create', label: 'Create Interview', icon: Plus, path: '/admin/create-interview' },
+    { id: 'ai-calls', label: 'AI Calls', icon: PhoneCall, path: '/admin/ai-calls' },
     { id: 'settings', label: 'Profile Settings', icon: Settings, path: '/admin/profile-settings' },
   ]
 

@@ -19,7 +19,8 @@ import {
   X,
   Bell,
   Activity,
-  AlertCircle
+  AlertCircle,
+  PhoneCall
 } from 'lucide-react'
 import { logout, loadSuperAdminProfile } from '../../store/slices/authSlice'
 import { persistor } from '../../store/store'
@@ -401,6 +402,7 @@ export default function SuperAdminLayout() {
     { id: 'qualified', label: 'Qualified Candidates', icon: CheckCircle, path: '/superadmin/qualified-candidates' },
     { id: 'rejected', label: 'Rejected Candidates', icon: XCircle, path: '/superadmin/rejected-candidates' },
     { id: 'create', label: 'Create Interview', icon: Plus, path: '/superadmin/create-interview' },
+    { id: 'ai-calls', label: 'AI Calls', icon: PhoneCall, path: '/superadmin/ai-calls' },
     { id: 'settings', label: 'Profile Settings', icon: Settings, path: '/superadmin/profile-settings' },
   ]
 
