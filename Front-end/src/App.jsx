@@ -34,6 +34,7 @@ const OverviewDashboardPage = React.lazy(() => import('./pages/admin/OverviewDas
 const QualifiedCandidatesPage = React.lazy(() => import('./pages/admin/QualifiedCandidatesPage'))
 const RejectedCandidatesPage = React.lazy(() => import('./pages/admin/RejectedCandidatesPage'))
 const CreateInterviewPage = React.lazy(() => import('./pages/admin/CreateInterviewPage'))
+const AICallingAgentPage = React.lazy(() => import('./pages/admin/AICallingAgentPage'))
 const ProfileSettings = React.lazy(() => import('./components/admin/ProfileSettings'))
 const AdminNotifications = React.lazy(() => import('./pages/admin/AdminNotifications'))
 
@@ -96,6 +97,7 @@ function App() {
             <Route path="qualified-candidates" element={<SuperAdminQualifiedCandidatesPage />} />
             <Route path="rejected-candidates" element={<SuperAdminRejectedCandidatesPage />} />
             <Route path="create-interview" element={<SuperAdminCreateInterviewPage />} />
+            <Route path="ai-calling" element={<AICallingAgentPage />} />
             <Route path="profile-settings" element={<SuperAdminProfileSettings />} />
             <Route path="notifications" element={<SuperAdminNotifications />} />
           </Route>
@@ -118,6 +120,7 @@ function App() {
             <Route path="qualified-candidates" element={<QualifiedCandidatesPage />} />
             <Route path="rejected-candidates" element={<RejectedCandidatesPage />} />
             <Route path="create-interview" element={<CreateInterviewPage />} />
+            <Route path="ai-calling" element={<AICallingAgentPage />} />
             <Route path="profile-settings" element={<ProfileSettings />} />
             <Route path="notifications" element={<AdminNotifications />} />
           </Route>

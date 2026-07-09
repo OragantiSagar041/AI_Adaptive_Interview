@@ -1,7 +1,9 @@
 import React from 'react'
-import { Search, X, Download, Trash2, Video, Eye, Calendar } from 'lucide-react'
+import { useDispatch } from 'react-redux'
+import { Search, X, Download, Trash2, Video, Eye, Calendar, PhoneCall } from 'lucide-react'
 import Button from '../Button'
 import Badge from '../Badge'
+import { initiateAICall } from '../../store/slices/candidatesSlice'
 
 export function CandidateFilters({
   searchTerm,
@@ -148,6 +150,15 @@ export function CandidateTable({
   currentPage,
   setCurrentPage
 }) {
+  const dispatch = useDispatch()
+
+  const handleCallClick = (session) => {
+    const phoneNumber = prompt(`Enter phone number for ${session.candidate_name || 'Candidate'} (e.g. +1234567890):`, session.candidate_phone || '')
+    if (phoneNumber) {
+      dispatch(initiateAICall({ sessionId: session.link_id || session.id, phoneNumber }))
+    }
+  }
+
   return (
     <>
       <div className="overflow-x-auto w-full">
@@ -282,6 +293,15 @@ export function CandidateTable({
                             className="px-2.5 py-1.5 bg-slate-100 hover:bg-slate-200/80 text-slate-600 border border-slate-200 text-xs font-bold rounded transition-colors cursor-pointer"
                           >
                             Copy Link
+                          </button>
+                        )}
+                        {(computedStatus === 'pending' || computedStatus === 'started') && (
+                          <button
+                            onClick={() => handleCallClick(c)}
+                            className="flex items-center justify-center w-[28px] h-[28px] bg-indigo-50 text-indigo-500 hover:bg-indigo-500 hover:text-white rounded border border-indigo-100 transition-colors cursor-pointer shadow-sm"
+                            title="Call Candidate (AI)"
+                          >
+                            <PhoneCall size={14} />
                           </button>
                         )}
                         <button

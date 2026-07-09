@@ -78,6 +78,7 @@ from routes import voice_routes
 from .models import *
 from .database import *
 from .config import *
+from . import omni_dimension_client
 from .services import *
 from app.session_store import get_session, set_session, delete_session
 
@@ -6377,6 +6378,225 @@ async def stt_endpoint(file: UploadFile = File(...), language: Optional[str] = N
         print(f"STT Error: {e}")
         raise HTTPException(status_code=500, detail=str(e))
 
+# ─── Omni Dimension AI Calling Endpoints ──────────────────────────────────────
+
+@router.post("/api/calls/initiate/{session_id}")
+async def initiate_ai_call(session_id: str, request: Request):
+    """
+    Initiates an outbound AI call via Omni Dimension for the given session.
+    Expects a JSON body with an optional phone_number, if not already in DB.
+    """
+    try:
+        body = await request.json()
+    except Exception:
+        body = {}
+    
+    phone_number = body.get("phone_number")
+    
+    session_data = interview_sessions_collection.find_one({
+        "$or": [{"id": session_id}, {"link_id": session_id}]
+    })
+    
+    if not session_data:
+        raise HTTPException(status_code=404, detail="Session not found")
+        
+    candidate_name = session_data.get("candidate_name", "Candidate")
+    # If phone_number was not passed in body, try to get from session (if it exists)
+    if not phone_number:
+        phone_number = session_data.get("candidate_phone")
+        
+    if not phone_number:
+        raise HTTPException(status_code=400, detail="Phone number is required to initiate an AI call")
+
+    interview_id = session_data.get("interview_id")
+    interview_data = interviews_collection.find_one({"id": interview_id})
+    if not interview_data:
+        raise HTTPException(status_code=404, detail="Interview template not found")
+
+    job_description = interview_data.get("job_description", "")
+    resume_text = session_data.get("parsed_resume", "")
+    skills = ", ".join(interview_data.get("skills", []))
+    duration = interview_data.get("duration", 30)
+
+    try:
+        from . import omni_dimension_client
+        response = omni_dimension_client.start_omni_call(
+            phone_number=phone_number,
+            candidate_name=candidate_name,
+            job_description=job_description,
+            resume_text=resume_text,
+            duration=duration,
+            skills=skills
+        )
+        
+        call_id = response.get("call_id") if isinstance(response, dict) else str(response)
+        
+        # Save call info to session
+        interview_sessions_collection.update_one(
+            {"_id": session_data["_id"]},
+            {"$set": {
+                "ai_call_id": call_id,
+                "ai_call_status": "initiated",
+                "candidate_phone": phone_number
+            }}
+        )
+        return {"status": "success", "call_id": call_id, "message": f"AI Call initiated to {phone_number}"}
+    except Exception as e:
+        print(f"Error initiating AI call: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+class ManualAICallRequest(BaseModel):
+    phone_number: str
+    candidate_name: Optional[str] = "Candidate"
+    job_description: Optional[str] = ""
+    resume_text: Optional[str] = ""
+    duration: Optional[int] = 30
+    skills: Optional[str] = ""
+
+@router.post("/api/calls/initiate-manual")
+async def initiate_manual_ai_call(
+    phone_number: str = Form(...),
+    candidate_name: Optional[str] = Form("Candidate"),
+    job_description: Optional[str] = Form(""),
+    duration: Optional[int] = Form(30),
+    skills: Optional[str] = Form(""),
+    resume: UploadFile = File(None)
+):
+    """
+    Initiates an outbound AI call via Omni Dimension manually, without requiring an existing session.
+    """
+    if not phone_number:
+        raise HTTPException(status_code=400, detail="Phone number is required")
+
+    try:
+        from . import omni_dimension_client
+        from .services import extract_text_from_file
+        
+        resume_text = ""
+        if resume and resume.filename:
+            file_content = await resume.read()
+            resume_text = extract_text_from_file(file_content, resume.filename)
+            
+        response = omni_dimension_client.start_omni_call(
+            phone_number=phone_number,
+            candidate_name=candidate_name,
+            job_description=job_description,
+            resume_text=resume_text,
+            duration=duration,
+            skills=skills
+        )
+        
+        call_id = response.get("call_id") if isinstance(response, dict) else str(response)
+        
+        # Save to Omni call logs
+        omni_call_logs_collection.insert_one({
+            "call_id": call_id,
+            "candidate_name": candidate_name,
+            "phone_number": phone_number,
+            "status": "initiated",
+            "duration": "0m 0s",
+            "recording_url": None,
+            "created_at": datetime.now(timezone.utc).isoformat()
+        })
+        
+        # We don't have a session to attach this to, so we just return it. 
+        # In the future, a separate collection for standalone manual AI calls could be created.
+        return {"status": "success", "call_id": call_id, "message": f"Manual AI Call initiated to {phone_number}"}
+    except Exception as e:
+        print(f"Error initiating manual AI call: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+@router.get("/api/calls/logs/{call_id}")
+async def get_omni_call_log_details(call_id: str):
+    """
+    Fetches the detailed log for a specific call directly from Omni Dimension.
+    """
+    from . import omni_dimension_client
+    try:
+        response = omni_dimension_client.get_omni_call_status(call_id)
+        if response and response.get('json') and response['json'].get('call_log_data'):
+            return {"log": response['json']['call_log_data'][0]}
+        raise HTTPException(status_code=404, detail="Call log details not found in Omni Dimension.")
+    except Exception as e:
+        print(f"Error fetching detailed call log {call_id}: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+@router.get("/api/calls/logs")
+async def get_omni_call_logs():
+    """
+    Fetches all omni dimension call logs, updating pending calls with live data.
+    """
+    try:
+        logs = list(omni_call_logs_collection.find().sort("created_at", -1))
+        from . import omni_dimension_client
+        updated = False
+        
+        for log in logs:
+            # Avoid fetching for already completed/failed calls unless required
+            status = log.get("status", "").lower()
+            if status not in ["completed", "failed", "no answer", "canceled"]:
+                try:
+                    call_id = log.get("call_id")
+                    if call_id:
+                        status_response = omni_dimension_client.get_omni_call_status(str(call_id))
+                        if status_response and "call_logs" in status_response:
+                            call_log_data = status_response["call_logs"][0] if status_response["call_logs"] else {}
+                            if call_log_data:
+                                new_status = call_log_data.get("call_status", status)
+                                duration_sec = call_log_data.get("duration_in_sec", 0)
+                                mins, secs = divmod(duration_sec, 60)
+                                duration_str = f"{mins}m {secs}s"
+                                recording_url = call_log_data.get("recording_url", log.get("recording_url"))
+                                
+                                log["status"] = new_status
+                                log["duration"] = duration_str
+                                log["recording_url"] = recording_url
+                                
+                                omni_call_logs_collection.update_one(
+                                    {"_id": log["_id"]},
+                                    {"$set": {
+                                        "status": new_status,
+                                        "duration": duration_str,
+                                        "recording_url": recording_url
+                                    }}
+                                )
+                                updated = True
+                except Exception as ex:
+                    print(f"Error fetching status for call {log.get('call_id')}: {ex}")
+            
+            # stringify ObjectId for JSON response
+            log["_id"] = str(log["_id"])
+            
+        return {"status": "success", "logs": logs}
+    except Exception as e:
+        print(f"Error fetching call logs: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+@router.get("/api/calls/status/{session_id}")
+async def check_ai_call_status(session_id: str):
+    """
+    Checks the status of the AI call for a given session.
+    """
+    session_data = interview_sessions_collection.find_one({
+        "$or": [{"id": session_id}, {"link_id": session_id}]
+    })
+    
+    if not session_data or not session_data.get("ai_call_id"):
+        raise HTTPException(status_code=404, detail="AI call not found for this session")
+
+    call_id = session_data["ai_call_id"]
+    try:
+        from . import omni_dimension_client
+        status_response = omni_dimension_client.get_omni_call_status(call_id)
+        
+        # Update session with latest status if needed
+        # status_response could contain duration, recording link, etc.
+        
+        return {"status": "success", "data": status_response}
+    except Exception as e:
+        print(f"Error checking AI call status: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
 class CodingChatRequest(BaseModel):
     interview_id: str
     transcript: str
@@ -6466,3 +6686,97 @@ You must respond in 2-3 conversational sentences. Follow these rules strictly:
         raise HTTPException(status_code=500, detail=str(e))
 
 
+
+# ---------------------------------------------------------------------------
+# Omni Dimension AI Calling Endpoints
+# ---------------------------------------------------------------------------
+
+class StartAICallRequest(BaseModel):
+    phone_number: str
+
+@router.post("/api/calls/start/{link_id}")
+def start_ai_call(link_id: str, data: StartAICallRequest, current_admin: dict = Depends(get_current_admin_details)):
+    # Find the candidate session
+    session = interview_sessions_collection.find_one({"link_id": link_id})
+    if not session:
+        raise HTTPException(status_code=404, detail="Candidate session not found.")
+    
+    # Save the phone number if provided
+    if data.phone_number:
+        interview_sessions_collection.update_one(
+            {"_id": session["_id"]},
+            {"$set": {"candidate_phone": data.phone_number}}
+        )
+    
+    # Check if a call is already in progress
+    if session.get("omni_call_id") and session.get("omni_call_status") not in ["completed", "failed"]:
+        # We might want to check the actual status via API, but for now just prevent duplicates
+        pass 
+        
+    try:
+        # Start the call via Omni Dimension
+        response = omni_dimension_client.start_omni_call(
+            phone_number=data.phone_number,
+            candidate_name=session.get("candidate_name", ""),
+            job_description=session.get("job_description", ""),
+            resume_text=session.get("resume_text", ""),
+            duration=session.get("interview_duration", 15),
+            skills=", ".join(session.get("custom_questions", []))
+        )
+        
+        call_id = response.get("id") if hasattr(response, "get") else response.id
+        
+        # Update session with call metadata
+        interview_sessions_collection.update_one(
+            {"_id": session["_id"]},
+            {"$set": {
+                "omni_call_id": call_id,
+                "omni_call_status": "initiated"
+            }}
+        )
+        
+        return {"status": "success", "call_id": call_id}
+        
+    except Exception as e:
+        print(f"Error starting AI call: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+@router.get("/api/calls/status/{link_id}")
+def get_ai_call_status(link_id: str, current_admin: dict = Depends(get_current_admin_details)):
+    session = interview_sessions_collection.find_one({"link_id": link_id})
+    if not session:
+        raise HTTPException(status_code=404, detail="Candidate session not found.")
+        
+    call_id = session.get("omni_call_id")
+    if not call_id:
+        return {"status": "success", "call_status": "no_call"}
+        
+    try:
+        # Fetch status from Omni Dimension
+        response = omni_dimension_client.get_omni_call_status(call_id)
+        
+        call_status = response.get("status") if hasattr(response, "get") else response.status
+        
+        # Update MongoDB if status changed
+        if call_status and call_status != session.get("omni_call_status"):
+            update_data = {"omni_call_status": call_status}
+            
+            # If completed, we should also save the transcript/summary
+            if call_status == "completed":
+                transcript = response.get("transcript") if hasattr(response, "get") else getattr(response, "transcript", None)
+                summary = response.get("summary") if hasattr(response, "get") else getattr(response, "summary", None)
+                if transcript:
+                    update_data["omni_call_transcript"] = transcript
+                if summary:
+                    update_data["omni_call_summary"] = summary
+            
+            interview_sessions_collection.update_one(
+                {"_id": session["_id"]},
+                {"$set": update_data}
+            )
+            
+        return {"status": "success", "call_status": call_status, "data": response}
+        
+    except Exception as e:
+        print(f"Error checking AI call status: {e}")
+        raise HTTPException(status_code=500, detail=str(e))

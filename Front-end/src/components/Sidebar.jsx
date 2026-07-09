@@ -29,6 +29,7 @@ export default function Sidebar({
     { id: 'qualified', label: 'Qualified Candidates', icon: CheckCircle, path: '/admin/qualified-candidates' },
     { id: 'rejected', label: 'Rejected Candidates', icon: XCircle, path: '/admin/rejected-candidates' },
     { id: 'create', label: 'Create Interview', icon: Plus, path: '/admin/create-interview' },
+    { id: 'ai-calling', label: 'AI Calling Agent', icon: Radio, path: '/admin/ai-calling' },
     { id: 'settings', label: 'Profile Settings', icon: Settings, path: '/admin/profile-settings' },
   ]
 
