@@ -327,6 +327,115 @@ export const useInterviewSession = (sessionId, interviewType, startRoundTwo) => 
     return () => document.removeEventListener("visibilitychange", handleVisibilityChange)
   }, [isDisclaimerAccepted, showAllSet])
 
+  // ── Screenshot / Screen-capture Prevention ───────────────────────────────
+  // Silently blocks PrintScreen, Win+Shift+S, Ctrl+Shift+S, Ctrl+P and other
+  // common screenshot shortcuts. No alerts are shown — keystrokes are simply
+  // swallowed. Also applies CSS-level content-protection while the interview
+  // is active so that screen-recording tools capture a visually protected page.
+  useEffect(() => {
+    if (!isDisclaimerAccepted || showAllSet) return
+
+    const BLOCKED_KEYS = new Set(['PrintScreen', 'Snapshot'])
+
+    const handleKeyDown = (e) => {
+      const key = e.key
+      const ctrl = e.ctrlKey || e.metaKey
+      const shift = e.shiftKey
+      const alt = e.altKey
+
+      // Block PrintScreen / Alt+PrintScreen / any variant
+      if (BLOCKED_KEYS.has(key)) {
+        e.preventDefault()
+        e.stopImmediatePropagation()
+        return
+      }
+
+      // Win+Shift+S  (Windows Snipping Tool) — key reported as 'S'
+      if ((e.metaKey || e.key === 'Meta') && shift && key === 'S') {
+        e.preventDefault()
+        e.stopImmediatePropagation()
+        return
+      }
+
+      // Ctrl+Shift+S (many apps / browser extensions for screenshots)
+      if (ctrl && shift && key === 'S') {
+        e.preventDefault()
+        e.stopImmediatePropagation()
+        return
+      }
+
+      // Ctrl+P / Ctrl+Shift+P  (print / print-preview — can capture content)
+      if (ctrl && (key === 'p' || key === 'P')) {
+        e.preventDefault()
+        e.stopImmediatePropagation()
+        return
+      }
+
+      // Ctrl+Shift+P
+      if (ctrl && shift && (key === 'p' || key === 'P')) {
+        e.preventDefault()
+        e.stopImmediatePropagation()
+        return
+      }
+
+      // Alt+PrintScreen fallback
+      if (alt && BLOCKED_KEYS.has(key)) {
+        e.preventDefault()
+        e.stopImmediatePropagation()
+        return
+      }
+    }
+
+    // Block the keyup as well so clipboard never gets the PrintScreen bitmap
+    const handleKeyUp = (e) => {
+      if (BLOCKED_KEYS.has(e.key)) {
+        e.preventDefault()
+        e.stopImmediatePropagation()
+      }
+    }
+
+    // Silently clear clipboard if PrintScreen somehow still fires
+    const handleKeyPress = (e) => {
+      if (BLOCKED_KEYS.has(e.key)) {
+        e.preventDefault()
+        e.stopImmediatePropagation()
+        try { navigator.clipboard.writeText('') } catch (_) { /* no-op */ }
+      }
+    }
+
+    // CSS-level protection: apply a global style that makes the page appear
+    // blank / dark in screen-recording contexts that respect CSS media queries.
+    const styleEl = document.createElement('style')
+    styleEl.id = 'interview-screenshot-guard'
+    styleEl.textContent = `
+      @media print {
+        body * { visibility: hidden !important; }
+        body::after {
+          content: '' !important;
+          visibility: visible !important;
+          display: block !important;
+          background: #000 !important;
+          position: fixed !important;
+          inset: 0 !important;
+        }
+      }
+    `
+    document.head.appendChild(styleEl)
+
+    // Capture-phase listeners so they fire before any child handler
+    document.addEventListener('keydown', handleKeyDown, true)
+    document.addEventListener('keyup',   handleKeyUp,   true)
+    document.addEventListener('keypress', handleKeyPress, true)
+
+    return () => {
+      document.removeEventListener('keydown', handleKeyDown, true)
+      document.removeEventListener('keyup',   handleKeyUp,   true)
+      document.removeEventListener('keypress', handleKeyPress, true)
+      document.getElementById('interview-screenshot-guard')?.remove()
+    }
+  }, [isDisclaimerAccepted, showAllSet])
+  // ─────────────────────────────────────────────────────────────────────────
+
   // Track unload events (Refresh or Close tab)
   useEffect(() => {
     const handleUnload = () => {
