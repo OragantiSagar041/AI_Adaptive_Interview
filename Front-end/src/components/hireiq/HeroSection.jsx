@@ -63,13 +63,32 @@ export function HeroSection() {
             }}>
               {n}
             </a>))}
-          <a href="#contact" onClick={() => setMenuOpen(false)} className="mt-6 inline-flex items-center gap-2 border border-white/40 px-8 py-4 text-xs tracking-widest uppercase text-white transition-all duration-500" style={{
-            transitionDelay: `${NAV.length * 80 + 100}ms`,
-            opacity: menuOpen ? 1 : 0,
-            transform: menuOpen ? "translateY(0)" : "translateY(20px)",
-        }}>
-            Request Demo <ArrowUpRight className="w-4 h-4"/>
-          </a>
+          {user ? (
+            <Link to={dashPath} onClick={() => setMenuOpen(false)} className="mt-6 inline-flex items-center gap-2 border border-white/40 px-8 py-4 text-xs tracking-widest uppercase text-white transition-all duration-500" style={{
+              transitionDelay: `${NAV.length * 80 + 100}ms`,
+              opacity: menuOpen ? 1 : 0,
+              transform: menuOpen ? "translateY(0)" : "translateY(20px)",
+            }}>
+              Dashboard <ArrowUpRight className="w-4 h-4"/>
+            </Link>
+          ) : (
+            <div className="flex flex-col gap-4 mt-6 items-center">
+              <Link to="/login" onClick={() => setMenuOpen(false)} className="px-8 py-2 text-xs tracking-widest uppercase text-white/80 hover:text-white transition-all duration-500" style={{
+                transitionDelay: `${NAV.length * 80 + 100}ms`,
+                opacity: menuOpen ? 1 : 0,
+                transform: menuOpen ? "translateY(0)" : "translateY(20px)",
+              }}>
+                Sign in
+              </Link>
+              <Link to="/register" onClick={() => setMenuOpen(false)} className="inline-flex items-center gap-2 border border-white/40 px-8 py-4 text-xs tracking-widest uppercase text-white transition-all duration-500 hover:bg-white/10" style={{
+                transitionDelay: `${NAV.length * 80 + 200}ms`,
+                opacity: menuOpen ? 1 : 0,
+                transform: menuOpen ? "translateY(0)" : "translateY(20px)",
+              }}>
+                Get Started <ArrowUpRight className="w-4 h-4"/>
+              </Link>
+            </div>
+          )}
         </div>
       </div>
 
