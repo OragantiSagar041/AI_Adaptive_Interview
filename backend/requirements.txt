@@ -1,26 +1,62 @@
+# ─── Web Framework ────────────────────────────────────────────────────────────
 fastapi
 uvicorn[standard]
+starlette
 python-multipart
+
+# ─── Environment & Config ─────────────────────────────────────────────────────
 python-dotenv
-openai
-pydantic
-reportlab
-PyPDF2
-python-docx
-requests
+
+# ─── Database ─────────────────────────────────────────────────────────────────
 pymongo[srv]
 certifi
-langgraph
-cloudinary
-stripe
+
+# ─── Auth & Security ──────────────────────────────────────────────────────────
 PyJWT
 passlib[bcrypt]
 bcrypt<5.0.0
+
+# ─── AI / LLM Clients ─────────────────────────────────────────────────────────
+openai
 groq
-redis
-celery
-edge-tts==7.2.8
+langgraph
+langchain
+langchain-core
+
+# ─── Omni Dimension AI Calling ────────────────────────────────────────────────
+omnidimension==0.2.17
+
+# ─── File Parsing ─────────────────────────────────────────────────────────────
+PyPDF2
+python-docx
+reportlab
+
+# ─── HTTP & Async ─────────────────────────────────────────────────────────────
+requests
+aiohttp
+httpx
 websockets
+
+# ─── Cloud Storage ────────────────────────────────────────────────────────────
+cloudinary
+
+# ─── Payments ─────────────────────────────────────────────────────────────────
+stripe
+
+# ─── Task Queue & Cache ───────────────────────────────────────────────────────
+celery
+redis
+
+# ─── Text-to-Speech ───────────────────────────────────────────────────────────
+edge-tts==7.2.8
 cartesia
 
+# ─── Data & Utilities ─────────────────────────────────────────────────────────
+pydantic
+pydantic-settings
+python-jose[cryptography]
+
+# ─── Testing ──────────────────────────────────────────────────────────────────
 pytest
+pytest-asyncio
+httpx
