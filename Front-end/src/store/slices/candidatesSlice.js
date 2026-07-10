@@ -47,6 +47,38 @@ export const handleBulkDelete = createAsyncThunk(
   }
 )
 
+export const initiateAICall = createAsyncThunk(
+  'candidates/initiateAICall',
+  async (sessionId, { getState, rejectWithValue }) => {
+    try {
+      const { API_BASE_URL, token } = getState().auth
+      const res = await axios.post(`${API_BASE_URL}/api/calls/initiate/${sessionId}`, {}, {
+        headers: { Authorization: `Bearer ${token}` }
+      })
+      return res.data
+    } catch (err) {
+      const errorMsg = err.response?.data?.detail || err.response?.data?.message || err.message || 'Failed to initiate AI call'
+      return rejectWithValue(typeof errorMsg === 'object' ? JSON.stringify(errorMsg) : errorMsg)
+    }
+  }
+)
+
+export const checkAICallStatus = createAsyncThunk(
+  'candidates/checkAICallStatus',
+  async (sessionId, { getState, rejectWithValue }) => {
+    try {
+      const { API_BASE_URL, token } = getState().auth
+      const res = await axios.get(`${API_BASE_URL}/api/calls/status/${sessionId}`, {
+        headers: { Authorization: `Bearer ${token}` }
+      })
+      return res.data
+    } catch (err) {
+      const errorMsg = err.response?.data?.detail || err.response?.data?.message || err.message || 'Failed to check AI call status'
+      return rejectWithValue(typeof errorMsg === 'object' ? JSON.stringify(errorMsg) : errorMsg)
+    }
+  }
+)
+
 // ─── SuperAdmin Thunks ─────────────────────────────────
 export const loadSuperAdminQualifiedCandidates = createAsyncThunk(
   'candidates/loadSuperAdminQualifiedCandidates',
@@ -91,7 +123,10 @@ export const handleSuperAdminBulkDelete = createAsyncThunk(
       const { API_BASE_URL, token } = getState().auth
       const selectedAdminFilter = getState().dashboard.selectedAdminFilter
       const res = await axios.delete(`${API_BASE_URL}/superadmin/candidates/bulk`, {
-        headers: { Authorization: `Bearer ${token}` },
+        headers: { 
+          Authorization: `Bearer ${token}`,
+          'Content-Type': 'application/json'
+        },
         data: { ids }
       })
       alert(`Deleted ${ids.length} sessions successfully.`)

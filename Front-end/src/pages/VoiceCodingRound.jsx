@@ -283,6 +283,8 @@ export default function VoiceCodingRound({
         body: JSON.stringify({ 
           text, 
           voice: 'shimmer',
+          language: sessionLang,
+          use_custom_voice: sessionDetail?.voice_clone || sessionDetail?.voice_cloning_enabled || false,
           voice_id: sessionDetail?.custom_voice_id || null
         })
       })

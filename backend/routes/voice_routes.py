@@ -1,6 +1,7 @@
 from fastapi import APIRouter, WebSocket, WebSocketDisconnect
 from typing import Dict, Any
 import asyncio
+from starlette.concurrency import run_in_threadpool
 import json
 import logging
 
@@ -104,18 +105,19 @@ async def interview_websocket(websocket: WebSocket, link_id: str):
                 }
 
                 try:
-                    # Push alert into proctoring_alerts array on the session document
-                    interview_sessions_collection.update_one(
-                        {"link_id": link_id},
-                        {
-                            "$push": {"proctoring_alerts": alert_entry},
-                            "$set": {
-                                "warnings_count": warnings_count,
-                                "last_alert_at": timestamp,
-                            }
-                        },
-                        upsert=False
-                    )
+                    def _update_session_db():
+                        interview_sessions_collection.update_one(
+                            {"link_id": link_id},
+                            {
+                                "$push": {"proctoring_alerts": alert_entry},
+                                "$set": {
+                                    "warnings_count": warnings_count,
+                                    "last_alert_at": timestamp,
+                                }
+                            },
+                            upsert=False
+                        )
+                    await run_in_threadpool(_update_session_db)
                     logger.info(
                         f"[Proctoring] {alert_type} saved for link_id={link_id} "
                         f"(total warnings: {warnings_count})"

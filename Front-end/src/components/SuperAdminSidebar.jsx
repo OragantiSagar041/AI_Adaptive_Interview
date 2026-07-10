@@ -32,6 +32,7 @@ export default function SuperAdminSidebar({
     { id: 'qualified', label: 'Qualified Candidates', icon: CheckCircle },
     { id: 'rejected', label: 'Rejected Candidates', icon: XCircle },
     { id: 'create', label: 'Create Interview', icon: Plus },
+    { id: 'ai-calling', label: 'AI Calling Agent', icon: Radio },
     { id: 'settings', label: 'Profile Settings', icon: Settings },
   ]
 

@@ -5,11 +5,19 @@
  *   Round 2: Coding (Monaco Editor + live code sentinel)
  *   Round 3: Case Study (branching AI discussion)
  */
-import React, { useState, useEffect, useRef, useCallback } from 'react'
-import { useParams } from 'react-router-dom'
+import React, { useState, useEffect, useRef, useCallback, Suspense } from 'react'
+import { useParams, useNavigate } from 'react-router-dom'
+import {
+  Mic, MicOff,
+  CheckCircle, Video, Monitor, Info, Camera,
+  AlertCircle
+} from 'lucide-react'
+
+// Internal Components
+import ErrorBoundary from '../components/ErrorBoundary'
+const VoiceCodingRound = React.lazy(() => import('./VoiceCodingRound'))
+const VoiceCaseStudy = React.lazy(() => import('./VoiceCaseStudy'))
 import { API_BASE_URL } from '../apiConfig'
-import VoiceCodingRound from './VoiceCodingRound'
-import VoiceCaseStudy from './VoiceCaseStudy'
 import useCandidateWebRTC from '../hooks/useCandidateWebRTC'
 import OrbAvatar from '../components/OrbAvatar'
 import Swal from 'sweetalert2'
@@ -17,6 +25,8 @@ import 'sweetalert2/dist/sweetalert2.min.css'
 import { RefreshCw } from 'lucide-react'
 import aiVideoUrl from '../assets/ai_avatar.mp4'
 import { useProctoring } from '../hooks/useProctoring'
+import { useScreenshotProtection } from '../hooks/useScreenshotProtection'
+import { useExamSecurity } from '../hooks/useExamSecurity'
 import DeviceCheckModal from '../components/DeviceCheckModal'
 
 import { VOICE_TRANSLATIONS } from '../utils/voiceTranslations'
@@ -237,6 +247,13 @@ export default function VoiceInterviewPage() {
     eyeContactLost: false,
     lastAlertType: ''
   })
+  const integrityMetricsRef = useRef({
+    reason: 'normal',
+    tabSwitches: 0,
+    faceAlerts: 0,
+    noiseAlerts: 0,
+    fullscreenExits: 0
+  })
   const screenShareViolationsRef = useRef(0)
   const screenShareViolationHandlerRef = useRef(null)  // stable ref to avoid circular deps
   const usedFollowUps = useRef(new Set())
@@ -259,6 +276,8 @@ export default function VoiceInterviewPage() {
   const cameraStreamRef = useRef(null)
   const cameraChunksRef = useRef([])
   const candidateVideoRef = useRef(null)
+  
+
 
   // Set a mock audio level that bounces slightly when speaking, or 0 when silent
   const isSpeaking = aiStatus === 'listening' && interimText.length > 0
@@ -331,6 +350,17 @@ export default function VoiceInterviewPage() {
     />
   )
 
+  // Ensure stream stays attached across round transitions
+  useEffect(() => {
+    if (candidateVideoRef.current && cameraStreamRef.current) {
+      if (candidateVideoRef.current.srcObject !== cameraStreamRef.current) {
+        candidateVideoRef.current.srcObject = cameraStreamRef.current
+        candidateVideoRef.current.muted = true
+        candidateVideoRef.current.play().catch(e => console.log(e))
+      }
+    }
+  }, [round])
+
   // Sync refs
   useEffect(() => { currentQIdxRef.current = currentQIdx }, [currentQIdx])
   useEffect(() => { questionsRef.current = questions }, [questions])
@@ -382,6 +412,72 @@ export default function VoiceInterviewPage() {
     }
   }, [linkId, warningsCount])
 
+  // ── Screenshot / Screen-capture Prevention ───────────────────────────────
+  // Active while the interview is in progress. Silently swallows PrintScreen,
+  // Win+Shift+S, Ctrl+P, Ctrl+Shift+S, Alt+PrintScreen. No alerts shown.
+  // Also applies @media print guard so print-to-PDF capture shows a blank page.
+  useEffect(() => {
+    const interviewActive = round && round !== 'pre_checks' && round !== 'done'
+    if (!interviewActive) return
+
+    const BLOCKED_KEYS = new Set(['PrintScreen', 'Snapshot'])
+
+    const handleKeyDown = (e) => {
+      const key = e.key
+      const ctrl = e.ctrlKey || e.metaKey
+      const shift = e.shiftKey
+      const alt = e.altKey
+
+      if (BLOCKED_KEYS.has(key)) { e.preventDefault(); e.stopImmediatePropagation(); return }
+      if ((e.metaKey || key === 'Meta') && shift && key === 'S') { e.preventDefault(); e.stopImmediatePropagation(); return }
+      if (ctrl && shift && key === 'S') { e.preventDefault(); e.stopImmediatePropagation(); return }
+      if (ctrl && (key === 'p' || key === 'P')) { e.preventDefault(); e.stopImmediatePropagation(); return }
+      if (ctrl && shift && (key === 'p' || key === 'P')) { e.preventDefault(); e.stopImmediatePropagation(); return }
+      if (alt && BLOCKED_KEYS.has(key)) { e.preventDefault(); e.stopImmediatePropagation(); return }
+    }
+
+    const handleKeyUp = (e) => {
+      if (BLOCKED_KEYS.has(e.key)) { e.preventDefault(); e.stopImmediatePropagation() }
+    }
+
+    const handleKeyPress = (e) => {
+      if (BLOCKED_KEYS.has(e.key)) {
+        e.preventDefault(); e.stopImmediatePropagation()
+        try { navigator.clipboard.writeText('') } catch (_) { /* no-op */ }
+      }
+    }
+
+    const styleEl = document.createElement('style')
+    styleEl.id = 'voice-interview-screenshot-guard'
+    styleEl.textContent = `
+      @media print {
+        body * { visibility: hidden !important; }
+        body::after {
+          content: '' !important;
+          visibility: visible !important;
+          display: block !important;
+          background: #000 !important;
+          position: fixed !important;
+          inset: 0 !important;
+        }
+      }
+    `
+    document.head.appendChild(styleEl)
+
+    document.addEventListener('keydown',  handleKeyDown,  true)
+    document.addEventListener('keyup',    handleKeyUp,    true)
+    document.addEventListener('keypress', handleKeyPress, true)
+
+    return () => {
+      document.removeEventListener('keydown',  handleKeyDown,  true)
+      document.removeEventListener('keyup',    handleKeyUp,    true)
+      document.removeEventListener('keypress', handleKeyPress, true)
+      document.getElementById('voice-interview-screenshot-guard')?.remove()
+    }
+  }, [round])
+  // ─────────────────────────────────────────────────────────────────────────
+
+
   useEffect(() => {
     if (!_sessionKey) return
     const existing = (() => { try { return JSON.parse(sessionStorage.getItem(_sessionKey) || '{}') } catch { return {} } })()
@@ -389,6 +485,7 @@ export default function VoiceInterviewPage() {
       sessionStorage.setItem(_sessionKey, JSON.stringify({ ...existing, startedAt: Date.now() }))
     }
   }, [round, _sessionKey])
+
 
   useEffect(() => {
     if (!_sessionKey) return
@@ -514,7 +611,7 @@ export default function VoiceInterviewPage() {
 
   const addMsg = useCallback((role, text) => setChatMessages(p => [...p, { role, text }]), [])
   const aiSay = useCallback((text, onEnd) => {
-    if (submittingRef.current || isTransitioningRef.current || roundRef.current === 'done') return;
+    if (isTransitioningRef.current || roundRef.current === 'done') return;
     addMsg('ai', text); speak(text, onEnd)
   }, [addMsg, speak])
 
@@ -890,25 +987,44 @@ export default function VoiceInterviewPage() {
   }, [addMsg, aiSay, startListening])  
 
   // ── Complete interview ────────────────────────────────────────────────────
-  const completeInterview = useCallback(async (isTimeout = false) => {
+  const completeInterview = useCallback(async (options = {}) => {
     if (submittingRef.current) return
     submittingRef.current = true
+    
+    // Fallback for legacy calls that pass a boolean (isTimeout)
+    const isTimeout = typeof options === 'boolean' ? options : (options.isTimeout || false)
+    const completionReason = typeof options === 'object' && options.reason ? options.reason : 'normal'
+    
+    integrityMetricsRef.current.reason = completionReason
+
     stopListening(); window.speechSynthesis?.cancel(); stopAudio()
     const iid = interviewIdRef.current
 
     // Switch UI to submitting immediately
     setRound('submitting')
     
-    const timeoutFlag = typeof isTimeout === 'boolean' ? isTimeout : false;
-    const message = timeoutFlag 
+    const message = isTimeout 
       ? "Thank you for the interview. We are saving your interview, please wait."
       : "We are saving your interview, please wait.";
       
     // Speak asynchronously
     aiSay(message)
 
-    // Fire backend completion
-    try { await fetch(`${API_BASE_URL}/complete-session/${linkId}?warnings=${warningsCount}`, { method: 'POST' }) } catch (_) { }
+    // Fire backend completion with detailed integrity metrics
+    try {
+      await fetch(`${API_BASE_URL}/complete-session/${linkId}`, { 
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          warnings: warningsCountRef.current || warningsCount, // use ref if available to avoid stale closures
+          reason: integrityMetricsRef.current.reason,
+          total_tab_switches: integrityMetricsRef.current.tabSwitches,
+          total_face_alerts: integrityMetricsRef.current.faceAlerts,
+          total_noise_alerts: integrityMetricsRef.current.noiseAlerts,
+          total_fullscreen_exits: integrityMetricsRef.current.fullscreenExits
+        })
+      })
+    } catch (_) { }
     
     // Upload heavy recording and WAIT for it so it's not lost
     try {
@@ -1026,22 +1142,45 @@ export default function VoiceInterviewPage() {
 
   // ── Proctoring: ESC + Tab + Screenshare ──────────────────────────────────
   // Helper to log proctoring events to backend
+  const warningsCountRef = useRef(0)
   const logProctoringAlert = useCallback((alertType, details = '') => {
     const alertMessages = {
       'multi_person': '👀 Multiple faces detected in frame!',
       'no_face': '👤 No face detected - please face the camera!',
       'phone': '📱 Mobile phone detected in frame!',
       'eye_contact': '👁️‍🗨️ Please maintain eye contact with the screen.',
-      'tab_switch': '🚨 Tab switch detected!'
+      'tab_switch': '🚨 Tab switch detected!',
+      'screenshot_shortcut': '📸 Screenshots are not allowed during this interview.',
+      'devtools_attempt': '🔧 Developer tools access detected!',
+      'save_attempt': '💾 Page save attempt detected!',
+      'clipboard_attempt': '📋 Copying or pasting is not allowed.',
+      'print_attempt': '🖨️ Printing is not allowed.',
+      'devtools_open': '🔧 Developer tools are not allowed during the interview.',
+      'window_blur': '⚠️ Switching applications is not allowed.',
+      'multi_monitor': '🖥️ Multiple monitors detected — please use a single display.',
     }
     const displayMsg = alertMessages[alertType] || `⚠️ Proctoring alert: ${alertType}`
     setProctoringBanner({ type: alertType, message: displayMsg })
     setTimeout(() => setProctoringBanner(null), 4000)
 
+    if (['multi_person', 'no_face', 'phone', 'eye_contact'].includes(alertType)) {
+      integrityMetricsRef.current.faceAlerts += 1
+    } else if (alertType === 'tab_switch') {
+      integrityMetricsRef.current.tabSwitches += 1
+    } else if (alertType === 'fullscreen_exit') {
+      integrityMetricsRef.current.fullscreenExits += 1
+    } else if (alertType === 'background_noise') {
+      integrityMetricsRef.current.noiseAlerts += 1
+    }
+
     setWarningsCount(p => {
       const newCount = p + 1
+      warningsCountRef.current = newCount
       setProctoringState(prev => ({ ...prev, lastAlertType: alertType }))
-      // Send to backend via WebSocket
+
+      const ts = new Date().toISOString()
+
+      // 1. Send via WebSocket (real-time admin dashboard)
       if (wsRef.current?.readyState === WebSocket.OPEN) {
         wsRef.current.send(JSON.stringify({
           action: 'save_proctoring_alert',
@@ -1050,9 +1189,34 @@ export default function VoiceInterviewPage() {
           alert_type: alertType,
           details,
           warnings_count: newCount,
-          timestamp: new Date().toISOString()
+          timestamp: ts,
         }))
       }
+
+      // 2. POST to unified violation endpoint (persistent DB record)
+      // Fire-and-forget — we don't block the alert flow on network latency.
+      fetch(`${API_BASE_URL}/proctoring/violation`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          interview_id: interviewIdRef.current || '',
+          link_id: linkId || '',
+          candidate_id: sessionDetailRef.current?.candidate_id || '',
+          violation_type: alertType,
+          details: details || displayMsg,
+          timestamp: ts,
+        }),
+      }).catch(() => {
+        // Fallback to legacy endpoint if new one is unavailable
+        if (interviewIdRef.current) {
+          fetch(`${API_BASE_URL}/session/${interviewIdRef.current}/violation`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ type: alertType, count: newCount, timestamp: ts, details }),
+          }).catch(() => {})
+        }
+      })
+
       return newCount
     })
   }, [linkId])
@@ -1110,7 +1274,7 @@ export default function VoiceInterviewPage() {
             confirmButtonColor: '#ef4444',
             confirmButtonText: 'OK',
             allowOutsideClick: false,
-          }).then(() => completeInterview())
+          }).then(() => completeInterview({ reason: 'Terminated due to multiple tab switching violations.' }))
         } else {
           Swal.fire({
             icon: 'warning',
@@ -1145,7 +1309,7 @@ export default function VoiceInterviewPage() {
               document.documentElement.requestFullscreen().catch(() => { })
             }
           } else {
-            completeInterview()
+            completeInterview({ reason: 'Terminated due to fullscreen mode exit.' })
           }
         })
       }
@@ -1155,18 +1319,20 @@ export default function VoiceInterviewPage() {
     document.addEventListener('fullscreenchange', handleFullscreenChange)
 
     return () => {
-      stopListening()
-      window.speechSynthesis?.cancel()
-      clearTimeout(silenceTimerRef.current)
+      // NOTE: We DO NOT call window.speechSynthesis?.cancel() here anymore.
+      // This cleanup function was accidentally getting triggered whenever a proctoring
+      // alert changed the completeInterview or logProctoringAlert reference, muting the AI.
       document.removeEventListener('visibilitychange', handleVisibilityChange)
       document.removeEventListener('fullscreenchange', handleFullscreenChange)
     }
-  }, [stopListening, round, logProctoringAlert, completeInterview])
+    // We intentionally omit logProctoringAlert and completeInterview to prevent re-bind loops muting the AI.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [stopListening, round])
 
   // Use Centralized AI Proctoring Hook
   const proctoring = useProctoring({
     videoRef: candidateVideoRef,
-    enabled: round !== 'done' && round !== 'pre_checks' && round !== 'intro',
+    enabled: round !== 'done' && round !== 'pre_checks' && round !== 'intro' && round !== 'submitting',
     maxAlerts: 10,
     onViolation: (v) => {
       logProctoringAlert(v.type, v.message)
@@ -1182,7 +1348,7 @@ export default function VoiceInterviewPage() {
         color: '#fff',
       })
     },
-    onTerminate: () => completeInterview()
+    onTerminate: () => completeInterview({ reason: 'Terminated due to multiple AI proctoring alerts (Face/Camera violations).' })
   })
 
   useEffect(() => {
@@ -1198,6 +1364,45 @@ export default function VoiceInterviewPage() {
     proctoring.eyeContactLost,
     setProctoringState
   ])
+
+  // ── Screenshot / snipping-tool deterrence ────────────────────────────
+  useScreenshotProtection({
+    enabled: round !== 'done' && round !== 'pre_checks' && round !== 'intro' && round !== 'submitting',
+    onAttempt: (v) => {
+      const message = 'Screenshots are not allowed during this interview.'
+      logProctoringAlert(v.type, message)
+      Swal.fire({
+        icon: 'warning',
+        title: '📸 Screenshots Not Allowed',
+        text: message,
+        toast: true,
+        position: 'top-end',
+        showConfirmButton: false,
+        timer: 4000,
+        background: '#161c2d',
+        color: '#fff',
+      })
+    },
+  })
+
+  // ── Browser exam security (copy/paste blocking, DevTools, window blur, multi-monitor) ──
+  useExamSecurity({
+    enabled: round !== 'done' && round !== 'pre_checks' && round !== 'intro' && round !== 'submitting',
+    onViolation: ({ type, message }) => {
+      logProctoringAlert(type, message)
+      Swal.fire({
+        icon: 'warning',
+        title: '⚠️ Security Alert',
+        text: message,
+        toast: true,
+        position: 'top-end',
+        showConfirmButton: false,
+        timer: 4000,
+        background: '#161c2d',
+        color: '#fff',
+      })
+    },
+  })
 
   useEffect(() => {
     if (!linkId || round === 'done' || round === 'pre_checks' || round === 'intro') return
@@ -1261,20 +1466,24 @@ export default function VoiceInterviewPage() {
   if (round === 'coding' && codingQuestion) {
     return (
       <>
-        <VoiceCodingRound question={codingQuestion} interviewId={interviewId} linkId={linkId} duration={roundDuration}
-          sessionDetail={sessionDetail} language={language} wsRef={wsRef} onComplete={() => {
-            const type = interviewType
-            if (type === 'Non-Technical') {
-              // fetch case study after coding
-              fetch(`${API_BASE_URL}/case-study/start`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ interview_id: interviewId }) })
-                .then(r => r.json()).then(data => {
-                  const cqs = (data.case_study_round?.questions || []).map((q, i) => ({ id: `cs_${i}`, type: 'case_study', text: q.text || q.scenario || '', caseStudyIndex: i }))
-                  setCaseStudyQuestions(cqs); setRound('case_study')
-                }).catch(() => completeInterview())
-            } else {
-              completeInterview()
-            }
-          }} />
+        <ErrorBoundary>
+          <React.Suspense fallback={<div className="flex h-screen items-center justify-center text-white text-xl bg-[#0a0f1e]">Loading coding environment...</div>}>
+            <VoiceCodingRound question={codingQuestion} interviewId={interviewId} linkId={linkId} duration={roundDuration}
+              sessionDetail={sessionDetail} language={language} wsRef={wsRef} onComplete={() => {
+              const type = interviewType
+              if (type === 'Non-Technical') {
+                // fetch case study after coding
+                fetch(`${API_BASE_URL}/case-study/start`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ interview_id: interviewId }) })
+                  .then(r => r.json()).then(data => {
+                    const cqs = (data.case_study_round?.questions || []).map((q, i) => ({ id: `cs_${i}`, type: 'case_study', text: q.text || q.scenario || '', caseStudyIndex: i }))
+                    setCaseStudyQuestions(cqs); setRound('case_study')
+                  }).catch(() => completeInterview())
+              } else {
+                completeInterview()
+              }
+            }} />
+          </React.Suspense>
+        </ErrorBoundary>
         {candidateVideoElement}
       </>
     )
@@ -1283,9 +1492,13 @@ export default function VoiceInterviewPage() {
   if (round === 'case_study' && caseStudyQuestions.length) {
     return (
       <>
-        <VoiceCaseStudy question={caseStudyQuestions[0]} allQuestions={caseStudyQuestions} duration={roundDuration}
-          interviewId={interviewId} linkId={linkId} sessionDetail={sessionDetail}
-          language={language} wsRef={wsRef} onComplete={completeInterview} />
+        <ErrorBoundary>
+          <React.Suspense fallback={<div className="flex h-screen items-center justify-center text-white text-xl bg-[#0a0f1e]">Loading case study environment...</div>}>
+            <VoiceCaseStudy question={caseStudyQuestions[0]} allQuestions={caseStudyQuestions} duration={roundDuration}
+            interviewId={interviewId} linkId={linkId} sessionDetail={sessionDetail}
+            language={language} wsRef={wsRef} onComplete={completeInterview} />
+          </React.Suspense>
+        </ErrorBoundary>
         {candidateVideoElement}
       </>
     )

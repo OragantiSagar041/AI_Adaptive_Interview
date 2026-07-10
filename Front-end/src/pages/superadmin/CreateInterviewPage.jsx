@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react'
+import { useLocation } from 'react-router-dom'
 import { useSelector, useDispatch } from 'react-redux'
 import axios from 'axios'
 import Swal from 'sweetalert2'
@@ -13,6 +14,7 @@ import { createSuperAdminInterview } from '../../store/slices/interviewSlice'
 
 export default function CreateInterviewPage() {
   const dispatch = useDispatch()
+  const location = useLocation()
   const token = useSelector(state => state.auth.token)
   const adminUser = useSelector(state => state.auth.adminUser)
   const API_BASE_URL = useSelector(state => state.auth.API_BASE_URL)
@@ -35,13 +37,7 @@ export default function CreateInterviewPage() {
 
   // Single Candidate Form
   const [singleCandidate, setSingleCandidate] = useState(() => {
-    try {
-      const stored = sessionStorage.getItem('createInterview_singleCandidate')
-      if (stored) return JSON.parse(stored)
-    } catch (e) {
-      console.error('Failed to parse stored singleCandidate', e)
-    }
-    return {
+    let defaultState = {
       name: '',
       email: '',
       resumeText: '',
@@ -65,7 +61,26 @@ export default function CreateInterviewPage() {
         locationType: 'Current',
         askBond: false
       }
+    };
+
+    try {
+      const stored = sessionStorage.getItem('createInterview_singleCandidate')
+      if (stored) {
+        defaultState = { ...defaultState, ...JSON.parse(stored) };
+      }
+    } catch (e) {
+      console.error('Failed to parse stored singleCandidate', e)
     }
+
+    // Override with incoming data from navigation if present
+    if (location.state && location.state.candidateData) {
+      const { name, resumeText, jobDescription } = location.state.candidateData;
+      if (name) defaultState.name = name;
+      if (resumeText) defaultState.resumeText = resumeText;
+      if (jobDescription) defaultState.jobDescription = jobDescription;
+    }
+
+    return defaultState;
   })
 
   useEffect(() => {
@@ -166,6 +181,29 @@ export default function CreateInterviewPage() {
     }
     if (token) fetchVoices()
   }, [token, API_BASE_URL])
+
+  // Fetch AI Call Logs for Dropdown
+  const [callLogs, setCallLogs] = useState([])
+  useEffect(() => {
+    async function fetchLogs() {
+      try {
+        const response = await fetch(`${API_BASE_URL}/api/calls/logs`, {
+          headers: { 'Authorization': `Bearer ${token}` }
+        })
+        const data = await response.json()
+        if (response.ok) {
+          // Filter to completed calls only, or just show all with names
+          setCallLogs(data.logs || [])
+        }
+      } catch (e) {
+        console.error("Failed to fetch logs", e)
+      }
+    }
+    if (token && createTab === 'single') {
+      fetchLogs()
+    }
+  }, [token, API_BASE_URL, createTab])
+
   // Form input setters
   const handleSingleChange = (key, value) => {
     setSingleCandidate(prev => ({ ...prev, [key]: value }))
@@ -904,6 +942,45 @@ Congratulations! You have been selected for an AI-powered interview. Please revi
                     <p className="text-[0.7rem] text-slate-400 font-medium">Provide basic contact and login credentials</p>
                   </div>
                 </div>
+
+                {callLogs.length > 0 && (
+                  <div className="bg-indigo-50/50 border border-indigo-100 rounded-xl p-4 flex flex-col gap-2">
+                    <label className="text-xs font-bold text-indigo-800 uppercase tracking-wider">Select Interested Candidate (From AI Calls)</label>
+                    <select
+                      className="w-full px-4 py-2.5 bg-white border border-indigo-200 rounded-lg text-sm text-slate-700 focus:outline-none focus:border-primary focus:ring-2 focus:ring-primary/20 transition-all cursor-pointer shadow-sm"
+                      onChange={(e) => {
+                        const selectedId = e.target.value;
+                        if (!selectedId) return;
+                        const log = callLogs.find(l => l.call_id === selectedId || l.id === selectedId);
+                        if (log) {
+                          setSingleCandidate(prev => ({
+                            ...prev,
+                            name: log.candidate_name || prev.name,
+                            resumeText: log.resume_text || prev.resumeText,
+                            jobDescription: log.job_description || prev.jobDescription
+                          }));
+                          // Automatically trigger ATS calculation if we have both
+                          if ((log.resume_text || singleCandidate.resumeText) && (log.job_description || singleCandidate.jobDescription)) {
+                            handleCalculateAts(log.resume_text || singleCandidate.resumeText, log.job_description || singleCandidate.jobDescription);
+                          }
+                          // Reset the dropdown visually so they can select again if needed, or leave it selected
+                        }
+                      }}
+                    >
+                      <option value="">-- Select a Candidate --</option>
+                      {callLogs
+                        .filter(log => log.candidate_name && log.status?.toLowerCase() === 'completed')
+                        .map(log => (
+                        <option key={log.call_id || log.id} value={log.call_id || log.id}>
+                          {log.candidate_name} {log.phone_number ? `(${log.phone_number})` : ''}
+                        </option>
+                      ))}
+                    </select>
+                    <p className="text-[0.65rem] text-indigo-500 font-medium mt-1">
+                      Selecting a candidate will automatically fill their name, resume, and job description!
+                    </p>
+                  </div>
+                )}
 
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                   <Input

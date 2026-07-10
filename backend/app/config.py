@@ -28,6 +28,10 @@ cloudinary.config(
     api_secret=os.getenv("CLOUDINARY_API_SECRET"),
 )
 
+OMNI_DIMENSION_API_KEY = os.getenv("OMNI_DIMENSION_API_KEY")
+OMNI_VOICE_ID = os.getenv("OMNI_DIMENSION_VOICE_ID")
+OMNI_AGENT_ID = os.getenv("OMNI_DIMENSION_AGENT_ID")
+
 # ---------------------------------------------------------------------------
 # Global feature flags / mutable state
 # ---------------------------------------------------------------------------

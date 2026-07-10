@@ -491,16 +491,7 @@ export default function MasterLayout() {
                     >
                       <User size={14} /> My Profile
                     </NavLink>
-                    <a
-                      href="#"
-                      onClick={(e) => {
-                        e.preventDefault();
-                        setDropdownOpen(false);
-                      }}
-                      className="flex items-center gap-2.5 px-4 py-2 text-sm text-slate-700 hover:bg-slate-50 no-underline"
-                    >
-                      <Settings size={14} /> Settings
-                    </a>
+
                     <hr className="border-slate-100 my-1" />
                     <button
                       onClick={() => {

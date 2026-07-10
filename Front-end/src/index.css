@@ -1,4 +1,5 @@
 @import "tailwindcss";
+@import "tw-animate-css";
 
 :root {
   --radius: 0.875rem;
@@ -216,4 +217,48 @@ html, body {
   .mobile-only {
     display: flex !important;
   }
+}
+
+/* --- Added from Frontend project for Landing Page --- */
+
+@theme inline {
+  --font-podium: "FSP DEMO - PODIUM Sharp 4.11", "Inter", sans-serif;
+  --font-inter: "Inter", sans-serif;
+}
+
+@layer utilities {
+  .font-podium { font-family: "FSP DEMO - PODIUM Sharp 4.11", "Inter", sans-serif; font-weight: 900; }
+  .font-inter { font-family: "Inter", sans-serif; }
+
+  .hero-heading {
+    background: linear-gradient(180deg, #F5F7FA 0%, #D7E2EA 40%, #7C6FE0 70%, #B600A8 100%);
+    -webkit-background-clip: text;
+    background-clip: text;
+    -webkit-text-fill-color: transparent;
+  }
+
+  .gradient-cta {
+    background: linear-gradient(123deg, #18011F 7%, #B600A8 37%, #7621B0 72%, #BE4C00 100%);
+    box-shadow: 0px 4px 4px rgba(181, 1, 167, 0.25), 4px 4px 12px #7721B1 inset;
+    outline: 2px solid #fff;
+    outline-offset: -3px;
+  }
+
+  .radial-glow {
+    background: radial-gradient(circle at 50% 40%, rgba(124, 58, 237, 0.25) 0%, rgba(182, 0, 168, 0.12) 30%, transparent 65%);
+  }
+}
+
+@keyframes fade-up {
+  from { opacity: 0; transform: translateY(30px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+@keyframes fade-in { from { opacity: 0; } to { opacity: 1; } }
+
+@layer utilities {
+  .animate-fade-up { animation: fade-up 0.8s ease-out forwards; opacity: 0; }
+  .animate-fade-up-delay-1 { animation: fade-up 0.8s ease-out 0.2s forwards; opacity: 0; }
+  .animate-fade-up-delay-2 { animation: fade-up 0.8s ease-out 0.4s forwards; opacity: 0; }
+  .animate-fade-up-delay-3 { animation: fade-up 0.8s ease-out 0.6s forwards; opacity: 0; }
+  .animate-fade-up-delay-4 { animation: fade-up 0.8s ease-out 0.8s forwards; opacity: 0; }
 }

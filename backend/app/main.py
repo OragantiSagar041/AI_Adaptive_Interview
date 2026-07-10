@@ -155,6 +155,7 @@ app.include_router(router)
 app.include_router(transcription.router)
 app.include_router(voice_routes.router)
 
+from fastapi.encoders import jsonable_encoder
 from fastapi.exceptions import RequestValidationError
 
 @app.exception_handler(RequestValidationError)
@@ -164,7 +165,7 @@ async def validation_exception_handler(request, exc):
     print("Errors:", exc.errors())
     print("Body:", exc.body)
     print("================================================================")
-    return JSONResponse(status_code=422, content={"detail": exc.errors()})
+    return JSONResponse(status_code=422, content={"detail": jsonable_encoder(exc.errors())})
 
 # ---------------------------------------------------------------------------
 # Health / root
