@@ -200,6 +200,72 @@ export function useProctoring({
     return () => clearInterval(intervalRef.current)
   }, [enabled, state.modelsReady, videoRef])
 
+  // 6. Anti-Screenshot & Copy Protection
+  useEffect(() => {
+    if (!enabled) return;
+
+    const handleKeyDown = (e) => {
+      // Prevent PrintScreen key
+      if (e.key === 'PrintScreen') {
+        e.preventDefault();
+        navigator.clipboard.writeText('');
+        raiseViolation('screenshot_attempt', 'Screenshot attempt detected');
+      }
+      
+      // Prevent common Mac screenshot shortcuts (Cmd + Shift + 3/4/5)
+      if (e.metaKey && e.shiftKey && (e.key === '3' || e.key === '4' || e.key === '5')) {
+        e.preventDefault();
+        navigator.clipboard.writeText('');
+        raiseViolation('screenshot_attempt', 'Screenshot attempt detected');
+      }
+
+      // Prevent Windows snipping tool shortcut (Win + Shift + S)
+      if (e.metaKey && e.shiftKey && (e.key === 's' || e.key === 'S')) {
+        e.preventDefault();
+        navigator.clipboard.writeText('');
+        raiseViolation('screenshot_attempt', 'Screenshot attempt detected');
+      }
+      
+      // Prevent Save As (Cmd/Ctrl + S)
+      if ((e.metaKey || e.ctrlKey) && (e.key === 's' || e.key === 'S')) {
+        e.preventDefault();
+      }
+      
+      // Prevent Print (Cmd/Ctrl + P)
+      if ((e.metaKey || e.ctrlKey) && (e.key === 'p' || e.key === 'P')) {
+        e.preventDefault();
+      }
+    };
+
+    const handleContextMenu = (e) => {
+      e.preventDefault(); // Disable right-click
+    };
+
+    const handleCopy = (e) => {
+      e.preventDefault();
+      navigator.clipboard.writeText('');
+    };
+
+    window.addEventListener('keydown', handleKeyDown);
+    window.addEventListener('keyup', handleKeyDown); // Catch printscreen on keyup sometimes
+    window.addEventListener('contextmenu', handleContextMenu);
+    window.addEventListener('copy', handleCopy);
+
+    // Apply CSS to prevent text selection
+    document.body.style.userSelect = 'none';
+    document.body.style.webkitUserSelect = 'none';
+
+    return () => {
+      window.removeEventListener('keydown', handleKeyDown);
+      window.removeEventListener('keyup', handleKeyDown);
+      window.removeEventListener('contextmenu', handleContextMenu);
+      window.removeEventListener('copy', handleCopy);
+      
+      document.body.style.userSelect = '';
+      document.body.style.webkitUserSelect = '';
+    };
+  }, [enabled, raiseViolation]);
+
   // 5. Lip sync: compare mouth-openness against expected speaking activity.
   const checkLipSync = useCallback((jawOpenScore, isAudioActive, threshold = 0.12) => {
     return !!isAudioActive && jawOpenScore < threshold

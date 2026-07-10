@@ -199,15 +199,16 @@ export default function OverviewDashboardPage() {
         onOpenQualified={() => navigate('/superadmin/qualified-candidates')}
       />
 
-      <Card className="bg-white/82 backdrop-blur-md border border-[#e5edf7] p-0 shadow-sm flex flex-col gap-5 text-slate-800">
-        <div className="flex flex-col gap-4 px-4 pt-4 sm:flex-row sm:justify-between sm:items-start sm:px-6 sm:pt-6">
-          <div className="flex gap-3 items-center">
-            <div className="w-10 h-10 rounded-xl flex items-center justify-center bg-indigo-50 text-indigo-600">
-              <LayoutDashboard size={18} />
+      <Card className="bg-white/80 backdrop-blur-2xl border border-white/60 p-0 shadow-[0_8px_30px_rgb(0,0,0,0.04)] rounded-3xl flex flex-col gap-5 text-slate-800 overflow-hidden relative">
+        <div className="absolute top-0 left-0 w-full h-32 bg-gradient-to-b from-indigo-50/50 to-transparent pointer-events-none" />
+        <div className="flex flex-col gap-4 px-4 pt-4 sm:flex-row sm:justify-between sm:items-start sm:px-6 sm:pt-6 relative z-10">
+          <div className="flex gap-4 items-center">
+            <div className="w-12 h-12 rounded-2xl flex items-center justify-center bg-gradient-to-br from-indigo-500 to-purple-600 text-white shadow-lg shadow-indigo-500/20">
+              <LayoutDashboard size={22} />
             </div>
             <div>
-              <h3 className="text-base font-bold text-slate-800">SuperAdmin Dashboard</h3>
-              <p className="text-xs text-slate-500">Global review of hiring operations</p>
+              <h3 className="text-xl font-black text-transparent bg-clip-text bg-gradient-to-r from-slate-900 to-indigo-800">Global Operations</h3>
+              <p className="text-sm text-slate-500 font-medium">SuperAdmin Dashboard Review</p>
             </div>
           </div>
 
