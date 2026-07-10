@@ -109,7 +109,7 @@ export default function CallDetailsModal({ isOpen, onClose, callId, API_BASE_URL
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 backdrop-blur-sm p-4 animate-fade-in">
       <div className="bg-[#0a0a0a] text-white w-full max-w-5xl h-[85vh] rounded-xl shadow-2xl flex flex-col border border-[#222] overflow-hidden">
-        
+
         {/* Header */}
         <div className="flex items-center justify-between p-4 border-b border-[#222]">
           <h2 className="text-lg font-bold text-white">Call Details (ID: {callId})</h2>
@@ -123,14 +123,14 @@ export default function CallDetailsModal({ isOpen, onClose, callId, API_BASE_URL
             <div className="flex items-center gap-2 text-xs font-bold text-gray-400">
               Mode:
               <div className="flex bg-[#111] rounded overflow-hidden border border-[#222]">
-                <button 
-                  onClick={() => setViewMode('simple')} 
+                <button
+                  onClick={() => setViewMode('simple')}
                   className={`px-4 py-1.5 transition-colors ${viewMode === 'simple' ? 'bg-teal-500 text-black' : 'hover:text-white'}`}
                 >
                   Simple
                 </button>
-                <button 
-                  onClick={() => setViewMode('advanced')} 
+                <button
+                  onClick={() => setViewMode('advanced')}
                   className={`px-4 py-1.5 transition-colors ${viewMode === 'advanced' ? 'bg-teal-500 text-black' : 'hover:text-white'}`}
                 >
                   Advanced
@@ -154,7 +154,7 @@ export default function CallDetailsModal({ isOpen, onClose, callId, API_BASE_URL
           </div>
         ) : (
           <div className="flex-1 overflow-y-auto custom-scrollbar flex flex-col bg-[#0a0a0a]">
-            
+
             {/* Audio Player Wrapper */}
             <div className="p-4 bg-[#0a0a0a]">
               <div className="flex items-center gap-4 bg-[#111] p-3 rounded-lg border border-[#222]">
@@ -174,12 +174,12 @@ export default function CallDetailsModal({ isOpen, onClose, callId, API_BASE_URL
                   <Download size={16} />
                 </button>
               </div>
-              <audio 
-                ref={audioRef} 
-                src={details.internal_recording_url || details.recording_url} 
-                onTimeUpdate={handleTimeUpdate} 
+              <audio
+                ref={audioRef}
+                src={details.internal_recording_url || details.recording_url}
+                onTimeUpdate={handleTimeUpdate}
                 onEnded={() => setIsPlaying(false)}
-                className="hidden" 
+                className="hidden"
               />
             </div>
 
@@ -221,12 +221,11 @@ export default function CallDetailsModal({ isOpen, onClose, callId, API_BASE_URL
             {/* Tabs */}
             <div className="px-6 flex gap-6 bg-[#0a0a0a]">
               {['Chat', 'Replay', 'Analysis', 'Post Actions', 'Latency Profile'].map(tab => (
-                <button 
+                <button
                   key={tab}
                   onClick={() => setActiveTab(tab.toLowerCase())}
-                  className={`py-3 text-[11px] font-bold transition-colors border-b-2 ${
-                    activeTab === tab.toLowerCase() ? 'border-teal-500 text-white' : 'border-transparent text-gray-500 hover:text-gray-300'
-                  }`}
+                  className={`py-3 text-[11px] font-bold transition-colors border-b-2 ${activeTab === tab.toLowerCase() ? 'border-teal-500 text-white' : 'border-transparent text-gray-500 hover:text-gray-300'
+                    }`}
                 >
                   {tab}
                 </button>
@@ -240,7 +239,7 @@ export default function CallDetailsModal({ isOpen, onClose, callId, API_BASE_URL
                     <div className="flex flex-col gap-3 max-w-4xl">
                       {details.interactions.map((interaction, idx) => (
                         <div key={idx} className="flex flex-col gap-3">
-                          
+
                           {viewMode === 'simple' && (
                             <>
                               {/* Assistant Bubble */}
@@ -256,7 +255,7 @@ export default function CallDetailsModal({ isOpen, onClose, callId, API_BASE_URL
                                   <p className="text-sm text-gray-100 leading-relaxed ml-7 whitespace-pre-wrap">{interaction.bot_response}</p>
                                 </div>
                               )}
-                              
+
                               {/* Caller Bubble */}
                               {interaction.user_query && (
                                 <div className="flex flex-col bg-[#111] rounded-lg p-4 border border-[#222]">
@@ -285,7 +284,7 @@ export default function CallDetailsModal({ isOpen, onClose, callId, API_BASE_URL
                                   <span>Total Tokens: <strong className="text-white">{interaction.total_tokens || 0}</strong></span>
                                 </div>
                               </div>
-                              
+
                               <div className="p-4 flex flex-col gap-4">
                                 {/* Assistant Bubble inside Advanced */}
                                 {interaction.bot_response && (
@@ -361,7 +360,7 @@ export default function CallDetailsModal({ isOpen, onClose, callId, API_BASE_URL
                 </div>
               )}
             </div>
-            
+
           </div>
         )}
       </div>

@@ -18,12 +18,12 @@ function StatusBadge({ status }) {
   if (!status) return <span className="text-slate-400 text-xs">—</span>
   const s = status.toLowerCase()
   const map = {
-    completed:  { bg: 'bg-emerald-50 border-emerald-200 text-emerald-700', icon: <CheckCircle2 size={11}/> },
-    failed:     { bg: 'bg-rose-50 border-rose-200 text-rose-700',           icon: <XCircle size={11}/> },
-    'no-answer':{ bg: 'bg-amber-50 border-amber-200 text-amber-700',        icon: <AlertCircle size={11}/> },
-    busy:       { bg: 'bg-orange-50 border-orange-200 text-orange-700',     icon: <AlertCircle size={11}/> },
+    completed: { bg: 'bg-emerald-50 border-emerald-200 text-emerald-700', icon: <CheckCircle2 size={11} /> },
+    failed: { bg: 'bg-rose-50 border-rose-200 text-rose-700', icon: <XCircle size={11} /> },
+    'no-answer': { bg: 'bg-amber-50 border-amber-200 text-amber-700', icon: <AlertCircle size={11} /> },
+    busy: { bg: 'bg-orange-50 border-orange-200 text-orange-700', icon: <AlertCircle size={11} /> },
   }
-  const style = map[s] || { bg: 'bg-blue-50 border-blue-200 text-blue-700', icon: <Activity size={11}/> }
+  const style = map[s] || { bg: 'bg-blue-50 border-blue-200 text-blue-700', icon: <Activity size={11} /> }
   return (
     <span className={`inline-flex items-center gap-1 text-[0.68rem] font-bold border px-2 py-0.5 rounded-full ${style.bg}`}>
       {style.icon} {status.toUpperCase().replace('-', ' ')}
@@ -77,10 +77,10 @@ function AssistantDetailsTab({ agentSettings, loading }) {
     <div className="space-y-6 p-6">
       <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
         {[
-          { label: 'Languages', icon: <Globe size={14}/>, color: 'emerald', value: agentSettings.language || 'English' },
-          { label: 'Voice (TTS)', icon: <Volume2 size={14}/>, color: 'indigo', value: `${agentSettings.tts_provider || 'Cartesia'} – ${agentSettings.tts_voice_id || 'Riya'}` },
-          { label: 'AI Model', icon: <Zap size={14}/>, color: 'amber', value: agentSettings.llm_model || 'gpt-4o-mini' },
-          { label: 'Transcription', icon: <Mic size={14}/>, color: 'rose', value: agentSettings.asr_provider || 'Soniox' },
+          { label: 'Languages', icon: <Globe size={14} />, color: 'emerald', value: agentSettings.language || 'English' },
+          { label: 'Voice (TTS)', icon: <Volume2 size={14} />, color: 'indigo', value: `${agentSettings.tts_provider || 'Cartesia'} – ${agentSettings.tts_voice_id || 'Riya'}` },
+          { label: 'AI Model', icon: <Zap size={14} />, color: 'amber', value: agentSettings.llm_model || 'gpt-4o-mini' },
+          { label: 'Transcription', icon: <Mic size={14} />, color: 'rose', value: agentSettings.asr_provider || 'Soniox' },
         ].map(({ label, icon, color, value }) => (
           <div key={label} className={`bg-[#1a2333] border border-${color}-500/20 rounded-xl p-4`}>
             <div className={`flex items-center gap-2 mb-2 text-${color}-400`}>
@@ -230,7 +230,7 @@ function KnowledgeBaseTab({ files, loading, onUpload, onRemove }) {
   if (loading) return <SectionLoader />
   return (
     <div className="p-6">
-      
+
       <div className="flex justify-between items-center mb-6">
         <div>
           <h3 className="text-lg font-bold text-white flex items-center gap-2">
@@ -238,10 +238,10 @@ function KnowledgeBaseTab({ files, loading, onUpload, onRemove }) {
           </h3>
           <p className="text-slate-400 text-sm mt-1">Manage documents that give your AI specialized knowledge.</p>
         </div>
-        <input 
-          type="file" 
-          ref={fileInputRef} 
-          className="hidden" 
+        <input
+          type="file"
+          ref={fileInputRef}
+          className="hidden"
           accept=".pdf,.doc,.docx,.txt"
           onChange={(e) => {
             if (e.target.files && e.target.files.length > 0) {
@@ -275,7 +275,7 @@ function KnowledgeBaseTab({ files, loading, onUpload, onRemove }) {
                   {file.size && <div className="text-xs text-slate-500 mt-0.5">{(file.size / 1024).toFixed(1)} KB</div>}
                 </div>
               </div>
-              <button 
+              <button
                 onClick={() => onRemove && onRemove(i)}
                 className="text-gray-500 hover:text-red-400 transition-colors opacity-0 group-hover:opacity-100 p-1"
                 title="Remove file"
@@ -296,7 +296,7 @@ function IntegrationsTab({ integrations, loading, onRefresh }) {
 
   const handleDetach = async (integrationId) => {
     if (!window.confirm('Are you sure you want to detach this integration?')) return
-    
+
     setDetaching(integrationId)
     try {
       const token = localStorage.getItem('token')
@@ -356,7 +356,7 @@ function IntegrationsTab({ integrations, loading, onRefresh }) {
               <div className="font-semibold text-sm text-white leading-tight pr-8">{int.name}</div>
               <div className="text-xs text-slate-400 mt-1.5 capitalize">{int.type?.replace('_', ' ')}</div>
               <div className="text-xs text-slate-600 mt-0.5 break-all">ID: {int.id}</div>
-              
+
               <button
                 onClick={() => handleDetach(int.id)}
                 disabled={detaching === int.id}
@@ -478,8 +478,8 @@ function RecentCallsTab({ calls, loading, onViewDetails }) {
         <div className="flex flex-col items-center justify-center bg-[#111111] border border-gray-800 rounded-2xl h-[450px] gap-5 text-gray-400 shadow-sm">
           <div className="p-4 bg-gray-800/50 rounded-full border border-gray-700">
             <svg width="42" height="42" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
-              <circle cx="12" cy="12" r="2"/>
-              <path d="M16.24 7.76a6 6 0 0 1 0 8.49m-8.48 0a6 6 0 0 1 0-8.49m11.31-2.82a10 10 0 0 1 0 14.14m-14.14 0a10 10 0 0 1 0-14.14"/>
+              <circle cx="12" cy="12" r="2" />
+              <path d="M16.24 7.76a6 6 0 0 1 0 8.49m-8.48 0a6 6 0 0 1 0-8.49m11.31-2.82a10 10 0 0 1 0 14.14m-14.14 0a10 10 0 0 1 0-14.14" />
             </svg>
           </div>
           <span className="text-[14px] font-medium tracking-wide">Previous calls will appear here</span>
@@ -493,33 +493,53 @@ function RecentCallsTab({ calls, loading, onViewDetails }) {
     if (str.includes(':')) {
       const parts = str.split(':');
       if (parts.length >= 3) {
-         const m = parseInt(parts[1] || '0', 10).toString().padStart(2, '0');
-         const s = parseInt(parts[2] || '0', 10).toString().padStart(2, '0');
-         return `${m}:${s}`;
+        const m = parseInt(parts[1] || '0', 10).toString().padStart(2, '0');
+        const s = parseInt(parts[2] || '0', 10).toString().padStart(2, '0');
+        return `${m}:${s}`;
       } else if (parts.length === 2) {
-         const m = parseInt(parts[0] || '0', 10).toString().padStart(2, '0');
-         const s = parseInt(parts[1] || '0', 10).toString().padStart(2, '0');
-         return `${m}:${s}`;
+        const m = parseInt(parts[0] || '0', 10).toString().padStart(2, '0');
+        const s = parseInt(parts[1] || '0', 10).toString().padStart(2, '0');
+        return `${m}:${s}`;
       }
     }
     return str;
   }
 
-  const formatDate = (dateStr) => {
-    if (!dateStr) return 'Unknown Date';
-    const d = new Date(dateStr);
-    if (isNaN(d)) return dateStr;
-    const months = ["January", "February", "March", "April", "May", "June", "July", "August", "September", "October", "November", "December"];
-    const month = months[d.getMonth()];
-    const day = d.getDate();
-    const year = d.getFullYear();
-    let hours = d.getHours();
-    const ampm = hours >= 12 ? 'PM' : 'AM';
-    hours = hours % 12;
-    hours = hours ? hours : 12;
-    const minutes = d.getMinutes().toString().padStart(2, '0');
-    return `${month} ${day}, ${year} at ${hours.toString().padStart(2, '0')}:${minutes} ${ampm}`;
-  }
+  const formatDate = (dateString) => {
+    if (!dateString) return 'Unknown Date';
+    try {
+      const parts = dateString.split(/[-T:.Z/ ]/).filter(Boolean);
+      if (parts.length >= 5) {
+        let year, monthNum, day, hours, minutes;
+        
+        if (parts[0].length === 4) {
+          year = parts[0];
+          monthNum = parseInt(parts[1], 10);
+          day = parseInt(parts[2], 10);
+          hours = parseInt(parts[3], 10);
+          minutes = parts[4];
+        } else {
+          monthNum = parseInt(parts[0], 10);
+          day = parseInt(parts[1], 10);
+          year = parts[2];
+          hours = parseInt(parts[3], 10);
+          minutes = parts[4];
+        }
+        
+        const months = ["January", "February", "March", "April", "May", "June", "July", "August", "September", "October", "November", "December"];
+        const month = months[monthNum - 1] || "Unknown";
+        
+        const ampm = hours >= 12 ? 'PM' : 'AM';
+        hours = hours % 12;
+        hours = hours ? hours : 12;
+        
+        return `${month} ${day}, ${year} at ${hours.toString().padStart(2, '0')}:${minutes} ${ampm}`;
+      }
+      return dateString;
+    } catch(e) {
+      return dateString;
+    }
+  };
 
   return (
     <div className="p-6 max-w-[1200px] mx-auto bg-[#0a0a0a] min-h-screen">
@@ -553,10 +573,10 @@ function RecentCallsTab({ calls, loading, onViewDetails }) {
           const isCompleted = call.call_status === 'completed';
           const isOutbound = (call.call_direction || '').toLowerCase() === 'outbound';
           const badgeColor = isCompleted ? 'border-green-500/30 text-green-500' : 'border-red-500/30 text-red-500';
-          
+
           return (
-            <div 
-              key={call.id || idx} 
+            <div
+              key={call.id || idx}
               onClick={() => onViewDetails && onViewDetails(call.id)}
               className="bg-[#111] border border-[#222] rounded-lg p-3 flex items-center gap-4 text-sm font-mono text-gray-300 hover:border-gray-700 hover:bg-[#1a1a1a] transition-all cursor-pointer"
             >
@@ -564,7 +584,7 @@ function RecentCallsTab({ calls, loading, onViewDetails }) {
               <div className="flex-shrink-0 w-8 h-8 rounded-full bg-[#1a1a1a] border border-[#333] flex items-center justify-center">
                 <Phone size={14} className="text-teal-500 opacity-80" />
               </div>
-              
+
               {/* Info Column */}
               <div className="flex flex-col flex-1 gap-1.5">
                 <div className="flex items-center gap-3">
@@ -585,7 +605,7 @@ function RecentCallsTab({ calls, loading, onViewDetails }) {
                   </span>
                 </div>
               </div>
-              
+
               {/* Right Column */}
               <div className="flex flex-col items-end gap-1.5 ml-auto">
                 <div className="flex items-center gap-2 bg-[#1a1a1a] border border-[#333] px-2 py-1 rounded text-xs text-gray-400 font-mono">
@@ -615,11 +635,11 @@ export default function AICallingAgentPage() {
 
   // Data states
   const [agentSettings, setAgentSettings] = useState(null)
-  const [callConfig, setCallConfig]     = useState(null)
+  const [callConfig, setCallConfig] = useState(null)
   const [knowledgeBase, setKnowledgeBase] = useState([])
-  const [integrations, setIntegrations]   = useState([])
+  const [integrations, setIntegrations] = useState([])
   const [postCallConfigs, setPostCallConfigs] = useState([])
-  const [recentCalls, setRecentCalls]     = useState([])
+  const [recentCalls, setRecentCalls] = useState([])
 
   // Loading states
   const [loadingMap, setLoadingMap] = useState({
@@ -630,6 +650,14 @@ export default function AICallingAgentPage() {
   // Manual dialer state
   const [manualCall, setManualCall] = useState({ phone: '', name: '', jobDesc: '', resume: null })
   const [isCalling, setIsCalling] = useState(false)
+  const [availableJobs, setAvailableJobs] = useState([])
+
+  useEffect(() => {
+    const saved = localStorage.getItem('superadmin_jobs_data');
+    if (saved) {
+      try { setAvailableJobs(JSON.parse(saved)) } catch (e) { }
+    }
+  }, [])
 
   const headers = { Authorization: `Bearer ${token}` }
 
@@ -642,7 +670,7 @@ export default function AICallingAgentPage() {
       const r = await fetch(`${API_BASE_URL}/api/calls/agent-settings`, { headers })
       const d = await r.json()
       if (r.ok) setAgentSettings(d.settings)
-    } catch(e) { console.error(e) } finally { setLoading('assistant', false) }
+    } catch (e) { console.error(e) } finally { setLoading('assistant', false) }
   }
 
   const fetchCallConfig = async () => {
@@ -652,7 +680,7 @@ export default function AICallingAgentPage() {
       const r = await fetch(`${API_BASE_URL}/api/calls/call-config`, { headers })
       const d = await r.json()
       if (r.ok) setCallConfig(d.config)
-    } catch(e) { console.error(e) } finally { setLoading('callconfig', false) }
+    } catch (e) { console.error(e) } finally { setLoading('callconfig', false) }
   }
 
   const fetchKnowledgeBase = async () => {
@@ -661,7 +689,7 @@ export default function AICallingAgentPage() {
       const r = await fetch(`${API_BASE_URL}/api/calls/knowledge-base`, { headers })
       const d = await r.json()
       if (r.ok) setKnowledgeBase(d.files || [])
-    } catch(e) { console.error(e) } finally { setLoading('knowledgebase', false) }
+    } catch (e) { console.error(e) } finally { setLoading('knowledgebase', false) }
   }
 
   const fetchIntegrations = async () => {
@@ -671,7 +699,7 @@ export default function AICallingAgentPage() {
       const r = await fetch(`${API_BASE_URL}/api/calls/integrations`, { headers })
       const d = await r.json()
       if (r.ok) setIntegrations(d.integrations || [])
-    } catch(e) { console.error(e) } finally { setLoading('integrations', false) }
+    } catch (e) { console.error(e) } finally { setLoading('integrations', false) }
   }
 
   const fetchPostCall = async () => {
@@ -681,7 +709,7 @@ export default function AICallingAgentPage() {
       const r = await fetch(`${API_BASE_URL}/api/calls/post-call-config`, { headers })
       const d = await r.json()
       if (r.ok) setPostCallConfigs(d.post_call_configs || [])
-    } catch(e) { console.error(e) } finally { setLoading('postcall', false) }
+    } catch (e) { console.error(e) } finally { setLoading('postcall', false) }
   }
 
   const fetchRecentCalls = async () => {
@@ -694,7 +722,7 @@ export default function AICallingAgentPage() {
       } else {
         setRecentCalls([])
       }
-    } catch(e) {
+    } catch (e) {
       console.error(e)
       setRecentCalls([])
     } finally { setLoading('recentcalls', false) }
@@ -727,17 +755,17 @@ export default function AICallingAgentPage() {
       const d = await r.json()
       if (r.ok) { alert(d.message || 'Call initiated!'); setManualCall({ phone: '', name: '', jobDesc: '', resume: null }) }
       else alert('Failed: ' + (d.detail || 'Unknown error'))
-    } catch(e) { alert('Error: ' + e.message) } finally { setIsCalling(false) }
+    } catch (e) { alert('Error: ' + e.message) } finally { setIsCalling(false) }
   }
 
   const TABS = [
-    { id: 'assistant',    label: 'Assistant Details',  icon: <Radio size={15}/> },
-    { id: 'callconfig',   label: 'Call Configuration', icon: <Cog size={15}/> },
-    { id: 'knowledgebase',label: 'Knowledge Base',     icon: <BookOpen size={15}/> },
-    { id: 'integrations', label: 'Integrations',       icon: <Plug size={15}/> },
-    { id: 'postcall',     label: 'Post-Call',          icon: <MailCheck size={15}/> },
-    { id: 'recentcalls',  label: 'Recent Calls',       icon: <Clock size={15}/> },
-    { id: 'dialer',       label: 'Manual Dialer',      icon: <Phone size={15}/> },
+    { id: 'assistant', label: 'Assistant Details', icon: <Radio size={15} /> },
+    { id: 'callconfig', label: 'Call Configuration', icon: <Cog size={15} /> },
+    { id: 'knowledgebase', label: 'Knowledge Base', icon: <BookOpen size={15} /> },
+    { id: 'integrations', label: 'Integrations', icon: <Plug size={15} /> },
+    { id: 'postcall', label: 'Post-Call', icon: <MailCheck size={15} /> },
+    { id: 'recentcalls', label: 'Recent Calls', icon: <Clock size={15} /> },
+    { id: 'dialer', label: 'Manual Dialer', icon: <Phone size={15} /> },
   ]
 
   return (
@@ -763,11 +791,10 @@ export default function AICallingAgentPage() {
             <button
               key={id}
               onClick={() => setActiveTab(id)}
-              className={`flex items-center gap-1.5 px-4 py-2.5 text-xs font-bold rounded-t-lg transition-all whitespace-nowrap border-b-2 -mb-px ${
-                activeTab === id
+              className={`flex items-center gap-1.5 px-4 py-2.5 text-xs font-bold rounded-t-lg transition-all whitespace-nowrap border-b-2 -mb-px ${activeTab === id
                   ? 'border-indigo-500 text-indigo-400 bg-[#0d1117]'
                   : 'border-transparent text-slate-500 hover:text-slate-300 hover:bg-white/5'
-              }`}
+                }`}
             >
               {icon} {label}
             </button>
@@ -783,9 +810,9 @@ export default function AICallingAgentPage() {
             <CallConfigTab config={callConfig} loading={loadingMap.callconfig} />
           )}
           {activeTab === 'knowledgebase' && (
-            <KnowledgeBaseTab 
-              files={knowledgeBase} 
-              loading={loadingMap.knowledgebase} 
+            <KnowledgeBaseTab
+              files={knowledgeBase}
+              loading={loadingMap.knowledgebase}
               onUpload={(file) => {
                 // Here you would implement the actual file upload logic via a multipart POST request
                 console.log("Uploading file:", file.name);
@@ -804,9 +831,9 @@ export default function AICallingAgentPage() {
             />
           )}
           {activeTab === 'integrations' && (
-            <IntegrationsTab 
-              integrations={integrations} 
-              loading={loadingMap.integrations} 
+            <IntegrationsTab
+              integrations={integrations}
+              loading={loadingMap.integrations}
               onRefresh={() => {
                 const fetchIntegrations = async () => {
                   try {
@@ -820,7 +847,7 @@ export default function AICallingAgentPage() {
                   } catch (e) { console.error(e) }
                 };
                 fetchIntegrations();
-              }} 
+              }}
             />
           )}
           {activeTab === 'postcall' && (
@@ -849,7 +876,7 @@ export default function AICallingAgentPage() {
                     <label className="block text-xs font-bold text-slate-400 mb-1.5">Phone Number *</label>
                     <input
                       type="text" value={manualCall.phone}
-                      onChange={e => setManualCall({...manualCall, phone: e.target.value})}
+                      onChange={e => setManualCall({ ...manualCall, phone: e.target.value })}
                       className="w-full px-4 py-2.5 bg-[#1a2333] border border-white/10 rounded-lg text-sm text-white placeholder-slate-600 focus:outline-none focus:border-indigo-500"
                       placeholder="+91 99999 00000"
                     />
@@ -858,17 +885,38 @@ export default function AICallingAgentPage() {
                     <label className="block text-xs font-bold text-slate-400 mb-1.5">Candidate Name</label>
                     <input
                       type="text" value={manualCall.name}
-                      onChange={e => setManualCall({...manualCall, name: e.target.value})}
+                      onChange={e => setManualCall({ ...manualCall, name: e.target.value })}
                       className="w-full px-4 py-2.5 bg-[#1a2333] border border-white/10 rounded-lg text-sm text-white placeholder-slate-600 focus:outline-none focus:border-indigo-500"
                       placeholder="e.g. John Doe"
                     />
                   </div>
                 </div>
                 <div>
-                  <label className="block text-xs font-bold text-slate-400 mb-1.5">Job Description</label>
+                  <div className="flex items-center justify-between mb-1.5">
+                    <label className="block text-xs font-bold text-slate-400">Job Description</label>
+                    {availableJobs.length > 0 && (
+                      <select
+                        className="bg-[#1a2333] border border-white/10 text-xs text-white rounded px-2 py-1 focus:outline-none focus:border-indigo-500"
+                        onChange={(e) => {
+                          if (!e.target.value) return;
+                          const job = availableJobs.find(j => j.id.toString() === e.target.value);
+                          if (job) {
+                            const desc = `Role: ${job.title}\nExperience: ${job.experience}\nSkills: ${job.skills}\n\n${job.description}`;
+                            setManualCall(prev => ({ ...prev, jobDesc: desc }));
+                          }
+                          e.target.value = "";
+                        }}
+                      >
+                        <option value="">Auto-fill from saved Job...</option>
+                        {availableJobs.map(job => (
+                          <option key={job.id} value={job.id}>{job.title}</option>
+                        ))}
+                      </select>
+                    )}
+                  </div>
                   <textarea
                     value={manualCall.jobDesc}
-                    onChange={e => setManualCall({...manualCall, jobDesc: e.target.value})}
+                    onChange={e => setManualCall({ ...manualCall, jobDesc: e.target.value })}
                     className="w-full px-4 py-3 bg-[#1a2333] border border-white/10 rounded-lg text-sm text-white placeholder-slate-600 focus:outline-none focus:border-indigo-500 h-24 resize-none"
                     placeholder="Paste job description or role requirements..."
                   />
@@ -877,7 +925,7 @@ export default function AICallingAgentPage() {
                   <label className="block text-xs font-bold text-slate-400 mb-1.5">Resume (PDF/DOCX)</label>
                   <input
                     type="file" accept=".pdf,.doc,.docx"
-                    onChange={e => setManualCall({...manualCall, resume: e.target.files[0]})}
+                    onChange={e => setManualCall({ ...manualCall, resume: e.target.files[0] })}
                     className="w-full px-4 py-2.5 bg-[#1a2333] border border-white/10 rounded-lg text-sm text-slate-400 file:mr-4 file:py-1.5 file:px-4 file:rounded-full file:border-0 file:text-xs file:font-bold file:bg-indigo-600 file:text-white hover:file:bg-indigo-700"
                   />
                 </div>
@@ -887,7 +935,7 @@ export default function AICallingAgentPage() {
                     disabled={isCalling || !manualCall.phone}
                     className="flex items-center gap-2 px-6 py-2.5 bg-indigo-600 hover:bg-indigo-500 disabled:opacity-50 text-white font-bold text-sm rounded-lg transition-colors shadow-lg shadow-indigo-600/30"
                   >
-                    {isCalling ? <><Activity size={15} className="animate-spin" /> Calling...</> : <><Phone size={15}/> Start AI Call</>}
+                    {isCalling ? <><Activity size={15} className="animate-spin" /> Calling...</> : <><Phone size={15} /> Start AI Call</>}
                   </button>
                 </div>
               </div>
