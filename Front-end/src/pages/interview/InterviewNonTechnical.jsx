@@ -6,6 +6,7 @@ import DeviceCheckModal from '../../components/DeviceCheckModal'
 import { API_BASE_URL } from '../../apiConfig'
 import api from '../../utils/api'
 import '../../Interview.css'
+import { motion } from 'framer-motion'
 
 export const InterviewNonTechnical = () => {
   const interviewType = 'Non-Technical';
@@ -754,24 +755,28 @@ export const InterviewNonTechnical = () => {
 
       {/* Floating Camera Preview Widget */}
       {isDisclaimerAccepted && !showAllSet && !loading && (
-        <div className="fixed bottom-6 right-6 w-56 h-36 rounded-xl overflow-hidden shadow-2xl border-2 border-indigo-600 z-[9999] bg-black transition-all duration-300 hover:-translate-y-1 hover:scale-[1.02] hover:shadow-[0_15px_30px_rgba(99,102,241,0.25)] hover:border-violet-500">
-          <video ref={videoPreviewRef} autoPlay muted playsInline id="videoPreview" className="w-full h-full object-cover" />
-          <div className="absolute bottom-3 left-3 bg-red-500 text-white text-[10px] font-bold tracking-wider px-2 py-0.5 rounded-full flex items-center gap-1 shadow-sm">
+        <motion.div 
+          drag 
+          dragMomentum={false}
+          className="fixed bottom-6 right-6 w-56 h-36 rounded-xl overflow-hidden shadow-2xl border-2 border-indigo-600 z-[9999] bg-black transition-colors duration-300 hover:shadow-[0_15px_30px_rgba(99,102,241,0.25)] hover:border-violet-500 cursor-move"
+        >
+          <video ref={videoPreviewRef} autoPlay muted playsInline id="videoPreview" className="w-full h-full object-cover pointer-events-none" />
+          <div className="absolute bottom-3 left-3 bg-red-500 text-white text-[10px] font-bold tracking-wider px-2 py-0.5 rounded-full flex items-center gap-1 shadow-sm pointer-events-none">
             <span className="w-1.5 h-1.5 bg-white rounded-full animate-pulse" /> LIVE
           </div>
           {/* Face alert badge on camera widget */}
           {faceAlertCount > 0 && (
-            <div className="absolute top-2 left-2 bg-red-600/90 text-white text-[9px] font-bold px-2 py-0.5 rounded-full flex items-center gap-1">
+            <div className="absolute top-2 left-2 bg-red-600/90 text-white text-[9px] font-bold px-2 py-0.5 rounded-full flex items-center gap-1 pointer-events-none">
               👁️ {faceAlertCount}/20
             </div>
           )}
           {proctoringAlert && (
-            <div className="absolute inset-0 bg-black/85 text-red-500 flex flex-col items-center justify-center p-3 text-center z-10">
+            <div className="absolute inset-0 bg-black/85 text-red-500 flex flex-col items-center justify-center p-3 text-center z-10 pointer-events-none">
               <span className="text-xl mb-1 animate-bounce">⚠️</span>
               <div className="text-[10px] font-bold leading-tight">{proctoringAlert}</div>
             </div>
           )}
-        </div>
+        </motion.div>
       )}
 
       {showRound2Confirm && (
