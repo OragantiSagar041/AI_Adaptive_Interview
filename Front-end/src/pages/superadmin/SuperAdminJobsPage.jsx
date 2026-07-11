@@ -1,9 +1,24 @@
 import React, { useState, useEffect } from 'react';
-import { Briefcase, Plus, MapPin, Clock, FileText, X, DollarSign, Target, Trash2, Pencil, Wallet } from 'lucide-react';
+import { Briefcase, Plus, MapPin, Clock, FileText, X, DollarSign, Target, Trash2, Pencil, Wallet, Users } from 'lucide-react';
 import Card from '../../components/Card';
 import Button from '../../components/Button';
+import { useSelector, useDispatch } from 'react-redux';
+import { loadSuperAdminDashboard } from '../../store/slices/dashboardSlice';
+import { getComputedStatus } from '../../utils/adminFormatters';
 
 export default function SuperAdminJobsPage() {
+  const dispatch = useDispatch();
+  const candidates = useSelector((state) => state.candidates?.candidates || []);
+
+  useEffect(() => {
+    if (candidates.length === 0) {
+      dispatch(loadSuperAdminDashboard());
+    }
+  }, [dispatch, candidates.length]);
+
+  const [selectedJobForCandidates, setSelectedJobForCandidates] = useState(null);
+  const [selectedJobDetails, setSelectedJobDetails] = useState(null);
+
   const [jobs, setJobs] = useState(() => {
     const savedJobs = localStorage.getItem('superadmin_jobs_data');
     if (savedJobs) {
@@ -122,17 +137,28 @@ export default function SuperAdminJobsPage() {
       ) : (
         <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-6">
           {jobs.map((job) => (
-            <Card key={job.id} className="p-6 flex flex-col hover:shadow-xl hover:shadow-indigo-100/50 transition-all border-slate-100 hover:border-indigo-100 relative group">
+            <Card 
+              key={job.id} 
+              className="p-6 flex flex-col hover:shadow-xl hover:shadow-indigo-100/50 transition-all border-slate-100 hover:border-indigo-100 relative group cursor-pointer"
+              onClick={() => setSelectedJobDetails(job)}
+            >
               <div className="absolute top-4 right-4 flex items-center gap-2">
                 <button 
-                  onClick={() => handleEditJob(job)}
+                  onClick={(e) => { e.stopPropagation(); setSelectedJobForCandidates(job); }}
+                  className="p-1.5 text-slate-400 hover:bg-teal-50 hover:text-teal-600 rounded-md transition-colors"
+                  title="View Candidates"
+                >
+                  <Users size={16} />
+                </button>
+                <button 
+                  onClick={(e) => { e.stopPropagation(); handleEditJob(job); }}
                   className="p-1.5 text-slate-400 hover:bg-indigo-50 hover:text-indigo-600 rounded-md transition-colors"
                   title="Edit Job"
                 >
                   <Pencil size={16} />
                 </button>
                 <button 
-                  onClick={() => removeJob(job.id)}
+                  onClick={(e) => { e.stopPropagation(); removeJob(job.id); }}
                   className="p-1.5 text-slate-400 hover:bg-red-50 hover:text-red-500 rounded-md transition-colors"
                   title="Delete Job"
                 >
@@ -146,10 +172,7 @@ export default function SuperAdminJobsPage() {
                 <span className="flex items-center gap-1"><Clock size={14} className="text-teal-400"/> {job.workMode}</span>
               </div>
               
-              <div className="bg-slate-50 rounded-lg p-4 mb-4 flex-1">
-                <p className="text-sm text-slate-600 line-clamp-3 mb-4">
-                  {job.description}
-                </p>
+              <div className="bg-slate-50 rounded-lg p-4 mb-2 flex-1 flex flex-col justify-center">
                 <div className="grid grid-cols-3 gap-2 text-xs text-slate-700">
                   <div className="flex flex-col gap-1">
                     <div className="flex items-center gap-1 text-slate-500"><Target size={12}/> Exp</div>
@@ -163,19 +186,6 @@ export default function SuperAdminJobsPage() {
                     <div className="flex items-center gap-1 text-slate-500"><DollarSign size={12}/> Bond</div>
                     <span className="font-semibold text-slate-900 truncate">{job.bond || 'No Bond'}</span>
                   </div>
-                </div>
-              </div>
-              
-              <div className="pt-3 border-t border-slate-100">
-                <div className="text-xs text-slate-500 mb-2 font-medium flex items-center gap-1">
-                  <FileText size={14} className="text-indigo-400"/> Required Skills
-                </div>
-                <div className="flex flex-wrap gap-2">
-                  {job.skills.split(',').map((skill, i) => (
-                    <span key={i} className="px-2.5 py-1 bg-indigo-50 text-indigo-700 rounded-full text-xs font-medium border border-indigo-100/50">
-                      {skill.trim()}
-                    </span>
-                  ))}
                 </div>
               </div>
             </Card>
@@ -324,6 +334,177 @@ export default function SuperAdminJobsPage() {
                 className="bg-indigo-600 hover:bg-indigo-700 text-white"
               >
                 {editingJobId ? 'Save Changes' : 'Create Job'}
+              </Button>
+            </div>
+          </div>
+        </div>
+      )}
+      {/* View Candidates Modal */}
+      {selectedJobForCandidates && (
+        <div className="fixed inset-0 bg-slate-900/40 backdrop-blur-sm z-50 flex items-center justify-center p-4">
+          <div 
+            className="bg-white rounded-2xl shadow-2xl w-full max-w-4xl max-h-[90vh] overflow-hidden flex flex-col"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="p-6 border-b border-slate-100 flex items-center justify-between sticky top-0 bg-white z-10">
+              <h2 className="text-xl font-bold text-slate-800 flex items-center gap-2">
+                <Users className="text-teal-600" size={24} />
+                Candidates for {selectedJobForCandidates.title}
+              </h2>
+              <button 
+                onClick={() => setSelectedJobForCandidates(null)}
+                className="p-2 text-slate-400 hover:text-slate-600 hover:bg-slate-100 rounded-full transition-colors"
+              >
+                <X size={20} />
+              </button>
+            </div>
+            
+            <div className="p-6 overflow-y-auto">
+              {(() => {
+                const jobCandidates = candidates.filter(c => 
+                  c.interview_title && c.interview_title.toLowerCase() === selectedJobForCandidates.title.toLowerCase()
+                );
+                
+                if (jobCandidates.length === 0) {
+                  return (
+                    <div className="flex flex-col items-center justify-center py-12 text-slate-500">
+                      <Users size={48} className="text-slate-300 mb-4" />
+                      <p>No candidates have been scheduled or completed interviews for this job yet.</p>
+                    </div>
+                  );
+                }
+
+                return (
+                  <div className="overflow-x-auto">
+                    <table className="w-full text-left border-collapse">
+                      <thead>
+                        <tr className="border-b border-slate-200">
+                          <th className="py-3 px-4 font-semibold text-sm text-slate-600">Candidate Name</th>
+                          <th className="py-3 px-4 font-semibold text-sm text-slate-600">Status</th>
+                          <th className="py-3 px-4 font-semibold text-sm text-slate-600">Score</th>
+                          <th className="py-3 px-4 font-semibold text-sm text-slate-600">Date</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {jobCandidates.map(c => (
+                          <tr key={c.id || c.link_id} className="border-b border-slate-100 hover:bg-slate-50 transition-colors">
+                            <td className="py-3 px-4 text-sm font-medium text-slate-800">{c.candidate_name || 'N/A'}</td>
+                            <td className="py-3 px-4 text-sm">
+                              <span className={`px-2.5 py-1 rounded-full text-xs font-semibold ${
+                                getComputedStatus(c) === 'Completed' ? 'bg-emerald-100 text-emerald-700' :
+                                getComputedStatus(c) === 'Pending' ? 'bg-amber-100 text-amber-700' :
+                                'bg-slate-100 text-slate-700'
+                              }`}>
+                                {getComputedStatus(c) || c.status}
+                              </span>
+                            </td>
+                            <td className="py-3 px-4 text-sm font-semibold text-slate-700">
+                              {c.score ? `${Number(c.score).toFixed(1)}/100` : '--'}
+                            </td>
+                            <td className="py-3 px-4 text-sm text-slate-500">
+                              {c.created_at ? new Date(c.created_at).toLocaleDateString() : 'N/A'}
+                            </td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                );
+              })()}
+            </div>
+            
+            <div className="p-6 border-t border-slate-100 bg-slate-50 flex justify-end gap-3 rounded-b-2xl">
+              <Button 
+                onClick={() => setSelectedJobForCandidates(null)}
+                variant="secondary"
+              >
+                Close
+              </Button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Job Details Modal */}
+      {selectedJobDetails && (
+        <div className="fixed inset-0 bg-slate-900/40 backdrop-blur-sm z-50 flex items-center justify-center p-4">
+          <div 
+            className="bg-white rounded-2xl shadow-2xl w-full max-w-2xl max-h-[90vh] overflow-hidden flex flex-col"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="p-6 border-b border-slate-100 flex items-center justify-between sticky top-0 bg-white z-10">
+              <h2 className="text-xl font-bold text-slate-800 flex items-center gap-2 pr-4">
+                <Briefcase className="text-indigo-600" size={24} />
+                {selectedJobDetails.title}
+              </h2>
+              <button 
+                onClick={() => setSelectedJobDetails(null)}
+                className="p-2 text-slate-400 hover:text-slate-600 hover:bg-slate-100 rounded-full transition-colors flex-shrink-0"
+              >
+                <X size={20} />
+              </button>
+            </div>
+            
+            <div className="p-6 overflow-y-auto space-y-6">
+              <div className="flex flex-wrap items-center gap-4 text-sm font-medium text-slate-600">
+                <span className="flex items-center gap-1.5"><MapPin size={16} className="text-indigo-400"/> {selectedJobDetails.location}</span>
+                <span className="flex items-center gap-1.5"><Clock size={16} className="text-teal-400"/> {selectedJobDetails.workMode}</span>
+              </div>
+
+              <div className="bg-slate-50 rounded-xl p-5 border border-slate-100">
+                <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 text-sm text-slate-700">
+                  <div className="flex flex-col gap-1.5">
+                    <div className="flex items-center gap-1.5 text-slate-500 font-medium"><Target size={14}/> Experience</div>
+                    <span className="font-bold text-slate-900">{selectedJobDetails.experience}</span>
+                  </div>
+                  <div className="flex flex-col gap-1.5">
+                    <div className="flex items-center gap-1.5 text-slate-500 font-medium"><Wallet size={14}/> Salary</div>
+                    <span className="font-bold text-slate-900">{selectedJobDetails.salary || 'Not specified'}</span>
+                  </div>
+                  <div className="flex flex-col gap-1.5">
+                    <div className="flex items-center gap-1.5 text-slate-500 font-medium"><DollarSign size={14}/> Bond / Contract</div>
+                    <span className="font-bold text-slate-900">{selectedJobDetails.bond || 'No Bond'}</span>
+                  </div>
+                </div>
+              </div>
+
+              <div>
+                <h4 className="text-sm font-bold text-slate-800 flex items-center gap-2 mb-3">
+                  <FileText size={16} className="text-indigo-500"/>
+                  Job Description
+                </h4>
+                <p className="text-sm text-slate-600 leading-relaxed whitespace-pre-wrap">
+                  {selectedJobDetails.description}
+                </p>
+              </div>
+              
+              <div>
+                <h4 className="text-sm font-bold text-slate-800 mb-3">Required Skills</h4>
+                <div className="flex flex-wrap gap-2">
+                  {selectedJobDetails.skills.split(',').map((skill, i) => (
+                    <span key={i} className="px-3 py-1.5 bg-indigo-50 text-indigo-700 rounded-lg text-sm font-medium border border-indigo-100/50">
+                      {skill.trim()}
+                    </span>
+                  ))}
+                </div>
+              </div>
+            </div>
+            
+            <div className="p-6 border-t border-slate-100 bg-slate-50 flex justify-end gap-3 rounded-b-2xl">
+              <Button 
+                onClick={() => {
+                  setSelectedJobDetails(null);
+                  handleEditJob(selectedJobDetails);
+                }}
+                className="bg-indigo-50 text-indigo-700 hover:bg-indigo-100 border-none shadow-none"
+              >
+                <Pencil size={16} className="mr-2 inline" /> Edit Job
+              </Button>
+              <Button 
+                onClick={() => setSelectedJobDetails(null)}
+                variant="secondary"
+              >
+                Close
               </Button>
             </div>
           </div>
