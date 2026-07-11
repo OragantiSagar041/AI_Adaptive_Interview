@@ -1,5 +1,6 @@
 import { motion, useScroll, useTransform } from "framer-motion";
 import { useRef } from "react";
+import { Link } from "react-router-dom";
 import { GhostButton } from "./primitives";
 import interviewerImg from "../../assets/ai-interviewer.png";
 import interviewerDeskImg from "../../assets/ai-interviewer-desk.png";
@@ -7,18 +8,21 @@ import mockInterviewImg from "../../assets/ai-mock-interview.jpeg";
 import dashboardImg from "../../assets/hireiq-dashboard.png";
 const PROJECTS = [
     {
+        id: "nexus",
         n: "01",
         category: "Enterprise SaaS",
         name: "Nexus — 40,000 hires / year",
         imgs: [interviewerImg, mockInterviewImg, dashboardImg],
     },
     {
+        id: "aura",
         n: "02",
         category: "High-Growth Startup",
         name: "Aura — 12× faster engineering hiring",
         imgs: [interviewerDeskImg, dashboardImg, mockInterviewImg],
     },
     {
+        id: "solaris",
         n: "03",
         category: "Global BPO",
         name: "Solaris — 2.4M candidates screened",
@@ -62,7 +66,9 @@ function ProjectCard({ p, index, total, container, }) {
             </div>
           </div>
           <div className="pt-2">
-            <GhostButton label="Read Case Study"/>
+            <Link to={`/customer-story/${p.id}`}>
+              <GhostButton label="Read Case Study"/>
+            </Link>
           </div>
         </div>
 

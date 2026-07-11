@@ -19,6 +19,7 @@ const InterviewTechnical = React.lazy(() => import('./pages/interview/InterviewT
 const InterviewNonTechnical = React.lazy(() => import('./pages/interview/InterviewNonTechnical').then(m => ({ default: m.InterviewNonTechnical })))
 const CaseStudyPage = React.lazy(() => import('./pages/CaseStudyPage'))
 const VoiceInterviewPage = React.lazy(() => import('./pages/VoiceInterviewPage'))
+const HireIQCaseStudyPage = React.lazy(() => import('./pages/HireIQCaseStudyPage'))
 
 // Admin / master routes (were already lazy — keep them)
 const MasterLayout = React.lazy(() => import('./components/master/MasterLayout'))
@@ -63,6 +64,7 @@ function App() {
           <Route path="/interview/non-technical" element={<InterviewNonTechnical />} />
           <Route path="/register" element={<RegisterPage />} />
           <Route path="/case-study" element={<CaseStudyPage />} />
+          <Route path="/customer-story/:id" element={<HireIQCaseStudyPage />} />
           <Route path="/voice-interview/:linkId" element={<VoiceInterviewPage />} />
           {/* Master routes */}
           <Route
