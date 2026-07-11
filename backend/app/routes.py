@@ -6453,6 +6453,8 @@ class ManualAICallRequest(BaseModel):
     duration: Optional[int] = 30
     skills: Optional[str] = ""
 
+# (duplicate removed — see /api/calls/agent-settings below)
+
 @router.post("/api/calls/initiate-manual")
 async def initiate_manual_ai_call(
     phone_number: str = Form(...),
@@ -6506,6 +6508,255 @@ async def initiate_manual_ai_call(
         print(f"Error initiating manual AI call: {e}")
         raise HTTPException(status_code=500, detail=str(e))
 
+
+# ─── Omni Dimension Agent Data Routes ─────────────────────────────────────────
+
+@router.get("/api/calls/agent-settings")
+async def get_omni_agent_settings():
+    """Fetch the Omni Dimension Agent settings."""
+    from .omni_dimension_client import get_omni_client, OMNI_AGENT_ID
+    try:
+        client = get_omni_client()
+        agent_id = int(OMNI_AGENT_ID) if OMNI_AGENT_ID else 1
+        res = client.agent.list()
+        bots = res.get('json', {}).get('bots', [])
+        agent = next((b for b in bots if b.get('id') == agent_id), bots[0] if bots else {})
+        return {"settings": agent}
+    except Exception as e:
+        return JSONResponse(status_code=500, content={"detail": f"Failed to fetch agent settings: {str(e)}"})
+
+
+@router.get("/api/calls/knowledge-base")
+async def get_omni_knowledge_base():
+    """Fetch the Knowledge Base files from Omni Dimension."""
+    from .omni_dimension_client import get_omni_client
+    try:
+        client = get_omni_client()
+        res = client.knowledge_base.list()
+        data = res.get('json', res)
+        return {"files": data.get("files", []), "success": True}
+    except Exception as e:
+        return JSONResponse(status_code=500, content={"detail": str(e)})
+
+
+@router.get("/api/calls/integrations")
+async def get_omni_integrations():
+    """Fetch integrations for the agent from Omni Dimension."""
+    from .omni_dimension_client import get_omni_client, OMNI_AGENT_ID
+    try:
+        client = get_omni_client()
+        agent_id = int(OMNI_AGENT_ID) if OMNI_AGENT_ID else 1
+        res = client.integrations.get_agent_integrations(agent_id=agent_id)
+        data = res.get('json', res)
+        return {"integrations": data.get("integrations", []), "success": True}
+    except Exception as e:
+        return JSONResponse(status_code=500, content={"detail": str(e)})
+
+
+@router.get("/api/calls/integrations/user")
+async def get_user_integrations():
+    from .omni_dimension_client import get_omni_client
+    try:
+        client = get_omni_client()
+        res = client.integrations.get_user_integrations()
+        data = res.get('json', res) if isinstance(res, dict) else (res.json if hasattr(res, 'json') else res)
+        return {"integrations": data.get("integrations", []) if isinstance(data, dict) else [], "success": True}
+    except Exception as e:
+        return JSONResponse(status_code=500, content={"detail": str(e)})
+
+class CalendlyIntegrationRequest(BaseModel):
+    name: str
+    cal_api_key: str
+    cal_id: str
+    cal_timezone: str
+    description: Optional[str] = ""
+
+@router.post("/api/calls/integrations/calendly")
+async def create_calendly_integration(req: CalendlyIntegrationRequest):
+    from .omni_dimension_client import get_omni_client, OMNI_AGENT_ID
+    try:
+        client = get_omni_client()
+        res = client.integrations.create_cal_integration(
+            name=req.name,
+            cal_api_key=req.cal_api_key,
+            cal_id=req.cal_id,
+            cal_timezone=req.cal_timezone,
+            description=req.description
+        )
+        data = res.get('json', res) if isinstance(res, dict) else (res.json if hasattr(res, 'json') else res)
+        
+        # Depending on SDK response format, integration data might be nested
+        integration_data = data.get("integration", data) if isinstance(data, dict) else data
+        integration_id = integration_data.get("id") if isinstance(integration_data, dict) else getattr(integration_data, "id", None)
+        
+        agent_id = int(OMNI_AGENT_ID) if OMNI_AGENT_ID else 1
+        if integration_id:
+            client.integrations.add_integration_to_agent(agent_id=agent_id, integration_id=integration_id)
+            
+        return {"success": True, "integration": integration_data}
+    except Exception as e:
+        return JSONResponse(status_code=500, content={"detail": str(e)})
+
+class CustomApiIntegrationRequest(BaseModel):
+    name: str
+    url: str
+    method: str
+    description: Optional[str] = ""
+    headers: Optional[dict] = None
+    body_type: Optional[str] = None
+    body_content: Optional[dict] = None
+    body_params: Optional[dict] = None
+    query_params: Optional[dict] = None
+    stop_listening: Optional[bool] = False
+    request_timeout: Optional[int] = 10
+
+@router.post("/api/calls/integrations/custom-api")
+async def create_custom_api_integration(req: CustomApiIntegrationRequest):
+    from .omni_dimension_client import get_omni_client, OMNI_AGENT_ID
+    try:
+        client = get_omni_client()
+        res = client.integrations.create_custom_api_integration(
+            name=req.name,
+            url=req.url,
+            method=req.method,
+            description=req.description,
+            headers=req.headers,
+            body_type=req.body_type,
+            body_content=req.body_content,
+            body_params=req.body_params,
+            query_params=req.query_params,
+            stop_listening=req.stop_listening,
+            request_timeout=req.request_timeout
+        )
+        data = res.get('json', res) if isinstance(res, dict) else (res.json if hasattr(res, 'json') else res)
+        
+        integration_data = data.get("integration", data) if isinstance(data, dict) else data
+        integration_id = integration_data.get("id") if isinstance(integration_data, dict) else getattr(integration_data, "id", None)
+        
+        agent_id = int(OMNI_AGENT_ID) if OMNI_AGENT_ID else 1
+        if integration_id:
+            client.integrations.add_integration_to_agent(agent_id=agent_id, integration_id=integration_id)
+            
+        return {"success": True, "integration": integration_data}
+    except Exception as e:
+        return JSONResponse(status_code=500, content={"detail": str(e)})
+
+class DetachIntegrationRequest(BaseModel):
+    integration_id: int
+
+@router.post("/api/calls/integrations/detach")
+async def detach_integration(req: DetachIntegrationRequest):
+    from .omni_dimension_client import get_omni_client, OMNI_AGENT_ID
+    try:
+        client = get_omni_client()
+        agent_id = int(OMNI_AGENT_ID) if OMNI_AGENT_ID else 1
+        client.integrations.remove_integration_from_agent(agent_id=agent_id, integration_id=req.integration_id)
+        return {"success": True}
+    except Exception as e:
+        return JSONResponse(status_code=500, content={"detail": str(e)})
+
+
+@router.get("/api/calls/call-config")
+async def get_omni_call_config():
+    """Fetch call configuration from agent settings."""
+    from .omni_dimension_client import get_omni_client, OMNI_AGENT_ID
+    try:
+        client = get_omni_client()
+        agent_id = int(OMNI_AGENT_ID) if OMNI_AGENT_ID else 1
+        res = client.agent.list()
+        bots = res.get('json', {}).get('bots', [])
+        agent = next((b for b in bots if b.get('id') == agent_id), bots[0] if bots else {})
+        config = {
+            "silence_timeout": agent.get("silence_timeout"),
+            "speech_speed": agent.get("speech_speed"),
+            "max_call_duration_in_sec": agent.get("max_call_duration_in_sec"),
+            "is_end_call_enabled": agent.get("is_end_call_enabled"),
+            "end_call_condition": agent.get("end_call_condition"),
+            "end_call_message": agent.get("end_call_message"),
+            "voicemail_enabled": agent.get("voicemail_enabled"),
+            "voicemail_message": agent.get("voicemail_message"),
+            "background_noise_enabled": agent.get("background_noise_enabled"),
+            "background_noice_name": agent.get("background_noice_name"),
+            "background_audio_volume": agent.get("background_audio_volume"),
+            "initial_ringing_sound_enabled": agent.get("initial_ringing_sound_enabled"),
+            "is_transfer_enabled": agent.get("is_transfer_enabled"),
+            "first_ideal_message": agent.get("first_ideal_message"),
+            "second_ideal_message": agent.get("second_ideal_message"),
+            "last_ideal_message": agent.get("last_ideal_message"),
+            "user_idle_threshold_sec": agent.get("user_idle_threshold_sec"),
+            "min_speech_duration_ms": agent.get("min_speech_duration_ms"),
+        }
+        return {"config": config, "success": True}
+    except Exception as e:
+        return JSONResponse(status_code=500, content={"detail": str(e)})
+
+
+@router.get("/api/calls/post-call-config")
+async def get_omni_post_call_config():
+    """Fetch post-call configuration from agent settings."""
+    from .omni_dimension_client import get_omni_client, OMNI_AGENT_ID
+    try:
+        client = get_omni_client()
+        agent_id = int(OMNI_AGENT_ID) if OMNI_AGENT_ID else 1
+        res = client.agent.list()
+        bots = res.get('json', {}).get('bots', [])
+        agent = next((b for b in bots if b.get('id') == agent_id), bots[0] if bots else {})
+        post_call = agent.get("post_call_config_ids", [])
+        return {"post_call_configs": post_call, "success": True}
+    except Exception as e:
+        return JSONResponse(status_code=500, content={"detail": str(e)})
+
+
+@router.get("/api/calls/recent-calls")
+async def get_omni_recent_calls():
+    """Fetch recent call logs directly from Omni Dimension SDK, including all evaluation scores."""
+    from .omni_dimension_client import get_omni_client, OMNI_AGENT_ID
+    try:
+        client = get_omni_client()
+        agent_id = int(OMNI_AGENT_ID) if OMNI_AGENT_ID else None
+        res = client.call.get_call_logs(agent_id=agent_id, page_size=50)
+        # SDK always returns {"status": <int>, "json": <dict>}
+        data = res.get('json', res) if isinstance(res, dict) else {}
+        # Try all known keys the Omni Dimension API may use for the calls list
+        calls = (
+            data.get("calls")
+            or data.get("call_log_data")
+            or data.get("call_logs")
+            or data.get("data")
+            or data.get("results")
+            or []
+        )
+        if not isinstance(calls, list):
+            calls = []
+        # Normalise each call record to extract evaluation / score fields
+        normalised = []
+        for c in calls:
+            if not isinstance(c, dict):
+                continue
+            rec = dict(c)
+            # Pull evaluation sub-object if present
+            ev = rec.get("evaluation") or {}
+            # Flatten evaluation fields to top-level for easy frontend access
+            rec["sentiment_score"]            = ev.get("sentiment_score")            or rec.get("sentiment_score")
+            rec["sentiment_analysis_details"] = ev.get("sentiment_analysis_details") or rec.get("sentiment_analysis_details")
+            rec["cqs_score"]                  = ev.get("cqs_score")                  or rec.get("cqs_score")
+            rec["cqs_score_message"]          = ev.get("cqs_score_message")          or rec.get("cqs_score_message")
+            rec["metric_score_intent"]        = ev.get("metric_score_intent")        or rec.get("metric_score_intent")
+            rec["metric_score_relevance"]     = ev.get("metric_score_relevance")     or rec.get("metric_score_relevance")
+            rec["metric_score_latency"]       = ev.get("metric_score_latency")       or rec.get("metric_score_latency")
+            rec["metric_score_coherence"]     = ev.get("metric_score_coherence")     or rec.get("metric_score_coherence")
+            rec["p50_latency"]                = rec.get("p50_latency")
+            rec["p99_latency"]                = rec.get("p99_latency")
+            normalised.append(rec)
+            
+        return {"calls": normalised, "success": True, "total": len(normalised)}
+    except Exception as e:
+        import traceback
+        print(f"[recent-calls ERROR] {traceback.format_exc()}")
+        return JSONResponse(status_code=500, content={"detail": str(e)})
+
+# ──────────────────────────────────────────────────────────────────────────────
+
 @router.get("/api/calls/logs/{call_id}")
 async def get_omni_call_log_details(call_id: str):
     """
@@ -6515,7 +6766,25 @@ async def get_omni_call_log_details(call_id: str):
     try:
         response = omni_dimension_client.get_omni_call_status(call_id)
         if response and response.get('json') and response['json'].get('call_log_data'):
-            return {"log": response['json']['call_log_data'][0]}
+            log_data = response['json']['call_log_data'][0]
+            
+            # Flatten evaluation fields for the call itself
+            ev = log_data.get("evaluation") or {}
+            log_data["sentiment_score"]            = ev.get("sentiment_score")            or log_data.get("sentiment_score")
+            log_data["sentiment_analysis_details"] = ev.get("sentiment_analysis_details") or log_data.get("sentiment_analysis_details")
+            log_data["cqs_score"]                  = ev.get("cqs_score")                  or log_data.get("cqs_score")
+            log_data["cqs_score_message"]          = ev.get("cqs_score_message")          or log_data.get("cqs_score_message")
+            
+            # Flatten interaction evaluation scores
+            if "interactions" in log_data and isinstance(log_data["interactions"], list):
+                for interaction in log_data["interactions"]:
+                    int_ev = interaction.get("evaluation") or {}
+                    interaction["metric_score_intent"]    = int_ev.get("metric_score_intent")    or interaction.get("metric_score_intent")
+                    interaction["metric_score_relevance"] = int_ev.get("metric_score_relevance") or interaction.get("metric_score_relevance")
+                    interaction["metric_score_latency"]   = int_ev.get("metric_score_latency")   or interaction.get("metric_score_latency")
+                    interaction["metric_score_coherence"] = int_ev.get("metric_score_coherence") or interaction.get("metric_score_coherence")
+            
+            return {"log": log_data}
         raise HTTPException(status_code=404, detail="Call log details not found in Omni Dimension.")
     except Exception as e:
         print(f"Error fetching detailed call log {call_id}: {e}")
@@ -6548,17 +6817,31 @@ async def get_omni_call_logs():
                                 duration_str = f"{mins}m {secs}s"
                                 recording_url = call_log_data.get("recording_url", log.get("recording_url"))
                                 
-                                log["status"] = new_status
-                                log["duration"] = duration_str
-                                log["recording_url"] = recording_url
+                                update_fields = {
+                                    "status": new_status,
+                                    "duration": duration_str,
+                                    "recording_url": recording_url
+                                }
+                                
+                                ev = call_log_data.get("evaluation") or {}
+                                if ev.get("cqs_score") or call_log_data.get("cqs_score"):
+                                    update_fields["cqs_score"] = ev.get("cqs_score") or call_log_data.get("cqs_score")
+                                if ev.get("sentiment_score") or call_log_data.get("sentiment_score"):
+                                    update_fields["sentiment_score"] = ev.get("sentiment_score") or call_log_data.get("sentiment_score")
+                                
+                                if "interactions" in call_log_data and isinstance(call_log_data["interactions"], list):
+                                    interactions = call_log_data["interactions"]
+                                    for interaction in interactions:
+                                        int_ev = interaction.get("evaluation") or {}
+                                        interaction["metric_score_intent"]    = int_ev.get("metric_score_intent")    or interaction.get("metric_score_intent")
+                                        interaction["metric_score_relevance"] = int_ev.get("metric_score_relevance") or interaction.get("metric_score_relevance")
+                                        interaction["metric_score_latency"]   = int_ev.get("metric_score_latency")   or interaction.get("metric_score_latency")
+                                        interaction["metric_score_coherence"] = int_ev.get("metric_score_coherence") or interaction.get("metric_score_coherence")
+                                    update_fields["interactions"] = interactions
                                 
                                 omni_call_logs_collection.update_one(
                                     {"_id": log["_id"]},
-                                    {"$set": {
-                                        "status": new_status,
-                                        "duration": duration_str,
-                                        "recording_url": recording_url
-                                    }}
+                                    {"$set": update_fields}
                                 )
                                 updated = True
                 except Exception as ex:
