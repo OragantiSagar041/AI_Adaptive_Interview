@@ -920,13 +920,13 @@ export default function VoiceInterviewPage() {
     }
 
     if (!answer?.trim()) {
-      // 10s silence -> Skip to next question
+      // 10s silence -> Skip to next question without AI saying anything
       const nextIdx = qIdx + 1
       if (!qs[nextIdx]) {
-        aiSay(t.wrapUpVerbal, () => transitionToNextRound())
+        transitionToNextRound()
       } else {
         setCurrentQIdx(nextIdx)
-        aiSay(`${t.nextQuestion.replace('[X]', nextIdx + 1)}${qs[nextIdx].text}`, () => startListening(ans => handleAnswer(ans, nextIdx, 0)))
+        setTimeout(() => startListening(ans => handleAnswer(ans, nextIdx, 0)), 500)
       }
       return
     }

@@ -390,7 +390,7 @@ export default function VoiceCaseStudy({
           clearTimeout(silenceTimerRef.current)
           silenceTimerRef.current = setTimeout(() => {
             if (mediaRecorder.state !== 'inactive') mediaRecorder.stop()
-          }, 15000)  // 15s grace after last detected speech
+          }, 5000)  // 5s grace after last detected speech
         }
         recognition.start()
       }
