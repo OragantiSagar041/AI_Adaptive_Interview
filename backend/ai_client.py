@@ -134,6 +134,7 @@ def _call_openrouter(
     model: str = "openai/gpt-4o-mini",
     temperature: float = 0.1,
     timeout: int = 15,
+    max_tokens: int = 1024,
 ) -> str:
     """Call OpenRouter using the OpenAI-compatible endpoint via requests."""
     url = "https://openrouter.ai/api/v1/chat/completions"
@@ -147,6 +148,7 @@ def _call_openrouter(
         "model": model,
         "messages": messages,
         "temperature": temperature,
+        "max_tokens": max_tokens,
     }
     resp = http_requests.post(url, headers=headers, json=payload, timeout=timeout)
 
@@ -229,6 +231,7 @@ def chat_completion(
     model: str = "openai/gpt-4o-mini",
     temperature: float = 0.1,
     timeout: int = 15,
+    max_tokens: int = 1024,
 ) -> str:
     """
     Send a chat completion request.
@@ -242,7 +245,7 @@ def chat_completion(
         raise RuntimeError("No API key available")
 
     try:
-        return _call_openrouter(messages, model, temperature, timeout)
+        return _call_openrouter(messages, model, temperature, timeout, max_tokens)
     except QuotaExhaustedError:
         print("⚡ Kill-switch: quota exhausted → instant offline mode")
         raise RuntimeError("QUOTA_EXHAUSTED_INSTANT_OFFLINE")

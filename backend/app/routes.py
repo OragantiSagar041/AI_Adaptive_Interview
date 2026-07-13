@@ -288,20 +288,20 @@ def api_gen_next_question(req: NextQuestionRequest):
         # ── BUGFIX: Prevent Follow-ups from hijacking the interview ──
         # 1. Skip follow-ups for Intros, Custom Questions, Closing, and existing Follow-ups
         if "self-intro" in q_type or "introduction" in q_type:
-            raise HTTPException(status_code=503, detail="Skip follow-up for intro")
+            return {"skip_followup": True, "reason": "Skip follow-up for intro"}
         if "follow-up" in q_type or "jd-based" in q_type:
-            raise HTTPException(status_code=503, detail="Already a follow-up")
+            return {"skip_followup": True, "reason": "Already a follow-up"}
         if "custom" in q_cat:
-            raise HTTPException(status_code=503, detail="Skip follow-up for custom questions")
+            return {"skip_followup": True, "reason": "Skip follow-up for custom questions"}
         if "closing" in q_cat or "future" in q_cat or "closing" in q_type:
-            raise HTTPException(status_code=503, detail="Skip follow-up for closing")
+            return {"skip_followup": True, "reason": "Skip follow-up for closing"}
 
         # Check if we already have a follow-up (avoid infinite expansion if re-running)
         if current_idx + 1 < len(interview["questions"]):
              # If the very next question is already a follow-up, do not insert another one
              next_q = interview["questions"][current_idx+1]
              if "follow-up" in next_q.get("type", "").lower() or "jd-based" in next_q.get("type", "").lower():
-                 raise HTTPException(status_code=503, detail="Next question is already a follow-up")
+                 return {"skip_followup": True, "reason": "Next question is already a follow-up"}
                  
              # Shift IDs of subsequent questions
              for q in interview["questions"][current_idx+1:]:
