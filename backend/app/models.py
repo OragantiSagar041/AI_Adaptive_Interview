@@ -113,3 +113,22 @@ class EmailPreviewRequest(BaseModel):
     duration: int = 30
     scheduled_start: str = ""
     scheduled_end: str = ""
+
+class JobCreate(BaseModel):
+    title: str
+    experience: str
+    skills: str
+    description: str
+    workMode: str = "Remote"
+    bond: str = ""
+    location: str = ""
+    salary: str = ""
+    admin_id: Optional[str] = None
+
+class JobApplicationCreate(BaseModel):
+    name: str
+    email: str
+    phone: str
+    resume_url: Optional[str] = ""
+    linkedin_url: Optional[str] = ""
+    cover_letter: Optional[str] = ""

@@ -21,6 +21,7 @@ import {
   CreditCard,
   AlertCircle
 } from 'lucide-react'
+import logoImage from '../../assets/logo.png'
 import { logout, loadSuperAdminProfile } from '../../store/slices/authSlice'
 import { persistor } from '../../store/store'
 import AdminCopilot from '../admin/copilot/AdminCopilot'
@@ -259,9 +260,7 @@ export default function MasterLayout() {
       >
         <div className={`flex w-full ${(isCollapsed && !isMobile) ? 'flex-col items-center gap-4' : 'items-center justify-between gap-2.5'}`}>
           <div className="flex items-center gap-2.5 overflow-hidden">
-            <div className="w-8 h-8 rounded-lg flex items-center justify-center bg-white text-indigo-700 text-sm font-extrabold shrink-0 shadow-sm">
-              <Shield size={16} fill="currentColor" />
-            </div>
+            <img src={logoImage} alt="Hire IQ Logo" className="w-8 h-8 object-contain" />
             {(!isCollapsed || isMobile) && (
               <strong className="text-xl font-bold tracking-tight text-white font-title truncate">Hire IQ</strong>
             )}

@@ -201,32 +201,38 @@ export default function OverviewDashboardPage() {
 
       <Card className="bg-white/80 backdrop-blur-2xl border border-white/60 p-0 shadow-[0_8px_30px_rgb(0,0,0,0.04)] rounded-3xl flex flex-col gap-5 text-slate-800 overflow-hidden relative">
         <div className="absolute top-0 left-0 w-full h-32 bg-gradient-to-b from-indigo-50/50 to-transparent pointer-events-none" />
-        <div className="flex flex-col gap-4 px-4 pt-4 sm:flex-row sm:justify-between sm:items-start sm:px-6 sm:pt-6 relative z-10">
-          <div className="flex gap-4 items-center">
-            <div className="w-12 h-12 rounded-2xl flex items-center justify-center bg-gradient-to-br from-indigo-500 to-purple-600 text-white shadow-lg shadow-indigo-500/20">
-              <LayoutDashboard size={22} />
+        <div className="flex flex-col gap-6 px-5 pt-5 sm:px-7 sm:pt-7 relative z-10">
+          <div className="flex items-center gap-4 border-b border-indigo-100/50 pb-5">
+            <div className="w-14 h-14 rounded-2xl flex items-center justify-center bg-gradient-to-br from-indigo-600 via-indigo-700 to-purple-800 text-white shadow-[0_8px_16px_rgba(79,70,229,0.25)] border border-white/20 ring-4 ring-indigo-50">
+              <LayoutDashboard size={26} strokeWidth={2.5} />
             </div>
-            <div>
-              <h3 className="text-xl font-black text-transparent bg-clip-text bg-gradient-to-r from-slate-900 to-indigo-800">Global Operations</h3>
-              <p className="text-sm text-slate-500 font-medium">SuperAdmin Dashboard Review</p>
+            <div className="flex flex-col">
+              <h3 className="text-2xl font-black text-transparent bg-clip-text bg-gradient-to-r from-slate-900 to-indigo-900 tracking-tight leading-tight">
+                Global Operations
+              </h3>
+              <p className="text-sm text-slate-500 font-semibold tracking-wide mt-0.5">
+                SuperAdmin Dashboard Review
+              </p>
             </div>
           </div>
 
-          <CandidateFilters
-            searchTerm={searchTerm}
-            setSearchTerm={(term) => dispatch(setSearchTerm(term))}
-            startDate={startDate}
-            setStartDate={(date) => dispatch(setStartDate(date))}
-            endDate={endDate}
-            setEndDate={(date) => dispatch(setEndDate(date))}
-            statusFilter={statusFilter}
-            setStatusFilter={(statusVal) => dispatch(setStatusFilter(statusVal))}
-            sortBy={sortBy}
-            setSortBy={(sort) => dispatch(setSortBy(sort))}
-            handleExportExcel={handleExportExcelAction}
-            selectedIds={selectedIds}
-            handleBulkDelete={handleBulkDeleteAction}
-          />
+          <div className="w-full bg-slate-50/80 rounded-2xl border border-slate-200/60 p-3 shadow-inner overflow-hidden">
+            <CandidateFilters
+              searchTerm={searchTerm}
+              setSearchTerm={(term) => dispatch(setSearchTerm(term))}
+              startDate={startDate}
+              setStartDate={(date) => dispatch(setStartDate(date))}
+              endDate={endDate}
+              setEndDate={(date) => dispatch(setEndDate(date))}
+              statusFilter={statusFilter}
+              setStatusFilter={(statusVal) => dispatch(setStatusFilter(statusVal))}
+              sortBy={sortBy}
+              setSortBy={(sort) => dispatch(setSortBy(sort))}
+              handleExportExcel={handleExportExcelAction}
+              selectedIds={selectedIds}
+              handleBulkDelete={handleBulkDeleteAction}
+            />
+          </div>
         </div>
 
         <CandidateTable

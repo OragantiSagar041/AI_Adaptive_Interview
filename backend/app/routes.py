@@ -7063,3 +7063,147 @@ def get_ai_call_status(link_id: str, current_admin: dict = Depends(get_current_a
     except Exception as e:
         print(f"Error checking AI call status: {e}")
         raise HTTPException(status_code=500, detail=str(e))
+
+# ---------------------------------------------------------------------------
+# Jobs & Applications (Super Admin / Public)
+# ---------------------------------------------------------------------------
+
+@router.post("/api/jobs")
+def create_job(job: JobCreate, current_admin: dict = Depends(get_current_admin_details)):
+    job_dict = job.dict()
+    import random
+    import string
+    job_id = f"JOB-{''.join(random.choices(string.ascii_uppercase + string.digits, k=6))}"
+    job_dict["job_id"] = job_id
+    job_dict["admin_username"] = current_admin["username"]
+    job_dict["created_at"] = datetime.now(timezone.utc).isoformat()
+    result = jobs_collection.insert_one(job_dict)
+    job_dict["_id"] = str(result.inserted_id)
+    return {"status": "success", "job": job_dict}
+
+@router.get("/api/jobs")
+def get_admin_jobs(current_admin: dict = Depends(get_current_admin_details)):
+    query = {}
+    if current_admin["role"] == "admin":
+         query["admin_username"] = current_admin["username"]
+    jobs = list(jobs_collection.find(query).sort("created_at", -1))
+    for j in jobs:
+        j["_id"] = str(j["_id"])
+    return {"status": "success", "jobs": jobs}
+
+@router.put("/api/jobs/{job_id}")
+def update_job(job_id: str, job_update: JobCreate, current_admin: dict = Depends(get_current_admin_details)):
+    update_data = job_update.dict()
+    update_data["updated_at"] = datetime.now(timezone.utc).isoformat()
+    result = jobs_collection.update_one({"job_id": job_id}, {"$set": update_data})
+    if result.matched_count == 0:
+        raise HTTPException(status_code=404, detail="Job not found")
+    return {"status": "success", "message": "Job updated"}
+
+@router.delete("/api/jobs/{job_id}")
+def delete_job(job_id: str, current_admin: dict = Depends(get_current_admin_details)):
+    result = jobs_collection.delete_one({"job_id": job_id})
+    if result.deleted_count == 0:
+        raise HTTPException(status_code=404, detail="Job not found")
+    return {"status": "success", "message": "Job deleted"}
+
+@router.get("/api/public/jobs/{job_id}")
+def get_public_job(job_id: str):
+    job = jobs_collection.find_one({"job_id": job_id})
+    if not job:
+        raise HTTPException(status_code=404, detail="Job not found")
+    job["_id"] = str(job["_id"])
+    return {"status": "success", "job": job}
+
+from fastapi import File, UploadFile, Form
+
+@router.post("/api/public/jobs/{job_id}/apply")
+async def apply_for_job(
+    job_id: str,
+    name: str = Form(...),
+    email: str = Form(...),
+    phone: str = Form(...),
+    linkedin_url: Optional[str] = Form(""),
+    resume: UploadFile = File(...)
+):
+    job = jobs_collection.find_one({"job_id": job_id})
+    if not job:
+        raise HTTPException(status_code=404, detail="Job not found")
+        
+    import os
+    import shutil
+    upload_dir = "uploads/resumes"
+    os.makedirs(upload_dir, exist_ok=True)
+    
+    file_path = f"{upload_dir}/{job_id}_{resume.filename}"
+    with open(file_path, "wb") as buffer:
+        shutil.copyfileobj(resume.file, buffer)
+        
+    app_dict = {
+        "job_id": job_id,
+        "job_title": job.get("title"),
+        "name": name,
+        "email": email,
+        "phone": phone,
+        "linkedin_url": linkedin_url,
+        "resume_path": file_path,
+        "status": "Pending Review",
+        "applied_at": datetime.now(timezone.utc).isoformat()
+    }
+    
+    result = job_applications_collection.insert_one(app_dict)
+    return {"status": "success", "message": "Application submitted successfully", "application_id": str(result.inserted_id)}
+
+import PyPDF2
+import io
+
+@router.post("/api/public/jobs/parse-resume")
+async def parse_resume(resume: UploadFile = File(...)):
+    try:
+        # Read the file content
+        content = await resume.read()
+        
+        # We'll just handle PDFs for now as an example, but we can easily extend this
+        extracted_text = ""
+        if resume.filename.lower().endswith(".pdf"):
+            pdf_reader = PyPDF2.PdfReader(io.BytesIO(content))
+            for page in pdf_reader.pages:
+                extracted_text += page.extract_text() + "\n"
+        else:
+            # If not PDF, just decode assuming txt or string (we can add docx later if needed)
+            # Or just take a best effort for other text-based
+            try:
+                extracted_text = content.decode('utf-8', errors='ignore')
+            except:
+                extracted_text = ""
+
+        if not extracted_text.strip():
+             return {"status": "success", "data": {"name": "", "email": "", "phone": "", "linkedin_url": ""}}
+
+        # Ensure text is not insanely large for the LLM context (truncate if necessary)
+        extracted_text = extracted_text[:10000]
+
+        prompt = f"""
+        Extract the following information from the provided resume text. 
+        Format the output strictly as JSON with keys: "name", "email", "phone", "linkedin_url".
+        If a field is not found, leave it as an empty string. Do not include markdown formatting or comments.
+        
+        Resume Text:
+        {extracted_text}
+        """
+        
+        raw_response = chat_completion([{"role": "user", "content": prompt}])
+        parsed_data = extract_json(raw_response) or {}
+        
+        return {
+            "status": "success", 
+            "data": {
+                "name": parsed_data.get("name", ""),
+                "email": parsed_data.get("email", ""),
+                "phone": parsed_data.get("phone", ""),
+                "linkedin_url": parsed_data.get("linkedin_url", "")
+            }
+        }
+    except Exception as e:
+        print(f"Error parsing resume: {e}")
+        return {"status": "error", "data": {"name": "", "email": "", "phone": "", "linkedin_url": ""}}

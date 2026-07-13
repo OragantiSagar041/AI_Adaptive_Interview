@@ -14,6 +14,7 @@ import {
   ChevronLeft,
   ChevronRight,
 } from 'lucide-react'
+import logoImage from '../assets/logo.png'
 
 export default function SuperAdminSidebar({
   activeTab,
@@ -56,9 +57,7 @@ export default function SuperAdminSidebar({
     >
       <div className={`flex w-full ${isCollapsed ? 'flex-col items-center gap-4' : 'items-center justify-between gap-2.5'}`}>
         <div className="flex items-center gap-2.5 overflow-hidden">
-          <div className="w-8 h-8 rounded-lg flex items-center justify-center bg-white text-primary text-sm font-extrabold shrink-0 shadow-sm">
-            <Shield size={16} fill="currentColor" style={{ color: '#4f46e5' }} />
-          </div>
+          <img src={logoImage} alt="Hire IQ Logo" className="w-8 h-8 object-contain" />
           {!isCollapsed && (
             <strong className="text-xl font-bold tracking-tight text-white font-title truncate">Hire IQ</strong>
           )}

@@ -19,7 +19,8 @@ companies_collection = db["companies"]
 credit_requests_collection = db["credit_requests"]
 notifications_collection = db["notifications"]
 omni_call_logs_collection = db["omni_call_logs"]
-
+jobs_collection = db["jobs"]
+job_applications_collection = db["job_applications"]
 
 async def init_db_indexes():
     candidates_collection.create_index("name", unique=True)

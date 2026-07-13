@@ -11,6 +11,8 @@ from mongo_db import (
     credit_requests_collection,
     notifications_collection,
     omni_call_logs_collection,
+    jobs_collection,
+    job_applications_collection,
 )
 
 load_dotenv()
@@ -26,4 +28,6 @@ __all__ = [
     "credit_requests_collection",
     "notifications_collection",
     "omni_call_logs_collection",
+    "jobs_collection",
+    "job_applications_collection",
 ]
