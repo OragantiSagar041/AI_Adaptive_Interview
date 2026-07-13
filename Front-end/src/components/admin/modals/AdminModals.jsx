@@ -144,7 +144,7 @@ export function CandidateScorecardModal({
         <div className="flex flex-col gap-8 text-slate-800 bg-white pt-2">
           
           {/* Top Stats Row */}
-          <div className="grid grid-cols-2 md:grid-cols-5 gap-4">
+          <div className="grid grid-cols-2 md:grid-cols-6 gap-4">
             <div className="bg-white border border-slate-200 shadow-sm rounded-xl p-5">
               <span className="text-[0.68rem] text-slate-400 font-bold uppercase tracking-wider block mb-2">Average Score</span>
               <div className="flex items-baseline gap-1">
@@ -182,6 +182,12 @@ export function CandidateScorecardModal({
               <div className="flex items-baseline gap-1 mt-1">
                 <span className="text-4xl font-black text-slate-800 tracking-tight">{candidateDetail?.integrity?.total_time_minutes || 0}</span>
                 <span className="text-sm font-bold text-slate-800">m</span>
+              </div>
+            </div>
+            <div className="bg-white border border-slate-200 shadow-sm rounded-xl p-5">
+              <span className="text-[0.68rem] text-slate-400 font-bold uppercase tracking-wider block mb-2">AI Tokens Consumed</span>
+              <div className="flex items-baseline gap-1 mt-1">
+                <span className="text-4xl font-black text-[#6366f1] tracking-tight">{candidateDetail?.ai_tokens_used || selectedCandidate?.ai_tokens_used || 0}</span>
               </div>
             </div>
           </div>

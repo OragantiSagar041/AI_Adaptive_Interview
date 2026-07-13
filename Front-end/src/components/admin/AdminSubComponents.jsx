@@ -1,4 +1,5 @@
-import React from 'react'
+import React, { useState, useEffect } from 'react'
+import { createPortal } from 'react-dom'
 import { useDispatch } from 'react-redux'
 import { Search, X, Download, Trash2, Video, Eye, Calendar, PhoneCall } from 'lucide-react'
 import Button from '../Button'
@@ -151,6 +152,7 @@ export function CandidateTable({
   setCurrentPage
 }) {
   const dispatch = useDispatch()
+  const [rescheduleModal, setRescheduleModal] = useState({ isOpen: false, session: null, newStart: '', newEnd: '', isSubmitting: false })
 
   const handleCallClick = (session) => {
     const phoneNumber = prompt(`Enter phone number for ${session.candidate_name || 'Candidate'} (e.g. +1234567890):`, session.candidate_phone || '')
@@ -266,16 +268,21 @@ export function CandidateTable({
                         {computedStatus === 'expired' && (
                           <button
                             onClick={() => {
-                              const extendDays = prompt("Reschedule: Enter extra number of days to extend this session:")
-                              if (extendDays && !isNaN(extendDays)) {
-                                fetch(`${API_BASE_URL}/admin/sessions/${c.link_id || c.id}/reschedule`, {
-                                  method: 'POST',
-                                  body: new URLSearchParams({ new_expiry: new Date(Date.now() + Number(extendDays) * 24 * 60 * 60 * 1000).toISOString() })
-                                }).then(res => {
-                                  if (res.ok) { alert("Session extended successfully!"); loadDashboardData(); }
-                                  else { alert("Failed to extend session."); }
-                                })
-                              }
+                              const toLocalISO = (dateStr) => {
+                                const d = dateStr ? new Date(dateStr) : new Date();
+                                d.setMinutes(d.getMinutes() - d.getTimezoneOffset());
+                                return d.toISOString().slice(0, 16);
+                              };
+                              const start = c.scheduled_start || c.created_at;
+                              const end = c.expires_at || new Date(Date.now() + 86400000).toISOString();
+                              
+                              setRescheduleModal({ 
+                                isOpen: true, 
+                                session: c, 
+                                newStart: toLocalISO(start), 
+                                newEnd: toLocalISO(end), 
+                                isSubmitting: false 
+                              })
                             }}
                             className="px-2.5 py-1.5 bg-primary text-white text-xs font-bold rounded hover:bg-primary-hover transition-colors cursor-pointer border-none"
                           >
@@ -343,6 +350,117 @@ export function CandidateTable({
             </Button>
           </div>
         </div>
+      )}
+
+      {rescheduleModal.isOpen && createPortal(
+        <div className="fixed inset-0 bg-slate-900/50 backdrop-blur-sm z-[9999] flex items-center justify-center p-4">
+          <div className="bg-white rounded-xl shadow-xl w-full max-w-md overflow-hidden" onClick={e => e.stopPropagation()}>
+            <div className="flex justify-between items-center p-5 border-b border-slate-100">
+              <h3 className="font-bold text-slate-800 flex items-center gap-2">
+                <Calendar size={18} className="text-primary" />
+                Reschedule Session
+              </h3>
+              <button onClick={() => setRescheduleModal(prev => ({ ...prev, isOpen: false }))} className="text-slate-400 hover:text-slate-600 bg-transparent border-none cursor-pointer">
+                <X size={18} />
+              </button>
+            </div>
+            
+            <div className="p-6">
+              <div className="mb-4">
+                <p className="text-sm text-slate-600 mb-1">Candidate:</p>
+                <div className="flex items-center gap-2">
+                  <p className="font-semibold text-slate-800">{rescheduleModal.session?.candidate_name || 'Candidate'}</p>
+                  {rescheduleModal.session && (
+                    <span className="bg-slate-100 text-slate-500 px-2 py-0.5 rounded text-xs border border-slate-200 font-mono">
+                      ID: {rescheduleModal.session.candidate_id || rescheduleModal.session.id}
+                    </span>
+                  )}
+                </div>
+              </div>
+
+              <div className="grid grid-cols-2 gap-4 mb-4">
+                <div>
+                  <label className="block text-sm font-semibold text-slate-700 mb-1">START DATE & TIME</label>
+                  <div className="relative">
+                    <input 
+                      type="datetime-local" 
+                      value={rescheduleModal.newStart}
+                      onChange={(e) => setRescheduleModal(prev => ({ ...prev, newStart: e.target.value }))}
+                      className="w-full border border-slate-200 rounded-lg p-2.5 text-sm text-slate-800 outline-none focus:border-primary focus:ring-1 focus:ring-primary"
+                    />
+                  </div>
+                </div>
+                <div>
+                  <label className="block text-sm font-semibold text-slate-700 mb-1">END DATE & TIME</label>
+                  <div className="relative">
+                    <input 
+                      type="datetime-local" 
+                      value={rescheduleModal.newEnd}
+                      onChange={(e) => setRescheduleModal(prev => ({ ...prev, newEnd: e.target.value }))}
+                      className="w-full border border-slate-200 rounded-lg p-2.5 text-sm text-slate-800 outline-none focus:border-primary focus:ring-1 focus:ring-primary"
+                    />
+                  </div>
+                </div>
+              </div>
+
+              <div className="bg-slate-50 border border-slate-200 rounded-xl p-4 text-xs text-slate-500 flex items-start gap-3">
+                <div className="mt-0.5 w-4 h-4 rounded-full bg-indigo-500 flex items-center justify-center text-white font-bold flex-shrink-0">i</div>
+                <div>Leave dates empty for immediate access (24h default expiry). If configured, candidates can only access the assessment within the specified window.</div>
+              </div>
+            </div>
+
+            <div className="p-4 bg-slate-50 border-t border-slate-100 flex justify-end gap-2">
+              <button 
+                onClick={() => setRescheduleModal(prev => ({ ...prev, isOpen: false }))}
+                className="px-4 py-2 rounded-lg text-sm font-semibold text-slate-600 hover:bg-slate-200 bg-slate-100 border-none cursor-pointer transition-colors"
+                disabled={rescheduleModal.isSubmitting}
+              >
+                Cancel
+              </button>
+              <button 
+                onClick={() => {
+                  setRescheduleModal(prev => ({ ...prev, isSubmitting: true }))
+                  const defaultStart = rescheduleModal.newStart ? new Date(rescheduleModal.newStart).getTime() : Date.now();
+                  const body = new URLSearchParams({ 
+                    new_expiry: rescheduleModal.newEnd ? new Date(rescheduleModal.newEnd).toISOString() : new Date(defaultStart + 86400000).toISOString()
+                  });
+                  if (rescheduleModal.newStart) {
+                    body.append('new_start', new Date(rescheduleModal.newStart).toISOString());
+                  }
+                  
+                  fetch(`${API_BASE_URL}/admin/sessions/${rescheduleModal.session?.link_id || rescheduleModal.session?.id}/reschedule`, {
+                    method: 'POST',
+                    headers: {
+                      'Authorization': `Bearer ${sessionStorage.getItem("masterToken") || sessionStorage.getItem("adminToken") || sessionStorage.getItem("token")}`
+                    },
+                    body: body
+                  }).then(res => {
+                    if (res.ok) {
+                      setRescheduleModal({ isOpen: false, session: null, newStart: '', newEnd: '', isSubmitting: false })
+                      loadDashboardData();
+                    } else {
+                      res.json().then(data => {
+                        alert(data.detail || "Failed to extend session.");
+                        setRescheduleModal(prev => ({ ...prev, isSubmitting: false }))
+                      }).catch(() => {
+                        alert("Failed to extend session.");
+                        setRescheduleModal(prev => ({ ...prev, isSubmitting: false }))
+                      });
+                    }
+                  }).catch(err => {
+                    alert("Network error: " + err.message);
+                    setRescheduleModal(prev => ({ ...prev, isSubmitting: false }))
+                  })
+                }}
+                className="px-4 py-2 rounded-lg text-sm font-semibold text-white bg-primary hover:bg-primary-hover border-none cursor-pointer transition-colors"
+                disabled={rescheduleModal.isSubmitting}
+              >
+                {rescheduleModal.isSubmitting ? 'Rescheduling...' : 'Confirm Reschedule'}
+              </button>
+            </div>
+          </div>
+        </div>,
+        document.body
       )}
     </>
   )

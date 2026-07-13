@@ -27,8 +27,46 @@ import threading
 import requests as http_requests
 from typing import List, Dict, Optional
 from dotenv import load_dotenv
+import contextvars
 
 load_dotenv()
+
+# Context variable to track which session we are currently processing
+current_session_id = contextvars.ContextVar("current_session_id", default=None)
+
+# ─── Token Tracking (Temporary) ──────────────────────────────────────────────
+
+TOKEN_TRACKER_FILE = os.path.join(os.path.dirname(__file__), "token_tracker.json")
+
+def _track_tokens(tokens: int):
+    if not tokens:
+        return
+    try:
+        total = 0
+        if os.path.exists(TOKEN_TRACKER_FILE):
+            with open(TOKEN_TRACKER_FILE, "r") as f:
+                data = json.load(f)
+                total = data.get("total_tokens_consumed", 0)
+        
+        total += tokens
+        
+        with open(TOKEN_TRACKER_FILE, "w") as f:
+            json.dump({"total_tokens_consumed": total}, f, indent=4)
+            
+        print(f"\\n[TOKEN TRACKER] Used {tokens} tokens this call. Total consumed so far: {total}\\n")
+        
+        # Track directly in the database session if one is set
+        session_id = current_session_id.get()
+        if session_id:
+            from mongo_db import interview_sessions_collection
+            interview_sessions_collection.update_one(
+                {"link_id": session_id},
+                {"$inc": {"ai_tokens_used": tokens}}
+            )
+            print(f"[TOKEN TRACKER] Saved {tokens} tokens to session {session_id}")
+            
+    except Exception as e:
+        print(f"[TOKEN TRACKER] Failed to track tokens: {e}")
 
 # ─── Configuration ───────────────────────────────────────────────────────────
 
@@ -120,6 +158,12 @@ def _call_openrouter(
         raise RuntimeError(f"OpenRouter error {resp.status_code}: {resp.text[:300]}")
 
     data = resp.json()
+    
+    # Track tokens
+    usage = data.get("usage", {})
+    if usage and "total_tokens" in usage:
+        _track_tokens(usage["total_tokens"])
+        
     return data["choices"][0]["message"]["content"]
 
 

@@ -1,4 +1,4 @@
-import React, { useState, useRef, useEffect } from 'react'
+import React, { useState, useRef, useEffect, lazy, Suspense } from 'react'
 import { useSearchParams, Link } from 'react-router-dom'
 import { Video, Volume2, ArrowRight, ShieldAlert, Cpu, AlertTriangle, RefreshCw } from 'lucide-react'
 import { useInterviewSession } from './useInterviewSession'
@@ -7,9 +7,11 @@ import { API_BASE_URL } from '../../apiConfig'
 import api from '../../utils/api'
 import '../../Interview.css'
 import { motion } from 'framer-motion'
+const MonacoEditor = lazy(() => import('@monaco-editor/react'))
 
 export const InterviewTechnical = () => {
   const interviewType = 'Technical';
+  const codeAnswersRef = useRef({})
 
   const startRoundTwo = async ({
     verbalQuestionsLength,
@@ -473,7 +475,16 @@ export const InterviewTechnical = () => {
               <label style={{ fontSize: '14px', color: 'var(--text-muted)', fontWeight: '600' }}>Language</label>
               <select
                 value={selectedLanguage}
-                onChange={(e) => setSelectedLanguage(e.target.value)}
+                onChange={(e) => {
+                  const newLang = e.target.value;
+                  codeAnswersRef.current[selectedLanguage] = codeAnswer;
+                  setSelectedLanguage(newLang);
+                  if (codeAnswersRef.current[newLang] !== undefined) {
+                    setCodeAnswer(codeAnswersRef.current[newLang]);
+                  } else {
+                    setCodeAnswer(''); // Trigger useInterviewSession to load default template
+                  }
+                }}
                 style={{ padding: '8px 16px', borderRadius: 'var(--radius-md)', border: '1px solid #cbd5e1', outline: 'none', background: '#fff', fontWeight: '500', color: 'var(--text-main)' }}
               >
                 <option value="python">Python</option>
@@ -493,14 +504,29 @@ export const InterviewTechnical = () => {
               </div>
 
               {activeRightTab === 'code' && (
-                <textarea
-                  className="coding-codebox"
-                  spellCheck="false"
-                  placeholder="// Write your solution here..."
-                  value={codeAnswer}
-                  onChange={(e) => setCodeAnswer(e.target.value)}
-                  style={{ flexGrow: 1, width: '100%', border: 'none', outline: 'none', padding: '16px', fontFamily: 'monospace', fontSize: '14px', resize: 'none', background: '#fff', minHeight: '100px', overflowY: 'auto' }}
-                ></textarea>
+                <Suspense fallback={<div style={{ padding: 16, color: '#64748b', fontSize: 13 }}>Loading editor...</div>}>
+                  <MonacoEditor
+                    height="320px"
+                    language={selectedLanguage === 'cpp' ? 'cpp' : selectedLanguage === 'javascript' ? 'javascript' : 'python'}
+                    value={codeAnswer}
+                    onChange={(val) => setCodeAnswer(val || '')}
+                    theme="vs-light"
+                    options={{
+                      fontSize: 14,
+                      minimap: { enabled: false },
+                      scrollBeyondLastLine: false,
+                      wordWrap: 'on',
+                      lineNumbers: 'on',
+                      folding: true,
+                      automaticLayout: true,
+                      tabSize: 4,
+                      insertSpaces: true,
+                      fontFamily: 'Consolas, "Courier New", monospace',
+                      padding: { top: 12, bottom: 12 },
+                      scrollbar: { vertical: 'auto' },
+                    }}
+                  />
+                </Suspense>
               )}
 
               <div className="coding-console-shell" style={{ borderTop: activeRightTab === 'code' ? '1px solid #e2e8f0' : 'none', background: '#f8fafc', display: 'flex', flexDirection: 'column', maxHeight: activeRightTab === 'code' ? '40%' : '100%', minHeight: activeRightTab === 'code' ? '160px' : '0', flexGrow: activeRightTab === 'code' ? 0 : 1 }}>
