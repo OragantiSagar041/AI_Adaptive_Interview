@@ -3212,7 +3212,6 @@ def reschedule_session(link_id: str, new_expiry: str = Form(...), new_start: str
     
     if new_start:
         update_data["scheduled_start"] = new_start
-        update_data["created_at"] = new_start # Also update created_at to effectively start the window then
     
     # Also update scheduled_end if it exists for consistency
     update_data["scheduled_end"] = new_expiry

@@ -421,7 +421,7 @@ export function CandidateTable({
                 onClick={() => {
                   setRescheduleModal(prev => ({ ...prev, isSubmitting: true }))
                   const body = new URLSearchParams({ 
-                    new_expiry: new Date(rescheduleModal.newEnd).toISOString() 
+                    new_expiry: rescheduleModal.newEnd ? new Date(rescheduleModal.newEnd).toISOString() : new Date(Date.now() + 86400000).toISOString()
                   });
                   if (rescheduleModal.newStart) {
                     body.append('new_start', new Date(rescheduleModal.newStart).toISOString());
@@ -438,13 +438,21 @@ export function CandidateTable({
                       setRescheduleModal({ isOpen: false, session: null, newStart: '', newEnd: '', isSubmitting: false })
                       loadDashboardData();
                     } else {
-                      alert("Failed to extend session.");
-                      setRescheduleModal(prev => ({ ...prev, isSubmitting: false }))
+                      res.json().then(data => {
+                        alert(data.detail || "Failed to extend session.");
+                        setRescheduleModal(prev => ({ ...prev, isSubmitting: false }))
+                      }).catch(() => {
+                        alert("Failed to extend session.");
+                        setRescheduleModal(prev => ({ ...prev, isSubmitting: false }))
+                      });
                     }
+                  }).catch(err => {
+                    alert("Network error: " + err.message);
+                    setRescheduleModal(prev => ({ ...prev, isSubmitting: false }))
                   })
                 }}
                 className="px-4 py-2 rounded-lg text-sm font-semibold text-white bg-primary hover:bg-primary-hover border-none cursor-pointer transition-colors"
-                disabled={rescheduleModal.isSubmitting || !rescheduleModal.newEnd}
+                disabled={rescheduleModal.isSubmitting}
               >
                 {rescheduleModal.isSubmitting ? 'Rescheduling...' : 'Confirm Reschedule'}
               </button>

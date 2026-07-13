@@ -347,11 +347,20 @@ console.log("\\n" + JSON.stringify(results));
         ]
     }
     
+    import requests
+    
     try:
         response = requests.post("https://emkc.org/api/v2/piston/execute", json=payload, timeout=10)
+        
         if response.status_code != 200:
-            print(f"[Piston JS] HTTP {response.status_code} — falling back to LLM evaluation")
-            return _evaluate_code_with_llm(code, tests, function_name, "javascript")
+            if response.status_code >= 500 or response.status_code == 429:
+                print(f"[Piston JS] HTTP {response.status_code} — falling back to LLM evaluation")
+                return _evaluate_code_with_llm(code, tests, function_name, "javascript")
+            else:
+                # E.g. 400 Bad Request, do not fall back to LLM
+                print(f"[Piston JS] HTTP {response.status_code} — returning failure")
+                return {"passed": False, "test_results": [], "score": 0, "feedback": f"API Error {response.status_code}: {response.text}"}
+        
         data = response.json()
         
         if "run" in data:
@@ -381,11 +390,8 @@ console.log("\\n" + JSON.stringify(results));
         else:
             return _runner_error(f"Invalid response from Piston API: {data}", tests)
             
-    except requests.exceptions.Timeout:
-        print("[Piston JS] Timeout — falling back to LLM evaluation")
-        return _evaluate_code_with_llm(code, tests, function_name, "javascript")
-    except Exception as e:
-        print(f"[Piston JS] Error: {e} — falling back to LLM evaluation")
+    except requests.RequestException as e:
+        print(f"[Piston JS] Request failed ({e}) — falling back to LLM evaluation")
         return _evaluate_code_with_llm(code, tests, function_name, "javascript")
 
 def _evaluate_code_with_llm(code: str, tests: list, function_name: str, language: str) -> Dict[str, Any]:
@@ -416,8 +422,8 @@ def _evaluate_code_with_llm(code: str, tests: list, function_name: str, language
         raw_response = chat_completion(messages, model="openai/gpt-4o-mini", temperature=0.1)
         
         result = extract_json(raw_response)
-        if not result:
-            return _runner_error("Execution failed (AI evaluator returned invalid output).", tests)
+        if not result or not isinstance(result, dict) or "status" not in result or "all_passed" not in result or "visible_results" not in result:
+            return _runner_error("Execution failed (AI evaluator returned invalid output schema).", tests)
             
         return result
     except Exception as e:
