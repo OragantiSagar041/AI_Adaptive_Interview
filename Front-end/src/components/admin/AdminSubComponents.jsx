@@ -420,8 +420,9 @@ export function CandidateTable({
               <button 
                 onClick={() => {
                   setRescheduleModal(prev => ({ ...prev, isSubmitting: true }))
+                  const defaultStart = rescheduleModal.newStart ? new Date(rescheduleModal.newStart).getTime() : Date.now();
                   const body = new URLSearchParams({ 
-                    new_expiry: rescheduleModal.newEnd ? new Date(rescheduleModal.newEnd).toISOString() : new Date(Date.now() + 86400000).toISOString()
+                    new_expiry: rescheduleModal.newEnd ? new Date(rescheduleModal.newEnd).toISOString() : new Date(defaultStart + 86400000).toISOString()
                   });
                   if (rescheduleModal.newStart) {
                     body.append('new_start', new Date(rescheduleModal.newStart).toISOString());

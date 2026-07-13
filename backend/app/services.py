@@ -359,7 +359,7 @@ console.log("\\n" + JSON.stringify(results));
             else:
                 # E.g. 400 Bad Request, do not fall back to LLM
                 print(f"[Piston JS] HTTP {response.status_code} — returning failure")
-                return {"passed": False, "test_results": [], "score": 0, "feedback": f"API Error {response.status_code}: {response.text}"}
+                return _runner_error(f"API Error {response.status_code}: {response.text}", tests)
         
         data = response.json()
         
