@@ -304,18 +304,25 @@ def api_gen_next_question(req: NextQuestionRequest):
         # If API fails, return a 503 so frontend catches it and moves to next pre-generated question
         raise HTTPException(status_code=503, detail="AI generation failed")
     
+    # Assign the inserted follow-up ID explicitly
+    new_question["id"] = int(current_q["id"]) + 1
+    
     # Shift IDs of subsequent questions to make room for the new follow-up
     for q in interview["questions"][current_idx+1:]:
         q["id"] = int(q["id"]) + 1
              
     interview["questions"].insert(current_idx + 1, new_question)
-    set_session(req.interview_id, interview)
-        
-    # Update DB with new question list
-    interviews_collection.update_one(
-        {"id": req.interview_id}, 
-        {"$set": {"questions": json.dumps(interview["questions"])}}
-    )
+    
+    try:
+        # Update DB first to prevent partial persistence
+        interviews_collection.update_one(
+            {"id": req.interview_id}, 
+            {"$set": {"questions": json.dumps(interview["questions"])}}
+        )
+        # If DB succeeds, update fast-cache
+        set_session(req.interview_id, interview)
+    except Exception as e:
+        raise HTTPException(status_code=500, detail="Failed to save follow-up question")
         
     return new_question
 
