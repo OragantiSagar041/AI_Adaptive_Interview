@@ -349,7 +349,9 @@ console.log("\\n" + JSON.stringify(results));
     
     try:
         response = requests.post("https://emkc.org/api/v2/piston/execute", json=payload, timeout=10)
-        response.raise_for_status()
+        if response.status_code != 200:
+            print(f"[Piston JS] HTTP {response.status_code} — falling back to LLM evaluation")
+            return _evaluate_code_with_llm(code, tests, function_name, "javascript")
         data = response.json()
         
         if "run" in data:
@@ -380,9 +382,11 @@ console.log("\\n" + JSON.stringify(results));
             return _runner_error(f"Invalid response from Piston API: {data}", tests)
             
     except requests.exceptions.Timeout:
-        return _runner_error("Execution timed out (10s limit).", tests)
+        print("[Piston JS] Timeout — falling back to LLM evaluation")
+        return _evaluate_code_with_llm(code, tests, function_name, "javascript")
     except Exception as e:
-        return _runner_error(f"Failed to execute code securely: {e}", tests)
+        print(f"[Piston JS] Error: {e} — falling back to LLM evaluation")
+        return _evaluate_code_with_llm(code, tests, function_name, "javascript")
 
 def _evaluate_code_with_llm(code: str, tests: list, function_name: str, language: str) -> Dict[str, Any]:
     system_prompt = (
@@ -408,13 +412,17 @@ def _evaluate_code_with_llm(code: str, tests: list, function_name: str, language
     ]
     
     # This automatically uses OpenRouter, falling back to HuggingFace if quota is exceeded
-    raw_response = chat_completion(messages, model="openai/gpt-4o-mini", temperature=0.1)
-    
-    result = extract_json(raw_response)
-    if not result:
-        raise ValueError("Failed to extract JSON from LLM evaluator")
+    try:
+        raw_response = chat_completion(messages, model="openai/gpt-4o-mini", temperature=0.1)
         
-    return result
+        result = extract_json(raw_response)
+        if not result:
+            return _runner_error("Execution failed (AI evaluator returned invalid output).", tests)
+            
+        return result
+    except Exception as e:
+        print(f"[LLM Evaluator] Error: {e}")
+        return _runner_error("Execution failed: AI evaluation quota exceeded or unavailable.", tests)
 
 def _generate_jdoodle_script(code: str, tests: list, function_name: str, language: str) -> str:
     script = ""
@@ -842,7 +850,9 @@ else:
     
     try:
         response = requests.post("https://emkc.org/api/v2/piston/execute", json=payload, timeout=10)
-        response.raise_for_status()
+        if response.status_code != 200:
+            print(f"[Piston Python] HTTP {response.status_code} — falling back to LLM evaluation")
+            return _evaluate_code_with_llm(code, tests, function_name, "python")
         data = response.json()
         
         if "run" in data:
@@ -877,9 +887,11 @@ else:
             return _runner_error(f"Invalid response from Piston API: {data}", tests)
             
     except requests.exceptions.Timeout:
-        return _runner_error("Execution timed out (10s limit).", tests)
+        print("[Piston Python] Timeout — falling back to LLM evaluation")
+        return _evaluate_code_with_llm(code, tests, function_name, "python")
     except Exception as e:
-        return _runner_error(f"Failed to execute code securely: {e}", tests)
+        print(f"[Piston Python] Error: {e} — falling back to LLM evaluation")
+        return _evaluate_code_with_llm(code, tests, function_name, "python")
 def extract_skills(text: str) -> List[str]:
     """Extract skills from resume text."""
     skills = []
@@ -984,7 +996,7 @@ def extract_projects(text: str) -> List[Dict]:
     
     return projects
 
-def generate_resume_questions(resume_text: str, language: str = "English") -> List[Dict[str, str]]:
+def generate_resume_questions(resume_text: str, language: str = "English", industry: str = "General") -> List[Dict[str, str]]:
     """Generate interview questions based on candidate's resume using AI."""
     print("Generating questions from resume...")
     
@@ -1040,10 +1052,11 @@ def generate_resume_questions(resume_text: str, language: str = "English") -> Li
     for i, exp in enumerate(experiences[:2]):  # Limit to 2 experiences
         company = exp.get('company', 'your previous role')
         title = exp.get('title', '')
+        industry_context = f" in the {industry} sector" if industry and industry.lower() not in ["general", ""] else ""
         
         questions.append({
             "id": len(questions) + 1,
-            "question": f"At {company} as a {title}, what were your key responsibilities and achievements?",
+            "question": f"At {company} as a {title}{industry_context}, what were your key responsibilities and achievements?",
             "difficulty": "Medium",
             "type": "Experience",
             "category": "Work History"
@@ -1412,7 +1425,7 @@ def generate_mock_questions(text: str, source: str, num_questions: int = 6, resu
             
         # 2. Add AI questions (Instructions and JD/Resume)
         if "resume" in source.lower():
-            ai_questions = generate_resume_questions(text, language=language)
+            ai_questions = generate_resume_questions(text, language=language, industry=industry)
         else:
             ai_questions = generate_jd_questions(text, ai_instructions=ai_instructions, interview_type=interview_type, industry=industry, language=language)
         

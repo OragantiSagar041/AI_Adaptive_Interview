@@ -67,7 +67,7 @@ from reportlab.platypus import Paragraph, SimpleDocTemplate, Spacer, Table, Tabl
 # ---------------------------------------------------------------------------
 # Internal / project
 # ---------------------------------------------------------------------------
-from ai_client import chat_completion, extract_json
+from ai_client import chat_completion, extract_json, current_session_id
 from analyze_answer import analyze_answer
 from coding_graph import generate_coding_task, observe_coding_intent, run_coding_round
 from industry_fallback_data import INDUSTRY_TECHNICAL_QUESTIONS, INDUSTRY_CASE_STUDIES
@@ -546,7 +546,8 @@ def save_answer(
     time_spent_seconds: str = Form("0"),
     time_limit_seconds: str = Form("120"),
 ):
-    print(f"⚡ Instant save for Q{question_id} — AI scoring in background...")
+    current_session_id.set(interview_id)
+    print(f"⚡ Instant save for Q{question_id} ➝ AI scoring in background...")
 
     # ── STEP 1: Get context (fast — RAM first) ──────────────────────────────
     context = ""
@@ -3193,7 +3194,7 @@ def activate_session(link_id: str, current_admin: dict = Depends(require_role("a
     return {"status": "success"}
 
 @router.post("/admin/sessions/{link_id}/reschedule")
-def reschedule_session(link_id: str, new_expiry: str = Form(...), current_admin: dict = Depends(require_role("admin", "super_admin"))):
+def reschedule_session(link_id: str, new_expiry: str = Form(...), new_start: str = Form(None), current_admin: dict = Depends(require_role("admin", "super_admin"))):
     """
     Reschedule an interview by updating its expires_at date 
     and resetting its status to pending (if it was expired).
@@ -3209,7 +3210,12 @@ def reschedule_session(link_id: str, new_expiry: str = Form(...), current_admin:
         "is_deactivated": False # Ensure it's active if rescheduled
     }
     
+    if new_start:
+        update_data["scheduled_start"] = new_start
+        update_data["created_at"] = new_start # Also update created_at to effectively start the window then
+    
     # Also update scheduled_end if it exists for consistency
+    update_data["scheduled_end"] = new_expiry
     result = interview_sessions_collection.update_one(
         {"link_id": link_id}, 
         {"$set": update_data}
@@ -3235,6 +3241,7 @@ def reschedule_session(link_id: str, new_expiry: str = Form(...), current_admin:
 @router.post("/start-session-interview")
 @router.post("/start_session_interview")
 def start_session_interview(link_id: str = Form(...)):
+    current_session_id.set(link_id)
     row = interview_sessions_collection.find_one({"link_id": link_id})
     
     if not row:
