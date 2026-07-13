@@ -259,26 +259,28 @@ def api_gen_next_question(req: NextQuestionRequest):
             current_idx = i
             break
             
-    if current_idx != -1:
-        current_q = interview["questions"][current_idx]
-        q_type = current_q.get("type", "").lower()
-        q_cat = current_q.get("category", "").lower()
+    if current_idx == -1:
+        raise HTTPException(status_code=400, detail="Current question ID not found")
         
-        # 1. Skip follow-ups for Intros, Custom Questions, Closing, and existing Follow-ups
-        if "self-intro" in q_type or "introduction" in q_type:
-            return {"skip_followup": True, "reason": "Skip follow-up for intro"}
-        if "follow-up" in q_type or "jd-based" in q_type:
-            return {"skip_followup": True, "reason": "Already a follow-up"}
-        if "custom" in q_cat:
-            return {"skip_followup": True, "reason": "Skip follow-up for custom questions"}
-        if "closing" in q_cat or "future" in q_cat or "closing" in q_type:
-            return {"skip_followup": True, "reason": "Skip follow-up for closing"}
+    current_q = interview["questions"][current_idx]
+    q_type = current_q.get("type", "").lower()
+    q_cat = current_q.get("category", "").lower()
+    
+    # 1. Skip follow-ups for Intros, Custom Questions, Closing, and existing Follow-ups
+    if "self-intro" in q_type or "introduction" in q_type:
+        return {"skip_followup": True, "reason": "Skip follow-up for intro"}
+    if "follow-up" in q_type or "jd-based" in q_type:
+        return {"skip_followup": True, "reason": "Already a follow-up"}
+    if "custom" in q_cat:
+        return {"skip_followup": True, "reason": "Skip follow-up for custom questions"}
+    if "closing" in q_cat or "future" in q_cat or "closing" in q_type:
+        return {"skip_followup": True, "reason": "Skip follow-up for closing"}
 
-        # 2. Check if we already have a follow-up (avoid infinite expansion if re-running)
-        if current_idx + 1 < len(interview["questions"]):
-             next_q = interview["questions"][current_idx+1]
-             if "follow-up" in next_q.get("type", "").lower() or "jd-based" in next_q.get("type", "").lower():
-                 return {"skip_followup": True, "reason": "Next question is already a follow-up"}
+    # 2. Check if we already have a follow-up (avoid infinite expansion if re-running)
+    if current_idx + 1 < len(interview["questions"]):
+         next_q = interview["questions"][current_idx+1]
+         if "follow-up" in next_q.get("type", "").lower() or "jd-based" in next_q.get("type", "").lower():
+             return {"skip_followup": True, "reason": "Next question is already a follow-up"}
 
     
     try:
@@ -302,23 +304,20 @@ def api_gen_next_question(req: NextQuestionRequest):
         # If API fails, return a 503 so frontend catches it and moves to next pre-generated question
         raise HTTPException(status_code=503, detail="AI generation failed")
     
-    if current_idx != -1:
-        # Shift IDs of subsequent questions to make room for the new follow-up
-        for q in interview["questions"][current_idx+1:]:
-            q["id"] = int(q["id"]) + 1
-                 
-        interview["questions"].insert(current_idx + 1, new_question)
-        set_session(req.interview_id, interview)
+    # Shift IDs of subsequent questions to make room for the new follow-up
+    for q in interview["questions"][current_idx+1:]:
+        q["id"] = int(q["id"]) + 1
+             
+    interview["questions"].insert(current_idx + 1, new_question)
+    set_session(req.interview_id, interview)
         
-        # Update DB with new question list
-        interviews_collection.update_one(
-            {"id": req.interview_id}, 
-            {"$set": {"questions": json.dumps(interview["questions"])}}
-        )
+    # Update DB with new question list
+    interviews_collection.update_one(
+        {"id": req.interview_id}, 
+        {"$set": {"questions": json.dumps(interview["questions"])}}
+    )
         
-        return new_question
-    
-    raise HTTPException(status_code=400, detail="Current question ID not found")
+    return new_question
 
 
 @router.post("/upload-resume")
