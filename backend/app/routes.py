@@ -250,6 +250,38 @@ def api_gen_next_question(req: NextQuestionRequest):
         
     interview = get_session(req.interview_id)
     followup_streak = interview.get("followup_streak", 0)
+
+    # ── BUGFIX: Prevent Follow-ups from hijacking the interview ──
+    # Find current question and evaluate skip conditions BEFORE calling the AI
+    current_idx = -1
+    for i, q in enumerate(interview["questions"]):
+        if int(q["id"]) == req.current_question_id:
+            current_idx = i
+            break
+            
+    if current_idx == -1:
+        raise HTTPException(status_code=400, detail="Current question ID not found")
+        
+    current_q = interview["questions"][current_idx]
+    q_type = current_q.get("type", "").lower()
+    q_cat = current_q.get("category", "").lower()
+    
+    # 1. Skip follow-ups for Intros, Custom Questions, Closing, and existing Follow-ups
+    if "self-intro" in q_type or "introduction" in q_type:
+        return {"skip_followup": True, "reason": "Skip follow-up for intro"}
+    if "follow-up" in q_type or "jd-based" in q_type:
+        return {"skip_followup": True, "reason": "Already a follow-up"}
+    if "custom" in q_cat:
+        return {"skip_followup": True, "reason": "Skip follow-up for custom questions"}
+    if "closing" in q_cat or "future" in q_cat or "closing" in q_type:
+        return {"skip_followup": True, "reason": "Skip follow-up for closing"}
+
+    # 2. Check if we already have a follow-up (avoid infinite expansion if re-running)
+    if current_idx + 1 < len(interview["questions"]):
+         next_q = interview["questions"][current_idx+1]
+         if "follow-up" in next_q.get("type", "").lower() or "jd-based" in next_q.get("type", "").lower():
+             return {"skip_followup": True, "reason": "Next question is already a follow-up"}
+
     
     try:
         # Generate the question
@@ -272,53 +304,27 @@ def api_gen_next_question(req: NextQuestionRequest):
         # If API fails, return a 503 so frontend catches it and moves to next pre-generated question
         raise HTTPException(status_code=503, detail="AI generation failed")
     
-    # Insert this new question into the list right after current
-    # Find current index
-    current_idx = -1
-    for i, q in enumerate(interview["questions"]):
-        if int(q["id"]) == req.current_question_id:
-            current_idx = i
-            break
-            
-    if current_idx != -1:
-        current_q = interview["questions"][current_idx]
-        q_type = current_q.get("type", "").lower()
-        q_cat = current_q.get("category", "").lower()
-        
-        # ── BUGFIX: Prevent Follow-ups from hijacking the interview ──
-        # 1. Skip follow-ups for Intros, Custom Questions, Closing, and existing Follow-ups
-        if "self-intro" in q_type or "introduction" in q_type:
-            raise HTTPException(status_code=503, detail="Skip follow-up for intro")
-        if "follow-up" in q_type or "jd-based" in q_type:
-            raise HTTPException(status_code=503, detail="Already a follow-up")
-        if "custom" in q_cat:
-            raise HTTPException(status_code=503, detail="Skip follow-up for custom questions")
-        if "closing" in q_cat or "future" in q_cat or "closing" in q_type:
-            raise HTTPException(status_code=503, detail="Skip follow-up for closing")
-
-        # Check if we already have a follow-up (avoid infinite expansion if re-running)
-        if current_idx + 1 < len(interview["questions"]):
-             # If the very next question is already a follow-up, do not insert another one
-             next_q = interview["questions"][current_idx+1]
-             if "follow-up" in next_q.get("type", "").lower() or "jd-based" in next_q.get("type", "").lower():
-                 raise HTTPException(status_code=503, detail="Next question is already a follow-up")
-                 
-             # Shift IDs of subsequent questions
-             for q in interview["questions"][current_idx+1:]:
-                 q["id"] = int(q["id"]) + 1
-                 
-        interview["questions"].insert(current_idx + 1, new_question)
-        set_session(req.interview_id, interview)
-        
-        # Update DB with new question list
+    # Assign the inserted follow-up ID explicitly
+    new_question["id"] = int(current_q["id"]) + 1
+    
+    # Shift IDs of subsequent questions to make room for the new follow-up
+    for q in interview["questions"][current_idx+1:]:
+        q["id"] = int(q["id"]) + 1
+             
+    interview["questions"].insert(current_idx + 1, new_question)
+    
+    try:
+        # Update DB first to prevent partial persistence
         interviews_collection.update_one(
             {"id": req.interview_id}, 
             {"$set": {"questions": json.dumps(interview["questions"])}}
         )
+        # If DB succeeds, update fast-cache
+        set_session(req.interview_id, interview)
+    except Exception as e:
+        raise HTTPException(status_code=500, detail="Failed to save follow-up question")
         
-        return new_question
-    
-    raise HTTPException(status_code=400, detail="Current question ID not found")
+    return new_question
 
 
 @router.post("/upload-resume")
