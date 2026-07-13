@@ -2047,6 +2047,14 @@ export default function VoiceInterviewPage() {
       </div>
       {/* Hidden Video for AI Proctoring - MUST have valid dimensions for MediaPipe to work properly */}
       {candidateVideoElement}
+
+      {/* Proctoring Model Failure Alert */}
+      {proctoring?.modelsFailed && (
+        <div className="fixed top-4 left-1/2 -translate-x-1/2 z-[100] bg-rose-500/90 backdrop-blur-md text-white px-6 py-3 rounded-full shadow-2xl flex items-center gap-3 animate-in slide-in-from-top-4">
+          <AlertCircle size={20} />
+          <span className="text-sm font-bold">⚠️ Proctoring AI models failed to load. Monitoring is temporarily disabled.</span>
+        </div>
+      )}
     </div>
   )
 }

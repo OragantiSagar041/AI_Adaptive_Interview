@@ -1948,7 +1948,7 @@ export const useInterviewSession = (sessionId, interviewType, startRoundTwo) => 
       const currentQuestion = questions[currentQuestionIndex] || {}
       
       // If forced termination (e.g., proctoring alert), save the answer first!
-      if (isForceSubmit && currentQuestion) {
+      if (forceClose && currentQuestion) {
         const iid = interviewIdRef.current || sessionId
         const answerForm = new FormData()
         answerForm.append('interview_id', iid)

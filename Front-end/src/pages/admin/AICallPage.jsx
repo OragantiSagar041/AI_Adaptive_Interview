@@ -19,7 +19,7 @@ export default function AICallPage() {
       const script = document.createElement('script');
       script.id = 'omnidimension-web-widget';
       script.async = true;
-      const secretKey = import.meta.env.VITE_OMNIDIM_SECRET_KEY || 'd1d114e7ce26828380c3e663d88cd414';
+      const secretKey = import.meta.env.VITE_OMNIDIM_SECRET_KEY;
       // Append timestamp to force the browser to execute the script again
       script.src = `https://omnidim.io/web_widget.js?secret_key=${secretKey}&t=${Date.now()}`;
       document.body.appendChild(script);

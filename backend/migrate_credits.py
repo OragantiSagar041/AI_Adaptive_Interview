@@ -3,7 +3,7 @@ from dotenv import load_dotenv
 import os
 
 load_dotenv()
-client = pymongo.MongoClient(os.getenv("MONGO_URI", "mongodb+srv://oragantisagar041_db_user:ArahInfoTech123@cluster0.9x2n3ve.mongodb.net/?appName=Cluster0"))
+client = pymongo.MongoClient(os.getenv("MONGO_URI"))
 db = client['AI_Interview']
 
 # Plan to credits map
