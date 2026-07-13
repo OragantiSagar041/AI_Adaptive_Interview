@@ -5832,8 +5832,22 @@ async def get_dashboard_aggregated_data(admin_id: Optional[str] = None, current_
         stats_data = await get_dashboard_stats(admin_id=admin_id, current_admin=current_admin)
         
         
-        # Removed candidates query for performance decoupling
+        # Restore candidate query since the frontend still expects candidates in this payload
+        c_query_filter = {
+            "company_id": current_admin.get("company_id"),
+            "$or": [{"is_deactivated": False}, {"is_deactivated": {"$exists": False}}]
+        }
+        if current_admin.get("role") == "admin":
+            c_query_filter["created_by"] = current_admin["admin_id"]
+        elif admin_id:
+            c_query_filter["created_by"] = admin_id
+            
+        candidates_cursor = list(interview_sessions_collection.find(c_query_filter).sort("created_at", -1))
         candidates_list = []
+        for c in candidates_cursor:
+            c["id"] = str(c["_id"])
+            c["_id"] = str(c["_id"])
+            candidates_list.append(c)
         live_sessions = []
         ongoing_monitored_count = 0
         ongoing_live_count = 0
