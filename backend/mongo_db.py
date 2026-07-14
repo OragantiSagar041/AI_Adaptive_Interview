@@ -21,6 +21,19 @@ notifications_collection = db["notifications"]
 omni_call_logs_collection = db["omni_call_logs"]
 jobs_collection = db["jobs"]
 job_applications_collection = db["job_applications"]
+counters_collection = db["counters"]
+
+def get_next_sequence_value(sequence_name: str, prefix: str) -> str:
+    """
+    Generates a sequential ID like CAN1, RC1, JOB1 using MongoDB atomic find_one_and_update.
+    """
+    sequence_document = counters_collection.find_one_and_update(
+        {"_id": sequence_name},
+        {"$inc": {"sequence_value": 1}},
+        upsert=True,
+        return_document=True
+    )
+    return f"{prefix}{sequence_document['sequence_value']}"
 
 async def init_db_indexes():
     candidates_collection.create_index("name", unique=True)

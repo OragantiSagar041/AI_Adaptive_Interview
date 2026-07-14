@@ -1,6 +1,8 @@
 import React, { useState, useEffect, useRef } from 'react'
 import { useSelector, useDispatch } from 'react-redux'
 import { useNavigate, useLocation, NavLink, Outlet } from 'react-router-dom'
+import Swal from 'sweetalert2'
+import 'sweetalert2/dist/sweetalert2.min.css'
 import {
   LayoutDashboard,
   CheckCircle,
@@ -21,7 +23,8 @@ import {
   Activity,
   AlertCircle,
   PhoneCall,
-  Briefcase
+  Briefcase,
+  MessageSquare
 } from 'lucide-react'
 import logoImage from '../../assets/logo.png'
 import { logout, loadSuperAdminProfile } from '../../store/slices/authSlice'
@@ -35,7 +38,7 @@ import {
 import LiveMonitorStreamModal from '../admin/modals/LiveMonitorStreamModal'
 import axios from 'axios'
 import { getNotifications, markNotificationAsRead, markAllNotificationsAsRead } from '../../utils/api'
-import { setSelectedCandidate, setLiveResultsModalOpen } from '../../store/slices/interviewSlice'
+import { setSelectedCandidate, setLiveResultsModalOpen, handleUpdateDecision } from '../../store/slices/interviewSlice'
 import { loadSuperAdminDashboard, setSelectedAdminFilter, updateLiveSnapshot } from '../../store/slices/dashboardSlice'
 
 function hexToRgba(hex, alpha) {
@@ -201,9 +204,27 @@ export default function SuperAdminLayout() {
     }
   }, [isMobile, sidebarOpen])
 
-  const handleOpenLiveStreamAction = (session) => {
-    setLiveStreamSession(session)
+  const handleOpenLiveStreamAction = (sessionId) => {
+    setLiveStreamSession(sessionId)
     setIsLiveStreamOpen(true)
+  }
+
+  const handleUpdateDecisionAction = (linkId, decision) => {
+    Swal.fire({
+      title: 'Are you sure?',
+      text: `Do you want to mark this candidate as ${decision.toUpperCase()}? Official email will be sent.`,
+      icon: 'warning',
+      showCancelButton: true,
+      confirmButtonColor: decision === 'selected' ? '#10b981' : '#f43f5e',
+      cancelButtonColor: '#94a3b8',
+      confirmButtonText: 'Yes, confirm!'
+    }).then((result) => {
+      if (result.isConfirmed) {
+        dispatch(handleUpdateDecision({ linkId, decision })).then(() => {
+          if (token) dispatch(loadSuperAdminDashboard(selectedAdminFilter))
+        })
+      }
+    })
   }
 
   const accentColors = {
@@ -405,18 +426,19 @@ export default function SuperAdminLayout() {
     { id: 'rejected', label: 'Rejected Candidates', icon: XCircle, path: '/superadmin/rejected-candidates' },
     { id: 'create', label: 'Create Interview', icon: Plus, path: '/superadmin/create-interview' },
     { id: 'ai-calling', label: 'AI Calling Agent', icon: Radio, path: '/superadmin/ai-calling' },
+    { id: 'conversational-flow', label: 'Conversational Flow', icon: MessageSquare, path: '/superadmin/conversational-flow' },
     { id: 'jobs', label: 'Jobs', icon: Briefcase, path: '/superadmin/jobs' },
     { id: 'settings', label: 'Profile Settings', icon: Settings, path: '/superadmin/profile-settings' },
   ]
 
   return (
-      <div
-        className="grid grid-cols-1 min-h-screen text-[#0f172a]"
-        style={{
-          gridTemplateColumns: isMobile ? '1fr' : (isCollapsed ? '80px 1fr' : '260px 1fr'),
-          background: `linear-gradient(135deg, ${accentWashStrong} 0%, #ffffff 35%, #ffffff 65%, ${accentWash} 100%)`,
-        }}
-      >
+    <div
+      className="grid grid-cols-1 min-h-screen text-[#0f172a]"
+      style={{
+        gridTemplateColumns: isMobile ? '1fr' : (isCollapsed ? '80px 1fr' : '260px 1fr'),
+        background: `linear-gradient(135deg, ${accentWashStrong} 0%, #ffffff 35%, #ffffff 65%, ${accentWash} 100%)`,
+      }}
+    >
       {/* Sidebar Backdrop for Mobile */}
       {isMobile && sidebarOpen && (
         <div
@@ -427,11 +449,10 @@ export default function SuperAdminLayout() {
 
       {/* Sidebar */}
       <aside
-        className={`text-white flex flex-col gap-8 z-50 shadow-lg shrink-0 overflow-hidden transition-all duration-300 ${
-          isMobile
+        className={`text-white flex flex-col gap-8 z-50 shadow-lg shrink-0 overflow-hidden transition-all duration-300 ${isMobile
             ? `fixed left-0 top-0 ${sidebarOpen ? 'translate-x-0' : '-translate-x-full'} w-[260px] p-6 h-[100dvh]`
             : `sticky top-0 ${isCollapsed ? 'w-[80px] p-4 items-center h-screen' : 'w-[260px] p-6 h-screen'}`
-        }`}
+          }`}
         style={{
           background: `
             radial-gradient(circle at 20% 18%, rgba(255, 255, 255, 0.12), transparent 24%),
@@ -479,8 +500,7 @@ export default function SuperAdminLayout() {
               onClick={() => isMobile && setSidebarOpen(false)}
               title={(isCollapsed && !isMobile) ? label : ""}
               className={({ isActive }) =>
-                `w-full text-left flex items-center rounded-lg text-sm font-semibold transition-all border-none outline-none cursor-pointer no-underline ${
-                  (isCollapsed && !isMobile) ? 'justify-center p-2.5' : 'px-4 py-2.5 gap-3'
+                `w-full text-left flex items-center rounded-lg text-sm font-semibold transition-all border-none outline-none cursor-pointer no-underline ${(isCollapsed && !isMobile) ? 'justify-center p-2.5' : 'px-4 py-2.5 gap-3'
                 } ${isActive && !liveResultsModalOpen && !showCreditsModal
                   ? 'bg-white text-indigo-700 shadow-sm'
                   : 'bg-transparent text-white/80 hover:bg-white/10 hover:text-white'
@@ -500,9 +520,8 @@ export default function SuperAdminLayout() {
               if (isMobile) setSidebarOpen(false)
             }}
             title={(isCollapsed && !isMobile) ? "Live Results" : ""}
-            className={`text-left flex items-center rounded-lg text-sm font-semibold transition-all border-none outline-none cursor-pointer ${
-              (isCollapsed && !isMobile) ? 'justify-center p-2.5' : 'px-4 py-2.5 gap-3 w-full'
-            } ${liveResultsModalOpen && !showCreditsModal
+            className={`text-left flex items-center rounded-lg text-sm font-semibold transition-all border-none outline-none cursor-pointer ${(isCollapsed && !isMobile) ? 'justify-center p-2.5' : 'px-4 py-2.5 gap-3 w-full'
+              } ${liveResultsModalOpen && !showCreditsModal
                 ? 'bg-white text-indigo-700 shadow-sm'
                 : 'bg-transparent text-white/80 hover:bg-white/10 hover:text-white'
               }`}
@@ -518,9 +537,8 @@ export default function SuperAdminLayout() {
               if (isMobile) setSidebarOpen(false)
             }}
             title={(isCollapsed && !isMobile) ? "Available Credits" : ""}
-            className={`text-left flex items-center rounded-lg text-sm font-semibold transition-all border-none outline-none cursor-pointer ${
-              (isCollapsed && !isMobile) ? 'justify-center p-2.5' : 'px-4 py-2.5 gap-3 w-full'
-            } ${showCreditsModal
+            className={`text-left flex items-center rounded-lg text-sm font-semibold transition-all border-none outline-none cursor-pointer ${(isCollapsed && !isMobile) ? 'justify-center p-2.5' : 'px-4 py-2.5 gap-3 w-full'
+              } ${showCreditsModal
                 ? 'bg-white text-indigo-700 shadow-sm'
                 : 'bg-transparent text-white/80 hover:bg-white/10 hover:text-white'
               }`}
@@ -533,9 +551,8 @@ export default function SuperAdminLayout() {
         <button
           onClick={handleLogout}
           title={(isCollapsed && !isMobile) ? "Logout" : ""}
-          className={`text-left flex items-center border border-white/20 hover:bg-white/10 text-white outline-none cursor-pointer transition-all ${
-            (isCollapsed && !isMobile) ? 'justify-center p-2.5 rounded-xl' : 'px-4 py-2.5 rounded-lg gap-3 w-full'
-          }`}
+          className={`text-left flex items-center border border-white/20 hover:bg-white/10 text-white outline-none cursor-pointer transition-all ${(isCollapsed && !isMobile) ? 'justify-center p-2.5 rounded-xl' : 'px-4 py-2.5 rounded-lg gap-3 w-full'
+            }`}
         >
           <LogOut size={16} className="shrink-0" />
           {(!isCollapsed || isMobile) && <span>Logout</span>}
@@ -613,65 +630,64 @@ export default function SuperAdminLayout() {
                   </span>
                 )}
               </button>
-              
+
               {notifDropdownOpen && (
-                  <div className="absolute right-0 top-full mt-2 w-80 bg-white border border-slate-200 rounded-2xl shadow-xl py-2 z-50">
-                    <div className="flex items-center justify-between px-4 py-2 border-b border-slate-100">
-                      <span className="text-xs font-bold text-slate-800 font-sans">Recent Notifications</span>
-                      {unreadCount > 0 && (
-                        <button
-                          onClick={handleMarkAllRead}
-                          className="text-[10px] font-bold text-primary hover:underline cursor-pointer border-none bg-transparent"
-                        >
-                          Mark all read
-                        </button>
-                      )}
-                    </div>
-                    
-                    <div className="max-h-64 overflow-y-auto divide-y divide-slate-50">
-                      {notifications.length === 0 ? (
-                        <div className="py-8 text-center text-xs text-slate-400 font-sans">No notifications</div>
-                      ) : (
-                        notifications.slice(0, 5).map(n => (
-                          <div
-                            key={n.id}
-                            onClick={() => {
-                              if (!n.read) handleMarkRead(n.id)
-                              setNotifDropdownOpen(false)
-                              if (n.type === 'credits') navigate('/superadmin/team')
-                              else if (n.type === 'activity') navigate('/superadmin/super-dashboard')
-                              else navigate('/superadmin/super-dashboard')
-                            }}
-                            className={`p-3 text-left hover:bg-slate-50 cursor-pointer transition-colors flex gap-2.5 items-start ${
-                              !n.read ? 'bg-slate-50/30' : ''
-                            }`}
-                          >
-                            <div className="p-1.5 rounded-lg bg-slate-50 flex-shrink-0 mt-0.5">
-                              {getNotifIcon(n.type)}
-                            </div>
-                            <div className="space-y-0.5 min-w-0">
-                              <div className="flex items-center gap-1.5 justify-between">
-                                <span className={`text-xs font-bold truncate block ${!n.read ? 'text-slate-800' : 'text-slate-600'}`}>{n.title}</span>
-                                {!n.read && <span className="w-1.5 h-1.5 rounded-full bg-primary shrink-0" />}
-                              </div>
-                              <p className="text-[11px] text-slate-500 leading-normal line-clamp-2 font-sans">{n.message}</p>
-                              <span className="text-[9px] text-slate-400 block pt-0.5 font-sans">{formatRelativeTime(n.created_at)}</span>
-                            </div>
-                          </div>
-                        ))
-                      )}
-                    </div>
-                    
-                    <div className="border-t border-slate-100 px-4 pt-2 pb-1 text-center">
-                      <NavLink
-                        to="/superadmin/notifications"
-                        onClick={() => setNotifDropdownOpen(false)}
-                        className="text-[11px] font-bold text-primary hover:underline no-underline block py-1 font-sans"
+                <div className="absolute right-0 top-full mt-2 w-80 bg-white border border-slate-200 rounded-2xl shadow-xl py-2 z-50">
+                  <div className="flex items-center justify-between px-4 py-2 border-b border-slate-100">
+                    <span className="text-xs font-bold text-slate-800 font-sans">Recent Notifications</span>
+                    {unreadCount > 0 && (
+                      <button
+                        onClick={handleMarkAllRead}
+                        className="text-[10px] font-bold text-primary hover:underline cursor-pointer border-none bg-transparent"
                       >
-                        View All Notifications
-                      </NavLink>
-                    </div>
+                        Mark all read
+                      </button>
+                    )}
                   </div>
+
+                  <div className="max-h-64 overflow-y-auto divide-y divide-slate-50">
+                    {notifications.length === 0 ? (
+                      <div className="py-8 text-center text-xs text-slate-400 font-sans">No notifications</div>
+                    ) : (
+                      notifications.slice(0, 5).map(n => (
+                        <div
+                          key={n.id}
+                          onClick={() => {
+                            if (!n.read) handleMarkRead(n.id)
+                            setNotifDropdownOpen(false)
+                            if (n.type === 'credits') navigate('/superadmin/team')
+                            else if (n.type === 'activity') navigate('/superadmin/super-dashboard')
+                            else navigate('/superadmin/super-dashboard')
+                          }}
+                          className={`p-3 text-left hover:bg-slate-50 cursor-pointer transition-colors flex gap-2.5 items-start ${!n.read ? 'bg-slate-50/30' : ''
+                            }`}
+                        >
+                          <div className="p-1.5 rounded-lg bg-slate-50 flex-shrink-0 mt-0.5">
+                            {getNotifIcon(n.type)}
+                          </div>
+                          <div className="space-y-0.5 min-w-0">
+                            <div className="flex items-center gap-1.5 justify-between">
+                              <span className={`text-xs font-bold truncate block ${!n.read ? 'text-slate-800' : 'text-slate-600'}`}>{n.title}</span>
+                              {!n.read && <span className="w-1.5 h-1.5 rounded-full bg-primary shrink-0" />}
+                            </div>
+                            <p className="text-[11px] text-slate-500 leading-normal line-clamp-2 font-sans">{n.message}</p>
+                            <span className="text-[9px] text-slate-400 block pt-0.5 font-sans">{formatRelativeTime(n.created_at)}</span>
+                          </div>
+                        </div>
+                      ))
+                    )}
+                  </div>
+
+                  <div className="border-t border-slate-100 px-4 pt-2 pb-1 text-center">
+                    <NavLink
+                      to="/superadmin/notifications"
+                      onClick={() => setNotifDropdownOpen(false)}
+                      className="text-[11px] font-bold text-primary hover:underline no-underline block py-1 font-sans"
+                    >
+                      View All Notifications
+                    </NavLink>
+                  </div>
+                </div>
               )}
             </div>
 
@@ -806,7 +822,7 @@ export default function SuperAdminLayout() {
         selectedCandidate={selectedCandidate}
         loadingDetail={loadingDetail}
         candidateDetail={candidateDetail}
-        handleUpdateDecision={() => { }}
+        handleUpdateDecision={handleUpdateDecisionAction}
       />
 
       <LiveResultsModal

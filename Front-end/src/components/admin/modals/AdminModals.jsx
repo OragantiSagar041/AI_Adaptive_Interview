@@ -214,7 +214,7 @@ export function CandidateScorecardModal({
       }
       subtitle={
         <span className="text-slate-500 text-sm font-medium mt-1 inline-block">
-          Candidate ID: <strong className="text-slate-800">CAN{selectedCandidate?.id || selectedCandidate?.link_id?.substring(0, 6)?.toUpperCase() || '1X0'}IQ</strong> &nbsp;&nbsp;(Session: {selectedCandidate?.session_id || selectedCandidate?.link_id})
+          Candidate ID: <strong className="text-slate-800">{selectedCandidate?.custom_id || `CAN${selectedCandidate?.id?.substring(0, 4)?.toUpperCase()}IQ` || 'PENDING'}</strong> &nbsp;&nbsp;(Session: {selectedCandidate?.session_id || selectedCandidate?.link_id})
         </span>
       }
       maxWidth="max-w-6xl"
@@ -517,7 +517,10 @@ export function CandidateScorecardModal({
                     <h4 className="text-[1rem] font-bold text-slate-900 leading-snug">
                       Q{idx + 1}: {ans.question_text}
                     </h4>
-                    <span className="text-2xl font-black text-[#f43f5e] shrink-0">{selectedCandidate?.score != null ? Math.floor(selectedCandidate.score) : '--'}</span>
+                    <div className="flex items-baseline gap-1">
+                      <span className="text-2xl font-black text-[#f43f5e] shrink-0">{ans?.ai_score != null ? Math.floor(ans.ai_score) : '--'}</span>
+                      <span className="text-sm font-bold text-[#f43f5e]">/100</span>
+                    </div>
                   </div>
 
                   {/* Behavioral Tags Row */}

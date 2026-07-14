@@ -40,6 +40,9 @@ const AICallingAgentPage = React.lazy(() => import('./pages/admin/AICallingAgent
 const ProfileSettings = React.lazy(() => import('./components/admin/ProfileSettings'))
 const AdminNotifications = React.lazy(() => import('./pages/admin/AdminNotifications'))
 
+// NEW: Conversational Flow Page
+const ConversationalFlowPage = React.lazy(() => import('./pages/admin/ConversationalFlowPage'))
+
 const SuperAdminLayout = React.lazy(() => import('./components/superadmin/SuperAdminLayout'))
 const SuperDashboardPage = React.lazy(() => import('./pages/superadmin/SuperDashboardPage'))
 const TeamManagementPage = React.lazy(() => import('./pages/superadmin/TeamManagementPage'))
@@ -104,6 +107,7 @@ function App() {
             <Route path="rejected-candidates" element={<SuperAdminRejectedCandidatesPage />} />
             <Route path="create-interview" element={<SuperAdminCreateInterviewPage />} />
             <Route path="ai-calling" element={<AICallingAgentPage />} />
+            <Route path="conversational-flow" element={<ConversationalFlowPage />} />
             <Route path="jobs" element={<SuperAdminJobsPage />} />
             <Route path="profile-settings" element={<SuperAdminProfileSettings />} />
             <Route path="notifications" element={<SuperAdminNotifications />} />
@@ -128,6 +132,7 @@ function App() {
             <Route path="rejected-candidates" element={<RejectedCandidatesPage />} />
             <Route path="create-interview" element={<CreateInterviewPage />} />
             <Route path="ai-calling" element={<AICallingAgentPage />} />
+            <Route path="conversational-flow" element={<ConversationalFlowPage />} />
             <Route path="profile-settings" element={<ProfileSettings />} />
             <Route path="notifications" element={<AdminNotifications />} />
           </Route>
