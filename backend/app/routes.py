@@ -4284,10 +4284,13 @@ class CompleteSessionRequest(BaseModel):
     total_fullscreen_exits: int = 0
 
 @router.post("/complete-session/{link_id}")
-def complete_session(link_id: str, payload: CompleteSessionRequest):
+def complete_session(link_id: str, payload: Optional[CompleteSessionRequest] = None):
     """Mark a session as completed and send notification emails (Task 3)."""
     try:
         session = interview_sessions_collection.find_one({"link_id": link_id})
+        # Use default payload if none was sent by the client
+        if payload is None:
+            payload = CompleteSessionRequest()
         update_data = {
             "status": "completed", 
             "warnings": payload.warnings, 
@@ -6957,11 +6960,15 @@ async def stt_endpoint(file: UploadFile = File(...), language: Optional[str] = N
                 # Use whisper-large-v3-turbo for better accuracy with Indian accents.
                 # Pass initial_prompt to prime the model with Indian English context which
                 # dramatically reduces hallucinations and accent-related transcription errors.
+                # IMPORTANT: Only pass an English prompt if the target language is English!
+                iso_lang = language or "en"
+                sys_prompt = "The speaker has an Indian English accent. Transcribe technical terms, programming concepts, and software engineering terminology accurately." if iso_lang == "en" else ""
+                
                 transcript = await groq_client.audio.transcriptions.create(
                     model="whisper-large-v3-turbo",
                     file=f,
-                    language=language or "en",
-                    prompt="The speaker has an Indian English accent. Transcribe technical terms, programming concepts, and software engineering terminology accurately.",
+                    language=iso_lang,
+                    prompt=sys_prompt,
                     temperature=0.0,  # Lower temperature = more deterministic, fewer hallucinations
                 )
             return {"transcript": transcript.text}
