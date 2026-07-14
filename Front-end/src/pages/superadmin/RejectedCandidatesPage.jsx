@@ -8,7 +8,7 @@ import axios from 'axios'
 import { getComputedStatus } from '../../utils/adminFormatters'
 import { loadSuperAdminRejectedCandidates, handleSuperAdminExportExcel } from '../../store/slices/candidatesSlice'
 import { setSelectedAdminFilter } from '../../store/slices/dashboardSlice'
-import { handleOpenScorecard } from '../../store/slices/interviewSlice'
+import CandidateDialog from '../../components/superadmin/CandidateDialog'
 
 function scoreTone(score) {
   if (score >= 75) return "text-emerald-600 font-bold"
@@ -34,6 +34,7 @@ function StatCard({ icon: Icon, label, value, accent }) {
 
 export default function RejectedCandidatesPage() {
   const dispatch = useDispatch()
+  const [selectedCandidate, setSelectedCandidate] = useState(null)
   const token = useSelector(state => state.auth.token)
   const API_BASE_URL = useSelector(state => state.auth.API_BASE_URL)
   const adminUser = useSelector(state => state.auth.adminUser)
@@ -319,7 +320,7 @@ export default function RejectedCandidatesPage() {
                     </td>
                     <td className="px-5 py-4 text-right">
                       <button
-                        onClick={() => dispatch(handleOpenScorecard(c))}
+                        onClick={() => setSelectedCandidate(c)}
                         className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-white border border-slate-200 text-slate-700 text-xs font-bold rounded-lg hover:bg-slate-50 hover:border-slate-300 transition-colors shadow-sm"
                       >
                         <Eye size={14} /> View Details
@@ -359,6 +360,11 @@ export default function RejectedCandidatesPage() {
         </div>
       </section>
 
+      <CandidateDialog 
+        candidate={selectedCandidate} 
+        open={!!selectedCandidate} 
+        onOpenChange={(v) => !v && setSelectedCandidate(null)} 
+      />
     </div>
   )
 }
