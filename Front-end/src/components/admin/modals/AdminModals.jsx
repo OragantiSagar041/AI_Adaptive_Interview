@@ -517,7 +517,10 @@ export function CandidateScorecardModal({
                     <h4 className="text-[1rem] font-bold text-slate-900 leading-snug">
                       Q{idx + 1}: {ans.question_text}
                     </h4>
-                    <span className="text-2xl font-black text-[#f43f5e] shrink-0">{selectedCandidate?.score != null ? Math.floor(selectedCandidate.score) : '--'}</span>
+                    <div className="flex items-baseline gap-1">
+                      <span className="text-2xl font-black text-[#f43f5e] shrink-0">{ans?.ai_score != null ? Math.floor(ans.ai_score) : '--'}</span>
+                      <span className="text-sm font-bold text-[#f43f5e]">/100</span>
+                    </div>
                   </div>
 
                   {/* Behavioral Tags Row */}
