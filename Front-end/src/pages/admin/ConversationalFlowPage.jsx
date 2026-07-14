@@ -145,6 +145,16 @@ export default function ConversationalFlowPage() {
             <div 
               className="flex items-center justify-between p-4 cursor-pointer hover:bg-slate-750"
               onClick={() => toggleSection(index)}
+              role="button"
+              tabIndex={0}
+              aria-expanded={expandedSections[index] ? 'true' : 'false'}
+              aria-label={`Toggle section ${index + 1}`}
+              onKeyDown={(e) => {
+                if (e.key === 'Enter' || e.key === ' ') {
+                  e.preventDefault()
+                  toggleSection(index)
+                }
+              }}
             >
               <div className="flex items-center space-x-4">
                 {expandedSections[index] ? 
@@ -171,6 +181,7 @@ export default function ConversationalFlowPage() {
                   <button
                     onClick={() => updateSection(index, 'is_enabled', !section.is_enabled)}
                     className={`relative inline-flex h-5 w-9 items-center rounded-full transition-colors ${section.is_enabled ? 'bg-emerald-500' : 'bg-slate-600'}`}
+                    aria-label={`Toggle section ${index + 1} enabled state`}
                   >
                     <span className={`inline-block h-3 w-3 transform rounded-full bg-white transition-transform ${section.is_enabled ? 'translate-x-5' : 'translate-x-1'}`} />
                   </button>
@@ -178,6 +189,7 @@ export default function ConversationalFlowPage() {
                 <button 
                   onClick={() => removeSection(index)}
                   className="p-1.5 text-slate-400 hover:text-rose-400 rounded-md hover:bg-slate-700 transition-colors"
+                  aria-label={`Remove section ${index + 1}`}
                 >
                   <Trash2 className="w-4 h-4" />
                 </button>

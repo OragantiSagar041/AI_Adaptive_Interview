@@ -1480,15 +1480,21 @@ def get_agent_flow():
     if not OMNI_DIMENSION_API_KEY:
         raise HTTPException(status_code=500, detail="OMNI_DIMENSION_API_KEY is not set.")
     
-    agent_id = OMNI_AGENT_ID or 1
+    if not OMNI_AGENT_ID:
+        raise HTTPException(status_code=500, detail="OMNI_AGENT_ID is not configured.")
+    
+    agent_id = OMNI_AGENT_ID
     headers = {"Authorization": f"Bearer {OMNI_DIMENSION_API_KEY}"}
     try:
-        res = requests.get(f"https://backend.omnidim.io/api/v1/agents/{agent_id}", headers=headers)
+        res = requests.get(f"https://backend.omnidim.io/api/v1/agents/{agent_id}", headers=headers, timeout=10)
         if res.status_code == 200:
             data = res.json()
             flow_data = data.get("context_breakdown", []) if "context_breakdown" in data else data.get("agent", {}).get("context_breakdown", [])
             return {"success": True, "flow": flow_data}
-        return {"success": False, "detail": res.text, "flow": []}
+        else:
+            raise HTTPException(status_code=res.status_code, detail=res.text)
+    except HTTPException:
+        raise
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 
@@ -1499,7 +1505,10 @@ def update_agent_flow(req: UpdateAgentFlowRequest):
     if not OMNI_DIMENSION_API_KEY:
         raise HTTPException(status_code=500, detail="OMNI_DIMENSION_API_KEY is not set.")
     
-    agent_id = OMNI_AGENT_ID or 1
+    if not OMNI_AGENT_ID:
+        raise HTTPException(status_code=500, detail="OMNI_AGENT_ID is not configured.")
+    
+    agent_id = OMNI_AGENT_ID
     headers = {"Authorization": f"Bearer {OMNI_DIMENSION_API_KEY}", "Content-Type": "application/json"}
     
     # We only send the context_breakdown (conversational flow)
@@ -1508,11 +1517,13 @@ def update_agent_flow(req: UpdateAgentFlowRequest):
     }
     
     try:
-        res = requests.put(f"https://backend.omnidim.io/api/v1/agents/{agent_id}", headers=headers, json=payload)
+        res = requests.put(f"https://backend.omnidim.io/api/v1/agents/{agent_id}", headers=headers, json=payload, timeout=10)
         if res.status_code == 200:
             return {"success": True, "message": "Agent flow updated successfully."}
         else:
             raise HTTPException(status_code=res.status_code, detail=res.text)
+    except HTTPException:
+        raise
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 

@@ -79,7 +79,7 @@ def _compute_test_case_ratio(coding_round: Dict[str, Any]) -> float:
     return (total_pass / total_tests) * 100.0
 
 
-def _evaluate_explanation(coding_round: Dict[str, Any], language: str = "English") -> float:
+def _evaluate_explanation(coding_round: Dict[str, Any], language: str = "English") -> Optional[float]:
     """
     Asks the AI to score (0–100) how well the candidate explained their
     approach verbally (stored in coding_round["latest_explanation"]).
@@ -126,7 +126,7 @@ Respond ONLY with:
         return max(0.0, min(100.0, score))
     except Exception as e:
         print(f"[score_rounds] Explanation eval error: {e}")
-        return 0.0
+        return None
 
 
 # ──────────────────────────────────────────────────────────
@@ -137,7 +137,7 @@ def compute_case_study_score(
     case_study_round: Dict[str, Any],
     context: str = "",
     language: str = "English",
-) -> float:
+) -> Optional[float]:
     """
     Returns a 0–100 case study score by asking the AI to evaluate each
     candidate answer against its scenario question.
@@ -213,14 +213,16 @@ Respond ONLY with a valid JSON object in exactly this format:
             max_tokens=200,
         )
         data = extract_json(resp or "")
-        avg  = float(data.get("avg_score", 0))
-        if avg == 0 and data.get("scores"):
-            scores = [float(s) for s in data["scores"]]
-            avg = sum(scores) / len(scores) if scores else 0.0
+        scores = data.get("scores")
+        if scores and isinstance(scores, list):
+            valid_scores = [float(s) for s in scores if isinstance(s, (int, float, str)) and str(s).replace('.', '', 1).isdigit()]
+            avg = sum(valid_scores) / len(valid_scores) if valid_scores else 0.0
+        else:
+            avg = float(data.get("avg_score", 0))
         return round(max(0.0, min(100.0, avg)), 1)
     except Exception as e:
         print(f"[score_rounds] Case study eval error: {e}")
-        return 0.0
+        return None
 
 
 # ──────────────────────────────────────────────────────────
@@ -239,8 +241,8 @@ def blend_scores(
     - verbal + case_study  → 50% verbal + 50% case_study
     - all three            → 34% verbal + 33% coding + 33% case_study
     """
-    has_coding     = coding_score is not None and coding_score > 0
-    has_case_study = case_study_score is not None and case_study_score > 0
+    has_coding     = coding_score is not None
+    has_case_study = case_study_score is not None
 
     if has_coding and has_case_study:
         blended = (verbal_score * 0.34) + (coding_score * 0.33) + (case_study_score * 0.33)
