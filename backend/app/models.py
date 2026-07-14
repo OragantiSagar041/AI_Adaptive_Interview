@@ -84,6 +84,8 @@ class CreateSession(BaseModel):
     case_study_count: int = 0
     voice_clone: bool = False
     custom_voice_id: str = ""
+    application_id: Optional[str] = None
+    candidate_phone: Optional[str] = ""
 
 class ForgotPasswordRequest(BaseModel):
     username: str

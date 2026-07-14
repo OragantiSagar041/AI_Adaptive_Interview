@@ -20,6 +20,7 @@ export default function QualifiedCandidatesPage() {
   const error = useSelector(state => state.candidates.error)
 
   const [subAdmins, setSubAdmins] = useState([])
+  const [pipelineFilter, setPipelineFilter] = useState('all')
 
   useEffect(() => {
     if (!token) return
@@ -37,8 +38,8 @@ export default function QualifiedCandidatesPage() {
   }, [token, API_BASE_URL])
 
   useEffect(() => {
-    dispatch(loadSuperAdminQualifiedCandidates(selectedAdminFilter))
-  }, [dispatch, selectedAdminFilter])
+    dispatch(loadSuperAdminQualifiedCandidates({ adminFilter: selectedAdminFilter, pipeline: pipelineFilter }))
+  }, [dispatch, selectedAdminFilter, pipelineFilter])
 
   const qualifiedCandidates = candidates.filter(c => c.decision === 'selected')
 
@@ -76,6 +77,21 @@ export default function QualifiedCandidatesPage() {
                   {adm.name || adm.username}
                 </option>
               ))}
+            </select>
+          </div>
+
+          {/* Pipeline filter */}
+          <div className="flex items-center gap-2 bg-white/70 backdrop-blur-md px-3 py-1.5 rounded-xl border border-slate-200 shadow-sm">
+            <span className="text-[11px] font-bold text-slate-500 uppercase tracking-wider">Pipeline:</span>
+            <select
+              value={pipelineFilter}
+              onChange={(e) => setPipelineFilter(e.target.value)}
+              className="rounded-lg border border-slate-200 bg-white px-2.5 py-1 text-xs text-slate-800 outline-none focus:border-indigo-500 font-semibold cursor-pointer"
+              style={{ padding: '0.25rem 1.75rem 0.25rem 0.5rem', fontSize: '11px' }}
+            >
+              <option value="all">All</option>
+              <option value="ai_calling">AI Calling Agent</option>
+              <option value="hireiq">HireIQ Interview</option>
             </select>
           </div>
 
