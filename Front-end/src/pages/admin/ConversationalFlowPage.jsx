@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { Settings, Save, RefreshCw, ChevronDown, ChevronUp, CheckCircle, AlertCircle, Plus, Trash2 } from 'lucide-react';
 import axios from 'axios';
-import { API_BASE_URL } from '../../config/api';
+import { API_BASE_URL } from '../../apiConfig';
 
 export default function ConversationalFlowPage() {
   const [flowData, setFlowData] = useState([]);

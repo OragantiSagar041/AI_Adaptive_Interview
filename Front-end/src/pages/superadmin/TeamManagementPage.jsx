@@ -275,7 +275,7 @@ export default function TeamManagementPage() {
             className="group flex items-center gap-2 px-6 py-3 rounded-xl bg-gradient-to-r from-indigo-600 to-indigo-700 hover:from-indigo-500 hover:to-indigo-600 text-white font-bold text-sm cursor-pointer border-none shadow-lg shadow-indigo-500/30 transition-all hover:-translate-y-0.5 active:translate-y-0"
           >
             <UserPlus size={18} className="group-hover:scale-110 transition-transform" />
-            Add Admin
+            Add Recruiter
           </button>
         </div>
 
@@ -284,7 +284,7 @@ export default function TeamManagementPage() {
             <thead>
               <tr className="border-b-2 border-slate-200">
                 <th className="p-4 text-[0.75rem] font-extrabold uppercase text-slate-400 tracking-wider">Profile</th>
-                <th className="p-4 text-[0.75rem] font-extrabold uppercase text-slate-400 tracking-wider">Contact</th>
+                <th className="p-4 text-[0.75rem] font-extrabold uppercase text-slate-400 tracking-wider">Mail</th>
                 <th className="p-4 text-[0.75rem] font-extrabold uppercase text-slate-400 tracking-wider">Role</th>
                 <th className="p-4 text-[0.75rem] font-extrabold uppercase text-slate-400 tracking-wider text-center">Credits</th>
                 <th className="p-4 text-[0.75rem] font-extrabold uppercase text-slate-400 tracking-wider text-center">Status</th>
@@ -477,8 +477,8 @@ export default function TeamManagementPage() {
                   <UserPlus size={24} />
                 </div>
                 <div>
-                  <h3 className="text-xl font-black text-slate-800 tracking-tight">Provision Admin</h3>
-                  <p className="text-xs font-semibold text-slate-500 mt-0.5">Create a new sub-administrator account</p>
+                  <h3 className="text-xl font-black text-slate-800 tracking-tight">Provision Recruiter</h3>
+                  <p className="text-xs font-semibold text-slate-500 mt-0.5">Create a new recruiter account</p>
                 </div>
               </div>
               <button
@@ -571,7 +571,7 @@ export default function TeamManagementPage() {
                 disabled={addAdminLoading}
                 className="flex-[2] py-3.5 rounded-xl bg-gradient-to-r from-indigo-600 to-indigo-700 hover:from-indigo-500 hover:to-indigo-600 border-none text-white font-bold text-sm cursor-pointer disabled:opacity-50 shadow-lg shadow-indigo-500/30 transition-all hover:-translate-y-0.5 active:translate-y-0"
               >
-                {addAdminLoading ? 'Provisioning...' : 'Provision Admin'}
+                {addAdminLoading ? 'Provisioning...' : 'Add Recruiter'}
               </button>
             </div>
           </form>

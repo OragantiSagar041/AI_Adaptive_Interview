@@ -1486,8 +1486,8 @@ def get_agent_flow():
         res = requests.get(f"https://backend.omnidim.io/api/v1/agents/{agent_id}", headers=headers)
         if res.status_code == 200:
             data = res.json()
-            if "agent" in data:
-                return {"success": True, "flow": data["agent"].get("context_breakdown", [])}
+            flow_data = data.get("context_breakdown", []) if "context_breakdown" in data else data.get("agent", {}).get("context_breakdown", [])
+            return {"success": True, "flow": flow_data}
         return {"success": False, "detail": res.text, "flow": []}
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
