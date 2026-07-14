@@ -1490,11 +1490,13 @@ def get_agent_flow():
         if res.status_code == 200:
             data = res.json()
             agent_obj = data.get("agent") or {}
-            flow_data = (
-                data.get("context_breakdown")
-                or agent_obj.get("context_breakdown")
-                or []
-            )
+            top_level = data.get("context_breakdown")
+            if top_level is not None:
+                flow_data = top_level
+            elif agent_obj.get("context_breakdown") is not None:
+                flow_data = agent_obj["context_breakdown"]
+            else:
+                flow_data = []
             return {"success": True, "flow": flow_data}
         else:
             print(f"[Omnidimension] GET agent flow failed [status={res.status_code}]")
