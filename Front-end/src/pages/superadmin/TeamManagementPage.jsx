@@ -4,7 +4,7 @@ import axios from 'axios'
 import Swal from 'sweetalert2'
 import 'sweetalert2/dist/sweetalert2.min.css'
 import { RefreshCw, Shield, Plus, Check, X, Users, Activity, Coins, UserPlus, CreditCard, Trash2, ShieldOff, ShieldCheck } from 'lucide-react'
-import { updateCredits } from '../store/slices/authSlice'
+import { updateCredits } from '../../store/slices/authSlice'
 
 export default function TeamManagementPage() {
   const dispatch = useDispatch()
