@@ -263,7 +263,7 @@ export default function TeamManagementPage() {
             </div>
             <div className="flex flex-col">
               <h3 className="text-2xl font-black text-transparent bg-clip-text bg-gradient-to-r from-slate-900 to-indigo-900 tracking-tight leading-tight">
-                Administrators Console
+                Admin Management
               </h3>
               <p className="text-sm text-slate-500 font-semibold tracking-wide mt-0.5">
                 Manage sub-admins and their allocated credits
@@ -275,7 +275,7 @@ export default function TeamManagementPage() {
             className="group flex items-center gap-2 px-6 py-3 rounded-xl bg-gradient-to-r from-indigo-600 to-indigo-700 hover:from-indigo-500 hover:to-indigo-600 text-white font-bold text-sm cursor-pointer border-none shadow-lg shadow-indigo-500/30 transition-all hover:-translate-y-0.5 active:translate-y-0"
           >
             <UserPlus size={18} className="group-hover:scale-110 transition-transform" />
-            Provision Admin
+            Add Admin
           </button>
         </div>
 
