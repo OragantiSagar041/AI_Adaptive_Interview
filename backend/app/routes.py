@@ -1489,10 +1489,12 @@ def get_agent_flow():
         res = requests.get(f"https://backend.omnidim.io/api/v1/agents/{agent_id}", headers=headers, timeout=10)
         if res.status_code == 200:
             data = res.json()
-            flow_data = data.get("context_breakdown", []) if "context_breakdown" in data else data.get("agent", {}).get("context_breakdown", [])
+            agent_obj = data.get("agent") or {}
+            flow_data = data.get("context_breakdown", []) if "context_breakdown" in data else agent_obj.get("context_breakdown", [])
             return {"success": True, "flow": flow_data}
         else:
-            raise HTTPException(status_code=res.status_code, detail=res.text)
+            print(f"Omnidimension API Error: {res.text}")
+            raise HTTPException(status_code=res.status_code, detail="Failed to fetch agent flow from upstream API.")
     except HTTPException:
         raise
     except Exception as e:
@@ -1521,7 +1523,8 @@ def update_agent_flow(req: UpdateAgentFlowRequest):
         if res.status_code == 200:
             return {"success": True, "message": "Agent flow updated successfully."}
         else:
-            raise HTTPException(status_code=res.status_code, detail=res.text)
+            print(f"Omnidimension API Error: {res.text}")
+            raise HTTPException(status_code=res.status_code, detail="Failed to update agent flow on upstream API.")
     except HTTPException:
         raise
     except Exception as e:

@@ -248,6 +248,7 @@ Return VALID JSON ONLY:
         # An answer this short is fundamentally invalid (Hard Zero Rule)
         content_s = 0
         relevance_s = 0
+        time_s = 0
         result_dict["feedback"] = "Answer is too short to evaluate. Please provide a full, detailed explanation."
     elif len(answer_words) < 10:
         content_s = min(content_s, 8)

@@ -143,13 +143,13 @@ def compute_case_study_score(
     candidate answer against its scenario question.
     """
     if not case_study_round:
-        return 0.0
+        return None
 
     questions = case_study_round.get("questions", []) or []
     answers   = case_study_round.get("answers", []) or []
 
     if not questions or not answers:
-        return 0.0
+        return None
 
     # Pair questions with their answers
     pairs = []
@@ -178,7 +178,7 @@ def compute_case_study_score(
             pairs.append((q_text, a_text))
 
     if not pairs:
-        return 0.0
+        return None
 
     # Build a single AI call to evaluate all pairs at once
     qa_block = ""
