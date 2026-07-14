@@ -1,9 +1,11 @@
 import React, { useState, useEffect, useRef } from 'react'
-import { RefreshCw, Video, X, Monitor, Eye, ShieldAlert } from 'lucide-react'
+import { RefreshCw, Video, X, Monitor, Eye, ShieldAlert, Download } from 'lucide-react'
 import { API_BASE_URL } from '../../../apiConfig'
 import Modal from '../../Modal'
 import Button from '../../Button'
 import Badge from '../../Badge'
+import { toJpeg } from 'html-to-image'
+import { jsPDF } from 'jspdf'
 
 // Lightweight WYSIWYG Editor using native iframe designMode
 function IframeWYSIWYG({ initialHtml, onChange }) {
@@ -18,34 +20,34 @@ function IframeWYSIWYG({ initialHtml, onChange }) {
   useEffect(() => {
     const iframe = iframeRef.current;
     if (!iframe) return;
-    
+
     const doc = iframe.contentDocument || iframe.contentWindow?.document;
     if (!doc) return;
-    
+
     if (!isInitialized.current) {
       doc.open();
       doc.write(initialHtml);
       doc.close();
       doc.designMode = "on";
       isInitialized.current = true;
-      
+
       const handleInput = () => {
         if (onChangeRef.current) {
           onChangeRef.current(doc.body.innerHTML);
         }
       };
-      
+
       // MutationObserver guarantees we catch all text edits, deletions, and formatting changes
       const observer = new MutationObserver(handleInput);
-      observer.observe(doc.body, { 
-        childList: true, 
-        subtree: true, 
-        characterData: true 
+      observer.observe(doc.body, {
+        childList: true,
+        subtree: true,
+        characterData: true
       });
-      
+
       doc.body.addEventListener('input', handleInput);
       doc.body.addEventListener('keyup', handleInput);
-      
+
       return () => {
         observer.disconnect();
         doc.body.removeEventListener('input', handleInput);
@@ -72,11 +74,111 @@ export function CandidateScorecardModal({
   handleUpdateDecision
 }) {
   const [activeTab, setActiveTab] = React.useState('verbal');
+  const [isGeneratingPdf, setIsGeneratingPdf] = React.useState(false);
 
   // Reset tab when modal opens for a new candidate
   React.useEffect(() => {
     if (isOpen) setActiveTab('verbal');
   }, [isOpen, selectedCandidate]);
+
+  const handleDownloadPdf = () => {
+    setIsGeneratingPdf(true);
+    // Give React time to render all tabs before capturing
+    setTimeout(async () => {
+      try {
+        const element = document.getElementById('pdf-content');
+        if (!element) {
+          console.error("PDF content element not found");
+          setIsGeneratingPdf(false);
+          return;
+        }
+
+        // Create jsPDF instance early to calculate exact page aspect ratio
+        const pdf = new jsPDF({
+          orientation: 'portrait',
+          unit: 'px',
+          format: 'a4'
+        });
+        const pdfWidth = pdf.internal.pageSize.getWidth();
+        const pageHeight = pdf.internal.pageSize.getHeight();
+
+        // Temporarily adjust styles for better PDF rendering
+        const originalStyle = element.style.cssText;
+        element.style.padding = '20px';
+        element.style.backgroundColor = '#ffffff';
+        element.style.width = `${element.offsetWidth}px`;
+
+        const pageHeightPx = element.offsetWidth * (pageHeight / pdfWidth);
+        const breakableElements = element.querySelectorAll('.avoid-break');
+
+        // We will store the original margins so we can restore them later
+        const originalMargins = new Map();
+
+        for (let i = 0; i < breakableElements.length; i++) {
+          const el = breakableElements[i];
+          const rect = el.getBoundingClientRect();
+          const parentRect = element.getBoundingClientRect();
+
+          const offsetTop = rect.top - parentRect.top;
+          const offsetBottom = offsetTop + rect.height;
+
+          const startPage = Math.floor(offsetTop / pageHeightPx);
+          const endPage = Math.floor(offsetBottom / pageHeightPx);
+
+          // If element crosses page boundary
+          if (startPage !== endPage && rect.height < (pageHeightPx * 0.9)) {
+            const nextPageTop = (startPage + 1) * pageHeightPx;
+            const pushAmount = (nextPageTop - offsetTop) + 20;
+
+            const currentMarginTop = parseFloat(window.getComputedStyle(el).marginTop || '0');
+            originalMargins.set(el, el.style.marginTop);
+            
+            // Push element down using margin to avoid flexbox gap calculation issues
+            el.style.marginTop = `${currentMarginTop + pushAmount}px`;
+          }
+        }
+
+        // Wait a tiny bit for layout to settle
+        await new Promise(r => setTimeout(r, 50));
+
+        // Use html-to-image with skipFonts to prevent CORS hangs on foreign language fonts
+        const dataUrl = await toJpeg(element, {
+          quality: 0.95,
+          pixelRatio: 1.5,
+          backgroundColor: '#ffffff',
+          skipFonts: true // Fixes the crash for Hindi/other languages
+        });
+
+        // Restore original margins and styles
+        element.style.cssText = originalStyle;
+        originalMargins.forEach((originalMargin, el) => {
+          el.style.marginTop = originalMargin;
+        });
+
+        const imgProps = pdf.getImageProperties(dataUrl);
+        const imgHeight = (imgProps.height * pdfWidth) / imgProps.width;
+
+        let heightLeft = imgHeight;
+        let position = 0;
+
+        pdf.addImage(dataUrl, 'JPEG', 0, position, pdfWidth, imgHeight);
+        heightLeft -= pageHeight;
+
+        while (heightLeft > 0) {
+          position = heightLeft - imgHeight;
+          pdf.addPage();
+          pdf.addImage(dataUrl, 'JPEG', 0, position, pdfWidth, imgHeight);
+          heightLeft -= pageHeight;
+        }
+
+        pdf.save(`${selectedCandidate?.candidate_name || 'Candidate'}_results.pdf`);
+      } catch (err) {
+        console.error("Error generating PDF:", err);
+      } finally {
+        setIsGeneratingPdf(false);
+      }
+    }, 500); // 500ms delay to allow state changes to flush to DOM
+  };
 
   const getSubScore = (key) => {
     if (candidateDetail?.multi_dimensional_analysis?.[key]) {
@@ -112,26 +214,35 @@ export function CandidateScorecardModal({
       }
       subtitle={
         <span className="text-slate-500 text-sm font-medium mt-1 inline-block">
-          Candidate ID: <strong className="text-slate-800">CAN{selectedCandidate?.id || selectedCandidate?.link_id?.substring(0,6)?.toUpperCase() || '1X0'}IQ</strong> &nbsp;&nbsp;(Session: {selectedCandidate?.session_id || selectedCandidate?.link_id})
+          Candidate ID: <strong className="text-slate-800">CAN{selectedCandidate?.id || selectedCandidate?.link_id?.substring(0, 6)?.toUpperCase() || '1X0'}IQ</strong> &nbsp;&nbsp;(Session: {selectedCandidate?.session_id || selectedCandidate?.link_id})
         </span>
       }
       maxWidth="max-w-6xl"
       footer={
-        <div className="flex gap-3 w-full justify-end">
+        <div className="flex gap-3 w-full justify-between items-center">
           <Button
-            onClick={() => handleUpdateDecision(selectedCandidate.link_id || selectedCandidate.id, 'selected')}
-            variant="primary"
-            className="bg-emerald-500 hover:bg-emerald-600 shadow-[0_4px_10px_rgba(16,185,129,0.2)] text-white font-semibold px-6"
+            onClick={handleDownloadPdf}
+            className="bg-indigo-50 hover:bg-indigo-100 border border-indigo-200 text-indigo-700 font-semibold px-4 py-2 rounded-lg flex items-center gap-2 transition-colors"
           >
-            Shortlist Candidate
+            {isGeneratingPdf ? <RefreshCw className="animate-spin" size={18} /> : <Download size={18} />}
+            {isGeneratingPdf ? 'Generating...' : 'Download PDF Report'}
           </Button>
-          <Button
-            onClick={() => handleUpdateDecision(selectedCandidate.link_id || selectedCandidate.id, 'rejected')}
-            variant="danger"
-            className="bg-rose-500 hover:bg-rose-600 text-white font-semibold px-6 shadow-[0_4px_10px_rgba(244,63,94,0.2)]"
-          >
-            Reject Candidate
-          </Button>
+          <div className="flex gap-3">
+            <Button
+              onClick={() => handleUpdateDecision(selectedCandidate.link_id || selectedCandidate.id, 'selected')}
+              variant="primary"
+              className="bg-emerald-500 hover:bg-emerald-600 shadow-[0_4px_10px_rgba(16,185,129,0.2)] text-white font-semibold px-6"
+            >
+              Shortlist Candidate
+            </Button>
+            <Button
+              onClick={() => handleUpdateDecision(selectedCandidate.link_id || selectedCandidate.id, 'rejected')}
+              variant="danger"
+              className="bg-rose-500 hover:bg-rose-600 text-white font-semibold px-6 shadow-[0_4px_10px_rgba(244,63,94,0.2)]"
+            >
+              Reject Candidate
+            </Button>
+          </div>
         </div>
       }
     >
@@ -141,10 +252,10 @@ export function CandidateScorecardModal({
           <span className="text-sm font-semibold">Loading evaluation detail logs...</span>
         </div>
       ) : (
-        <div className="flex flex-col gap-8 text-slate-800 bg-white pt-2">
-          
+        <div id="pdf-content" className="flex flex-col gap-8 text-slate-800 bg-white pt-2">
+
           {/* Top Stats Row */}
-          <div className="grid grid-cols-2 md:grid-cols-6 gap-4">
+          <div className="grid grid-cols-2 md:grid-cols-5 gap-4 avoid-break">
             <div className="bg-white border border-slate-200 shadow-sm rounded-xl p-5">
               <span className="text-[0.68rem] text-slate-400 font-bold uppercase tracking-wider block mb-2">Average Score</span>
               <div className="flex items-baseline gap-1">
@@ -184,19 +295,13 @@ export function CandidateScorecardModal({
                 <span className="text-sm font-bold text-slate-800">m</span>
               </div>
             </div>
-            <div className="bg-white border border-slate-200 shadow-sm rounded-xl p-5">
-              <span className="text-[0.68rem] text-slate-400 font-bold uppercase tracking-wider block mb-2">AI Tokens Consumed</span>
-              <div className="flex items-baseline gap-1 mt-1">
-                <span className="text-4xl font-black text-[#6366f1] tracking-tight">{candidateDetail?.ai_tokens_used || selectedCandidate?.ai_tokens_used || 0}</span>
-              </div>
-            </div>
           </div>
 
           {/* Proctoring & Integrity */}
           {candidateDetail?.integrity && (
-            <div className="flex flex-col gap-4 mt-2">
+            <div className="flex flex-col gap-4 mt-2 avoid-break">
               <h3 className="text-lg font-bold text-slate-900 tracking-tight border-b border-slate-100 pb-2 flex items-center gap-2">
-                <ShieldAlert className="text-rose-500 w-5 h-5" /> 
+                <ShieldAlert className="text-rose-500 w-5 h-5" />
                 Proctoring & Integrity
               </h3>
               <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
@@ -227,9 +332,9 @@ export function CandidateScorecardModal({
 
           {/* Interview Termination Reason */}
           {candidateDetail?.completion_reason && candidateDetail.completion_reason !== "normal" && (
-            <div className="flex flex-col gap-2 mb-4 bg-rose-50 border border-rose-200 rounded-xl p-4">
+            <div className="flex flex-col gap-2 mb-4 bg-rose-50 border border-rose-200 rounded-xl p-4 avoid-break">
               <h3 className="text-lg font-bold text-rose-700 tracking-tight flex items-center gap-2">
-                <i className="fas fa-ban w-5 h-5 flex items-center justify-center"></i> 
+                <i className="fas fa-ban w-5 h-5 flex items-center justify-center"></i>
                 Interview Terminated
               </h3>
               <p className="text-sm font-medium text-rose-800">
@@ -240,9 +345,9 @@ export function CandidateScorecardModal({
 
           {/* Session Alerts & Warnings */}
           {candidateDetail?.alerts && candidateDetail.alerts.length > 0 && (
-            <div className="flex flex-col gap-4">
+            <div className="flex flex-col gap-4 avoid-break">
               <h3 className="text-lg font-bold text-slate-900 tracking-tight border-b border-slate-100 pb-2 flex items-center gap-2">
-                <i className="fas fa-exclamation-triangle text-amber-500 w-5 h-5 flex items-center justify-center"></i> 
+                <i className="fas fa-exclamation-triangle text-amber-500 w-5 h-5 flex items-center justify-center"></i>
                 Session Alerts & Warnings
               </h3>
               <div className="flex flex-col gap-3 bg-slate-50 border border-slate-200 rounded-xl p-4">
@@ -282,7 +387,7 @@ export function CandidateScorecardModal({
 
           {/* Interview Video Recordings */}
           {(candidateDetail?.recording_url || candidateDetail?.screen_recording_url) && (
-            <div className="flex flex-col gap-4">
+            <div className="flex flex-col gap-4 avoid-break">
               <h3 className="text-lg font-bold text-slate-900 tracking-tight border-b border-slate-100 pb-2 flex items-center gap-2">
                 <Video className="text-indigo-600 w-5 h-5 animate-pulse" /> Interview Video Recordings
               </h3>
@@ -292,13 +397,17 @@ export function CandidateScorecardModal({
                     <span className="text-xs font-bold text-slate-500 uppercase tracking-wider block">
                       Candidate Webcam Video
                     </span>
-                    <div className="relative rounded-lg overflow-hidden bg-black aspect-video shadow-inner">
-                      <video
-                        src={getVideoUrl(candidateDetail.recording_url)}
-                        controls
-                        className="w-full h-full object-contain"
-                        preload="metadata"
-                      />
+                    <div className="relative rounded-lg overflow-hidden bg-black aspect-video shadow-inner flex items-center justify-center">
+                      {isGeneratingPdf ? (
+                        <span className="text-slate-400 font-medium text-sm"><Video className="inline-block mr-2 w-5 h-5 mb-1 opacity-50" />Video available in web dashboard</span>
+                      ) : (
+                        <video
+                          src={getVideoUrl(candidateDetail.recording_url)}
+                          controls
+                          className="w-full h-full object-contain"
+                          preload="metadata"
+                        />
+                      )}
                     </div>
                   </div>
                 )}
@@ -307,13 +416,17 @@ export function CandidateScorecardModal({
                     <span className="text-xs font-bold text-slate-500 uppercase tracking-wider block">
                       Candidate Screen Share Video
                     </span>
-                    <div className="relative rounded-lg overflow-hidden bg-black aspect-video shadow-inner">
-                      <video
-                        src={getVideoUrl(candidateDetail.screen_recording_url)}
-                        controls
-                        className="w-full h-full object-contain"
-                        preload="metadata"
-                      />
+                    <div className="relative rounded-lg overflow-hidden bg-black aspect-video shadow-inner flex items-center justify-center">
+                      {isGeneratingPdf ? (
+                        <span className="text-slate-400 font-medium text-sm"><Monitor className="inline-block mr-2 w-5 h-5 mb-1 opacity-50" />Screen recording available in web dashboard</span>
+                      ) : (
+                        <video
+                          src={getVideoUrl(candidateDetail.screen_recording_url)}
+                          controls
+                          className="w-full h-full object-contain"
+                          preload="metadata"
+                        />
+                      )}
                     </div>
                   </div>
                 )}
@@ -322,7 +435,7 @@ export function CandidateScorecardModal({
           )}
 
           {/* Multi-Dimensional Analysis */}
-          <div className="flex flex-col gap-4">
+          <div className="flex flex-col gap-4 avoid-break">
             <h3 className="text-lg font-bold text-slate-900 tracking-tight border-b border-slate-100 pb-2">Multi-Dimensional Analysis</h3>
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
               {[
@@ -344,7 +457,7 @@ export function CandidateScorecardModal({
                     <div className="bg-[#f43f5e] h-full rounded-full" style={{ width: `${getSubScore(dim.title)}%` }}></div>
                   </div>
                   <div className="border-t border-slate-100/60 pt-3 mt-1">
-                     <span className="text-[0.68rem] text-slate-800 font-bold block mb-1">AI Reasoning: <span className="text-slate-500 font-normal">{getSubReasoning(dim.title)}</span></span>
+                    <span className="text-[0.68rem] text-slate-800 font-bold block mb-1">AI Reasoning: <span className="text-slate-500 font-normal">{getSubReasoning(dim.title)}</span></span>
                   </div>
                 </div>
               ))}
@@ -352,15 +465,14 @@ export function CandidateScorecardModal({
           </div>
 
           {/* Tabs Navigation */}
-          <div className="flex flex-col gap-4 mt-4">
+          {!isGeneratingPdf && (
             <div className="flex items-center gap-2 border-b border-slate-200">
               <button
                 onClick={() => setActiveTab('verbal')}
-                className={`pb-3 px-4 text-sm font-bold transition-all border-b-2 flex items-center gap-2 ${
-                  activeTab === 'verbal' 
-                    ? 'border-[#6366f1] text-[#6366f1]' 
-                    : 'border-transparent text-slate-500 hover:text-slate-700 hover:border-slate-300'
-                }`}
+                className={`pb-3 px-4 text-sm font-bold transition-all border-b-2 flex items-center gap-2 ${activeTab === 'verbal'
+                  ? 'border-[#6366f1] text-[#6366f1]'
+                  : 'border-transparent text-slate-500 hover:text-slate-700 hover:border-slate-300'
+                  }`}
               >
                 <i className="fas fa-comments"></i> Verbal Round
               </button>
@@ -368,11 +480,10 @@ export function CandidateScorecardModal({
               {candidateDetail?.coding_round?.task && (
                 <button
                   onClick={() => setActiveTab('coding')}
-                  className={`pb-3 px-4 text-sm font-bold transition-all border-b-2 flex items-center gap-2 ${
-                    activeTab === 'coding' 
-                      ? 'border-[#6366f1] text-[#6366f1]' 
-                      : 'border-transparent text-slate-500 hover:text-slate-700 hover:border-slate-300'
-                  }`}
+                  className={`pb-3 px-4 text-sm font-bold transition-all border-b-2 flex items-center gap-2 ${activeTab === 'coding'
+                    ? 'border-[#6366f1] text-[#6366f1]'
+                    : 'border-transparent text-slate-500 hover:text-slate-700 hover:border-slate-300'
+                    }`}
                 >
                   <i className="fas fa-code"></i> Coding Round
                 </button>
@@ -381,29 +492,34 @@ export function CandidateScorecardModal({
               {candidateDetail?.case_study_round?.scenario && (
                 <button
                   onClick={() => setActiveTab('case_study')}
-                  className={`pb-3 px-4 text-sm font-bold transition-all border-b-2 flex items-center gap-2 ${
-                    activeTab === 'case_study' 
-                      ? 'border-[#6366f1] text-[#6366f1]' 
-                      : 'border-transparent text-slate-500 hover:text-slate-700 hover:border-slate-300'
-                  }`}
+                  className={`pb-3 px-4 text-sm font-bold transition-all border-b-2 flex items-center gap-2 ${activeTab === 'case_study'
+                    ? 'border-[#6366f1] text-[#6366f1]'
+                    : 'border-transparent text-slate-500 hover:text-slate-700 hover:border-slate-300'
+                    }`}
                 >
                   <i className="fas fa-briefcase"></i> Case Study Round
                 </button>
               )}
             </div>
+          )}
 
-            {/* TAB CONTENT: Verbal Round */}
-            {activeTab === 'verbal' && (
-              <div className="flex flex-col gap-6 pt-2">
+          {/* TAB CONTENT: Verbal Round */}
+          {(activeTab === 'verbal' || isGeneratingPdf) && (
+            <div className="flex flex-col gap-6 pt-2">
+              {isGeneratingPdf && (
+                <h4 className="text-[1rem] font-bold text-slate-900 leading-snug mb-2 border-b border-slate-200 pb-3 flex items-center gap-2">
+                  <i className="fas fa-comments text-indigo-500"></i> Verbal Round
+                </h4>
+              )}
               {candidateDetail?.answers?.map((ans, idx) => (
-                <div key={idx} className="bg-slate-50/50 border border-slate-200 rounded-xl p-5 relative overflow-hidden">
+                <div key={idx} className="bg-slate-50/50 border border-slate-200 rounded-xl p-5 relative overflow-hidden avoid-break">
                   <div className="flex justify-between items-start mb-4 gap-4">
                     <h4 className="text-[1rem] font-bold text-slate-900 leading-snug">
                       Q{idx + 1}: {ans.question_text}
                     </h4>
                     <span className="text-2xl font-black text-[#f43f5e] shrink-0">{selectedCandidate?.score != null ? Math.floor(selectedCandidate.score) : '--'}</span>
                   </div>
-                  
+
                   {/* Behavioral Tags Row */}
                   <div className="flex flex-wrap gap-2 mb-4">
                     <div className="bg-slate-100 border border-slate-200 px-3 py-1.5 rounded-lg flex items-center gap-1.5 text-xs font-semibold text-slate-700">
@@ -447,133 +563,132 @@ export function CandidateScorecardModal({
                 </div>
               ))}
               {(!candidateDetail?.answers || candidateDetail.answers.length === 0) && (
-                <div className="text-center py-12 border border-dashed border-slate-300 rounded-xl bg-slate-50">
+                <div className="text-center py-12 border border-dashed border-slate-300 rounded-xl bg-slate-50 avoid-break">
                   <p className="text-slate-500 text-sm font-semibold">No recorded answers available for this candidate.</p>
                 </div>
               )}
+            </div>
+          )}
+
+          {/* TAB CONTENT: Coding Round Breakdown */}
+          {(activeTab === 'coding' || isGeneratingPdf) && candidateDetail?.coding_round?.task && (
+            <div className="bg-slate-50/50 border border-slate-200 rounded-xl p-5 relative overflow-hidden mt-2 avoid-break">
+              <h4 className="text-[1rem] font-bold text-slate-900 leading-snug mb-4 border-b border-slate-200 pb-3 flex items-center gap-2">
+                <i className="fas fa-code text-indigo-500"></i> Coding Round
+              </h4>
+
+              <div className="mb-4">
+                <span className="text-[0.68rem] text-slate-500 font-bold uppercase tracking-wider block mb-2">Problem Statement</span>
+                <p className="text-[0.95rem] text-slate-800 font-bold">{candidateDetail.coding_round.task?.title}</p>
+                <p className="text-sm text-slate-600 mt-1 whitespace-pre-wrap leading-relaxed">{candidateDetail.coding_round.task?.description}</p>
               </div>
-            )}
 
-            {/* TAB CONTENT: Coding Round Breakdown */}
-            {activeTab === 'coding' && candidateDetail?.coding_round?.task && (
-                <div className="bg-slate-50/50 border border-slate-200 rounded-xl p-5 relative overflow-hidden mt-2">
-                  <h4 className="text-[1rem] font-bold text-slate-900 leading-snug mb-4 border-b border-slate-200 pb-3 flex items-center gap-2">
-                    <i className="fas fa-code text-indigo-500"></i> Coding Round
-                  </h4>
-                  
-                  <div className="mb-4">
-                    <span className="text-[0.68rem] text-slate-500 font-bold uppercase tracking-wider block mb-2">Problem Statement</span>
-                    <p className="text-[0.95rem] text-slate-800 font-bold">{candidateDetail.coding_round.task?.title}</p>
-                    <p className="text-sm text-slate-600 mt-1 whitespace-pre-wrap leading-relaxed">{candidateDetail.coding_round.task?.description}</p>
-                  </div>
-                  
-                  {candidateDetail.coding_round.task?.constraints && (
-                    <div className="mb-4">
-                      <span className="text-[0.68rem] text-slate-500 font-bold uppercase tracking-wider block mb-2">Constraints</span>
-                      <p className="text-xs text-slate-700 font-mono bg-white border border-slate-200 p-2.5 rounded-lg whitespace-pre-wrap">{candidateDetail.coding_round.task.constraints}</p>
-                    </div>
-                  )}
+              {candidateDetail.coding_round.task?.constraints && (
+                <div className="mb-4">
+                  <span className="text-[0.68rem] text-slate-500 font-bold uppercase tracking-wider block mb-2">Constraints</span>
+                  <p className="text-xs text-slate-700 font-mono bg-white border border-slate-200 p-2.5 rounded-lg whitespace-pre-wrap">{candidateDetail.coding_round.task.constraints}</p>
+                </div>
+              )}
 
-                  {candidateDetail.coding_round.task?.examples && candidateDetail.coding_round.task.examples.length > 0 && (
-                    <div className="mb-5">
-                      <span className="text-[0.68rem] text-slate-500 font-bold uppercase tracking-wider block mb-2">Examples</span>
-                      <div className="space-y-2">
-                        {candidateDetail.coding_round.task.examples.map((ex, i) => (
-                          <div key={i} className="bg-white border border-slate-200 p-3 rounded-lg text-xs font-mono text-slate-700">
-                            <div className="mb-1"><strong className="text-slate-500">Input:</strong> <span className="text-emerald-600">{ex.input}</span></div>
-                            <div><strong className="text-slate-500">Output:</strong> <span className="text-amber-600">{ex.output}</span></div>
-                          </div>
-                        ))}
+              {candidateDetail.coding_round.task?.examples && candidateDetail.coding_round.task.examples.length > 0 && (
+                <div className="mb-5">
+                  <span className="text-[0.68rem] text-slate-500 font-bold uppercase tracking-wider block mb-2">Examples</span>
+                  <div className="space-y-2">
+                    {candidateDetail.coding_round.task.examples.map((ex, i) => (
+                      <div key={i} className="bg-white border border-slate-200 p-3 rounded-lg text-xs font-mono text-slate-700">
+                        <div className="mb-1"><strong className="text-slate-500">Input:</strong> <span className="text-emerald-600">{ex.input}</span></div>
+                        <div><strong className="text-slate-500">Output:</strong> <span className="text-amber-600">{ex.output}</span></div>
                       </div>
-                    </div>
-                  )}
-
-                  <div className="mb-5">
-                    <span className="text-[0.68rem] text-slate-500 font-bold uppercase tracking-wider block mb-2">Candidate's Code ({candidateDetail.coding_round.language})</span>
-                    <pre className="bg-[#0d1117] border border-slate-800 text-slate-300 p-4 rounded-lg text-xs font-mono overflow-x-auto whitespace-pre-wrap">
-                      {candidateDetail.coding_round.latest_code || "No code submitted."}
-                    </pre>
+                    ))}
                   </div>
+                </div>
+              )}
 
-                  <div className="mb-2">
-                    <span className="text-[0.68rem] text-slate-500 font-bold uppercase tracking-wider block mb-2">Test Results</span>
-                    {candidateDetail.coding_round.latest_run ? (
-                      <div className="bg-white border border-slate-200 p-4 rounded-lg">
-                        <div className="font-bold text-sm mb-3 flex items-center gap-2">
-                          Status: 
-                          {candidateDetail.coding_round.latest_run.all_passed 
-                            ? <span className="text-emerald-600 bg-emerald-50 px-2 py-0.5 rounded border border-emerald-200 text-xs uppercase tracking-wide">All Passed</span> 
-                            : <span className="text-rose-600 bg-rose-50 px-2 py-0.5 rounded border border-rose-200 text-xs uppercase tracking-wide">Failed</span>}
-                        </div>
-                        {candidateDetail.coding_round.latest_run.runtime_error && (
-                           <div className="text-xs text-rose-600 font-mono bg-rose-50 border border-rose-100 p-2.5 rounded mb-3 whitespace-pre-wrap">{candidateDetail.coding_round.latest_run.runtime_error}</div>
-                        )}
-                        <div className="grid grid-cols-2 gap-4">
-                          <div className="bg-slate-50 p-3 rounded-lg border border-slate-100">
-                            <div className="text-xs text-slate-500 font-semibold mb-1 uppercase tracking-wide">Visible Tests</div>
-                            <div className="text-lg font-black text-slate-800">
-                              {candidateDetail.coding_round.latest_run.visible_results?.filter(r=>r.passed).length || 0} <span className="text-slate-400 text-sm font-semibold">/ {candidateDetail.coding_round.latest_run.visible_results?.length || 0}</span>
-                            </div>
-                          </div>
-                          <div className="bg-slate-50 p-3 rounded-lg border border-slate-100">
-                            <div className="text-xs text-slate-500 font-semibold mb-1 uppercase tracking-wide">Hidden Tests</div>
-                            <div className="text-lg font-black text-slate-800">
-                              {candidateDetail.coding_round.latest_run.hidden_summary?.passed || 0} <span className="text-slate-400 text-sm font-semibold">/ {candidateDetail.coding_round.latest_run.hidden_summary?.total || 0}</span>
-                            </div>
-                          </div>
-                        </div>
-                      </div>
-                    ) : (
-                      <p className="text-sm text-slate-500 italic bg-white border border-slate-200 p-4 rounded-lg">No run results available.</p>
+              <div className="mb-5">
+                <span className="text-[0.68rem] text-slate-500 font-bold uppercase tracking-wider block mb-2">Candidate's Code ({candidateDetail.coding_round.language})</span>
+                <pre className="bg-[#0d1117] border border-slate-800 text-slate-300 p-4 rounded-lg text-xs font-mono overflow-x-auto whitespace-pre-wrap">
+                  {candidateDetail.coding_round.latest_code || "No code submitted."}
+                </pre>
+              </div>
+
+              <div className="mb-2">
+                <span className="text-[0.68rem] text-slate-500 font-bold uppercase tracking-wider block mb-2">Test Results</span>
+                {candidateDetail.coding_round.latest_run ? (
+                  <div className="bg-white border border-slate-200 p-4 rounded-lg">
+                    <div className="font-bold text-sm mb-3 flex items-center gap-2">
+                      Status:
+                      {candidateDetail.coding_round.latest_run.all_passed
+                        ? <span className="text-emerald-600 bg-emerald-50 px-2 py-0.5 rounded border border-emerald-200 text-xs uppercase tracking-wide">All Passed</span>
+                        : <span className="text-rose-600 bg-rose-50 px-2 py-0.5 rounded border border-rose-200 text-xs uppercase tracking-wide">Failed</span>}
+                    </div>
+                    {candidateDetail.coding_round.latest_run.runtime_error && (
+                      <div className="text-xs text-rose-600 font-mono bg-rose-50 border border-rose-100 p-2.5 rounded mb-3 whitespace-pre-wrap">{candidateDetail.coding_round.latest_run.runtime_error}</div>
                     )}
-                  </div>
-                </div>
-              )}
-
-            {/* TAB CONTENT: Case Study Round Breakdown */}
-            {activeTab === 'case_study' && candidateDetail?.case_study_round?.scenario && (
-                <div className="bg-slate-50/50 border border-slate-200 rounded-xl p-5 relative overflow-hidden mt-2">
-                  <h4 className="text-[1rem] font-bold text-slate-900 leading-snug mb-4 border-b border-slate-200 pb-3 flex items-center gap-2">
-                    <i className="fas fa-briefcase text-amber-500"></i> Case Study Round
-                  </h4>
-                  <div className="mb-5">
-                    <span className="text-[0.68rem] text-slate-500 font-bold uppercase tracking-wider block mb-2">Scenario</span>
-                    <p className="text-[0.95rem] text-slate-700 leading-relaxed whitespace-pre-wrap bg-white border border-slate-200 p-4 rounded-lg">{candidateDetail.case_study_round.scenario}</p>
-                  </div>
-                  
-                  {candidateDetail.case_study_round.messages && candidateDetail.case_study_round.messages.length > 1 && (
-                    <div>
-                      <span className="text-[0.68rem] text-slate-500 font-bold uppercase tracking-wider block mb-3">Conversation Transcript</span>
-                      <div className="space-y-3 bg-white border border-slate-200 p-4 rounded-lg max-h-[400px] overflow-y-auto">
-                        {candidateDetail.case_study_round.messages.filter(m => m.role !== 'system').map((msg, i) => (
-                          <div key={i} className={`p-3 rounded-xl text-sm ${msg.role === 'user' ? 'bg-indigo-50 border-indigo-100 border text-indigo-900 ml-8 rounded-tr-sm' : 'bg-slate-50 border-slate-200 border text-slate-700 mr-8 rounded-tl-sm'}`}>
-                            <strong className={`block mb-1 text-[0.65rem] uppercase tracking-widest ${msg.role === 'user' ? 'text-indigo-400' : 'text-slate-400'}`}>
-                              {msg.role === 'user' ? 'Candidate' : 'Interviewer'}
-                            </strong>
-                            <div className="whitespace-pre-wrap leading-relaxed">{msg.content}</div>
-                          </div>
-                        ))}
+                    <div className="grid grid-cols-2 gap-4">
+                      <div className="bg-slate-50 p-3 rounded-lg border border-slate-100">
+                        <div className="text-xs text-slate-500 font-semibold mb-1 uppercase tracking-wide">Visible Tests</div>
+                        <div className="text-lg font-black text-slate-800">
+                          {candidateDetail.coding_round.latest_run.visible_results?.filter(r => r.passed).length || 0} <span className="text-slate-400 text-sm font-semibold">/ {candidateDetail.coding_round.latest_run.visible_results?.length || 0}</span>
+                        </div>
+                      </div>
+                      <div className="bg-slate-50 p-3 rounded-lg border border-slate-100">
+                        <div className="text-xs text-slate-500 font-semibold mb-1 uppercase tracking-wide">Hidden Tests</div>
+                        <div className="text-lg font-black text-slate-800">
+                          {candidateDetail.coding_round.latest_run.hidden_summary?.passed || 0} <span className="text-slate-400 text-sm font-semibold">/ {candidateDetail.coding_round.latest_run.hidden_summary?.total || 0}</span>
+                        </div>
                       </div>
                     </div>
-                  )}
-                </div>
-              )}
+                  </div>
+                ) : (
+                  <p className="text-sm text-slate-500 italic bg-white border border-slate-200 p-4 rounded-lg">No run results available.</p>
+                )}
+              </div>
+            </div>
+          )}
 
-            {/* Candidate Feedback (Always visible below tabs) */}
-            {candidateDetail?.candidate_feedback && (
-                <div className="bg-indigo-50/50 border border-indigo-100 rounded-xl p-5 relative mt-4 shadow-sm">
-                  <h4 className="text-[1rem] font-bold text-indigo-900 leading-snug mb-3 flex items-center gap-2">
-                    <i className="fas fa-comment-dots text-indigo-500"></i> Candidate Feedback
-                  </h4>
-                  <p className="text-[0.95rem] text-slate-700 leading-relaxed whitespace-pre-wrap bg-white border border-indigo-100/50 p-4 rounded-lg shadow-sm">
-                    {candidateDetail.candidate_feedback}
-                  </p>
+          {/* TAB CONTENT: Case Study Round Breakdown */}
+          {(activeTab === 'case_study' || isGeneratingPdf) && candidateDetail?.case_study_round?.scenario && (
+            <div className="bg-slate-50/50 border border-slate-200 rounded-xl p-5 relative overflow-hidden mt-2 avoid-break">
+              <h4 className="text-[1rem] font-bold text-slate-900 leading-snug mb-4 border-b border-slate-200 pb-3 flex items-center gap-2">
+                <i className="fas fa-briefcase text-amber-500"></i> Case Study Round
+              </h4>
+              <div className="mb-5">
+                <span className="text-[0.68rem] text-slate-500 font-bold uppercase tracking-wider block mb-2">Scenario</span>
+                <p className="text-[0.95rem] text-slate-700 leading-relaxed whitespace-pre-wrap bg-white border border-slate-200 p-4 rounded-lg">{candidateDetail.case_study_round.scenario}</p>
+              </div>
+
+              {candidateDetail.case_study_round.messages && candidateDetail.case_study_round.messages.length > 1 && (
+                <div>
+                  <span className="text-[0.68rem] text-slate-500 font-bold uppercase tracking-wider block mb-3">Conversation Transcript</span>
+                  <div className={`space-y-3 bg-white border border-slate-200 p-4 rounded-lg ${isGeneratingPdf ? '' : 'max-h-[400px] overflow-y-auto'}`}>
+                    {candidateDetail.case_study_round.messages.filter(m => m.role !== 'system').map((msg, i) => (
+                      <div key={i} className={`p-3 rounded-xl text-sm ${msg.role === 'user' ? 'bg-indigo-50 border-indigo-100 border text-indigo-900 ml-8 rounded-tr-sm' : 'bg-slate-50 border-slate-200 border text-slate-700 mr-8 rounded-tl-sm'}`}>
+                        <strong className={`block mb-1 text-[0.65rem] uppercase tracking-widest ${msg.role === 'user' ? 'text-indigo-400' : 'text-slate-400'}`}>
+                          {msg.role === 'user' ? 'Candidate' : 'Interviewer'}
+                        </strong>
+                        <div className="whitespace-pre-wrap leading-relaxed">{msg.content}</div>
+                      </div>
+                    ))}
+                  </div>
                 </div>
               )}
             </div>
-          </div>
-        )}
-      </Modal>
+          )}
+
+          {/* Candidate Feedback (Always visible below tabs) */}
+          {candidateDetail?.candidate_feedback && (
+            <div className="bg-indigo-50/50 border border-indigo-100 rounded-xl p-5 relative mt-4 shadow-sm avoid-break">
+              <h4 className="text-[1rem] font-bold text-indigo-900 leading-snug mb-3 flex items-center gap-2">
+                <i className="fas fa-comment-dots text-indigo-500"></i> Candidate Feedback
+              </h4>
+              <p className="text-[0.95rem] text-slate-700 leading-relaxed whitespace-pre-wrap bg-white border border-indigo-100/50 p-4 rounded-lg shadow-sm">
+                {candidateDetail.candidate_feedback}
+              </p>
+            </div>
+          )}
+        </div>
+      )}
+    </Modal>
   )
 }
 
