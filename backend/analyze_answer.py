@@ -139,6 +139,7 @@ Return VALID JSON ONLY:
                 time_context=time_context,
                 time_score_hint=time_score_hint,
             )
+            result_dict = result if isinstance(result, dict) else result.to_dict()
         else:
             # Direct fallback if typed_ai_layer not available
             content = chat_completion(
@@ -150,39 +151,47 @@ Return VALID JSON ONLY:
                 temperature=0.01,
                 timeout=45,
             )
-            result = extract_json(content)
-            if not result:
+            result_dict = extract_json(content)
+            if not result_dict:
                 raise Exception("No JSON found in AI response")
-
-        # ── Safety checks ──────────────────────────────────────────────────
-        word_count = len(answer.split())
-
-        # Very short answers (< 10 words): hard cap score
-        if word_count < 10 and result.get("overall_score", 0) > 25:
-            result["content_score"] = min(result.get("content_score", 0), 8)
-            result["relevance_score"] = min(result.get("relevance_score", 0), 5)
-            result["overall_score"] = (
-                result["content_score"]
-                + result.get("relevance_score", 0)
-                + result.get("time_score", 0)
-            )
-            if "too short" not in result.get("feedback", "").lower():
-                result["feedback"] = (
+            
+        # ── 1. Enforce Math & Guardrails ──
+        # Get raw values (AI often hallucinates the total sum)
+        content_s = int(result_dict.get("content_score", 0))
+        relevance_s = int(result_dict.get("relevance_score", 0))
+        time_s = int(result_dict.get("time_score", 0))
+        
+        # Guardrails against single-word hallucinations
+        if len(answer_words) < 5:
+            # An answer this short is fundamentally invalid
+            content_s = 0
+            relevance_s = 0
+            result_dict["feedback"] = "Answer is too short to evaluate. Please provide a full, detailed explanation."
+        elif len(answer_words) < 10:
+            content_s = min(content_s, 8)
+            relevance_s = min(relevance_s, 5)
+            if "too short" not in result_dict.get("feedback", "").lower():
+                result_dict["feedback"] = (
                     "Your answer was too short to evaluate meaningfully. "
                     "Please provide a detailed response. "
-                    + result.get("feedback", "")
+                    + result_dict.get("feedback", "")
                 )
+            
+        result_dict["content_score"] = content_s
+        result_dict["relevance_score"] = relevance_s
+        result_dict["time_score"] = time_s
+        
+        # STRICT OVERRIDE: overall_score MUST be the mathematical sum
+        result_dict["overall_score"] = min(100, max(0, content_s + relevance_s + time_s))
 
-        # Ensure overall_score is the sum of components (prevent AI hallucination)
-        computed = (
-            result.get("content_score", 0)
-            + result.get("relevance_score", 0)
-            + result.get("time_score", 0)
-        )
-        if abs(computed - result.get("overall_score", 0)) > 5:
-            result["overall_score"] = min(100, max(0, computed))
+        # Final constraints
+        for k in ["overall_score", "content_score", "clarity_score", "technical_depth_score", "confidence_score"]:
+            result_dict[k] = max(0, min(100, int(result_dict.get(k, 0))))
+        
+        result_dict["relevance_score"] = max(0, min(30, int(result_dict.get("relevance_score", 0))))
+        result_dict["time_score"] = max(0, min(20, int(result_dict.get("time_score", 0))))
 
-        return result
+        return result_dict
 
     except Exception as e:
         print(f"⚠️ Analysis API Failed: {e}")

@@ -636,12 +636,33 @@ def save_answer(
                 {"$set": {"scoring_status": "failed", "ai_score": 0}}
             )
 
-        # ── Post-scoring checks: Recalculate avg_score and trigger completion events if ready ──
+        # ── Post-scoring checks: Recalculate avg_score (composite) and trigger completion events if ready ──
         try:
             answers = list(answers_collection.find({"interview_id": interview_id}))
             scores = [a.get("ai_score", 0) for a in answers if a.get("ai_score") is not None]
-            avg_score = sum(scores) / len(scores) if scores else 0
-            
+            verbal_avg = sum(scores) / len(scores) if scores else 0
+
+            # ── Composite score: blend with coding / case study if present ──
+            try:
+                from score_rounds import compute_coding_score, compute_case_study_score, blend_scores
+                interview_row = interviews_collection.find_one({"id": interview_id})
+                interview_format = (interview_row or {}).get("interview_format", "Standard") if interview_row else "Standard"
+                coding_round_data = (interview_row or {}).get("coding_round") if interview_row else None
+                case_study_data   = (interview_row or {}).get("case_study_round") if interview_row else None
+
+                coding_s     = compute_coding_score(coding_round_data, interview_format, language) if coding_round_data else None
+                case_study_s = compute_case_study_score(case_study_data, context, language) if case_study_data else None
+                avg_score    = blend_scores(verbal_avg, coding_s, case_study_s)
+
+                if coding_s is not None:
+                    print(f"📊 Coding score: {coding_s}/100 (format={interview_format})")
+                if case_study_s is not None:
+                    print(f"📊 Case study score: {case_study_s}/100")
+                print(f"📊 Composite avg_score: {avg_score}/100 (verbal={verbal_avg:.1f})")
+            except Exception as blend_err:
+                print(f"⚠️ Composite blend error (falling back to verbal): {blend_err}")
+                avg_score = verbal_avg
+
             session = interview_sessions_collection.find_one({"interview_id": interview_id})
             if session:
                 interview_sessions_collection.update_one(
@@ -1377,6 +1398,59 @@ detected_accent (short string)."""
         }
 
 
+from pydantic import BaseModel
+class AgentFlowItem(BaseModel):
+    context_title: str
+    context_body: str
+    is_enabled: bool = True
+
+class UpdateAgentFlowRequest(BaseModel):
+    flow: List[AgentFlowItem]
+
+@router.get("/admin/agent-flow")
+def get_agent_flow():
+    from app.config import OMNI_DIMENSION_API_KEY, OMNI_AGENT_ID
+    import requests
+    if not OMNI_DIMENSION_API_KEY:
+        raise HTTPException(status_code=500, detail="OMNI_DIMENSION_API_KEY is not set.")
+    
+    agent_id = OMNI_AGENT_ID or 1
+    headers = {"Authorization": f"Bearer {OMNI_DIMENSION_API_KEY}"}
+    try:
+        res = requests.get(f"https://backend.omnidim.io/api/v1/agents/{agent_id}", headers=headers)
+        if res.status_code == 200:
+            data = res.json()
+            if "agent" in data:
+                return {"success": True, "flow": data["agent"].get("context_breakdown", [])}
+        return {"success": False, "detail": res.text, "flow": []}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+@router.put("/admin/agent-flow")
+def update_agent_flow(req: UpdateAgentFlowRequest):
+    from app.config import OMNI_DIMENSION_API_KEY, OMNI_AGENT_ID
+    import requests
+    if not OMNI_DIMENSION_API_KEY:
+        raise HTTPException(status_code=500, detail="OMNI_DIMENSION_API_KEY is not set.")
+    
+    agent_id = OMNI_AGENT_ID or 1
+    headers = {"Authorization": f"Bearer {OMNI_DIMENSION_API_KEY}", "Content-Type": "application/json"}
+    
+    # We only send the context_breakdown (conversational flow)
+    payload = {
+        "context_breakdown": [item.dict() for item in req.flow]
+    }
+    
+    try:
+        res = requests.put(f"https://backend.omnidim.io/api/v1/agents/{agent_id}", headers=headers, json=payload)
+        if res.status_code == 200:
+            return {"success": True, "message": "Agent flow updated successfully."}
+        else:
+            raise HTTPException(status_code=res.status_code, detail=res.text)
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
 @router.get("/admin/interview/{link_id}")
 def get_interview_details(link_id: str):
     # 1. Fetch session metadata
@@ -1493,11 +1567,30 @@ def get_interview_details(link_id: str):
                 "noise_alerts": noise_al
             })
 
-    # 2. Calculate or restore AI summary
+    # 2. Calculate composite AI summary score
     avg_score = 0
     if results:
         scores = [r["ai_score"] for r in results if r["ai_score"] is not None]
-        avg_score = round(sum(scores) / len(scores), 1) if scores else 0
+        verbal_avg = round(sum(scores) / len(scores), 1) if scores else 0
+
+        # Blend with coding / case study rounds if present
+        try:
+            from score_rounds import compute_coding_score, compute_case_study_score, blend_scores
+            interview_record_for_score = interviews_collection.find_one({"id": actual_interview_id}) if actual_interview_id else None
+            if interview_record_for_score:
+                interview_format_cs = interview_record_for_score.get("interview_format", "Standard")
+                lang_cs = interview_record_for_score.get("language", "English")
+                ctx_cs  = f"Candidate's {interview_record_for_score.get('source','Resume')}: {interview_record_for_score.get('profile_text','')}"
+                coding_rd  = interview_record_for_score.get("coding_round")
+                case_std   = interview_record_for_score.get("case_study_round")
+                coding_s   = compute_coding_score(coding_rd, interview_format_cs, lang_cs) if coding_rd else None
+                case_s     = compute_case_study_score(case_std, ctx_cs, lang_cs) if case_std else None
+                avg_score  = blend_scores(verbal_avg, coding_s, case_s)
+            else:
+                avg_score = verbal_avg
+        except Exception as blend_err:
+            print(f"⚠️ complete-session blend error: {blend_err}")
+            avg_score = verbal_avg
 
     # Use cached values if available, else generate
     if saved_rec and saved_comm is not None and saved_skills is not None:

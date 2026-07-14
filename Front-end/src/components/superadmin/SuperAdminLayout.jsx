@@ -21,7 +21,8 @@ import {
   Activity,
   AlertCircle,
   PhoneCall,
-  Briefcase
+  Briefcase,
+  MessageSquare
 } from 'lucide-react'
 import logoImage from '../../assets/logo.png'
 import { logout, loadSuperAdminProfile } from '../../store/slices/authSlice'
@@ -405,6 +406,7 @@ export default function SuperAdminLayout() {
     { id: 'rejected', label: 'Rejected Candidates', icon: XCircle, path: '/superadmin/rejected-candidates' },
     { id: 'create', label: 'Create Interview', icon: Plus, path: '/superadmin/create-interview' },
     { id: 'ai-calling', label: 'AI Calling Agent', icon: Radio, path: '/superadmin/ai-calling' },
+    { id: 'conversational-flow', label: 'Conversational Flow', icon: MessageSquare, path: '/superadmin/conversational-flow' },
     { id: 'jobs', label: 'Jobs', icon: Briefcase, path: '/superadmin/jobs' },
     { id: 'settings', label: 'Profile Settings', icon: Settings, path: '/superadmin/profile-settings' },
   ]

@@ -13,6 +13,8 @@ import {
   BarChart2,
   ChevronLeft,
   ChevronRight,
+  MessageSquare,
+  Briefcase,
 } from 'lucide-react'
 import logoImage from '../assets/logo.png'
 
@@ -32,8 +34,10 @@ export default function SuperAdminSidebar({
     { id: 'dashboard', label: 'Overview Dashboard', icon: LayoutDashboard },
     { id: 'qualified', label: 'Qualified Candidates', icon: CheckCircle },
     { id: 'rejected', label: 'Rejected Candidates', icon: XCircle },
-    { id: 'create', label: 'Create Interview', icon: Plus },
-    { id: 'ai-calling', label: 'AI Calling Agent', icon: Radio },
+    { id: 'create', label: 'Create Interview', icon: Plus, path: '/superadmin/create-interview' },
+    { id: 'ai-calling', label: 'AI Calling Agent', icon: Radio, path: '/superadmin/ai-calling' },
+    { id: 'conversational-flow', label: 'Conversational Flow', icon: MessageSquare, path: '/superadmin/conversational-flow' },
+    { id: 'jobs', label: 'Jobs', icon: Briefcase, path: '/superadmin/jobs' },
     { id: 'settings', label: 'Profile Settings', icon: Settings },
   ]
 
