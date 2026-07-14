@@ -59,33 +59,35 @@ export default function JobApplicationModal({ job, onClose }) {
 
   const handleSubmit = async (e) => {
     e.preventDefault();
-    if (!resumeFile) {
-      setError('Please upload your resume.');
-      return;
-    }
-    
     setSubmitting(true);
     setError('');
 
     try {
-      // In a real scenario, job.job_id is from the backend. 
-      // If the job only has an id from local storage, we pass that.
-      const jobIdToUse = job.job_id || job.id; 
-      
-      const payload = new FormData();
-      payload.append('name', formData.name);
-      payload.append('email', formData.email);
-      payload.append('phone', formData.phone);
-      payload.append('linkedin_url', formData.linkedin_url);
-      payload.append('resume', resumeFile);
+      // Always use the MongoDB job_id field; never fall back to a local numeric id
+      const jobIdToUse = job.job_id;
+      if (!jobIdToUse) {
+        setError('This job has no valid ID. Please re-open the job from the Jobs page.');
+        setSubmitting(false);
+        return;
+      }
 
-      await axios.post(`${API_BASE_URL}/api/public/jobs/${jobIdToUse}/apply`, payload, {
-        headers: { 'Content-Type': 'multipart/form-data' }
-      });
+      // Send JSON body matching the backend JobApplicationCreate schema
+      await axios.post(
+        `${API_BASE_URL}/api/public/jobs/${jobIdToUse}/apply`,
+        {
+          name: formData.name,
+          email: formData.email,
+          phone: formData.phone,
+          resume_url: resumeFile ? resumeFile.name : '',
+          linkedin_url: formData.linkedin_url,
+          cover_letter: '',
+        },
+        { headers: { 'Content-Type': 'application/json' } }
+      );
       setSubmitted(true);
     } catch (err) {
       console.error("Application error:", err);
-      setError(err.response?.data?.detail || 'Failed to submit application. Ensure this job exists in the backend.');
+      setError(err.response?.data?.detail || 'Failed to submit application. Please try again.');
     } finally {
       setSubmitting(false);
     }

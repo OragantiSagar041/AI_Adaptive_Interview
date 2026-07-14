@@ -499,6 +499,70 @@ def upload_answer(
     # Return 501 Not Implemented instead of causing syntax or runtime errors.
     raise HTTPException(status_code=501, detail="Upload answer with video is not implemented yet.")
 
+def sync_session_to_application(link_id: str):
+    try:
+        session = interview_sessions_collection.find_one({"link_id": link_id})
+        if not session:
+            return
+            
+        app_id = session.get("application_id")
+        candidate_email = session.get("candidate_email")
+        company_id = session.get("company_id")
+        
+        app_record = None
+        if app_id:
+            from bson import ObjectId
+            try:
+                app_record = job_applications_collection.find_one({"_id": ObjectId(app_id)})
+            except:
+                pass
+                
+        if not app_record and candidate_email and company_id:
+            jobs = list(jobs_collection.find({"company_id": company_id}))
+            job_ids = [j.get("job_id") for j in jobs if j.get("job_id")]
+            app_record = job_applications_collection.find_one({
+                "email": {"$regex": f"^{candidate_email.strip()}$", "$options": "i"},
+                "job_id": {"$in": job_ids}
+            })
+            
+        if app_record:
+            avg_score = session.get("avg_score")
+            if avg_score is None:
+                interview_id = session.get("interview_id")
+                if interview_id:
+                    answers = list(answers_collection.find({"interview_id": interview_id}))
+                    scores = [a.get("ai_score", 0) for a in answers if a.get("ai_score") is not None]
+                    avg_score = round(sum(scores) / len(scores), 1) if scores else 0.0
+                    
+            strengths = session.get("strengths_summary") or ""
+            weaknesses = session.get("weaknesses_summary") or ""
+            feedback = ""
+            if strengths or weaknesses:
+                feedback = f"Strengths:\n{strengths}\n\nWeaknesses:\n{weaknesses}"
+                
+            update_fields = {
+                "hireiq_interview_status": session.get("status") or "completed",
+                "hireiq_score": avg_score or 0.0,
+                "hireiq_feedback": feedback,
+                "hireiq_recommendation": session.get("overall_recommendation") or "No recommendation",
+                "hireiq_completion_time": session.get("updated_at") or session.get("created_at") or datetime.now(timezone.utc).isoformat(),
+                "hireiq_final_result": session.get("decision") or "pending"
+            }
+            
+            if session.get("status") == "completed":
+                if avg_score is not None:
+                    update_fields["score"] = avg_score
+                if session.get("decision"):
+                    update_fields["decision"] = session["decision"]
+                    
+            job_applications_collection.update_one(
+                {"_id": app_record["_id"]},
+                {"$set": update_fields}
+            )
+            print(f"✅ Synced HireIQ interview {link_id} status to application {app_record['_id']}.")
+    except Exception as e:
+        print(f"⚠️ Error syncing interview to application: {e}")
+
 @router.get("/interview/{interview_id}/summary")
 def get_interview_summary(interview_id: str):
     """Get a summary of the interview including all questions and answers."""
@@ -669,6 +733,7 @@ def save_answer(
                     {"_id": session["_id"]},
                     {"$set": {"avg_score": round(avg_score, 1)}}
                 )
+                sync_session_to_application(session.get("link_id"))
                 
                 # If session is completed, check if all answers are now scored
                 if session.get("status") == "completed" and not session.get("notification_sent"):
@@ -686,6 +751,7 @@ def save_answer(
                                 "notification_sent": True
                             }}
                         )
+                        sync_session_to_application(session.get("link_id"))
 
                         # Send notification!
                         link_id = session.get("link_id")
@@ -1453,6 +1519,129 @@ def update_agent_flow(req: UpdateAgentFlowRequest):
 
 @router.get("/admin/interview/{link_id}")
 def get_interview_details(link_id: str):
+    if link_id.startswith("ai_call_"):
+        # This is an AI Call Mock Session!
+        app_id = link_id.replace("ai_call_", "")
+        from bson import ObjectId
+        try:
+            app = job_applications_collection.find_one({"_id": ObjectId(app_id)})
+        except Exception:
+            app = None
+        if not app:
+            # Fallback search by omni_call_id
+            app = job_applications_collection.find_one({"omni_call_id": app_id})
+        if not app:
+            raise HTTPException(status_code=404, detail="AI Call candidate not found")
+            
+        interactions = app.get("omni_call_details", {}).get("interactions", [])
+        answers = []
+        if interactions:
+            for idx, interaction in enumerate(interactions):
+                speaker = interaction.get("speaker", "Bot")
+                text = interaction.get("text", "")
+                answers.append({
+                    "question_id": idx + 1,
+                    "question_text": f"Segment {idx + 1} ({speaker})",
+                    "answer_text": text,
+                    "ai_score": app.get("score") or 0.0,
+                    "content_score": app.get("score") or 0.0,
+                    "relevance_score": app.get("score") or 0.0,
+                    "time_score": 100,
+                    "time_spent_seconds": 0,
+                    "time_limit_seconds": 60,
+                    "ai_feedback": "Outbound AI Call interaction.",
+                    "corrected_answer": "N/A",
+                    "wpm": 0.0,
+                    "pause_count": 0,
+                    "filler_count": 0,
+                    "keyword_match_pct": 0.0,
+                    "tab_switches": 0,
+                    "face_alerts": 0,
+                    "noise_alerts": 0,
+                    "behavioral_stats": {
+                        "filler_words_count": 0,
+                        "pauses_count": 0,
+                        "face_not_visible_count": 0
+                    }
+                })
+        elif app.get("transcript"):
+            lines = app.get("transcript", "").split("\n")
+            for idx, line in enumerate(lines):
+                if not line.strip():
+                    continue
+                speaker = "Bot"
+                text = line
+                if ":" in line:
+                    parts = line.split(":", 1)
+                    speaker = parts[0].strip()
+                    text = parts[1].strip()
+                answers.append({
+                    "question_id": idx + 1,
+                    "question_text": f"Segment {idx + 1} ({speaker})",
+                    "answer_text": text,
+                    "ai_score": app.get("score") or 0.0,
+                    "content_score": app.get("score") or 0.0,
+                    "relevance_score": app.get("score") or 0.0,
+                    "time_score": 100,
+                    "time_spent_seconds": 0,
+                    "time_limit_seconds": 60,
+                    "ai_feedback": "Outbound AI Call interaction.",
+                    "corrected_answer": "N/A",
+                    "wpm": 0.0,
+                    "pause_count": 0,
+                    "filler_count": 0,
+                    "keyword_match_pct": 0.0,
+                    "tab_switches": 0,
+                    "face_alerts": 0,
+                    "noise_alerts": 0,
+                    "behavioral_stats": {
+                        "filler_words_count": 0,
+                        "pauses_count": 0,
+                        "face_not_visible_count": 0
+                    }
+                })
+
+        # Mock dimensions
+        score = app.get("score") or 0.0
+        response_payload = {
+            "interview_id": link_id,
+            "actual_interview_id": "mock_ai_call",
+            "candidate_id": f"CAN{str(app['_id'])[:4].upper()}",
+            "candidate_name": app.get("name") or "Candidate",
+            "candidate_email": app.get("email") or "",
+            "date": app.get("applied_at") or app.get("updated_at"),
+            "source": "AI Calling Agent",
+            "avg_score": score,
+            "overall_recommendation": app.get("interest") or "Interested",
+            "strengths_summary": "Marked as Interested during outbound AI call.",
+            "weaknesses_summary": "N/A",
+            "communication_score": score,
+            "communication_reasoning": "Communication assessed via outbound AI calling agent.",
+            "skills_score": score,
+            "skills_reasoning": "Skills assessed via outbound AI calling agent.",
+            "competencies_score": score,
+            "competencies_reasoning": "N/A",
+            "personality_score": score,
+            "personality_reasoning": "N/A",
+            "culture_fit_score": score,
+            "culture_fit_reasoning": "N/A",
+            "job_success_score": score,
+            "job_success_reasoning": "N/A",
+            "detected_accent": "English",
+            "recording_url": app.get("omni_call_details", {}).get("recording_url"),
+            "screen_recording_url": None,
+            "completion_reason": "normal",
+            "integrity": {
+                "total_tab_switches": 0,
+                "total_face_alerts": 0,
+                "total_noise_alerts": 0,
+                "total_time_minutes": 0.0
+            },
+            "alerts": [],
+            "answers": answers
+        }
+        return response_payload
+
     # 1. Fetch session metadata
     session_data = interview_sessions_collection.find_one({"link_id": link_id})
     if not session_data:
@@ -1656,6 +1845,7 @@ def get_interview_details(link_id: str):
                 )
             except Exception as e:
                 print(f"Summary cache error: {e}")
+            sync_session_to_application(link_id)
 
     response_payload = {
         "interview_id": link_id,
@@ -2176,7 +2366,7 @@ async def get_dashboard_stats(admin_id: Optional[str] = None, current_admin: dic
             
         all_sessions = list(interview_sessions_collection.find(
             query,
-            {"created_at": 1, "status": 1, "decision": 1, "avg_score": 1, "is_deactivated": 1, "expires_at": 1, "created_by": 1}
+            {"created_at": 1, "status": 1, "decision": 1, "avg_score": 1, "is_deactivated": 1, "expires_at": 1, "created_by": 1, "candidate_email": 1, "email": 1}
         ))
         now = datetime.now(timezone.utc)
         
@@ -2193,9 +2383,15 @@ async def get_dashboard_stats(admin_id: Optional[str] = None, current_admin: dic
         today_count = 0
         week_count = 0
         
+        seen_emails = set()
+        
         for s in all_sessions:
             if s.get("is_deactivated", False):
                 continue
+                
+            email = s.get("candidate_email") or s.get("email")
+            if email:
+                seen_emails.add(email.strip().lower())
                 
             status = s.get("status", "pending")
             if status == "pending" and s.get("expires_at"):
@@ -2249,6 +2445,54 @@ async def get_dashboard_stats(admin_id: Optional[str] = None, current_admin: dic
                     week_count += 1
             except Exception:
                 pass
+                
+        # Merge stats from AI Calling interested candidates
+        try:
+            jobs_query = {"company_id": current_admin.get("company_id")}
+            if current_admin.get("role") == "admin":
+                jobs_query["admin_id"] = current_admin["admin_id"]
+            elif admin_id:
+                jobs_query["admin_id"] = admin_id
+            jobs = list(jobs_collection.find(jobs_query))
+            job_ids = [j.get("job_id") for j in jobs if j.get("job_id")]
+            
+            app_query = {
+                "job_id": {"$in": job_ids},
+                "interest": {"$regex": "interested", "$options": "i"}
+            }
+            apps = list(job_applications_collection.find(app_query, {"email": 1, "score": 1, "applied_at": 1, "updated_at": 1}))
+            
+            for app in apps:
+                email = app.get("email")
+                if email:
+                    email_lower = email.strip().lower()
+                    if email_lower in seen_emails:
+                        continue
+                    seen_emails.add(email_lower)
+                
+                total += 1
+                completed += 1
+                selected += 1
+                
+                score = app.get("score")
+                if score is not None:
+                    total_score += score
+                    scored_count += 1
+                    
+                try:
+                    created_str = app.get("applied_at") or app.get("updated_at")
+                    if created_str:
+                        created = datetime.fromisoformat(created_str.replace('Z', '+00:00'))
+                        if created.tzinfo is None:
+                            created = created.replace(tzinfo=timezone.utc)
+                        if created.date() == now.date():
+                            today_count += 1
+                        if (now - created).days <= 7:
+                            week_count += 1
+                except Exception:
+                    pass
+        except Exception as e:
+            print(f"Error merging AI Calling stats: {e}")
         
         avg_score = round(total_score / scored_count, 1) if scored_count > 0 else 0
         
@@ -2836,7 +3080,9 @@ def create_session(data: CreateSession, current_admin: dict = Depends(get_curren
         "case_study_count": data.case_study_count,
         "industry": data.industry,
         "voice_clone": data.voice_clone,
-        "custom_voice_id": data.custom_voice_id
+        "custom_voice_id": data.custom_voice_id,
+        "application_id": data.application_id,
+        "candidate_phone": data.candidate_phone
     }
     
     # Task 4: Store scheduled time window
@@ -3693,6 +3939,33 @@ def log_proctoring_violation(data: ProctoringViolationRequest):
 def update_decision(data: DecisionRequest, current_admin: dict = Depends(require_role("admin", "super_admin"))):
     print(f" Decision Update Request: link_id={data.link_id}, decision={data.decision}")
     try:
+        if data.link_id.startswith("ai_call_"):
+            app_id = data.link_id.replace("ai_call_", "")
+            from bson import ObjectId
+            try:
+                app = job_applications_collection.find_one({"_id": ObjectId(app_id)})
+            except Exception:
+                app = None
+            if not app:
+                app = job_applications_collection.find_one({"omni_call_id": app_id})
+            if not app:
+                raise HTTPException(status_code=404, detail="AI Call candidate not found")
+                
+            job_applications_collection.update_one({"_id": app["_id"]}, {"$set": {"decision": data.decision}})
+            
+            name = app.get("name") or "Candidate"
+            email = app.get("email")
+            jd = app.get("job_description") or ""
+            
+            load_dotenv(override=True)
+            email_sent = False
+            email_reason = "No candidate email found"
+            if email:
+                email_sent = send_decision_email(email, name, data.decision, jd)
+                email_reason = "Success" if email_sent else "Email service error (Brevo API failed)"
+            
+            return {"status": "success", "decision": data.decision, "email_sent": email_sent, "email_reason": email_reason}
+
         # 1. Fetch candidate details for email
         row = interview_sessions_collection.find_one({"link_id": data.link_id})
         if not row:
@@ -4128,6 +4401,7 @@ def complete_session(link_id: str, payload: Optional[CompleteSessionRequest] = N
                 update_data["candidate_id"] = f"{candidate_id}IQ"
                 
         interview_sessions_collection.update_one({"link_id": link_id}, {"$set": update_data})
+        sync_session_to_application(link_id)
         
         # Task 3: Trigger submission logic IF all answers are scored.
         # Otherwise, the background scoring thread will trigger this later.
@@ -4152,6 +4426,7 @@ def complete_session(link_id: str, payload: Optional[CompleteSessionRequest] = N
                                 "notification_sent": True
                             }}
                         )
+                        sync_session_to_application(link_id)
                         
                         candidate_name = session.get("candidate_name", "Candidate")
                         candidate_email = session.get("candidate_email", "")
@@ -5939,11 +6214,66 @@ async def get_dashboard_aggregated_data(admin_id: Optional[str] = None, current_
             c_query_filter["created_by"] = admin_id
             
         candidates_cursor = list(interview_sessions_collection.find(c_query_filter).sort("created_at", -1))
+        
+        # Get AI Calling interested candidates
+        apps = []
+        try:
+            jobs_query = {"company_id": current_admin.get("company_id")}
+            if current_admin.get("role") == "admin":
+                jobs_query["admin_id"] = current_admin["admin_id"]
+            elif admin_id:
+                jobs_query["admin_id"] = admin_id
+            jobs = list(jobs_collection.find(jobs_query))
+            job_ids = [j.get("job_id") for j in jobs if j.get("job_id")]
+            
+            app_query = {
+                "job_id": {"$in": job_ids},
+                "$or": [
+                    {"interest": {"$regex": "interested", "$options": "i"}},
+                    {"decision": {"$in": ["selected", "rejected"]}}
+                ]
+            }
+            apps = list(job_applications_collection.find(app_query))
+        except Exception as e:
+            print(f"Error fetching AI Calling candidates: {e}")
+            
+        seen_emails = set()
         candidates_list = []
         for c in candidates_cursor:
+            email = c.get("candidate_email") or c.get("email")
+            if email:
+                seen_emails.add(email.strip().lower())
             c["id"] = str(c["_id"])
             c["_id"] = str(c["_id"])
             candidates_list.append(c)
+            
+        for app in apps:
+            email = app.get("email")
+            if email:
+                email_lower = email.strip().lower()
+                if email_lower in seen_emails:
+                    continue
+                seen_emails.add(email_lower)
+            
+            app_id = str(app.get("_id"))
+            score = app.get("score") or 0.0
+            mock_session = {
+                "id": f"ai_call_{app_id}",
+                "_id": f"ai_call_{app_id}",
+                "link_id": f"ai_call_{app_id}",
+                "candidate_name": app.get("name") or "Candidate",
+                "candidate_email": app.get("email") or "",
+                "candidate_phone": app.get("phone") or "",
+                "interview_title": app.get("job_title") or "AI Calling Profile",
+                "score": score,
+                "avg_score": score,
+                "created_at": app.get("applied_at") or app.get("updated_at") or datetime.now(timezone.utc).isoformat(),
+                "decision": app.get("decision") or "selected",
+                "status": "completed",
+                "application_id": app_id,
+                "is_deactivated": False
+            }
+            candidates_list.append(mock_session)
         live_sessions = []
         ongoing_monitored_count = 0
         ongoing_live_count = 0
@@ -6152,6 +6482,143 @@ def update_credit_request_alias(request_id: str, data: UpdateCreditRequestSchema
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 
+@router.get("/api/admin/candidates/qualified")
+def get_admin_qualified(pipeline: Optional[str] = "all", current_admin: dict = Depends(get_current_admin_details)):
+    if current_admin.get("role") not in ["admin"]:
+        raise HTTPException(status_code=403, detail="Admin access required")
+        
+    admin_id = current_admin["admin_id"]
+    company_id = current_admin.get("company_id")
+    
+    sessions = []
+    if pipeline in ["all", "hireiq"]:
+        query = {"company_id": company_id, "decision": "selected", "created_by": admin_id}
+        sessions = list(interview_sessions_collection.find(query).sort("created_at", -1))
+        
+    apps = []
+    if pipeline in ["all", "ai_calling"]:
+        try:
+            jobs_query = {"company_id": company_id, "admin_id": admin_id}
+            jobs = list(jobs_collection.find(jobs_query))
+            job_ids = [j.get("job_id") for j in jobs if j.get("job_id")]
+            
+            app_query = {
+                "job_id": {"$in": job_ids},
+                "interest": {"$regex": "interested", "$options": "i"},
+                "decision": {"$ne": "rejected"}
+            }
+            apps = list(job_applications_collection.find(app_query))
+        except Exception as e:
+            print(f"Error fetching AI Calling candidates for admin qualified: {e}")
+            
+    seen_emails = set()
+    merged_list = []
+    for s in sessions:
+        email = s.get("candidate_email") or s.get("email")
+        if email:
+            seen_emails.add(email.strip().lower())
+        s["id"] = str(s["_id"])
+        s["_id"] = str(s["_id"])
+        merged_list.append(s)
+        
+    for app in apps:
+        email = app.get("email")
+        if email:
+            email_lower = email.strip().lower()
+            if email_lower in seen_emails:
+                continue
+            seen_emails.add(email_lower)
+            
+        app_id = str(app.get("_id"))
+        score = app.get("score") or 0.0
+        mock_session = {
+            "id": f"ai_call_{app_id}",
+            "_id": f"ai_call_{app_id}",
+            "link_id": f"ai_call_{app_id}",
+            "candidate_name": app.get("name") or "Candidate",
+            "candidate_email": app.get("email") or "",
+            "candidate_phone": app.get("phone") or "",
+            "interview_title": app.get("job_title") or "AI Calling Profile",
+            "score": score,
+            "avg_score": score,
+            "created_at": app.get("applied_at") or app.get("updated_at") or datetime.now(timezone.utc).isoformat(),
+            "decision": "selected",
+            "status": "completed",
+            "application_id": app_id,
+            "is_deactivated": False
+        }
+        merged_list.append(mock_session)
+        
+    return merged_list
+
+@router.get("/api/admin/candidates/rejected")
+def get_admin_rejected(pipeline: Optional[str] = "all", current_admin: dict = Depends(get_current_admin_details)):
+    if current_admin.get("role") not in ["admin"]:
+        raise HTTPException(status_code=403, detail="Admin access required")
+        
+    admin_id = current_admin["admin_id"]
+    company_id = current_admin.get("company_id")
+    
+    sessions = []
+    if pipeline in ["all", "hireiq"]:
+        query = {"company_id": company_id, "decision": "rejected", "created_by": admin_id}
+        sessions = list(interview_sessions_collection.find(query).sort("created_at", -1))
+        
+    apps = []
+    if pipeline in ["all", "ai_calling"]:
+        try:
+            jobs_query = {"company_id": company_id, "admin_id": admin_id}
+            jobs = list(jobs_collection.find(jobs_query))
+            job_ids = [j.get("job_id") for j in jobs if j.get("job_id")]
+            
+            app_query = {
+                "job_id": {"$in": job_ids},
+                "decision": "rejected"
+            }
+            apps = list(job_applications_collection.find(app_query))
+        except Exception as e:
+            print(f"Error fetching AI Calling rejected candidates for admin: {e}")
+            
+    seen_emails = set()
+    merged_list = []
+    for s in sessions:
+        email = s.get("candidate_email") or s.get("email")
+        if email:
+            seen_emails.add(email.strip().lower())
+        s["id"] = str(s["_id"])
+        s["_id"] = str(s["_id"])
+        merged_list.append(s)
+        
+    for app in apps:
+        email = app.get("email")
+        if email:
+            email_lower = email.strip().lower()
+            if email_lower in seen_emails:
+                continue
+            seen_emails.add(email_lower)
+            
+        app_id = str(app.get("_id"))
+        score = app.get("score") or 0.0
+        mock_session = {
+            "id": f"ai_call_{app_id}",
+            "_id": f"ai_call_{app_id}",
+            "link_id": f"ai_call_{app_id}",
+            "candidate_name": app.get("name") or "Candidate",
+            "candidate_email": app.get("email") or "",
+            "candidate_phone": app.get("phone") or "",
+            "interview_title": app.get("job_title") or "AI Calling Profile",
+            "score": score,
+            "avg_score": score,
+            "created_at": app.get("applied_at") or app.get("updated_at") or datetime.now(timezone.utc).isoformat(),
+            "decision": "rejected",
+            "status": "completed",
+            "application_id": app_id,
+            "is_deactivated": False
+        }
+        merged_list.append(mock_session)
+        
+    return merged_list
+
 # ─── SuperAdmin APIs ─────────────────────────────────
 
 @router.get("/api/superadmin/dashboard")
@@ -6163,31 +6630,146 @@ async def superadmin_dashboard(adminId: Optional[str] = None, current_admin: dic
 
 @router.get("/api/superadmin/candidates/qualified")
 @router.get("/superadmin/candidates/qualified")
-def get_superadmin_qualified(adminId: Optional[str] = None, current_admin: dict = Depends(get_current_admin_details)):
+def get_superadmin_qualified(adminId: Optional[str] = None, pipeline: Optional[str] = "all", current_admin: dict = Depends(get_current_admin_details)):
     if current_admin.get("role") not in ["super_admin", "master"]:
         raise HTTPException(status_code=403, detail="Super Admin access required")
-    query = {"company_id": current_admin.get("company_id"), "decision": "selected"}
-    if adminId:
-        query["created_by"] = adminId
-    sessions = list(interview_sessions_collection.find(query).sort("created_at", -1))
+    
+    sessions = []
+    if pipeline in ["all", "hireiq"]:
+        query = {"company_id": current_admin.get("company_id"), "decision": "selected"}
+        if adminId:
+            query["created_by"] = adminId
+        sessions = list(interview_sessions_collection.find(query).sort("created_at", -1))
+    
+    # Get AI Calling interested candidates
+    apps = []
+    if pipeline in ["all", "ai_calling"]:
+        try:
+            jobs_query = {"company_id": current_admin.get("company_id")}
+            if adminId:
+                jobs_query["admin_id"] = adminId
+            jobs = list(jobs_collection.find(jobs_query))
+            job_ids = [j.get("job_id") for j in jobs if j.get("job_id")]
+            
+            app_query = {
+                "job_id": {"$in": job_ids},
+                "interest": {"$regex": "interested", "$options": "i"},
+                "decision": {"$ne": "rejected"}
+            }
+            apps = list(job_applications_collection.find(app_query))
+        except Exception as e:
+            print(f"Error fetching AI Calling candidates for superadmin qualified: {e}")
+        
+    seen_emails = set()
+    merged_list = []
     for s in sessions:
+        email = s.get("candidate_email") or s.get("email")
+        if email:
+            seen_emails.add(email.strip().lower())
         s["id"] = str(s["_id"])
         s["_id"] = str(s["_id"])
-    return sessions
+        merged_list.append(s)
+        
+    for app in apps:
+        email = app.get("email")
+        if email:
+            email_lower = email.strip().lower()
+            if email_lower in seen_emails:
+                continue
+            seen_emails.add(email_lower)
+            
+        app_id = str(app.get("_id"))
+        score = app.get("score") or 0.0
+        mock_session = {
+            "id": f"ai_call_{app_id}",
+            "_id": f"ai_call_{app_id}",
+            "link_id": f"ai_call_{app_id}",
+            "candidate_name": app.get("name") or "Candidate",
+            "candidate_email": app.get("email") or "",
+            "candidate_phone": app.get("phone") or "",
+            "interview_title": app.get("job_title") or "AI Calling Profile",
+            "score": score,
+            "avg_score": score,
+            "created_at": app.get("applied_at") or app.get("updated_at") or datetime.now(timezone.utc).isoformat(),
+            "decision": "selected",
+            "status": "completed",
+            "application_id": app_id,
+            "is_deactivated": False
+        }
+        merged_list.append(mock_session)
+        
+    return merged_list
 
 @router.get("/api/superadmin/candidates/rejected")
 @router.get("/superadmin/candidates/rejected")
-def get_superadmin_rejected(adminId: Optional[str] = None, current_admin: dict = Depends(get_current_admin_details)):
+def get_superadmin_rejected(adminId: Optional[str] = None, pipeline: Optional[str] = "all", current_admin: dict = Depends(get_current_admin_details)):
     if current_admin.get("role") not in ["super_admin", "master"]:
         raise HTTPException(status_code=403, detail="Super Admin access required")
-    query = {"company_id": current_admin.get("company_id"), "decision": "rejected"}
-    if adminId:
-        query["created_by"] = adminId
-    sessions = list(interview_sessions_collection.find(query).sort("created_at", -1))
+    
+    sessions = []
+    if pipeline in ["all", "hireiq"]:
+        query = {"company_id": current_admin.get("company_id"), "decision": "rejected"}
+        if adminId:
+            query["created_by"] = adminId
+        sessions = list(interview_sessions_collection.find(query).sort("created_at", -1))
+    
+    # Get AI Calling rejected candidates
+    apps = []
+    if pipeline in ["all", "ai_calling"]:
+        try:
+            jobs_query = {"company_id": current_admin.get("company_id")}
+            if adminId:
+                jobs_query["admin_id"] = adminId
+            jobs = list(jobs_collection.find(jobs_query))
+            job_ids = [j.get("job_id") for j in jobs if j.get("job_id")]
+            
+            app_query = {
+                "job_id": {"$in": job_ids},
+                "decision": "rejected"
+            }
+            apps = list(job_applications_collection.find(app_query))
+        except Exception as e:
+            print(f"Error fetching AI Calling rejected candidates: {e}")
+        
+    seen_emails = set()
+    merged_list = []
     for s in sessions:
+        email = s.get("candidate_email") or s.get("email")
+        if email:
+            seen_emails.add(email.strip().lower())
         s["id"] = str(s["_id"])
         s["_id"] = str(s["_id"])
-    return sessions
+        merged_list.append(s)
+        
+    for app in apps:
+        email = app.get("email")
+        if email:
+            email_lower = email.strip().lower()
+            if email_lower in seen_emails:
+                continue
+            seen_emails.add(email_lower)
+            
+        app_id = str(app.get("_id"))
+        score = app.get("score") or 0.0
+        mock_session = {
+            "id": f"ai_call_{app_id}",
+            "_id": f"ai_call_{app_id}",
+            "link_id": f"ai_call_{app_id}",
+            "candidate_name": app.get("name") or "Candidate",
+            "candidate_email": app.get("email") or "",
+            "candidate_phone": app.get("phone") or "",
+            "interview_title": app.get("job_title") or "AI Calling Profile",
+            "score": score,
+            "avg_score": score,
+            "created_at": app.get("applied_at") or app.get("updated_at") or datetime.now(timezone.utc).isoformat(),
+            "decision": "rejected",
+            "status": "completed",
+            "application_id": app_id,
+            "is_deactivated": False
+        }
+        merged_list.append(mock_session)
+        
+    return merged_list
 
 @router.post("/api/superadmin/interview/create")
 @router.post("/superadmin/interview/create")
@@ -6335,18 +6917,18 @@ async def voice_clone_instant(audio: UploadFile = File(...), voice_name: Optiona
 
         def _do_clone():
             client = Cartesia(api_key=api_key)
-            # 1. Clone the embedding from the clip
-            embedding = client.voices.clone(filepath=temp_audio)
-            # 2. Create the actual voice object so we get an ID
-            new_voice = client.voices.create(
-                name=voice_name or "CandidateVoice",
-                description="Auto-cloned from interview voice sample",
-                embedding=embedding
-            )
+            # Clone the voice from the clip; voices.clone() returns VoiceMetadata directly
+            with open(temp_audio, "rb") as clip_file:
+                new_voice = client.voices.clone(
+                    clip=clip_file,
+                    name=voice_name or "CandidateVoice",
+                    language="en",
+                    description="Auto-cloned from interview voice sample",
+                )
             return new_voice
 
         new_voice_data = await asyncio.get_event_loop().run_in_executor(None, _do_clone)
-        voice_id = new_voice_data.get("id")
+        voice_id = new_voice_data.id
         
         if not voice_id:
             raise Exception("No voice ID returned from Cartesia.")
@@ -6574,6 +7156,8 @@ async def initiate_manual_ai_call(
     job_description: Optional[str] = Form(""),
     duration: Optional[int] = Form(30),
     skills: Optional[str] = Form(""),
+    job_id: Optional[str] = Form(None),
+    application_id: Optional[str] = Form(None),
     resume: UploadFile = File(None)
 ):
     """
@@ -6590,6 +7174,25 @@ async def initiate_manual_ai_call(
         if resume and resume.filename:
             file_content = await resume.read()
             resume_text = extract_text_from_file(file_content, resume.filename)
+        elif application_id:
+            from bson import ObjectId
+            import os
+            try:
+                app_doc = job_applications_collection.find_one({"_id": ObjectId(application_id)})
+                if app_doc:
+                    resume_text = app_doc.get("resume_text") or ""
+                    if not resume_text and app_doc.get("resume_url"):
+                        r_url = app_doc.get("resume_url")
+                        if os.path.exists(r_url):
+                            with open(r_url, "rb") as f:
+                                resume_text = extract_text_from_file(f.read(), r_url)
+                                if resume_text:
+                                    job_applications_collection.update_one(
+                                        {"_id": ObjectId(application_id)},
+                                        {"$set": {"resume_text": resume_text}}
+                                    )
+            except Exception as e:
+                print(f"Error loading resume in manual AI call: {e}")
             
         response = omni_dimension_client.start_omni_call(
             phone_number=phone_number,
@@ -6610,11 +7213,73 @@ async def initiate_manual_ai_call(
             "status": "initiated",
             "duration": "0m 0s",
             "recording_url": None,
+            "job_id": job_id,
+            "application_id": application_id,
             "created_at": datetime.now(timezone.utc).isoformat()
         })
         
-        # We don't have a session to attach this to, so we just return it. 
-        # In the future, a separate collection for standalone manual AI calls could be created.
+        # Store calling data against the same application record
+        app_doc = None
+        if application_id:
+            try:
+                app_doc = job_applications_collection.find_one({"_id": ObjectId(application_id)})
+            except Exception:
+                pass
+        
+        if not app_doc and phone_number and job_id:
+            app_doc = job_applications_collection.find_one({"job_id": job_id, "phone": phone_number})
+
+        if app_doc:
+            job_applications_collection.update_one(
+                {"_id": app_doc["_id"]},
+                {"$set": {
+                    "job_id": job_id or app_doc.get("job_id"),
+                    "application_id": str(app_doc["_id"]),
+                    "resume_text": resume_text or app_doc.get("resume_text", ""),
+                    "job_description": job_description or app_doc.get("job_description", ""),
+                    "call_status": "initiated",
+                    "omni_call_id": call_id,
+                    "omni_call_details": {
+                        "call_id": call_id,
+                        "phone_number": phone_number,
+                        "candidate_name": candidate_name,
+                        "duration": "0m 0s",
+                        "recording_url": None,
+                        "created_at": datetime.now(timezone.utc).isoformat()
+                    }
+                }}
+            )
+        else:
+            if job_id:
+                new_app = {
+                    "job_id": job_id,
+                    "name": candidate_name,
+                    "phone": phone_number,
+                    "email": "",
+                    "resume_url": "",
+                    "linkedin_url": "",
+                    "cover_letter": "",
+                    "status": "Pending Review",
+                    "applied_at": datetime.now(timezone.utc).isoformat(),
+                    "resume_text": resume_text,
+                    "job_description": job_description,
+                    "call_status": "initiated",
+                    "omni_call_id": call_id,
+                    "omni_call_details": {
+                        "call_id": call_id,
+                        "phone_number": phone_number,
+                        "candidate_name": candidate_name,
+                        "duration": "0m 0s",
+                        "recording_url": None,
+                        "created_at": datetime.now(timezone.utc).isoformat()
+                    }
+                }
+                res = job_applications_collection.insert_one(new_app)
+                job_applications_collection.update_one(
+                    {"_id": res.inserted_id},
+                    {"$set": {"application_id": str(res.inserted_id)}}
+                )
+        
         return {"status": "success", "call_id": call_id, "message": f"Manual AI Call initiated to {phone_number}"}
     except Exception as e:
         print(f"Error initiating manual AI call: {e}")
@@ -6902,6 +7567,113 @@ async def get_omni_call_log_details(call_id: str):
         print(f"Error fetching detailed call log {call_id}: {e}")
         raise HTTPException(status_code=500, detail=str(e))
 
+def sync_call_status_helper(call_id: str, app_id: str = None):
+    """
+    Synchronizes call details from OmniDimension for a specific call_id.
+    Updates the log in omni_call_logs and the corresponding application in job_applications.
+    """
+    from bson import ObjectId
+    try:
+        from . import omni_dimension_client
+        status_response = omni_dimension_client.get_omni_call_status(str(call_id))
+        if status_response and "call_logs" in status_response and status_response["call_logs"]:
+            call_log_data = status_response["call_logs"][0]
+            
+            new_status = call_log_data.get("call_status", "initiated")
+            duration_sec = call_log_data.get("duration_in_sec", 0)
+            mins, secs = divmod(duration_sec, 60)
+            duration_str = f"{mins}m {secs}s"
+            recording_url = call_log_data.get("recording_url")
+            
+            # Extract evaluation, score, interest, transcript
+            ev = call_log_data.get("evaluation") or {}
+            score = ev.get("cqs_score") or call_log_data.get("cqs_score") or 0
+            
+            # Interest sentiment details or sentiment score
+            interest = ev.get("sentiment_analysis_details") or ev.get("sentiment_score") or call_log_data.get("interest") or ""
+            if not interest:
+                interest = ev.get("summary") or ""
+            
+            # Transcript reconstruction
+            transcript_list = []
+            if "interactions" in call_log_data and isinstance(call_log_data["interactions"], list):
+                interactions = call_log_data["interactions"]
+                for interaction in interactions:
+                    speaker = interaction.get("speaker", "Bot")
+                    text = interaction.get("text", "")
+                    if text:
+                        transcript_list.append(f"{speaker}: {text}")
+                        # Update interactions scores
+                        int_ev = interaction.get("evaluation") or {}
+                        interaction["metric_score_intent"]    = int_ev.get("metric_score_intent")    or interaction.get("metric_score_intent")
+                        interaction["metric_score_relevance"] = int_ev.get("metric_score_relevance") or interaction.get("metric_score_relevance")
+                        interaction["metric_score_latency"]   = int_ev.get("metric_score_latency")   or interaction.get("metric_score_latency")
+                        interaction["metric_score_coherence"] = int_ev.get("metric_score_coherence") or interaction.get("metric_score_coherence")
+            
+            transcript_str = "\n".join(transcript_list)
+            
+            # Update call log
+            log_fields = {
+                "status": new_status,
+                "duration": duration_str,
+                "recording_url": recording_url,
+                "cqs_score": score,
+                "interest": interest,
+                "transcript": transcript_str
+            }
+            if "interactions" in call_log_data:
+                log_fields["interactions"] = call_log_data["interactions"]
+                
+            omni_call_logs_collection.update_one(
+                {"call_id": call_id},
+                {"$set": log_fields}
+            )
+            
+            # Find the corresponding application document to update
+            app_doc = None
+            if app_id:
+                try:
+                    app_doc = job_applications_collection.find_one({"_id": ObjectId(app_id)})
+                except Exception:
+                    pass
+            if not app_doc:
+                app_doc = job_applications_collection.find_one({"omni_call_id": call_id})
+            if not app_doc:
+                phone_number = call_log_data.get("phone_number")
+                if phone_number:
+                    call_log = omni_call_logs_collection.find_one({"call_id": call_id})
+                    if call_log and call_log.get("job_id"):
+                        app_doc = job_applications_collection.find_one({
+                            "job_id": call_log["job_id"], 
+                            "phone": phone_number
+                        })
+            
+            if app_doc:
+                job_applications_collection.update_one(
+                    {"_id": app_doc["_id"]},
+                    {"$set": {
+                        "call_status": new_status,
+                        "interest": interest,
+                        "score": score,
+                        "transcript": transcript_str,
+                        "omni_call_details": {
+                            "call_id": call_id,
+                            "phone_number": call_log_data.get("phone_number", app_doc.get("phone")),
+                            "candidate_name": app_doc.get("name"),
+                            "duration": duration_str,
+                            "recording_url": recording_url,
+                            "cqs_score": score,
+                            "interest": interest,
+                            "interactions": call_log_data.get("interactions", []),
+                            "updated_at": datetime.now(timezone.utc).isoformat()
+                        }
+                    }}
+                )
+            return True
+    except Exception as e:
+        print(f"Error in sync_call_status_helper for call_id {call_id}: {e}")
+    return False
+
 @router.get("/api/calls/logs")
 async def get_omni_call_logs():
     """
@@ -6909,57 +7681,16 @@ async def get_omni_call_logs():
     """
     try:
         logs = list(omni_call_logs_collection.find().sort("created_at", -1))
-        from . import omni_dimension_client
-        updated = False
-        
         for log in logs:
-            # Avoid fetching for already completed/failed calls unless required
             status = log.get("status", "").lower()
             if status not in ["completed", "failed", "no answer", "canceled"]:
-                try:
-                    call_id = log.get("call_id")
-                    if call_id:
-                        status_response = omni_dimension_client.get_omni_call_status(str(call_id))
-                        if status_response and "call_logs" in status_response:
-                            call_log_data = status_response["call_logs"][0] if status_response["call_logs"] else {}
-                            if call_log_data:
-                                new_status = call_log_data.get("call_status", status)
-                                duration_sec = call_log_data.get("duration_in_sec", 0)
-                                mins, secs = divmod(duration_sec, 60)
-                                duration_str = f"{mins}m {secs}s"
-                                recording_url = call_log_data.get("recording_url", log.get("recording_url"))
-                                
-                                update_fields = {
-                                    "status": new_status,
-                                    "duration": duration_str,
-                                    "recording_url": recording_url
-                                }
-                                
-                                ev = call_log_data.get("evaluation") or {}
-                                if ev.get("cqs_score") or call_log_data.get("cqs_score"):
-                                    update_fields["cqs_score"] = ev.get("cqs_score") or call_log_data.get("cqs_score")
-                                if ev.get("sentiment_score") or call_log_data.get("sentiment_score"):
-                                    update_fields["sentiment_score"] = ev.get("sentiment_score") or call_log_data.get("sentiment_score")
-                                
-                                if "interactions" in call_log_data and isinstance(call_log_data["interactions"], list):
-                                    interactions = call_log_data["interactions"]
-                                    for interaction in interactions:
-                                        int_ev = interaction.get("evaluation") or {}
-                                        interaction["metric_score_intent"]    = int_ev.get("metric_score_intent")    or interaction.get("metric_score_intent")
-                                        interaction["metric_score_relevance"] = int_ev.get("metric_score_relevance") or interaction.get("metric_score_relevance")
-                                        interaction["metric_score_latency"]   = int_ev.get("metric_score_latency")   or interaction.get("metric_score_latency")
-                                        interaction["metric_score_coherence"] = int_ev.get("metric_score_coherence") or interaction.get("metric_score_coherence")
-                                    update_fields["interactions"] = interactions
-                                
-                                omni_call_logs_collection.update_one(
-                                    {"_id": log["_id"]},
-                                    {"$set": update_fields}
-                                )
-                                updated = True
-                except Exception as ex:
-                    print(f"Error fetching status for call {log.get('call_id')}: {ex}")
+                call_id = log.get("call_id")
+                app_id = log.get("application_id")
+                if call_id:
+                    sync_call_status_helper(str(call_id), app_id)
             
-            # stringify ObjectId for JSON response
+        logs = list(omni_call_logs_collection.find().sort("created_at", -1))
+        for log in logs:
             log["_id"] = str(log["_id"])
             
         return {"status": "success", "logs": logs}
@@ -6990,6 +7721,53 @@ async def check_ai_call_status(session_id: str):
         return {"status": "success", "data": status_response}
     except Exception as e:
         print(f"Error checking AI call status: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+@router.get("/api/calls/interested-candidates")
+def get_interested_candidates(current_admin: dict = Depends(get_current_admin_details)):
+    """
+    Returns all applications from job_applications_collection marked as interested from AI calling.
+    For admin, filters by job owner.
+    """
+    try:
+        query = {}
+        if current_admin["role"] == "admin":
+            # get all jobs owned by admin
+            jobs = list(jobs_collection.find({"admin_id": current_admin["admin_id"]}))
+            job_ids = [j.get("job_id") for j in jobs if j.get("job_id")]
+            query["job_id"] = {"$in": job_ids}
+            
+        # We want applications where call_status is completed and interest is "Interested" (case-insensitive regex)
+        query["interest"] = {"$regex": "interested", "$options": "i"}
+        
+        apps = list(job_applications_collection.find(query).sort("applied_at", -1))
+        
+        from .services import extract_text_from_file
+        from bson import ObjectId
+        import os
+        
+        updated_apps = []
+        for a in apps:
+            a["_id"] = str(a["_id"])
+            if not a.get("resume_text") and a.get("resume_url"):
+                r_url = a.get("resume_url")
+                if os.path.exists(r_url):
+                    try:
+                        with open(r_url, "rb") as f:
+                            text = extract_text_from_file(f.read(), r_url)
+                            if text:
+                                a["resume_text"] = text
+                                job_applications_collection.update_one(
+                                    {"_id": ObjectId(a["_id"])},
+                                    {"$set": {"resume_text": text}}
+                                )
+                    except Exception as parse_err:
+                        print(f"Failed to parse stored resume {r_url}: {parse_err}")
+            updated_apps.append(a)
+            
+        return {"status": "success", "candidates": updated_apps}
+    except Exception as e:
+        print(f"Error fetching interested candidates: {e}")
         raise HTTPException(status_code=500, detail=str(e))
 
 class CodingChatRequest(BaseModel):
@@ -7187,8 +7965,9 @@ def create_job(job: JobCreate, current_admin: dict = Depends(get_current_admin_d
     import string
     job_id = f"JOB-{''.join(random.choices(string.ascii_uppercase + string.digits, k=6))}"
     job_dict["job_id"] = job_id
-    job_dict["admin_username"] = current_admin["username"]
+    job_dict["admin_id"] = current_admin["admin_id"]
     job_dict["created_at"] = datetime.now(timezone.utc).isoformat()
+    job_dict["application_count"] = 0
     result = jobs_collection.insert_one(job_dict)
     job_dict["_id"] = str(result.inserted_id)
     return {"status": "success", "job": job_dict}
@@ -7197,7 +7976,7 @@ def create_job(job: JobCreate, current_admin: dict = Depends(get_current_admin_d
 def get_admin_jobs(current_admin: dict = Depends(get_current_admin_details)):
     query = {}
     if current_admin["role"] == "admin":
-         query["admin_username"] = current_admin["username"]
+         query["admin_id"] = current_admin["admin_id"]
     jobs = list(jobs_collection.find(query).sort("created_at", -1))
     for j in jobs:
         j["_id"] = str(j["_id"])
@@ -7209,12 +7988,20 @@ def update_job(job_id: str, job_update: JobCreate, current_admin: dict = Depends
     update_data["updated_at"] = datetime.now(timezone.utc).isoformat()
     result = jobs_collection.update_one({"job_id": job_id}, {"$set": update_data})
     if result.matched_count == 0:
+        from bson import ObjectId
+        if ObjectId.is_valid(job_id):
+            result = jobs_collection.update_one({"_id": ObjectId(job_id)}, {"$set": update_data})
+    if result.matched_count == 0:
         raise HTTPException(status_code=404, detail="Job not found")
     return {"status": "success", "message": "Job updated"}
 
 @router.delete("/api/jobs/{job_id}")
 def delete_job(job_id: str, current_admin: dict = Depends(get_current_admin_details)):
     result = jobs_collection.delete_one({"job_id": job_id})
+    if result.deleted_count == 0:
+        from bson import ObjectId
+        if ObjectId.is_valid(job_id):
+            result = jobs_collection.delete_one({"_id": ObjectId(job_id)})
     if result.deleted_count == 0:
         raise HTTPException(status_code=404, detail="Job not found")
     return {"status": "success", "message": "Job deleted"}
@@ -7223,6 +8010,10 @@ def delete_job(job_id: str, current_admin: dict = Depends(get_current_admin_deta
 def get_public_job(job_id: str):
     job = jobs_collection.find_one({"job_id": job_id})
     if not job:
+        from bson import ObjectId
+        if ObjectId.is_valid(job_id):
+            job = jobs_collection.find_one({"_id": ObjectId(job_id)})
+    if not job:
         raise HTTPException(status_code=404, detail="Job not found")
     job["_id"] = str(job["_id"])
     return {"status": "success", "job": job}
@@ -7230,41 +8021,122 @@ def get_public_job(job_id: str):
 from fastapi import File, UploadFile, Form
 
 @router.post("/api/public/jobs/{job_id}/apply")
-async def apply_for_job(
-    job_id: str,
-    name: str = Form(...),
-    email: str = Form(...),
-    phone: str = Form(...),
-    linkedin_url: Optional[str] = Form(""),
-    resume: UploadFile = File(...)
-):
+def apply_for_job(job_id: str, application: JobApplicationCreate):
+    """
+    Accept a job application submitted as JSON by the public-facing form.
+    Validates the job exists, persists the application, and increments
+    the job's application_count atomically.
+    """
     job = jobs_collection.find_one({"job_id": job_id})
     if not job:
+        from bson import ObjectId
+        if ObjectId.is_valid(job_id):
+            job = jobs_collection.find_one({"_id": ObjectId(job_id)})
+    if not job:
         raise HTTPException(status_code=404, detail="Job not found")
-        
-    import os
-    import shutil
-    upload_dir = "uploads/resumes"
-    os.makedirs(upload_dir, exist_ok=True)
-    
-    file_path = f"{upload_dir}/{job_id}_{resume.filename}"
-    with open(file_path, "wb") as buffer:
-        shutil.copyfileobj(resume.file, buffer)
-        
+
+    actual_job_id = job.get("job_id") or str(job["_id"])
     app_dict = {
-        "job_id": job_id,
+        "job_id": actual_job_id,
         "job_title": job.get("title"),
-        "name": name,
-        "email": email,
-        "phone": phone,
-        "linkedin_url": linkedin_url,
-        "resume_path": file_path,
+        "name": application.name,
+        "email": application.email,
+        "phone": application.phone,
+        "resume_url": application.resume_url,
+        "linkedin_url": application.linkedin_url,
+        "cover_letter": application.cover_letter,
         "status": "Pending Review",
-        "applied_at": datetime.now(timezone.utc).isoformat()
+        "applied_at": datetime.now(timezone.utc).isoformat(),
     }
-    
+
     result = job_applications_collection.insert_one(app_dict)
+    # Atomically increment application_count on the parent job
+    jobs_collection.update_one(
+        {"_id": job["_id"]},
+        {"$inc": {"application_count": 1}},
+    )
+    print(f"[JobApply] New application for job_id={actual_job_id} by {application.email}, _id={result.inserted_id}")
     return {"status": "success", "message": "Application submitted successfully", "application_id": str(result.inserted_id)}
+
+@router.get("/api/jobs/{job_id}/applications")
+def get_job_applications(job_id: str, current_admin: dict = Depends(get_current_admin_details)):
+    """
+    Returns all applications submitted for a given job_id.
+    Super-admins can view applications for any job; admins only for their own jobs.
+    """
+    job = jobs_collection.find_one({"job_id": job_id})
+    if not job:
+        from bson import ObjectId
+        if ObjectId.is_valid(job_id):
+            job = jobs_collection.find_one({"_id": ObjectId(job_id)})
+    if not job:
+        raise HTTPException(status_code=404, detail="Job not found")
+    # Admins can only see applications for jobs they own (stored as admin_id since last fix)
+    if current_admin["role"] == "admin" and job.get("admin_id") != current_admin["admin_id"]:
+        raise HTTPException(status_code=403, detail="Access denied")
+    actual_job_id = job.get("job_id") or str(job["_id"])
+    applications = list(job_applications_collection.find({"job_id": actual_job_id}).sort("applied_at", -1))
+    
+    # Sync active calls
+    for a in applications:
+        call_status = (a.get("call_status") or "").lower()
+        call_id = a.get("omni_call_id")
+        if call_id and call_status and call_status not in ["completed", "failed", "no answer", "canceled"]:
+            try:
+                sync_call_status_helper(str(call_id), str(a["_id"]))
+            except Exception as e:
+                print(f"Failed to sync active call {call_id}: {e}")
+                
+    # Re-fetch after syncing to get fresh data
+    applications = list(job_applications_collection.find({"job_id": actual_job_id}).sort("applied_at", -1))
+    
+    from .services import extract_text_from_file
+    import os
+    from bson import ObjectId
+    
+    for a in applications:
+        a["_id"] = str(a["_id"])
+        if not a.get("resume_text") and a.get("resume_url"):
+            r_url = a.get("resume_url")
+            if os.path.exists(r_url):
+                try:
+                    with open(r_url, "rb") as f:
+                        text = extract_text_from_file(f.read(), r_url)
+                        if text:
+                            a["resume_text"] = text
+                            job_applications_collection.update_one(
+                                {"_id": ObjectId(a["_id"])},
+                                {"$set": {"resume_text": text}}
+                            )
+                except Exception as parse_err:
+                    print(f"Failed to parse stored resume {r_url}: {parse_err}")
+                    
+    return {"status": "success", "applications": applications, "total": len(applications)}
+
+@router.patch("/api/jobs/{job_id}/applications/{app_id}/status")
+def update_application_status(
+    job_id: str,
+    app_id: str,
+    payload: dict,
+    current_admin: dict = Depends(get_current_admin_details)
+):
+    """Update the status of a specific job application."""
+    from bson import ObjectId as BsonObjectId
+    new_status = payload.get("status", "").strip()
+    allowed = {"Pending Review", "Shortlisted", "Interview Scheduled", "Rejected", "Hired"}
+    if new_status not in allowed:
+        raise HTTPException(status_code=400, detail=f"Invalid status. Allowed: {allowed}")
+    try:
+        oid = BsonObjectId(app_id)
+    except Exception:
+        raise HTTPException(status_code=400, detail="Invalid application id")
+    result = job_applications_collection.update_one(
+        {"_id": oid},
+        {"$set": {"status": new_status, "updated_at": datetime.now(timezone.utc).isoformat()}}
+    )
+    if result.matched_count == 0:
+        raise HTTPException(status_code=404, detail="Application not found")
+    return {"status": "success", "message": f"Status updated to '{new_status}'"}
 
 import PyPDF2
 import io

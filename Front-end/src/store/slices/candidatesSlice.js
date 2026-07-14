@@ -82,11 +82,39 @@ export const checkAICallStatus = createAsyncThunk(
 // ─── SuperAdmin Thunks ─────────────────────────────────
 export const loadSuperAdminQualifiedCandidates = createAsyncThunk(
   'candidates/loadSuperAdminQualifiedCandidates',
-  async (adminFilter = null, { getState, rejectWithValue }) => {
+  async (arg = {}, { getState, rejectWithValue }) => {
     try {
       const { API_BASE_URL, token } = getState().auth
-      const params = adminFilter ? { adminId: adminFilter } : {}
+      let adminFilter = null
+      let pipeline = 'all'
+      if (typeof arg === 'string' || arg === null) {
+        adminFilter = arg
+      } else if (typeof arg === 'object') {
+        adminFilter = arg.adminFilter ?? null
+        pipeline = arg.pipeline ?? 'all'
+      }
+      const params = { pipeline }
+      if (adminFilter) params.adminId = adminFilter
       const res = await axios.get(`${API_BASE_URL}/superadmin/candidates/qualified`, {
+        headers: { Authorization: `Bearer ${token}` },
+        params
+      })
+      return res.data
+    } catch (err) {
+      const errorMsg = err.response?.data?.detail || err.response?.data?.message || err.message || 'Failed to load qualified candidates'
+      return rejectWithValue(typeof errorMsg === 'object' ? JSON.stringify(errorMsg) : errorMsg)
+    }
+  }
+)
+
+export const loadAdminQualifiedCandidates = createAsyncThunk(
+  'candidates/loadAdminQualifiedCandidates',
+  async (arg = {}, { getState, rejectWithValue }) => {
+    try {
+      const { API_BASE_URL, token } = getState().auth
+      const pipeline = typeof arg === 'object' && arg.pipeline ? arg.pipeline : 'all'
+      const params = { pipeline }
+      const res = await axios.get(`${API_BASE_URL}/api/admin/candidates/qualified`, {
         headers: { Authorization: `Bearer ${token}` },
         params
       })
@@ -100,11 +128,39 @@ export const loadSuperAdminQualifiedCandidates = createAsyncThunk(
 
 export const loadSuperAdminRejectedCandidates = createAsyncThunk(
   'candidates/loadSuperAdminRejectedCandidates',
-  async (adminFilter = null, { getState, rejectWithValue }) => {
+  async (arg = {}, { getState, rejectWithValue }) => {
     try {
       const { API_BASE_URL, token } = getState().auth
-      const params = adminFilter ? { adminId: adminFilter } : {}
+      let adminFilter = null
+      let pipeline = 'all'
+      if (typeof arg === 'string' || arg === null) {
+        adminFilter = arg
+      } else if (typeof arg === 'object') {
+        adminFilter = arg.adminFilter ?? null
+        pipeline = arg.pipeline ?? 'all'
+      }
+      const params = { pipeline }
+      if (adminFilter) params.adminId = adminFilter
       const res = await axios.get(`${API_BASE_URL}/superadmin/candidates/rejected`, {
+        headers: { Authorization: `Bearer ${token}` },
+        params
+      })
+      return res.data
+    } catch (err) {
+      const errorMsg = err.response?.data?.detail || err.response?.data?.message || err.message || 'Failed to load rejected candidates'
+      return rejectWithValue(typeof errorMsg === 'object' ? JSON.stringify(errorMsg) : errorMsg)
+    }
+  }
+)
+
+export const loadAdminRejectedCandidates = createAsyncThunk(
+  'candidates/loadAdminRejectedCandidates',
+  async (arg = {}, { getState, rejectWithValue }) => {
+    try {
+      const { API_BASE_URL, token } = getState().auth
+      const pipeline = typeof arg === 'object' && arg.pipeline ? arg.pipeline : 'all'
+      const params = { pipeline }
+      const res = await axios.get(`${API_BASE_URL}/api/admin/candidates/rejected`, {
         headers: { Authorization: `Bearer ${token}` },
         params
       })
@@ -319,6 +375,18 @@ const candidatesSlice = createSlice({
         state.status = 'failed'
         state.error = action.payload
       })
+      .addCase(loadAdminQualifiedCandidates.pending, (state) => {
+        state.status = 'loading'
+      })
+      .addCase(loadAdminQualifiedCandidates.fulfilled, (state, action) => {
+        state.status = 'succeeded'
+        state.candidates = action.payload || []
+        recomputeFilteredCandidates(state)
+      })
+      .addCase(loadAdminQualifiedCandidates.rejected, (state, action) => {
+        state.status = 'failed'
+        state.error = action.payload
+      })
       .addCase(loadSuperAdminRejectedCandidates.pending, (state) => {
         state.status = 'loading'
       })
@@ -328,6 +396,18 @@ const candidatesSlice = createSlice({
         recomputeFilteredCandidates(state)
       })
       .addCase(loadSuperAdminRejectedCandidates.rejected, (state, action) => {
+        state.status = 'failed'
+        state.error = action.payload
+      })
+      .addCase(loadAdminRejectedCandidates.pending, (state) => {
+        state.status = 'loading'
+      })
+      .addCase(loadAdminRejectedCandidates.fulfilled, (state, action) => {
+        state.status = 'succeeded'
+        state.candidates = action.payload || []
+        recomputeFilteredCandidates(state)
+      })
+      .addCase(loadAdminRejectedCandidates.rejected, (state, action) => {
         state.status = 'failed'
         state.error = action.payload
       })
