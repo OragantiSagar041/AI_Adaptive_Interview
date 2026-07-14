@@ -378,171 +378,231 @@ export default function CaseStudyPage() {
   const isLastQuestion = currentIndex === questions.length - 1
 
   return (
-    <div className="min-h-screen bg-slate-100 text-slate-900 font-sans">
-      {/* Top Bar Navigation */}
-      <header className="fixed top-0 left-0 right-0 h-16 bg-white border-b border-slate-200 shadow-sm z-50 flex items-center justify-between px-6 sm:px-8">
-        <div className="flex items-center gap-3">
-          <span className="rounded-full bg-gradient-to-tr from-indigo-600 to-indigo-500 text-white text-[0.68rem] font-bold tracking-wider uppercase px-3 py-1">
-            Round 2
-          </span>
-          <span className="text-sm font-bold text-slate-900">Audio Case Study</span>
-        </div>
+    <div className="min-h-screen bg-[radial-gradient(ellipse_at_top_right,_var(--tw-gradient-stops))] from-slate-50 via-white to-indigo-50/40 text-slate-900 font-sans relative overflow-hidden pb-32">
+      
+      {/* Decorative Background Orbs */}
+      <div className="absolute top-[-10%] left-[-10%] w-[40%] h-[40%] rounded-full bg-indigo-400/10 blur-[100px] pointer-events-none" />
+      <div className="absolute bottom-[-10%] right-[-5%] w-[50%] h-[50%] rounded-full bg-sky-400/10 blur-[120px] pointer-events-none" />
 
-        <div className="flex items-center gap-4">
-          <div className="flex items-center gap-2 border border-slate-200 rounded-full px-4 py-1.5 bg-slate-50 text-xs font-bold">
-            <span className={`w-2 h-2 rounded-full bg-emerald-500 ${isListening ? 'animate-ping' : ''}`} />
-            <span
-              className={`font-mono text-sm ${isTimerUrgent ? 'text-red-500 font-extrabold' : isTimerWarning ? 'text-amber-500 font-bold' : 'text-slate-800'
-                }`}
-            >
-              {getTimerDisplay()}
-            </span>
+      {/* Top Header / Progress Bar */}
+      <header className="fixed top-0 left-0 right-0 z-50 px-4 py-4 sm:px-8">
+        <div className="max-w-[1000px] mx-auto bg-white/70 backdrop-blur-xl border border-white shadow-[0_4px_24px_-8px_rgba(0,0,0,0.1)] rounded-2xl flex items-center justify-between p-3 px-5 transition-all">
+          <div className="flex items-center gap-4">
+            <div className="rounded-xl bg-gradient-to-br from-indigo-600 to-indigo-500 shadow-lg shadow-indigo-200 text-white text-[0.75rem] font-bold tracking-widest uppercase px-4 py-1.5 flex items-center gap-2">
+              <span className="w-2 h-2 rounded-full bg-white animate-pulse" />
+              Round 2
+            </div>
+            <span className="text-[0.95rem] font-extrabold text-slate-800 tracking-tight hidden sm:block">Audio Case Study</span>
           </div>
 
-          {isLastQuestion && (
-            <button
-              onClick={handleSubmitAll}
-              className="px-4 py-2 rounded-lg bg-emerald-600 hover:bg-emerald-500 text-white text-xs font-semibold shadow-sm border-none cursor-pointer flex items-center gap-1.5"
-            >
-              Submit &amp; Finish
-            </button>
-          )}
+          <div className="flex items-center gap-4 flex-1 justify-center max-w-[200px] mx-4 hidden md:flex">
+             <div className="w-full h-1.5 bg-slate-100 rounded-full overflow-hidden shadow-inner">
+               <div 
+                 className="h-full bg-gradient-to-r from-indigo-500 to-sky-400 transition-all duration-500 ease-out relative"
+                 style={{ width: `${((currentIndex + 1) / questions.length) * 100}%` }}
+               >
+                 <div className="absolute top-0 right-0 bottom-0 left-0 bg-[linear-gradient(90deg,transparent,rgba(255,255,255,0.3),transparent)] animate-[shimmer_2s_infinite]" />
+               </div>
+             </div>
+          </div>
+
+          <div className="flex items-center gap-4">
+            <div className={`flex items-center gap-2.5 border rounded-xl px-4 py-1.5 font-bold shadow-sm backdrop-blur-md transition-colors ${isTimerUrgent ? 'bg-red-50/90 border-red-200 text-red-600' : isTimerWarning ? 'bg-amber-50/90 border-amber-200 text-amber-600' : 'bg-white/60 border-slate-200/60 text-slate-700'}`}>
+              <span className={`w-2 h-2 rounded-full ${isTimerUrgent ? 'bg-red-500 animate-ping' : isTimerWarning ? 'bg-amber-500' : 'bg-emerald-500'} shadow-sm`} />
+              <span className="font-mono text-sm tracking-wide">
+                {getTimerDisplay()}
+              </span>
+            </div>
+
+            {isLastQuestion && (
+              <button
+                onClick={handleSubmitAll}
+                className="hidden sm:flex px-5 py-2 rounded-xl bg-emerald-500 hover:bg-emerald-400 text-white text-xs font-bold shadow-[0_4px_14px_rgba(16,185,129,0.3)] transition-all hover:-translate-y-0.5 cursor-pointer items-center gap-2"
+              >
+                Submit &amp; Finish
+              </button>
+            )}
+          </div>
         </div>
       </header>
 
-      {/* Progress Bar */}
-      <div className="fixed top-16 left-0 right-0 h-1 bg-slate-200 z-50">
-        <div
-          className="h-full bg-gradient-to-r from-indigo-500 to-indigo-600 transition-all duration-300"
-          style={{ width: `${((currentIndex + 1) / questions.length) * 100}%` }}
-        />
-      </div>
-
       {/* Main Workspace Layout */}
-      <main className="max-w-[900px] mx-auto px-6 py-28 flex flex-col gap-6">
-        <div className="flex justify-between items-center flex-wrap gap-2">
-          <span className="text-slate-500 font-bold text-xs">
-            Question {currentIndex + 1} of {questions.length}
-          </span>
-          <span className="rounded-full bg-indigo-50 text-indigo-700 text-xs font-bold px-3 py-1">
-            {currentQuestion?.skill_tested || 'Scenario'}
+      <main className="max-w-[850px] mx-auto px-4 sm:px-6 pt-32 flex flex-col gap-8 relative z-10">
+        
+        {/* Breadcrumb / Status Line */}
+        <div className="flex justify-between items-center flex-wrap gap-2 px-2">
+          <div className="flex flex-col">
+            <span className="text-slate-400 font-bold text-xs uppercase tracking-widest mb-1">
+              Progress
+            </span>
+            <span className="text-slate-800 font-extrabold text-lg tracking-tight">
+              Question {currentIndex + 1} <span className="text-slate-400 font-medium text-sm">of {questions.length}</span>
+            </span>
+          </div>
+          <span className="rounded-full bg-white border border-slate-200/60 shadow-sm text-indigo-600 text-xs font-bold px-4 py-1.5 flex items-center gap-2">
+            <Cpu className="w-3.5 h-3.5" />
+            {currentQuestion?.skill_tested || 'Scenario Assessment'}
           </span>
         </div>
 
         {/* Scenario Block */}
-        <section className="bg-white border border-slate-200 rounded-2xl p-6 shadow-sm flex flex-col gap-3">
-          <span className="text-[0.68rem] font-bold text-blue-600 uppercase tracking-widest block">📖 Scenario</span>
-          <div className="text-sm leading-relaxed text-slate-700 bg-slate-50 border-l-4 border-indigo-600 px-5 py-3.5 rounded-r-xl">
+        <section className="bg-white/60 backdrop-blur-2xl border border-white shadow-[0_8px_30px_rgb(0,0,0,0.04)] rounded-[24px] p-6 sm:p-8 flex flex-col gap-4 relative group hover:shadow-[0_8px_40px_rgb(0,0,0,0.08)] transition-all">
+          <div className="absolute top-0 left-8 w-16 h-1 bg-gradient-to-r from-blue-500 to-indigo-500 rounded-b-full opacity-70" />
+          <div className="flex items-center gap-2">
+            <div className="w-8 h-8 rounded-full bg-blue-50 text-blue-600 flex items-center justify-center">
+              <span className="text-sm">📖</span>
+            </div>
+            <span className="text-[0.75rem] font-bold text-blue-700 uppercase tracking-widest">Scenario Context</span>
+          </div>
+          <div className="text-[0.95rem] leading-relaxed text-slate-700 font-medium">
             {currentQuestion?.scenario || 'No details available.'}
           </div>
         </section>
 
         {/* Question Block */}
-        <section className="bg-white border border-slate-200 rounded-2xl p-6 shadow-sm flex flex-col gap-3">
-          <span className="text-[0.68rem] font-bold text-red-600 uppercase tracking-widest block">❓ Question</span>
-          <p className="text-base font-semibold leading-relaxed text-slate-900">
+        <section className="bg-white/70 backdrop-blur-2xl border border-white shadow-[0_8px_30px_rgb(0,0,0,0.06)] rounded-[24px] p-6 sm:p-8 flex flex-col gap-4 relative">
+          <div className="absolute top-0 left-8 w-16 h-1 bg-gradient-to-r from-rose-400 to-red-500 rounded-b-full opacity-70" />
+          <div className="flex items-center gap-2">
+            <div className="w-8 h-8 rounded-full bg-rose-50 text-rose-600 flex items-center justify-center">
+              <span className="text-sm">❓</span>
+            </div>
+            <span className="text-[0.75rem] font-bold text-rose-600 uppercase tracking-widest">Question</span>
+          </div>
+          <p className="text-lg font-bold leading-relaxed text-slate-900 tracking-tight">
             {currentQuestion?.question || 'No question details loaded.'}
           </p>
         </section>
 
         {/* Answer Recording Workspace Block */}
-        <section className="bg-white border border-slate-200 rounded-2xl p-6 shadow-sm space-y-4">
-          <div className="flex justify-between items-center flex-wrap gap-2 border-b border-slate-100 pb-3">
-            <span className="text-[0.68rem] font-bold text-emerald-600 uppercase tracking-widest block">🎙 Your Answer</span>
-            <div className="flex items-center gap-3">
+        <section className="bg-white/80 backdrop-blur-3xl border border-white shadow-[0_8px_40px_rgb(0,0,0,0.08)] rounded-[32px] p-6 sm:p-8 space-y-6 relative overflow-hidden">
+          {/* Subtle glow behind mic */}
+          {isListening && <div className="absolute top-8 right-8 w-32 h-32 bg-red-400/20 rounded-full blur-[40px] pointer-events-none animate-pulse" />}
+
+          <div className="flex justify-between items-center flex-wrap gap-4 border-b border-slate-100/60 pb-4 relative z-10">
+            <div className="flex items-center gap-2">
+               <div className="w-8 h-8 rounded-full bg-emerald-50 text-emerald-600 flex items-center justify-center">
+                 <Volume2 className="w-4 h-4" />
+               </div>
+               <span className="text-[0.75rem] font-bold text-emerald-600 uppercase tracking-widest">Your Response</span>
+            </div>
+            
+            <div className="flex items-center gap-4 bg-white border border-slate-100 shadow-sm rounded-full px-4 py-1.5">
               {isListening && (
-                <div className="flex items-end gap-[3px] h-[20px] transition-opacity">
-                  <span className="w-1 h-3 bg-red-500 rounded-full animate-bounce" />
-                  <span className="w-1 h-4 bg-red-500 rounded-full animate-bounce delay-75" />
-                  <span className="w-1 h-2.5 bg-red-500 rounded-full animate-bounce" />
-                  <span className="w-1 h-5 bg-red-500 rounded-full animate-bounce delay-150" />
+                <div className="flex items-center gap-2">
+                  <div className="flex items-end gap-[3px] h-[14px]">
+                    <span className="w-1 h-2 bg-red-500 rounded-full animate-bounce" />
+                    <span className="w-1 h-3 bg-red-500 rounded-full animate-bounce delay-75" />
+                    <span className="w-1 h-2 bg-red-500 rounded-full animate-bounce delay-150" />
+                    <span className="w-1 h-3.5 bg-red-500 rounded-full animate-bounce delay-[225ms]" />
+                  </div>
+                  <span className="text-red-500 font-bold text-[0.65rem] tracking-widest uppercase animate-pulse">
+                    Recording
+                  </span>
                 </div>
               )}
-              {isListening && (
-                <span className="rounded-full bg-red-50 border border-red-200 text-red-500 font-extrabold text-[0.65rem] tracking-wider px-2.5 py-0.5 animate-pulse flex items-center gap-1">
-                  <span className="w-1.5 h-1.5 bg-red-500 rounded-full" /> RECORDING
-                </span>
+              {!isListening && (
+                 <span className="text-[0.65rem] font-bold text-slate-400 tracking-widest uppercase">
+                    Mic Ready
+                 </span>
               )}
-              <span className="text-xs text-slate-500 font-medium">
-                {getWordCount(transcriptionText)} words
+              <div className="w-px h-4 bg-slate-200" />
+              <span className="text-xs text-slate-500 font-bold tracking-wide">
+                <span className="text-slate-900">{getWordCount(transcriptionText)}</span> words
               </span>
             </div>
           </div>
 
-          {/* Mic Trigger */}
-          <button
-            onClick={toggleMic}
-            className={`w-full py-4 rounded-xl border-2 border-dashed flex items-center justify-center gap-2 font-bold text-sm cursor-pointer transition-all ${isListening
-                ? 'border-red-500 bg-red-50 text-red-500 shadow-md ring-4 ring-red-100'
-                : 'border-slate-200 bg-slate-50 hover:bg-slate-100 hover:border-indigo-500 text-slate-600 hover:text-indigo-600'
-              }`}
-          >
-            <span className={`text-base ${isListening ? 'animate-bounce' : ''}`}>
-              {isListening ? '⏹' : '🎤'}
-            </span>
-            <span>{isListening ? 'Recording... Tap to stop' : 'Tap to start recording your answer'}</span>
-          </button>
+          <div className="flex flex-col sm:flex-row gap-6 items-start relative z-10">
+             {/* Mic Trigger */}
+            <button
+              onClick={toggleMic}
+              className={`relative shrink-0 w-full sm:w-[120px] h-[120px] rounded-[28px] flex flex-col items-center justify-center gap-2 font-bold cursor-pointer transition-all duration-300 ${isListening
+                  ? 'bg-red-500 text-white shadow-[0_10px_30px_rgba(239,68,68,0.4)] scale-95 ring-4 ring-red-100'
+                  : 'bg-white border border-slate-200 hover:border-indigo-300 text-slate-600 hover:text-indigo-600 shadow-sm hover:shadow-md hover:bg-slate-50 hover:-translate-y-1'
+                }`}
+            >
+              <div className={`w-12 h-12 rounded-full flex items-center justify-center bg-white/20 backdrop-blur-sm ${!isListening && 'bg-slate-100'} transition-all`}>
+                 {isListening ? (
+                   <div className="w-4 h-4 bg-white rounded-[4px] animate-pulse" />
+                 ) : (
+                   <Volume2 className="w-6 h-6" />
+                 )}
+              </div>
+              <span className="text-[0.65rem] uppercase tracking-widest opacity-90">
+                {isListening ? 'Stop' : 'Speak'}
+              </span>
+            </button>
 
-          {/* Textarea Workspace */}
-          <textarea
-            value={transcriptionText}
-            onChange={(e) => setTranscriptionText(e.target.value)}
-            placeholder="Your spoken answer will appear here... (You can also type your answer)"
-            className="w-full min-h-[180px] rounded-xl border border-slate-200 p-4 text-sm leading-relaxed text-slate-900 placeholder:text-slate-300 outline-none focus:border-indigo-500 focus:ring-4 focus:ring-indigo-50 shadow-inner resize-y transition-all"
-          />
-
-          <div className="text-[0.72rem] text-slate-500 flex items-center gap-1.5">
-            <span>💡</span> Speak your full answer, then tap the microphone again to stop.
+            {/* Textarea Workspace */}
+            <div className="w-full relative group flex-1 h-[120px]">
+              <textarea
+                value={transcriptionText}
+                onChange={(e) => setTranscriptionText(e.target.value)}
+                placeholder="Tap 'Speak' to start recording, or click here to type your answer..."
+                className="w-full h-full rounded-[24px] bg-slate-50/50 border border-slate-200 p-5 pr-12 text-[0.95rem] leading-relaxed text-slate-800 font-medium placeholder:text-slate-400 outline-none focus:border-indigo-400 focus:bg-white focus:ring-4 focus:ring-indigo-50 shadow-inner resize-none transition-all custom-scrollbar"
+              />
+              <div className="absolute bottom-4 right-4 text-[1.2rem] opacity-30 group-focus-within:opacity-100 transition-opacity">
+                ✍️
+              </div>
+            </div>
           </div>
         </section>
 
         {/* Evaluation Criteria Block */}
         {currentQuestion?.evaluation_criteria && currentQuestion.evaluation_criteria.length > 0 && (
-          <section className="bg-yellow-50/50 border border-yellow-200 rounded-2xl p-5">
-            <span className="text-[0.68rem] font-bold text-amber-800 uppercase tracking-widest block mb-2">
-              🎯 What we're looking for
-            </span>
-            <ul className="list-disc pl-5 text-amber-900 text-xs leading-relaxed space-y-1 font-medium">
+          <section className="bg-amber-50/60 backdrop-blur-md border border-amber-200/60 rounded-2xl p-5 sm:p-6 mb-8">
+            <div className="flex items-center gap-2 mb-3">
+              <ShieldAlert className="w-4 h-4 text-amber-600" />
+              <span className="text-[0.7rem] font-bold text-amber-800 uppercase tracking-widest">
+                Evaluation Criteria
+              </span>
+            </div>
+            <ul className="list-none space-y-2.5">
               {currentQuestion.evaluation_criteria.map((c, i) => (
-                <li key={i}>{c}</li>
+                <li key={i} className="flex items-start gap-2.5 text-amber-900/80 text-sm font-medium">
+                  <div className="w-1.5 h-1.5 rounded-full bg-amber-400 mt-1.5 shrink-0" />
+                  <span className="leading-relaxed">{c}</span>
+                </li>
               ))}
             </ul>
           </section>
         )}
       </main>
 
-      {/* Footer Navigation Bar */}
-      <footer className="fixed bottom-0 left-0 right-0 bg-white border-t border-slate-200 px-6 py-4 shadow-lg z-50 flex items-center justify-between">
-        <div className="flex gap-2">
+      {/* Footer Navigation Dock */}
+      <footer className="fixed bottom-6 left-0 right-0 z-50 px-4 pointer-events-none flex justify-center">
+        <div className="bg-slate-900/90 backdrop-blur-2xl border border-white/10 shadow-[0_20px_40px_rgba(0,0,0,0.3)] rounded-full p-2 flex items-center justify-between gap-4 pointer-events-auto max-w-[500px] w-full">
           <button
             onClick={() => handleIndexChange(currentIndex - 1)}
             disabled={currentIndex === 0}
-            className="px-4 py-2.5 rounded-lg font-bold text-slate-700 bg-slate-100 hover:bg-slate-200 border-none cursor-pointer disabled:opacity-40 disabled:cursor-not-allowed text-xs transition-colors flex items-center"
+            className="w-12 h-12 rounded-full flex items-center justify-center font-bold text-white bg-white/5 hover:bg-white/15 cursor-pointer disabled:opacity-20 disabled:cursor-not-allowed transition-colors"
+            title="Previous Question"
           >
-            ← Prev
+            ←
           </button>
+          
           <button
             onClick={() => handleSaveAnswer(false)}
-            className="px-4 py-2.5 rounded-lg font-bold text-green-700 bg-green-50 border border-green-200 hover:bg-green-100 cursor-pointer text-xs transition-colors flex items-center gap-1"
+            className="flex-1 h-12 rounded-full font-bold text-white bg-white/10 border border-white/5 hover:bg-white/20 hover:border-white/10 cursor-pointer text-sm tracking-wide transition-all flex items-center justify-center gap-2"
           >
-            💾 Save Answer
+            💾 Save Current Progress
           </button>
-        </div>
 
-        <div className="flex gap-2">
           {!isLastQuestion ? (
             <button
               onClick={() => handleIndexChange(currentIndex + 1)}
-              className="px-5 py-2.5 rounded-lg font-bold text-white bg-indigo-600 hover:bg-indigo-500 border-none cursor-pointer text-xs transition-all shadow-sm flex items-center"
+              className="w-12 h-12 rounded-full flex items-center justify-center font-bold text-white bg-indigo-500 hover:bg-indigo-400 cursor-pointer transition-all shadow-[0_0_15px_rgba(99,102,241,0.5)]"
+              title="Next Question"
             >
-              Next →
+              →
             </button>
           ) : (
             <button
               onClick={handleSubmitAll}
-              className="px-6 py-2.5 rounded-lg font-bold text-white bg-emerald-600 hover:bg-emerald-500 border-none cursor-pointer text-xs transition-all shadow-sm flex items-center gap-1"
+              className="w-12 h-12 rounded-full flex items-center justify-center font-bold text-white bg-emerald-500 hover:bg-emerald-400 cursor-pointer transition-all shadow-[0_0_15px_rgba(16,185,129,0.5)]"
+              title="Submit All"
             >
-              ✅ Submit All
+              <CheckCircle2 className="w-5 h-5" />
             </button>
           )}
         </div>

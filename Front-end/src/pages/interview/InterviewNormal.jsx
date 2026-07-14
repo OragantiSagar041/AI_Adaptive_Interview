@@ -390,7 +390,7 @@ export const InterviewNormal = () => {
     : questions.filter(q => q.type !== 'case_study').length
 
   return (
-    <div className={currentQuestion?.type === 'coding' ? "w-screen h-screen p-0 m-0 max-w-none overflow-hidden flex flex-col" : "container"}>
+    <div className={currentQuestion?.type === 'coding' ? "w-screen h-screen p-0 m-0 max-w-none overflow-hidden flex flex-col" : "min-h-screen bg-[radial-gradient(ellipse_at_top_right,_var(--tw-gradient-stops))] from-slate-50 via-white to-indigo-50/40 text-slate-900 overflow-hidden flex flex-col relative"}>
       {/* Alerts */}
       {showNoiseBanner && (
         <div style={{ position: 'fixed', top: '20px', right: '20px', zIndex: 99999, padding: '16px', borderRadius: '12px', background: 'rgba(245, 158, 11, 0.1)', border: '1px solid #f59e0b', color: '#f59e0b', display: 'flex', alignItems: 'center', gap: '12px', boxShadow: '0 4px 6px rgba(0,0,0,0.1)', maxWidth: '380px' }}>
@@ -437,7 +437,7 @@ export const InterviewNormal = () => {
       {currentQuestion?.type === 'coding' ? (
         renderRoundTwoUI ? renderRoundTwoUI({ ...session, sessionId }) : null
       ) : (
-        <div id="interviewSection" className="grid grid-cols-1 md:grid-cols-[320px_1fr] lg:grid-cols-[360px_1fr] gap-6 flex-1 min-h-0 overflow-hidden p-2">
+        <div id="interviewSection" className="grid grid-cols-1 md:grid-cols-[320px_1fr] lg:grid-cols-[360px_1fr] gap-8 flex-1 min-h-0 overflow-hidden p-6 z-10">
           <svg width="0" height="0" style={{ position: 'absolute' }}>
             <defs>
               <linearGradient id="timerGradient" x1="0%" y1="0%" x2="100%" y2="0%">
@@ -449,7 +449,7 @@ export const InterviewNormal = () => {
 
           <div className="ip-left flex flex-col gap-4 h-full overflow-y-auto pr-1 scrollbar-none">
             {/* AI Analyzing Status Card */}
-            <div className="bg-white/80 backdrop-blur-md border border-slate-200/80 rounded-2xl p-4 shadow-sm flex items-center gap-4 transition-all duration-300 hover:shadow-md hover:scale-[1.01] hover:border-indigo-100">
+            <div className="bg-white/60 backdrop-blur-2xl border border-white shadow-[0_8px_30px_rgb(0,0,0,0.04)] rounded-2xl p-5 flex items-center gap-4 transition-all duration-300 hover:shadow-lg hover:border-indigo-50">
               <div className="w-10 h-10 rounded-full bg-gradient-to-tr from-indigo-500 to-purple-600 flex items-center justify-center shrink-0 shadow-sm animate-pulse">
                 <svg xmlns="http://www.w3.org/2000/svg" className="w-5 h-5 text-white" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
                   <circle cx="12" cy="8" r="4" />
@@ -469,7 +469,7 @@ export const InterviewNormal = () => {
             </div>
 
             {/* Timer Card */}
-            <div className="bg-white/80 backdrop-blur-md border border-slate-200/80 rounded-2xl p-5 shadow-sm flex flex-col items-center gap-4 transition-all duration-300 hover:shadow-md">
+            <div className="bg-white/60 backdrop-blur-2xl border border-white shadow-[0_8px_30px_rgb(0,0,0,0.04)] rounded-[24px] p-6 flex flex-col items-center gap-4 transition-all duration-300 hover:shadow-lg">
               <div className="relative w-28 h-28">
                 <svg className="-rotate-90 w-28 h-28" viewBox="0 0 110 110">
                   <circle className="fill-none stroke-slate-100 stroke-[8px]" cx="55" cy="55" r="47" />
@@ -485,7 +485,7 @@ export const InterviewNormal = () => {
 
 
               <button 
-                className="w-full py-2.5 px-4 rounded-full font-bold text-xs bg-slate-800 hover:bg-slate-900 text-white transition-all cursor-pointer border-none shadow-sm flex items-center justify-center gap-2" 
+                className="w-full py-3 px-4 rounded-xl font-bold text-xs bg-slate-800 hover:bg-slate-700 text-white transition-all cursor-pointer border-none shadow-md flex items-center justify-center gap-2 hover:-translate-y-0.5" 
                 onClick={() => handleSubmitInterview(false)}
               >
                 ⏹ End Interview
@@ -493,7 +493,7 @@ export const InterviewNormal = () => {
             </div>
 
             {/* AI insights Card */}
-            <div className="bg-white/80 backdrop-blur-md border border-slate-200/80 rounded-2xl p-5 shadow-sm transition-all duration-300 hover:shadow-md">
+            <div className="bg-white/60 backdrop-blur-2xl border border-white shadow-[0_8px_30px_rgb(0,0,0,0.04)] rounded-[24px] p-6 transition-all duration-300 hover:shadow-lg">
               <h4 className="m-0 mb-4 text-[13px] font-bold text-slate-800 tracking-wide uppercase">AI Live Evaluation</h4>
               
               <div className="mb-4">
@@ -536,7 +536,7 @@ export const InterviewNormal = () => {
             </div>
 
             {/* Audio canvas visualizer */}
-            <div className="bg-white/80 backdrop-blur-md border border-slate-200/80 rounded-2xl p-5 shadow-sm transition-all duration-300 hover:shadow-md flex flex-col gap-2">
+            <div className="bg-white/60 backdrop-blur-2xl border border-white shadow-[0_8px_30px_rgb(0,0,0,0.04)] rounded-[24px] p-6 transition-all duration-300 hover:shadow-lg flex flex-col gap-2">
               <h4 className="m-0 text-[13px] font-bold text-slate-800 tracking-wide uppercase">Voice Monitor</h4>
               <div className="relative w-full h-12 bg-slate-50 border border-slate-200/80 rounded-xl overflow-hidden shadow-inner flex items-center justify-center">
                 <canvas ref={visualizerCanvasRef} className="w-full h-full block" />
@@ -546,7 +546,7 @@ export const InterviewNormal = () => {
 
           <div className="ip-right flex flex-col gap-4 h-full min-h-0">
             {isPrepMode ? (
-              <div className="bg-white/95 backdrop-blur-xl border border-slate-200/80 rounded-[2rem] p-8 shadow-sm flex flex-col gap-6 h-full min-h-0 overflow-y-auto">
+              <div className="bg-white/70 backdrop-blur-3xl border border-white rounded-[2rem] p-8 shadow-[0_8px_40px_rgb(0,0,0,0.08)] flex flex-col gap-6 h-full min-h-0 overflow-y-auto">
                 <div className="flex justify-between items-center pb-4 border-b border-slate-100">
                   <div className="flex items-center gap-3">
                     <div className="w-10 h-10 rounded-xl bg-indigo-50 flex items-center justify-center text-indigo-600 text-lg shadow-sm">
@@ -616,7 +616,7 @@ export const InterviewNormal = () => {
             ) : (
               <>
                 {/* Question Card */}
-                <div className="bg-white/90 backdrop-blur-md border border-slate-200/80 rounded-3xl p-5 md:p-6 shadow-sm relative overflow-hidden transition-all duration-300 hover:shadow-md before:content-[''] before:absolute before:top-0 before:left-0 before:w-1.5 before:h-full before:bg-gradient-to-b before:from-indigo-500 before:to-emerald-500">
+                <div className="bg-white/70 backdrop-blur-2xl border border-white rounded-[24px] p-6 md:p-8 shadow-[0_8px_30px_rgb(0,0,0,0.06)] relative overflow-hidden transition-all duration-300 hover:shadow-xl">
                   <div className="text-[11px] text-slate-400 font-extrabold tracking-wider uppercase mb-2">
                     Question <span id="questionNumber" className="text-indigo-600 font-black">{displayQuestionNum}</span> of <span id="totalQuestions">{totalDisplayQuestions}</span>
                   </div>
@@ -650,7 +650,7 @@ export const InterviewNormal = () => {
                 </div>
 
                 {/* Transcript Card */}
-                <div className="bg-white/90 backdrop-blur-md border border-slate-200/80 rounded-3xl p-5 shadow-sm flex flex-col h-[260px] shrink-0 transition-all duration-300 hover:shadow-md">
+                <div className="bg-white/80 backdrop-blur-3xl border border-white rounded-[32px] p-6 md:p-8 shadow-[0_8px_40px_rgb(0,0,0,0.08)] flex flex-col h-[300px] shrink-0 transition-all duration-300 hover:shadow-xl">
                   <div className="flex items-center justify-between mb-3">
                     <div className="flex items-center gap-2 text-sm font-extrabold text-slate-800 tracking-wide uppercase">
                       <span>🎙</span> Live Transcript
@@ -661,7 +661,7 @@ export const InterviewNormal = () => {
                     </div>
                   </div>
                   <textarea
-                    className="bg-slate-50/50 border border-slate-200/60 rounded-xl p-4 text-base leading-relaxed text-slate-800 placeholder:text-slate-400 outline-none focus:border-indigo-500 focus:ring-2 focus:ring-indigo-100 shadow-inner resize-none w-full flex-1 overflow-y-auto transition-all"
+                    className="bg-slate-50/50 border border-slate-200 p-5 text-[0.95rem] font-medium leading-relaxed text-slate-800 placeholder:text-slate-400 outline-none shadow-inner resize-none w-full flex-1 overflow-y-auto transition-all rounded-[24px] custom-scrollbar"
                     placeholder="Your speech will appear here automatically..."
                     readOnly
                     value={transcriptionText + (interimTranscriptText ? interimTranscriptText : '')}
