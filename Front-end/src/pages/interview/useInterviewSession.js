@@ -886,30 +886,32 @@ export const useInterviewSession = (sessionId, interviewType, startRoundTwo) => 
           // VAD handles restarting; we no longer automatically restart here.
 
           if (blob.size > 1000) {
-            // We no longer skip blobs if a transcription is in-flight.
-            // Skipping blobs causes speech to be permanently lost (typing stops).
-            // Fast API can handle overlapping POST requests safely.
-            // Pick correct file extension for backend
-            const ext = actualMime.includes('ogg') ? 'ogg' : actualMime.includes('mp4') ? 'mp4' : 'webm'
-            const formData = new FormData()
-            formData.append('audio', blob, `audio.${ext}`)
-            // Use refs (populated synchronously at session-load) instead of
-            // sessionDetail?.  to avoid stale-closure / race-condition 422 errors.
-            formData.append('candidate_name', candidateNameRef.current)
-            formData.append('language', interviewLanguageRef.current)
-            transcribeInFlightRef.current = true
-            try {
-              const res = await api.post('/transcribe', formData, {
-                headers: { 'Content-Type': 'multipart/form-data' },
-                timeout: 10000
-              })
-              if (res.data && res.data.text && res.data.text.trim()) {
-                setTranscriptionText(prev => prev + res.data.text.trim() + ' ')
+            // Only send to Whisper for English interviews.
+            // For regional languages (Telugu, Hindi, etc.) the browser Web Speech API
+            // (Google) handles transcription directly in onresult — it's far more
+            // accurate than Whisper for Indian languages. Sending audio to Whisper
+            // for Telugu causes heavy hallucination.
+            const currentLang = interviewLanguageRef.current || 'English'
+            if (currentLang === 'English') {
+              const ext = actualMime.includes('ogg') ? 'ogg' : actualMime.includes('mp4') ? 'mp4' : 'webm'
+              const formData = new FormData()
+              formData.append('audio', blob, `audio.${ext}`)
+              formData.append('candidate_name', candidateNameRef.current)
+              formData.append('language', currentLang)
+              transcribeInFlightRef.current = true
+              try {
+                const res = await api.post('/transcribe', formData, {
+                  headers: { 'Content-Type': 'multipart/form-data' },
+                  timeout: 10000
+                })
+                if (res.data && res.data.text && res.data.text.trim()) {
+                  setTranscriptionText(prev => prev + res.data.text.trim() + ' ')
+                }
+              } catch (err) {
+                console.error('Whisper transcription failed:', err)
+              } finally {
+                transcribeInFlightRef.current = false
               }
-            } catch (err) {
-              console.error('Whisper transcription failed:', err)
-            } finally {
-              transcribeInFlightRef.current = false
             }
           }
         }
@@ -934,8 +936,6 @@ export const useInterviewSession = (sessionId, interviewType, startRoundTwo) => 
     }
 
     rec.onresult = (event) => {
-      // Show Google's live transcript immediately as fallback text
-      // Whisper will replace/append more accurate text asynchronously
       let interimText = ''
       let finalText = ''
       for (let i = event.resultIndex; i < event.results.length; i++) {
@@ -949,10 +949,17 @@ export const useInterviewSession = (sessionId, interviewType, startRoundTwo) => 
       // Show interim text in real time (visible while speaking)
       setInterimTranscriptText(interimText)
       if (finalText) {
-        // We no longer append Google's final text to avoid duplication with Whisper
         setInterimTranscriptText('')
-      }      // Trigger Whisper transcription after 1.5s pause in speech
-      // Removed: We now rely purely on VAD (audio volume) rather than Google SpeechRecognition timeouts.
+        // For non-English languages, the browser Web Speech API (Google) is
+        // far more accurate than Whisper for regional Indian languages like
+        // Telugu, Hindi, Tamil, etc. Use it as the primary transcript source.
+        // Whisper is still used for English where it excels.
+        const lang = interviewLanguageRef.current || 'English'
+        if (lang !== 'English') {
+          setTranscriptionText(prev => prev + finalText)
+        }
+        // For English, Whisper handles it via the VAD MediaRecorder path below.
+      }
     }
 
     rec.onerror = (e) => {
@@ -1021,8 +1028,10 @@ export const useInterviewSession = (sessionId, interviewType, startRoundTwo) => 
               try { mr.start() } catch (e) { }
             }
           } else {
-            // Silence detected: if silent for > 1.5s, stop and flush to backend
-            if (mr.state === 'recording' && (now - lastSpeechTimeRef.current > 1500)) {
+            // Silence detected: if silent for > 2.5s, stop and flush to backend.
+            // 2.5s gives Whisper a longer, more meaningful chunk which dramatically
+            // reduces hallucination compared to short 1-2 second fragments.
+            if (mr.state === 'recording' && (now - lastSpeechTimeRef.current > 2500)) {
               try { mr.stop() } catch (e) { }
             }
           }

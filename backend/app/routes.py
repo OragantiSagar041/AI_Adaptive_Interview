@@ -4011,10 +4011,13 @@ class CompleteSessionRequest(BaseModel):
     total_fullscreen_exits: int = 0
 
 @router.post("/complete-session/{link_id}")
-def complete_session(link_id: str, payload: CompleteSessionRequest):
+def complete_session(link_id: str, payload: Optional[CompleteSessionRequest] = None):
     """Mark a session as completed and send notification emails (Task 3)."""
     try:
         session = interview_sessions_collection.find_one({"link_id": link_id})
+        # Use default payload if none was sent by the client
+        if payload is None:
+            payload = CompleteSessionRequest()
         update_data = {
             "status": "completed", 
             "warnings": payload.warnings, 
@@ -5832,8 +5835,22 @@ async def get_dashboard_aggregated_data(admin_id: Optional[str] = None, current_
         stats_data = await get_dashboard_stats(admin_id=admin_id, current_admin=current_admin)
         
         
-        # Removed candidates query for performance decoupling
+        # Restore candidate query since the frontend still expects candidates in this payload
+        c_query_filter = {
+            "company_id": current_admin.get("company_id"),
+            "$or": [{"is_deactivated": False}, {"is_deactivated": {"$exists": False}}]
+        }
+        if current_admin.get("role") == "admin":
+            c_query_filter["created_by"] = current_admin["admin_id"]
+        elif admin_id:
+            c_query_filter["created_by"] = admin_id
+            
+        candidates_cursor = list(interview_sessions_collection.find(c_query_filter).sort("created_at", -1))
         candidates_list = []
+        for c in candidates_cursor:
+            c["id"] = str(c["_id"])
+            c["_id"] = str(c["_id"])
+            candidates_list.append(c)
         live_sessions = []
         ongoing_monitored_count = 0
         ongoing_live_count = 0
@@ -6361,11 +6378,15 @@ async def stt_endpoint(file: UploadFile = File(...), language: Optional[str] = N
                 # Use whisper-large-v3-turbo for better accuracy with Indian accents.
                 # Pass initial_prompt to prime the model with Indian English context which
                 # dramatically reduces hallucinations and accent-related transcription errors.
+                # IMPORTANT: Only pass an English prompt if the target language is English!
+                iso_lang = language or "en"
+                sys_prompt = "The speaker has an Indian English accent. Transcribe technical terms, programming concepts, and software engineering terminology accurately." if iso_lang == "en" else ""
+                
                 transcript = await groq_client.audio.transcriptions.create(
                     model="whisper-large-v3-turbo",
                     file=f,
-                    language=language or "en",
-                    prompt="The speaker has an Indian English accent. Transcribe technical terms, programming concepts, and software engineering terminology accurately.",
+                    language=iso_lang,
+                    prompt=sys_prompt,
                     temperature=0.0,  # Lower temperature = more deterministic, fewer hallucinations
                 )
             return {"transcript": transcript.text}
