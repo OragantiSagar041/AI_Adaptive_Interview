@@ -318,7 +318,10 @@ export default function TeamManagementPage() {
                         <div className="w-10 h-10 rounded-full bg-gradient-to-tr from-indigo-100 to-purple-100 flex items-center justify-center text-indigo-700 font-bold uppercase border border-indigo-200 shadow-sm shrink-0">
                           {(admin.name || admin.username || 'A')[0]}
                         </div>
-                        <span className="font-bold text-slate-800 text-sm">{admin.name || admin.username}</span>
+                        <div className="flex flex-col">
+                          <span className="font-bold text-slate-800 text-sm">{admin.name || admin.username}</span>
+                          <span className="text-[10px] text-slate-400 font-medium uppercase tracking-wider">{admin.custom_id || admin.id}</span>
+                        </div>
                       </div>
                     </td>
                     <td className="p-4 text-sm text-slate-500 font-medium">{admin.email}</td>

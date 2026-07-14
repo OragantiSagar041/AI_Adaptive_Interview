@@ -153,8 +153,10 @@ def get_or_create_candidate(name: str) -> str:
     if row:
         return str(row["_id"])
 
+    custom_id = get_next_sequence_value("candidate", "CAN")
     result = candidates_collection.insert_one({
         "name": name,
+        "custom_id": custom_id,
         "created_at": datetime.now(timezone.utc).isoformat()
     })
     return str(result.inserted_id)
@@ -751,6 +753,20 @@ def save_answer(
                                 "notification_sent": True
                             }}
                         )
+                        
+                        # Append 'IQ' to candidate's custom_id if not present
+                        candidate_id = session.get("candidate_id")
+                        if candidate_id:
+                            try:
+                                from bson import ObjectId
+                                cand = candidates_collection.find_one({"_id": ObjectId(candidate_id)})
+                                if cand and cand.get("custom_id") and not cand["custom_id"].endswith("IQ"):
+                                    candidates_collection.update_one(
+                                        {"_id": ObjectId(candidate_id)},
+                                        {"$set": {"custom_id": f"{cand['custom_id']}IQ"}}
+                                    )
+                            except: pass
+                            
                         sync_session_to_application(session.get("link_id"))
 
                         # Send notification!
@@ -2666,6 +2682,7 @@ async def startup_event_db_and_email():
             hashed_pw = hash_password(master_pw)
             default_email = os.getenv("BREVO_SENDER_EMAIL", "no-reply@mockinterview.com")
             admins_collection.insert_one({
+        "custom_id": get_next_sequence_value("recruiter", "RC"),
                 "username": "master",
                 "password": hashed_pw,
                 "email": default_email,
@@ -2682,6 +2699,7 @@ async def startup_event_db_and_email():
             hashed_pw = hash_password(admin_pw)
             default_email = os.getenv("BREVO_SENDER_EMAIL", "no-reply@mockinterview.com")
             admins_collection.insert_one({
+        "custom_id": get_next_sequence_value("recruiter", "RC"),
                 "username": "admin",
                 "password": hashed_pw,
                 "email": default_email,
@@ -4877,6 +4895,7 @@ def create_tenant(data: TenantCreate, master_id: str = Depends(get_current_admin
         "created_at": start.isoformat()
     }
     
+    new_tenant["custom_id"] = get_next_sequence_value("recruiter", "RC")
     admins_collection.insert_one(new_tenant)
     
     # Create notification for master admin
@@ -5179,6 +5198,7 @@ def firebase_auth(data: FirebaseAuthRequest):
             "credits": credits_to_grant,
             "created_at": now.isoformat()
         }
+        new_admin["custom_id"] = get_next_sequence_value("recruiter", "RC")
         result = admins_collection.insert_one(new_admin)
         user = admins_collection.find_one({"_id": result.inserted_id})
         
@@ -5414,6 +5434,7 @@ def register_admin(data: AdminRegister):
         "created_at": now.isoformat()
     }
     
+    new_admin["custom_id"] = get_next_sequence_value("recruiter", "RC")
     admins_collection.insert_one(new_admin)
     return {"status": "success", "message": f"Account created with {data.plan} plan! Please login."}
 
@@ -5589,6 +5610,7 @@ def verify_razorpay_payment(data: RazorpayVerifyRequest):
     company_id = str(company_insert.inserted_id)
 
     admins_collection.insert_one({
+        "custom_id": get_next_sequence_value("recruiter", "RC"),
         "username": signup["email"],
         "password": hash_password(signup["password"]),
         "email": signup["email"],
@@ -5827,6 +5849,7 @@ async def stripe_webhook(request):
         now = datetime.now(timezone.utc)
         
         admins_collection.insert_one({
+        "custom_id": get_next_sequence_value("recruiter", "RC"),
             "username": email,
             "password": hash_password(password),
             "email": email,
@@ -5972,6 +5995,7 @@ def create_sub_admin(data: SubAdminCreate, current_admin: dict = Depends(get_cur
         "created_at": datetime.now(timezone.utc).isoformat()
     }
     
+    new_admin["custom_id"] = get_next_sequence_value("recruiter", "RC")
     admins_collection.insert_one(new_admin)
     return {"status": "success", "message": "Sub-admin created successfully"}
 
@@ -7988,6 +8012,7 @@ def create_job(job: JobCreate, current_admin: dict = Depends(get_current_admin_d
     job_dict["admin_id"] = current_admin["admin_id"]
     job_dict["created_at"] = datetime.now(timezone.utc).isoformat()
     job_dict["application_count"] = 0
+    job_dict["custom_id"] = get_next_sequence_value("job", "JOB")
     result = jobs_collection.insert_one(job_dict)
     job_dict["_id"] = str(result.inserted_id)
     return {"status": "success", "job": job_dict}

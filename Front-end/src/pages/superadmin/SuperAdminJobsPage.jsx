@@ -324,7 +324,10 @@ export default function SuperAdminJobsPage() {
                       <Briefcase size={20} />
                     </div>
                     <div className="overflow-hidden">
-                      <h3 className="font-black text-slate-800 text-base leading-tight truncate">{job.title}</h3>
+                      <div className="flex items-center gap-2">
+                        <h3 className="font-black text-slate-800 text-base leading-tight truncate">{job.title}</h3>
+                        <span className="text-[9px] font-bold text-slate-400 uppercase tracking-wider bg-slate-100 px-1.5 py-0.5 rounded">{job.custom_id || job.job_id || 'JOB'}</span>
+                      </div>
                       <p className="text-xs text-slate-400 font-medium mt-0.5 flex items-center gap-1">
                         <Building2 size={11} /> {job.location}
                       </p>
@@ -435,7 +438,10 @@ export default function SuperAdminJobsPage() {
                           <Briefcase size={17} />
                         </div>
                         <div>
-                          <p className="font-black text-slate-800 text-sm">{job.title}</p>
+                          <div className="flex items-center gap-2">
+                            <p className="font-black text-slate-800 text-sm">{job.title}</p>
+                            <span className="text-[9px] font-bold text-slate-400 uppercase tracking-wider bg-slate-100 px-1.5 py-0.5 rounded">{job.custom_id || job.job_id || 'JOB'}</span>
+                          </div>
                           <p className="text-xs text-slate-400 mt-0.5 line-clamp-1 max-w-[200px]">{job.description}</p>
                         </div>
                       </div>
