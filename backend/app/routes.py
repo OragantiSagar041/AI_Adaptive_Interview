@@ -44,7 +44,7 @@ from bson import ObjectId
 from docx import Document
 from dotenv import load_dotenv
 from groq import AsyncGroq
-from pydantic import BaseModel
+from pydantic import BaseModel, validator, Field
 from starlette.background import BackgroundTask
 
 from fastapi import (
@@ -3155,6 +3155,12 @@ class BulkCandidate(BaseModel):
     resume_text: str = ""
     record_video: bool = True  # Task 5: Per-candidate video toggle
 
+    @validator('candidate_name')
+    def name_must_not_be_numeric(cls, v):
+        if v.strip().isdigit():
+            raise ValueError("Candidate Name cannot be purely numeric")
+        return v
+
 class BulkCreateSession(BaseModel):
     candidates: List[BulkCandidate]
     job_description: str
@@ -3174,6 +3180,22 @@ class BulkCreateSession(BaseModel):
     ai_instructions: str = ""
     voice_clone: bool = False
     custom_voice_id: str = ""
+
+    @validator('scheduled_end')
+    def validate_dates(cls, v, values):
+        start = values.get('scheduled_start')
+        if start and v:
+            try:
+                # Basic ISO format validation check (will be parsed fully in logic)
+                start_dt = datetime.datetime.fromisoformat(start.replace("Z", "+00:00"))
+                end_dt = datetime.datetime.fromisoformat(v.replace("Z", "+00:00"))
+                if start_dt >= end_dt:
+                    raise ValueError("scheduled_end must be after scheduled_start")
+            except ValueError as e:
+                if "scheduled_end must be after" in str(e):
+                    raise e
+                # Ignore strict ISO parse errors here to allow legacy fallback formats
+        return v
 
 @router.post("/admin/bulk-create-sessions")
 def bulk_create_sessions(data: BulkCreateSession, background_tasks: BackgroundTasks, current_admin: dict = Depends(get_current_admin_details)):
@@ -6037,9 +6059,28 @@ def add_sub_admin_credits(admin_id: str, data: AddCreditsRequest, current_admin:
     if not admin_doc:
         raise HTTPException(status_code=404, detail="Sub-admin not found")
         
-    new_credits = admin_doc.get("credits", 0) + data.credits
-    admins_collection.update_one({"_id": ObjectId(admin_id)}, {"$set": {"credits": new_credits}})
-    return {"status": "success", "credits": new_credits}
+    if admin_doc.get("login_enabled") == False:
+        raise HTTPException(status_code=400, detail="Cannot add credits to a deactivated admin account.")
+
+    # Deduct from Super Admin atomically
+    super_admin_id = current_admin["admin_id"]
+    sa_doc = admins_collection.find_one_and_update(
+        {"_id": ObjectId(super_admin_id), "credits": {"$gte": data.credits}},
+        {"$inc": {"credits": -data.credits}},
+        return_document=ReturnDocument.AFTER
+    )
+    
+    if not sa_doc:
+        raise HTTPException(status_code=400, detail="Insufficient credits in Super Admin account.")
+        
+    # Add to Sub-Admin atomically
+    updated_admin = admins_collection.find_one_and_update(
+        {"_id": ObjectId(admin_id)},
+        {"$inc": {"credits": data.credits}},
+        return_document=ReturnDocument.AFTER
+    )
+    
+    return {"status": "success", "credits": updated_admin.get("credits", 0), "super_admin_credits": sa_doc.get("credits", 0)}
 
 
 @router.get("/super-admin/dashboard-stats")

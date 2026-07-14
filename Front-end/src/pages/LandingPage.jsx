@@ -86,9 +86,9 @@ function Nav() {
         <nav className="hidden md:flex items-center gap-8 text-sm text-muted-foreground">
           <a href="#platform" className="hover:text-foreground transition">Platform</a>
           <a href="#how" className="hover:text-foreground transition">How it works</a>
-          <a href="#about" className="hover:text-foreground transition">About</a>
-          <a href="#blog" className="hover:text-foreground transition">Blog</a>
-          <a href="#contact" className="hover:text-foreground transition">Contact</a>
+          <a href="#features" className="hover:text-foreground transition">Features</a>
+          <a href="#why" className="hover:text-foreground transition">Why HireIQ</a>
+          <a href="#faq" className="hover:text-foreground transition">FAQ</a>
         </nav>
         <div className="flex items-center gap-2">
           <Link
