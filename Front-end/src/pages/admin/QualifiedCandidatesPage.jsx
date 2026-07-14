@@ -1,15 +1,23 @@
-import React from 'react'
+import React, { useState, useEffect } from 'react'
 import { useSelector, useDispatch } from 'react-redux'
 import { ChevronRight, Download } from 'lucide-react'
 import Card from '../../components/Card'
 import Button from '../../components/Button'
 import { getComputedStatus } from '../../utils/adminFormatters'
-import { handleExportExcel } from '../../store/slices/candidatesSlice'
+import { handleExportExcel, loadAdminQualifiedCandidates } from '../../store/slices/candidatesSlice'
 import { handleOpenScorecard } from '../../store/slices/interviewSlice'
 
 export default function QualifiedCandidatesPage() {
   const dispatch = useDispatch()
   const candidates = useSelector(state => state.candidates.candidates) || []
+  const status = useSelector(state => state.candidates.status)
+  const error = useSelector(state => state.candidates.error)
+
+  const [pipelineFilter, setPipelineFilter] = useState('all')
+
+  useEffect(() => {
+    dispatch(loadAdminQualifiedCandidates({ pipeline: pipelineFilter }))
+  }, [dispatch, pipelineFilter])
 
   const qualifiedCandidates = candidates.filter(c => c.decision === 'selected')
 
@@ -26,20 +34,49 @@ export default function QualifiedCandidatesPage() {
 
   return (
     <div className="flex flex-col gap-6">
-      <div className="flex justify-between items-center">
+      <div className="flex justify-between items-center flex-wrap gap-4">
         <div>
           <h3 className="text-lg font-bold text-slate-800">Qualified Candidates</h3>
           <p className="text-xs text-slate-500">Shortlisted for next hiring rounds</p>
         </div>
-        <Button
-          onClick={handleExportAction}
-          variant="secondary"
-          className="bg-emerald-50 border-emerald-200 text-emerald-600 hover:bg-emerald-100/50"
-          icon={<Download size={14} />}
-        >
-          Export Selected
-        </Button>
+        <div className="flex items-center gap-3 flex-wrap w-full sm:w-auto">
+          {/* Pipeline filter */}
+          <div className="flex items-center gap-2 bg-white/70 backdrop-blur-md px-3 py-1.5 rounded-xl border border-slate-200 shadow-sm">
+            <span className="text-[11px] font-bold text-slate-500 uppercase tracking-wider">Pipeline:</span>
+            <select
+              value={pipelineFilter}
+              onChange={(e) => setPipelineFilter(e.target.value)}
+              className="rounded-lg border border-slate-200 bg-white px-2.5 py-1 text-xs text-slate-800 outline-none focus:border-indigo-500 font-semibold cursor-pointer"
+              style={{ padding: '0.25rem 1.75rem 0.25rem 0.5rem', fontSize: '11px' }}
+            >
+              <option value="all">All</option>
+              <option value="ai_calling">AI Calling Agent</option>
+              <option value="hireiq">HireIQ Interview</option>
+            </select>
+          </div>
+
+          <Button
+            onClick={handleExportAction}
+            variant="secondary"
+            className="bg-emerald-50 border-emerald-200 text-emerald-600 hover:bg-emerald-100/50 h-[36px]"
+            icon={<Download size={14} />}
+          >
+            Export Selected
+          </Button>
+        </div>
       </div>
+
+      {status === 'loading' && candidates.length === 0 && (
+        <div className="flex items-center justify-center h-[200px]">
+          <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-emerald-600" />
+        </div>
+      )}
+
+      {status === 'failed' && (
+        <div className="bg-red-50 border border-red-200 text-red-600 text-sm rounded-lg p-4 mt-4">
+          {error || 'Something went wrong. Please try again.'}
+        </div>
+      )}
 
       <Card className="bg-white/82 backdrop-blur-md border border-[#e5edf7] p-0 shadow-sm text-slate-800">
         <table className="w-full border-collapse text-left">

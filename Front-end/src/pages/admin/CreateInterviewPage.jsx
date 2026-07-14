@@ -39,8 +39,10 @@ export default function CreateInterviewPage() {
     let defaultState = {
       name: '',
       email: '',
+      phone: '',
       resumeText: '',
       jobDescription: '',
+      applicationId: '',
       customQuestions: '',
       aiInstructions: '',
       industry: 'General',
@@ -189,16 +191,15 @@ export default function CreateInterviewPage() {
   useEffect(() => {
     async function fetchLogs() {
       try {
-        const response = await fetch(`${API_BASE_URL}/api/calls/logs`, {
+        const response = await fetch(`${API_BASE_URL}/api/calls/interested-candidates`, {
           headers: { 'Authorization': `Bearer ${token}` }
         })
         const data = await response.json()
         if (response.ok) {
-          // Filter to completed calls only, or just show all with names
-          setCallLogs(data.logs || [])
+          setCallLogs(data.candidates || [])
         }
       } catch (e) {
-        console.error("Failed to fetch logs", e)
+        console.error("Failed to fetch interested candidates logs", e)
       }
     }
     if (token && createTab === 'single') {
@@ -529,7 +530,9 @@ Congratulations! You have been selected for an AI-powered interview. Please revi
         ai_instructions: aiInstructions,
         case_study_count: interviewType === 'Non-Technical' ? Number(caseStudyCount) : 0,
         voice_clone: voiceCloning,
-        custom_voice_id: singleCandidate.customVoiceId
+        custom_voice_id: singleCandidate.customVoiceId,
+        application_id: singleCandidate.applicationId || "",
+        candidate_phone: singleCandidate.phone || ""
       }, {
         headers: {
           'Authorization': `Bearer ${token}`
@@ -896,43 +899,52 @@ Congratulations! You have been selected for an AI-powered interview. Please revi
                   </div>
                 </div>
 
-                {callLogs.length > 0 && (
-                  <div className="bg-indigo-50/50 border border-indigo-100 rounded-xl p-4 flex flex-col gap-2">
-                    <label className="text-xs font-bold text-indigo-800 uppercase tracking-wider">Select Interested Candidate (From AI Calls)</label>
-                    <select
-                      className="w-full px-4 py-2.5 bg-white border border-indigo-200 rounded-lg text-sm text-slate-700 focus:outline-none focus:border-primary focus:ring-2 focus:ring-primary/20 transition-all cursor-pointer shadow-sm"
-                      onChange={(e) => {
-                        const selectedId = e.target.value;
-                        if (!selectedId) return;
-                        const log = callLogs.find(l => l.call_id === selectedId || l.id === selectedId);
-                        if (log) {
-                          setSingleCandidate(prev => ({
-                            ...prev,
-                            name: log.candidate_name || prev.name,
-                            resumeText: log.resume_text || prev.resumeText,
-                            jobDescription: log.job_description || prev.jobDescription
-                          }));
-                          // Automatically trigger ATS calculation if we have both
-                          if ((log.resume_text || singleCandidate.resumeText) && (log.job_description || singleCandidate.jobDescription)) {
-                            handleCalculateAts(log.resume_text || singleCandidate.resumeText, log.job_description || singleCandidate.jobDescription);
-                          }
+                <div className="bg-indigo-50/50 border border-indigo-100 rounded-xl p-4 flex flex-col gap-2">
+                  <label className="text-xs font-bold text-indigo-800 uppercase tracking-wider">Select Interested Candidate (From AI Calls)</label>
+                  <select
+                    className="w-full px-4 py-2.5 bg-white border border-indigo-200 rounded-lg text-sm text-slate-700 focus:outline-none focus:border-primary focus:ring-2 focus:ring-primary/20 transition-all cursor-pointer shadow-sm disabled:bg-slate-50 disabled:text-slate-400 disabled:cursor-not-allowed"
+                    disabled={callLogs.length === 0}
+                    onChange={(e) => {
+                      const selectedId = e.target.value;
+                      if (!selectedId) return;
+                      const log = callLogs.find(l => (l._id || l.id) === selectedId);
+                      if (log) {
+                        setSingleCandidate(prev => ({
+                          ...prev,
+                          name: log.name || prev.name,
+                          email: log.email || prev.email,
+                          phone: log.phone || prev.phone,
+                          resumeText: log.resume_text || log.resume_url || prev.resumeText,
+                          jobDescription: log.job_description || prev.jobDescription,
+                          applicationId: log._id || log.id || ''
+                        }));
+                        // Automatically trigger ATS calculation if we have both
+                        const resText = log.resume_text || log.resume_url || singleCandidate.resumeText;
+                        if (resText && (log.job_description || singleCandidate.jobDescription)) {
+                          handleCalculateAts(resText, log.job_description || singleCandidate.jobDescription);
                         }
-                      }}
-                    >
-                      <option value="">-- Select a Candidate --</option>
-                      {callLogs
-                        .filter(log => log.candidate_name && log.status?.toLowerCase() === 'completed')
-                        .map(log => (
-                        <option key={log.call_id || log.id} value={log.call_id || log.id}>
-                          {log.candidate_name} {log.phone_number ? `(${log.phone_number})` : ''}
-                        </option>
-                      ))}
-                    </select>
-                    <p className="text-[0.65rem] text-indigo-500 font-medium mt-1">
-                      Selecting a candidate will automatically fill their name, resume, and job description!
-                    </p>
-                  </div>
-                )}
+                      }
+                    }}
+                  >
+                    {callLogs.length === 0 ? (
+                      <option value="">No interested candidates found from AI Calls</option>
+                    ) : (
+                      <>
+                        <option value="">-- Select a Candidate --</option>
+                        {callLogs.map(log => (
+                          <option key={log._id || log.id} value={log._id || log.id}>
+                            {log.name} ({log.email}) - {log.job_title || 'Interested Candidate'}
+                          </option>
+                        ))}
+                      </>
+                    )}
+                  </select>
+                  <p className="text-[0.65rem] text-indigo-500 font-medium mt-1">
+                    {callLogs.length === 0 
+                      ? "Ensure candidates are marked as 'Interested' in the AI Calling Agent to see them here." 
+                      : "Selecting a candidate will automatically fill their name, email, phone, resume, and job description!"}
+                  </p>
+                </div>
 
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                   <Input

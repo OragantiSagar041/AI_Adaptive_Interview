@@ -675,13 +675,28 @@ export default function AICallingAgentPage() {
   const [manualCall, setManualCall] = useState({ phone: '', name: '', jobDesc: '', resume: null })
   const [isCalling, setIsCalling] = useState(false)
   const [availableJobs, setAvailableJobs] = useState([])
+  const [selectedJob, setSelectedJob] = useState(null)
+  const [availableCandidates, setAvailableCandidates] = useState([])
+  const [selectedApplicationId, setSelectedApplicationId] = useState('')
+  const [selectedJobId, setSelectedJobId] = useState('')
 
   useEffect(() => {
-    const saved = localStorage.getItem('superadmin_jobs_data');
-    if (saved) {
-      try { setAvailableJobs(JSON.parse(saved)) } catch (e) { }
+    if (!token) return
+    const fetchJobs = async () => {
+      try {
+        const res = await fetch(`${API_BASE_URL}/api/jobs`, {
+          headers: { Authorization: `Bearer ${token}` }
+        })
+        if (res.ok) {
+          const data = await res.json()
+          setAvailableJobs(data.jobs || [])
+        }
+      } catch (err) {
+        console.error("Error fetching jobs for dialer:", err)
+      }
     }
-  }, [])
+    fetchJobs()
+  }, [token, API_BASE_URL])
 
   const headers = { Authorization: `Bearer ${token}` }
 
@@ -772,6 +787,8 @@ export default function AICallingAgentPage() {
       formData.append('phone_number', manualCall.phone)
       formData.append('candidate_name', manualCall.name || 'Candidate')
       formData.append('job_description', manualCall.jobDesc)
+      if (selectedJobId) formData.append('job_id', selectedJobId)
+      if (selectedApplicationId) formData.append('application_id', selectedApplicationId)
       if (manualCall.resume) formData.append('resume', manualCall.resume)
       const r = await fetch(`${API_BASE_URL}/api/calls/initiate-manual`, {
         method: 'POST', headers: { Authorization: `Bearer ${token}` }, body: formData
@@ -959,25 +976,81 @@ export default function AICallingAgentPage() {
                     <div>
                       <div className="flex items-center justify-between mb-2">
                         <label className="block text-[0.7rem] font-bold uppercase tracking-wider text-slate-500">Job Description</label>
-                        {availableJobs && availableJobs.length > 0 && (
-                          <select
-                            className="bg-indigo-50 border border-indigo-100 text-[0.7rem] font-bold text-indigo-700 rounded-lg px-2 py-1 outline-none focus:border-indigo-500 cursor-pointer"
-                            onChange={(e) => {
-                              if (!e.target.value) return;
-                              const job = availableJobs.find(j => j.id.toString() === e.target.value);
-                              if (job) {
-                                const desc = `Role: ${job.title}\nExperience: ${job.experience}\nSkills: ${job.skills}\n\n${job.description}`;
-                                setManualCall(prev => ({ ...prev, jobDesc: desc }));
-                              }
-                              e.target.value = "";
-                            }}
-                          >
-                            <option value="">Auto-fill from saved Job...</option>
-                            {availableJobs.map(job => (
-                              <option key={job.id} value={job.id}>{job.title}</option>
-                            ))}
-                          </select>
-                        )}
+                        <div className="flex gap-2">
+                           {availableJobs && availableJobs.length > 0 && (
+                            <select
+                              className="bg-indigo-50 border border-indigo-100 text-[0.7rem] font-bold text-indigo-700 rounded-lg px-2 py-1 outline-none focus:border-indigo-500 cursor-pointer"
+                              onChange={async (e) => {
+                                const jobId = e.target.value;
+                                setSelectedJobId(jobId);
+                                setSelectedApplicationId('');
+                                if (!jobId) {
+                                  setSelectedJob(null);
+                                  setAvailableCandidates([]);
+                                  return;
+                                }
+                                try {
+                                  const res = await fetch(`${API_BASE_URL}/api/public/jobs/${jobId}`);
+                                  if (res.ok) {
+                                    const data = await res.json();
+                                    const job = data.job;
+                                    setSelectedJob(job);
+                                    if (job) {
+                                      const desc = `Role: ${job.title}\nExperience: ${job.experience || ''}\nSkills: ${job.skills || ''}\n\n${job.description || ''}`;
+                                      setManualCall(prev => ({ ...prev, jobDesc: desc }));
+                                    }
+                                  }
+                                  const appsRes = await fetch(`${API_BASE_URL}/api/jobs/${jobId}/applications`, { headers });
+                                  if (appsRes.ok) {
+                                    const data = await appsRes.json();
+                                    setAvailableCandidates(data.applications || []);
+                                  } else {
+                                    setAvailableCandidates([]);
+                                  }
+                                } catch (err) {
+                                  console.error("Error fetching job description/applications:", err);
+                                }
+                              }}
+                            >
+                              <option value="">Auto-fill from saved Job...</option>
+                              {availableJobs.map(job => (
+                                <option key={job.job_id || job._id || job.id} value={job.job_id || job._id || job.id}>{job.title}</option>
+                              ))}
+                            </select>
+                          )}
+                          {availableCandidates && availableCandidates.length > 0 && (
+                            <select
+                              className="bg-teal-50 border border-teal-100 text-[0.7rem] font-bold text-teal-700 rounded-lg px-2 py-1 outline-none focus:border-teal-500 cursor-pointer"
+                              onChange={(e) => {
+                                const appObjId = e.target.value;
+                                setSelectedApplicationId(appObjId);
+                                if (!appObjId) return;
+                                const candidate = availableCandidates.find(c => (c._id || c.id) === appObjId);
+                                if (candidate) {
+                                  const jobTitle = selectedJob ? selectedJob.title : '';
+                                  const jobExp = selectedJob ? selectedJob.experience : '';
+                                  const jobSkills = selectedJob ? selectedJob.skills : '';
+                                  const jobDescription = selectedJob ? selectedJob.description : '';
+
+                                  const desc = `Role: ${jobTitle}\nExperience: ${jobExp || ''}\nSkills: ${jobSkills || ''}\n\nCandidate Name: ${candidate.name || ''}\nCandidate Email: ${candidate.email || ''}\nCandidate Phone: ${candidate.phone || ''}\nCandidate Resume: ${candidate.resume_text || candidate.resume_url || ''}\n\nJob Description:\n${jobDescription || ''}`;
+
+                                  setManualCall({
+                                    phone: candidate.phone || '',
+                                    name: candidate.name || '',
+                                    jobDesc: desc,
+                                    resume: null
+                                  });
+                                }
+                                e.target.value = "";
+                              }}
+                            >
+                              <option value="">Auto-fill Candidate...</option>
+                              {availableCandidates.map(c => (
+                                <option key={c._id || c.id} value={c._id || c.id}>{c.name} ({c.email})</option>
+                              ))}
+                            </select>
+                          )}
+                        </div>
                       </div>
                       <textarea
                         value={manualCall.jobDesc}
