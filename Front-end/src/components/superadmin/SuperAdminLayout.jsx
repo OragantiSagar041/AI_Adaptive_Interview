@@ -1,6 +1,8 @@
 import React, { useState, useEffect, useRef } from 'react'
 import { useSelector, useDispatch } from 'react-redux'
 import { useNavigate, useLocation, NavLink, Outlet } from 'react-router-dom'
+import Swal from 'sweetalert2'
+import 'sweetalert2/dist/sweetalert2.min.css'
 import {
   LayoutDashboard,
   CheckCircle,
@@ -21,7 +23,8 @@ import {
   Activity,
   AlertCircle,
   PhoneCall,
-  Briefcase
+  Briefcase,
+  MessageSquare
 } from 'lucide-react'
 import logoImage from '../../assets/logo.png'
 import { logout, loadSuperAdminProfile } from '../../store/slices/authSlice'
@@ -35,7 +38,7 @@ import {
 import LiveMonitorStreamModal from '../admin/modals/LiveMonitorStreamModal'
 import axios from 'axios'
 import { getNotifications, markNotificationAsRead, markAllNotificationsAsRead } from '../../utils/api'
-import { setSelectedCandidate, setLiveResultsModalOpen } from '../../store/slices/interviewSlice'
+import { setSelectedCandidate, setLiveResultsModalOpen, handleUpdateDecision } from '../../store/slices/interviewSlice'
 import { loadSuperAdminDashboard, setSelectedAdminFilter, updateLiveSnapshot } from '../../store/slices/dashboardSlice'
 
 function hexToRgba(hex, alpha) {
@@ -201,9 +204,27 @@ export default function SuperAdminLayout() {
     }
   }, [isMobile, sidebarOpen])
 
-  const handleOpenLiveStreamAction = (session) => {
-    setLiveStreamSession(session)
+  const handleOpenLiveStreamAction = (sessionId) => {
+    setLiveStreamSession(sessionId)
     setIsLiveStreamOpen(true)
+  }
+
+  const handleUpdateDecisionAction = (linkId, decision) => {
+    Swal.fire({
+      title: 'Are you sure?',
+      text: `Do you want to mark this candidate as ${decision.toUpperCase()}? Official email will be sent.`,
+      icon: 'warning',
+      showCancelButton: true,
+      confirmButtonColor: decision === 'selected' ? '#10b981' : '#f43f5e',
+      cancelButtonColor: '#94a3b8',
+      confirmButtonText: 'Yes, confirm!'
+    }).then((result) => {
+      if (result.isConfirmed) {
+        dispatch(handleUpdateDecision({ linkId, decision })).then(() => {
+          if (token) dispatch(loadSuperAdminDashboard(selectedAdminFilter))
+        })
+      }
+    })
   }
 
   const accentColors = {
@@ -405,6 +426,7 @@ export default function SuperAdminLayout() {
     { id: 'rejected', label: 'Rejected Candidates', icon: XCircle, path: '/superadmin/rejected-candidates' },
     { id: 'create', label: 'Create Interview', icon: Plus, path: '/superadmin/create-interview' },
     { id: 'ai-calling', label: 'AI Calling Agent', icon: Radio, path: '/superadmin/ai-calling' },
+    { id: 'conversational-flow', label: 'Conversational Flow', icon: MessageSquare, path: '/superadmin/conversational-flow' },
     { id: 'jobs', label: 'Jobs', icon: Briefcase, path: '/superadmin/jobs' },
     { id: 'settings', label: 'Profile Settings', icon: Settings, path: '/superadmin/profile-settings' },
   ]
@@ -800,7 +822,7 @@ export default function SuperAdminLayout() {
         selectedCandidate={selectedCandidate}
         loadingDetail={loadingDetail}
         candidateDetail={candidateDetail}
-        handleUpdateDecision={() => { }}
+        handleUpdateDecision={handleUpdateDecisionAction}
       />
 
       <LiveResultsModal

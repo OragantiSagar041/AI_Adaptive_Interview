@@ -139,6 +139,7 @@ Return VALID JSON ONLY:
                 time_context=time_context,
                 time_score_hint=time_score_hint,
             )
+            result_dict = result if isinstance(result, dict) else result.to_dict()
         else:
             # Direct fallback if typed_ai_layer not available
             content = chat_completion(
@@ -150,40 +151,10 @@ Return VALID JSON ONLY:
                 temperature=0.01,
                 timeout=45,
             )
-            result = extract_json(content)
-            if not result:
+            result_dict = extract_json(content)
+            if not result_dict:
                 raise Exception("No JSON found in AI response")
-
-        # ── Safety checks ──────────────────────────────────────────────────
-        word_count = len(answer.split())
-
-        # Very short answers (< 10 words): hard cap score
-        if word_count < 10 and result.get("overall_score", 0) > 25:
-            result["content_score"] = min(result.get("content_score", 0), 8)
-            result["relevance_score"] = min(result.get("relevance_score", 0), 5)
-            result["overall_score"] = (
-                result["content_score"]
-                + result.get("relevance_score", 0)
-                + result.get("time_score", 0)
-            )
-            if "too short" not in result.get("feedback", "").lower():
-                result["feedback"] = (
-                    "Your answer was too short to evaluate meaningfully. "
-                    "Please provide a detailed response. "
-                    + result.get("feedback", "")
-                )
-
-        # Ensure overall_score is the sum of components (prevent AI hallucination)
-        computed = (
-            result.get("content_score", 0)
-            + result.get("relevance_score", 0)
-            + result.get("time_score", 0)
-        )
-        if abs(computed - result.get("overall_score", 0)) > 5:
-            result["overall_score"] = min(100, max(0, computed))
-
-        return result
-
+            
     except Exception as e:
         print(f"⚠️ Analysis API Failed: {e}")
 
@@ -192,30 +163,28 @@ Return VALID JSON ONLY:
 
         # Content score heuristic
         if word_count < 10:
-            content_score = 8
+            content_s = 8
             feedback = f"⚠️ AI Offline. Answer too short ({word_count} words). Provide more detail."
         elif word_count < 30:
-            content_score = 18
+            content_s = 18
             feedback = f"⚠️ AI Offline. Short answer ({word_count} words). More depth expected."
         else:
-            content_score = min(int(word_count * 0.8), 40)
+            content_s = min(int(word_count * 0.8), 40)
             feedback = f"⚠️ AI Offline. Your answer was recorded ({word_count} words). Check API credits for real analysis."
 
         # Relevance heuristic (neutral when offline)
-        relevance_score = 15
+        relevance_s = 15
 
         # Time score heuristic
-        time_score = 12  # neutral default
+        time_s = 12  # neutral default
         if time_spent_seconds > 0 and time_limit_seconds > 0:
             pct = time_spent_seconds / time_limit_seconds
             if 0.40 <= pct <= 0.85:
-                time_score = 18
+                time_s = 18
             elif pct < 0.20:
-                time_score = 5
+                time_s = 5
             elif pct > 1.10:
-                time_score = 8
-
-        overall = min(100, content_score + relevance_score + time_score)
+                time_s = 8
 
         # ── DYNAMIC INSIGHTS HEURISTICS (Offline Mode) ─────────────────
         # 1. Clarity (Based on WPM)
@@ -257,18 +226,59 @@ Return VALID JSON ONLY:
             confidence_score = 0
             technical_depth_score = 0
 
-        return {
+        result_dict = {
             "corrected_answer": "Analysis unavailable (Offline Mode)",
-            "content_score": content_score,
-            "relevance_score": relevance_score,
-            "time_score": time_score,
-            "overall_score": overall,
+            "content_score": content_s,
+            "relevance_score": relevance_s,
+            "time_score": time_s,
             "clarity_score": clarity_score,
             "technical_depth_score": technical_depth_score,
             "confidence_score": confidence_score,
             "feedback": feedback,
             "keywords": ["Offline"],
         }
+
+    # ── COMMON PROCESSING: Enforce Math & Guardrails ──
+    content_s = int(result_dict.get("content_score", 0))
+    relevance_s = int(result_dict.get("relevance_score", 0))
+    time_s = int(result_dict.get("time_score", 0))
+    
+    # Guardrails against single-word hallucinations & offline stubs
+    if len(answer_words) < 5:
+        # An answer this short is fundamentally invalid (Hard Zero Rule)
+        content_s = 0
+        relevance_s = 0
+        time_s = 0
+        result_dict["feedback"] = "Answer is too short to evaluate. Please provide a full, detailed explanation."
+    elif len(answer_words) < 10:
+        content_s = min(content_s, 8)
+        relevance_s = min(relevance_s, 5)
+        if "too short" not in result_dict.get("feedback", "").lower():
+            result_dict["feedback"] = (
+                "Your answer was too short to evaluate meaningfully. "
+                "Please provide a detailed response. "
+                + result_dict.get("feedback", "")
+            )
+            
+    # Clamp rubric components before computing overall_score
+    content_s = max(0, min(50, content_s))
+    relevance_s = max(0, min(30, relevance_s))
+    time_s = max(0, min(20, time_s))
+    
+    result_dict["content_score"] = content_s
+    result_dict["relevance_score"] = relevance_s
+    result_dict["time_score"] = time_s
+    
+    # STRICT OVERRIDE: overall_score MUST be the mathematical sum
+    result_dict["overall_score"] = content_s + relevance_s + time_s
+
+    # Final constraints for secondary components
+    for k in ["clarity_score", "technical_depth_score", "confidence_score"]:
+        result_dict[k] = max(0, min(100, int(result_dict.get(k, 0))))
+    
+    return result_dict
+
+
 
 
 print("[OK] analyze_answer.py loaded | time-aware scoring with industry-standard rubric")

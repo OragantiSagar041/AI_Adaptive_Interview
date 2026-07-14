@@ -1,7 +1,9 @@
 import React, { useState, useEffect } from 'react'
 import { useNavigate, Navigate, useSearchParams, useLocation, Outlet } from 'react-router-dom'
+import { ChevronDown, RefreshCw, X, FileText, BarChart, Download, Search, CheckCircle, Video, Play, Mail, Filter, Info, Share2, Copy } from 'lucide-react'
+import Swal from 'sweetalert2'
+import 'sweetalert2/dist/sweetalert2.min.css'
 import { useSelector, useDispatch } from 'react-redux'
-import { RefreshCw } from 'lucide-react'
 import axios from 'axios'
 import AdminLayout from '../components/admin/AdminLayout'
 import ProfileSettings from '../components/admin/ProfileSettings'
@@ -1031,8 +1033,19 @@ export default function AdminPage({ role: initialRole = 'admin' }) {
   }
 
   const handleUpdateDecisionAction = (linkId, decision) => {
-    if (!confirm(`Are you sure you want to mark this candidate as ${decision.toUpperCase()}? Official email will be sent.`)) return
-    dispatch(handleUpdateDecision({ linkId, decision }))
+    Swal.fire({
+      title: 'Are you sure?',
+      text: `Do you want to mark this candidate as ${decision.toUpperCase()}? Official email will be sent.`,
+      icon: 'warning',
+      showCancelButton: true,
+      confirmButtonColor: decision === 'selected' ? '#10b981' : '#f43f5e',
+      cancelButtonColor: '#94a3b8',
+      confirmButtonText: 'Yes, confirm!'
+    }).then((result) => {
+      if (result.isConfirmed) {
+        dispatch(handleUpdateDecision({ linkId, decision }))
+      }
+    })
   }
 
   const handleExportExcelAction = () => {

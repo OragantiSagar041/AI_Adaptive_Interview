@@ -13,6 +13,8 @@ from mongo_db import (
     omni_call_logs_collection,
     jobs_collection,
     job_applications_collection,
+    counters_collection,
+    get_next_sequence_value,
 )
 
 load_dotenv()
@@ -30,4 +32,6 @@ __all__ = [
     "omni_call_logs_collection",
     "jobs_collection",
     "job_applications_collection",
+    "counters_collection",
+    "get_next_sequence_value",
 ]
