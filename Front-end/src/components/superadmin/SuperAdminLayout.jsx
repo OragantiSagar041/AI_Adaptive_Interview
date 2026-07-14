@@ -578,7 +578,7 @@ export default function SuperAdminLayout() {
                 <Menu size={18} />
               </button>
             )}
-            <h2 className="text-sm sm:text-xl font-bold text-slate-800 truncate">SuperAdmin Console</h2>
+            <h2 className="text-sm sm:text-xl font-bold text-slate-800 truncate">SuperAdmin Management</h2>
           </div>
 
           <div className="flex items-center gap-2 sm:gap-4 shrink-0">

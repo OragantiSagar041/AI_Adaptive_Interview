@@ -546,6 +546,8 @@ def sync_session_to_application(link_id: str):
                 "hireiq_interview_status": session.get("status") or "completed",
                 "hireiq_score": avg_score or 0.0,
                 "hireiq_feedback": feedback,
+                "hireiq_resume_text": session.get("resume_text", ""),
+                "hireiq_job_description_text": session.get("job_description_text", ""),
                 "hireiq_recommendation": session.get("overall_recommendation") or "No recommendation",
                 "hireiq_completion_time": session.get("updated_at") or session.get("created_at") or datetime.now(timezone.utc).isoformat(),
                 "hireiq_final_result": session.get("decision") or "pending"
@@ -1888,8 +1890,21 @@ def get_interview_details(link_id: str):
         "actual_interview_id": actual_interview_id,
         "candidate_id": session_data.get("candidate_id"),
         "candidate_name": candidate_name or "Candidate",
+        "candidate_email": session_data.get("candidate_email") or session_data.get("email", ""),
+        "candidate_phone": session_data.get("candidate_phone") or session_data.get("phone", ""),
+        "interview_title": session_data.get("interview_title") or session_data.get("job_title", ""),
+        "experience": session_data.get("experience", ""),
+        "location": session_data.get("location", ""),
+        "notice_period": session_data.get("notice_period", ""),
+        "current_ctc": session_data.get("current_ctc", ""),
+        "expected_ctc": session_data.get("expected_ctc", ""),
+        "current_company": session_data.get("current_company", ""),
+        "status": session_data.get("status", "completed"),
+        "decision": session_data.get("decision", ""),
+        "resume_text": session_data.get("resume_text", ""),
+        "job_description_text": session_data.get("job_description", ""),
         "date": created_at,
-        "source": "Job Description / Resume",
+        "source": session_data.get("source") or "Job Description / Resume",
         "avg_score": avg_score,
         "overall_recommendation": recommendation,
         "strengths_summary": strengths,
@@ -1960,6 +1975,16 @@ def get_interview_details(link_id: str):
                 response_payload["coding_round"] = interview_record.get("coding_round")
             if interview_record.get("case_study_round"):
                 response_payload["case_study_round"] = interview_record.get("case_study_round")
+            # Add profile/resume text and job description for ATS analysis
+            response_payload["profile_text"] = interview_record.get("profile_text", "")
+            response_payload["job_description"] = interview_record.get("job_description", "")
+            # Fill interview_title from interview record if not already set from session
+            if not response_payload.get("interview_title"):
+                response_payload["interview_title"] = (
+                    interview_record.get("title") or
+                    interview_record.get("interview_title") or
+                    interview_record.get("job_title", "")
+                )
                 
     return response_payload
 
