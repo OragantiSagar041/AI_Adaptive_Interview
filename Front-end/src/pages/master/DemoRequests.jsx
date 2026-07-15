@@ -1,71 +1,66 @@
 import React, { useState, useEffect } from 'react';
 import { Mail, Briefcase, Calendar, CheckCircle, Trash2, MessageSquare } from 'lucide-react';
 import Swal from 'sweetalert2';
+import { useSelector } from 'react-redux';
+import { API_BASE_URL } from '../../apiConfig';
 
 export default function DemoRequests() {
   const [requests, setRequests] = useState([]);
   const [loading, setLoading] = useState(true);
 
-  const fetchRequests = () => {
+  const token = useSelector((state) => state.auth.token);
+
+  const fetchRequests = async () => {
     setLoading(true);
-    // TODO: Replace with real API call when backend is ready
-    // fetch(`${API_BASE_URL}/api/demo-requests`).then(...)
-    
-    setTimeout(() => {
-      setRequests([
-        {
-          id: '1',
-          date: new Date().toISOString(),
-          firstName: 'Sarah',
-          lastName: 'Connor',
-          email: 'sarah.connor@sky.net',
-          company: 'Cyberdyne Systems',
-          message: 'Looking to automate our engineering recruitment process completely.',
-          status: 'new'
-        },
-        {
-          id: '2',
-          date: new Date(Date.now() - 86400000).toISOString(), // 1 day ago
-          firstName: 'Bruce',
-          lastName: 'Wayne',
-          email: 'bwayne@wayneenterprises.com',
-          company: 'Wayne Enterprises',
-          message: 'Need a discrete and efficient hiring system for R&D.',
-          status: 'contacted'
-        },
-        {
-          id: '3',
-          date: new Date(Date.now() - 172800000).toISOString(), // 2 days ago
-          firstName: 'Tony',
-          lastName: 'Stark',
-          email: 'tony@starkindustries.com',
-          company: 'Stark Industries',
-          message: 'Interested in the AI evaluation capabilities.',
-          status: 'new'
+    try {
+      const response = await fetch(`${API_BASE_URL}/master/demo-requests`, {
+        headers: {
+          'Authorization': `Bearer ${token}`
         }
-      ]);
+      });
+      if (response.ok) {
+        const data = await response.json();
+        setRequests(data.data || []);
+      }
+    } catch (error) {
+      console.error("Error fetching demo requests:", error);
+    } finally {
       setLoading(false);
-    }, 800);
+    }
   };
 
   useEffect(() => {
     fetchRequests();
   }, []);
 
-  const handleMarkContacted = (id) => {
-    setRequests(requests.map(req => 
-      req.id === id ? { ...req, status: 'contacted' } : req
-    ));
-    Swal.fire({
-      toast: true,
-      position: 'top-end',
-      icon: 'success',
-      title: 'Marked as contacted',
-      showConfirmButton: false,
-      timer: 2000,
-      background: '#161c2d',
-      color: '#fff',
-    });
+  const handleMarkContacted = async (id) => {
+    try {
+      const response = await fetch(`${API_BASE_URL}/master/demo-requests/${id}`, {
+        method: 'PUT',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${token}`
+        },
+        body: JSON.stringify({ status: 'CONTACTED' })
+      });
+      if (response.ok) {
+        setRequests(requests.map(req => 
+          req.id === id ? { ...req, status: 'CONTACTED' } : req
+        ));
+        Swal.fire({
+          toast: true,
+          position: 'top-end',
+          icon: 'success',
+          title: 'Marked as contacted',
+          showConfirmButton: false,
+          timer: 2000,
+          background: '#161c2d',
+          color: '#fff',
+        });
+      }
+    } catch (error) {
+      console.error("Error updating status:", error);
+    }
   };
 
   const handleDelete = (id) => {
@@ -79,19 +74,31 @@ export default function DemoRequests() {
       confirmButtonText: 'Yes, delete it!',
       background: '#161c2d',
       color: '#fff',
-    }).then((result) => {
+    }).then(async (result) => {
       if (result.isConfirmed) {
-        setRequests(requests.filter(req => req.id !== id));
-        Swal.fire({
-          toast: true,
-          position: 'top-end',
-          icon: 'success',
-          title: 'Request deleted',
-          showConfirmButton: false,
-          timer: 2000,
-          background: '#161c2d',
-          color: '#fff',
-        });
+        try {
+          const response = await fetch(`${API_BASE_URL}/master/demo-requests/${id}`, {
+            method: 'DELETE',
+            headers: {
+              'Authorization': `Bearer ${token}`
+            }
+          });
+          if (response.ok) {
+            setRequests(requests.filter(req => req.id !== id));
+            Swal.fire({
+              toast: true,
+              position: 'top-end',
+              icon: 'success',
+              title: 'Request deleted',
+              showConfirmButton: false,
+              timer: 2000,
+              background: '#161c2d',
+              color: '#fff',
+            });
+          }
+        } catch (error) {
+          console.error("Error deleting request:", error);
+        }
       }
     });
   };
@@ -146,30 +153,30 @@ export default function DemoRequests() {
                     <td className="p-4 pl-6 text-sm text-slate-600 whitespace-nowrap">
                       <div className="flex items-center gap-2">
                         <Calendar className="w-4 h-4 text-slate-400" />
-                        {new Date(req.date).toLocaleDateString()}
+                        {new Date(req.created_at).toLocaleDateString()}
                       </div>
                     </td>
                     <td className="p-4">
-                      <div className="text-sm font-semibold text-slate-800">{req.firstName} {req.lastName}</div>
+                      <div className="text-sm font-semibold text-slate-800">{req.first_name} {req.last_name}</div>
                       <div className="flex items-center gap-1.5 text-xs text-slate-500 mt-1">
                         <Mail className="w-3 h-3" />
-                        {req.email}
+                        {req.work_email}
                       </div>
                     </td>
                     <td className="p-4">
                       <div className="flex items-center gap-2 text-sm text-slate-700">
                         <Briefcase className="w-4 h-4 text-slate-400" />
-                        {req.company}
+                        {req.company_name}
                       </div>
                     </td>
                     <td className="p-4">
                       <div className="flex items-start gap-2 text-sm text-slate-600">
                         <MessageSquare className="w-4 h-4 text-slate-400 mt-0.5 shrink-0" />
-                        <span className="line-clamp-2" title={req.message}>{req.message}</span>
+                        <span className="line-clamp-2" title={req.help_text}>{req.help_text}</span>
                       </div>
                     </td>
                     <td className="p-4">
-                      {req.status === 'new' ? (
+                      {req.status === 'NEW' ? (
                         <span className="inline-flex items-center px-2.5 py-1 rounded-full text-[10px] font-bold uppercase tracking-wider bg-emerald-50 text-emerald-600 border border-emerald-200">
                           New
                         </span>
@@ -181,7 +188,7 @@ export default function DemoRequests() {
                     </td>
                     <td className="p-4 pr-6 text-right">
                       <div className="flex items-center justify-end gap-2">
-                        {req.status === 'new' && (
+                        {req.status === 'NEW' && (
                           <button 
                             onClick={() => handleMarkContacted(req.id)}
                             title="Mark as Contacted"
