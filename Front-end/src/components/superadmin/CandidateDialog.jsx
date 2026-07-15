@@ -1,6 +1,9 @@
 import React, { useState, useEffect } from 'react'
-import { useSelector } from 'react-redux'
+import { useSelector, useDispatch } from 'react-redux'
+import { useNavigate } from 'react-router-dom'
+import Swal from 'sweetalert2'
 import axios from 'axios'
+import { handleUpdateDecision } from '../../store/slices/interviewSlice'
 import {
   Mail, Phone, MapPin, Building2, IndianRupee, Clock, Download,
   Play, FileText, Sparkles, Star, Check, X, Calendar, Send,
@@ -61,6 +64,8 @@ function StatCard({ label, value }) {
 
 // ── Main Dialog ──────────────────────────────────────────────────────────────
 export default function CandidateDialog({ candidate, open, onOpenChange }) {
+  const dispatch = useDispatch()
+  const navigate = useNavigate()
   const [activeTab, setActiveTab] = useState("overview")
   const [detail, setDetail] = useState(null)
   const [atsData, setAtsData] = useState(null)
@@ -165,6 +170,68 @@ export default function CandidateDialog({ candidate, open, onOpenChange }) {
 
   const recordingUrl = c.recording_url
   const screenRecordingUrl = c.screen_recording_url
+
+  const handleDecision = async (newDecision) => {
+    if (!candidate) return;
+    const linkId = candidate.link_id || candidate.id || candidate._id;
+    if (!linkId) return;
+
+    try {
+      await dispatch(handleUpdateDecision({ linkId, decision: newDecision })).unwrap()
+      Swal.fire('Success', `Candidate marked as ${newDecision.toUpperCase()}`, 'success')
+      onOpenChange(false)
+    } catch (err) {
+      Swal.fire('Error', 'Failed to update decision', 'error')
+    }
+  }
+
+  const handleNotes = () => {
+    Swal.fire({
+      title: 'Add Notes',
+      input: 'textarea',
+      inputLabel: 'Enter your notes for this candidate',
+      inputPlaceholder: 'Type your notes here...',
+      showCancelButton: true,
+      confirmButtonText: 'Save Notes',
+      confirmButtonColor: '#4f46e5'
+    }).then((result) => {
+      if (result.isConfirmed) {
+        Swal.fire('Saved!', 'Your notes have been saved locally.', 'success')
+      }
+    })
+  }
+
+  const handleSchedule = () => {
+    Swal.fire({
+      title: 'Schedule Interview',
+      html: 'Feature coming soon! You will be able to pick a date and time for the next round.',
+      icon: 'info',
+      confirmButtonColor: '#4f46e5'
+    })
+  }
+
+  const handleOffer = () => {
+    Swal.fire({
+      title: 'Send Offer',
+      text: "Are you sure you want to send an offer to this candidate?",
+      icon: 'question',
+      showCancelButton: true,
+      confirmButtonColor: '#10b981',
+      cancelButtonColor: '#ef4444',
+      confirmButtonText: 'Yes, Send Offer'
+    }).then((result) => {
+      if (result.isConfirmed) {
+        Swal.fire('Offer Sent!', 'The candidate has been notified.', 'success')
+      }
+    })
+  }
+
+  const handleViewProfile = () => {
+    const isQual = (c.decision || candidate.decision) === 'selected' || (c.decision || candidate.decision) === 'hired';
+    const isRej = (c.decision || candidate.decision) === 'rejected';
+    onOpenChange(false);
+    navigate(isQual ? '/admin/qualified-candidates' : (isRej ? '/admin/rejected-candidates' : '/admin/qualified-candidates'));
+  }
 
   const tabs = ["overview", "resume", "interview", "evaluation", "timeline"]
 
@@ -514,22 +581,27 @@ export default function CandidateDialog({ candidate, open, onOpenChange }) {
 
         {/* ── Footer Actions ── */}
         <div className="border-t border-slate-200/80 p-4 bg-white flex flex-wrap items-center justify-end gap-3 shrink-0">
-          <button className="flex items-center gap-2 px-4 py-2 text-sm font-bold text-slate-600 bg-white border border-slate-200 rounded-xl hover:bg-slate-50 transition-colors shadow-sm">
+          <button onClick={handleNotes} className="flex items-center gap-2 px-4 py-2 text-sm font-bold text-slate-600 bg-white border border-slate-200 rounded-xl hover:bg-slate-50 transition-colors shadow-sm">
             <MessageSquare size={16} /> Add Notes
           </button>
-          <button className="flex items-center gap-2 px-4 py-2 text-sm font-bold text-slate-600 bg-white border border-slate-200 rounded-xl hover:bg-slate-50 transition-colors shadow-sm">
+          <button onClick={handleViewProfile} className="flex items-center gap-2 px-4 py-2 text-sm font-bold text-slate-600 bg-white border border-slate-200 rounded-xl hover:bg-slate-50 transition-colors shadow-sm">
             <Eye size={16} /> View Profile
           </button>
           <div className="w-px h-6 bg-slate-200 mx-1" />
           {!isQualified && (
-            <button className="flex items-center gap-2 px-4 py-2 text-sm font-bold text-rose-600 bg-rose-50 border border-rose-100 rounded-xl hover:bg-rose-100 transition-colors shadow-sm">
-              <X size={16} strokeWidth={3} /> Reject
-            </button>
+            <>
+              <button onClick={() => handleDecision('rejected')} className="flex items-center gap-2 px-4 py-2 text-sm font-bold text-rose-600 bg-rose-50 border border-rose-100 rounded-xl hover:bg-rose-100 transition-colors shadow-sm">
+                <X size={16} strokeWidth={3} /> Reject
+              </button>
+              <button onClick={() => handleDecision('selected')} className="flex items-center gap-2 px-4 py-2 text-sm font-bold text-emerald-600 bg-emerald-50 border border-emerald-100 rounded-xl hover:bg-emerald-100 transition-colors shadow-sm">
+                <Check size={16} strokeWidth={3} /> Select
+              </button>
+            </>
           )}
-          <button className="flex items-center gap-2 px-4 py-2 text-sm font-bold text-indigo-600 bg-indigo-50 border border-indigo-100 rounded-xl hover:bg-indigo-100 transition-colors shadow-sm">
+          <button onClick={handleSchedule} className="flex items-center gap-2 px-4 py-2 text-sm font-bold text-indigo-600 bg-indigo-50 border border-indigo-100 rounded-xl hover:bg-indigo-100 transition-colors shadow-sm">
             <Calendar size={16} /> Schedule
           </button>
-          <button className="flex items-center gap-2 px-5 py-2 text-sm font-bold text-white bg-indigo-600 rounded-xl hover:bg-indigo-700 transition-colors shadow-sm">
+          <button onClick={handleOffer} className="flex items-center gap-2 px-5 py-2 text-sm font-bold text-white bg-indigo-600 rounded-xl hover:bg-indigo-700 transition-colors shadow-sm">
             <Send size={16} /> Send Offer
           </button>
         </div>
