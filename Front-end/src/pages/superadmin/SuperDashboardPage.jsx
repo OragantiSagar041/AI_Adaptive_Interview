@@ -1,6 +1,11 @@
-import React, { useEffect } from "react";
+import React, { useEffect, useState } from "react";
 import { useDispatch, useSelector } from "react-redux";
 import { loadSuperAdminDashboard } from "@/store/slices/dashboardSlice";
+import { CandidateTable } from "../../components/admin/AdminSubComponents";
+import CandidateDialog from "../../components/superadmin/CandidateDialog";
+import { getComputedStatus } from "../../utils/adminFormatters";
+import { setSelectedIds, setCurrentPage } from "../../store/slices/candidatesSlice";
+import { handleOpenScorecard, handleDeleteSession } from "../../store/slices/interviewSlice";
 import {
   Building2,
   Users,
@@ -28,7 +33,10 @@ import {
   HardDrive,
   Bell,
   ArrowUpRight,
-  ArrowDownRight
+  ArrowDownRight,
+  Eye,
+  ChevronLeft,
+  ChevronRight
 } from "lucide-react";
 import {
   ResponsiveContainer,
@@ -66,17 +74,32 @@ export default function SuperDashboardPage() {
     ongoingSpeakingCount, 
     ongoingCodingCount,
     liveSessions,
-    candidates,
     status
   } = useSelector(state => state.dashboard);
+  
+  const { API_BASE_URL } = useSelector(state => state.auth);
+  const selectedAdminFilter = useSelector(state => state.dashboard.selectedAdminFilter);
+  
+  const paginatedCandidates = useSelector(state => state.candidates.paginatedCandidates);
+  const selectedIds = useSelector(state => state.candidates.selectedIds);
+  const totalPages = useSelector(state => state.candidates.totalPages);
+  const startIndex = useSelector(state => state.candidates.startIndex);
+  const endIndex = useSelector(state => state.candidates.endIndex);
+  const totalItems = useSelector(state => state.candidates.totalItems);
+  const currentPage = useSelector(state => state.candidates.currentPage);
+
+  const [selectedCandidate, setSelectedCandidate] = useState(null);
 
   useEffect(() => {
-    dispatch(loadSuperAdminDashboard());
+    dispatch(loadSuperAdminDashboard(selectedAdminFilter));
     const interval = setInterval(() => {
-      dispatch(loadSuperAdminDashboard());
+      dispatch(loadSuperAdminDashboard(selectedAdminFilter));
     }, 30000); // refresh every 30s
-    return () => clearInterval(interval);
-  }, [dispatch]);
+    return () => {
+      clearInterval(interval);
+      dispatch(setSelectedIds([]));
+    }
+  }, [dispatch, selectedAdminFilter]);
 
   const kpis = [
     { label: "Total AI Interviews", value: formatNum(dbStats?.total), delta: "", up: true, icon: Mic, tint: "from-violet-500/15 to-violet-500/0" },
@@ -122,7 +145,7 @@ export default function SuperDashboardPage() {
   return (
     <div className="space-y-6">
       <div>
-        <h1 className="text-2xl font-semibold tracking-tight">Super Admin Dashboard</h1>
+        <h1 className="text-2xl font-semibold tracking-tight">Dashboard</h1>
         <p className="text-sm text-slate-500">
           Monitor AI interviews, platform activity and system performance in real-time.
         </p>
@@ -274,49 +297,43 @@ export default function SuperDashboardPage() {
       {/* Recent Candidates Table */}
       <Card className="bg-white text-slate-900 border-slate-200 shadow-sm">
         <CardHeader className="pb-2">
-          <CardTitle className="text-base">Recent Candidates</CardTitle>
+          <CardTitle className="text-base">Candidates</CardTitle>
           <CardDescription>Latest candidates evaluated by the AI.</CardDescription>
         </CardHeader>
         <CardContent>
-          <Table>
-            <TableHeader>
-              <TableRow>
-                <TableHead className="text-slate-500">Candidate Name</TableHead>
-                <TableHead className="text-slate-500">Email</TableHead>
-                <TableHead className="text-slate-500">Applied For</TableHead>
-                <TableHead className="text-right text-slate-500">Score</TableHead>
-                <TableHead className="text-right text-slate-500">Status</TableHead>
-              </TableRow>
-            </TableHeader>
-            <TableBody>
-              {candidates?.slice(0, 8).map((c, i) => (
-                <TableRow key={i}>
-                  <TableCell className="font-medium">{c.candidate_name || c.name || "Unknown"}</TableCell>
-                  <TableCell className="text-slate-500">{c.candidate_email || c.email || "N/A"}</TableCell>
-                  <TableCell className="text-slate-500">{c.interview_title || c.job_title || "General Interview"}</TableCell>
-                  <TableCell className="text-right tabular-nums">
-                    {(c.avg_score || c.score || 0).toFixed(1)}%
-                  </TableCell>
-                  <TableCell className="text-right">
-                    <Badge
-                      variant={c.status === "completed" || c.decision === "selected" ? "default" : "secondary"}
-                      className={c.status === "completed" || c.decision === "selected" ? "bg-emerald-500/15 text-emerald-700" : ""}
-                    >
-                      {c.decision === "selected" ? "Hired" : c.decision === "rejected" ? "Rejected" : c.status || "Pending"}
-                    </Badge>
-                  </TableCell>
-                </TableRow>
-              ))}
-              {(!candidates || candidates.length === 0) && (
-                <TableRow>
-                  <TableCell colSpan={5} className="text-center text-slate-500 py-6">No recent candidates found</TableCell>
-                </TableRow>
-              )}
-            </TableBody>
-          </Table>
+          <CandidateTable
+            paginatedCandidates={paginatedCandidates}
+            selectedIds={selectedIds}
+            setSelectedIds={(ids) => dispatch(setSelectedIds(ids))}
+            getComputedStatus={getComputedStatus}
+            handleOpenScorecard={(c) => setSelectedCandidate(c)}
+            handleDeleteSession={(id) => {
+              if (!confirm("Are you sure you want to delete this candidate's interview session? This cannot be undone.")) return
+              dispatch(handleDeleteSession(id))
+            }}
+            loadDashboardData={() => dispatch(loadSuperAdminDashboard(selectedAdminFilter))}
+            API_BASE_URL={API_BASE_URL}
+            totalPages={totalPages}
+            startIndex={startIndex}
+            endIndex={endIndex}
+            totalItems={totalItems}
+            currentPage={currentPage}
+            setCurrentPage={(page) => dispatch(setCurrentPage(page))}
+          />
         </CardContent>
       </Card>
 
+      <CandidateDialog
+        candidate={selectedCandidate}
+        open={!!selectedCandidate}
+        onOpenChange={(v) => {
+          if (!v) setSelectedCandidate(null);
+        }}
+        onStatusUpdate={() => {
+          dispatch(loadSuperAdminDashboard(selectedAdminFilter));
+        }}
+      />
     </div>
   );
 }
+ 

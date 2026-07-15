@@ -1546,7 +1546,7 @@ def get_agent_flow():
     if not OMNI_AGENT_ID:
         raise HTTPException(status_code=500, detail="OMNI_AGENT_ID is not configured.")
     
-    agent_id = OMNI_AGENT_ID
+    agent_id = str(OMNI_AGENT_ID).strip()
     headers = {"Authorization": f"Bearer {OMNI_DIMENSION_API_KEY}"}
     try:
         res = requests.get(f"https://backend.omnidim.io/api/v1/agents/{agent_id}", headers=headers, timeout=10)
@@ -1579,7 +1579,7 @@ def update_agent_flow(req: UpdateAgentFlowRequest):
     if not OMNI_AGENT_ID:
         raise HTTPException(status_code=500, detail="OMNI_AGENT_ID is not configured.")
     
-    agent_id = OMNI_AGENT_ID
+    agent_id = str(OMNI_AGENT_ID).strip()
     headers = {"Authorization": f"Bearer {OMNI_DIMENSION_API_KEY}", "Content-Type": "application/json"}
     
     # We only send the context_breakdown (conversational flow)

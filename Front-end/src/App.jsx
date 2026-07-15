@@ -46,6 +46,7 @@ const ConversationalFlowPage = React.lazy(() => import('./pages/admin/Conversati
 
 const SuperAdminLayout = React.lazy(() => import('./components/superadmin/SuperAdminLayout'))
 const SuperDashboardPage = React.lazy(() => import('./pages/superadmin/SuperDashboardPage'))
+const NewSuperDashboardPage = React.lazy(() => import('./pages/superadmin/NewSuperDashboardPage'))
 const TeamManagementPage = React.lazy(() => import('./pages/superadmin/TeamManagementPage'))
 const SuperAdminOverviewDashboardPage = React.lazy(() => import('./pages/superadmin/OverviewDashboardPage'))
 const SuperAdminQualifiedCandidatesPage = React.lazy(() => import('./pages/superadmin/QualifiedCandidatesPage'))
@@ -102,10 +103,10 @@ function App() {
               </ProtectedRoute>
             }
           >
-            <Route index element={<Navigate to="super-dashboard" replace />} />
-            <Route path="super-dashboard" element={<SuperDashboardPage />} />
+            <Route index element={<Navigate to="new-dashboard" replace />} />
+            <Route path="new-dashboard" element={<NewSuperDashboardPage />} />
             <Route path="team" element={<TeamManagementPage />} />
-            <Route path="dashboard" element={<SuperAdminOverviewDashboardPage />} />
+            <Route path="dashboard" element={<SuperDashboardPage />} />
             <Route path="qualified-candidates" element={<SuperAdminQualifiedCandidatesPage />} />
             <Route path="rejected-candidates" element={<SuperAdminRejectedCandidatesPage />} />
             <Route path="create-interview" element={<SuperAdminCreateInterviewPage />} />
