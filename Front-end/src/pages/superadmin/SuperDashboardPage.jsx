@@ -1,5 +1,7 @@
-import React, { useEffect } from "react";
+import React, { useEffect, useState } from "react";
 import { useDispatch, useSelector } from "react-redux";
+import axios from "axios";
+import CandidateDialog from "../../components/superadmin/CandidateDialog";
 import { loadSuperAdminDashboard } from "@/store/slices/dashboardSlice";
 import {
   Building2,
@@ -28,7 +30,8 @@ import {
   HardDrive,
   Bell,
   ArrowUpRight,
-  ArrowDownRight
+  ArrowDownRight,
+  Eye
 } from "lucide-react";
 import {
   ResponsiveContainer,
@@ -66,9 +69,12 @@ export default function SuperDashboardPage() {
     ongoingSpeakingCount, 
     ongoingCodingCount,
     liveSessions,
-    candidates,
     status
   } = useSelector(state => state.dashboard);
+  
+  const { token, API_BASE_URL } = useSelector(state => state.auth);
+  const [recentCandidates, setRecentCandidates] = useState([]);
+  const [selectedCandidate, setSelectedCandidate] = useState(null);
 
   useEffect(() => {
     dispatch(loadSuperAdminDashboard());
@@ -77,6 +83,34 @@ export default function SuperDashboardPage() {
     }, 30000); // refresh every 30s
     return () => clearInterval(interval);
   }, [dispatch]);
+
+  useEffect(() => {
+    const fetchRecentCandidates = async () => {
+      try {
+        const [qualifiedRes, rejectedRes] = await Promise.all([
+          axios.get(`${API_BASE_URL}/superadmin/candidates/qualified`, { headers: { Authorization: `Bearer ${token}` } }),
+          axios.get(`${API_BASE_URL}/superadmin/candidates/rejected`, { headers: { Authorization: `Bearer ${token}` } })
+        ]);
+        
+        const qualified = qualifiedRes.data || [];
+        const rejected = rejectedRes.data || [];
+        
+        const combined = [...qualified, ...rejected].sort((a, b) => {
+          const dateA = new Date(a.created_at || a.applied_at || a.updated_at || 0);
+          const dateB = new Date(b.created_at || b.applied_at || b.updated_at || 0);
+          return dateB - dateA;
+        });
+        
+        setRecentCandidates(combined.slice(0, 8));
+      } catch (err) {
+        console.error("Error fetching recent candidates:", err);
+      }
+    };
+    
+    if (token && API_BASE_URL) {
+      fetchRecentCandidates();
+    }
+  }, [token, API_BASE_URL]);
 
   const kpis = [
     { label: "Total AI Interviews", value: formatNum(dbStats?.total), delta: "", up: true, icon: Mic, tint: "from-violet-500/15 to-violet-500/0" },
@@ -122,7 +156,7 @@ export default function SuperDashboardPage() {
   return (
     <div className="space-y-6">
       <div>
-        <h1 className="text-2xl font-semibold tracking-tight">Super Admin Dashboard</h1>
+        <h1 className="text-2xl font-semibold tracking-tight">Dashboard</h1>
         <p className="text-sm text-slate-500">
           Monitor AI interviews, platform activity and system performance in real-time.
         </p>
@@ -286,10 +320,11 @@ export default function SuperDashboardPage() {
                 <TableHead className="text-slate-500">Applied For</TableHead>
                 <TableHead className="text-right text-slate-500">Score</TableHead>
                 <TableHead className="text-right text-slate-500">Status</TableHead>
+                <TableHead className="text-right text-slate-500">Actions</TableHead>
               </TableRow>
             </TableHeader>
             <TableBody>
-              {candidates?.slice(0, 8).map((c, i) => (
+              {recentCandidates?.map((c, i) => (
                 <TableRow key={i}>
                   <TableCell className="font-medium">{c.candidate_name || c.name || "Unknown"}</TableCell>
                   <TableCell className="text-slate-500">{c.candidate_email || c.email || "N/A"}</TableCell>
@@ -299,17 +334,29 @@ export default function SuperDashboardPage() {
                   </TableCell>
                   <TableCell className="text-right">
                     <Badge
-                      variant={c.status === "completed" || c.decision === "selected" ? "default" : "secondary"}
-                      className={c.status === "completed" || c.decision === "selected" ? "bg-emerald-500/15 text-emerald-700" : ""}
+                      variant={c.decision === "selected" ? "default" : c.decision === "pending" ? "outline" : "secondary"}
+                      className={
+                        c.decision === "selected" ? "bg-emerald-500/15 text-emerald-700" :
+                        c.decision === "pending" ? "bg-amber-500/15 text-amber-700 border-amber-200" :
+                        c.decision === "rejected" ? "bg-rose-500/15 text-rose-700" : ""
+                      }
                     >
-                      {c.decision === "selected" ? "Hired" : c.decision === "rejected" ? "Rejected" : c.status || "Pending"}
+                      {c.decision === "selected" ? "Hired" : c.decision === "rejected" ? "Rejected" : c.decision === "pending" ? "Pending" : c.status || "Pending"}
                     </Badge>
+                  </TableCell>
+                  <TableCell className="text-right">
+                    <button
+                      onClick={() => setSelectedCandidate(c)}
+                      className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-bold bg-white border border-slate-200 text-slate-600 hover:text-indigo-600 hover:border-indigo-200 hover:bg-indigo-50 shadow-sm transition-all cursor-pointer"
+                    >
+                      <Eye className="h-3.5 w-3.5" /> View
+                    </button>
                   </TableCell>
                 </TableRow>
               ))}
-              {(!candidates || candidates.length === 0) && (
+              {(!recentCandidates || recentCandidates.length === 0) && (
                 <TableRow>
-                  <TableCell colSpan={5} className="text-center text-slate-500 py-6">No recent candidates found</TableCell>
+                  <TableCell colSpan={6} className="text-center text-slate-500 py-6">No recent candidates found</TableCell>
                 </TableRow>
               )}
             </TableBody>
@@ -317,6 +364,18 @@ export default function SuperDashboardPage() {
         </CardContent>
       </Card>
 
+      <CandidateDialog
+        candidate={selectedCandidate}
+        open={!!selectedCandidate}
+        onOpenChange={(v) => !v && setSelectedCandidate(null)}
+        onStatusUpdate={(newDecision) => {
+          setRecentCandidates(prev => prev.map(c => 
+            (c.id === selectedCandidate.id || c.link_id === selectedCandidate.link_id || c._id === selectedCandidate._id)
+              ? { ...c, decision: newDecision, status: newDecision === 'pending' ? 'pending' : 'completed' }
+              : c
+          ));
+        }}
+      />
     </div>
   );
 }

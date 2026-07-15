@@ -63,7 +63,7 @@ function StatCard({ label, value }) {
 }
 
 // ── Main Dialog ──────────────────────────────────────────────────────────────
-export default function CandidateDialog({ candidate, open, onOpenChange }) {
+export default function CandidateDialog({ candidate, open, onOpenChange, onStatusUpdate }) {
   const dispatch = useDispatch()
   const navigate = useNavigate()
   const [activeTab, setActiveTab] = useState("overview")
@@ -179,6 +179,7 @@ export default function CandidateDialog({ candidate, open, onOpenChange }) {
     try {
       await dispatch(handleUpdateDecision({ linkId, decision: newDecision })).unwrap()
       Swal.fire('Success', `Candidate marked as ${newDecision.toUpperCase()}`, 'success')
+      if (onStatusUpdate) onStatusUpdate(newDecision)
       onOpenChange(false)
     } catch (err) {
       Swal.fire('Error', 'Failed to update decision', 'error')
@@ -592,6 +593,9 @@ export default function CandidateDialog({ candidate, open, onOpenChange }) {
             <>
               <button onClick={() => handleDecision('rejected')} className="flex items-center gap-2 px-4 py-2 text-sm font-bold text-rose-600 bg-rose-50 border border-rose-100 rounded-xl hover:bg-rose-100 transition-colors shadow-sm">
                 <X size={16} strokeWidth={3} /> Reject
+              </button>
+              <button onClick={() => handleDecision('pending')} className="flex items-center gap-2 px-4 py-2 text-sm font-bold text-amber-600 bg-amber-50 border border-amber-100 rounded-xl hover:bg-amber-100 transition-colors shadow-sm">
+                <Clock size={16} strokeWidth={3} /> Pending
               </button>
               <button onClick={() => handleDecision('selected')} className="flex items-center gap-2 px-4 py-2 text-sm font-bold text-emerald-600 bg-emerald-50 border border-emerald-100 rounded-xl hover:bg-emerald-100 transition-colors shadow-sm">
                 <Check size={16} strokeWidth={3} /> Select

@@ -62,6 +62,7 @@ export default function SuperAdminLayout() {
   const token = useSelector(state => state.auth.token)
   const role = useSelector(state => state.auth.role)
   const adminUser = useSelector(state => state.auth.adminUser)
+  const userName = adminUser?.name || adminUser?.username || 'Super Admin'
   const API_BASE_URL = useSelector(state => state.auth.API_BASE_URL)
 
   // Dashboard & Modal selectors
@@ -422,91 +423,156 @@ export default function SuperAdminLayout() {
   const accentPageStrong = hexToRgba(currentAccent.primary, 0.20)
 
   const navItems = [
-    { id: 'dashboard', label: 'Dashboard', path: '/superadmin/super-dashboard' },
-    // { id: 'organizations', label: 'Organizations', path: '/superadmin/organizations' },
-    { id: 'administrators', label: 'Administrators', path: '/superadmin/team' },
-    // { id: 'recruiters', label: 'Recruiters', path: '/superadmin/recruiters' },
-    { id: 'jobs', label: 'Jobs', path: '/superadmin/jobs' },
-    { id: 'ai-interviews', label: 'AI Interview Sessions', path: '/superadmin/ai-calling' },
+    { id: 'super-dashboard', label: 'Super Admin Dashboard', path: '/superadmin/new-dashboard' },
+    { id: 'team', label: 'Team Management', path: '/superadmin/team' },
+    { id: 'dashboard', label: 'Dashboard', path: '/superadmin/dashboard' },
     { id: 'qualified', label: 'Qualified Candidates', path: '/superadmin/qualified-candidates' },
-    { id: 'rejected', label: 'Rejected Candidates', path: '/superadmin/rejected-candidates' },
-    { id: 'reports', label: 'Reports & Analytics', path: '/superadmin/dashboard' },
+     { id: 'rejected', label: 'Rejected Candidates', path: '/superadmin/rejected-candidates' },
+     { id: 'create', label: 'Create Interview', icon: Plus, path: '/superadmin/create-interview' },
+     { id: 'ai-calling', label: 'AI Calling Agent', icon: Radio, path: '/superadmin/ai-calling' },
+     { id: 'conversational-flow', label: 'Conversational Flow', icon: MessageSquare, path: '/superadmin/conversational-flow' },
+     { id: 'jobs', label: 'Jobs', path: '/superadmin/jobs' },
+     { id: 'settings', label: 'Settings', path: '/superadmin/profile-settings' },
+     // { id: 'organizations', label: 'Organizations', path: '/superadmin/organizations' },
+    // { id: 'administrators', label: 'Administrators', path: '/superadmin/team' },
+    // { id: 'recruiters', label: 'Recruiters', path: '/superadmin/recruiters' },
+    // { id: 'reports', label: 'Reports & Analytics', path: '/superadmin/dashboard' },
     // { id: 'credit', label: 'Credit Management', path: '/superadmin/credit' },
     // { id: 'subscription', label: 'Subscription Management', path: '/superadmin/subscription' },
+    // { id: 'ai-interviews', label: 'AI Interview Sessions', path: '/superadmin/ai-calling' },
     // { id: 'integrations', label: 'Integrations', path: '/superadmin/integrations' },
     // { id: 'audit', label: 'Audit Logs', path: '/superadmin/audit' },
     // { id: 'security', label: 'Security', path: '/superadmin/security' },
-    { id: 'settings', label: 'Settings', path: '/superadmin/profile-settings' },
   ]
 
   return (
-    <div className="min-h-screen bg-slate-50 text-slate-900 flex flex-col font-sans">
-      {/* Top bar */}
-      <header className="sticky top-0 z-30 border-b border-slate-200 bg-white/80 backdrop-blur">
-        <div className="flex h-14 items-center gap-4 px-6">
-          <div className="flex items-center gap-2">
-            <div className="grid h-8 w-8 place-items-center rounded-lg bg-indigo-600 text-white shadow-sm">
-              <Zap className="h-4 w-4" />
-            </div>
-            <div className="leading-tight">
-              <div className="text-sm font-semibold">HireIQ</div>
-              <div className="text-[11px] text-slate-500">Super Admin</div>
-            </div>
+    <div className="min-h-screen bg-slate-50 text-slate-900 flex font-sans overflow-hidden">
+      {/* Sidebar */}
+      <aside className="hidden w-64 shrink-0 border-r border-slate-200 bg-white md:flex flex-col h-screen">
+        {/* Brand / Logo */}
+        <div className="flex items-center gap-3 px-6 h-16 border-b border-slate-200 shrink-0">
+          <div className="grid h-8 w-8 place-items-center rounded-lg bg-indigo-600 text-white shadow-sm">
+            <Zap className="h-4 w-4" />
           </div>
-          <div className="ml-6 hidden lg:block">
-            <Badge variant="secondary" className="rounded-full font-normal border-slate-200 text-slate-600">
-              Platform Administration Overview
-            </Badge>
+          <div className="leading-tight">
+            <div className="text-sm font-semibold">HireIQ</div>
+            <div className="text-[11px] text-slate-500">Super Admin</div>
           </div>
-          <div className="ml-auto flex items-center gap-2">
-            <Button variant="ghost" size="sm" className="text-slate-500">
-              <Bell className="h-4 w-4" />
-              <span className="ml-1 hidden sm:inline">Alerts</span>
-              {notifications.filter(n => !n.is_read).length > 0 && (
-                <Badge className="ml-2 h-5 rounded-full px-1.5 text-[10px] bg-indigo-600 text-white">
-                  {notifications.filter(n => !n.is_read).length}
-                </Badge>
+        </div>
+
+        {/* Navigation Items */}
+        <div className="space-y-1 p-3 overflow-y-auto flex-1">
+          {navItems.map((item) => (
+            <NavLink
+              key={item.id}
+              to={item.path}
+              className={({ isActive }) =>
+                `flex items-center gap-3 rounded-md px-3 py-2 text-sm font-medium transition-colors ${
+                  isActive
+                    ? 'bg-indigo-50 text-indigo-600'
+                    : 'text-slate-500 hover:bg-slate-100 hover:text-slate-900'
+                }`
+              }
+            >
+              {({ isActive }) => (
+                <>
+                  <span className="h-1.5 w-1.5 rounded-full bg-current opacity-60" />
+                  {item.label}
+                </>
               )}
-            </Button>
-            <div className="grid h-8 w-8 place-items-center rounded-full bg-indigo-50 text-indigo-700 text-xs font-semibold ml-2">
-              SA
-            </div>
-            <Button variant="ghost" size="sm" onClick={handleLogout} className="ml-2 text-slate-500 hover:text-slate-800 cursor-pointer">
-              <LogOut className="h-4 w-4" />
-            </Button>
+            </NavLink>
+          ))}
+        </div>
+        
+        {/* Bottom Sidebar Actions */}
+        <div className="p-3 border-t border-slate-200 space-y-1 shrink-0">
+          <button
+            onClick={() => dispatch(setLiveResultsModalOpen(true))}
+            className="flex items-center gap-3 w-full rounded-md px-3 py-2 text-sm font-medium transition-colors text-slate-500 hover:bg-slate-100 hover:text-slate-900 border-none bg-transparent cursor-pointer text-left"
+          >
+            <Radio size={16} />
+            Live Results
+          </button>
+          <button
+            onClick={() => setShowCreditsModal(true)}
+            className="flex items-center gap-3 w-full rounded-md px-3 py-2 text-sm font-medium transition-colors text-slate-500 hover:bg-slate-100 hover:text-slate-900 border-none bg-transparent cursor-pointer text-left"
+          >
+            <Coins size={16} />
+            Available Credits
+          </button>
+        </div>
+      </aside>
+
+      {/* Main Content Wrapper */}
+      <div className="flex-1 flex flex-col min-w-0 h-screen">
+        {/* Top bar */}
+        <header className="sticky top-0 z-30 border-b border-slate-200 bg-white/95 backdrop-blur flex items-center justify-between px-6 h-16 shadow-sm shrink-0">
+        {/* Left Side: Brand & Toggles */}
+        <div className="flex items-center gap-6">
+          <h2 className="text-[17px] font-bold text-slate-800">SuperAdmin Management</h2>
+
+          {/* Theme Toggle Dots */}
+          <div className="flex items-center gap-2 bg-slate-100 rounded-full px-2.5 py-1.5 border border-slate-200">
+            {Object.keys(accentColors).map(color => (
+              <button
+                key={color}
+                onClick={() => setAccentName(color)}
+                className="w-3.5 h-3.5 rounded-full border-2 border-white cursor-pointer p-0 transition-all hover:scale-110"
+                style={{
+                  background: accentColors[color].primary,
+                  boxShadow: accentName === color ? `0 0 0 2px ${accentColors[color].primary}` : 'none',
+                }}
+                title={color}
+              />
+            ))}
+          </div>
+
+          {/* Active Plan Badge */}
+          <div className="flex items-center gap-1.5 px-3 py-1 bg-indigo-50/50 border border-indigo-200/60 text-indigo-700 rounded-full text-xs font-bold shadow-sm">
+            <span className="w-1.5 h-1.5 rounded-full bg-indigo-600"></span>
+            Active Plan: {adminUser?.subscription_plan || 'Advance'}
+          </div>
+
+          {/* Credits Badge */}
+          <div className="flex items-center gap-1.5 px-3 py-1 bg-cyan-50 border border-cyan-100 text-cyan-600 rounded-full text-xs font-bold shadow-sm">
+            <span className="text-[10px]">🔗</span>
+            {adminUser?.credits ?? 0} credits left
+          </div>
+        </div>
+
+        {/* Right Side: Notifications & User Profile */}
+        <div className="flex items-center gap-5">
+          {/* Notification Bell */}
+          <button
+            onClick={() => setNotifDropdownOpen(!notifDropdownOpen)}
+            className="relative p-2 text-slate-400 hover:text-slate-600 bg-white border border-slate-100 hover:bg-slate-50 rounded-full transition-all cursor-pointer flex items-center justify-center shadow-sm"
+            title="Notifications"
+          >
+            <Bell size={18} />
+            {unreadCount > 0 && (
+              <span className="absolute -top-1 -right-1 bg-sky-500 text-white font-extrabold text-[9px] min-w-[18px] h-[18px] px-1 rounded-full flex items-center justify-center shadow-sm border-2 border-white">
+                {unreadCount}
+              </span>
+            )}
+          </button>
+
+          {/* User Profile */}
+          <div className="flex items-center gap-4 border-l border-slate-200 pl-5">
+            <span className="text-sm text-slate-500 font-medium">
+              Welcome back, <span className="font-bold text-slate-800">{userName}</span>
+            </span>
+            <button
+              onClick={handleLogout}
+              className="flex items-center gap-1.5 text-sm font-semibold text-slate-500 hover:text-slate-800 transition-colors cursor-pointer bg-transparent border-none"
+            >
+              <LogOut size={15} /> Logout
+            </button>
           </div>
         </div>
       </header>
 
-      <div className="flex flex-1 overflow-hidden">
-        {/* Sidebar */}
-        <aside className="hidden w-60 shrink-0 border-r border-slate-200 bg-white/40 md:block overflow-y-auto">
-          <div className="space-y-1">
-            {navItems.map((item) => (
-              <NavLink
-                key={item.id}
-                to={item.path}
-                className={({ isActive }) =>
-                  `flex items-center gap-3 rounded-md px-3 py-2 text-sm font-medium transition-colors ${
-                    isActive
-                      ? 'bg-indigo-50 text-indigo-600'
-                      : 'text-slate-500 hover:bg-slate-100 hover:text-slate-900'
-                  }`
-                }
-              >
-                {({ isActive }) => (
-                  <>
-                    <span className="h-1.5 w-1.5 rounded-full bg-current opacity-60" />
-                    {item.label}
-                  </>
-                )}
-              </NavLink>
-            ))}
-          </div>
-        </aside>
-
-        {/* Main */}
-        <main className="min-w-0 flex-1 overflow-y-auto bg-slate-50/50 relative">
+      {/* Main Content */}
+      <main className="flex-1 overflow-y-auto bg-slate-50/50 relative">
           {notifDropdownOpen && (
             <div className="absolute right-4 top-4 w-80 bg-white border border-slate-200 rounded-2xl shadow-xl py-2 z-50">
               <div className="flex items-center justify-between px-4 py-2 border-b border-slate-100">

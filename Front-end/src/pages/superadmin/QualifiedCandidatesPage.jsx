@@ -320,7 +320,7 @@ export default function QualifiedCandidatesPage() {
                       <td className="px-5 py-4 text-right">
                         <button
                           onClick={() => setSelectedCandidate(c)}
-                          className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-bold bg-white border border-slate-200 text-slate-600 hover:text-indigo-600 hover:border-indigo-200 hover:bg-indigo-50 shadow-sm transition-all cursor-pointer opacity-0 group-hover:opacity-100 focus:opacity-100"
+                          className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-bold bg-white border border-slate-200 text-slate-600 hover:text-indigo-600 hover:border-indigo-200 hover:bg-indigo-50 shadow-sm transition-all cursor-pointer"
                         >
                           <Eye className="h-3.5 w-3.5" /> View
                         </button>
