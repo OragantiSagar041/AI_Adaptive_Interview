@@ -8302,3 +8302,74 @@ async def parse_resume(resume: UploadFile = File(...)):
     except Exception as e:
         print(f"Error parsing resume: {e}")
         return {"status": "error", "data": {"name": "", "email": "", "phone": "", "linkedin_url": ""}}
+
+# ---------------------------------------------------------------------------
+# Demo Requests
+# ---------------------------------------------------------------------------
+from app.models import DemoRequestCreate, DemoRequestUpdate
+from mongo_db import demo_requests_collection
+from bson import ObjectId
+from datetime import datetime
+
+@router.post('/demo-request')
+def create_demo_request(req: DemoRequestCreate):
+    try:
+        new_request = {
+            'first_name': req.first_name,
+            'last_name': req.last_name,
+            'work_email': req.work_email,
+            'company_name': req.company_name,
+            'help_text': req.help_text,
+            'status': 'NEW',
+            'created_at': datetime.utcnow().isoformat()
+        }
+        result = demo_requests_collection.insert_one(new_request)
+        return {'status': 'success', 'id': str(result.inserted_id)}
+    except Exception as e:
+        print(f'Error saving demo request: {e}')
+        raise HTTPException(status_code=500, detail='Failed to submit demo request')
+
+@router.get('/master/demo-requests')
+def get_master_demo_requests(current_admin: dict = Depends(get_current_admin_details)):
+    if current_admin.get('role') != 'master':
+        raise HTTPException(status_code=403, detail='Only master admin can view demo requests')
+    
+    try:
+        requests_cursor = demo_requests_collection.find().sort('created_at', -1)
+        requests = []
+        for req in requests_cursor:
+            req['id'] = str(req['_id'])
+            del req['_id']
+            requests.append(req)
+        return {'status': 'success', 'data': requests}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+@router.put('/master/demo-requests/{request_id}')
+def update_demo_request_status(request_id: str, req: DemoRequestUpdate, current_admin: dict = Depends(get_current_admin_details)):
+    if current_admin.get('role') != 'master':
+        raise HTTPException(status_code=403, detail='Not authorized')
+    try:
+        result = demo_requests_collection.update_one(
+            {'_id': ObjectId(request_id)},
+            {'$set': {'status': req.status}}
+        )
+        if result.modified_count == 1:
+            return {'status': 'success'}
+        else:
+            raise HTTPException(status_code=404, detail='Request not found')
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+@router.delete('/master/demo-requests/{request_id}')
+def delete_demo_request(request_id: str, current_admin: dict = Depends(get_current_admin_details)):
+    if current_admin.get('role') != 'master':
+        raise HTTPException(status_code=403, detail='Not authorized')
+    try:
+        result = demo_requests_collection.delete_one({'_id': ObjectId(request_id)})
+        if result.deleted_count == 1:
+            return {'status': 'success'}
+        else:
+            raise HTTPException(status_code=404, detail='Request not found')
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))

@@ -134,3 +134,13 @@ class JobApplicationCreate(BaseModel):
     resume_url: Optional[str] = ""
     linkedin_url: Optional[str] = ""
     cover_letter: Optional[str] = ""
+
+class DemoRequestCreate(BaseModel):
+    first_name: str
+    last_name: str
+    work_email: str
+    company_name: str
+    help_text: str
+
+class DemoRequestUpdate(BaseModel):
+    status: str
