@@ -99,6 +99,7 @@ export default function OverviewDashboardPage() {
   const [activeActionFilter, setActiveActionFilter] = useState(null);
   const [activeRecFilter, setActiveRecFilter] = useState(null);
   const [activeActivityFilter, setActiveActivityFilter] = useState(null);
+  const [searchQuery, setSearchQuery] = useState("");
 
   const handleOpenRecordsModal = async (filterType, title) => {
     setListModalFilterType(filterType);
@@ -150,7 +151,17 @@ export default function OverviewDashboardPage() {
   const activeFilter = activeActionFilter || activeRecFilter || activeActivityFilter;
 
   const filteredTableCandidates = candidates ? candidates.filter((c) => {
-    if (!activeFilter) return true;
+    let matchesSearch = true;
+    if (searchQuery) {
+      const q = searchQuery.toLowerCase();
+      const matchName = (c.candidate_name || c.name || "").toLowerCase().includes(q);
+      const matchTitle = (c.interview_title || c.job_title || "").toLowerCase().includes(q);
+      matchesSearch = matchName || matchTitle;
+    }
+
+    if (!activeFilter) return matchesSearch;
+    if (!matchesSearch) return false;
+
     const computedStatus = (c.status || "").toLowerCase();
     const decision = (c.decision || "").toLowerCase();
     const alerts = parseInt(c.proctoring_alerts || 0);
@@ -255,51 +266,6 @@ export default function OverviewDashboardPage() {
 
   return (
     <div className="min-h-screen bg-slate-50">
-      {/* Header */}
-      <header className="sticky top-0 z-40 border-b border-border/60 bg-slate-50/80 backdrop-blur-xl">
-        <div className="mx-auto flex max-w-[1600px] items-center gap-4 px-6 py-3.5">
-          <div className="flex items-center gap-2.5">
-            <div
-              className="grid h-9 w-9 place-items-center rounded-lg text-primary-foreground shadow-[var(--shadow-glow)]"
-              style={{ background: "var(--gradient-primary)" }}
-            >
-              <Sparkles className="h-4.5 w-4.5" strokeWidth={2.5} />
-            </div>
-            <div className="leading-tight">
-              <div className="text-[15px] font-semibold tracking-tight">Recruiter Console</div>
-              <div className="text-[11px] text-muted-foreground">AI-Powered Recruitment Workspace</div>
-            </div>
-          </div>
-
-          <div className="relative ml-6 hidden max-w-md flex-1 md:block">
-            <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
-            <Input
-              placeholder="Search candidates, jobs, recruiters…"
-              className="h-9 pl-9 bg-slate-50 border-transparent focus-visible:bg-slate-50"
-            />
-          </div>
-
-          <div className="ml-auto flex items-center gap-2">
-            <Button variant="ghost" size="icon" className="relative">
-              <Bell className="h-4.5 w-4.5" />
-              <span className="absolute right-2 top-2 h-2 w-2 rounded-full bg-destructive ring-2 ring-background" />
-            </Button>
-            <Separator orientation="vertical" className="mx-1 h-6" />
-            <div className="flex items-center gap-2.5 pr-1">
-              <Avatar className="h-8 w-8">
-                <AvatarFallback className="bg-primary text-primary-foreground text-xs font-semibold">
-                  {initials("Current Admin")}
-                </AvatarFallback>
-              </Avatar>
-              <div className="hidden text-right leading-tight sm:block">
-                <div className="text-[13px] font-medium">Current Admin</div>
-                <div className="text-[11px] text-muted-foreground">Lead Recruiter</div>
-              </div>
-            </div>
-          </div>
-        </div>
-      </header>
-
       <main className="mx-auto max-w-[1600px] space-y-6 px-6 py-6">
         {/* Greeting */}
         <section className="flex flex-wrap items-end justify-between gap-4">
@@ -396,6 +362,15 @@ export default function OverviewDashboardPage() {
               <p className="text-xs text-muted-foreground">
                 {activeFilter ? `Displaying matching records for the active action card.` : "Leaderboard by AI-assisted output and hiring conversion."}
               </p>
+            </div>
+            <div className="relative w-full max-w-xs md:w-64">
+              <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
+              <Input
+                placeholder="Search candidates..."
+                value={searchQuery}
+                onChange={(e) => setSearchQuery(e.target.value)}
+                className="h-9 pl-9 bg-slate-50 border-slate-200 focus-visible:bg-white"
+              />
             </div>
           </div>
           <div className="overflow-x-auto">

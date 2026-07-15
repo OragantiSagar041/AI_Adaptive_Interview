@@ -122,9 +122,8 @@ export default function Navbar({
 
   return (
     <header
-      className="relative z-30 border-b px-8 py-4 flex justify-between items-center text-[#1e293b] shadow-sm backdrop-blur-md"
+      className="relative z-30 border-b px-8 py-4 flex justify-between items-center text-[#1e293b] shadow-sm bg-white"
       style={{
-        background: `linear-gradient(90deg, rgba(255,255,255,0.92), ${hexToRgba(currentAccent.primary, 0.14)})`,
         borderColor: hexToRgba(currentAccent.primary, 0.22),
       }}
     >

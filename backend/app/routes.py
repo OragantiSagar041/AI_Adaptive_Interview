@@ -146,6 +146,52 @@ def startup_event_cloudinary():
 # In-memory storage (replace with database in production)
     # interviews = {}
 
+
+def sync_session_status(session: dict, current_time: datetime = None) -> str:
+    """
+    Computes the accurate status of an interview session, updating the DB if it has expired.
+    Returns the final status string (e.g., 'pending', 'started', 'completed', 'expired').
+    """
+    if current_time is None:
+        current_time = datetime.now(timezone.utc)
+        
+    status = session.get("status", "pending")
+    if session.get("is_deactivated", False):
+        return status
+
+    # Check pending expiration
+    if status == "pending" and session.get("expires_at"):
+        try:
+            exp_dt = datetime.fromisoformat(session["expires_at"].replace('Z', '+00:00'))
+            if exp_dt.tzinfo is None:
+                exp_dt = exp_dt.replace(tzinfo=timezone.utc)
+            if current_time > exp_dt:
+                status = "expired"
+                if "_id" in session:
+                    interview_sessions_collection.update_one({"_id": session["_id"]}, {"$set": {"status": "expired"}})
+                session["status"] = status
+        except Exception:
+            pass
+            
+    # Check started expiration
+    elif status == "started":
+        time_ref_str = session.get("started_at") or session.get("created_at")
+        if time_ref_str:
+            try:
+                time_ref = datetime.fromisoformat(time_ref_str.replace('Z', '+00:00'))
+                if time_ref.tzinfo is None:
+                    time_ref = time_ref.replace(tzinfo=timezone.utc)
+                duration_mins = int(session.get("interview_duration") or 30)
+                buffer_mins = max(120, duration_mins * 2)
+                if (current_time - time_ref).total_seconds() > (buffer_mins * 60):
+                    status = "expired"
+                    if "_id" in session:
+                        interview_sessions_collection.update_one({"_id": session["_id"]}, {"$set": {"status": "expired"}})
+                    session["status"] = status
+            except Exception:
+                pass
+                
+    return status
 def get_or_create_candidate(name: str) -> str:
     row = candidates_collection.find_one({"name": name})
 
@@ -1898,7 +1944,7 @@ def get_interview_details(link_id: str):
         "current_ctc": session_data.get("current_ctc", ""),
         "expected_ctc": session_data.get("expected_ctc", ""),
         "current_company": session_data.get("current_company", ""),
-        "status": session_data.get("status", "completed"),
+        "status": sync_session_status(session_data),
         "decision": session_data.get("decision", ""),
         "resume_text": session_data.get("resume_text", ""),
         "job_description_text": session_data.get("job_description", ""),
@@ -2453,31 +2499,7 @@ async def get_dashboard_stats(admin_id: Optional[str] = None, current_admin: dic
             if email:
                 seen_emails.add(email.strip().lower())
                 
-            status = s.get("status", "pending")
-            if status == "pending" and s.get("expires_at"):
-                try:
-                    exp_dt = datetime.fromisoformat(s["expires_at"].replace('Z', '+00:00'))
-                    if exp_dt.tzinfo is None:
-                        exp_dt = exp_dt.replace(tzinfo=timezone.utc)
-                    if now > exp_dt:
-                        status = "expired"
-                        interview_sessions_collection.update_one({"_id": s["_id"]}, {"$set": {"status": "expired"}})
-                except Exception:
-                    pass
-            elif status == "started":
-                time_ref_str = s.get("started_at") or s.get("created_at")
-                if time_ref_str:
-                    try:
-                        time_ref = datetime.fromisoformat(time_ref_str.replace('Z', '+00:00'))
-                        if time_ref.tzinfo is None:
-                            time_ref = time_ref.replace(tzinfo=timezone.utc)
-                        duration_mins = int(s.get("interview_duration") or 30)
-                        buffer_mins = max(120, duration_mins * 2)
-                        if (now - time_ref).total_seconds() > (buffer_mins * 60):
-                            status = "expired"
-                            interview_sessions_collection.update_one({"_id": s["_id"]}, {"$set": {"status": "expired"}})
-                    except Exception:
-                        pass
+            status = sync_session_status(s, now)
             
             if status == "completed":
                 completed += 1
@@ -2595,31 +2617,7 @@ def export_sessions(current_admin: dict = Depends(get_current_admin_details), st
     
     export_data = []
     for row in rows:
-        current_status = row.get("status", "pending")
-        if current_status == "pending" and row.get("expires_at"):
-            try:
-                exp_dt = datetime.fromisoformat(row["expires_at"].replace('Z', '+00:00'))
-                if exp_dt.tzinfo is None:
-                    exp_dt = exp_dt.replace(tzinfo=timezone.utc)
-                if now > exp_dt:
-                    current_status = "expired"
-                    interview_sessions_collection.update_one({"_id": row["_id"]}, {"$set": {"status": "expired"}})
-            except Exception:
-                pass
-        elif current_status == "started":
-            time_ref_str = row.get("started_at") or row.get("created_at")
-            if time_ref_str:
-                try:
-                    time_ref = datetime.fromisoformat(time_ref_str.replace('Z', '+00:00'))
-                    if time_ref.tzinfo is None:
-                        time_ref = time_ref.replace(tzinfo=timezone.utc)
-                    duration_mins = int(row.get("interview_duration") or 30)
-                    buffer_mins = max(120, duration_mins * 2)
-                    if (now - time_ref).total_seconds() > (buffer_mins * 60):
-                        current_status = "expired"
-                        interview_sessions_collection.update_one({"_id": row["_id"]}, {"$set": {"status": "expired"}})
-                except Exception:
-                    pass
+        current_status = sync_session_status(row, now)
         
         decision = row.get("decision", "")
         
@@ -6509,10 +6507,14 @@ async def get_dashboard_aggregated_data(admin_id: Optional[str] = None, current_
             
         seen_emails = set()
         candidates_list = []
+        now = datetime.now(timezone.utc)
         for c in candidates_cursor:
             email = c.get("candidate_email") or c.get("email")
             if email:
                 seen_emails.add(email.strip().lower())
+            
+            c["status"] = sync_session_status(c, now)
+            
             c["id"] = str(c["_id"])
             c["_id"] = str(c["_id"])
             candidates_list.append(c)
@@ -6784,10 +6786,12 @@ def get_admin_qualified(pipeline: Optional[str] = "all", current_admin: dict = D
             
     seen_emails = set()
     merged_list = []
+    now = datetime.now(timezone.utc)
     for s in sessions:
         email = s.get("candidate_email") or s.get("email")
         if email:
             seen_emails.add(email.strip().lower())
+        s["status"] = sync_session_status(s, now)
         s["id"] = str(s["_id"])
         s["_id"] = str(s["_id"])
         merged_list.append(s)
@@ -6852,10 +6856,12 @@ def get_admin_rejected(pipeline: Optional[str] = "all", current_admin: dict = De
             
     seen_emails = set()
     merged_list = []
+    now = datetime.now(timezone.utc)
     for s in sessions:
         email = s.get("candidate_email") or s.get("email")
         if email:
             seen_emails.add(email.strip().lower())
+        s["status"] = sync_session_status(s, now)
         s["id"] = str(s["_id"])
         s["_id"] = str(s["_id"])
         merged_list.append(s)
@@ -6933,10 +6939,12 @@ def get_superadmin_qualified(adminId: Optional[str] = None, pipeline: Optional[s
         
     seen_emails = set()
     merged_list = []
+    now = datetime.now(timezone.utc)
     for s in sessions:
         email = s.get("candidate_email") or s.get("email")
         if email:
             seen_emails.add(email.strip().lower())
+        s["status"] = sync_session_status(s, now)
         s["id"] = str(s["_id"])
         s["_id"] = str(s["_id"])
         merged_list.append(s)
@@ -7004,10 +7012,12 @@ def get_superadmin_rejected(adminId: Optional[str] = None, pipeline: Optional[st
         
     seen_emails = set()
     merged_list = []
+    now = datetime.now(timezone.utc)
     for s in sessions:
         email = s.get("candidate_email") or s.get("email")
         if email:
             seen_emails.add(email.strip().lower())
+        s["status"] = sync_session_status(s, now)
         s["id"] = str(s["_id"])
         s["_id"] = str(s["_id"])
         merged_list.append(s)

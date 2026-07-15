@@ -364,7 +364,7 @@ export default function LoginPage() {
       sessionStorage.setItem('subscriptionPlanKey', planKey); sessionStorage.setItem('planCapabilities', JSON.stringify(planCapabilities))
       sessionStorage.setItem('subscriptionExpiry', data.subscription_expiry || ''); sessionStorage.setItem('subscriptionCredits', data.credits ?? '')
       sessionStorage.setItem('subscriptionWarningMessage', data.subscription_warning_message || ''); sessionStorage.setItem('adminCompany', data.company_name || '')
-      if (finalRole === 'superadmin') navigate('/superadmin/super-dashboard')
+      if (finalRole === 'superadmin') navigate('/superadmin/new-dashboard')
       else if (finalRole === 'admin') navigate('/admin/dashboard')
       else if (finalRole === 'master') navigate('/master/dashboard')
       else navigate('/login')
