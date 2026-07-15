@@ -4920,30 +4920,32 @@ def get_ongoing_interviews(admin_id: Optional[str] = None, current_admin: dict =
 
 @router.websocket("/ws/webrtc/{role}/{link_id}")
 async def webrtc_endpoint(websocket: WebSocket, role: str, link_id: str, token: Optional[str] = None):
-    with open("webrtc_debug.log", "a") as f:
-        f.write(f"\\n--- New Connection ---\\nRole: {role}, Link ID: {link_id}\\nToken: {token}\\n")
+    import os, tempfile
+    webrtc_log_path = os.path.join(tempfile.gettempdir(), "webrtc_debug.log")
+    with open(webrtc_log_path, "a") as f:
+        f.write(f"\n--- New Connection ---\nRole: {role}, Link ID: {link_id}\nToken: {token}\n")
     
     if role == "candidate":
         await manager.connect_candidate(websocket, link_id)
     elif role == "admin":
         if not token:
-            with open("webrtc_debug.log", "a") as f:
-                f.write("No token provided. Closing with 1008.\\n")
+            with open(webrtc_log_path, "a") as f:
+                f.write("No token provided. Closing with 1008.\n")
             await websocket.close(code=1008)
             return
         try:
             jwt.decode(token, JWT_SECRET_KEY, algorithms=[ALGORITHM])
             await manager.connect_admin(websocket, link_id)
-            with open("webrtc_debug.log", "a") as f:
-                f.write("Admin connected successfully.\\n")
+            with open(webrtc_log_path, "a") as f:
+                f.write("Admin connected successfully.\n")
         except jwt.PyJWTError as e:
-            with open("webrtc_debug.log", "a") as f:
-                f.write(f"JWT Decode Error: {str(e)}\\n")
+            with open(webrtc_log_path, "a") as f:
+                f.write(f"JWT Decode Error: {str(e)}\n")
             await websocket.close(code=1008)
             return
         except Exception as e:
-            with open("webrtc_debug.log", "a") as f:
-                f.write(f"Other Error: {str(e)}\\n{traceback.format_exc()}\\n")
+            with open(webrtc_log_path, "a") as f:
+                f.write(f"Other Error: {str(e)}\n{traceback.format_exc()}\n")
             await websocket.close(code=1011)
             return
     else:
@@ -4981,16 +4983,18 @@ async def webrtc_endpoint(websocket: WebSocket, role: str, link_id: str, token: 
             elif role == "admin":
                 await manager.send_to_candidate(link_id, data)
     except WebSocketDisconnect:
-        with open("webrtc_debug.log", "a") as f:
-            f.write(f"WebSocketDisconnect for role {role}, link_id {link_id}\\n")
+        webrtc_log_path = os.path.join(tempfile.gettempdir(), "webrtc_debug.log")
+        with open(webrtc_log_path, "a") as f:
+            f.write(f"WebSocketDisconnect for role {role}, link_id {link_id}\n")
         if role == "candidate":
             manager.disconnect_candidate(link_id)
             await manager.send_to_admins(link_id, {"type": "candidate_disconnected"})
         elif role == "admin":
             manager.disconnect_admin(websocket, link_id)
     except Exception as e:
-        with open("webrtc_debug.log", "a") as f:
-            f.write(f"Exception in while loop: {str(e)}\\n{traceback.format_exc()}\\n")
+        webrtc_log_path = os.path.join(tempfile.gettempdir(), "webrtc_debug.log")
+        with open(webrtc_log_path, "a") as f:
+            f.write(f"Exception in while loop: {str(e)}\n{traceback.format_exc()}\n")
 
 
 # --------------------------------------------------------------------------------
@@ -6613,7 +6617,8 @@ async def get_dashboard_aggregated_data(admin_id: Optional[str] = None, current_
                 
                 if online:
                     ongoing_live_count += 1
-                else:
+                
+                if snap.get("proctoring_alerts", 0) > 0:
                     ongoing_alert_count += 1
                     
                 if audio_level > 5:

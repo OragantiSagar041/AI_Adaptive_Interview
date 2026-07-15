@@ -36,7 +36,8 @@ current_session_id = contextvars.ContextVar("current_session_id", default=None)
 
 # ─── Token Tracking (Temporary) ──────────────────────────────────────────────
 
-TOKEN_TRACKER_FILE = os.path.join(os.path.dirname(__file__), "token_tracker.json")
+import tempfile
+TOKEN_TRACKER_FILE = os.path.join(tempfile.gettempdir(), "hireiq_token_tracker.json")
 
 def _track_tokens(tokens: int):
     if not tokens:
