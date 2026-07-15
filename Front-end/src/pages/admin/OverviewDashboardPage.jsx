@@ -99,6 +99,7 @@ export default function OverviewDashboardPage() {
   const [activeActionFilter, setActiveActionFilter] = useState(null);
   const [activeRecFilter, setActiveRecFilter] = useState(null);
   const [activeActivityFilter, setActiveActivityFilter] = useState(null);
+  const [searchQuery, setSearchQuery] = useState("");
 
   const handleOpenRecordsModal = async (filterType, title) => {
     setListModalFilterType(filterType);
@@ -150,7 +151,17 @@ export default function OverviewDashboardPage() {
   const activeFilter = activeActionFilter || activeRecFilter || activeActivityFilter;
 
   const filteredTableCandidates = candidates ? candidates.filter((c) => {
-    if (!activeFilter) return true;
+    let matchesSearch = true;
+    if (searchQuery) {
+      const q = searchQuery.toLowerCase();
+      const matchName = (c.candidate_name || c.name || "").toLowerCase().includes(q);
+      const matchTitle = (c.interview_title || c.job_title || "").toLowerCase().includes(q);
+      matchesSearch = matchName || matchTitle;
+    }
+
+    if (!activeFilter) return matchesSearch;
+    if (!matchesSearch) return false;
+
     const computedStatus = (c.status || "").toLowerCase();
     const decision = (c.decision || "").toLowerCase();
     const alerts = parseInt(c.proctoring_alerts || 0);
@@ -194,14 +205,12 @@ export default function OverviewDashboardPage() {
   ];
 
   const pipeline = [
-    { stage: "Applied", count: parseInt(dbStats?.total) || 0, color: "#9CA3AF" },
-    { stage: "AI Resume Screening", count: parseInt(dbStats?.total) || 0, color: "#38BDF8" },
-    { stage: "AI Voice Interview", count: parseInt(dbStats?.started) || 0, color: "#06B6D4" },
-    { stage: "AI Evaluation", count: parseInt(dbStats?.completed) || 0, color: "#3B82F6" },
-    { stage: "Recruiter Review", count: parseInt(dbStats?.pending) || 0, color: "#8B5CF6" },
-    { stage: "Shortlisted", count: parseInt(dbStats?.selected) || 0, color: "#D946EF" },
-    { stage: "Offer", count: 0, color: "#F97316" },
-    { stage: "Hired", count: 0, color: "#10B981" },
+    { stage: "Total Assigned", count: parseInt(dbStats?.total) || 0, color: "oklch(0.75 0.05 250)" },
+    { stage: "Started", count: parseInt(dbStats?.started) || 0, color: "oklch(0.7 0.12 240)" },
+    { stage: "Completed", count: parseInt(dbStats?.completed) || 0, color: "oklch(0.65 0.16 220)" },
+    { stage: "Pending Review", count: parseInt(dbStats?.pending) || 0, color: "oklch(0.6 0.18 260)" },
+    { stage: "Selected", count: parseInt(dbStats?.selected) || 0, color: "oklch(0.68 0.18 320)" },
+    { stage: "Rejected", count: parseInt(dbStats?.rejected) || 0, color: "oklch(0.72 0.17 45)" },
   ];
 
   const topCandidates = candidates ? candidates.filter(c => parseFloat(c.score || c.avg_score || 0) >= 80) : [];
@@ -268,17 +277,12 @@ export default function OverviewDashboardPage() {
               <Sparkles className="h-4.5 w-4.5" strokeWidth={2.5} />
             </div>
             <div className="leading-tight">
-              <div className="text-[15px] font-semibold tracking-tight">Recruiter Console</div>
-              <div className="text-[11px] text-muted-foreground">AI-Powered Recruitment Workspace</div>
+
             </div>
           </div>
 
           <div className="relative ml-6 hidden max-w-md flex-1 md:block">
-            <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
-            <Input
-              placeholder="Search candidates, jobs, recruiters…"
-              className="h-9 pl-9 bg-slate-50 border-transparent focus-visible:bg-slate-50"
-            />
+            {/* Search removed from header */}
           </div>
 
           <div className="ml-auto flex items-center gap-2">
@@ -293,10 +297,7 @@ export default function OverviewDashboardPage() {
                   {initials("Current Admin")}
                 </AvatarFallback>
               </Avatar>
-              <div className="hidden text-right leading-tight sm:block">
-                <div className="text-[13px] font-medium">Current Admin</div>
-                <div className="text-[11px] text-muted-foreground">Lead Recruiter</div>
-              </div>
+
             </div>
           </div>
         </div>
@@ -364,7 +365,7 @@ export default function OverviewDashboardPage() {
             <Badge variant="outline" className="text-xs">All Time</Badge>
           </div>
 
-          <div className="mt-5 grid grid-cols-2 gap-3 md:grid-cols-4 xl:grid-cols-4">
+          <div className="mt-5 grid grid-cols-2 gap-3 md:grid-cols-3 xl:grid-cols-6">
             {pipeline.map((p, i) => (
               <div key={p.stage} className="relative">
                 <div
@@ -399,6 +400,15 @@ export default function OverviewDashboardPage() {
                 {activeFilter ? `Displaying matching records for the active action card.` : "Leaderboard by AI-assisted output and hiring conversion."}
               </p>
             </div>
+            <div className="relative w-full max-w-xs md:w-64">
+              <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
+              <Input
+                placeholder="Search candidates..."
+                value={searchQuery}
+                onChange={(e) => setSearchQuery(e.target.value)}
+                className="h-9 pl-9 bg-slate-50 border-slate-200 focus-visible:bg-white"
+              />
+            </div>
           </div>
           <div className="overflow-x-auto">
             <table className="w-full text-sm">
@@ -407,13 +417,13 @@ export default function OverviewDashboardPage() {
                   <th className="px-6 py-2.5 font-medium">Candidate</th>
                   <th className="px-3 py-2.5 font-medium">Role</th>
 
-                  <th className="px-3 py-2.5 font-medium">AI Score</th>
+                  <th className="px-3 py-2.5 font-medium">Productivity</th>
                   <th className="px-6 py-2.5 font-medium">Status</th>
                   <th className="px-6 py-2.5 font-medium text-right">Actions</th>
                 </tr>
               </thead>
               <tbody>
-                {candidates && candidates.filter(c => c.decision !== "selected" && c.decision !== "rejected").slice(0, 10).map((c, i) => (
+                {filteredTableCandidates && filteredTableCandidates.slice(0, 10).map((c, i) => (
                   <tr key={c.id || i} className="border-b border-border/50 last:border-0 hover:bg-slate-50">
                     <td className="px-6 py-3">
                       <div className="flex items-center gap-2.5">
@@ -712,10 +722,96 @@ export default function OverviewDashboardPage() {
           Enterprise · Role-Based Permissions · Multi-Department Hiring · Audit Trail · AI Hiring Insights
         </footer>
 
+        <Modal
+          isOpen={listModalOpen}
+          onClose={() => {
+            setListModalOpen(false);
+            setListModalFilterType(null);
+          }}
+          title={listModalTitle}
+          subtitle="Matching candidate and interview records"
+          maxWidth="max-w-3xl"
+        >
+          {loadingModalRecords ? (
+            <div className="flex flex-col items-center justify-center py-12">
+              <div className="h-8 w-8 animate-spin rounded-full border-4 border-indigo-600 border-t-transparent" />
+              <p className="mt-4 text-sm text-muted-foreground">Loading records from server...</p>
+            </div>
+          ) : listModalCandidates.length > 0 ? (
+            <div className="overflow-x-auto">
+              <table className="w-full text-sm text-left">
+                <thead>
+                  <tr className="border-b border-slate-200 text-slate-500 text-xs font-semibold uppercase tracking-wider bg-slate-50">
+                    <th className="px-4 py-3">Candidate</th>
+                    <th className="px-4 py-3">Role</th>
+                    <th className="px-4 py-3">AI Score</th>
+                    <th className="px-4 py-3">Status</th>
+                    <th className="px-4 py-3 text-right">Action</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-slate-100">
+                  {listModalCandidates.map((c) => (
+                    <tr key={c.id || c._id} className="hover:bg-slate-50">
+                      <td className="px-4 py-3.5">
+                        <div className="font-semibold text-slate-800">{c.candidate_name || c.name || "Candidate"}</div>
+                        <div className="text-xs text-muted-foreground">{c.candidate_email || c.email}</div>
+                      </td>
+                      <td className="px-4 py-3.5 text-slate-600">{c.interview_title || c.job_title || "N/A"}</td>
+                      <td className="px-4 py-3.5">
+                        <div className="flex items-center gap-2">
+                          <Progress value={Math.round(c.score || c.avg_score || 0)} className="h-1.5 w-16" />
+                          <span className="text-xs font-medium tabular-nums">{Math.round(c.score || c.avg_score || 0)}%</span>
+                        </div>
+                      </td>
+                      <td className="px-4 py-3.5">
+                        <Badge
+                          variant="outline"
+                          className={
+                            (c.decision === "selected" || c.decision === "hired")
+                              ? "border-success/30 bg-success/10 text-success"
+                              : c.decision === "rejected"
+                                ? "border-destructive/30 bg-destructive/10 text-destructive"
+                                : "border-warning/30 bg-warning/10 text-warning-foreground"
+                          }
+                        >
+                          <span className={`mr-1.5 h-1.5 w-1.5 rounded-full ${(c.decision === "selected" || c.decision === "hired") ? "bg-success" : c.decision === "rejected" ? "bg-destructive" : "bg-warning"}`} />
+                          {c.decision ? (c.decision.charAt(0).toUpperCase() + c.decision.slice(1)) : (c.status ? c.status.charAt(0).toUpperCase() + c.status.slice(1) : "Pending")}
+                        </Badge>
+                      </td>
+                      <td className="px-4 py-3.5 text-right">
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          className="h-8 px-3 text-xs"
+                          onClick={() => handleViewCandidateFromModal(c)}
+                        >
+                          View Details
+                        </Button>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          ) : (
+            <div className="flex flex-col items-center justify-center py-12 text-center">
+              <AlertCircle className="h-10 w-10 text-slate-300 animate-pulse" />
+              <p className="mt-4 text-sm text-slate-500 font-medium">No matching records found.</p>
+            </div>
+          )}
+        </Modal>
+
         <CandidateDialog
           candidate={selectedCandidate}
           open={!!selectedCandidate}
-          onOpenChange={(v) => !v && setSelectedCandidate(null)}
+          onOpenChange={(v) => {
+            if (!v) {
+              setSelectedCandidate(null);
+              if (listModalFilterType) {
+                setListModalOpen(true);
+              }
+            }
+          }}
         />
       </main>
     </div>

@@ -4,7 +4,7 @@ import { useNavigate } from 'react-router-dom'
 import Swal from 'sweetalert2'
 import axios from 'axios'
 import { handleUpdateDecision } from '../../store/slices/interviewSlice'
-import ScheduleModal from '../../pages/ScheduleModal'
+import ScheduleModal from './ScheduleModal'
 import {
   Mail, Phone, MapPin, Building2, IndianRupee, Clock, Download,
   Play, FileText, Sparkles, Star, Check, X, Calendar, Send,
@@ -21,16 +21,16 @@ function ScoreRing({ value, size = 140, strokeWidth = 12, label, tone }) {
 
   let colorClass = tone === "success" ? "text-emerald-500"
     : tone === "warning" ? "text-amber-500"
-    : tone === "danger" ? "text-rose-500"
-    : num >= 80 ? "text-emerald-500"
-    : num >= 60 ? "text-amber-500"
-    : "text-rose-500"
+      : tone === "danger" ? "text-rose-500"
+        : num >= 80 ? "text-emerald-500"
+          : num >= 60 ? "text-amber-500"
+            : "text-rose-500"
 
   return (
     <div className="relative flex flex-col items-center justify-center" style={{ width: size, height: size }}>
       <svg className="transform -rotate-90 w-full h-full" viewBox={`0 0 ${size} ${size}`}>
-        <circle cx={size/2} cy={size/2} r={radius} stroke="currentColor" strokeWidth={strokeWidth} fill="transparent" className="text-slate-100" />
-        <circle cx={size/2} cy={size/2} r={radius} stroke="currentColor" strokeWidth={strokeWidth} fill="transparent"
+        <circle cx={size / 2} cy={size / 2} r={radius} stroke="currentColor" strokeWidth={strokeWidth} fill="transparent" className="text-slate-100" />
+        <circle cx={size / 2} cy={size / 2} r={radius} stroke="currentColor" strokeWidth={strokeWidth} fill="transparent"
           strokeDasharray={circumference} strokeDashoffset={offset}
           className={`${colorClass} transition-all duration-1000 ease-out`} strokeLinecap="round" />
       </svg>
@@ -73,7 +73,14 @@ export default function CandidateDialog({ candidate, open, onOpenChange }) {
   const [loading, setLoading] = useState(false)
   const [atsLoading, setAtsLoading] = useState(false)
   const [error, setError] = useState(null)
-  const [isScheduleModalOpen, setIsScheduleModalOpen] = useState(false)
+
+  // New States
+  const [extractingInfo, setExtractingInfo] = useState(false)
+  const [showNotes, setShowNotes] = useState(false)
+  const [newNote, setNewNote] = useState("")
+  const [notesSaving, setNotesSaving] = useState(false)
+  const [showScheduleModal, setShowScheduleModal] = useState(false)
+
   const token = useSelector(state => state.auth.token)
   const API_BASE_URL = useSelector(state => state.auth.API_BASE_URL)
 
@@ -137,6 +144,102 @@ export default function CandidateDialog({ candidate, open, onOpenChange }) {
     fetchAts()
   }, [activeTab, detail, atsData, API_BASE_URL, token])
 
+  // Extract candidate info via frontend Regex if missing
+  useEffect(() => {
+    if (!open || !detail) return
+
+    const hasResume = detail.resume_text || detail.profile_text || detail.resume_url;
+
+    // Check if we need to extract info
+    if (!detail.info_extracted && (!detail.experience || detail.experience === "N/A") && hasResume && !extractingInfo) {
+      setExtractingInfo(true)
+
+      const resume = detail.resume_text || detail.profile_text || "";
+      let extExp = "";
+      let extLocation = "";
+      let extCTC = "";
+      let extMobile = "";
+      let extCompany = "";
+      let extExpectedCTC = "";
+      let extNotice = "";
+
+      // Simple frontend regex extraction
+      if (resume) {
+        // Look for X years, X+ years, X yrs, or Fresher
+        const expMatch = resume.match(/(?:experience[\s:\-]{1,4})?(\d+(?:\.\d+)?)\+?\s*(?:years?|yrs?|y)(?:\s*of)?\s*(?:experience)?\b/i);
+        const fresherMatch = resume.match(/(?:fresher|entry[- ]level|0\s*years?)/i);
+        if (expMatch) extExp = expMatch[1] + " Years";
+        else if (fresherMatch) extExp = "0 Years";
+
+        const locMatch = resume.match(/(?:location|city|address|residing\s*in|place|based\s*in)[\s:\-]{1,4}([A-Za-z]+(?:,\s*[A-Za-z]+)*)/i);
+        if (locMatch) extLocation = locMatch[1];
+
+        const ctcMatch = resume.match(/(?:current\s*ctc|ctc|package|salary|current\s*salary)[\s:\-]{1,4}([\d\.]+\s*(?:lpa|k|m|LPA))/i);
+        if (ctcMatch) extCTC = ctcMatch[1].toUpperCase();
+
+        const mobileMatch = resume.match(/(?:mobile|phone|ph|contact)[\s:\-]{1,4}(\+?[\d\-\s]{10,15})/i) || resume.match(/(?:\+91|91)?[-\s]?[6-9]\d{9}/);
+        if (mobileMatch) extMobile = (mobileMatch[1] || mobileMatch[0]).trim();
+
+        const compMatch = resume.match(/(?:company|employer|organization|currently\s*working\s*at|current\s*company|worked\s*at|role\s*at)[\s:\-]{1,4}([A-Za-z0-9\s\&\.\-]+?)(?=\n|$|\|)/i);
+        if (compMatch) extCompany = compMatch[1].trim();
+
+        const expCtcMatch = resume.match(/(?:expected\s*ctc|expected\s*salary|expected|expected\s*package)[\s:\-]{1,4}([\d\.]+\s*(?:lpa|k|m|LPA))/i);
+        if (expCtcMatch) extExpectedCTC = expCtcMatch[1].toUpperCase();
+
+        const noticeMatch = resume.match(/(?:notice\s*period|availability|can\s*join\s*in|joining\s*in)[\s:\-]{1,5}(\d+\s*(?:days?|months?|weeks?|day|month|week))/i);
+        if (noticeMatch) extNotice = noticeMatch[1];
+
+        // Strategy 2: Line-by-line key-value fallback
+        // This is for when the user manually pastes vertical lists (e.g. "Experience\n2 Years")
+        const lines = resume.split('\n').map(l => l.trim()).filter(l => l.length > 0);
+        for (let i = 0; i < lines.length - 1; i++) {
+          const lower = lines[i].toLowerCase().replace(/[:\-]/g, '').trim();
+          const next = lines[i + 1];
+
+          if (!extExp && (lower === "experience" || lower === "total experience" || lower === "exp")) {
+            extExp = next;
+          }
+          if (!extCTC && (lower === "current ctc" || lower === "ctc" || lower === "current salary")) {
+            extCTC = next;
+          }
+          if (!extExpectedCTC && (lower === "expected ctc" || lower === "expected salary")) {
+            extExpectedCTC = next;
+          }
+          if (!extNotice && (lower === "notice period" || lower === "availability")) {
+            extNotice = next;
+          }
+          if (!extCompany && (lower === "current company" || lower === "company" || lower === "organization")) {
+            extCompany = next;
+          }
+          if (!extLocation && (lower === "location" || lower === "city")) {
+            extLocation = next;
+          }
+          if (!extMobile && (lower === "mobile" || lower === "phone" || lower === "contact")) {
+            extMobile = next;
+          }
+        }
+      }
+
+      // Simulate a small delay for extraction feeling
+      setTimeout(() => {
+        setDetail(prev => ({
+          ...prev,
+          experience: (!prev.experience || prev.experience === "N/A") ? extExp : prev.experience,
+          location: (!prev.location || prev.location === "N/A") ? extLocation : prev.location,
+          current_ctc: (!prev.current_ctc || prev.current_ctc === "N/A") ? extCTC : prev.current_ctc,
+          candidate_phone: (!prev.candidate_phone || prev.candidate_phone === "N/A") && (!prev.phone || prev.phone === "N/A") ? extMobile : (prev.candidate_phone || prev.phone),
+          current_company: (!prev.current_company || prev.current_company === "N/A") ? extCompany : prev.current_company,
+          expected_ctc: (!prev.expected_ctc || prev.expected_ctc === "N/A") ? extExpectedCTC : prev.expected_ctc,
+          notice_period: (!prev.notice_period || prev.notice_period === "N/A") ? extNotice : prev.notice_period,
+          info_extracted: true
+        }))
+        setExtractingInfo(false)
+      }, 800);
+    }
+  }, [open, detail, extractingInfo])
+
+  // No AI Notes Extraction anymore, we use DB directly.
+
   if (!open || !candidate) return null
 
   // Merge candidate + detail for display
@@ -182,6 +285,8 @@ export default function CandidateDialog({ candidate, open, onOpenChange }) {
       await dispatch(handleUpdateDecision({ linkId, decision: newDecision })).unwrap()
       Swal.fire('Success', `Candidate marked as ${newDecision.toUpperCase()}`, 'success')
       onOpenChange(false)
+      const basePath = window.location.pathname.startsWith('/superadmin') ? '/superadmin' : '/admin'
+      navigate(`${basePath}/${newDecision === 'selected' ? 'qualified-candidates' : 'rejected-candidates'}`)
     } catch (err) {
       Swal.fire('Error', 'Failed to update decision', 'error')
     }
@@ -204,7 +309,7 @@ export default function CandidateDialog({ candidate, open, onOpenChange }) {
   }
 
   const handleSchedule = () => {
-    setIsScheduleModalOpen(true);
+    setShowScheduleModal(true)
   }
 
   const handleOffer = () => {
@@ -224,12 +329,83 @@ export default function CandidateDialog({ candidate, open, onOpenChange }) {
   }
 
   const handleViewProfile = () => {
-    const linkId = c.link_id || c.id || c._id;
-    onOpenChange(false);
-    navigate(`/admin/candidate/profile/${linkId}`, { state: { candidate: c } });
+    onOpenChange(false)
+    const linkId = c.link_id || candidate.link_id || c.id || candidate.id || c._id || candidate._id
+    const basePath = window.location.pathname.startsWith('/superadmin') ? '/superadmin' : '/admin'
+    navigate(`${basePath}/candidate/profile/${linkId}`, { state: { candidate: c } })
   }
 
+
   const tabs = ["overview", "resume", "interview", "evaluation", "timeline"]
+
+  // Action handlers
+  const handleReject = async () => {
+    if (!window.confirm("Are you sure you want to reject this candidate?")) return
+    const appId = c.link_id || candidate.link_id || c.id || candidate.id || c._id || candidate._id
+    try {
+      await axios.post(`${API_BASE_URL}/admin/update-decision`, {
+        link_id: appId,
+        decision: "rejected"
+      }, { headers: { Authorization: `Bearer ${token}` } })
+      onOpenChange(false)
+
+      // Reload so the candidate is instantly removed from the current list
+      window.location.reload()
+    } catch (e) {
+      console.error("Failed to reject", e)
+    }
+  }
+
+  const handleQualify = async () => {
+    if (!window.confirm("Are you sure you want to qualify this candidate?")) return
+    const appId = c.link_id || candidate.link_id || c.id || candidate.id || c._id || candidate._id
+    try {
+      await axios.post(`${API_BASE_URL}/admin/update-decision`, {
+        link_id: appId,
+        decision: "selected"
+      }, { headers: { Authorization: `Bearer ${token}` } })
+      onOpenChange(false)
+
+      // Reload so the candidate is instantly added to the qualified list
+      window.location.reload()
+    } catch (e) {
+      console.error("Failed to qualify", e)
+    }
+  }
+
+
+
+  const handleAddNote = async () => {
+    if (!newNote.trim()) return
+    setNotesSaving(true)
+    const linkId = c.link_id || candidate.link_id || c.interview_id || candidate.interview_id || c.id || candidate.id || c._id || candidate._id
+    
+    try {
+      const noteObj = {
+        text: newNote,
+        added_by: "Admin",
+        added_at: new Date().toISOString()
+      };
+      
+      const updatedNotes = [...(c.notes || []), noteObj]
+      
+      // Save to backend database
+      await axios.post(`${API_BASE_URL}/admin/interview/${linkId}/notes`, { notes: updatedNotes }, {
+        headers: { Authorization: `Bearer ${token}` }
+      })
+
+      setDetail(prev => ({
+        ...prev,
+        notes: updatedNotes
+      }));
+      setNewNote("");
+    } catch (e) {
+      console.error("Error adding note", e)
+      Swal.fire('Error', 'Failed to save note to database', 'error')
+    } finally {
+      setNotesSaving(false)
+    }
+  }
 
   return (
     <div className="fixed inset-0 z-[200] flex items-center justify-center bg-slate-900/60 backdrop-blur-sm p-4" onClick={(e) => { if (e.target === e.currentTarget) onOpenChange(false) }}>
@@ -423,10 +599,10 @@ export default function CandidateDialog({ candidate, open, onOpenChange }) {
                     {resumeText && !jdText
                       ? "ATS analysis not available — job description missing."
                       : !resumeText && jdText
-                      ? "No resume text found for this candidate. ATS analysis requires a resume."
-                      : loading
-                      ? "Loading resume data..."
-                      : "No resume or job description data found for this candidate."}
+                        ? "No resume text found for this candidate. ATS analysis requires a resume."
+                        : loading
+                          ? "Loading resume data..."
+                          : "No resume or job description data found for this candidate."}
                   </div>
                 )}
               </section>
@@ -575,24 +751,65 @@ export default function CandidateDialog({ candidate, open, onOpenChange }) {
           )}
         </div>
 
+        {/* ─ Notes Side Panel ─ */}
+        {showNotes && (
+          <div className="absolute top-[88px] right-0 bottom-[73px] w-80 bg-white border-l border-slate-200 shadow-xl flex flex-col z-10 animate-in slide-in-from-right-8 duration-200">
+            <div className="p-4 border-b border-slate-100 flex justify-between items-center bg-slate-50/50">
+              <h3 className="font-bold text-slate-800">Candidate Notes</h3>
+              <button onClick={() => setShowNotes(false)} className="text-slate-400 hover:text-slate-700"><X size={16} /></button>
+            </div>
+            <div className="flex-1 overflow-y-auto p-4 space-y-4">
+              {(c.notes || []).length === 0 ? (
+                <p className="text-xs text-slate-400 text-center py-4">No notes added yet.</p>
+              ) : (
+                (c.notes || []).map((n, i) => (
+                  <div key={i} className="bg-slate-50 rounded-lg p-3 border border-slate-100">
+                    <p className="text-sm text-slate-700 whitespace-pre-wrap">{n.text}</p>
+                    <div className="flex justify-between items-center mt-2 text-[10px] text-slate-400 font-medium">
+                      <span>{n.added_by}</span>
+                      <span>{new Date(n.added_at).toLocaleDateString()}</span>
+                    </div>
+                  </div>
+                ))
+              )}
+            </div>
+            <div className="p-4 border-t border-slate-100 bg-slate-50/50">
+              <textarea
+                value={newNote}
+                onChange={e => setNewNote(e.target.value)}
+                placeholder="Type a note..."
+                className="w-full text-sm rounded-xl border-slate-200 resize-none focus:ring-indigo-500 focus:border-indigo-500 mb-2 p-3 text-slate-800"
+                rows={3}
+              />
+              <button
+                onClick={handleAddNote}
+                disabled={notesSaving || !newNote.trim()}
+                className="w-full flex items-center justify-center gap-2 py-2 bg-indigo-600 hover:bg-indigo-700 disabled:opacity-50 text-white rounded-lg text-sm font-bold transition-colors"
+              >
+                {notesSaving ? <Loader2 size={16} className="animate-spin" /> : <Send size={16} />} Save Note
+              </button>
+            </div>
+          </div>
+        )}
+
         {/* ── Footer Actions ── */}
         <div className="border-t border-slate-200/80 p-4 bg-white flex flex-wrap items-center justify-end gap-3 shrink-0">
-          <button onClick={handleNotes} className="flex items-center gap-2 px-4 py-2 text-sm font-bold text-slate-600 bg-white border border-slate-200 rounded-xl hover:bg-slate-50 transition-colors shadow-sm">
-            <MessageSquare size={16} /> Add Notes
+          <button onClick={() => setShowNotes(!showNotes)} className={`flex items-center gap-2 px-4 py-2 text-sm font-bold border rounded-xl transition-colors shadow-sm ${showNotes ? 'bg-indigo-50 text-indigo-700 border-indigo-200' : 'text-slate-600 bg-white border-slate-200 hover:bg-slate-50'}`}>
+            <MessageSquare size={16} /> Notes {(c.notes?.length > 0) && <span className="bg-indigo-100 text-indigo-700 px-1.5 py-0.5 rounded text-[10px] leading-none ml-1">{c.notes.length}</span>}
           </button>
           <button onClick={handleViewProfile} className="flex items-center gap-2 px-4 py-2 text-sm font-bold text-slate-600 bg-white border border-slate-200 rounded-xl hover:bg-slate-50 transition-colors shadow-sm">
             <Eye size={16} /> View Profile
           </button>
           <div className="w-px h-6 bg-slate-200 mx-1" />
-          {!isQualified && (
-            <>
-              <button onClick={() => handleDecision('rejected')} className="flex items-center gap-2 px-4 py-2 text-sm font-bold text-rose-600 bg-rose-50 border border-rose-100 rounded-xl hover:bg-rose-100 transition-colors shadow-sm">
-                <X size={16} strokeWidth={3} /> Reject
-              </button>
-              <button onClick={() => handleDecision('selected')} className="flex items-center gap-2 px-4 py-2 text-sm font-bold text-emerald-600 bg-emerald-50 border border-emerald-100 rounded-xl hover:bg-emerald-100 transition-colors shadow-sm">
-                <Check size={16} strokeWidth={3} /> Select
-              </button>
-            </>
+          {c.decision !== 'rejected' && (
+            <button onClick={() => handleDecision('rejected')} className="flex items-center gap-2 px-4 py-2 text-sm font-bold text-rose-600 bg-rose-50 border border-rose-100 rounded-xl hover:bg-rose-100 transition-colors shadow-sm">
+              <X size={16} strokeWidth={3} /> Reject
+            </button>
+          )}
+          {c.decision !== 'selected' && c.decision !== 'hired' && (
+            <button onClick={() => handleDecision('selected')} className="flex items-center gap-2 px-4 py-2 text-sm font-bold text-emerald-600 bg-emerald-50 border border-emerald-100 rounded-xl hover:bg-emerald-100 transition-colors shadow-sm">
+              <Check size={16} strokeWidth={3} /> Select
+            </button>
           )}
           <button onClick={handleSchedule} className="flex items-center gap-2 px-4 py-2 text-sm font-bold text-indigo-600 bg-indigo-50 border border-indigo-100 rounded-xl hover:bg-indigo-100 transition-colors shadow-sm">
             <Calendar size={16} /> Schedule
@@ -604,8 +821,8 @@ export default function CandidateDialog({ candidate, open, onOpenChange }) {
       </div>
 
       <ScheduleModal 
-        isOpen={isScheduleModalOpen}
-        onClose={() => setIsScheduleModalOpen(false)}
+        isOpen={showScheduleModal} 
+        onClose={() => setShowScheduleModal(false)}
         candidate={c}
       />
     </div>

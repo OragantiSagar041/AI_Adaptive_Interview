@@ -55,6 +55,7 @@ const SuperAdminJobsPage = React.lazy(() => import('./pages/superadmin/SuperAdmi
 const SuperAdminProfileSettings = React.lazy(() => import('./components/superadmin/ProfileSettings'))
 const SuperAdminNotifications = React.lazy(() => import('./pages/superadmin/SuperAdminNotifications'))
 const AICallPage = React.lazy(() => import('./pages/admin/AICallPage'))
+const ProfileViewPage = React.lazy(() => import('./pages/superadmin/ProfileViewPage.jsx'))
 
 function App() {
   return (
@@ -111,6 +112,7 @@ function App() {
             <Route path="ai-calling" element={<AICallingAgentPage />} />
             <Route path="conversational-flow" element={<ConversationalFlowPage />} />
             <Route path="jobs" element={<SuperAdminJobsPage />} />
+            <Route path="candidate/profile/:id" element={<ProfileViewPage />} />
             <Route path="profile-settings" element={<SuperAdminProfileSettings />} />
             <Route path="notifications" element={<SuperAdminNotifications />} />
           </Route>
@@ -135,6 +137,7 @@ function App() {
             <Route path="create-interview" element={<CreateInterviewPage />} />
             <Route path="ai-calling" element={<AICallingAgentPage />} />
             <Route path="conversational-flow" element={<ConversationalFlowPage />} />
+            <Route path="candidate/profile/:id" element={<ProfileViewPage />} />
             <Route path="profile-settings" element={<ProfileSettings />} />
             <Route path="notifications" element={<AdminNotifications />} />
           </Route>
