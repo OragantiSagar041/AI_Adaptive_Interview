@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useMemo } from 'react'
 import { useSelector, useDispatch } from 'react-redux'
-import { Users, Star, Phone, ClipboardCheck, Target, FileSignature, Search, Filter, Eye, Download, Sparkles } from 'lucide-react'
+import { Users, Star, UserCheck, ClipboardCheck, Target, FileSignature, Search, Filter, Eye, Download, Sparkles } from 'lucide-react'
 import axios from 'axios'
 import { getComputedStatus } from '../../utils/adminFormatters'
 import { loadSuperAdminQualifiedCandidates, handleSuperAdminExportExcel } from '../../store/slices/candidatesSlice'
@@ -128,7 +128,7 @@ export default function QualifiedCandidatesPage() {
   const STATS = [
     { label: "Total Candidates", value: qualifiedCandidates.length.toString(), icon: Users, tone: "primary", colorClass: "bg-indigo-100 text-indigo-600" },
     { label: "Avg AI Score", value: `${avgScore}%`, icon: Star, tone: "info", colorClass: "bg-blue-100 text-blue-600" },
-    { label: "AI Interviews", value: candidates.length.toString(), icon: Phone, tone: "chart-2", colorClass: "bg-emerald-100 text-emerald-600" },
+    { label: "Total Qualified Candidates", value: qualifiedCandidates.length.toString(), icon: UserCheck, tone: "chart-2", colorClass: "bg-emerald-100 text-emerald-600" },
     { label: "Pending Review", value: qualifiedCandidates.filter(c => !c.reviewed).length.toString(), icon: ClipboardCheck, tone: "warning", colorClass: "bg-amber-100 text-amber-600" },
     { label: "Ready to Hire", value: qualifiedCandidates.filter(c => Number(c.score || 0) >= 85).length.toString(), icon: Target, tone: "success", colorClass: "bg-teal-100 text-teal-600" },
     { label: "Offers Released", value: "0", icon: FileSignature, tone: "chart-5", colorClass: "bg-purple-100 text-purple-600" },
@@ -282,7 +282,7 @@ export default function QualifiedCandidatesPage() {
                   if (!adminName) {
                     adminName = (typeof c.created_by === 'string' && c.created_by.length === 24) ? "System" : c.created_by || "System"
                   }
-                  
+
                   return (
                     <tr key={c.id || c.link_id || c.email} className="hover:bg-slate-50/50 transition-colors group whitespace-nowrap">
                       <td className="px-5 py-4">
@@ -346,10 +346,10 @@ export default function QualifiedCandidatesPage() {
         </section>
       </main>
 
-      <CandidateDialog 
-        candidate={selectedCandidate} 
-        open={!!selectedCandidate} 
-        onOpenChange={(v) => !v && setSelectedCandidate(null)} 
+      <CandidateDialog
+        candidate={selectedCandidate}
+        open={!!selectedCandidate}
+        onOpenChange={(v) => !v && setSelectedCandidate(null)}
       />
     </div>
   )

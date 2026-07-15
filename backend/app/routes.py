@@ -5059,7 +5059,7 @@ def get_notifications(current_admin: dict = Depends(get_current_admin_details)):
                 mock_data = [
                     {
                         "title": "Welcome to Hire IQ",
-                        "message": "Welcome to your Super Admin console. You can manage your team, check candidate results, and provision interviews.",
+                        "message": "Welcome to your Admin Management. You can manage your team, check candidate results, and provision interviews.",
                         "type": "system",
                         "recipient_role": "superadmin",
                         "company_id": company_id,

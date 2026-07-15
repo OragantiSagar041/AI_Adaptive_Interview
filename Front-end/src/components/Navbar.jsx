@@ -1,4 +1,4 @@
- 
+
 import React, { useState, useEffect, useRef } from 'react'
 import { useSelector } from 'react-redux'
 import { NavLink, useNavigate } from 'react-router-dom'
@@ -39,7 +39,7 @@ export default function Navbar({
     return () => {
       document.removeEventListener("mousedown", handleClickOutside)
     }
-   
+
   }, [])
 
   const fetchNotifications = async () => {
@@ -59,7 +59,7 @@ export default function Navbar({
       const interval = setInterval(fetchNotifications, 30000)
       return () => clearInterval(interval)
     }
-   
+
   }, [token])
 
   const handleMarkRead = async (id) => {
@@ -129,7 +129,7 @@ export default function Navbar({
       }}
     >
       <div>
-        <h2 className="text-xl font-bold text-slate-800">Admin Console</h2>
+        <h2 className="text-xl font-bold text-slate-800">Recruiter Management</h2>
       </div>
 
       <div className="flex items-center gap-4">
@@ -151,7 +151,7 @@ export default function Navbar({
         <div className="flex items-center gap-1.5 bg-primary/10 text-primary border border-primary/20 rounded-full pl-4 pr-1.5 py-1 text-sm font-bold shadow-sm">
           <i className="fas fa-layer-group text-[10px]"></i>
           {adminUser?.subscription_plan || 'Advance'} • {adminUser?.credits ?? 0} credits left
-          <button 
+          <button
             onClick={onAddCredits}
             className="ml-1 w-5 h-5 flex items-center justify-center bg-primary text-white rounded-full hover:bg-primary-hover shadow-md transition-colors border-none cursor-pointer"
             title={adminUser?.role === 'superadmin' ? 'Buy Credits' : 'Request Credits'}
@@ -175,63 +175,62 @@ export default function Navbar({
             )}
           </button>
           {notifDropdownOpen && (
-              <div className="absolute right-0 top-full mt-2 w-80 bg-white border border-slate-200 rounded-2xl shadow-xl py-2 z-50">
-                <div className="flex items-center justify-between px-4 py-2 border-b border-slate-100">
-                  <span className="text-xs font-bold text-slate-800 font-sans">Recent Notifications</span>
-                  {unreadCount > 0 && (
-                    <button
-                      onClick={handleMarkAllRead}
-                      className="text-[10px] font-bold text-primary hover:underline cursor-pointer border-none bg-transparent"
-                    >
-                      Mark all read
-                    </button>
-                  )}
-                </div>
-                
-                <div className="max-h-64 overflow-y-auto divide-y divide-slate-50">
-                  {notifications.length === 0 ? (
-                    <div className="py-8 text-center text-xs text-slate-400 font-sans">No notifications</div>
-                  ) : (
-                    notifications.slice(0, 5).map(n => (
-                      <div
-                        key={n.id}
-                        onClick={() => {
-                          if (!n.read) handleMarkRead(n.id)
-                          setNotifDropdownOpen(false)
-                          if (n.type === 'candidate') navigate('/admin/dashboard')
-                          else if (n.type === 'credits') navigate('/admin/profile-settings')
-                          else navigate('/admin/dashboard')
-                        }}
-                        className={`p-3 text-left hover:bg-slate-50 cursor-pointer transition-colors flex gap-2.5 items-start ${
-                          !n.read ? 'bg-slate-50/30' : ''
-                        }`}
-                      >
-                        <div className="p-1.5 rounded-lg bg-slate-50 flex-shrink-0 mt-0.5 animate-none">
-                          {getNotifIcon(n.type)}
-                        </div>
-                        <div className="space-y-0.5 min-w-0">
-                          <div className="flex items-center gap-1.5 justify-between">
-                            <span className={`text-xs font-bold truncate block ${!n.read ? 'text-slate-800' : 'text-slate-600'}`}>{n.title}</span>
-                            {!n.read && <span className="w-1.5 h-1.5 rounded-full bg-primary shrink-0" />}
-                          </div>
-                          <p className="text-[11px] text-slate-500 leading-normal line-clamp-2 font-sans">{n.message}</p>
-                          <span className="text-[9px] text-slate-400 block pt-0.5 font-sans">{formatRelativeTime(n.created_at)}</span>
-                        </div>
-                      </div>
-                    ))
-                  )}
-                </div>
-                
-                <div className="border-t border-slate-100 px-4 pt-2 pb-1 text-center">
-                  <NavLink
-                    to="/admin/notifications"
-                    onClick={() => setNotifDropdownOpen(false)}
-                    className="text-[11px] font-bold text-primary hover:underline no-underline block py-1 font-sans"
+            <div className="absolute right-0 top-full mt-2 w-80 bg-white border border-slate-200 rounded-2xl shadow-xl py-2 z-50">
+              <div className="flex items-center justify-between px-4 py-2 border-b border-slate-100">
+                <span className="text-xs font-bold text-slate-800 font-sans">Recent Notifications</span>
+                {unreadCount > 0 && (
+                  <button
+                    onClick={handleMarkAllRead}
+                    className="text-[10px] font-bold text-primary hover:underline cursor-pointer border-none bg-transparent"
                   >
-                    View All Notifications
-                  </NavLink>
-                </div>
+                    Mark all read
+                  </button>
+                )}
               </div>
+
+              <div className="max-h-64 overflow-y-auto divide-y divide-slate-50">
+                {notifications.length === 0 ? (
+                  <div className="py-8 text-center text-xs text-slate-400 font-sans">No notifications</div>
+                ) : (
+                  notifications.slice(0, 5).map(n => (
+                    <div
+                      key={n.id}
+                      onClick={() => {
+                        if (!n.read) handleMarkRead(n.id)
+                        setNotifDropdownOpen(false)
+                        if (n.type === 'candidate') navigate('/admin/dashboard')
+                        else if (n.type === 'credits') navigate('/admin/profile-settings')
+                        else navigate('/admin/dashboard')
+                      }}
+                      className={`p-3 text-left hover:bg-slate-50 cursor-pointer transition-colors flex gap-2.5 items-start ${!n.read ? 'bg-slate-50/30' : ''
+                        }`}
+                    >
+                      <div className="p-1.5 rounded-lg bg-slate-50 flex-shrink-0 mt-0.5 animate-none">
+                        {getNotifIcon(n.type)}
+                      </div>
+                      <div className="space-y-0.5 min-w-0">
+                        <div className="flex items-center gap-1.5 justify-between">
+                          <span className={`text-xs font-bold truncate block ${!n.read ? 'text-slate-800' : 'text-slate-600'}`}>{n.title}</span>
+                          {!n.read && <span className="w-1.5 h-1.5 rounded-full bg-primary shrink-0" />}
+                        </div>
+                        <p className="text-[11px] text-slate-500 leading-normal line-clamp-2 font-sans">{n.message}</p>
+                        <span className="text-[9px] text-slate-400 block pt-0.5 font-sans">{formatRelativeTime(n.created_at)}</span>
+                      </div>
+                    </div>
+                  ))
+                )}
+              </div>
+
+              <div className="border-t border-slate-100 px-4 pt-2 pb-1 text-center">
+                <NavLink
+                  to="/admin/notifications"
+                  onClick={() => setNotifDropdownOpen(false)}
+                  className="text-[11px] font-bold text-primary hover:underline no-underline block py-1 font-sans"
+                >
+                  View All Notifications
+                </NavLink>
+              </div>
+            </div>
           )}
         </div>
 
