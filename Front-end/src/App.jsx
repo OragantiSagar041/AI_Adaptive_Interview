@@ -28,6 +28,7 @@ const MasterDashboard = React.lazy(() => import('./pages/master/MasterDashboard'
 const Plans = React.lazy(() => import('./pages/master/Plans'))
 const Subscribers = React.lazy(() => import('./pages/master/Subscribers'))
 const CreateTenant = React.lazy(() => import('./pages/master/CreateTenant'))
+const DemoRequests = React.lazy(() => import('./pages/master/DemoRequests'))
 const MasterProfile = React.lazy(() => import('./pages/master/MasterProfile'))
 const MasterNotifications = React.lazy(() => import('./pages/master/MasterNotifications'))
 
@@ -86,6 +87,7 @@ function App() {
             <Route path="plans" element={<Plans />} />
             <Route path="subscribers" element={<Subscribers />} />
             <Route path="create-tenant" element={<CreateTenant />} />
+            <Route path="demo-requests" element={<DemoRequests />} />
             <Route path="profile" element={<MasterProfile />} />
             <Route path="notifications" element={<MasterNotifications />} />
           </Route>
