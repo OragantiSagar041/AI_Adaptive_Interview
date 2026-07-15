@@ -72,6 +72,7 @@ const dashboardSlice = createSlice({
     ongoingCodingCount: 0,
     ongoingMonitoredCount: 0,
     liveSessions: [],
+    candidates: [],
     status: 'idle',
     error: null
   },
@@ -109,7 +110,8 @@ const dashboardSlice = createSlice({
         state.ongoingSpeakingCount = payload.ongoingSpeakingCount || 0
         state.ongoingCodingCount = payload.ongoingCodingCount || 0
         state.ongoingMonitoredCount = payload.ongoingMonitoredCount || 0
-        state.liveSessions = payload.liveSessions || []
+        state.liveSessions = payload.liveSessions || [];
+        state.candidates = payload.candidates || [];
       })
       .addCase(loadDashboardData.rejected, (state, action) => {
         state.status = 'failed'
@@ -131,7 +133,8 @@ const dashboardSlice = createSlice({
         state.ongoingSpeakingCount = payload.ongoingSpeakingCount || 0
         state.ongoingCodingCount = payload.ongoingCodingCount || 0
         state.ongoingMonitoredCount = payload.ongoingMonitoredCount || 0
-        state.liveSessions = payload.liveSessions || []
+        state.liveSessions = payload.liveSessions || [];
+        state.candidates = payload.candidates || [];
       })
       .addCase(loadSuperAdminDashboard.rejected, (state, action) => {
         state.status = 'failed'
