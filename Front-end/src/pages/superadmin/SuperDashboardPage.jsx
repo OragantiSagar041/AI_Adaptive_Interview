@@ -13,6 +13,7 @@ export default function SuperDashboardPage() {
   const [totalSessions, setTotalSessions] = useState(0)
   const [completedSessions, setCompletedSessions] = useState(0)
   const [pendingSessions, setPendingSessions] = useState(0)
+  const [totalRecruiters, setTotalRecruiters] = useState(0)
 
   // Chart Canvas references
   const saUsageChartRef = useRef(null)
@@ -63,6 +64,7 @@ export default function SuperDashboardPage() {
           })
         ])
         subAdmins = subAdminsRes.data?.data || []
+        setTotalRecruiters(subAdmins.length)
         candidates = dashboardRes.data?.candidates || []
       } catch (e) {
         console.error('Failed to load sub-admins or dashboard sessions', e)
@@ -217,7 +219,7 @@ export default function SuperDashboardPage() {
   return (
     <div className="space-y-6 md:space-y-8 max-w-6xl">
       {/* Stat Cards */}
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 md:gap-6">
+      <div className="grid grid-cols-1 md:grid-cols-3 lg:grid-cols-5 gap-4 md:gap-6">
         <div className="bg-white border border-slate-200/60 p-4 md:p-6 rounded-2xl shadow-[0_4px_20px_rgba(0,0,0,0.04)] flex justify-between items-center gap-2">
           <div>
             <span className="text-[0.62rem] md:text-[0.68rem] font-bold text-slate-400 uppercase tracking-widest block leading-tight">Available Credits</span>
@@ -255,6 +257,16 @@ export default function SuperDashboardPage() {
           </div>
           <div className="w-10 h-10 md:w-12 md:h-12 bg-amber-50 text-amber-500 rounded-xl flex items-center justify-center shrink-0 text-lg md:text-xl">
             <i className="fas fa-clock" />
+          </div>
+        </div>
+
+        <div className="bg-white border border-slate-200/60 p-4 md:p-6 rounded-2xl shadow-[0_4px_20px_rgba(0,0,0,0.04)] flex justify-between items-center gap-2">
+          <div>
+            <span className="text-[0.62rem] md:text-[0.68rem] font-bold text-slate-400 uppercase tracking-widest block leading-tight">Recruiters</span>
+            <h3 className="text-2xl md:text-3xl font-extrabold mt-1 text-slate-900">{totalRecruiters}</h3>
+          </div>
+          <div className="w-10 h-10 md:w-12 md:h-12 bg-blue-50 text-blue-500 rounded-xl flex items-center justify-center shrink-0 text-lg md:text-xl">
+            <i className="fas fa-users" />
           </div>
         </div>
       </div>
