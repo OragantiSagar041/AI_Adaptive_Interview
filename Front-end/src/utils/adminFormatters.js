@@ -1,11 +1,5 @@
 export function getComputedStatus(candidate) {
-  const currentStatus = candidate.status || 'pending'
-  if (currentStatus === 'pending' && candidate.expires_at) {
-    if (new Date() > new Date(candidate.expires_at)) {
-      return 'expired'
-    }
-  }
-  return currentStatus
+  return candidate.status || 'pending'
 }
 
 export function formatShortDate(value) {

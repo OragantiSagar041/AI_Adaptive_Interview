@@ -5,7 +5,7 @@ import {
   MessageSquare, Calendar, Search, Eye, Download, Share2, X, FileText, ArrowRightLeft, Recycle
 } from 'lucide-react'
 import axios from 'axios'
-import { getComputedStatus } from '../../utils/adminFormatters'
+import { formatShortDate, formatScore } from '../../utils/adminFormatters'
 import { loadAdminRejectedCandidates, handleExportExcel } from '../../store/slices/candidatesSlice'
 import CandidateDialog from '../../components/superadmin/CandidateDialog'
 
@@ -85,9 +85,9 @@ export default function RejectedCandidatesPage() {
       alert("No data available to export.")
       return
     }
-    dispatch(handleExportExcel(filtered.map(c => ({
+    dispatch(handleExportExcel(candidates.map(c => ({
       ...c,
-      status: getComputedStatus(c),
+      status: c.status || 'completed',
     }))))
   }
 

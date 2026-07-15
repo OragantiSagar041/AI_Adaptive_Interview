@@ -112,12 +112,14 @@ export default function OverviewDashboardPage() {
   ];
 
   const pipeline = [
-    { stage: "Total Assigned", count: parseInt(dbStats?.total) || 0, color: "oklch(0.75 0.05 250)" },
-    { stage: "Started", count: parseInt(dbStats?.started) || 0, color: "oklch(0.7 0.12 240)" },
-    { stage: "Completed", count: parseInt(dbStats?.completed) || 0, color: "oklch(0.65 0.16 220)" },
-    { stage: "Pending Review", count: parseInt(dbStats?.pending) || 0, color: "oklch(0.6 0.18 260)" },
-    { stage: "Selected", count: parseInt(dbStats?.selected) || 0, color: "oklch(0.68 0.18 320)" },
-    { stage: "Rejected", count: parseInt(dbStats?.rejected) || 0, color: "oklch(0.72 0.17 45)" },
+    { stage: "Applied", count: parseInt(dbStats?.total) || 0, color: "#9CA3AF" },
+    { stage: "AI Resume Screening", count: parseInt(dbStats?.total) || 0, color: "#38BDF8" },
+    { stage: "AI Voice Interview", count: parseInt(dbStats?.started) || 0, color: "#06B6D4" },
+    { stage: "AI Evaluation", count: parseInt(dbStats?.completed) || 0, color: "#3B82F6" },
+    { stage: "Recruiter Review", count: parseInt(dbStats?.pending) || 0, color: "#8B5CF6" },
+    { stage: "Shortlisted", count: parseInt(dbStats?.selected) || 0, color: "#D946EF" },
+    { stage: "Offer", count: 0, color: "#F97316" },
+    { stage: "Hired", count: 0, color: "#10B981" },
   ];
 
   const todaysTasks = [
@@ -269,7 +271,7 @@ export default function OverviewDashboardPage() {
             <Badge variant="outline" className="text-xs">All Time</Badge>
           </div>
 
-          <div className="mt-5 grid grid-cols-2 gap-3 md:grid-cols-3 xl:grid-cols-6">
+          <div className="mt-5 grid grid-cols-2 gap-3 md:grid-cols-4 xl:grid-cols-4">
             {pipeline.map((p, i) => (
               <div key={p.stage} className="relative">
                 <div
@@ -310,13 +312,13 @@ export default function OverviewDashboardPage() {
                   <th className="px-6 py-2.5 font-medium">Candidate</th>
                   <th className="px-3 py-2.5 font-medium">Role</th>
 
-                  <th className="px-3 py-2.5 font-medium">Productivity</th>
+                  <th className="px-3 py-2.5 font-medium">AI Score</th>
                   <th className="px-6 py-2.5 font-medium">Status</th>
                   <th className="px-6 py-2.5 font-medium text-right">Actions</th>
                 </tr>
               </thead>
               <tbody>
-                {candidates && candidates.slice(0, 10).map((c, i) => (
+                {candidates && candidates.filter(c => c.decision !== "selected" && c.decision !== "rejected").slice(0, 10).map((c, i) => (
                   <tr key={c.id || i} className="border-b border-border/50 last:border-0 hover:bg-slate-50">
                     <td className="px-6 py-3">
                       <div className="flex items-center gap-2.5">
@@ -343,8 +345,8 @@ export default function OverviewDashboardPage() {
                           (c.decision === "selected" || c.decision === "hired")
                             ? "border-success/30 bg-success/10 text-success"
                             : c.decision === "rejected"
-                            ? "border-destructive/30 bg-destructive/10 text-destructive"
-                            : "border-warning/30 bg-warning/10 text-warning-foreground"
+                              ? "border-destructive/30 bg-destructive/10 text-destructive"
+                              : "border-warning/30 bg-warning/10 text-warning-foreground"
                         }
                       >
                         <span className={`mr-1.5 h-1.5 w-1.5 rounded-full ${(c.decision === "selected" || c.decision === "hired") ? "bg-success" : c.decision === "rejected" ? "bg-destructive" : "bg-warning"}`} />
@@ -352,9 +354,9 @@ export default function OverviewDashboardPage() {
                       </Badge>
                     </td>
                     <td className="px-6 py-3 text-right">
-                      <Button 
-                        variant="ghost" 
-                        size="sm" 
+                      <Button
+                        variant="ghost"
+                        size="sm"
                         className="h-8 px-3 text-xs"
                         onClick={() => setSelectedCandidate(c)}
                       >
@@ -601,10 +603,10 @@ export default function OverviewDashboardPage() {
           Enterprise · Role-Based Permissions · Multi-Department Hiring · Audit Trail · AI Hiring Insights
         </footer>
 
-        <CandidateDialog 
-          candidate={selectedCandidate} 
-          open={!!selectedCandidate} 
-          onOpenChange={(v) => !v && setSelectedCandidate(null)} 
+        <CandidateDialog
+          candidate={selectedCandidate}
+          open={!!selectedCandidate}
+          onOpenChange={(v) => !v && setSelectedCandidate(null)}
         />
       </main>
     </div>

@@ -2,7 +2,7 @@ import React, { useState, useEffect, useMemo } from 'react'
 import { useSelector, useDispatch } from 'react-redux'
 import { Users, Star, Phone, ClipboardCheck, Target, FileSignature, Search, Filter, Eye, Download, Sparkles } from 'lucide-react'
 import axios from 'axios'
-import { getComputedStatus } from '../../utils/adminFormatters'
+import { formatShortDate, formatScore } from '../../utils/adminFormatters'
 import { loadAdminQualifiedCandidates, handleExportExcel } from '../../store/slices/candidatesSlice'
 import CandidateDialog from '../../components/superadmin/CandidateDialog'
 
@@ -100,7 +100,7 @@ export default function QualifiedCandidatesPage() {
     }
     dispatch(handleExportExcel(qualifiedCandidates.map(c => ({
       ...c,
-      status: getComputedStatus(c),
+      status: c.status || 'completed',
     }))))
   }
 
@@ -277,8 +277,8 @@ export default function QualifiedCandidatesPage() {
                           </div>
                         ) : 'N/A'}
                       </td>
-                      <td className="px-5 py-4">
-                        <StatusBadge value={getComputedStatus(c)} />
+                      <td className="py-4 px-5 align-middle">
+                        <StatusBadge value={c.status || 'completed'} />
                       </td>
                       <td className="px-5 py-4 text-right">
                         <button
