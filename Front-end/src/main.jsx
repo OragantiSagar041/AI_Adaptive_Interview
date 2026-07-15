@@ -5,6 +5,31 @@ import { PersistGate } from 'redux-persist/integration/react'
 import { persistor, store } from './store/store'
 import './index.css'
 import App from './App.jsx'
+import axios from 'axios'
+import { logout } from './store/slices/authSlice'
+import Swal from 'sweetalert2'
+
+// Global Axios Interceptor for handling deactivated accounts
+axios.interceptors.response.use(
+  (response) => response,
+  (error) => {
+    if (error.response && error.response.status === 403) {
+      const detail = error.response.data?.detail;
+      if (detail && detail.toLowerCase().includes('deactivated')) {
+        Swal.fire({
+          title: 'Access Revoked',
+          text: 'Your account has been deactivated. Please contact support.',
+          icon: 'error',
+          confirmButtonText: 'OK'
+        }).then(() => {
+          store.dispatch(logout());
+          window.location.href = '/login';
+        });
+      }
+    }
+    return Promise.reject(error);
+  }
+);
 
 createRoot(document.getElementById('root')).render(
   <StrictMode>

@@ -5,6 +5,7 @@ import logo from '../assets/logo.png'
 import Swal from 'sweetalert2'
 import 'sweetalert2/dist/sweetalert2.min.css'
 import { RefreshCw } from 'lucide-react'
+import DemoRequests from './DemoRequests'
 
 
 
@@ -529,6 +530,17 @@ export default function MasterPage() {
             >
               <i className="fas fa-user-plus" /> Create Tenant
             </button>
+
+            <button
+              onClick={() => setActiveTab('demo-requests')}
+              className={`w-full text-left px-4 py-2.5 rounded-lg text-sm font-semibold flex items-center gap-3 transition-colors border-none outline-none cursor-pointer ${
+                activeTab === 'demo-requests'
+                  ? 'bg-white text-indigo-700 shadow-sm'
+                  : 'bg-transparent text-white/80 hover:bg-white/10 hover:text-white'
+              }`}
+            >
+              <i className="fas fa-envelope-open-text" /> Demo Requests
+            </button>
           </nav>
         </div>
 
@@ -551,6 +563,7 @@ export default function MasterPage() {
             {activeTab === 'plans' && 'Product Pricing & Plans'}
             {activeTab === 'subscribers' && 'Subscribed Companies'}
             {activeTab === 'create-tenant' && 'Provision Tenant Account'}
+            {activeTab === 'demo-requests' && 'Demo Requests'}
           </h2>
 
           <div className="flex items-center gap-4">
@@ -928,6 +941,11 @@ export default function MasterPage() {
               </form>
             </div>
           )}
+          {/* TAB VIEW: DEMO REQUESTS */}
+          {activeTab === 'demo-requests' && (
+            <DemoRequests />
+          )}
+
         </main>
       </div>
 

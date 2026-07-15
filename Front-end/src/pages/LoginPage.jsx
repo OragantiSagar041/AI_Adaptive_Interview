@@ -479,7 +479,7 @@ export default function LoginPage() {
                         placeholder="Enter your password"
                         autoComplete="current-password" required
                       />
-                      <button type="button" className="lp-eye" onClick={() => setShowPassword(v => !v)}>
+                      <button type="button" className="lp-eye" onClick={() => setShowPassword(v => !v)} onMouseDown={(e) => e.preventDefault()}>
                         {showPassword ? <EyeOff size={16} /> : <Eye size={16} />}
                       </button>
                     </div>

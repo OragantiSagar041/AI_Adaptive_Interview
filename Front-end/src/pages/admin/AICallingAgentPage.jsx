@@ -6,7 +6,8 @@ import {
   BookOpen, Plug, Cog, MailCheck, Clock, Volume2, Globe, Zap, FileText,
   Mic, MessageSquare, RefreshCw, ChevronDown, ChevronUp, Timer,
   AlertCircle, User, Calendar, TrendingUp, Play, Plus, Trash2, Copy,
-  ArrowUpRight, ArrowDownLeft, Upload
+  ArrowUpRight, ArrowDownLeft, Upload, Search, Filter, Users, Settings, 
+  CheckCircle, Eye, Brain, X
 } from 'lucide-react'
 import Card from '../../components/Card'
 import Button from '../../components/Button'
@@ -967,7 +968,7 @@ export default function AICallingAgentPage() {
                         <label className="block text-[0.7rem] font-bold uppercase tracking-wider text-slate-500 mb-2">Candidate Name</label>
                         <input
                           type="text" value={manualCall.name}
-                          onChange={e => setManualCall({ ...manualCall, name: e.target.value })}
+                          onChange={e => setManualCall({ ...manualCall, name: e.target.value.replace(/[0-9]/g, '') })}
                           className="w-full px-4 py-3 bg-slate-50 border border-slate-200 rounded-xl text-sm text-slate-800 placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 transition-all font-semibold"
                           placeholder="e.g. John Doe"
                         />
@@ -1060,12 +1061,34 @@ export default function AICallingAgentPage() {
                       />
                     </div>
                     <div>
-                      <label className="block text-[0.7rem] font-bold uppercase tracking-wider text-slate-500 mb-2">Resume (PDF/DOCX)</label>
-                      <input
-                        type="file" accept=".pdf,.doc,.docx"
-                        onChange={e => setManualCall({ ...manualCall, resume: e.target.files[0] })}
-                        className="w-full px-4 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-sm text-slate-500 file:mr-4 file:py-2 file:px-4 file:rounded-lg file:border-0 file:text-[0.7rem] file:font-bold file:uppercase file:tracking-wider file:bg-indigo-100 file:text-indigo-700 hover:file:bg-indigo-200 cursor-pointer transition-all"
-                      />
+                      <div className="flex justify-between items-end mb-2">
+                        <label className="block text-[0.7rem] font-bold uppercase tracking-wider text-slate-500">Resume (PDF/DOCX)</label>
+                        {manualCall.resume && (
+                          <button onClick={() => setManualCall({...manualCall, resume: null})} className="text-xs text-red-500 hover:text-red-700 font-bold flex items-center gap-1 transition-colors"><X size={12}/> Remove</button>
+                        )}
+                      </div>
+                      {!manualCall.resume ? (
+                        <input
+                          type="file" accept=".pdf,.doc,.docx"
+                          onChange={e => setManualCall({ ...manualCall, resume: e.target.files[0] })}
+                          className="w-full px-4 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-sm text-slate-500 file:mr-4 file:py-2 file:px-4 file:rounded-lg file:border-0 file:text-[0.7rem] file:font-bold file:uppercase file:tracking-wider file:bg-indigo-100 file:text-indigo-700 hover:file:bg-indigo-200 cursor-pointer transition-all focus:outline-none focus:ring-2 focus:ring-indigo-500/20"
+                        />
+                      ) : (
+                        <div className="w-full px-4 py-2.5 bg-indigo-50 border border-indigo-200 rounded-xl text-sm text-indigo-700 font-semibold flex items-center justify-between">
+                          <div className="flex items-center gap-2 overflow-hidden">
+                            <FileText size={16} className="shrink-0" /> 
+                            <span className="truncate">{manualCall.resume.name}</span>
+                          </div>
+                          <label className="text-xs text-indigo-600 hover:text-indigo-800 cursor-pointer font-bold px-2 py-1 hover:bg-indigo-100 rounded-md transition-colors">
+                            Replace
+                            <input
+                              type="file" accept=".pdf,.doc,.docx"
+                              onChange={e => setManualCall({ ...manualCall, resume: e.target.files[0] })}
+                              className="hidden"
+                            />
+                          </label>
+                        </div>
+                      )}
                     </div>
                     <div className="pt-4 flex justify-end">
                       <button

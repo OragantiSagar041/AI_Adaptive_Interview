@@ -1,11 +1,13 @@
 import React, { useState, useEffect } from 'react'
-import { useSelector } from 'react-redux'
+import { useSelector, useDispatch } from 'react-redux'
 import axios from 'axios'
 import Swal from 'sweetalert2'
 import 'sweetalert2/dist/sweetalert2.min.css'
 import { RefreshCw, Shield, Plus, Check, X, Users, Activity, Coins, UserPlus, CreditCard, Trash2, ShieldOff, ShieldCheck } from 'lucide-react'
+import { updateCredits } from '../../store/slices/authSlice'
 
 export default function TeamManagementPage() {
+  const dispatch = useDispatch()
   const token = useSelector(state => state.auth.token) || ''
   const API_BASE_URL = useSelector(state => state.auth.API_BASE_URL)
 
@@ -237,7 +239,11 @@ export default function TeamManagementPage() {
           body: JSON.stringify({ credits: parseInt(credits, 10) })
         })
         if (res.ok) {
+          const data = await res.json()
           Swal.fire('Added!', `${credits} credits added.`, 'success')
+          if (data.super_admin_credits !== undefined) {
+            dispatch(updateCredits(data.super_admin_credits))
+          }
           loadTeamManagement()
         } else {
           const error = await res.json()
@@ -501,7 +507,7 @@ export default function TeamManagementPage() {
                     type="text"
                     required
                     value={newAdminForm.name}
-                    onChange={(e) => setNewAdminForm(prev => ({ ...prev, name: e.target.value }))}
+                    onChange={(e) => setNewAdminForm(prev => ({ ...prev, name: e.target.value.replace(/[0-9]/g, '') }))}
                     placeholder="e.g. John Doe"
                     className="w-full rounded-xl border border-slate-200 bg-slate-50/50 px-4 py-3 text-sm text-slate-800 font-medium outline-none focus:bg-white focus:border-indigo-500 focus:ring-4 focus:ring-indigo-500/10 transition-all placeholder:text-slate-400"
                   />

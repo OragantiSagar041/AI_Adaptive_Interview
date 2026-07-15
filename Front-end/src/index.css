@@ -3,8 +3,8 @@
 
 :root {
   --radius: 0.875rem;
-  /* Cinematic black stack — Vision Pro / Linear / OpenAI */
-  --background: oklch(0.02 0.003 250);          /* #020202-ish */
+  /* Deep blue stack */
+  --background: oklch(17.651% 0.05687 256.551);          /* dark blue */
   --foreground: oklch(0.97 0.01 220);
   --card: oklch(0.055 0.008 240);                /* #08090A */
   --card-foreground: oklch(0.97 0.01 220);
@@ -60,7 +60,7 @@
 }
 
 html, body {
-  background: #020204;
+  background: var(--background);
   color: var(--foreground);
   font-family: var(--font-sans);
   -webkit-font-smoothing: antialiased;
@@ -130,7 +130,7 @@ html, body {
     radial-gradient(70% 55% at 50% 25%, rgba(40,90,220,0.16), transparent 70%),
     radial-gradient(50% 40% at 85% 75%, rgba(56,189,248,0.10), transparent 70%),
     radial-gradient(40% 35% at 15% 80%, rgba(139,92,246,0.08), transparent 70%),
-    #020204;
+    var(--background);
 }
 
 @utility noise { position: relative; }
@@ -186,7 +186,7 @@ html, body {
 
 /* scrollbar */
 ::-webkit-scrollbar { width: 10px; height: 10px }
-::-webkit-scrollbar-track { background: #020204 }
+::-webkit-scrollbar-track { background: var(--background) }
 ::-webkit-scrollbar-thumb { background: rgba(56,130,255,0.22); border-radius: 8px }
 ::-webkit-scrollbar-thumb:hover { background: rgba(56,130,255,0.4) }
 

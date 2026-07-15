@@ -2043,6 +2043,13 @@ def get_current_admin_details(credentials: HTTPAuthorizationCredentials = Depend
         role: str = payload.get("role", "tenant")
         if admin_id is None:
             raise HTTPException(status_code=401, detail="Invalid authentication credentials")
+            
+        admin_doc = admins_collection.find_one({"_id": ObjectId(admin_id)})
+        if not admin_doc:
+            raise HTTPException(status_code=401, detail="Account not found")
+        if admin_doc.get("login_enabled") == False:
+            raise HTTPException(status_code=403, detail="Account is deactivated")
+            
         return {"admin_id": admin_id, "company_id": company_id, "role": role}
     except jwt.PyJWTError:
         raise HTTPException(status_code=401, detail="Invalid or expired token")

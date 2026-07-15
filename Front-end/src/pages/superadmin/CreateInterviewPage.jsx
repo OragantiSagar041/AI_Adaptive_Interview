@@ -998,7 +998,7 @@ Congratulations! You have been selected for an AI-powered interview. Please revi
                     label="Candidate Name"
                     placeholder="e.g. John Doe"
                     value={singleCandidate.name}
-                    onChange={(e) => handleSingleChange('name', e.target.value)}
+                    onChange={(e) => handleSingleChange('name', e.target.value.replace(/[0-9]/g, ''))}
                   />
 
                   <Input
@@ -1470,12 +1470,14 @@ Congratulations! You have been selected for an AI-powered interview. Please revi
                     label="Start Date & Time"
                     type="datetime-local"
                     value={singleCandidate.scheduledStart}
+                    max={singleCandidate.scheduledEnd || undefined}
                     onChange={(e) => handleSingleChange('scheduledStart', e.target.value)}
                   />
                   <Input
                     label="End Date & Time"
                     type="datetime-local"
                     value={singleCandidate.scheduledEnd}
+                    min={singleCandidate.scheduledStart || undefined}
                     onChange={(e) => handleSingleChange('scheduledEnd', e.target.value)}
                   />
                 </div>
@@ -1982,12 +1984,14 @@ Congratulations! You have been selected for an AI-powered interview. Please revi
                     label="Start Date & Time"
                     type="datetime-local"
                     value={bulkConfig.scheduledStart}
+                    max={bulkConfig.scheduledEnd || undefined}
                     onChange={(e) => handleBulkConfigChange('scheduledStart', e.target.value)}
                   />
                   <Input
                     label="End Date & Time"
                     type="datetime-local"
                     value={bulkConfig.scheduledEnd}
+                    min={bulkConfig.scheduledStart || undefined}
                     onChange={(e) => handleBulkConfigChange('scheduledEnd', e.target.value)}
                   />
                 </div>
@@ -2220,7 +2224,7 @@ Congratulations! You have been selected for an AI-powered interview. Please revi
                     label="Candidate Name"
                     placeholder="John Doe"
                     value={bulkCandidateInput.name}
-                    onChange={(e) => setBulkCandidateInput(prev => ({ ...prev, name: e.target.value }))}
+                    onChange={(e) => setBulkCandidateInput(prev => ({ ...prev, name: e.target.value.replace(/[0-9]/g, '') }))}
                   />
                   <Input
                     label="Candidate Email"

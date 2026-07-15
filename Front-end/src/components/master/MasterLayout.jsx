@@ -19,7 +19,8 @@ import {
   X,
   Bell,
   CreditCard,
-  AlertCircle
+  AlertCircle,
+  Mail
 } from 'lucide-react'
 import logoImage from '../../assets/logo.png'
 import { logout, loadSuperAdminProfile } from '../../store/slices/authSlice'
@@ -216,6 +217,7 @@ export default function MasterLayout() {
     { id: 'plans', label: 'Plans', icon: Tags, path: '/master/plans' },
     { id: 'subscribers', label: 'Subscribers', icon: Users, path: '/master/subscribers' },
     { id: 'create-tenant', label: 'Create Tenant', icon: UserPlus, path: '/master/create-tenant' },
+    { id: 'demo-requests', label: 'Demo Requests', icon: Mail, path: '/master/demo-requests' },
   ]
 
   const getPageTitle = () => {
@@ -224,6 +226,7 @@ export default function MasterLayout() {
     if (path.includes('plans')) return 'Product Pricing & Plans'
     if (path.includes('subscribers')) return 'Subscribed Companies'
     if (path.includes('create-tenant')) return 'Provision Tenant Account'
+    if (path.includes('demo-requests')) return 'Demo Requests'
     return 'Master Console'
   }
 

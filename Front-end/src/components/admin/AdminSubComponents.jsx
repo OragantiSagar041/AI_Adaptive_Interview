@@ -33,7 +33,7 @@ export function CandidateFilters({
             style={{ padding: '0.5rem 0.75rem 0.5rem 2.25rem' }}
             placeholder="Name or Email..."
             value={searchTerm}
-            onChange={(e) => setSearchTerm(e.target.value)}
+            onChange={(e) => setSearchTerm(e.target.value.replace(/[0-9]/g, ''))}
           />
         </div>
       </div>
@@ -47,6 +47,7 @@ export function CandidateFilters({
               className="text-xs text-[#0f172a] outline-none bg-transparent h-full cursor-pointer w-[130px]"
               style={{ padding: '0 0.5rem' }}
               value={startDate}
+              max={endDate || undefined}
               onChange={(e) => setStartDate(e.target.value)}
               title="From Date"
             />
@@ -58,6 +59,7 @@ export function CandidateFilters({
               className="text-xs text-[#0f172a] outline-none bg-transparent h-full cursor-pointer w-[130px]"
               style={{ padding: '0 0.5rem' }}
               value={endDate}
+              min={startDate || undefined}
               onChange={(e) => setEndDate(e.target.value)}
               title="To Date"
             />
