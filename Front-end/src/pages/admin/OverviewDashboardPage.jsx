@@ -266,43 +266,6 @@ export default function OverviewDashboardPage() {
 
   return (
     <div className="min-h-screen bg-slate-50">
-      {/* Header */}
-      <header className="sticky top-0 z-40 border-b border-border/60 bg-slate-50/80 backdrop-blur-xl">
-        <div className="mx-auto flex max-w-[1600px] items-center gap-4 px-6 py-3.5">
-          <div className="flex items-center gap-2.5">
-            <div
-              className="grid h-9 w-9 place-items-center rounded-lg text-primary-foreground shadow-[var(--shadow-glow)]"
-              style={{ background: "var(--gradient-primary)" }}
-            >
-              <Sparkles className="h-4.5 w-4.5" strokeWidth={2.5} />
-            </div>
-            <div className="leading-tight">
-
-            </div>
-          </div>
-
-          <div className="relative ml-6 hidden max-w-md flex-1 md:block">
-            {/* Search removed from header */}
-          </div>
-
-          <div className="ml-auto flex items-center gap-2">
-            <Button variant="ghost" size="icon" className="relative">
-              <Bell className="h-4.5 w-4.5" />
-              <span className="absolute right-2 top-2 h-2 w-2 rounded-full bg-destructive ring-2 ring-background" />
-            </Button>
-            <Separator orientation="vertical" className="mx-1 h-6" />
-            <div className="flex items-center gap-2.5 pr-1">
-              <Avatar className="h-8 w-8">
-                <AvatarFallback className="bg-primary text-primary-foreground text-xs font-semibold">
-                  {initials("Current Admin")}
-                </AvatarFallback>
-              </Avatar>
-
-            </div>
-          </div>
-        </div>
-      </header>
-
       <main className="mx-auto max-w-[1600px] space-y-6 px-6 py-6">
         {/* Greeting */}
         <section className="flex flex-wrap items-end justify-between gap-4">

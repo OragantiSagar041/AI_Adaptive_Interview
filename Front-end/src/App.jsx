@@ -119,8 +119,8 @@ function App() {
           </Route>
 
           {/* Legacy URL aliases */}
-          <Route path="/super-admin" element={<Navigate to="/superadmin/super-dashboard" replace />} />
-          <Route path="/super_admin" element={<Navigate to="/superadmin/super-dashboard" replace />} />
+          <Route path="/super-admin" element={<Navigate to="/superadmin/new-dashboard" replace />} />
+          <Route path="/super_admin" element={<Navigate to="/superadmin/new-dashboard" replace />} />
 
           {/* Admin route — with nested sub-routes */}
           <Route
