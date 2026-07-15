@@ -24,8 +24,11 @@ import {
   AlertCircle,
   PhoneCall,
   Briefcase,
-  MessageSquare
+  MessageSquare,
+  Zap
 } from 'lucide-react'
+import { Badge } from '../ui/badge'
+import { Button } from '../ui/button'
 import logoImage from '../../assets/logo.png'
 import { logout, loadSuperAdminProfile } from '../../store/slices/authSlice'
 import { persistor } from '../../store/store'
@@ -419,298 +422,153 @@ export default function SuperAdminLayout() {
   const accentPageStrong = hexToRgba(currentAccent.primary, 0.20)
 
   const navItems = [
-    { id: 'super-dashboard', label: 'Super Admin Dashboard', icon: BarChart2, path: '/superadmin/super-dashboard' },
-    { id: 'team', label: 'Team Management', icon: Users, path: '/superadmin/team' },
-    { id: 'dashboard', label: 'Overview Dashboard', icon: LayoutDashboard, path: '/superadmin/dashboard' },
-    { id: 'qualified', label: 'Qualified Candidates', icon: CheckCircle, path: '/superadmin/qualified-candidates' },
-    { id: 'rejected', label: 'Rejected Candidates', icon: XCircle, path: '/superadmin/rejected-candidates' },
-    { id: 'create', label: 'Create Interview', icon: Plus, path: '/superadmin/create-interview' },
-    { id: 'ai-calling', label: 'AI Calling Agent', icon: Radio, path: '/superadmin/ai-calling' },
-    { id: 'conversational-flow', label: 'Conversational Flow', icon: MessageSquare, path: '/superadmin/conversational-flow' },
-    { id: 'jobs', label: 'Jobs', icon: Briefcase, path: '/superadmin/jobs' },
-    { id: 'settings', label: 'Profile Settings', icon: Settings, path: '/superadmin/profile-settings' },
+    { id: 'dashboard', label: 'Dashboard', path: '/superadmin/super-dashboard' },
+    // { id: 'organizations', label: 'Organizations', path: '/superadmin/organizations' },
+    { id: 'administrators', label: 'Administrators', path: '/superadmin/team' },
+    // { id: 'recruiters', label: 'Recruiters', path: '/superadmin/recruiters' },
+    { id: 'jobs', label: 'Jobs', path: '/superadmin/jobs' },
+    { id: 'ai-interviews', label: 'AI Interview Sessions', path: '/superadmin/ai-calling' },
+    { id: 'qualified', label: 'Qualified Candidates', path: '/superadmin/qualified-candidates' },
+    { id: 'rejected', label: 'Rejected Candidates', path: '/superadmin/rejected-candidates' },
+    { id: 'reports', label: 'Reports & Analytics', path: '/superadmin/dashboard' },
+    // { id: 'credit', label: 'Credit Management', path: '/superadmin/credit' },
+    // { id: 'subscription', label: 'Subscription Management', path: '/superadmin/subscription' },
+    // { id: 'integrations', label: 'Integrations', path: '/superadmin/integrations' },
+    // { id: 'audit', label: 'Audit Logs', path: '/superadmin/audit' },
+    // { id: 'security', label: 'Security', path: '/superadmin/security' },
+    { id: 'settings', label: 'Settings', path: '/superadmin/profile-settings' },
   ]
 
   return (
-    <div
-      className="grid grid-cols-1 min-h-screen text-[#0f172a]"
-      style={{
-        gridTemplateColumns: isMobile ? '1fr' : (isCollapsed ? '80px 1fr' : '260px 1fr'),
-        background: `linear-gradient(135deg, ${accentWashStrong} 0%, #ffffff 35%, #ffffff 65%, ${accentWash} 100%)`,
-      }}
-    >
-      {/* Sidebar Backdrop for Mobile */}
-      {isMobile && sidebarOpen && (
-        <div
-          onClick={() => setSidebarOpen(false)}
-          className="fixed inset-0 bg-slate-950/40 backdrop-blur-xs z-[45] transition-opacity"
-        />
-      )}
-
-      {/* Sidebar */}
-      <aside
-        className={`text-white flex flex-col gap-8 z-50 shadow-lg shrink-0 overflow-hidden transition-all duration-300 ${isMobile
-            ? `fixed left-0 top-0 ${sidebarOpen ? 'translate-x-0' : '-translate-x-full'} w-[260px] p-6 h-[100dvh]`
-            : `sticky top-0 ${isCollapsed ? 'w-[80px] p-4 items-center h-screen' : 'w-[260px] p-6 h-screen'}`
-          }`}
-        style={{
-          background: `
-            radial-gradient(circle at 20% 18%, rgba(255, 255, 255, 0.12), transparent 24%),
-            linear-gradient(180deg, rgba(20, 37, 91, 0.96) 0%, rgba(30, 58, 138, 0.94) 46%, rgba(37, 99, 235, 0.9) 100%)
-          `,
-          boxShadow: `0 20px 60px rgba(15, 23, 42, 0.12)`
-        }}
-      >
-        <div className={`flex w-full ${(isCollapsed && !isMobile) ? 'flex-col items-center gap-4' : 'items-center justify-between gap-2.5'}`}>
-          <div className="flex items-center gap-2.5 overflow-hidden">
-            <img src={logoImage} alt="Hire IQ Logo" className="w-8 h-8 object-contain" />
-            {(!isCollapsed || isMobile) && (
-              <strong className="text-xl font-bold tracking-tight text-white font-title truncate">Hire IQ</strong>
-            )}
+    <div className="min-h-screen bg-slate-50 text-slate-900 flex flex-col font-sans">
+      {/* Top bar */}
+      <header className="sticky top-0 z-30 border-b border-slate-200 bg-white/80 backdrop-blur">
+        <div className="flex h-14 items-center gap-4 px-6">
+          <div className="flex items-center gap-2">
+            <div className="grid h-8 w-8 place-items-center rounded-lg bg-indigo-600 text-white shadow-sm">
+              <Zap className="h-4 w-4" />
+            </div>
+            <div className="leading-tight">
+              <div className="text-sm font-semibold">HireIQ</div>
+              <div className="text-[11px] text-slate-500">Super Admin</div>
+            </div>
           </div>
-          {isMobile ? (
-            <button
-              onClick={() => setSidebarOpen(false)}
-              className="p-1 rounded-lg hover:bg-white/10 text-white/80 hover:text-white border-none cursor-pointer outline-none transition-colors shrink-0"
-              title="Close Sidebar"
-            >
-              <X size={18} />
-            </button>
-          ) : (
-            <button
-              onClick={() => setIsCollapsed(!isCollapsed)}
-              className="p-1 rounded-lg hover:bg-white/10 text-white/80 hover:text-white border-none cursor-pointer outline-none transition-colors shrink-0"
-              title={isCollapsed ? "Expand Sidebar" : "Collapse Sidebar"}
-            >
-              {isCollapsed ? <ChevronRight size={18} /> : <ChevronLeft size={18} />}
-            </button>
-          )}
-        </div>
-
-        <nav className="flex flex-col gap-2 flex-grow overflow-y-auto scrollbar-none w-full">
-          {(!isCollapsed || isMobile) && (
-            <div className="text-[0.62rem] font-bold text-white/50 uppercase tracking-widest px-3 mb-1">
-              SuperAdmin Control ({role})
-            </div>
-          )}
-          {navItems.map(({ id, label, icon: Icon, path }) => (
-            <NavLink
-              key={id}
-              to={path}
-              onClick={() => isMobile && setSidebarOpen(false)}
-              title={(isCollapsed && !isMobile) ? label : ""}
-              className={({ isActive }) =>
-                `w-full text-left flex items-center rounded-lg text-sm font-semibold transition-all border-none outline-none cursor-pointer no-underline ${(isCollapsed && !isMobile) ? 'justify-center p-2.5' : 'px-4 py-2.5 gap-3'
-                } ${isActive && !liveResultsModalOpen && !showCreditsModal
-                  ? 'bg-white text-indigo-700 shadow-sm'
-                  : 'bg-transparent text-white/80 hover:bg-white/10 hover:text-white'
-                }`
-              }
-            >
-              <Icon size={16} className="shrink-0" />
-              {(!isCollapsed || isMobile) && <span>{label}</span>}
-            </NavLink>
-          ))}
-
-          <div className="border-t border-white/10 my-2 w-full" />
-          <button
-            onClick={() => {
-              dispatch(setLiveResultsModalOpen(true))
-              setShowCreditsModal(false)
-              if (isMobile) setSidebarOpen(false)
-            }}
-            title={(isCollapsed && !isMobile) ? "Live Results" : ""}
-            className={`text-left flex items-center rounded-lg text-sm font-semibold transition-all border-none outline-none cursor-pointer ${(isCollapsed && !isMobile) ? 'justify-center p-2.5' : 'px-4 py-2.5 gap-3 w-full'
-              } ${liveResultsModalOpen && !showCreditsModal
-                ? 'bg-white text-indigo-700 shadow-sm'
-                : 'bg-transparent text-white/80 hover:bg-white/10 hover:text-white'
-              }`}
-          >
-            <Radio size={16} className="shrink-0" />
-            {(!isCollapsed || isMobile) && <span>Live Results</span>}
-          </button>
-
-          <button
-            onClick={() => {
-              dispatch(setLiveResultsModalOpen(false))
-              setShowCreditsModal(true)
-              if (isMobile) setSidebarOpen(false)
-            }}
-            title={(isCollapsed && !isMobile) ? "Available Credits" : ""}
-            className={`text-left flex items-center rounded-lg text-sm font-semibold transition-all border-none outline-none cursor-pointer ${(isCollapsed && !isMobile) ? 'justify-center p-2.5' : 'px-4 py-2.5 gap-3 w-full'
-              } ${showCreditsModal
-                ? 'bg-white text-indigo-700 shadow-sm'
-                : 'bg-transparent text-white/80 hover:bg-white/10 hover:text-white'
-              }`}
-          >
-            <Coins size={16} className="shrink-0" />
-            {(!isCollapsed || isMobile) && <span>Available Credits</span>}
-          </button>
-        </nav>
-
-        <button
-          onClick={handleLogout}
-          title={(isCollapsed && !isMobile) ? "Logout" : ""}
-          className={`text-left flex items-center border border-white/20 hover:bg-white/10 text-white outline-none cursor-pointer transition-all ${(isCollapsed && !isMobile) ? 'justify-center p-2.5 rounded-xl' : 'px-4 py-2.5 rounded-lg gap-3 w-full'
-            }`}
-        >
-          <LogOut size={16} className="shrink-0" />
-          {(!isCollapsed || isMobile) && <span>Logout</span>}
-        </button>
-      </aside>
-
-      {/* Main Panel */}
-      <div className="flex flex-col min-w-0">
-        {/* Navbar */}
-        <header
-          className="relative z-30 border-b px-4 lg:px-8 py-4 flex justify-between items-center text-[#1e293b] shadow-sm backdrop-blur-md"
-          style={{
-            background: `linear-gradient(90deg, rgba(255,255,255,0.92), ${hexToRgba(currentAccent.primary, 0.14)})`,
-            borderColor: hexToRgba(currentAccent.primary, 0.22),
-          }}
-        >
-          <div className="flex items-center gap-2 min-w-0">
-            {isMobile && (
-              <button
-                onClick={() => setSidebarOpen(true)}
-                className="p-1.5 -ml-1 hover:bg-slate-100 rounded-xl text-slate-600 hover:text-slate-800 transition-colors border-none bg-transparent cursor-pointer outline-none flex items-center justify-center shrink-0"
-              >
-                <Menu size={18} />
-              </button>
-            )}
-            <h2 className="text-sm sm:text-xl font-bold text-slate-800 truncate">SuperAdmin Management</h2>
+          <div className="ml-6 hidden lg:block">
+            <Badge variant="secondary" className="rounded-full font-normal border-slate-200 text-slate-600">
+              Platform Administration Overview
+            </Badge>
           </div>
-
-          <div className="flex items-center gap-2 sm:gap-4 shrink-0">
-            <div className="max-md:hidden flex items-center gap-1.5 bg-slate-100 rounded-full p-1 border border-slate-200">
-              {Object.keys(accentColors).map(color => (
-                <button
-                  key={color}
-                  onClick={() => setAccentName(color)}
-                  className="w-3.5 h-3.5 rounded-full border-2 border-white cursor-pointer p-0 transition-all"
-                  style={{
-                    background: accentColors[color].primary,
-                    boxShadow: accentName === color ? `0 0 0 2px ${accentColors[color].primary}` : 'none',
-                  }}
-                  title={color}
-                />
-              ))}
-            </div>
-
-            {/* Active Subscription Plan Badge */}
-            <div className="max-sm:hidden flex items-center gap-1.5 bg-indigo-50 border border-indigo-200 text-indigo-800 rounded-full px-3.5 py-1 text-xs font-bold shadow-sm">
-              <span className="w-1.5 h-1.5 bg-indigo-500 rounded-full" />
-              <span>Active Plan: {adminUser?.subscription_plan || 'Free Trial'}</span>
-            </div>
-
-            {/* Clickable Credits indicator */}
-            <button
-              onClick={() => {
-                dispatch(setLiveResultsModalOpen(false))
-                setShowCreditsModal(true)
-              }}
-              className="flex items-center gap-1.5 bg-primary/10 hover:bg-primary/20 text-primary border border-primary/20 rounded-full px-2.5 py-1 sm:px-4 sm:py-1 text-xs sm:text-sm font-bold shadow-sm transition-all cursor-pointer outline-none"
-              title="View Available Credits & Subscription Status"
-            >
-              <Coins size={14} className="text-primary" />
-              <span>{adminUser?.credits ?? 0}<span className="max-sm:hidden"> credits left</span></span>
-            </button>
-
-            {/* Notification Bell */}
-            <div ref={notifRef} className="relative">
-              <button
-                onClick={() => setNotifDropdownOpen(!notifDropdownOpen)}
-                className="relative p-2 text-slate-500 hover:text-slate-700 hover:bg-slate-100 rounded-xl transition-all cursor-pointer border border-slate-200 bg-white flex items-center justify-center"
-                title="Notifications"
-              >
-                <Bell size={18} />
-                {unreadCount > 0 && (
-                  <span className="absolute -top-1 -right-1 bg-primary text-white font-extrabold text-[9px] min-w-[16px] h-4 px-1 rounded-full flex items-center justify-center animate-bounce">
-                    {unreadCount}
-                  </span>
-                )}
-              </button>
-
-              {notifDropdownOpen && (
-                <div className="absolute right-0 top-full mt-2 w-80 bg-white border border-slate-200 rounded-2xl shadow-xl py-2 z-50">
-                  <div className="flex items-center justify-between px-4 py-2 border-b border-slate-100">
-                    <span className="text-xs font-bold text-slate-800 font-sans">Recent Notifications</span>
-                    {unreadCount > 0 && (
-                      <button
-                        onClick={handleMarkAllRead}
-                        className="text-[10px] font-bold text-primary hover:underline cursor-pointer border-none bg-transparent"
-                      >
-                        Mark all read
-                      </button>
-                    )}
-                  </div>
-
-                  <div className="max-h-64 overflow-y-auto divide-y divide-slate-50">
-                    {notifications.length === 0 ? (
-                      <div className="py-8 text-center text-xs text-slate-400 font-sans">No notifications</div>
-                    ) : (
-                      notifications.slice(0, 5).map(n => (
-                        <div
-                          key={n.id}
-                          onClick={() => {
-                            if (!n.read) handleMarkRead(n.id)
-                            setNotifDropdownOpen(false)
-                            if (n.type === 'credits') navigate('/superadmin/team')
-                            else if (n.type === 'activity') navigate('/superadmin/super-dashboard')
-                            else navigate('/superadmin/super-dashboard')
-                          }}
-                          className={`p-3 text-left hover:bg-slate-50 cursor-pointer transition-colors flex gap-2.5 items-start ${!n.read ? 'bg-slate-50/30' : ''
-                            }`}
-                        >
-                          <div className="p-1.5 rounded-lg bg-slate-50 flex-shrink-0 mt-0.5">
-                            {getNotifIcon(n.type)}
-                          </div>
-                          <div className="space-y-0.5 min-w-0">
-                            <div className="flex items-center gap-1.5 justify-between">
-                              <span className={`text-xs font-bold truncate block ${!n.read ? 'text-slate-800' : 'text-slate-600'}`}>{n.title}</span>
-                              {!n.read && <span className="w-1.5 h-1.5 rounded-full bg-primary shrink-0" />}
-                            </div>
-                            <p className="text-[11px] text-slate-500 leading-normal line-clamp-2 font-sans">{n.message}</p>
-                            <span className="text-[9px] text-slate-400 block pt-0.5 font-sans">{formatRelativeTime(n.created_at)}</span>
-                          </div>
-                        </div>
-                      ))
-                    )}
-                  </div>
-
-                  <div className="border-t border-slate-100 px-4 pt-2 pb-1 text-center">
-                    <NavLink
-                      to="/superadmin/notifications"
-                      onClick={() => setNotifDropdownOpen(false)}
-                      className="text-[11px] font-bold text-primary hover:underline no-underline block py-1 font-sans"
-                    >
-                      View All Notifications
-                    </NavLink>
-                  </div>
-                </div>
+          <div className="ml-auto flex items-center gap-2">
+            <Button variant="ghost" size="sm" className="text-slate-500">
+              <Bell className="h-4 w-4" />
+              <span className="ml-1 hidden sm:inline">Alerts</span>
+              {notifications.filter(n => !n.is_read).length > 0 && (
+                <Badge className="ml-2 h-5 rounded-full px-1.5 text-[10px] bg-indigo-600 text-white">
+                  {notifications.filter(n => !n.is_read).length}
+                </Badge>
               )}
+            </Button>
+            <div className="grid h-8 w-8 place-items-center rounded-full bg-indigo-50 text-indigo-700 text-xs font-semibold ml-2">
+              SA
             </div>
-
-            <span className="text-sm text-slate-600 max-lg:hidden">
-              Welcome back, <strong className="text-slate-800">{adminUser?.name || 'SuperAdmin'}</strong>
-            </span>
-
-            <button
-              onClick={handleLogout}
-              className="max-sm:hidden flex px-3 py-1.5 bg-transparent border border-slate-200 rounded-lg cursor-pointer text-slate-600 hover:text-slate-800 hover:bg-slate-50 items-center gap-1.5 text-xs font-semibold"
-            >
-              <LogOut size={14} /> Logout
-            </button>
+            <Button variant="ghost" size="sm" onClick={handleLogout} className="ml-2 text-slate-500 hover:text-slate-800 cursor-pointer">
+              <LogOut className="h-4 w-4" />
+            </Button>
           </div>
-        </header>
+        </div>
+      </header>
 
-        <main
-          className="p-4 lg:p-8 flex-grow overflow-y-auto"
-          style={{
-            background: `linear-gradient(135deg, ${accentPageStrong} 0%, rgba(255,255,255,0.85) 30%, rgba(255,255,255,0.85) 70%, ${accentPage} 100%)`,
-          }}
-        >
-          <Outlet />
+      <div className="flex flex-1 overflow-hidden">
+        {/* Sidebar */}
+        <aside className="hidden w-60 shrink-0 border-r border-slate-200 bg-white/40 md:block overflow-y-auto">
+          <div className="space-y-1">
+            {navItems.map((item) => (
+              <NavLink
+                key={item.id}
+                to={item.path}
+                className={({ isActive }) =>
+                  `flex items-center gap-3 rounded-md px-3 py-2 text-sm font-medium transition-colors ${
+                    isActive
+                      ? 'bg-indigo-50 text-indigo-600'
+                      : 'text-slate-500 hover:bg-slate-100 hover:text-slate-900'
+                  }`
+                }
+              >
+                {({ isActive }) => (
+                  <>
+                    <span className="h-1.5 w-1.5 rounded-full bg-current opacity-60" />
+                    {item.label}
+                  </>
+                )}
+              </NavLink>
+            ))}
+          </div>
+        </aside>
+
+        {/* Main */}
+        <main className="min-w-0 flex-1 overflow-y-auto bg-slate-50/50 relative">
+          {notifDropdownOpen && (
+            <div className="absolute right-4 top-4 w-80 bg-white border border-slate-200 rounded-2xl shadow-xl py-2 z-50">
+              <div className="flex items-center justify-between px-4 py-2 border-b border-slate-100">
+                <span className="text-xs font-bold text-slate-800 font-sans">Recent Notifications</span>
+                {unreadCount > 0 && (
+                  <button
+                    onClick={handleMarkAllRead}
+                    className="text-[10px] font-bold text-indigo-600 hover:underline cursor-pointer border-none bg-transparent"
+                  >
+                    Mark all read
+                  </button>
+                )}
+              </div>
+
+              <div className="max-h-64 overflow-y-auto divide-y divide-slate-50">
+                {notifications.length === 0 ? (
+                  <div className="py-8 text-center text-xs text-slate-400 font-sans">No notifications</div>
+                ) : (
+                  notifications.slice(0, 5).map(n => (
+                    <div
+                      key={n.id}
+                      onClick={() => {
+                        if (!n.read) handleMarkRead(n.id)
+                        setNotifDropdownOpen(false)
+                        if (n.type === 'credits') navigate('/superadmin/team')
+                        else if (n.type === 'activity') navigate('/superadmin/super-dashboard')
+                        else navigate('/superadmin/super-dashboard')
+                      }}
+                      className={`p-3 text-left hover:bg-slate-50 cursor-pointer transition-colors flex gap-2.5 items-start ${!n.read ? 'bg-indigo-50/30' : ''
+                        }`}
+                    >
+                      <div className="p-1.5 rounded-lg bg-slate-50 flex-shrink-0 mt-0.5">
+                        {getNotifIcon(n.type)}
+                      </div>
+                      <div className="space-y-0.5 min-w-0">
+                        <div className="flex items-center gap-1.5 justify-between">
+                          <span className={`text-xs font-bold truncate block ${!n.read ? 'text-slate-800' : 'text-slate-600'}`}>{n.title}</span>
+                          {!n.read && <span className="w-1.5 h-1.5 rounded-full bg-indigo-600 shrink-0" />}
+                        </div>
+                        <p className="text-[11px] text-slate-500 leading-normal line-clamp-2 font-sans">{n.message}</p>
+                        <span className="text-[9px] text-slate-400 block pt-0.5 font-sans">{formatRelativeTime(n.created_at)}</span>
+                      </div>
+                    </div>
+                  ))
+                )}
+              </div>
+
+              <div className="border-t border-slate-100 px-4 pt-2 pb-1 text-center">
+                <NavLink
+                  to="/superadmin/notifications"
+                  onClick={() => setNotifDropdownOpen(false)}
+                  className="text-[11px] font-bold text-indigo-600 hover:underline no-underline block py-1 font-sans"
+                >
+                  View All Notifications
+                </NavLink>
+              </div>
+            </div>
+          )}
+
+          <div className="p-4 lg:p-8">
+            <Outlet />
+          </div>
         </main>
       </div>
 

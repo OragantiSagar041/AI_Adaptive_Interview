@@ -1,4 +1,6 @@
-import React, { useEffect } from "react";
+const fs = require('fs');
+
+const code = import React, { useEffect } from "react";
 import { useDispatch, useSelector } from "react-redux";
 import { loadSuperAdminDashboard } from "@/store/slices/dashboardSlice";
 import {
@@ -52,7 +54,7 @@ import {
 import { Separator } from "@/components/ui/separator";
 
 function formatNum(n) {
-  if (!n && n !== 0) return "0";
+  if (!n) return "0";
   return Number(n).toLocaleString();
 }
 
@@ -83,7 +85,7 @@ export default function SuperDashboardPage() {
     { label: "Active Today", value: formatNum(dbStats?.today), delta: "", up: true, icon: Activity, tint: "from-blue-500/15 to-blue-500/0" },
     { label: "Completed Interviews", value: formatNum(dbStats?.completed), delta: "", up: true, icon: CheckCircle2, tint: "from-emerald-500/15 to-emerald-500/0" },
     { label: "Pending Interviews", value: formatNum(dbStats?.pending), delta: "", up: true, icon: Clock, tint: "from-amber-500/15 to-amber-500/0" },
-    { label: "Avg AI Score", value: `${dbStats?.avg_score || 0}%`, delta: "", up: true, icon: Star, tint: "from-fuchsia-500/15 to-fuchsia-500/0" },
+    { label: "Avg AI Score", value: \\\\\\%\\\, delta: "", up: true, icon: Star, tint: "from-fuchsia-500/15 to-fuchsia-500/0" },
     { label: "Candidates Hired", value: formatNum(dbStats?.selected), delta: "", up: true, icon: Target, tint: "from-teal-500/15 to-teal-500/0" },
     { label: "Candidates Rejected", value: formatNum(dbStats?.rejected), delta: "", up: false, icon: XCircle, tint: "from-rose-500/15 to-rose-500/0" },
     { label: "Expired Links", value: formatNum(dbStats?.expired), delta: "", up: false, icon: AlertTriangle, tint: "from-red-500/15 to-red-500/0" }
@@ -99,24 +101,10 @@ export default function SuperDashboardPage() {
   ];
 
   const funnelData = [
-    { name: "Applications Received", value: 42000, fill: "#3b82f6" },
-    { name: "AI Resume Screening", value: 28400, fill: "#0ea5e9" },
-    { name: "AI Voice Screening", value: 19860, fill: "#0284c7" },
-    { name: "AI Interviews", value: 12300, fill: "#0d9488" },
-    { name: "Qualified Candidates", value: 7800, fill: "#10b981" },
-    { name: "Recruiter Review", value: 4900, fill: "#22c55e" },
-    { name: "Offers Released", value: 2184, fill: "#eab308" },
-    { name: "Candidates Hired", value: 82, fill: "#f59e0b" }
-  ];
-
-  const analytics = [
-    { label: "AI Resume Screening Success Rate", value: 82 },
-    { label: "Interview Completion Rate", value: 91 },
-    { label: "Average AI Match Score", value: 89 },
-    { label: "Offer Acceptance Rate", value: 76 },
-    { label: "Candidate Conversion Rate", value: 34 },
-    { label: "Recruiter Productivity", value: 93 },
-    { label: "AI Recommendation Accuracy", value: 88 }
+    { name: "Total Interviews", value: dbStats?.total || 0, fill: "oklch(0.62 0.18 265)" },
+    { name: "Pending", value: dbStats?.pending || 0, fill: "oklch(0.58 0.16 232)" },
+    { name: "Completed", value: dbStats?.completed || 0, fill: "oklch(0.62 0.15 175)" },
+    { name: "Hired", value: dbStats?.selected || 0, fill: "oklch(0.72 0.18 70)" }
   ];
 
   return (
@@ -134,7 +122,7 @@ export default function SuperDashboardPage() {
           const Icon = k.icon;
           return (
             <Card key={k.label} className="relative overflow-hidden bg-white text-slate-900 border-slate-200 shadow-sm">
-              <div className={`pointer-events-none absolute inset-0 bg-gradient-to-br ${k.tint}`} />
+              <div className={\\\pointer-events-none absolute inset-0 bg-gradient-to-br \\\\\\} />
               <CardContent className="relative p-4">
                 <div className="flex items-start justify-between">
                   <div className="grid h-9 w-9 place-items-center rounded-lg bg-white text-slate-900 border-slate-200 shadow-sm ring-1 ring-slate-200">
@@ -167,12 +155,12 @@ export default function SuperDashboardPage() {
         </CardContent>
       </Card>
 
-      {/* Funnel & Analytics */}
+      {/* Funnel */}
       <div className="grid gap-4 lg:grid-cols-3">
-        <Card className="lg:col-span-2 bg-white text-slate-900 border-slate-200 shadow-sm">
+        <Card className="lg:col-span-3 bg-white text-slate-900 border-slate-200 shadow-sm">
           <CardHeader className="pb-2">
             <CardTitle className="text-base">AI Recruitment Funnel</CardTitle>
-            <CardDescription>Stage-by-stage conversion across the platform.</CardDescription>
+            <CardDescription>Stage-by-stage conversion tracking.</CardDescription>
           </CardHeader>
           <CardContent>
             <div className="h-[360px]">
@@ -193,36 +181,6 @@ export default function SuperDashboardPage() {
                   </Funnel>
                 </FunnelChart>
               </ResponsiveContainer>
-            </div>
-          </CardContent>
-        </Card>
-
-        {/* AI Platform Analytics */}
-        <Card className="lg:col-span-1 bg-white text-slate-900 border-slate-200 shadow-sm flex flex-col">
-          <CardHeader className="pb-2">
-            <CardTitle className="text-base">AI Platform Analytics</CardTitle>
-            <CardDescription>Key business metrics.</CardDescription>
-          </CardHeader>
-          <CardContent className="flex-1 flex flex-col justify-between">
-            <div className="space-y-4">
-              {analytics.map((item, idx) => (
-                <div key={idx} className="space-y-1">
-                  <div className="flex items-center justify-between text-xs">
-                    <span className="text-slate-500">{item.label}</span>
-                    <span className="font-medium">{item.value}%</span>
-                  </div>
-                  <Progress value={item.value} className="h-1.5" />
-                </div>
-              ))}
-            </div>
-            <div className="mt-6">
-              <div className="rounded-lg border border-slate-200 bg-slate-50 p-3 flex items-center justify-between">
-                <div className="flex items-center text-slate-500">
-                  <Clock className="mr-2 h-4 w-4" />
-                  <span className="text-sm">Average Time-to-Hire</span>
-                </div>
-                <div className="font-semibold">22 days</div>
-              </div>
             </div>
           </CardContent>
         </Card>
@@ -256,8 +214,8 @@ export default function SuperDashboardPage() {
                     </Badge>
                   </TableCell>
                   <TableCell className="text-right tabular-nums">{session.proctoring_alerts || 0}</TableCell>
-                  <TableCell className="text-right flex items-center justify-end">
-                    <Progress value={(session.audio_level || 0) * 10} className="h-1.5 w-16 ml-2" />
+                  <TableCell className="text-right">
+                    <Progress value={(session.audio_level || 0) * 10} className="h-1.5 w-16 ml-auto" />
                   </TableCell>
                 </TableRow>
               ))}
@@ -320,3 +278,6 @@ export default function SuperDashboardPage() {
     </div>
   );
 }
+\;
+
+fs.writeFileSync('src/pages/superadmin/SuperDashboardPage.jsx', code);
