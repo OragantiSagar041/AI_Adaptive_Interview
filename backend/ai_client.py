@@ -113,12 +113,13 @@ def _is_in_cooldown() -> bool:
     return (time.time() - _quota_hit_at) < QUOTA_COOLDOWN_SECONDS
 
 
-def _mark_quota_exhausted():
+def _mark_quota_exhausted(details: str = ""):
     """Record that OpenRouter quota was exhausted."""
     global _quota_hit_at
     with _lock:
         _quota_hit_at = time.time()
-    print(f"  OpenRouter quota exhausted  switching to HuggingFace for {QUOTA_COOLDOWN_SECONDS}s")
+    msg_suffix = f" | Details: {details}" if details else ""
+    print(f"  OpenRouter quota exhausted  switching fallback for {QUOTA_COOLDOWN_SECONDS}s{msg_suffix}")
 
 
 def _is_quota_error(exc: Exception) -> bool:
@@ -153,11 +154,13 @@ def _call_openrouter(
     resp = http_requests.post(url, headers=headers, json=payload, timeout=timeout)
 
     if resp.status_code in (402, 429):
-        _mark_quota_exhausted()
-        raise QuotaExhaustedError(f"OpenRouter returned {resp.status_code}: {resp.text[:200]}")
+        err_msg = f"HTTP {resp.status_code}: {resp.text}"
+        _mark_quota_exhausted(err_msg)
+        raise QuotaExhaustedError(err_msg)
 
     if resp.status_code != 200:
-        raise RuntimeError(f"OpenRouter error {resp.status_code}: {resp.text[:300]}")
+        err_msg = f"HTTP {resp.status_code}: {resp.text}"
+        raise RuntimeError(f"OpenRouter error {err_msg}")
 
     data = resp.json()
     
@@ -219,6 +222,37 @@ def _call_huggingface(
 
 # ─── Custom Exception ────────────────────────────────────────────────────────
 
+def _call_groq(
+    messages: List[Dict[str, str]],
+    model: str = "llama-3.1-8b-instant",
+    temperature: float = 0.1,
+    timeout: int = 15,
+    max_tokens: int = 1024,
+) -> str:
+    """Call Groq API (completions)."""
+    GROQ_API_KEY = os.getenv("GROQ_API_KEY", "")
+    if not GROQ_API_KEY:
+        raise RuntimeError("No Groq API key available")
+    url = "https://api.groq.com/openai/v1/chat/completions"
+    headers = {
+        "Authorization": f"Bearer {GROQ_API_KEY}",
+        "Content-Type": "application/json",
+    }
+    payload = {
+        "model": model,
+        "messages": messages,
+        "temperature": temperature,
+        "max_tokens": max_tokens,
+    }
+    resp = http_requests.post(url, headers=headers, json=payload, timeout=timeout)
+    if resp.status_code != 200:
+        raise RuntimeError(f"Groq error {resp.status_code}: {resp.text[:300]}")
+    data = resp.json()
+    return data["choices"][0]["message"]["content"]
+
+
+# ─── Custom Exception ────────────────────────────────────────────────────────
+
 class QuotaExhaustedError(Exception):
     """Raised when OpenRouter quota is exhausted."""
     pass
@@ -235,28 +269,41 @@ def chat_completion(
 ) -> str:
     """
     Send a chat completion request.
-    If OpenRouter fails or is out of quota, instantly fails so the backend 
-    falls back to the OFFLINE smart question generator (no lagging).
+    If OpenRouter fails or is out of quota, falls back to Groq, then to HuggingFace, before going offline.
     """
-    if _is_in_cooldown():
-        raise RuntimeError("QUOTA_EXHAUSTED_INSTANT_OFFLINE")
-
-    if not OPENROUTER_API_KEY:
-        raise RuntimeError("No API key available")
-
-    try:
-        return _call_openrouter(messages, model, temperature, timeout, max_tokens)
-    except QuotaExhaustedError:
-        print("⚡ Kill-switch: quota exhausted → instant offline mode")
-        raise RuntimeError("QUOTA_EXHAUSTED_INSTANT_OFFLINE")
-    except Exception as exc:
-        if _is_quota_error(exc):
-            _mark_quota_exhausted()
-            print("⚡ Kill-switch: quota error → instant offline mode")
-            raise RuntimeError("QUOTA_EXHAUSTED_INSTANT_OFFLINE")
+    # 1. Primary path: try OpenRouter if not in cooldown
+    if not _is_in_cooldown() and OPENROUTER_API_KEY:
+        try:
+            return _call_openrouter(messages, model, temperature, timeout, max_tokens)
+        except Exception as openrouter_exc:
+            err_msg = str(openrouter_exc)
+            if _is_quota_error(openrouter_exc):
+                _mark_quota_exhausted(err_msg)
+                print(f"⚡ OpenRouter quota hit: {err_msg}. Switching to fallbacks...")
+            else:
+                print(f"⚠️ OpenRouter failed: {openrouter_exc}. Switching to fallbacks...")
+    else:
+        if _is_in_cooldown():
+            print("⏳ OpenRouter is in cooldown. Trying Groq fallback directly...")
         else:
-            print(f"  OpenRouter error: {exc}. Instantly falling back to offline mode to prevent lag.")
-            raise RuntimeError(f"OpenRouter Failed: {exc}")
+            print("⚠️ No OpenRouter API key. Trying Groq fallback directly...")
+
+    # 2. Secondary path: Groq fallback
+    GROQ_API_KEY = os.getenv("GROQ_API_KEY", "")
+    if GROQ_API_KEY:
+        try:
+            print("🤖 Calling Groq LLM (llama-3.1-8b-instant)...")
+            return _call_groq(messages, "llama-3.1-8b-instant", temperature, timeout, max_tokens)
+        except Exception as groq_exc:
+            print(f"⚠️ Groq fallback failed: {groq_exc}. Trying HuggingFace fallback...")
+            
+    # 3. Tertiary path: HuggingFace fallback
+    try:
+        print("🤗 Calling HuggingFace fallback model...")
+        return _call_huggingface(messages, temperature=temperature, timeout=timeout)
+    except Exception as hf_exc:
+        print(f"❌ All LLM providers failed: OpenRouter, Groq, and HuggingFace.")
+        raise RuntimeError("QUOTA_EXHAUSTED_INSTANT_OFFLINE")
 
 
 def chat_completion_safe(
