@@ -25,6 +25,7 @@ from datetime import datetime, timedelta, timezone
 from typing import Any, Dict, List, Optional
 from app.services import parse_iso_datetime
 from app.session_store import get_session, delete_session
+from pymongo import ReturnDocument
 
 sys.stdout.reconfigure(encoding='utf-8')
 sys.stderr.reconfigure(encoding='utf-8')
@@ -144,8 +145,6 @@ def startup_event_cloudinary():
 
 # In-memory storage (replace with database in production)
     # interviews = {}
-
-
 
 def get_or_create_candidate(name: str) -> str:
     row = candidates_collection.find_one({"name": name})
@@ -4145,23 +4144,88 @@ class CopilotRequest(BaseModel):
     admin_id: Optional[str] = None
 
 @router.post("/admin/copilot")
-def admin_copilot_chat(request: CopilotRequest, current_admin: dict = Depends(get_current_admin_details)):
+def admin_copilot_chat(request: CopilotRequest, raw_request: Request, current_admin: dict = Depends(get_current_admin_details)):
     try:
         from ai_client import chat_completion
+        from mongo_db import db
         
         role = current_admin.get("role", "admin")
         admin_id = current_admin.get("admin_id")
         company_id = current_admin.get("company_id")
         
+        def strip_markdown(text: str) -> str:
+            if not text:
+                return ""
+            import re
+            t = re.sub(r'```[a-zA-Z0-9]*', '', text)
+            t = re.sub(r'\*\*|__|\*|_|#', '', t)
+            return t.strip()
+        
+        # 1. Dynamic platform routing metadata (Filtered and capped to save tokens)
+        dynamic_endpoints = []
+        for r in getattr(raw_request.app, "routes", []):
+            if hasattr(r, "path") and hasattr(r, "methods") and ("/admin" in r.path or "/api/plans" in r.path):
+                if "notification" in r.path or "ws" in r.path:
+                    continue
+                methods_str = ", ".join(r.methods - {"HEAD", "OPTIONS"})
+                if methods_str:
+                    endpoint_name = r.endpoint.__name__ if hasattr(r, "endpoint") else ""
+                    docstring = ""
+                    if hasattr(r, "endpoint") and r.endpoint.__doc__:
+                        docstring = r.endpoint.__doc__.strip().split('\n')[0].strip()
+                    doc_suffix = f" -> {docstring}" if docstring else ""
+                    dynamic_endpoints.append(f"- Endpoint `{r.path}` ({methods_str}) [Handler: {endpoint_name}]{doc_suffix}")
+        endpoints_context = "\n".join(dynamic_endpoints[:5])
+ 
+        # 2. Dynamic database collections and records count (Filtered to essential collections)
+        dynamic_collections = []
+        try:
+            coll_names = db.list_collection_names()
+            important_colls = {"jobs", "job_applications", "interview_sessions", "admins"}
+            for col in coll_names:
+                if col in important_colls:
+                    doc_count = db[col].count_documents({})
+                    dynamic_collections.append(f"- Collection '{col}': {doc_count} documents")
+        except Exception as db_err:
+            dynamic_collections.append(f"- Database query failed: {db_err}")
+        db_context_meta = "\n".join(dynamic_collections)
+ 
+        # 3. Dynamic subscription plans (Capped)
+        dynamic_plans = []
+        try:
+            plans = list(plans_collection.find({}, {"_id": 0}))
+            for p in plans[:3]:
+                dynamic_plans.append(f"- Plan: {p.get('name', 'N/A')} (Key: {p.get('plan_key', 'N/A')}) | Price: {p.get('price_monthly', 0)} USD/mo | Credits: {p.get('credits_granted', 0)}")
+        except Exception:
+            pass
+        plans_context = "\n".join(dynamic_plans)
+
         system_prompt = f"""You are the 'Hire IQ Admin Copilot', a specialized AI assistant embedded within the Admin Dashboard of the Hire IQ Mock Interview platform.
 You are currently talking to a user with the role: {role.upper()}.
-Your ONLY purpose is to help the admin understand and navigate this website, AND to perform specific administrative actions when requested.
+
+YOUR PURPOSE:
+Your purpose is to help the admin understand and navigate this website, AND to perform specific administrative actions when requested.
+
+DYNAMIC MODULE & FEATURE RECOGNITION:
+Do not rely on hardcoded feature or module names. You must dynamically inspect the platform structure using the context details provided below:
+1. "DYNAMIC PLATFORM MODULES & ROUTING METADATA": Outlines all available API routes, endpoints, HTTP methods, and module descriptions.
+2. "DYNAMIC DATABASE SCHEMA & COLLECTIONS METADATA": Outlines MongoDB tables and count of records, reflecting available features.
+3. "ACTIVE SUBSCRIPTION PLANS": Outlines all plans, credit grants, and prices.
+Use this information to answer user questions about any module, view, or functionality of the platform, even if new ones are added dynamically.
+
+YOU MUST SUPPORT:
+1. General HireIQ conversations (e.g. greetings, role explanations, HireIQ small talk).
+2. Platform questions (answering how any module, endpoint, or system feature works by mapping them to the active routes and database context).
+3. Navigation help (guiding the admin to pages by mapping their query to the listed Admin / Tenant routes).
+4. Candidate, job, and application queries (using the context data provided below to answer user questions about candidates, scores, job applications, job details, and status).
+5. Email drafting (drafting feedback, rejection, or selection emails for candidates).
+6. Email sending (routing to the 'send_feedback' action).
+7. Admin creation (routing to the 'create_admin' action).
+8. Credit management (routing to 'request_credits', 'transfer_credits', or 'buy_credits' actions).
 
 CRITICAL RULES:
-1. ONLY answer questions related to the Hire IQ website, its features, and how to use it.
-2. BE EXTREMELY CONCISE. Provide ONLY the direct, valid answer. Do NOT generate long explanations, filler text, or conversational fluff. Use short bullet points if necessary.
-3. If the user asks about ANYTHING ELSE, you MUST politely decline in exactly one short sentence.
-4. When asked to perform an action (e.g., "Send a feedback email", "Send credits"), output exactly one short sentence confirming the action, followed IMMEDIATELY by a JSON block.
+1. Direct LLM Responses: For HireIQ-related queries (categories 1 to 5), you must answer the user directly. Keep your answers concise, accurate, and professional.
+2. Action Responses: For action requests (categories 6 to 8), you must output exactly one short sentence confirming the action, followed IMMEDIATELY by a JSON block.
    The JSON block MUST be exactly in this format:
    ```json
    {{
@@ -4169,35 +4233,67 @@ CRITICAL RULES:
        ... (other required fields)
    }}
    ```
-5. Do NOT echo or repeat the user's question. Just provide the answer directly.
+   Supported actions and roles:
+   - send_feedback: Available for admin and super_admin. Schema: `{{'action': 'send_feedback', 'candidate_email': '...', 'content': '...'}}`
+   - request_credits: Available for admin only. Schema: `{{'action': 'request_credits', 'amount': ..., 'reason': '...'}}`
+   - transfer_credits: Available for super_admin only. Schema: `{{'action': 'transfer_credits', 'admin_username': '...', 'amount': ...}}`
+   - buy_credits: Available for super_admin only. Schema: `{{'action': 'buy_credits', 'amount': ...}}`
+   - create_admin: Available for super_admin only. Schema: `{{'action': 'create_admin', 'username': '...', 'email': '...'}}`
+3. Formatting Rules:
+   - You MUST format all responses as clean, structured, numbered or bulleted lists.
+   - You MUST NOT use any Markdown formatting such as **bold**, *italics*, _underscores_, or code blocks in your responses unless the user explicitly requests them (or for the required JSON action blocks).
+   - Responses should be plain, professional, clean, and easy to read while preserving the same information.
+4. Unrelated Topics: For any topic unrelated to HireIQ (such as general knowledge, coding help, non-HireIQ conversation, general assistant questions), you MUST politely decline. Use this fallback response: "I'm sorry, I can only help you with questions related to the HireIQ platform, its dashboard, candidate data, and standard admin actions."
+5. Do NOT echo or repeat the user's question. Provide the answer or the action directly.
 """
 
         context_data = ""
+        context_data += "\n--- DYNAMIC PLATFORM MODULES & ROUTING METADATA ---\n"
+        context_data += endpoints_context + "\n"
+        
+        context_data += "\n--- DYNAMIC DATABASE SCHEMA & COLLECTIONS METADATA ---\n"
+        context_data += db_context_meta + "\n"
+        
+        if plans_context:
+            context_data += "\n--- ACTIVE SUBSCRIPTION PLANS ---\n"
+            context_data += plans_context + "\n"
+
+        # Fetch recent jobs and applications
+        recent_jobs = []
+        recent_apps = []
+        
+        if role in ["admin", "super_admin"]:
+            # Query jobs
+            jobs_query = {}
+            if role == "admin":
+                jobs_query["admin_id"] = admin_id
+            else:  # super_admin
+                jobs_query["company_id"] = company_id
+            
+            recent_jobs = list(jobs_collection.find(
+                jobs_query, 
+                {"job_id": 1, "title": 1, "department": 1, "location": 1, "_id": 0}
+            ).sort("created_at", -1).limit(3))
+            
+            if recent_jobs:
+                job_ids = [j.get("job_id") for j in recent_jobs if j.get("job_id")]
+                recent_apps = list(job_applications_collection.find(
+                    {"job_id": {"$in": job_ids}}, 
+                    {"name": 1, "email": 1, "score": 1, "status": 1, "applied_at": 1, "job_id": 1, "_id": 0}
+                ).sort("applied_at", -1).limit(3))
 
         if role == "admin":
-            system_prompt += """
-AVAILABLE ACTIONS FOR ADMIN:
-- draft_email: Draft a feedback/selection email. `{"action": "send_feedback", "candidate_email": "...", "content": "..."}`
-- request_credits: Request credits from super admin. `{"action": "request_credits", "amount": 100, "reason": "..."}`
-"""
             recent_sessions = list(interview_sessions_collection.find(
                 {"created_by": admin_id, "status": "completed"},
                 {"candidate_name": 1, "candidate_email": 1, "avg_score": 1, "decision": 1, "_id": 0}
-            ).sort("created_at", -1).limit(50))
+            ).sort("created_at", -1).limit(3))
             if recent_sessions:
-                context_data += "\n--- YOUR RECENT CANDIDATES ---\n"
+                context_data += "\n--- YOUR RECENT CANDIDATE MOCK INTERVIEWS ---\n"
                 for s in recent_sessions:
                     context_data += f"- Candidate: {s.get('candidate_name', 'Unknown')} | Email: {s.get('candidate_email', 'Unknown')} | Score: {s.get('avg_score', 'N/A')}/100 | Decision: {s.get('decision', 'None')}\n"
 
         elif role == "super_admin":
-            system_prompt += """
-AVAILABLE ACTIONS FOR SUPER ADMIN:
-- draft_email: Draft a feedback email to a candidate. `{"action": "send_feedback", "candidate_email": "...", "content": "..."}`
-- buy_credits: Generate checkout link. `{"action": "buy_credits", "amount": 100}`
-- transfer_credits: Send credits to a sub-admin. `{"action": "transfer_credits", "admin_username": "...", "amount": 50}`
-- create_admin: Create a new sub-admin. `{"action": "create_admin", "username": "...", "email": "..."}`
-"""
-            sub_admins = list(admins_collection.find({"created_by": admin_id}, {"username": 1, "email": 1, "credits": 1, "_id": 0}))
+            sub_admins = list(admins_collection.find({"created_by": admin_id}, {"username": 1, "email": 1, "credits": 1, "_id": 0}).limit(3))
             if sub_admins:
                 context_data += "\n--- YOUR SUB-ADMINS ---\n"
                 for sa in sub_admins:
@@ -4206,17 +4302,23 @@ AVAILABLE ACTIONS FOR SUPER ADMIN:
             recent_sessions = list(interview_sessions_collection.find(
                 {"company_id": company_id, "status": "completed"},
                 {"candidate_name": 1, "candidate_email": 1, "avg_score": 1, "decision": 1, "created_by": 1, "_id": 0}
-            ).sort("created_at", -1).limit(50))
+            ).sort("created_at", -1).limit(3))
             if recent_sessions:
-                context_data += "\n--- COMPANY CANDIDATES ---\n"
+                context_data += "\n--- COMPANY CANDIDATE MOCK INTERVIEWS ---\n"
                 for s in recent_sessions:
                     context_data += f"- Candidate: {s.get('candidate_name')} | Email: {s.get('candidate_email')} | Score: {s.get('avg_score')} | Created By ID: {s.get('created_by')}\n"
 
-        elif role == "master":
-            system_prompt += """
-AVAILABLE ACTIONS FOR MASTER:
-- Currently no JSON actions. You can answer queries about the platform metrics provided below.
-"""
+        if recent_jobs:
+            context_data += "\n--- ACTIVE/RECENT JOBS ---\n"
+            for j in recent_jobs:
+                context_data += f"- Job ID: {j.get('job_id')} | Title: {j.get('title')} | Dept: {j.get('department', 'N/A')} | Loc: {j.get('location', 'N/A')}\n"
+                
+        if recent_apps:
+            context_data += "\n--- RECENT JOB APPLICATIONS ---\n"
+            for a in recent_apps:
+                context_data += f"- Applicant: {a.get('name')} | Email: {a.get('email')} | Job ID: {a.get('job_id')} | Score: {a.get('score', 'N/A')} | Status: {a.get('status', 'N/A')} | Applied At: {a.get('applied_at', 'N/A')}\n"
+
+        if role == "master":
             total_super_admins = admins_collection.count_documents({"role": "tenant"})
             total_admins = admins_collection.count_documents({})
             total_interviews = interview_sessions_collection.count_documents({})
@@ -4231,7 +4333,8 @@ AVAILABLE ACTIONS FOR MASTER:
         system_prompt += f"\n{context_data}"
         
         messages = [{"role": "system", "content": system_prompt}]
-        for msg in request.history:
+        history_list = request.history or []
+        for msg in history_list[-2:]:
             if msg.role in ["user", "assistant"]:
                 messages.append({"role": msg.role, "content": msg.content})
         messages.append({"role": "user", "content": request.message})
@@ -4256,7 +4359,7 @@ AVAILABLE ACTIONS FOR MASTER:
                 except:
                     pass
                     
-            return {"reply": response_text, "action_required": action_required}
+            return {"reply": strip_markdown(response_text), "action_required": action_required}
             
         except Exception as e:
             print(f"Warning: Copilot AI failed: {e}")
@@ -4265,26 +4368,29 @@ AVAILABLE ACTIONS FOR MASTER:
             msg_lower = request.message.lower()
             
             offline_responses = {
-                "generate interview questions": "To generate interview questions, go to 'Create Interview' or 'Bulk Send' and type a Job Description. The system will automatically generate questions tailored to the JD.",
-                "rank candidates": "To rank candidates, go to the Results dashboard. Candidates are ranked by their ATS Score and overall interview performance score automatically.",
-                "draft feedback emails": "To draft feedback emails, go to the candidate's result page and click 'Send Feedback Email'. The system will generate a custom template.",
-                "api": "API keys can be configured in the Settings tab. If you run out of quota, the system has offline fallbacks for ATS scoring and this copilot.",
-                "quota": "If your API quota is over, the platform will use built-in offline fallbacks for essential features.",
-                "buy credits": "To buy credits, go to the Plan & Usage section or contact the master administrator.",
-                "transfer credits": "To transfer credits to your sub-admins, navigate to the Admins dashboard and use the 'Add Credits' button.",
-                "create admin": "To create a new sub-admin, go to the Admins dashboard and click 'Create Admin'.",
-                "hello": f"Hello! I am operating in offline fallback mode for your {role} account because the API quota is exceeded. I can still answer basic platform questions.",
-                "hi": f"Hi there! I am currently in offline mode but I can still help you navigate the {role} features."
+                "generate interview questions": "- Navigate to the 'Create Interview' or 'Bulk Send' page.\n- Input your Job Description (JD).\n- The platform will automatically generate interview questions tailored to the JD.",
+                "rank candidates": "- Navigate to the 'Results' dashboard.\n- View the candidates sorted by their ATS Score and overall interview performance score.",
+                "draft feedback emails": "- Navigate to the candidate's specific results page.\n- Click the 'Send Feedback Email' button.\n- A customized draft feedback email will be generated automatically.",
+                "api": "- Configuration: API keys are configured in the 'Settings' section.\n- Quota Limits: If you run out of API quota, the system switches to offline fallbacks for scoring and copilot help.",
+                "quota": "- System Quota: If your API quota limit is reached, essential features will switch to using offline fallback logic.",
+                "buy credits": "- Purchase Credits: Go to the 'Plan & Usage' section of your dashboard.\n- Contact Admin: Alternatively, contact the master administrator for support.",
+                "transfer credits": "- Admin Dashboard: Navigate to the 'Admins' dashboard page.\n- Transfer: Use the 'Add Credits' button next to the sub-admin's account name.",
+                "create admin": "- Sub-Admins Page: Go to the 'Admins' page in the dashboard.\n- Create Recruiter: Click on the 'Create Admin' button.",
+                "hello": f"- Status: Currently operating in offline fallback mode for your {role} account.\n- Reason: API quota has been exceeded.\n- Support: I can answer basic platform navigation and configuration questions.",
+                "hi": f"- Status: Currently operating in offline mode.\n- Navigation: I can help you locate features or modules in the {role} dashboard."
             }
             
             for keyword, response in offline_responses.items():
                 if keyword in msg_lower:
-                    return {"reply": f"[Offline Mode] {response}"}
+                    return {"reply": f"[Offline Mode] {strip_markdown(response)}"}
                     
-            return {"reply": f"[Offline Mode] I'm sorry, my AI connection is currently offline due to quota limits. I can only answer basic FAQ questions for your {role} account right now."}
+            return {"reply": strip_markdown(f"[Offline Mode] - Status: AI connection is currently offline due to quota limits.\n- Support: I can only answer basic FAQ questions for your {role} account right now.")}
 
     except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
+        import traceback
+        tb_str = traceback.format_exc()
+        print(f"Error in admin_copilot_chat: {tb_str}")
+        raise HTTPException(status_code=500, detail=f"Internal Server Error: {str(e)}\n{tb_str}")
 
 class CopilotExecuteRequest(BaseModel):
     action: str
@@ -4348,6 +4454,56 @@ def admin_copilot_execute(request: CopilotExecuteRequest, current_admin: dict = 
             admins_collection.update_one({"_id": ObjectId(admin_id)}, {"$inc": {"credits": -amount}})
             admins_collection.update_one({"_id": target_admin["_id"]}, {"$inc": {"credits": amount}})
             return {"status": "success", "message": f"Successfully transferred {amount} credits to {target_username}."}
+            
+        elif request.action == "create_admin" and role == "super_admin":
+            username = request.data.get("username")
+            email = request.data.get("email")
+            if not username or not email:
+                raise HTTPException(status_code=400, detail="Missing username or email")
+                
+            company_id = current_admin.get("company_id")
+            if not company_id:
+                raise HTTPException(status_code=400, detail="Super Admin is not associated with a company")
+                
+            if admins_collection.find_one({"username": username}):
+                raise HTTPException(status_code=400, detail="Username already exists")
+                
+            import uuid
+            default_password = f"SubAdmin{uuid.uuid4().hex[:6]}!"
+            
+            new_admin = {
+                "username": username,
+                "password": hash_password(default_password),
+                "email": email,
+                "name": username,
+                "role": "admin",
+                "company_id": company_id,
+                "credits": 0,
+                "login_enabled": True,
+                "created_at": datetime.now(timezone.utc).isoformat()
+            }
+            new_admin["custom_id"] = get_next_sequence_value("recruiter", "RC")
+            admins_collection.insert_one(new_admin)
+            
+            return {
+                "status": "success",
+                "message": f"Successfully created sub-admin '{username}' with email '{email}'. Temporary password: {default_password}"
+            }
+            
+        elif request.action == "buy_credits" and role == "super_admin":
+            amount = request.data.get("amount")
+            if not amount:
+                raise HTTPException(status_code=400, detail="Missing amount")
+            try:
+                amount = int(amount)
+            except ValueError:
+                raise HTTPException(status_code=400, detail="Amount must be an integer")
+                
+            checkout_url = f"https://checkout.stripe.com/pay/mock_session_{amount}_credits"
+            return {
+                "status": "success", 
+                "message": f"Successfully generated a checkout link for {amount} credits: {checkout_url}"
+            }
             
         else:
             raise HTTPException(status_code=400, detail=f"Unknown or unauthorized action: {request.action}")
@@ -4764,30 +4920,32 @@ def get_ongoing_interviews(admin_id: Optional[str] = None, current_admin: dict =
 
 @router.websocket("/ws/webrtc/{role}/{link_id}")
 async def webrtc_endpoint(websocket: WebSocket, role: str, link_id: str, token: Optional[str] = None):
-    with open("webrtc_debug.log", "a") as f:
-        f.write(f"\\n--- New Connection ---\\nRole: {role}, Link ID: {link_id}\\nToken: {token}\\n")
+    import os, tempfile
+    webrtc_log_path = os.path.join(tempfile.gettempdir(), "webrtc_debug.log")
+    with open(webrtc_log_path, "a") as f:
+        f.write(f"\n--- New Connection ---\nRole: {role}, Link ID: {link_id}\nToken: {token}\n")
     
     if role == "candidate":
         await manager.connect_candidate(websocket, link_id)
     elif role == "admin":
         if not token:
-            with open("webrtc_debug.log", "a") as f:
-                f.write("No token provided. Closing with 1008.\\n")
+            with open(webrtc_log_path, "a") as f:
+                f.write("No token provided. Closing with 1008.\n")
             await websocket.close(code=1008)
             return
         try:
             jwt.decode(token, JWT_SECRET_KEY, algorithms=[ALGORITHM])
             await manager.connect_admin(websocket, link_id)
-            with open("webrtc_debug.log", "a") as f:
-                f.write("Admin connected successfully.\\n")
+            with open(webrtc_log_path, "a") as f:
+                f.write("Admin connected successfully.\n")
         except jwt.PyJWTError as e:
-            with open("webrtc_debug.log", "a") as f:
-                f.write(f"JWT Decode Error: {str(e)}\\n")
+            with open(webrtc_log_path, "a") as f:
+                f.write(f"JWT Decode Error: {str(e)}\n")
             await websocket.close(code=1008)
             return
         except Exception as e:
-            with open("webrtc_debug.log", "a") as f:
-                f.write(f"Other Error: {str(e)}\\n{traceback.format_exc()}\\n")
+            with open(webrtc_log_path, "a") as f:
+                f.write(f"Other Error: {str(e)}\n{traceback.format_exc()}\n")
             await websocket.close(code=1011)
             return
     else:
@@ -4825,16 +4983,18 @@ async def webrtc_endpoint(websocket: WebSocket, role: str, link_id: str, token: 
             elif role == "admin":
                 await manager.send_to_candidate(link_id, data)
     except WebSocketDisconnect:
-        with open("webrtc_debug.log", "a") as f:
-            f.write(f"WebSocketDisconnect for role {role}, link_id {link_id}\\n")
+        webrtc_log_path = os.path.join(tempfile.gettempdir(), "webrtc_debug.log")
+        with open(webrtc_log_path, "a") as f:
+            f.write(f"WebSocketDisconnect for role {role}, link_id {link_id}\n")
         if role == "candidate":
             manager.disconnect_candidate(link_id)
             await manager.send_to_admins(link_id, {"type": "candidate_disconnected"})
         elif role == "admin":
             manager.disconnect_admin(websocket, link_id)
     except Exception as e:
-        with open("webrtc_debug.log", "a") as f:
-            f.write(f"Exception in while loop: {str(e)}\\n{traceback.format_exc()}\\n")
+        webrtc_log_path = os.path.join(tempfile.gettempdir(), "webrtc_debug.log")
+        with open(webrtc_log_path, "a") as f:
+            f.write(f"Exception in while loop: {str(e)}\n{traceback.format_exc()}\n")
 
 
 # --------------------------------------------------------------------------------
@@ -6457,7 +6617,8 @@ async def get_dashboard_aggregated_data(admin_id: Optional[str] = None, current_
                 
                 if online:
                     ongoing_live_count += 1
-                else:
+                
+                if snap.get("proctoring_alerts", 0) > 0:
                     ongoing_alert_count += 1
                     
                 if audio_level > 5:
@@ -8302,3 +8463,74 @@ async def parse_resume(resume: UploadFile = File(...)):
     except Exception as e:
         print(f"Error parsing resume: {e}")
         return {"status": "error", "data": {"name": "", "email": "", "phone": "", "linkedin_url": ""}}
+
+# ---------------------------------------------------------------------------
+# Demo Requests
+# ---------------------------------------------------------------------------
+from app.models import DemoRequestCreate, DemoRequestUpdate
+from mongo_db import demo_requests_collection
+from bson import ObjectId
+from datetime import datetime
+
+@router.post('/demo-request')
+def create_demo_request(req: DemoRequestCreate):
+    try:
+        new_request = {
+            'first_name': req.first_name,
+            'last_name': req.last_name,
+            'work_email': req.work_email,
+            'company_name': req.company_name,
+            'help_text': req.help_text,
+            'status': 'NEW',
+            'created_at': datetime.utcnow().isoformat()
+        }
+        result = demo_requests_collection.insert_one(new_request)
+        return {'status': 'success', 'id': str(result.inserted_id)}
+    except Exception as e:
+        print(f'Error saving demo request: {e}')
+        raise HTTPException(status_code=500, detail='Failed to submit demo request')
+
+@router.get('/master/demo-requests')
+def get_master_demo_requests(current_admin: dict = Depends(get_current_admin_details)):
+    if current_admin.get('role') != 'master':
+        raise HTTPException(status_code=403, detail='Only master admin can view demo requests')
+    
+    try:
+        requests_cursor = demo_requests_collection.find().sort('created_at', -1)
+        requests = []
+        for req in requests_cursor:
+            req['id'] = str(req['_id'])
+            del req['_id']
+            requests.append(req)
+        return {'status': 'success', 'data': requests}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+@router.put('/master/demo-requests/{request_id}')
+def update_demo_request_status(request_id: str, req: DemoRequestUpdate, current_admin: dict = Depends(get_current_admin_details)):
+    if current_admin.get('role') != 'master':
+        raise HTTPException(status_code=403, detail='Not authorized')
+    try:
+        result = demo_requests_collection.update_one(
+            {'_id': ObjectId(request_id)},
+            {'$set': {'status': req.status}}
+        )
+        if result.modified_count == 1:
+            return {'status': 'success'}
+        else:
+            raise HTTPException(status_code=404, detail='Request not found')
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+@router.delete('/master/demo-requests/{request_id}')
+def delete_demo_request(request_id: str, current_admin: dict = Depends(get_current_admin_details)):
+    if current_admin.get('role') != 'master':
+        raise HTTPException(status_code=403, detail='Not authorized')
+    try:
+        result = demo_requests_collection.delete_one({'_id': ObjectId(request_id)})
+        if result.deleted_count == 1:
+            return {'status': 'success'}
+        else:
+            raise HTTPException(status_code=404, detail='Request not found')
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))

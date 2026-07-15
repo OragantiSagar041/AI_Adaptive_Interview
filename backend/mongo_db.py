@@ -22,6 +22,7 @@ omni_call_logs_collection = db["omni_call_logs"]
 jobs_collection = db["jobs"]
 job_applications_collection = db["job_applications"]
 counters_collection = db["counters"]
+demo_requests_collection = db["demo_requests"]
 
 def get_next_sequence_value(sequence_name: str, prefix: str) -> str:
     """

@@ -1145,16 +1145,56 @@ function StickyDemo() {
 function DemoModal() {
   const [isOpen, setIsOpen] = useState(false);
   const [submitted, setSubmitted] = useState(false);
+  const [loading, setLoading] = useState(false);
+  const [formData, setFormData] = useState({
+    first_name: '',
+    last_name: '',
+    work_email: '',
+    company_name: '',
+    help_text: ''
+  });
 
   useEffect(() => {
     const handleOpen = (e) => {
       e.preventDefault();
       setIsOpen(true);
       setSubmitted(false);
+      setFormData({
+        first_name: '',
+        last_name: '',
+        work_email: '',
+        company_name: '',
+        help_text: ''
+      });
     };
     window.addEventListener("openDemoModal", handleOpen);
     return () => window.removeEventListener("openDemoModal", handleOpen);
   }, []);
+
+  const handleChange = (e) => {
+    setFormData({ ...formData, [e.target.name]: e.target.value });
+  };
+
+  const handleSubmit = async (e) => {
+    e.preventDefault();
+    setLoading(true);
+    try {
+      const response = await fetch(`${API_BASE_URL}/demo-request`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(formData)
+      });
+      if (response.ok) {
+        setSubmitted(true);
+      } else {
+        alert("Failed to submit request. Please try again.");
+      }
+    } catch (err) {
+      alert("Network error. Please try again.");
+    } finally {
+      setLoading(false);
+    }
+  };
 
   if (!isOpen) return null;
 
@@ -1188,38 +1228,39 @@ function DemoModal() {
             <h3 className="text-3xl font-extrabold text-white mt-4 mb-2">See HireIQ in Action</h3>
             <p className="text-muted-foreground mb-8">Fill out the form below and we'll be in touch to schedule a personalized walkthrough.</p>
 
-            <form className="space-y-4" onSubmit={(e) => { e.preventDefault(); setSubmitted(true); }}>
+            <form className="space-y-4" onSubmit={handleSubmit}>
               <div className="grid grid-cols-2 gap-4">
                 <div className="space-y-1.5 text-left">
                   <label className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">First Name</label>
-                  <input required type="text" className="w-full bg-black/40 border border-white/10 rounded-xl px-4 py-3 text-white placeholder-muted-foreground/50 focus:outline-none focus:border-primary/50 focus:ring-1 focus:ring-primary/50 transition" placeholder="John" />
+                  <input required name="first_name" value={formData.first_name} onChange={handleChange} type="text" className="w-full bg-black/40 border border-white/10 rounded-xl px-4 py-3 text-white placeholder-muted-foreground/50 focus:outline-none focus:border-primary/50 focus:ring-1 focus:ring-primary/50 transition" placeholder="John" />
                 </div>
                 <div className="space-y-1.5 text-left">
                   <label className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">Last Name</label>
-                  <input required type="text" className="w-full bg-black/40 border border-white/10 rounded-xl px-4 py-3 text-white placeholder-muted-foreground/50 focus:outline-none focus:border-primary/50 focus:ring-1 focus:ring-primary/50 transition" placeholder="Doe" />
+                  <input required name="last_name" value={formData.last_name} onChange={handleChange} type="text" className="w-full bg-black/40 border border-white/10 rounded-xl px-4 py-3 text-white placeholder-muted-foreground/50 focus:outline-none focus:border-primary/50 focus:ring-1 focus:ring-primary/50 transition" placeholder="Doe" />
                 </div>
               </div>
 
               <div className="space-y-1.5 text-left">
                 <label className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">Work Email</label>
-                <input required type="email" className="w-full bg-black/40 border border-white/10 rounded-xl px-4 py-3 text-white placeholder-muted-foreground/50 focus:outline-none focus:border-primary/50 focus:ring-1 focus:ring-primary/50 transition" placeholder="john@company.com" />
+                <input required name="work_email" value={formData.work_email} onChange={handleChange} type="email" className="w-full bg-black/40 border border-white/10 rounded-xl px-4 py-3 text-white placeholder-muted-foreground/50 focus:outline-none focus:border-primary/50 focus:ring-1 focus:ring-primary/50 transition" placeholder="john@company.com" />
               </div>
 
               <div className="space-y-1.5 text-left">
                 <label className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">Company Name</label>
-                <input required type="text" className="w-full bg-black/40 border border-white/10 rounded-xl px-4 py-3 text-white placeholder-muted-foreground/50 focus:outline-none focus:border-primary/50 focus:ring-1 focus:ring-primary/50 transition" placeholder="Acme Corp" />
+                <input required name="company_name" value={formData.company_name} onChange={handleChange} type="text" className="w-full bg-black/40 border border-white/10 rounded-xl px-4 py-3 text-white placeholder-muted-foreground/50 focus:outline-none focus:border-primary/50 focus:ring-1 focus:ring-primary/50 transition" placeholder="Acme Corp" />
               </div>
 
               <div className="space-y-1.5 text-left">
                 <label className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">How can we help?</label>
-                <textarea rows="3" className="w-full bg-black/40 border border-white/10 rounded-xl px-4 py-3 text-white placeholder-muted-foreground/50 focus:outline-none focus:border-primary/50 focus:ring-1 focus:ring-primary/50 transition resize-none" placeholder="Tell us about your hiring needs..."></textarea>
+                <textarea required name="help_text" value={formData.help_text} onChange={handleChange} rows="3" className="w-full bg-black/40 border border-white/10 rounded-xl px-4 py-3 text-white placeholder-muted-foreground/50 focus:outline-none focus:border-primary/50 focus:ring-1 focus:ring-primary/50 transition resize-none" placeholder="Tell us about your hiring needs..."></textarea>
               </div>
 
               <button
                 type="submit"
-                className="w-full mt-4 py-3.5 rounded-xl bg-gradient-to-r from-primary to-purple-600 text-white font-bold shadow-[0_0_20px_rgba(124,58,237,0.3)] hover:opacity-90 transition"
+                disabled={loading}
+                className="w-full mt-4 py-3.5 rounded-xl bg-gradient-to-r from-primary to-purple-600 text-white font-bold shadow-[0_0_20px_rgba(124,58,237,0.3)] hover:opacity-90 transition disabled:opacity-50"
               >
-                Request Demo
+                {loading ? "Submitting..." : "Request Demo"}
               </button>
             </form>
           </>

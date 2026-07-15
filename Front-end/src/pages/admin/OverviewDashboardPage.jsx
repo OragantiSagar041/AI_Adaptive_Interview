@@ -3,6 +3,7 @@ import { useSelector, useDispatch } from "react-redux";
 import { useNavigate } from "react-router-dom";
 import { loadDashboardData } from "../../store/slices/dashboardSlice";
 import CandidateDialog from '../../components/superadmin/CandidateDialog';
+import Modal from "../../components/Modal";
 
 import {
   Search,
@@ -88,6 +89,52 @@ export default function OverviewDashboardPage() {
   const dispatch = useDispatch();
   const navigate = useNavigate();
   const [selectedCandidate, setSelectedCandidate] = useState(null);
+  const [listModalOpen, setListModalOpen] = useState(false);
+  const [listModalTitle, setListModalTitle] = useState("");
+  const [listModalCandidates, setListModalCandidates] = useState([]);
+  const [listModalFilterType, setListModalFilterType] = useState(null);
+  const [loadingModalRecords, setLoadingModalRecords] = useState(false);
+
+  // Keep these states so existing code (like activeFilter references) does not break
+  const [activeActionFilter, setActiveActionFilter] = useState(null);
+  const [activeRecFilter, setActiveRecFilter] = useState(null);
+  const [activeActivityFilter, setActiveActivityFilter] = useState(null);
+
+  const handleOpenRecordsModal = async (filterType, title) => {
+    setListModalFilterType(filterType);
+    setListModalTitle(title);
+    setListModalOpen(true);
+    setLoadingModalRecords(true);
+    setListModalCandidates([]);
+
+    try {
+      const result = await dispatch(loadDashboardData()).unwrap();
+      const allCandidates = result.candidates || [];
+
+      let filtered = [];
+      if (filterType === "pending") {
+        filtered = allCandidates.filter(c => (c.status || "").toLowerCase() === "pending");
+      } else if (filterType === "live") {
+        filtered = allCandidates.filter(c => (c.status || "").toLowerCase() === "started" || c.online);
+      } else if (filterType === "alerts") {
+        filtered = allCandidates.filter(c => parseInt(c.proctoring_alerts || 0) > 0);
+      } else if (filterType === "rejected") {
+        filtered = allCandidates.filter(c => (c.decision || "").toLowerCase() === "rejected");
+      } else if (filterType === "high_scores") {
+        filtered = allCandidates.filter(c => parseFloat(c.score || c.avg_score || 0) >= 80);
+      }
+      setListModalCandidates(filtered);
+    } catch (err) {
+      console.error("Failed to fetch records:", err);
+    } finally {
+      setLoadingModalRecords(false);
+    }
+  };
+
+  const handleViewCandidateFromModal = (candidate) => {
+    setSelectedCandidate(candidate);
+    setListModalOpen(false);
+  };
 
   const authRole = useSelector((state) => state.auth.role);
   const dbStats = useSelector((state) => state.dashboard.dbStats);
@@ -99,6 +146,41 @@ export default function OverviewDashboardPage() {
   useEffect(() => {
     dispatch(loadDashboardData());
   }, [dispatch]);
+
+  const activeFilter = activeActionFilter || activeRecFilter || activeActivityFilter;
+
+  const filteredTableCandidates = candidates ? candidates.filter((c) => {
+    if (!activeFilter) return true;
+    const computedStatus = (c.status || "").toLowerCase();
+    const decision = (c.decision || "").toLowerCase();
+    const alerts = parseInt(c.proctoring_alerts || 0);
+
+    if (activeFilter === "pending") {
+      return computedStatus === "pending";
+    }
+    if (activeFilter === "live") {
+      return computedStatus === "started" || c.online;
+    }
+    if (activeFilter === "started") {
+      return computedStatus === "started";
+    }
+    if (activeFilter === "completed") {
+      return computedStatus === "completed";
+    }
+    if (activeFilter === "expired") {
+      return computedStatus === "expired";
+    }
+    if (activeFilter === "alerts") {
+      return alerts > 0;
+    }
+    if (activeFilter === "rejected") {
+      return decision === "rejected";
+    }
+    if (activeFilter === "high_scores") {
+      return parseFloat(c.score || c.avg_score || 0) >= 80;
+    }
+    return true;
+  }) : [];
 
   const kpis = [
     { label: "Total Candidates", value: dbStats?.total || "0", icon: Users, tint: "primary", delta: "" },
@@ -120,26 +202,37 @@ export default function OverviewDashboardPage() {
     { stage: "Rejected", count: parseInt(dbStats?.rejected) || 0, color: "oklch(0.72 0.17 45)" },
   ];
 
+  const topCandidates = candidates ? candidates.filter(c => parseFloat(c.score || c.avg_score || 0) >= 80) : [];
+
+  const dashboardSummary = {
+    pendingReviews: parseInt(dbStats?.pending) || 0,
+    liveInterviews: ongoingLiveCount || 0,
+    alertsCount: ongoingAlertCount || 0,
+    rejectedCount: parseInt(dbStats?.rejected) || 0,
+    startedCount: parseInt(dbStats?.started) || 0,
+    completedCount: parseInt(dbStats?.completed) || 0,
+    expiredCount: parseInt(dbStats?.expired) || 0,
+    highScoreCount: topCandidates.length
+  };
+
   const todaysTasks = [
-    { label: "Candidates Awaiting Review", count: dbStats?.pending || 0, icon: UserCheck, tone: "info" },
-    { label: "Interviews In Progress", count: ongoingLiveCount || 0, icon: Activity, tone: "primary" },
-    { label: "Alerts Requiring Attention", count: ongoingAlertCount || 0, icon: AlertCircle, tone: "warning" },
-    { label: "Rejected Candidates", count: dbStats?.rejected || 0, icon: XCircle, tone: "destructive" },
+    { label: "Candidates Awaiting Review", count: dashboardSummary.pendingReviews, icon: UserCheck, tone: "info" },
+    { label: "Interviews In Progress", count: dashboardSummary.liveInterviews, icon: Activity, tone: "primary" },
+    { label: "Alerts Requiring Attention", count: dashboardSummary.alertsCount, icon: AlertCircle, tone: "warning" },
+    { label: "Rejected Candidates", count: dashboardSummary.rejectedCount, icon: XCircle, tone: "destructive" },
   ];
 
   const interviewStatus = [
-    { label: "Live Interviews", count: ongoingLiveCount || 0, dot: "bg-success", pulse: true },
-    { label: "Started", count: dbStats?.started || 0, dot: "bg-info", pulse: false },
-    { label: "Completed", count: dbStats?.completed || 0, dot: "bg-primary", pulse: false },
-    { label: "Expired", count: dbStats?.expired || 0, dot: "bg-destructive", pulse: false },
+    { label: "Live Interviews", count: dashboardSummary.liveInterviews, dot: "bg-success", pulse: true },
+    { label: "Started", count: dashboardSummary.startedCount, dot: "bg-info", pulse: false },
+    { label: "Completed", count: dashboardSummary.completedCount, dot: "bg-primary", pulse: false },
+    { label: "Expired", count: dashboardSummary.expiredCount, dot: "bg-destructive", pulse: false },
   ];
 
-  const topCandidates = candidates ? candidates.filter(c => parseFloat(c.score || c.avg_score || 0) >= 80) : [];
-
   const recommendations = [
-    { text: `${topCandidates.length} candidates with high AI Scores (>= 80%)`, icon: Sparkles, priority: "High" },
-    { text: `${dbStats?.pending || 0} candidates awaiting recruiter approval`, icon: UserCheck, priority: "High" },
-    { text: `${ongoingAlertCount || 0} alerts from ongoing interviews`, icon: AlertCircle, priority: "Medium" },
+    { text: `${dashboardSummary.highScoreCount} candidates with high AI Scores (>= 80%)`, icon: Sparkles, priority: "High", type: "high_scores" },
+    { text: `${dashboardSummary.pendingReviews} candidates awaiting recruiter approval`, icon: UserCheck, priority: "High", type: "pending" },
+    { text: `${dashboardSummary.alertsCount} alerts from ongoing interviews`, icon: AlertCircle, priority: "Medium", type: "alerts" },
   ];
 
   const analyticsKpis = [
@@ -297,9 +390,11 @@ export default function OverviewDashboardPage() {
         <Card className="border-border/60 shadow-[var(--shadow-card)] bg-white">
           <div className="flex flex-wrap items-center justify-between gap-3 p-6 pb-4">
             <div>
-              <h2 className="text-base font-semibold">Recruiter Performance</h2>
+              <h2 className="text-base font-semibold">
+                {activeFilter ? `Action Item Records (${filteredTableCandidates.length})` : "Recruiter Performance"}
+              </h2>
               <p className="text-xs text-muted-foreground">
-                Leaderboard by AI-assisted output and hiring conversion.
+                {activeFilter ? `Displaying matching records for the active action card.` : "Leaderboard by AI-assisted output and hiring conversion."}
               </p>
             </div>
           </div>
@@ -316,7 +411,7 @@ export default function OverviewDashboardPage() {
                 </tr>
               </thead>
               <tbody>
-                {candidates && candidates.slice(0, 10).map((c, i) => (
+                {filteredTableCandidates && filteredTableCandidates.slice(0, 10).map((c, i) => (
                   <tr key={c.id || i} className="border-b border-border/50 last:border-0 hover:bg-slate-50">
                     <td className="px-6 py-3">
                       <div className="flex items-center gap-2.5">
@@ -343,8 +438,8 @@ export default function OverviewDashboardPage() {
                           (c.decision === "selected" || c.decision === "hired")
                             ? "border-success/30 bg-success/10 text-success"
                             : c.decision === "rejected"
-                            ? "border-destructive/30 bg-destructive/10 text-destructive"
-                            : "border-warning/30 bg-warning/10 text-warning-foreground"
+                              ? "border-destructive/30 bg-destructive/10 text-destructive"
+                              : "border-warning/30 bg-warning/10 text-warning-foreground"
                         }
                       >
                         <span className={`mr-1.5 h-1.5 w-1.5 rounded-full ${(c.decision === "selected" || c.decision === "hired") ? "bg-success" : c.decision === "rejected" ? "bg-destructive" : "bg-warning"}`} />
@@ -352,9 +447,9 @@ export default function OverviewDashboardPage() {
                       </Badge>
                     </td>
                     <td className="px-6 py-3 text-right">
-                      <Button 
-                        variant="ghost" 
-                        size="sm" 
+                      <Button
+                        variant="ghost"
+                        size="sm"
                         className="h-8 px-3 text-xs"
                         onClick={() => setSelectedCandidate(c)}
                       >
@@ -381,10 +476,16 @@ export default function OverviewDashboardPage() {
             <ul className="mt-4 space-y-2">
               {todaysTasks.map((t) => {
                 const Icon = t.icon;
+                const filterType = t.label === "Candidates Awaiting Review" ? "pending" :
+                  t.label === "Interviews In Progress" ? "live" :
+                    t.label === "Alerts Requiring Attention" ? "alerts" :
+                      t.label === "Rejected Candidates" ? "rejected" : null;
+
                 return (
                   <li
                     key={t.label}
-                    className="flex items-center justify-between rounded-lg border border-border/50 bg-white px-3 py-2.5 transition-colors hover:border-primary/40 hover:bg-slate-50"
+                    onClick={() => handleOpenRecordsModal(filterType, t.label)}
+                    className="flex items-center justify-between rounded-lg border border-border/50 bg-white px-3 py-2.5 transition-colors cursor-pointer hover:border-primary/40 hover:bg-slate-50"
                   >
                     <div className="flex items-center gap-2.5">
                       <div className={`grid h-8 w-8 place-items-center rounded-md ${tintClasses[t.tone]}`}>
@@ -394,7 +495,9 @@ export default function OverviewDashboardPage() {
                     </div>
                     <div className="flex items-center gap-1.5">
                       <span className="text-sm font-semibold tabular-nums">{t.count}</span>
-                      <ChevronRight className="h-4 w-4 text-muted-foreground" />
+                      <div className="p-1 hover:bg-slate-200/50 rounded-full transition-colors cursor-pointer">
+                        <ChevronRight className="h-4 w-4 text-muted-foreground" />
+                      </div>
                     </div>
                   </li>
                 );
@@ -417,10 +520,12 @@ export default function OverviewDashboardPage() {
             <ul className="mt-4 space-y-2.5">
               {recommendations.map((r, i) => {
                 const Icon = r.icon;
+
                 return (
                   <li
                     key={i}
-                    className="group flex items-start gap-3 rounded-lg border border-border/50 p-3 transition-all hover:border-primary/40 hover:shadow-sm"
+                    onClick={() => handleOpenRecordsModal(r.type, r.text)}
+                    className="group flex items-start gap-3 rounded-lg border border-border/50 bg-white p-3 transition-all cursor-pointer hover:border-primary/40 hover:shadow-sm"
                   >
                     <div className="mt-0.5 grid h-8 w-8 shrink-0 place-items-center rounded-md bg-primary/10 text-primary">
                       <Icon className="h-4 w-4" />
@@ -449,23 +554,25 @@ export default function OverviewDashboardPage() {
               <Activity className="h-4 w-4 text-primary" />
             </div>
             <div className="mt-4 grid grid-cols-2 gap-3">
-              {interviewStatus.map((s) => (
-                <div
-                  key={s.label}
-                  className="rounded-lg border border-border/50 bg-gradient-to-br from-white to-slate-50 p-3.5"
-                >
-                  <div className="flex items-center gap-2">
-                    <span className={`relative flex h-2 w-2`}>
-                      {s.pulse && (
-                        <span className={`absolute inline-flex h-full w-full animate-ping rounded-full ${s.dot} opacity-75`} />
-                      )}
-                      <span className={`relative inline-flex h-2 w-2 rounded-full ${s.dot}`} />
-                    </span>
-                    <span className="text-[11px] font-medium text-muted-foreground">{s.label}</span>
+              {interviewStatus.map((s) => {
+                return (
+                  <div
+                    key={s.label}
+                    className="rounded-lg border border-border/50 bg-gradient-to-br from-white to-slate-50 p-3.5"
+                  >
+                    <div className="flex items-center gap-2">
+                      <span className="relative flex h-2 w-2">
+                        {s.pulse && (
+                          <span className={`absolute inline-flex h-full w-full animate-ping rounded-full ${s.dot} opacity-75`} />
+                        )}
+                        <span className={`relative inline-flex h-2 w-2 rounded-full ${s.dot}`} />
+                      </span>
+                      <span className="text-[11px] font-medium text-muted-foreground">{s.label}</span>
+                    </div>
+                    <div className="mt-1.5 text-2xl font-semibold tabular-nums">{s.count}</div>
                   </div>
-                  <div className="mt-1.5 text-2xl font-semibold tabular-nums">{s.count}</div>
-                </div>
-              ))}
+                );
+              })}
             </div>
 
             <Separator className="my-5" />
@@ -473,8 +580,10 @@ export default function OverviewDashboardPage() {
             <div>
               <div className="text-xs font-medium text-muted-foreground">Live Interview Load</div>
               <div className="mt-2 flex items-center gap-2">
-                <Progress value={ongoingLiveCount > 0 ? 100 : 0} className="h-2" />
-                <span className="text-xs tabular-nums">{ongoingLiveCount > 0 ? "Active" : "Idle"}</span>
+                <Progress value={Math.min(Math.round((ongoingLiveCount / 5) * 100), 100)} className="h-2" />
+                <span className="text-xs tabular-nums">
+                  {ongoingLiveCount > 0 ? `${Math.min(Math.round((ongoingLiveCount / 5) * 100), 100)}%` : "Idle"}
+                </span>
               </div>
               <p className="mt-2 text-[11px] text-muted-foreground">
                 {ongoingLiveCount} concurrent AI voice sessions active
@@ -601,10 +710,96 @@ export default function OverviewDashboardPage() {
           Enterprise · Role-Based Permissions · Multi-Department Hiring · Audit Trail · AI Hiring Insights
         </footer>
 
-        <CandidateDialog 
-          candidate={selectedCandidate} 
-          open={!!selectedCandidate} 
-          onOpenChange={(v) => !v && setSelectedCandidate(null)} 
+        <Modal
+          isOpen={listModalOpen}
+          onClose={() => {
+            setListModalOpen(false);
+            setListModalFilterType(null);
+          }}
+          title={listModalTitle}
+          subtitle="Matching candidate and interview records"
+          maxWidth="max-w-3xl"
+        >
+          {loadingModalRecords ? (
+            <div className="flex flex-col items-center justify-center py-12">
+              <div className="h-8 w-8 animate-spin rounded-full border-4 border-indigo-600 border-t-transparent" />
+              <p className="mt-4 text-sm text-muted-foreground">Loading records from server...</p>
+            </div>
+          ) : listModalCandidates.length > 0 ? (
+            <div className="overflow-x-auto">
+              <table className="w-full text-sm text-left">
+                <thead>
+                  <tr className="border-b border-slate-200 text-slate-500 text-xs font-semibold uppercase tracking-wider bg-slate-50">
+                    <th className="px-4 py-3">Candidate</th>
+                    <th className="px-4 py-3">Role</th>
+                    <th className="px-4 py-3">AI Score</th>
+                    <th className="px-4 py-3">Status</th>
+                    <th className="px-4 py-3 text-right">Action</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-slate-100">
+                  {listModalCandidates.map((c) => (
+                    <tr key={c.id || c._id} className="hover:bg-slate-50">
+                      <td className="px-4 py-3.5">
+                        <div className="font-semibold text-slate-800">{c.candidate_name || c.name || "Candidate"}</div>
+                        <div className="text-xs text-muted-foreground">{c.candidate_email || c.email}</div>
+                      </td>
+                      <td className="px-4 py-3.5 text-slate-600">{c.interview_title || c.job_title || "N/A"}</td>
+                      <td className="px-4 py-3.5">
+                        <div className="flex items-center gap-2">
+                          <Progress value={Math.round(c.score || c.avg_score || 0)} className="h-1.5 w-16" />
+                          <span className="text-xs font-medium tabular-nums">{Math.round(c.score || c.avg_score || 0)}%</span>
+                        </div>
+                      </td>
+                      <td className="px-4 py-3.5">
+                        <Badge
+                          variant="outline"
+                          className={
+                            (c.decision === "selected" || c.decision === "hired")
+                              ? "border-success/30 bg-success/10 text-success"
+                              : c.decision === "rejected"
+                                ? "border-destructive/30 bg-destructive/10 text-destructive"
+                                : "border-warning/30 bg-warning/10 text-warning-foreground"
+                          }
+                        >
+                          <span className={`mr-1.5 h-1.5 w-1.5 rounded-full ${(c.decision === "selected" || c.decision === "hired") ? "bg-success" : c.decision === "rejected" ? "bg-destructive" : "bg-warning"}`} />
+                          {c.decision ? (c.decision.charAt(0).toUpperCase() + c.decision.slice(1)) : (c.status ? c.status.charAt(0).toUpperCase() + c.status.slice(1) : "Pending")}
+                        </Badge>
+                      </td>
+                      <td className="px-4 py-3.5 text-right">
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          className="h-8 px-3 text-xs"
+                          onClick={() => handleViewCandidateFromModal(c)}
+                        >
+                          View Details
+                        </Button>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          ) : (
+            <div className="flex flex-col items-center justify-center py-12 text-center">
+              <AlertCircle className="h-10 w-10 text-slate-300 animate-pulse" />
+              <p className="mt-4 text-sm text-slate-500 font-medium">No matching records found.</p>
+            </div>
+          )}
+        </Modal>
+
+        <CandidateDialog
+          candidate={selectedCandidate}
+          open={!!selectedCandidate}
+          onOpenChange={(v) => {
+            if (!v) {
+              setSelectedCandidate(null);
+              if (listModalFilterType) {
+                setListModalOpen(true);
+              }
+            }
+          }}
         />
       </main>
     </div>
