@@ -1,6 +1,8 @@
-import React, { useEffect } from "react";
+import React, { useEffect, useState } from "react";
 import { useSelector, useDispatch } from "react-redux";
+import { useNavigate } from "react-router-dom";
 import { loadDashboardData } from "../../store/slices/dashboardSlice";
+import CandidateDialog from '../../components/superadmin/CandidateDialog';
 
 import {
   Search,
@@ -60,12 +62,12 @@ const Separator = ({ className = "", orientation = "horizontal", ...props }) => 
 );
 
 const quickActions = [
-  { label: "Create AI Interview", icon: Plus },
-  { label: "Upload Job Description", icon: FileUp },
-  { label: "Invite Candidates", icon: UserPlus },
-  { label: "View Analytics", icon: BarChart3 },
-  { label: "Review Top Candidates", icon: Star },
-  { label: "Schedule Interview", icon: CalendarIcon },
+  { label: "Create AI Interview", icon: Plus, path: "/admin/create-interview" },
+  { label: "Upload Job Description", icon: FileUp, path: "/admin/create-interview" },
+  { label: "Invite Candidates", icon: UserPlus, path: "/admin/qualified-candidates" },
+  { label: "View Analytics", icon: BarChart3, path: "/admin/dashboard" },
+  { label: "Review Top Candidates", icon: Star, path: "/admin/qualified-candidates" },
+  { label: "Schedule Interview", icon: CalendarIcon, path: "/admin/create-interview" },
 ];
 
 const tintClasses = {
@@ -84,14 +86,16 @@ function initials(name) {
 
 export default function OverviewDashboardPage() {
   const dispatch = useDispatch();
-  
+  const navigate = useNavigate();
+  const [selectedCandidate, setSelectedCandidate] = useState(null);
+
   const authRole = useSelector((state) => state.auth.role);
   const dbStats = useSelector((state) => state.dashboard.dbStats);
   const candidates = useSelector((state) => state.candidates.candidates);
   const ongoingLiveCount = useSelector((state) => state.dashboard.ongoingLiveCount);
   const ongoingAlertCount = useSelector((state) => state.dashboard.ongoingAlertCount);
   const dashboardStatus = useSelector((state) => state.dashboard.status);
-  
+
   useEffect(() => {
     dispatch(loadDashboardData());
   }, [dispatch]);
@@ -131,7 +135,7 @@ export default function OverviewDashboardPage() {
   ];
 
   const topCandidates = candidates ? candidates.filter(c => parseFloat(c.score || c.avg_score || 0) >= 80) : [];
-  
+
   const recommendations = [
     { text: `${topCandidates.length} candidates with high AI Scores (>= 80%)`, icon: Sparkles, priority: "High" },
     { text: `${dbStats?.pending || 0} candidates awaiting recruiter approval`, icon: UserCheck, priority: "High" },
@@ -145,7 +149,7 @@ export default function OverviewDashboardPage() {
     { label: "Candidates Rejected", value: dbStats?.rejected || "0", trend: "" },
   ];
 
-  const sortedCandidates = candidates ? [...candidates].sort((a,b) => new Date(b.created_at || b.updated_at) - new Date(a.created_at || a.updated_at)).slice(0, 6) : [];
+  const sortedCandidates = candidates ? [...candidates].sort((a, b) => new Date(b.created_at || b.updated_at) - new Date(a.created_at || a.updated_at)).slice(0, 6) : [];
   const activity = sortedCandidates.map(c => ({
     icon: c.decision === "selected" ? Award : (c.decision === "rejected" ? XCircle : CheckCircle2),
     text: `${c.candidate_name || "Candidate"} - ${c.interview_title || "Role"} (${c.status || "Assigned"})`,
@@ -153,20 +157,6 @@ export default function OverviewDashboardPage() {
     tone: c.decision === "selected" ? "success" : (c.decision === "rejected" ? "destructive" : "info")
   }));
 
-  const recruiters = [
-    {
-      name: "Current Admin",
-      dept: "Hiring",
-      jobs: "--",
-      assigned: dbStats?.total || "0",
-      interviews: dbStats?.completed || "0",
-      shortlisted: dbStats?.pending || "0",
-      hired: dbStats?.selected || "0",
-      score: dbStats?.avg_score || "0",
-      productivity: 100,
-      status: "Active",
-    }
-  ];
 
   const maxPipeline = Math.max(...pipeline.map((p) => p.count), 1);
 
@@ -317,60 +307,59 @@ export default function OverviewDashboardPage() {
             <table className="w-full text-sm">
               <thead>
                 <tr className="border-y border-border/60 bg-slate-50 text-left text-[11px] uppercase tracking-wider text-muted-foreground">
-                  <th className="px-6 py-2.5 font-medium">Recruiter</th>
-                  <th className="px-3 py-2.5 font-medium">Dept</th>
-                  <th className="px-3 py-2.5 font-medium text-right">Jobs</th>
-                  <th className="px-3 py-2.5 font-medium text-right">Assigned</th>
-                  <th className="px-3 py-2.5 font-medium text-right">AI Interviews</th>
-                  <th className="px-3 py-2.5 font-medium text-right">Shortlisted</th>
-                  <th className="px-3 py-2.5 font-medium text-right">Hired</th>
-                  <th className="px-3 py-2.5 font-medium text-right">Avg AI</th>
+                  <th className="px-6 py-2.5 font-medium">Candidate</th>
+                  <th className="px-3 py-2.5 font-medium">Role</th>
+
                   <th className="px-3 py-2.5 font-medium">Productivity</th>
                   <th className="px-6 py-2.5 font-medium">Status</th>
+                  <th className="px-6 py-2.5 font-medium text-right">Actions</th>
                 </tr>
               </thead>
               <tbody>
-                {recruiters.map((r) => (
-                  <tr key={r.name} className="border-b border-border/50 last:border-0 hover:bg-slate-50">
+                {candidates && candidates.slice(0, 10).map((c, i) => (
+                  <tr key={c.id || i} className="border-b border-border/50 last:border-0 hover:bg-slate-50">
                     <td className="px-6 py-3">
                       <div className="flex items-center gap-2.5">
                         <Avatar className="h-8 w-8">
                           <AvatarFallback className="bg-primary/10 text-primary text-[11px] font-semibold">
-                            {initials(r.name)}
+                            {initials(c.candidate_name || c.name || "C")}
                           </AvatarFallback>
                         </Avatar>
-                        <div className="font-medium">{r.name}</div>
+                        <div className="font-medium">{c.candidate_name || c.name || "Candidate"}</div>
                       </div>
                     </td>
-                    <td className="px-3 py-3 text-muted-foreground">{r.dept}</td>
-                    <td className="px-3 py-3 text-right tabular-nums">{r.jobs}</td>
-                    <td className="px-3 py-3 text-right tabular-nums">{r.assigned}</td>
-                    <td className="px-3 py-3 text-right tabular-nums">{r.interviews}</td>
-                    <td className="px-3 py-3 text-right tabular-nums">{r.shortlisted}</td>
-                    <td className="px-3 py-3 text-right tabular-nums font-medium">{r.hired}</td>
-                    <td className="px-3 py-3 text-right">
-                      <span className="inline-flex items-center gap-1 rounded-md bg-success/10 px-1.5 py-0.5 text-xs font-medium text-success">
-                        {r.score}%
-                      </span>
-                    </td>
+                    <td className="px-3 py-3 text-muted-foreground">{c.interview_title || c.job_title || "N/A"}</td>
+
                     <td className="px-3 py-3">
                       <div className="flex items-center gap-2">
-                        <Progress value={r.productivity} className="h-1.5 w-24" />
-                        <span className="text-xs tabular-nums text-muted-foreground">{r.productivity}%</span>
+                        <Progress value={Math.round(c.score || c.avg_score || 0)} className="h-1.5 w-24" />
+                        <span className="text-xs tabular-nums text-muted-foreground">{Math.round(c.score || c.avg_score || 0)}%</span>
                       </div>
                     </td>
                     <td className="px-6 py-3">
                       <Badge
                         variant="outline"
                         className={
-                          r.status === "Active"
+                          (c.decision === "selected" || c.decision === "hired")
                             ? "border-success/30 bg-success/10 text-success"
+                            : c.decision === "rejected"
+                            ? "border-destructive/30 bg-destructive/10 text-destructive"
                             : "border-warning/30 bg-warning/10 text-warning-foreground"
                         }
                       >
-                        <span className={`mr-1.5 h-1.5 w-1.5 rounded-full ${r.status === "Active" ? "bg-success" : "bg-warning"}`} />
-                        {r.status}
+                        <span className={`mr-1.5 h-1.5 w-1.5 rounded-full ${(c.decision === "selected" || c.decision === "hired") ? "bg-success" : c.decision === "rejected" ? "bg-destructive" : "bg-warning"}`} />
+                        {c.decision ? (c.decision.charAt(0).toUpperCase() + c.decision.slice(1)) : (c.status ? c.status.charAt(0).toUpperCase() + c.status.slice(1) : "Pending")}
                       </Badge>
+                    </td>
+                    <td className="px-6 py-3 text-right">
+                      <Button 
+                        variant="ghost" 
+                        size="sm" 
+                        className="h-8 px-3 text-xs"
+                        onClick={() => setSelectedCandidate(c)}
+                      >
+                        View
+                      </Button>
                     </td>
                   </tr>
                 ))}
@@ -578,6 +567,7 @@ export default function OverviewDashboardPage() {
                   return (
                     <button
                       key={a.label}
+                      onClick={() => navigate(a.path)}
                       className="group flex flex-col items-start gap-2 rounded-lg border border-border/60 bg-white p-3 text-left transition-all hover:border-primary/50 hover:bg-primary/5 hover:shadow-sm"
                     >
                       <div className="grid h-8 w-8 place-items-center rounded-md bg-primary/10 text-primary group-hover:bg-primary group-hover:text-primary-foreground transition-colors">
@@ -610,6 +600,12 @@ export default function OverviewDashboardPage() {
         <footer className="pb-2 pt-4 text-center text-xs text-muted-foreground">
           Enterprise · Role-Based Permissions · Multi-Department Hiring · Audit Trail · AI Hiring Insights
         </footer>
+
+        <CandidateDialog 
+          candidate={selectedCandidate} 
+          open={!!selectedCandidate} 
+          onOpenChange={(v) => !v && setSelectedCandidate(null)} 
+        />
       </main>
     </div>
   );
