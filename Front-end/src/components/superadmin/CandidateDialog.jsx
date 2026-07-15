@@ -8,7 +8,7 @@ import {
   Mail, Phone, MapPin, Building2, IndianRupee, Clock, Download,
   Play, FileText, Sparkles, Star, Check, X, Calendar, Send,
   MessageSquare, Video, Scale, Loader2, AlertCircle, Monitor,
-  Mic, ShieldAlert, Eye
+  Mic, ShieldAlert, Eye, ChevronRight
 } from "lucide-react"
 
 // ── Score Ring ──────────────────────────────────────────────────────────────
@@ -72,6 +72,9 @@ export default function CandidateDialog({ candidate, open, onOpenChange, onStatu
   const [loading, setLoading] = useState(false)
   const [atsLoading, setAtsLoading] = useState(false)
   const [error, setError] = useState(null)
+  const [showResumeModal, setShowResumeModal] = useState(false)
+  const [showRecordingModal, setShowRecordingModal] = useState(false)
+  const [showTranscriptModal, setShowTranscriptModal] = useState(false)
   const token = useSelector(state => state.auth.token)
   const API_BASE_URL = useSelector(state => state.auth.API_BASE_URL)
 
@@ -237,6 +240,7 @@ export default function CandidateDialog({ candidate, open, onOpenChange, onStatu
   const tabs = ["overview", "resume", "interview", "evaluation", "timeline"]
 
   return (
+    <>
     <div className="fixed inset-0 z-[200] flex items-center justify-center bg-slate-900/60 backdrop-blur-sm p-4" onClick={(e) => { if (e.target === e.currentTarget) onOpenChange(false) }}>
       <div className="bg-white rounded-2xl shadow-2xl w-full max-w-5xl max-h-[90vh] flex flex-col overflow-hidden">
 
@@ -363,13 +367,21 @@ export default function CandidateDialog({ candidate, open, onOpenChange, onStatu
           {/* ─ Resume Tab ─ */}
           {activeTab === 'resume' && (
             <div className="space-y-6">
-              {/* Profile Text */}
+              {/* Resume Button */}
               {resumeText && (
                 <section className="bg-white rounded-xl border border-slate-200/60 p-5 shadow-sm">
-                  <h3 className="text-sm font-black text-slate-800 mb-3">Resume / Profile Text</h3>
-                  <pre className="text-xs text-slate-600 bg-slate-50 rounded-lg p-4 whitespace-pre-wrap font-sans max-h-48 overflow-y-auto border border-slate-200">
-                    {resumeText}
-                  </pre>
+                  <div className="flex items-center justify-between">
+                    <div>
+                      <h3 className="text-sm font-black text-slate-800">Resume / Profile Text</h3>
+                      <p className="text-xs text-slate-400 font-medium mt-0.5">Candidate's submitted resume</p>
+                    </div>
+                    <button
+                      onClick={() => setShowResumeModal(true)}
+                      className="flex items-center gap-2 px-4 py-2 text-sm font-bold text-indigo-600 bg-indigo-50 border border-indigo-100 rounded-xl hover:bg-indigo-100 transition-colors shadow-sm"
+                    >
+                      <FileText size={16} /> Resume <ChevronRight size={14} />
+                    </button>
+                  </div>
                 </section>
               )}
 
@@ -447,73 +459,38 @@ export default function CandidateDialog({ candidate, open, onOpenChange, onStatu
                 <StatCard label="Questions Answered" value={c.answers?.length ?? "N/A"} />
               </div>
 
-              {/* Recordings */}
+              {/* Recordings Button */}
               <section className="bg-white rounded-xl border border-slate-200/60 p-5 shadow-sm">
-                <h3 className="text-sm font-black text-slate-800 mb-4">Recordings</h3>
-                <div className="grid sm:grid-cols-2 gap-4">
-                  {/* Camera Recording */}
-                  <div className="rounded-xl border border-slate-200 bg-slate-50 p-4">
-                    <div className="flex items-center gap-2 mb-3">
-                      <div className="p-2 bg-indigo-50 text-indigo-600 rounded-lg"><Video size={18} /></div>
-                      <div>
-                        <div className="text-sm font-black text-slate-800">Camera Recording</div>
-                        <div className="text-xs text-slate-400 font-medium">Interview video feed</div>
-                      </div>
-                    </div>
-                    {recordingUrl ? (
-                      <video controls className="w-full rounded-lg border border-slate-200 bg-black max-h-48" src={recordingUrl}>
-                        Your browser does not support video.
-                      </video>
-                    ) : (
-                      <div className="h-28 flex items-center justify-center rounded-lg border-2 border-dashed border-slate-200 text-xs font-medium text-slate-400">
-                        No camera recording available
-                      </div>
-                    )}
+                <div className="flex items-center justify-between">
+                  <div>
+                    <h3 className="text-sm font-black text-slate-800">Recordings</h3>
+                    <p className="text-xs text-slate-400 font-medium mt-0.5">
+                      {recordingUrl || screenRecordingUrl ? 'Camera & screen recording available' : 'No recordings available'}
+                    </p>
                   </div>
-
-                  {/* Screen Recording */}
-                  <div className="rounded-xl border border-slate-200 bg-slate-50 p-4">
-                    <div className="flex items-center gap-2 mb-3">
-                      <div className="p-2 bg-emerald-50 text-emerald-600 rounded-lg"><Monitor size={18} /></div>
-                      <div>
-                        <div className="text-sm font-black text-slate-800">Screen Recording</div>
-                        <div className="text-xs text-slate-400 font-medium">Screen share capture</div>
-                      </div>
-                    </div>
-                    {screenRecordingUrl ? (
-                      <video controls className="w-full rounded-lg border border-slate-200 bg-black max-h-48" src={screenRecordingUrl}>
-                        Your browser does not support video.
-                      </video>
-                    ) : (
-                      <div className="h-28 flex items-center justify-center rounded-lg border-2 border-dashed border-slate-200 text-xs font-medium text-slate-400">
-                        No screen recording available
-                      </div>
-                    )}
-                  </div>
+                  <button
+                    onClick={() => setShowRecordingModal(true)}
+                    className="flex items-center gap-2 px-4 py-2 text-sm font-bold text-emerald-600 bg-emerald-50 border border-emerald-100 rounded-xl hover:bg-emerald-100 transition-colors shadow-sm"
+                  >
+                    <Video size={16} /> Recording <ChevronRight size={14} />
+                  </button>
                 </div>
               </section>
 
-              {/* Q&A Answers */}
+              {/* Transcript Button */}
               {c.answers && c.answers.length > 0 && (
                 <section className="bg-white rounded-xl border border-slate-200/60 p-5 shadow-sm">
-                  <h3 className="text-sm font-black text-slate-800 mb-4">Interview Q&A ({c.answers.length} questions)</h3>
-                  <div className="space-y-4 max-h-80 overflow-y-auto pr-2">
-                    {c.answers.map((a, idx) => (
-                      <div key={idx} className="rounded-lg border border-slate-100 p-4 bg-slate-50">
-                        <div className="flex items-start justify-between gap-2 mb-2">
-                          <p className="text-sm font-bold text-slate-700">Q{idx + 1}. {a.question_text}</p>
-                          {a.ai_score !== null && a.ai_score !== undefined && (
-                            <span className={`shrink-0 text-xs font-black px-2 py-0.5 rounded-full ${a.ai_score >= 75 ? 'bg-emerald-100 text-emerald-700' : a.ai_score >= 50 ? 'bg-amber-100 text-amber-700' : 'bg-rose-100 text-rose-700'}`}>
-                              {Number(a.ai_score).toFixed(0)}%
-                            </span>
-                          )}
-                        </div>
-                        <p className="text-sm text-slate-600">{a.answer_text}</p>
-                        {a.ai_feedback && (
-                          <p className="mt-2 text-xs text-slate-500 italic border-t border-slate-200 pt-2">{a.ai_feedback}</p>
-                        )}
-                      </div>
-                    ))}
+                  <div className="flex items-center justify-between">
+                    <div>
+                      <h3 className="text-sm font-black text-slate-800">Interview Q&A</h3>
+                      <p className="text-xs text-slate-400 font-medium mt-0.5">{c.answers.length} questions answered</p>
+                    </div>
+                    <button
+                      onClick={() => setShowTranscriptModal(true)}
+                      className="flex items-center gap-2 px-4 py-2 text-sm font-bold text-violet-600 bg-violet-50 border border-violet-100 rounded-xl hover:bg-violet-100 transition-colors shadow-sm"
+                    >
+                      <MessageSquare size={16} /> Transcript <ChevronRight size={14} />
+                    </button>
                   </div>
                 </section>
               )}
@@ -611,5 +588,208 @@ export default function CandidateDialog({ candidate, open, onOpenChange, onStatu
         </div>
       </div>
     </div>
+
+    {/* ── Resume Sub-Modal ── */}
+    {showResumeModal && (
+      <div className="fixed inset-0 z-[300] flex items-center justify-center bg-slate-900/70 backdrop-blur-sm p-4" onClick={() => setShowResumeModal(false)}>
+        <div className="bg-white rounded-2xl shadow-2xl w-full max-w-2xl max-h-[80vh] flex flex-col overflow-hidden" onClick={e => e.stopPropagation()}>
+          <div className="flex items-center justify-between px-6 py-4 border-b border-slate-100 shrink-0">
+            <div className="flex items-center gap-2">
+              <div className="p-2 bg-indigo-50 text-indigo-600 rounded-lg"><FileText size={18} /></div>
+              <div>
+                <h3 className="text-sm font-black text-slate-800">Resume / Profile Text</h3>
+                <p className="text-xs text-slate-400 font-medium">{name}</p>
+              </div>
+            </div>
+            <button onClick={() => setShowResumeModal(false)} className="p-2 rounded-full hover:bg-slate-100 text-slate-400 hover:text-slate-700 transition-colors">
+              <X size={18} />
+            </button>
+          </div>
+          <div className="flex-1 overflow-y-auto p-6">
+            <pre className="text-sm text-slate-700 bg-slate-50 rounded-xl p-5 whitespace-pre-wrap font-sans border border-slate-200 leading-relaxed">{resumeText}</pre>
+          </div>
+        </div>
+      </div>
+    )}
+
+    {/* ── Recording Sub-Modal ── */}
+    {showRecordingModal && (
+      <div className="fixed inset-0 z-[300] flex items-center justify-center bg-slate-900/70 backdrop-blur-sm p-4" onClick={() => setShowRecordingModal(false)}>
+        <div className="bg-white rounded-2xl shadow-2xl w-full max-w-3xl max-h-[85vh] flex flex-col overflow-hidden" onClick={e => e.stopPropagation()}>
+          <div className="flex items-center justify-between px-6 py-4 border-b border-slate-100 shrink-0">
+            <div className="flex items-center gap-2">
+              <div className="p-2 bg-emerald-50 text-emerald-600 rounded-lg"><Video size={18} /></div>
+              <div>
+                <h3 className="text-sm font-black text-slate-800">Recordings</h3>
+                <p className="text-xs text-slate-400 font-medium">{name}</p>
+              </div>
+            </div>
+            <button onClick={() => setShowRecordingModal(false)} className="p-2 rounded-full hover:bg-slate-100 text-slate-400 hover:text-slate-700 transition-colors">
+              <X size={18} />
+            </button>
+          </div>
+          <div className="flex-1 overflow-y-auto p-6">
+            <div className="grid sm:grid-cols-2 gap-5">
+              {/* Camera Recording */}
+              <div className="rounded-xl border border-slate-200 bg-slate-50 p-4">
+                <div className="flex items-center gap-2 mb-3">
+                  <div className="p-2 bg-indigo-50 text-indigo-600 rounded-lg"><Video size={18} /></div>
+                  <div>
+                    <div className="text-sm font-black text-slate-800">Camera Recording</div>
+                    <div className="text-xs text-slate-400 font-medium">Interview video feed</div>
+                  </div>
+                </div>
+                {recordingUrl ? (
+                  <video controls className="w-full rounded-lg border border-slate-200 bg-black" src={recordingUrl}>
+                    Your browser does not support video.
+                  </video>
+                ) : (
+                  <div className="h-32 flex items-center justify-center rounded-lg border-2 border-dashed border-slate-200 text-xs font-medium text-slate-400">
+                    No camera recording available
+                  </div>
+                )}
+              </div>
+              {/* Screen Recording */}
+              <div className="rounded-xl border border-slate-200 bg-slate-50 p-4">
+                <div className="flex items-center gap-2 mb-3">
+                  <div className="p-2 bg-emerald-50 text-emerald-600 rounded-lg"><Monitor size={18} /></div>
+                  <div>
+                    <div className="text-sm font-black text-slate-800">Screen Recording</div>
+                    <div className="text-xs text-slate-400 font-medium">Screen share capture</div>
+                  </div>
+                </div>
+                {screenRecordingUrl ? (
+                  <video controls className="w-full rounded-lg border border-slate-200 bg-black" src={screenRecordingUrl}>
+                    Your browser does not support video.
+                  </video>
+                ) : (
+                  <div className="h-32 flex items-center justify-center rounded-lg border-2 border-dashed border-slate-200 text-xs font-medium text-slate-400">
+                    No screen recording available
+                  </div>
+                )}
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    )}
+
+    {/* ── Transcript Sub-Modal ── */}
+    {showTranscriptModal && (
+      <div className="fixed inset-0 z-[300] flex items-center justify-center bg-slate-900/70 backdrop-blur-sm p-4" onClick={() => setShowTranscriptModal(false)}>
+        <div className="bg-white rounded-2xl shadow-2xl w-full max-w-3xl max-h-[90vh] flex flex-col overflow-hidden" onClick={e => e.stopPropagation()}>
+          <div className="flex items-center justify-between px-6 py-4 border-b border-slate-100 shrink-0">
+            <div className="flex items-center gap-2">
+              <div className="p-2 bg-violet-50 text-violet-600 rounded-lg"><MessageSquare size={18} /></div>
+              <div>
+                <h3 className="text-sm font-black text-slate-800">Interview Q&A — Transcript</h3>
+                <p className="text-xs text-slate-400 font-medium">{c.answers?.length} questions · {name}</p>
+              </div>
+            </div>
+            <button onClick={() => setShowTranscriptModal(false)} className="p-2 rounded-full hover:bg-slate-100 text-slate-400 hover:text-slate-700 transition-colors">
+              <X size={18} />
+            </button>
+          </div>
+          <div className="flex-1 overflow-y-auto p-6">
+            <div className="space-y-5">
+              {(c.answers || []).map((a, idx) => {
+                const score = Number(a.ai_score ?? 0)
+                const scoreBg = score >= 75 ? 'bg-emerald-100 text-emerald-700' : score >= 50 ? 'bg-amber-100 text-amber-700' : 'bg-rose-100 text-rose-700'
+                const wpm = Number(a.wpm ?? 0)
+                const tabSwitches = Number(a.tab_switches ?? 0)
+                const faceAlerts = Number(a.face_alerts ?? 0)
+                const noiseAlerts = Number(a.noise_alerts ?? 0)
+                const hasAlerts = tabSwitches > 0 || faceAlerts > 0 || noiseAlerts > 0
+                return (
+                  <div key={idx} className="rounded-2xl border border-slate-200 bg-white shadow-sm overflow-hidden">
+                    {/* Question Header */}
+                    <div className="flex items-start justify-between gap-3 p-4 bg-slate-50 border-b border-slate-100">
+                      <div className="flex items-start gap-2 flex-1 min-w-0">
+                        <span className="mt-0.5 shrink-0 inline-flex items-center justify-center w-6 h-6 rounded-full bg-indigo-600 text-white text-[10px] font-black">Q{idx + 1}</span>
+                        <p className="text-sm font-bold text-slate-800 leading-snug">{a.question_text || 'No question recorded'}</p>
+                      </div>
+                      {a.ai_score !== null && a.ai_score !== undefined && (
+                        <span className={`shrink-0 text-xs font-black px-2.5 py-1 rounded-full ${scoreBg}`}>
+                          AI Score: {score.toFixed(0)}%
+                        </span>
+                      )}
+                    </div>
+
+                    <div className="p-4 space-y-4">
+                      {/* Stats row: WPM + alerts */}
+                      <div className="flex flex-wrap gap-2">
+                        {wpm > 0 && (
+                          <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-[11px] font-bold bg-blue-50 text-blue-700 border border-blue-100">
+                            <Mic size={11} /> {wpm.toFixed(0)} WPM
+                          </span>
+                        )}
+                        {tabSwitches > 0 && (
+                          <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-[11px] font-bold bg-amber-50 text-amber-700 border border-amber-100">
+                            <Monitor size={11} /> {tabSwitches} Tab Switch{tabSwitches > 1 ? 'es' : ''}
+                          </span>
+                        )}
+                        {faceAlerts > 0 && (
+                          <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-[11px] font-bold bg-rose-50 text-rose-700 border border-rose-100">
+                            <ShieldAlert size={11} /> {faceAlerts} Face Alert{faceAlerts > 1 ? 's' : ''}
+                          </span>
+                        )}
+                        {noiseAlerts > 0 && (
+                          <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-[11px] font-bold bg-orange-50 text-orange-700 border border-orange-100">
+                            <AlertCircle size={11} /> {noiseAlerts} Noise Alert{noiseAlerts > 1 ? 's' : ''}
+                          </span>
+                        )}
+                        {!wpm && !hasAlerts && (
+                          <span className="text-[11px] text-slate-400 font-medium">No integrity data recorded</span>
+                        )}
+                      </div>
+
+                      {/* Candidate Answer */}
+                      <div>
+                        <div className="text-[10px] font-black text-slate-500 uppercase tracking-wider mb-1.5 flex items-center gap-1">
+                          <MessageSquare size={10} /> Candidate Answer
+                        </div>
+                        <div className="bg-slate-50 border border-slate-200 rounded-xl p-3 text-sm text-slate-700 leading-relaxed">
+                          {a.answer_text || <span className="italic text-slate-400">No answer recorded</span>}
+                        </div>
+                      </div>
+
+                      {/* Corrected Answer */}
+                      {a.corrected_answer && a.corrected_answer !== 'N/A' && a.corrected_answer !== 'Scoring in progress...' && (
+                        <div>
+                          <div className="text-[10px] font-black text-emerald-600 uppercase tracking-wider mb-1.5 flex items-center gap-1">
+                            <Check size={10} /> Corrected / Model Answer
+                          </div>
+                          <div className="bg-emerald-50 border border-emerald-100 rounded-xl p-3 text-sm text-emerald-800 leading-relaxed">
+                            {a.corrected_answer}
+                          </div>
+                        </div>
+                      )}
+
+                      {/* AI Feedback */}
+                      {a.ai_feedback && (
+                        <div>
+                          <div className="text-[10px] font-black text-indigo-500 uppercase tracking-wider mb-1.5 flex items-center gap-1">
+                            <Sparkles size={10} /> AI Feedback
+                          </div>
+                          <div className="bg-indigo-50 border border-indigo-100 rounded-xl p-3 text-sm text-indigo-800 italic leading-relaxed">
+                            {a.ai_feedback}
+                          </div>
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                )
+              })}
+              {(!c.answers || c.answers.length === 0) && (
+                <div className="text-center py-12 text-slate-400 text-sm font-medium">
+                  No transcript available for this candidate.
+                </div>
+              )}
+            </div>
+          </div>
+        </div>
+      </div>
+    )}
+  </>
   )
 }
