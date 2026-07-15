@@ -2044,7 +2044,13 @@ def get_current_admin_details(credentials: HTTPAuthorizationCredentials = Depend
         if admin_id is None:
             raise HTTPException(status_code=401, detail="Invalid authentication credentials")
             
-        admin_doc = admins_collection.find_one({"_id": ObjectId(admin_id)})
+        from bson.errors import InvalidId
+        try:
+            admin_oid = ObjectId(admin_id)
+        except InvalidId:
+            raise HTTPException(status_code=401, detail="Invalid token format")
+            
+        admin_doc = admins_collection.find_one({"_id": admin_oid})
         if not admin_doc:
             raise HTTPException(status_code=401, detail="Account not found")
         if admin_doc.get("login_enabled") == False:
