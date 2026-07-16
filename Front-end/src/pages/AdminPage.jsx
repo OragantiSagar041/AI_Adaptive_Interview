@@ -604,7 +604,7 @@ export default function AdminPage({ role: initialRole = 'admin' }) {
       if (response.ok) {
         let msg = `Secure interview link created successfully!`
         if (data.email_scheduled && data.email_send_at) {
-          msg += `\nInvitation scheduled to send to ${email} at ${new Date(data.email_send_at).toLocaleString()}`
+          msg += `\nInvitation scheduled to send to ${email} at ${new Date(data.email_send_at).toLocaleString('en-IN', { timeZone: 'Asia/Kolkata', dateStyle: 'short', timeStyle: 'short' })}`
         } else if (data.email_sent) {
           msg += `\nInvitation email sent successfully to ${email}!`
         }

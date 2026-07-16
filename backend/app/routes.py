@@ -20,6 +20,7 @@ import subprocess
 import tempfile
 import threading
 import traceback
+import logging
 from collections import defaultdict
 from datetime import datetime, timedelta, timezone
 from typing import Any, Dict, List, Optional
@@ -85,6 +86,8 @@ from app.session_store import get_session, set_session, delete_session
 
 load_dotenv()
 
+logging.basicConfig(level=logging.INFO)
+logger = logging.getLogger(__name__)
 
 router = APIRouter()
 
@@ -1527,27 +1530,92 @@ detected_accent (short string)."""
         }
 
 
-from pydantic import BaseModel
+from pydantic import BaseModel, root_validator
 class AgentFlowItem(BaseModel):
     context_title: str
     context_body: str
     is_enabled: bool = True
+    title: Optional[str] = None
+    instruction: Optional[str] = None
+    body: Optional[str] = None
+
+    @root_validator(pre=True)
+    def normalize_legacy_fields(cls, values):
+        if values.get('context_title') is None and values.get('title') is not None:
+            values['context_title'] = values.get('title')
+        if values.get('context_body') is None:
+            if values.get('instruction') is not None:
+                values['context_body'] = values.get('instruction')
+            elif values.get('body') is not None:
+                values['context_body'] = values.get('body')
+        if values.get('is_enabled') is None:
+            values['is_enabled'] = values.get('enabled', True)
+        return values
 
 class UpdateAgentFlowRequest(BaseModel):
     flow: List[AgentFlowItem]
 
+
+def _normalize_text_field(value: Any) -> str:
+    if isinstance(value, str):
+        return value
+    if value is None:
+        return ""
+    if isinstance(value, bool):
+        return ""
+    return str(value)
+
+
+def normalize_agent_flow_read_item(item: Dict[str, Any]) -> Dict[str, Any]:
+    context_title = item.get("context_title") if item.get("context_title") is not None else item.get("title", "")
+    context_body = item.get("context_body") if item.get("context_body") is not None else item.get("body", item.get("instruction", ""))
+    return {
+        "context_title": _normalize_text_field(context_title),
+        "context_body": _normalize_text_field(context_body),
+        "is_enabled": bool(item.get("is_enabled", item.get("enabled", True))),
+    }
+
+
+def normalize_agent_flow_write_item(item: Dict[str, Any]) -> Dict[str, Any]:
+    title = item.get("context_title") if item.get("context_title") is not None else item.get("title", "")
+    body = item.get("context_body") if item.get("context_body") is not None else item.get("body", item.get("instruction", ""))
+    return {
+        "title": _normalize_text_field(title),
+        "body": _normalize_text_field(body),
+        "is_enabled": bool(item.get("is_enabled", item.get("enabled", True))),
+    }
+
 @router.get("/admin/agent-flow")
 def get_agent_flow():
-    from app.config import OMNI_DIMENSION_API_KEY, OMNI_AGENT_ID
+    from app.config import get_omni_dimension_api_key, get_omni_agent_id
     import requests
-    if not OMNI_DIMENSION_API_KEY:
-        raise HTTPException(status_code=500, detail="OMNI_DIMENSION_API_KEY is not set.")
-    
-    if not OMNI_AGENT_ID:
+    from pathlib import Path
+    # Prefer a local flow file when present so admin UI reflects local edits immediately.
+    local_path = Path(__file__).resolve().parents[1] / 'agent_flow.json'
+    if local_path.exists():
+        try:
+            data = json.loads(local_path.read_text(encoding='utf-8'))
+            if data:
+                normalized = [normalize_agent_flow_read_item(item) for item in data]
+                return {"success": True, "flow": normalized}
+        except Exception as e:
+            logger.warning(f"[agent-flow] Warning: failed to read local flow: {e}")
+    api_key = get_omni_dimension_api_key()
+    agent_id_value = get_omni_agent_id()
+    if not api_key:
+        raise HTTPException(status_code=500, detail="OMNI_DIMENSION_API_KEY is not set and no local flow available.")
+
+    if not agent_id_value:
         raise HTTPException(status_code=500, detail="OMNI_AGENT_ID is not configured.")
+<<<<<<< HEAD
     
     agent_id = str(OMNI_AGENT_ID).strip()
     headers = {"Authorization": f"Bearer {OMNI_DIMENSION_API_KEY}"}
+=======
+
+    agent_id = agent_id_value
+    headers = {"Authorization": f"Bearer {api_key}"}
+>>>>>>> 831ac5e (Save my local changes)
     try:
         res = requests.get(f"https://backend.omnidim.io/api/v1/agents/{agent_id}", headers=headers, timeout=10)
         if res.status_code == 200:
@@ -1560,44 +1628,101 @@ def get_agent_flow():
                 flow_data = agent_obj["context_breakdown"]
             else:
                 flow_data = []
-            return {"success": True, "flow": flow_data}
+            normalized_flow = [normalize_agent_flow_read_item(item) for item in flow_data]
+            return {"success": True, "flow": normalized_flow}
         else:
             print(f"[Omnidimension] GET agent flow failed [status={res.status_code}]")
+            # If upstream fails, fall back to local flow file
+            local_path = Path(__file__).resolve().parents[1] / 'agent_flow.json'
+            if local_path.exists():
+                try:
+                    data = json.loads(local_path.read_text(encoding='utf-8'))
+                    return {"success": True, "flow": data}
+                except Exception as e:
+                    raise HTTPException(status_code=500, detail=f"Failed to read local flow: {e}")
             raise HTTPException(status_code=res.status_code, detail="Failed to fetch agent flow from upstream API.")
     except HTTPException:
         raise
     except Exception as e:
+        # On unexpected exception, try local fallback
+        local_path = Path(__file__).resolve().parents[1] / 'agent_flow.json'
+        if local_path.exists():
+            try:
+                data = json.loads(local_path.read_text(encoding='utf-8'))
+                return {"success": True, "flow": data}
+            except Exception:
+                pass
         raise HTTPException(status_code=500, detail=str(e))
 
 @router.put("/admin/agent-flow")
 def update_agent_flow(req: UpdateAgentFlowRequest):
-    from app.config import OMNI_DIMENSION_API_KEY, OMNI_AGENT_ID
+    from app.config import get_omni_dimension_api_key, get_omni_agent_id
     import requests
-    if not OMNI_DIMENSION_API_KEY:
-        raise HTTPException(status_code=500, detail="OMNI_DIMENSION_API_KEY is not set.")
-    
-    if not OMNI_AGENT_ID:
+    from pathlib import Path
+    agent_id_value = get_omni_agent_id()
+    if not agent_id_value:
         raise HTTPException(status_code=500, detail="OMNI_AGENT_ID is not configured.")
+<<<<<<< HEAD
     
     agent_id = str(OMNI_AGENT_ID).strip()
     headers = {"Authorization": f"Bearer {OMNI_DIMENSION_API_KEY}", "Content-Type": "application/json"}
+=======
+
+    agent_id = agent_id_value
+    payload = {
+        "context_breakdown": [normalize_agent_flow_write_item(item.dict()) for item in req.flow]
+    }
+
+    api_key = get_omni_dimension_api_key()
+    if not api_key:
+        logger.warning("[agent-flow] OMNI_DIMENSION_API_KEY not configured; saving local flow only.")
+        try:
+            local_path = Path(__file__).resolve().parents[1] / 'agent_flow.json'
+            local_path.write_text(json.dumps(payload.get('context_breakdown', []), indent=2, ensure_ascii=False), encoding='utf-8')
+        except Exception as e:
+            raise HTTPException(status_code=500, detail=f"Failed to persist local flow: {e}")
+        return {"success": True, "message": "Local flow saved; Omnidimension sync skipped because OMNI_DIMENSION_API_KEY is not configured."}
+
+    headers = {"Authorization": f"Bearer {api_key}", "Content-Type": "application/json"}
+>>>>>>> 831ac5e (Save my local changes)
     
     # We only send the context_breakdown (conversational flow)
-    payload = {
-        "context_breakdown": [item.dict() for item in req.flow]
-    }
     
+    omni_url = f"https://backend.omnidim.io/api/v1/agents/{agent_id}"
     try:
-        res = requests.put(f"https://backend.omnidim.io/api/v1/agents/{agent_id}", headers=headers, json=payload, timeout=10)
+        logger.info("[agent-flow] OmniDimension sync request: method=PUT url=%s agent_id=%s", omni_url, agent_id)
+        logger.info("[agent-flow] OmniDimension headers: %s", headers)
+        logger.info("[agent-flow] OmniDimension request body: %s", json.dumps(payload, ensure_ascii=False))
+        res = requests.put(omni_url, headers=headers, json=payload, timeout=10)
+        logger.info("[agent-flow] OmniDimension response status: %s", res.status_code)
+        logger.info("[agent-flow] OmniDimension response body: %s", res.text)
         if res.status_code == 200:
+            # persist locally as well
+            try:
+                local_path = Path(__file__).resolve().parents[1] / 'agent_flow.json'
+                local_path.write_text(json.dumps(payload.get('context_breakdown', []), indent=2, ensure_ascii=False), encoding='utf-8')
+            except Exception as e:
+                print(f"[agent-flow] Warning: failed to persist local flow: {e}")
             return {"success": True, "message": "Agent flow updated successfully."}
         else:
             print(f"[Omnidimension] PUT agent flow failed [status={res.status_code}]")
-            raise HTTPException(status_code=res.status_code, detail="Failed to update agent flow on upstream API.")
+            # try to persist locally and return success if local save succeeds
+            try:
+                local_path = Path(__file__).resolve().parents[1] / 'agent_flow.json'
+                local_path.write_text(json.dumps(payload.get('context_breakdown', []), indent=2, ensure_ascii=False), encoding='utf-8')
+                return {"success": True, "message": "Upstream failed but local flow updated."}
+            except Exception:
+                raise HTTPException(status_code=res.status_code, detail="Failed to update agent flow on upstream API and failed to save locally.")
     except HTTPException:
         raise
     except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
+        # attempt local save on unexpected error
+        try:
+            local_path = Path(__file__).resolve().parents[1] / 'agent_flow.json'
+            local_path.write_text(json.dumps(payload.get('context_breakdown', []), indent=2, ensure_ascii=False), encoding='utf-8')
+            return {"success": True, "message": "Local flow updated (upstream error)."}
+        except Exception:
+            raise HTTPException(status_code=500, detail=str(e))
 
 
 @router.get("/admin/interview/{link_id}")
@@ -7572,10 +7697,10 @@ async def initiate_manual_ai_call(
 @router.get("/api/calls/agent-settings")
 async def get_omni_agent_settings():
     """Fetch the Omni Dimension Agent settings."""
-    from .omni_dimension_client import get_omni_client, OMNI_AGENT_ID
+    from .omni_dimension_client import get_omni_client, get_omni_agent_id
     try:
         client = get_omni_client()
-        agent_id = int(OMNI_AGENT_ID) if OMNI_AGENT_ID else 1
+        agent_id = int(get_omni_agent_id()) if get_omni_agent_id() else 1
         res = client.agent.list()
         bots = res.get('json', {}).get('bots', [])
         agent = next((b for b in bots if b.get('id') == agent_id), bots[0] if bots else {})
@@ -7600,10 +7725,10 @@ async def get_omni_knowledge_base():
 @router.get("/api/calls/integrations")
 async def get_omni_integrations():
     """Fetch integrations for the agent from Omni Dimension."""
-    from .omni_dimension_client import get_omni_client, OMNI_AGENT_ID
+    from .omni_dimension_client import get_omni_client, get_omni_agent_id
     try:
         client = get_omni_client()
-        agent_id = int(OMNI_AGENT_ID) if OMNI_AGENT_ID else 1
+        agent_id = int(get_omni_agent_id()) if get_omni_agent_id() else 1
         res = client.integrations.get_agent_integrations(agent_id=agent_id)
         data = res.get('json', res)
         return {"integrations": data.get("integrations", []), "success": True}
@@ -7631,7 +7756,7 @@ class CalendlyIntegrationRequest(BaseModel):
 
 @router.post("/api/calls/integrations/calendly")
 async def create_calendly_integration(req: CalendlyIntegrationRequest):
-    from .omni_dimension_client import get_omni_client, OMNI_AGENT_ID
+    from .omni_dimension_client import get_omni_client, get_omni_agent_id
     try:
         client = get_omni_client()
         res = client.integrations.create_cal_integration(
@@ -7647,7 +7772,7 @@ async def create_calendly_integration(req: CalendlyIntegrationRequest):
         integration_data = data.get("integration", data) if isinstance(data, dict) else data
         integration_id = integration_data.get("id") if isinstance(integration_data, dict) else getattr(integration_data, "id", None)
         
-        agent_id = int(OMNI_AGENT_ID) if OMNI_AGENT_ID else 1
+        agent_id = int(get_omni_agent_id()) if get_omni_agent_id() else 1
         if integration_id:
             client.integrations.add_integration_to_agent(agent_id=agent_id, integration_id=integration_id)
             
@@ -7670,7 +7795,7 @@ class CustomApiIntegrationRequest(BaseModel):
 
 @router.post("/api/calls/integrations/custom-api")
 async def create_custom_api_integration(req: CustomApiIntegrationRequest):
-    from .omni_dimension_client import get_omni_client, OMNI_AGENT_ID
+    from .omni_dimension_client import get_omni_client, get_omni_agent_id
     try:
         client = get_omni_client()
         res = client.integrations.create_custom_api_integration(
@@ -7691,7 +7816,7 @@ async def create_custom_api_integration(req: CustomApiIntegrationRequest):
         integration_data = data.get("integration", data) if isinstance(data, dict) else data
         integration_id = integration_data.get("id") if isinstance(integration_data, dict) else getattr(integration_data, "id", None)
         
-        agent_id = int(OMNI_AGENT_ID) if OMNI_AGENT_ID else 1
+        agent_id = int(get_omni_agent_id()) if get_omni_agent_id() else 1
         if integration_id:
             client.integrations.add_integration_to_agent(agent_id=agent_id, integration_id=integration_id)
             
@@ -7704,10 +7829,10 @@ class DetachIntegrationRequest(BaseModel):
 
 @router.post("/api/calls/integrations/detach")
 async def detach_integration(req: DetachIntegrationRequest):
-    from .omni_dimension_client import get_omni_client, OMNI_AGENT_ID
+    from .omni_dimension_client import get_omni_client, get_omni_agent_id
     try:
         client = get_omni_client()
-        agent_id = int(OMNI_AGENT_ID) if OMNI_AGENT_ID else 1
+        agent_id = int(get_omni_agent_id()) if get_omni_agent_id() else 1
         client.integrations.remove_integration_from_agent(agent_id=agent_id, integration_id=req.integration_id)
         return {"success": True}
     except Exception as e:
@@ -7717,10 +7842,10 @@ async def detach_integration(req: DetachIntegrationRequest):
 @router.get("/api/calls/call-config")
 async def get_omni_call_config():
     """Fetch call configuration from agent settings."""
-    from .omni_dimension_client import get_omni_client, OMNI_AGENT_ID
+    from .omni_dimension_client import get_omni_client, get_omni_agent_id
     try:
         client = get_omni_client()
-        agent_id = int(OMNI_AGENT_ID) if OMNI_AGENT_ID else 1
+        agent_id = int(get_omni_agent_id()) if get_omni_agent_id() else 1
         res = client.agent.list()
         bots = res.get('json', {}).get('bots', [])
         agent = next((b for b in bots if b.get('id') == agent_id), bots[0] if bots else {})
@@ -7752,10 +7877,10 @@ async def get_omni_call_config():
 @router.get("/api/calls/post-call-config")
 async def get_omni_post_call_config():
     """Fetch post-call configuration from agent settings."""
-    from .omni_dimension_client import get_omni_client, OMNI_AGENT_ID
+    from .omni_dimension_client import get_omni_client, get_omni_agent_id
     try:
         client = get_omni_client()
-        agent_id = int(OMNI_AGENT_ID) if OMNI_AGENT_ID else 1
+        agent_id = int(get_omni_agent_id()) if get_omni_agent_id() else 1
         res = client.agent.list()
         bots = res.get('json', {}).get('bots', [])
         agent = next((b for b in bots if b.get('id') == agent_id), bots[0] if bots else {})
@@ -7768,10 +7893,11 @@ async def get_omni_post_call_config():
 @router.get("/api/calls/recent-calls")
 async def get_omni_recent_calls():
     """Fetch recent call logs directly from Omni Dimension SDK, including all evaluation scores."""
-    from .omni_dimension_client import get_omni_client, OMNI_AGENT_ID
+    from .omni_dimension_client import get_omni_client, get_omni_agent_id
     try:
         client = get_omni_client()
-        agent_id = int(OMNI_AGENT_ID) if OMNI_AGENT_ID else None
+        agent_id_value = get_omni_agent_id()
+        agent_id = int(agent_id_value) if agent_id_value else None
         res = client.call.get_call_logs(agent_id=agent_id, page_size=50)
         # SDK always returns {"status": <int>, "json": <dict>}
         data = res.get('json', res) if isinstance(res, dict) else {}

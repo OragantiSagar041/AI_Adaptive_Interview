@@ -373,9 +373,10 @@ export function CandidateScorecardModal({
                     <div className="flex-1">
                       <p className="text-sm font-semibold text-slate-800">{alert.message}</p>
                       <p className="text-xs text-slate-500 mt-1">
-                        {new Date(alert.timestamp).toLocaleString(undefined, {
+                        {new Date(alert.timestamp).toLocaleString('en-IN', {
                           dateStyle: 'medium',
-                          timeStyle: 'short'
+                          timeStyle: 'short',
+                          timeZone: 'Asia/Kolkata'
                         })}
                       </p>
                     </div>

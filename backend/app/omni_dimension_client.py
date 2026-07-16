@@ -1,11 +1,13 @@
 import json
 from omnidimension import Client
-from .config import OMNI_DIMENSION_API_KEY, OMNI_VOICE_ID, OMNI_AGENT_ID
+from .config import get_omni_dimension_api_key, get_omni_voice_id, get_omni_agent_id
+
 
 def get_omni_client():
-    if not OMNI_DIMENSION_API_KEY:
+    api_key = get_omni_dimension_api_key()
+    if not api_key:
         raise ValueError("OMNI_DIMENSION_API_KEY is not set.")
-    return Client(OMNI_DIMENSION_API_KEY)
+    return Client(api_key)
 
 def start_omni_call(phone_number: str, candidate_name: str, job_description: str, resume_text: str, duration: int, skills: str):
     """
@@ -27,20 +29,22 @@ def start_omni_call(phone_number: str, candidate_name: str, job_description: str
             phone_number = f"+{phone_number}"
     
     # Construct call context
+    voice_id = get_omni_voice_id()
     context = {
         "candidate_name": candidate_name,
         "job_description": job_description,
         "resume_text": resume_text,
         "interview_duration": duration,
         "required_skills": skills,
-        "voice_id": OMNI_VOICE_ID
+        "voice_id": voice_id
     }
     
     # The API requires agent_id to be an integer.
+    agent_id_value = get_omni_agent_id()
     try:
-        agent_id = int(OMNI_AGENT_ID) if OMNI_AGENT_ID else 1
+        agent_id = int(agent_id_value) if agent_id_value else 1
     except ValueError:
-        raise ValueError(f"OMNI_DIMENSION_AGENT_ID must be an integer, but got: '{OMNI_AGENT_ID}'. Please update your .env file.")
+        raise ValueError(f"OMNI_DIMENSION_AGENT_ID must be an integer, but got: '{agent_id_value}'. Please update your .env file.")
 
     
     try:

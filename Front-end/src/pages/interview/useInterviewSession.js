@@ -648,7 +648,7 @@ export const useInterviewSession = (sessionId, interviewType, startRoundTwo) => 
         }
         if (payload.is_before_schedule && payload.scheduled_start) {
           const startTime = new Date(payload.scheduled_start.endsWith('Z') || payload.scheduled_start.includes('+') ? payload.scheduled_start : payload.scheduled_start + 'Z')
-          throw new Error(`This interview is scheduled to start on ${startTime.toLocaleString()}. Please try again at the scheduled time.`)
+          throw new Error(`This interview is scheduled to start on ${startTime.toLocaleString('en-IN', { timeZone: 'Asia/Kolkata', dateStyle: 'short', timeStyle: 'short' })}. Please try again at the scheduled time.`)
         }
         if (payload.session_status === 'completed') {
           setIsCompleted(true)
