@@ -1,7 +1,23 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { Settings, Save, RefreshCw, ChevronDown, ChevronUp, CheckCircle, AlertCircle, Plus, Trash2 } from 'lucide-react';
 import axios from 'axios';
 import { API_BASE_URL } from '../../apiConfig';
+import ErrorBoundary from '../../components/ErrorBoundary';
+
+const generateSectionId = () => `section-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
+
+const normalizeTextValue = (value) => {
+  if (typeof value === 'string') return value;
+  if (typeof value === 'number') return String(value);
+  return '';
+};
+
+const normalizeFlowItem = (item, id) => ({
+  id: id || generateSectionId(),
+  context_title: normalizeTextValue(item.context_title ?? item.title),
+  context_body: normalizeTextValue(item.context_body ?? item.instruction),
+  is_enabled: typeof item.is_enabled === 'boolean' ? item.is_enabled : (typeof item.enabled === 'boolean' ? item.enabled : true),
+});
 
 export default function ConversationalFlowPage() {
   const [flowData, setFlowData] = useState([]);
@@ -10,6 +26,9 @@ export default function ConversationalFlowPage() {
   const [error, setError] = useState(null);
   const [success, setSuccess] = useState(false);
   const [expandedSections, setExpandedSections] = useState({});
+  const dragItemIndex = useRef(null);
+  const dragOverIndex = useRef(null);
+  const [draggingId, setDraggingId] = useState(null);
 
   useEffect(() => {
     fetchFlowData();
@@ -21,17 +40,20 @@ export default function ConversationalFlowPage() {
       setError(null);
       const res = await axios.get(`${API_BASE_URL}/admin/agent-flow`);
       if (res.data.success) {
-        setFlowData(res.data.flow || []);
+        const normalizedFlow = (res.data.flow || []).map((item, index) => normalizeFlowItem(item, item?.id ?? `section-${index}`));
+        setFlowData(normalizedFlow);
         // Expand first section by default
-        if (res.data.flow && res.data.flow.length > 0) {
-          setExpandedSections({ 0: true });
+        if (normalizedFlow.length > 0) {
+          setExpandedSections({ [normalizedFlow[0].id]: true });
         }
       } else {
-        setError(res.data.detail || 'Failed to fetch agent flow');
+        const detail = res.data.detail || res.data.message || 'Failed to fetch agent flow';
+        setError(typeof detail === 'object' ? JSON.stringify(detail, null, 2) : detail);
       }
     } catch (err) {
       console.error(err);
-      setError(err.response?.data?.detail || 'An error occurred while fetching the flow.');
+      const detail = err?.response?.data?.detail ?? err?.response?.data?.message ?? err?.message ?? err;
+      setError(typeof detail === 'object' ? JSON.stringify(detail, null, 2) : String(detail));
     } finally {
       setLoading(false);
     }
@@ -43,25 +65,36 @@ export default function ConversationalFlowPage() {
       setError(null);
       setSuccess(false);
       
-      const payload = { flow: flowData };
+      const payload = {
+        flow: flowData.map((section) => ({
+          // include both legacy and normalized fields to satisfy backend validation
+          title: section.context_title,
+          body: section.context_body,
+          context_title: section.context_title,
+          context_body: section.context_body,
+          is_enabled: section.is_enabled,
+        })),
+      };
       const res = await axios.put(`${API_BASE_URL}/admin/agent-flow`, payload);
       
       if (res.data.success) {
+        await fetchFlowData();
         setSuccess(true);
         setTimeout(() => setSuccess(false), 3000);
       }
     } catch (err) {
       console.error(err);
-      setError(err.response?.data?.detail || 'Failed to save agent flow.');
+      const detail = err?.response?.data?.detail ?? err?.response?.data?.message ?? err?.message ?? err;
+      setError(typeof detail === 'object' ? JSON.stringify(detail, null, 2) : String(detail));
     } finally {
       setSaving(false);
     }
   };
 
-  const toggleSection = (index) => {
+  const toggleSection = (id) => {
     setExpandedSections(prev => ({
       ...prev,
-      [index]: !prev[index]
+      [id]: !prev[id]
     }));
   };
 
@@ -71,14 +104,29 @@ export default function ConversationalFlowPage() {
     setFlowData(newData);
   };
 
-  const addSection = () => {
-    const newSection = {
-      context_title: 'New Section',
-      context_body: '',
-      is_enabled: true
-    };
-    setFlowData([...flowData, newSection]);
-    setExpandedSections(prev => ({ ...prev, [flowData.length]: true }));
+  const moveSection = (fromIndex, toIndex) => {
+    const updated = [...flowData];
+    const [moved] = updated.splice(fromIndex, 1);
+    updated.splice(toIndex, 0, moved);
+    setFlowData(updated);
+  };
+
+  const handleDragStart = (index, id) => {
+    dragItemIndex.current = index;
+    setDraggingId(id);
+  };
+
+  const handleDragEnter = (index) => {
+    if (dragItemIndex.current === null || dragItemIndex.current === index) return;
+    dragOverIndex.current = index;
+    moveSection(dragItemIndex.current, index);
+    dragItemIndex.current = index;
+  };
+
+  const handleDragEnd = () => {
+    dragItemIndex.current = null;
+    dragOverIndex.current = null;
+    setDraggingId(null);
   };
 
   const removeSection = (index) => {
@@ -86,17 +134,29 @@ export default function ConversationalFlowPage() {
     setFlowData(newData);
   };
 
+  const addSection = () => {
+    const newSection = {
+      id: generateSectionId(),
+      context_title: 'New Section',
+      context_body: '',
+      is_enabled: true,
+    };
+    setFlowData([...flowData, newSection]);
+    setExpandedSections(prev => ({ ...prev, [newSection.id]: true }));
+  };
+
   if (loading) {
     return (
       <div className="flex items-center justify-center min-h-[400px]">
         <RefreshCw className="w-8 h-8 text-indigo-500 animate-spin" />
-        <span className="ml-3 text-slate-400">Syncing with Omnidimension...</span>
+        <span className="ml-3 text-slate-400">Loading agent flow...</span>
       </div>
     );
   }
 
   return (
-    <div className="max-w-4xl mx-auto py-8 px-4">
+    <ErrorBoundary>
+      <div className="max-w-4xl mx-auto py-8 px-4">
       <div className="flex justify-between items-center mb-8">
         <div>
           <h1 className="text-2xl font-bold text-slate-900 flex items-center">
@@ -140,29 +200,38 @@ export default function ConversationalFlowPage() {
 
       <div className="space-y-4">
         {flowData.map((section, index) => (
-          <div key={index} className="bg-slate-800 border border-slate-700 rounded-lg overflow-hidden transition-all">
+          <div
+            key={section.id || index}
+            className={`bg-slate-800 border border-slate-700 rounded-lg overflow-hidden transition-all ${draggingId === section.id ? 'opacity-60' : ''}`}
+            draggable
+            onDragStart={() => handleDragStart(index, section.id)}
+            onDragOver={(e) => e.preventDefault()}
+            onDragEnter={() => handleDragEnter(index)}
+            onDragEnd={handleDragEnd}
+          >
             {/* Header */}
             <div 
-              className="flex items-center justify-between p-4 cursor-pointer hover:bg-slate-750"
-              onClick={() => toggleSection(index)}
+              className="flex items-center justify-between p-4 cursor-move hover:bg-slate-750"
+              onClick={() => toggleSection(section.id)}
               role="button"
               tabIndex={0}
-              aria-expanded={expandedSections[index] ? 'true' : 'false'}
+              aria-expanded={expandedSections[section.id] ? 'true' : 'false'}
               aria-label={`Toggle section ${index + 1}`}
               onKeyDown={(e) => {
+                if (e.target !== e.currentTarget) return;
                 if (e.key === 'Enter' || e.key === ' ') {
-                  e.preventDefault()
-                  toggleSection(index)
+                  e.preventDefault();
+                  toggleSection(section.id);
                 }
               }}
             >
               <div className="flex items-center space-x-4">
-                {expandedSections[index] ? 
+                {expandedSections[section.id] ? 
                   <ChevronUp className="w-5 h-5 text-slate-400" /> : 
                   <ChevronDown className="w-5 h-5 text-slate-400" />
                 }
                 <span className="text-slate-500 font-mono text-sm">{index + 1}.</span>
-                {expandedSections[index] ? (
+                {expandedSections[section.id] ? (
                   <input
                     type="text"
                     value={section.context_title}
@@ -197,7 +266,7 @@ export default function ConversationalFlowPage() {
             </div>
 
             {/* Body */}
-            {expandedSections[index] && (
+            {expandedSections[section.id] && (
               <div className="p-4 border-t border-slate-700 bg-slate-900/50">
                 <textarea
                   value={section.context_body}
@@ -218,6 +287,7 @@ export default function ConversationalFlowPage() {
         <Plus className="w-5 h-5 mr-2" />
         Add Section
       </button>
-    </div>
+      </div>
+    </ErrorBoundary>
   );
 }

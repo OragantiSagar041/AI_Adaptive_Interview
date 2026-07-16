@@ -27,6 +27,7 @@ from starlette.middleware.base import BaseHTTPMiddleware
 # Internal routers & modules
 # ---------------------------------------------------------------------------
 from app.routes import router       # Main API router (all endpoints)
+from app.routes_conversation_flow import router as conversation_flow_router
 import transcription                # Voice transcription sub-router
 from routes import voice_routes     # WebRTC voice routes
 from app import config
@@ -152,6 +153,7 @@ app.mount("/uploads", StaticFiles(directory="uploads"), name="uploads")
 
 # --- Routers ---
 app.include_router(router)
+app.include_router(conversation_flow_router)
 app.include_router(transcription.router)
 app.include_router(voice_routes.router)
 

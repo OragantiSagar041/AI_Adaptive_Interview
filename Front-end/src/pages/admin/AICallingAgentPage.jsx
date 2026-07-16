@@ -13,6 +13,7 @@ import Card from '../../components/Card'
 import Button from '../../components/Button'
 import CallDetailsModal from './CallDetailsModal'
 import IntegrationModal from './IntegrationModal'
+import { parseDateStringToUtc } from '../../utils/adminFormatters'
 
 // ─── Helpers ───────────────────────────────────────────────────────────────────
 
@@ -530,36 +531,19 @@ function RecentCallsTab({ calls, loading, onViewDetails }) {
   const formatDate = (dateString) => {
     if (!dateString) return 'Unknown Date';
     try {
-      const parts = dateString.split(/[-T:.Z/ ]/).filter(Boolean);
-      if (parts.length >= 5) {
-        let year, monthNum, day, hours, minutes;
-        
-        if (parts[0].length === 4) {
-          year = parts[0];
-          monthNum = parseInt(parts[1], 10);
-          day = parseInt(parts[2], 10);
-          hours = parseInt(parts[3], 10);
-          minutes = parts[4];
-        } else {
-          monthNum = parseInt(parts[0], 10);
-          day = parseInt(parts[1], 10);
-          year = parts[2];
-          hours = parseInt(parts[3], 10);
-          minutes = parts[4];
-        }
-        
-        const months = ["January", "February", "March", "April", "May", "June", "July", "August", "September", "October", "November", "December"];
-        const month = months[monthNum - 1] || "Unknown";
-        
-        const ampm = hours >= 12 ? 'PM' : 'AM';
-        hours = hours % 12;
-        hours = hours ? hours : 12;
-        
-        return `${month} ${day}, ${year} at ${hours.toString().padStart(2, '0')}:${minutes} ${ampm}`;
-      }
-      return dateString;
-    } catch(e) {
-      return dateString;
+      const date = parseDateStringToUtc(dateString)
+      if (!date || Number.isNaN(date.getTime())) return dateString
+      return date.toLocaleString('en-IN', {
+        timeZone: 'Asia/Kolkata',
+        month: 'long',
+        day: '2-digit',
+        year: 'numeric',
+        hour: '2-digit',
+        minute: '2-digit',
+        hour12: true,
+      })
+    } catch (e) {
+      return dateString
     }
   };
 

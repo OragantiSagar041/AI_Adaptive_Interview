@@ -303,7 +303,11 @@ export function CandidateTable({
                       </div>
                     </td>
                     <td className="px-4 py-3.5 text-sm text-slate-600">
-                      {new Date(c.created_at).toLocaleString('en-IN', { dateStyle: 'short', timeStyle: 'short' })}
+                      {new Date(c.created_at).toLocaleString('en-IN', {
+                        dateStyle: 'short',
+                        timeStyle: 'short',
+                        timeZone: 'Asia/Kolkata'
+                      })}
                     </td>
                     <td className="px-4 py-3.5 text-sm">
                       <Badge variant={computedStatus} text={computedStatus === 'expired' ? 'NOT ATTENDED' : computedStatus} />
