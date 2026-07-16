@@ -74,6 +74,9 @@ export default function CandidateDialog({ candidate, open, onOpenChange, onStatu
   const [atsLoading, setAtsLoading] = useState(false)
   const [error, setError] = useState(null)
   const [isScheduleModalOpen, setIsScheduleModalOpen] = useState(false)
+  const [showResumeModal, setShowResumeModal] = useState(false)
+  const [showRecordingModal, setShowRecordingModal] = useState(false)
+  const [showTranscriptModal, setShowTranscriptModal] = useState(false)
   const token = useSelector(state => state.auth.token)
   const API_BASE_URL = useSelector(state => state.auth.API_BASE_URL)
 
