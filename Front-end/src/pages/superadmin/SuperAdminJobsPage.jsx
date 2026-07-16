@@ -226,7 +226,7 @@ export default function SuperAdminJobsPage() {
   };
 
   return (
-    <div className="w-full max-w-7xl text-slate-800">
+    <div className="superadmin-jobs-page w-full max-w-7xl text-slate-900">
 
       {/* ── Header ─────────────────────────────────────── */}
       <div className="bg-white/80 backdrop-blur-2xl border border-white/60 rounded-3xl shadow-[0_8px_30px_rgb(0,0,0,0.04)] p-6 sm:p-8 mb-8 relative overflow-hidden">

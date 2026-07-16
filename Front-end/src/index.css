@@ -81,6 +81,15 @@ html, body {
   -webkit-font-smoothing: antialiased;
 }
 
+/* Ensure white/light background cards don't inherit white card text */
+.bg-white.text-card-foreground,
+.bg-slate-50.text-card-foreground,
+.bg-slate-100.text-card-foreground,
+.bg-slate-200.text-card-foreground,
+.bg-slate-300.text-card-foreground {
+  color: inherit !important;
+}
+
 .superadmin-theme {
   --radius: 0.625rem;
   --background: oklch(0.985 0.005 240);
@@ -197,6 +206,16 @@ html, body {
 }
 @utility glow-purple {
   box-shadow: 0 0 50px -12px rgba(40,90,220,0.55), 0 0 140px -40px rgba(40,90,220,0.55);
+}
+
+.superadmin-jobs-page {
+  color: #0f172a;
+}
+.superadmin-jobs-page .text-slate-400,
+.superadmin-jobs-page .text-slate-500,
+.superadmin-jobs-page .text-slate-600,
+.superadmin-jobs-page .text-slate-700 {
+  color: #0f172a !important;
 }
 @utility bg-grid {
   background-image:
