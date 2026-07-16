@@ -8257,10 +8257,8 @@ def create_job(job: JobCreate, current_admin: dict = Depends(get_current_admin_d
 
 @router.get("/api/jobs")
 def get_admin_jobs(current_admin: dict = Depends(get_current_admin_details)):
-    query = {}
-    if current_admin["role"] == "admin":
-         query["admin_id"] = current_admin["admin_id"]
-    jobs = list(jobs_collection.find(query).sort("created_at", -1))
+    # Return all jobs for both admin and superadmin users so the Jobs section shows a unified list.
+    jobs = list(jobs_collection.find({}).sort("created_at", -1))
     for j in jobs:
         j["_id"] = str(j["_id"])
     return {"status": "success", "jobs": jobs}
