@@ -1,0 +1,58 @@
+/* snake.css - Animation for How It Works workflow */
+
+.snake-circle {
+  animation: snakeGlow 7s linear infinite;
+}
+
+.snake-arrow {
+  animation: snakeArrow 7s linear infinite;
+}
+
+@keyframes snakeGlow {
+  0% {
+    box-shadow: 0 0 0px transparent;
+    transform: scale(1);
+    background-color: transparent;
+  }
+
+  6% {
+    box-shadow: 0 0 40px currentColor;
+    transform: scale(1.15);
+  }
+
+  12% {
+    box-shadow: 0 0 0px transparent;
+    transform: scale(1);
+    background-color: transparent;
+  }
+
+  100% {
+    box-shadow: 0 0 0px transparent;
+    transform: scale(1);
+    background-color: transparent;
+  }
+}
+
+@keyframes snakeArrow {
+  0% {
+    opacity: 0.2;
+    transform: translateX(0);
+  }
+
+  6% {
+    opacity: 1;
+    transform: translateX(15px) scale(1.4);
+    filter: drop-shadow(0 0 8px currentColor);
+  }
+
+  12% {
+    opacity: 0.2;
+    transform: translateX(0);
+    filter: drop-shadow(0 0 0 transparent);
+  }
+
+  100% {
+    opacity: 0.2;
+    transform: translateX(0);
+  }
+}

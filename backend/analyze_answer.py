@@ -1,0 +1,335 @@
+import json
+from ai_client import chat_completion, extract_json
+
+# Route AI scoring through typed_ai_layer for type-safe, validated outputs
+try:
+    from typed_ai_layer import score_answer as _typed_score
+    _TYPED_LAYER_AVAILABLE = True
+except ImportError:
+    _TYPED_LAYER_AVAILABLE = False
+
+# STATIC SYSTEM PROMPT — extracted so OpenRouter can cache it between calls.
+# This saves ~400 tokens on every answer scored.
+_SCORING_SYSTEM_PROMPT = """You are a senior technical interview evaluator calibrated to the same standards as HireVue, Karat, and Google hiring panels.
+
+You MUST use the Machine Reading Inference (MRI) workflow:
+1. GENERATE the perfect, ideal answer to the question (output as 'corrected_answer').
+2. EXTRACT 3 to 5 core factual concepts required from your ideal answer (output as 'key_facts_required').
+3. ANALYZE the candidate's transcript and strictly list which of those exact facts they successfully mentioned (output as 'facts_mentioned_by_candidate').
+4. CALCULATE the score STRICTLY based on the ratio of facts hit vs facts required.
+
+SCORING RUBRIC:
+1. CONTENT QUALITY (0-50 pts): 40-50=Hit all facts, 28-39=Missed 1-2 minor facts, 15-27=Missed major facts, 0-14=Hit 0 facts or factually incorrect.
+2. RELEVANCE (0-30 pts): 25-30=Direct, 17-24=Mostly, 8-16=Partial, 0-7=Irrelevant.
+3. TIME EFFICIENCY (0-20 pts): optimal use of allotted time.
+
+RULES:
+- Score the CANDIDATE'S ANSWER based on your ideal answer.
+- overall_score = content_score + relevance_score + time_score (max 100).
+- Also score clarity_score, technical_depth_score, confidence_score (each 0-100).
+- CRITICAL RULE: You MUST evaluate if the candidate actually answered the question. Set 'is_relevant' to false if they talked about something else, gave a nonsense answer, or said they don't know.
+- Return VALID JSON ONLY."""
+
+
+def analyze_answer(
+    question: str,
+    answer: str,
+    context: str = "",
+    time_spent_seconds: int = 0,
+    time_limit_seconds: int = 120,
+    language: str = "English"
+):
+    """
+    Analyze a candidate's interview answer and return a structured score.
+
+    Scoring Rubric (industry-standard, calibrated against HireVue / Karat norms):
+      - Content Quality   : 50 pts  (depth, accuracy, examples, structure)
+      - Relevance         : 30 pts  (how directly the answer addresses the question)
+      - Time Efficiency   : 20 pts  (optimal use of allotted time — not too short, not padding)
+
+    Final overall_score = weighted sum (0–100).
+    """
+    # Short-circuit for empty/placeholder answers
+    if not answer or not answer.strip() or answer.strip() in [
+        "Transcribing...", "Your speech will appear here automatically...", "(Skipped)"
+    ]:
+        return {
+            "corrected_answer": "No answer provided.",
+            "grammar_score": 0,
+            "relevance_score": 0,
+            "clarity_score": 0,
+            "content_score": 0,
+            "time_score": 0,
+            "overall_score": 0,
+            "feedback": "No answer was recorded for this question.",
+        }
+
+    # ── Time efficiency context ──────────────────────────────────────────────
+    time_context = ""
+    time_score_hint = ""
+    if time_spent_seconds > 0 and time_limit_seconds > 0:
+        pct = time_spent_seconds / time_limit_seconds
+        if pct < 0.20:
+            time_context = (
+                f"The candidate answered in {time_spent_seconds}s out of {time_limit_seconds}s allowed "
+                f"({int(pct*100)}% of time used). This is very short — likely insufficient depth."
+            )
+            time_score_hint = "time_score should be 0–10 (far too brief)."
+        elif pct < 0.40:
+            time_context = (
+                f"The candidate answered in {time_spent_seconds}s out of {time_limit_seconds}s allowed "
+                f"({int(pct*100)}% of time used). Answer may lack sufficient detail."
+            )
+            time_score_hint = "time_score should be 10–14 (too short)."
+        elif pct <= 0.85:
+            time_context = (
+                f"The candidate answered in {time_spent_seconds}s out of {time_limit_seconds}s allowed "
+                f"({int(pct*100)}% of time used). Good time management."
+            )
+            time_score_hint = "time_score should be 16–20 (optimal range)."
+        elif pct <= 1.05:
+            time_context = (
+                f"The candidate answered in {time_spent_seconds}s out of {time_limit_seconds}s allowed "
+                f"({int(pct*100)}% of time used). Used nearly all time — good."
+            )
+            time_score_hint = "time_score should be 14–18 (slightly long but acceptable)."
+        else:
+            time_context = (
+                f"The candidate went over time: {time_spent_seconds}s used vs {time_limit_seconds}s allowed "
+                f"({int(pct*100)}% of limit). Answer was padded or rambling."
+            )
+            time_score_hint = "time_score should be 8–12 (over time, penalised)."
+    else:
+        time_context = "Time data not available."
+        time_score_hint = "time_score should be 12 (neutral default when time data is missing)."
+
+    # TOKEN SAVE: Cap answer at 600 words — adequate for full scoring
+    answer_words = answer.split()
+    if len(answer_words) > 600:
+        answer = " ".join(answer_words[:600]) + " ...[truncated]"
+
+    # USER message — concise, variable data only (system prompt is cached above)
+    prompt = f"""Score this interview answer. Language for feedback: {language}.
+
+Context: {context[:500] if context else 'N/A'}
+Question: "{question[:300]}"
+Answer: "{answer}"
+Time: {time_context}
+{time_score_hint}
+
+Return VALID JSON ONLY:
+{{
+  "corrected_answer": "...",
+  "content_score": 0,
+  "relevance_score": 0,
+  "time_score": 0,
+  "overall_score": 0,
+  "clarity_score": 0,
+  "technical_depth_score": 0,
+  "confidence_score": 0,
+  "feedback": "...",
+  "keywords": ["key1", "key2"]
+}}"""
+
+    try:
+        # Use Typed AI layer for type-safe, validated JSON output
+        if _TYPED_LAYER_AVAILABLE:
+            result = _typed_score(
+                question=question,
+                answer=answer,
+                context=context,
+                time_spent_seconds=time_spent_seconds,
+                time_limit_seconds=time_limit_seconds,
+                language=language,
+                time_context=time_context,
+                time_score_hint=time_score_hint,
+            )
+            result_dict = result if isinstance(result, dict) else result.to_dict()
+        else:
+            # Direct fallback if typed_ai_layer not available
+            content = chat_completion(
+                messages=[
+                    {"role": "system", "content": _SCORING_SYSTEM_PROMPT},
+                    {"role": "user", "content": prompt}
+                ],
+                model="openai/gpt-4o-mini",
+                temperature=0.01,
+                timeout=45,
+            )
+            result_dict = extract_json(content)
+            if not result_dict:
+                raise Exception("No JSON found in AI response")
+
+        # ── Safety checks ──────────────────────────────────────────────────
+        word_count = len(answer.split())
+
+        # Very short answers (< 10 words): hard cap score
+        if word_count < 10:
+            result["content_score"] = min(result.get("content_score", 0), 8)
+            result["relevance_score"] = min(result.get("relevance_score", 0), 5)
+            result["overall_score"] = (
+                result["content_score"]
+                + result.get("relevance_score", 0)
+                + result.get("time_score", 0)
+            )
+            if "too short" not in result.get("feedback", "").lower():
+                result["feedback"] = (
+                    "Your answer was too short to evaluate meaningfully. "
+                    "Please provide a detailed response. "
+                    + result.get("feedback", "")
+                )
+
+        # Ensure overall_score is the sum of components (prevent AI hallucination)
+        computed = (
+            result.get("content_score", 0)
+            + result.get("relevance_score", 0)
+            + result.get("time_score", 0)
+        )
+        if abs(computed - result.get("overall_score", 0)) > 5:
+            result["overall_score"] = min(100, max(0, computed))
+
+        # Enforce strict zero-tolerance for irrelevant or nonsense answers
+        facts_required = result.get("key_facts_required", [])
+        facts_mentioned = result.get("facts_mentioned_by_candidate", [])
+        facts_hit = len(facts_mentioned)
+        
+        is_too_short = word_count < 5
+        is_short_hallucination = (word_count < 15 and result.get("overall_score", 0) > 40)
+        is_rubric_fail = not result.get("is_relevant", True) or (result.get("relevance_score", 0) <= 10) or (result.get("content_score", 0) <= 14)
+        is_zero_facts = (len(facts_required) > 0 and facts_hit == 0)
+        
+        if is_too_short or is_short_hallucination or is_rubric_fail or is_zero_facts:
+            result["overall_score"] = 0
+            result["content_score"] = 0
+            result["relevance_score"] = 0
+            result["time_score"] = 0
+
+        return result
+
+    except Exception as e:
+        print(f"⚠️ Analysis API Failed: {e}")
+
+        # ── FALLBACK: Heuristic scoring (offline mode) ─────────────────────
+        word_count = len(answer.split())
+
+        # Content score heuristic
+        if word_count < 10:
+            content_s = 8
+            feedback = f"⚠️ AI Offline. Answer too short ({word_count} words). Provide more detail."
+        elif word_count < 30:
+            content_s = 18
+            feedback = f"⚠️ AI Offline. Short answer ({word_count} words). More depth expected."
+        else:
+            content_s = min(int(word_count * 0.8), 40)
+            feedback = f"⚠️ AI Offline. Your answer was recorded ({word_count} words). Check API credits for real analysis."
+
+        # Relevance heuristic (neutral when offline)
+        relevance_s = 15
+
+        # Time score heuristic
+        time_s = 12  # neutral default
+        if time_spent_seconds > 0 and time_limit_seconds > 0:
+            pct = time_spent_seconds / time_limit_seconds
+            if 0.40 <= pct <= 0.85:
+                time_s = 18
+            elif pct < 0.20:
+                time_s = 5
+            elif pct > 1.10:
+                time_s = 8
+
+        # ── DYNAMIC INSIGHTS HEURISTICS (Offline Mode) ─────────────────
+        # 1. Clarity (Based on WPM)
+        wpm = 0
+        clarity_score = 50
+        if time_spent_seconds > 0:
+            wpm = (word_count / time_spent_seconds) * 60
+            if 110 <= wpm <= 160:
+                clarity_score = 85  # Good conversational pace
+            elif 80 <= wpm < 110 or 160 < wpm <= 190:
+                clarity_score = 65  # A bit slow or fast
+            else:
+                clarity_score = 45  # Too slow or too fast
+                
+        # 2. Confidence (Based on hedging words)
+        hedging_words = [" um ", " uh ", " like ", " i mean ", " sort of ", " kind of ", " maybe ", " probably ", " i guess ", " not sure "]
+        lower_ans = " " + answer.lower() + " "
+        hedge_count = sum(lower_ans.count(h) for h in hedging_words)
+        confidence_score = max(20, 90 - (hedge_count * 5))
+        if word_count < 20: 
+            confidence_score = min(confidence_score, 40)
+            
+        # 3. Technical Depth (Based on vocabulary richness / long words)
+        words = answer.split()
+        long_words = [w for w in words if len(w) > 7]
+        richness_ratio = len(long_words) / word_count if word_count > 0 else 0
+        if richness_ratio > 0.30:
+            technical_depth_score = 85
+        elif richness_ratio > 0.15:
+            technical_depth_score = 65
+        else:
+            technical_depth_score = 45
+        if word_count < 20:
+            technical_depth_score = min(technical_depth_score, 40)
+            
+        # Hard fail if no words spoken
+        if word_count == 0:
+            clarity_score = 0
+            confidence_score = 0
+            technical_depth_score = 0
+
+        result_dict = {
+            "corrected_answer": "Analysis unavailable (Offline Mode)",
+            "content_score": content_s,
+            "relevance_score": relevance_s,
+            "time_score": time_s,
+            "clarity_score": clarity_score,
+            "technical_depth_score": technical_depth_score,
+            "confidence_score": confidence_score,
+            "feedback": feedback,
+            "keywords": ["Offline"],
+        }
+
+    # ── COMMON PROCESSING: Enforce Math & Guardrails ──
+    content_s = int(result_dict.get("content_score", 0))
+    relevance_s = int(result_dict.get("relevance_score", 0))
+    time_s = int(result_dict.get("time_score", 0))
+    
+    # Guardrails against single-word hallucinations & offline stubs
+    if len(answer_words) < 5:
+        # An answer this short is fundamentally invalid (Hard Zero Rule)
+        content_s = 0
+        relevance_s = 0
+        time_s = 0
+        result_dict["feedback"] = "Answer is too short to evaluate. Please provide a full, detailed explanation."
+    elif len(answer_words) < 10:
+        content_s = min(content_s, 8)
+        relevance_s = min(relevance_s, 5)
+        if "too short" not in result_dict.get("feedback", "").lower():
+            result_dict["feedback"] = (
+                "Your answer was too short to evaluate meaningfully. "
+                "Please provide a detailed response. "
+                + result_dict.get("feedback", "")
+            )
+            
+    # Clamp rubric components before computing overall_score
+    content_s = max(0, min(50, content_s))
+    relevance_s = max(0, min(30, relevance_s))
+    time_s = max(0, min(20, time_s))
+    
+    result_dict["content_score"] = content_s
+    result_dict["relevance_score"] = relevance_s
+    result_dict["time_score"] = time_s
+    
+    # STRICT OVERRIDE: overall_score MUST be the mathematical sum
+    result_dict["overall_score"] = content_s + relevance_s + time_s
+
+    # Final constraints for secondary components
+    for k in ["clarity_score", "technical_depth_score", "confidence_score"]:
+        result_dict[k] = max(0, min(100, int(result_dict.get(k, 0))))
+    
+    return result_dict
+
+
+
+
+print("[OK] analyze_answer.py loaded | time-aware scoring with industry-standard rubric")
