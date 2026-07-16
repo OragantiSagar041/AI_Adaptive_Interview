@@ -150,21 +150,19 @@ export default function AdminNotifications() {
           <div className="flex gap-2">
             <button
               onClick={() => setFilter('all')}
-              className={`px-4 py-2 rounded-xl text-xs font-bold transition-all border-none cursor-pointer ${
-                filter === 'all'
+              className={`px-4 py-2 rounded-xl text-xs font-bold transition-all border-none cursor-pointer ${filter === 'all'
                   ? 'bg-indigo-50 text-indigo-600'
                   : 'bg-transparent text-slate-400 hover:text-slate-600 hover:bg-slate-50'
-              }`}
+                }`}
             >
               All Notifications ({notifications.length})
             </button>
             <button
               onClick={() => setFilter('unread')}
-              className={`px-4 py-2 rounded-xl text-xs font-bold transition-all border-none cursor-pointer ${
-                filter === 'unread'
+              className={`px-4 py-2 rounded-xl text-xs font-bold transition-all border-none cursor-pointer ${filter === 'unread'
                   ? 'bg-indigo-50 text-indigo-600'
                   : 'bg-transparent text-slate-400 hover:text-slate-600 hover:bg-slate-50'
-              }`}
+                }`}
             >
               Unread ({unreadCount})
             </button>
@@ -192,9 +190,8 @@ export default function AdminNotifications() {
             {filteredNotifications.map((n) => (
               <div
                 key={n.id}
-                className={`flex items-start justify-between p-6 gap-4 transition-all hover:bg-slate-50/50 ${
-                  !n.read ? 'bg-slate-50/20' : ''
-                }`}
+                className={`flex items-start justify-between p-6 gap-4 transition-all hover:bg-slate-50/50 ${!n.read ? 'bg-slate-50/20' : ''
+                  }`}
               >
                 <div className="flex gap-4">
                   {/* Icon Indicator */}
