@@ -764,7 +764,7 @@ export default function SuperAdminJobsPage() {
                             <td className="py-4 px-5">
                               <div className="flex flex-col gap-1">
                                 <span className="flex items-center gap-1.5 text-xs text-slate-600 font-medium">
-                                  <Mail size={11} className="text-indigo-400 shrink-0" />{app.email || '—'}
+                                  <Mail size={11} className="text-indigo-400 shrink-0" />{app.candidate_email || app.email || '—'}
                                 </span>
                                 <span className="flex items-center gap-1.5 text-xs text-slate-500">
                                   <Phone size={11} className="text-teal-400 shrink-0" />{app.phone || '—'}
