@@ -137,7 +137,6 @@ export function CandidateScorecardModal({
 
             const currentMarginTop = parseFloat(window.getComputedStyle(el).marginTop || '0');
             originalMargins.set(el, el.style.marginTop);
-
             // Push element down using margin to avoid flexbox gap calculation issues
             el.style.marginTop = `${currentMarginTop + pushAmount}px`;
           }
@@ -716,25 +715,21 @@ export function CandidateScorecardModal({
 
 export const convertHtmlToPlainText = (htmlString, candidateName = '', jobDescription = '', duration = '') => {
   if (!htmlString) return '';
-
   try {
     const parser = new DOMParser();
     const doc = parser.parseFromString(htmlString, 'text/html');
     const whiteCard = doc.body.querySelector('div[style*="background: white"]') || doc.body.children[1] || doc.body;
     const blocks = [];
-
     let extractedName = '';
     const dearPara = Array.from(whiteCard.querySelectorAll('p')).find(p => p.innerText.includes('Dear'));
     if (dearPara) {
       extractedName = dearPara.innerText.replace('Dear', '').replace(',', '').trim();
     }
-
     let extractedJd = '';
     const jdPara = Array.from(whiteCard.querySelectorAll('p')).find(p => p.previousElementSibling && p.previousElementSibling.innerText.includes('Role Details'));
     if (jdPara) {
       extractedJd = jdPara.innerText.trim();
     }
-
     let extractedDuration = '';
     const durationPara = Array.from(whiteCard.querySelectorAll('p')).find(p => p.innerText.includes('Duration:'));
     if (durationPara) {
@@ -744,28 +739,23 @@ export const convertHtmlToPlainText = (htmlString, candidateName = '', jobDescri
 
     Array.from(whiteCard.children).forEach(child => {
       const text = child.innerText || '';
-
       if (child.tagName === 'DIV' && (child.style.borderLeft || text.includes('Role Details'))) {
         blocks.push('📋 Role Details:\n{job_description}');
         return;
       }
-
       if (child.querySelector('a') || (child.tagName === 'DIV' && child.style.textAlign === 'center' && text.includes('Start Interview'))) {
         blocks.push('[Start Interview Button]');
         return;
       }
-
       if (text.includes('Mandatory Interview Guidelines')) {
         const bulletPoints = Array.from(child.querySelectorAll('li')).map(li => `• ${li.innerText.trim()}`).join('\n');
         blocks.push(`⚠️ Mandatory Interview Guidelines\n${bulletPoints || '• Full-Screen Mode: You must maintain full-screen mode at all times.\n• Video Proctoring: Your camera will be active.\n• Audio Environment: Please ensure you are in a quiet room.'}`);
         return;
       }
-
       if (text.includes('Scheduled Time') || text.includes('Scheduled Window') || text.includes('scheduled time window')) {
         blocks.push('{schedule_info}');
         return;
       }
-
       if (child.tagName === 'DIV' && (child.style.backgroundColor === 'rgb(254, 243, 199)' || text.includes('Important:') || text.includes('expire'))) {
         blocks.push(`⚠️ Important: This interview link will expire in exactly 24 hours. Ensure a stable internet connection and a quiet environment.`);
         return;
@@ -794,7 +784,6 @@ export const convertHtmlToPlainText = (htmlString, candidateName = '', jobDescri
       if (duration && blockText.includes(String(duration)) && blockText.includes('Duration:')) {
         blockText = blockText.replaceAll(String(duration), '{duration}');
       }
-
       if (extractedJd && blockText.includes(extractedJd)) {
         blockText = blockText.replaceAll(extractedJd, '{job_description}');
       }
@@ -810,7 +799,6 @@ export const convertHtmlToPlainText = (htmlString, candidateName = '', jobDescri
       clean = clean.replace(/\n\s*\n/g, '\n\n').trim();
       return clean;
     }
-
     return blocks.join('\n\n');
   } catch (err) {
     console.error("Error converting HTML to plain text", err);
@@ -841,7 +829,6 @@ export const convertPlainTextToHtml = (plainText, candidateName = 'Candidate Nam
         }
         return `<li>${cleanLine}</li>`;
       }).join('\n');
-
       return `
         <div style="background-color: #f8fafc; border-radius: 8px; padding: 20px; margin: 24px 0; border: 1px solid #e2e8f0; border-left: 4px solid #ef4444; text-align: left;">
             <h3 style="margin: 0 0 12px; font-size: 14px; color: #0f172a; font-weight: 700; text-transform: uppercase; letter-spacing: 0.05em;">⚠️ Mandatory Interview Guidelines</h3>
@@ -851,7 +838,6 @@ export const convertPlainTextToHtml = (plainText, candidateName = 'Candidate Nam
         </div>
       `;
     }
-
     if (text.includes('Role Details') || text.includes('{job_description}')) {
       const formattedJd = String(jobDescription || '').replace(/\n/g, '<br/>');
       return `
@@ -861,7 +847,6 @@ export const convertPlainTextToHtml = (plainText, candidateName = 'Candidate Nam
         </div>
       `;
     }
-
     if (text.includes('[Start Interview Button]')) {
       return `
         <div style="text-align: center; margin: 32px 0;">
@@ -871,7 +856,6 @@ export const convertPlainTextToHtml = (plainText, candidateName = 'Candidate Nam
         </div>
       `;
     }
-
     if (text.includes('{schedule_info}')) {
       if (scheduleBlock) return scheduleBlock;
       return `
@@ -880,7 +864,6 @@ export const convertPlainTextToHtml = (plainText, candidateName = 'Candidate Nam
         </div>
       `;
     }
-
     if (text.includes('Important:') || text.includes('expire')) {
       let cleanText = text.replace('⚠️', '').trim();
       return `
@@ -889,17 +872,14 @@ export const convertPlainTextToHtml = (plainText, candidateName = 'Candidate Nam
         </div>
       `;
     }
-
     let cleanText = text
       .replaceAll('{candidate_name}', candidateName)
       .replaceAll('{duration}', String(duration))
       .replaceAll('{job_description}', jobDescription);
-
     if (cleanText.startsWith('Dear ')) {
       const greetingName = cleanText.substring(5).replace(/,$/, '').trim();
       return `<p style="font-size: 16px; color: #0f172a; text-align: left; margin: 0 0 20px 0;">Dear <b>${greetingName}</b>,</p>`;
     }
-
     if (cleanText.startsWith('Best regards,') || cleanText.startsWith('Regards,')) {
       const lines = cleanText.split('\n');
       const formattedLines = lines.map((l, idx) => {
