@@ -21,6 +21,7 @@ notifications_collection = db["notifications"]
 omni_call_logs_collection = db["omni_call_logs"]
 jobs_collection = db["jobs"]
 job_applications_collection = db["job_applications"]
+conversation_flows_collection = db["conversation_flows"]
 counters_collection = db["counters"]
 demo_requests_collection = db["demo_requests"]
 

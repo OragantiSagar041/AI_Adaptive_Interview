@@ -465,7 +465,7 @@ export default function OverviewDashboardPage() {
                     className="flex items-center justify-between rounded-lg bg-white px-3 py-2.5 transition-all shadow-sm hover:shadow-md"
                   >
                     <div className="flex items-center gap-2.5">
-                      <div className={`grid h-8 w-8 place-items-center rounded-md ${tintClasses[t.tone]}`}>
+                      <div className="grid h-8 w-8 place-items-center rounded-md bg-primary/10 text-primary">
                         <Icon className="h-4 w-4" />
                       </div>
                       <span className="text-sm">{t.label}</span>

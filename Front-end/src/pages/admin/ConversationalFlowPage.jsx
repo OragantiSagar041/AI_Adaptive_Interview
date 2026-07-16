@@ -99,7 +99,7 @@ export default function ConversationalFlowPage() {
     <div className="max-w-4xl mx-auto py-8 px-4">
       <div className="flex justify-between items-center mb-8">
         <div>
-          <h1 className="text-2xl font-bold text-white flex items-center">
+          <h1 className="text-2xl font-bold text-slate-900 flex items-center">
             <Settings className="w-6 h-6 mr-3 text-indigo-400" />
             Conversational Flow
           </h1>

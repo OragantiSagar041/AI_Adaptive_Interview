@@ -138,6 +138,7 @@ function App() {
             <Route path="create-interview" element={<CreateInterviewPage />} />
             <Route path="ai-calling" element={<AICallingAgentPage />} />
             <Route path="conversational-flow" element={<ConversationalFlowPage />} />
+            <Route path="jobs" element={<SuperAdminJobsPage />} />
             <Route path="candidate/profile/:id" element={<ProfileViewPage />} />
             <Route path="profile-settings" element={<ProfileSettings />} />
             <Route path="notifications" element={<AdminNotifications />} />

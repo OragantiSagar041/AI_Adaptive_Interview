@@ -158,6 +158,8 @@ export default function AdminPage({ role: initialRole = 'admin' }) {
       activeTab = 'rejected'
     } else if (pathname.includes('create-interview')) {
       activeTab = 'create'
+    } else if (pathname.includes('/admin/jobs')) {
+      activeTab = 'jobs'
     } else if (pathname.includes('profile-settings')) {
       activeTab = 'settings'
     }
@@ -1178,6 +1180,7 @@ export default function AdminPage({ role: initialRole = 'admin' }) {
                 qualified: '/admin/qualified-candidates',
                 rejected: '/admin/rejected-candidates',
                 create: '/admin/create-interview',
+                jobs: '/admin/jobs',
                 settings: '/admin/profile-settings'
               }
               navigate(tabToPath[tab] || '/admin/dashboard')
