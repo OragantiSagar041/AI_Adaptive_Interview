@@ -91,6 +91,18 @@ const dashboardSlice = createSlice({
           audio_level: data.audio_level || 0,
           current_question: data.current_question || session.current_question
         };
+      } else {
+        // If an interview goes live and isn't in our list yet, add it!
+        state.liveSessions.unshift({
+          link_id: link_id,
+          candidate_name: data.candidate_name || "Fetching...",
+          interview_title: data.interview_title || "Live Interview",
+          online: true,
+          audio_level: data.audio_level || 0,
+          current_question: data.current_question,
+          proctoring_alerts: data.proctoring_alerts || 0,
+          session_id: link_id
+        });
       }
     }
   },

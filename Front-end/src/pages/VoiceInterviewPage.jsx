@@ -1443,6 +1443,7 @@ export default function VoiceInterviewPage() {
           face_visible: proctoringState.faceVisible,
           proctoring_alerts: warningsCount,
           alert_types: [...new Set(alertTypes)],
+          round_type: round,
           last_alert_type: proctoringState.lastAlertType || null,
           face_count: proctoringState.faceCount || 0,
           multi_face: !!proctoringState.multiFace,

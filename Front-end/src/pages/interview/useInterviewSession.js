@@ -262,7 +262,7 @@ export const useInterviewSession = (sessionId, interviewType, startRoundTwo) => 
 
   // WebRTC Candidate Logic
   const telemetryData = {
-    round_type: isRoundTwo ? 'coding' : 'verbal',
+    round_type: startRoundTwo ? 'coding' : 'verbal',
     current_question: currentQuestionIndex + 1,
     total_questions: questions.length,
     question_text: questions[currentQuestionIndex]?.text || '',

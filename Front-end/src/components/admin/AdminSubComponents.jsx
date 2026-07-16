@@ -19,8 +19,19 @@ export function CandidateFilters({
   setSortBy,
   handleExportExcel,
   selectedIds,
-  handleBulkDelete
+  handleBulkDelete,
+  adminFilter,
+  setAdminFilter,
+  pipelineFilter,
+  setPipelineFilter,
+  positionFilter,
+  setPositionFilter,
+  allCandidates = [],
+  adminsList = []
 }) {
+  const uniquePositions = [...new Set(allCandidates.map(c => c.interview_title).filter(Boolean))]
+  const uniqueAdmins = [...new Set(allCandidates.map(c => c.created_by).filter(Boolean))]
+
   return (
     <div className="flex flex-nowrap items-end gap-3 w-full overflow-x-auto pb-3">
       <div className="flex flex-col gap-1 flex-shrink-0">
@@ -96,6 +107,61 @@ export function CandidateFilters({
         </select>
       </div>
 
+      {pipelineFilter !== undefined && (
+        <div className="flex flex-col gap-1 flex-shrink-0">
+          <label className="text-[0.68rem] text-slate-500 font-bold uppercase">Pipeline</label>
+          <select
+            className="bg-white border border-[#dbe4f0] text-[#0f172a] rounded-lg px-3 py-1.5 text-xs outline-none transition-all focus:border-primary focus:ring-2 focus:ring-primary/15 w-full sm:w-[130px] cursor-pointer"
+            style={{ padding: '0.5rem 1.75rem 0.5rem 0.75rem' }}
+            value={pipelineFilter}
+            onChange={(e) => setPipelineFilter(e.target.value)}
+          >
+            <option value="all">All Pipelines</option>
+            <option value="hireiq">HireIQ</option>
+            <option value="ai_calling">AI Calling</option>
+          </select>
+        </div>
+      )}
+
+      {positionFilter !== undefined && (
+        <div className="flex flex-col gap-1 flex-shrink-0">
+          <label className="text-[0.68rem] text-slate-500 font-bold uppercase">Position</label>
+          <select
+            className="bg-white border border-[#dbe4f0] text-[#0f172a] rounded-lg px-3 py-1.5 text-xs outline-none transition-all focus:border-primary focus:ring-2 focus:ring-primary/15 w-full sm:w-[150px] cursor-pointer"
+            style={{ padding: '0.5rem 1.75rem 0.5rem 0.75rem' }}
+            value={positionFilter}
+            onChange={(e) => setPositionFilter(e.target.value)}
+          >
+            <option value="all">All Positions</option>
+            {uniquePositions.map(pos => (
+              <option key={pos} value={pos}>{pos}</option>
+            ))}
+          </select>
+        </div>
+      )}
+
+      {adminFilter !== undefined && (
+        <div className="flex flex-col gap-1 flex-shrink-0">
+          <label className="text-[0.68rem] text-slate-500 font-bold uppercase">Admin</label>
+          <select
+            className="bg-white border border-[#dbe4f0] text-[#0f172a] rounded-lg px-3 py-1.5 text-xs outline-none transition-all focus:border-primary focus:ring-2 focus:ring-primary/15 w-full sm:w-[130px] cursor-pointer"
+            style={{ padding: '0.5rem 1.75rem 0.5rem 0.75rem' }}
+            value={adminFilter}
+            onChange={(e) => setAdminFilter(e.target.value)}
+          >
+            <option value="all">All Admins</option>
+            {adminsList.map(adminObj => {
+              const adminId = adminObj._id || adminObj.id || adminObj.admin_id;
+              if (!adminId) return null;
+              const displayName = adminObj.name || adminObj.username || adminId.slice(0, 8);
+              return (
+                <option key={adminId} value={adminId}>{displayName}</option>
+              )
+            })}
+          </select>
+        </div>
+      )}
+
       <div className="flex items-center gap-2 flex-shrink-0 mt-2 sm:mt-0">
         <Button
           onClick={() => {
@@ -104,6 +170,9 @@ export function CandidateFilters({
             setEndDate('')
             setStatusFilter('all')
             setSortBy('score')
+            if (setAdminFilter) setAdminFilter('all')
+            if (setPipelineFilter) setPipelineFilter('all')
+            if (setPositionFilter) setPositionFilter('all')
           }}
           variant="secondary"
           className="flex-1 sm:flex-initial px-2.5 py-1.5 h-[36px] bg-rose-50 border-rose-200 text-rose-500 hover:bg-rose-100/50 justify-center"

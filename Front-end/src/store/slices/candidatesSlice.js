@@ -246,6 +246,20 @@ function recomputeFilteredCandidates(state) {
       if (createdDate > endDateTime) return false
     }
 
+    if (state.adminFilter && state.adminFilter !== 'all') {
+      if (c.created_by !== state.adminFilter) return false
+    }
+
+    if (state.pipelineFilter && state.pipelineFilter !== 'all') {
+      const isAICalling = (c.id || '').startsWith('ai_call_') || (c.link_id || '').startsWith('ai_call_')
+      if (state.pipelineFilter === 'ai_calling' && !isAICalling) return false
+      if (state.pipelineFilter === 'hireiq' && isAICalling) return false
+    }
+
+    if (state.positionFilter && state.positionFilter !== 'all') {
+      if ((c.interview_title || '') !== state.positionFilter) return false
+    }
+
     return true
   })
 
@@ -277,6 +291,9 @@ const candidatesSlice = createSlice({
     startDate: '',
     endDate: '',
     statusFilter: 'all',
+    adminFilter: 'all',
+    pipelineFilter: 'all',
+    positionFilter: 'all',
     sortBy: 'score',
     totalPages: 1,
     startIndex: 0,
@@ -304,6 +321,21 @@ const candidatesSlice = createSlice({
     },
     setStatusFilter: (state, action) => {
       state.statusFilter = action.payload
+      state.currentPage = 1
+      recomputeFilteredCandidates(state)
+    },
+    setAdminFilter: (state, action) => {
+      state.adminFilter = action.payload
+      state.currentPage = 1
+      recomputeFilteredCandidates(state)
+    },
+    setPipelineFilter: (state, action) => {
+      state.pipelineFilter = action.payload
+      state.currentPage = 1
+      recomputeFilteredCandidates(state)
+    },
+    setPositionFilter: (state, action) => {
+      state.positionFilter = action.payload
       state.currentPage = 1
       recomputeFilteredCandidates(state)
     },
@@ -430,6 +462,9 @@ export const {
   setStartDate,
   setEndDate,
   setStatusFilter,
+  setAdminFilter,
+  setPipelineFilter,
+  setPositionFilter,
   setSortBy,
   setSelectedIds,
   setCurrentPage

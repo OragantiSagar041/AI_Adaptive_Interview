@@ -260,8 +260,8 @@ export default function MasterLayout() {
         }`}
         style={{
           background: `
-            radial-gradient(ellipse 450px 700px at 50% 30%, ${hexToRgba(currentAccent.primary, 0.25)} 0%, ${hexToRgba(currentAccent.primary, 0.12)} 30%, ${hexToRgba(currentAccent.primary, 0.05)} 60%, transparent 85%),
-            linear-gradient(180deg, ${hexToRgba(currentAccent.primary, 0.95)} 0%, ${hexToRgba(currentAccent.primary, 0.85)} 50%, ${hexToRgba(currentAccent.primary, 0.75)} 100%)
+            radial-gradient(circle at 20% 18%, rgba(255, 255, 255, 0.12), transparent 24%),
+            linear-gradient(180deg, rgba(20, 37, 91, 0.96) 0%, rgba(30, 58, 138, 0.94) 46%, rgba(37, 99, 235, 0.9) 100%)
           `,
           boxShadow: `0 20px 60px rgba(15, 23, 42, 0.12)`
         }}
@@ -520,9 +520,9 @@ export default function MasterLayout() {
         </header>
 
         <main
-          className="p-4 sm:p-8 flex-grow overflow-y-auto relative"
+          className="p-4 sm:p-8 flex-grow overflow-y-auto"
           style={{
-            background: 'transparent',
+            background: `linear-gradient(135deg, ${accentPageStrong} 0%, rgba(255,255,255,0.85) 30%, rgba(255,255,255,0.85) 70%, ${accentPage} 100%)`,
           }}
         >
           <Outlet />

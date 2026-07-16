@@ -73,6 +73,9 @@ export default function CandidateDialog({ candidate, open, onOpenChange }) {
   const [loading, setLoading] = useState(false)
   const [atsLoading, setAtsLoading] = useState(false)
   const [error, setError] = useState(null)
+  const [showResumeModal, setShowResumeModal] = useState(false)
+  const [showRecordingModal, setShowRecordingModal] = useState(false)
+  const [showTranscriptModal, setShowTranscriptModal] = useState(false)
 
   // New States
   const [extractingInfo, setExtractingInfo] = useState(false)
@@ -379,16 +382,15 @@ export default function CandidateDialog({ candidate, open, onOpenChange }) {
     if (!newNote.trim()) return
     setNotesSaving(true)
     const linkId = c.link_id || candidate.link_id || c.interview_id || candidate.interview_id || c.id || candidate.id || c._id || candidate._id
-    
     try {
       const noteObj = {
         text: newNote,
         added_by: "Admin",
         added_at: new Date().toISOString()
       };
-      
+
       const updatedNotes = [...(c.notes || []), noteObj]
-      
+
       // Save to backend database
       await axios.post(`${API_BASE_URL}/admin/interview/${linkId}/notes`, { notes: updatedNotes }, {
         headers: { Authorization: `Bearer ${token}` }
@@ -820,8 +822,8 @@ export default function CandidateDialog({ candidate, open, onOpenChange }) {
         </div>
       </div>
 
-      <ScheduleModal 
-        isOpen={showScheduleModal} 
+      <ScheduleModal
+        isOpen={showScheduleModal}
         onClose={() => setShowScheduleModal(false)}
         candidate={c}
       />

@@ -1,4 +1,5 @@
 import React, { useEffect, useRef, useState } from 'react';
+import { useProctoring } from '../hooks/useProctoring';
 
 const DeviceCheckModal = ({ onSuccess, onCancel }) => {
   const videoRef = useRef(null);
@@ -12,6 +13,13 @@ const DeviceCheckModal = ({ onSuccess, onCancel }) => {
   const [volLevel, setVolLevel] = useState(0);
   const [isReady, setIsReady] = useState(false);
   const [hasAudioVerified, setHasAudioVerified] = useState(false);
+
+  const proctoring = useProctoring({
+    videoRef,
+    enabled: isReady && !error
+  });
+  
+  const hasFaceVerified = proctoring.faceVisible && proctoring.faceCount === 1;
 
   useEffect(() => {
     let active = true;
@@ -166,6 +174,20 @@ const DeviceCheckModal = ({ onSuccess, onCancel }) => {
           </div>
         </div>
 
+        {/* Face Detection Status */}
+        <div className="bg-white/5 rounded-xl p-4 mb-8 flex items-center justify-between">
+          <span className="text-sm font-semibold text-slate-300 flex items-center gap-2">
+            <i className="fas fa-user-check text-indigo-400"></i> Face Detection
+          </span>
+          {hasFaceVerified ? (
+            <span className="text-xs font-bold text-emerald-400 bg-emerald-400/10 px-2 py-1 rounded">Face Verified ✓</span>
+          ) : proctoring.multiFace ? (
+            <span className="text-xs font-bold text-red-500 bg-red-500/10 px-2 py-1 rounded">Multiple Faces Detected!</span>
+          ) : isReady ? (
+            <span className="text-xs font-bold text-amber-500 bg-amber-500/10 px-2 py-1 rounded">Looking for face...</span>
+          ) : null}
+        </div>
+
         {/* Actions */}
         <div className="flex gap-4">
           <button
@@ -176,14 +198,14 @@ const DeviceCheckModal = ({ onSuccess, onCancel }) => {
           </button>
           <button
             onClick={handleProceed}
-            disabled={!isReady || !!error || !hasAudioVerified}
+            disabled={!isReady || !!error || !hasAudioVerified || !hasFaceVerified}
             className={`flex-1 py-3 rounded-xl font-bold text-sm transition-all shadow-lg ${
-              isReady && !error && hasAudioVerified
+              isReady && !error && hasAudioVerified && hasFaceVerified
                 ? 'bg-primary hover:bg-primary-hover text-white shadow-primary/25 hover:shadow-primary/40 hover:-translate-y-0.5' 
                 : 'bg-slate-700 text-slate-500 cursor-not-allowed shadow-none'
             }`}
           >
-            {isReady && !error && !hasAudioVerified ? 'Awaiting Audio...' : 'Proceed to Interview'}
+            {isReady && !error && (!hasAudioVerified || !hasFaceVerified) ? 'Awaiting Checks...' : 'Proceed to Interview'}
           </button>
         </div>
         

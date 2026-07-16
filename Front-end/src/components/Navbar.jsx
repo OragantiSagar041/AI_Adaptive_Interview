@@ -134,7 +134,7 @@ export default function Navbar({
             <button
               key={color}
               onClick={() => onAccentChange(color)}
-              className="w-3.5 h-3.5 rounded-full border-2 border-white cursor-pointer p-0 transition-all hover:scale-110"
+              className="w-3.5 h-3.5 rounded-full border-2 border-white cursor-pointer p-0 transition-all"
               style={{
                 background: accentColors[color].primary,
                 boxShadow: accentName === color ? `0 0 0 2px ${accentColors[color].primary}` : 'none',
@@ -144,14 +144,16 @@ export default function Navbar({
           ))}
         </div>
 
-        <div className="flex items-center gap-1.5 px-3 py-1 bg-indigo-50/50 border border-indigo-200/60 text-indigo-700 rounded-full text-xs font-bold shadow-sm">
-          <span className="w-1.5 h-1.5 rounded-full bg-indigo-600" />
-          Active Plan: {adminUser?.subscription_plan || 'Advance'}
-        </div>
-
-        <div className="flex items-center gap-1.5 px-3 py-1 bg-cyan-50 border border-cyan-100 text-cyan-600 rounded-full text-xs font-bold shadow-sm">
-          <span className="text-[10px]">🔗</span>
-          {adminUser?.credits ?? 0} credits left
+        <div className="flex items-center gap-1.5 bg-primary/10 text-primary border border-primary/20 rounded-full pl-4 pr-1.5 py-1 text-sm font-bold shadow-sm">
+          <i className="fas fa-layer-group text-[10px]"></i>
+          {adminUser?.subscription_plan || 'Advance'} • {adminUser?.credits ?? 0} credits left
+          <button
+            onClick={onAddCredits}
+            className="ml-1 w-5 h-5 flex items-center justify-center bg-primary text-white rounded-full hover:bg-primary-hover shadow-md transition-colors border-none cursor-pointer"
+            title={adminUser?.role === 'superadmin' ? 'Buy Credits' : 'Request Credits'}
+          >
+            <i className="fas fa-plus text-[10px]"></i>
+          </button>
         </div>
 
         {/* Notification Bell */}

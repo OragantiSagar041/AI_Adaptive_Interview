@@ -29,10 +29,16 @@ _RESUME_SYSTEM = (
 
 _SCORING_SYSTEM = (
     "You are a senior technical interview evaluator calibrated to HireVue, Karat, and Google standards.\n"
+    "You MUST use the Machine Reading Inference (MRI) workflow:\n"
+    "1. GENERATE the perfect, ideal answer to the question (output as 'corrected_answer').\n"
+    "2. EXTRACT 3 to 5 core factual concepts required from your ideal answer (output as 'key_facts_required').\n"
+    "3. ANALYZE the candidate's transcript and strictly list which of those exact facts they successfully mentioned (output as 'facts_mentioned_by_candidate').\n"
+    "4. CALCULATE the score STRICTLY based on the ratio of facts hit vs facts required.\n"
     "SCORING RUBRIC:\n"
-    "1. CONTENT QUALITY (0-50 pts): depth, accuracy, STAR structure. 40-50=Exceptional, 28-39=Good, 15-27=Weak, 0-14=Poor\n"
-    "2. RELEVANCE (0-30 pts): how directly the answer addresses the question. 25-30=Direct, 17-24=Mostly, 8-16=Partial, 0-7=Irrelevant\n"
+    "1. CONTENT QUALITY (0-50 pts): 40-50=Hit all facts, 28-39=Missed 1-2 minor facts, 15-27=Missed major facts, 0-14=Hit 0 facts or factually incorrect.\n"
+    "2. RELEVANCE (0-30 pts): 25-30=Direct, 17-24=Mostly, 8-16=Partial, 0-7=Irrelevant.\n"
     "3. TIME EFFICIENCY (0-20 pts): optimal use of allotted time.\n"
+    "CRITICAL RULE: You MUST evaluate if the candidate actually answered the question. Set 'is_relevant' to false if they talked about something else, gave a nonsense answer, or said they don't know.\n"
     "Return VALID JSON ONLY. No markdown."
 )
 
@@ -167,7 +173,10 @@ Time info: {time_context}
 
 Return VALID JSON ONLY:
 {{
+  "is_relevant": true,
   "corrected_answer": "...",
+  "key_facts_required": ["fact 1", "fact 2"],
+  "facts_mentioned_by_candidate": ["fact 1"],
   "content_score": 0,
   "relevance_score": 0,
   "time_score": 0,
@@ -198,6 +207,27 @@ Return VALID JSON ONLY:
             timeout=45,
         )
         result = _parse_with_schema(raw, AnswerScore, fallback)
+        
+        # Enforce strict zero-tolerance for irrelevant or nonsense answers
+        word_count = len(answer.split())
+        facts_hit = len(result.facts_mentioned_by_candidate)
+        
+        # Aggressive Hallucination Filters:
+        # 1. If it's physically too short to be a valid technical answer (< 5 words).
+        # 2. If it's short (< 15 words) but somehow got a high score (hallucinated).
+        # 3. If AI explicitly flagged it as irrelevant or gave it a failing rubric score.
+        # 4. If the AI generated facts, but the candidate hit 0 of them.
+        is_too_short = word_count < 5
+        is_short_hallucination = (word_count < 15 and result.overall_score > 40)
+        is_rubric_fail = not result.is_relevant or (result.relevance_score <= 10) or (result.content_score <= 14)
+        is_zero_facts = (len(result.key_facts_required) > 0 and facts_hit == 0)
+        
+        if is_too_short or is_short_hallucination or is_rubric_fail or is_zero_facts:
+            result.overall_score = 0
+            result.content_score = 0
+            result.relevance_score = 0
+            result.time_score = 0
+            
         return result.to_dict()
     except Exception as e:
         print(f"[typed_ai_layer] score_answer error: {e}")
