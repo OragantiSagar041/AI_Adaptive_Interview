@@ -707,10 +707,18 @@ export default function SuperAdminJobsPage() {
                     No one has applied for <span className="font-bold">{applicationData.job?.title}</span> yet.
                     Share the job link to start receiving applications.
                   </p>
-                  <div className="mt-6 px-4 py-2.5 bg-slate-50 border border-slate-200 rounded-xl flex items-center gap-2 text-sm text-slate-500 font-mono">
-                    <ExternalLink size={13} className="text-indigo-400" />
-                    /apply/{applicationData.job?.job_id}
-                  </div>
+                  <button 
+                    onClick={() => {
+                      const url = `${window.location.origin}/apply/${applicationData.job?.job_id}`;
+                      navigator.clipboard.writeText(url);
+                      alert('Job link copied to clipboard!');
+                    }}
+                    title="Click to copy link"
+                    className="mt-6 px-4 py-3 bg-white border border-slate-200 hover:border-indigo-300 hover:bg-indigo-50/50 rounded-xl flex items-center gap-2.5 text-sm text-slate-600 font-mono transition-all cursor-pointer w-full max-w-md shadow-sm group"
+                  >
+                    <ExternalLink size={15} className="text-indigo-400 group-hover:text-indigo-600 transition-colors shrink-0" />
+                    <span className="truncate flex-1 text-left">{window.location.origin}/apply/{applicationData.job?.job_id}</span>
+                  </button>
                 </div>
               ) : (
                 <div className="overflow-x-auto rounded-2xl border border-slate-100 shadow-sm">

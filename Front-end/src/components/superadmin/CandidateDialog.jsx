@@ -48,7 +48,7 @@ function InfoRow({ icon: Icon, label, value }) {
       <Icon className="h-4 w-4 text-slate-400 mt-0.5 shrink-0" />
       <div className="min-w-0">
         <div className="text-[11px] font-bold text-slate-400 uppercase tracking-wider">{label}</div>
-        <div className="text-sm font-semibold text-slate-700 truncate">{value || 'N/A'}</div>
+        <div className="text-sm font-semibold text-slate-700 break-all">{value || 'N/A'}</div>
       </div>
     </div>
   )
@@ -77,8 +77,22 @@ export default function CandidateDialog({ candidate, open, onOpenChange, onStatu
   const [showResumeModal, setShowResumeModal] = useState(false)
   const [showRecordingModal, setShowRecordingModal] = useState(false)
   const [showTranscriptModal, setShowTranscriptModal] = useState(false)
+  const [showNotesPanel, setShowNotesPanel] = useState(false)
+  const [notesHistory, setNotesHistory] = useState([])
+  const [notes, setNotes] = useState("")
+  const [savingNotes, setSavingNotes] = useState(false)
   const token = useSelector(state => state.auth.token)
   const API_BASE_URL = useSelector(state => state.auth.API_BASE_URL)
+
+  useEffect(() => {
+    if (detail?.notes_history && Array.isArray(detail.notes_history)) {
+      setNotesHistory(detail.notes_history);
+    } else if (candidate?.notes_history && Array.isArray(candidate.notes_history)) {
+      setNotesHistory(candidate.notes_history);
+    } else {
+      setNotesHistory([]);
+    }
+  }, [detail, candidate]);
 
   // Fetch full candidate details when dialog opens
   useEffect(() => {
@@ -192,19 +206,28 @@ export default function CandidateDialog({ candidate, open, onOpenChange, onStatu
   }
 
   const handleNotes = () => {
-    Swal.fire({
-      title: 'Add Notes',
-      input: 'textarea',
-      inputLabel: 'Enter your notes for this candidate',
-      inputPlaceholder: 'Type your notes here...',
-      showCancelButton: true,
-      confirmButtonText: 'Save Notes',
-      confirmButtonColor: '#4f46e5'
-    }).then((result) => {
-      if (result.isConfirmed) {
-        Swal.fire('Saved!', 'Your notes have been saved locally.', 'success')
+    setShowNotesPanel(true);
+  }
+
+  const handleSaveNotes = async () => {
+    if (!notes.trim()) return;
+    setSavingNotes(true);
+    try {
+      const linkId = candidate.link_id || candidate.id || candidate._id;
+      const response = await axios.put(`${API_BASE_URL}/admin/interview/${linkId}/notes`, { notes }, {
+        headers: { Authorization: `Bearer ${token}` }
+      });
+      if (response.data.note) {
+        setNotesHistory(prev => [...prev, response.data.note]);
+        if (detail) {
+          setDetail(prev => ({ ...prev, notes_history: [...(prev.notes_history || []), response.data.note] }));
+        }
       }
-    })
+      setNotes("");
+    } catch (err) {
+      Swal.fire('Error', 'Failed to save note.', 'error');
+    }
+    setSavingNotes(false);
   }
 
   const handleSchedule = () => {
@@ -230,7 +253,8 @@ export default function CandidateDialog({ candidate, open, onOpenChange, onStatu
   const handleViewProfile = () => {
     const linkId = c.link_id || c.id || c._id;
     onOpenChange(false);
-    navigate(`/admin/candidate/profile/${linkId}`, { state: { candidate: c } });
+    const prefix = window.location.pathname.startsWith('/superadmin') ? '/superadmin' : '/admin';
+    navigate(`${prefix}/candidate/profile/${linkId}`, { state: { candidate: c } });
   }
 
   const tabs = ["overview", "resume", "interview", "evaluation", "timeline"]
@@ -789,6 +813,53 @@ export default function CandidateDialog({ candidate, open, onOpenChange, onStatu
               )}
             </div>
           </div>
+        </div>
+      </div>
+    )}
+
+    {/* ── Notes Slide-out Panel ── */}
+    {showNotesPanel && (
+      <div className="fixed inset-y-0 right-0 z-[400] w-96 bg-white shadow-2xl flex flex-col border-l border-slate-100">
+        <div className="flex items-center justify-between px-6 py-4 border-b border-slate-100 shrink-0 bg-slate-50">
+          <h3 className="text-sm font-black text-slate-800">Candidate Notes</h3>
+          <button onClick={() => setShowNotesPanel(false)} className="p-1.5 rounded-full hover:bg-slate-200 text-slate-400 hover:text-slate-700 transition-colors">
+            <X size={16} />
+          </button>
+        </div>
+        <div className="flex-1 p-5 bg-slate-50 flex flex-col overflow-y-auto space-y-4">
+          {notesHistory.length === 0 ? (
+            <div className="flex-1 flex flex-col items-center justify-center text-slate-400 text-sm">
+              <MessageSquare size={32} className="mb-2 opacity-50" />
+              <p>No notes yet.</p>
+              <p className="text-xs mt-1">Add a note below to start.</p>
+            </div>
+          ) : (
+            notesHistory.map((n, i) => (
+              <div key={i} className="bg-white p-3.5 rounded-xl border border-slate-200 shadow-sm flex flex-col">
+                <div className="text-[10px] font-bold text-slate-400 uppercase mb-1.5 flex justify-between">
+                  <span>{n.role || 'Admin'}</span>
+                  <span>{new Date(n.timestamp).toLocaleDateString()} {new Date(n.timestamp).toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'})}</span>
+                </div>
+                <p className="text-sm text-slate-700 whitespace-pre-wrap">{n.text}</p>
+              </div>
+            ))
+          )}
+        </div>
+        <div className="p-5 border-t border-slate-100 bg-white">
+           <textarea 
+             value={notes}
+             onChange={(e) => setNotes(e.target.value)}
+             placeholder="Type a note..."
+             rows={2}
+             className="w-full p-3 bg-slate-50 border border-slate-200 rounded-xl resize-none focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 text-sm text-slate-700 placeholder:text-slate-400 outline-none transition-all mb-3"
+           />
+          <button 
+            onClick={handleSaveNotes}
+            disabled={savingNotes || !notes.trim()}
+            className="w-full py-2.5 bg-indigo-500 hover:bg-indigo-600 text-white rounded-xl font-bold text-sm flex items-center justify-center gap-2 transition-colors disabled:opacity-50 shadow-sm"
+          >
+            {savingNotes ? 'Saving...' : 'Save Note'}
+          </button>
         </div>
       </div>
     )}

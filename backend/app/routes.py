@@ -1720,6 +1720,7 @@ def get_interview_details(link_id: str):
                 "total_noise_alerts": 0,
                 "total_time_minutes": 0.0
             },
+            "admin_notes": app.get("admin_notes", ""),
             "alerts": [],
             "answers": answers
         }
@@ -8544,3 +8545,42 @@ def delete_demo_request(request_id: str, current_admin: dict = Depends(get_curre
             raise HTTPException(status_code=404, detail='Request not found')
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.put("/admin/interview/{link_id}/notes")
+def update_interview_notes(link_id: str, payload: dict, current_admin: dict = Depends(get_current_admin_details)):
+    if current_admin.get("role") not in ["master", "superadmin", "admin", "tenant"]:
+        raise HTTPException(status_code=403, detail="Not authorized")
+    note_text = payload.get("notes", "").strip()
+    if not note_text:
+        return {"status": "success", "message": "No note to add"}
+        
+    new_note = {
+        "text": note_text,
+        "author_id": current_admin.get("admin_id"),
+        "role": current_admin.get("role"),
+        "timestamp": datetime.now(timezone.utc).isoformat()
+    }
+    
+    from bson import ObjectId
+    result = interview_sessions_collection.update_one(
+        {"link_id": link_id},
+        {"$push": {"notes_history": new_note}}
+    )
+    if result.matched_count == 0:
+        # Also check job_applications for AI calls
+        try:
+            oid = ObjectId(link_id.replace("ai_call_", "")) if link_id.startswith("ai_call_") else None
+        except Exception:
+            oid = None
+        or_cond = [{"omni_call_id": link_id}]
+        if oid:
+            or_cond.append({"_id": oid})
+        result2 = job_applications_collection.update_one(
+            {"$or": or_cond},
+            {"$push": {"notes_history": new_note}}
+        )
+        if result2.matched_count == 0:
+            raise HTTPException(status_code=404, detail="Session not found")
+            
+    return {"status": "success", "message": "Note added successfully", "note": new_note}
