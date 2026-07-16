@@ -35,7 +35,7 @@ import {
   Radio,
 } from "lucide-react";
 
-import Card from "../../components/Card";
+import { Card } from "../../components/ui/card";
 import Button from "../../components/Button";
 import Badge from "../../components/Badge";
 import Input from "../../components/Input";
@@ -265,10 +265,10 @@ export default function OverviewDashboardPage() {
   const maxPipeline = Math.max(...pipeline.map((p) => p.count), 1);
 
   return (
-    <div className="min-h-screen bg-slate-50">
-      <main className="mx-auto max-w-[1600px] space-y-6 px-6 py-6">
+    <div className="p-8 h-full overflow-y-auto bg-slate-50">
+      <main className="mx-auto max-w-[1600px] space-y-6">
         {/* Greeting */}
-        <section className="flex flex-wrap items-end justify-between gap-4">
+        <section className="flex flex-wrap items-center justify-between gap-4">
           <div>
             <h1 className="text-2xl font-semibold tracking-tight">Dashboard Overview</h1>
             <p className="mt-1 text-sm text-muted-foreground">
@@ -284,18 +284,20 @@ export default function OverviewDashboardPage() {
         </section>
 
         {/* KPI Cards */}
-        <section className="grid grid-cols-2 gap-4 md:grid-cols-4 xl:grid-cols-4">
+        <section className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-4 mb-6">
           {kpis.map((k) => {
             const Icon = k.icon;
             return (
               <Card
                 key={k.label}
-                className="group relative overflow-hidden border-border/60 p-5 shadow-[var(--shadow-card)] transition-all hover:-translate-y-0.5 hover:shadow-[var(--shadow-glow)] bg-white"
+                className="bg-white border-none shadow-sm flex flex-col justify-center h-28 p-4 transition-all hover:-translate-y-0.5 hover:shadow-md"
               >
-                <div className="flex items-start justify-between">
+                <div className="flex items-center justify-between gap-3">
                   <div>
-                    <div className="text-xs font-medium text-muted-foreground">{k.label}</div>
-                    <div className="mt-2 text-[28px] font-semibold leading-none tracking-tight">
+                    <div className="text-[10px] font-bold uppercase tracking-wider text-slate-400">
+                      {k.label}
+                    </div>
+                    <div className="mt-2 text-3xl font-bold text-slate-900 tracking-tight">
                       {k.value}
                     </div>
                     {k.delta && (
@@ -317,7 +319,7 @@ export default function OverviewDashboardPage() {
         </section>
 
         {/* Pipeline */}
-        <Card className="border-border/60 p-6 shadow-[var(--shadow-card)] bg-white">
+        <Card className="bg-white border-none shadow-sm p-6">
           <div className="flex flex-wrap items-center justify-between gap-3">
             <div>
               <h2 className="text-base font-semibold">Candidate Pipeline</h2>
@@ -353,7 +355,7 @@ export default function OverviewDashboardPage() {
         </Card>
 
         {/* Recruiter Table */}
-        <Card className="border-border/60 shadow-[var(--shadow-card)] bg-white">
+        <Card className="bg-white border-none shadow-sm">
           <div className="flex flex-wrap items-center justify-between gap-3 p-6 pb-4">
             <div>
               <h2 className="text-base font-semibold">
@@ -376,7 +378,7 @@ export default function OverviewDashboardPage() {
           <div className="overflow-x-auto">
             <table className="w-full text-sm">
               <thead>
-                <tr className="border-y border-border/60 bg-slate-50 text-left text-[11px] uppercase tracking-wider text-muted-foreground">
+                <tr className="border-b border-slate-200 bg-slate-50 text-left text-[11px] uppercase tracking-wider text-muted-foreground">
                   <th className="px-6 py-2.5 font-medium">Candidate</th>
                   <th className="px-3 py-2.5 font-medium">Role</th>
 
@@ -387,7 +389,7 @@ export default function OverviewDashboardPage() {
               </thead>
               <tbody>
                 {filteredTableCandidates && filteredTableCandidates.slice(0, 10).map((c, i) => (
-                  <tr key={c.id || i} className="border-b border-border/50 last:border-0 hover:bg-slate-50">
+                  <tr key={c.id || i} className="border-b border-slate-200 last:border-0 hover:bg-slate-50">
                     <td className="px-6 py-3">
                       <div className="flex items-center gap-2.5">
                         <Avatar className="h-8 w-8">
@@ -439,8 +441,8 @@ export default function OverviewDashboardPage() {
         </Card>
 
         {/* Tasks / Recommendations / Live */}
-        <section className="grid gap-4 lg:grid-cols-3">
-          <Card className="border-border/60 p-6 shadow-[var(--shadow-card)] bg-white">
+        <section className="grid gap-6 lg:grid-cols-3">
+          <Card className="bg-white border-none shadow-sm p-6">
             <div className="flex items-center justify-between">
               <div>
                 <h3 className="text-base font-semibold">Action Items</h3>
@@ -460,7 +462,7 @@ export default function OverviewDashboardPage() {
                   <li
                     key={t.label}
                     onClick={() => handleOpenRecordsModal(filterType, t.label)}
-                    className="flex items-center justify-between rounded-lg border border-border/50 bg-white px-3 py-2.5 transition-colors cursor-pointer hover:border-primary/40 hover:bg-slate-50"
+                    className="flex items-center justify-between rounded-lg bg-white px-3 py-2.5 transition-all shadow-sm hover:shadow-md"
                   >
                     <div className="flex items-center gap-2.5">
                       <div className={`grid h-8 w-8 place-items-center rounded-md ${tintClasses[t.tone]}`}>
@@ -480,7 +482,7 @@ export default function OverviewDashboardPage() {
             </ul>
           </Card>
 
-          <Card className="border-border/60 p-6 shadow-[var(--shadow-card)] bg-white">
+          <Card className="bg-white border-none shadow-sm p-6">
             <div className="flex items-center justify-between">
               <div className="flex items-center gap-2">
                 <div
@@ -500,7 +502,7 @@ export default function OverviewDashboardPage() {
                   <li
                     key={i}
                     onClick={() => handleOpenRecordsModal(r.type, r.text)}
-                    className="group flex items-start gap-3 rounded-lg border border-border/50 bg-white p-3 transition-all cursor-pointer hover:border-primary/40 hover:shadow-sm"
+                    className="group flex items-start gap-3 rounded-lg bg-white p-3 transition-all shadow-sm hover:shadow-md cursor-pointer"
                   >
                     <div className="mt-0.5 grid h-8 w-8 shrink-0 place-items-center rounded-md bg-primary/10 text-primary">
                       <Icon className="h-4 w-4" />
@@ -520,7 +522,7 @@ export default function OverviewDashboardPage() {
             </ul>
           </Card>
 
-          <Card className="border-border/60 p-6 shadow-[var(--shadow-card)] bg-white">
+          <Card className="bg-white border-none shadow-sm p-6">
             <div className="flex items-center justify-between">
               <div>
                 <h3 className="text-base font-semibold">AI Interview Activity</h3>
@@ -533,7 +535,7 @@ export default function OverviewDashboardPage() {
                 return (
                   <div
                     key={s.label}
-                    className="rounded-lg border border-border/50 bg-gradient-to-br from-white to-slate-50 p-3.5"
+                    className="rounded-lg bg-slate-50 p-3.5 shadow-sm"
                   >
                     <div className="flex items-center gap-2">
                       <span className="relative flex h-2 w-2">
@@ -568,13 +570,13 @@ export default function OverviewDashboardPage() {
         </section>
 
         {/* Recruiter Analytics */}
-        <Card className="border-border/60 p-6 shadow-[var(--shadow-card)] bg-white">
+        <Card className="bg-white border-none shadow-sm p-6">
           <div className="flex flex-wrap items-center justify-between gap-3">
             <div>
               <h2 className="text-base font-semibold">Recruiter Analytics</h2>
               <p className="text-xs text-muted-foreground">Key performance indicators across the team</p>
             </div>
-            <div className="flex items-center gap-1.5 rounded-md border border-border/60 bg-slate-50 p-0.5 text-xs">
+            <div className="flex items-center gap-1.5 rounded-md bg-slate-50 p-0.5 text-xs shadow-sm">
               {["All Time"].map((t, i) => (
                 <button
                   key={t}
@@ -589,7 +591,7 @@ export default function OverviewDashboardPage() {
             {analyticsKpis.map((a) => (
               <div
                 key={a.label}
-                className="rounded-lg border border-border/50 bg-gradient-to-br from-white to-slate-50 p-4"
+                className="rounded-lg bg-slate-50 p-4 shadow-sm"
               >
                 <div className="text-[11px] font-medium text-muted-foreground">{a.label}</div>
                 <div className="mt-1.5 flex items-baseline gap-2">
@@ -611,8 +613,8 @@ export default function OverviewDashboardPage() {
         </Card>
 
         {/* Activity + Quick Actions */}
-        <section className="grid gap-4 lg:grid-cols-3">
-          <Card className="border-border/60 p-6 shadow-[var(--shadow-card)] lg:col-span-2 bg-white">
+        <section className="grid gap-6 lg:grid-cols-3">
+          <Card className="bg-white border-none shadow-sm lg:col-span-2 p-6">
             <div className="flex items-center justify-between">
               <div>
                 <h3 className="text-base font-semibold">Recent Activity</h3>
@@ -627,7 +629,7 @@ export default function OverviewDashboardPage() {
                     <div className={`grid h-9 w-9 shrink-0 place-items-center rounded-full ${tintClasses[a.tone]}`}>
                       <Icon className="h-4 w-4" />
                     </div>
-                    <div className="min-w-0 flex-1 border-b border-border/50 pb-3 last:border-0">
+                    <div className="min-w-0 flex-1 border-b border-slate-200 pb-3 last:border-0">
                       <div className="text-sm">{a.text}</div>
                       <div className="mt-0.5 text-[11px] text-muted-foreground">{a.time}</div>
                     </div>
@@ -640,7 +642,7 @@ export default function OverviewDashboardPage() {
           </Card>
 
           <div className="space-y-4">
-            <Card className="border-border/60 p-6 shadow-[var(--shadow-card)] bg-white">
+            <Card className="bg-white border-none shadow-sm p-6">
               <div className="flex items-center gap-2">
                 <Zap className="h-4 w-4 text-primary" />
                 <h3 className="text-base font-semibold">Quick Actions</h3>
@@ -652,7 +654,7 @@ export default function OverviewDashboardPage() {
                     <button
                       key={a.label}
                       onClick={() => navigate(a.path)}
-                      className="group flex flex-col items-start gap-2 rounded-lg border border-border/60 bg-white p-3 text-left transition-all hover:border-primary/50 hover:bg-primary/5 hover:shadow-sm"
+                      className="group flex flex-col items-start gap-2 rounded-lg bg-white p-3 text-left transition-all shadow-sm hover:shadow-md"
                     >
                       <div className="grid h-8 w-8 place-items-center rounded-md bg-primary/10 text-primary group-hover:bg-primary group-hover:text-primary-foreground transition-colors">
                         <Icon className="h-4 w-4" />
@@ -665,7 +667,7 @@ export default function OverviewDashboardPage() {
             </Card>
 
             <Card
-              className="relative overflow-hidden border-0 p-6 text-primary-foreground shadow-[var(--shadow-glow)]"
+              className="relative overflow-hidden border-0 p-6 text-primary-foreground shadow-lg"
               style={{ background: "var(--gradient-primary)" }}
             >
               <div className="absolute -right-8 -top-8 h-32 w-32 rounded-full bg-white/10 blur-2xl" />

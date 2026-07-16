@@ -235,7 +235,12 @@ export default function MasterLayout() {
         className="grid grid-cols-1 min-h-screen text-[#0f172a]"
         style={{
           gridTemplateColumns: isMobile ? '1fr' : (isCollapsed ? '80px 1fr' : '260px 1fr'),
-          background: `linear-gradient(135deg, ${accentWashStrong} 0%, #ffffff 35%, #ffffff 65%, ${accentWash} 100%)`,
+          background: `
+            radial-gradient(circle at 50% 5%, rgba(255,255,255,.95) 0%, rgba(248,243,255,.9) 20%, rgba(236,222,255,.75) 38%, rgba(216,188,255,.35) 60%, transparent 80%),
+            radial-gradient(circle at 12% 88%, #5b00ff 0%, #6f19ff 25%, #8b53ff 48%, rgba(139,83,255,.45) 68%, transparent 82%),
+            radial-gradient(circle at 88% 92%, #9d00ff 0%, #b328ff 22%, #c65dff 45%, rgba(198,93,255,.4) 68%, transparent 82%),
+            linear-gradient(180deg, #ffffff 0%, #f4ecff 25%, #e5d4ff 55%, #d2b5ff 100%)
+          `,
         }}
       >
       {/* Sidebar Backdrop for Mobile */}
@@ -255,8 +260,8 @@ export default function MasterLayout() {
         }`}
         style={{
           background: `
-            radial-gradient(circle at 20% 18%, rgba(255, 255, 255, 0.12), transparent 24%),
-            linear-gradient(180deg, rgba(20, 37, 91, 0.96) 0%, rgba(30, 58, 138, 0.94) 46%, rgba(37, 99, 235, 0.9) 100%)
+            radial-gradient(ellipse 450px 700px at 50% 30%, ${hexToRgba(currentAccent.primary, 0.25)} 0%, ${hexToRgba(currentAccent.primary, 0.12)} 30%, ${hexToRgba(currentAccent.primary, 0.05)} 60%, transparent 85%),
+            linear-gradient(180deg, ${hexToRgba(currentAccent.primary, 0.95)} 0%, ${hexToRgba(currentAccent.primary, 0.85)} 50%, ${hexToRgba(currentAccent.primary, 0.75)} 100%)
           `,
           boxShadow: `0 20px 60px rgba(15, 23, 42, 0.12)`
         }}
@@ -304,10 +309,13 @@ export default function MasterLayout() {
                   (isCollapsed && !isMobile) ? 'justify-center p-2' : 'px-3.5 py-2 gap-3'
                 } ${
                   isActive
-                    ? 'bg-white text-indigo-700 shadow-sm'
+                    ? 'text-white shadow-sm'
                     : 'bg-transparent text-white/80 hover:bg-white/10 hover:text-white'
                 }`
               }
+              style={({ isActive }) => ({
+                background: isActive ? `linear-gradient(135deg, rgba(255, 255, 255, 0.15), rgba(255, 255, 255, 0.05))` : 'transparent'
+              })}
             >
               <Icon size={16} className="shrink-0" />
               {(!isCollapsed || isMobile) && <span>{label}</span>}
@@ -512,9 +520,9 @@ export default function MasterLayout() {
         </header>
 
         <main
-          className="p-4 sm:p-8 flex-grow overflow-y-auto"
+          className="p-4 sm:p-8 flex-grow overflow-y-auto relative"
           style={{
-            background: `linear-gradient(135deg, ${accentPageStrong} 0%, rgba(255,255,255,0.85) 30%, rgba(255,255,255,0.85) 70%, ${accentPage} 100%)`,
+            background: 'transparent',
           }}
         >
           <Outlet />

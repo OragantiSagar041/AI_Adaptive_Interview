@@ -24,12 +24,12 @@ import {
   AlertCircle,
   PhoneCall,
   Briefcase,
-  MessageSquare,
-  Zap
+  MessageSquare
 } from 'lucide-react'
 import { Badge } from '../ui/badge'
 import { Button } from '../ui/button'
 import logoImage from '../../assets/logo.png'
+import finalLogo from '../../assets/final.png'
 import { logout, loadSuperAdminProfile } from '../../store/slices/authSlice'
 import { persistor } from '../../store/store'
 import AdminCopilot from '../admin/copilot/AdminCopilot'
@@ -448,12 +448,19 @@ export default function SuperAdminLayout() {
   return (
     <div className="min-h-screen bg-slate-50 text-slate-900 flex font-sans overflow-hidden">
       {/* Sidebar */}
-      <aside className="hidden w-64 shrink-0 border-r border-slate-200 bg-white md:flex flex-col h-screen">
+      <aside 
+        className="hidden w-64 shrink-0 border-r border-slate-200 md:flex flex-col h-screen"
+        style={{
+          background: `radial-gradient(ellipse 350px 600px at 50% 30%, ${hexToRgba(currentAccent.primary, 0.15)} 0%, ${hexToRgba(currentAccent.primary, 0.08)} 35%, ${hexToRgba(currentAccent.primary, 0.03)} 60%, transparent 85%), linear-gradient(180deg, ${hexToRgba(currentAccent.primary, 0.04)} 0%, #ffffff 100%)`
+        }}
+      >
         {/* Brand / Logo */}
         <div className="flex items-center gap-3 px-6 h-16 border-b border-slate-200 shrink-0">
-          <div className="grid h-8 w-8 place-items-center rounded-lg bg-indigo-600 text-white shadow-sm">
-            <Zap className="h-4 w-4" />
-          </div>
+          <img 
+            src={finalLogo}
+            alt="HireIQ Logo"
+            className="h-8 w-8 object-contain"
+          />
           <div className="leading-tight">
             <div className="text-sm font-semibold">HireIQ</div>
             <div className="text-[11px] text-slate-500">Super Admin</div>
@@ -469,10 +476,13 @@ export default function SuperAdminLayout() {
               className={({ isActive }) =>
                 `flex items-center gap-3 rounded-md px-3 py-2 text-sm font-medium transition-colors ${
                   isActive
-                    ? 'bg-indigo-50 text-indigo-600'
+                    ? `text-white`
                     : 'text-slate-500 hover:bg-slate-100 hover:text-slate-900'
                 }`
               }
+              style={({ isActive }) => ({
+                background: isActive ? `linear-gradient(135deg, ${currentAccent.primary} 0%, ${currentAccent.hover} 100%)` : 'transparent'
+              })}
             >
               {({ isActive }) => (
                 <>
@@ -572,7 +582,12 @@ export default function SuperAdminLayout() {
       </header>
 
       {/* Main Content */}
-      <main className="flex-1 overflow-y-auto bg-slate-50/50 relative">
+      <main 
+        className="flex-1 overflow-y-auto relative"
+        style={{
+          background: `radial-gradient(ellipse 700px 600px at 50% 25%, ${hexToRgba(currentAccent.primary, 0.12)} 0%, ${hexToRgba(currentAccent.primary, 0.06)} 25%, ${hexToRgba(currentAccent.primary, 0.02)} 50%, transparent 80%), linear-gradient(180deg, ${hexToRgba(currentAccent.primary, 0.03)} 0%, #f8fafc 100%)`
+        }}
+      >
           {notifDropdownOpen && (
             <div className="absolute right-4 top-4 w-80 bg-white border border-slate-200 rounded-2xl shadow-xl py-2 z-50">
               <div className="flex items-center justify-between px-4 py-2 border-b border-slate-100">
