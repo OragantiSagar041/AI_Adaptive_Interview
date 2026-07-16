@@ -36,10 +36,10 @@ export default function AdminLayout({
 
   return (
       <div
-        className="grid grid-cols-1 min-h-screen text-[#0f172a]"
+        className="grid grid-cols-1 min-h-screen text-slate-900"
         style={{
           gridTemplateColumns: isCollapsed ? '80px 1fr' : '260px 1fr',
-          background: `linear-gradient(135deg, ${accentWashStrong} 0%, #ffffff 35%, #ffffff 65%, ${accentWash} 100%)`,
+          background: `radial-gradient(ellipse 700px 600px at 50% 25%, ${accentPageStrong} 0%, ${accentPage} 25%, ${accentWash} 50%, transparent 80%), linear-gradient(180deg, ${accentPage} 0%, #f8fafc 100%)`,
         }}
       >
       <SidebarComponent
@@ -65,7 +65,7 @@ export default function AdminLayout({
         <main
           className="p-8 flex-grow overflow-y-auto"
           style={{
-            background: `linear-gradient(135deg, ${accentPageStrong} 0%, rgba(255,255,255,0.85) 30%, rgba(255,255,255,0.85) 70%, ${accentPage} 100%)`,
+            background: `radial-gradient(ellipse 700px 600px at 20% 10%, ${hexToRgba(currentAccent.primary, 0.14)} 0%, ${hexToRgba(currentAccent.primary, 0.08)} 18%, ${hexToRgba(currentAccent.hover, 0.04)} 40%, transparent 78%), linear-gradient(180deg, rgba(255,255,255,0.96) 0%, rgba(255,255,255,0.88) 45%, #ffffff 100%)`,
           }}
         >
           {children}
