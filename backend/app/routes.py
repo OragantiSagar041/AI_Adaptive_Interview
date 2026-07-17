@@ -2520,18 +2520,18 @@ async def get_dashboard_stats(admin_id: Optional[str] = None, current_admin: dic
             return json.loads(cached)
 
     try:
-        query = {"company_id": current_admin.get("company_id")}
+        comp_id = current_admin.get("company_id")
+        query = {"company_id": comp_id}
         
-        if current_admin.get("role") in ["admin", "super_admin", "master"]:
+        if current_admin.get("role") == "admin":
             admin_doc = admins_collection.find_one({"_id": ObjectId(current_admin["admin_id"])})
             credits = admin_doc.get("credits", 0) if admin_doc else 0
+        elif comp_id:
+            # super_admin and master: use company credits (sessions deduct from company pool)
+            company = companies_collection.find_one({"_id": ObjectId(comp_id)})
+            credits = company.get("credits", 0) if company else 0
         else:
-            comp_id = current_admin.get("company_id")
-            if comp_id:
-                company = companies_collection.find_one({"_id": ObjectId(comp_id)})
-                credits = company.get("credits", 0) if company else 0
-            else:
-                credits = 0
+            credits = 0
         
         # Data Isolation:
         # If the user is a standard admin, force the query to their own admin_id
@@ -2546,6 +2546,7 @@ async def get_dashboard_stats(admin_id: Optional[str] = None, current_admin: dic
             {"created_at": 1, "status": 1, "decision": 1, "avg_score": 1, "is_deactivated": 1, "expires_at": 1, "created_by": 1, "candidate_email": 1, "email": 1}
         ))
         now = datetime.now(timezone.utc)
+        from datetime import timedelta
         
         active_sessions = [s for s in all_sessions if not s.get("is_deactivated", False)]
         total = len(active_sessions)
@@ -2649,6 +2650,77 @@ async def get_dashboard_stats(admin_id: Optional[str] = None, current_admin: dic
         
         avg_score = round(total_score / scored_count, 1) if scored_count > 0 else 0
         
+        # Super Admin metrics
+        recruiters_count = 0
+        chart_labels = []
+        chart_data = []
+        admin_labels = []
+        admin_data = []
+        credits_used = 0
+        credits_available = credits
+
+        if comp_id:
+            # 1. Recruiters Count
+            recruiters_count = admins_collection.count_documents({"company_id": comp_id, "role": "admin"})
+            
+            # 2. Last 7 Days Usage
+            for i in range(6, -1, -1):
+                day = now - timedelta(days=i)
+                start_of_day = datetime(day.year, day.month, day.day, tzinfo=timezone.utc)
+                end_of_day = start_of_day + timedelta(days=1)
+                
+                count = interview_sessions_collection.count_documents({
+                    **query,
+                    "created_at": {
+                        "$gte": start_of_day.isoformat(),
+                        "$lt": end_of_day.isoformat()
+                    }
+                })
+                chart_labels.append(day.strftime("%m/%d"))
+                chart_data.append(count)
+                
+            # 3. Recruiter Breakdown — count from all_sessions (same source as total/completed/pending)
+            # all_sessions already contains created_by and is filtered by company_id
+            session_by_creator = {}
+            for s in all_sessions:
+                cb = s.get("created_by") or ""
+                if cb:
+                    session_by_creator[cb] = session_by_creator.get(cb, 0) + 1
+
+            # Sessions with created_by='admin' (frontend fallback string) are attributed to the current admin
+            if "admin" in session_by_creator:
+                session_by_creator[current_admin["admin_id"]] = (
+                    session_by_creator.get(current_admin["admin_id"], 0) + session_by_creator.pop("admin")
+                )
+
+            # Load all admins in this company and map each to their session count
+            all_company_admins = list(admins_collection.find(
+                {"company_id": comp_id},
+                {"_id": 1, "name": 1, "username": 1, "email": 1}
+            ))
+            seen_admin_ids = set()
+            for a in all_company_admins:
+                aid = str(a["_id"])
+                if aid in seen_admin_ids:
+                    continue
+                seen_admin_ids.add(aid)
+                name = a.get("name") or a.get("username") or "Admin"
+                # Try ObjectId string first, then username, then email as fallbacks
+                count = session_by_creator.get(aid, 0)
+                if count == 0 and a.get("username"):
+                    count = session_by_creator.get(a["username"], 0)
+                if count == 0 and a.get("email"):
+                    count = session_by_creator.get(a["email"], 0)
+                admin_labels.append(name)
+                admin_data.append(count)
+
+            # 4. Credits Used vs Available
+            # Each interview session costs exactly 1 credit (deducted atomically at creation).
+            # credits_used = total non-deactivated sessions for this company.
+            credits_used = interview_sessions_collection.count_documents(
+                {"company_id": comp_id, "$or": [{"is_deactivated": False}, {"is_deactivated": {"$exists": False}}]}
+            )
+
         stats = {
             "total": total,
             "pending": pending,
@@ -2660,7 +2732,14 @@ async def get_dashboard_stats(admin_id: Optional[str] = None, current_admin: dic
             "avg_score": avg_score,
             "today": today_count,
             "this_week": week_count,
-            "credits": credits
+            "credits": credits,
+            "credits_available": credits_available,
+            "credits_used": credits_used,
+            "recruiters_count": recruiters_count,
+            "chart_labels": chart_labels,
+            "chart_data": chart_data,
+            "admin_labels": admin_labels,
+            "admin_data": admin_data
         }
         
         if manager.redis:
