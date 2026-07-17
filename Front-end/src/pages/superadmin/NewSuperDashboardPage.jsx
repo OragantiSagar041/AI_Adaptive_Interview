@@ -1,7 +1,6 @@
-import React, { useEffect, useState } from "react";
+import React, { useEffect } from "react";
 // Vite reload trigger comment - run clean poll
 import { useDispatch, useSelector } from "react-redux";
-import api from "@/utils/api";
 import { loadSuperAdminDashboard } from "@/store/slices/dashboardSlice";
 import {
   Coins,
@@ -28,40 +27,30 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 
 export default function NewSuperDashboardPage() {
   const dispatch = useDispatch();
+  const dbStats = useSelector((state) => state.dashboard.dbStats);
   const selectedAdminFilter = useSelector((state) => state.dashboard.selectedAdminFilter);
-  const [stats, setStats] = useState({});
 
   useEffect(() => {
-    const fetchStats = async () => {
-      try {
-        const params = selectedAdminFilter ? { adminId: selectedAdminFilter } : {};
-        const response = await api.get("/super-admin/dashboard-stats", { params });
-        if (response.data) {
-          setStats(response.data);
-        }
-      } catch (error) {
-        console.error("Error fetching dashboard stats:", error);
-      }
-    };
-    
-    fetchStats();
-    const interval = setInterval(fetchStats, 15000); // Poll every 15s for fresh backend data
+    dispatch(loadSuperAdminDashboard(selectedAdminFilter));
+    const interval = setInterval(() => {
+      dispatch(loadSuperAdminDashboard(selectedAdminFilter));
+    }, 15000); // Poll every 15s for fresh backend data
     return () => clearInterval(interval);
-  }, [selectedAdminFilter]);
+  }, [dispatch, selectedAdminFilter]);
 
   // Construct chart data dynamically from backend stats
-  const lineData = stats.chart_labels?.map((label, idx) => ({
+  const lineData = dbStats?.chart_labels?.map((label, idx) => ({
     date: label,
-    interviews: stats.chart_data?.[idx] || 0
+    interviews: dbStats.chart_data?.[idx] || 0
   })) || [];
 
-  const barData = stats.admin_labels?.map((label, idx) => ({
+  const barData = dbStats?.admin_labels?.map((label, idx) => ({
     name: label,
-    value: stats.admin_data?.[idx] || 0
+    value: dbStats.admin_data?.[idx] || 0
   })) || [];
 
-  const creditsAvailable = Number(stats.credits ?? 0);
-  const creditsUsed = Number(stats.total_sessions ?? 0) * 10; // Assuming 10 credits per session as typical
+  const creditsAvailable = Number(dbStats?.credits_available ?? dbStats?.credits ?? 0);
+  const creditsUsed = Number(dbStats?.credits_used ?? 0);
 
   const pieData = [
     { name: "Credits Available", value: creditsAvailable },
@@ -81,7 +70,7 @@ export default function NewSuperDashboardPage() {
             <div className="flex flex-col">
               <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-1">AVAILABLE CREDITS</span>
               <span className="text-3xl font-bold text-emerald-500 tracking-tight">
-                {stats.credits ?? '--'}
+                {dbStats?.credits_available ?? dbStats?.credits ?? '--'}
               </span>
             </div>
             <div className="w-10 h-10 rounded-lg bg-emerald-50 flex items-center justify-center shrink-0">
@@ -95,7 +84,7 @@ export default function NewSuperDashboardPage() {
             <div className="flex flex-col">
               <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-1">TOTAL INTERVIEWS</span>
               <span className="text-3xl font-bold text-slate-800 tracking-tight">
-                {stats.total_sessions ?? '--'}
+                {dbStats?.total ?? '--'}
               </span>
             </div>
             <div className="w-10 h-10 rounded-lg bg-indigo-50 flex items-center justify-center shrink-0">
@@ -109,7 +98,7 @@ export default function NewSuperDashboardPage() {
             <div className="flex flex-col">
               <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-1">COMPLETED</span>
               <span className="text-3xl font-bold text-slate-800 tracking-tight">
-                {stats.completed_sessions ?? '--'}
+                {dbStats?.completed ?? '--'}
               </span>
             </div>
             <div className="w-10 h-10 rounded-full bg-indigo-50 flex items-center justify-center shrink-0">
@@ -123,7 +112,7 @@ export default function NewSuperDashboardPage() {
             <div className="flex flex-col">
               <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-1">PENDING</span>
               <span className="text-3xl font-bold text-slate-800 tracking-tight">
-                {stats.pending_sessions ?? '--'}
+                {dbStats?.pending ?? '--'}
               </span>
             </div>
             <div className="w-10 h-10 rounded-lg bg-amber-50 flex items-center justify-center shrink-0">
@@ -137,7 +126,7 @@ export default function NewSuperDashboardPage() {
             <div className="flex flex-col">
               <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-1">RECRUITERS</span>
               <span className="text-3xl font-bold text-slate-800 tracking-tight">
-                {stats.admin_labels?.length ?? '--'}
+                {dbStats?.recruiters_count ?? '--'}
               </span>
             </div>
             <div className="w-10 h-10 rounded-lg bg-blue-50 flex items-center justify-center shrink-0">

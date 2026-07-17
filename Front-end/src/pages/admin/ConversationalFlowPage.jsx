@@ -249,7 +249,7 @@ export default function ConversationalFlowPage() {
                   <span className="text-xs text-slate-400 font-medium">{section.is_enabled ? 'ON' : 'OFF'}</span>
                   <button
                     onClick={() => updateSection(index, 'is_enabled', !section.is_enabled)}
-                    className={`relative inline-flex h-5 w-9 items-center rounded-full transition-colors ${section.is_enabled ? 'bg-emerald-500' : 'bg-slate-200'}`}
+                    className={`relative inline-flex h-5 w-9 items-center rounded-full transition-colors ${section.is_enabled ? 'bg-emerald-500' : 'bg-slate-300'}`}
                     aria-label={`Toggle section ${index + 1} enabled state`}
                   >
                     <span className={`inline-block h-3 w-3 transform rounded-full bg-white transition-transform ${section.is_enabled ? 'translate-x-5' : 'translate-x-1'} shadow-sm`} />
