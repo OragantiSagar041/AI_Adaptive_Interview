@@ -78,4 +78,12 @@ Respond ONLY with a valid JSON object in exactly this format. Do not include mar
         return result
     except Exception as e:
         print(f"Error in multi-dimensional analysis: {e}")
-        return {}
+        # FALLBACK: Offline Mode
+        return {
+          "Technical Skills": {"score": 0, "reasoning": "Analysis unavailable (Offline Mode)"},
+          "Behavioral Competencies": {"score": 0, "reasoning": "Analysis unavailable (Offline Mode)"},
+          "Personality & Traits": {"score": 0, "reasoning": "Analysis unavailable (Offline Mode)"},
+          "Communication & Clarity": {"score": 0, "reasoning": "Analysis unavailable (Offline Mode)"},
+          "Culture Fit": {"score": 0, "reasoning": "Analysis unavailable (Offline Mode)"},
+          "Predicted Job Success": {"score": 0, "reasoning": "Analysis unavailable (Offline Mode)"}
+        }

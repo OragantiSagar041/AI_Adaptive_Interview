@@ -16,7 +16,7 @@ export default function DashboardStats({
     <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-5">
       {/* Live Monitoring Card - Premium Dark Glassmorphic */}
       <div
-        className="sm:col-span-2 lg:col-span-1 bg-gradient-to-br from-slate-900/70 via-[#0f172a]/70 to-[#1e1b4b]/70 backdrop-blur-3xl border border-white/20 rounded-2xl p-5 relative overflow-hidden cursor-pointer shadow-[0_8px_32px_0_rgba(31,38,135,0.37)] hover:shadow-[0_12px_48px_0_rgba(99,102,241,0.45)] hover:-translate-y-1 hover:border-white/40 transition-all duration-300 group"
+        className="sm:col-span-2 lg:col-span-1 bg-gradient-to-br from-slate-900 via-[#0f172a] to-[#1e1b4b] border border-indigo-500/20 rounded-2xl p-5 relative overflow-hidden cursor-pointer shadow-lg shadow-indigo-900/20 hover:shadow-indigo-500/20 hover:-translate-y-1 hover:border-indigo-500/40 transition-all duration-300 group"
         onClick={onOpenLiveResults}
       >
         {/* Animated Background Elements */}
@@ -69,12 +69,7 @@ export default function DashboardStats({
 
       {/* Total Card */}
       <div
-        className="bg-white/60 backdrop-blur-2xl border border-white/50 rounded-2xl p-5 relative overflow-hidden cursor-pointer shadow-[0_8px_32px_0_rgba(31,38,135,0.25)] hover:shadow-[0_12px_48px_0_rgba(59,130,246,0.3)] hover:-translate-y-1 hover:border-white/70 transition-all duration-300 group"
-        style={{
-          background: 'linear-gradient(135deg, rgba(255, 255, 255, 0.65) 0%, rgba(255, 255, 255, 0.55) 100%)',
-          backdropFilter: 'blur(12px)',
-          WebkitBackdropFilter: 'blur(12px)',
-        }}
+        className="bg-white/70 backdrop-blur-xl border border-white/40 rounded-2xl p-5 relative overflow-hidden cursor-pointer shadow-[0_4px_20px_-4px_rgba(0,0,0,0.05)] hover:shadow-[0_8px_30px_-4px_rgba(59,130,246,0.15)] hover:-translate-y-1 hover:border-blue-200 transition-all duration-300 group"
         onClick={() => onStatusFilter('all')}
       >
         <Users className="absolute -bottom-4 -right-4 w-24 h-24 text-blue-50 opacity-50 group-hover:scale-110 group-hover:rotate-6 transition-transform duration-500" />
@@ -95,12 +90,7 @@ export default function DashboardStats({
 
       {/* Pending Card */}
       <div
-        className="bg-white/60 backdrop-blur-2xl border border-white/50 rounded-2xl p-5 relative overflow-hidden cursor-pointer shadow-[0_8px_32px_0_rgba(31,38,135,0.25)] hover:shadow-[0_12px_48px_0_rgba(245,158,11,0.3)] hover:-translate-y-1 hover:border-white/70 transition-all duration-300 group"
-        style={{
-          background: 'linear-gradient(135deg, rgba(255, 255, 255, 0.65) 0%, rgba(255, 255, 255, 0.55) 100%)',
-          backdropFilter: 'blur(12px)',
-          WebkitBackdropFilter: 'blur(12px)',
-        }}
+        className="bg-white/70 backdrop-blur-xl border border-white/40 rounded-2xl p-5 relative overflow-hidden cursor-pointer shadow-[0_4px_20px_-4px_rgba(0,0,0,0.05)] hover:shadow-[0_8px_30px_-4px_rgba(245,158,11,0.15)] hover:-translate-y-1 hover:border-amber-200 transition-all duration-300 group"
         onClick={() => onStatusFilter('pending')}
       >
         <Clock className="absolute -bottom-4 -right-4 w-24 h-24 text-amber-50 opacity-50 group-hover:scale-110 group-hover:-rotate-6 transition-transform duration-500" />
@@ -121,12 +111,7 @@ export default function DashboardStats({
 
       {/* Completed Card */}
       <div
-        className="bg-white/60 backdrop-blur-2xl border border-white/50 rounded-2xl p-5 relative overflow-hidden cursor-pointer shadow-[0_8px_32px_0_rgba(31,38,135,0.25)] hover:shadow-[0_12px_48px_0_rgba(16,185,129,0.3)] hover:-translate-y-1 hover:border-white/70 transition-all duration-300 group"
-        style={{
-          background: 'linear-gradient(135deg, rgba(255, 255, 255, 0.65) 0%, rgba(255, 255, 255, 0.55) 100%)',
-          backdropFilter: 'blur(12px)',
-          WebkitBackdropFilter: 'blur(12px)',
-        }}
+        className="bg-white/70 backdrop-blur-xl border border-white/40 rounded-2xl p-5 relative overflow-hidden cursor-pointer shadow-[0_4px_20px_-4px_rgba(0,0,0,0.05)] hover:shadow-[0_8px_30px_-4px_rgba(16,185,129,0.15)] hover:-translate-y-1 hover:border-emerald-200 transition-all duration-300 group"
         onClick={() => onStatusFilter('completed')}
       >
         <CheckCircle className="absolute -bottom-4 -right-4 w-24 h-24 text-emerald-50 opacity-50 group-hover:scale-110 group-hover:rotate-6 transition-transform duration-500" />
@@ -147,12 +132,7 @@ export default function DashboardStats({
 
       {/* Qualified Card */}
       <div
-        className="bg-white/60 backdrop-blur-2xl border border-white/50 rounded-2xl p-5 relative overflow-hidden cursor-pointer shadow-[0_8px_32px_0_rgba(99,102,241,0.25)] hover:shadow-[0_12px_48px_0_rgba(99,102,241,0.35)] hover:-translate-y-1 hover:border-white/70 transition-all duration-300 group"
-        style={{
-          background: 'linear-gradient(135deg, rgba(255, 255, 255, 0.65) 0%, rgba(255, 255, 255, 0.55) 100%)',
-          backdropFilter: 'blur(12px)',
-          WebkitBackdropFilter: 'blur(12px)',
-        }}
+        className="bg-gradient-to-br from-indigo-50 to-white backdrop-blur-xl border border-indigo-100 rounded-2xl p-5 relative overflow-hidden cursor-pointer shadow-[0_4px_20px_-4px_rgba(0,0,0,0.05)] hover:shadow-[0_8px_30px_-4px_rgba(99,102,241,0.2)] hover:-translate-y-1 hover:border-indigo-300 transition-all duration-300 group"
         onClick={onOpenQualified}
       >
         <Award className="absolute -bottom-4 -right-4 w-24 h-24 text-indigo-100 opacity-50 group-hover:scale-110 group-hover:-rotate-6 transition-transform duration-500" />

@@ -14,7 +14,7 @@ from fastapi.security import HTTPBearer
 sys.stdout.reconfigure(encoding='utf-8')
 sys.stderr.reconfigure(encoding='utf-8')
 
-load_dotenv()
+load_dotenv(override=True)
 
 # ---------------------------------------------------------------------------
 # Third-party client setup
@@ -28,9 +28,22 @@ cloudinary.config(
     api_secret=os.getenv("CLOUDINARY_API_SECRET"),
 )
 
-OMNI_DIMENSION_API_KEY = os.getenv("OMNI_DIMENSION_API_KEY")
-OMNI_VOICE_ID = os.getenv("OMNI_DIMENSION_VOICE_ID")
-OMNI_AGENT_ID = os.getenv("OMNI_DIMENSION_AGENT_ID")
+DATABASE_URL = os.getenv("DATABASE_URL", "postgresql+psycopg2://user:password@localhost:5432/hireiq")
+
+
+def get_omni_dimension_api_key() -> str:
+    load_dotenv(override=True)
+    return (os.getenv("OMNI_DIMENSION_API_KEY") or "").strip()
+
+
+def get_omni_voice_id() -> str:
+    load_dotenv(override=True)
+    return (os.getenv("OMNI_DIMENSION_VOICE_ID") or "").strip()
+
+
+def get_omni_agent_id() -> str:
+    load_dotenv(override=True)
+    return (os.getenv("OMNI_DIMENSION_AGENT_ID") or "").strip()
 
 # ---------------------------------------------------------------------------
 # Global feature flags / mutable state

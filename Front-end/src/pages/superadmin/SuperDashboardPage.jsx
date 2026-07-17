@@ -1,10 +1,24 @@
 import React, { useEffect, useState } from "react";
+import { useOutletContext } from "react-router-dom";
 import { useDispatch, useSelector } from "react-redux";
 import { loadSuperAdminDashboard } from "@/store/slices/dashboardSlice";
-import { CandidateTable } from "../../components/admin/AdminSubComponents";
+import { CandidateTable, CandidateFilters } from "../../components/admin/AdminSubComponents";
 import CandidateDialog from "../../components/superadmin/CandidateDialog";
 import { getComputedStatus } from "../../utils/adminFormatters";
-import { setSelectedIds, setCurrentPage } from "../../store/slices/candidatesSlice";
+import { 
+  setSelectedIds, 
+  setCurrentPage,
+  setSearchTerm,
+  setStartDate,
+  setEndDate,
+  setStatusFilter,
+  setSortBy,
+  setAdminFilter,
+  setPipelineFilter,
+  setPositionFilter,
+  handleSuperAdminBulkDelete,
+  handleSuperAdminExportExcel
+} from "../../store/slices/candidatesSlice";
 import { handleOpenScorecard, handleDeleteSession } from "../../store/slices/interviewSlice";
 import {
   Building2,
@@ -65,6 +79,7 @@ function formatNum(n) {
 }
 
 export default function SuperDashboardPage() {
+  const { handleOpenLiveStreamAction } = useOutletContext() || {};
   const dispatch = useDispatch();
   const { 
     dbStats, 
@@ -77,7 +92,7 @@ export default function SuperDashboardPage() {
     status
   } = useSelector(state => state.dashboard);
   
-  const { API_BASE_URL } = useSelector(state => state.auth);
+  const { API_BASE_URL, token } = useSelector(state => state.auth);
   const selectedAdminFilter = useSelector(state => state.dashboard.selectedAdminFilter);
   
   const paginatedCandidates = useSelector(state => state.candidates.paginatedCandidates);
@@ -87,8 +102,39 @@ export default function SuperDashboardPage() {
   const endIndex = useSelector(state => state.candidates.endIndex);
   const totalItems = useSelector(state => state.candidates.totalItems);
   const currentPage = useSelector(state => state.candidates.currentPage);
+  
+  const searchTerm = useSelector(state => state.candidates.searchTerm);
+  const startDate = useSelector(state => state.candidates.startDate);
+  const endDate = useSelector(state => state.candidates.endDate);
+  const statusFilter = useSelector(state => state.candidates.statusFilter);
+  const adminFilter = useSelector(state => state.candidates.adminFilter);
+  const pipelineFilter = useSelector(state => state.candidates.pipelineFilter);
+  const positionFilter = useSelector(state => state.candidates.positionFilter);
+  const sortBy = useSelector(state => state.candidates.sortBy);
+  
+  const allCandidates = useSelector(state => state.candidates.candidates);
 
   const [selectedCandidate, setSelectedCandidate] = useState(null);
+  const [adminsList, setAdminsList] = useState([]);
+
+  useEffect(() => {
+    const fetchAdmins = async () => {
+      try {
+        const res = await fetch(`${API_BASE_URL}/super-admin/admins`, {
+          headers: { 'Authorization': `Bearer ${token}` }
+        });
+        const json = await res.json();
+        if (json && json.data) {
+          setAdminsList(json.data);
+        }
+      } catch (e) {
+        console.error('Failed to fetch admins:', e);
+      }
+    };
+    if (token) {
+      fetchAdmins();
+    }
+  }, [API_BASE_URL, token]);
 
   useEffect(() => {
     dispatch(loadSuperAdminDashboard(selectedAdminFilter));
@@ -264,8 +310,10 @@ export default function SuperDashboardPage() {
                 <TableHead className="text-slate-500">Candidate</TableHead>
                 <TableHead className="text-slate-500">Interview</TableHead>
                 <TableHead className="text-right text-slate-500">Status</TableHead>
+                <TableHead className="text-center text-slate-500">Progress</TableHead>
                 <TableHead className="text-right text-slate-500">Alerts</TableHead>
                 <TableHead className="text-right text-slate-500">Audio Level</TableHead>
+                <TableHead className="text-right text-slate-500">Action</TableHead>
               </TableRow>
             </TableHeader>
             <TableBody>
@@ -278,15 +326,41 @@ export default function SuperDashboardPage() {
                       {session.online ? "Online" : "Offline"}
                     </Badge>
                   </TableCell>
+                  <TableCell className="text-center whitespace-nowrap">
+                    {session.current_question ? (
+                      <div className="flex flex-col items-center gap-1">
+                        {session.round_type && (
+                          <span className="text-[10px] uppercase font-bold text-indigo-600 bg-indigo-50 px-1.5 py-0.5 rounded">
+                            {session.round_type}
+                          </span>
+                        )}
+                        <span className="text-xs font-semibold text-slate-700 bg-slate-100 px-2 py-1 rounded-md">
+                          Q{session.current_question} / {session.total_questions || '-'}
+                        </span>
+                      </div>
+                    ) : (
+                      <span className="text-xs text-slate-400">N/A</span>
+                    )}
+                  </TableCell>
                   <TableCell className="text-right tabular-nums">{session.proctoring_alerts || 0}</TableCell>
                   <TableCell className="text-right flex items-center justify-end">
                     <Progress value={(session.audio_level || 0) * 10} className="h-1.5 w-16 ml-2" />
+                  </TableCell>
+                  <TableCell className="text-right">
+                    <Button 
+                      size="sm" 
+                      variant="outline" 
+                      onClick={() => handleOpenLiveStreamAction && handleOpenLiveStreamAction(session)}
+                      className="h-8 text-xs font-semibold hover:bg-indigo-50 hover:text-indigo-600 border-indigo-100 transition-colors"
+                    >
+                      <Eye className="w-3.5 h-3.5 mr-1.5" /> Monitor
+                    </Button>
                   </TableCell>
                 </TableRow>
               ))}
               {(!liveSessions || liveSessions.length === 0) && (
                 <TableRow>
-                  <TableCell colSpan={5} className="text-center text-slate-500 py-6">No active sessions being monitored</TableCell>
+                  <TableCell colSpan={6} className="text-center text-slate-500 py-6">No active sessions being monitored</TableCell>
                 </TableRow>
               )}
             </TableBody>
@@ -301,6 +375,29 @@ export default function SuperDashboardPage() {
           <CardDescription>Latest candidates evaluated by the AI.</CardDescription>
         </CardHeader>
         <CardContent>
+          <CandidateFilters
+            searchTerm={searchTerm}
+            setSearchTerm={(val) => dispatch(setSearchTerm(val))}
+            startDate={startDate}
+            setStartDate={(val) => dispatch(setStartDate(val))}
+            endDate={endDate}
+            setEndDate={(val) => dispatch(setEndDate(val))}
+            statusFilter={statusFilter}
+            setStatusFilter={(val) => dispatch(setStatusFilter(val))}
+            adminFilter={adminFilter}
+            setAdminFilter={(val) => dispatch(setAdminFilter(val))}
+            pipelineFilter={pipelineFilter}
+            setPipelineFilter={(val) => dispatch(setPipelineFilter(val))}
+            positionFilter={positionFilter}
+            setPositionFilter={(val) => dispatch(setPositionFilter(val))}
+            sortBy={sortBy}
+            setSortBy={(val) => dispatch(setSortBy(val))}
+            handleExportExcel={() => dispatch(handleSuperAdminExportExcel(allCandidates))}
+            selectedIds={selectedIds}
+            handleBulkDelete={() => dispatch(handleSuperAdminBulkDelete(selectedIds))}
+            allCandidates={allCandidates}
+            adminsList={adminsList}
+          />
           <CandidateTable
             paginatedCandidates={paginatedCandidates}
             selectedIds={selectedIds}

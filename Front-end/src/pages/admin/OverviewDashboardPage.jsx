@@ -3,6 +3,7 @@ import { useSelector, useDispatch } from "react-redux";
 import { useNavigate } from "react-router-dom";
 import { loadDashboardData } from "../../store/slices/dashboardSlice";
 import CandidateDialog from '../../components/superadmin/CandidateDialog';
+import { CandidateFilters } from "../../components/admin/AdminSubComponents";
 import Modal from "../../components/Modal";
 
 import {
@@ -35,7 +36,7 @@ import {
   Radio,
 } from "lucide-react";
 
-import { Card } from "../../components/ui/card";
+import Card from "../../components/Card";
 import Button from "../../components/Button";
 import Badge from "../../components/Badge";
 import Input from "../../components/Input";
@@ -100,6 +101,12 @@ export default function OverviewDashboardPage() {
   const [activeRecFilter, setActiveRecFilter] = useState(null);
   const [activeActivityFilter, setActiveActivityFilter] = useState(null);
   const [searchQuery, setSearchQuery] = useState("");
+  const [startDate, setStartDate] = useState("");
+  const [endDate, setEndDate] = useState("");
+  const [statusFilter, setStatusFilter] = useState("all");
+  const [pipelineFilter, setPipelineFilter] = useState("all");
+  const [positionFilter, setPositionFilter] = useState("all");
+  const [sortBy, setSortBy] = useState("score");
 
   const handleOpenRecordsModal = async (filterType, title) => {
     setListModalFilterType(filterType);
@@ -150,7 +157,7 @@ export default function OverviewDashboardPage() {
 
   const activeFilter = activeActionFilter || activeRecFilter || activeActivityFilter;
 
-  const filteredTableCandidates = candidates ? candidates.filter((c) => {
+  const filteredTableCandidates = (candidates ? candidates.filter((c) => {
     let matchesSearch = true;
     if (searchQuery) {
       const q = searchQuery.toLowerCase();
@@ -159,8 +166,38 @@ export default function OverviewDashboardPage() {
       matchesSearch = matchName || matchTitle;
     }
 
-    if (!activeFilter) return matchesSearch;
+    if (!activeFilter && !startDate && !endDate && statusFilter === "all" && pipelineFilter === "all" && positionFilter === "all") return matchesSearch;
     if (!matchesSearch) return false;
+
+    // Additional filters
+    if (statusFilter !== "all") {
+      const computedStatus = (c.status || "").toLowerCase();
+      const decision = (c.decision || "").toLowerCase();
+      if (statusFilter === "completed" && computedStatus !== "completed") return false;
+      if (statusFilter === "pending" && computedStatus !== "pending") return false;
+      if (statusFilter === "started" && computedStatus !== "started") return false;
+      if (statusFilter === "expired" && computedStatus !== "expired") return false;
+    }
+
+    if (pipelineFilter !== "all") {
+      if ((c.pipeline_type || "hireiq").toLowerCase() !== pipelineFilter.toLowerCase()) return false;
+    }
+
+    if (positionFilter !== "all") {
+      if (c.interview_title !== positionFilter && c.job_title !== positionFilter) return false;
+    }
+
+    if (startDate) {
+      const cDate = new Date(c.created_at || c.updated_at);
+      if (cDate < new Date(startDate)) return false;
+    }
+
+    if (endDate) {
+      const cDate = new Date(c.created_at || c.updated_at);
+      const endD = new Date(endDate);
+      endD.setHours(23, 59, 59, 999);
+      if (cDate > endD) return false;
+    }
 
     const computedStatus = (c.status || "").toLowerCase();
     const decision = (c.decision || "").toLowerCase();
@@ -191,7 +228,17 @@ export default function OverviewDashboardPage() {
       return parseFloat(c.score || c.avg_score || 0) >= 80;
     }
     return true;
-  }) : [];
+  }) : []).sort((a, b) => {
+    if (sortBy === 'score') {
+      const scoreA = parseFloat(a.score || a.avg_score || 0);
+      const scoreB = parseFloat(b.score || b.avg_score || 0);
+      return scoreB - scoreA;
+    } else {
+      const dateA = new Date(a.created_at || a.updated_at || 0);
+      const dateB = new Date(b.created_at || b.updated_at || 0);
+      return dateB - dateA;
+    }
+  });
 
   const kpis = [
     { label: "Total Candidates", value: dbStats?.total || "0", icon: Users, tint: "primary", delta: "" },
@@ -265,10 +312,10 @@ export default function OverviewDashboardPage() {
   const maxPipeline = Math.max(...pipeline.map((p) => p.count), 1);
 
   return (
-    <div className="p-8 h-full overflow-y-auto bg-slate-50">
-      <main className="mx-auto max-w-[1600px] space-y-6">
+    <div className="min-h-screen bg-slate-50">
+      <main className="mx-auto max-w-[1600px] space-y-6 px-6 py-6">
         {/* Greeting */}
-        <section className="flex flex-wrap items-center justify-between gap-4">
+        <section className="flex flex-wrap items-end justify-between gap-4">
           <div>
             <h1 className="text-2xl font-semibold tracking-tight">Dashboard Overview</h1>
             <p className="mt-1 text-sm text-muted-foreground">
@@ -284,20 +331,18 @@ export default function OverviewDashboardPage() {
         </section>
 
         {/* KPI Cards */}
-        <section className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-4 mb-6">
+        <section className="grid grid-cols-2 gap-4 md:grid-cols-4 xl:grid-cols-4">
           {kpis.map((k) => {
             const Icon = k.icon;
             return (
               <Card
                 key={k.label}
-                className="bg-white border-none shadow-sm flex flex-col justify-center h-28 p-4 transition-all hover:-translate-y-0.5 hover:shadow-md"
+                className="group relative overflow-hidden border-border/60 p-5 shadow-[var(--shadow-card)] transition-all hover:-translate-y-0.5 hover:shadow-[var(--shadow-glow)] bg-white"
               >
-                <div className="flex items-center justify-between gap-3">
+                <div className="flex items-start justify-between">
                   <div>
-                    <div className="text-[10px] font-bold uppercase tracking-wider text-slate-400">
-                      {k.label}
-                    </div>
-                    <div className="mt-2 text-3xl font-bold text-slate-900 tracking-tight">
+                    <div className="text-xs font-medium text-muted-foreground">{k.label}</div>
+                    <div className="mt-2 text-[28px] font-semibold leading-none tracking-tight">
                       {k.value}
                     </div>
                     {k.delta && (
@@ -319,7 +364,7 @@ export default function OverviewDashboardPage() {
         </section>
 
         {/* Pipeline */}
-        <Card className="bg-white border-none shadow-sm p-6">
+        <Card className="border-border/60 p-6 shadow-[var(--shadow-card)] bg-white">
           <div className="flex flex-wrap items-center justify-between gap-3">
             <div>
               <h2 className="text-base font-semibold">Candidate Pipeline</h2>
@@ -355,7 +400,7 @@ export default function OverviewDashboardPage() {
         </Card>
 
         {/* Recruiter Table */}
-        <Card className="bg-white border-none shadow-sm">
+        <Card className="border-border/60 shadow-[var(--shadow-card)] bg-white">
           <div className="flex flex-wrap items-center justify-between gap-3 p-6 pb-4">
             <div>
               <h2 className="text-base font-semibold">
@@ -365,20 +410,30 @@ export default function OverviewDashboardPage() {
                 {activeFilter ? `Displaying matching records for the active action card.` : "Leaderboard by AI-assisted output and hiring conversion."}
               </p>
             </div>
-            <div className="relative w-full max-w-xs md:w-64">
-              <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
-              <Input
-                placeholder="Search candidates..."
-                value={searchQuery}
-                onChange={(e) => setSearchQuery(e.target.value)}
-                className="h-9 pl-9 bg-slate-50 border-slate-200 focus-visible:bg-white"
+            <div className="w-full mt-4">
+              <CandidateFilters
+                searchTerm={searchQuery}
+                setSearchTerm={setSearchQuery}
+                startDate={startDate}
+                setStartDate={setStartDate}
+                endDate={endDate}
+                setEndDate={setEndDate}
+                statusFilter={statusFilter}
+                setStatusFilter={setStatusFilter}
+                pipelineFilter={pipelineFilter}
+                setPipelineFilter={setPipelineFilter}
+                positionFilter={positionFilter}
+                setPositionFilter={setPositionFilter}
+                sortBy={sortBy}
+                setSortBy={setSortBy}
+                allCandidates={candidates || []}
               />
             </div>
           </div>
           <div className="overflow-x-auto">
             <table className="w-full text-sm">
               <thead>
-                <tr className="border-b border-slate-200 bg-slate-50 text-left text-[11px] uppercase tracking-wider text-muted-foreground">
+                <tr className="border-y border-border/60 bg-slate-50 text-left text-[11px] uppercase tracking-wider text-muted-foreground">
                   <th className="px-6 py-2.5 font-medium">Candidate</th>
                   <th className="px-3 py-2.5 font-medium">Role</th>
 
@@ -389,7 +444,7 @@ export default function OverviewDashboardPage() {
               </thead>
               <tbody>
                 {filteredTableCandidates && filteredTableCandidates.slice(0, 10).map((c, i) => (
-                  <tr key={c.id || i} className="border-b border-slate-200 last:border-0 hover:bg-slate-50">
+                  <tr key={c.id || i} className="border-b border-border/50 last:border-0 hover:bg-slate-50">
                     <td className="px-6 py-3">
                       <div className="flex items-center gap-2.5">
                         <Avatar className="h-8 w-8">
@@ -441,8 +496,8 @@ export default function OverviewDashboardPage() {
         </Card>
 
         {/* Tasks / Recommendations / Live */}
-        <section className="grid gap-6 lg:grid-cols-3">
-          <Card className="bg-white border-none shadow-sm p-6">
+        <section className="grid gap-4 lg:grid-cols-3">
+          <Card className="border-border/60 p-6 shadow-[var(--shadow-card)] bg-white">
             <div className="flex items-center justify-between">
               <div>
                 <h3 className="text-base font-semibold">Action Items</h3>
@@ -462,7 +517,7 @@ export default function OverviewDashboardPage() {
                   <li
                     key={t.label}
                     onClick={() => handleOpenRecordsModal(filterType, t.label)}
-                    className="flex items-center justify-between rounded-lg bg-white px-3 py-2.5 transition-all shadow-sm hover:shadow-md"
+                    className="flex items-center justify-between rounded-lg border border-border/50 bg-white px-3 py-2.5 transition-colors cursor-pointer hover:border-primary/40 hover:bg-slate-50"
                   >
                     <div className="flex items-center gap-2.5">
                       <div className="grid h-8 w-8 place-items-center rounded-md bg-primary/10 text-primary">
@@ -482,7 +537,7 @@ export default function OverviewDashboardPage() {
             </ul>
           </Card>
 
-          <Card className="bg-white border-none shadow-sm p-6">
+          <Card className="border-border/60 p-6 shadow-[var(--shadow-card)] bg-white">
             <div className="flex items-center justify-between">
               <div className="flex items-center gap-2">
                 <div
@@ -502,7 +557,7 @@ export default function OverviewDashboardPage() {
                   <li
                     key={i}
                     onClick={() => handleOpenRecordsModal(r.type, r.text)}
-                    className="group flex items-start gap-3 rounded-lg bg-white p-3 transition-all shadow-sm hover:shadow-md cursor-pointer"
+                    className="group flex items-start gap-3 rounded-lg border border-border/50 bg-white p-3 transition-all cursor-pointer hover:border-primary/40 hover:shadow-sm"
                   >
                     <div className="mt-0.5 grid h-8 w-8 shrink-0 place-items-center rounded-md bg-primary/10 text-primary">
                       <Icon className="h-4 w-4" />
@@ -522,7 +577,7 @@ export default function OverviewDashboardPage() {
             </ul>
           </Card>
 
-          <Card className="bg-white border-none shadow-sm p-6">
+          <Card className="border-border/60 p-6 shadow-[var(--shadow-card)] bg-white">
             <div className="flex items-center justify-between">
               <div>
                 <h3 className="text-base font-semibold">AI Interview Activity</h3>
@@ -535,7 +590,7 @@ export default function OverviewDashboardPage() {
                 return (
                   <div
                     key={s.label}
-                    className="rounded-lg bg-slate-50 p-3.5 shadow-sm"
+                    className="rounded-lg border border-border/50 bg-gradient-to-br from-white to-slate-50 p-3.5"
                   >
                     <div className="flex items-center gap-2">
                       <span className="relative flex h-2 w-2">
@@ -570,13 +625,13 @@ export default function OverviewDashboardPage() {
         </section>
 
         {/* Recruiter Analytics */}
-        <Card className="bg-white border-none shadow-sm p-6">
+        <Card className="border-border/60 p-6 shadow-[var(--shadow-card)] bg-white">
           <div className="flex flex-wrap items-center justify-between gap-3">
             <div>
               <h2 className="text-base font-semibold">Recruiter Analytics</h2>
               <p className="text-xs text-muted-foreground">Key performance indicators across the team</p>
             </div>
-            <div className="flex items-center gap-1.5 rounded-md bg-slate-50 p-0.5 text-xs shadow-sm">
+            <div className="flex items-center gap-1.5 rounded-md border border-border/60 bg-slate-50 p-0.5 text-xs">
               {["All Time"].map((t, i) => (
                 <button
                   key={t}
@@ -591,7 +646,7 @@ export default function OverviewDashboardPage() {
             {analyticsKpis.map((a) => (
               <div
                 key={a.label}
-                className="rounded-lg bg-slate-50 p-4 shadow-sm"
+                className="rounded-lg border border-border/50 bg-gradient-to-br from-white to-slate-50 p-4"
               >
                 <div className="text-[11px] font-medium text-muted-foreground">{a.label}</div>
                 <div className="mt-1.5 flex items-baseline gap-2">
@@ -613,8 +668,8 @@ export default function OverviewDashboardPage() {
         </Card>
 
         {/* Activity + Quick Actions */}
-        <section className="grid gap-6 lg:grid-cols-3">
-          <Card className="bg-white border-none shadow-sm lg:col-span-2 p-6">
+        <section className="grid gap-4 lg:grid-cols-3">
+          <Card className="border-border/60 p-6 shadow-[var(--shadow-card)] lg:col-span-2 bg-white">
             <div className="flex items-center justify-between">
               <div>
                 <h3 className="text-base font-semibold">Recent Activity</h3>
@@ -629,7 +684,7 @@ export default function OverviewDashboardPage() {
                     <div className={`grid h-9 w-9 shrink-0 place-items-center rounded-full ${tintClasses[a.tone]}`}>
                       <Icon className="h-4 w-4" />
                     </div>
-                    <div className="min-w-0 flex-1 border-b border-slate-200 pb-3 last:border-0">
+                    <div className="min-w-0 flex-1 border-b border-border/50 pb-3 last:border-0">
                       <div className="text-sm">{a.text}</div>
                       <div className="mt-0.5 text-[11px] text-muted-foreground">{a.time}</div>
                     </div>
@@ -642,7 +697,7 @@ export default function OverviewDashboardPage() {
           </Card>
 
           <div className="space-y-4">
-            <Card className="bg-white border-none shadow-sm p-6">
+            <Card className="border-border/60 p-6 shadow-[var(--shadow-card)] bg-white">
               <div className="flex items-center gap-2">
                 <Zap className="h-4 w-4 text-primary" />
                 <h3 className="text-base font-semibold">Quick Actions</h3>
@@ -654,7 +709,7 @@ export default function OverviewDashboardPage() {
                     <button
                       key={a.label}
                       onClick={() => navigate(a.path)}
-                      className="group flex flex-col items-start gap-2 rounded-lg bg-white p-3 text-left transition-all shadow-sm hover:shadow-md"
+                      className="group flex flex-col items-start gap-2 rounded-lg border border-border/60 bg-white p-3 text-left transition-all hover:border-primary/50 hover:bg-primary/5 hover:shadow-sm"
                     >
                       <div className="grid h-8 w-8 place-items-center rounded-md bg-primary/10 text-primary group-hover:bg-primary group-hover:text-primary-foreground transition-colors">
                         <Icon className="h-4 w-4" />
@@ -667,7 +722,7 @@ export default function OverviewDashboardPage() {
             </Card>
 
             <Card
-              className="relative overflow-hidden border-0 p-6 text-primary-foreground shadow-lg"
+              className="relative overflow-hidden border-0 p-6 text-primary-foreground shadow-[var(--shadow-glow)]"
               style={{ background: "var(--gradient-primary)" }}
             >
               <div className="absolute -right-8 -top-8 h-32 w-32 rounded-full bg-white/10 blur-2xl" />

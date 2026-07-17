@@ -36,10 +36,10 @@ export default function AdminLayout({
 
   return (
       <div
-        className="grid grid-cols-1 min-h-screen text-slate-900"
+        className="grid grid-cols-1 min-h-screen text-[#0f172a]"
         style={{
           gridTemplateColumns: isCollapsed ? '80px 1fr' : '260px 1fr',
-          background: `radial-gradient(ellipse 700px 600px at 50% 25%, ${accentPageStrong} 0%, ${accentPage} 25%, ${accentWash} 50%, transparent 80%), linear-gradient(180deg, ${accentPage} 0%, #f8fafc 100%)`,
+          background: `linear-gradient(135deg, ${accentWashStrong} 0%, #ffffff 35%, #ffffff 65%, ${accentWash} 100%)`,
         }}
       >
       <SidebarComponent

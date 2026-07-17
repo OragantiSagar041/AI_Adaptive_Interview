@@ -256,7 +256,7 @@ export default function RejectedCandidatesPage() {
                         </div>
                         <div>
                           <div className="font-bold text-slate-800 text-sm">{c.candidate_name}</div>
-                          <div className="text-xs font-medium text-slate-400 mt-0.5">{c.email || 'No email provided'}</div>
+                          <div className="text-xs font-medium text-slate-400 mt-0.5">{c.candidate_email || c.email || 'No email provided'}</div>
                         </div>
                       </div>
                     </td>

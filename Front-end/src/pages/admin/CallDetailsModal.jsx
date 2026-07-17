@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { X, Play, Pause, RefreshCw, Star, Download, Clock } from 'lucide-react';
+import { parseDateStringToUtc } from '../../utils/adminFormatters';
 
 export default function CallDetailsModal({ isOpen, onClose, callId, API_BASE_URL, token }) {
   const navigate = useNavigate();
@@ -92,18 +93,17 @@ export default function CallDetailsModal({ isOpen, onClose, callId, API_BASE_URL
 
   const formatDate = (dateStr) => {
     if (!dateStr) return 'Unknown Date';
-    const d = new Date(dateStr);
-    if (isNaN(d)) return dateStr;
-    const months = ["January", "February", "March", "April", "May", "June", "July", "August", "September", "October", "November", "December"];
-    const month = months[d.getMonth()];
-    const day = d.getDate();
-    const year = d.getFullYear();
-    let hours = d.getHours();
-    const ampm = hours >= 12 ? 'PM' : 'AM';
-    hours = hours % 12;
-    hours = hours ? hours : 12;
-    const minutes = d.getMinutes().toString().padStart(2, '0');
-    return `${month} ${day}, ${year} at ${hours.toString().padStart(2, '0')}:${minutes} ${ampm}`;
+    const d = parseDateStringToUtc(dateStr)
+    if (!d || isNaN(d)) return dateStr;
+    return d.toLocaleString('en-IN', {
+      timeZone: 'Asia/Kolkata',
+      month: 'long',
+      day: '2-digit',
+      year: 'numeric',
+      hour: '2-digit',
+      minute: '2-digit',
+      hour12: true,
+    });
   };
 
   return (

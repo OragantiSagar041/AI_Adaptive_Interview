@@ -56,7 +56,7 @@ const SuperAdminJobsPage = React.lazy(() => import('./pages/superadmin/SuperAdmi
 const SuperAdminProfileSettings = React.lazy(() => import('./components/superadmin/ProfileSettings'))
 const SuperAdminNotifications = React.lazy(() => import('./pages/superadmin/SuperAdminNotifications'))
 const AICallPage = React.lazy(() => import('./pages/admin/AICallPage'))
-const ProfileViewPage = React.lazy(() => import('./pages/superadmin/ProfileViewPage.jsx'))
+const ProfileViewPage = React.lazy(() => import('./pages/superadmin/ProfileViewPage'))
 
 function App() {
   return (
