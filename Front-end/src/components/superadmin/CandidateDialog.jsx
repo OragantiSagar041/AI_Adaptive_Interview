@@ -421,42 +421,6 @@ export default function CandidateDialog({ candidate, open, onOpenChange, onStatu
             <button onClick={() => onOpenChange(false)} className="absolute top-4 right-4 p-2 rounded-full hover:bg-slate-100 text-slate-400 hover:text-slate-700 transition-colors">
               <X size={20} />
             </button>
-
-            {loading ? (
-              <div className="flex items-center gap-3 py-4">
-                <Loader2 size={28} className="animate-spin text-indigo-500" />
-                <span className="text-slate-500 font-medium">Loading candidate details…</span>
-              </div>
-            ) : (
-              <div className="flex items-start gap-4">
-                <div className="flex h-16 w-16 items-center justify-center rounded-2xl bg-indigo-600 text-white text-xl font-bold shrink-0 shadow-sm">
-                  {initials}
-                </div>
-                <div className="flex-1 min-w-0">
-                  <h2 className="text-2xl font-black text-slate-800 truncate">{name}</h2>
-                  <p className="text-sm font-medium text-slate-500 mt-0.5">{jobTitle}</p>
-                  <div className="flex flex-wrap items-center gap-2 mt-3">
-                    <span className={`inline-flex items-center gap-1 rounded-full px-2.5 py-1 text-xs font-bold ${isQualified ? 'bg-emerald-100 text-emerald-700' : 'bg-rose-100 text-rose-700'}`}>
-                      {isQualified ? 'Hire' : 'Rejected'}
-                    </span>
-                    <span className="inline-flex items-center gap-1 rounded-full border border-slate-200 bg-slate-100 px-2.5 py-1 text-xs font-semibold text-slate-700">
-                      {isQualified ? 'Qualified' : 'Rejected'}
-                    </span>
-                    <span className="text-xs font-medium text-slate-400">ID: {candidate.link_id || candidate.id}</span>
-                  </div>
-                </div>
-                <div className="hidden sm:flex flex-col items-center justify-center mr-8">
-                  <div className="text-[11px] font-bold text-slate-400 uppercase tracking-wider">AI Score</div>
-                  <div className={`text-4xl font-black tabular-nums tracking-tighter mt-1 ${aiScore >= 75 ? 'text-emerald-600' : aiScore >= 50 ? 'text-amber-500' : 'text-rose-500'}`}>{aiScore.toFixed(0)}%</div>
-                </div>
-              </div>
-            )}
-
-            {error && (
-              <div className="mt-3 flex items-center gap-2 text-xs font-medium text-amber-600 bg-amber-50 border border-amber-100 rounded-lg px-3 py-2">
-                <AlertCircle size={14} /> {error}
-              </div>
-            )}
           </div>
 
           {/* ── Tabs ── */}

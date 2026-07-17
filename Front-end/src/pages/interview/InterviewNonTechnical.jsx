@@ -693,7 +693,7 @@ export const InterviewNonTechnical = () => {
                       <div className="flex-1 flex flex-col gap-4">
                         <div className="bg-slate-50 p-5 rounded-[16px] border border-slate-200 shadow-sm">
                           <h4 className="font-bold text-slate-800 mb-3 text-[13px] uppercase tracking-wider flex items-center gap-2">
-                            <span className="text-lg">dY"?</span> Scenario Context
+                            <span className="text-lg">Q</span> Scenario Context
                           </h4>
                           <ul className="list-disc pl-5 m-0 space-y-2 text-slate-600 text-[15px] leading-relaxed">
                             {currentQuestion.scenario?.split(/(?<=[.?!])\s+/).map((sentence, i) => sentence.trim() ? <li key={i}>{sentence.trim()}</li> : null)}
