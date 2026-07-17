@@ -379,16 +379,16 @@ export default function CandidateDialog({ candidate, open, onOpenChange }) {
     if (!newNote.trim()) return
     setNotesSaving(true)
     const linkId = c.link_id || candidate.link_id || c.interview_id || candidate.interview_id || c.id || candidate.id || c._id || candidate._id
-    
+
     try {
       const noteObj = {
         text: newNote,
         added_by: "Admin",
         added_at: new Date().toISOString()
       };
-      
+
       const updatedNotes = [...(c.notes || []), noteObj]
-      
+
       // Save to backend database
       await axios.post(`${API_BASE_URL}/admin/interview/${linkId}/notes`, { notes: updatedNotes }, {
         headers: { Authorization: `Bearer ${token}` }
@@ -480,6 +480,26 @@ export default function CandidateDialog({ candidate, open, onOpenChange }) {
                   <InfoRow icon={IndianRupee} label="Expected CTC" value={c.expected_ctc} />
                   <InfoRow icon={Clock} label="Notice Period" value={c.notice_period} />
                   <InfoRow icon={MapPin} label="Location" value={c.location} />
+                  
+                  {/* Alerts Column */}
+                  <div className="flex items-start gap-3 sm:col-span-2 lg:col-span-4 mt-2 pt-4 border-t border-slate-100">
+                    <AlertCircle className="h-4 w-4 text-amber-500 mt-0.5 shrink-0" />
+                    <div className="min-w-0 flex-1">
+                      <div className="text-[11px] font-bold text-slate-400 uppercase tracking-wider mb-1">Proctoring Alerts</div>
+                      {c.alerts && c.alerts.length > 0 ? (
+                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 mt-2">
+                          {c.alerts.map((a, i) => (
+                            <div key={i} className="text-sm font-semibold text-slate-700 bg-amber-50/50 border border-amber-100/50 rounded-md p-2 flex gap-2">
+                              <span className="text-amber-500">•</span>
+                              <span className="leading-tight">{a.message}</span>
+                            </div>
+                          ))}
+                        </div>
+                      ) : (
+                        <div className="text-sm font-semibold text-slate-500">None</div>
+                      )}
+                    </div>
+                  </div>
                 </div>
               </section>
 
@@ -820,8 +840,8 @@ export default function CandidateDialog({ candidate, open, onOpenChange }) {
         </div>
       </div>
 
-      <ScheduleModal 
-        isOpen={showScheduleModal} 
+      <ScheduleModal
+        isOpen={showScheduleModal}
         onClose={() => setShowScheduleModal(false)}
         candidate={c}
       />
