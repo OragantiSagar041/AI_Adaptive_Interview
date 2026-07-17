@@ -1319,6 +1319,18 @@ def _run_coding_feedback(req: CodingRoundCheckpointRequest, feedback_mode: str) 
         "mode": feedback_mode,
     }
 
+    # Automatically run tests on the final submitted code so the admin can see the test results
+    if feedback_mode == "final" and latest_code.strip():
+        try:
+            from .services import run_code_against_tests
+            run_result = run_code_against_tests(latest_code, coding_round["task"], req.language or "python")
+            coding_round["latest_run"] = {
+                "at": checkpoint["at"],
+                **run_result,
+            }
+        except Exception as e:
+            print(f"Auto-eval execution failed: {e}")
+
     coding_round["latest_code"] = latest_code
     coding_round["latest_explanation"] = latest_explanation
     coding_round["language"] = req.language

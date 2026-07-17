@@ -9,7 +9,7 @@ import {
   Mail, Phone, MapPin, Building2, IndianRupee, Clock, Download,
   Play, FileText, Sparkles, Star, Check, X, Calendar, Send,
   MessageSquare, Video, Scale, Loader2, AlertCircle, Monitor,
-  Mic, ShieldAlert, Eye, ChevronRight
+  Mic, ShieldAlert, Eye, ChevronRight, Code
 } from "lucide-react"
 
 // ── Score Ring ──────────────────────────────────────────────────────────────
@@ -76,6 +76,7 @@ export default function CandidateDialog({ candidate, open, onOpenChange, onStatu
   const [showResumeModal, setShowResumeModal] = useState(false)
   const [showRecordingModal, setShowRecordingModal] = useState(false)
   const [showTranscriptModal, setShowTranscriptModal] = useState(false)
+  const [transcriptTab, setTranscriptTab] = useState('verbal')
   // New States
   const [extractingInfo, setExtractingInfo] = useState(false)
   const [showNotes, setShowNotes] = useState(false)
@@ -894,7 +895,7 @@ export default function CandidateDialog({ candidate, open, onOpenChange, onStatu
     {showTranscriptModal && (
       <div className="fixed inset-0 z-[300] flex items-center justify-center bg-slate-900/70 backdrop-blur-sm p-4" onClick={() => setShowTranscriptModal(false)}>
         <div className="bg-white rounded-2xl shadow-2xl w-full max-w-3xl max-h-[90vh] flex flex-col overflow-hidden" onClick={e => e.stopPropagation()}>
-          <div className="flex items-center justify-between px-6 py-4 border-b border-slate-100 shrink-0">
+          <div className="flex items-center justify-between px-6 py-4 shrink-0">
             <div className="flex items-center gap-2">
               <div className="p-2 bg-violet-50 text-violet-600 rounded-lg"><MessageSquare size={18} /></div>
               <div>
@@ -906,9 +907,25 @@ export default function CandidateDialog({ candidate, open, onOpenChange, onStatu
               <X size={18} />
             </button>
           </div>
+          
+          <div className="px-6 py-2 border-b border-slate-100 bg-slate-50 flex items-center gap-2 shrink-0">
+            <button
+              onClick={() => setTranscriptTab('verbal')}
+              className={`px-4 py-2 rounded-lg text-sm font-bold transition-all ${transcriptTab === 'verbal' ? 'bg-indigo-600 text-white shadow-sm' : 'bg-transparent text-slate-500 hover:bg-slate-200'}`}
+            >
+              Verbal
+            </button>
+            <button
+              onClick={() => setTranscriptTab('coding')}
+              className={`px-4 py-2 rounded-lg text-sm font-bold transition-all ${transcriptTab === 'coding' ? 'bg-indigo-600 text-white shadow-sm' : 'bg-transparent text-slate-500 hover:bg-slate-200'}`}
+            >
+              Coding or Case Study
+            </button>
+          </div>
+
           <div className="flex-1 overflow-y-auto p-6">
             <div className="space-y-5">
-              {(c.answers || []).map((a, idx) => {
+              {(c.answers || []).filter(a => transcriptTab === 'coding' ? a.question_text?.toLowerCase().includes('coding round') || a.question_text?.toLowerCase().includes('case study') : !a.question_text?.toLowerCase().includes('coding round') && !a.question_text?.toLowerCase().includes('case study')).map((a, idx) => {
                 const score = Number(a.ai_score ?? 0)
                 const scoreBg = score >= 75 ? 'bg-emerald-100 text-emerald-700' : score >= 50 ? 'bg-amber-100 text-amber-700' : 'bg-rose-100 text-rose-700'
                 const wpm = Number(a.wpm ?? 0)
@@ -922,7 +939,11 @@ export default function CandidateDialog({ candidate, open, onOpenChange, onStatu
                     <div className="flex items-start justify-between gap-3 p-4 bg-slate-50 border-b border-slate-100">
                       <div className="flex items-start gap-2 flex-1 min-w-0">
                         <span className="mt-0.5 shrink-0 inline-flex items-center justify-center w-6 h-6 rounded-full bg-indigo-600 text-white text-[10px] font-black">Q{idx + 1}</span>
-                        <p className="text-sm font-bold text-slate-800 leading-snug">{a.question_text || 'No question recorded'}</p>
+                        <p className="text-sm font-bold text-slate-800 leading-snug whitespace-pre-wrap">
+                          {a.question_text?.toLowerCase().includes('coding round') 
+                            ? (a.question_text || '').replace(/(Input:)/gi, '\n\n$1').replace(/(Output:)/gi, '\n$1').replace(/(Constraints:)/gi, '\n\n$1').replace(/(Example:)/gi, '\n\n$1').trim()
+                            : (a.question_text || 'No question recorded')}
+                        </p>
                       </div>
                       {a.ai_score !== null && a.ai_score !== undefined && (
                         <span className={`shrink-0 text-xs font-black px-2.5 py-1 rounded-full ${scoreBg}`}>
@@ -959,38 +980,135 @@ export default function CandidateDialog({ candidate, open, onOpenChange, onStatu
                         )}
                       </div>
 
-                      {/* Candidate Answer */}
-                      <div>
-                        <div className="text-[10px] font-black text-slate-500 uppercase tracking-wider mb-1.5 flex items-center gap-1">
-                          <MessageSquare size={10} /> Candidate Answer
-                        </div>
-                        <div className="bg-slate-50 border border-slate-200 rounded-xl p-3 text-sm text-slate-700 leading-relaxed">
-                          {a.answer_text || <span className="italic text-slate-400">No answer recorded</span>}
-                        </div>
-                      </div>
+                      {a.question_text?.toLowerCase().includes('coding round') ? (
+                        <>
+                          <div className="bg-slate-900 rounded-xl overflow-hidden shadow-inner border border-slate-700 mt-2">
+                            <div className="bg-slate-800 px-4 py-2 border-b border-slate-700 flex items-center justify-between">
+                              <span className="text-xs font-black text-slate-300 tracking-wider flex items-center gap-2">
+                                <Code size={14} /> CANDIDATE CODE
+                              </span>
+                              {c.coding_round?.latest_run && (
+                                <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full ${(((c.coding_round.latest_run.visible_results || []).filter(r => r.passed).length) + (c.coding_round.latest_run.hidden_summary?.passed || 0)) === (((c.coding_round.latest_run.visible_results || []).length) + (c.coding_round.latest_run.hidden_summary?.total || 0)) && (((c.coding_round.latest_run.visible_results || []).length) + (c.coding_round.latest_run.hidden_summary?.total || 0)) > 0 ? 'bg-emerald-500/20 text-emerald-400' : 'bg-rose-500/20 text-rose-400'}`}>
+                                  Test Cases Passed: {(((c.coding_round.latest_run.visible_results || []).filter(r => r.passed).length) + (c.coding_round.latest_run.hidden_summary?.passed || 0))} / {(((c.coding_round.latest_run.visible_results || []).length) + (c.coding_round.latest_run.hidden_summary?.total || 0))}
+                                </span>
+                              )}
+                            </div>
+                            <div className="p-4 overflow-x-auto">
+                              <pre className="text-sm font-mono text-emerald-400 leading-relaxed whitespace-pre-wrap">
+                                {a.answer_text || c.coding_round?.latest_code || 'No code provided.'}
+                              </pre>
+                            </div>
 
-                      {/* Corrected Answer */}
-                      {a.corrected_answer && a.corrected_answer !== 'N/A' && a.corrected_answer !== 'Scoring in progress...' && (
-                        <div>
-                          <div className="text-[10px] font-black text-emerald-600 uppercase tracking-wider mb-1.5 flex items-center gap-1">
-                            <Check size={10} /> Corrected / Model Answer
+                            {/* Failed Test Cases / Errors / Default Test Cases */}
+                            {c.coding_round?.latest_run ? (
+                              <div className="bg-slate-900 border-t border-slate-700 p-4">
+                                {c.coding_round.latest_run.runtime_error ? (
+                                  <div className="text-rose-400 text-xs font-mono whitespace-pre-wrap bg-slate-950 p-3 rounded-lg border border-rose-900/50">
+                                    <strong className="text-rose-500 block mb-1">Runtime Error:</strong>
+                                    {c.coding_round.latest_run.runtime_error}
+                                  </div>
+                                ) : (
+                                  <div className="space-y-2">
+                                    {(c.coding_round.latest_run.visible_results || []).filter(r => !r.passed).map((r, i) => (
+                                      <div key={i} className="text-xs font-mono text-slate-300 bg-slate-950 p-3 rounded-lg border border-slate-800">
+                                        <div className="text-rose-400 font-bold mb-2 flex items-center gap-1.5"><X size={12} /> Test Case Failed</div>
+                                        <div className="grid grid-cols-[80px,1fr] gap-1 mb-1">
+                                          <span className="text-slate-500">Input:</span> 
+                                          <span className="text-slate-300">{r.input}</span>
+                                        </div>
+                                        <div className="grid grid-cols-[80px,1fr] gap-1 mb-1">
+                                          <span className="text-slate-500">Expected:</span> 
+                                          <span className="text-emerald-400">{r.expected}</span>
+                                        </div>
+                                        <div className="grid grid-cols-[80px,1fr] gap-1">
+                                          <span className="text-slate-500">Output:</span> 
+                                          <span className="text-amber-400">{r.output}</span>
+                                        </div>
+                                      </div>
+                                    ))}
+                                    {(c.coding_round.latest_run.visible_results || []).filter(r => !r.passed).length === 0 && ((c.coding_round.latest_run.hidden_summary?.total || 0) > (c.coding_round.latest_run.hidden_summary?.passed || 0)) && (
+                                      <div className="text-xs font-mono text-amber-400 bg-slate-950 p-3 rounded-lg border border-amber-900/30">
+                                        Some hidden test cases failed.
+                                      </div>
+                                    )}
+                                    {(((c.coding_round.latest_run.visible_results || []).filter(r => r.passed).length) + (c.coding_round.latest_run.hidden_summary?.passed || 0)) === (((c.coding_round.latest_run.visible_results || []).length) + (c.coding_round.latest_run.hidden_summary?.total || 0)) && (((c.coding_round.latest_run.visible_results || []).length) + (c.coding_round.latest_run.hidden_summary?.total || 0)) > 0 && (
+                                      <div className="text-xs font-mono text-emerald-400 bg-slate-950 p-3 rounded-lg border border-emerald-900/30 flex items-center gap-2">
+                                        <Check size={14} /> All test cases passed successfully!
+                                      </div>
+                                    )}
+                                  </div>
+                                )}
+                              </div>
+                            ) : c.coding_round?.task?.test_cases ? (
+                              <div className="bg-slate-900 border-t border-slate-700 p-4 space-y-2">
+                                <div className="text-xs font-black text-slate-400 uppercase tracking-wider mb-2">Visible Test Cases</div>
+                                {c.coding_round.task.test_cases.filter(t => t.visible !== false).map((t, i) => (
+                                  <div key={i} className="text-xs font-mono text-slate-300 bg-slate-950 p-3 rounded-lg border border-slate-800">
+                                    <div className="grid grid-cols-[80px,1fr] gap-1 mb-1">
+                                      <span className="text-slate-500">Input:</span> 
+                                      <span className="text-slate-300">{typeof t.input === 'string' ? t.input : JSON.stringify(t.input)}</span>
+                                    </div>
+                                    <div className="grid grid-cols-[80px,1fr] gap-1">
+                                      <span className="text-slate-500">Expected:</span> 
+                                      <span className="text-emerald-400">{typeof t.expected === 'string' ? t.expected : JSON.stringify(t.expected)}</span>
+                                    </div>
+                                  </div>
+                                ))}
+                                <div className="text-[10px] font-medium text-slate-500 italic mt-3">
+                                  * Candidate did not run these tests during the interview. No execution output is available.
+                                </div>
+                              </div>
+                            ) : null}
                           </div>
-                          <div className="bg-emerald-50 border border-emerald-100 rounded-xl p-3 text-sm text-emerald-800 leading-relaxed">
-                            {a.corrected_answer}
+                          
+                          {/* AI Feedback */}
+                          {a.ai_feedback && (
+                            <div>
+                              <div className="text-[10px] font-black text-indigo-500 uppercase tracking-wider mb-1.5 flex items-center gap-1 mt-4">
+                                <Sparkles size={10} /> AI Feedback
+                              </div>
+                              <div className="bg-indigo-50 border border-indigo-100 rounded-xl p-3 text-sm text-indigo-800 italic leading-relaxed whitespace-pre-wrap">
+                                {a.ai_feedback}
+                              </div>
+                            </div>
+                          )}
+                        </>
+                      ) : (
+                        <>
+                          {/* Candidate Answer */}
+                          <div>
+                            <div className="text-[10px] font-black text-slate-500 uppercase tracking-wider mb-1.5 flex items-center gap-1">
+                              <MessageSquare size={10} /> Candidate Answer
+                            </div>
+                            <div className="bg-slate-50 border border-slate-200 rounded-xl p-3 text-sm text-slate-700 leading-relaxed whitespace-pre-wrap">
+                              {a.answer_text || <span className="italic text-slate-400">No answer recorded</span>}
+                            </div>
                           </div>
-                        </div>
-                      )}
 
-                      {/* AI Feedback */}
-                      {a.ai_feedback && (
-                        <div>
-                          <div className="text-[10px] font-black text-indigo-500 uppercase tracking-wider mb-1.5 flex items-center gap-1">
-                            <Sparkles size={10} /> AI Feedback
-                          </div>
-                          <div className="bg-indigo-50 border border-indigo-100 rounded-xl p-3 text-sm text-indigo-800 italic leading-relaxed">
-                            {a.ai_feedback}
-                          </div>
-                        </div>
+                          {/* Corrected Answer */}
+                          {a.corrected_answer && a.corrected_answer !== 'N/A' && a.corrected_answer !== 'Scoring in progress...' && (
+                            <div>
+                              <div className="text-[10px] font-black text-emerald-600 uppercase tracking-wider mb-1.5 flex items-center gap-1">
+                                <Check size={10} /> Corrected / Model Answer
+                              </div>
+                              <div className="bg-emerald-50 border border-emerald-100 rounded-xl p-3 text-sm text-emerald-800 leading-relaxed whitespace-pre-wrap">
+                                {a.corrected_answer}
+                              </div>
+                            </div>
+                          )}
+
+                          {/* AI Feedback */}
+                          {a.ai_feedback && (
+                            <div>
+                              <div className="text-[10px] font-black text-indigo-500 uppercase tracking-wider mb-1.5 flex items-center gap-1">
+                                <Sparkles size={10} /> AI Feedback
+                              </div>
+                              <div className="bg-indigo-50 border border-indigo-100 rounded-xl p-3 text-sm text-indigo-800 italic leading-relaxed whitespace-pre-wrap">
+                                {a.ai_feedback}
+                              </div>
+                            </div>
+                          )}
+                        </>
                       )}
                     </div>
                   </div>
