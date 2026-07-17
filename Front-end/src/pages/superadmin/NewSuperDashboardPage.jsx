@@ -1,4 +1,7 @@
-import React from "react";
+import React, { useEffect } from "react";
+// Vite reload trigger comment - run clean poll
+import { useDispatch, useSelector } from "react-redux";
+import { loadSuperAdminDashboard } from "@/store/slices/dashboardSlice";
 import {
   Coins,
   Video,
@@ -23,29 +26,35 @@ import {
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 
 export default function NewSuperDashboardPage() {
-  // Dummy data for charts
-  const lineData = [
-    { date: "07/09", interviews: 6 },
-    { date: "07/10", interviews: 5 },
-    { date: "07/11", interviews: 6 },
-    { date: "07/12", interviews: 1 },
-    { date: "07/13", interviews: 5 },
-    { date: "07/14", interviews: 26 },
-    { date: "07/15", interviews: 9 }
-  ];
+  const dispatch = useDispatch();
+  const dbStats = useSelector((state) => state.dashboard.dbStats);
+  const selectedAdminFilter = useSelector((state) => state.dashboard.selectedAdminFilter);
 
-  const barData = [
-    { name: "Sagar Oraganti", value: 45 },
-    { name: "Test_123", value: 1 },
-    { name: "Test_1", value: 4 },
-    { name: "John Snow", value: 1 },
-    { name: "Koteeswararao", value: 0 },
-    { name: "Admin (admin)", value: 121 }
-  ];
+  useEffect(() => {
+    dispatch(loadSuperAdminDashboard(selectedAdminFilter));
+    const interval = setInterval(() => {
+      dispatch(loadSuperAdminDashboard(selectedAdminFilter));
+    }, 15000); // Poll every 15s for fresh backend credits
+    return () => clearInterval(interval);
+  }, [dispatch, selectedAdminFilter]);
+
+  // Construct chart data dynamically from backend stats
+  const lineData = dbStats.chart_labels?.map((label, idx) => ({
+    date: label,
+    interviews: dbStats.chart_data?.[idx] || 0
+  })) || [];
+
+  const barData = dbStats.admin_labels?.map((label, idx) => ({
+    name: label,
+    value: dbStats.admin_data?.[idx] || 0
+  })) || [];
+
+  const creditsAvailable = Number(dbStats.credits_available ?? dbStats.credits ?? 0);
+  const creditsUsed = Number(dbStats.credits_used ?? 0);
 
   const pieData = [
-    { name: "Credits Available", value: 100134 },
-    { name: "Credits Used", value: 5000 }
+    { name: "Credits Available", value: creditsAvailable },
+    { name: "Credits Used", value: creditsUsed }
   ];
 
   const PIE_COLORS = ["#10b981", "#ef4444"]; // Green for available, Red for used
@@ -60,7 +69,9 @@ export default function NewSuperDashboardPage() {
           <CardContent className="p-4 flex items-center justify-between">
             <div className="flex flex-col">
               <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-1">AVAILABLE CREDITS</span>
-              <span className="text-3xl font-bold text-emerald-500 tracking-tight">100134</span>
+              <span className="text-3xl font-bold text-emerald-500 tracking-tight">
+                {dbStats.credits_available ?? dbStats.credits ?? '--'}
+              </span>
             </div>
             <div className="w-10 h-10 rounded-lg bg-emerald-50 flex items-center justify-center shrink-0">
               <Coins className="w-5 h-5 text-emerald-500" />
@@ -72,7 +83,9 @@ export default function NewSuperDashboardPage() {
           <CardContent className="p-4 flex items-center justify-between">
             <div className="flex flex-col">
               <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-1">TOTAL INTERVIEWS</span>
-              <span className="text-3xl font-bold text-slate-800 tracking-tight">181</span>
+              <span className="text-3xl font-bold text-slate-800 tracking-tight">
+                {dbStats.total ?? '--'}
+              </span>
             </div>
             <div className="w-10 h-10 rounded-lg bg-indigo-50 flex items-center justify-center shrink-0">
               <Video className="w-5 h-5 text-indigo-500" />
@@ -84,7 +97,9 @@ export default function NewSuperDashboardPage() {
           <CardContent className="p-4 flex items-center justify-between">
             <div className="flex flex-col">
               <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-1">COMPLETED</span>
-              <span className="text-3xl font-bold text-slate-800 tracking-tight">42</span>
+              <span className="text-3xl font-bold text-slate-800 tracking-tight">
+                {dbStats.completed ?? '--'}
+              </span>
             </div>
             <div className="w-10 h-10 rounded-full bg-indigo-50 flex items-center justify-center shrink-0">
               <CheckCircle2 className="w-5 h-5 text-indigo-500" />
@@ -96,7 +111,9 @@ export default function NewSuperDashboardPage() {
           <CardContent className="p-4 flex items-center justify-between">
             <div className="flex flex-col">
               <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-1">PENDING</span>
-              <span className="text-3xl font-bold text-slate-800 tracking-tight">6</span>
+              <span className="text-3xl font-bold text-slate-800 tracking-tight">
+                {dbStats.pending ?? '--'}
+              </span>
             </div>
             <div className="w-10 h-10 rounded-lg bg-amber-50 flex items-center justify-center shrink-0">
               <Clock className="w-5 h-5 text-amber-500" />
@@ -108,7 +125,9 @@ export default function NewSuperDashboardPage() {
           <CardContent className="p-4 flex items-center justify-between">
             <div className="flex flex-col">
               <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-1">RECRUITERS</span>
-              <span className="text-3xl font-bold text-slate-800 tracking-tight">4</span>
+              <span className="text-3xl font-bold text-slate-800 tracking-tight">
+                {dbStats.recruiters_count ?? '--'}
+              </span>
             </div>
             <div className="w-10 h-10 rounded-lg bg-blue-50 flex items-center justify-center shrink-0">
               <Users className="w-5 h-5 text-blue-500" />
