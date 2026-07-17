@@ -168,7 +168,7 @@ export default function ConversationalFlowPage() {
         <div className="flex space-x-3">
           <button 
             onClick={fetchFlowData}
-            className="px-4 py-2 bg-slate-800 text-slate-300 hover:text-white rounded-lg transition-colors flex items-center"
+            className="px-4 py-2 bg-white border border-slate-200 text-slate-700 hover:bg-slate-50 rounded-lg shadow-sm transition-colors flex items-center"
           >
             <RefreshCw className="w-4 h-4 mr-2" />
             Reload
@@ -202,7 +202,7 @@ export default function ConversationalFlowPage() {
         {flowData.map((section, index) => (
           <div
             key={section.id || index}
-            className={`bg-slate-800 border border-slate-700 rounded-lg overflow-hidden transition-all ${draggingId === section.id ? 'opacity-60' : ''}`}
+            className={`bg-white border border-slate-200 shadow-sm rounded-lg overflow-hidden transition-all ${draggingId === section.id ? 'opacity-60' : ''}`}
             draggable
             onDragStart={() => handleDragStart(index, section.id)}
             onDragOver={(e) => e.preventDefault()}
@@ -211,7 +211,7 @@ export default function ConversationalFlowPage() {
           >
             {/* Header */}
             <div 
-              className="flex items-center justify-between p-4 cursor-move hover:bg-slate-750"
+              className="flex items-center justify-between p-4 cursor-move hover:bg-slate-50"
               onClick={() => toggleSection(section.id)}
               role="button"
               tabIndex={0}
@@ -237,10 +237,10 @@ export default function ConversationalFlowPage() {
                     value={section.context_title}
                     onChange={(e) => updateSection(index, 'context_title', e.target.value)}
                     onClick={(e) => e.stopPropagation()}
-                    className="bg-slate-900 border border-slate-700 rounded px-3 py-1 text-white text-sm focus:outline-none focus:border-indigo-500"
+                    className="bg-white border border-slate-300 shadow-sm rounded px-3 py-1 text-slate-900 text-sm focus:outline-none focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500"
                   />
                 ) : (
-                  <h3 className="text-white font-medium">{section.context_title}</h3>
+                  <h3 className="text-slate-800 font-medium">{section.context_title}</h3>
                 )}
               </div>
               
@@ -249,15 +249,15 @@ export default function ConversationalFlowPage() {
                   <span className="text-xs text-slate-400 font-medium">{section.is_enabled ? 'ON' : 'OFF'}</span>
                   <button
                     onClick={() => updateSection(index, 'is_enabled', !section.is_enabled)}
-                    className={`relative inline-flex h-5 w-9 items-center rounded-full transition-colors ${section.is_enabled ? 'bg-emerald-500' : 'bg-slate-600'}`}
+                    className={`relative inline-flex h-5 w-9 items-center rounded-full transition-colors ${section.is_enabled ? 'bg-emerald-500' : 'bg-slate-300'}`}
                     aria-label={`Toggle section ${index + 1} enabled state`}
                   >
-                    <span className={`inline-block h-3 w-3 transform rounded-full bg-white transition-transform ${section.is_enabled ? 'translate-x-5' : 'translate-x-1'}`} />
+                    <span className={`inline-block h-3 w-3 transform rounded-full bg-white transition-transform ${section.is_enabled ? 'translate-x-5' : 'translate-x-1'} shadow-sm`} />
                   </button>
                 </div>
                 <button 
                   onClick={() => removeSection(index)}
-                  className="p-1.5 text-slate-400 hover:text-rose-400 rounded-md hover:bg-slate-700 transition-colors"
+                  className="p-1.5 text-slate-400 hover:text-rose-600 rounded-md hover:bg-slate-100 transition-colors"
                   aria-label={`Remove section ${index + 1}`}
                 >
                   <Trash2 className="w-4 h-4" />
@@ -267,11 +267,11 @@ export default function ConversationalFlowPage() {
 
             {/* Body */}
             {expandedSections[section.id] && (
-              <div className="p-4 border-t border-slate-700 bg-slate-900/50">
+              <div className="p-4 border-t border-slate-100 bg-slate-50/50">
                 <textarea
                   value={section.context_body}
                   onChange={(e) => updateSection(index, 'context_body', e.target.value)}
-                  className="w-full bg-slate-900 border border-slate-700 rounded-lg p-4 text-slate-300 text-sm focus:outline-none focus:border-indigo-500 min-h-[150px] resize-y font-mono"
+                  className="w-full bg-white border border-slate-200 shadow-sm rounded-lg p-4 text-slate-700 text-sm focus:outline-none focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500 min-h-[150px] resize-y font-mono"
                   placeholder="Enter instructions for this section..."
                 />
               </div>
@@ -282,7 +282,7 @@ export default function ConversationalFlowPage() {
 
       <button
         onClick={addSection}
-        className="mt-6 w-full py-4 border-2 border-dashed border-slate-700 hover:border-indigo-500 hover:text-indigo-400 text-slate-500 rounded-lg flex items-center justify-center transition-colors"
+        className="mt-6 w-full py-4 border-2 border-dashed border-slate-300 bg-transparent hover:bg-slate-50 hover:border-indigo-400 hover:text-indigo-600 text-slate-500 rounded-lg flex items-center justify-center transition-colors"
       >
         <Plus className="w-5 h-5 mr-2" />
         Add Section

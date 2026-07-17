@@ -86,6 +86,8 @@ class CreateSession(BaseModel):
     custom_voice_id: str = ""
     application_id: Optional[str] = None
     candidate_phone: Optional[str] = ""
+    ats_score: Optional[int] = None
+    jd_file_url: Optional[str] = None
 
 class ForgotPasswordRequest(BaseModel):
     username: str

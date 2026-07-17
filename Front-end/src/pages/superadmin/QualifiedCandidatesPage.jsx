@@ -298,7 +298,9 @@ export default function QualifiedCandidatesPage() {
                       </td>
                       <td className="px-5 py-4 text-sm font-semibold text-slate-600">{c.interview_title || c.job_applied}</td>
                       <td className="px-5 py-4 text-sm font-bold text-slate-700 tabular-nums">{scoreNum.toFixed(0)}%</td>
-                      <td className="px-5 py-4 text-sm font-medium text-slate-500">{c.skills_match || (scoreNum > 0 ? `${Math.min(scoreNum + 5, 99).toFixed(0)}%` : "N/A")}</td>
+                      <td className="px-5 py-4 text-sm font-medium text-slate-500">
+                        {c.ats_score != null ? `${c.ats_score}%` : (c.skills_match || '--')}
+                      </td>
                       <td className="px-5 py-4">
                         <span className="inline-flex items-center gap-1.5 text-xs font-semibold text-slate-600">
                           <span className={cn("h-1.5 w-1.5 rounded-full", c.decision === 'selected' ? "bg-emerald-500" : "bg-amber-500")} />
