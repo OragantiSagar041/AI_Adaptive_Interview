@@ -6853,11 +6853,7 @@ async def get_dashboard_aggregated_data(admin_id: Optional[str] = None, current_
             job_ids = [j.get("job_id") for j in jobs if j.get("job_id")]
             
             app_query = {
-                "job_id": {"$in": job_ids},
-                "$or": [
-                    {"interest": {"$regex": "interested", "$options": "i"}},
-                    {"decision": {"$in": ["selected", "rejected"]}}
-                ]
+                "job_id": {"$in": job_ids}
             }
             apps = list(job_applications_collection.find(app_query))
         except Exception as e:
@@ -6904,6 +6900,43 @@ async def get_dashboard_aggregated_data(admin_id: Optional[str] = None, current_
                 "is_deactivated": False
             }
             candidates_list.append(mock_session)
+            
+        try:
+            omni_res = await get_omni_recent_calls()
+            if isinstance(omni_res, dict) and "calls" in omni_res:
+                for call in omni_res["calls"]:
+                    call_id = str(call.get("id") or call.get("call_id") or "")
+                    if not call_id: continue
+                    
+                    status_raw = str(call.get("status") or "").lower()
+                    status = "completed"
+                    
+                    score = call.get("cqs_score") or call.get("sentiment_score") or 0.0
+                    try:
+                        score = float(score)
+                    except (ValueError, TypeError):
+                        score = 0.0
+                        
+                    mock_session = {
+                        "id": f"ai_call_omni_{call_id}",
+                        "_id": f"ai_call_omni_{call_id}",
+                        "link_id": f"ai_call_omni_{call_id}",
+                        "candidate_name": call.get("to_number") or call.get("to") or call.get("candidate_name") or "Omni Call",
+                        "candidate_email": "",
+                        "candidate_phone": call.get("to_number") or call.get("to") or "",
+                        "interview_title": "AI Calling",
+                        "score": score,
+                        "avg_score": score,
+                        "created_at": call.get("created_at") or call.get("start_time") or datetime.now(timezone.utc).isoformat(),
+                        "decision": status_raw,
+                        "status": status,
+                        "application_id": call_id,
+                        "is_deactivated": False
+                    }
+                    candidates_list.append(mock_session)
+        except Exception as e:
+            print(f"Error appending Omni calls to dashboard: {e}")
+
         live_sessions = []
         ongoing_monitored_count = 0
         ongoing_live_count = 0

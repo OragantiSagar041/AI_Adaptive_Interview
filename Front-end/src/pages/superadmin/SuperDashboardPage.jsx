@@ -4,6 +4,7 @@ import { useDispatch, useSelector } from "react-redux";
 import { loadSuperAdminDashboard } from "@/store/slices/dashboardSlice";
 import { CandidateTable, CandidateFilters } from "../../components/admin/AdminSubComponents";
 import CandidateDialog from "../../components/superadmin/CandidateDialog";
+import CallDetailsModal from "../admin/CallDetailsModal";
 import { getComputedStatus } from "../../utils/adminFormatters";
 import { 
   setSelectedIds, 
@@ -420,16 +421,26 @@ export default function SuperDashboardPage() {
         </CardContent>
       </Card>
 
-      <CandidateDialog
-        candidate={selectedCandidate}
-        open={!!selectedCandidate}
-        onOpenChange={(v) => {
-          if (!v) setSelectedCandidate(null);
-        }}
-        onStatusUpdate={() => {
-          dispatch(loadSuperAdminDashboard(selectedAdminFilter));
-        }}
-      />
+      {selectedCandidate?.id?.startsWith('ai_call_omni_') ? (
+        <CallDetailsModal
+          isOpen={!!selectedCandidate}
+          onClose={() => setSelectedCandidate(null)}
+          callId={selectedCandidate.id.replace('ai_call_omni_', '')}
+          API_BASE_URL={API_BASE_URL}
+          token={token}
+        />
+      ) : (
+        <CandidateDialog
+          candidate={selectedCandidate}
+          open={!!selectedCandidate}
+          onOpenChange={(v) => {
+            if (!v) setSelectedCandidate(null);
+          }}
+          onStatusUpdate={() => {
+            dispatch(loadSuperAdminDashboard(selectedAdminFilter));
+          }}
+        />
+      )}
     </div>
   );
 }

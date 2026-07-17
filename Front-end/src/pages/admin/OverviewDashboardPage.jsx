@@ -11,6 +11,7 @@ import {
   TableRow
 } from "../../components/ui/table";
 import CandidateDialog from '../../components/superadmin/CandidateDialog';
+import CallDetailsModal from "./CallDetailsModal";
 import { CandidateFilters } from "../../components/admin/AdminSubComponents";
 import Modal from "../../components/Modal";
 
@@ -153,7 +154,7 @@ export default function OverviewDashboardPage() {
     setListModalOpen(false);
   };
 
-  const authRole = useSelector((state) => state.auth.role);
+  const { role: authRole, API_BASE_URL, token } = useSelector((state) => state.auth);
   const dbStats = useSelector((state) => state.dashboard.dbStats);
   const candidates = useSelector((state) => state.candidates.candidates);
   const ongoingLiveCount = useSelector((state) => state.dashboard.ongoingLiveCount);
@@ -906,19 +907,31 @@ export default function OverviewDashboardPage() {
             </div>
           )}
         </Modal>
-
-        <CandidateDialog
-          candidate={selectedCandidate}
-          open={!!selectedCandidate}
-          onOpenChange={(v) => {
-            if (!v) {
+        {selectedCandidate?.id?.startsWith('ai_call_omni_') ? (
+          <CallDetailsModal
+            isOpen={!!selectedCandidate}
+            onClose={() => {
               setSelectedCandidate(null);
-              if (listModalFilterType) {
-                setListModalOpen(true);
+              if (listModalFilterType) setListModalOpen(true);
+            }}
+            callId={selectedCandidate.id.replace('ai_call_omni_', '')}
+            API_BASE_URL={API_BASE_URL}
+            token={token || localStorage.getItem("token")}
+          />
+        ) : (
+          <CandidateDialog
+            candidate={selectedCandidate}
+            open={!!selectedCandidate}
+            onOpenChange={(v) => {
+              if (!v) {
+                setSelectedCandidate(null);
+                if (listModalFilterType) {
+                  setListModalOpen(true);
+                }
               }
-            }
-          }}
-        />
+            }}
+          />
+        )}
       </main>
     </div>
   );
