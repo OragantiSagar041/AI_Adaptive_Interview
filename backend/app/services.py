@@ -1158,7 +1158,19 @@ def generate_resume_questions(resume_text: str, language: str = "English", indus
 
 def extract_text_from_file(file_content: bytes, filename: str) -> str:
     """Extract text content from different file types."""
+    import re
     file_extension = filename.lower().split('.')[-1]
+
+    def clean_extracted_text(text: str) -> str:
+        # Fix special bullet characters separated from text by newlines
+        text = re.sub(r'([•·▪◦➢➔❖\u2022\u2023\u25E6\u2043\u2219])\s*\n\s*', r'\1 ', text)
+        # Fix ASCII bullets (- or *) on their own line
+        text = re.sub(r'(?m)^(\s*[-*])\s*\n\s*', r'\1 ', text)
+        # Fix numbers followed by dot on their own line (e.g. "1.\nText")
+        text = re.sub(r'(?m)^(\s*\d+\.)\s*\n\s*', r'\1 ', text)
+        # Remove repeated bullets appended to the end of a page (e.g. "• • • • 1")
+        text = re.sub(r'([•·▪◦➢➔❖\u2022\u2023\u25E6\u2043\u2219][ \t]*){2,}\d*[ \t]*', '', text)
+        return text.strip()
 
     try:
         if file_extension == 'pdf':
@@ -1167,7 +1179,7 @@ def extract_text_from_file(file_content: bytes, filename: str) -> str:
             text = ""
             for page in pdf_reader.pages:
                 text += page.extract_text() + "\n"
-            return text.strip()
+            return clean_extracted_text(text)
 
         elif file_extension in ['docx', 'doc']:
             # Extract text from DOCX
@@ -1175,21 +1187,21 @@ def extract_text_from_file(file_content: bytes, filename: str) -> str:
             text = ""
             for paragraph in doc.paragraphs:
                 text += paragraph.text + "\n"
-            return text.strip()
+            return clean_extracted_text(text)
 
         elif file_extension == 'txt':
             # Handle plain text files
-            return file_content.decode('utf-8')
+            return clean_extracted_text(file_content.decode('utf-8'))
 
         else:
             # Try to decode as UTF-8 text for other formats
-            return file_content.decode('utf-8')
+            return clean_extracted_text(file_content.decode('utf-8'))
 
     except Exception as e:
         print(f"Error extracting text from {filename}: {e}")
         # Fallback: try to decode as UTF-8
         try:
-            return file_content.decode('utf-8', errors='ignore')
+            return clean_extracted_text(file_content.decode('utf-8', errors='ignore'))
         except:
             raise HTTPException(status_code=400, detail=f"Unable to process file {filename}. Supported formats: PDF, DOCX, TXT")
 
@@ -2099,36 +2111,189 @@ def format_datetime_for_display(value: str) -> str:
 
 def should_attach_job_description_pdf(job_description: str) -> bool:
     text = (job_description or "").strip()
-    return len(text) > JOB_DESCRIPTION_PDF_THRESHOLD or text.count("\n") > 12
+    return len(text) > 0
 
 def generate_job_description_pdf_base64(job_description: str) -> str:
+    from reportlab.platypus import SimpleDocTemplate, Paragraph, Spacer, KeepTogether
+    from reportlab.lib.styles import getSampleStyleSheet, ParagraphStyle
+    from reportlab.lib.pagesizes import A4
+    from reportlab.lib.enums import TA_LEFT
+    import re
+    import io
+    import base64
+    
     buffer = io.BytesIO()
-    pdf = canvas.Canvas(buffer, pagesize=A4)
-    width, height = A4
-    left_margin = 50
-    top = height - 60
-    line_height = 16
+    doc = SimpleDocTemplate(buffer, pagesize=A4, rightMargin=50, leftMargin=50, topMargin=50, bottomMargin=50)
+    styles = getSampleStyleSheet()
 
-    pdf.setTitle("Job Description")
-    pdf.setFont("Helvetica-Bold", 16)
-    pdf.drawString(left_margin, top, "Job Description")
-    y = top - 28
+    title_style = ParagraphStyle(
+        'TitleStyle',
+        parent=styles['Heading1'],
+        fontName="Helvetica-Bold",
+        fontSize=22,
+        alignment=TA_LEFT,
+        spaceAfter=24,
+        textColor="#0f172a"
+    )
+    
+    body_style = ParagraphStyle(
+        'BodyStyle',
+        parent=styles['Normal'],
+        fontName="Helvetica",
+        fontSize=10,
+        leading=16,
+        spaceBefore=4,
+        spaceAfter=4,
+        textColor="#334155"
+    )
 
-    pdf.setFont("Helvetica", 10)
-    for paragraph in (job_description or "").splitlines() or [""]:
-        wrapped_lines = simpleSplit(paragraph or " ", "Helvetica", 10, width - (left_margin * 2))
-        for line in wrapped_lines:
-            if y < 60:
-                pdf.showPage()
-                pdf.setFont("Helvetica", 10)
-                y = height - 60
-            pdf.drawString(left_margin, y, line)
-            y -= line_height
-        y -= 6
+    bullet_style = ParagraphStyle(
+        'BulletStyle',
+        parent=body_style,
+        leftIndent=20,
+        firstLineIndent=-10
+    )
 
-    pdf.save()
+    h2_style = ParagraphStyle(
+        'H2Style',
+        parent=styles['Heading2'],
+        fontName="Helvetica-Bold",
+        fontSize=14,
+        spaceBefore=16,
+        spaceAfter=8,
+        textColor="#0f172a"
+    )
+
+    h3_style = ParagraphStyle(
+        'H3Style',
+        parent=styles['Heading3'],
+        fontName="Helvetica-Bold",
+        fontSize=12,
+        spaceBefore=12,
+        spaceAfter=6,
+        textColor="#334155"
+    )
+    elements = []
+    current_group = []
+
+    def flush_group():
+        if current_group:
+            elements.append(KeepTogether(list(current_group)))
+            current_group.clear()
+
+    def format_text(text):
+        # Escape XML symbols first
+        text = text.replace('&', '&amp;').replace('<', '&lt;').replace('>', '&gt;')
+        # Markdown Bold
+        text = re.sub(r'\*\*(.*?)\*\*', r'<b>\1</b>', text)
+        # Markdown Italic
+        text = re.sub(r'\*(.*?)\*', r'<i>\1</i>', text)
+        return text
+
+    if not job_description:
+        job_description = "No description provided."
+
+    lines = job_description.split('\n')
+    
+    # Extract the first non-empty line as the title if it looks like one
+    title_text = "Job Description"
+    title_line_idx = -1
+    for i, line in enumerate(lines):
+        clean = line.strip()
+        if clean:
+            # If the first line is short, doesn't have a colon, and doesn't start with Markdown headers, use as title
+            if len(clean) < 60 and ':' not in clean and not clean.startswith('#') and clean[0].isupper():
+                title_text = clean
+                title_line_idx = i
+            break
+
+    elements.append(Paragraph(f"<b>{format_text(title_text)}</b>", title_style))
+
+    for i, line in enumerate(lines):
+        if i == title_line_idx:
+            continue
+        clean_line = line.strip()
+        if not clean_line:
+            current_group.append(Spacer(1, 8))
+            continue
+            
+        is_explicit_heading = False
+        is_heading = False
+        p_element = None
+
+        # Headers
+        if clean_line.startswith('### '):
+            is_explicit_heading = True
+            p_element = Paragraph(f"<b>{format_text(clean_line[4:])}</b>", h3_style)
+        elif clean_line.startswith('## '):
+            is_explicit_heading = True
+            p_element = Paragraph(f"<b>{format_text(clean_line[3:])}</b>", h2_style)
+        elif clean_line.startswith('# '):
+            is_explicit_heading = True
+            p_element = Paragraph(f"<b>{format_text(clean_line[2:])}</b>", h2_style)
+            
+        # Bullet points (- or * or •)
+        elif clean_line.startswith('- ') or clean_line.startswith('* ') or clean_line.startswith('• ') or clean_line.startswith('· '):
+            bullet_text = format_text(clean_line[2:])
+            p_element = Paragraph(f'&bull; {bullet_text}', bullet_style)
+            
+        # Numbered lists (e.g. "1. ")
+        elif re.match(r'^\d+\.\s', clean_line):
+            match = re.match(r'^(\d+\.)\s+(.*)', clean_line)
+            if match:
+                num, rest = match.groups()
+                p_element = Paragraph(f'{num} {format_text(rest)}', bullet_style)
+            else:
+                p_element = Paragraph(format_text(clean_line), body_style)
+        else:
+            # Check for colon-separated key-value lines (e.g. "Job Title: Java Developer")
+            is_kv = False
+            if ':' in clean_line:
+                parts = clean_line.split(':', 1)
+                # If the key is relatively short, bold it and treat as a normal line to avoid huge gaps
+                if len(parts[0]) < 40 and not parts[0].endswith(('.', ',', ';', '-')):
+                    bold_key = f"<b>{format_text(parts[0])}:</b>"
+                    rest = format_text(parts[1])
+                    p_element = Paragraph(f"{bold_key}{rest}", body_style)
+                    is_kv = True
+
+            if not is_kv:
+                # Detect potential side headings based on common JD section keywords
+                if len(clean_line) < 60 and clean_line[0].isalpha() and clean_line[0].isupper():
+                    if not clean_line.endswith(('.', ',', ';', ':', '-')):
+                        import re
+                        HEADING_KEYWORDS = {
+                            'role', 'responsibilities', 'responsibility', 'skills', 'skill',
+                            'qualifications', 'qualification', 'education', 'educational',
+                            'experience', 'about', 'offer', 'benefits', 'perks', 'requirements',
+                            'requirement', 'tools', 'technologies', 'technology', 'databases',
+                            'database', 'frameworks', 'framework', 'programming', 'apply',
+                            'description', 'overview', 'profile', 'summary'
+                        }
+                        words = set(re.findall(r'\w+', clean_line.lower()))
+                        if words.intersection(HEADING_KEYWORDS):
+                            if 'object-oriented' not in clean_line.lower() and 'oop' not in clean_line.lower():
+                                is_heading = True
+                    elif clean_line.endswith('?'):
+                        is_heading = True
+                
+                if is_heading:
+                    p_element = Paragraph(f"<b>{format_text(clean_line)}</b>", h3_style)
+                else:
+                    p_element = Paragraph(format_text(clean_line), body_style)
+
+        if is_explicit_heading or is_heading:
+            flush_group()
+        
+        if p_element:
+            current_group.append(p_element)
+
+    flush_group()
+    doc.build(elements)
     buffer.seek(0)
-    return base64.b64encode(buffer.read()).decode("utf-8")
+    pdf_base64 = base64.b64encode(buffer.read()).decode("utf-8")
+    buffer.close()
+    return pdf_base64
 
 def build_job_description_block(job_description: str) -> str:
     text = (job_description or "").strip()
@@ -2285,7 +2450,8 @@ def queue_or_send_interview_email(session_doc: Dict[str, Any], link_url: str, sk
         job_description=session_doc.get("job_description", ""),
         custom_html=session_doc.get("custom_email_html", ""),
         scheduled_start=session_doc.get("scheduled_start", ""),
-        scheduled_end=session_doc.get("scheduled_end", "")
+        scheduled_end=session_doc.get("scheduled_end", ""),
+        jd_file_url=session_doc.get("jd_file_url")
     )
     email_sent = True # Async operation queued successfully
 
@@ -2304,7 +2470,7 @@ def queue_or_send_interview_email(session_doc: Dict[str, Any], link_url: str, sk
         "email_send_at": (send_at.isoformat() if send_at else now.isoformat())
     }
 
-def send_interview_email(candidate_email: str, candidate_name: str, link_url: str, duration: int, job_description: str, custom_html: str = "", scheduled_start: str = "", scheduled_end: str = ""):
+def send_interview_email(candidate_email: str, candidate_name: str, link_url: str, duration: int, job_description: str, custom_html: str = "", scheduled_start: str = "", scheduled_end: str = "", jd_file_url: str = None):
     import os
     import requests
     from dotenv import load_dotenv
@@ -2337,10 +2503,30 @@ def send_interview_email(candidate_email: str, candidate_name: str, link_url: st
         "htmlContent": html_content
     }
 
-    if should_attach_job_description_pdf(job_description):
+    import base64
+    
+    attachment_content = None
+    attachment_name = "job_description.pdf"
+    
+    if jd_file_url:
+        try:
+            r = requests.get(jd_file_url, timeout=15)
+            if r.status_code == 200:
+                attachment_content = base64.b64encode(r.content).decode('utf-8')
+                ext = jd_file_url.split('.')[-1]
+                if ext.lower() in ['pdf', 'docx', 'doc', 'txt']:
+                    attachment_name = f"job_description.{ext}"
+        except Exception as e:
+            print(f"Error fetching JD file from Cloudinary: {e}")
+
+    if not attachment_content and should_attach_job_description_pdf(job_description):
+        attachment_content = generate_job_description_pdf_base64(job_description)
+        attachment_name = "job_description.pdf"
+
+    if attachment_content:
         payload["attachment"] = [{
-            "name": "job_description.pdf",
-            "content": generate_job_description_pdf_base64(job_description)
+            "name": attachment_name,
+            "content": attachment_content
         }]
 
     try:

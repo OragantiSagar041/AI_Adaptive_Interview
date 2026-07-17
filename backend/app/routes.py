@@ -377,11 +377,11 @@ def api_gen_next_question(req: NextQuestionRequest):
     return new_question
 
 
-@router.post("/upload-resume")
-@router.post("/upload-resume/")
-def upload_resume(
+@router.post("/parse-resume")
+async def parse_resume(
     file: UploadFile = File(...),
-    source: str = Form("resume")
+    source: str = Form("resume"),
+    upload_to_cloud: bool = Form(False)
 ):
     ALLOWED_MIMES = ["application/pdf", "application/vnd.openxmlformats-officedocument.wordprocessingml.document", "application/msword", "text/plain"]
     if file.content_type and file.content_type not in ALLOWED_MIMES:
@@ -391,7 +391,7 @@ def upload_resume(
         raise HTTPException(status_code=413, detail="File too large. Maximum size is 10MB.")
         
     try:
-        print(f"Uploading resume with source: {source}")
+        print(f"Uploading file with source: {source}, upload_to_cloud: {upload_to_cloud}")
 
         # Read file content
         content = file.file.read()
@@ -401,6 +401,29 @@ def upload_resume(
 
         if not content_str.strip():
             raise HTTPException(status_code=400, detail="No readable text found in the file")
+
+        file_url = None
+        if upload_to_cloud:
+            import cloudinary.uploader
+            try:
+                # Seek back to 0 before uploading
+                file.file.seek(0)
+                upload_res = cloudinary.uploader.upload(
+                    file.file,
+                    resource_type="raw",
+                    folder="jds" if source == 'jd' else "resumes",
+                    public_id=f"{uuid.uuid4().hex[:8]}_{file.filename}"
+                )
+                file_url = upload_res.get("secure_url")
+            except Exception as e:
+                print(f"Cloudinary upload failed: {e}")
+                # We do not fail the whole process if upload fails, just continue without URL
+
+        if source == "jd":
+            return {
+                "text": content_str.strip(),
+                "file_url": file_url
+            }
 
         # Generate interview ID
         interview_id = f"int_{int(datetime.now(timezone.utc).timestamp())}_{uuid.uuid4().hex[:8]}"
@@ -432,7 +455,8 @@ def upload_resume(
                 "source": source,
                 "profile_text": content_str[:5000],
                 "questions": json.dumps(questions),
-                "created_at": datetime.now(timezone.utc).isoformat()
+                "created_at": datetime.now(timezone.utc).isoformat(),
+                "file_url": file_url
             })
         except Exception as db_e:
             print(f" DB Save Error: {db_e}")
@@ -2104,7 +2128,8 @@ def get_interview_details(link_id: str):
         },
         "alerts": session_data.get("alerts", []),
         "answers": results,
-        "candidate_feedback": session_data.get("candidate_feedback", "")
+        "candidate_feedback": session_data.get("candidate_feedback", ""),
+        "ats_score": session_data.get("ats_score")
     }
     
     # Include full question list so admin can see which questions were skipped
@@ -3329,6 +3354,7 @@ def create_session(data: CreateSession, current_admin: dict = Depends(get_curren
         "resume_text": data.resume_text,
         "job_description": data.job_description,
         "custom_email_html": data.custom_email_html,
+        "jd_file_url": data.jd_file_url,
         "created_by": data.admin_id,
         "company_id": current_admin.get("company_id"),
         "created_at": now.isoformat(),
@@ -3347,7 +3373,8 @@ def create_session(data: CreateSession, current_admin: dict = Depends(get_curren
         "voice_clone": data.voice_clone,
         "custom_voice_id": data.custom_voice_id,
         "application_id": data.application_id,
-        "candidate_phone": data.candidate_phone
+        "candidate_phone": data.candidate_phone,
+        "ats_score": data.ats_score
     }
     
     # Task 4: Store scheduled time window
@@ -3400,6 +3427,7 @@ class BulkCreateSession(BaseModel):
     language: str = "English"
     case_study_count: int = 3
     custom_email_html: str = ""  # Task 1: Optional admin-edited email
+    jd_file_url: Optional[str] = None
     scheduled_start: str = ""  # Task 4
     scheduled_end: str = ""    # Task 4
     hr_screening: HRScreening = HRScreening()  # HR screening preferences
@@ -3502,6 +3530,7 @@ def bulk_create_sessions(data: BulkCreateSession, background_tasks: BackgroundTa
             "resume_text": candidate.resume_text,
             "job_description": data.job_description,
             "custom_email_html": data.custom_email_html,
+            "jd_file_url": data.jd_file_url,
             "created_by": data.admin_id,
             "company_id": current_admin.get("company_id"),
             "created_at": now.isoformat(),
@@ -4728,8 +4757,124 @@ async def calculate_ats_score(request: ATSRequest):
         
         if not resume_text or not jd_text:
             raise HTTPException(status_code=400, detail="Resume or JD is empty")
-            
-        # Offline Fallback logic: High-Accuracy Keyword Dictionary Match
+
+        # ── Attempt AI-powered ATS scoring first ──────────────────────────────
+        try:
+            from ai_client import chat_completion
+            prompt = f"""You are a professional ATS (Applicant Tracking System) evaluator. Score this resume against the job description using EXACTLY this weighted rubric. Return ONLY valid JSON.
+
+SCORING RUBRIC (weights must sum to 100%):
+- skills_match (30%): How well the candidate's technical & soft skills match the JD requirements
+- experience_match (25%): How well years of experience, roles, and industry background match
+- projects_match (15%): Relevance of past projects, achievements, and portfolio to the JD
+- education_match (10%): Degree, field of study, and academic qualifications alignment
+- keywords_match (10%): Presence of important ATS keywords from the JD in the resume
+- formatting_ats (5%): Resume structure clarity, section headings, and ATS parseability
+- certifications (5%): Relevant certifications, licenses, or professional credentials
+
+Job Description:
+{jd_text[:2000]}
+
+Resume:
+{resume_text[:2000]}
+
+Return this EXACT JSON (all score fields are integers 0-100, weighted_total is the weighted average):
+{{
+  "skills_match": {{"score": 0, "note": "brief reason"}},
+  "experience_match": {{"score": 0, "note": "brief reason"}},
+  "projects_match": {{"score": 0, "note": "brief reason"}},
+  "education_match": {{"score": 0, "note": "brief reason"}},
+  "keywords_match": {{"score": 0, "note": "brief reason"}},
+  "formatting_ats": {{"score": 0, "note": "brief reason"}},
+  "certifications": {{"score": 0, "note": "brief reason"}},
+  "weighted_total": 0,
+  "matched_skills": ["skill1", "skill2"],
+  "missing_skills": ["skill1", "skill2"],
+  "summary": "2-3 sentence overall assessment"
+}}"""
+
+            raw = chat_completion(
+                messages=[
+                    {"role": "system", "content": "You are a precise ATS scoring engine. Return ONLY valid JSON. No markdown. No explanation outside the JSON."},
+                    {"role": "user", "content": prompt},
+                ],
+                model="openai/gpt-4o-mini",
+                temperature=0.0,
+                timeout=30,
+                max_tokens=1500,
+            )
+
+            # Parse response
+            import json as _json, re as _re
+            raw_clean = _re.sub(r"```(?:json)?", "", raw).strip()
+            start = raw_clean.find("{")
+            end = raw_clean.rfind("}") + 1
+            if start != -1 and end > start:
+                data = _json.loads(raw_clean[start:end])
+
+                # Extract per-category breakdown
+                WEIGHTS = {
+                    "skills_match":     0.30,
+                    "experience_match": 0.25,
+                    "projects_match":   0.15,
+                    "education_match":  0.10,
+                    "keywords_match":   0.10,
+                    "formatting_ats":   0.05,
+                    "certifications":   0.05,
+                }
+                LABELS = {
+                    "skills_match":     "Skills Match",
+                    "experience_match": "Experience Match",
+                    "projects_match":   "Projects Match",
+                    "education_match":  "Education Match",
+                    "keywords_match":   "Keywords Match",
+                    "formatting_ats":   "Formatting & ATS Compatibility",
+                    "certifications":   "Certifications",
+                }
+
+                breakdown = []
+                computed_total = 0.0
+                for key, weight in WEIGHTS.items():
+                    cat = data.get(key, {})
+                    cat_score = max(0, min(100, int(cat.get("score", 0) if isinstance(cat, dict) else cat)))
+                    cat_note = cat.get("note", "") if isinstance(cat, dict) else ""
+                    computed_total += cat_score * weight
+                    breakdown.append({
+                        "category": LABELS[key],
+                        "score": cat_score,
+                        "weight": int(weight * 100),
+                        "note": cat_note,
+                        "weighted_contribution": round(cat_score * weight, 1)
+                    })
+
+                # Use AI's weighted_total if provided, else use computed
+                ai_total = data.get("weighted_total")
+                if ai_total is not None:
+                    final_score = max(0, min(100, int(ai_total)))
+                else:
+                    final_score = max(0, min(100, round(computed_total)))
+
+                matched = [str(s) for s in data.get("matched_skills", [])][:15]
+                missing = [str(s) for s in data.get("missing_skills", [])][:15]
+                summary = str(data.get("summary", ""))
+
+                if not matched and not missing:
+                    matched = ["No clear skills identified"]
+                    missing = ["No clear skills identified"]
+
+                return {
+                    "score": final_score,
+                    "matched_skills": matched,
+                    "missing_skills": missing,
+                    "summary": summary or f"AI ATS Analysis: {final_score}% weighted match score across 7 evaluation categories.",
+                    "breakdown": breakdown,
+                    "mode": "ai"
+                }
+        except Exception as ai_err:
+            print(f"⚠️ ATS AI call failed, falling back to keyword matching: {ai_err}")
+
+
+        # ── Offline Fallback: High-Accuracy Keyword Dictionary Match ──────────
         import re
         try:
             from offline_skills_dict import COMMON_SKILLS
@@ -4742,7 +4887,6 @@ async def calculate_ats_score(request: ATSRequest):
         # Extract common skills that exist in the Job Description
         jd_keywords = set()
         for skill in COMMON_SKILLS:
-            # Use regex to match whole words/phrases to prevent partial matches
             pattern = r'\b' + re.escape(skill) + r'\b'
             if re.search(pattern, jd_lower):
                 jd_keywords.add(skill)
@@ -4763,33 +4907,42 @@ async def calculate_ats_score(request: ATSRequest):
             else:
                 missing.append(word.title())
                 
-        # Sort lists (limit to top 15 for UI clarity)
         matched = sorted(matched)[:15]
         missing = sorted(missing)[:15]
         
-        # Calculate score based ONLY on the validated dictionary skills
         total_keywords = len(jd_keywords)
         matched_count = len(matched)
-        if total_keywords > 0:
-            score = min(100, int((matched_count / total_keywords) * 100))
-        else:
-            score = 0
+        score = min(100, int((matched_count / total_keywords) * 100)) if total_keywords > 0 else 0
         
         if not matched and not missing:
             matched.append("No clear skills found")
             missing.append("No clear skills found")
             
+        # Create a dummy breakdown so the UI table still renders
+        dummy_breakdown = [
+            {"category": "Skills Match", "score": score, "weight": 30, "note": "Offline Keyword Match"},
+            {"category": "Experience Match", "score": score, "weight": 25, "note": "Offline Keyword Match"},
+            {"category": "Projects Match", "score": score, "weight": 15, "note": "Offline Keyword Match"},
+            {"category": "Education Match", "score": score, "weight": 10, "note": "Offline Keyword Match"},
+            {"category": "Keywords Match", "score": score, "weight": 10, "note": "Offline Keyword Match"},
+            {"category": "Formatting & ATS Compatibility", "score": score, "weight": 5, "note": "Offline Keyword Match"},
+            {"category": "Certifications", "score": score, "weight": 5, "note": "Offline Keyword Match"}
+        ]
+
         return {
             "score": score,
             "matched_skills": matched,
             "missing_skills": missing,
-            "summary": "Offline Mode Active: This score is calculated using an offline keyword-matching algorithm because the AI Quota has been exceeded."
+            "summary": "Keyword Match Mode: Score calculated using offline skill dictionary matching. Upgrade to AI mode by ensuring AI keys are configured.",
+            "breakdown": dummy_breakdown,
+            "mode": "fallback"
         }
             
     except HTTPException:
         raise
     except Exception as e:
         print(f" ATS Score endpoint error: {e}")
+
         raise HTTPException(status_code=500, detail=str(e))
 
 class CandidateFeedbackRequest(BaseModel):

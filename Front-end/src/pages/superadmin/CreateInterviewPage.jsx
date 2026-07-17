@@ -229,20 +229,20 @@ export default function CreateInterviewPage() {
   }
 
   // Parse file content
-  const handleParseFile = async (file, onParsed, onLoading) => {
+  const handleParseFile = async (file, onParsed, onLoading, source = 'resume', uploadToCloud = false) => {
     if (!file) return
-    if (file.size > 5 * 1024 * 1024) {
-      onParsed('File exceeds 5MB limit')
-      return
-    }
     onLoading(true)
     const formData = new FormData()
     formData.append('file', file)
+    formData.append('source', source)
+    if (uploadToCloud) {
+      formData.append('upload_to_cloud', 'true')
+    }
     try {
       const response = await axios.post(`${API_BASE_URL}/admin/parse-resume`, formData, {
         headers: {
           'Content-Type': 'multipart/form-data',
-          'Authorization': `Bearer ${sessionStorage.getItem('adminToken')}`
+          'Authorization': `Bearer ${sessionStorage.getItem('superadminToken') || sessionStorage.getItem('adminToken')}`
         }
       })
       onParsed(null, response.data)
@@ -631,7 +631,9 @@ Congratulations! You have been selected for an AI-powered interview. Please revi
         voice_clone: voiceCloning,
         custom_voice_id: singleCandidate.customVoiceId || "",
         application_id: singleCandidate.applicationId || "",
-        candidate_phone: singleCandidate.phone || ""
+        candidate_phone: singleCandidate.phone || "",
+        ats_score: atsScoreData ? atsScoreData.score : null,
+        jd_file_url: singleCandidate.jdFileUrl || null
       })).unwrap()
 
       let msg = `Secure interview link created successfully!`
@@ -862,7 +864,8 @@ Congratulations! You have been selected for an AI-powered interview. Please revi
         custom_questions: customQuestions,
         ai_instructions: aiInstructions,
         voice_clone: bulkConfig.voiceCloning,
-        custom_voice_id: bulkConfig.customVoiceId || ""
+        custom_voice_id: bulkConfig.customVoiceId || "",
+        jd_file_url: bulkConfig.jdFileUrl || null
       })).unwrap()
 
       Swal.fire({
@@ -1124,9 +1127,14 @@ Congratulations! You have been selected for an AI-powered interview. Please revi
                             })
                             setJdParsing(false)
                           } else {
-                            handleSingleChange('jobDescription', data.text || '')
+                            if (data.text) {
+                              handleSingleChange('jobDescription', data.text)
+                            }
+                            if (data.file_url) {
+                              handleSingleChange('jdFileUrl', data.file_url)
+                            }
                           }
-                        }, setJdParsing)
+                        }, setJdParsing, 'jd', true)
                       }}
                     />
                   </div>
@@ -1141,6 +1149,7 @@ Congratulations! You have been selected for an AI-powered interview. Please revi
                 {/* ATS Match Score */}
                 {atsScoreData && (
                   <div className="bg-indigo-50/30 border border-indigo-100/80 rounded-2xl p-5 mt-2 flex flex-col gap-4">
+                    {/* Header */}
                     <div className="flex justify-between items-center">
                       <h4 className="text-sm font-bold text-slate-800 flex items-center gap-1.5">
                         <i className="fas fa-chart-line text-primary"></i> ATS Resume Match Score
@@ -1154,18 +1163,23 @@ Congratulations! You have been selected for an AI-powered interview. Please revi
                         {atsCalculating ? "Analyzing..." : <><i className="fas fa-sync-alt mr-1"></i> Recalculate</>}
                       </Button>
                     </div>
-                    <div className="flex gap-6 items-start flex-col sm:flex-row">
-                      <div className="flex-shrink-0 text-center mx-auto sm:mx-0">
+
+                    {/* Score ring + summary */}
+                    <div className="flex gap-5 items-center">
+                      <div className="flex-shrink-0 text-center">
                         <div className="relative w-20 h-20 flex items-center justify-center">
                           <svg className="w-20 h-20 transform -rotate-90">
+                            <defs>
+                              <linearGradient id="scoreGradient" x1="0%" y1="0%" x2="100%" y2="100%">
+                                <stop offset="0%" stopColor="#6366f1" />
+                                <stop offset="100%" stopColor="#4f46e5" />
+                              </linearGradient>
+                            </defs>
                             <circle cx="40" cy="40" r="34" stroke="#e2e8f0" strokeWidth="6" fill="transparent" />
                             <circle
-                              cx="40"
-                              cy="40"
-                              r="34"
+                              cx="40" cy="40" r="34"
                               stroke={atsScoreData.score >= 75 ? '#10b981' : atsScoreData.score >= 50 ? '#f59e0b' : '#ef4444'}
-                              strokeWidth="6"
-                              fill="transparent"
+                              strokeWidth="6" fill="transparent"
                               strokeDasharray={213.6}
                               strokeDashoffset={213.6 - (213.6 * atsScoreData.score) / 100}
                               strokeLinecap="round"
@@ -1174,29 +1188,62 @@ Congratulations! You have been selected for an AI-powered interview. Please revi
                           </svg>
                           <span className="absolute text-lg font-extrabold text-slate-800">{atsScoreData.score}%</span>
                         </div>
-                        <div className="text-[0.65rem] text-slate-500 font-bold uppercase tracking-wider mt-2">Overall Match</div>
+                        <div className="text-[0.62rem] text-slate-500 font-bold uppercase tracking-wider mt-1.5">Overall Match</div>
                       </div>
-                      <div className="flex-grow text-xs text-slate-600 leading-relaxed">
-                        <p className="mb-3 font-medium text-slate-700 bg-white/50 p-3 rounded-lg border border-slate-100">{atsScoreData.summary}</p>
-                        <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-                          <div className="bg-emerald-500/5 p-3 rounded-xl border border-emerald-500/10">
-                            <strong className="text-emerald-600 block mb-1.5 text-[0.7rem] uppercase tracking-wide"><i className="fas fa-check mr-1"></i> Matched Skills</strong>
-                            <div className="flex flex-wrap gap-1 mt-1.5">
-                              {atsScoreData.matched_skills.map((skill, idx) => (
-                                <span key={idx} className="bg-emerald-50 border border-emerald-100 text-emerald-700 px-2.5 py-0.5 rounded-full text-[0.65rem] font-bold">{skill}</span>
-                              ))}
-                              {atsScoreData.matched_skills.length === 0 && <span className="text-slate-400">None identified</span>}
-                            </div>
-                          </div>
-                          <div className="bg-rose-500/5 p-3 rounded-xl border border-rose-500/10">
-                            <strong className="text-rose-600 block mb-1.5 text-[0.7rem] uppercase tracking-wide"><i className="fas fa-triangle-exclamation mr-1"></i> Missing Skills</strong>
-                            <div className="flex flex-wrap gap-1 mt-1.5">
-                              {atsScoreData.missing_skills.map((skill, idx) => (
-                                <span key={idx} className="bg-rose-50 border border-rose-100 text-rose-700 px-2.5 py-0.5 rounded-full text-[0.65rem] font-bold">{skill}</span>
-                              ))}
-                              {atsScoreData.missing_skills.length === 0 && <span className="text-slate-400">None identified</span>}
-                            </div>
-                          </div>
+                      <p className="flex-grow text-xs font-medium text-slate-600 bg-white/60 p-3 rounded-xl border border-slate-100 leading-relaxed">{atsScoreData.summary}</p>
+                    </div>
+
+                    {/* Weighted Category Breakdown */}
+                    {atsScoreData.breakdown && atsScoreData.breakdown.length > 0 && (
+                      <div className="flex flex-col gap-2">
+                        <span className="text-[0.65rem] font-bold text-slate-500 uppercase tracking-wider flex items-center gap-1.5">
+                          <i className="fas fa-sliders-h text-primary/70"></i> Score Breakdown by Category
+                        </span>
+                        <div className="flex flex-col gap-1.5">
+                          {atsScoreData.breakdown.map((item, idx) => {
+                            const barColor = item.score >= 75 ? 'bg-emerald-500' : item.score >= 50 ? 'bg-amber-400' : 'bg-rose-500'
+                            const textColor = item.score >= 75 ? 'text-emerald-600' : item.score >= 50 ? 'text-amber-600' : 'text-rose-600'
+                            return (
+                              <div key={idx} className="bg-white/70 border border-slate-100 rounded-xl px-3.5 py-2.5 flex items-center gap-3">
+                                <div className="w-[140px] shrink-0">
+                                  <div className="text-[0.68rem] font-bold text-slate-700 leading-tight">{item.category}</div>
+                                  <div className="text-[0.6rem] text-slate-400 font-medium mt-0.5">Weight: {item.weight}%</div>
+                                </div>
+                                <div className="flex-grow">
+                                  <div className="h-2 bg-slate-100 rounded-full overflow-hidden">
+                                    <div
+                                      className={`h-full rounded-full transition-all duration-700 ${barColor}`}
+                                      style={{ width: `${item.score}%` }}
+                                    />
+                                  </div>
+                                  {item.note && <p className="text-[0.6rem] text-slate-400 mt-1 leading-tight truncate">{item.note}</p>}
+                                </div>
+                                <div className={`text-sm font-extrabold w-10 text-right shrink-0 ${textColor}`}>{item.score}%</div>
+                              </div>
+                            )
+                          })}
+                        </div>
+                      </div>
+                    )}
+
+                    {/* Matched / Missing skills chips */}
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                      <div className="bg-emerald-500/5 p-3 rounded-xl border border-emerald-500/10">
+                        <strong className="text-emerald-600 block mb-1.5 text-[0.7rem] uppercase tracking-wide"><i className="fas fa-check mr-1"></i> Matched Skills</strong>
+                        <div className="flex flex-wrap gap-1 mt-1.5">
+                          {atsScoreData.matched_skills.map((skill, idx) => (
+                            <span key={idx} className="bg-emerald-50 border border-emerald-100 text-emerald-700 px-2.5 py-0.5 rounded-full text-[0.65rem] font-bold">{skill}</span>
+                          ))}
+                          {atsScoreData.matched_skills.length === 0 && <span className="text-slate-400 text-xs">None identified</span>}
+                        </div>
+                      </div>
+                      <div className="bg-rose-500/5 p-3 rounded-xl border border-rose-500/10">
+                        <strong className="text-rose-600 block mb-1.5 text-[0.7rem] uppercase tracking-wide"><i className="fas fa-triangle-exclamation mr-1"></i> Missing Skills</strong>
+                        <div className="flex flex-wrap gap-1 mt-1.5">
+                          {atsScoreData.missing_skills.map((skill, idx) => (
+                            <span key={idx} className="bg-rose-50 border border-rose-100 text-rose-700 px-2.5 py-0.5 rounded-full text-[0.65rem] font-bold">{skill}</span>
+                          ))}
+                          {atsScoreData.missing_skills.length === 0 && <span className="text-slate-400 text-xs">None identified</span>}
                         </div>
                       </div>
                     </div>
@@ -1733,9 +1780,14 @@ Congratulations! You have been selected for an AI-powered interview. Please revi
                             })
                             setBulkJdParsing(false)
                           } else {
-                            handleBulkConfigChange('jobDescription', data.text || '')
+                            if (data.text) {
+                              handleBulkConfigChange('jobDescription', data.text)
+                            }
+                            if (data.file_url) {
+                              handleBulkConfigChange('jdFileUrl', data.file_url)
+                            }
                           }
-                        }, setBulkJdParsing)
+                        }, setBulkJdParsing, 'jd', true)
                       }}
                     />
                   </div>

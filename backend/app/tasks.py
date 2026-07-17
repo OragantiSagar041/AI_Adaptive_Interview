@@ -81,6 +81,7 @@ def send_email_task(
     custom_html: str = "",
     scheduled_start: str = "",
     scheduled_end: str = "",
+    jd_file_url: str = None,
 ):
     logger.info(f"Sending email via Celery to {candidate_email}")
 
