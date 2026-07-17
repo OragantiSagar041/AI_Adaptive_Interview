@@ -2024,7 +2024,8 @@ def get_interview_details(link_id: str):
         "alerts": session_data.get("alerts", []),
         "notes": session_data.get("notes", []),
         "answers": results,
-        "candidate_feedback": session_data.get("candidate_feedback", "")
+        "candidate_feedback": session_data.get("candidate_feedback", ""),
+        "ats_score": session_data.get("ats_score")
     }
     
     # Include full question list so admin can see which questions were skipped
@@ -3188,7 +3189,8 @@ def create_session(data: CreateSession, current_admin: dict = Depends(get_curren
         "voice_clone": data.voice_clone,
         "custom_voice_id": data.custom_voice_id,
         "application_id": data.application_id,
-        "candidate_phone": data.candidate_phone
+        "candidate_phone": data.candidate_phone,
+        "ats_score": data.ats_score
     }
     
     # Task 4: Store scheduled time window
@@ -4610,8 +4612,65 @@ async def calculate_ats_score(request: ATSRequest):
         
         if not resume_text or not jd_text:
             raise HTTPException(status_code=400, detail="Resume or JD is empty")
-            
-        # Offline Fallback logic: High-Accuracy Keyword Dictionary Match
+
+        # ── Attempt AI-powered ATS scoring first ──────────────────────────────
+        try:
+            from ai_client import chat_completion
+            prompt = f"""You are an expert ATS (Applicant Tracking System) evaluator.
+
+Analyze how well this resume matches the job description and return ONLY valid JSON. No markdown, no explanation.
+
+Job Description:
+{jd_text[:2000]}
+
+Resume:
+{resume_text[:2000]}
+
+Return this exact JSON structure:
+{{
+  "score": <integer 0-100 representing overall match percentage>,
+  "matched_skills": [<list of up to 15 skills/keywords from the JD that are present in the resume>],
+  "missing_skills": [<list of up to 15 important skills/keywords from the JD missing from the resume>],
+  "summary": "<2-3 sentence analysis of the candidate's fit for this role>"
+}}"""
+
+            raw = chat_completion(
+                messages=[
+                    {"role": "system", "content": "You are an ATS scoring engine. Return ONLY valid JSON. No markdown."},
+                    {"role": "user", "content": prompt},
+                ],
+                model="openai/gpt-4o-mini",
+                temperature=0.0,
+                timeout=25,
+                max_tokens=512,
+            )
+
+            # Parse response
+            import json as _json, re as _re
+            raw_clean = _re.sub(r"```(?:json)?", "", raw).strip()
+            start = raw_clean.find("{")
+            end = raw_clean.rfind("}") + 1
+            if start != -1 and end > start:
+                data = _json.loads(raw_clean[start:end])
+                score = max(0, min(100, int(data.get("score", 0))))
+                matched = [str(s) for s in data.get("matched_skills", [])][:15]
+                missing = [str(s) for s in data.get("missing_skills", [])][:15]
+                summary = str(data.get("summary", ""))
+                
+                if not matched and not missing:
+                    matched = ["No clear skills identified"]
+                    missing = ["No clear skills identified"]
+                    
+                return {
+                    "score": score,
+                    "matched_skills": matched,
+                    "missing_skills": missing,
+                    "summary": summary or f"AI ATS Analysis: {score}% match score based on semantic comparison of your resume against the job requirements."
+                }
+        except Exception as ai_err:
+            print(f"⚠️ ATS AI call failed, falling back to keyword matching: {ai_err}")
+
+        # ── Offline Fallback: High-Accuracy Keyword Dictionary Match ──────────
         import re
         try:
             from offline_skills_dict import COMMON_SKILLS
@@ -4624,7 +4683,6 @@ async def calculate_ats_score(request: ATSRequest):
         # Extract common skills that exist in the Job Description
         jd_keywords = set()
         for skill in COMMON_SKILLS:
-            # Use regex to match whole words/phrases to prevent partial matches
             pattern = r'\b' + re.escape(skill) + r'\b'
             if re.search(pattern, jd_lower):
                 jd_keywords.add(skill)
@@ -4645,17 +4703,12 @@ async def calculate_ats_score(request: ATSRequest):
             else:
                 missing.append(word.title())
                 
-        # Sort lists (limit to top 15 for UI clarity)
         matched = sorted(matched)[:15]
         missing = sorted(missing)[:15]
         
-        # Calculate score based ONLY on the validated dictionary skills
         total_keywords = len(jd_keywords)
         matched_count = len(matched)
-        if total_keywords > 0:
-            score = min(100, int((matched_count / total_keywords) * 100))
-        else:
-            score = 0
+        score = min(100, int((matched_count / total_keywords) * 100)) if total_keywords > 0 else 0
         
         if not matched and not missing:
             matched.append("No clear skills found")
@@ -4665,13 +4718,14 @@ async def calculate_ats_score(request: ATSRequest):
             "score": score,
             "matched_skills": matched,
             "missing_skills": missing,
-            "summary": "Offline Mode Active: This score is calculated using an offline keyword-matching algorithm because the AI Quota has been exceeded."
+            "summary": "Keyword Match Mode: Score calculated using offline skill dictionary matching. Upgrade to AI mode by ensuring AI keys are configured."
         }
             
     except HTTPException:
         raise
     except Exception as e:
         print(f" ATS Score endpoint error: {e}")
+
         raise HTTPException(status_code=500, detail=str(e))
 
 class CandidateFeedbackRequest(BaseModel):

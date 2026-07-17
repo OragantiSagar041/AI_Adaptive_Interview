@@ -532,7 +532,8 @@ Congratulations! You have been selected for an AI-powered interview. Please revi
         voice_clone: voiceCloning,
         custom_voice_id: singleCandidate.customVoiceId,
         application_id: singleCandidate.applicationId || "",
-        candidate_phone: singleCandidate.phone || ""
+        candidate_phone: singleCandidate.phone || "",
+        ats_score: atsScoreData ? atsScoreData.score : null
       }, {
         headers: {
           'Authorization': `Bearer ${token}`
