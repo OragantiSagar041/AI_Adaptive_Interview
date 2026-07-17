@@ -1607,15 +1607,9 @@ def get_agent_flow():
 
     if not agent_id_value:
         raise HTTPException(status_code=500, detail="OMNI_AGENT_ID is not configured.")
-<<<<<<< HEAD
-    
-    agent_id = str(OMNI_AGENT_ID).strip()
-    headers = {"Authorization": f"Bearer {OMNI_DIMENSION_API_KEY}"}
-=======
 
     agent_id = agent_id_value
     headers = {"Authorization": f"Bearer {api_key}"}
->>>>>>> 831ac5e (Save my local changes)
     try:
         res = requests.get(f"https://backend.omnidim.io/api/v1/agents/{agent_id}", headers=headers, timeout=10)
         if res.status_code == 200:
@@ -1662,11 +1656,6 @@ def update_agent_flow(req: UpdateAgentFlowRequest):
     agent_id_value = get_omni_agent_id()
     if not agent_id_value:
         raise HTTPException(status_code=500, detail="OMNI_AGENT_ID is not configured.")
-<<<<<<< HEAD
-    
-    agent_id = str(OMNI_AGENT_ID).strip()
-    headers = {"Authorization": f"Bearer {OMNI_DIMENSION_API_KEY}", "Content-Type": "application/json"}
-=======
 
     agent_id = agent_id_value
     payload = {
@@ -1684,7 +1673,6 @@ def update_agent_flow(req: UpdateAgentFlowRequest):
         return {"success": True, "message": "Local flow saved; Omnidimension sync skipped because OMNI_DIMENSION_API_KEY is not configured."}
 
     headers = {"Authorization": f"Bearer {api_key}", "Content-Type": "application/json"}
->>>>>>> 831ac5e (Save my local changes)
     
     # We only send the context_breakdown (conversational flow)
     

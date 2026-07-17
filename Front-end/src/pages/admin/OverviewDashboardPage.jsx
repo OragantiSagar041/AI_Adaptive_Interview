@@ -3,6 +3,7 @@ import { useSelector, useDispatch } from "react-redux";
 import { useNavigate } from "react-router-dom";
 import { loadDashboardData } from "../../store/slices/dashboardSlice";
 import CandidateDialog from '../../components/superadmin/CandidateDialog';
+import { CandidateFilters } from "../../components/admin/AdminSubComponents";
 import Modal from "../../components/Modal";
 
 import {
@@ -100,6 +101,12 @@ export default function OverviewDashboardPage() {
   const [activeRecFilter, setActiveRecFilter] = useState(null);
   const [activeActivityFilter, setActiveActivityFilter] = useState(null);
   const [searchQuery, setSearchQuery] = useState("");
+  const [startDate, setStartDate] = useState("");
+  const [endDate, setEndDate] = useState("");
+  const [statusFilter, setStatusFilter] = useState("all");
+  const [pipelineFilter, setPipelineFilter] = useState("all");
+  const [positionFilter, setPositionFilter] = useState("all");
+  const [sortBy, setSortBy] = useState("score");
 
   const handleOpenRecordsModal = async (filterType, title) => {
     setListModalFilterType(filterType);
@@ -150,7 +157,7 @@ export default function OverviewDashboardPage() {
 
   const activeFilter = activeActionFilter || activeRecFilter || activeActivityFilter;
 
-  const filteredTableCandidates = candidates ? candidates.filter((c) => {
+  const filteredTableCandidates = (candidates ? candidates.filter((c) => {
     let matchesSearch = true;
     if (searchQuery) {
       const q = searchQuery.toLowerCase();
@@ -159,8 +166,38 @@ export default function OverviewDashboardPage() {
       matchesSearch = matchName || matchTitle;
     }
 
-    if (!activeFilter) return matchesSearch;
+    if (!activeFilter && !startDate && !endDate && statusFilter === "all" && pipelineFilter === "all" && positionFilter === "all") return matchesSearch;
     if (!matchesSearch) return false;
+
+    // Additional filters
+    if (statusFilter !== "all") {
+      const computedStatus = (c.status || "").toLowerCase();
+      const decision = (c.decision || "").toLowerCase();
+      if (statusFilter === "completed" && computedStatus !== "completed") return false;
+      if (statusFilter === "pending" && computedStatus !== "pending") return false;
+      if (statusFilter === "started" && computedStatus !== "started") return false;
+      if (statusFilter === "expired" && computedStatus !== "expired") return false;
+    }
+
+    if (pipelineFilter !== "all") {
+      if ((c.pipeline_type || "hireiq").toLowerCase() !== pipelineFilter.toLowerCase()) return false;
+    }
+
+    if (positionFilter !== "all") {
+      if (c.interview_title !== positionFilter && c.job_title !== positionFilter) return false;
+    }
+
+    if (startDate) {
+      const cDate = new Date(c.created_at || c.updated_at);
+      if (cDate < new Date(startDate)) return false;
+    }
+
+    if (endDate) {
+      const cDate = new Date(c.created_at || c.updated_at);
+      const endD = new Date(endDate);
+      endD.setHours(23, 59, 59, 999);
+      if (cDate > endD) return false;
+    }
 
     const computedStatus = (c.status || "").toLowerCase();
     const decision = (c.decision || "").toLowerCase();
@@ -191,7 +228,17 @@ export default function OverviewDashboardPage() {
       return parseFloat(c.score || c.avg_score || 0) >= 80;
     }
     return true;
-  }) : [];
+  }) : []).sort((a, b) => {
+    if (sortBy === 'score') {
+      const scoreA = parseFloat(a.score || a.avg_score || 0);
+      const scoreB = parseFloat(b.score || b.avg_score || 0);
+      return scoreB - scoreA;
+    } else {
+      const dateA = new Date(a.created_at || a.updated_at || 0);
+      const dateB = new Date(b.created_at || b.updated_at || 0);
+      return dateB - dateA;
+    }
+  });
 
   const kpis = [
     { label: "Total Candidates", value: dbStats?.total || "0", icon: Users, tint: "primary", delta: "" },
@@ -363,13 +410,23 @@ export default function OverviewDashboardPage() {
                 {activeFilter ? `Displaying matching records for the active action card.` : "Leaderboard by AI-assisted output and hiring conversion."}
               </p>
             </div>
-            <div className="relative w-full max-w-xs md:w-64">
-              <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
-              <Input
-                placeholder="Search candidates..."
-                value={searchQuery}
-                onChange={(e) => setSearchQuery(e.target.value)}
-                className="h-9 pl-9 bg-slate-50 border-slate-200 focus-visible:bg-white"
+            <div className="w-full mt-4">
+              <CandidateFilters
+                searchTerm={searchQuery}
+                setSearchTerm={setSearchQuery}
+                startDate={startDate}
+                setStartDate={setStartDate}
+                endDate={endDate}
+                setEndDate={setEndDate}
+                statusFilter={statusFilter}
+                setStatusFilter={setStatusFilter}
+                pipelineFilter={pipelineFilter}
+                setPipelineFilter={setPipelineFilter}
+                positionFilter={positionFilter}
+                setPositionFilter={setPositionFilter}
+                sortBy={sortBy}
+                setSortBy={setSortBy}
+                allCandidates={candidates || []}
               />
             </div>
           </div>
