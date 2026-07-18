@@ -438,7 +438,16 @@ export const useInterviewSession = (sessionId, interviewType, startRoundTwo) => 
 
   // Track unload events (Refresh or Close tab)
   useEffect(() => {
-    const handleUnload = () => {
+    const handleUnload = (e) => {
+      const isUploading = uploadingText && uploadPercentage < 100;
+      const isActiveSession = sessionId && isDisclaimerAccepted && !isCompleted;
+      
+      // Prevent exiting during active interview or during video upload
+      if (isActiveSession || isUploading) {
+        e.preventDefault();
+        e.returnValue = '';
+      }
+
       if (sessionId && isDisclaimerAccepted) {
         navigator.sendBeacon(`${api.defaults.baseURL || ''}/interview/${sessionId}/alert`, JSON.stringify({
           type: "warning",
@@ -448,7 +457,7 @@ export const useInterviewSession = (sessionId, interviewType, startRoundTwo) => 
     }
     window.addEventListener("beforeunload", handleUnload)
     return () => window.removeEventListener("beforeunload", handleUnload)
-  }, [sessionId, isDisclaimerAccepted])
+  }, [sessionId, isDisclaimerAccepted, isCompleted, uploadingText, uploadPercentage])
 
   // Persist current question index
   useEffect(() => {
@@ -1752,6 +1761,7 @@ export const useInterviewSession = (sessionId, interviewType, startRoundTwo) => 
         filler_count: countFillers(transcriptionText),
         wpm: wpm,
         pause_count: behavioralStatsRef.current.pauseCount,
+        time_spent_seconds: timeSpent,
         tab_switches: behavioralStatsRef.current.tabSwitches,
         face_alerts: behavioralStatsRef.current.faceAlerts,
         noise_alerts: behavioralStatsRef.current.noiseAlerts
@@ -1807,6 +1817,7 @@ export const useInterviewSession = (sessionId, interviewType, startRoundTwo) => 
         filler_count: countFillers(transcriptionText),
         wpm: wpm,
         pause_count: behavioralStatsRef.current.pauseCount,
+        time_spent_seconds: timeSpent,
         tab_switches: behavioralStatsRef.current.tabSwitches,
         face_alerts: behavioralStatsRef.current.faceAlerts,
         noise_alerts: behavioralStatsRef.current.noiseAlerts
@@ -1923,6 +1934,8 @@ export const useInterviewSession = (sessionId, interviewType, startRoundTwo) => 
       screenRecorderRef.current.stop()
     }
 
+    let uploadPromiseChain = Promise.resolve()
+
     if (cameraChunksRef.current.length > 0 || screenChunksRef.current.length > 0) {
       setUploadingText("Uploading video recordings...")
       setUploadPercentage(10)
@@ -1957,13 +1970,11 @@ export const useInterviewSession = (sessionId, interviewType, startRoundTwo) => 
         })
       }
 
-      // Fire and forget background upload
-      Promise.all([
+      // Keep track of the upload promise to await it later
+      uploadPromiseChain = Promise.all([
         uploadPromise(cameraChunksRef.current, 'camera'),
         uploadPromise(screenChunksRef.current, 'screen')
-      ]).then(() => {
-        setUploadPercentage(100)
-      }).catch(err => console.error("Background upload failed:", err))
+      ]).catch(err => console.error("Background upload failed:", err))
     }
 
     try {
@@ -2010,8 +2021,12 @@ export const useInterviewSession = (sessionId, interviewType, startRoundTwo) => 
       await api.post(`/complete-session/${sessionId}${queryParams}`)
     } catch (e) { }
 
+    // Wait for the video upload to finish before marking everything complete
+    await uploadPromiseChain
+
     setShowSkipButton(false)
     setUploadPercentage(100)
+    setUploadingText("")
     setTimeout(() => {
       if (document.fullscreenElement) {
         document.exitFullscreen().catch(err => console.log(err))

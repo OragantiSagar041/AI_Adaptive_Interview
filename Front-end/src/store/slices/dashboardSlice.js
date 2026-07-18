@@ -40,6 +40,44 @@ export const loadSuperAdminDashboard = createAsyncThunk(
   }
 )
 
+// ─── Recruitment Funnel Thunk ───────────────────────────────────────────────
+export const loadRecruitmentFunnel = createAsyncThunk(
+  'dashboard/loadRecruitmentFunnel',
+  async (adminFilter = null, { getState, rejectWithValue }) => {
+    try {
+      const { API_BASE_URL, token } = getState().auth
+      const params = adminFilter ? { adminId: adminFilter } : {}
+      const res = await axios.get(`${API_BASE_URL}/superadmin/recruitment-funnel`, {
+        headers: { Authorization: `Bearer ${token}` },
+        params
+      })
+      return res.data.funnel ?? []
+    } catch (err) {
+      const errorMsg = err.response?.data?.detail || err.message || 'Failed to load funnel'
+      return rejectWithValue(typeof errorMsg === 'object' ? JSON.stringify(errorMsg) : errorMsg)
+    }
+  }
+)
+
+// ─── Platform Analytics Thunk ───────────────────────────────────────────────
+export const loadPlatformAnalytics = createAsyncThunk(
+  'dashboard/loadPlatformAnalytics',
+  async (adminFilter = null, { getState, rejectWithValue }) => {
+    try {
+      const { API_BASE_URL, token } = getState().auth
+      const params = adminFilter ? { adminId: adminFilter } : {}
+      const res = await axios.get(`${API_BASE_URL}/superadmin/platform-analytics`, {
+        headers: { Authorization: `Bearer ${token}` },
+        params
+      })
+      return res.data
+    } catch (err) {
+      const errorMsg = err.response?.data?.detail || err.message || 'Failed to load analytics'
+      return rejectWithValue(typeof errorMsg === 'object' ? JSON.stringify(errorMsg) : errorMsg)
+    }
+  }
+)
+
 const dashboardSlice = createSlice({
   name: 'dashboard',
   initialState: {
@@ -65,6 +103,9 @@ const dashboardSlice = createSlice({
       avg_score: '--',
       today: '--'
     },
+    funnelData: [],
+    analyticsData: [],
+    avgTimeToHire: null,
     selectedAdminFilter: null,
     ongoingLiveCount: 0,
     ongoingAlertCount: 0,
@@ -91,18 +132,6 @@ const dashboardSlice = createSlice({
           audio_level: data.audio_level || 0,
           current_question: data.current_question || session.current_question
         };
-      } else {
-        // If an interview goes live and isn't in our list yet, add it!
-        state.liveSessions.unshift({
-          link_id: link_id,
-          candidate_name: data.candidate_name || "Fetching...",
-          interview_title: data.interview_title || "Live Interview",
-          online: true,
-          audio_level: data.audio_level || 0,
-          current_question: data.current_question,
-          proctoring_alerts: data.proctoring_alerts || 0,
-          session_id: link_id
-        });
       }
     }
   },
@@ -151,6 +180,14 @@ const dashboardSlice = createSlice({
       .addCase(loadSuperAdminDashboard.rejected, (state, action) => {
         state.status = 'failed'
         state.error = action.payload
+      })
+      .addCase(loadRecruitmentFunnel.fulfilled, (state, action) => {
+        state.funnelData = Array.isArray(action.payload) ? action.payload : []
+      })
+      .addCase(loadPlatformAnalytics.fulfilled, (state, action) => {
+        const payload = action.payload || {}
+        state.analyticsData = Array.isArray(payload.analytics) ? payload.analytics : []
+        state.avgTimeToHire = payload.avg_time_to_hire_days ?? null
       })
   }
 })
