@@ -117,6 +117,7 @@ export default function SuperDashboardPage() {
   const sortBy = useSelector(state => state.candidates.sortBy);
   
   const allCandidates = useSelector(state => state.candidates.candidates);
+  const filteredCandidates = useSelector(state => state.candidates.filteredCandidates);
 
   const [selectedCandidate, setSelectedCandidate] = useState(null);
   const [adminsList, setAdminsList] = useState([]);
@@ -414,7 +415,7 @@ export default function SuperDashboardPage() {
             setPositionFilter={(val) => dispatch(setPositionFilter(val))}
             sortBy={sortBy}
             setSortBy={(val) => dispatch(setSortBy(val))}
-            handleExportExcel={() => dispatch(handleSuperAdminExportExcel(allCandidates))}
+            handleExportExcel={() => dispatch(handleSuperAdminExportExcel(paginatedCandidates))}
             selectedIds={selectedIds}
             handleBulkDelete={() => dispatch(handleSuperAdminBulkDelete(selectedIds))}
             allCandidates={allCandidates}

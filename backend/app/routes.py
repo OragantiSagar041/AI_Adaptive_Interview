@@ -785,8 +785,13 @@ def save_answer(
             # ── Composite score: blend with coding / case study if present ──
             try:
                 from score_rounds import compute_coding_score, compute_case_study_score, blend_scores
+                session_rec = interview_sessions_collection.find_one({"interview_id": interview_id})
                 interview_row = interviews_collection.find_one({"id": interview_id})
-                interview_format = (interview_row or {}).get("interview_format", "Standard") if interview_row else "Standard"
+                interview_format = "Standard"
+                if session_rec and session_rec.get("interview_format"):
+                    interview_format = session_rec["interview_format"]
+                elif interview_row and interview_row.get("interview_format"):
+                    interview_format = interview_row["interview_format"]
                 coding_round_data = (interview_row or {}).get("coding_round") if interview_row else None
                 case_study_data   = (interview_row or {}).get("case_study_round") if interview_row else None
 
@@ -833,10 +838,11 @@ def save_answer(
                         if candidate_id:
                             try:
                                 from bson import ObjectId
-                                cand = candidates_collection.find_one({"_id": ObjectId(candidate_id)})
+                                query = {"_id": ObjectId(candidate_id)} if ObjectId.is_valid(candidate_id) else {"custom_id": candidate_id}
+                                cand = candidates_collection.find_one(query)
                                 if cand and cand.get("custom_id") and not cand["custom_id"].endswith("IQ"):
                                     candidates_collection.update_one(
-                                        {"_id": ObjectId(candidate_id)},
+                                        query,
                                         {"$set": {"custom_id": f"{cand['custom_id']}IQ"}}
                                     )
                             except: pass
@@ -902,24 +908,56 @@ class BehavioralData(BaseModel):
 def save_behavioral_data(data: BehavioralData):
     """Saves per-question behavioral and proctoring metrics"""
     try:
-        update_fields = {
-            "wpm": data.wpm,
-            "pause_count": data.pause_count,
-            "filler_count": data.filler_count,
-            "keyword_match_pct": data.keyword_match_pct,
-            "tab_switches": data.tab_switches,
-            "face_alerts": data.face_alerts,
-            "noise_alerts": data.noise_alerts
-        }
-        # Only update time_spent_seconds if it is explicitly provided and non-zero.
-        # This prevents overwriting the value already saved by /save-answer with a default 0.
-        if data.time_spent_seconds and data.time_spent_seconds > 0:
-            update_fields["time_spent_seconds"] = data.time_spent_seconds
+        # Check if this is a case study question
+        is_case_study = False
+        idx = -1
+        if "cs_" in str(data.question_id):
+            is_case_study = True
+            try:
+                idx = int(str(data.question_id).replace("cs_", ""))
+            except:
+                pass
 
-        answers_collection.update_many(
-            {"interview_id": data.interview_id, "question_id": data.question_id},
-            {"$set": update_fields}
-        )
+        if is_case_study and idx >= 0:
+            interview = interviews_collection.find_one({"id": data.interview_id})
+            if interview and "case_study_round" in interview:
+                answers = interview["case_study_round"].get("answers", [])
+                if idx < len(answers):
+                    if answers[idx] is None:
+                        answers[idx] = {}
+
+                    answers[idx]["wpm"] = data.wpm
+                    answers[idx]["pause_count"] = data.pause_count
+                    answers[idx]["filler_count"] = data.filler_count
+                    answers[idx]["time_spent_seconds"] = data.time_spent_seconds
+                    answers[idx]["tab_switches"] = data.tab_switches
+                    answers[idx]["face_alerts"] = data.face_alerts
+                    answers[idx]["noise_alerts"] = data.noise_alerts
+
+                    interviews_collection.update_one(
+                        {"id": data.interview_id},
+                        {"$set": {"case_study_round.answers": answers}}
+                    )
+
+        else:
+            update_fields = {
+                "wpm": data.wpm,
+                "pause_count": data.pause_count,
+                "filler_count": data.filler_count,
+                "keyword_match_pct": data.keyword_match_pct,
+                "tab_switches": data.tab_switches,
+                "face_alerts": data.face_alerts,
+                "noise_alerts": data.noise_alerts
+            }
+
+            # Preserve existing time if the frontend sends the default value.
+            if data.time_spent_seconds and data.time_spent_seconds > 0:
+                update_fields["time_spent_seconds"] = data.time_spent_seconds
+
+            answers_collection.update_many(
+                {"interview_id": data.interview_id, "question_id": data.question_id},
+                {"$set": update_fields}
+            )
         return {"status": "ok"}
     except Exception as e:
         print(f"Behavioral save error: {e}")
@@ -928,7 +966,6 @@ def save_behavioral_data(data: BehavioralData):
 
 class CodingRoundStartRequest(BaseModel):
     interview_id: str
-
 
 class CodingRoundCheckpointRequest(BaseModel):
     interview_id: str
@@ -2052,7 +2089,7 @@ def get_interview_details(link_id: str):
             from score_rounds import compute_coding_score, compute_case_study_score, blend_scores
             interview_record_for_score = interviews_collection.find_one({"id": actual_interview_id}) if actual_interview_id else None
             if interview_record_for_score:
-                interview_format_cs = interview_record_for_score.get("interview_format", "Standard")
+                interview_format_cs = session_data.get("interview_format", "Standard") if session_data else "Standard"
                 lang_cs = interview_record_for_score.get("language", "English")
                 ctx_cs  = f"Candidate's {interview_record_for_score.get('source','Resume')}: {interview_record_for_score.get('profile_text','')}"
                 coding_rd  = interview_record_for_score.get("coding_round")
@@ -2403,11 +2440,16 @@ def generate_report(interview_id: str):
     story.append(Paragraph(f"<b>Source:</b> {source}", normal_style))
     story.append(Spacer(1, 12))
     
-    # Calculate Average Score
-    if answers:
+    # Fetch session record to reuse the average score already stored in the DB (includes blended scores)
+    session_rec = interview_sessions_collection.find_one({"interview_id": interview_id})
+    avg_score = session_rec.get("avg_score") if session_rec else None
+    
+    # Calculate Average Score (Fallback if not populated in session document)
+    if avg_score is None and answers:
         scores = [row[2] for row in answers if row[2] is not None]
         avg_score = sum(scores) / len(scores) if scores else 0
         
+    if avg_score is not None:
         # Color code overall score
         color = "green" if avg_score >= 60 else "orange" if avg_score >= 40 else "red"
         story.append(Paragraph(f"<b>Overall Score:</b> <font color='{color}' size='14'>{avg_score:.1f}/100</font>", normal_style))
@@ -4235,7 +4277,8 @@ def start_session_interview(link_id: str = Form(...)):
             "profile_text": content_str[:5000],
             "questions": json.dumps(questions),
             "created_at": datetime.now(timezone.utc).isoformat(),
-            "language": language
+            "language": language,
+            "interview_format": row.get("interview_format", "Standard")
         })
         
         # Update session status AND cache questions for instant future loads
@@ -4385,6 +4428,7 @@ def update_decision(data: DecisionRequest, current_admin: dict = Depends(require
         # 2. Update DB
         interview_sessions_collection.update_one({"link_id": data.link_id}, {"$set": {"decision": data.decision}})
         print(f" DB Updated for {data.link_id}")
+        sync_session_to_application(data.link_id)
         
         # 3. Send Email
         load_dotenv(override=True)
@@ -5090,13 +5134,24 @@ class CompleteSessionRequest(BaseModel):
     total_fullscreen_exits: int = 0
 
 @router.post("/complete-session/{link_id}")
-def complete_session(link_id: str, payload: Optional[CompleteSessionRequest] = None):
+def complete_session(
+    link_id: str, 
+    payload: Optional[CompleteSessionRequest] = None,
+    warnings: Optional[int] = None,
+    reason: Optional[str] = None
+):
     """Mark a session as completed and send notification emails (Task 3)."""
     try:
         session = interview_sessions_collection.find_one({"link_id": link_id})
         # Use default payload if none was sent by the client
         if payload is None:
             payload = CompleteSessionRequest()
+            
+        if warnings is not None:
+            payload.warnings = warnings
+        if reason is not None:
+            payload.reason = reason
+            
         update_data = {
             "status": "completed", 
             "warnings": payload.warnings, 
@@ -5110,6 +5165,15 @@ def complete_session(link_id: str, payload: Optional[CompleteSessionRequest] = N
             }
         }
         if session:
+            violations = session.get("violations", [])
+            if violations:
+                if update_data["integrity"]["total_tab_switches"] == 0:
+                    update_data["integrity"]["total_tab_switches"] = sum(1 for v in violations if v.get("type") == "tab_switch")
+                if update_data["integrity"]["total_face_alerts"] == 0:
+                    update_data["integrity"]["total_face_alerts"] = sum(1 for v in violations if v.get("type") not in ("tab_switch", "noise_alert"))
+                if update_data["integrity"]["total_noise_alerts"] == 0:
+                    update_data["integrity"]["total_noise_alerts"] = sum(1 for v in violations if v.get("type") == "noise_alert")
+            
             candidate_id = session.get("candidate_id")
             if candidate_id and not candidate_id.endswith("IQ"):
                 update_data["candidate_id"] = f"{candidate_id}IQ"
@@ -5129,9 +5193,11 @@ def complete_session(link_id: str, payload: Optional[CompleteSessionRequest] = N
                     all_scored = all(a.get("scoring_status") in ("complete", "failed") for a in answers)
                     
                     if all_scored and not session.get("notification_sent"):
-                        # Calculate final score
-                        scores = [a.get("ai_score", 0) for a in answers if a.get("ai_score") is not None]
-                        avg_score = sum(scores) / len(scores) if scores else 0
+                        # Reuse the existing score in the database session document if available
+                        avg_score = session.get("avg_score")
+                        if avg_score is None:
+                            scores = [a.get("ai_score", 0) for a in answers if a.get("ai_score") is not None]
+                            avg_score = sum(scores) / len(scores) if scores else 0
                         
                         interview_sessions_collection.update_one(
                             {"link_id": link_id},
@@ -7165,20 +7231,38 @@ def export_excel(data: ExportExcelRequest, current_admin: dict = Depends(get_cur
     from fastapi.responses import StreamingResponse
     try:
         output = io.StringIO()
+        from dateutil.parser import parse as parse_date
         writer = csv.writer(output)
-        writer.writerow(["Name", "Email", "Position", "Status", "Score", "Created"])
+        writer.writerow(["Name", "Email", "Position", "Status", "Score", "Created At"])
         for c in data.candidates:
+            # Format score as a plain number so Excel doesn't convert it to a date
+            raw_score = c.get("score")
+            if raw_score is None:
+                raw_score = c.get("avg_score", 0)
+            formatted_score = f"{float(raw_score):.1f}" if raw_score else "0.0"
+            
+            # Format date
+            raw_date = c.get("created_at", "")
+            formatted_date = raw_date
+            if raw_date:
+                try:
+                    dt = parse_date(raw_date)
+                    formatted_date = dt.strftime("%d/%m/%Y, %I:%M %p")
+                except Exception:
+                    pass
+
             writer.writerow([
-                c.get("candidate_name", ""),
-                c.get("candidate_email", ""),
-                c.get("interview_title", ""),
-                c.get("status", ""),
-                c.get("score", 0),
-                c.get("created_at", "")
+                c.get("candidate_name", "Unknown"),
+                c.get("candidate_email", "N/A"),
+                c.get("interview_title") or "N/A",
+                str(c.get("status", "")).upper(),
+                formatted_score,
+                formatted_date
             ])
         output.seek(0)
+        # Add BOM for UTF-8 so Excel opens it properly formatted automatically
         return StreamingResponse(
-            io.BytesIO(output.getvalue().encode("utf-8")),
+            io.BytesIO(b'\xef\xbb\xbf' + output.getvalue().encode("utf-8")),
             media_type="text/csv",
             headers={"Content-Disposition": "attachment; filename=Interview_Candidates_Report.csv"}
         )
