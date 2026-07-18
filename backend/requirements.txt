@@ -11,6 +11,7 @@ python-dotenv
 pymongo[srv]
 certifi
 psycopg2-binary
+sqlalchemy
 
 # ─── Auth & Security ──────────────────────────────────────────────────────────
 PyJWT

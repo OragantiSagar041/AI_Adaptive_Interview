@@ -224,20 +224,25 @@ export default function CandidateDialog({ candidate, open, onOpenChange }) {
       }
 
       // Simulate a small delay for extraction feeling
-      setTimeout(() => {
-        setDetail(prev => ({
-          ...prev,
-          experience: (!prev.experience || prev.experience === "N/A") ? extExp : prev.experience,
-          location: (!prev.location || prev.location === "N/A") ? extLocation : prev.location,
-          current_ctc: (!prev.current_ctc || prev.current_ctc === "N/A") ? extCTC : prev.current_ctc,
-          candidate_phone: (!prev.candidate_phone || prev.candidate_phone === "N/A") && (!prev.phone || prev.phone === "N/A") ? extMobile : (prev.candidate_phone || prev.phone),
-          current_company: (!prev.current_company || prev.current_company === "N/A") ? extCompany : prev.current_company,
-          expected_ctc: (!prev.expected_ctc || prev.expected_ctc === "N/A") ? extExpectedCTC : prev.expected_ctc,
-          notice_period: (!prev.notice_period || prev.notice_period === "N/A") ? extNotice : prev.notice_period,
-          info_extracted: true
-        }))
+      const timerId = setTimeout(() => {
+        setDetail(prev => {
+          if (!prev) return prev;
+          return {
+            ...prev,
+            experience: (!prev.experience || prev.experience === "N/A") ? extExp : prev.experience,
+            location: (!prev.location || prev.location === "N/A") ? extLocation : prev.location,
+            current_ctc: (!prev.current_ctc || prev.current_ctc === "N/A") ? extCTC : prev.current_ctc,
+            candidate_phone: (!prev.candidate_phone || prev.candidate_phone === "N/A") && (!prev.phone || prev.phone === "N/A") ? extMobile : (prev.candidate_phone || prev.phone),
+            current_company: (!prev.current_company || prev.current_company === "N/A") ? extCompany : prev.current_company,
+            expected_ctc: (!prev.expected_ctc || prev.expected_ctc === "N/A") ? extExpectedCTC : prev.expected_ctc,
+            notice_period: (!prev.notice_period || prev.notice_period === "N/A") ? extNotice : prev.notice_period,
+            info_extracted: true
+          };
+        })
         setExtractingInfo(false)
       }, 800);
+
+      return () => clearTimeout(timerId);
     }
   }, [open, detail, extractingInfo])
 
@@ -276,8 +281,14 @@ export default function CandidateDialog({ candidate, open, onOpenChange }) {
     { label: isQualified ? "Selected ✓" : "Rejected ✗", done: !!(c.decision || candidate.decision), bad: !isQualified }
   ]
 
-  const recordingUrl = c.recording_url
-  const screenRecordingUrl = c.screen_recording_url
+  const formatMediaUrl = (url) => {
+    if (!url) return null
+    if (url.startsWith('http')) return url
+    return `${API_BASE_URL}/${url.replace(/^\/+/, '')}`
+  }
+
+  const recordingUrl = formatMediaUrl(c.recording_url)
+  const screenRecordingUrl = formatMediaUrl(c.screen_recording_url)
 
   const handleDecision = async (newDecision) => {
     if (!candidate) return;
@@ -440,6 +451,11 @@ export default function CandidateDialog({ candidate, open, onOpenChange }) {
                     {isQualified ? 'Qualified' : 'Rejected'}
                   </span>
                   <span className="text-xs font-medium text-slate-400">ID: {candidate.link_id || candidate.id}</span>
+                  {c.started_at && (
+                    <span className="flex items-center gap-1 text-xs font-medium text-slate-500 bg-slate-100/50 px-2.5 py-1 rounded-md border border-slate-200/50">
+                      <Calendar size={13} className="text-slate-400" /> Attended: {new Date(c.started_at).toLocaleString('en-US', { month: 'short', day: 'numeric', year: 'numeric', hour: 'numeric', minute: '2-digit', hour12: true })}
+                    </span>
+                  )}
                 </div>
               </div>
               <div className="hidden sm:flex flex-col items-center justify-center mr-8">
@@ -482,6 +498,26 @@ export default function CandidateDialog({ candidate, open, onOpenChange }) {
                   <InfoRow icon={IndianRupee} label="Expected CTC" value={c.expected_ctc} />
                   <InfoRow icon={Clock} label="Notice Period" value={c.notice_period} />
                   <InfoRow icon={MapPin} label="Location" value={c.location} />
+                  
+                  {/* Alerts Column */}
+                  <div className="flex items-start gap-3 sm:col-span-2 lg:col-span-4 mt-2 pt-4 border-t border-slate-100">
+                    <AlertCircle className="h-4 w-4 text-amber-500 mt-0.5 shrink-0" />
+                    <div className="min-w-0 flex-1">
+                      <div className="text-[11px] font-bold text-slate-400 uppercase tracking-wider mb-1">Proctoring Alerts</div>
+                      {c.alerts && c.alerts.length > 0 ? (
+                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 mt-2">
+                          {c.alerts.map((a, i) => (
+                            <div key={i} className="text-sm font-semibold text-slate-700 bg-amber-50/50 border border-amber-100/50 rounded-md p-2 flex gap-2">
+                              <span className="text-amber-500">•</span>
+                              <span className="leading-tight">{a.message}</span>
+                            </div>
+                          ))}
+                        </div>
+                      ) : (
+                        <div className="text-sm font-semibold text-slate-500">None</div>
+                      )}
+                    </div>
+                  </div>
                 </div>
               </section>
 
@@ -675,11 +711,18 @@ export default function CandidateDialog({ candidate, open, onOpenChange }) {
                       <div key={idx} className="rounded-lg border border-slate-100 p-4 bg-slate-50">
                         <div className="flex items-start justify-between gap-2 mb-2">
                           <p className="text-sm font-bold text-slate-700">Q{idx + 1}. {a.question_text}</p>
-                          {a.ai_score !== null && a.ai_score !== undefined && (
-                            <span className={`shrink-0 text-xs font-black px-2 py-0.5 rounded-full ${a.ai_score >= 75 ? 'bg-emerald-100 text-emerald-700' : a.ai_score >= 50 ? 'bg-amber-100 text-amber-700' : 'bg-rose-100 text-rose-700'}`}>
-                              {Number(a.ai_score).toFixed(0)}%
-                            </span>
-                          )}
+                          <div className="flex items-center gap-2 shrink-0">
+                            {Number(a.time_spent_seconds || 0) > 0 && (
+                              <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[11px] font-bold bg-slate-100 text-slate-700 border border-slate-200">
+                                <Clock size={11} /> {Math.floor(Number(a.time_spent_seconds) / 60) > 0 ? `${Math.floor(Number(a.time_spent_seconds) / 60)}m ${Number(a.time_spent_seconds) % 60}s` : `${Number(a.time_spent_seconds)}s`}
+                              </span>
+                            )}
+                            {a.ai_score !== null && a.ai_score !== undefined && (
+                              <span className={`text-xs font-black px-2 py-0.5 rounded-full ${a.ai_score >= 75 ? 'bg-emerald-100 text-emerald-700' : a.ai_score >= 50 ? 'bg-amber-100 text-amber-700' : 'bg-rose-100 text-rose-700'}`}>
+                                {Number(a.ai_score).toFixed(0)}%
+                              </span>
+                            )}
+                          </div>
                         </div>
                         <p className="text-sm text-slate-600">{a.answer_text}</p>
                         {a.ai_feedback && (

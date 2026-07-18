@@ -438,7 +438,16 @@ export const useInterviewSession = (sessionId, interviewType, startRoundTwo) => 
 
   // Track unload events (Refresh or Close tab)
   useEffect(() => {
-    const handleUnload = () => {
+    const handleUnload = (e) => {
+      const isUploading = uploadingText && uploadPercentage < 100;
+      const isActiveSession = sessionId && isDisclaimerAccepted && !isCompleted;
+      
+      // Prevent exiting during active interview or during video upload
+      if (isActiveSession || isUploading) {
+        e.preventDefault();
+        e.returnValue = '';
+      }
+
       if (sessionId && isDisclaimerAccepted) {
         navigator.sendBeacon(`${api.defaults.baseURL || ''}/interview/${sessionId}/alert`, JSON.stringify({
           type: "warning",
@@ -448,7 +457,7 @@ export const useInterviewSession = (sessionId, interviewType, startRoundTwo) => 
     }
     window.addEventListener("beforeunload", handleUnload)
     return () => window.removeEventListener("beforeunload", handleUnload)
-  }, [sessionId, isDisclaimerAccepted])
+  }, [sessionId, isDisclaimerAccepted, isCompleted, uploadingText, uploadPercentage])
 
   // Persist current question index
   useEffect(() => {
@@ -626,6 +635,16 @@ export const useInterviewSession = (sessionId, interviewType, startRoundTwo) => 
     }
 
     async function verifySession() {
+      // Fast-path: if this browser already completed this session, show the
+      // completed screen immediately without waiting for the API round-trip.
+      try {
+        if (localStorage.getItem(`interview_done_${sessionId}`) === '1') {
+          setIsCompleted(true)
+          setLoading(false)
+          return
+        }
+      } catch (e) {}
+
       try {
         const payload = await api.get(`/session/${sessionId}`).then(r => r.data)
         if (payload.status !== 'success') {
@@ -840,6 +859,7 @@ export const useInterviewSession = (sessionId, interviewType, startRoundTwo) => 
     const rec = new SpeechRecognition()
     rec.continuous = true  // Keep listening continuously without restarting
     rec.interimResults = true
+    rec.maxAlternatives = 3  // Consider top 3 alternatives for better accuracy
     const targetLang = langMap[sessionDetail?.language] || 'en-IN'
     rec.lang = targetLang
 
@@ -925,13 +945,15 @@ export const useInterviewSession = (sessionId, interviewType, startRoundTwo) => 
 
     rec.onstart = () => {
       isSpeechRecordingRef.current = true
-      ensureWhisperRunning()
+      // Note: Whisper path is disabled — Web Speech API is used as the sole
+      // transcript source for all languages. It is real-time, accurate, and
+      // avoids Whisper hallucination + latency issues.
     }
 
     rec.onend = () => {
       // With continuous=true this fires only on error/abort, restart it
       if (isSpeechRecordingRef.current) {
-        try { rec.start() } catch (e) { }
+        setTimeout(() => { try { rec.start() } catch (e) { } }, 100)
       }
     }
 
@@ -939,26 +961,32 @@ export const useInterviewSession = (sessionId, interviewType, startRoundTwo) => 
       let interimText = ''
       let finalText = ''
       for (let i = event.resultIndex; i < event.results.length; i++) {
-        const t = event.results[i][0].transcript
         if (event.results[i].isFinal) {
-          finalText += t + ' '
+          // Pick the highest-confidence alternative for best accuracy
+          let bestTranscript = event.results[i][0].transcript
+          let bestConfidence = event.results[i][0].confidence || 0
+          for (let j = 1; j < event.results[i].length; j++) {
+            const alt = event.results[i][j]
+            if ((alt.confidence || 0) > bestConfidence) {
+              bestConfidence = alt.confidence
+              bestTranscript = alt.transcript
+            }
+          }
+          finalText += bestTranscript + ' '
         } else {
-          interimText += t
+          interimText += event.results[i][0].transcript
         }
       }
       // Show interim text in real time (visible while speaking)
       setInterimTranscriptText(interimText)
       if (finalText) {
         setInterimTranscriptText('')
-        // For non-English languages, the browser Web Speech API (Google) is
-        // far more accurate than Whisper for regional Indian languages like
-        // Telugu, Hindi, Tamil, etc. Use it as the primary transcript source.
-        // Whisper is still used for English where it excels.
-        const lang = interviewLanguageRef.current || 'English'
-        if (lang !== 'English') {
-          setTranscriptionText(prev => prev + finalText)
-        }
-        // For English, Whisper handles it via the VAD MediaRecorder path below.
+        // Use Web Speech API final results for ALL languages (English + regional).
+        // The browser's Google speech engine is real-time, zero-latency, and highly
+        // accurate — far superior to Whisper for live transcription. Whisper's
+        // batch approach (fires after 2.5s silence) caused mismatches, duplications,
+        // and hallucinations that made transcription appear inaccurate.
+        setTranscriptionText(prev => prev + finalText)
       }
     }
 
@@ -1019,23 +1047,10 @@ export const useInterviewSession = (sessionId, interviewType, startRoundTwo) => 
           lastSpeechTimeRef.current = now
         }
 
-        // True Voice Activity Detection (VAD) for Whisper
-        const mr = whisperMediaRecorderRef.current
-        if (mr && isSpeechRecordingRef.current) {
-          if (rms > 0.03) {
-            // Speech detected: ensure recorder is capturing
-            if (mr.state === 'inactive') {
-              try { mr.start() } catch (e) { }
-            }
-          } else {
-            // Silence detected: if silent for > 2.5s, stop and flush to backend.
-            // 2.5s gives Whisper a longer, more meaningful chunk which dramatically
-            // reduces hallucination compared to short 1-2 second fragments.
-            if (mr.state === 'recording' && (now - lastSpeechTimeRef.current > 2500)) {
-              try { mr.stop() } catch (e) { }
-            }
-          }
-        }
+        // VAD (Voice Activity Detection) — used only for proctoring noise alerts.
+        // Whisper MediaRecorder path is disabled: Web Speech API is now the sole
+        // transcript source. This eliminates the hallucination and latency issues
+        // that made transcription appear inaccurate.
 
         if (rms > 0.18 && now > noiseCooldownRef.current) {
           noiseFrameCountRef.current++
@@ -1746,6 +1761,7 @@ export const useInterviewSession = (sessionId, interviewType, startRoundTwo) => 
         filler_count: countFillers(transcriptionText),
         wpm: wpm,
         pause_count: behavioralStatsRef.current.pauseCount,
+        time_spent_seconds: timeSpent,
         tab_switches: behavioralStatsRef.current.tabSwitches,
         face_alerts: behavioralStatsRef.current.faceAlerts,
         noise_alerts: behavioralStatsRef.current.noiseAlerts
@@ -1801,6 +1817,7 @@ export const useInterviewSession = (sessionId, interviewType, startRoundTwo) => 
         filler_count: countFillers(transcriptionText),
         wpm: wpm,
         pause_count: behavioralStatsRef.current.pauseCount,
+        time_spent_seconds: timeSpent,
         tab_switches: behavioralStatsRef.current.tabSwitches,
         face_alerts: behavioralStatsRef.current.faceAlerts,
         noise_alerts: behavioralStatsRef.current.noiseAlerts
@@ -1874,7 +1891,17 @@ export const useInterviewSession = (sessionId, interviewType, startRoundTwo) => 
   }, [handleNextQuestion])
 
   const handleSubmitInterview = async (forceClose = false, terminationReason = null) => {
+    if (isSubmittingRef.current) return  // Prevent double-submit
     isSubmittingRef.current = true
+
+    // ── Immediately mark as completed so the interview UI hides right away ──
+    // This prevents the interview from staying visible during async cleanup,
+    // and stops back-navigation from re-showing the interview.
+    setIsCompleted(true)
+    if (sessionId) {
+      try { localStorage.setItem(`interview_done_${sessionId}`, '1') } catch (e) {}
+    }
+
     if (window.speechSynthesis) window.speechSynthesis.cancel()
     stopSilenceTimer()
     if (_sessionKey) sessionStorage.removeItem(_sessionKey)
@@ -1906,6 +1933,8 @@ export const useInterviewSession = (sessionId, interviewType, startRoundTwo) => 
     if (screenRecorderRef.current && screenRecorderRef.current.state !== 'inactive') {
       screenRecorderRef.current.stop()
     }
+
+    let uploadPromiseChain = Promise.resolve()
 
     if (cameraChunksRef.current.length > 0 || screenChunksRef.current.length > 0) {
       setUploadingText("Uploading video recordings...")
@@ -1941,13 +1970,11 @@ export const useInterviewSession = (sessionId, interviewType, startRoundTwo) => 
         })
       }
 
-      // Fire and forget background upload
-      Promise.all([
+      // Keep track of the upload promise to await it later
+      uploadPromiseChain = Promise.all([
         uploadPromise(cameraChunksRef.current, 'camera'),
         uploadPromise(screenChunksRef.current, 'screen')
-      ]).then(() => {
-        setUploadPercentage(100)
-      }).catch(err => console.error("Background upload failed:", err))
+      ]).catch(err => console.error("Background upload failed:", err))
     }
 
     try {
@@ -1994,8 +2021,12 @@ export const useInterviewSession = (sessionId, interviewType, startRoundTwo) => 
       await api.post(`/complete-session/${sessionId}${queryParams}`)
     } catch (e) { }
 
+    // Wait for the video upload to finish before marking everything complete
+    await uploadPromiseChain
+
     setShowSkipButton(false)
     setUploadPercentage(100)
+    setUploadingText("")
     setTimeout(() => {
       if (document.fullscreenElement) {
         document.exitFullscreen().catch(err => console.log(err))
