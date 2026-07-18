@@ -11,6 +11,7 @@ import {
   MessageSquare, Video, Scale, Loader2, AlertCircle, Monitor,
   Mic, ShieldAlert, Eye, ChevronRight, Code
 } from "lucide-react"
+import { jsPDF } from 'jspdf'
 
 // ── Score Ring ──────────────────────────────────────────────────────────────
 function ScoreRing({ value, size = 140, strokeWidth = 12, label, tone }) {
@@ -289,6 +290,126 @@ export default function CandidateDialog({ candidate, open, onOpenChange, onStatu
 
   const recordingUrl = formatMediaUrl(c.recording_url)
   const screenRecordingUrl = formatMediaUrl(c.screen_recording_url)
+
+  const handleDownloadRecording = async () => {
+    const urlsToDownload = [];
+    if (recordingUrl) urlsToDownload.push({ url: recordingUrl, name: 'camera_recording.mp4' });
+    if (screenRecordingUrl) urlsToDownload.push({ url: screenRecordingUrl, name: 'screen_recording.mp4' });
+
+    if (urlsToDownload.length === 0) return;
+
+    for (const { url, name } of urlsToDownload) {
+      try {
+        const response = await fetch(url);
+        const blob = await response.blob();
+        const blobUrl = window.URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = blobUrl;
+        a.download = `${c.candidate_name?.replace(/\s+/g, '_') || 'Candidate'}_${name}`;
+        document.body.appendChild(a);
+        a.click();
+        a.remove();
+        window.URL.revokeObjectURL(blobUrl);
+      } catch (error) {
+        console.error("Direct download failed, falling back to new tab:", error);
+        window.open(url, '_blank');
+      }
+    }
+  };
+
+  const handleDownloadTranscript = () => {
+    if (!c.answers || c.answers.length === 0) return;
+
+    const doc = new jsPDF();
+    
+    const margin = 15;
+    const pageHeight = doc.internal.pageSize.height;
+    const pageWidth = doc.internal.pageSize.width;
+    let y = 20;
+
+    const checkPageBreak = (neededHeight) => {
+      if (y + neededHeight > pageHeight - margin) {
+        doc.addPage();
+        y = margin + 5;
+      }
+    };
+
+    doc.setFontSize(16);
+    doc.setFont("helvetica", "bold");
+    doc.text(`Interview Transcript: ${c.candidate_name || 'Unknown Candidate'}`, margin, y);
+    y += 10;
+
+    doc.setFontSize(11);
+    doc.setFont("helvetica", "normal");
+    doc.text(`Status: ${c.status || "Completed"}`, margin, y);
+    y += 6;
+    if (c.created_at) {
+      doc.text(`Date: ${new Date(c.created_at).toLocaleString()}`, margin, y);
+      y += 6;
+    }
+    doc.text(`Total Score: ${c.score || c.avg_score || 0}/100`, margin, y);
+    y += 10;
+    
+    doc.setDrawColor(200);
+    doc.line(margin, y, pageWidth - margin, y);
+    y += 10;
+
+    c.answers.forEach((a, index) => {
+      checkPageBreak(10);
+      doc.setFont("helvetica", "bold");
+      const qText = `Q${index + 1}: ${a.question_text || 'No question recorded'}`;
+      const qLines = doc.splitTextToSize(qText, pageWidth - 2 * margin);
+      checkPageBreak(qLines.length * 5 + 5);
+      doc.text(qLines, margin, y);
+      y += qLines.length * 5 + 3;
+
+      doc.setFont("helvetica", "normal");
+      const ansLabel = "Candidate's Answer/Code:";
+      checkPageBreak(5);
+      doc.text(ansLabel, margin, y);
+      y += 5;
+
+      doc.setFont("courier", "normal");
+      const aText = a.answer_text || c.coding_round?.latest_code || 'No answer provided';
+      const aLines = doc.splitTextToSize(aText, pageWidth - 2 * margin);
+      
+      for (let i = 0; i < aLines.length; i++) {
+        checkPageBreak(5);
+        doc.text(aLines[i], margin, y);
+        y += 5;
+      }
+      y += 3;
+
+      if (a.ai_score !== null && a.ai_score !== undefined) {
+        checkPageBreak(5);
+        doc.setFont("helvetica", "bold");
+        doc.text(`AI Score: ${Number(a.ai_score).toFixed(0)}%`, margin, y);
+        y += 5;
+      }
+
+      if (a.ai_feedback) {
+        checkPageBreak(5);
+        doc.setFont("helvetica", "italic");
+        doc.text("AI Feedback:", margin, y);
+        y += 5;
+        doc.setFont("helvetica", "normal");
+        const fLines = doc.splitTextToSize(a.ai_feedback, pageWidth - 2 * margin);
+        for (let i = 0; i < fLines.length; i++) {
+          checkPageBreak(5);
+          doc.text(fLines[i], margin, y);
+          y += 5;
+        }
+      }
+      
+      y += 5;
+      checkPageBreak(5);
+      doc.setDrawColor(200);
+      doc.line(margin, y, pageWidth - margin, y);
+      y += 10;
+    });
+
+    doc.save(`${c.candidate_name?.replace(/\s+/g, '_') || 'Candidate'}_transcript.pdf`);
+  };
 
   const handleDecision = async (newDecision) => {
     if (!candidate) return;
@@ -656,12 +777,23 @@ export default function CandidateDialog({ candidate, open, onOpenChange, onStatu
                         {recordingUrl || screenRecordingUrl ? 'Camera & screen recording available' : 'No recordings available'}
                       </p>
                     </div>
-                    <button
-                      onClick={() => setShowRecordingModal(true)}
-                      className="flex items-center gap-2 px-4 py-2 text-sm font-bold text-emerald-600 bg-emerald-50 border border-emerald-100 rounded-xl hover:bg-emerald-100 transition-colors shadow-sm"
-                    >
-                      <Video size={16} /> Recording <ChevronRight size={14} />
-                    </button>
+                    <div className="flex items-center gap-2">
+                      {(recordingUrl || screenRecordingUrl) && (
+                        <button
+                          onClick={handleDownloadRecording}
+                          className="flex items-center gap-2 px-4 py-2 text-sm font-bold text-slate-600 bg-slate-50 border border-slate-200 rounded-xl hover:bg-slate-100 transition-colors shadow-sm"
+                          title="Download Recording"
+                        >
+                          <Download size={16} /> Download
+                        </button>
+                      )}
+                      <button
+                        onClick={() => setShowRecordingModal(true)}
+                        className="flex items-center gap-2 px-4 py-2 text-sm font-bold text-emerald-600 bg-emerald-50 border border-emerald-100 rounded-xl hover:bg-emerald-100 transition-colors shadow-sm"
+                      >
+                        <Video size={16} /> Recording <ChevronRight size={14} />
+                      </button>
+                    </div>
                   </div>
                 </section>
 
@@ -673,6 +805,14 @@ export default function CandidateDialog({ candidate, open, onOpenChange, onStatu
                         <h3 className="text-sm font-black text-slate-800">Interview Q&A</h3>
                         <p className="text-xs text-slate-400 font-medium mt-0.5">{c.answers.length} questions answered</p>
                       </div>
+                    <div className="flex items-center gap-2">
+                      <button
+                        onClick={handleDownloadTranscript}
+                        className="flex items-center gap-2 px-4 py-2 text-sm font-bold text-slate-600 bg-slate-50 border border-slate-200 rounded-xl hover:bg-slate-100 transition-colors shadow-sm"
+                        title="Download Transcript"
+                      >
+                        <Download size={16} /> Download
+                      </button>
                       <button
                         onClick={() => setShowTranscriptModal(true)}
                         className="flex items-center gap-2 px-4 py-2 text-sm font-bold text-violet-600 bg-violet-50 border border-violet-100 rounded-xl hover:bg-violet-100 transition-colors shadow-sm"
@@ -680,7 +820,8 @@ export default function CandidateDialog({ candidate, open, onOpenChange, onStatu
                         <MessageSquare size={16} /> Transcript <ChevronRight size={14} />
                       </button>
                     </div>
-                  </section>
+                  </div>
+                </section>
                 )}
               </div>
             )}

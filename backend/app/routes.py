@@ -7101,20 +7101,38 @@ def export_excel(data: ExportExcelRequest, current_admin: dict = Depends(get_cur
     from fastapi.responses import StreamingResponse
     try:
         output = io.StringIO()
+        from dateutil.parser import parse as parse_date
         writer = csv.writer(output)
-        writer.writerow(["Name", "Email", "Position", "Status", "Score", "Created"])
+        writer.writerow(["Name", "Email", "Position", "Status", "Score", "Created At"])
         for c in data.candidates:
+            # Format score as a plain number so Excel doesn't convert it to a date
+            raw_score = c.get("score")
+            if raw_score is None:
+                raw_score = c.get("avg_score", 0)
+            formatted_score = f"{float(raw_score):.1f}" if raw_score else "0.0"
+            
+            # Format date
+            raw_date = c.get("created_at", "")
+            formatted_date = raw_date
+            if raw_date:
+                try:
+                    dt = parse_date(raw_date)
+                    formatted_date = dt.strftime("%d/%m/%Y, %I:%M %p")
+                except Exception:
+                    pass
+
             writer.writerow([
-                c.get("candidate_name", ""),
-                c.get("candidate_email", ""),
-                c.get("interview_title", ""),
-                c.get("status", ""),
-                c.get("score", 0),
-                c.get("created_at", "")
+                c.get("candidate_name", "Unknown"),
+                c.get("candidate_email", "N/A"),
+                c.get("interview_title") or "N/A",
+                str(c.get("status", "")).upper(),
+                formatted_score,
+                formatted_date
             ])
         output.seek(0)
+        # Add BOM for UTF-8 so Excel opens it properly formatted automatically
         return StreamingResponse(
-            io.BytesIO(output.getvalue().encode("utf-8")),
+            io.BytesIO(b'\xef\xbb\xbf' + output.getvalue().encode("utf-8")),
             media_type="text/csv",
             headers={"Content-Disposition": "attachment; filename=Interview_Candidates_Report.csv"}
         )
