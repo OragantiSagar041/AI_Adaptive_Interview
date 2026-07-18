@@ -495,7 +495,7 @@ export function CandidateScorecardModal({
                 </button>
               )}
 
-              {candidateDetail?.case_study_round?.scenario && (
+              {(candidateDetail?.case_study_round?.scenario || (candidateDetail?.case_study_round?.questions && candidateDetail.case_study_round.questions.length > 0)) && (
                 <button
                   onClick={() => setActiveTab('case_study')}
                   className={`pb-3 px-4 text-sm font-bold transition-all border-b-2 flex items-center gap-2 ${activeTab === 'case_study'
@@ -669,29 +669,52 @@ export function CandidateScorecardModal({
           )}
 
           {/* TAB CONTENT: Case Study Round Breakdown */}
-          {(activeTab === 'case_study' || isGeneratingPdf) && candidateDetail?.case_study_round?.scenario && (
+          {(activeTab === 'case_study' || isGeneratingPdf) && (candidateDetail?.case_study_round?.scenario || (candidateDetail?.case_study_round?.questions && candidateDetail.case_study_round.questions.length > 0)) && (
             <div className="bg-slate-50/50 border border-slate-200 rounded-xl p-5 relative overflow-hidden mt-2 avoid-break">
               <h4 className="text-[1rem] font-bold text-slate-900 leading-snug mb-4 border-b border-slate-200 pb-3 flex items-center gap-2">
                 <i className="fas fa-briefcase text-amber-500"></i> Case Study Round
               </h4>
-              <div className="mb-5">
-                <span className="text-[0.68rem] text-slate-500 font-bold uppercase tracking-wider block mb-2">Scenario</span>
-                <p className="text-[0.95rem] text-slate-700 leading-relaxed whitespace-pre-wrap bg-white border border-slate-200 p-4 rounded-lg">{candidateDetail.case_study_round.scenario}</p>
-              </div>
-
-              {candidateDetail.case_study_round.messages && candidateDetail.case_study_round.messages.length > 1 && (
-                <div>
-                  <span className="text-[0.68rem] text-slate-500 font-bold uppercase tracking-wider block mb-3">Conversation Transcript</span>
-                  <div className={`space-y-3 bg-white border border-slate-200 p-4 rounded-lg ${isGeneratingPdf ? '' : 'max-h-[400px] overflow-y-auto'}`}>
-                    {candidateDetail.case_study_round.messages.filter(m => m.role !== 'system').map((msg, i) => (
-                      <div key={i} className={`p-3 rounded-xl text-sm ${msg.role === 'user' ? 'bg-indigo-50 border-indigo-100 border text-indigo-900 ml-8 rounded-tr-sm' : 'bg-slate-50 border-slate-200 border text-slate-700 mr-8 rounded-tl-sm'}`}>
-                        <strong className={`block mb-1 text-[0.65rem] uppercase tracking-widest ${msg.role === 'user' ? 'text-indigo-400' : 'text-slate-400'}`}>
-                          {msg.role === 'user' ? 'Candidate' : 'Interviewer'}
-                        </strong>
-                        <div className="whitespace-pre-wrap leading-relaxed">{msg.content}</div>
-                      </div>
-                    ))}
+              
+              {candidateDetail.case_study_round.scenario ? (
+                <>
+                  <div className="mb-5">
+                    <span className="text-[0.68rem] text-slate-500 font-bold uppercase tracking-wider block mb-2">Scenario</span>
+                    <p className="text-[0.95rem] text-slate-700 leading-relaxed whitespace-pre-wrap bg-white border border-slate-200 p-4 rounded-lg">{candidateDetail.case_study_round.scenario}</p>
                   </div>
+
+                  {candidateDetail.case_study_round.messages && candidateDetail.case_study_round.messages.length > 1 && (
+                    <div>
+                      <span className="text-[0.68rem] text-slate-500 font-bold uppercase tracking-wider block mb-3">Conversation Transcript</span>
+                      <div className={`space-y-3 bg-white border border-slate-200 p-4 rounded-lg ${isGeneratingPdf ? '' : 'max-h-[400px] overflow-y-auto'}`}>
+                        {candidateDetail.case_study_round.messages.filter(m => m.role !== 'system').map((msg, i) => (
+                          <div key={i} className={`p-3 rounded-xl text-sm ${msg.role === 'user' ? 'bg-indigo-50 border-indigo-100 border text-indigo-900 ml-8 rounded-tr-sm' : 'bg-slate-50 border-slate-200 border text-slate-700 mr-8 rounded-tl-sm'}`}>
+                            <strong className={`block mb-1 text-[0.65rem] uppercase tracking-widest ${msg.role === 'user' ? 'text-indigo-400' : 'text-slate-400'}`}>
+                              {msg.role === 'user' ? 'Candidate' : 'Interviewer'}
+                            </strong>
+                            <div className="whitespace-pre-wrap leading-relaxed">{msg.content}</div>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+                </>
+              ) : (
+                <div className="space-y-6">
+                  {candidateDetail.case_study_round.questions.map((q, idx) => {
+                    const ans = candidateDetail.case_study_round.answers?.[idx];
+                    const ansText = typeof ans === 'string' ? ans : (ans?.answer_text || '(No answer recorded)');
+                    return (
+                      <div key={idx} className="border-b border-slate-200/60 pb-4 last:border-b-0 last:pb-0">
+                        <span className="text-[0.68rem] text-slate-500 font-bold uppercase tracking-wider block mb-1">Scenario {idx + 1}</span>
+                        <p className="text-sm font-bold text-slate-800 mb-2">{q.scenario || q.text}</p>
+                        <p className="text-xs text-[#6366f1] font-semibold mb-2">Question: {q.question || q.text}</p>
+                        <div className="bg-white border border-slate-200 p-3 rounded-lg text-sm text-slate-700">
+                          <strong className="block mb-1 text-[0.65rem] uppercase tracking-widest text-slate-400">Candidate's Answer</strong>
+                          <div className="whitespace-pre-wrap leading-relaxed">{ansText}</div>
+                        </div>
+                      </div>
+                    );
+                  })}
                 </div>
               )}
             </div>
