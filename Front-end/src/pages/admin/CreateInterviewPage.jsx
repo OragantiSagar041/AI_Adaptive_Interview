@@ -341,7 +341,7 @@ export default function CreateInterviewPage() {
       if (singleCandidate.resumeText && singleCandidate.jobDescription) {
         handleCalculateAts(singleCandidate.resumeText, singleCandidate.jobDescription)
       }
-    }, 2500)
+    }, 600)
     return () => clearTimeout(timer)
   }, [singleCandidate.resumeText, singleCandidate.jobDescription])
 
