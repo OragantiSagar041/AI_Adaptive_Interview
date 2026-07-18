@@ -3268,7 +3268,12 @@ def extract_info_from_resume(text: str) -> Dict:
     return {"name": name, "email": email}
 
 @router.post("/admin/parse-resume")
-async def parse_resume(file: UploadFile = File(...), current_admin: dict = Depends(get_current_admin_details)):
+async def parse_resume(
+    file: UploadFile = File(...), 
+    source: Optional[str] = Form(None),
+    upload_to_cloud: Optional[str] = Form(None),
+    current_admin: dict = Depends(get_current_admin_details)
+):
     ALLOWED_MIMES = ["application/pdf", "application/vnd.openxmlformats-officedocument.wordprocessingml.document", "application/msword", "text/plain"]
     if file.content_type and file.content_type not in ALLOWED_MIMES:
         raise HTTPException(status_code=400, detail="Invalid file type. Only PDF, DOCX, and TXT are allowed for security reasons.")
@@ -3278,12 +3283,37 @@ async def parse_resume(file: UploadFile = File(...), current_admin: dict = Depen
         
     content = await file.read()
     text = extract_text_from_file(content, file.filename)
-    info = extract_info_from_resume(text)
+    
+    file_url = None
+    # Check if upload_to_cloud is true ('true', '1', etc)
+    if upload_to_cloud and upload_to_cloud.lower() in ('true', '1', 'yes'):
+        import cloudinary.uploader
+        try:
+            # We already read the file into `content`. We can upload the content bytes directly.
+            # But cloudinary.uploader.upload prefers a file-like object or bytes
+            upload_res = cloudinary.uploader.upload(
+                content,
+                resource_type="raw",
+                folder="jds" if source == 'jd' else "resumes",
+                public_id=f"{uuid.uuid4().hex[:8]}_{file.filename}"
+            )
+            file_url = upload_res.get("secure_url")
+        except Exception as e:
+            print(f"Cloudinary upload failed: {e}")
+            # Do not fail the whole process if upload fails, just continue without URL
+            pass
+
+    info = {}
+    # Only extract name and email if this is NOT a job description
+    if source != 'jd':
+        info = extract_info_from_resume(text)
+        
     return {
         "status": "success",   
         "text": text,
         "name": info.get("name"), 
-        "email": info.get("email")
+        "email": info.get("email"),
+        "file_url": file_url
     }
 
 @router.get("/admin/candidate/check")
@@ -4758,19 +4788,28 @@ async def calculate_ats_score(request: ATSRequest):
         if not resume_text or not jd_text:
             raise HTTPException(status_code=400, detail="Resume or JD is empty")
 
-        # ── Attempt AI-powered ATS scoring first ──────────────────────────────
+        import prompt_cache
+        cache_key_text = f"JD:{jd_text}::RESUME:{resume_text}"
+        cached_result = prompt_cache.get(cache_key_text, "ATS_SCORE")
+        if cached_result:
+            return cached_result
+
+
         try:
             from ai_client import chat_completion
-            prompt = f"""You are a professional ATS (Applicant Tracking System) evaluator. Score this resume against the job description using EXACTLY this weighted rubric. Return ONLY valid JSON.
+            prompt = f"""You are a professional ATS (Applicant Tracking System) evaluator. You MUST use the Machine Reading Inference (MRI) workflow:
+1. QUICKLY EXTRACT core factual requirements from the Job Description.
+2. ANALYZE the candidate's Resume and map which exact requirements they met.
+3. CALCULATE the scores STRICTLY based on the ratio of requirements hit vs required.
+Return ONLY valid JSON.
 
 SCORING RUBRIC (weights must sum to 100%):
-- skills_match (30%): How well the candidate's technical & soft skills match the JD requirements
-- experience_match (25%): How well years of experience, roles, and industry background match
-- projects_match (15%): Relevance of past projects, achievements, and portfolio to the JD
-- education_match (10%): Degree, field of study, and academic qualifications alignment
-- keywords_match (10%): Presence of important ATS keywords from the JD in the resume
-- formatting_ats (5%): Resume structure clarity, section headings, and ATS parseability
-- certifications (5%): Relevant certifications, licenses, or professional credentials
+- keyword_matching (25%)
+- semantic_similarity (20%)
+- experience_alignment (25%)
+- project_relevance (15%)
+- education (10%)
+- formatting_ats (5%)
 
 Job Description:
 {jd_text[:2000]}
@@ -4780,28 +4819,27 @@ Resume:
 
 Return this EXACT JSON (all score fields are integers 0-100, weighted_total is the weighted average):
 {{
-  "skills_match": {{"score": 0, "note": "brief reason"}},
-  "experience_match": {{"score": 0, "note": "brief reason"}},
-  "projects_match": {{"score": 0, "note": "brief reason"}},
-  "education_match": {{"score": 0, "note": "brief reason"}},
-  "keywords_match": {{"score": 0, "note": "brief reason"}},
-  "formatting_ats": {{"score": 0, "note": "brief reason"}},
-  "certifications": {{"score": 0, "note": "brief reason"}},
+  "keyword_matching": {{"score": 0}},
+  "semantic_similarity": {{"score": 0}},
+  "experience_alignment": {{"score": 0}},
+  "project_relevance": {{"score": 0}},
+  "education": {{"score": 0}},
+  "formatting_ats": {{"score": 0}},
   "weighted_total": 0,
   "matched_skills": ["skill1", "skill2"],
   "missing_skills": ["skill1", "skill2"],
-  "summary": "2-3 sentence overall assessment"
+  "summary": "2-3 sentence overall assessment and recommendations for improvement"
 }}"""
 
             raw = chat_completion(
                 messages=[
-                    {"role": "system", "content": "You are a precise ATS scoring engine. Return ONLY valid JSON. No markdown. No explanation outside the JSON."},
+                    {"role": "system", "content": "You are a precise ATS scoring engine. Return ONLY valid JSON. No markdown. Be extremely fast and concise."},
                     {"role": "user", "content": prompt},
                 ],
                 model="openai/gpt-4o-mini",
                 temperature=0.0,
-                timeout=30,
-                max_tokens=1500,
+                timeout=15,
+                max_tokens=300,
             )
 
             # Parse response
@@ -4814,22 +4852,20 @@ Return this EXACT JSON (all score fields are integers 0-100, weighted_total is t
 
                 # Extract per-category breakdown
                 WEIGHTS = {
-                    "skills_match":     0.30,
-                    "experience_match": 0.25,
-                    "projects_match":   0.15,
-                    "education_match":  0.10,
-                    "keywords_match":   0.10,
-                    "formatting_ats":   0.05,
-                    "certifications":   0.05,
+                    "keyword_matching":     0.25,
+                    "semantic_similarity":  0.20,
+                    "experience_alignment": 0.25,
+                    "project_relevance":    0.15,
+                    "education":            0.10,
+                    "formatting_ats":       0.05,
                 }
                 LABELS = {
-                    "skills_match":     "Skills Match",
-                    "experience_match": "Experience Match",
-                    "projects_match":   "Projects Match",
-                    "education_match":  "Education Match",
-                    "keywords_match":   "Keywords Match",
-                    "formatting_ats":   "Formatting & ATS Compatibility",
-                    "certifications":   "Certifications",
+                    "keyword_matching":     "Keyword Matching",
+                    "semantic_similarity":  "Semantic Similarity",
+                    "experience_alignment": "Experience Alignment",
+                    "project_relevance":    "Project Relevance",
+                    "education":            "Education Match",
+                    "formatting_ats":       "Formatting & ATS Compatibility",
                 }
 
                 breakdown = []
@@ -4862,7 +4898,7 @@ Return this EXACT JSON (all score fields are integers 0-100, weighted_total is t
                     matched = ["No clear skills identified"]
                     missing = ["No clear skills identified"]
 
-                return {
+                result = {
                     "score": final_score,
                     "matched_skills": matched,
                     "missing_skills": missing,
@@ -4870,6 +4906,10 @@ Return this EXACT JSON (all score fields are integers 0-100, weighted_total is t
                     "breakdown": breakdown,
                     "mode": "ai"
                 }
+                
+                import prompt_cache
+                prompt_cache.set(cache_key_text, "ATS_SCORE", result)
+                return result
         except Exception as ai_err:
             print(f"⚠️ ATS AI call failed, falling back to keyword matching: {ai_err}")
 
@@ -4929,7 +4969,7 @@ Return this EXACT JSON (all score fields are integers 0-100, weighted_total is t
             {"category": "Certifications", "score": score, "weight": 5, "note": "Offline Keyword Match"}
         ]
 
-        return {
+        result = {
             "score": score,
             "matched_skills": matched,
             "missing_skills": missing,
@@ -4937,6 +4977,10 @@ Return this EXACT JSON (all score fields are integers 0-100, weighted_total is t
             "breakdown": dummy_breakdown,
             "mode": "fallback"
         }
+        
+        import prompt_cache
+        prompt_cache.set(cache_key_text, "ATS_SCORE", result)
+        return result
             
     except HTTPException:
         raise
