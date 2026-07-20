@@ -3405,14 +3405,20 @@ async def parse_resume(
     salary = ""
     bond = ""
     workMode = "Remote"
+    warning = None
     
     if source == 'jd':
         from app.services import analyze_resume_or_jd, chat_completion
+        from starlette.concurrency import run_in_threadpool
         try:
-            analysis = analyze_resume_or_jd(text)
+            analysis = await run_in_threadpool(analyze_resume_or_jd, text)
             skills_list = analysis.get("skills", []) if isinstance(analysis, dict) else []
             skills_str = ", ".join(skills_list)
-            
+        except Exception as e:
+            print("Error analyzing JD skills:", e)
+            warning = "Failed to extract skills. "
+
+        try:
             prompt = f"""Extract the following fields from this job description:
 1. title (string)
 2. experience (string, e.g., '2-3 years')
@@ -3421,12 +3427,14 @@ async def parse_resume(
 5. bond (string, e.g., '1 year' or 'No')
 6. workMode (string, only one of: 'Remote', 'Hybrid', 'On-site')
 
-Return a pure JSON object with these keys. If not found, return empty string for that key. Do not use markdown. JD: {text[:2500]}"""
+Return a pure JSON object with these keys. If not found, return empty string for that key. Do not use markdown. JD: {text[:20000]}"""
             
-            resp = chat_completion(
+            resp = await run_in_threadpool(
+                chat_completion,
                 messages=[{"role": "user", "content": prompt}],
                 model="openai/gpt-4o-mini",
-                temperature=0.0
+                temperature=0.0,
+                timeout=15.0
             )
             
             import json, re
@@ -3439,20 +3447,29 @@ Return a pure JSON object with these keys. If not found, return empty string for
                     location = data.get("location") or ""
                     salary = data.get("salary") or ""
                     bond = data.get("bond") or ""
-                    work_mode_parsed = data.get("workMode") or ""
-                    if work_mode_parsed in ["Remote", "Hybrid", "On-site"]:
-                        workMode = work_mode_parsed
+                    
+                    wm_parsed = str(data.get("workMode") or "").strip().lower()
+                    if "hybrid" in wm_parsed:
+                        workMode = "Hybrid"
+                    elif "site" in wm_parsed or "office" in wm_parsed:
+                        workMode = "On-site"
+                    elif "remote" in wm_parsed:
+                        workMode = "Remote"
                 except Exception as parse_e:
                     print("Error parsing JSON for JD details:", parse_e)
+                    warning = "AI parsing failed or was incomplete. Some fields may be missing."
         except Exception as e:
             print("Error extracting JD info:", e)
+            warning = "Failed to communicate with AI extraction service."
+            
+        if title == "Job Posting":
             lines = [l.strip() for l in text.split('\n') if l.strip()]
             if lines:
                 title = lines[0][:50]
     else:
         info = extract_info_from_resume(text)
         
-    return {
+    res_dict = {
         "status": "success",   
         "text": text,
         "name": info.get("name"), 
@@ -3466,6 +3483,9 @@ Return a pure JSON object with these keys. If not found, return empty string for
         "bond": bond,
         "workMode": workMode
     }
+    if warning:
+        res_dict["warning"] = warning
+    return res_dict
 
 @router.get("/admin/candidate/check")
 def check_candidate(email: str, current_admin: dict = Depends(get_current_admin_details)):

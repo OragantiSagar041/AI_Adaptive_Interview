@@ -1,17 +1,16 @@
 import logging
 from datetime import datetime
 from typing import List, Optional
-from sqlalchemy.orm import Session
+
 from app.repositories.conversation_repository import AgentRepository, ConversationSectionRepository
 from app.service_layer.omni_client import OmniDimensionClient
 
 logger = logging.getLogger(__name__)
 
 class ConversationFlowSyncService:
-    def __init__(self, db_session: Session, agent_id: int):
-        self.db_session = db_session
-        self.agent_repo = AgentRepository(db_session)
-        self.section_repo = ConversationSectionRepository(db_session)
+    def __init__(self, agent_id: int):
+        self.agent_repo = AgentRepository()
+        self.section_repo = ConversationSectionRepository()
         self.agent = self.agent_repo.get_agent(agent_id)
         if not self.agent:
             raise ValueError(f"Agent not found: {agent_id}")

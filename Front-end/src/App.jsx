@@ -57,12 +57,14 @@ const SuperAdminProfileSettings = React.lazy(() => import('./components/superadm
 const SuperAdminNotifications = React.lazy(() => import('./pages/superadmin/SuperAdminNotifications'))
 const AICallPage = React.lazy(() => import('./pages/admin/AICallPage'))
 const ProfileViewPage = React.lazy(() => import('./pages/superadmin/ProfileViewPage'))
+import ErrorBoundary from './components/ErrorBoundary'
 
 function App() {
   return (
     <BrowserRouter>
       <React.Suspense fallback={<div className="flex h-screen items-center justify-center bg-gray-900 text-white font-semibold text-lg tracking-wide">Loading Interface...</div>}>
-        <Routes>
+        <ErrorBoundary>
+          <Routes>
           <Route path="/" element={<LandingPage />} />
           <Route path="/voice-recruiter" element={<AiRecruiterLandingPage />} />
           <Route path="/login" element={<LoginPage />} />
@@ -147,6 +149,7 @@ function App() {
           {/* Fallback route */}
           <Route path="*" element={<Navigate to="/" replace />} />
         </Routes>
+        </ErrorBoundary>
       </React.Suspense>
     </BrowserRouter>
   )

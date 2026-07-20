@@ -145,6 +145,7 @@ export default function SuperAdminJobsPage() {
 
   const [jdParsing, setJdParsing] = useState(false);
   const handleParseJobFile = async (e) => {
+    if (jdParsing) return;
     const file = e.target.files[0];
     if (!file) return;
     
@@ -158,11 +159,15 @@ export default function SuperAdminJobsPage() {
       const response = await axios.post(`${API_BASE_URL}/admin/parse-resume`, formDataObj, {
         headers: {
           'Content-Type': 'multipart/form-data',
-          'Authorization': `Bearer ${sessionStorage.getItem('superadminToken') || sessionStorage.getItem('adminToken')}`
+          'Authorization': authHeaders.Authorization
         }
       });
       
-      const { text, title, experience, skills, location, salary, bond, workMode } = response.data;
+      const { text, title, experience, skills, location, salary, bond, workMode, warning } = response.data;
+      
+      if (warning) {
+        alert(warning);
+      }
       
       setFormData(prev => ({
         ...prev,
@@ -664,9 +669,9 @@ export default function SuperAdminJobsPage() {
                     <button
                       type="button"
                       onClick={() => document.getElementById('jdUploadInput').click()}
-                      className="inline-flex items-center gap-1 text-[0.7rem] font-extrabold text-primary bg-indigo-50 hover:bg-indigo-100 border border-primary/15 rounded-lg px-3 py-1 cursor-pointer transition-all"
+                      className="inline-flex items-center gap-1 text-[0.7rem] font-extrabold text-indigo-600 bg-indigo-50 hover:bg-indigo-100 border border-indigo-200 rounded-lg px-3 py-1 cursor-pointer transition-all"
                     >
-                      <i className="fas fa-paperclip"></i> Upload file
+                      <FileText className="w-3 h-3" /> Upload file
                     </button>
                     <input
                       type="file"
@@ -676,7 +681,7 @@ export default function SuperAdminJobsPage() {
                       onChange={handleParseJobFile}
                     />
                   </div>
-                  {jdParsing && <span className="text-xs text-warning font-semibold mt-1 mb-2 block"><i className="fas fa-spinner fa-spin mr-1"></i> Parsing Job Description...</span>}
+                  {jdParsing && <span className="text-xs text-amber-500 font-semibold mt-1 mb-2 flex items-center gap-1"><RefreshCw className="w-3 h-3 animate-spin" /> Parsing Job Description...</span>}
                   <textarea
                     name="description" required
                     value={formData.description} onChange={handleInputChange}
