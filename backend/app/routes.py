@@ -3398,8 +3398,58 @@ async def parse_resume(
             pass
 
     info = {}
-    # Only extract name and email if this is NOT a job description
-    if source != 'jd':
+    title = "Job Posting"
+    experience = "Not Specified"
+    skills_str = ""
+    location = ""
+    salary = ""
+    bond = ""
+    workMode = "Remote"
+    
+    if source == 'jd':
+        from app.services import analyze_resume_or_jd, chat_completion
+        try:
+            analysis = analyze_resume_or_jd(text)
+            skills_list = analysis.get("skills", []) if isinstance(analysis, dict) else []
+            skills_str = ", ".join(skills_list)
+            
+            prompt = f"""Extract the following fields from this job description:
+1. title (string)
+2. experience (string, e.g., '2-3 years')
+3. location (string)
+4. salary (string)
+5. bond (string, e.g., '1 year' or 'No')
+6. workMode (string, only one of: 'Remote', 'Hybrid', 'On-site')
+
+Return a pure JSON object with these keys. If not found, return empty string for that key. Do not use markdown. JD: {text[:2500]}"""
+            
+            resp = chat_completion(
+                messages=[{"role": "user", "content": prompt}],
+                model="openai/gpt-4o-mini",
+                temperature=0.0
+            )
+            
+            import json, re
+            if resp:
+                resp_clean = re.sub(r"```(?:json)?", "", resp).strip()
+                try:
+                    data = json.loads(resp_clean)
+                    title = data.get("title") or title
+                    experience = data.get("experience") or experience
+                    location = data.get("location") or ""
+                    salary = data.get("salary") or ""
+                    bond = data.get("bond") or ""
+                    work_mode_parsed = data.get("workMode") or ""
+                    if work_mode_parsed in ["Remote", "Hybrid", "On-site"]:
+                        workMode = work_mode_parsed
+                except Exception as parse_e:
+                    print("Error parsing JSON for JD details:", parse_e)
+        except Exception as e:
+            print("Error extracting JD info:", e)
+            lines = [l.strip() for l in text.split('\n') if l.strip()]
+            if lines:
+                title = lines[0][:50]
+    else:
         info = extract_info_from_resume(text)
         
     return {
@@ -3407,7 +3457,14 @@ async def parse_resume(
         "text": text,
         "name": info.get("name"), 
         "email": info.get("email"),
-        "file_url": file_url
+        "file_url": file_url,
+        "title": title,
+        "experience": experience,
+        "skills": skills_str,
+        "location": location,
+        "salary": salary,
+        "bond": bond,
+        "workMode": workMode
     }
 
 @router.get("/admin/candidate/check")

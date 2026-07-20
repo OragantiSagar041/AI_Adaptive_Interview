@@ -6,7 +6,7 @@ import JobApplicationModal from '../../components/JobApplicationModal';
 import { useSelector, useDispatch } from 'react-redux';
 import { loadSuperAdminDashboard } from '../../store/slices/dashboardSlice';
 import { getComputedStatus } from '../../utils/adminFormatters';
-
+import axios from 'axios';
 const WORK_MODE_STYLES = {
   Remote: 'bg-emerald-50 text-emerald-700 border-emerald-200',
   Hybrid: 'bg-blue-50 text-blue-700 border-blue-200',
@@ -141,6 +141,47 @@ export default function SuperAdminJobsPage() {
   const handleInputChange = (e) => {
     const { name, value } = e.target;
     setFormData(prev => ({ ...prev, [name]: value }));
+  };
+
+  const [jdParsing, setJdParsing] = useState(false);
+  const handleParseJobFile = async (e) => {
+    const file = e.target.files[0];
+    if (!file) return;
+    
+    setJdParsing(true);
+    const formDataObj = new FormData();
+    formDataObj.append('file', file);
+    formDataObj.append('source', 'jd');
+    
+    try {
+      // Use the existing parse-resume endpoint since we reverted the other one
+      const response = await axios.post(`${API_BASE_URL}/admin/parse-resume`, formDataObj, {
+        headers: {
+          'Content-Type': 'multipart/form-data',
+          'Authorization': `Bearer ${sessionStorage.getItem('superadminToken') || sessionStorage.getItem('adminToken')}`
+        }
+      });
+      
+      const { text, title, experience, skills, location, salary, bond, workMode } = response.data;
+      
+      setFormData(prev => ({
+        ...prev,
+        title: title || "Job Posting",
+        experience: experience || "Not Specified",
+        skills: skills || "",
+        location: location || "",
+        salary: salary || "",
+        bond: bond || "",
+        workMode: workMode || "Remote",
+        description: text || ""
+      }));
+    } catch (err) {
+      console.error(err);
+      alert("Error parsing job file");
+    } finally {
+      setJdParsing(false);
+      e.target.value = null; // reset input
+    }
   };
 
   const resetForm = () => {
@@ -618,7 +659,24 @@ export default function SuperAdminJobsPage() {
                 </div>
 
                 <div>
-                  <label className="block text-[0.7rem] font-bold text-slate-500 uppercase tracking-wider mb-1.5 ml-1">Job Description</label>
+                  <div className="flex justify-between items-center mb-1.5 ml-1">
+                    <label className="block text-[0.7rem] font-bold text-slate-500 uppercase tracking-wider">Job Description</label>
+                    <button
+                      type="button"
+                      onClick={() => document.getElementById('jdUploadInput').click()}
+                      className="inline-flex items-center gap-1 text-[0.7rem] font-extrabold text-primary bg-indigo-50 hover:bg-indigo-100 border border-primary/15 rounded-lg px-3 py-1 cursor-pointer transition-all"
+                    >
+                      <i className="fas fa-paperclip"></i> Upload file
+                    </button>
+                    <input
+                      type="file"
+                      id="jdUploadInput"
+                      accept=".pdf,.docx,.doc,.txt"
+                      className="hidden"
+                      onChange={handleParseJobFile}
+                    />
+                  </div>
+                  {jdParsing && <span className="text-xs text-warning font-semibold mt-1 mb-2 block"><i className="fas fa-spinner fa-spin mr-1"></i> Parsing Job Description...</span>}
                   <textarea
                     name="description" required
                     value={formData.description} onChange={handleInputChange}
