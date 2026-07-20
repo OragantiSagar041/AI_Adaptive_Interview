@@ -951,9 +951,18 @@ export const useInterviewSession = (sessionId, interviewType, startRoundTwo) => 
     }
 
     rec.onend = () => {
-      // With continuous=true this fires only on error/abort, restart it
+      // With continuous=true this fires only on error/abort — restart with a small delay
+      // to avoid rapid restart storms and InvalidStateError exceptions in Chrome.
       if (isSpeechRecordingRef.current) {
-        setTimeout(() => { try { rec.start() } catch (e) { } }, 100)
+        setTimeout(() => {
+          if (!isSpeechRecordingRef.current) return
+          try {
+            rec.start()
+          } catch (e) {
+            // InvalidStateError or similar — start a fresh recognition instance
+            if (isSpeechRecordingRef.current) setupSpeechRecognition()
+          }
+        }, 150)
       }
     }
 
@@ -995,10 +1004,19 @@ export const useInterviewSession = (sessionId, interviewType, startRoundTwo) => 
         console.error("Microphone permission denied:", e.error)
         return
       }
-      // For no-speech or other transient errors, just restart
-      if (isSpeechRecordingRef.current) {
-        setTimeout(() => { try { rec.start() } catch (err) { } }, 300)
+      if (e.error === 'no-speech') {
+        // Not a failure — browser detected silence. Do NOT immediately restart;
+        // the onend handler will fire and handle the restart with a delay.
+        return
       }
+      if (e.error === 'network') {
+        // Network blip — restart after a longer pause
+        if (isSpeechRecordingRef.current) {
+          setTimeout(() => { if (isSpeechRecordingRef.current) setupSpeechRecognition() }, 1000)
+        }
+        return
+      }
+      // Other transient errors — restart via onend (which fires after onerror)
     }
 
     recognitionRef.current = rec
@@ -1713,6 +1731,7 @@ export const useInterviewSession = (sessionId, interviewType, startRoundTwo) => 
       }
     } catch (err) {
       console.error("Failed to start round 2:", err)
+      isRoundTwoRef.current = false  // allow retry if user tries again
       Swal.fire({
         icon: 'error',
         title: 'Failed to start Round 2',
