@@ -47,6 +47,20 @@ export const useInterviewSession = (sessionId, interviewType, startRoundTwo) => 
   const [agreeChecked, setAgreeChecked] = useState(false)
   const [autoReconnecting, setAutoReconnecting] = useState(!!_savedSession?.accepted)
 
+  // ── Phase 3: Browser online/offline detection ────────────────────────────
+  // navigator.onLine gives the initial state; events keep it up to date.
+  const [isOnline, setIsOnline] = useState(() => navigator.onLine)
+  useEffect(() => {
+    const goOnline = () => setIsOnline(true)
+    const goOffline = () => setIsOnline(false)
+    window.addEventListener('online', goOnline)
+    window.addEventListener('offline', goOffline)
+    return () => {
+      window.removeEventListener('online', goOnline)
+      window.removeEventListener('offline', goOffline)
+    }
+  }, [])
+
   // Voice Cloning intermediate state
   const [showVoiceCloneSetup, setShowVoiceCloneSetup] = useState(false)
   const [clonedVoiceId, setClonedVoiceId] = useState(null)
@@ -642,6 +656,17 @@ export const useInterviewSession = (sessionId, interviewType, startRoundTwo) => 
           setIsCompleted(true)
           setLoading(false)
           return
+        }
+      } catch (e) {}
+
+      // ── Drain any pending completion that failed on a previous load ──────
+      // If /complete-session failed (network drop, server crash) on the last
+      // visit, we stored a retry key. Attempt the call now, silently.
+      try {
+        const pendingKey = `complete_session_pending_${sessionId}`
+        if (localStorage.getItem(pendingKey) === '1') {
+          await api.post(`/complete-session/${sessionId}`).catch(() => {})
+          localStorage.removeItem(pendingKey)
         }
       } catch (e) {}
 
@@ -1736,23 +1761,41 @@ export const useInterviewSession = (sessionId, interviewType, startRoundTwo) => 
     stopSilenceTimer()
     setShowRound2Confirm(false)
 
-    try {
-      const activeQuestion = questions[currentQuestionIndex]
-      const iid = interviewId || sessionDetail?.interview_id || sessionId
-      const answerForm = new FormData()
-      answerForm.append('interview_id', iid)
-      answerForm.append('question_id', activeQuestion?.id || (currentQuestionIndex + 1))
-      answerForm.append('question_text', activeQuestion?.text || activeQuestion?.question || '')
-      answerForm.append('answer_text', activeQuestion?.type === 'coding' ? (codeAnswer || ' ') : (transcriptionText || ' '))
-      answerForm.append('candidate_name', sessionDetail?.candidate_name || 'Candidate')
-      const timeSpent = Math.round((Date.now() - questionStartTimeRef.current) / 1000)
-      answerForm.append('time_spent_seconds', timeSpent.toString())
-      answerForm.append('time_limit_seconds', '120')
+    const activeQuestion = questions[currentQuestionIndex]
+    const iid = interviewId || sessionDetail?.interview_id || sessionId
+    const timeSpent = Math.round((Date.now() - questionStartTimeRef.current) / 1000)
 
+    // ── Save the final verbal answer before transitioning ────────────────────
+    // If this fails, we stop here and warn the candidate so no answer is lost.
+    const answerForm = new FormData()
+    answerForm.append('interview_id', iid)
+    answerForm.append('question_id', activeQuestion?.id || (currentQuestionIndex + 1))
+    answerForm.append('question_text', activeQuestion?.text || activeQuestion?.question || '')
+    answerForm.append('answer_text', activeQuestion?.type === 'coding' ? (codeAnswer || ' ') : (transcriptionText || ' '))
+    answerForm.append('candidate_name', sessionDetail?.candidate_name || 'Candidate')
+    answerForm.append('time_spent_seconds', timeSpent.toString())
+    answerForm.append('time_limit_seconds', '120')
+
+    try {
       await api.post(`/save-answer`, answerForm, {
         headers: { 'Content-Type': 'multipart/form-data' }
       })
+    } catch (e) {
+      console.error("Failed to save answer during round transition:", e)
+      await Swal.fire({
+        icon: 'error',
+        title: 'Connection Error',
+        text: 'Your answer could not be saved — please check your connection and try again.',
+        confirmButtonText: 'Retry',
+        allowOutsideClick: false
+      })
+      // Restore the confirm modal so the candidate can retry
+      setShowRound2Confirm(true)
+      return
+    }
 
+    // Behavioral data save is best-effort; failure must not block transition
+    try {
       const words = transcriptionText.trim().split(/\s+/).filter(w => w.length > 0).length
       const wpm = timeSpent > 0 ? Math.round((words / timeSpent) * 60) : 0
       await api.post(`/save-behavioral-data`, {
@@ -1767,7 +1810,7 @@ export const useInterviewSession = (sessionId, interviewType, startRoundTwo) => 
         noise_alerts: behavioralStatsRef.current.noiseAlerts
       })
     } catch (e) {
-      console.error("Failed to save answer during transition:", e)
+      console.error("Failed to save behavioral data during round transition:", e)
     }
 
     setTranscriptionText('')
@@ -2019,7 +2062,11 @@ export const useInterviewSession = (sessionId, interviewType, startRoundTwo) => 
     try {
       const queryParams = terminationReason ? `?reason=${encodeURIComponent(terminationReason)}` : ''
       await api.post(`/complete-session/${sessionId}${queryParams}`)
-    } catch (e) { }
+    } catch (e) {
+      // Store a retry marker so verifySession() can drain it on the next page load
+      console.warn('complete-session failed; scheduling retry on next visit.', e)
+      try { localStorage.setItem(`complete_session_pending_${sessionId}`, '1') } catch (_) {}
+    }
 
     // Wait for the video upload to finish before marking everything complete
     await uploadPromiseChain
@@ -2119,6 +2166,7 @@ export const useInterviewSession = (sessionId, interviewType, startRoundTwo) => 
     recognitionRef,
     isSpeechRecordingRef,
     interimTranscriptText,
-    isCompleted
+    isCompleted,
+    isOnline
   }
 }

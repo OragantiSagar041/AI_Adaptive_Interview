@@ -365,5 +365,36 @@ Return JSON: {{"question": "...", "difficulty": "Medium", "type": "JD-Based", "c
         fallback.id = current_q_id + 1
         return fallback.to_dict()
 
+def detect_spoken_language(text: str) -> str:
+    """
+    Detect the spoken language of the candidate's answer text using LLM.
+    Returns the capitalized name of the language (e.g., 'English', 'Hindi', 'Marathi', etc.) or 'Unknown'.
+    """
+    if not text or not text.strip():
+        return "Unknown"
+        
+    prompt = (
+        "Identify the primary spoken language of this text. Respond with ONLY the capitalized name of the language "
+        "(e.g., 'English', 'Hindi', 'Marathi', 'Telugu', 'Tamil', etc.). If the language is not clear or if it is "
+        "gibberish/silence/nonsense, respond with ONLY the word 'Unknown'. No markdown, no punctuation, no extra words.\n\n"
+        f"Text: \"{text}\""
+    )
+    try:
+        response = chat_completion(
+            messages=[
+                {"role": "system", "content": "You are a language detection tool. You respond with exactly one capitalized word or 'Unknown'."},
+                {"role": "user", "content": prompt}
+            ],
+            model="openai/gpt-4o-mini",
+            temperature=0.0
+        )
+        detected = (response or "").strip().replace(".", "").replace('"', '').replace("'", "")
+        # Basic validation: must be a single word (e.g. English, Hindi, etc.)
+        if len(detected.split()) == 1 and detected != "Unknown":
+            return detected.capitalize()
+    except Exception as e:
+        print(f"Language detection failed: {e}")
+    return "Unknown"
+
 
 print("[OK] typed_ai_layer.py loaded | Type-safe AI layer active")

@@ -23,7 +23,7 @@ import traceback
 import logging
 from collections import defaultdict
 from datetime import datetime, timedelta, timezone
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, List, Optional, Union
 from app.services import parse_iso_datetime
 from app.session_store import get_session, delete_session
 from pymongo import ReturnDocument
@@ -749,6 +749,25 @@ def save_answer(
                 time_limit_seconds=t_limit,
                 language=language
             )
+
+            # Spoken language detection using existing AI/LLM - runs only once per interview
+            try:
+                session_doc = interview_sessions_collection.find_one(
+                    {"$or": [{"link_id": interview_id}, {"interview_id": interview_id}]},
+                    {"detected_accent": 1}
+                )
+                current_accent = session_doc.get("detected_accent") if session_doc else None
+                if not current_accent or current_accent == "Unknown":
+                    from typed_ai_layer import detect_spoken_language
+                    detected = detect_spoken_language(answer_text)
+                    if detected and detected != "Unknown":
+                        interview_sessions_collection.update_one(
+                            {"$or": [{"link_id": interview_id}, {"interview_id": interview_id}]},
+                            {"$set": {"detected_accent": detected}}
+                        )
+            except Exception as lang_err:
+                print(f"Language detection background update failed: {lang_err}")
+
             keywords = ai_result.get("keywords", [])
             keywords_str = ",".join(keywords) if isinstance(keywords, list) else str(keywords)
 
@@ -2120,7 +2139,7 @@ def get_interview_details(link_id: str):
         culture_fit_reasoning = saved_cult_reason
         job_success_score = saved_job
         job_success_reasoning = saved_job_reason
-        detected_accent = saved_accent
+        detected_accent = saved_accent or "Unknown"
     else:
         summary = generate_interview_summary(candidate_name or "Candidate", results)
         recommendation = summary.get("recommendation", "No Data")
@@ -2138,7 +2157,10 @@ def get_interview_details(link_id: str):
         culture_fit_reasoning = summary.get("culture_fit_reasoning", "N/A")
         job_success_score = summary.get("job_success_score", 0)
         job_success_reasoning = summary.get("job_success_reasoning", "N/A")
-        detected_accent = summary.get("detected_accent", "Unknown")
+        
+        detected_accent = summary.get("detected_accent")
+        if not detected_accent or detected_accent == "Unknown":
+            detected_accent = session_data.get("detected_accent") or "Unknown"
         
         # Only cache in DB if it's a real summary (not the fallback)
         if "Summary generation failed" not in strengths:
@@ -3463,6 +3485,13 @@ def create_session(data: CreateSession, current_admin: dict = Depends(get_curren
     else:
         expires_at = (now + timedelta(hours=24)).isoformat()
     
+    custom_questions = data.custom_questions
+    if isinstance(custom_questions, list):
+        custom_questions = "\n".join(custom_questions)
+    ai_instructions = data.ai_instructions
+    if isinstance(ai_instructions, list):
+        ai_instructions = "\n".join(ai_instructions)
+
     session_doc = {
         "link_id": link_id,
         "candidate_id": f"CAN{random.randint(1000, 9999)}",
@@ -3483,8 +3512,8 @@ def create_session(data: CreateSession, current_admin: dict = Depends(get_curren
         "record_video": data.record_video,
         "status": "pending",
         "hr_screening": data.hr_screening.dict(),
-        "custom_questions": data.custom_questions,
-        "ai_instructions": data.ai_instructions,
+        "custom_questions": custom_questions,
+        "ai_instructions": ai_instructions,
         "case_study_count": data.case_study_count,
         "industry": data.industry,
         "voice_clone": data.voice_clone,
@@ -3555,8 +3584,8 @@ class BulkCreateSession(BaseModel):
     scheduled_start: str = ""  # Task 4
     scheduled_end: str = ""    # Task 4
     hr_screening: HRScreening = HRScreening()  # HR screening preferences
-    custom_questions: str = ""
-    ai_instructions: str = ""
+    custom_questions: Union[str, List[str]] = ""
+    ai_instructions: Union[str, List[str]] = ""
     voice_clone: bool = False
     custom_voice_id: str = ""
 
@@ -3641,6 +3670,13 @@ def bulk_create_sessions(data: BulkCreateSession, background_tasks: BackgroundTa
     scheduled_expiry = parse_iso_datetime(data.scheduled_end)
     expiry_iso = scheduled_expiry.isoformat() if scheduled_expiry else (now + timedelta(hours=24)).isoformat()
 
+    custom_questions = data.custom_questions
+    if isinstance(custom_questions, list):
+        custom_questions = "\n".join(custom_questions)
+    ai_instructions = data.ai_instructions
+    if isinstance(ai_instructions, list):
+        ai_instructions = "\n".join(ai_instructions)
+
     # Step 1: Prepare documents
     for candidate in data.candidates:
         link_id = str(uuid.uuid4())
@@ -3670,8 +3706,8 @@ def bulk_create_sessions(data: BulkCreateSession, background_tasks: BackgroundTa
             "custom_voice_id": data.custom_voice_id,
             "status": "pending",
             "hr_screening": data.hr_screening.dict(),
-            "custom_questions": data.custom_questions,
-            "ai_instructions": data.ai_instructions
+            "custom_questions": custom_questions,
+            "ai_instructions": ai_instructions
         }
         if data.scheduled_start:
             session_doc["scheduled_start"] = data.scheduled_start
@@ -3805,13 +3841,59 @@ def get_session_by_link(link_id: str):
             except Exception:
                 pass
                 
+        status = row.get("status")
+        
+        # Verify if allowed duration has already been exceeded
+        raw_duration = row.get("interview_duration")
+        try:
+            interview_duration = int(raw_duration) if raw_duration and int(raw_duration) > 0 else 30
+        except (ValueError, TypeError):
+            interview_duration = 30
+            
+        if status == 'started':
+            from datetime import timedelta
+            started_at_str = row.get("started_at")
+            if started_at_str:
+                try:
+                    started_at = parse_iso_datetime(started_at_str)
+                    if now > started_at + timedelta(minutes=interview_duration + 5):
+                        interview_sessions_collection.update_one(
+                            {"link_id": link_id},
+                            {"$set": {"status": "completed"}}
+                        )
+                        status = "completed"
+                except Exception as e:
+                    print(f"Error parsing started_at in get_session_by_link: {e}")
+                    
+        # Verify if proctoring thresholds have already been exceeded
+        violation_count = row.get("violation_count", 0)
+        warnings_count = row.get("warnings_count", 0)
+        violations = row.get("violations", [])
+        noise_alerts = sum(1 for v in violations if v.get("type") == "noise_alert")
+        tab_switches = sum(1 for v in violations if v.get("type") == "tab_switch")
+        screenshare_stops = sum(1 for v in violations if v.get("type") == "screenshare_stopped")
+        
+        is_terminated = (
+            violation_count >= 20 or
+            warnings_count >= 10 or
+            noise_alerts >= 10 or
+            tab_switches >= 3 or
+            screenshare_stops >= 3
+        )
+        if is_terminated and status != "completed":
+            interview_sessions_collection.update_one(
+                {"link_id": link_id},
+                {"$set": {"status": "completed"}}
+            )
+            status = "completed"
+                
         return {
             "status": "success",
             "candidate_name": row.get("candidate_name"),
             "resume_text": row.get("resume_text"),
             "job_description": row.get("job_description"),
-            "session_status": row.get("status"),
-            "interview_duration": int(row.get("interview_duration") or 30) if row.get("interview_duration") else 30,
+            "session_status": status,
+            "interview_duration": interview_duration,
             "interview_format": row.get("interview_format", "Standard"),
             "is_expired": is_expired,
             "is_before_schedule": is_before_schedule,
@@ -4106,6 +4188,28 @@ def start_session_interview(link_id: str = Form(...)):
                         status = "completed"
                 except Exception as e:
                     print(f"Error parsing started_at: {e}")
+
+            # Verify if proctoring thresholds have already been exceeded
+            violation_count = row.get("violation_count", 0)
+            warnings_count = row.get("warnings_count", 0)
+            violations = row.get("violations", [])
+            noise_alerts = sum(1 for v in violations if v.get("type") == "noise_alert")
+            tab_switches = sum(1 for v in violations if v.get("type") == "tab_switch")
+            screenshare_stops = sum(1 for v in violations if v.get("type") == "screenshare_stopped")
+
+            is_terminated = (
+                violation_count >= 20 or
+                warnings_count >= 10 or
+                noise_alerts >= 10 or
+                tab_switches >= 3 or
+                screenshare_stops >= 3
+            )
+            if is_terminated and status != "completed":
+                interview_sessions_collection.update_one(
+                    {"link_id": link_id},
+                    {"$set": {"status": "completed"}}
+                )
+                status = "completed"
 
         if status == 'completed':
             return {
@@ -8878,13 +8982,21 @@ def start_ai_call(link_id: str, data: StartAICallRequest, current_admin: dict = 
         
     try:
         # Start the call via Omni Dimension
+        cq = session.get("custom_questions")
+        if isinstance(cq, list):
+            skills_str = ", ".join(cq)
+        elif isinstance(cq, str):
+            skills_str = ", ".join([q.strip() for q in cq.split('\n') if q.strip()])
+        else:
+            skills_str = ""
+
         response = omni_dimension_client.start_omni_call(
             phone_number=data.phone_number,
             candidate_name=session.get("candidate_name", ""),
             job_description=session.get("job_description", ""),
             resume_text=session.get("resume_text", ""),
             duration=session.get("interview_duration", 15),
-            skills=", ".join(session.get("custom_questions", []))
+            skills=skills_str
         )
         
         call_id = response.get("id") if hasattr(response, "get") else response.id

@@ -35,7 +35,6 @@ export default function CreateInterviewPage() {
   const [bulkQuestionsOpen, setBulkQuestionsOpen] = useState(false)
   const [bulkInstructionsOpen, setBulkInstructionsOpen] = useState(false)
 
-  // Single Candidate Form
   const [singleCandidate, setSingleCandidate] = useState(() => {
     let defaultState = {
       name: '',
@@ -44,8 +43,8 @@ export default function CreateInterviewPage() {
       resumeText: '',
       jobDescription: '',
       applicationId: '',
-      customQuestions: '',
-      aiInstructions: '',
+      customQuestions: [],
+      aiInstructions: [],
       industry: 'General',
       interviewFormat: 'Standard',
       interviewType: 'Technical',
@@ -68,7 +67,14 @@ export default function CreateInterviewPage() {
     try {
       const stored = sessionStorage.getItem('createInterview_singleCandidate')
       if (stored) {
-        defaultState = { ...defaultState, ...JSON.parse(stored) };
+        let parsed = JSON.parse(stored);
+        if (typeof parsed.customQuestions === 'string') {
+          parsed.customQuestions = parsed.customQuestions ? parsed.customQuestions.split('\n').map(q => q.trim()).filter(Boolean) : [];
+        }
+        if (typeof parsed.aiInstructions === 'string') {
+          parsed.aiInstructions = parsed.aiInstructions ? parsed.aiInstructions.split('\n').map(i => i.trim()).filter(Boolean) : [];
+        }
+        defaultState = { ...defaultState, ...parsed };
       }
     } catch (e) {
       console.error('Failed to parse stored singleCandidate', e)
@@ -97,6 +103,11 @@ export default function CreateInterviewPage() {
   const [atsCalculating, setAtsCalculating] = useState(false)
   const [atsScoreData, setAtsScoreData] = useState(null) // { score, summary, matched_skills, missing_skills }
 
+  const [newSingleQuestion, setNewSingleQuestion] = useState('')
+  const [newSingleInstruction, setNewSingleInstruction] = useState('')
+  const [newBulkQuestion, setNewBulkQuestion] = useState('')
+  const [newBulkInstruction, setNewBulkInstruction] = useState('')
+
   // Email Preview Modal
   const [emailPreviewModalOpen, setEmailPreviewModalOpen] = useState(false)
   const [emailTemplate, setEmailTemplate] = useState({
@@ -109,16 +120,10 @@ export default function CreateInterviewPage() {
 
   // Bulk Send Configurations
   const [bulkConfig, setBulkConfig] = useState(() => {
-    try {
-      const stored = sessionStorage.getItem('createInterview_bulkConfig')
-      if (stored) return JSON.parse(stored)
-    } catch (e) {
-      console.error('Failed to parse stored bulkConfig', e)
-    }
-    return {
+    let defaultState = {
       jobDescription: '',
-      customQuestions: '',
-      aiInstructions: '',
+      customQuestions: [],
+      aiInstructions: [],
       industry: 'General',
       interviewFormat: 'Standard',
       interviewType: 'Technical',
@@ -136,7 +141,24 @@ export default function CreateInterviewPage() {
         locationType: 'Current',
         askBond: false
       }
+    };
+
+    try {
+      const stored = sessionStorage.getItem('createInterview_bulkConfig')
+      if (stored) {
+        let parsed = JSON.parse(stored);
+        if (typeof parsed.customQuestions === 'string') {
+          parsed.customQuestions = parsed.customQuestions ? parsed.customQuestions.split('\n').map(q => q.trim()).filter(Boolean) : [];
+        }
+        if (typeof parsed.aiInstructions === 'string') {
+          parsed.aiInstructions = parsed.aiInstructions ? parsed.aiInstructions.split('\n').map(i => i.trim()).filter(Boolean) : [];
+        }
+        defaultState = { ...defaultState, ...parsed };
+      }
+    } catch (e) {
+      console.error('Failed to parse stored bulkConfig', e)
     }
+    return defaultState;
   })
 
   useEffect(() => {
@@ -226,6 +248,42 @@ export default function CreateInterviewPage() {
       ...prev,
       hrScreening: { ...prev.hrScreening, [key]: value }
     }))
+  }
+
+  const addSingleQuestion = () => {
+    if (!newSingleQuestion.trim()) return
+    handleSingleChange('customQuestions', [...(singleCandidate.customQuestions || []), newSingleQuestion.trim()])
+    setNewSingleQuestion('')
+  }
+  const deleteSingleQuestion = (index) => {
+    handleSingleChange('customQuestions', (singleCandidate.customQuestions || []).filter((_, i) => i !== index))
+  }
+
+  const addSingleInstruction = () => {
+    if (!newSingleInstruction.trim()) return
+    handleSingleChange('aiInstructions', [...(singleCandidate.aiInstructions || []), newSingleInstruction.trim()])
+    setNewSingleInstruction('')
+  }
+  const deleteSingleInstruction = (index) => {
+    handleSingleChange('aiInstructions', (singleCandidate.aiInstructions || []).filter((_, i) => i !== index))
+  }
+
+  const addBulkQuestion = () => {
+    if (!newBulkQuestion.trim()) return
+    handleBulkConfigChange('customQuestions', [...(bulkConfig.customQuestions || []), newBulkQuestion.trim()])
+    setNewBulkQuestion('')
+  }
+  const deleteBulkQuestion = (index) => {
+    handleBulkConfigChange('customQuestions', (bulkConfig.customQuestions || []).filter((_, i) => i !== index))
+  }
+
+  const addBulkInstruction = () => {
+    if (!newBulkInstruction.trim()) return
+    handleBulkConfigChange('aiInstructions', [...(bulkConfig.aiInstructions || []), newBulkInstruction.trim()])
+    setNewBulkInstruction('')
+  }
+  const deleteBulkInstruction = (index) => {
+    handleBulkConfigChange('aiInstructions', (bulkConfig.aiInstructions || []).filter((_, i) => i !== index))
   }
 
   // Parse file content
@@ -1294,18 +1352,62 @@ Congratulations! You have been selected for an AI-powered interview. Please revi
                               })
                               setCustomQuestionsParsing(false)
                             } else {
-                              handleSingleChange('customQuestions', data.text || '')
+                              const lines = (data.text || '')
+                                .split('\n')
+                                .map(line => line.trim())
+                                .filter(Boolean);
+                              handleSingleChange('customQuestions', [...(singleCandidate.customQuestions || []), ...lines])
                             }
                           }, setCustomQuestionsParsing)
                         }}
                       />
                     </div>
-                    {customQuestionsParsing && <span className="text-xs text-warning font-semibold"><i className="fas fa-spinner fa-spin mr-1"></i> Parsing questions file...</span>}
-                    <Textarea
-                      placeholder="Enter custom screening questions here (one per line) or attach a file above. If provided, the AI interviewer will prioritize these questions."
-                      value={singleCandidate.customQuestions}
-                      onChange={(e) => handleSingleChange('customQuestions', e.target.value)}
-                    />
+                    {customQuestionsParsing && (
+                      <span className="text-xs text-warning font-semibold mt-1 block">
+                        <i className="fas fa-spinner fa-spin mr-1"></i> Parsing questions file...
+                      </span>
+                    )}
+                    <div className="flex gap-2 items-center w-full">
+                      <input
+                        type="text"
+                        placeholder="Add a custom screening question..."
+                        className="flex-1 bg-slate-50/95 border border-slate-200 rounded-[5px] px-4 py-2.5 text-slate-900 text-[0.95rem] outline-none transition-all duration-200 focus:border-primary focus:bg-white focus:shadow-[0_0_0_3px_rgba(99,102,241,0.12)] placeholder:text-slate-400"
+                        value={newSingleQuestion}
+                        onChange={(e) => setNewSingleQuestion(e.target.value)}
+                        onKeyDown={(e) => {
+                          if (e.key === 'Enter') {
+                            e.preventDefault();
+                            addSingleQuestion();
+                          }
+                        }}
+                      />
+                      <button
+                        type="button"
+                        onClick={addSingleQuestion}
+                        className="bg-indigo-650 hover:bg-indigo-700 text-white text-xs font-bold px-4 py-2.5 rounded-[5px] transition-colors cursor-pointer"
+                        style={{ backgroundColor: '#6366f1' }}
+                      >
+                        Add
+                      </button>
+                    </div>
+                    {singleCandidate.customQuestions && singleCandidate.customQuestions.length > 0 && (
+                      <ol className="list-decimal pl-5 flex flex-col gap-2 mt-2 max-h-60 overflow-y-auto">
+                        {singleCandidate.customQuestions.map((q, idx) => (
+                          <li key={idx} className="text-sm text-slate-700 font-medium">
+                            <div className="flex justify-between items-start gap-4 group">
+                              <span className="break-all">{q}</span>
+                              <button
+                                type="button"
+                                onClick={() => deleteSingleQuestion(idx)}
+                                className="text-rose-500 hover:text-rose-700 transition-colors p-1 cursor-pointer flex-shrink-0 bg-transparent border-none"
+                              >
+                                <i className="fas fa-trash"></i>
+                              </button>
+                            </div>
+                          </li>
+                        ))}
+                      </ol>
+                    )}
                   </div>
                 </div>
 
@@ -1344,18 +1446,62 @@ Congratulations! You have been selected for an AI-powered interview. Please revi
                               })
                               setAiInstructionsParsing(false)
                             } else {
-                              handleSingleChange('aiInstructions', data.text || '')
+                              const lines = (data.text || '')
+                                .split('\n')
+                                .map(line => line.trim())
+                                .filter(Boolean);
+                              handleSingleChange('aiInstructions', [...(singleCandidate.aiInstructions || []), ...lines])
                             }
                           }, setAiInstructionsParsing)
                         }}
                       />
                     </div>
-                    {aiInstructionsParsing && <span className="text-xs text-warning font-semibold"><i className="fas fa-spinner fa-spin mr-1"></i> Parsing instructions file...</span>}
-                    <Textarea
-                      placeholder="e.g. 'Focus heavily on microservices architecture and system design. Restrict standard icebreakers. Keep the conversation extremely professional.'"
-                      value={singleCandidate.aiInstructions}
-                      onChange={(e) => handleSingleChange('aiInstructions', e.target.value)}
-                    />
+                    {aiInstructionsParsing && (
+                      <span className="text-xs text-warning font-semibold mt-1 block">
+                        <i className="fas fa-spinner fa-spin mr-1"></i> Parsing instructions file...
+                      </span>
+                    )}
+                    <div className="flex gap-2 items-center w-full">
+                      <input
+                        type="text"
+                        placeholder="Add a custom interviewer instruction..."
+                        className="flex-1 bg-slate-50/95 border border-slate-200 rounded-[5px] px-4 py-2.5 text-slate-900 text-[0.95rem] outline-none transition-all duration-200 focus:border-primary focus:bg-white focus:shadow-[0_0_0_3px_rgba(99,102,241,0.12)] placeholder:text-slate-400"
+                        value={newSingleInstruction}
+                        onChange={(e) => setNewSingleInstruction(e.target.value)}
+                        onKeyDown={(e) => {
+                          if (e.key === 'Enter') {
+                            e.preventDefault();
+                            addSingleInstruction();
+                          }
+                        }}
+                      />
+                      <button
+                        type="button"
+                        onClick={addSingleInstruction}
+                        className="bg-indigo-650 hover:bg-indigo-700 text-white text-xs font-bold px-4 py-2.5 rounded-[5px] transition-colors cursor-pointer"
+                        style={{ backgroundColor: '#6366f1' }}
+                      >
+                        Add
+                      </button>
+                    </div>
+                    {singleCandidate.aiInstructions && singleCandidate.aiInstructions.length > 0 && (
+                      <ol className="list-decimal pl-5 flex flex-col gap-2 mt-2 max-h-60 overflow-y-auto">
+                        {singleCandidate.aiInstructions.map((inst, idx) => (
+                          <li key={idx} className="text-sm text-slate-700 font-medium">
+                            <div className="flex justify-between items-start gap-4 group">
+                              <span className="break-all">{inst}</span>
+                              <button
+                                type="button"
+                                onClick={() => deleteSingleInstruction(idx)}
+                                className="text-rose-500 hover:text-rose-700 transition-colors p-1 cursor-pointer flex-shrink-0 bg-transparent border-none"
+                              >
+                                <i className="fas fa-trash"></i>
+                              </button>
+                            </div>
+                          </li>
+                        ))}
+                      </ol>
+                    )}
                   </div>
                 </div>
               </div>
@@ -1837,18 +1983,62 @@ Congratulations! You have been selected for an AI-powered interview. Please revi
                               })
                               setBulkCustomQuestionsParsing(false)
                             } else {
-                              handleBulkConfigChange('customQuestions', data.text || '')
+                              const lines = (data.text || '')
+                                .split('\n')
+                                .map(line => line.trim())
+                                .filter(Boolean);
+                              handleBulkConfigChange('customQuestions', [...(bulkConfig.customQuestions || []), ...lines])
                             }
                           }, setBulkCustomQuestionsParsing)
                         }}
                       />
                     </div>
-                    {bulkCustomQuestionsParsing && <span className="text-xs text-warning font-semibold"><i className="fas fa-spinner fa-spin mr-1"></i> Parsing questions file...</span>}
-                    <Textarea
-                      placeholder="Enter custom screening questions here (one per line) or attach a file above. If provided, the AI interviewer will prioritize these questions."
-                      value={bulkConfig.customQuestions}
-                      onChange={(e) => handleBulkConfigChange('customQuestions', e.target.value)}
-                    />
+                    {bulkCustomQuestionsParsing && (
+                      <span className="text-xs text-warning font-semibold mt-1 block">
+                        <i className="fas fa-spinner fa-spin mr-1"></i> Parsing questions file...
+                      </span>
+                    )}
+                    <div className="flex gap-2 items-center w-full">
+                      <input
+                        type="text"
+                        placeholder="Add a custom screening question..."
+                        className="flex-1 bg-slate-50/95 border border-slate-200 rounded-[5px] px-4 py-2.5 text-slate-900 text-[0.95rem] outline-none transition-all duration-200 focus:border-primary focus:bg-white focus:shadow-[0_0_0_3px_rgba(99,102,241,0.12)] placeholder:text-slate-400"
+                        value={newBulkQuestion}
+                        onChange={(e) => setNewBulkQuestion(e.target.value)}
+                        onKeyDown={(e) => {
+                          if (e.key === 'Enter') {
+                            e.preventDefault();
+                            addBulkQuestion();
+                          }
+                        }}
+                      />
+                      <button
+                        type="button"
+                        onClick={addBulkQuestion}
+                        className="bg-indigo-650 hover:bg-indigo-700 text-white text-xs font-bold px-4 py-2.5 rounded-[5px] transition-colors cursor-pointer"
+                        style={{ backgroundColor: '#6366f1' }}
+                      >
+                        Add
+                      </button>
+                    </div>
+                    {bulkConfig.customQuestions && bulkConfig.customQuestions.length > 0 && (
+                      <ol className="list-decimal pl-5 flex flex-col gap-2 mt-2 max-h-60 overflow-y-auto">
+                        {bulkConfig.customQuestions.map((q, idx) => (
+                          <li key={idx} className="text-sm text-slate-700 font-medium">
+                            <div className="flex justify-between items-start gap-4 group">
+                              <span className="break-all">{q}</span>
+                              <button
+                                type="button"
+                                onClick={() => deleteBulkQuestion(idx)}
+                                className="text-rose-500 hover:text-rose-700 transition-colors p-1 cursor-pointer flex-shrink-0 bg-transparent border-none"
+                              >
+                                <i className="fas fa-trash"></i>
+                              </button>
+                            </div>
+                          </li>
+                        ))}
+                      </ol>
+                    )}
                   </div>
                 </div>
 
@@ -1887,18 +2077,62 @@ Congratulations! You have been selected for an AI-powered interview. Please revi
                               })
                               setBulkAiInstructionsParsing(false)
                             } else {
-                              handleBulkConfigChange('aiInstructions', data.text || '')
+                              const lines = (data.text || '')
+                                .split('\n')
+                                .map(line => line.trim())
+                                .filter(Boolean);
+                              handleBulkConfigChange('aiInstructions', [...(bulkConfig.aiInstructions || []), ...lines])
                             }
                           }, setBulkAiInstructionsParsing)
                         }}
                       />
                     </div>
-                    {bulkAiInstructionsParsing && <span className="text-xs text-warning font-semibold"><i className="fas fa-spinner fa-spin mr-1"></i> Parsing instructions file...</span>}
-                    <Textarea
-                      placeholder="e.g. 'Focus heavily on microservices architecture and system design. Restrict standard icebreakers. Keep the conversation extremely professional.'"
-                      value={bulkConfig.aiInstructions}
-                      onChange={(e) => handleBulkConfigChange('aiInstructions', e.target.value)}
-                    />
+                    {bulkAiInstructionsParsing && (
+                      <span className="text-xs text-warning font-semibold mt-1 block">
+                        <i className="fas fa-spinner fa-spin mr-1"></i> Parsing instructions file...
+                      </span>
+                    )}
+                    <div className="flex gap-2 items-center w-full">
+                      <input
+                        type="text"
+                        placeholder="Add a custom interviewer instruction..."
+                        className="flex-1 bg-slate-50/95 border border-slate-200 rounded-[5px] px-4 py-2.5 text-slate-900 text-[0.95rem] outline-none transition-all duration-200 focus:border-primary focus:bg-white focus:shadow-[0_0_0_3px_rgba(99,102,241,0.12)] placeholder:text-slate-400"
+                        value={newBulkInstruction}
+                        onChange={(e) => setNewBulkInstruction(e.target.value)}
+                        onKeyDown={(e) => {
+                          if (e.key === 'Enter') {
+                            e.preventDefault();
+                            addBulkInstruction();
+                          }
+                        }}
+                      />
+                      <button
+                        type="button"
+                        onClick={addBulkInstruction}
+                        className="bg-indigo-650 hover:bg-indigo-700 text-white text-xs font-bold px-4 py-2.5 rounded-[5px] transition-colors cursor-pointer"
+                        style={{ backgroundColor: '#6366f1' }}
+                      >
+                        Add
+                      </button>
+                    </div>
+                    {bulkConfig.aiInstructions && bulkConfig.aiInstructions.length > 0 && (
+                      <ol className="list-decimal pl-5 flex flex-col gap-2 mt-2 max-h-60 overflow-y-auto">
+                        {bulkConfig.aiInstructions.map((inst, idx) => (
+                          <li key={idx} className="text-sm text-slate-700 font-medium">
+                            <div className="flex justify-between items-start gap-4 group">
+                              <span className="break-all">{inst}</span>
+                              <button
+                                type="button"
+                                onClick={() => deleteBulkInstruction(idx)}
+                                className="text-rose-500 hover:text-rose-700 transition-colors p-1 cursor-pointer flex-shrink-0 bg-transparent border-none"
+                              >
+                                <i className="fas fa-trash"></i>
+                              </button>
+                            </div>
+                          </li>
+                        ))}
+                      </ol>
+                    )}
                   </div>
                 </div>
               </div>
