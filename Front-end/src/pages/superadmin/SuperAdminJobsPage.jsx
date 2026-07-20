@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import { Briefcase, Plus, MapPin, Clock, FileText, X, Target, Trash2, Pencil, Wallet, Users, LayoutGrid, LayoutList, ArrowRight, ChevronRight, Zap, Building2, BookOpen, CheckCircle2, Mail, Phone, ExternalLink, RefreshCw, ChevronDown } from 'lucide-react';
 import Card from '../../components/Card';
 import Button from '../../components/Button';
@@ -32,8 +32,12 @@ export default function SuperAdminJobsPage() {
   const token = useSelector((state) => state.auth.token);
   const candidates = useSelector((state) => state.candidates?.candidates || []);
 
-  // Builds the Authorization header from Redux token (not localStorage)
-  const authHeaders = token ? { Authorization: `Bearer ${token}` } : {};
+  // Builds the Authorization header — memoized so identity is stable across renders
+  // and does NOT cause useCallback/useEffect to re-fire on every render.
+  const authHeaders = useMemo(
+    () => (token ? { Authorization: `Bearer ${token}` } : {}),
+    [token]
+  );
 
   useEffect(() => {
     if (candidates.length === 0) {
@@ -127,9 +131,12 @@ export default function SuperAdminJobsPage() {
     } finally {
       setJobsLoading(false);
     }
-  }, [currentPage, authHeaders]);
+  // authHeaders is stable (memoized), currentPage is not needed here because
+  // the caller always passes the page explicitly — keep deps minimal.
+  }, [authHeaders]);
 
   // ── Fetch jobs from backend on mount / page change ────────────────────────
+  // Only re-run when currentPage changes; fetchJobs is stable unless the token changes.
   useEffect(() => {
     fetchJobs(currentPage);
   }, [currentPage, fetchJobs]);
