@@ -102,33 +102,37 @@ export default function SuperAdminJobsPage() {
   const [jobs, setJobs] = useState([]);
   const [currentPage, setCurrentPage] = useState(1);
   const [totalPages, setTotalPages] = useState(1);
+  const [totalJobs, setTotalJobs] = useState(0);
   const limit = 20;
 
-  // ── Fetch jobs from backend on mount ──────────────────────────────────────
-  useEffect(() => {
-    const fetchJobs = async () => {
-      setJobsLoading(true);
-      try {
-        const res = await fetch(`${API_BASE_URL}/api/jobs?page=${currentPage}&limit=${limit}`, {
-          headers: { ...authHeaders }
-        });
-        if (res.ok) {
-          const data = await res.json();
-          setJobs(data.jobs || []);
-          if (data.pagination) {
-            setTotalPages(data.pagination.total_pages || 1);
-          }
-        } else {
-          console.error('Failed to fetch jobs:', res.status);
+  // ── Shared fetch helper — used on mount, after create, and after delete ────
+  const fetchJobs = useCallback(async (page = currentPage) => {
+    setJobsLoading(true);
+    try {
+      const res = await fetch(`${API_BASE_URL}/api/jobs?page=${page}&limit=${limit}`, {
+        headers: { ...authHeaders }
+      });
+      if (res.ok) {
+        const data = await res.json();
+        setJobs(data.jobs || []);
+        if (data.pagination) {
+          setTotalPages(data.pagination.total_pages || 1);
+          setTotalJobs(data.pagination.total_jobs ?? 0);
         }
-      } catch (err) {
-        console.error('Error fetching jobs:', err);
-      } finally {
-        setJobsLoading(false);
+      } else {
+        console.error('Failed to fetch jobs:', res.status);
       }
-    };
-    fetchJobs();
-  }, [currentPage]);
+    } catch (err) {
+      console.error('Error fetching jobs:', err);
+    } finally {
+      setJobsLoading(false);
+    }
+  }, [currentPage, authHeaders]);
+
+  // ── Fetch jobs from backend on mount / page change ────────────────────────
+  useEffect(() => {
+    fetchJobs(currentPage);
+  }, [currentPage, fetchJobs]);
 
   const [showModal, setShowModal] = useState(false);
   const [showApplyModal, setShowApplyModal] = useState(false);
@@ -170,7 +174,7 @@ export default function SuperAdminJobsPage() {
           body: JSON.stringify(formData),
         });
         if (res.ok) {
-          setJobs(prev => prev.map(j => j.job_id === editingJobId ? { ...j, ...formData } : j));
+          await fetchJobs(currentPage);
         } else {
           console.error('Failed to update job:', await res.text());
         }
@@ -181,8 +185,9 @@ export default function SuperAdminJobsPage() {
           body: JSON.stringify(formData),
         });
         if (res.ok) {
-          const data = await res.json();
-          setJobs(prev => [data.job, ...prev]);
+          // Refetch page 1 so total count and ordering are accurate
+          setCurrentPage(1);
+          await fetchJobs(1);
         } else {
           console.error('Failed to create job:', await res.text());
         }
@@ -217,8 +222,11 @@ export default function SuperAdminJobsPage() {
         headers: { ...authHeaders },
       });
       if (res.ok) {
-        setJobs(prev => prev.filter(j => j.job_id !== job_id));
         if (selectedJobDetails?.job_id === job_id) setSelectedJobDetails(null);
+        // Refetch: if this was the last job on the page, go back one page
+        const newPage = jobs.length === 1 && currentPage > 1 ? currentPage - 1 : currentPage;
+        setCurrentPage(newPage);
+        await fetchJobs(newPage);
       } else {
         console.error('Failed to delete job:', await res.text());
       }
@@ -247,7 +255,7 @@ export default function SuperAdminJobsPage() {
                 Jobs Management
               </h1>
               <p className="text-slate-500 mt-0.5 text-sm font-semibold">
-                {jobs.length} active posting{jobs.length !== 1 ? 's' : ''} · Create and manage job openings
+                {totalJobs} active posting{totalJobs !== 1 ? 's' : ''} · Create and manage job openings
               </p>
             </div>
           </div>

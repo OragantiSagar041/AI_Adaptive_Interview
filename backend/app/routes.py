@@ -8951,6 +8951,11 @@ def create_job(job: JobCreate, current_admin: dict = Depends(get_current_admin_d
 
 @router.get("/api/jobs")
 def get_admin_jobs(page: int = 1, limit: int = 20, current_admin: dict = Depends(get_current_admin_details)):
+    # Validate and clamp pagination parameters
+    if page < 1:
+        raise HTTPException(status_code=400, detail="page must be >= 1")
+    if limit < 1 or limit > 100:
+        raise HTTPException(status_code=400, detail="limit must be between 1 and 100")
     # Return jobs with pagination
     skip = (page - 1) * limit
     total_jobs = jobs_collection.count_documents({})

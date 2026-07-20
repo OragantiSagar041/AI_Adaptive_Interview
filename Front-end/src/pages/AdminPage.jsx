@@ -1062,6 +1062,15 @@ export default function AdminPage({ role: initialRole = 'admin' }) {
     }))))
   }
 
+  // ── Must be declared before any early return to satisfy Rules of Hooks ──────
+  const [isInitialLoad, setIsInitialLoad] = useState(true)
+
+  useEffect(() => {
+    if (dashboardStatus === 'succeeded' || dashboardStatus === 'failed') {
+      setIsInitialLoad(false)
+    }
+  }, [dashboardStatus])
+
   if (!token) {
     return <Navigate to="/login" replace />
   }
@@ -1136,13 +1145,6 @@ export default function AdminPage({ role: initialRole = 'admin' }) {
     getComputedStatus
   }
 
-  const [isInitialLoad, setIsInitialLoad] = useState(true)
-
-  useEffect(() => {
-    if (dashboardStatus === 'succeeded' || dashboardStatus === 'failed') {
-      setIsInitialLoad(false)
-    }
-  }, [dashboardStatus])
 
   const renderContent = () => {
     if (role === 'superadmin') {
