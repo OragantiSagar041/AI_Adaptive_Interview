@@ -378,7 +378,7 @@ def api_gen_next_question(req: NextQuestionRequest):
 
 
 @router.post("/parse-resume")
-async def parse_resume(
+def parse_resume(
     file: UploadFile = File(...),
     source: str = Form("resume"),
     upload_to_cloud: bool = Form(False)
@@ -3362,7 +3362,7 @@ def extract_info_from_resume(text: str) -> Dict:
     return {"name": name, "email": email}
 
 @router.post("/admin/parse-resume")
-async def parse_resume(
+def parse_resume(
     file: UploadFile = File(...), 
     source: Optional[str] = Form(None),
     upload_to_cloud: Optional[str] = Form(None),
@@ -3375,30 +3375,22 @@ async def parse_resume(
     if getattr(file, "size", 0) and file.size > 10 * 1024 * 1024:
         raise HTTPException(status_code=413, detail="File too large. Maximum size is 10MB.")
         
-    content = await file.read()
+    content = file.file.read()
     text = extract_text_from_file(content, file.filename)
     
     file_url = None
-    # Check if upload_to_cloud is true ('true', '1', etc)
     if upload_to_cloud and upload_to_cloud.lower() in ('true', '1', 'yes'):
-        import cloudinary.uploader
-        try:
-            # We already read the file into `content`. We can upload the content bytes directly.
-            # But cloudinary.uploader.upload prefers a file-like object or bytes
-            upload_res = cloudinary.uploader.upload(
-                content,
-                resource_type="raw",
-                folder="jds" if source == 'jd' else "resumes",
-                public_id=f"{uuid.uuid4().hex[:8]}_{file.filename}"
-            )
-            file_url = upload_res.get("secure_url")
-        except Exception as e:
-            print(f"Cloudinary upload failed: {e}")
-            # Do not fail the whole process if upload fails, just continue without URL
-            pass
+        import os
+        import uuid
+        temp_dir = os.path.join(os.getcwd(), "temp_uploads")
+        os.makedirs(temp_dir, exist_ok=True)
+        temp_filename = f"{uuid.uuid4().hex[:8]}_{file.filename}"
+        temp_path = os.path.join(temp_dir, temp_filename)
+        with open(temp_path, "wb") as f:
+            f.write(content)
+        file_url = f"temp://{temp_filename}"
 
     info = {}
-    # Only extract name and email if this is NOT a job description
     if source != 'jd':
         info = extract_info_from_resume(text)
         
@@ -3409,6 +3401,7 @@ async def parse_resume(
         "email": info.get("email"),
         "file_url": file_url
     }
+
 
 @router.get("/admin/candidate/check")
 def check_candidate(email: str, current_admin: dict = Depends(get_current_admin_details)):
@@ -3508,6 +3501,13 @@ def create_session(data: CreateSession, current_admin: dict = Depends(get_curren
         session_doc["scheduled_end"] = data.scheduled_end
     
     interview_sessions_collection.insert_one(session_doc)
+    
+    # Process temp JD/Resume URLs in the background
+    if data.jd_file_url and data.jd_file_url.startswith("temp://"):
+        threading.Thread(target=process_temp_cloudinary_upload, args=(data.jd_file_url, "interview_sessions", "jd_file_url")).start()
+    if getattr(data, "resume_url", None) and getattr(data, "resume_url").startswith("temp://"):
+        threading.Thread(target=process_temp_cloudinary_upload, args=(data.resume_url, "interview_sessions", "resume_url")).start()
+
     
     # Credits were already deducted atomically at the beginning of the request.
     # _id is already populated by insert_one
@@ -3741,6 +3741,10 @@ def bulk_create_sessions(data: BulkCreateSession, background_tasks: BackgroundTa
     # Queue the slow email sending process to run in the background (Celery)
     from app.tasks import process_bulk_emails_task
     process_bulk_emails_task.delay(email_jobs)
+    # Process temp JD URLs in the background for bulk sessions
+    if data.jd_file_url and data.jd_file_url.startswith("temp://"):
+        threading.Thread(target=process_temp_cloudinary_upload, args=(data.jd_file_url, "interview_sessions", "jd_file_url")).start()
+
 
     print(f" Bulk sessions created: {successful}/{len(results)}")
     
@@ -4876,7 +4880,7 @@ class ATSRequest(BaseModel):
     jd_text: str
 
 @router.post("/admin/ats-score")
-async def calculate_ats_score(request: ATSRequest):
+def calculate_ats_score(request: ATSRequest):
     try:
         resume_text = request.resume_text.strip()[:3000]
         jd_text = request.jd_text.strip()[:3000]
@@ -4927,16 +4931,32 @@ Return this EXACT JSON (all score fields are integers 0-100, weighted_total is t
   "summary": "2-3 sentence overall assessment and recommendations for improvement"
 }}"""
 
-            raw = chat_completion(
-                messages=[
-                    {"role": "system", "content": "You are a precise ATS scoring engine. Return ONLY valid JSON. No markdown. Be extremely fast and concise."},
-                    {"role": "user", "content": prompt},
-                ],
-                model="openai/gpt-4o-mini",
-                temperature=0.0,
-                timeout=15,
-                max_tokens=300,
-            )
+            import os
+            groq_key = os.getenv("GROQ_API_KEY")
+            if groq_key:
+                from groq import Groq
+                client = Groq(api_key=groq_key.strip())
+                response = client.chat.completions.create(
+                    model="llama3-8b-8192",
+                    messages=[
+                        {"role": "system", "content": "You are a precise ATS scoring engine. Return ONLY valid JSON. No markdown. Be extremely fast and concise."},
+                        {"role": "user", "content": prompt}
+                    ],
+                    temperature=0.0,
+                    max_tokens=300
+                )
+                raw = response.choices[0].message.content
+            else:
+                raw = chat_completion(
+                    messages=[
+                        {"role": "system", "content": "You are a precise ATS scoring engine. Return ONLY valid JSON. No markdown. Be extremely fast and concise."},
+                        {"role": "user", "content": prompt},
+                    ],
+                    model="openai/gpt-4o-mini",
+                    temperature=0.0,
+                    timeout=15,
+                    max_tokens=300,
+                )
 
             # Parse response
             import json as _json, re as _re
@@ -8264,7 +8284,7 @@ async def initiate_manual_ai_call(
 # ─── Omni Dimension Agent Data Routes ─────────────────────────────────────────
 
 @router.get("/api/calls/agent-settings")
-async def get_omni_agent_settings():
+def get_omni_agent_settings():
     """Fetch the Omni Dimension Agent settings."""
     from .omni_dimension_client import get_omni_client, get_omni_agent_id
     try:
@@ -8279,7 +8299,7 @@ async def get_omni_agent_settings():
 
 
 @router.get("/api/calls/knowledge-base")
-async def get_omni_knowledge_base():
+def get_omni_knowledge_base():
     """Fetch the Knowledge Base files from Omni Dimension."""
     from .omni_dimension_client import get_omni_client
     try:
@@ -8292,7 +8312,7 @@ async def get_omni_knowledge_base():
 
 
 @router.get("/api/calls/integrations")
-async def get_omni_integrations():
+def get_omni_integrations():
     """Fetch integrations for the agent from Omni Dimension."""
     from .omni_dimension_client import get_omni_client, get_omni_agent_id
     try:
@@ -8306,7 +8326,7 @@ async def get_omni_integrations():
 
 
 @router.get("/api/calls/integrations/user")
-async def get_user_integrations():
+def get_user_integrations():
     from .omni_dimension_client import get_omni_client
     try:
         client = get_omni_client()
@@ -8324,7 +8344,7 @@ class CalendlyIntegrationRequest(BaseModel):
     description: Optional[str] = ""
 
 @router.post("/api/calls/integrations/calendly")
-async def create_calendly_integration(req: CalendlyIntegrationRequest):
+def create_calendly_integration(req: CalendlyIntegrationRequest):
     from .omni_dimension_client import get_omni_client, get_omni_agent_id
     try:
         client = get_omni_client()
@@ -8363,7 +8383,7 @@ class CustomApiIntegrationRequest(BaseModel):
     request_timeout: Optional[int] = 10
 
 @router.post("/api/calls/integrations/custom-api")
-async def create_custom_api_integration(req: CustomApiIntegrationRequest):
+def create_custom_api_integration(req: CustomApiIntegrationRequest):
     from .omni_dimension_client import get_omni_client, get_omni_agent_id
     try:
         client = get_omni_client()
@@ -8397,7 +8417,7 @@ class DetachIntegrationRequest(BaseModel):
     integration_id: int
 
 @router.post("/api/calls/integrations/detach")
-async def detach_integration(req: DetachIntegrationRequest):
+def detach_integration(req: DetachIntegrationRequest):
     from .omni_dimension_client import get_omni_client, get_omni_agent_id
     try:
         client = get_omni_client()
@@ -8409,7 +8429,7 @@ async def detach_integration(req: DetachIntegrationRequest):
 
 
 @router.get("/api/calls/call-config")
-async def get_omni_call_config():
+def get_omni_call_config():
     """Fetch call configuration from agent settings."""
     from .omni_dimension_client import get_omni_client, get_omni_agent_id
     try:
@@ -8444,7 +8464,7 @@ async def get_omni_call_config():
 
 
 @router.get("/api/calls/post-call-config")
-async def get_omni_post_call_config():
+def get_omni_post_call_config():
     """Fetch post-call configuration from agent settings."""
     from .omni_dimension_client import get_omni_client, get_omni_agent_id
     try:
@@ -8460,7 +8480,7 @@ async def get_omni_post_call_config():
 
 
 @router.get("/api/calls/recent-calls")
-async def get_omni_recent_calls():
+def get_omni_recent_calls():
     """Fetch recent call logs directly from Omni Dimension SDK, including all evaluation scores."""
     from .omni_dimension_client import get_omni_client, get_omni_agent_id
     try:
@@ -8511,7 +8531,7 @@ async def get_omni_recent_calls():
 # ──────────────────────────────────────────────────────────────────────────────
 
 @router.get("/api/calls/logs/{call_id}")
-async def get_omni_call_log_details(call_id: str):
+def get_omni_call_log_details(call_id: str):
     """
     Fetches the detailed log for a specific call directly from Omni Dimension.
     """
@@ -8651,7 +8671,7 @@ def sync_call_status_helper(call_id: str, app_id: str = None):
     return False
 
 @router.get("/api/calls/logs")
-async def get_omni_call_logs():
+def get_omni_call_logs():
     """
     Fetches all omni dimension call logs, updating pending calls with live data.
     """
@@ -8675,7 +8695,7 @@ async def get_omni_call_logs():
         raise HTTPException(status_code=500, detail=str(e))
 
 @router.get("/api/calls/status/{session_id}")
-async def check_ai_call_status(session_id: str):
+def check_ai_call_status(session_id: str):
     """
     Checks the status of the AI call for a given session.
     """
@@ -9133,10 +9153,10 @@ import PyPDF2
 import io
 
 @router.post("/api/public/jobs/parse-resume")
-async def parse_resume(resume: UploadFile = File(...)):
+def parse_resume(resume: UploadFile = File(...)):
     try:
         # Read the file content
-        content = await resume.read()
+        content = resume.file.read()
         
         # We'll just handle PDFs for now as an example, but we can easily extend this
         extracted_text = ""
