@@ -41,22 +41,28 @@ class AgentRepository:
         return None
 
     def create_agent(self, agent_id: int, name: str, omni_agent_id: str, omni_api_key: str) -> Agent:
-        doc = {
-            "_id": agent_id,
+        doc_set = {
             "name": name,
             "omni_agent_id": omni_agent_id,
             "omni_api_key": omni_api_key,
+            "updated_at": _now(),
+        }
+        doc_set_on_insert = {
             "sync_status": "PENDING",
             "sync_error": None,
             "last_synced_at": None,
             "created_at": _now(),
-            "updated_at": _now(),
         }
-        agents_collection.update_one({"_id": agent_id}, {"$set": doc}, upsert=True)
-        return Agent(**doc)
+        agents_collection.update_one(
+            {"_id": agent_id}, 
+            {"$set": doc_set, "$setOnInsert": doc_set_on_insert}, 
+            upsert=True
+        )
+        data = agents_collection.find_one({"_id": agent_id})
+        return Agent(**data)
 
     def update_sync_status(self, agent_id: int, status: str, error: Optional[str] = None):
-        agents_collection.update_one(
+        res = agents_collection.update_one(
             {"_id": agent_id},
             {"$set": {
                 "sync_status": status,
@@ -65,6 +71,8 @@ class AgentRepository:
                 "updated_at": _now()
             }}
         )
+        if res.matched_count == 0:
+            raise ValueError(f"Agent {agent_id} not found")
 
 class ConversationSectionRepository:
     def __init__(self):
@@ -74,13 +82,14 @@ class ConversationSectionRepository:
         cursor = conversation_flows_collection.find({"agent_id": agent_id}).sort("display_order", 1)
         return [ConversationSection(**doc) for doc in cursor]
 
-    def get_section(self, section_id: str) -> Optional[ConversationSection]:
+    def get_section(self, agent_id: int, section_id: str) -> Optional[ConversationSection]:
         from bson import ObjectId
+        from bson.errors import InvalidId
         try:
-            doc = conversation_flows_collection.find_one({"_id": ObjectId(str(section_id))})
+            doc = conversation_flows_collection.find_one({"_id": ObjectId(str(section_id)), "agent_id": agent_id})
             return ConversationSection(**doc) if doc else None
-        except Exception:
-            doc = conversation_flows_collection.find_one({"_id": section_id})
+        except InvalidId:
+            doc = conversation_flows_collection.find_one({"_id": section_id, "agent_id": agent_id})
             return ConversationSection(**doc) if doc else None
 
     def create_section(self, agent_id: int, title: str, instruction: str, enabled: bool, display_order: int) -> ConversationSection:
@@ -99,17 +108,21 @@ class ConversationSectionRepository:
 
     def bulk_upsert_sections(self, agent_id: int, sections: List[dict]) -> List[ConversationSection]:
         from bson import ObjectId
+        from bson.errors import InvalidId
+        from pymongo import UpdateOne, InsertOne, DeleteOne
+        
         existing = {str(section.id): section for section in self.list_sections(agent_id)}
         incoming_ids = {str(item['id']) for item in sections if item.get('id')}
+        
+        operations = []
 
         for section_id in existing.keys():
             if section_id not in incoming_ids:
                 try:
-                    conversation_flows_collection.delete_one({"_id": ObjectId(section_id)})
-                except Exception:
-                    conversation_flows_collection.delete_one({"_id": section_id})
+                    operations.append(DeleteOne({"_id": ObjectId(section_id), "agent_id": agent_id}))
+                except InvalidId:
+                    operations.append(DeleteOne({"_id": section_id, "agent_id": agent_id}))
 
-        result_sections = []
         for section_data in sections:
             section_id_str = str(section_data.get('id')) if section_data.get('id') else None
             if section_id_str and section_id_str in existing:
@@ -121,32 +134,28 @@ class ConversationSectionRepository:
                     "updated_at": _now()
                 }
                 try:
-                    conversation_flows_collection.update_one({"_id": ObjectId(section_id_str)}, {"$set": update_doc})
-                    doc = conversation_flows_collection.find_one({"_id": ObjectId(section_id_str)})
-                except Exception:
-                    conversation_flows_collection.update_one({"_id": section_id_str}, {"$set": update_doc})
-                    doc = conversation_flows_collection.find_one({"_id": section_id_str})
-                if doc:
-                    doc["_id"] = str(doc["_id"])
-                    result_sections.append(ConversationSection(**doc))
+                    operations.append(UpdateOne({"_id": ObjectId(section_id_str), "agent_id": agent_id}, {"$set": update_doc}))
+                except InvalidId:
+                    operations.append(UpdateOne({"_id": section_id_str, "agent_id": agent_id}, {"$set": update_doc}))
             else:
-                doc = {
+                operations.append(InsertOne({
                     "agent_id": agent_id,
                     "title": section_data['title'],
                     "instruction": section_data['instruction'],
                     "enabled": section_data['enabled'],
                     "display_order": section_data['display_order'],
                     "created_at": _now(),
-                    "updated_at": _now(),
-                }
-                res = conversation_flows_collection.insert_one(doc)
-                doc["_id"] = str(res.inserted_id)
-                result_sections.append(ConversationSection(**doc))
+                    "updated_at": _now()
+                }))
 
-        return result_sections
+        if operations:
+            conversation_flows_collection.bulk_write(operations)
+
+        return self.list_sections(agent_id)
 
     def update_section(self, section: ConversationSection, **fields) -> ConversationSection:
         from bson import ObjectId
+        from bson.errors import InvalidId
         update_fields = {}
         for key, value in fields.items():
             if value is not None:
@@ -156,32 +165,48 @@ class ConversationSectionRepository:
         section.updated_at = update_fields["updated_at"]
 
         try:
-            conversation_flows_collection.update_one({"_id": ObjectId(str(section.id))}, {"$set": update_fields})
-        except Exception:
-            conversation_flows_collection.update_one({"_id": section.id}, {"$set": update_fields})
+            res = conversation_flows_collection.update_one({"_id": ObjectId(str(section.id)), "agent_id": section.agent_id}, {"$set": update_fields})
+        except InvalidId:
+            res = conversation_flows_collection.update_one({"_id": section.id, "agent_id": section.agent_id}, {"$set": update_fields})
+
+        if res.matched_count == 0:
+            raise ValueError(f"Section {section.id} not found for agent {section.agent_id}")
 
         return section
 
     def delete_section(self, section: ConversationSection):
         from bson import ObjectId
+        from bson.errors import InvalidId
         try:
-            conversation_flows_collection.delete_one({"_id": ObjectId(str(section.id))})
-        except Exception:
-            conversation_flows_collection.delete_one({"_id": section.id})
+            res = conversation_flows_collection.delete_one({"_id": ObjectId(str(section.id)), "agent_id": section.agent_id})
+        except InvalidId:
+            res = conversation_flows_collection.delete_one({"_id": section.id, "agent_id": section.agent_id})
+            
+        if res.deleted_count == 0:
+            raise ValueError(f"Section {section.id} not found for agent {section.agent_id}")
 
     def reorder_sections(self, agent_id: int, section_ids: List[str]):
         from bson import ObjectId
+        from bson.errors import InvalidId
+        from pymongo import UpdateOne
+        
+        operations = []
         for index, section_id in enumerate(section_ids):
             try:
-                conversation_flows_collection.update_one(
+                operations.append(UpdateOne(
                     {"_id": ObjectId(str(section_id)), "agent_id": agent_id},
                     {"$set": {"display_order": index, "updated_at": _now()}}
-                )
-            except Exception:
-                conversation_flows_collection.update_one(
+                ))
+            except InvalidId:
+                operations.append(UpdateOne(
                     {"_id": section_id, "agent_id": agent_id},
                     {"$set": {"display_order": index, "updated_at": _now()}}
-                )
+                ))
+                
+        if operations:
+            res = conversation_flows_collection.bulk_write(operations)
+            if res.matched_count != len(section_ids):
+                raise ValueError("Some sections were not found for reordering")
 
     def get_enabled_sorted_sections(self, agent_id: int) -> List[ConversationSection]:
         cursor = conversation_flows_collection.find({"agent_id": agent_id, "enabled": True}).sort("display_order", 1)

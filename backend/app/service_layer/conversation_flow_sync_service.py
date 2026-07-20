@@ -23,7 +23,7 @@ class ConversationFlowSyncService:
         return section
 
     def update_section(self, section_id: int, title: Optional[str], instruction: Optional[str], enabled: Optional[bool], display_order: Optional[int], updated_at: datetime):
-        section = self.section_repo.get_section(section_id)
+        section = self.section_repo.get_section(self.agent.id, section_id)
         if not section:
             raise ValueError("Section not found")
         if section.updated_at and section.updated_at > updated_at:
@@ -34,7 +34,7 @@ class ConversationFlowSyncService:
         return updated
 
     def delete_section(self, section_id: int):
-        section = self.section_repo.get_section(section_id)
+        section = self.section_repo.get_section(self.agent.id, section_id)
         if not section:
             raise ValueError("Section not found")
         logger.info("Database Save: delete section %s for agent %s", section_id, self.agent.id)
@@ -42,7 +42,7 @@ class ConversationFlowSyncService:
         self._sync_whole_flow()
 
     def toggle_section(self, section_id: int, enabled: bool):
-        section = self.section_repo.get_section(section_id)
+        section = self.section_repo.get_section(self.agent.id, section_id)
         if not section:
             raise ValueError("Section not found")
         logger.info("Database Save: toggle section %s for agent %s to %s", section_id, self.agent.id, enabled)

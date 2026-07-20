@@ -171,18 +171,18 @@ export default function SuperAdminJobsPage() {
       
       setFormData(prev => ({
         ...prev,
-        title: title || "Job Posting",
-        experience: experience || "Not Specified",
-        skills: skills || "",
-        location: location || "",
-        salary: salary || "",
-        bond: bond || "",
-        workMode: workMode || "Remote",
-        description: text || ""
+        title: title || prev.title,
+        experience: experience || prev.experience,
+        skills: skills || prev.skills,
+        location: location || prev.location,
+        salary: salary || prev.salary,
+        bond: bond || prev.bond,
+        workMode: workMode || prev.workMode,
+        description: text || prev.description
       }));
     } catch (err) {
       console.error(err);
-      alert("Error parsing job file");
+      alert(err.response?.data?.detail || err.message || "Error parsing job file");
     } finally {
       setJdParsing(false);
       e.target.value = null; // reset input

@@ -1,5 +1,6 @@
 import React, { useState } from 'react'
 import { X, Calendar, Globe, Plug, Loader2, Search, MessageSquare, Database, Phone, ChevronLeft, ExternalLink, TrendingUp } from 'lucide-react'
+import { API_BASE_URL } from '../../apiConfig'
 
 // Mock Data for the Integrations Grid
 const INTEGRATIONS = [
@@ -25,7 +26,6 @@ const CATEGORIES = [
 ]
 
 export default function IntegrationModal({ isOpen, onClose, onRefresh }) {
-  const API_BASE_URL = import.meta.env.VITE_API_URL || 'http://localhost:8000'
   const [selectedConfig, setSelectedConfig] = useState(null) // null means grid view, 'calendly' or 'custom_api'
   const [activeCategory, setActiveCategory] = useState('All')
   const [searchQuery, setSearchQuery] = useState('')

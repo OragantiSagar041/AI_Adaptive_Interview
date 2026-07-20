@@ -146,6 +146,17 @@ function App() {
             <Route path="notifications" element={<AdminNotifications />} />
           </Route>
 
+          {/* Unauthorized Route */}
+          <Route path="/unauthorized" element={
+            <div className="flex flex-col items-center justify-center min-h-screen bg-slate-50 text-slate-800">
+              <h1 className="text-4xl font-bold mb-4">403 - Unauthorized</h1>
+              <p className="text-lg mb-6">You don't have permission to access this page.</p>
+              <a href="/" className="px-6 py-2 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 transition-colors">
+                Go to Homepage
+              </a>
+            </div>
+          } />
+
           {/* Fallback route */}
           <Route path="*" element={<Navigate to="/" replace />} />
         </Routes>

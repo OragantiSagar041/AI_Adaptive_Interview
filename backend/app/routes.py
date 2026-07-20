@@ -429,7 +429,17 @@ async def parse_resume(
         interview_id = f"int_{int(datetime.now(timezone.utc).timestamp())}_{uuid.uuid4().hex[:8]}"
 
         # Analyze the resume
-        profile_analysis = analyze_resume_or_jd(content_str)
+        import asyncio
+        from starlette.concurrency import run_in_threadpool
+        try:
+            profile_analysis = await asyncio.wait_for(
+                run_in_threadpool(analyze_resume_or_jd, content_str), 
+                timeout=15.0
+            )
+        except asyncio.TimeoutError:
+            profile_analysis = {"error": "Analysis timed out"}
+        except Exception as e:
+            profile_analysis = {"error": str(e)}
 
         # Generate questions
         questions = generate_mock_questions(content_str, source)
@@ -476,7 +486,7 @@ async def parse_resume(
 
 @router.post("/start-interview")
 @router.post("/start-interview/")
-def start_interview(
+async def start_interview(
     content: str = Form(...),
     source: str = Form("resume")
 ):
@@ -486,7 +496,17 @@ def start_interview(
         interview_id = f"int_{int(datetime.now(timezone.utc).timestamp())}_{uuid.uuid4().hex[:8]}"
 
         # ✅ STEP-3.2 → AI ANALYSIS (CORRECT PLACE)
-        profile_analysis = analyze_resume_or_jd(content)
+        import asyncio
+        from starlette.concurrency import run_in_threadpool
+        try:
+            profile_analysis = await asyncio.wait_for(
+                run_in_threadpool(analyze_resume_or_jd, content), 
+                timeout=15.0
+            )
+        except asyncio.TimeoutError:
+            profile_analysis = {"error": "Analysis timed out"}
+        except Exception as e:
+            profile_analysis = {"error": str(e)}
 
         # Generate questions based on Source (Resume vs JD)
         questions = generate_mock_questions(content, source)
@@ -3411,9 +3431,13 @@ async def parse_resume(
         from app.services import analyze_resume_or_jd, chat_completion
         from starlette.concurrency import run_in_threadpool
         try:
-            analysis = await run_in_threadpool(analyze_resume_or_jd, text)
+            import asyncio
+            analysis = await asyncio.wait_for(run_in_threadpool(analyze_resume_or_jd, text), timeout=15.0)
             skills_list = analysis.get("skills", []) if isinstance(analysis, dict) else []
             skills_str = ", ".join(skills_list)
+        except asyncio.TimeoutError:
+            print("JD skills analysis timed out.")
+            warning = "Failed to extract skills. Analysis timed out."
         except Exception as e:
             print("Error analyzing JD skills:", e)
             warning = "Failed to extract skills. "
@@ -3457,10 +3481,10 @@ Return a pure JSON object with these keys. If not found, return empty string for
                         workMode = "Remote"
                 except Exception as parse_e:
                     print("Error parsing JSON for JD details:", parse_e)
-                    warning = "AI parsing failed or was incomplete. Some fields may be missing."
+                    warning = (warning + " " if warning else "") + "AI parsing failed or was incomplete. Some fields may be missing."
         except Exception as e:
             print("Error extracting JD info:", e)
-            warning = "Failed to communicate with AI extraction service."
+            warning = (warning + " " if warning else "") + "Failed to communicate with AI extraction service."
             
         if title == "Job Posting":
             lines = [l.strip() for l in text.split('\n') if l.strip()]
@@ -4101,7 +4125,7 @@ def reschedule_session(link_id: str, new_expiry: str = Form(...), new_start: str
 
 @router.post("/start-session-interview")
 @router.post("/start_session_interview")
-def start_session_interview(link_id: str = Form(...)):
+async def start_session_interview(link_id: str = Form(...)):
     current_session_id.set(link_id)
     row = interview_sessions_collection.find_one({"link_id": link_id})
     
@@ -4281,7 +4305,17 @@ def start_session_interview(link_id: str = Form(...)):
     source = "job_description" if job_description and len(job_description) > 50 else "resume"
     content_str = job_description if source == "job_description" else resume_text
     
-    profile_analysis = analyze_resume_or_jd(content_str)
+    import asyncio
+    from starlette.concurrency import run_in_threadpool
+    try:
+        profile_analysis = await asyncio.wait_for(
+            run_in_threadpool(analyze_resume_or_jd, content_str), 
+            timeout=15.0
+        )
+    except asyncio.TimeoutError:
+        profile_analysis = {"error": "Analysis timed out"}
+    except Exception as e:
+        profile_analysis = {"error": str(e)}
     
     hr_screening = row.get("hr_screening")
     custom_questions_text = row.get("custom_questions", "")
