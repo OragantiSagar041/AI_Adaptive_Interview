@@ -1136,6 +1136,14 @@ export default function AdminPage({ role: initialRole = 'admin' }) {
     getComputedStatus
   }
 
+  const [isInitialLoad, setIsInitialLoad] = useState(true)
+
+  useEffect(() => {
+    if (dashboardStatus === 'succeeded' || dashboardStatus === 'failed') {
+      setIsInitialLoad(false)
+    }
+  }, [dashboardStatus])
+
   const renderContent = () => {
     if (role === 'superadmin') {
       switch (activeTab) {
@@ -1188,7 +1196,7 @@ export default function AdminPage({ role: initialRole = 'admin' }) {
           }
         }}
       >
-        {loadingData && candidates.length === 0 ? (
+        {isInitialLoad && loadingData ? (
           <div className="flex items-center gap-2.5 text-slate-500">
             <RefreshCw size={18} className="animate-spin" />
             <span>Refreshing console workspace...</span>

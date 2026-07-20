@@ -100,18 +100,24 @@ export default function SuperAdminJobsPage() {
   };
 
   const [jobs, setJobs] = useState([]);
+  const [currentPage, setCurrentPage] = useState(1);
+  const [totalPages, setTotalPages] = useState(1);
+  const limit = 20;
 
   // ── Fetch jobs from backend on mount ──────────────────────────────────────
   useEffect(() => {
     const fetchJobs = async () => {
       setJobsLoading(true);
       try {
-        const res = await fetch(`${API_BASE_URL}/api/jobs`, {
+        const res = await fetch(`${API_BASE_URL}/api/jobs?page=${currentPage}&limit=${limit}`, {
           headers: { ...authHeaders }
         });
         if (res.ok) {
           const data = await res.json();
           setJobs(data.jobs || []);
+          if (data.pagination) {
+            setTotalPages(data.pagination.total_pages || 1);
+          }
         } else {
           console.error('Failed to fetch jobs:', res.status);
         }
@@ -122,7 +128,7 @@ export default function SuperAdminJobsPage() {
       }
     };
     fetchJobs();
-  }, []);
+  }, [currentPage]);
 
   const [showModal, setShowModal] = useState(false);
   const [showApplyModal, setShowApplyModal] = useState(false);
@@ -511,6 +517,31 @@ export default function SuperAdminJobsPage() {
                 ))}
               </tbody>
             </table>
+          </div>
+        </div>
+      )}
+
+      {/* Pagination Controls */}
+      {totalPages > 1 && (
+        <div className="flex items-center justify-between mt-6 bg-white/80 backdrop-blur-2xl border border-white/60 rounded-2xl shadow-[0_4px_20px_rgb(0,0,0,0.02)] p-4">
+          <div className="text-sm font-semibold text-slate-500">
+            Page <span className="text-indigo-600 font-bold">{currentPage}</span> of <span className="text-indigo-600 font-bold">{totalPages}</span>
+          </div>
+          <div className="flex items-center gap-2">
+            <button
+              onClick={() => setCurrentPage(p => Math.max(1, p - 1))}
+              disabled={currentPage === 1}
+              className={`px-4 py-2 rounded-xl text-sm font-bold transition-all ${currentPage === 1 ? 'bg-slate-100 text-slate-400 cursor-not-allowed' : 'bg-white border border-slate-200 text-slate-700 hover:border-indigo-300 hover:text-indigo-600 cursor-pointer shadow-sm'}`}
+            >
+              Previous
+            </button>
+            <button
+              onClick={() => setCurrentPage(p => Math.min(totalPages, p + 1))}
+              disabled={currentPage === totalPages}
+              className={`px-4 py-2 rounded-xl text-sm font-bold transition-all ${currentPage === totalPages ? 'bg-slate-100 text-slate-400 cursor-not-allowed' : 'bg-white border border-slate-200 text-slate-700 hover:border-indigo-300 hover:text-indigo-600 cursor-pointer shadow-sm'}`}
+            >
+              Next
+            </button>
           </div>
         </div>
       )}

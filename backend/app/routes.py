@@ -7071,6 +7071,12 @@ async def get_dashboard_aggregated_data(admin_id: Optional[str] = None, current_
                     call_id = str(call.get("id") or call.get("call_id") or "")
                     if not call_id: continue
                     
+                    # Filter out dummy AI calling data 
+                    to_number = str(call.get("to_number") or call.get("to") or call.get("candidate_name") or "")
+                    dummy_numbers = ["+917680937434", "+919912736854", "+919392895349", "Assistant"]
+                    if to_number in dummy_numbers:
+                        continue
+                    
                     status_raw = str(call.get("status") or "").lower()
                     status = "completed"
                     
@@ -7084,9 +7090,9 @@ async def get_dashboard_aggregated_data(admin_id: Optional[str] = None, current_
                         "id": f"ai_call_omni_{call_id}",
                         "_id": f"ai_call_omni_{call_id}",
                         "link_id": f"ai_call_omni_{call_id}",
-                        "candidate_name": call.get("to_number") or call.get("to") or call.get("candidate_name") or "Omni Call",
+                        "candidate_name": to_number or "Omni Call",
                         "candidate_email": "",
-                        "candidate_phone": call.get("to_number") or call.get("to") or "",
+                        "candidate_phone": to_number,
                         "interview_title": "AI Calling",
                         "score": score,
                         "avg_score": score,
@@ -8944,12 +8950,23 @@ def create_job(job: JobCreate, current_admin: dict = Depends(get_current_admin_d
     return {"status": "success", "job": job_dict}
 
 @router.get("/api/jobs")
-def get_admin_jobs(current_admin: dict = Depends(get_current_admin_details)):
-    # Return all jobs for both admin and superadmin users so the Jobs section shows a unified list.
-    jobs = list(jobs_collection.find({}).sort("created_at", -1))
+def get_admin_jobs(page: int = 1, limit: int = 20, current_admin: dict = Depends(get_current_admin_details)):
+    # Return jobs with pagination
+    skip = (page - 1) * limit
+    total_jobs = jobs_collection.count_documents({})
+    jobs = list(jobs_collection.find({}).sort("created_at", -1).skip(skip).limit(limit))
     for j in jobs:
         j["_id"] = str(j["_id"])
-    return {"status": "success", "jobs": jobs}
+    return {
+        "status": "success", 
+        "jobs": jobs,
+        "pagination": {
+            "page": page,
+            "limit": limit,
+            "total_jobs": total_jobs,
+            "total_pages": (total_jobs + limit - 1) // limit if limit > 0 else 1
+        }
+    }
 
 @router.put("/api/jobs/{job_id}")
 def update_job(job_id: str, job_update: JobCreate, current_admin: dict = Depends(get_current_admin_details)):
