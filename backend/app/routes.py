@@ -91,6 +91,57 @@ logger = logging.getLogger(__name__)
 
 router = APIRouter()
 
+def process_temp_cloudinary_upload(temp_url: str, collection_name: str, field_name: str):
+    """
+    Background worker to upload temporary local files to Cloudinary and update the database.
+    """
+    if not temp_url.startswith("temp://"):
+        return
+        
+    try:
+        temp_filename = temp_url.replace("temp://", "")
+        temp_path = os.path.join(os.getcwd(), "temp_uploads", temp_filename)
+        
+        if not os.path.exists(temp_path):
+            print(f"Temp file not found: {temp_path}")
+            return
+            
+        import cloudinary.uploader
+        folder = "jds" if "jd" in field_name.lower() else "resumes"
+        
+        # Upload to cloudinary
+        with open(temp_path, "rb") as f:
+            upload_res = cloudinary.uploader.upload(
+                f,
+                resource_type="raw",
+                folder=folder,
+                public_id=temp_filename
+            )
+            
+        new_url = upload_res.get("secure_url")
+        if new_url:
+            # Update the database using the appropriate collection
+            db_collection = None
+            if collection_name == "interview_sessions":
+                from app.database import interview_sessions_collection
+                db_collection = interview_sessions_collection
+            
+            if db_collection is not None:
+                db_collection.update_many(
+                    {field_name: temp_url},
+                    {"$set": {field_name: new_url}}
+                )
+                print(f"Successfully uploaded and updated {field_name} for {temp_url}")
+                
+        # Clean up the local temp file
+        try:
+            os.remove(temp_path)
+        except Exception as e:
+            print(f"Could not remove temp file {temp_path}: {e}")
+            
+    except Exception as e:
+        print(f"Cloudinary background upload failed for {temp_url}: {e}")
+
 
 @router.get("/admin/last-error")
 def get_last_error(current_admin: dict = Depends(get_current_admin_details)):
