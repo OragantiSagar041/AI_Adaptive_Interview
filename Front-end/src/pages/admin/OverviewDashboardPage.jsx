@@ -524,7 +524,7 @@ export default function OverviewDashboardPage() {
                   <th className="px-6 py-2.5 font-medium">Candidate</th>
                   <th className="px-3 py-2.5 font-medium">Role</th>
 
-                  <th className="px-3 py-2.5 font-medium">Productivity</th>
+                  <th className="px-3 py-2.5 font-medium">AI Score</th>
                   <th className="px-6 py-2.5 font-medium">Status</th>
                   <th className="px-6 py-2.5 font-medium text-right">Actions</th>
                 </tr>

@@ -7251,9 +7251,13 @@ async def get_dashboard_aggregated_data(admin_id: Optional[str] = None, current_
                     status_raw = str(call.get("status") or "").lower()
                     status = "completed"
                     
-                    score = call.get("cqs_score") or call.get("sentiment_score") or 0.0
+                    # Safely get cqs_score; if not available, default to 0.0
+                    cqs = call.get("cqs_score")
+                    if cqs is None:
+                        cqs = 0.0
+                        
                     try:
-                        score = float(score)
+                        score = float(cqs)
                     except (ValueError, TypeError):
                         score = 0.0
                         
