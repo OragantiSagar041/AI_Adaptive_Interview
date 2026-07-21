@@ -26,7 +26,8 @@ export const InterviewTechnical = () => {
   }) => {
     setCodingRoundLoading(true)
     try {
-      const payload = await api.post(`/coding-round/start`, { interview_id: interviewId }).then(r => r.data)
+      // LLM task generation can take 30-90s — override the default 50s timeout
+      const payload = await api.post(`/coding-round/start`, { interview_id: interviewId }, { timeout: 120000 }).then(r => r.data)
 
       const task = payload.coding_round?.task || {}
       const recommendedLang = task.recommended_language || 'python'

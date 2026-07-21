@@ -27,6 +27,7 @@ import aiVideoUrl from '../assets/ai_avatar.mp4'
 import { useProctoring } from '../hooks/useProctoring'
 import { useScreenshotProtection } from '../hooks/useScreenshotProtection'
 import { useExamSecurity } from '../hooks/useExamSecurity'
+import { useExitConfirmation } from '../hooks/useExitConfirmation'
 import DeviceCheckModal from '../components/DeviceCheckModal'
 
 import { VOICE_TRANSLATIONS } from '../utils/voiceTranslations'
@@ -279,7 +280,7 @@ export default function VoiceInterviewPage() {
   const cameraStreamRef = useRef(null)
   const cameraChunksRef = useRef([])
   const candidateVideoRef = useRef(null)
-  
+
 
 
   // Set a mock audio level that bounces slightly when speaking, or 0 when silent
@@ -486,6 +487,21 @@ export default function VoiceInterviewPage() {
     }
   }, [linkId, warningsCount])
 
+  // ── Exit Confirmation Dialog ────────────────────────────────────────────────
+  const isInterviewActive = round && round !== 'done' && round !== 'intro' && round !== 'pre_checks'
+  useExitConfirmation({
+    active: isInterviewActive,
+    onConfirmExit: async () => {
+      if (linkId) {
+        navigator.sendBeacon(
+          `${API_BASE_URL}/complete-session/${linkId}?warnings=${warningsCount}&reason=tab_closed`,
+          JSON.stringify({ reason: 'candidate_exited', timestamp: new Date().toISOString() })
+        )
+      }
+    },
+    message: `Your interview is still in progress.<br/><br/>If you leave now, your session will be marked as <strong>incomplete</strong> and you may not be able to re-enter.<br/><br/>Are you sure you want to exit?`,
+  })
+
   // ── Screenshot / Screen-capture Prevention ───────────────────────────────
   // Active while the interview is in progress. Silently swallows PrintScreen,
   // Win+Shift+S, Ctrl+P, Ctrl+Shift+S, Alt+PrintScreen. No alerts shown.
@@ -538,13 +554,13 @@ export default function VoiceInterviewPage() {
     `
     document.head.appendChild(styleEl)
 
-    document.addEventListener('keydown',  handleKeyDown,  true)
-    document.addEventListener('keyup',    handleKeyUp,    true)
+    document.addEventListener('keydown', handleKeyDown, true)
+    document.addEventListener('keyup', handleKeyUp, true)
     document.addEventListener('keypress', handleKeyPress, true)
 
     return () => {
-      document.removeEventListener('keydown',  handleKeyDown,  true)
-      document.removeEventListener('keyup',    handleKeyUp,    true)
+      document.removeEventListener('keydown', handleKeyDown, true)
+      document.removeEventListener('keyup', handleKeyUp, true)
       document.removeEventListener('keypress', handleKeyPress, true)
       document.getElementById('voice-interview-screenshot-guard')?.remove()
     }
@@ -739,7 +755,7 @@ export default function VoiceInterviewPage() {
   useEffect(() => {
     const q = questions[currentQIdx]
     if (q?.text) typewrite(q.text)
-  }, [currentQIdx, questions])  
+  }, [currentQIdx, questions])
 
   // ── Screen & Camera Recording ───────────────────────────────────────────────
   const startScreenRecording = useCallback(async () => {
@@ -1142,7 +1158,7 @@ export default function VoiceInterviewPage() {
         aiSay(`${transition}${t.nextQuestion.replace('[X]', nextIdx + 1)}${qs[nextIdx].text}`, () => startListening(ans => handleAnswer(ans, nextIdx, 0)))
       }, 500)
     }
-  }, [addMsg, aiSay, startListening])  
+  }, [addMsg, aiSay, startListening])
 
   // ── Complete interview ────────────────────────────────────────────────────
   const completeInterview = useCallback(async (options = {}) => {
@@ -1153,7 +1169,7 @@ export default function VoiceInterviewPage() {
     // Fallback for legacy calls that pass a boolean (isTimeout)
     const isTimeout = typeof options === 'boolean' ? options : (options.isTimeout || false)
     const completionReason = typeof options === 'object' && options.reason ? options.reason : 'normal'
-    
+
     integrityMetricsRef.current.reason = completionReason
 
     stopListening(); window.speechSynthesis?.cancel(); stopAudio()
@@ -1161,17 +1177,17 @@ export default function VoiceInterviewPage() {
 
     // Switch UI to submitting immediately
     setRound('submitting')
-    
-    const message = isTimeout 
+
+    const message = isTimeout
       ? "Thank you for the interview. We are saving your interview, please wait."
       : "We are saving your interview, please wait.";
-      
+
     // Speak asynchronously
     aiSay(message)
 
     // Fire backend completion with detailed integrity metrics
     try {
-      await fetch(`${API_BASE_URL}/complete-session/${linkId}`, { 
+      await fetch(`${API_BASE_URL}/complete-session/${linkId}`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -1195,9 +1211,9 @@ export default function VoiceInterviewPage() {
     } catch (err) {
       console.error("Recording upload failed:", err)
     }
-    
+
     // Stop audio and mark done ONLY after upload finishes
-    stopAudio() 
+    stopAudio()
     setRound('done')
     setIsSaving(false)
   }, [stopListening, linkId, stopAndUploadRecording, warningsCount, stopAudio, aiSay])
@@ -1214,7 +1230,7 @@ export default function VoiceInterviewPage() {
 
     const type = interviewType
     const iid = interviewIdRef.current
-    
+
     // Check timeout flag
     const timeoutFlag = typeof isTimeout === 'boolean' ? isTimeout : false;
 
@@ -1418,7 +1434,7 @@ export default function VoiceInterviewPage() {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({ type: alertType, count: newCount, timestamp: ts, details }),
-          }).catch(() => {})
+          }).catch(() => { })
         }
       })
 
@@ -1709,18 +1725,18 @@ export default function VoiceInterviewPage() {
           <React.Suspense fallback={<div className="flex h-screen items-center justify-center text-white text-xl bg-[#0a0f1e]">Loading coding environment...</div>}>
             <VoiceCodingRound question={codingQuestion} interviewId={interviewId} linkId={linkId} duration={roundDuration}
               sessionDetail={sessionDetail} language={language} wsRef={wsRef} onComplete={() => {
-              const type = interviewType
-              if (type === 'Non-Technical') {
-                // fetch case study after coding
-                fetch(`${API_BASE_URL}/case-study/start`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ interview_id: interviewId }) })
-                  .then(r => r.json()).then(data => {
-                    const cqs = (data.case_study_round?.questions || []).map((q, i) => ({ id: `cs_${i}`, type: 'case_study', text: q.text || q.scenario || '', caseStudyIndex: i }))
-                    setCaseStudyQuestions(cqs); setRound('case_study')
-                  }).catch(() => completeInterview())
-              } else {
-                completeInterview()
-              }
-            }} />
+                const type = interviewType
+                if (type === 'Non-Technical') {
+                  // fetch case study after coding
+                  fetch(`${API_BASE_URL}/case-study/start`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ interview_id: interviewId }) })
+                    .then(r => r.json()).then(data => {
+                      const cqs = (data.case_study_round?.questions || []).map((q, i) => ({ id: `cs_${i}`, type: 'case_study', text: q.text || q.scenario || '', caseStudyIndex: i }))
+                      setCaseStudyQuestions(cqs); setRound('case_study')
+                    }).catch(() => completeInterview())
+                } else {
+                  completeInterview()
+                }
+              }} />
           </React.Suspense>
         </ErrorBoundary>
         {candidateVideoElement}
@@ -1734,8 +1750,8 @@ export default function VoiceInterviewPage() {
         <ErrorBoundary>
           <React.Suspense fallback={<div className="flex h-screen items-center justify-center text-white text-xl bg-[#0a0f1e]">Loading case study environment...</div>}>
             <VoiceCaseStudy question={caseStudyQuestions[0]} allQuestions={caseStudyQuestions} duration={roundDuration}
-            interviewId={interviewId} linkId={linkId} sessionDetail={sessionDetail}
-            language={language} wsRef={wsRef} onComplete={completeInterview} />
+              interviewId={interviewId} linkId={linkId} sessionDetail={sessionDetail}
+              language={language} wsRef={wsRef} onComplete={completeInterview} />
           </React.Suspense>
         </ErrorBoundary>
         {candidateVideoElement}
@@ -1893,7 +1909,7 @@ export default function VoiceInterviewPage() {
       </div>
 
       {showDeviceCheck && (
-        <DeviceCheckModal 
+        <DeviceCheckModal
           onSuccess={() => {
             if (document.documentElement.requestFullscreen) {
               document.documentElement.requestFullscreen().catch(() => { })
