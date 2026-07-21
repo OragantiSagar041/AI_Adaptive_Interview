@@ -618,7 +618,7 @@ async def generate_more_questions_endpoint(
 
         async with _question_generation_locks[interview_id]:
             # Fetch session from RAM or DB
-        session = get_session(interview_id)
+            session = get_session(interview_id)
             if not session:
                 row = interviews_collection.find_one({"id": interview_id})
                 if row:
@@ -640,7 +640,6 @@ async def generate_more_questions_endpoint(
 
             if not session:
                 raise HTTPException(status_code=404, detail="Interview session not found")
-
             profile_text = session.get("profile_text", "")
             source = session.get("source", "resume")
             existing_questions = session.get("questions", [])
