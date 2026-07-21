@@ -634,7 +634,121 @@ async def start_interview(
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 
+import asyncio
+from collections import defaultdict
+_question_generation_locks = defaultdict(asyncio.Lock)
+
+@router.post("/generate-more-questions")
+@router.post("/generate-more-questions/")
+async def generate_more_questions_endpoint(
+    interview_id: str = Form(...),
+    asked_question_ids: str = Form(""),
+    count: int = Form(5)
+):
+    """
+    Generate additional questions for an interview session when the candidate
+    finishes all questions but still has time left on the clock.
+    Returns only NEW questions not already asked.
+    """
+    try:
+        from starlette.concurrency import run_in_threadpool
+
+        async with _question_generation_locks[interview_id]:
+            # Fetch session from RAM or DB
+            session = get_session(interview_id)
+            if not session:
+                row = interviews_collection.find_one({"id": interview_id})
+                if row:
+                    try:
+                        loaded_questions = json.loads(row.get("questions", "[]"))
+                        session = {
+                            "id": interview_id,
+                            "source": row.get("source"),
+                            "profile_text": row.get("profile_text", ""),
+                            "questions": loaded_questions,
+                            "answers": {},
+                            "industry": row.get("industry", "General"),
+                            "interview_type": row.get("interview_type", "Technical"),
+                            "language": row.get("language", "English")
+                        }
+                        set_session(interview_id, session)
+                    except Exception:
+                        pass
+
+            if not session:
+                raise HTTPException(status_code=404, detail="Interview session not found")
+            profile_text = session.get("profile_text", "")
+            source = session.get("source", "resume")
+            existing_questions = session.get("questions", [])
+
+            # Parse IDs of already-asked questions to avoid repeats
+            asked_ids = set()
+            if asked_question_ids:
+                for aid in asked_question_ids.split(","):
+                    aid = aid.strip()
+                    if aid:
+                        asked_ids.add(str(aid))
+
+            already_asked_texts = {
+                str(q.get("question") or q.get("text") or "").lower().strip()
+                for q in existing_questions
+                if str(q.get("id", "")) in asked_ids or asked_ids == set()
+            }
+
+            # Generate a new batch of questions
+            new_questions = await run_in_threadpool(
+                generate_mock_questions,
+                text=profile_text,
+                source=source,
+                num_questions=count + 4,
+                interview_type=session.get("interview_type", "Technical"),
+                industry=session.get("industry", "General"),
+                language=session.get("language", "English")
+            )
+
+            # Filter out questions already asked (text-similarity check)
+            fresh_questions = []
+            for q in new_questions:
+                q_text = str(q.get("question") or q.get("text") or "").lower().strip()
+                is_duplicate = any(
+                    q_text in asked or asked in q_text
+                    for asked in already_asked_texts
+                    if len(asked) > 10  # skip very short strings
+                )
+                if not is_duplicate:
+                    fresh_questions.append(q)
+                if len(fresh_questions) >= count:
+                    break
+
+            # Assign fresh IDs starting after the last existing question
+            start_id = len(existing_questions) + 1
+            for i, q in enumerate(fresh_questions):
+                q["id"] = start_id + i
+                q["text"] = q.get("question") or q.get("text") or ""
+                q["type"] = q.get("type") or "Interview"
+
+            # Persist the newly generated questions back to session and DB
+            session["questions"].extend(fresh_questions)
+            set_session(interview_id, session)
+            interviews_collection.update_one(
+                {"id": interview_id},
+                {"$set": {"questions": json.dumps(session["questions"])}}
+            )
+
+            return {
+                "status": "success",
+                "questions": fresh_questions,
+                "count": len(fresh_questions)
+            }
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        print(f"Error in /generate-more-questions: {e}")
+        raise HTTPException(status_code=500, detail="Failed to generate more questions. Please try again later.")
+
 @router.get("/interview/{interview_id}/question/{question_id}")
+
 def get_question(interview_id: str, question_id: int):
     # Restore from DB if not in RAM
     if not get_session(interview_id):
@@ -1114,7 +1228,10 @@ class CodingRoundObserveRequest(CodingRoundCheckpointRequest):
 
 
 @router.post("/coding-round/start")
-def start_coding_round(req: CodingRoundStartRequest):
+async def start_coding_round(req: CodingRoundStartRequest):
+    import asyncio
+    from fastapi.concurrency import run_in_threadpool
+
     interview = get_interview_or_404(req.interview_id)
     answers_data = get_answer_history(req.interview_id)
 
@@ -1129,13 +1246,17 @@ def start_coding_round(req: CodingRoundStartRequest):
 
     interview_type = interview.get("interview_type", "Technical")
     profile_text = interview.get("profile_text", "")
-    
+
     # Get industry from the session
     link_id = interview.get("link_id", "")
     session = interview_sessions_collection.find_one({"link_id": link_id}) if link_id else None
     industry = (session or {}).get("industry", "General")
-    
-    task = generate_coding_task(profile_text, answers_data, interview_type, industry=industry)
+
+    # generate_coding_task calls an LLM (blocking I/O) — run it off the event loop
+    task = await run_in_threadpool(
+        generate_coding_task, profile_text, answers_data, interview_type, industry
+    )
+
     coding_round = {
         "status": "active",
         "task": task,
@@ -1643,6 +1764,17 @@ def generate_interview_summary(candidate_name: str, answers_data: list) -> dict:
     """
     Generate interview summary via typed_ai_layer (type-safe, compressed, token-optimized).
     """
+    # Priority 0: LangGraph Layer
+    try:
+        from interview_graphs import run_summary_graph
+        result = run_summary_graph(candidate_name, answers_data)
+        if result and "recommendation" in result:
+            return result
+    except ImportError:
+        pass
+    except Exception as e:
+        print(f"[interview_graphs] summary failed, falling back: {e}")
+
     # Priority 1: Typed AI layer (type-safe validated output)
     try:
         from typed_ai_layer import generate_summary as _typed_summary
@@ -2577,7 +2709,10 @@ def generate_report(interview_id: str):
     story.append(Spacer(1, 12))
     
     # Fetch session record to reuse the average score already stored in the DB (includes blended scores)
-    session_rec = interview_sessions_collection.find_one({"interview_id": interview_id})
+    link_id = interview_data.get("link_id")
+    session_rec = interview_sessions_collection.find_one({"link_id": link_id}) if link_id else None
+    if not session_rec:
+        session_rec = interview_sessions_collection.find_one({"interview_id": interview_id})
     avg_score = session_rec.get("avg_score") if session_rec else None
     
     # Calculate Average Score (Fallback if not populated in session document)
@@ -2629,6 +2764,33 @@ def generate_report(interview_id: str):
         # story.append(Paragraph("_" * 80, normal_style)) 
         
         story.append(Spacer(1, 15))
+
+    # ── AI EVALUATION & RECOMMENDATION ──
+    if session_rec:
+        recommendation = session_rec.get("overall_recommendation") or session_rec.get("recommendation")
+        strengths = session_rec.get("strengths_summary")
+        weaknesses = session_rec.get("weaknesses_summary")
+        
+        if recommendation or strengths or weaknesses:
+            story.append(Spacer(1, 20))
+            story.append(Paragraph("<b>AI Recommendation & Evaluation</b>", styles['Heading2']))
+            story.append(Spacer(1, 10))
+            
+            if recommendation:
+                story.append(Paragraph(f"<b>Recommendation:</b> {recommendation}", normal_style))
+                story.append(Spacer(1, 5))
+            if strengths:
+                story.append(Paragraph("<b>Strengths:</b>", normal_style))
+                safe_strengths = strengths.replace("&", "&amp;").replace("<", "&lt;").replace(">", "&gt;").replace("\n", "<br/>")
+                story.append(Paragraph(safe_strengths, normal_style))
+                story.append(Spacer(1, 5))
+            if weaknesses:
+                story.append(Paragraph("<b>Areas to Improve:</b>", normal_style))
+                safe_weaknesses = weaknesses.replace("&", "&amp;").replace("<", "&lt;").replace(">", "&gt;").replace("\n", "<br/>")
+                story.append(Paragraph(safe_weaknesses, normal_style))
+                story.append(Spacer(1, 5))
+            
+            story.append(Spacer(1, 15))
 
     # ── CODING ROUND ──
     coding_round = interview_data.get("coding_round")

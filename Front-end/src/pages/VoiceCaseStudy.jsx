@@ -10,6 +10,7 @@ import { VOICE_TRANSLATIONS } from '../utils/voiceTranslations'
 import Swal from 'sweetalert2'
 import 'sweetalert2/dist/sweetalert2.min.css'
 import aiVideoUrl from '../assets/ai_avatar.mp4'
+import { useExitConfirmation } from '../hooks/useExitConfirmation'
 
 // ── VideoAvatar for case study ─────────────────────────────────────────────────────
 function CaseStudyVideoAvatar({ status, size = 200 }) {
@@ -225,19 +226,19 @@ export default function VoiceCaseStudy({
     return () => clearInterval(t)
   }, [])
 
-  // Unload Tracking
-  useEffect(() => {
-    const handleUnload = () => {
+  // Unload Tracking + Exit Confirmation Dialog
+  useExitConfirmation({
+    active: true,
+    onConfirmExit: async () => {
       if (linkId) {
         navigator.sendBeacon(`${API_BASE_URL}/interview/${linkId}/alert`, JSON.stringify({
           type: "warning",
-          message: "Candidate refreshed or closed the window during the case study round."
+          message: "Candidate closed the window during the case study round."
         }))
       }
-    }
-    window.addEventListener("beforeunload", handleUnload)
-    return () => window.removeEventListener("beforeunload", handleUnload)
-  }, [linkId])
+    },
+    message: `You are in the middle of the <strong>Case Study Round</strong>.<br/><br/>If you leave now, your response will not be saved and your session may be marked as <strong>incomplete</strong>.<br/><br/>Are you sure you want to exit?`,
+  })
 
   const fmt = s => `${String(Math.floor(s/60)).padStart(2,'0')}:${String(s%60).padStart(2,'0')}`
 
