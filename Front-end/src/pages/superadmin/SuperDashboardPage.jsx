@@ -1,9 +1,10 @@
 import React, { useEffect, useState } from "react";
 import { useOutletContext, useNavigate } from "react-router-dom";
 import { useDispatch, useSelector } from "react-redux";
-import { loadSuperAdminDashboard } from "@/store/slices/dashboardSlice";
+import { loadSuperAdminDashboard, loadRecruitmentFunnel, loadPlatformAnalytics } from "@/store/slices/dashboardSlice";
 import { CandidateTable, CandidateFilters } from "../../components/admin/AdminSubComponents";
 import CandidateDialog from "../../components/superadmin/CandidateDialog";
+import CallDetailsModal from "../admin/CallDetailsModal";
 import { getComputedStatus } from "../../utils/adminFormatters";
 import { 
   setSelectedIds, 
@@ -90,7 +91,10 @@ export default function SuperDashboardPage() {
     ongoingSpeakingCount, 
     ongoingCodingCount,
     liveSessions,
-    status
+    status,
+    funnelData: rawFunnelData,
+    analyticsData,
+    avgTimeToHire
   } = useSelector(state => state.dashboard);
   
   const { API_BASE_URL, token } = useSelector(state => state.auth);
@@ -114,6 +118,7 @@ export default function SuperDashboardPage() {
   const sortBy = useSelector(state => state.candidates.sortBy);
   
   const allCandidates = useSelector(state => state.candidates.candidates);
+  const filteredCandidates = useSelector(state => state.candidates.filteredCandidates);
 
   const [selectedCandidate, setSelectedCandidate] = useState(null);
   const [adminsList, setAdminsList] = useState([]);
@@ -139,8 +144,12 @@ export default function SuperDashboardPage() {
 
   useEffect(() => {
     dispatch(loadSuperAdminDashboard(selectedAdminFilter));
+    dispatch(loadRecruitmentFunnel(selectedAdminFilter));
+    dispatch(loadPlatformAnalytics(selectedAdminFilter));
     const interval = setInterval(() => {
       dispatch(loadSuperAdminDashboard(selectedAdminFilter));
+      dispatch(loadRecruitmentFunnel(selectedAdminFilter));
+      dispatch(loadPlatformAnalytics(selectedAdminFilter));
     }, 30000); // refresh every 30s
     return () => {
       clearInterval(interval);
@@ -168,7 +177,7 @@ export default function SuperDashboardPage() {
     { metric: "Coding Sessions", value: ongoingCodingCount || 0 }
   ];
 
-  const funnelData = [
+  const defaultFunnelTemplate = [
     { name: "Applications Received", value: 42000, fill: "#3b82f6" },
     { name: "AI Resume Screening", value: 28400, fill: "#0ea5e9" },
     { name: "AI Voice Screening", value: 19860, fill: "#0284c7" },
@@ -179,15 +188,18 @@ export default function SuperDashboardPage() {
     { name: "Candidates Hired", value: 82, fill: "#f59e0b" }
   ];
 
-  const analytics = [
-    { label: "AI Resume Screening Success Rate", value: 82 },
-    { label: "Interview Completion Rate", value: 91 },
-    { label: "Average AI Match Score", value: 89 },
-    { label: "Offer Acceptance Rate", value: 76 },
-    { label: "Candidate Conversion Rate", value: 34 },
-    { label: "Recruiter Productivity", value: 93 },
-    { label: "AI Recommendation Accuracy", value: 88 }
-  ];
+  const isFunnelEmpty = !rawFunnelData || rawFunnelData.length === 0 || rawFunnelData.every(d => d.value === 0);
+  const displayFunnelData = isFunnelEmpty
+    ? defaultFunnelTemplate.map((d, i) => ({
+        ...d,
+        shapeValue: d.value,
+        displayValue: rawFunnelData?.[i]?.value || 0
+      }))
+    : rawFunnelData.map(d => ({
+        ...d,
+        shapeValue: d.value,
+        displayValue: d.value
+      }));
 
   return (
     <div className="space-y-6">
@@ -254,11 +266,16 @@ export default function SuperDashboardPage() {
             <CardDescription>Stage-by-stage conversion across the platform.</CardDescription>
           </CardHeader>
           <CardContent>
-            <div className="h-[360px]">
+            <div className="h-[360px] relative">
+              {isFunnelEmpty && status !== 'loading' && (
+                <div className="absolute top-0 right-2 text-xs text-slate-400 bg-slate-50 px-2 py-1 rounded-md border border-slate-200 z-10">
+                  Demo Data (No active pipeline)
+                </div>
+              )}
               <ResponsiveContainer width="100%" height="100%">
                 <FunnelChart>
                   <RTooltip
-                    formatter={(v) => formatNum(v)}
+                    formatter={(v, name, props) => formatNum(props.payload.displayValue)}
                     contentStyle={{
                       background: "#ffffff",
                       border: "1px solid #e2e8f0",
@@ -266,9 +283,9 @@ export default function SuperDashboardPage() {
                       fontSize: 12
                     }}
                   />
-                  <Funnel dataKey="value" data={funnelData} isAnimationActive>
+                  <Funnel dataKey="shapeValue" data={displayFunnelData} isAnimationActive>
                     <LabelList position="right" fill="#0f172a" stroke="none" dataKey="name" fontSize={12} />
-                    <LabelList position="center" fill="#fff" stroke="none" fontSize={12} formatter={(v) => formatNum(v)} />
+                    <LabelList position="center" fill="#fff" stroke="none" dataKey="displayValue" fontSize={12} formatter={(v) => formatNum(v)} />
                   </Funnel>
                 </FunnelChart>
               </ResponsiveContainer>
@@ -284,15 +301,19 @@ export default function SuperDashboardPage() {
           </CardHeader>
           <CardContent className="flex-1 flex flex-col justify-between">
             <div className="space-y-4">
-              {analytics.map((item, idx) => (
-                <div key={idx} className="space-y-1">
-                  <div className="flex items-center justify-between text-xs">
-                    <span className="text-slate-500">{item.label}</span>
-                    <span className="font-medium">{item.value}%</span>
+              {analyticsData.length === 0 ? (
+                <div className="text-center text-sm text-slate-400 py-4">Loading analytics…</div>
+              ) : (
+                analyticsData.map((item, idx) => (
+                  <div key={idx} className="space-y-1">
+                    <div className="flex items-center justify-between text-xs">
+                      <span className="text-slate-500">{item.label}</span>
+                      <span className="font-medium">{item.value}%</span>
+                    </div>
+                    <Progress value={item.value} className="h-1.5" />
                   </div>
-                  <Progress value={item.value} className="h-1.5" />
-                </div>
-              ))}
+                ))
+              )}
             </div>
             <div className="mt-6">
               <div className="rounded-lg border border-slate-200 bg-slate-50 p-3 flex items-center justify-between">
@@ -300,7 +321,9 @@ export default function SuperDashboardPage() {
                   <Clock className="mr-2 h-4 w-4" />
                   <span className="text-sm">Average Time-to-Hire</span>
                 </div>
-                <div className="font-semibold">22 days</div>
+                <div className="font-semibold">
+                  {avgTimeToHire != null ? `${avgTimeToHire} days` : '—'}
+                </div>
               </div>
             </div>
           </CardContent>
@@ -402,7 +425,7 @@ export default function SuperDashboardPage() {
             setPositionFilter={(val) => dispatch(setPositionFilter(val))}
             sortBy={sortBy}
             setSortBy={(val) => dispatch(setSortBy(val))}
-            handleExportExcel={() => dispatch(handleSuperAdminExportExcel(allCandidates))}
+            handleExportExcel={() => dispatch(handleSuperAdminExportExcel(paginatedCandidates))}
             selectedIds={selectedIds}
             handleBulkDelete={() => dispatch(handleSuperAdminBulkDelete(selectedIds))}
             allCandidates={allCandidates}
@@ -430,16 +453,26 @@ export default function SuperDashboardPage() {
         </CardContent>
       </Card>
 
-      <CandidateDialog
-        candidate={selectedCandidate}
-        open={!!selectedCandidate}
-        onOpenChange={(v) => {
-          if (!v) setSelectedCandidate(null);
-        }}
-        onStatusUpdate={() => {
-          dispatch(loadSuperAdminDashboard(selectedAdminFilter));
-        }}
-      />
+      {selectedCandidate?.id?.startsWith('ai_call_omni_') ? (
+        <CallDetailsModal
+          isOpen={!!selectedCandidate}
+          onClose={() => setSelectedCandidate(null)}
+          callId={selectedCandidate.id.replace('ai_call_omni_', '')}
+          API_BASE_URL={API_BASE_URL}
+          token={token}
+        />
+      ) : (
+        <CandidateDialog
+          candidate={selectedCandidate}
+          open={!!selectedCandidate}
+          onOpenChange={(v) => {
+            if (!v) setSelectedCandidate(null);
+          }}
+          onStatusUpdate={() => {
+            dispatch(loadSuperAdminDashboard(selectedAdminFilter));
+          }}
+        />
+      )}
     </div>
   );
 }

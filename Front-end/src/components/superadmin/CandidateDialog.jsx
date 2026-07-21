@@ -11,6 +11,7 @@ import {
   MessageSquare, Video, Scale, Loader2, AlertCircle, Monitor,
   Mic, ShieldAlert, Eye, ChevronRight, Code
 } from "lucide-react"
+import { jsPDF } from 'jspdf'
 
 // ── Score Ring ──────────────────────────────────────────────────────────────
 function ScoreRing({ value, size = 140, strokeWidth = 12, label, tone }) {
@@ -224,20 +225,25 @@ export default function CandidateDialog({ candidate, open, onOpenChange, onStatu
       }
 
       // Simulate a small delay for extraction feeling
-      setTimeout(() => {
-        setDetail(prev => ({
-          ...prev,
-          experience: (!prev.experience || prev.experience === "N/A") ? extExp : prev.experience,
-          location: (!prev.location || prev.location === "N/A") ? extLocation : prev.location,
-          current_ctc: (!prev.current_ctc || prev.current_ctc === "N/A") ? extCTC : prev.current_ctc,
-          candidate_phone: (!prev.candidate_phone || prev.candidate_phone === "N/A") && (!prev.phone || prev.phone === "N/A") ? extMobile : (prev.candidate_phone || prev.phone),
-          current_company: (!prev.current_company || prev.current_company === "N/A") ? extCompany : prev.current_company,
-          expected_ctc: (!prev.expected_ctc || prev.expected_ctc === "N/A") ? extExpectedCTC : prev.expected_ctc,
-          notice_period: (!prev.notice_period || prev.notice_period === "N/A") ? extNotice : prev.notice_period,
-          info_extracted: true
-        }))
+      const timerId = setTimeout(() => {
+        setDetail(prev => {
+          if (!prev) return prev;
+          return {
+            ...prev,
+            experience: (!prev.experience || prev.experience === "N/A") ? extExp : prev.experience,
+            location: (!prev.location || prev.location === "N/A") ? extLocation : prev.location,
+            current_ctc: (!prev.current_ctc || prev.current_ctc === "N/A") ? extCTC : prev.current_ctc,
+            candidate_phone: (!prev.candidate_phone || prev.candidate_phone === "N/A") && (!prev.phone || prev.phone === "N/A") ? extMobile : (prev.candidate_phone || prev.phone),
+            current_company: (!prev.current_company || prev.current_company === "N/A") ? extCompany : prev.current_company,
+            expected_ctc: (!prev.expected_ctc || prev.expected_ctc === "N/A") ? extExpectedCTC : prev.expected_ctc,
+            notice_period: (!prev.notice_period || prev.notice_period === "N/A") ? extNotice : prev.notice_period,
+            info_extracted: true
+          };
+        })
         setExtractingInfo(false)
       }, 800);
+
+      return () => clearTimeout(timerId);
     }
   }, [open, detail, extractingInfo])
 
@@ -276,8 +282,134 @@ export default function CandidateDialog({ candidate, open, onOpenChange, onStatu
     { label: isQualified ? "Selected ✓" : "Rejected ✗", done: !!(c.decision || candidate.decision), bad: !isQualified }
   ]
 
-  const recordingUrl = c.recording_url
-  const screenRecordingUrl = c.screen_recording_url
+  const formatMediaUrl = (url) => {
+    if (!url) return null
+    if (url.startsWith('http')) return url
+    return `${API_BASE_URL}/${url.replace(/^\/+/, '')}`
+  }
+
+  const recordingUrl = formatMediaUrl(c.recording_url)
+  const screenRecordingUrl = formatMediaUrl(c.screen_recording_url)
+
+  const handleDownloadRecording = async () => {
+    const urlsToDownload = [];
+    if (recordingUrl) urlsToDownload.push({ url: recordingUrl, name: 'camera_recording.mp4' });
+    if (screenRecordingUrl) urlsToDownload.push({ url: screenRecordingUrl, name: 'screen_recording.mp4' });
+
+    if (urlsToDownload.length === 0) return;
+
+    for (const { url, name } of urlsToDownload) {
+      try {
+        const response = await fetch(url);
+        const blob = await response.blob();
+        const blobUrl = window.URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = blobUrl;
+        a.download = `${c.candidate_name?.replace(/\s+/g, '_') || 'Candidate'}_${name}`;
+        document.body.appendChild(a);
+        a.click();
+        a.remove();
+        window.URL.revokeObjectURL(blobUrl);
+      } catch (error) {
+        console.error("Direct download failed, falling back to new tab:", error);
+        window.open(url, '_blank');
+      }
+    }
+  };
+
+  const handleDownloadTranscript = () => {
+    if (!c.answers || c.answers.length === 0) return;
+
+    const doc = new jsPDF();
+    
+    const margin = 15;
+    const pageHeight = doc.internal.pageSize.height;
+    const pageWidth = doc.internal.pageSize.width;
+    let y = 20;
+
+    const checkPageBreak = (neededHeight) => {
+      if (y + neededHeight > pageHeight - margin) {
+        doc.addPage();
+        y = margin + 5;
+      }
+    };
+
+    doc.setFontSize(16);
+    doc.setFont("helvetica", "bold");
+    doc.text(`Interview Transcript: ${c.candidate_name || 'Unknown Candidate'}`, margin, y);
+    y += 10;
+
+    doc.setFontSize(11);
+    doc.setFont("helvetica", "normal");
+    doc.text(`Status: ${c.status || "Completed"}`, margin, y);
+    y += 6;
+    if (c.created_at) {
+      doc.text(`Date: ${new Date(c.created_at).toLocaleString()}`, margin, y);
+      y += 6;
+    }
+    doc.text(`Total Score: ${c.score || c.avg_score || 0}/100`, margin, y);
+    y += 10;
+    
+    doc.setDrawColor(200);
+    doc.line(margin, y, pageWidth - margin, y);
+    y += 10;
+
+    c.answers.forEach((a, index) => {
+      checkPageBreak(10);
+      doc.setFont("helvetica", "bold");
+      const qText = `Q${index + 1}: ${a.question_text || 'No question recorded'}`;
+      const qLines = doc.splitTextToSize(qText, pageWidth - 2 * margin);
+      checkPageBreak(qLines.length * 5 + 5);
+      doc.text(qLines, margin, y);
+      y += qLines.length * 5 + 3;
+
+      doc.setFont("helvetica", "normal");
+      const ansLabel = "Candidate's Answer/Code:";
+      checkPageBreak(5);
+      doc.text(ansLabel, margin, y);
+      y += 5;
+
+      doc.setFont("courier", "normal");
+      const aText = a.answer_text || c.coding_round?.latest_code || 'No answer provided';
+      const aLines = doc.splitTextToSize(aText, pageWidth - 2 * margin);
+      
+      for (let i = 0; i < aLines.length; i++) {
+        checkPageBreak(5);
+        doc.text(aLines[i], margin, y);
+        y += 5;
+      }
+      y += 3;
+
+      if (a.ai_score !== null && a.ai_score !== undefined) {
+        checkPageBreak(5);
+        doc.setFont("helvetica", "bold");
+        doc.text(`AI Score: ${Number(a.ai_score).toFixed(0)}%`, margin, y);
+        y += 5;
+      }
+
+      if (a.ai_feedback) {
+        checkPageBreak(5);
+        doc.setFont("helvetica", "italic");
+        doc.text("AI Feedback:", margin, y);
+        y += 5;
+        doc.setFont("helvetica", "normal");
+        const fLines = doc.splitTextToSize(a.ai_feedback, pageWidth - 2 * margin);
+        for (let i = 0; i < fLines.length; i++) {
+          checkPageBreak(5);
+          doc.text(fLines[i], margin, y);
+          y += 5;
+        }
+      }
+      
+      y += 5;
+      checkPageBreak(5);
+      doc.setDrawColor(200);
+      doc.line(margin, y, pageWidth - margin, y);
+      y += 10;
+    });
+
+    doc.save(`${c.candidate_name?.replace(/\s+/g, '_') || 'Candidate'}_transcript.pdf`);
+  };
 
   const handleDecision = async (newDecision) => {
     if (!candidate) return;
@@ -421,6 +553,47 @@ export default function CandidateDialog({ candidate, open, onOpenChange, onStatu
             <button onClick={() => onOpenChange(false)} className="absolute top-4 right-4 p-2 rounded-full hover:bg-slate-100 text-slate-400 hover:text-slate-700 transition-colors">
               <X size={20} />
             </button>
+
+            {loading ? (
+              <div className="flex items-center gap-3 py-4">
+                <Loader2 size={28} className="animate-spin text-indigo-500" />
+                <span className="text-slate-500 font-medium">Loading candidate details…</span>
+              </div>
+            ) : (
+              <div className="flex items-start gap-4">
+                <div className="flex h-16 w-16 items-center justify-center rounded-2xl bg-indigo-600 text-white text-xl font-bold shrink-0 shadow-sm">
+                  {initials}
+                </div>
+                <div className="flex-1 min-w-0">
+                  <h2 className="text-2xl font-black text-slate-800 truncate">{name}</h2>
+                  <p className="text-sm font-medium text-slate-500 mt-0.5">{jobTitle}</p>
+                  <div className="flex flex-wrap items-center gap-2 mt-3">
+                    <span className={`inline-flex items-center gap-1 rounded-full px-2.5 py-1 text-xs font-bold ${isQualified ? 'bg-emerald-100 text-emerald-700' : 'bg-rose-100 text-rose-700'}`}>
+                      {isQualified ? 'Hire' : 'Rejected'}
+                    </span>
+                    <span className="inline-flex items-center gap-1 rounded-full border border-slate-200 bg-slate-100 px-2.5 py-1 text-xs font-semibold text-slate-700">
+                      {isQualified ? 'Qualified' : 'Rejected'}
+                    </span>
+                    <span className="text-xs font-medium text-slate-400">ID: {candidate.link_id || candidate.id}</span>
+                    {c.started_at && (
+                      <span className="flex items-center gap-1 text-xs font-medium text-slate-500 bg-slate-100/50 px-2.5 py-1 rounded-md border border-slate-200/50">
+                        <Calendar size={13} className="text-slate-400" /> Attended: {new Date(c.started_at).toLocaleString('en-US', { month: 'short', day: 'numeric', year: 'numeric', hour: 'numeric', minute: '2-digit', hour12: true })}
+                      </span>
+                    )}
+                  </div>
+                </div>
+                <div className="hidden sm:flex flex-col items-center justify-center mr-8">
+                  <div className="text-[11px] font-bold text-slate-400 uppercase tracking-wider">AI Score</div>
+                  <div className={`text-4xl font-black tabular-nums tracking-tighter mt-1 ${aiScore >= 75 ? 'text-emerald-600' : aiScore >= 50 ? 'text-amber-500' : 'text-rose-500'}`}>{aiScore.toFixed(0)}%</div>
+                </div>
+              </div>
+            )}
+
+            {error && (
+              <div className="mt-3 flex items-center gap-2 text-xs font-medium text-amber-600 bg-amber-50 border border-amber-100 rounded-lg px-3 py-2">
+                <AlertCircle size={14} /> {error}
+              </div>
+            )}
           </div>
 
           {/* ── Tabs ── */}
@@ -604,12 +777,23 @@ export default function CandidateDialog({ candidate, open, onOpenChange, onStatu
                         {recordingUrl || screenRecordingUrl ? 'Camera & screen recording available' : 'No recordings available'}
                       </p>
                     </div>
-                    <button
-                      onClick={() => setShowRecordingModal(true)}
-                      className="flex items-center gap-2 px-4 py-2 text-sm font-bold text-emerald-600 bg-emerald-50 border border-emerald-100 rounded-xl hover:bg-emerald-100 transition-colors shadow-sm"
-                    >
-                      <Video size={16} /> Recording <ChevronRight size={14} />
-                    </button>
+                    <div className="flex items-center gap-2">
+                      {(recordingUrl || screenRecordingUrl) && (
+                        <button
+                          onClick={handleDownloadRecording}
+                          className="flex items-center gap-2 px-4 py-2 text-sm font-bold text-slate-600 bg-slate-50 border border-slate-200 rounded-xl hover:bg-slate-100 transition-colors shadow-sm"
+                          title="Download Recording"
+                        >
+                          <Download size={16} /> Download
+                        </button>
+                      )}
+                      <button
+                        onClick={() => setShowRecordingModal(true)}
+                        className="flex items-center gap-2 px-4 py-2 text-sm font-bold text-emerald-600 bg-emerald-50 border border-emerald-100 rounded-xl hover:bg-emerald-100 transition-colors shadow-sm"
+                      >
+                        <Video size={16} /> Recording <ChevronRight size={14} />
+                      </button>
+                    </div>
                   </div>
                 </section>
 
@@ -621,6 +805,14 @@ export default function CandidateDialog({ candidate, open, onOpenChange, onStatu
                         <h3 className="text-sm font-black text-slate-800">Interview Q&A</h3>
                         <p className="text-xs text-slate-400 font-medium mt-0.5">{c.answers.length} questions answered</p>
                       </div>
+                    <div className="flex items-center gap-2">
+                      <button
+                        onClick={handleDownloadTranscript}
+                        className="flex items-center gap-2 px-4 py-2 text-sm font-bold text-slate-600 bg-slate-50 border border-slate-200 rounded-xl hover:bg-slate-100 transition-colors shadow-sm"
+                        title="Download Transcript"
+                      >
+                        <Download size={16} /> Download
+                      </button>
                       <button
                         onClick={() => setShowTranscriptModal(true)}
                         className="flex items-center gap-2 px-4 py-2 text-sm font-bold text-violet-600 bg-violet-50 border border-violet-100 rounded-xl hover:bg-violet-100 transition-colors shadow-sm"
@@ -628,7 +820,8 @@ export default function CandidateDialog({ candidate, open, onOpenChange, onStatu
                         <MessageSquare size={16} /> Transcript <ChevronRight size={14} />
                       </button>
                     </div>
-                  </section>
+                  </div>
+                </section>
                 )}
               </div>
             )}
@@ -919,6 +1112,11 @@ export default function CandidateDialog({ candidate, open, onOpenChange, onStatu
                     <div className="p-4 space-y-4">
                       {/* Stats row: WPM + alerts */}
                       <div className="flex flex-wrap gap-2">
+                        {Number(a.time_spent_seconds || 0) > 0 && (
+                          <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-[11px] font-bold bg-slate-100 text-slate-700 border border-slate-200">
+                            <Clock size={11} /> {Math.floor(Number(a.time_spent_seconds) / 60) > 0 ? `${Math.floor(Number(a.time_spent_seconds) / 60)}m ${Number(a.time_spent_seconds) % 60}s` : `${Number(a.time_spent_seconds)}s`}
+                          </span>
+                        )}
                         {wpm > 0 && (
                           <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-[11px] font-bold bg-blue-50 text-blue-700 border border-blue-100">
                             <Mic size={11} /> {wpm.toFixed(0)} WPM

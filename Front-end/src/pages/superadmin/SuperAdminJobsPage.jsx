@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import { Briefcase, Plus, MapPin, Clock, FileText, X, Target, Trash2, Pencil, Wallet, Users, LayoutGrid, LayoutList, ArrowRight, ChevronRight, Zap, Building2, BookOpen, CheckCircle2, Mail, Phone, ExternalLink, RefreshCw, ChevronDown } from 'lucide-react';
 import Card from '../../components/Card';
 import Button from '../../components/Button';
@@ -32,8 +32,12 @@ export default function SuperAdminJobsPage() {
   const token = useSelector((state) => state.auth.token);
   const candidates = useSelector((state) => state.candidates?.candidates || []);
 
-  // Builds the Authorization header from Redux token (not localStorage)
-  const authHeaders = token ? { Authorization: `Bearer ${token}` } : {};
+  // Builds the Authorization header — memoized so identity is stable across renders
+  // and does NOT cause useCallback/useEffect to re-fire on every render.
+  const authHeaders = useMemo(
+    () => (token ? { Authorization: `Bearer ${token}` } : {}),
+    [token]
+  );
 
   useEffect(() => {
     if (candidates.length === 0) {
@@ -100,29 +104,42 @@ export default function SuperAdminJobsPage() {
   };
 
   const [jobs, setJobs] = useState([]);
+  const [currentPage, setCurrentPage] = useState(1);
+  const [totalPages, setTotalPages] = useState(1);
+  const [totalJobs, setTotalJobs] = useState(0);
+  const limit = 20;
 
-  // ── Fetch jobs from backend on mount ──────────────────────────────────────
-  useEffect(() => {
-    const fetchJobs = async () => {
-      setJobsLoading(true);
-      try {
-        const res = await fetch(`${API_BASE_URL}/api/jobs`, {
-          headers: { ...authHeaders }
-        });
-        if (res.ok) {
-          const data = await res.json();
-          setJobs(data.jobs || []);
-        } else {
-          console.error('Failed to fetch jobs:', res.status);
+  // ── Shared fetch helper — used on mount, after create, and after delete ────
+  const fetchJobs = useCallback(async (page = currentPage) => {
+    setJobsLoading(true);
+    try {
+      const res = await fetch(`${API_BASE_URL}/api/jobs?page=${page}&limit=${limit}`, {
+        headers: { ...authHeaders }
+      });
+      if (res.ok) {
+        const data = await res.json();
+        setJobs(data.jobs || []);
+        if (data.pagination) {
+          setTotalPages(data.pagination.total_pages || 1);
+          setTotalJobs(data.pagination.total_jobs ?? 0);
         }
-      } catch (err) {
-        console.error('Error fetching jobs:', err);
-      } finally {
-        setJobsLoading(false);
+      } else {
+        console.error('Failed to fetch jobs:', res.status);
       }
-    };
-    fetchJobs();
-  }, []);
+    } catch (err) {
+      console.error('Error fetching jobs:', err);
+    } finally {
+      setJobsLoading(false);
+    }
+  // authHeaders is stable (memoized), currentPage is not needed here because
+  // the caller always passes the page explicitly — keep deps minimal.
+  }, [authHeaders]);
+
+  // ── Fetch jobs from backend on mount / page change ────────────────────────
+  // Only re-run when currentPage changes; fetchJobs is stable unless the token changes.
+  useEffect(() => {
+    fetchJobs(currentPage);
+  }, [currentPage, fetchJobs]);
 
   const [showModal, setShowModal] = useState(false);
   const [showApplyModal, setShowApplyModal] = useState(false);
@@ -164,7 +181,7 @@ export default function SuperAdminJobsPage() {
           body: JSON.stringify(formData),
         });
         if (res.ok) {
-          setJobs(prev => prev.map(j => j.job_id === editingJobId ? { ...j, ...formData } : j));
+          await fetchJobs(currentPage);
         } else {
           console.error('Failed to update job:', await res.text());
         }
@@ -175,8 +192,9 @@ export default function SuperAdminJobsPage() {
           body: JSON.stringify(formData),
         });
         if (res.ok) {
-          const data = await res.json();
-          setJobs(prev => [data.job, ...prev]);
+          // Refetch page 1 so total count and ordering are accurate
+          setCurrentPage(1);
+          await fetchJobs(1);
         } else {
           console.error('Failed to create job:', await res.text());
         }
@@ -211,8 +229,11 @@ export default function SuperAdminJobsPage() {
         headers: { ...authHeaders },
       });
       if (res.ok) {
-        setJobs(prev => prev.filter(j => j.job_id !== job_id));
         if (selectedJobDetails?.job_id === job_id) setSelectedJobDetails(null);
+        // Refetch: if this was the last job on the page, go back one page
+        const newPage = jobs.length === 1 && currentPage > 1 ? currentPage - 1 : currentPage;
+        setCurrentPage(newPage);
+        await fetchJobs(newPage);
       } else {
         console.error('Failed to delete job:', await res.text());
       }
@@ -241,7 +262,7 @@ export default function SuperAdminJobsPage() {
                 Jobs Management
               </h1>
               <p className="text-slate-500 mt-0.5 text-sm font-semibold">
-                {jobs.length} active posting{jobs.length !== 1 ? 's' : ''} · Create and manage job openings
+                {totalJobs} active posting{totalJobs !== 1 ? 's' : ''} · Create and manage job openings
               </p>
             </div>
           </div>
@@ -511,6 +532,31 @@ export default function SuperAdminJobsPage() {
                 ))}
               </tbody>
             </table>
+          </div>
+        </div>
+      )}
+
+      {/* Pagination Controls */}
+      {totalPages > 1 && (
+        <div className="flex items-center justify-between mt-6 bg-white/80 backdrop-blur-2xl border border-white/60 rounded-2xl shadow-[0_4px_20px_rgb(0,0,0,0.02)] p-4">
+          <div className="text-sm font-semibold text-slate-500">
+            Page <span className="text-indigo-600 font-bold">{currentPage}</span> of <span className="text-indigo-600 font-bold">{totalPages}</span>
+          </div>
+          <div className="flex items-center gap-2">
+            <button
+              onClick={() => setCurrentPage(p => Math.max(1, p - 1))}
+              disabled={currentPage === 1}
+              className={`px-4 py-2 rounded-xl text-sm font-bold transition-all ${currentPage === 1 ? 'bg-slate-100 text-slate-400 cursor-not-allowed' : 'bg-white border border-slate-200 text-slate-700 hover:border-indigo-300 hover:text-indigo-600 cursor-pointer shadow-sm'}`}
+            >
+              Previous
+            </button>
+            <button
+              onClick={() => setCurrentPage(p => Math.min(totalPages, p + 1))}
+              disabled={currentPage === totalPages}
+              className={`px-4 py-2 rounded-xl text-sm font-bold transition-all ${currentPage === totalPages ? 'bg-slate-100 text-slate-400 cursor-not-allowed' : 'bg-white border border-slate-200 text-slate-700 hover:border-indigo-300 hover:text-indigo-600 cursor-pointer shadow-sm'}`}
+            >
+              Next
+            </button>
           </div>
         </div>
       )}

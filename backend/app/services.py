@@ -222,7 +222,8 @@ def get_admin_plan_context(user: Dict[str, Any]) -> Dict[str, Any]:
         if "credits" in user:
             credits = user.get("credits", 0)
         else:
-            admin_doc = admins_collection.find_one({"_id": ObjectId(user.get("admin_id"))})
+            # `user` is already the admin document from admins_collection!
+            admin_doc = admins_collection.find_one({"_id": ObjectId(user.get("_id"))})
             credits = admin_doc.get("credits", 0) if admin_doc else 0
     else:
         credits = company.get("credits", 0) if company else user.get("credits", 0)

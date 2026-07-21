@@ -848,7 +848,14 @@ export default function VoiceInterviewPage() {
     // ── Smart error handler ────────────────────────────────────────────────
     rec.onerror = (e) => {
       const err = e.error
-      if (err === 'no-speech') return  // harmless — silence, keep listening
+      if (err === 'no-speech') {
+        // Not truly a failure — silence detected. Reset timer so we keep waiting.
+        clearTimeout(silenceTimerRef.current)
+        silenceTimerRef.current = setTimeout(() => {
+          if (isListeningRef.current) { stopListening(); onFinish?.(currentTxRef.current.trim()) }
+        }, 10000)
+        return
+      }
       if (err === 'aborted') return  // intentional stop — do nothing
 
       if (err === 'network') {
@@ -872,12 +879,19 @@ export default function VoiceInterviewPage() {
     // ── onend: only restart if still intentionally listening ──────────────
     rec.onend = () => {
       if (!isListeningRef.current) return  // we stopped on purpose — don't restart
-      // Recognition stopped by itself (common in Chrome) — restart seamlessly
-      try {
-        if (recognitionRef.current === rec) {  // guard: ensure this is still the active instance
-          rec.start()
+      // Recognition stopped by itself (common in Chrome) — restart after a short delay
+      // to prevent rapid restart storms and InvalidStateError exceptions.
+      setTimeout(() => {
+        if (!isListeningRef.current) return
+        try {
+          if (recognitionRef.current === rec) {  // guard: ensure this is still the active instance
+            rec.start()
+          }
+        } catch (e) {
+          // InvalidStateError or similar — start a fresh instance
+          if (isListeningRef.current) startListening(onFinish)
         }
-      } catch (_) { }
+      }, 150)
     }
 
     try { rec.start() } catch (e) {
@@ -1079,10 +1093,12 @@ export default function VoiceInterviewPage() {
             codingTask: task, codingTests: data.tests || []
           }
           setCodingQuestion(codingQ)
+          isTransitioningRef.current = false  // allow future transitions/retries
           setRound('coding')
           setLoading(false)
         } catch (err) {
           console.error("Coding round start failed:", err)
+          isTransitioningRef.current = false  // allow retry
           setError('Failed to load coding round. Please retry.')
           setRound('error')
           setLoading(false)
@@ -1103,10 +1119,12 @@ export default function VoiceInterviewPage() {
             id: `cs_${i}`, type: 'case_study', text: q.text, caseStudyIndex: i
           }))
           setCaseStudyQuestions(cqs.length ? cqs : [{ id: 'cs_0', type: 'case_study', text: data.scenario || 'Present your business case.', caseStudyIndex: 0 }])
+          isTransitioningRef.current = false  // allow future transitions/retries
           setRound('case_study')
           setLoading(false)
         } catch (err) {
           console.error('Case study start failed:', err)
+          isTransitioningRef.current = false  // allow retry
           setError('Failed to load case study. Please retry.')
           setRound('error')
           setLoading(false)

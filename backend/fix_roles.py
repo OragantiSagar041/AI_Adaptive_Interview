@@ -1,1 +1,0 @@
-import os; from dotenv import load_dotenv; from pymongo import MongoClient; load_dotenv(); uri = os.getenv('MONGO_URI', 'mongodb://localhost:27017/'); client = MongoClient(uri); db = client['AI_Interview']; res = db.admins.update_many({'role': 'tenant'}, {'$set': {'role': 'super_admin'}}); print(f'Modified {res.modified_count} users.')

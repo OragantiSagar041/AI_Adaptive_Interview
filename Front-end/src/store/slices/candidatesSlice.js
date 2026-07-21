@@ -278,6 +278,7 @@ function recomputeFilteredCandidates(state) {
   }
   state.startIndex = (state.currentPage - 1) * pageSize
   state.endIndex = Math.min(state.startIndex + pageSize, state.totalItems)
+  state.filteredCandidates = sorted
   state.paginatedCandidates = sorted.slice(state.startIndex, state.endIndex)
 }
 
@@ -285,6 +286,7 @@ const candidatesSlice = createSlice({
   name: 'candidates',
   initialState: {
     candidates: [],
+    filteredCandidates: [],
     paginatedCandidates: [],
     selectedIds: [],
     searchTerm: '',
