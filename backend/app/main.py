@@ -148,8 +148,10 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-# Mount uploads folder to serve files
-app.mount("/uploads", StaticFiles(directory="uploads"), name="uploads")
+# Mount uploads folder to serve files (only if directory exists)
+import os as _os
+if _os.path.isdir("uploads"):
+    app.mount("/uploads", StaticFiles(directory="uploads"), name="uploads")
 
 # --- Routers ---
 app.include_router(router)

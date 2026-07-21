@@ -1,4 +1,4 @@
-﻿"""
+"""
 ai_schemas.py -- Strict Pydantic v2 output models for all AI operations.
 
 These replace the fragile extract_json() regex hack used throughout the app.
@@ -34,6 +34,9 @@ class InterviewQuestion(BaseModel):
 
 
 class AnswerScore(BaseModel):
+    is_relevant: bool = True
+    key_facts_required: List[str] = Field(default_factory=list)
+    facts_mentioned_by_candidate: List[str] = Field(default_factory=list)
     corrected_answer: str = "N/A"
     content_score: int = Field(default=0, ge=0, le=50)
     relevance_score: int = Field(default=0, ge=0, le=30)

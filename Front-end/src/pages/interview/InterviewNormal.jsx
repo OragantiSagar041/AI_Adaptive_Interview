@@ -59,6 +59,7 @@ export const InterviewNormal = () => {
     proceedToRoundTwo,
     handleNextQuestion,
     handleSubmitInterview,
+    handleFinishEarly,
     handleSkipUpload,
     isMobileDevice,
     recognitionRef,
@@ -496,9 +497,9 @@ export const InterviewNormal = () => {
 
               <button 
                 className="w-full py-3 px-4 rounded-xl font-bold text-xs bg-slate-800 hover:bg-slate-700 text-white transition-all cursor-pointer border-none shadow-md flex items-center justify-center gap-2 hover:-translate-y-0.5" 
-                onClick={() => handleSubmitInterview(false)}
+                onClick={handleFinishEarly}
               >
-                ⏹ End Interview
+                ⏹ Finish Interview
               </button>
             </div>
 
