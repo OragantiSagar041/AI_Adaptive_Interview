@@ -5,7 +5,7 @@ import reactRefresh from 'eslint-plugin-react-refresh'
 import { defineConfig, globalIgnores } from 'eslint/config'
 
 export default defineConfig([
-  globalIgnores(['dist', 'public/models/**']),
+  globalIgnores(['dist', 'public/models/**', 'rewrite.cjs', 'scratch.js', 'test_error.cjs']),
   {
     // Single config object: plugins declared here, so all rules below can resolve them.
     // Previously the rules were in a SEPARATE config object without plugin access,

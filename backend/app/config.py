@@ -178,9 +178,6 @@ RATE_LIMIT_EXEMPT_PATHS = {
 }
 RATE_LIMIT_EXEMPT_PREFIXES = (
     "/uploads",
-    "/admin/ongoing-interviews",
-    "/admin/live-snapshot",
-    "/superadmin/dashboard",
     "/superadmin/profile",
     "/api/notifications",
 )
@@ -192,6 +189,8 @@ RATE_LIMIT_EXEMPT_PREFIXES = (
 JWT_SECRET_KEY = os.getenv("JWT_SECRET_KEY")
 if not JWT_SECRET_KEY:
     raise ValueError("FATAL ERROR: JWT_SECRET_KEY environment variable is not set. Refusing to start.")
+if len(JWT_SECRET_KEY.encode("utf-8")) < 32:
+    raise ValueError("FATAL ERROR: JWT_SECRET_KEY must be at least 32 bytes for HS256.")
 ALGORITHM = "HS256"
 
 security = HTTPBearer()

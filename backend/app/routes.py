@@ -43,6 +43,7 @@ import cloudinary.api
 import edge_tts
 import PyPDF2
 from bson import ObjectId
+from bson.errors import InvalidId
 from docx import Document
 from dotenv import load_dotenv
 from groq import AsyncGroq
@@ -83,6 +84,12 @@ from .config import *
 from . import omni_dimension_client
 from .services import *
 from app.session_store import get_session, set_session, delete_session
+from app.live_monitoring_security import (
+    admin_can_access_session,
+    create_monitoring_token,
+    decode_monitoring_token,
+    validate_snapshot_dataurl,
+)
 
 load_dotenv()
 
@@ -90,6 +97,87 @@ logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
 router = APIRouter()
+
+candidate_monitoring_security = HTTPBearer(auto_error=False)
+
+
+def _create_candidate_monitoring_token(link_id: str, interview_id: str, duration_minutes: int) -> str:
+    """Issue a short-lived token that can only publish telemetry for one session."""
+    return create_monitoring_token(
+        JWT_SECRET_KEY,
+        ALGORITHM,
+        link_id,
+        interview_id,
+        duration_minutes,
+    )
+
+
+def _validate_candidate_monitoring_token(token: str, link_id: str) -> Dict[str, Any]:
+    try:
+        payload = decode_monitoring_token(JWT_SECRET_KEY, ALGORITHM, token, link_id)
+    except (jwt.PyJWTError, ValueError) as exc:
+        raise HTTPException(status_code=401, detail="Invalid or expired monitoring token") from exc
+
+    session = interview_sessions_collection.find_one(
+        {"link_id": link_id},
+        {
+            "link_id": 1,
+            "interview_id": 1,
+            "company_id": 1,
+            "created_by": 1,
+            "status": 1,
+            "is_deactivated": 1,
+        },
+    )
+    if not session:
+        raise HTTPException(status_code=404, detail="Session not found")
+    if session.get("is_deactivated") or session.get("status") != "started":
+        raise HTTPException(status_code=403, detail="This interview session is not active")
+
+    token_interview_id = str(payload.get("interview_id") or "")
+    session_interview_id = str(session.get("interview_id") or "")
+    if token_interview_id and session_interview_id and not hmac.compare_digest(token_interview_id, session_interview_id):
+        raise HTTPException(status_code=403, detail="Monitoring token is no longer valid for this interview")
+    return session
+
+
+def _get_authorized_live_session(link_id: str, current_admin: Dict[str, Any]) -> Dict[str, Any]:
+    """Authorize live-monitoring access with tenant isolation."""
+    role = current_admin.get("role")
+    if role not in {"admin", "super_admin", "master"}:
+        raise HTTPException(status_code=403, detail="Live monitoring access is required")
+
+    session = interview_sessions_collection.find_one(
+        {"link_id": link_id},
+        {"link_id": 1, "company_id": 1, "created_by": 1, "status": 1},
+    )
+    if not session:
+        raise HTTPException(status_code=404, detail="Session not found")
+    if not admin_can_access_session(current_admin, session):
+        raise HTTPException(status_code=403, detail="Access denied to this session")
+    return session
+
+
+def _decode_dashboard_websocket_admin(token: str) -> Dict[str, str]:
+    try:
+        payload = jwt.decode(token, JWT_SECRET_KEY, algorithms=[ALGORITHM])
+        admin_id = str(payload.get("sub") or "")
+        role = str(payload.get("role") or "")
+        if not admin_id or role not in {"admin", "super_admin", "master"}:
+            raise ValueError("Invalid dashboard role")
+        admin_doc = admins_collection.find_one(
+            {"_id": ObjectId(admin_id)},
+            {"company_id": 1, "role": 1, "login_enabled": 1},
+        )
+        if not admin_doc or admin_doc.get("login_enabled") is False:
+            raise ValueError("Account is unavailable")
+        return {
+            "admin_id": admin_id,
+            "role": str(admin_doc.get("role") or role),
+            "company_id": str(admin_doc.get("company_id") or payload.get("company_id") or ""),
+        }
+    except (jwt.PyJWTError, ValueError, TypeError, InvalidId) as exc:
+        raise HTTPException(status_code=401, detail="Invalid or expired dashboard token") from exc
 
 
 @router.get("/admin/last-error")
@@ -1792,7 +1880,7 @@ def update_agent_flow(req: UpdateAgentFlowRequest):
 
 
 @router.get("/admin/interview/{link_id}")
-def get_interview_details(link_id: str):
+def get_interview_details(link_id: str, current_admin: dict = Depends(get_current_admin_details)):
     if link_id.startswith("ai_call_"):
         # This is an AI Call Mock Session!
         app_id = link_id.replace("ai_call_", "")
@@ -1806,6 +1894,12 @@ def get_interview_details(link_id: str):
             app = job_applications_collection.find_one({"omni_call_id": app_id})
         if not app:
             raise HTTPException(status_code=404, detail="AI Call candidate not found")
+        if current_admin.get("role") != "master":
+            job = jobs_collection.find_one({"job_id": app.get("job_id")}, {"company_id": 1, "admin_id": 1})
+            if not job or str(job.get("company_id") or "") != str(current_admin.get("company_id") or ""):
+                raise HTTPException(status_code=403, detail="Access denied to this candidate")
+            if current_admin.get("role") == "admin" and str(job.get("admin_id") or "") != str(current_admin.get("admin_id") or ""):
+                raise HTTPException(status_code=403, detail="Access denied to this candidate")
             
         interactions = app.get("omni_call_details", {}).get("interactions", [])
         answers = []
@@ -4184,7 +4278,10 @@ def start_session_interview(link_id: str = Form(...)):
                 "interview_format": row.get("interview_format", "Standard"),
                 "record_video": row.get("record_video", True),
                 "all_verbal_answered": all_verbal_answered,
-                "started_at": row.get("started_at")
+                "started_at": row.get("started_at"),
+                "monitoring_token": _create_candidate_monitoring_token(
+                    link_id, existing_interview_id, interview_duration
+                ),
             }
         
         # Fallback: regenerate if questions lost
@@ -4193,7 +4290,10 @@ def start_session_interview(link_id: str = Form(...)):
             "session_status": status,
             "candidate_name": candidate_name,
             "interview_id": existing_interview_id,
-            "interview_duration": interview_duration
+            "interview_duration": interview_duration,
+            "monitoring_token": _create_candidate_monitoring_token(
+                link_id, existing_interview_id, interview_duration
+            ),
         }
     
     # Always generate a full pool of questions — interview is time-based,
@@ -4288,7 +4388,8 @@ def start_session_interview(link_id: str = Form(...)):
             }}
         )
     except Exception as db_e:
-        print(f" DB Save Error: {db_e}")
+        logger.exception("Failed to persist interview session start")
+        raise HTTPException(status_code=500, detail="Unable to start the interview session") from db_e
     return {
         "status": "started",
         "interview_id": interview_id,
@@ -4300,7 +4401,10 @@ def start_session_interview(link_id: str = Form(...)):
         "interview_format": row.get("interview_format", "Standard"),
         "interview_type": interview_type,
         "record_video": row.get("record_video", True),
-        "started_at": datetime.now(timezone.utc).isoformat()
+        "started_at": datetime.now(timezone.utc).isoformat(),
+        "monitoring_token": _create_candidate_monitoring_token(
+            link_id, interview_id, interview_duration
+        ),
     }
 
 @router.post("/session/{interview_id}/violation")
@@ -5237,6 +5341,97 @@ def complete_session(
 
 # In-memory store:  link_id → latest heartbeat payload
 _live_snapshots: Dict[str, Dict] = {}
+_heartbeat_request_times: Dict[str, List[float]] = {}
+
+LIVE_SNAPSHOT_TTL_SECONDS = 90
+MAX_SNAPSHOT_BYTES = 250_000
+
+
+def _bounded_number(value: Any, minimum: float, maximum: float, integer: bool = False):
+    try:
+        number = float(value)
+    except (TypeError, ValueError):
+        return None
+    number = max(minimum, min(number, maximum))
+    return int(number) if integer else number
+
+
+def _optional_bool(value: Any):
+    return value if isinstance(value, bool) else None
+
+
+def _safe_round_type(value: Any):
+    normalized = str(value or "").strip().lower()
+    return normalized if normalized in {"verbal", "coding", "case_study"} else None
+
+
+async def _enforce_heartbeat_rate_limit(link_id: str):
+    """Allow normal 5-second heartbeats while limiting abuse per session."""
+    await manager.connect_redis()
+    if manager.redis:
+        key = f"heartbeat_rate:{link_id}"
+        count = await manager.redis.incr(key)
+        if count == 1:
+            await manager.redis.expire(key, 60)
+        if count > 30:
+            raise HTTPException(status_code=429, detail="Heartbeat rate limit exceeded")
+        return
+
+    now = time.monotonic()
+    recent = [timestamp for timestamp in _heartbeat_request_times.get(link_id, []) if now - timestamp < 60]
+    if len(recent) >= 30:
+        raise HTTPException(status_code=429, detail="Heartbeat rate limit exceeded")
+    recent.append(now)
+    _heartbeat_request_times[link_id] = recent
+
+
+async def _load_live_snapshots(link_ids: List[str]) -> Dict[str, Dict[str, Any]]:
+    clean_ids = [str(link_id) for link_id in link_ids if link_id]
+    if not clean_ids:
+        return {}
+    await manager.connect_redis()
+    if manager.redis:
+        values = await manager.redis.mget([f"live_snapshot:{link_id}" for link_id in clean_ids])
+        result: Dict[str, Dict[str, Any]] = {}
+        for link_id, raw_value in zip(clean_ids, values):
+            if not raw_value:
+                continue
+            try:
+                result[link_id] = json.loads(raw_value)
+            except (TypeError, json.JSONDecodeError):
+                logger.warning("Ignoring malformed live snapshot for %s", link_id)
+        return result
+    return {link_id: _live_snapshots.get(link_id, {}) for link_id in clean_ids}
+
+
+async def _store_live_snapshot(link_id: str, updates: Dict[str, Any], session: Dict[str, Any]) -> Dict[str, Any]:
+    existing = (await _load_live_snapshots([link_id])).get(link_id, {})
+    merged = {**existing, **{key: value for key, value in updates.items() if value is not None}}
+    merged["ts"] = datetime.now(timezone.utc).isoformat()
+
+    await manager.connect_redis()
+    if manager.redis:
+        await manager.redis.setex(
+            f"live_snapshot:{link_id}",
+            LIVE_SNAPSHOT_TTL_SECONDS,
+            json.dumps(merged),
+        )
+    else:
+        _live_snapshots[link_id] = merged
+
+    dashboard_data = {key: value for key, value in merged.items() if key != "snapshot"}
+    payload = {
+        "type": "live_snapshot",
+        "link_id": link_id,
+        "company_id": str(session.get("company_id") or ""),
+        "created_by": str(session.get("created_by") or ""),
+        "data": dashboard_data,
+    }
+    if manager.redis:
+        await manager.redis.publish("dashboard:updates", json.dumps(payload))
+    else:
+        await manager.broadcast_dashboard(payload)
+    return merged
 
 
 class LiveHeartbeatRequest(BaseModel):
@@ -5257,13 +5452,53 @@ class LiveHeartbeatRequest(BaseModel):
     multi_face: bool = False
     phone_detected: bool = False
     eye_contact_lost: bool = False
+    round_type: Optional[str] = None
+
+    @validator("link_id")
+    def validate_link_id(cls, value):
+        if not 8 <= len(value) <= 128:
+            raise ValueError("Invalid session link identifier")
+        return value
+
+    @validator("snapshot_dataurl")
+    def validate_snapshot_dataurl(cls, value):
+        if value is None:
+            return value
+        return validate_snapshot_dataurl(value, MAX_SNAPSHOT_BYTES)
+
+    @validator("audio_level")
+    def validate_audio_level(cls, value):
+        if value is not None and not 0 <= value <= 100:
+            raise ValueError("Audio level must be between 0 and 100")
+        return value
+
+    @validator("alert_types")
+    def validate_alert_types(cls, value):
+        if value is not None and (len(value) > 25 or any(len(str(item)) > 64 for item in value)):
+            raise ValueError("Too many or invalid alert types")
+        return value
+
+    @validator("round_type")
+    def validate_round_type(cls, value):
+        if value is None:
+            return value
+        normalized = value.strip().lower()
+        if normalized not in {"verbal", "coding", "case_study"}:
+            raise ValueError("Invalid interview round type")
+        return normalized
 
 
 @router.post("/live-heartbeat")
-async def live_heartbeat(data: LiveHeartbeatRequest):
+async def live_heartbeat(
+    data: LiveHeartbeatRequest,
+    credentials: Optional[HTTPAuthorizationCredentials] = Depends(candidate_monitoring_security),
+):
     """Candidate browser sends a heartbeat every ~5 s with camera snapshot and quality metrics."""
-    snap_data = {
-        "ts": datetime.now(timezone.utc).isoformat(),
+    if not credentials:
+        raise HTTPException(status_code=401, detail="Candidate monitoring token is required")
+    session = _validate_candidate_monitoring_token(credentials.credentials, data.link_id)
+    await _enforce_heartbeat_rate_limit(data.link_id)
+    updates = {
         "snapshot": data.snapshot_dataurl,
         "audio_level": data.audio_level,
         "internet_kbps": data.internet_kbps,
@@ -5280,34 +5515,26 @@ async def live_heartbeat(data: LiveHeartbeatRequest):
         "multi_face": data.multi_face,
         "phone_detected": data.phone_detected,
         "eye_contact_lost": data.eye_contact_lost,
+        "round_type": data.round_type,
     }
-    
-    from redis_manager import manager
-    import json
-    if manager.redis:
-        await manager.redis.setex(f"live_snapshot:{data.link_id}", 60, json.dumps(snap_data))
-        # Publish update to dashboard websocket channel
-        payload = {"type": "live_snapshot", "link_id": data.link_id, "data": snap_data}
-        await manager.redis.publish("dashboard:updates", json.dumps(payload))
-    else:
-        _live_snapshots[data.link_id] = snap_data
-        
+    await _store_live_snapshot(data.link_id, updates, session)
     return {"status": "ok"}
 
 
 @router.get("/admin/live-snapshot/{link_id}")
-async def get_live_snapshot(link_id: str):
-    """Admin polls latest candidate live snapshot and quality metrics."""
-    from redis_manager import manager
-    import json
-    
-    snap = None
-    if manager.redis:
-        snap_json = await manager.redis.get(f"live_snapshot:{link_id}")
-        if snap_json:
-            snap = json.loads(snap_json)
-    else:
-        snap = _live_snapshots.get(link_id)
+async def get_live_snapshot(
+    link_id: str,
+    current_admin: dict = Depends(get_current_admin_details),
+):
+    """Return a snapshot to an authorized admin, super admin, or master."""
+    _get_authorized_live_session(link_id, current_admin)
+    if current_admin.get("role") != "master":
+        require_admin_capability(
+            current_admin["admin_id"],
+            "live_monitoring",
+            "Live monitoring is available on the Advance plan only.",
+        )
+    snap = (await _load_live_snapshots([link_id])).get(link_id)
 
     if not snap:
         return {"online": False}
@@ -5339,23 +5566,26 @@ async def get_live_snapshot(link_id: str):
         "multi_face": snap.get("multi_face", False),
         "phone_detected": snap.get("phone_detected", False),
         "eye_contact_lost": snap.get("eye_contact_lost", False),
+        "round_type": snap.get("round_type"),
     }
 
 
 @router.get("/admin/ongoing-interviews")
-def get_ongoing_interviews(admin_id: Optional[str] = None, current_admin: dict = Depends(get_current_admin_details)):
+async def get_ongoing_interviews(admin_id: Optional[str] = None, current_admin: dict = Depends(get_current_admin_details)):
     """Return all in-progress (status=started) sessions for this admin with live status."""
     admin_uuid = current_admin["admin_id"]
-    require_admin_capability(
-        admin_uuid,
-        "live_monitoring",
-        "Live monitoring is available on the Advance plan only.",
-    )
+    if current_admin.get("role") != "master":
+        require_admin_capability(
+            admin_uuid,
+            "live_monitoring",
+            "Live monitoring is available on the Advance plan only.",
+        )
     query_filter = {
-        "company_id": current_admin.get("company_id"),
         "status": "started",
         "$or": [{"is_deactivated": False}, {"is_deactivated": {"$exists": False}}]
     }
+    if current_admin.get("role") != "master":
+        query_filter["company_id"] = current_admin.get("company_id")
     
     # Data Isolation:
     if current_admin.get("role") == "admin":
@@ -5368,10 +5598,11 @@ def get_ongoing_interviews(admin_id: Optional[str] = None, current_admin: dict =
         {"link_id": 1, "candidate_name": 1, "candidate_email": 1, "created_at": 1, "interview_id": 1, "started_at": 1}
     ).sort("created_at", -1))
 
+    snapshots = await _load_live_snapshots([row.get("link_id", "") for row in rows])
     sessions = []
     for row in rows:
         link_id = row.get("link_id", "")
-        snap = _live_snapshots.get(link_id, {})
+        snap = snapshots.get(link_id, {})
 
         # Determine online status from heartbeat age
         online = False
@@ -5432,6 +5663,7 @@ def get_ongoing_interviews(admin_id: Optional[str] = None, current_admin: dict =
             "multi_face": snap.get("multi_face", False),
             "phone_detected": snap.get("phone_detected", False),
             "eye_contact_lost": snap.get("eye_contact_lost", False),
+            "round_type": snap.get("round_type"),
         })
 
     return {"sessions": sessions, "count": len(sessions)}
@@ -5442,9 +5674,17 @@ async def webrtc_endpoint(websocket: WebSocket, role: str, link_id: str, token: 
     import os, tempfile
     webrtc_log_path = os.path.join(tempfile.gettempdir(), "webrtc_debug.log")
     with open(webrtc_log_path, "a") as f:
-        f.write(f"\n--- New Connection ---\nRole: {role}, Link ID: {link_id}\nToken: {token}\n")
+        f.write(f"\n--- New Connection ---\nRole: {role}, Link ID: {link_id}\nToken supplied: {bool(token)}\n")
     
     if role == "candidate":
+        if not token:
+            await websocket.close(code=1008)
+            return
+        try:
+            candidate_session = _validate_candidate_monitoring_token(token, link_id)
+        except HTTPException:
+            await websocket.close(code=1008)
+            return
         await manager.connect_candidate(websocket, link_id)
     elif role == "admin":
         if not token:
@@ -5453,10 +5693,16 @@ async def webrtc_endpoint(websocket: WebSocket, role: str, link_id: str, token: 
             await websocket.close(code=1008)
             return
         try:
-            jwt.decode(token, JWT_SECRET_KEY, algorithms=[ALGORITHM])
+            auth_context = _decode_dashboard_websocket_admin(token)
+            _get_authorized_live_session(link_id, auth_context)
             await manager.connect_admin(websocket, link_id)
             with open(webrtc_log_path, "a") as f:
                 f.write("Admin connected successfully.\n")
+        except HTTPException as e:
+            with open(webrtc_log_path, "a") as f:
+                f.write(f"Admin authorization error: {e.detail}\n")
+            await websocket.close(code=1008)
+            return
         except jwt.PyJWTError as e:
             with open(webrtc_log_path, "a") as f:
                 f.write(f"JWT Decode Error: {str(e)}\n")
@@ -5471,34 +5717,38 @@ async def webrtc_endpoint(websocket: WebSocket, role: str, link_id: str, token: 
         await websocket.close()
         return
 
+    last_telemetry_at = 0.0
     try:
         while True:
             data = await websocket.receive_json()
             # Signaling relay
             if role == "candidate":
+                if data.get("type") == "telemetry":
+                    now_monotonic = time.monotonic()
+                    if now_monotonic - last_telemetry_at < 1.0:
+                        continue
+                    last_telemetry_at = now_monotonic
                 await manager.send_to_admins(link_id, data)
                 
                 # Parse telemetry data if it's there
                 if data.get("type") == "telemetry":
-                    if "_live_snapshots" not in globals():
-                        globals()["_live_snapshots"] = {}
-                    existing_snapshot = globals()["_live_snapshots"].get(link_id, {})
                     telemetry_payload = data.get("data", {}) or {}
                     proctoring_status = telemetry_payload.get("proctoring_status", {}) or {}
-                    globals()["_live_snapshots"][link_id] = {
-                        **existing_snapshot,
-                        "ts": datetime.now(timezone.utc).isoformat(),
-                        "audio_level": telemetry_payload.get("audio_level", existing_snapshot.get("audio_level", 0)),
-                        "current_question": telemetry_payload.get("current_question", existing_snapshot.get("current_question", "")),
-                        "total_questions": telemetry_payload.get("total_questions", existing_snapshot.get("total_questions")),
-                        "proctoring_alerts": telemetry_payload.get("proctoring_alerts", existing_snapshot.get("proctoring_alerts", 0)),
-                        "last_alert_type": proctoring_status.get("lastAlertType") or existing_snapshot.get("last_alert_type"),
-                        "face_visible": proctoring_status.get("faceVisible", existing_snapshot.get("face_visible")),
-                        "face_count": proctoring_status.get("faceCount", existing_snapshot.get("face_count", 0)),
-                        "multi_face": proctoring_status.get("multiFace", existing_snapshot.get("multi_face", False)),
-                        "phone_detected": proctoring_status.get("phoneDetected", existing_snapshot.get("phone_detected", False)),
-                        "eye_contact_lost": proctoring_status.get("eyeContactLost", existing_snapshot.get("eye_contact_lost", False)),
+                    updates = {
+                        "audio_level": _bounded_number(telemetry_payload.get("audio_level"), 0, 100),
+                        "current_question": _bounded_number(telemetry_payload.get("current_question"), 0, 10_000, integer=True),
+                        "total_questions": _bounded_number(telemetry_payload.get("total_questions"), 0, 10_000, integer=True),
+                        "question_text": str(telemetry_payload.get("question_text") or "")[:500],
+                        "round_type": _safe_round_type(telemetry_payload.get("round_type")),
+                        "proctoring_alerts": _bounded_number(telemetry_payload.get("proctoring_alerts"), 0, 10_000, integer=True),
+                        "last_alert_type": str(proctoring_status.get("lastAlertType") or "")[:64] or None,
+                        "face_visible": _optional_bool(proctoring_status.get("faceVisible")),
+                        "face_count": _bounded_number(proctoring_status.get("faceCount"), 0, 20, integer=True),
+                        "multi_face": _optional_bool(proctoring_status.get("multiFace")),
+                        "phone_detected": _optional_bool(proctoring_status.get("phoneDetected")),
+                        "eye_contact_lost": _optional_bool(proctoring_status.get("eyeContactLost")),
                     }
+                    await _store_live_snapshot(link_id, updates, candidate_session)
             elif role == "admin":
                 await manager.send_to_candidate(link_id, data)
     except WebSocketDisconnect:
@@ -6973,9 +7223,17 @@ class UpdateCreditRequestSchema(BaseModel):
 from fastapi import WebSocket, WebSocketDisconnect
 
 @router.websocket("/ws/dashboard")
-async def dashboard_websocket(websocket: WebSocket):
+async def dashboard_websocket(websocket: WebSocket, token: Optional[str] = None):
     from redis_manager import manager
-    await manager.connect_dashboard(websocket)
+    if not token:
+        await websocket.close(code=1008)
+        return
+    try:
+        auth_context = _decode_dashboard_websocket_admin(token)
+    except HTTPException:
+        await websocket.close(code=1008)
+        return
+    await manager.connect_dashboard(websocket, auth_context)
     try:
         while True:
             # Keep connection alive
@@ -6984,7 +7242,11 @@ async def dashboard_websocket(websocket: WebSocket):
         manager.disconnect_dashboard(websocket)
 
 @router.get("/dashboard")
-async def get_dashboard_aggregated_data(admin_id: Optional[str] = None, current_admin: dict = Depends(get_current_admin_details)):
+async def get_dashboard_aggregated_data(
+    admin_id: Optional[str] = None,
+    summary_only: bool = False,
+    current_admin: dict = Depends(get_current_admin_details),
+):
     try:
         from redis_manager import manager
         import json
@@ -7002,7 +7264,28 @@ async def get_dashboard_aggregated_data(admin_id: Optional[str] = None, current_
         elif admin_id:
             c_query_filter["created_by"] = admin_id
             
-        candidates_cursor = list(interview_sessions_collection.find(c_query_filter).sort("created_at", -1))
+        candidate_projection = None
+        if summary_only:
+            candidate_projection = {
+                "link_id": 1,
+                "candidate_name": 1,
+                "candidate_email": 1,
+                "candidate_phone": 1,
+                "interview_title": 1,
+                "score": 1,
+                "avg_score": 1,
+                "status": 1,
+                "decision": 1,
+                "created_at": 1,
+                "expires_at": 1,
+                "started_at": 1,
+                "interview_duration": 1,
+                "is_deactivated": 1,
+            }
+        candidate_cursor = interview_sessions_collection.find(c_query_filter, candidate_projection).sort("created_at", -1)
+        if summary_only:
+            candidate_cursor = candidate_cursor.limit(8)
+        candidates_cursor = list(candidate_cursor)
         
         # Get AI Calling interested candidates
         apps = []
@@ -7012,7 +7295,7 @@ async def get_dashboard_aggregated_data(admin_id: Optional[str] = None, current_
                 jobs_query["admin_id"] = current_admin["admin_id"]
             elif admin_id:
                 jobs_query["admin_id"] = admin_id
-            jobs = list(jobs_collection.find(jobs_query))
+            jobs = [] if summary_only else list(jobs_collection.find(jobs_query))
             job_ids = [j.get("job_id") for j in jobs if j.get("job_id")]
             
             app_query = {
@@ -7065,7 +7348,7 @@ async def get_dashboard_aggregated_data(admin_id: Optional[str] = None, current_
             candidates_list.append(mock_session)
             
         try:
-            omni_res = await get_omni_recent_calls()
+            omni_res = {"calls": []} if summary_only else await get_omni_recent_calls()
             if isinstance(omni_res, dict) and "calls" in omni_res:
                 for call in omni_res["calls"]:
                     call_id = str(call.get("id") or call.get("call_id") or "")
@@ -7120,10 +7403,11 @@ async def get_dashboard_aggregated_data(admin_id: Optional[str] = None, current_
         
         if has_live or current_admin.get("role") in ["master", "super_admin"]:
             query_filter = {
-                "company_id": current_admin.get("company_id"),
                 "status": "started",
                 "$or": [{"is_deactivated": False}, {"is_deactivated": {"$exists": False}}]
             }
+            if current_admin.get("role") != "master":
+                query_filter["company_id"] = current_admin.get("company_id")
             if current_admin.get("role") == "admin":
                 query_filter["created_by"] = current_admin["admin_id"]
             elif admin_id:
@@ -7131,20 +7415,14 @@ async def get_dashboard_aggregated_data(admin_id: Optional[str] = None, current_
             
             rows = list(interview_sessions_collection.find(
                 query_filter,
-                {"link_id": 1, "candidate_name": 1, "candidate_email": 1, "created_at": 1, "interview_id": 1, "started_at": 1}
+                {"link_id": 1, "candidate_name": 1, "candidate_email": 1, "created_at": 1, "interview_id": 1, "interview_title": 1, "started_at": 1}
             ).sort("created_at", -1))
             
             ongoing_monitored_count = len(rows)
+            snapshots = await _load_live_snapshots([row.get("link_id", "") for row in rows])
             for row in rows:
                 link_id = row.get("link_id", "")
-                
-                snap = {}
-                if manager.redis:
-                    snap_json = await manager.redis.get(f"live_snapshot:{link_id}")
-                    if snap_json:
-                        snap = json.loads(snap_json)
-                else:
-                    snap = _live_snapshots.get(link_id, {}) if "_live_snapshots" in globals() else {}
+                snap = snapshots.get(link_id, {})
                 online = False
                 if snap.get("ts"):
                     try:
@@ -7169,6 +7447,8 @@ async def get_dashboard_aggregated_data(admin_id: Optional[str] = None, current_
                     "multi_face": snap.get("multi_face", False),
                     "phone_detected": snap.get("phone_detected", False),
                     "eye_contact_lost": snap.get("eye_contact_lost", False),
+                    "round_type": snap.get("round_type"),
+                    "question_text": snap.get("question_text", ""),
                     "link_id": row.get("link_id", ""),
                     "candidate_name": row.get("candidate_name", ""),
                     "candidate_email": row.get("candidate_email", ""),
@@ -7185,7 +7465,7 @@ async def get_dashboard_aggregated_data(admin_id: Optional[str] = None, current_
                     
                 if audio_level > 5:
                     ongoing_speaking_count += 1
-                if current_question and "code" in str(current_question).lower():
+                if snap.get("round_type") == "coding":
                     ongoing_coding_count += 1
 
         credit_reqs = []
@@ -7478,10 +7758,18 @@ def get_admin_rejected(pipeline: Optional[str] = "all", current_admin: dict = De
 
 @router.get("/api/superadmin/dashboard")
 @router.get("/superadmin/dashboard")
-async def superadmin_dashboard(adminId: Optional[str] = None, current_admin: dict = Depends(get_current_admin_details)):
+async def superadmin_dashboard(
+    adminId: Optional[str] = None,
+    summary_only: bool = False,
+    current_admin: dict = Depends(get_current_admin_details),
+):
     if current_admin.get("role") not in ["super_admin", "master"]:
         raise HTTPException(status_code=403, detail="Super Admin access required")
-    return await get_dashboard_aggregated_data(admin_id=adminId, current_admin=current_admin)
+    return await get_dashboard_aggregated_data(
+        admin_id=adminId,
+        summary_only=summary_only,
+        current_admin=current_admin,
+    )
 
 
 @router.get("/api/superadmin/recruitment-funnel")
@@ -7813,6 +8101,7 @@ def superadmin_get_interview_details(link_id: str, current_admin: dict = Depends
     if current_admin.get("role") not in ["super_admin", "master"]:
         raise HTTPException(status_code=403, detail="Super Admin access required")
     # Verify the session belongs to this super admin's company
+    _get_authorized_live_session(link_id, current_admin)
     session = interview_sessions_collection.find_one({"link_id": link_id})
     if not session:
         raise HTTPException(status_code=404, detail="Session not found")
@@ -7820,7 +8109,7 @@ def superadmin_get_interview_details(link_id: str, current_admin: dict = Depends
     if company_id and session.get("company_id") and session.get("company_id") != company_id:
         raise HTTPException(status_code=403, detail="Access denied to this session")
     # Reuse the existing admin endpoint logic
-    return get_interview_details(link_id)
+    return get_interview_details(link_id, current_admin)
 
 
 # -------------------------------------------------------------------------------------

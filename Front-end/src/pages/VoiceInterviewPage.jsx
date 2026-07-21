@@ -207,6 +207,7 @@ export default function VoiceInterviewPage() {
   const [codingQuestion, setCodingQuestion] = useState(null)
   const [caseStudyQuestions, setCaseStudyQuestions] = useState([])
   const [interviewId, setInterviewId] = useState('')
+  const [monitoringToken, setMonitoringToken] = useState('')
   const [language, setLanguage] = useState('English')
   const [interviewType, setInterviewType] = useState('Technical')
 
@@ -279,22 +280,17 @@ export default function VoiceInterviewPage() {
   
 
 
-  // Set a mock audio level that bounces slightly when speaking, or 0 when silent
-  const isSpeaking = aiStatus === 'listening' && interimText.length > 0
-  const mockAudioLevel = isSpeaking ? Math.floor(Math.random() * 40) + 20 : 0
-
   // Initialize WebRTC
   const telemetryData = {
-    round_type: round,
+    round_type: ['verbal', 'coding', 'case_study'].includes(round) ? round : 'verbal',
     status: aiStatus === 'idle' ? 'online' : aiStatus,
     proctoring_alerts: warningsCount,
     proctoring_status: proctoringState,
     current_question: currentQIdx + 1,
     total_questions: questions.length || 0,
-    audio_level: mockAudioLevel,
     question_text: questions[currentQIdx] ? questions[currentQIdx].question_text : ''
   }
-  useCandidateWebRTC(linkId, cameraStreamRef, telemetryData)
+  useCandidateWebRTC(linkId, cameraStreamRef, telemetryData, monitoringToken)
 
   // Refs
   const recognitionRef = useRef(null)
@@ -540,7 +536,10 @@ export default function VoiceInterviewPage() {
           .filter(q => q.type !== 'coding' && q.type !== 'case_study') // verbal only
 
         if (!qs.length) throw new Error('No questions found for this session.')
-        setQuestions(qs); setInterviewId(sd.interview_id || ''); setLoading(false)
+        setQuestions(qs)
+        setInterviewId(sd.interview_id || '')
+        setMonitoringToken(sd.monitoring_token || '')
+        setLoading(false)
       } catch (e) { setError(e.message); setLoading(false) }
     }
     init()
@@ -804,7 +803,19 @@ export default function VoiceInterviewPage() {
 
   const startListening = useCallback((onFinish) => {
     const SR = window.SpeechRecognition || window.webkitSpeechRecognition
-    if (!SR) { onFinish?.(''); return }
+    if (!SR) {
+      isListeningRef.current = false
+      setAiStatus('idle')
+      Swal.fire({
+        title: 'Voice Recognition Unavailable',
+        text: 'This browser does not support live speech recognition. Please continue in the latest Chrome or Edge browser.',
+        icon: 'error',
+        background: '#161c2d',
+        color: '#fff',
+        allowOutsideClick: false,
+      })
+      return
+    }
 
     // Always clean up previous instance first
     try { recognitionRef.current?.stop() } catch (_) { }
@@ -1013,6 +1024,7 @@ export default function VoiceInterviewPage() {
 
     stopListening(); window.speechSynthesis?.cancel(); stopAudio()
     const iid = interviewIdRef.current
+    const previousRound = roundRef.current
 
     // Switch UI to submitting immediately
     setRound('submitting')
@@ -1026,7 +1038,7 @@ export default function VoiceInterviewPage() {
 
     // Fire backend completion with detailed integrity metrics
     try {
-      await fetch(`${API_BASE_URL}/complete-session/${linkId}`, { 
+      const response = await fetch(`${API_BASE_URL}/complete-session/${linkId}`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -1038,7 +1050,20 @@ export default function VoiceInterviewPage() {
           total_fullscreen_exits: integrityMetricsRef.current.fullscreenExits
         })
       })
-    } catch (_) { }
+      if (!response.ok) throw new Error(`Completion failed with status ${response.status}`)
+    } catch (completionError) {
+      console.error('Failed to complete voice interview:', completionError)
+      submittingRef.current = false
+      setRound(previousRound)
+      Swal.fire({
+        title: 'Submission Failed',
+        text: 'Your interview could not be finalized. Please check your connection and try again.',
+        icon: 'error',
+        background: '#161c2d',
+        color: '#fff',
+      })
+      return
+    }
     
     // Upload heavy recording and WAIT for it so it's not lost
     try {
@@ -1422,8 +1447,19 @@ export default function VoiceInterviewPage() {
     },
   })
 
+  const heartbeatStateRef = useRef(null)
   useEffect(() => {
-    if (!linkId || round === 'done' || round === 'pre_checks' || round === 'intro') return
+    heartbeatStateRef.current = {
+      round,
+      currentQIdx,
+      totalQuestions: questions.length || 0,
+      proctoringState,
+      warningsCount,
+    }
+  }, [round, currentQIdx, questions.length, proctoringState, warningsCount])
+
+  useEffect(() => {
+    if (!linkId || !monitoringToken) return
 
     const captureSnapshot = () => {
       const video = candidateVideoRef.current
@@ -1441,32 +1477,38 @@ export default function VoiceInterviewPage() {
     }
 
     const sendHeartbeat = () => {
+      const current = heartbeatStateRef.current
+      if (!current || current.round === 'done' || current.round === 'pre_checks' || current.round === 'intro') return
+      if (!['verbal', 'coding', 'case_study'].includes(current.round)) return
+      const currentProctoring = current.proctoringState || {}
       const alertTypes = []
-      if (proctoringState.multiFace) alertTypes.push('multi_person')
-      if (proctoringState.faceVisible === false) alertTypes.push('no_face')
-      if (proctoringState.phoneDetected) alertTypes.push('phone')
-      if (proctoringState.eyeContactLost) alertTypes.push('eye_contact')
-      if (proctoringState.lastAlertType) alertTypes.push(proctoringState.lastAlertType)
+      if (currentProctoring.multiFace) alertTypes.push('multi_person')
+      if (currentProctoring.faceVisible === false) alertTypes.push('no_face')
+      if (currentProctoring.phoneDetected) alertTypes.push('phone')
+      if (currentProctoring.eyeContactLost) alertTypes.push('eye_contact')
+      if (currentProctoring.lastAlertType) alertTypes.push(currentProctoring.lastAlertType)
 
       fetch(`${API_BASE_URL}/live-heartbeat`, {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${monitoringToken}`,
+        },
         body: JSON.stringify({
           link_id: linkId,
           snapshot_dataurl: captureSnapshot(),
-          audio_level: mockAudioLevel,
-          current_question: currentQIdx + 1,
-          total_questions: questions.length || 0,
+          current_question: current.currentQIdx + 1,
+          total_questions: current.totalQuestions,
           tab_active: !document.hidden,
-          face_visible: proctoringState.faceVisible,
-          proctoring_alerts: warningsCount,
+          face_visible: currentProctoring.faceVisible,
+          proctoring_alerts: current.warningsCount,
           alert_types: [...new Set(alertTypes)],
-          round_type: round,
-          last_alert_type: proctoringState.lastAlertType || null,
-          face_count: proctoringState.faceCount || 0,
-          multi_face: !!proctoringState.multiFace,
-          phone_detected: !!proctoringState.phoneDetected,
-          eye_contact_lost: !!proctoringState.eyeContactLost
+          round_type: current.round,
+          last_alert_type: currentProctoring.lastAlertType || null,
+          face_count: currentProctoring.faceCount || 0,
+          multi_face: !!currentProctoring.multiFace,
+          phone_detected: !!currentProctoring.phoneDetected,
+          eye_contact_lost: !!currentProctoring.eyeContactLost
         })
       }).catch(() => { })
     }
@@ -1474,7 +1516,7 @@ export default function VoiceInterviewPage() {
     sendHeartbeat()
     const heartbeatInterval = setInterval(sendHeartbeat, 5000)
     return () => clearInterval(heartbeatInterval)
-  }, [linkId, round, mockAudioLevel, currentQIdx, questions.length, proctoringState, warningsCount])
+  }, [linkId, monitoringToken])
 
   // (Removed old round === 'verbal' useEffect for video srcObject, handled by callback ref now)
 

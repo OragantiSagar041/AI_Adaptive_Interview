@@ -143,11 +143,11 @@ export default function SuperDashboardPage() {
   }, [API_BASE_URL, token]);
 
   useEffect(() => {
-    dispatch(loadSuperAdminDashboard(selectedAdminFilter));
+    dispatch(loadSuperAdminDashboard({ adminFilter: selectedAdminFilter, summaryOnly: true }));
     dispatch(loadRecruitmentFunnel(selectedAdminFilter));
     dispatch(loadPlatformAnalytics(selectedAdminFilter));
     const interval = setInterval(() => {
-      dispatch(loadSuperAdminDashboard(selectedAdminFilter));
+      dispatch(loadSuperAdminDashboard({ adminFilter: selectedAdminFilter, summaryOnly: true }));
       dispatch(loadRecruitmentFunnel(selectedAdminFilter));
       dispatch(loadPlatformAnalytics(selectedAdminFilter));
     }, 30000); // refresh every 30s
@@ -476,4 +476,3 @@ export default function SuperDashboardPage() {
     </div>
   );
 }
- 
