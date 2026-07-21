@@ -7241,11 +7241,41 @@ async def get_dashboard_aggregated_data(admin_id: Optional[str] = None, current_
             }
             candidates_list.append(mock_session)
             
-        # NOTE: Omni Dimension (AI Calling) call logs are intentionally NOT merged
-        # into the main candidates_list here. Those records only have phone numbers
-        # (not real names), hardcoded 'AI Calling' roles, and 0% scores, which
-        # pollute the Recruiter Management table with dummy data.
-        # AI Calling data is available via the dedicated /api/calls/recent endpoint
+        try:
+            omni_res = await get_omni_recent_calls()
+            if isinstance(omni_res, dict) and "calls" in omni_res:
+                for call in omni_res["calls"]:
+                    call_id = str(call.get("id") or call.get("call_id") or "")
+                    if not call_id: continue
+                    
+                    status_raw = str(call.get("status") or "").lower()
+                    status = "completed"
+                    
+                    score = call.get("cqs_score") or call.get("sentiment_score") or 0.0
+                    try:
+                        score = float(score)
+                    except (ValueError, TypeError):
+                        score = 0.0
+                        
+                    mock_session = {
+                        "id": f"ai_call_omni_{call_id}",
+                        "_id": f"ai_call_omni_{call_id}",
+                        "link_id": f"ai_call_omni_{call_id}",
+                        "candidate_name": call.get("to_number") or call.get("to") or call.get("candidate_name") or "Omni Call",
+                        "candidate_email": "",
+                        "candidate_phone": call.get("to_number") or call.get("to") or "",
+                        "interview_title": "AI Calling",
+                        "score": score,
+                        "avg_score": score,
+                        "created_at": call.get("created_at") or call.get("start_time") or datetime.now(timezone.utc).isoformat(),
+                        "decision": status_raw,
+                        "status": status,
+                        "application_id": call_id,
+                        "is_deactivated": False
+                    }
+                    candidates_list.append(mock_session)
+        except Exception as e:
+            print(f"Error appending Omni calls to dashboard: {e}")
 
         live_sessions = []
         ongoing_monitored_count = 0
