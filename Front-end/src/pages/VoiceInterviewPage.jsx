@@ -566,22 +566,21 @@ export default function VoiceInterviewPage() {
     sessionStorage.setItem(_sessionKey, JSON.stringify({ ...existing, currentQIdx }))
   }, [currentQIdx, _sessionKey])
 
-  // ── Load Session ──────────────────────────────────────────────────────────
   useEffect(() => {
     if (!linkId) { setError('Missing session ID.'); setLoading(false); return }
     // ── Phase 2: Loading safeguard ────────────────────────────────────────────
-    // Prevents an infinite spinner if the backend is completely unreachable
-    // (no TCP response at all). The init async function will either succeed
-    // and call setLoading(false), or fail and call setError. If neither
-    // happens within 20 seconds, we surface a friendly error to the candidate.
+    let hasTimedOut = false
     const loadingTimeout = setTimeout(() => {
+      hasTimedOut = true
       setError('Unable to reach the interview server. Please check your connection and refresh the page.')
       setLoading(false)
     }, 20000)
     async function init() {
       try {
         const r = await fetch(`${API_BASE_URL}/session/${linkId}`)
+        if (hasTimedOut) return
         const d = await r.json()
+        if (hasTimedOut) return
         if (!r.ok || d.status !== 'success') throw new Error(d.detail || 'Session not found.')
         if (d.is_deactivated) throw new Error('This link is deactivated.')
         if (d.is_expired) throw new Error('This link has expired.')
@@ -624,7 +623,9 @@ export default function VoiceInterviewPage() {
 
         const fd = new FormData(); fd.append('link_id', linkId)
         const sr = await fetch(`${API_BASE_URL}/start-session-interview`, { method: 'POST', body: fd })
+        if (hasTimedOut) return
         const sd = await sr.json()
+        if (hasTimedOut) return
         if (!sr.ok) throw new Error(sd.detail || 'Failed to start session.')
         if (sd.session_status === 'completed') throw new Error('Interview already completed.')
 
@@ -634,7 +635,11 @@ export default function VoiceInterviewPage() {
 
         if (!qs.length) throw new Error('No questions found for this session.')
         setQuestions(qs); setInterviewId(sd.interview_id || ''); setLoading(false)
-      } catch (e) { setError(e.message); setLoading(false) }
+      } catch (e) {
+        if (!hasTimedOut) {
+          setError(e.message); setLoading(false)
+        }
+      }
       finally { clearTimeout(loadingTimeout) }
     }
     init()

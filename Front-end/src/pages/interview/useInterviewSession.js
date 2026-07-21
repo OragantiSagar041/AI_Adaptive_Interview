@@ -668,7 +668,7 @@ export const useInterviewSession = (sessionId, interviewType, startRoundTwo) => 
           if (key.startsWith(`failed_answer_${sessionId}_`)) {
             const answerData = JSON.parse(localStorage.getItem(key))
             const answerForm = new FormData()
-            answerForm.append('interview_id', sessionId)
+            answerForm.append('interview_id', answerData.interview_id || sessionId)
             answerForm.append('question_id', answerData.question_id)
             answerForm.append('question_text', answerData.question_text || '')
             answerForm.append('answer_text', answerData.answer_text || ' ')
@@ -2086,8 +2086,9 @@ export const useInterviewSession = (sessionId, interviewType, startRoundTwo) => 
         } catch (e) {
           // Persist failed answers before promising automatic recovery (forceClose submission)
           try {
-            const failedKey = `failed_answer_${iid}_${currentQuestion.id || (currentQuestionIndex + 1)}`
+            const failedKey = `failed_answer_${sessionId}_${currentQuestion.id || (currentQuestionIndex + 1)}`
             const answerData = {
+              interview_id: iid,
               question_id: currentQuestion.id || (currentQuestionIndex + 1),
               question_text: currentQuestion.text || currentQuestion.question || '',
               answer_text: currentQuestion.type === 'coding' ? (codeAnswer || ' ') : (transcriptionText || ' '),
