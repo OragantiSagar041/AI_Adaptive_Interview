@@ -161,6 +161,9 @@ export const useInterviewSession = (sessionId, interviewType, startRoundTwo) => 
   const [codingRoundData, setCodingRoundData] = useState(null)
   const [aiInsights, setAiInsights] = useState({ clarity: 50, technicalDepth: 50, confidence: 50 })
   const [showDeviceCheck, setShowDeviceCheck] = useState(false)
+  const [isSaving, setIsSaving] = useState(false)
+  const prefetchedQuestionsRef = useRef([])  // background-fetched next batch
+  const isPrefetchingRef = useRef(false)     // prevent duplicate fetches
 
   // Fetch AI Insights dynamically
   useEffect(() => {
@@ -635,6 +638,19 @@ export const useInterviewSession = (sessionId, interviewType, startRoundTwo) => 
     }
     return () => clearInterval(interval)
   }, [isDisclaimerAccepted, showAllSet, globalCountdown, questions.length])
+
+  // Tab close protection while saving/uploading
+  useEffect(() => {
+    if (!isSaving) return
+    const handleBeforeUnload = (e) => {
+      const msg = 'Your interview is still being saved. Please wait before closing this tab.'
+      e.preventDefault()
+      e.returnValue = msg
+      return msg
+    }
+    window.addEventListener('beforeunload', handleBeforeUnload)
+    return () => window.removeEventListener('beforeunload', handleBeforeUnload)
+  }, [isSaving])
 
   const handleSkipUpload = () => {
     setShowSkipButton(false)
@@ -1936,9 +1952,51 @@ export const useInterviewSession = (sessionId, interviewType, startRoundTwo) => 
           questionStartTimeRef.current = Date.now()
           startNextRound()
         } else {
-          handleSubmitInterview()
+          // Time still remaining? Try to load pre-fetched questions seamlessly
+          if (prefetchedQuestionsRef.current.length > 0 && globalCountdown > 30) {
+            const batch = prefetchedQuestionsRef.current
+            prefetchedQuestionsRef.current = []
+            const nextIdx = currentQuestionIndex + 1
+            setQuestions(prev => {
+              const updated = [...prev, ...batch]
+              return updated
+            })
+            setTranscriptionText('')
+            setInterimTranscriptText('')
+            setCodeAnswer('')
+            setCodeOutput('')
+            behavioralStatsRef.current = { wordCount: 0, fillerCount: 0, pauseCount: 0, faceAlerts: 0, tabSwitches: 0, noiseAlerts: 0 }
+            setCurrentQuestionIndex(nextIdx)
+            questionStartTimeRef.current = Date.now()
+            const nextQ = questions[nextIdx] || batch[0]
+            if (nextQ && nextQ.type !== 'coding') {
+              speakAIQuestion(nextQ.text || nextQ.question || nextQ.prompt || '')
+            }
+          } else {
+            handleSubmitInterview()
+          }
         }
       } else {
+        // ── Pre-fetch next batch when on second-to-last question ──
+        const qsLen = questions.length
+        if (!isPrefetchingRef.current && qsLen - currentQuestionIndex <= 2 && prefetchedQuestionsRef.current.length === 0) {
+          isPrefetchingRef.current = true
+          const alreadyAskedIds = questions.map(q => String(q.id || '')).join(',')
+          const fd = new FormData()
+          fd.append('interview_id', iid)
+          fd.append('asked_question_ids', alreadyAskedIds)
+          fd.append('count', '5')
+          fetch(`${import.meta.env.VITE_API_URL || ''}/generate-more-questions`, { method: 'POST', body: fd })
+            .then(r => r.json())
+            .then(data => {
+              if (data.questions && data.questions.length > 0) {
+                prefetchedQuestionsRef.current = data.questions
+              }
+            })
+            .catch(() => {})
+            .finally(() => { isPrefetchingRef.current = false })
+        }
+
         setTranscriptionText('')
         setInterimTranscriptText('')
         setCodeAnswer('')
@@ -1978,6 +2036,7 @@ export const useInterviewSession = (sessionId, interviewType, startRoundTwo) => 
   const handleSubmitInterview = async (forceClose = false, terminationReason = null) => {
     if (isSubmittingRef.current) return  // Prevent double-submit
     isSubmittingRef.current = true
+    setIsSaving(true)
 
     // ── Immediately mark as completed so the interview UI hides right away ──
     // This prevents the interview from staying visible during async cleanup,
@@ -2134,7 +2193,32 @@ export const useInterviewSession = (sessionId, interviewType, startRoundTwo) => 
         document.exitFullscreen().catch(err => console.log(err))
       }
       setShowAllSet(true)
+      setIsSaving(false)  // Upload complete, allow tab close
     }, 1500)
+  }
+
+  const handleFinishEarly = () => {
+    Swal.fire({
+      title: 'Finish Interview?',
+      html: '<p style="color:#94a3b8;font-size:14px">Are you sure you want to end the interview now? Your answers will be saved and submitted.</p>',
+      icon: 'question',
+      showCancelButton: true,
+      confirmButtonText: 'Yes, Finish',
+      cancelButtonText: 'Continue Interview',
+      confirmButtonColor: '#ef4444',
+      cancelButtonColor: '#6366f1',
+      background: '#0f172a',
+      color: '#fff',
+      customClass: {
+        popup: 'border border-white/10 rounded-2xl shadow-2xl',
+        title: 'text-xl font-bold text-white',
+      },
+      buttonsStyling: false
+    }).then(result => {
+      if (result.isConfirmed) {
+        handleSubmitInterview(false, 'early_exit')
+      }
+    })
   }
 
   return {
@@ -2216,6 +2300,7 @@ export const useInterviewSession = (sessionId, interviewType, startRoundTwo) => 
     proceedToRoundTwo,
     handleNextQuestion,
     handleSubmitInterview,
+    handleFinishEarly,
     handleSkipUpload,
     isMobileDevice,
     recognitionRef,

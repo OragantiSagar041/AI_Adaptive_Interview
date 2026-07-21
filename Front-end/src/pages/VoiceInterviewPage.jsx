@@ -236,6 +236,9 @@ export default function VoiceInterviewPage() {
   const [countdown, setCountdown] = useState(0)
   const [roundDuration, setRoundDuration] = useState(900)
   const [answeredCount, setAnsweredCount] = useState(0)
+  const [isSaving, setIsSaving] = useState(false)
+  const prefetchedQuestionsRef = useRef([])  // background-fetched next batch
+  const isPrefetchingRef = useRef(false)     // prevent duplicate fetches
   const [followUpCount, setFollowUpCount] = useState(0)  // follow-ups per question
   const [warningsCount, setWarningsCount] = useState(0)
   const [proctoringState, setProctoringState] = useState({
@@ -1092,8 +1095,46 @@ export default function VoiceInterviewPage() {
     // Next question
     setAnsweredCount(p => p + 1)
     const nextIdx = qIdx + 1
+
+    // ── Pre-fetch next batch when candidate is on second-to-last question ──
+    const iid = interviewIdRef.current
+    if (iid && !isPrefetchingRef.current && qs.length - qIdx <= 2 && prefetchedQuestionsRef.current.length === 0) {
+      isPrefetchingRef.current = true
+      const alreadyAskedIds = qs.map(q => String(q.id || '')).join(',')
+      const fd = new FormData()
+      fd.append('interview_id', iid)
+      fd.append('asked_question_ids', alreadyAskedIds)
+      fd.append('count', '5')
+      fetch(`${API_BASE_URL}/generate-more-questions`, { method: 'POST', body: fd })
+        .then(r => r.json())
+        .then(data => {
+          if (data.questions && data.questions.length > 0) {
+            prefetchedQuestionsRef.current = data.questions
+          }
+        })
+        .catch(() => {})
+        .finally(() => { isPrefetchingRef.current = false })
+    }
+
     if (!qs[nextIdx]) {
-      transitionToNextRound()
+      // Check if we have pre-fetched questions ready
+      if (prefetchedQuestionsRef.current.length > 0) {
+        const batch = prefetchedQuestionsRef.current
+        prefetchedQuestionsRef.current = []
+        const newQs = [...qs, ...batch]
+        setQuestions(newQs)
+        questionsRef.current = newQs
+        setCurrentQIdx(nextIdx)
+        const t = VOICE_TRANSLATIONS[languageRef.current] || VOICE_TRANSLATIONS['English']
+        const acks = t.acks
+        const transition = acks[Math.floor(Math.random() * acks.length)] + " "
+        setTimeout(() => {
+          aiSay(`${transition}${t.nextQuestion.replace('[X]', nextIdx + 1)}${newQs[nextIdx].text}`, () => startListening(ans => handleAnswer(ans, nextIdx, 0)))
+        }, 500)
+      } else {
+        // No pre-fetched questions yet — proceed to next round as usual
+        transitionToNextRound()
+      }
     } else {
       setCurrentQIdx(nextIdx)
       const t = VOICE_TRANSLATIONS[languageRef.current] || VOICE_TRANSLATIONS['English']
@@ -1109,6 +1150,7 @@ export default function VoiceInterviewPage() {
   const completeInterview = useCallback(async (options = {}) => {
     if (submittingRef.current) return
     submittingRef.current = true
+    setIsSaving(true)
     
     // Fallback for legacy calls that pass a boolean (isTimeout)
     const isTimeout = typeof options === 'boolean' ? options : (options.isTimeout || false)
@@ -1244,6 +1286,19 @@ export default function VoiceInterviewPage() {
     }
   }, [interviewType, stopListening, aiSay, completeInterview])
 
+  // ── Tab close protection while saving ────────────────────────────────────
+  useEffect(() => {
+    if (!isSaving) return
+    const handleBeforeUnload = (e) => {
+      const msg = 'Your interview is still being saved. Please wait before closing this tab.'
+      e.preventDefault()
+      e.returnValue = msg
+      return msg
+    }
+    window.addEventListener('beforeunload', handleBeforeUnload)
+    return () => window.removeEventListener('beforeunload', handleBeforeUnload)
+  }, [isSaving])
+
   // ── Countdown ─────────────────────────────────────────────────────────────
   useEffect(() => {
     if (round !== 'verbal' || countdown <= 0) return
@@ -1253,6 +1308,30 @@ export default function VoiceInterviewPage() {
     }), 1000)
     return () => clearInterval(t)
   }, [round, transitionToNextRound])
+
+  // ── Finish Early handler ──────────────────────────────────────────────────
+  const handleFinishEarly = useCallback(() => {
+    Swal.fire({
+      title: 'Finish Interview?',
+      html: '<p style="color:#94a3b8;font-size:14px">Are you sure you want to end the interview now? Your answers will be saved and submitted.</p>',
+      icon: 'question',
+      showCancelButton: true,
+      confirmButtonText: 'Yes, Finish',
+      cancelButtonText: 'Continue Interview',
+      confirmButtonColor: '#ef4444',
+      cancelButtonColor: '#6366f1',
+      background: '#0f172a',
+      color: '#fff',
+      customClass: {
+        popup: 'border border-white/10 rounded-2xl shadow-2xl',
+        title: 'text-xl font-bold text-white',
+      }
+    }).then(result => {
+      if (result.isConfirmed) {
+        completeInterview({ reason: 'early_exit' })
+      }
+    })
+  }, [completeInterview])
 
   // ── Start verbal interview ────────────────────────────────────────────────
   const startInterview = useCallback(async () => {
@@ -2199,19 +2278,20 @@ export default function VoiceInterviewPage() {
             <button onClick={transitionToNextRound} className="px-6 py-3.5 rounded-2xl bg-white/5 text-slate-400 border border-white/8 hover:bg-white/10 text-xs font-bold transition-all uppercase tracking-widest">
               Next Round
             </button>
-            <button onClick={completeInterview} className="px-6 py-3.5 rounded-2xl bg-rose-500/10 text-rose-400 border border-rose-500/20 hover:bg-rose-500/20 text-xs font-bold transition-all uppercase tracking-widest">
-              End Interview
+            <button onClick={handleFinishEarly} className="px-6 py-3.5 rounded-2xl bg-rose-500/10 text-rose-400 border border-rose-500/20 hover:bg-rose-500/20 text-xs font-bold transition-all uppercase tracking-widest">
+              Finish Early
             </button>
           </div>
 
-          {/* Progress dots */}
+          {/* Progress dots — only show first 30 to avoid overflow */}
           <div className="flex items-center justify-center gap-1.5 flex-wrap">
-            {questions.map((_, i) => (
+            {questions.slice(0, 30).map((_, i) => (
               <div key={i} className={`rounded-full transition-all duration-300 ${i < currentQIdx ? 'w-2 h-2 bg-emerald-500' :
                 i === currentQIdx ? 'w-3.5 h-3.5 bg-indigo-500 shadow-[0_0_10px_rgba(99,102,241,.8)]' :
                   'w-2 h-2 bg-white/10'
                 }`} />
             ))}
+            {questions.length > 30 && <span className="text-xs text-slate-500">+{questions.length - 30} more</span>}
           </div>
         </div>
       </div>

@@ -77,6 +77,13 @@ except ImportError:
     _TYPED_LAYER_AVAILABLE = False
     print("[WARN] typed_ai_layer not available")
 
+try:
+    from interview_graphs import run_question_generation_graph, run_followup_graph, run_summary_graph
+    _GRAPH_LAYER_AVAILABLE = True
+except ImportError:
+    _GRAPH_LAYER_AVAILABLE = False
+    print("[WARN] interview_graphs not available")
+
 from .models import *
 from .database import *
 from .config import *
@@ -1443,10 +1450,16 @@ def generate_mock_questions(text: str, source: str, num_questions: int = 6, resu
             print(f" Loaded {len(custom_q_list)} custom questions")
             
         # 2. Add AI questions (Instructions and JD/Resume)
-        if "resume" in source.lower():
-            ai_questions = generate_resume_questions(text, language=language, industry=industry)
+        if _GRAPH_LAYER_AVAILABLE:
+            if "resume" in source.lower():
+                ai_questions = run_question_generation_graph(text, "", middle_count, interview_type, industry, language)
+            else:
+                ai_questions = run_question_generation_graph("", text, middle_count, interview_type, industry, language)
         else:
-            ai_questions = generate_jd_questions(text, ai_instructions=ai_instructions, interview_type=interview_type, industry=industry, language=language)
+            if "resume" in source.lower():
+                ai_questions = generate_resume_questions(text, language=language, industry=industry)
+            else:
+                ai_questions = generate_jd_questions(text, ai_instructions=ai_instructions, interview_type=interview_type, industry=industry, language=language)
         
         ai_added = 0
         for q in ai_questions:
@@ -1939,6 +1952,9 @@ Return STRICT JSON only:
 # --- ADAPTIVE INTERVIEW LOGIC ---
 
 def generate_followup_question(answer_text: str, resume_context: str, jd_text: str, current_q_id: int, followup_streak: int, language: str = "English") -> Dict:
+    if _GRAPH_LAYER_AVAILABLE:
+        return run_followup_graph(answer_text, resume_context, jd_text, current_q_id, followup_streak, language)
+
     if followup_streak < 3:
         prompt = f"""
         You are an intelligent technical interviewer.

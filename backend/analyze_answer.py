@@ -1,12 +1,12 @@
 import json
 from ai_client import chat_completion, extract_json
 
-# Route AI scoring through typed_ai_layer for type-safe, validated outputs
+# Route AI scoring through LangGraph workflows
 try:
-    from typed_ai_layer import score_answer as _typed_score
-    _TYPED_LAYER_AVAILABLE = True
+    from interview_graphs import run_answer_scoring_graph
+    _GRAPH_LAYER_AVAILABLE = True
 except ImportError:
-    _TYPED_LAYER_AVAILABLE = False
+    _GRAPH_LAYER_AVAILABLE = False
 
 # STATIC SYSTEM PROMPT — extracted so OpenRouter can cache it between calls.
 # This saves ~400 tokens on every answer scored.
@@ -127,19 +127,18 @@ Return VALID JSON ONLY:
 }}"""
 
     try:
-        # Use Typed AI layer for type-safe, validated JSON output
-        if _TYPED_LAYER_AVAILABLE:
-            result = _typed_score(
+        # Use LangGraph based multi-step scoring
+        if _GRAPH_LAYER_AVAILABLE:
+            result_dict = run_answer_scoring_graph(
                 question=question,
                 answer=answer,
                 context=context,
-                time_spent_seconds=time_spent_seconds,
-                time_limit_seconds=time_limit_seconds,
+                time_spent=time_spent_seconds,
+                time_limit=time_limit_seconds,
                 language=language,
                 time_context=time_context,
                 time_score_hint=time_score_hint,
             )
-            result_dict = result if isinstance(result, dict) else result.to_dict()
         else:
             # Direct fallback if typed_ai_layer not available
             content = chat_completion(

@@ -597,7 +597,103 @@ async def start_interview(
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 
+@router.post("/generate-more-questions")
+@router.post("/generate-more-questions/")
+async def generate_more_questions_endpoint(
+    interview_id: str = Form(...),
+    asked_question_ids: str = Form(""),
+    count: int = Form(5)
+):
+    """
+    Generate additional questions for an interview session when the candidate
+    finishes all questions but still has time left on the clock.
+    Returns only NEW questions not already asked.
+    """
+    try:
+        from starlette.concurrency import run_in_threadpool
+        import asyncio
+
+        # Fetch session from RAM or DB
+        session = get_session(interview_id)
+        if not session:
+            row = interviews_collection.find_one({"id": interview_id})
+            if row:
+                try:
+                    loaded_questions = json.loads(row.get("questions", "[]"))
+                    session = {
+                        "id": interview_id,
+                        "source": row.get("source"),
+                        "profile_text": row.get("profile_text", ""),
+                        "questions": loaded_questions,
+                        "answers": {},
+                    }
+                    set_session(interview_id, session)
+                except Exception:
+                    pass
+
+        if not session:
+            raise HTTPException(status_code=404, detail="Interview session not found")
+
+        profile_text = session.get("profile_text", "")
+        source = session.get("source", "resume")
+        existing_questions = session.get("questions", [])
+
+        # Parse IDs of already-asked questions to avoid repeats
+        asked_ids = set()
+        if asked_question_ids:
+            for aid in asked_question_ids.split(","):
+                aid = aid.strip()
+                if aid:
+                    asked_ids.add(str(aid))
+
+        already_asked_texts = {
+            str(q.get("question") or q.get("text") or "").lower().strip()
+            for q in existing_questions
+            if str(q.get("id", "")) in asked_ids or asked_ids == set()
+        }
+
+        # Generate a new batch of questions
+        new_questions = await run_in_threadpool(
+            generate_mock_questions,
+            profile_text,
+            source,
+            count + 4  # Generate extra; we'll filter and trim
+        )
+
+        # Filter out questions already asked (text-similarity check)
+        fresh_questions = []
+        for q in new_questions:
+            q_text = str(q.get("question") or q.get("text") or "").lower().strip()
+            is_duplicate = any(
+                q_text in asked or asked in q_text
+                for asked in already_asked_texts
+                if len(asked) > 10  # skip very short strings
+            )
+            if not is_duplicate:
+                fresh_questions.append(q)
+            if len(fresh_questions) >= count:
+                break
+
+        # Assign fresh IDs starting after the last existing question
+        start_id = len(existing_questions) + 1
+        for i, q in enumerate(fresh_questions):
+            q["id"] = start_id + i
+            q["text"] = q.get("question") or q.get("text") or ""
+            q["type"] = q.get("type") or "Interview"
+
+        return {
+            "status": "success",
+            "questions": fresh_questions,
+            "count": len(fresh_questions)
+        }
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
 @router.get("/interview/{interview_id}/question/{question_id}")
+
 def get_question(interview_id: str, question_id: int):
     # Restore from DB if not in RAM
     if not get_session(interview_id):
@@ -1606,6 +1702,17 @@ def generate_interview_summary(candidate_name: str, answers_data: list) -> dict:
     """
     Generate interview summary via typed_ai_layer (type-safe, compressed, token-optimized).
     """
+    # Priority 0: LangGraph Layer
+    try:
+        from interview_graphs import run_summary_graph
+        result = run_summary_graph(candidate_name, answers_data)
+        if result and "recommendation" in result:
+            return result
+    except ImportError:
+        pass
+    except Exception as e:
+        print(f"[interview_graphs] summary failed, falling back: {e}")
+
     # Priority 1: Typed AI layer (type-safe validated output)
     try:
         from typed_ai_layer import generate_summary as _typed_summary
