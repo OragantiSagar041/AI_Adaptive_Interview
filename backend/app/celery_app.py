@@ -22,4 +22,12 @@ celery_app.conf.update(
     # Run tasks synchronously locally to avoid requiring Redis
     task_always_eager=os.getenv("ENV", "local") == "local",
     task_eager_propagates=True,
+
+    # Route tasks to distinct queues for multi-instance scaling
+    task_routes={
+        "app.tasks.score_answer_task": {"queue": "ai"},
+        "app.tasks.send_email_task": {"queue": "email"},
+        "app.tasks.process_bulk_emails_task": {"queue": "email"},
+        "app.tasks.generate_report_task": {"queue": "reports"},
+    },
 )

@@ -2,24 +2,89 @@ import asyncio
 import time
 import json
 import logging
-from typing import Dict, List, Set, Any, Callable
+import os
+from typing import Dict, List, Set, Any, Callable, Optional
 from collections import defaultdict
 from fastapi import WebSocket
+import redis.asyncio as aioredis
 
 logger = logging.getLogger(__name__)
+
+REDIS_URL = os.environ.get("REDIS_URL", "redis://localhost:6379/0")
 
 # ============================================================================
 # 1. Pub/Sub Broker
 # ============================================================================
 class AsyncPubSub:
-    """In-memory Publish-Subscribe broker for real-time events."""
+    """Redis-backed Publish-Subscribe broker with graceful local in-memory fallback."""
     def __init__(self):
         self.subscribers: Dict[str, Set[asyncio.Queue]] = defaultdict(set)
+        self.redis: Optional[aioredis.Redis] = None
+        self.pubsub = None
+        self.listen_task: Optional[asyncio.Task] = None
+        self.lock = asyncio.Lock()
+        self.redis_failed = False
         
+    async def _ensure_connected(self):
+        if self.redis or self.redis_failed:
+            return
+        async with self.lock:
+            if self.redis or self.redis_failed:
+                return
+            try:
+                # Configure socket timeouts to fail fast if Redis is down
+                self.redis = aioredis.from_url(
+                    REDIS_URL, 
+                    decode_responses=True,
+                    socket_connect_timeout=2.0,
+                    socket_timeout=2.0
+                )
+                await self.redis.ping()
+                self.pubsub = self.redis.pubsub()
+                self.listen_task = asyncio.create_task(self._redis_listener())
+                logger.info(f"AsyncPubSub successfully connected to Redis at {REDIS_URL}")
+            except Exception as e:
+                logger.warning(f"AsyncPubSub could not connect to Redis: {e}. Falling back to in-memory mode.")
+                self.redis = None
+                self.pubsub = None
+                self.redis_failed = True
+                
+    async def _redis_listener(self):
+        """Background listener that listens to Redis messages and puts them into local queues."""
+        try:
+            async for message in self.pubsub.listen():
+                if message["type"] == "message":
+                    channel = message["channel"]
+                    data_str = message["data"]
+                    try:
+                        data = json.loads(data_str)
+                    except Exception:
+                        data = data_str
+                        
+                    if channel in self.subscribers:
+                        for queue in list(self.subscribers[channel]):
+                            try:
+                                await queue.put(data)
+                            except Exception as e:
+                                logger.error(f"Error putting Redis message in local queue for {channel}: {e}")
+        except asyncio.CancelledError:
+            pass
+        except Exception as e:
+            logger.error(f"AsyncPubSub Redis listener task failed: {e}")
+            self.redis_failed = True
+            
     async def subscribe(self, channel: str) -> asyncio.Queue:
         """Subscribe to a channel and return a queue to listen on."""
+        await self._ensure_connected()
         queue = asyncio.Queue()
         self.subscribers[channel].add(queue)
+        
+        if self.pubsub and not self.redis_failed:
+            try:
+                await self.pubsub.subscribe(channel)
+            except Exception as e:
+                logger.error(f"Failed to subscribe to Redis channel {channel}: {e}")
+                
         return queue
         
     async def unsubscribe(self, channel: str, queue: asyncio.Queue):
@@ -28,15 +93,30 @@ class AsyncPubSub:
             self.subscribers[channel].remove(queue)
             if not self.subscribers[channel]:
                 del self.subscribers[channel]
-                
+                if self.pubsub and not self.redis_failed:
+                    try:
+                        await self.pubsub.unsubscribe(channel)
+                    except Exception as e:
+                        logger.error(f"Failed to unsubscribe from Redis channel {channel}: {e}")
+                        
     async def publish(self, channel: str, message: Any):
-        """Publish a message to all subscribers of a channel."""
+        """Publish a message to a channel (broadcasts globally via Redis)."""
+        await self._ensure_connected()
+        if self.redis and not self.redis_failed:
+            try:
+                msg_str = json.dumps(message)
+                await self.redis.publish(channel, msg_str)
+                return
+            except Exception as e:
+                logger.error(f"Failed to publish to Redis channel {channel}: {e}. Falling back to in-memory.")
+                
+        # Graceful fallback: local in-memory dispatch
         if channel in self.subscribers:
             for queue in list(self.subscribers[channel]):
                 try:
                     await queue.put(message)
                 except Exception as e:
-                    logger.error(f"Error publishing to queue on channel {channel}: {e}")
+                    logger.error(f"Local in-memory publish error on channel {channel}: {e}")
 
 pubsub = AsyncPubSub()
 

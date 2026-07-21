@@ -809,167 +809,18 @@ def save_answer(
         "created_at": datetime.now(timezone.utc).isoformat()
     })
 
-    # ── STEP 3: Fire AI scoring in a BACKGROUND THREAD ─────────────────────
-    def _score_in_background():
-        try:
-            ai_result = analyze_answer(
-                question_text,
-                answer_text,
-                context,
-                time_spent_seconds=t_spent,
-                time_limit_seconds=t_limit,
-                language=language
-            )
-
-            # Spoken language detection using existing AI/LLM - runs only once per interview
-            try:
-                session_doc = interview_sessions_collection.find_one(
-                    {"$or": [{"link_id": interview_id}, {"interview_id": interview_id}]},
-                    {"detected_accent": 1}
-                )
-                current_accent = session_doc.get("detected_accent") if session_doc else None
-                if not current_accent or current_accent == "Unknown":
-                    from typed_ai_layer import detect_spoken_language
-                    detected = detect_spoken_language(answer_text)
-                    if detected and detected != "Unknown":
-                        interview_sessions_collection.update_one(
-                            {"$or": [{"link_id": interview_id}, {"interview_id": interview_id}]},
-                            {"$set": {"detected_accent": detected}}
-                        )
-            except Exception as lang_err:
-                print(f"Language detection background update failed: {lang_err}")
-
-            keywords = ai_result.get("keywords", [])
-            keywords_str = ",".join(keywords) if isinstance(keywords, list) else str(keywords)
-
-            answers_collection.update_one(
-                {"interview_id": interview_id, "question_id": question_id},
-                {"$set": {
-                    "ai_score": ai_result.get("overall_score", 0),
-                    "content_score": ai_result.get("content_score", 0),
-                    "relevance_score": ai_result.get("relevance_score", 0),
-                    "time_score": ai_result.get("time_score", 0),
-                    "clarity_score": ai_result.get("clarity_score", 50),
-                    "technical_depth_score": ai_result.get("technical_depth_score", 50),
-                    "confidence_score": ai_result.get("confidence_score", 50),
-                    "ai_feedback": ai_result.get("feedback", "No feedback"),
-                    "ai_keywords": keywords_str,
-                    "corrected_answer": ai_result.get("corrected_answer", "N/A"),
-                    "scoring_status": "complete"
-                }}
-            )
-            print(f"✅ Background scoring complete for Q{question_id}: {ai_result.get('overall_score', 0)}/100")
-        except Exception as e:
-            print(f"⚠️ Background scoring failed for Q{question_id}: {e}")
-            answers_collection.update_one(
-                {"interview_id": interview_id, "question_id": question_id},
-                {"$set": {"scoring_status": "failed", "ai_score": 0}}
-            )
-
-        # ── Post-scoring checks: Recalculate avg_score (composite) and trigger completion events if ready ──
-        try:
-            answers = list(answers_collection.find({"interview_id": interview_id}))
-            scores = [a.get("ai_score", 0) for a in answers if a.get("ai_score") is not None]
-            verbal_avg = sum(scores) / len(scores) if scores else 0
-
-            # ── Composite score: blend with coding / case study if present ──
-            try:
-                from score_rounds import compute_coding_score, compute_case_study_score, blend_scores
-                session_rec = interview_sessions_collection.find_one({"interview_id": interview_id})
-                interview_row = interviews_collection.find_one({"id": interview_id})
-                interview_format = "Standard"
-                if session_rec and session_rec.get("interview_format"):
-                    interview_format = session_rec["interview_format"]
-                elif interview_row and interview_row.get("interview_format"):
-                    interview_format = interview_row["interview_format"]
-                coding_round_data = (interview_row or {}).get("coding_round") if interview_row else None
-                case_study_data   = (interview_row or {}).get("case_study_round") if interview_row else None
-
-                coding_s     = compute_coding_score(coding_round_data, interview_format, language) if coding_round_data else None
-                case_study_s = compute_case_study_score(case_study_data, context, language) if case_study_data else None
-                avg_score    = blend_scores(verbal_avg, coding_s, case_study_s)
-
-                if coding_s is not None:
-                    print(f"📊 Coding score: {coding_s}/100 (format={interview_format})")
-                if case_study_s is not None:
-                    print(f"📊 Case study score: {case_study_s}/100")
-                print(f"📊 Composite avg_score: {avg_score}/100 (verbal={verbal_avg:.1f})")
-            except Exception as blend_err:
-                print(f"⚠️ Composite blend error (falling back to verbal): {blend_err}")
-                avg_score = verbal_avg
-
-            session = interview_sessions_collection.find_one({"interview_id": interview_id})
-            if session:
-                interview_sessions_collection.update_one(
-                    {"_id": session["_id"]},
-                    {"$set": {"avg_score": round(avg_score, 1)}}
-                )
-                sync_session_to_application(session.get("link_id"))
-                
-                # If session is completed, check if all answers are now scored
-                if session.get("status") == "completed" and not session.get("notification_sent"):
-                    all_scored = all(a.get("scoring_status") in ("complete", "failed") for a in answers)
-                    if all_scored:
-                        # NEW: Generate Multi-Dimensional Analysis!
-                        from analyze_dimensions import analyze_interview_dimensions
-                        transcript = [{"Q": a.get("question_text"), "A": a.get("answer_text")} for a in answers]
-                        dimensions = analyze_interview_dimensions(transcript, context, language)
-                        
-                        interview_sessions_collection.update_one(
-                            {"_id": session["_id"]},
-                            {"$set": {
-                                "multi_dimensional_analysis": dimensions,
-                                "notification_sent": True
-                            }}
-                        )
-                        
-                        # Append 'IQ' to candidate's custom_id if not present
-                        candidate_id = session.get("candidate_id")
-                        if candidate_id:
-                            try:
-                                from bson import ObjectId
-                                query = {"_id": ObjectId(candidate_id)} if ObjectId.is_valid(candidate_id) else {"custom_id": candidate_id}
-                                cand = candidates_collection.find_one(query)
-                                if cand and cand.get("custom_id") and not cand["custom_id"].endswith("IQ"):
-                                    candidates_collection.update_one(
-                                        query,
-                                        {"$set": {"custom_id": f"{cand['custom_id']}IQ"}}
-                                    )
-                            except: pass
-                            
-                        sync_session_to_application(session.get("link_id"))
-
-                        # Send notification!
-                        link_id = session.get("link_id")
-                        candidate_name = session.get("candidate_name", "Candidate")
-                        candidate_email = session.get("candidate_email", "")
-                        admin_id = session.get("created_by", "")
-                        admin_email = ""
-                        if admin_id:
-                            try:
-                                from bson import ObjectId
-                                admin = admins_collection.find_one({"_id": ObjectId(admin_id)})
-                                if admin:
-                                    admin_email = admin.get("email", "")
-                            except: pass
-                        
-                        if candidate_email:
-                            send_submission_notification(
-                                candidate_email=candidate_email,
-                                candidate_name=candidate_name,
-                                admin_email=admin_email,
-                                avg_score=avg_score,
-                                total_questions=len(answers)
-                            )
-                            print(f"✅ Submission notification sent for {candidate_name} from background thread")
-                        
-                        from app import tasks
-                        tasks.generate_report_task.delay(interview_id=interview_id)
-        except Exception as e:
-            print(f"⚠️ Error checking session completion in background thread: {e}")
-
-    thread = threading.Thread(target=_score_in_background, daemon=True)
-    thread.start()
+    # ── STEP 3: Fire AI scoring in a Celery background task ──────────────────
+    from app import tasks
+    tasks.score_answer_task.delay(
+        interview_id=interview_id,
+        question_id=question_id,
+        question_text=question_text,
+        answer_text=answer_text,
+        context=context,
+        time_spent_seconds=t_spent,
+        time_limit_seconds=t_limit,
+        language=language
+    )
 
     # ── STEP 4: Return INSTANTLY to the candidate ───────────────────────────
     return {
@@ -9244,8 +9095,11 @@ def get_admin_jobs(page: int = 1, limit: int = 20, current_admin: dict = Depends
         raise HTTPException(status_code=400, detail="limit must be between 1 and 100")
     # Return jobs with pagination
     skip = (page - 1) * limit
-    total_jobs = jobs_collection.count_documents({})
-    jobs = list(jobs_collection.find({}).sort("created_at", -1).skip(skip).limit(limit))
+    query = {}
+    if current_admin["role"] == "admin":
+        query = {"admin_id": current_admin["admin_id"]}
+    total_jobs = jobs_collection.count_documents(query)
+    jobs = list(jobs_collection.find(query).sort("created_at", -1).skip(skip).limit(limit))
     for j in jobs:
         j["_id"] = str(j["_id"])
     return {
@@ -9261,6 +9115,17 @@ def get_admin_jobs(page: int = 1, limit: int = 20, current_admin: dict = Depends
 
 @router.put("/api/jobs/{job_id}")
 def update_job(job_id: str, job_update: JobCreate, current_admin: dict = Depends(get_current_admin_details)):
+    job = jobs_collection.find_one({"job_id": job_id})
+    if not job:
+        from bson import ObjectId
+        if ObjectId.is_valid(job_id):
+            job = jobs_collection.find_one({"_id": ObjectId(job_id)})
+    if not job:
+        raise HTTPException(status_code=404, detail="Job not found")
+
+    if current_admin["role"] == "admin" and job.get("admin_id") != current_admin["admin_id"]:
+        raise HTTPException(status_code=403, detail="Access denied")
+
     update_data = job_update.dict()
     update_data["updated_at"] = datetime.now(timezone.utc).isoformat()
     result = jobs_collection.update_one({"job_id": job_id}, {"$set": update_data})
@@ -9268,19 +9133,26 @@ def update_job(job_id: str, job_update: JobCreate, current_admin: dict = Depends
         from bson import ObjectId
         if ObjectId.is_valid(job_id):
             result = jobs_collection.update_one({"_id": ObjectId(job_id)}, {"$set": update_data})
-    if result.matched_count == 0:
-        raise HTTPException(status_code=404, detail="Job not found")
     return {"status": "success", "message": "Job updated"}
 
 @router.delete("/api/jobs/{job_id}")
 def delete_job(job_id: str, current_admin: dict = Depends(get_current_admin_details)):
+    job = jobs_collection.find_one({"job_id": job_id})
+    if not job:
+        from bson import ObjectId
+        if ObjectId.is_valid(job_id):
+            job = jobs_collection.find_one({"_id": ObjectId(job_id)})
+    if not job:
+        raise HTTPException(status_code=404, detail="Job not found")
+
+    if current_admin["role"] == "admin" and job.get("admin_id") != current_admin["admin_id"]:
+        raise HTTPException(status_code=403, detail="Access denied")
+
     result = jobs_collection.delete_one({"job_id": job_id})
     if result.deleted_count == 0:
         from bson import ObjectId
         if ObjectId.is_valid(job_id):
             result = jobs_collection.delete_one({"_id": ObjectId(job_id)})
-    if result.deleted_count == 0:
-        raise HTTPException(status_code=404, detail="Job not found")
     return {"status": "success", "message": "Job deleted"}
 
 @router.get("/api/public/jobs/{job_id}")
@@ -9398,6 +9270,17 @@ def update_application_status(
     current_admin: dict = Depends(get_current_admin_details)
 ):
     """Update the status of a specific job application."""
+    job = jobs_collection.find_one({"job_id": job_id})
+    if not job:
+        from bson import ObjectId
+        if ObjectId.is_valid(job_id):
+            job = jobs_collection.find_one({"_id": ObjectId(job_id)})
+    if not job:
+        raise HTTPException(status_code=404, detail="Job not found")
+
+    if current_admin["role"] == "admin" and job.get("admin_id") != current_admin["admin_id"]:
+        raise HTTPException(status_code=403, detail="Access denied")
+
     from bson import ObjectId as BsonObjectId
     new_status = payload.get("status", "").strip()
     allowed = {"Pending Review", "Shortlisted", "Interview Scheduled", "Rejected", "Hired"}
@@ -9407,6 +9290,15 @@ def update_application_status(
         oid = BsonObjectId(app_id)
     except Exception:
         raise HTTPException(status_code=400, detail="Invalid application id")
+
+    app = job_applications_collection.find_one({"_id": oid})
+    if not app:
+        raise HTTPException(status_code=404, detail="Application not found")
+
+    actual_job_id = job.get("job_id") or str(job["_id"])
+    if app.get("job_id") != actual_job_id:
+        raise HTTPException(status_code=400, detail="Application does not belong to this job")
+
     result = job_applications_collection.update_one(
         {"_id": oid},
         {"$set": {"status": new_status, "updated_at": datetime.now(timezone.utc).isoformat()}}
