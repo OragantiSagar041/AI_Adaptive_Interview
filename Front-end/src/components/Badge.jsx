@@ -21,7 +21,7 @@ export default function Badge({ variant = 'info', text = '', className = '', ...
       className={`${baseStyle} ${variants[variant] || variants.info} ${className}`}
       {...props}
     >
-      {text || variant}
+      {props.children || text || variant}
     </span>
   )
 }

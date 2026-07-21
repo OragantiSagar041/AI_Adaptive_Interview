@@ -7071,12 +7071,6 @@ async def get_dashboard_aggregated_data(admin_id: Optional[str] = None, current_
                     call_id = str(call.get("id") or call.get("call_id") or "")
                     if not call_id: continue
                     
-                    # Filter out dummy AI calling data 
-                    to_number = str(call.get("to_number") or call.get("to") or call.get("candidate_name") or "")
-                    dummy_numbers = ["+917680937434", "+919912736854", "+919392895349", "Assistant"]
-                    if to_number in dummy_numbers:
-                        continue
-                    
                     status_raw = str(call.get("status") or "").lower()
                     status = "completed"
                     
@@ -7090,9 +7084,9 @@ async def get_dashboard_aggregated_data(admin_id: Optional[str] = None, current_
                         "id": f"ai_call_omni_{call_id}",
                         "_id": f"ai_call_omni_{call_id}",
                         "link_id": f"ai_call_omni_{call_id}",
-                        "candidate_name": to_number or "Omni Call",
+                        "candidate_name": call.get("to_number") or call.get("to") or call.get("candidate_name") or "Omni Call",
                         "candidate_email": "",
-                        "candidate_phone": to_number,
+                        "candidate_phone": call.get("to_number") or call.get("to") or "",
                         "interview_title": "AI Calling",
                         "score": score,
                         "avg_score": score,
