@@ -3551,7 +3551,31 @@ Return a pure JSON object with these keys. If not found, return empty string for
                     warning = (warning + " " if warning else "") + "AI parsing failed or was incomplete. Some fields may be missing."
         except Exception as e:
             print("Error extracting JD info:", e)
-            warning = (warning + " " if warning else "") + "Failed to communicate with AI extraction service."
+            warning = (warning + " " if warning else "") + "AI auto-fill failed. Using basic text extraction. Please verify."
+            
+            import re
+            
+            # Basic Regex Fallbacks
+            if not experience or experience == "Not Specified":
+                exp_match = re.search(r'(\d+(?:\s*(?:-|to)\s*\d+)?\+?\s*(?:year|yr)s?)', text, re.IGNORECASE)
+                if exp_match: experience = exp_match.group(1).title()
+                
+            if not salary:
+                sal_match = re.search(r'((?:Rs\.?|INR|\$|₹)\s*[\d,.]+(?:\s*(?:-|to)\s*(?:Rs\.?|INR|\$|₹)?\s*[\d,.]+)?\s*(?:LPA|lakhs?|k|pa|per annum)?)', text, re.IGNORECASE)
+                if not sal_match:
+                    sal_match = re.search(r'([\d,.]+\s*(?:LPA|lakhs?))', text, re.IGNORECASE)
+                if sal_match: salary = sal_match.group(1)
+                
+            if workMode == "Remote": # Default is Remote, try to find otherwise
+                if re.search(r'\b(?:hybrid)\b', text, re.IGNORECASE):
+                    workMode = "Hybrid"
+                elif re.search(r'\b(?:on-site|onsite|work from office|in office)\b', text, re.IGNORECASE):
+                    workMode = "On-site"
+                    
+            if not location:
+                loc_match = re.search(r'(?:location|job location)\s*[:-]\s*([a-zA-Z\s,]+)(?:\n|$)', text, re.IGNORECASE)
+                if loc_match:
+                    location = loc_match.group(1).strip()[:50]
             
         if title == "Job Posting":
             lines = [l.strip() for l in text.split('\n') if l.strip()]
@@ -7355,7 +7379,7 @@ async def get_dashboard_aggregated_data(admin_id: Optional[str] = None, current_
             candidates_list.append(mock_session)
             
         try:
-            omni_res = await get_omni_recent_calls()
+            omni_res = get_omni_recent_calls()
             if isinstance(omni_res, dict) and "calls" in omni_res:
                 for call in omni_res["calls"]:
                     call_id = str(call.get("id") or call.get("call_id") or "")
