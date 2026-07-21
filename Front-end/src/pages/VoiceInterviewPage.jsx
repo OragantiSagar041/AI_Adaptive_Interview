@@ -575,13 +575,8 @@ export default function VoiceInterviewPage() {
     // and call setLoading(false), or fail and call setError. If neither
     // happens within 20 seconds, we surface a friendly error to the candidate.
     const loadingTimeout = setTimeout(() => {
-      setLoading(prev => {
-        if (prev) {
-          setError('Unable to reach the interview server. Please check your connection and refresh the page.')
-          return false
-        }
-        return prev
-      })
+      setError('Unable to reach the interview server. Please check your connection and refresh the page.')
+      setLoading(false)
     }, 20000)
     async function init() {
       try {

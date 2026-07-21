@@ -1,6 +1,6 @@
 import React from 'react'
 
-export default function Badge({ variant = 'info', text = '', className = '', ...props }) {
+export default function Badge({ variant = 'info', text = '', className = '', children, ...props }) {
   const baseStyle = 'px-2.5 py-1 rounded font-bold text-xs tracking-wider uppercase inline-block'
   
   const variants = {
@@ -21,7 +21,7 @@ export default function Badge({ variant = 'info', text = '', className = '', ...
       className={`${baseStyle} ${variants[variant] || variants.info} ${className}`}
       {...props}
     >
-      {props.children || text || variant}
+      {children || text || variant}
     </span>
   )
 }

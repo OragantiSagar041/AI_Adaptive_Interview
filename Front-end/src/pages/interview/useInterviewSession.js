@@ -655,9 +655,31 @@ export const useInterviewSession = (sessionId, interviewType, startRoundTwo) => 
       try {
         const pendingKey = `complete_session_pending_${sessionId}`
         if (localStorage.getItem(pendingKey) === '1') {
-          await api.post(`/complete-session/${sessionId}`)
+          api.post(`/complete-session/${sessionId}`)
             .then(() => localStorage.removeItem(pendingKey))
             .catch(() => {})
+        }
+      } catch (e) {}
+
+      // ── Drain any failed answers from a previous forceClose ──────
+      try {
+        const keys = Object.keys(localStorage)
+        for (const key of keys) {
+          if (key.startsWith(`failed_answer_${sessionId}_`)) {
+            const answerData = JSON.parse(localStorage.getItem(key))
+            const answerForm = new FormData()
+            answerForm.append('interview_id', sessionId)
+            answerForm.append('question_id', answerData.question_id)
+            answerForm.append('question_text', answerData.question_text || '')
+            answerForm.append('answer_text', answerData.answer_text || ' ')
+            answerForm.append('candidate_name', 'Candidate')
+            answerForm.append('time_spent_seconds', answerData.time_spent_seconds || '0')
+            answerForm.append('time_limit_seconds', '120')
+
+            api.post(`/save-answer`, answerForm, {
+              headers: { 'Content-Type': 'multipart/form-data' }
+            }).then(() => localStorage.removeItem(key)).catch(() => {})
+          }
         }
       } catch (e) {}
 
