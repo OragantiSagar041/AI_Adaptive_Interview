@@ -1,6 +1,7 @@
 import React, { useEffect } from "react";
 // Vite reload trigger comment - run clean poll
 import { useDispatch, useSelector } from "react-redux";
+import { useNavigate } from "react-router-dom";
 import { loadSuperAdminDashboard } from "@/store/slices/dashboardSlice";
 import {
   Coins,
@@ -27,6 +28,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 
 export default function NewSuperDashboardPage() {
   const dispatch = useDispatch();
+  const navigate = useNavigate();
   const dbStats = useSelector((state) => state.dashboard.dbStats);
   const selectedAdminFilter = useSelector((state) => state.dashboard.selectedAdminFilter);
 
@@ -65,7 +67,10 @@ export default function NewSuperDashboardPage() {
       {/* Top Cards Row */}
       <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-4 mb-6">
         
-        <Card className="bg-white border-none shadow-sm flex flex-col justify-center h-28">
+        <Card
+          className="bg-white border-none shadow-sm flex flex-col justify-center h-28 cursor-pointer transition-all hover:-translate-y-0.5 hover:shadow-md hover:border hover:border-emerald-200"
+          onClick={() => navigate('/superadmin/dashboard')}
+        >
           <CardContent className="p-4 flex items-center justify-between">
             <div className="flex flex-col">
               <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-1">AVAILABLE CREDITS</span>
@@ -79,7 +84,10 @@ export default function NewSuperDashboardPage() {
           </CardContent>
         </Card>
 
-        <Card className="bg-white border-none shadow-sm flex flex-col justify-center h-28">
+        <Card
+          className="bg-white border-none shadow-sm flex flex-col justify-center h-28 cursor-pointer transition-all hover:-translate-y-0.5 hover:shadow-md hover:border hover:border-indigo-200"
+          onClick={() => navigate('/superadmin/dashboard')}
+        >
           <CardContent className="p-4 flex items-center justify-between">
             <div className="flex flex-col">
               <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-1">TOTAL INTERVIEWS</span>
@@ -93,7 +101,10 @@ export default function NewSuperDashboardPage() {
           </CardContent>
         </Card>
 
-        <Card className="bg-white border-none shadow-sm flex flex-col justify-center h-28">
+        <Card
+          className="bg-white border-none shadow-sm flex flex-col justify-center h-28 cursor-pointer transition-all hover:-translate-y-0.5 hover:shadow-md hover:border hover:border-indigo-200"
+          onClick={() => navigate('/superadmin/qualified-candidates')}
+        >
           <CardContent className="p-4 flex items-center justify-between">
             <div className="flex flex-col">
               <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-1">COMPLETED</span>
@@ -107,7 +118,10 @@ export default function NewSuperDashboardPage() {
           </CardContent>
         </Card>
 
-        <Card className="bg-white border-none shadow-sm flex flex-col justify-center h-28">
+        <Card
+          className="bg-white border-none shadow-sm flex flex-col justify-center h-28 cursor-pointer transition-all hover:-translate-y-0.5 hover:shadow-md hover:border hover:border-amber-200"
+          onClick={() => navigate('/superadmin/dashboard')}
+        >
           <CardContent className="p-4 flex items-center justify-between">
             <div className="flex flex-col">
               <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-1">PENDING</span>
@@ -121,7 +135,10 @@ export default function NewSuperDashboardPage() {
           </CardContent>
         </Card>
 
-        <Card className="bg-white border-none shadow-sm flex flex-col justify-center h-28">
+        <Card
+          className="bg-white border-none shadow-sm flex flex-col justify-center h-28 cursor-pointer transition-all hover:-translate-y-0.5 hover:shadow-md hover:border hover:border-blue-200"
+          onClick={() => navigate('/superadmin/team')}
+        >
           <CardContent className="p-4 flex items-center justify-between">
             <div className="flex flex-col">
               <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-1">RECRUITERS</span>

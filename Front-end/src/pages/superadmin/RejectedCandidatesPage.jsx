@@ -282,7 +282,7 @@ export default function RejectedCandidatesPage() {
                 }
                 
                 return (
-                  <tr key={c.id || c.link_id || c.email} className="hover:bg-rose-50/30 transition-colors group whitespace-nowrap">
+                  <tr key={c.id || c.link_id || c.email} onClick={() => setSelectedCandidate(c)} className="hover:bg-rose-50/30 transition-colors group whitespace-nowrap cursor-pointer">
                     <td className="px-5 py-4">
                       <div className="flex items-center gap-3">
                         <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-slate-100 text-slate-600 font-bold shrink-0 shadow-sm border border-slate-200/50">
@@ -322,7 +322,7 @@ export default function RejectedCandidatesPage() {
                     </td>
                     <td className="px-5 py-4 text-right">
                       <button
-                        onClick={() => setSelectedCandidate(c)}
+                        onClick={(e) => { e.stopPropagation(); setSelectedCandidate(c); }}
                         className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-white border border-slate-200 text-slate-700 text-xs font-bold rounded-lg hover:bg-slate-50 hover:border-slate-300 transition-colors shadow-sm"
                       >
                         <Eye size={14} /> View Details

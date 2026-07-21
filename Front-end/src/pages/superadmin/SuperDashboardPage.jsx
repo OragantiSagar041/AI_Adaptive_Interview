@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from "react";
-import { useOutletContext } from "react-router-dom";
+import { useOutletContext, useNavigate } from "react-router-dom";
 import { useDispatch, useSelector } from "react-redux";
 import { loadSuperAdminDashboard } from "@/store/slices/dashboardSlice";
 import { CandidateTable, CandidateFilters } from "../../components/admin/AdminSubComponents";
@@ -79,6 +79,7 @@ function formatNum(n) {
 }
 
 export default function SuperDashboardPage() {
+  const navigate = useNavigate();
   const { handleOpenLiveStreamAction } = useOutletContext() || {};
   const dispatch = useDispatch();
   const { 
@@ -148,14 +149,14 @@ export default function SuperDashboardPage() {
   }, [dispatch, selectedAdminFilter]);
 
   const kpis = [
-    { label: "Total AI Interviews", value: formatNum(dbStats?.total), delta: "", up: true, icon: Mic, tint: "from-violet-500/15 to-violet-500/0" },
-    { label: "Active Today", value: formatNum(dbStats?.today), delta: "", up: true, icon: Activity, tint: "from-blue-500/15 to-blue-500/0" },
-    { label: "Completed Interviews", value: formatNum(dbStats?.completed), delta: "", up: true, icon: CheckCircle2, tint: "from-emerald-500/15 to-emerald-500/0" },
-    { label: "Pending Interviews", value: formatNum(dbStats?.pending), delta: "", up: true, icon: Clock, tint: "from-amber-500/15 to-amber-500/0" },
-    { label: "Avg AI Score", value: `${dbStats?.avg_score || 0}%`, delta: "", up: true, icon: Star, tint: "from-fuchsia-500/15 to-fuchsia-500/0" },
-    { label: "Candidates Hired", value: formatNum(dbStats?.selected), delta: "", up: true, icon: Target, tint: "from-teal-500/15 to-teal-500/0" },
-    { label: "Candidates Rejected", value: formatNum(dbStats?.rejected), delta: "", up: false, icon: XCircle, tint: "from-rose-500/15 to-rose-500/0" },
-    { label: "Expired Links", value: formatNum(dbStats?.expired), delta: "", up: false, icon: AlertTriangle, tint: "from-red-500/15 to-red-500/0" }
+    { label: "Total AI Interviews", value: formatNum(dbStats?.total), delta: "", up: true, icon: Mic, tint: "from-violet-500/15 to-violet-500/0", navPath: "/superadmin/dashboard" },
+    { label: "Active Today", value: formatNum(dbStats?.today), delta: "", up: true, icon: Activity, tint: "from-blue-500/15 to-blue-500/0", navPath: "/superadmin/dashboard" },
+    { label: "Completed Interviews", value: formatNum(dbStats?.completed), delta: "", up: true, icon: CheckCircle2, tint: "from-emerald-500/15 to-emerald-500/0", navPath: "/superadmin/qualified-candidates" },
+    { label: "Pending Interviews", value: formatNum(dbStats?.pending), delta: "", up: true, icon: Clock, tint: "from-amber-500/15 to-amber-500/0", navPath: "/superadmin/dashboard" },
+    { label: "Avg AI Score", value: `${dbStats?.avg_score || 0}%`, delta: "", up: true, icon: Star, tint: "from-fuchsia-500/15 to-fuchsia-500/0", navPath: "/superadmin/qualified-candidates" },
+    { label: "Candidates Hired", value: formatNum(dbStats?.selected), delta: "", up: true, icon: Target, tint: "from-teal-500/15 to-teal-500/0", navPath: "/superadmin/qualified-candidates" },
+    { label: "Candidates Rejected", value: formatNum(dbStats?.rejected), delta: "", up: false, icon: XCircle, tint: "from-rose-500/15 to-rose-500/0", navPath: "/superadmin/rejected-candidates" },
+    { label: "Expired Links", value: formatNum(dbStats?.expired), delta: "", up: false, icon: AlertTriangle, tint: "from-red-500/15 to-red-500/0", navPath: "/superadmin/dashboard" }
   ];
 
   const platformActivity = [
@@ -202,13 +203,22 @@ export default function SuperDashboardPage() {
         {kpis.map((k) => {
           const Icon = k.icon;
           return (
-            <Card key={k.label} className="relative overflow-hidden bg-white text-slate-900 border-slate-200 shadow-sm">
+            <Card
+              key={k.label}
+              onClick={() => k.navPath && navigate(k.navPath)}
+              className={`relative overflow-hidden bg-white text-slate-900 border-slate-200 shadow-sm transition-all hover:-translate-y-0.5 ${
+                k.navPath ? "cursor-pointer hover:border-indigo-300 hover:shadow-md" : ""
+              }`}
+            >
               <div className={`pointer-events-none absolute inset-0 bg-gradient-to-br ${k.tint}`} />
               <CardContent className="relative p-4">
                 <div className="flex items-start justify-between">
                   <div className="grid h-9 w-9 place-items-center rounded-lg bg-white text-slate-900 border-slate-200 shadow-sm ring-1 ring-slate-200">
                     <Icon className="h-4 w-4 text-slate-900" />
                   </div>
+                  {k.navPath && (
+                    <ChevronRight className="h-4 w-4 text-slate-400 opacity-0 group-hover:opacity-100 transition-opacity" />
+                  )}
                 </div>
                 <div className="mt-3 text-2xl font-semibold tracking-tight">{status === 'loading' && !dbStats?.total ? '...' : k.value}</div>
                 <div className="text-xs text-slate-500">{k.label}</div>
