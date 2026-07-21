@@ -480,10 +480,8 @@ export default function VoiceInterviewPage() {
       }
     }
     // pagehide fires on mobile browsers where beforeunload is unreliable
-    window.addEventListener('beforeunload', handleUnload)
     window.addEventListener('pagehide', handleUnload)
     return () => {
-      window.removeEventListener('beforeunload', handleUnload)
       window.removeEventListener('pagehide', handleUnload)
     }
   }, [linkId, warningsCount])
@@ -1201,6 +1199,7 @@ export default function VoiceInterviewPage() {
     // Stop audio and mark done ONLY after upload finishes
     stopAudio() 
     setRound('done')
+    setIsSaving(false)
   }, [stopListening, linkId, stopAndUploadRecording, warningsCount, stopAudio, aiSay])
 
   // ── Load coding/case study round questions ────────────────────────────────

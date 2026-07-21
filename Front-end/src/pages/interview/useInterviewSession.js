@@ -1953,6 +1953,21 @@ export const useInterviewSession = (sessionId, interviewType, startRoundTwo) => 
           startNextRound()
         } else {
           // Time still remaining? Try to load pre-fetched questions seamlessly
+          if (isPrefetchingRef.current && globalCountdown > 30) {
+            Swal.fire({
+              title: 'Generating Next Question...',
+              html: 'Just a moment...',
+              allowOutsideClick: false,
+              didOpen: () => { Swal.showLoading() },
+              background: '#0f172a',
+              color: '#fff'
+            })
+            while (isPrefetchingRef.current) {
+              await new Promise(r => setTimeout(r, 500))
+            }
+            Swal.close()
+          }
+
           if (prefetchedQuestionsRef.current.length > 0 && globalCountdown > 30) {
             const batch = prefetchedQuestionsRef.current
             prefetchedQuestionsRef.current = []
@@ -2214,8 +2229,31 @@ export const useInterviewSession = (sessionId, interviewType, startRoundTwo) => 
         title: 'text-xl font-bold text-white',
       },
       buttonsStyling: false
-    }).then(result => {
+    }).then(async result => {
       if (result.isConfirmed) {
+        // Save current answer before early exit
+        const currentQuestion = questions[currentQuestionIndex]
+        if (currentQuestion && (transcriptionText.trim() || codeAnswer.trim())) {
+          const timeSpent = Math.round((Date.now() - questionStartTimeRef.current) / 1000)
+          const iid = interviewId || sessionDetail?.interview_id || sessionId
+          if (currentQuestion.type === 'case_study') {
+            api.post(`/case-study/submit-answer`, {
+              interview_id: iid,
+              question_index: currentQuestion.caseStudyIndex,
+              answer_text: transcriptionText || ' '
+            }).catch(()=>{})
+          } else {
+            const answerForm = new FormData()
+            answerForm.append('interview_id', iid)
+            answerForm.append('question_id', currentQuestion.id || (currentQuestionIndex + 1))
+            answerForm.append('question_text', currentQuestion.text || currentQuestion.question || '')
+            answerForm.append('answer_text', currentQuestion.type === 'coding' ? (codeAnswer || ' ') : (transcriptionText || ' '))
+            answerForm.append('candidate_name', sessionDetail?.candidate_name || 'Candidate')
+            answerForm.append('time_spent_seconds', timeSpent.toString())
+            answerForm.append('time_limit_seconds', '120')
+            api.post(`/save-answer`, answerForm).catch(()=>{})
+          }
+        }
         handleSubmitInterview(false, 'early_exit')
       }
     })

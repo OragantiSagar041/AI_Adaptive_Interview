@@ -626,6 +626,9 @@ async def generate_more_questions_endpoint(
                         "profile_text": row.get("profile_text", ""),
                         "questions": loaded_questions,
                         "answers": {},
+                        "industry": row.get("industry", "General"),
+                        "interview_type": row.get("interview_type", "Technical"),
+                        "language": row.get("language", "English")
                     }
                     set_session(interview_id, session)
                 except Exception:
@@ -655,9 +658,12 @@ async def generate_more_questions_endpoint(
         # Generate a new batch of questions
         new_questions = await run_in_threadpool(
             generate_mock_questions,
-            profile_text,
-            source,
-            count + 4  # Generate extra; we'll filter and trim
+            text=profile_text,
+            source=source,
+            num_questions=count + 4,
+            interview_type=session.get("interview_type", "Technical"),
+            industry=session.get("industry", "General"),
+            language=session.get("language", "English")
         )
 
         # Filter out questions already asked (text-similarity check)
@@ -681,6 +687,14 @@ async def generate_more_questions_endpoint(
             q["text"] = q.get("question") or q.get("text") or ""
             q["type"] = q.get("type") or "Interview"
 
+        # Persist the newly generated questions back to session and DB
+        session["questions"].extend(fresh_questions)
+        set_session(interview_id, session)
+        interviews_collection.update_one(
+            {"id": interview_id},
+            {"$set": {"questions": json.dumps(session["questions"])}}
+        )
+
         return {
             "status": "success",
             "questions": fresh_questions,
@@ -690,7 +704,8 @@ async def generate_more_questions_endpoint(
     except HTTPException:
         raise
     except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
+        print(f"Error in /generate-more-questions: {e}")
+        raise HTTPException(status_code=500, detail="Failed to generate more questions. Please try again later.")
 
 @router.get("/interview/{interview_id}/question/{question_id}")
 

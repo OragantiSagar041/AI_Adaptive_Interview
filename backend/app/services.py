@@ -1953,7 +1953,10 @@ Return STRICT JSON only:
 
 def generate_followup_question(answer_text: str, resume_context: str, jd_text: str, current_q_id: int, followup_streak: int, language: str = "English") -> Dict:
     if _GRAPH_LAYER_AVAILABLE:
-        return run_followup_graph(answer_text, resume_context, jd_text, current_q_id, followup_streak, language)
+        try:
+            return run_followup_graph(answer_text, resume_context, jd_text, current_q_id, followup_streak, language)
+        except Exception as e:
+            print(f"Graph followup failed, falling back: {e}")
 
     if followup_streak < 3:
         prompt = f"""

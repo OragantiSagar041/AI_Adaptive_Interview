@@ -6,11 +6,8 @@ from typed_ai_layer import _parse_with_schema, _extract_json_robust, _truncate
 
 try:
     from langgraph.graph import END, StateGraph
-    LANGGRAPH_AVAILABLE = True
 except ImportError:
-    END = None
-    StateGraph = None
-    LANGGRAPH_AVAILABLE = False
+    raise ImportError("LangGraph is not installed or available")
 
 
 # ─── COMMON HELPERS ──────────────────────────────────────────────────────────
@@ -90,11 +87,15 @@ Return JSON matching AnswerScore schema. Include 'corrected_answer': '{state.get
     """
     fallback = AnswerScore(feedback="Failed to score.", overall_score=0, content_score=0, relevance_score=0)
     result = _llm_json(sys_prompt, usr_prompt, schema_class=AnswerScore, fallback=fallback)
+    
+    result["key_facts_required"] = state.get("key_facts_required", [])
+    result["facts_mentioned_by_candidate"] = state.get("facts_mentioned", [])
+    result["is_relevant"] = state.get("is_relevant", False)
+    
     state["result"] = result
     return state
 
 def build_answer_scoring_graph():
-    if not LANGGRAPH_AVAILABLE: return None
     g = StateGraph(AnswerScoringState)
     g.add_node("extract_facts", as_extract_facts)
     g.add_node("analyze_candidate", as_analyze_candidate)
@@ -108,10 +109,6 @@ def build_answer_scoring_graph():
 ANSWER_SCORING_GRAPH = build_answer_scoring_graph()
 
 def run_answer_scoring_graph(question, answer, context, time_spent, time_limit, language, time_context, time_score_hint):
-    if not LANGGRAPH_AVAILABLE:
-        from typed_ai_layer import score_answer
-        return score_answer(question, answer, context, time_spent, time_limit, language, time_context, time_score_hint)
-    
     state: AnswerScoringState = {
         "question": question,
         "answer": answer,
@@ -171,7 +168,6 @@ def qg_validate_format(state: QuestionGenerationState) -> QuestionGenerationStat
     return state
 
 def build_question_generation_graph():
-    if not LANGGRAPH_AVAILABLE: return None
     g = StateGraph(QuestionGenerationState)
     g.add_node("parse_context", qg_parse_context)
     g.add_node("draft_questions", qg_draft_questions)
@@ -185,10 +181,6 @@ def build_question_generation_graph():
 QUESTION_GENERATION_GRAPH = build_question_generation_graph()
 
 def run_question_generation_graph(resume, jd, num_questions, interview_type, industry, language):
-    if not LANGGRAPH_AVAILABLE:
-        # Fallback to old pipeline
-        return [InterviewQuestion(question="Tell me about yourself.", id=1).to_dict()]
-        
     state: QuestionGenerationState = {
         "resume_text": resume or "",
         "jd_text": jd or "",
@@ -233,7 +225,6 @@ def fu_draft_followup(state: FollowUpState) -> FollowUpState:
     return state
 
 def build_followup_graph():
-    if not LANGGRAPH_AVAILABLE: return None
     g = StateGraph(FollowUpState)
     g.add_node("analyze_gap", fu_analyze_gap)
     g.add_node("draft_followup", fu_draft_followup)
@@ -245,10 +236,6 @@ def build_followup_graph():
 FOLLOW_UP_GRAPH = build_followup_graph()
 
 def run_followup_graph(answer, resume, jd, q_id, streak, language):
-    if not LANGGRAPH_AVAILABLE:
-        from typed_ai_layer import generate_followup
-        return generate_followup(answer, resume, jd, q_id, streak, language)
-        
     if streak >= 3:
         from typed_ai_layer import generate_followup
         return generate_followup(answer, resume, jd, q_id, streak, language)
@@ -285,7 +272,7 @@ def sg_aggregate(state: SummaryState) -> SummaryState:
 def sg_draft_summary(state: SummaryState) -> SummaryState:
     sys = "Draft a final interview summary matching the InterviewSummary schema."
     ans = state.get("answers_data", [])
-    compressed = "\\n".join([f"Q: {a.get('question_text', '')[:50]} | Score: {a.get('ai_score', 0)}" for a in ans])
+    compressed = "\n".join([f"Q: {a.get('question_text', '')[:50]} | Score: {a.get('ai_score', 0)}" for a in ans])
     usr = f"Candidate: {state.get('candidate_name')}\nStats: {state.get('aggregate_stats')}\nQA: {compressed}\nReturn JSON."
     fallback = InterviewSummary(recommendation="Borderline")
     res = _llm_json(sys, usr, schema_class=InterviewSummary, fallback=fallback)
@@ -293,7 +280,6 @@ def sg_draft_summary(state: SummaryState) -> SummaryState:
     return state
 
 def build_summary_graph():
-    if not LANGGRAPH_AVAILABLE: return None
     g = StateGraph(SummaryState)
     g.add_node("aggregate", sg_aggregate)
     g.add_node("draft_summary", sg_draft_summary)
@@ -305,10 +291,6 @@ def build_summary_graph():
 SUMMARY_GRAPH = build_summary_graph()
 
 def run_summary_graph(candidate_name, answers_data):
-    if not LANGGRAPH_AVAILABLE:
-        from typed_ai_layer import generate_summary
-        return generate_summary(candidate_name, answers_data)
-        
     state: SummaryState = {
         "candidate_name": candidate_name,
         "answers_data": answers_data
