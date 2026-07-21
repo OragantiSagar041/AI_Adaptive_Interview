@@ -286,8 +286,8 @@ export function CandidateScorecardModal({
               </div>
             </div>
             <div className="bg-white border border-slate-200 shadow-sm rounded-xl p-5">
-              <span className="text-[0.68rem] text-slate-400 font-bold uppercase tracking-wider block mb-2">Detected Accent</span>
-              <span className="text-2xl font-black text-slate-800 tracking-tight block mt-1">{selectedCandidate?.language || 'Unknown'}</span>
+              <span className="text-[0.68rem] text-slate-400 font-bold uppercase tracking-wider block mb-2">Detected Language</span>
+              <span className="text-2xl font-black text-slate-800 tracking-tight block mt-1">{selectedCandidate?.detected_accent ?? candidateDetail?.detected_accent ?? 'Unknown'}</span>
             </div>
             <div className="bg-white border border-slate-200 shadow-sm rounded-xl p-5">
               <span className="text-[0.68rem] text-slate-400 font-bold uppercase tracking-wider block mb-2">Questions Answered</span>

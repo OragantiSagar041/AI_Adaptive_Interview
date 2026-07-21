@@ -1,5 +1,6 @@
 import React, { useState, useEffect, useRef } from 'react'
 import { useSelector } from 'react-redux'
+import { API_BASE_URL } from '../../apiConfig'
 import { motion, AnimatePresence } from 'framer-motion'
 import {
   Radio, PhoneCall, Settings2, Activity, CheckCircle2, XCircle, Phone,
@@ -318,7 +319,6 @@ function IntegrationsTab({ integrations, loading, onRefresh }) {
     setDetaching(integrationId)
     try {
       const token = localStorage.getItem('token')
-      const API_BASE_URL = import.meta.env.VITE_API_URL || 'http://localhost:8000'
       const r = await fetch(`${API_BASE_URL}/api/calls/integrations/detach`, {
         method: 'POST',
         headers: {
@@ -636,7 +636,6 @@ function RecentCallsTab({ calls, loading, onViewDetails }) {
 // ─── Main Page ──────────────────────────────────────────────────────────────────
 
 export default function AICallingAgentPage() {
-  const API_BASE_URL = useSelector(state => state.auth.API_BASE_URL)
   const token = useSelector(state => state.auth.token)
 
   const [activeTab, setActiveTab] = useState('assistant')
@@ -905,7 +904,6 @@ export default function AICallingAgentPage() {
                     const fetchIntegrations = async () => {
                       try {
                         const token = localStorage.getItem('token');
-                        const API_BASE_URL = import.meta.env.VITE_API_URL || 'http://localhost:8000';
                         const r = await fetch(`${API_BASE_URL}/api/calls/integrations`, {
                           headers: { Authorization: `Bearer ${token}` }
                         });

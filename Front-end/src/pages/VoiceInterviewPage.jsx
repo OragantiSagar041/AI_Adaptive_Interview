@@ -305,9 +305,25 @@ export default function VoiceInterviewPage() {
   const roundRef = useRef('pre_checks')
   const chatBottomRef = useRef(null)
   const wsRef = useRef(null)
+  const wsReconnectAttemptsRef = useRef(0)  // Phase 2: WS auto-reconnect counter
+  const wsReconnectTimeoutRef = useRef(null)
+  const heartbeatFailCountRef = useRef(0)   // Phase 2: consecutive heartbeat failure counter
   const languageRef = useRef('English')
   const currentAudioRef = useRef(null)    // ← tracks active TTS audio so stopAudio() can kill it
   const isTransitioningRef = useRef(false)
+
+  // ── Phase 3: Browser online/offline detection ────────────────────────────
+  const [isOnline, setIsOnline] = useState(() => navigator.onLine)
+  useEffect(() => {
+    const goOnline = () => setIsOnline(true)
+    const goOffline = () => setIsOnline(false)
+    window.addEventListener('online', goOnline)
+    window.addEventListener('offline', goOffline)
+    return () => {
+      window.removeEventListener('online', goOnline)
+      window.removeEventListener('offline', goOffline)
+    }
+  }, [])
   // Camera preview element for proctoring - must remain VISIBLE (even if small) for browser to
   // keep decoding frames. A fully hidden/off-screen video gets throttled by Chrome and freezes
   // causing MediaPipe to never detect faces.
@@ -368,18 +384,75 @@ export default function VoiceInterviewPage() {
 
   useEffect(() => {
     if (!linkId) return
-    const wsUrl = API_BASE_URL.replace('http', 'ws') + `/ws/interview/${linkId}`
-    const ws = new WebSocket(wsUrl)
-    ws.onmessage = (event) => {
-      try {
-        const data = JSON.parse(event.data)
-        if (data.type === 'ai_state' && roundRef.current === 'verbal') {
-          // Can sync state from backend if needed
+    const MAX_WS_RETRIES = 3
+
+    function connectWs() {
+      const wsUrl = API_BASE_URL.replace('http', 'ws') + `/ws/interview/${linkId}`
+      const ws = new WebSocket(wsUrl)
+
+      ws.onmessage = (event) => {
+        try {
+          const data = JSON.parse(event.data)
+          if (data.type === 'ai_state' && roundRef.current === 'verbal') {
+            // Can sync state from backend if needed
+          }
+        } catch (e) { }
+      }
+
+      ws.onopen = () => {
+        // Reset reconnect counter on successful connection
+        wsReconnectAttemptsRef.current = 0
+      }
+
+      ws.onerror = (err) => {
+        console.warn('[WS] Connection error:', err)
+      }
+
+      ws.onclose = (evt) => {
+        // Don't reconnect if interview is done or if this was an intentional close (code 1000)
+        const round = roundRef.current
+        if (round === 'done' || round === 'submitting' || evt.code === 1000) return
+
+        const attempt = wsReconnectAttemptsRef.current
+        if (attempt < MAX_WS_RETRIES) {
+          wsReconnectAttemptsRef.current = attempt + 1
+          Swal.fire({
+            icon: 'warning',
+            title: 'Connection Lost',
+            text: `Reconnecting to interview server (attempt ${attempt + 1}/${MAX_WS_RETRIES})...`,
+            toast: true,
+            position: 'top-end',
+            showConfirmButton: false,
+            timer: 3000,
+            background: '#161c2d',
+            color: '#fff',
+          })
+          wsReconnectTimeoutRef.current = setTimeout(() => {
+            wsRef.current = null
+            connectWs()
+          }, 2000)
+        } else {
+          // Exhausted retries — warn the candidate; HTTP fallback is already in place for save-answer
+          Swal.fire({
+            icon: 'warning',
+            title: 'Server Unreachable',
+            text: 'Real-time connection to the server could not be restored. Your answers will still be saved automatically. Continue the interview.',
+            confirmButtonText: 'Continue',
+            background: '#161c2d',
+            color: '#fff',
+            allowOutsideClick: false,
+          })
         }
-      } catch (e) { }
+      }
+
+      wsRef.current = ws
     }
-    wsRef.current = ws
-    return () => ws.close()
+
+    connectWs()
+    return () => {
+      if (wsReconnectTimeoutRef.current) clearTimeout(wsReconnectTimeoutRef.current)
+      if (wsRef.current) wsRef.current.close(1000, 'component unmounted')
+    }
   }, [linkId])
 
   const fmt = s => `${String(Math.floor(s / 60)).padStart(2, '0')}:${String(s % 60).padStart(2, '0')}`
@@ -489,17 +562,36 @@ export default function VoiceInterviewPage() {
     sessionStorage.setItem(_sessionKey, JSON.stringify({ ...existing, currentQIdx }))
   }, [currentQIdx, _sessionKey])
 
-  // ── Load Session ──────────────────────────────────────────────────────────
   useEffect(() => {
     if (!linkId) { setError('Missing session ID.'); setLoading(false); return }
+    // ── Phase 2: Loading safeguard ────────────────────────────────────────────
+    let hasTimedOut = false
+    const loadingTimeout = setTimeout(() => {
+      hasTimedOut = true
+      setError('Unable to reach the interview server. Please check your connection and refresh the page.')
+      setLoading(false)
+    }, 20000)
     async function init() {
       try {
         const r = await fetch(`${API_BASE_URL}/session/${linkId}`)
+        if (hasTimedOut) return
         const d = await r.json()
+        if (hasTimedOut) return
         if (!r.ok || d.status !== 'success') throw new Error(d.detail || 'Session not found.')
         if (d.is_deactivated) throw new Error('This link is deactivated.')
         if (d.is_expired) throw new Error('This link has expired.')
         if (d.session_status === 'completed') throw new Error('Interview already completed.')
+
+        // ── Drain any complete-session that failed on the previous load ────────
+        // If /complete-session failed (network/server crash), we stored a retry key.
+        try {
+          const pendingKey = `complete_session_pending_${linkId}`
+          if (localStorage.getItem(pendingKey) === '1') {
+            fetch(`${API_BASE_URL}/complete-session/${linkId}`, { method: 'POST' })
+              .then(res => { if (res.ok) localStorage.removeItem(pendingKey) })
+              .catch(() => {})
+          }
+        } catch (_) {}
         setSessionDetail(d)
         const langVal = d.language || 'English'
         setLanguage(langVal.charAt(0).toUpperCase() + langVal.slice(1).toLowerCase())
@@ -527,7 +619,9 @@ export default function VoiceInterviewPage() {
 
         const fd = new FormData(); fd.append('link_id', linkId)
         const sr = await fetch(`${API_BASE_URL}/start-session-interview`, { method: 'POST', body: fd })
+        if (hasTimedOut) return
         const sd = await sr.json()
+        if (hasTimedOut) return
         if (!sr.ok) throw new Error(sd.detail || 'Failed to start session.')
         if (sd.session_status === 'completed') throw new Error('Interview already completed.')
 
@@ -543,6 +637,7 @@ export default function VoiceInterviewPage() {
       } catch (e) { setError(e.message); setLoading(false) }
     }
     init()
+    return () => clearTimeout(loadingTimeout)
   }, [linkId])
 
   // ── TTS with female voice ──────────────────────────────────────────────────
@@ -978,7 +1073,12 @@ export default function VoiceInterviewPage() {
         fd.append('question_text', q.text)
         fd.append('answer_text', answer)
         fd.append('candidate_name', sessionDetailRef.current?.candidate_name || 'Candidate')
-        fetch(`${API_BASE_URL}/save-answer`, { method: 'POST', body: fd }).catch(() => { })
+        // Attempt once; if it fails, retry once more before warning
+        fetch(`${API_BASE_URL}/save-answer`, { method: 'POST', body: fd })
+          .catch(() =>
+            fetch(`${API_BASE_URL}/save-answer`, { method: 'POST', body: fd })
+              .catch(err => console.warn('Voice /save-answer failed after retry — answer may be lost:', err))
+          )
       }
     }
 
@@ -1042,7 +1142,7 @@ export default function VoiceInterviewPage() {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          warnings: warningsCountRef.current || warningsCount, // use ref if available to avoid stale closures
+          warnings: warningsCountRef.current || warningsCount,
           reason: integrityMetricsRef.current.reason,
           total_tab_switches: integrityMetricsRef.current.tabSwitches,
           total_face_alerts: integrityMetricsRef.current.faceAlerts,
@@ -1476,6 +1576,10 @@ export default function VoiceInterviewPage() {
       }
     }
 
+    // Phase 2: Use AbortController to prevent fetch from hanging indefinitely
+    const HEARTBEAT_TIMEOUT_MS = 8000
+    const HEARTBEAT_FAIL_THRESHOLD = 3 // consecutive failures before warning
+
     const sendHeartbeat = () => {
       const current = heartbeatStateRef.current
       if (!current || current.round === 'done' || current.round === 'pre_checks' || current.round === 'intro') return
@@ -1487,6 +1591,9 @@ export default function VoiceInterviewPage() {
       if (currentProctoring.phoneDetected) alertTypes.push('phone')
       if (currentProctoring.eyeContactLost) alertTypes.push('eye_contact')
       if (currentProctoring.lastAlertType) alertTypes.push(currentProctoring.lastAlertType)
+
+      const controller = new AbortController()
+      const timeoutId = setTimeout(() => controller.abort(), HEARTBEAT_TIMEOUT_MS)
 
       fetch(`${API_BASE_URL}/live-heartbeat`, {
         method: 'POST',
@@ -1510,7 +1617,32 @@ export default function VoiceInterviewPage() {
           phone_detected: !!currentProctoring.phoneDetected,
           eye_contact_lost: !!currentProctoring.eyeContactLost
         })
-      }).catch(() => { })
+      })
+        .then(() => {
+          clearTimeout(timeoutId)
+          // Reset failure counter on success
+          heartbeatFailCountRef.current = 0
+        })
+        .catch((err) => {
+          clearTimeout(timeoutId)
+          // Silently absorb AbortError (timed out) and network failures
+          // but count consecutive failures to warn the candidate
+          const failCount = heartbeatFailCountRef.current + 1
+          heartbeatFailCountRef.current = failCount
+          if (failCount === HEARTBEAT_FAIL_THRESHOLD) {
+            Swal.fire({
+              icon: 'warning',
+              title: 'Connection Issue',
+              text: 'Having trouble reaching the server. Please check your internet connection. Your interview is still in progress.',
+              toast: true,
+              position: 'top-end',
+              showConfirmButton: false,
+              timer: 6000,
+              background: '#161c2d',
+              color: '#fff',
+            })
+          }
+        })
     }
 
     sendHeartbeat()
@@ -1958,8 +2090,17 @@ export default function VoiceInterviewPage() {
         @keyframes spin-slow{from{transform:rotate(0deg)}to{transform:rotate(360deg)}}
       `}</style>
 
+      {/* Phase 3: Offline warning banner */}
+      {!isOnline && (
+        <div style={{ position: 'fixed', top: 0, left: 0, right: 0, zIndex: 100000, background: '#b45309', color: '#fff', padding: '10px 20px', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '10px', fontSize: '14px', fontWeight: '600', boxShadow: '0 2px 8px rgba(0,0,0,0.4)' }}>
+          <span>⚠️</span>
+          <span>You are offline. Reconnecting... Your answers will be saved when connection is restored.</span>
+        </div>
+      )}
+
       {/* Proctoring Banner */}
       {proctoringBanner && (
+
         <div style={{
           position: 'fixed', top: 0, left: 0, right: 0, zIndex: 9999,
           background: proctoringBanner.type === 'tab_switch' ? 'linear-gradient(90deg,#b91c1c,#dc2626)' : 'linear-gradient(90deg,#7c3aed,#6d28d9)',

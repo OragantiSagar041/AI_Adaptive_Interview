@@ -1,17 +1,16 @@
 import logging
 from datetime import datetime
 from typing import List, Optional
-from sqlalchemy.orm import Session
+
 from app.repositories.conversation_repository import AgentRepository, ConversationSectionRepository
 from app.service_layer.omni_client import OmniDimensionClient
 
 logger = logging.getLogger(__name__)
 
 class ConversationFlowSyncService:
-    def __init__(self, db_session: Session, agent_id: int):
-        self.db_session = db_session
-        self.agent_repo = AgentRepository(db_session)
-        self.section_repo = ConversationSectionRepository(db_session)
+    def __init__(self, agent_id: int):
+        self.agent_repo = AgentRepository()
+        self.section_repo = ConversationSectionRepository()
         self.agent = self.agent_repo.get_agent(agent_id)
         if not self.agent:
             raise ValueError(f"Agent not found: {agent_id}")
@@ -24,7 +23,7 @@ class ConversationFlowSyncService:
         return section
 
     def update_section(self, section_id: int, title: Optional[str], instruction: Optional[str], enabled: Optional[bool], display_order: Optional[int], updated_at: datetime):
-        section = self.section_repo.get_section(section_id)
+        section = self.section_repo.get_section(self.agent.id, section_id)
         if not section:
             raise ValueError("Section not found")
         if section.updated_at and section.updated_at > updated_at:
@@ -35,7 +34,7 @@ class ConversationFlowSyncService:
         return updated
 
     def delete_section(self, section_id: int):
-        section = self.section_repo.get_section(section_id)
+        section = self.section_repo.get_section(self.agent.id, section_id)
         if not section:
             raise ValueError("Section not found")
         logger.info("Database Save: delete section %s for agent %s", section_id, self.agent.id)
@@ -43,7 +42,7 @@ class ConversationFlowSyncService:
         self._sync_whole_flow()
 
     def toggle_section(self, section_id: int, enabled: bool):
-        section = self.section_repo.get_section(section_id)
+        section = self.section_repo.get_section(self.agent.id, section_id)
         if not section:
             raise ValueError("Section not found")
         logger.info("Database Save: toggle section %s for agent %s to %s", section_id, self.agent.id, enabled)
