@@ -284,7 +284,7 @@ export default function QualifiedCandidatesPage() {
                   }
 
                   return (
-                    <tr key={c.id || c.link_id || c.email} className="hover:bg-slate-50/50 transition-colors group whitespace-nowrap">
+                    <tr key={c.id || c.link_id || c.email} onClick={() => setSelectedCandidate(c)} className="hover:bg-slate-50/50 transition-colors group whitespace-nowrap cursor-pointer">
                       <td className="px-5 py-4">
                         <div className="flex items-center gap-3">
                           <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-indigo-50 text-indigo-600 font-bold shrink-0 shadow-sm border border-indigo-100/50">
@@ -321,7 +321,7 @@ export default function QualifiedCandidatesPage() {
                       </td>
                       <td className="px-5 py-4 text-right">
                         <button
-                          onClick={() => setSelectedCandidate(c)}
+                          onClick={(e) => { e.stopPropagation(); setSelectedCandidate(c); }}
                           className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-bold bg-white border border-slate-200 text-slate-600 hover:text-indigo-600 hover:border-indigo-200 hover:bg-indigo-50 shadow-sm transition-all cursor-pointer"
                         >
                           <Eye className="h-3.5 w-3.5" /> View

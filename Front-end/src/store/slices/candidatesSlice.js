@@ -390,6 +390,7 @@ const candidatesSlice = createSlice({
       })
       .addCase(loadSuperAdminDashboard.fulfilled, (state, action) => {
         state.status = 'succeeded'
+        if (action.meta.arg && typeof action.meta.arg === 'object' && action.meta.arg.summaryOnly) return
         state.candidates = action.payload.candidates || []
         recomputeFilteredCandidates(state)
       })

@@ -70,6 +70,7 @@ export const useInterviewSession = (sessionId, interviewType, startRoundTwo) => 
   const [sessionDetail, setSessionDetail] = useState(null)
   const sessionDetailRef = useRef(null)   // ref so async callbacks always read the latest value
   const [interviewId, setInterviewId] = useState('')
+  const [monitoringToken, setMonitoringToken] = useState('')
   const interviewIdRef = useRef('') // Add ref for interviewId to access in async functions
 
   useEffect(() => {
@@ -276,17 +277,6 @@ export const useInterviewSession = (sessionId, interviewType, startRoundTwo) => 
   // Capped at 20 entries (FIFO) to prevent unbounded memory growth.
   const ttsCacheRef = useRef(new Map())
   const TTS_CACHE_MAX = 20
-
-  // WebRTC Candidate Logic
-  const telemetryData = {
-    round_type: startRoundTwo ? 'coding' : 'verbal',
-    current_question: currentQuestionIndex + 1,
-    total_questions: questions.length,
-    question_text: questions[currentQuestionIndex]?.text || '',
-    audio_level: 50,
-    proctoring_alerts: screenShareViolations + noiseAlertCount + behavioralStatsRef.current.faceAlerts + behavioralStatsRef.current.tabSwitches
-  }
-  useCandidateWebRTC(sessionId, mediaStreamRef, telemetryData)
 
   const normalizeQuestions = (rawQuestions = []) => {
     return rawQuestions.map((question, index) => ({
@@ -773,6 +763,7 @@ export const useInterviewSession = (sessionId, interviewType, startRoundTwo) => 
         }
         setQuestions(qList)
         setInterviewId(startPayload.interview_id || '')
+        setMonitoringToken(startPayload.monitoring_token || '')
         // Snapshot candidate details into refs NOW (synchronously) so that the
         // async Whisper MediaRecorder onstop callback always has correct values.
         // Using refs avoids the race condition where sessionDetail state hasn't
@@ -1024,7 +1015,7 @@ export const useInterviewSession = (sessionId, interviewType, startRoundTwo) => 
             rec.start()
           } catch (e) {
             // InvalidStateError or similar — start a fresh recognition instance
-            if (isSpeechRecordingRef.current) setupSpeechRecognition()
+            if (isSpeechRecordingRef.current) initSpeechRecognition()
           }
         }, 150)
       }
@@ -1076,7 +1067,7 @@ export const useInterviewSession = (sessionId, interviewType, startRoundTwo) => 
       if (e.error === 'network') {
         // Network blip — restart after a longer pause
         if (isSpeechRecordingRef.current) {
-          setTimeout(() => { if (isSpeechRecordingRef.current) setupSpeechRecognition() }, 1000)
+          setTimeout(() => { if (isSpeechRecordingRef.current) initSpeechRecognition() }, 1000)
         }
         return
       }
@@ -1295,6 +1286,78 @@ export const useInterviewSession = (sessionId, interviewType, startRoundTwo) => 
       }
     }
   });
+
+  const telemetryRoundType = currentQuestion?.type === 'case_study'
+    ? 'case_study'
+    : (startRoundTwo || currentQuestion?.type === 'coding' ? 'coding' : 'verbal')
+  const telemetryData = {
+    round_type: telemetryRoundType,
+    current_question: currentQuestionIndex + 1,
+    total_questions: questions.length,
+    question_text: currentQuestion?.text || '',
+    proctoring_alerts: screenShareViolations + noiseAlertCount + faceAlertCount + behavioralStatsRef.current.tabSwitches,
+    proctoring_status: {
+      modelsReady: proctoring.modelsReady,
+      modelsFailed: proctoring.modelsFailed,
+      faceVisible: proctoring.faceVisible,
+      faceCount: proctoring.faceCount,
+      multiFace: proctoring.multiFace,
+      phoneDetected: proctoring.phoneDetected,
+      eyeContactLost: proctoring.eyeContactLost,
+      lastAlertType: proctoring.lastAlertType,
+    },
+  }
+  useCandidateWebRTC(sessionId, mediaStreamRef, telemetryData, monitoringToken)
+
+  const liveHeartbeatDataRef = useRef(null)
+  useEffect(() => {
+    liveHeartbeatDataRef.current = telemetryData
+  }, [telemetryData])
+
+  useEffect(() => {
+    if (!sessionId || !monitoringToken) return
+
+    const captureSnapshot = () => {
+      const video = videoPreviewRef.current
+      if (!video || video.readyState < 2 || !video.videoWidth || !video.videoHeight) return null
+      try {
+        const canvas = document.createElement('canvas')
+        canvas.width = 320
+        canvas.height = Math.max(1, Math.round((video.videoHeight / video.videoWidth) * canvas.width))
+        canvas.getContext('2d').drawImage(video, 0, 0, canvas.width, canvas.height)
+        return canvas.toDataURL('image/jpeg', 0.55)
+      } catch {
+        return null
+      }
+    }
+
+    const sendHeartbeat = () => {
+      const liveData = liveHeartbeatDataRef.current || {}
+      const proctoringStatus = liveData.proctoring_status || {}
+      const alertTypes = [proctoringStatus.lastAlertType].filter(Boolean)
+      api.post('/live-heartbeat', {
+        link_id: sessionId,
+        snapshot_dataurl: captureSnapshot(),
+        current_question: liveData.current_question,
+        total_questions: liveData.total_questions,
+        face_visible: proctoringStatus.faceVisible,
+        proctoring_alerts: liveData.proctoring_alerts || 0,
+        alert_types: alertTypes,
+        last_alert_type: proctoringStatus.lastAlertType || null,
+        face_count: proctoringStatus.faceCount || 0,
+        multi_face: !!proctoringStatus.multiFace,
+        phone_detected: !!proctoringStatus.phoneDetected,
+        eye_contact_lost: !!proctoringStatus.eyeContactLost,
+        round_type: liveData.round_type,
+      }, {
+        headers: { Authorization: `Bearer ${monitoringToken}` },
+      }).catch(() => {})
+    }
+
+    sendHeartbeat()
+    const intervalId = setInterval(sendHeartbeat, 5000)
+    return () => clearInterval(intervalId)
+  }, [sessionId, monitoringToken, videoPreviewRef])
 
 // Screenshot / capture-attempt deterrence & logging.
   // NOTE: this can only catch in-browser vectors (shortcuts, right-click,
@@ -2059,9 +2122,6 @@ export const useInterviewSession = (sessionId, interviewType, startRoundTwo) => 
     // This prevents the interview from staying visible during async cleanup,
     // and stops back-navigation from re-showing the interview.
     setIsCompleted(true)
-    if (sessionId) {
-      try { localStorage.setItem(`interview_done_${sessionId}`, '1') } catch (e) {}
-    }
 
     if (window.speechSynthesis) window.speechSynthesis.cancel()
     stopSilenceTimer()
@@ -2193,10 +2253,21 @@ export const useInterviewSession = (sessionId, interviewType, startRoundTwo) => 
     try {
       const queryParams = terminationReason ? `?reason=${encodeURIComponent(terminationReason)}` : ''
       await api.post(`/complete-session/${sessionId}${queryParams}`)
-    } catch (e) {
-      // Store a retry marker so verifySession() can drain it on the next page load
-      console.warn('complete-session failed; scheduling retry on next visit.', e)
-      try { localStorage.setItem(`complete_session_pending_${sessionId}`, '1') } catch (_) {}
+      if (sessionId) {
+        try { localStorage.setItem(`interview_done_${sessionId}`, '1') } catch (e) {}
+      }
+    } catch (completionError) {
+      console.error('Failed to complete interview session:', completionError)
+      isSubmittingRef.current = false
+      setIsCompleted(false)
+      Swal.fire({
+        title: 'Submission Failed',
+        text: 'Your interview could not be finalized. Please check your connection and submit again.',
+        icon: 'error',
+        background: '#161c2d',
+        color: '#fff',
+      })
+      return
     }
 
     // Wait for the video upload to finish before marking everything complete
@@ -2283,7 +2354,9 @@ export const useInterviewSession = (sessionId, interviewType, startRoundTwo) => 
     currentQuestion,
     codingTask,
     isMediaReady,
-    proctoringAlert,
+    proctoringAlert: proctoring.modelsFailed
+      ? 'Proctoring AI models failed to load. Face and object monitoring is unavailable.'
+      : proctoringAlert,
     faceAlertCount,
     noiseAlertCount,
     showNoiseBanner,

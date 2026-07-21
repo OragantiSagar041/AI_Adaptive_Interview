@@ -1,15 +1,21 @@
 import { useEffect, useRef } from 'react'
 import { API_BASE_URL } from '../apiConfig'
 
-export default function useCandidateWebRTC(linkId, mediaStreamRef, telemetryData) {
+export default function useCandidateWebRTC(linkId, mediaStreamRef, telemetryData, monitoringToken) {
   const wsRef = useRef(null)
   const pcsRef = useRef({}) // Admin session ID -> RTCPeerConnection (Map if multiple admins view)
+  const latestTelemetryRef = useRef(telemetryData)
+
+  useEffect(() => {
+    latestTelemetryRef.current = telemetryData
+  }, [telemetryData])
 
   // Initialize Signaling WebSocket
   useEffect(() => {
-    if (!linkId) return
+    if (!linkId || !monitoringToken) return
 
-    const wsUrl = API_BASE_URL.replace(/^https/, 'wss').replace(/^http/, 'ws') + `/ws/webrtc/candidate/${linkId}`
+    const wsUrl = API_BASE_URL.replace(/^https/, 'wss').replace(/^http/, 'ws') +
+      `/ws/webrtc/candidate/${linkId}?token=${encodeURIComponent(monitoringToken)}`
     const ws = new WebSocket(wsUrl)
     wsRef.current = ws
 
@@ -96,15 +102,54 @@ export default function useCandidateWebRTC(linkId, mediaStreamRef, telemetryData
       }
       Object.values(pcsRef.current).forEach(pc => pc.close())
     }
-  }, [linkId, mediaStreamRef])
+  }, [linkId, mediaStreamRef, monitoringToken])
 
   // Send Telemetry Updates periodically to keep candidate marked as 'online'
   useEffect(() => {
+    if (!linkId || !monitoringToken) return
+
+    let audioContext = null
+    let analyser = null
+    let audioData = null
+    let measuredStream = null
+
+    const measureAudioLevel = () => {
+      const stream = mediaStreamRef.current
+      if (!stream?.getAudioTracks().some(track => track.readyState === 'live')) return 0
+      try {
+        if (!analyser || measuredStream !== stream) {
+          audioContext?.close().catch(() => {})
+          audioContext = new (window.AudioContext || window.webkitAudioContext)()
+          const source = audioContext.createMediaStreamSource(stream)
+          analyser = audioContext.createAnalyser()
+          analyser.fftSize = 512
+          source.connect(analyser)
+          audioData = new Uint8Array(analyser.fftSize)
+          measuredStream = stream
+        }
+        if (audioContext.state === 'suspended') audioContext.resume().catch(() => {})
+        analyser.getByteTimeDomainData(audioData)
+        let sumSquares = 0
+        for (const sample of audioData) {
+          const normalized = (sample - 128) / 128
+          sumSquares += normalized * normalized
+        }
+        const rms = Math.sqrt(sumSquares / audioData.length)
+        return Math.min(100, Math.round(rms * 300))
+      } catch {
+        return 0
+      }
+    }
+
     const sendTelemetry = () => {
-      if (wsRef.current?.readyState === WebSocket.OPEN && telemetryData) {
+      const currentTelemetry = latestTelemetryRef.current
+      if (wsRef.current?.readyState === WebSocket.OPEN && currentTelemetry) {
         wsRef.current.send(JSON.stringify({
           type: 'telemetry',
-          data: telemetryData
+          data: {
+            ...currentTelemetry,
+            audio_level: measureAudioLevel(),
+          }
         }))
       }
     }
@@ -115,8 +160,11 @@ export default function useCandidateWebRTC(linkId, mediaStreamRef, telemetryData
     // Send every 5 seconds to maintain heartbeat
     const intervalId = setInterval(sendTelemetry, 5000)
 
-    return () => clearInterval(intervalId)
-  }, [JSON.stringify(telemetryData)])
+    return () => {
+      clearInterval(intervalId)
+      audioContext?.close().catch(() => {})
+    }
+  }, [linkId, mediaStreamRef, monitoringToken])
 
   return wsRef
 }

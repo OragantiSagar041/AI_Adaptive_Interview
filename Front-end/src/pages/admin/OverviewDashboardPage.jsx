@@ -253,14 +253,14 @@ export default function OverviewDashboardPage() {
   });
 
   const kpis = [
-    { label: "Total Candidates", value: dbStats?.total || "0", icon: Users, tint: "primary", delta: "" },
-    { label: "Candidates Selected", value: dbStats?.selected || "0", icon: Target, tint: "success", delta: "" },
-    { label: "AI Interviews Completed", value: dbStats?.completed || "0", icon: Mic, tint: "accent", delta: "" },
-    { label: "Average AI Score", value: `${dbStats?.avg_score || "0"}%`, icon: Star, tint: "warning", delta: "" },
-    { label: "Pending Reviews", value: dbStats?.pending || "0", icon: Clock, tint: "info", delta: "" },
-    { label: "Started", value: dbStats?.started || "0", icon: Activity, tint: "primary", delta: "" },
-    { label: "Rejected Candidates", value: dbStats?.rejected || "0", icon: XCircle, tint: "destructive", delta: "" },
-    { label: "Expired", value: dbStats?.expired || "0", icon: AlertCircle, tint: "warning", delta: "" },
+    { label: "Total Candidates", value: dbStats?.total || "0", icon: Users, tint: "primary", delta: "", filterType: null, navPath: null },
+    { label: "Candidates Selected", value: dbStats?.selected || "0", icon: Target, tint: "success", delta: "", filterType: null, navPath: "/admin/qualified-candidates" },
+    { label: "AI Interviews Completed", value: dbStats?.completed || "0", icon: Mic, tint: "accent", delta: "", filterType: "completed", navPath: null },
+    { label: "Average AI Score", value: `${dbStats?.avg_score || "0"}%`, icon: Star, tint: "warning", delta: "", filterType: "high_scores", navPath: null },
+    { label: "Pending Reviews", value: dbStats?.pending || "0", icon: Clock, tint: "info", delta: "", filterType: "pending", navPath: null },
+    { label: "Started", value: dbStats?.started || "0", icon: Activity, tint: "primary", delta: "", filterType: "live", navPath: null },
+    { label: "Rejected Candidates", value: dbStats?.rejected || "0", icon: XCircle, tint: "destructive", delta: "", filterType: "rejected", navPath: "/admin/rejected-candidates" },
+    { label: "Expired", value: dbStats?.expired || "0", icon: AlertCircle, tint: "warning", delta: "", filterType: "expired", navPath: null },
   ];
 
   const pipeline = [
@@ -346,10 +346,20 @@ export default function OverviewDashboardPage() {
         <section className="grid grid-cols-2 gap-4 md:grid-cols-4 xl:grid-cols-4">
           {kpis.map((k) => {
             const Icon = k.icon;
+            const isClickable = k.navPath || k.filterType;
             return (
               <Card
                 key={k.label}
-                className="group relative overflow-hidden border-border/60 p-5 shadow-[var(--shadow-card)] transition-all hover:-translate-y-0.5 hover:shadow-[var(--shadow-glow)] bg-white"
+                onClick={() => {
+                  if (k.navPath) {
+                    navigate(k.navPath);
+                  } else if (k.filterType) {
+                    handleOpenRecordsModal(k.filterType, k.label);
+                  }
+                }}
+                className={`group relative overflow-hidden border-border/60 p-5 shadow-[var(--shadow-card)] transition-all hover:-translate-y-0.5 hover:shadow-[var(--shadow-glow)] bg-white ${
+                  isClickable ? "cursor-pointer hover:border-primary/40" : ""
+                }`}
               >
                 <div className="flex items-start justify-between">
                   <div>
@@ -361,6 +371,12 @@ export default function OverviewDashboardPage() {
                       <div className="mt-2 flex items-center gap-1 text-[11px] text-success">
                         <TrendingUp className="h-3 w-3" />
                         {k.delta}
+                      </div>
+                    )}
+                    {isClickable && (
+                      <div className="mt-2 flex items-center gap-1 text-[10px] text-muted-foreground opacity-0 group-hover:opacity-100 transition-opacity">
+                        <ChevronRight className="h-3 w-3" />
+                        <span>View details</span>
                       </div>
                     )}
                   </div>
@@ -531,7 +547,7 @@ export default function OverviewDashboardPage() {
               </thead>
               <tbody>
                 {filteredTableCandidates && filteredTableCandidates.slice(0, 10).map((c, i) => (
-                  <tr key={c.id || i} className="border-b border-border/50 last:border-0 hover:bg-slate-50">
+                  <tr key={c.id || i} onClick={() => setSelectedCandidate(c)} className="border-b border-border/50 last:border-0 hover:bg-slate-50 cursor-pointer">
                     <td className="px-6 py-3">
                       <div className="flex items-center gap-2.5">
                         <Avatar className="h-8 w-8">
@@ -570,7 +586,7 @@ export default function OverviewDashboardPage() {
                         variant="ghost"
                         size="sm"
                         className="h-8 px-3 text-xs"
-                        onClick={() => setSelectedCandidate(c)}
+                        onClick={(e) => { e.stopPropagation(); setSelectedCandidate(c); }}
                       >
                         View
                       </Button>

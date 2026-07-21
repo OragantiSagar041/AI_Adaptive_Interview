@@ -24,10 +24,13 @@ export const loadDashboardData = createAsyncThunk(
 // ─── SuperAdmin Thunks ─────────────────────────────────
 export const loadSuperAdminDashboard = createAsyncThunk(
   'dashboard/loadSuperAdminData',
-  async (adminFilter = null, { getState, rejectWithValue }) => {
+  async (arg = null, { getState, rejectWithValue }) => {
     try {
       const { API_BASE_URL, token } = getState().auth
-      const params = adminFilter ? { adminId: adminFilter } : {}
+      const adminFilter = typeof arg === 'object' && arg !== null ? arg.adminFilter ?? null : arg
+      const summaryOnly = typeof arg === 'object' && arg !== null ? !!arg.summaryOnly : false
+      const params = { summary_only: summaryOnly }
+      if (adminFilter) params.adminId = adminFilter
       const res = await axios.get(`${API_BASE_URL}/superadmin/dashboard`, {
         headers: { Authorization: `Bearer ${token}` },
         params
@@ -128,10 +131,16 @@ const dashboardSlice = createSlice({
         const session = state.liveSessions[sessionIndex];
         state.liveSessions[sessionIndex] = {
           ...session,
+          ...data,
           online: true,
-          audio_level: data.audio_level || 0,
-          current_question: data.current_question || session.current_question
+          audio_level: data.audio_level ?? session.audio_level ?? 0,
+          current_question: data.current_question ?? session.current_question
         };
+        state.ongoingMonitoredCount = state.liveSessions.length
+        state.ongoingLiveCount = state.liveSessions.filter(item => item.online).length
+        state.ongoingAlertCount = state.liveSessions.filter(item => (item.proctoring_alerts || 0) > 0).length
+        state.ongoingSpeakingCount = state.liveSessions.filter(item => (item.audio_level || 0) > 5).length
+        state.ongoingCodingCount = state.liveSessions.filter(item => item.round_type === 'coding').length
       }
     }
   },

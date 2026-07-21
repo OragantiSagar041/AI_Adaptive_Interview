@@ -2,8 +2,9 @@ import os
 import json
 import asyncio
 import logging
-from typing import Dict, List, Optional
+from typing import Any, Dict, List, Optional
 from fastapi import WebSocket
+from app.live_monitoring_security import admin_can_receive_dashboard_event
 
 import redis.asyncio as redis
 
@@ -17,7 +18,7 @@ class RedisConnectionManager:
         self.pubsub = None
         # Local state for websockets connected to THIS instance
         self.local_connections: Dict[str, Dict[str, any]] = {}
-        self.dashboard_connections: List[WebSocket] = []
+        self.dashboard_connections: List[Dict[str, Any]] = []
         self.listener_task: Optional[asyncio.Task] = None
         self._redis_failed = False
 
@@ -74,12 +75,7 @@ class RedisConnectionManager:
                                     except Exception as e:
                                         logger.error(f"Error sending to local admin: {e}")
                     elif channel == "dashboard:updates":
-                        # Push to all connected dashboard websockets
-                        for ws in self.dashboard_connections:
-                            try:
-                                await ws.send_json(data)
-                            except Exception as e:
-                                logger.error(f"Error sending dashboard update: {e}")
+                        await self.broadcast_dashboard(data)
         except asyncio.CancelledError:
             pass
         except Exception as e:
@@ -125,16 +121,34 @@ class RedisConnectionManager:
                 if self.pubsub:
                     asyncio.create_task(self.pubsub.unsubscribe(f"session:{link_id}:candidate", f"session:{link_id}:admins"))
 
-    async def connect_dashboard(self, websocket: WebSocket):
+    async def connect_dashboard(self, websocket: WebSocket, auth_context: Dict[str, str]):
         await websocket.accept()
-        self.dashboard_connections.append(websocket)
+        self.dashboard_connections.append({"websocket": websocket, **auth_context})
         await self.connect_redis()
         if self.pubsub:
             await self.pubsub.subscribe("dashboard:updates")
 
     def disconnect_dashboard(self, websocket: WebSocket):
-        if websocket in self.dashboard_connections:
-            self.dashboard_connections.remove(websocket)
+        self.dashboard_connections = [
+            connection
+            for connection in self.dashboard_connections
+            if connection.get("websocket") is not websocket
+        ]
+
+    async def broadcast_dashboard(self, data: Dict[str, Any]):
+        """Send a dashboard event only to admins authorized for its tenant."""
+        stale_connections = []
+        for connection in list(self.dashboard_connections):
+            if not admin_can_receive_dashboard_event(connection, data):
+                continue
+            websocket = connection.get("websocket")
+            try:
+                await websocket.send_json(data)
+            except Exception as exc:
+                logger.error("Error sending dashboard update: %s", exc)
+                stale_connections.append(websocket)
+        for websocket in stale_connections:
+            self.disconnect_dashboard(websocket)
 
     async def send_to_candidate(self, link_id: str, message: dict):
         """Publish a message to the candidate's channel."""
