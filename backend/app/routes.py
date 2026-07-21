@@ -597,6 +597,10 @@ async def start_interview(
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 
+import asyncio
+from collections import defaultdict
+_question_generation_locks = defaultdict(asyncio.Lock)
+
 @router.post("/generate-more-questions")
 @router.post("/generate-more-questions/")
 async def generate_more_questions_endpoint(
@@ -611,95 +615,95 @@ async def generate_more_questions_endpoint(
     """
     try:
         from starlette.concurrency import run_in_threadpool
-        import asyncio
 
-        # Fetch session from RAM or DB
+        async with _question_generation_locks[interview_id]:
+            # Fetch session from RAM or DB
         session = get_session(interview_id)
-        if not session:
-            row = interviews_collection.find_one({"id": interview_id})
-            if row:
-                try:
-                    loaded_questions = json.loads(row.get("questions", "[]"))
-                    session = {
-                        "id": interview_id,
-                        "source": row.get("source"),
-                        "profile_text": row.get("profile_text", ""),
-                        "questions": loaded_questions,
-                        "answers": {},
-                        "industry": row.get("industry", "General"),
-                        "interview_type": row.get("interview_type", "Technical"),
-                        "language": row.get("language", "English")
-                    }
-                    set_session(interview_id, session)
-                except Exception:
-                    pass
+            if not session:
+                row = interviews_collection.find_one({"id": interview_id})
+                if row:
+                    try:
+                        loaded_questions = json.loads(row.get("questions", "[]"))
+                        session = {
+                            "id": interview_id,
+                            "source": row.get("source"),
+                            "profile_text": row.get("profile_text", ""),
+                            "questions": loaded_questions,
+                            "answers": {},
+                            "industry": row.get("industry", "General"),
+                            "interview_type": row.get("interview_type", "Technical"),
+                            "language": row.get("language", "English")
+                        }
+                        set_session(interview_id, session)
+                    except Exception:
+                        pass
 
-        if not session:
-            raise HTTPException(status_code=404, detail="Interview session not found")
+            if not session:
+                raise HTTPException(status_code=404, detail="Interview session not found")
 
-        profile_text = session.get("profile_text", "")
-        source = session.get("source", "resume")
-        existing_questions = session.get("questions", [])
+            profile_text = session.get("profile_text", "")
+            source = session.get("source", "resume")
+            existing_questions = session.get("questions", [])
 
-        # Parse IDs of already-asked questions to avoid repeats
-        asked_ids = set()
-        if asked_question_ids:
-            for aid in asked_question_ids.split(","):
-                aid = aid.strip()
-                if aid:
-                    asked_ids.add(str(aid))
+            # Parse IDs of already-asked questions to avoid repeats
+            asked_ids = set()
+            if asked_question_ids:
+                for aid in asked_question_ids.split(","):
+                    aid = aid.strip()
+                    if aid:
+                        asked_ids.add(str(aid))
 
-        already_asked_texts = {
-            str(q.get("question") or q.get("text") or "").lower().strip()
-            for q in existing_questions
-            if str(q.get("id", "")) in asked_ids or asked_ids == set()
-        }
+            already_asked_texts = {
+                str(q.get("question") or q.get("text") or "").lower().strip()
+                for q in existing_questions
+                if str(q.get("id", "")) in asked_ids or asked_ids == set()
+            }
 
-        # Generate a new batch of questions
-        new_questions = await run_in_threadpool(
-            generate_mock_questions,
-            text=profile_text,
-            source=source,
-            num_questions=count + 4,
-            interview_type=session.get("interview_type", "Technical"),
-            industry=session.get("industry", "General"),
-            language=session.get("language", "English")
-        )
-
-        # Filter out questions already asked (text-similarity check)
-        fresh_questions = []
-        for q in new_questions:
-            q_text = str(q.get("question") or q.get("text") or "").lower().strip()
-            is_duplicate = any(
-                q_text in asked or asked in q_text
-                for asked in already_asked_texts
-                if len(asked) > 10  # skip very short strings
+            # Generate a new batch of questions
+            new_questions = await run_in_threadpool(
+                generate_mock_questions,
+                text=profile_text,
+                source=source,
+                num_questions=count + 4,
+                interview_type=session.get("interview_type", "Technical"),
+                industry=session.get("industry", "General"),
+                language=session.get("language", "English")
             )
-            if not is_duplicate:
-                fresh_questions.append(q)
-            if len(fresh_questions) >= count:
-                break
 
-        # Assign fresh IDs starting after the last existing question
-        start_id = len(existing_questions) + 1
-        for i, q in enumerate(fresh_questions):
-            q["id"] = start_id + i
-            q["text"] = q.get("question") or q.get("text") or ""
-            q["type"] = q.get("type") or "Interview"
+            # Filter out questions already asked (text-similarity check)
+            fresh_questions = []
+            for q in new_questions:
+                q_text = str(q.get("question") or q.get("text") or "").lower().strip()
+                is_duplicate = any(
+                    q_text in asked or asked in q_text
+                    for asked in already_asked_texts
+                    if len(asked) > 10  # skip very short strings
+                )
+                if not is_duplicate:
+                    fresh_questions.append(q)
+                if len(fresh_questions) >= count:
+                    break
 
-        # Persist the newly generated questions back to session and DB
-        session["questions"].extend(fresh_questions)
-        set_session(interview_id, session)
-        interviews_collection.update_one(
-            {"id": interview_id},
-            {"$set": {"questions": json.dumps(session["questions"])}}
-        )
+            # Assign fresh IDs starting after the last existing question
+            start_id = len(existing_questions) + 1
+            for i, q in enumerate(fresh_questions):
+                q["id"] = start_id + i
+                q["text"] = q.get("question") or q.get("text") or ""
+                q["type"] = q.get("type") or "Interview"
 
-        return {
-            "status": "success",
-            "questions": fresh_questions,
-            "count": len(fresh_questions)
-        }
+            # Persist the newly generated questions back to session and DB
+            session["questions"].extend(fresh_questions)
+            set_session(interview_id, session)
+            interviews_collection.update_one(
+                {"id": interview_id},
+                {"$set": {"questions": json.dumps(session["questions"])}}
+            )
+
+            return {
+                "status": "success",
+                "questions": fresh_questions,
+                "count": len(fresh_questions)
+            }
 
     except HTTPException:
         raise

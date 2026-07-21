@@ -1962,8 +1962,10 @@ export const useInterviewSession = (sessionId, interviewType, startRoundTwo) => 
               background: '#0f172a',
               color: '#fff'
             })
-            while (isPrefetchingRef.current) {
+            let waits = 0;
+            while (isPrefetchingRef.current && waits < 30) {
               await new Promise(r => setTimeout(r, 500))
+              waits++;
             }
             Swal.close()
           }
@@ -2237,7 +2239,7 @@ export const useInterviewSession = (sessionId, interviewType, startRoundTwo) => 
           const timeSpent = Math.round((Date.now() - questionStartTimeRef.current) / 1000)
           const iid = interviewId || sessionDetail?.interview_id || sessionId
           if (currentQuestion.type === 'case_study') {
-            api.post(`/case-study/submit-answer`, {
+            await api.post(`/case-study/submit-answer`, {
               interview_id: iid,
               question_index: currentQuestion.caseStudyIndex,
               answer_text: transcriptionText || ' '
@@ -2251,7 +2253,7 @@ export const useInterviewSession = (sessionId, interviewType, startRoundTwo) => 
             answerForm.append('candidate_name', sessionDetail?.candidate_name || 'Candidate')
             answerForm.append('time_spent_seconds', timeSpent.toString())
             answerForm.append('time_limit_seconds', '120')
-            api.post(`/save-answer`, answerForm).catch(()=>{})
+            await api.post(`/save-answer`, answerForm).catch(()=>{})
           }
         }
         handleSubmitInterview(false, 'early_exit')
