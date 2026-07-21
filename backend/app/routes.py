@@ -1007,7 +1007,10 @@ class CodingRoundObserveRequest(CodingRoundCheckpointRequest):
 
 
 @router.post("/coding-round/start")
-def start_coding_round(req: CodingRoundStartRequest):
+async def start_coding_round(req: CodingRoundStartRequest):
+    import asyncio
+    from fastapi.concurrency import run_in_threadpool
+
     interview = get_interview_or_404(req.interview_id)
     answers_data = get_answer_history(req.interview_id)
 
@@ -1022,13 +1025,17 @@ def start_coding_round(req: CodingRoundStartRequest):
 
     interview_type = interview.get("interview_type", "Technical")
     profile_text = interview.get("profile_text", "")
-    
+
     # Get industry from the session
     link_id = interview.get("link_id", "")
     session = interview_sessions_collection.find_one({"link_id": link_id}) if link_id else None
     industry = (session or {}).get("industry", "General")
-    
-    task = generate_coding_task(profile_text, answers_data, interview_type, industry=industry)
+
+    # generate_coding_task calls an LLM (blocking I/O) — run it off the event loop
+    task = await run_in_threadpool(
+        generate_coding_task, profile_text, answers_data, interview_type, industry
+    )
+
     coding_round = {
         "status": "active",
         "task": task,
@@ -2461,7 +2468,10 @@ def generate_report(interview_id: str):
     story.append(Spacer(1, 12))
     
     # Fetch session record to reuse the average score already stored in the DB (includes blended scores)
-    session_rec = interview_sessions_collection.find_one({"interview_id": interview_id})
+    link_id = interview_data.get("link_id")
+    session_rec = interview_sessions_collection.find_one({"link_id": link_id}) if link_id else None
+    if not session_rec:
+        session_rec = interview_sessions_collection.find_one({"interview_id": interview_id})
     avg_score = session_rec.get("avg_score") if session_rec else None
     
     # Calculate Average Score (Fallback if not populated in session document)
@@ -2513,6 +2523,33 @@ def generate_report(interview_id: str):
         # story.append(Paragraph("_" * 80, normal_style)) 
         
         story.append(Spacer(1, 15))
+
+    # ── AI EVALUATION & RECOMMENDATION ──
+    if session_rec:
+        recommendation = session_rec.get("overall_recommendation") or session_rec.get("recommendation")
+        strengths = session_rec.get("strengths_summary")
+        weaknesses = session_rec.get("weaknesses_summary")
+        
+        if recommendation or strengths or weaknesses:
+            story.append(Spacer(1, 20))
+            story.append(Paragraph("<b>AI Recommendation & Evaluation</b>", styles['Heading2']))
+            story.append(Spacer(1, 10))
+            
+            if recommendation:
+                story.append(Paragraph(f"<b>Recommendation:</b> {recommendation}", normal_style))
+                story.append(Spacer(1, 5))
+            if strengths:
+                story.append(Paragraph("<b>Strengths:</b>", normal_style))
+                safe_strengths = strengths.replace("&", "&amp;").replace("<", "&lt;").replace(">", "&gt;").replace("\n", "<br/>")
+                story.append(Paragraph(safe_strengths, normal_style))
+                story.append(Spacer(1, 5))
+            if weaknesses:
+                story.append(Paragraph("<b>Areas to Improve:</b>", normal_style))
+                safe_weaknesses = weaknesses.replace("&", "&amp;").replace("<", "&lt;").replace(">", "&gt;").replace("\n", "<br/>")
+                story.append(Paragraph(safe_weaknesses, normal_style))
+                story.append(Spacer(1, 5))
+            
+            story.append(Spacer(1, 15))
 
     # ── CODING ROUND ──
     coding_round = interview_data.get("coding_round")

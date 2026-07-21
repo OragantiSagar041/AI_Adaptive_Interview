@@ -408,6 +408,39 @@ export default function CandidateDialog({ candidate, open, onOpenChange, onStatu
       y += 10;
     });
 
+    // ── EVALUATION RESULTS ──
+    checkPageBreak(30);
+    doc.setFontSize(14);
+    doc.setFont("helvetica", "bold");
+    doc.text("Evaluation Results", margin, y);
+    y += 8;
+    
+    doc.setFontSize(11);
+    
+    checkPageBreak(10);
+    doc.setFont("helvetica", "bold");
+    doc.text("Overall AI Score: ", margin, y);
+    doc.setFont("helvetica", "normal");
+    doc.text(`${aiScore.toFixed(0)}%`, margin + doc.getTextWidth("Overall AI Score: ") + 2, y);
+    y += 8;
+
+    scoreItems.forEach(([label, score]) => {
+      checkPageBreak(10);
+      doc.setFont("helvetica", "bold");
+      doc.text(`${label}: `, margin, y);
+      doc.setFont("helvetica", "normal");
+      doc.text(`${Number(score).toFixed(0)}%`, margin + doc.getTextWidth(`${label}: `) + 2, y);
+      y += 8;
+    });
+
+    const detectedLanguageAccent = c.detected_accent || c.detected_language || "Not detected";
+    checkPageBreak(10);
+    doc.setFont("helvetica", "bold");
+    doc.text("Detected Language / Accent: ", margin, y);
+    doc.setFont("helvetica", "normal");
+    doc.text(detectedLanguageAccent, margin + doc.getTextWidth("Detected Language / Accent: ") + 2, y);
+    y += 8;
+
     doc.save(`${c.candidate_name?.replace(/\s+/g, '_') || 'Candidate'}_transcript.pdf`);
   };
 

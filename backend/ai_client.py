@@ -265,7 +265,7 @@ def chat_completion(
     messages: List[Dict[str, str]],
     model: str = "openai/gpt-4o-mini",
     temperature: float = 0.1,
-    timeout: int = 15,
+    timeout: int = 45,
     max_tokens: int = 1024,
 ) -> str:
     """
