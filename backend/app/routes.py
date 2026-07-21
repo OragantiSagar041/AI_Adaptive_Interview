@@ -429,7 +429,7 @@ def api_gen_next_question(req: NextQuestionRequest):
 
 
 @router.post("/parse-resume")
-def parse_resume(
+async def parse_resume(
     file: UploadFile = File(...),
     source: str = Form("resume"),
     upload_to_cloud: bool = Form(False)
@@ -480,7 +480,17 @@ def parse_resume(
         interview_id = f"int_{int(datetime.now(timezone.utc).timestamp())}_{uuid.uuid4().hex[:8]}"
 
         # Analyze the resume
-        profile_analysis = analyze_resume_or_jd(content_str)
+        import asyncio
+        from starlette.concurrency import run_in_threadpool
+        try:
+            profile_analysis = await asyncio.wait_for(
+                run_in_threadpool(analyze_resume_or_jd, content_str), 
+                timeout=15.0
+            )
+        except asyncio.TimeoutError:
+            profile_analysis = {"error": "Analysis timed out"}
+        except Exception as e:
+            profile_analysis = {"error": str(e)}
 
         # Generate questions
         questions = generate_mock_questions(content_str, source)
@@ -527,7 +537,7 @@ def parse_resume(
 
 @router.post("/start-interview")
 @router.post("/start-interview/")
-def start_interview(
+async def start_interview(
     content: str = Form(...),
     source: str = Form("resume")
 ):
@@ -537,7 +547,17 @@ def start_interview(
         interview_id = f"int_{int(datetime.now(timezone.utc).timestamp())}_{uuid.uuid4().hex[:8]}"
 
         # ✅ STEP-3.2 → AI ANALYSIS (CORRECT PLACE)
-        profile_analysis = analyze_resume_or_jd(content)
+        import asyncio
+        from starlette.concurrency import run_in_threadpool
+        try:
+            profile_analysis = await asyncio.wait_for(
+                run_in_threadpool(analyze_resume_or_jd, content), 
+                timeout=15.0
+            )
+        except asyncio.TimeoutError:
+            profile_analysis = {"error": "Analysis timed out"}
+        except Exception as e:
+            profile_analysis = {"error": str(e)}
 
         # Generate questions based on Source (Resume vs JD)
         questions = generate_mock_questions(content, source)
@@ -3435,7 +3455,7 @@ def extract_info_from_resume(text: str) -> Dict:
     return {"name": name, "email": email}
 
 @router.post("/admin/parse-resume")
-def parse_resume(
+async def parse_resume(
     file: UploadFile = File(...), 
     source: Optional[str] = Form(None),
     upload_to_cloud: Optional[str] = Form(None),
@@ -3464,16 +3484,99 @@ def parse_resume(
         file_url = f"temp://{temp_filename}"
 
     info = {}
-    if source != 'jd':
+    
+    title = "Job Posting"
+    experience = "Not Specified"
+    skills_str = ""
+    location = ""
+    salary = ""
+    bond = ""
+    workMode = "Remote"
+    warning = None
+    
+    if source == 'jd':
+        from app.services import analyze_resume_or_jd, chat_completion
+        from starlette.concurrency import run_in_threadpool
+        try:
+            import asyncio
+            analysis = await asyncio.wait_for(run_in_threadpool(analyze_resume_or_jd, text), timeout=15.0)
+            skills_list = analysis.get("skills", []) if isinstance(analysis, dict) else []
+            skills_str = ", ".join(skills_list)
+        except asyncio.TimeoutError:
+            print("JD skills analysis timed out.")
+            warning = "Failed to extract skills. Analysis timed out."
+        except Exception as e:
+            print("Error analyzing JD skills:", e)
+            warning = "Failed to extract skills. "
+
+        try:
+            prompt = f"""Extract the following fields from this job description:
+1. title (string)
+2. experience (string, e.g., '2-3 years')
+3. location (string)
+4. salary (string)
+5. bond (string, e.g., '1 year' or 'No')
+6. workMode (string, only one of: 'Remote', 'Hybrid', 'On-site')
+
+Return a pure JSON object with these keys. If not found, return empty string for that key. Do not use markdown. JD: {text[:20000]}"""
+            
+            resp = await run_in_threadpool(
+                chat_completion,
+                messages=[{"role": "user", "content": prompt}],
+                model="openai/gpt-4o-mini",
+                temperature=0.0,
+                timeout=15.0
+            )
+            
+            import json, re
+            if resp:
+                resp_clean = re.sub(r"```(?:json)?", "", resp).strip()
+                try:
+                    data = json.loads(resp_clean)
+                    title = data.get("title") or title
+                    experience = data.get("experience") or experience
+                    location = data.get("location") or ""
+                    salary = data.get("salary") or ""
+                    bond = data.get("bond") or ""
+                    
+                    wm_parsed = str(data.get("workMode") or "").strip().lower()
+                    if "hybrid" in wm_parsed:
+                        workMode = "Hybrid"
+                    elif "site" in wm_parsed or "office" in wm_parsed:
+                        workMode = "On-site"
+                    elif "remote" in wm_parsed:
+                        workMode = "Remote"
+                except Exception as parse_e:
+                    print("Error parsing JSON for JD details:", parse_e)
+                    warning = (warning + " " if warning else "") + "AI parsing failed or was incomplete. Some fields may be missing."
+        except Exception as e:
+            print("Error extracting JD info:", e)
+            warning = (warning + " " if warning else "") + "Failed to communicate with AI extraction service."
+            
+        if title == "Job Posting":
+            lines = [l.strip() for l in text.split('\n') if l.strip()]
+            if lines:
+                title = lines[0][:50]
+    else:
         info = extract_info_from_resume(text)
         
-    return {
+    res_dict = {
         "status": "success",   
         "text": text,
         "name": info.get("name"), 
         "email": info.get("email"),
-        "file_url": file_url
+        "file_url": file_url,
+        "title": title,
+        "experience": experience,
+        "skills": skills_str,
+        "location": location,
+        "salary": salary,
+        "bond": bond,
+        "workMode": workMode
     }
+    if warning:
+        res_dict["warning"] = warning
+    return res_dict
 
 
 @router.get("/admin/candidate/check")
@@ -4163,7 +4266,7 @@ def reschedule_session(link_id: str, new_expiry: str = Form(...), new_start: str
 
 @router.post("/start-session-interview")
 @router.post("/start_session_interview")
-def start_session_interview(link_id: str = Form(...)):
+async def start_session_interview(link_id: str = Form(...)):
     current_session_id.set(link_id)
     row = interview_sessions_collection.find_one({"link_id": link_id})
     
@@ -4365,7 +4468,17 @@ def start_session_interview(link_id: str = Form(...)):
     source = "job_description" if job_description and len(job_description) > 50 else "resume"
     content_str = job_description if source == "job_description" else resume_text
     
-    profile_analysis = analyze_resume_or_jd(content_str)
+    import asyncio
+    from starlette.concurrency import run_in_threadpool
+    try:
+        profile_analysis = await asyncio.wait_for(
+            run_in_threadpool(analyze_resume_or_jd, content_str), 
+            timeout=15.0
+        )
+    except asyncio.TimeoutError:
+        profile_analysis = {"error": "Analysis timed out"}
+    except Exception as e:
+        profile_analysis = {"error": str(e)}
     
     hr_screening = row.get("hr_screening")
     custom_questions_text = row.get("custom_questions", "")
