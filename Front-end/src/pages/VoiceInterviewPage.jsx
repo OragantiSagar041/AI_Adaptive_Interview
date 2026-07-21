@@ -310,6 +310,7 @@ export default function VoiceInterviewPage() {
   const chatBottomRef = useRef(null)
   const wsRef = useRef(null)
   const wsReconnectAttemptsRef = useRef(0)  // Phase 2: WS auto-reconnect counter
+  const wsReconnectTimeoutRef = useRef(null)
   const heartbeatFailCountRef = useRef(0)   // Phase 2: consecutive heartbeat failure counter
   const languageRef = useRef('English')
   const currentAudioRef = useRef(null)    // ← tracks active TTS audio so stopAudio() can kill it
@@ -430,7 +431,7 @@ export default function VoiceInterviewPage() {
             background: '#161c2d',
             color: '#fff',
           })
-          setTimeout(() => {
+          wsReconnectTimeoutRef.current = setTimeout(() => {
             wsRef.current = null
             connectWs()
           }, 2000)
@@ -453,6 +454,7 @@ export default function VoiceInterviewPage() {
 
     connectWs()
     return () => {
+      if (wsReconnectTimeoutRef.current) clearTimeout(wsReconnectTimeoutRef.current)
       if (wsRef.current) wsRef.current.close(1000, 'component unmounted')
     }
   }, [linkId])
@@ -595,8 +597,9 @@ export default function VoiceInterviewPage() {
         try {
           const pendingKey = `complete_session_pending_${linkId}`
           if (localStorage.getItem(pendingKey) === '1') {
-            await fetch(`${API_BASE_URL}/complete-session/${linkId}`, { method: 'POST' }).catch(() => {})
-            localStorage.removeItem(pendingKey)
+            fetch(`${API_BASE_URL}/complete-session/${linkId}`, { method: 'POST' })
+              .then(res => { if (res.ok) localStorage.removeItem(pendingKey) })
+              .catch(() => {})
           }
         } catch (_) {}
         setSessionDetail(d)
@@ -637,6 +640,7 @@ export default function VoiceInterviewPage() {
         if (!qs.length) throw new Error('No questions found for this session.')
         setQuestions(qs); setInterviewId(sd.interview_id || ''); setLoading(false)
       } catch (e) { setError(e.message); setLoading(false) }
+      finally { clearTimeout(loadingTimeout) }
     }
     init()
     return () => clearTimeout(loadingTimeout)

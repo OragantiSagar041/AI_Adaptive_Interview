@@ -3916,27 +3916,29 @@ def get_session_by_link(link_id: str):
                 except Exception as e:
                     print(f"Error parsing started_at in get_session_by_link: {e}")
                     
+                    
         # Verify if proctoring thresholds have already been exceeded
-        violation_count = row.get("violation_count", 0)
-        warnings_count = row.get("warnings_count", 0)
-        violations = row.get("violations", [])
-        noise_alerts = sum(1 for v in violations if v.get("type") == "noise_alert")
-        tab_switches = sum(1 for v in violations if v.get("type") == "tab_switch")
-        screenshare_stops = sum(1 for v in violations if v.get("type") == "screenshare_stopped")
-        
-        is_terminated = (
-            violation_count >= 20 or
-            warnings_count >= 10 or
-            noise_alerts >= 10 or
-            tab_switches >= 3 or
-            screenshare_stops >= 3
-        )
-        if is_terminated and status != "completed":
-            interview_sessions_collection.update_one(
-                {"link_id": link_id},
-                {"$set": {"status": "completed"}}
+        if status == 'started':
+            violation_count = row.get("violation_count", 0)
+            warnings_count = row.get("warnings_count", 0)
+            violations = row.get("violations", [])
+            noise_alerts = sum(1 for v in violations if v.get("type") == "noise_alert")
+            tab_switches = sum(1 for v in violations if v.get("type") == "tab_switch")
+            screenshare_stops = sum(1 for v in violations if v.get("type") == "screenshare_stopped")
+            
+            is_terminated = (
+                violation_count >= 20 or
+                warnings_count >= 10 or
+                noise_alerts >= 10 or
+                tab_switches >= 3 or
+                screenshare_stops >= 3
             )
-            status = "completed"
+            if is_terminated:
+                interview_sessions_collection.update_one(
+                    {"link_id": link_id},
+                    {"$set": {"status": "completed"}}
+                )
+                status = "completed"
                 
         return {
             "status": "success",
@@ -7239,47 +7241,11 @@ async def get_dashboard_aggregated_data(admin_id: Optional[str] = None, current_
             }
             candidates_list.append(mock_session)
             
-        try:
-            omni_res = await get_omni_recent_calls()
-            if isinstance(omni_res, dict) and "calls" in omni_res:
-                for call in omni_res["calls"]:
-                    call_id = str(call.get("id") or call.get("call_id") or "")
-                    if not call_id: continue
-                    
-                    # Filter out dummy AI calling data 
-                    to_number = str(call.get("to_number") or call.get("to") or call.get("candidate_name") or "")
-                    dummy_numbers = ["+917680937434", "+919912736854", "+919392895349", "Assistant"]
-                    if to_number in dummy_numbers:
-                        continue
-                    
-                    status_raw = str(call.get("status") or "").lower()
-                    status = "completed"
-                    
-                    score = call.get("cqs_score") or call.get("sentiment_score") or 0.0
-                    try:
-                        score = float(score)
-                    except (ValueError, TypeError):
-                        score = 0.0
-                        
-                    mock_session = {
-                        "id": f"ai_call_omni_{call_id}",
-                        "_id": f"ai_call_omni_{call_id}",
-                        "link_id": f"ai_call_omni_{call_id}",
-                        "candidate_name": to_number or "Omni Call",
-                        "candidate_email": "",
-                        "candidate_phone": to_number,
-                        "interview_title": "AI Calling",
-                        "score": score,
-                        "avg_score": score,
-                        "created_at": call.get("created_at") or call.get("start_time") or datetime.now(timezone.utc).isoformat(),
-                        "decision": status_raw,
-                        "status": status,
-                        "application_id": call_id,
-                        "is_deactivated": False
-                    }
-                    candidates_list.append(mock_session)
-        except Exception as e:
-            print(f"Error appending Omni calls to dashboard: {e}")
+        # NOTE: Omni Dimension (AI Calling) call logs are intentionally NOT merged
+        # into the main candidates_list here. Those records only have phone numbers
+        # (not real names), hardcoded 'AI Calling' roles, and 0% scores, which
+        # pollute the Recruiter Management table with dummy data.
+        # AI Calling data is available via the dedicated /api/calls/recent endpoint
 
         live_sessions = []
         ongoing_monitored_count = 0

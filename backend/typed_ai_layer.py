@@ -388,10 +388,11 @@ def detect_spoken_language(text: str) -> str:
             model="openai/gpt-4o-mini",
             temperature=0.0
         )
-        detected = (response or "").strip().replace(".", "").replace('"', '').replace("'", "")
-        # Basic validation: must be a single word (e.g. English, Hindi, etc.)
-        if len(detected.split()) == 1 and detected != "Unknown":
-            return detected.capitalize()
+        detected = (response or "").strip().replace(".", "").replace('"', '').replace("'", "").capitalize()
+        # Basic validation: must be a single word and in the canonical set
+        canonical_languages = {"English", "Hindi", "Telugu", "Tamil", "Marathi", "Gujarati", "Bengali", "Kannada", "Malayalam", "Punjabi", "Odia", "Assamese", "Urdu", "Sanskrit", "Spanish", "French", "German", "Chinese", "Japanese", "Korean", "Arabic", "Russian", "Portuguese", "Italian"}
+        if len(detected.split()) == 1 and detected in canonical_languages:
+            return detected
     except Exception as e:
         print(f"Language detection failed: {e}")
     return "Unknown"

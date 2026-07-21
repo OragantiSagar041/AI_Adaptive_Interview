@@ -649,6 +649,18 @@ export const useInterviewSession = (sessionId, interviewType, startRoundTwo) => 
     }
 
     async function verifySession() {
+      // ── Drain any pending completion that failed on a previous load ──────
+      // If /complete-session failed (network drop, server crash) on the last
+      // visit, we stored a retry key. Attempt the call now, silently.
+      try {
+        const pendingKey = `complete_session_pending_${sessionId}`
+        if (localStorage.getItem(pendingKey) === '1') {
+          await api.post(`/complete-session/${sessionId}`)
+            .then(() => localStorage.removeItem(pendingKey))
+            .catch(() => {})
+        }
+      } catch (e) {}
+
       // Fast-path: if this browser already completed this session, show the
       // completed screen immediately without waiting for the API round-trip.
       try {
@@ -656,17 +668,6 @@ export const useInterviewSession = (sessionId, interviewType, startRoundTwo) => 
           setIsCompleted(true)
           setLoading(false)
           return
-        }
-      } catch (e) {}
-
-      // ── Drain any pending completion that failed on a previous load ──────
-      // If /complete-session failed (network drop, server crash) on the last
-      // visit, we stored a retry key. Attempt the call now, silently.
-      try {
-        const pendingKey = `complete_session_pending_${sessionId}`
-        if (localStorage.getItem(pendingKey) === '1') {
-          await api.post(`/complete-session/${sessionId}`).catch(() => {})
-          localStorage.removeItem(pendingKey)
         }
       } catch (e) {}
 
@@ -2060,7 +2061,19 @@ export const useInterviewSession = (sessionId, interviewType, startRoundTwo) => 
           await api.post(`/save-answer`, answerForm, {
             headers: { 'Content-Type': 'multipart/form-data' }
           })
-        } catch (e) { }
+        } catch (e) {
+          // Persist failed answers before promising automatic recovery (forceClose submission)
+          try {
+            const failedKey = `failed_answer_${iid}_${currentQuestion.id || (currentQuestionIndex + 1)}`
+            const answerData = {
+              question_id: currentQuestion.id || (currentQuestionIndex + 1),
+              question_text: currentQuestion.text || currentQuestion.question || '',
+              answer_text: currentQuestion.type === 'coding' ? (codeAnswer || ' ') : (transcriptionText || ' '),
+              time_spent_seconds: timeSpent
+            }
+            localStorage.setItem(failedKey, JSON.stringify(answerData))
+          } catch (_) {}
+        }
       }
 
       const payload = {
