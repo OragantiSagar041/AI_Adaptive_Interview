@@ -4048,9 +4048,9 @@ def bulk_create_sessions(data: BulkCreateSession, background_tasks: BackgroundTa
         else:
             r.pop("session_doc", None)
 
-    # Queue the slow email sending process to run in the background (Celery)
+    # Queue the slow email sending process to run in the background (FastAPI native)
     from app.tasks import process_bulk_emails_task
-    process_bulk_emails_task.delay(email_jobs)
+    background_tasks.add_task(process_bulk_emails_task, email_jobs)
     # Process temp JD URLs in the background for bulk sessions
     if data.jd_file_url and data.jd_file_url.startswith("temp://"):
         threading.Thread(target=process_temp_cloudinary_upload, args=(data.jd_file_url, "interview_sessions", "jd_file_url")).start()
