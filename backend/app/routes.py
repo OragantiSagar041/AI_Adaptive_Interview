@@ -6050,19 +6050,39 @@ async def webrtc_endpoint(websocket: WebSocket, role: str, link_id: str, token: 
 
     last_telemetry_at = 0.0
     try:
+        # Notify admin immediately that they are connected so the frontend
+        # can start the WebRTC offer right away without waiting for a message.
+        if role == "admin":
+            try:
+                await websocket.send_json({"type": "admin_connected"})
+            except Exception:
+                pass
+
         while True:
             data = await websocket.receive_json()
-            # Signaling relay
+            msg_type = data.get("type", "")
+
             if role == "candidate":
-                if data.get("type") == "telemetry":
+                # Heartbeat ping — just pong back, never relay to admins
+                if msg_type == "ping":
+                    try:
+                        await websocket.send_json({"type": "pong"})
+                    except Exception:
+                        pass
+                    continue
+
+                # Throttle telemetry: at most one per second
+                if msg_type == "telemetry":
                     now_monotonic = time.monotonic()
                     if now_monotonic - last_telemetry_at < 1.0:
                         continue
                     last_telemetry_at = now_monotonic
+
+                # Relay all signaling messages (offer/answer/ICE) to admins
                 await manager.send_to_admins(link_id, data)
-                
-                # Parse telemetry data if it's there
-                if data.get("type") == "telemetry":
+
+                # Persist telemetry snapshot to MongoDB / Redis for the dashboard
+                if msg_type == "telemetry":
                     telemetry_payload = data.get("data", {}) or {}
                     proctoring_status = telemetry_payload.get("proctoring_status", {}) or {}
                     updates = {
@@ -6080,7 +6100,9 @@ async def webrtc_endpoint(websocket: WebSocket, role: str, link_id: str, token: 
                         "eye_contact_lost": _optional_bool(proctoring_status.get("eyeContactLost")),
                     }
                     await _store_live_snapshot(link_id, updates, candidate_session)
+
             elif role == "admin":
+                # Forward all admin signaling (offer/answer/ICE) directly to the candidate
                 await manager.send_to_candidate(link_id, data)
     except WebSocketDisconnect:
         webrtc_log_path = os.path.join(tempfile.gettempdir(), "webrtc_debug.log")
