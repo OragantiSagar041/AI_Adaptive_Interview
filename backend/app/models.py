@@ -88,6 +88,12 @@ class CreateSession(BaseModel):
     candidate_phone: Optional[str] = ""
     ats_score: Optional[int] = None
     jd_file_url: Optional[str] = None
+    experience: str = ""
+    location: str = ""
+    current_ctc: str = ""
+    expected_ctc: str = ""
+    current_company: str = ""
+    notice_period: str = ""
 
 class ForgotPasswordRequest(BaseModel):
     username: str

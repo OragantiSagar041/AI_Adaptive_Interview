@@ -3639,20 +3639,69 @@ Return a pure JSON object with these keys. If not found, return empty string for
                 title = lines[0][:50]
     else:
         info = extract_info_from_resume(text)
+        name = info.get("name")
+        email = info.get("email")
+        
+        from app.services import chat_completion
+        from starlette.concurrency import run_in_threadpool
+        try:
+            prompt = f"""Extract the following fields from this candidate resume:
+1. name (string)
+2. email (string)
+3. phone (string)
+4. experience (string, e.g., '2 Years' or '0 Years')
+5. location (string)
+6. current_company (string, e.g. 'Google' or 'N/A')
+7. current_ctc (string, e.g. '5 LPA' or 'N/A')
+8. expected_ctc (string, e.g. '8 LPA' or 'N/A')
+9. notice_period (string, e.g. '30 Days' or 'N/A')
+
+Return a pure JSON object with these keys. If not found, return empty string for that key. Do not use markdown. Resume: {text[:20000]}"""
+            
+            resp = await run_in_threadpool(
+                chat_completion,
+                messages=[{"role": "user", "content": prompt}],
+                model="openai/gpt-4o-mini",
+                temperature=0.0,
+                timeout=15.0
+            )
+            import json, re
+            if resp:
+                resp_clean = re.sub(r"```(?:json)?", "", resp).strip()
+                try:
+                    data = json.loads(resp_clean)
+                    info["name"] = data.get("name") or name
+                    info["email"] = data.get("email") or email
+                    info["phone"] = data.get("phone") or ""
+                    info["experience"] = data.get("experience") or ""
+                    info["location"] = data.get("location") or ""
+                    info["current_company"] = data.get("current_company") or ""
+                    info["current_ctc"] = data.get("current_ctc") or ""
+                    info["expected_ctc"] = data.get("expected_ctc") or ""
+                    info["notice_period"] = data.get("notice_period") or ""
+                except Exception as parse_e:
+                    print("Error parsing JSON for Resume details:", parse_e)
+        except Exception as e:
+            print("Error extracting Resume info:", e)
         
     res_dict = {
         "status": "success",   
         "text": text,
-        "name": info.get("name"), 
-        "email": info.get("email"),
+        "name": info.get("name") if 'info' in locals() else None, 
+        "email": info.get("email") if 'info' in locals() else None,
+        "phone": info.get("phone") if 'info' in locals() else None,
         "file_url": file_url,
         "title": title,
-        "experience": experience,
+        "experience": experience if source == 'jd' else (info.get("experience") if 'info' in locals() else ""),
         "skills": skills_str,
-        "location": location,
+        "location": location if source == 'jd' else (info.get("location") if 'info' in locals() else ""),
         "salary": salary,
         "bond": bond,
-        "workMode": workMode
+        "workMode": workMode,
+        "current_company": info.get("current_company", "") if 'info' in locals() else "",
+        "current_ctc": info.get("current_ctc", "") if 'info' in locals() else "",
+        "expected_ctc": info.get("expected_ctc", "") if 'info' in locals() else "",
+        "notice_period": info.get("notice_period", "") if 'info' in locals() else ""
     }
     if warning:
         res_dict["warning"] = warning
@@ -3731,6 +3780,12 @@ def create_session(data: CreateSession, current_admin: dict = Depends(get_curren
         "candidate_id": f"CAN{random.randint(1000, 9999)}",
         "candidate_name": data.candidate_name.title(),
         "candidate_email": data.candidate_email,
+        "experience": data.experience,
+        "location": data.location,
+        "current_ctc": data.current_ctc,
+        "expected_ctc": data.expected_ctc,
+        "current_company": data.current_company,
+        "notice_period": data.notice_period,
         "resume_text": data.resume_text,
         "job_description": data.job_description,
         "custom_email_html": data.custom_email_html,
@@ -3795,6 +3850,13 @@ class BulkCandidate(BaseModel):
     candidate_email: str
     resume_text: str = ""
     record_video: bool = True  # Task 5: Per-candidate video toggle
+    experience: str = ""
+    location: str = ""
+    current_ctc: str = ""
+    expected_ctc: str = ""
+    current_company: str = ""
+    notice_period: str = ""
+    candidate_phone: Optional[str] = ""
 
     @validator('candidate_name')
     def name_must_not_be_numeric(cls, v):
@@ -3921,6 +3983,13 @@ def bulk_create_sessions(data: BulkCreateSession, background_tasks: BackgroundTa
             "candidate_id": f"CAN{random.randint(1000, 9999)}",
             "candidate_name": candidate.candidate_name.title(),
             "candidate_email": candidate.candidate_email,
+            "candidate_phone": candidate.candidate_phone,
+            "experience": candidate.experience,
+            "location": candidate.location,
+            "current_ctc": candidate.current_ctc,
+            "expected_ctc": candidate.expected_ctc,
+            "current_company": candidate.current_company,
+            "notice_period": candidate.notice_period,
             "resume_text": candidate.resume_text,
             "job_description": data.job_description,
             "custom_email_html": data.custom_email_html,
@@ -8662,7 +8731,8 @@ async def initiate_manual_ai_call(
     skills: Optional[str] = Form(""),
     job_id: Optional[str] = Form(None),
     application_id: Optional[str] = Form(None),
-    resume: UploadFile = File(None)
+    resume: UploadFile = File(None),
+    current_admin: dict = Depends(get_current_admin_details)
 ):
     """
     Initiates an outbound AI call via Omni Dimension manually, without requiring an existing session.
@@ -8719,6 +8789,8 @@ async def initiate_manual_ai_call(
             "recording_url": None,
             "job_id": job_id,
             "application_id": application_id,
+            "admin_id": current_admin.get("admin_id"),
+            "company_id": current_admin.get("company_id"),
             "created_at": datetime.now(timezone.utc).isoformat()
         })
         
@@ -8989,7 +9061,7 @@ def get_omni_post_call_config():
 
 
 @router.get("/api/calls/recent-calls")
-def get_omni_recent_calls():
+def get_omni_recent_calls(current_admin: dict = Depends(get_current_admin_details)):
     """Fetch recent call logs directly from Omni Dimension SDK, including all evaluation scores."""
     from .omni_dimension_client import get_omni_client, get_omni_agent_id
     try:
@@ -9010,6 +9082,38 @@ def get_omni_recent_calls():
         )
         if not isinstance(calls, list):
             calls = []
+            
+        role = current_admin.get("role")
+        if role != "master":
+            company_id = current_admin.get("company_id")
+            admin_id = current_admin.get("admin_id")
+            
+            # Find automated calls for this admin/company
+            session_query = {"omni_call_id": {"$exists": True, "$ne": None}}
+            if role == "super_admin":
+                session_query["company_id"] = company_id
+            elif role == "admin":
+                session_query["company_id"] = company_id
+                session_query["created_by"] = admin_id
+            
+            allowed_sessions = list(interview_sessions_collection.find(session_query, {"omni_call_id": 1}))
+            allowed_call_ids = {str(s.get("omni_call_id")) for s in allowed_sessions if s.get("omni_call_id")}
+            
+            # Find manual calls for this admin/company
+            manual_query = {}
+            if role == "super_admin":
+                manual_query["company_id"] = company_id
+            elif role == "admin":
+                manual_query["company_id"] = company_id
+                manual_query["admin_id"] = admin_id
+                
+            allowed_manuals = list(omni_call_logs_collection.find(manual_query, {"call_id": 1}))
+            for m in allowed_manuals:
+                if m.get("call_id"):
+                    allowed_call_ids.add(str(m.get("call_id")))
+                    
+            calls = [c for c in calls if isinstance(c, dict) and str(c.get("id") or c.get("call_id") or "") in allowed_call_ids]
+
         # Normalise each call record to extract evaluation / score fields
         normalised = []
         for c in calls:

@@ -844,7 +844,10 @@ export default function AdminPage({ role: initialRole = 'admin' }) {
   }
 
   const handleRequestCredits = async () => {
-    if (!creditsToRequest || creditsToRequest < 10) return;
+    if (!creditsToRequest || creditsToRequest < 5) {
+      alert("Please request at least 5 credits.");
+      return;
+    }
     setIsRequesting(true);
     try {
       await axios.post(`${API_BASE_URL}/admin/credit-requests`, {

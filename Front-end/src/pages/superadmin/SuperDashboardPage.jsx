@@ -143,10 +143,12 @@ export default function SuperDashboardPage() {
   }, [API_BASE_URL, token]);
 
   useEffect(() => {
-    dispatch(loadSuperAdminDashboard({ adminFilter: selectedAdminFilter, summaryOnly: true }));
+    // Initial fetch without summaryOnly to populate the Candidates table
+    dispatch(loadSuperAdminDashboard(selectedAdminFilter));
     dispatch(loadRecruitmentFunnel(selectedAdminFilter));
     dispatch(loadPlatformAnalytics(selectedAdminFilter));
     const interval = setInterval(() => {
+      // Poll with summaryOnly to update stats without re-fetching all candidates
       dispatch(loadSuperAdminDashboard({ adminFilter: selectedAdminFilter, summaryOnly: true }));
       dispatch(loadRecruitmentFunnel(selectedAdminFilter));
       dispatch(loadPlatformAnalytics(selectedAdminFilter));

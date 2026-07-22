@@ -595,6 +595,12 @@ Congratulations! You have been selected for an AI-powered interview. Please revi
         custom_voice_id: singleCandidate.customVoiceId,
         application_id: singleCandidate.applicationId || "",
         candidate_phone: singleCandidate.phone || "",
+        experience: singleCandidate.experience || "",
+        location: singleCandidate.location || "",
+        current_ctc: singleCandidate.current_ctc || "",
+        expected_ctc: singleCandidate.expected_ctc || "",
+        current_company: singleCandidate.current_company || "",
+        notice_period: singleCandidate.notice_period || "",
         ats_score: atsScoreData ? atsScoreData.score : null,
         jd_file_url: singleCandidate.jdFileUrl || null
       }, {
@@ -1088,7 +1094,14 @@ Congratulations! You have been selected for an AI-powered interview. Please revi
                             ...prev,
                             name: data.name || prev.name,
                             email: data.email || prev.email,
-                            resumeText: data.text || ''
+                            resumeText: data.text || '',
+                            phone: data.phone || prev.phone,
+                            experience: data.experience || prev.experience,
+                            location: data.location || prev.location,
+                            current_ctc: data.current_ctc || prev.current_ctc,
+                            expected_ctc: data.expected_ctc || prev.expected_ctc,
+                            current_company: data.current_company || prev.current_company,
+                            notice_period: data.notice_period || prev.notice_period
                           }))
                           if (data.email) {
                             handleCheckCandidate(data.email)
