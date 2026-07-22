@@ -14,9 +14,11 @@ const NO_FACE_CONSECUTIVE_FRAMES = 4    // ~2.8s of no face at 700ms interval
 
 const EYE_CONTACT_YAW_THRESHOLD = 0.25    // head turned left/right (lowered to be more sensitive)
 const EYE_CONTACT_PITCH_THRESHOLD = 0.20  // head tilted up/down
+const EYE_GAZE_SCORE_THRESHOLD = 0.35
 const EYE_CONTACT_CONSECUTIVE_FRAMES = 4  // ~2.8s of sustained gaze-away
 
 const DEFAULT_MAX_ALERTS = 3
+const EFFECTIVE_PHONE_ALERT_CONFIDENCE = Math.max(PHONE_ALERT_CONFIDENCE, 0.40)
 
 /**
  * @param {Object} opts
@@ -88,7 +90,7 @@ export function useProctoring({
       return
     }
 
-    const { faceCount, secondaryFaceWidths, headYaw, headPitch, phoneCandidates, jawOpenScore } = features
+    const { faceCount, secondaryFaceWidths, headYaw, headPitch, eyeLook, phoneCandidates, jawOpenScore } = features
     const streak = streakRef.current
 
     // 1 + 2. Face detection / multi-face detection
@@ -108,9 +110,11 @@ export function useProctoring({
     }
 
     // 3. Eye contact / gaze tracking
+    const eyeGazeScore = Math.max(0, ...Object.values(eyeLook || {}).map(Number))
     const lookingAway =
       Math.abs(headYaw) > EYE_CONTACT_YAW_THRESHOLD ||
-      Math.abs(headPitch) > EYE_CONTACT_PITCH_THRESHOLD
+      Math.abs(headPitch) > EYE_CONTACT_PITCH_THRESHOLD ||
+      eyeGazeScore > EYE_GAZE_SCORE_THRESHOLD
     streak.eyeAway = faceVisible && lookingAway ? streak.eyeAway + 1 : 0
     const eyeContactLost = streak.eyeAway >= EYE_CONTACT_CONSECUTIVE_FRAMES
     if (streak.eyeAway >= EYE_CONTACT_CONSECUTIVE_FRAMES) {
@@ -119,7 +123,7 @@ export function useProctoring({
     }
 
     // 4. Mobile / phone detection
-    const isPhone = phoneCandidates?.length > 0 && phoneCandidates[0].score > PHONE_ALERT_CONFIDENCE
+    const isPhone = phoneCandidates?.length > 0 && phoneCandidates[0].score > EFFECTIVE_PHONE_ALERT_CONFIDENCE
     streak.phone = isPhone ? streak.phone + 1 : 0
     if (streak.phone >= PHONE_CONSECUTIVE_FRAMES) {
       raiseViolation('phone', 'Mobile phone detected in frame')

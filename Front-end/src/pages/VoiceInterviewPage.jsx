@@ -18,6 +18,7 @@ import ErrorBoundary from '../components/ErrorBoundary'
 const VoiceCodingRound = React.lazy(() => import('./VoiceCodingRound'))
 const VoiceCaseStudy = React.lazy(() => import('./VoiceCaseStudy'))
 import { API_BASE_URL } from '../apiConfig'
+import { candidateFetch, setCandidateSessionAuth } from '../utils/candidateAuth'
 import useCandidateWebRTC from '../hooks/useCandidateWebRTC'
 import OrbAvatar from '../components/OrbAvatar'
 import Swal from 'sweetalert2'
@@ -391,7 +392,8 @@ export default function VoiceInterviewPage() {
     const MAX_WS_RETRIES = 3
 
     function connectWs() {
-      const wsUrl = API_BASE_URL.replace('http', 'ws') + `/ws/interview/${linkId}`
+      if (!monitoringToken) return
+      const wsUrl = API_BASE_URL.replace('http', 'ws') + `/ws/interview/${linkId}?token=${encodeURIComponent(monitoringToken)}`
       const ws = new WebSocket(wsUrl)
 
       ws.onmessage = (event) => {
@@ -457,7 +459,7 @@ export default function VoiceInterviewPage() {
       if (wsReconnectTimeoutRef.current) clearTimeout(wsReconnectTimeoutRef.current)
       if (wsRef.current) wsRef.current.close(1000, 'component unmounted')
     }
-  }, [linkId])
+  }, [linkId, monitoringToken])
 
   const fmt = s => `${String(Math.floor(s / 60)).padStart(2, '0')}:${String(s % 60).padStart(2, '0')}`
 
@@ -469,10 +471,14 @@ export default function VoiceInterviewPage() {
       const roundNow = roundRef.current
       // If interview is actively in progress (not done/intro/pre_checks), auto-complete it
       if (roundNow && roundNow !== 'done' && roundNow !== 'intro' && roundNow !== 'pre_checks') {
-        // sendBeacon is the ONLY reliable way to fire a request on tab close
-        navigator.sendBeacon(
+        candidateFetch(
           `${API_BASE_URL}/complete-session/${linkId}?warnings=${warningsCount}&reason=tab_closed`,
-          JSON.stringify({ reason: 'candidate_exited', timestamp: new Date().toISOString() })
+          {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ reason: 'candidate_exited', timestamp: new Date().toISOString() }),
+            keepalive: true,
+          }
         )
       }
     }
@@ -489,9 +495,14 @@ export default function VoiceInterviewPage() {
     active: isInterviewActive,
     onConfirmExit: async () => {
       if (linkId) {
-        navigator.sendBeacon(
+        await candidateFetch(
           `${API_BASE_URL}/complete-session/${linkId}?warnings=${warningsCount}&reason=tab_closed`,
-          JSON.stringify({ reason: 'candidate_exited', timestamp: new Date().toISOString() })
+          {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ reason: 'candidate_exited', timestamp: new Date().toISOString() }),
+            keepalive: true,
+          }
         )
       }
     },
@@ -604,7 +615,7 @@ export default function VoiceInterviewPage() {
         try {
           const pendingKey = `complete_session_pending_${linkId}`
           if (localStorage.getItem(pendingKey) === '1') {
-            fetch(`${API_BASE_URL}/complete-session/${linkId}`, { method: 'POST' })
+            candidateFetch(`${API_BASE_URL}/complete-session/${linkId}`, { method: 'POST' })
               .then(res => { if (res.ok) localStorage.removeItem(pendingKey) })
               .catch(() => {})
           }
@@ -649,7 +660,9 @@ export default function VoiceInterviewPage() {
         if (!qs.length) throw new Error('No questions found for this session.')
         setQuestions(qs)
         setInterviewId(sd.interview_id || '')
-        setMonitoringToken(sd.monitoring_token || '')
+        const candidateToken = sd.monitoring_token || ''
+        setMonitoringToken(candidateToken)
+        setCandidateSessionAuth(candidateToken, linkId, sd.interview_id || '')
         setLoading(false)
       } catch (e) { setError(e.message); setLoading(false) }
     }
@@ -859,7 +872,7 @@ export default function VoiceInterviewPage() {
             fd.append('recording_type', 'screen')
             fd.append('file', blob, 'screen_recording.webm')
             try {
-              await fetch(`${API_BASE_URL}/upload-full-recording`, { method: 'POST', body: fd })
+              await candidateFetch(`${API_BASE_URL}/upload-full-recording`, { method: 'POST', body: fd })
               // Screen recording successfully uploaded
             } catch (e) {
               console.warn('Screen upload failed:', e)
@@ -885,7 +898,7 @@ export default function VoiceInterviewPage() {
             fd.append('recording_type', 'camera')
             fd.append('file', blob, 'camera_recording.webm')
             try {
-              await fetch(`${API_BASE_URL}/upload-full-recording`, { method: 'POST', body: fd })
+              await candidateFetch(`${API_BASE_URL}/upload-full-recording`, { method: 'POST', body: fd })
               // Camera recording successfully uploaded
             } catch (e) {
               console.warn('Camera upload failed:', e)
@@ -996,7 +1009,13 @@ export default function VoiceInterviewPage() {
       // Any other fatal error (not-allowed, service-not-allowed, etc.)
       console.warn('SR:', err)
       stopListening()
-      onFinish?.(currentTxRef.current.trim())
+      Swal.fire({
+        title: 'Microphone Recognition Stopped',
+        text: 'Speech recognition could not continue. Check microphone and browser permissions, then use the microphone button to retry. Your answer was not submitted.',
+        icon: 'error',
+        background: '#161c2d',
+        color: '#fff',
+      })
     }
 
     // ── onend: only restart if still intentionally listening ──────────────
@@ -1020,7 +1039,13 @@ export default function VoiceInterviewPage() {
     try { rec.start() } catch (e) {
       console.warn('SR start error:', e)
       stopListening()
-      onFinish?.('')
+      Swal.fire({
+        title: 'Unable to Start Voice Recognition',
+        text: 'Check microphone permissions and retry. No answer was submitted.',
+        icon: 'error',
+        background: '#161c2d',
+        color: '#fff',
+      })
     }
   }, [stopListening])
 
@@ -1091,9 +1116,9 @@ export default function VoiceInterviewPage() {
         fd.append('answer_text', answer)
         fd.append('candidate_name', sessionDetailRef.current?.candidate_name || 'Candidate')
         // Attempt once; if it fails, retry once more before warning
-        fetch(`${API_BASE_URL}/save-answer`, { method: 'POST', body: fd })
+        candidateFetch(`${API_BASE_URL}/save-answer`, { method: 'POST', body: fd })
           .catch(() =>
-            fetch(`${API_BASE_URL}/save-answer`, { method: 'POST', body: fd })
+            candidateFetch(`${API_BASE_URL}/save-answer`, { method: 'POST', body: fd })
               .catch(err => console.warn('Voice /save-answer failed after retry — answer may be lost:', err))
           )
       }
@@ -1125,7 +1150,7 @@ export default function VoiceInterviewPage() {
       fd.append('interview_id', iid)
       fd.append('asked_question_ids', alreadyAskedIds)
       fd.append('count', '5')
-      fetch(`${API_BASE_URL}/generate-more-questions`, { method: 'POST', body: fd })
+      candidateFetch(`${API_BASE_URL}/generate-more-questions`, { method: 'POST', body: fd })
         .then(r => r.json())
         .then(data => {
           if (data.questions && data.questions.length > 0) {
@@ -1194,7 +1219,7 @@ export default function VoiceInterviewPage() {
 
     // Fire backend completion with detailed integrity metrics
     try {
-      const response = await fetch(`${API_BASE_URL}/complete-session/${linkId}`, {
+      const response = await candidateFetch(`${API_BASE_URL}/complete-session/${linkId}`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -1263,7 +1288,7 @@ export default function VoiceInterviewPage() {
 
       if (type === 'Technical') {
         try {
-          const fetchPromise = fetch(`${API_BASE_URL}/coding-round/start`, {
+          const fetchPromise = candidateFetch(`${API_BASE_URL}/coding-round/start`, {
             method: 'POST', headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({ interview_id: iid })
           }).then(r => r.json())
@@ -1288,7 +1313,7 @@ export default function VoiceInterviewPage() {
       } else {
         // Non-Technical → case study
         try {
-          const fetchPromise = fetch(`${API_BASE_URL}/case-study/start`, {
+          const fetchPromise = candidateFetch(`${API_BASE_URL}/case-study/start`, {
             method: 'POST', headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({ interview_id: iid })
           }).then(res => {
@@ -1432,7 +1457,7 @@ export default function VoiceInterviewPage() {
 
       // 2. POST to unified violation endpoint (persistent DB record)
       // Fire-and-forget — we don't block the alert flow on network latency.
-      fetch(`${API_BASE_URL}/proctoring/violation`, {
+      candidateFetch(`${API_BASE_URL}/proctoring/violation`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -1446,7 +1471,7 @@ export default function VoiceInterviewPage() {
       }).catch(() => {
         // Fallback to legacy endpoint if new one is unavailable
         if (interviewIdRef.current) {
-          fetch(`${API_BASE_URL}/session/${interviewIdRef.current}/violation`, {
+          candidateFetch(`${API_BASE_URL}/session/${interviewIdRef.current}/violation`, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({ type: alertType, count: newCount, timestamp: ts, details }),
@@ -1760,7 +1785,7 @@ export default function VoiceInterviewPage() {
                 const type = interviewType
                 if (type === 'Non-Technical') {
                   // fetch case study after coding
-                  fetch(`${API_BASE_URL}/case-study/start`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ interview_id: interviewId }) })
+                  candidateFetch(`${API_BASE_URL}/case-study/start`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ interview_id: interviewId }) })
                     .then(r => r.json()).then(data => {
                       const cqs = (data.case_study_round?.questions || []).map((q, i) => ({ id: `cs_${i}`, type: 'case_study', text: q.text || q.scenario || '', caseStudyIndex: i }))
                       setCaseStudyQuestions(cqs); setRound('case_study')
@@ -1853,7 +1878,7 @@ export default function VoiceInterviewPage() {
                 if (!feedback.trim()) return
                 setIsSubmittingFeedback(true)
                 try {
-                  await fetch(`${API_BASE_URL}/submit-feedback/${linkId}`, {
+                  await candidateFetch(`${API_BASE_URL}/submit-feedback/${linkId}`, {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify({ feedback_text: feedback })

@@ -56,6 +56,8 @@ services:
   frontend:
     build:
       context: ./Front-end
+      args:
+        VITE_API_BASE_URL: ${VITE_API_BASE_URL:-}
     container_name: interview_frontend
     ports:
       - "80:80"

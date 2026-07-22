@@ -4,9 +4,13 @@ import asyncio
 from starlette.concurrency import run_in_threadpool
 import json
 import logging
+import hmac
+import jwt
 
 from core_infra import pubsub, ws_manager, task_queue, MongoBatchWriter
 from mongo_db import answers_collection, interview_sessions_collection
+from app.config import JWT_SECRET_KEY, ALGORITHM
+from app.live_monitoring_security import decode_monitoring_token
 
 logger = logging.getLogger(__name__)
 router = APIRouter()
@@ -14,13 +18,11 @@ router = APIRouter()
 # Initialize the batch writer for answers
 answers_batch_writer = MongoBatchWriter(answers_collection, flush_interval=3.0, batch_size=20)
 
-@router.on_event("startup")
-async def startup_event():
+async def start_realtime_services():
     await answers_batch_writer.start()
     await task_queue.start()
 
-@router.on_event("shutdown")
-async def shutdown_event():
+async def stop_realtime_services():
     await answers_batch_writer.stop()
     await task_queue.stop()
 
@@ -30,6 +32,22 @@ async def interview_websocket(websocket: WebSocket, link_id: str):
     Main WebSocket endpoint for the real-time AI interview.
     Handles affinity, batch DB writes, and Pub/Sub broadcasting.
     """
+    token = websocket.query_params.get("token", "")
+    try:
+        payload = decode_monitoring_token(JWT_SECRET_KEY, ALGORITHM, token, link_id)
+        session = interview_sessions_collection.find_one(
+            {"link_id": link_id}, {"interview_id": 1, "status": 1, "is_deactivated": 1}
+        )
+        if not session or session.get("status") != "started" or session.get("is_deactivated"):
+            raise ValueError("Session is not active")
+        if not hmac.compare_digest(
+            str(payload.get("interview_id") or ""), str(session.get("interview_id") or "")
+        ):
+            raise ValueError("Token interview does not match")
+    except (jwt.PyJWTError, ValueError):
+        await websocket.close(code=1008)
+        return
+
     await ws_manager.connect(websocket, link_id)
     
     # Subscribe to personal channel for this interview

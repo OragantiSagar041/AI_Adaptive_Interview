@@ -25,7 +25,7 @@ from collections import defaultdict
 from datetime import datetime, timedelta, timezone
 from typing import Any, Dict, List, Optional, Union
 from app.services import parse_iso_datetime
-from app.session_store import get_session, delete_session
+from app.session_store import get_session, set_session, delete_session as delete_cached_session
 from pymongo import ReturnDocument
 
 sys.stdout.reconfigure(encoding='utf-8')
@@ -77,14 +77,15 @@ from industry_fallback_data import INDUSTRY_TECHNICAL_QUESTIONS, INDUSTRY_CASE_S
 from redis_manager import manager
 import transcription
 from routes import voice_routes
+from mongo_db import client as mongo_client
 
 from .models import *
 from .database import *
 from .config import *
 from . import omni_dimension_client
 from .services import *
-from app.session_store import get_session, set_session, delete_session
 from app.live_monitoring_security import (
+    MONITORING_SCOPE,
     admin_can_access_session,
     create_monitoring_token,
     decode_monitoring_token,
@@ -139,6 +140,61 @@ def _validate_candidate_monitoring_token(token: str, link_id: str) -> Dict[str, 
     if token_interview_id and session_interview_id and not hmac.compare_digest(token_interview_id, session_interview_id):
         raise HTTPException(status_code=403, detail="Monitoring token is no longer valid for this interview")
     return session
+
+
+def _require_candidate_session(
+    credentials: Optional[HTTPAuthorizationCredentials],
+    *,
+    link_id: Optional[str] = None,
+    interview_id: Optional[str] = None,
+    allow_completed: bool = False,
+) -> Dict[str, Any]:
+    """Authorize a candidate operation against the session-scoped bearer token."""
+    if not credentials:
+        raise HTTPException(status_code=401, detail="Candidate session token is required")
+
+    try:
+        payload = jwt.decode(credentials.credentials, JWT_SECRET_KEY, algorithms=[ALGORITHM])
+    except jwt.PyJWTError as exc:
+        raise HTTPException(status_code=401, detail="Invalid or expired candidate session token") from exc
+
+    token_link_id = str(payload.get("link_id") or "")
+    token_interview_id = str(payload.get("interview_id") or "")
+    if payload.get("scope") != MONITORING_SCOPE or not token_link_id:
+        raise HTTPException(status_code=401, detail="Invalid candidate session token scope")
+    if link_id and not hmac.compare_digest(token_link_id, str(link_id)):
+        raise HTTPException(status_code=403, detail="Candidate token does not match this session")
+    if interview_id and not hmac.compare_digest(token_interview_id, str(interview_id)):
+        raise HTTPException(status_code=403, detail="Candidate token does not match this interview")
+
+    session = interview_sessions_collection.find_one(
+        {"link_id": token_link_id},
+        {"link_id": 1, "interview_id": 1, "status": 1, "is_deactivated": 1},
+    )
+    if not session:
+        raise HTTPException(status_code=404, detail="Session not found")
+    if session.get("is_deactivated"):
+        raise HTTPException(status_code=403, detail="This interview session is deactivated")
+
+    session_interview_id = str(session.get("interview_id") or "")
+    if session_interview_id and not hmac.compare_digest(token_interview_id, session_interview_id):
+        raise HTTPException(status_code=403, detail="Candidate token is no longer valid for this interview")
+
+    allowed_statuses = {"started", "completed"} if allow_completed else {"started"}
+    if session.get("status") not in allowed_statuses:
+        raise HTTPException(status_code=403, detail="This interview session is not active")
+    return session
+
+
+def _require_admin_session_access(session: Dict[str, Any], current_admin: Dict[str, Any]) -> None:
+    """Enforce tenant isolation and per-recruiter ownership for normal admins."""
+    role = current_admin.get("role")
+    if role == "master":
+        return
+    if session.get("company_id") != current_admin.get("company_id"):
+        raise HTTPException(status_code=403, detail="Access denied")
+    if role == "admin" and str(session.get("created_by") or "") != str(current_admin.get("admin_id") or ""):
+        raise HTTPException(status_code=403, detail="Access denied to another recruiter's interview")
 
 
 def _get_authorized_live_session(link_id: str, current_admin: Dict[str, Any]) -> Dict[str, Any]:
@@ -643,13 +699,15 @@ _question_generation_locks = defaultdict(asyncio.Lock)
 async def generate_more_questions_endpoint(
     interview_id: str = Form(...),
     asked_question_ids: str = Form(""),
-    count: int = Form(5)
+    count: int = Form(5),
+    credentials: Optional[HTTPAuthorizationCredentials] = Depends(candidate_monitoring_security),
 ):
     """
     Generate additional questions for an interview session when the candidate
     finishes all questions but still has time left on the clock.
     Returns only NEW questions not already asked.
     """
+    _require_candidate_session(credentials, interview_id=interview_id)
     try:
         from starlette.concurrency import run_in_threadpool
 
@@ -862,8 +920,12 @@ def sync_session_to_application(link_id: str):
         print(f"⚠️ Error syncing interview to application: {e}")
 
 @router.get("/interview/{interview_id}/summary")
-def get_interview_summary(interview_id: str):
+def get_interview_summary(
+    interview_id: str,
+    credentials: Optional[HTTPAuthorizationCredentials] = Depends(candidate_monitoring_security),
+):
     """Get a summary of the interview including all questions and answers."""
+    _require_candidate_session(credentials, interview_id=interview_id, allow_completed=True)
     if not get_session(interview_id):
         raise HTTPException(status_code=404, detail="Interview not found")
     
@@ -913,7 +975,9 @@ def save_answer(
     candidate_name: str = Form("Candidate"),
     time_spent_seconds: str = Form("0"),
     time_limit_seconds: str = Form("120"),
+    credentials: Optional[HTTPAuthorizationCredentials] = Depends(candidate_monitoring_security),
 ):
+    _require_candidate_session(credentials, interview_id=interview_id)
     current_session_id.set(interview_id)
     print(f"⚡ Instant save for Q{question_id} ➝ AI scoring in background...")
 
@@ -997,8 +1061,12 @@ class BehavioralData(BaseModel):
     noise_alerts: int = 0
 
 @router.post("/save-behavioral-data")
-def save_behavioral_data(data: BehavioralData):
+def save_behavioral_data(
+    data: BehavioralData,
+    credentials: Optional[HTTPAuthorizationCredentials] = Depends(candidate_monitoring_security),
+):
     """Saves per-question behavioral and proctoring metrics"""
+    _require_candidate_session(credentials, interview_id=data.interview_id, allow_completed=True)
     try:
         # Check if this is a case study question
         is_case_study = False
@@ -1079,7 +1147,11 @@ class CodingRoundObserveRequest(CodingRoundCheckpointRequest):
 
 
 @router.post("/coding-round/start")
-async def start_coding_round(req: CodingRoundStartRequest):
+async def start_coding_round(
+    req: CodingRoundStartRequest,
+    credentials: Optional[HTTPAuthorizationCredentials] = Depends(candidate_monitoring_security),
+):
+    _require_candidate_session(credentials, interview_id=req.interview_id)
     import asyncio
     from fastapi.concurrency import run_in_threadpool
 
@@ -1341,7 +1413,11 @@ def _generate_case_study_questions_offline(job_description: str, num_questions: 
 
 
 @router.post("/case-study/start")
-async def start_case_study_round(req: CaseStudyStartRequest):
+async def start_case_study_round(
+    req: CaseStudyStartRequest,
+    credentials: Optional[HTTPAuthorizationCredentials] = Depends(candidate_monitoring_security),
+):
+    _require_candidate_session(credentials, interview_id=req.interview_id)
     interview = get_interview_or_404(req.interview_id)
     
     # Check if case study round already exists
@@ -1411,7 +1487,11 @@ async def start_case_study_round(req: CaseStudyStartRequest):
 
 
 @router.post("/case-study/submit-answer")
-def submit_case_study_answer(req: CaseStudyAnswerRequest):
+def submit_case_study_answer(
+    req: CaseStudyAnswerRequest,
+    credentials: Optional[HTTPAuthorizationCredentials] = Depends(candidate_monitoring_security),
+):
+    _require_candidate_session(credentials, interview_id=req.interview_id)
     interview = get_interview_or_404(req.interview_id)
     case_study = interview.get("case_study_round")
     if not case_study:
@@ -1435,7 +1515,11 @@ def submit_case_study_answer(req: CaseStudyAnswerRequest):
     return {"status": "saved", "question_index": req.question_index}
 
 @router.get("/coding-round/{interview_id}")
-def get_coding_round(interview_id: str):
+def get_coding_round(
+    interview_id: str,
+    credentials: Optional[HTTPAuthorizationCredentials] = Depends(candidate_monitoring_security),
+):
+    _require_candidate_session(credentials, interview_id=interview_id, allow_completed=True)
     interview = get_interview_or_404(interview_id)
     coding_round = interview.get("coding_round")
     if not coding_round:
@@ -1517,17 +1601,29 @@ def _run_coding_feedback(req: CodingRoundCheckpointRequest, feedback_mode: str) 
 
 
 @router.post("/coding-round/checkpoint")
-def coding_round_checkpoint(req: CodingRoundCheckpointRequest):
+def coding_round_checkpoint(
+    req: CodingRoundCheckpointRequest,
+    credentials: Optional[HTTPAuthorizationCredentials] = Depends(candidate_monitoring_security),
+):
+    _require_candidate_session(credentials, interview_id=req.interview_id)
     return _run_coding_feedback(req, "checkpoint")
 
 
 @router.post("/coding-round/submit")
-def coding_round_submit(req: CodingRoundSubmitRequest):
+def coding_round_submit(
+    req: CodingRoundSubmitRequest,
+    credentials: Optional[HTTPAuthorizationCredentials] = Depends(candidate_monitoring_security),
+):
+    _require_candidate_session(credentials, interview_id=req.interview_id)
     return _run_coding_feedback(req, "final")
 
 
 @router.post("/coding-round/run")
-def coding_round_run(req: CodingRoundRunRequest):
+def coding_round_run(
+    req: CodingRoundRunRequest,
+    credentials: Optional[HTTPAuthorizationCredentials] = Depends(candidate_monitoring_security),
+):
+    _require_candidate_session(credentials, interview_id=req.interview_id)
     interview = get_interview_or_404(req.interview_id)
     coding_round = interview.get("coding_round")
     if not coding_round or not coding_round.get("task"):
@@ -1549,7 +1645,11 @@ def coding_round_run(req: CodingRoundRunRequest):
 
 
 @router.post("/coding-round/observe")
-def coding_round_observe(req: CodingRoundObserveRequest):
+def coding_round_observe(
+    req: CodingRoundObserveRequest,
+    credentials: Optional[HTTPAuthorizationCredentials] = Depends(candidate_monitoring_security),
+):
+    _require_candidate_session(credentials, interview_id=req.interview_id)
     interview = get_interview_or_404(req.interview_id)
     coding_round = interview.get("coding_round")
     if not coding_round or not coding_round.get("task"):
@@ -1569,7 +1669,11 @@ def coding_round_observe(req: CodingRoundObserveRequest):
     return {"interview_id": req.interview_id, "observation": observation}
 
 @router.get("/interview/{interview_id}/ai-summary")
-def interview_ai_summary(interview_id: str):
+def interview_ai_summary(
+    interview_id: str,
+    credentials: Optional[HTTPAuthorizationCredentials] = Depends(candidate_monitoring_security),
+):
+    _require_candidate_session(credentials, interview_id=interview_id, allow_completed=True)
     answers = answers_collection.find({"interview_id": interview_id, "ai_score": {"$ne": None}})
     scores = [a.get("ai_score", 0) for a in answers]
     avg_score = round(sum(scores) / len(scores), 2) if scores else 0
@@ -1589,7 +1693,12 @@ from fastapi import Request
 import json
 
 @router.post("/interview/{interview_id}/alert")
-async def log_interview_alert(interview_id: str, request: Request):
+async def log_interview_alert(
+    interview_id: str,
+    request: Request,
+    credentials: Optional[HTTPAuthorizationCredentials] = Depends(candidate_monitoring_security),
+):
+    _require_candidate_session(credentials, link_id=interview_id)
     try:
         body_bytes = await request.body()
         data = json.loads(body_bytes)
@@ -2442,9 +2551,22 @@ def upload_full_recording(
     interview_id: str = Form(...),
     link_id: Optional[str] = Form(None),
     recording_type: Optional[str] = Form("camera"),
-    file: UploadFile = File(...)
+    file: UploadFile = File(...),
+    credentials: Optional[HTTPAuthorizationCredentials] = Depends(candidate_monitoring_security),
 ):
-    if getattr(file, "size", 0) and file.size > 500 * 1024 * 1024:
+    session = _require_candidate_session(
+        credentials,
+        link_id=link_id,
+        interview_id=interview_id,
+        allow_completed=True,
+    )
+    link_id = session.get("link_id")
+    if recording_type not in {"camera", "screen"}:
+        raise HTTPException(status_code=422, detail="Recording type must be camera or screen")
+    if file.content_type not in {"video/webm", "application/octet-stream"}:
+        raise HTTPException(status_code=415, detail="Only WebM interview recordings are accepted")
+    max_recording_bytes = 500 * 1024 * 1024
+    if getattr(file, "size", 0) and file.size > max_recording_bytes:
         raise HTTPException(status_code=413, detail="Recording too large. Maximum size is 500MB.")
         
     try:
@@ -2454,12 +2576,22 @@ def upload_full_recording(
         
         # Generate filename
         prefix = "camera" if recording_type == "camera" else "screen"
-        filename = f"{interview_id}_{prefix}_recording.webm"
+        filename = f"{uuid.uuid4().hex}_{prefix}_recording.webm"
         file_path = os.path.join(recordings_dir, filename)
         
         # Save file locally first since it can be large
-        with open(file_path, "wb") as buffer:
-            shutil.copyfileobj(file.file, buffer)
+        bytes_written = 0
+        try:
+            with open(file_path, "wb") as buffer:
+                while chunk := file.file.read(1024 * 1024):
+                    bytes_written += len(chunk)
+                    if bytes_written > max_recording_bytes:
+                        raise HTTPException(status_code=413, detail="Recording too large. Maximum size is 500MB.")
+                    buffer.write(chunk)
+        except Exception:
+            if os.path.exists(file_path):
+                os.remove(file_path)
+            raise
             
         # Upload to Cloudinary
         try:
@@ -2525,7 +2657,14 @@ def upload_full_recording(
 
 
 @router.get("/generate-report/{interview_id}")
-def generate_report(interview_id: str):
+def generate_report(
+    interview_id: str,
+    current_admin: dict = Depends(get_current_admin_details),
+):
+    session = interview_sessions_collection.find_one({"interview_id": interview_id})
+    if not session:
+        raise HTTPException(status_code=404, detail="Session not found")
+    _require_admin_session_access(session, current_admin)
     # Fetch interview data
     interview_data = interviews_collection.find_one({"id": interview_id})
     if not interview_data:
@@ -2847,11 +2986,13 @@ async def get_dashboard_stats(admin_id: Optional[str] = None, current_admin: dic
         query = {"company_id": comp_id}
         
         if current_admin.get("role") == "admin":
-            admin_doc = admins_collection.find_one({"_id": ObjectId(current_admin["admin_id"])})
+            admin_doc = await asyncio.to_thread(
+                admins_collection.find_one, {"_id": ObjectId(current_admin["admin_id"])}
+            )
             credits = admin_doc.get("credits", 0) if admin_doc else 0
         elif comp_id:
             # super_admin and master: use company credits (sessions deduct from company pool)
-            company = companies_collection.find_one({"_id": ObjectId(comp_id)})
+            company = await asyncio.to_thread(companies_collection.find_one, {"_id": ObjectId(comp_id)})
             credits = company.get("credits", 0) if company else 0
         else:
             credits = 0
@@ -2864,64 +3005,78 @@ async def get_dashboard_stats(admin_id: Optional[str] = None, current_admin: dic
         elif admin_id:
             query["created_by"] = admin_id
             
-        all_sessions = list(interview_sessions_collection.find(
-            query,
-            {"created_at": 1, "status": 1, "decision": 1, "avg_score": 1, "is_deactivated": 1, "expires_at": 1, "created_by": 1, "candidate_email": 1, "email": 1}
-        ))
         now = datetime.now(timezone.utc)
         from datetime import timedelta
-        
-        active_sessions = [s for s in all_sessions if not s.get("is_deactivated", False)]
-        total = len(active_sessions)
-        pending = 0
-        completed = 0
-        started = 0
-        expired = 0
-        selected = 0
-        rejected = 0
-        total_score = 0
-        scored_count = 0
-        today_count = 0
-        week_count = 0
-        
-        seen_emails = set()
-        
-        for s in all_sessions:
-            if s.get("is_deactivated", False):
-                continue
-                
-            email = s.get("candidate_email") or s.get("email")
-            if email:
-                seen_emails.add(email.strip().lower())
-                
-            status = sync_session_status(s, now)
-            
-            if status == "completed":
-                completed += 1
-            elif status == "started":
-                started += 1
-            elif status == "expired":
-                expired += 1
-            else:
-                pending += 1
-            
-            if s.get("decision") == "selected":
-                selected += 1
-            elif s.get("decision") == "rejected":
-                rejected += 1
-            
-            if s.get("avg_score") is not None:
-                total_score += s["avg_score"]
-                scored_count += 1
-            
-            try:
-                created = datetime.fromisoformat(s.get("created_at", ""))
-                if created.date() == now.date():
-                    today_count += 1
-                if (now - created).days <= 7:
-                    week_count += 1
-            except Exception:
-                pass
+        today_start = datetime(now.year, now.month, now.day, tzinfo=timezone.utc).isoformat()
+        week_start = (now - timedelta(days=7)).isoformat()
+        active_query = {
+            **query,
+            "$or": [{"is_deactivated": False}, {"is_deactivated": {"$exists": False}}],
+        }
+        dashboard_pipeline = [
+            {"$match": active_query},
+            {"$set": {
+                "effective_status": {
+                    "$cond": [
+                        {"$and": [
+                            {"$eq": ["$status", "pending"]},
+                            {"$ne": [{"$ifNull": ["$expires_at", None]}, None]},
+                            {"$lt": ["$expires_at", now.isoformat()]},
+                        ]},
+                        "expired",
+                        "$status",
+                    ]
+                }
+            }},
+            {"$facet": {
+                "summary": [{"$group": {
+                    "_id": None,
+                    "total": {"$sum": 1},
+                    "completed": {"$sum": {"$cond": [{"$eq": ["$effective_status", "completed"]}, 1, 0]}},
+                    "started": {"$sum": {"$cond": [{"$eq": ["$effective_status", "started"]}, 1, 0]}},
+                    "expired": {"$sum": {"$cond": [{"$eq": ["$effective_status", "expired"]}, 1, 0]}},
+                    "selected": {"$sum": {"$cond": [{"$eq": ["$decision", "selected"]}, 1, 0]}},
+                    "rejected": {"$sum": {"$cond": [{"$eq": ["$decision", "rejected"]}, 1, 0]}},
+                    "total_score": {"$sum": {"$ifNull": ["$avg_score", 0]}},
+                    "scored_count": {"$sum": {"$cond": [{"$ne": [{"$ifNull": ["$avg_score", None]}, None]}, 1, 0]}},
+                    "today": {"$sum": {"$cond": [{"$gte": ["$created_at", today_start]}, 1, 0]}},
+                    "this_week": {"$sum": {"$cond": [{"$gte": ["$created_at", week_start]}, 1, 0]}},
+                    "candidate_emails": {"$addToSet": {"$toLower": {"$ifNull": ["$candidate_email", "$email"]}}},
+                }}],
+                "by_creator": [{"$group": {"_id": "$created_by", "count": {"$sum": 1}}}],
+                "daily": [
+                    {"$match": {"created_at": {"$gte": week_start}}},
+                    {"$group": {"_id": {"$substrBytes": ["$created_at", 0, 10]}, "count": {"$sum": 1}}},
+                ],
+            }},
+        ]
+        aggregate_rows = await asyncio.to_thread(
+            lambda: list(interview_sessions_collection.aggregate(dashboard_pipeline))
+        )
+        aggregate_data = aggregate_rows[0] if aggregate_rows else {}
+        summary = (aggregate_data.get("summary") or [{}])[0]
+        total = summary.get("total", 0)
+        completed = summary.get("completed", 0)
+        started = summary.get("started", 0)
+        expired = summary.get("expired", 0)
+        pending = max(0, total - completed - started - expired)
+        selected = summary.get("selected", 0)
+        rejected = summary.get("rejected", 0)
+        total_score = summary.get("total_score", 0)
+        scored_count = summary.get("scored_count", 0)
+        today_count = summary.get("today", 0)
+        week_count = summary.get("this_week", 0)
+        seen_emails = {email for email in summary.get("candidate_emails", []) if email}
+        session_by_creator = {
+            str(row.get("_id") or ""): row.get("count", 0)
+            for row in aggregate_data.get("by_creator", [])
+            if row.get("_id")
+        }
+        daily_counts = {
+            row.get("_id"): row.get("count", 0)
+            for row in aggregate_data.get("daily", [])
+            if row.get("_id")
+        }
                 
         # Merge stats from AI Calling interested candidates
         try:
@@ -2930,14 +3085,19 @@ async def get_dashboard_stats(admin_id: Optional[str] = None, current_admin: dic
                 jobs_query["admin_id"] = current_admin["admin_id"]
             elif admin_id:
                 jobs_query["admin_id"] = admin_id
-            jobs = list(jobs_collection.find(jobs_query))
+            jobs = await asyncio.to_thread(lambda: list(jobs_collection.find(jobs_query)))
             job_ids = [j.get("job_id") for j in jobs if j.get("job_id")]
             
             app_query = {
                 "job_id": {"$in": job_ids},
                 "interest": {"$regex": "interested", "$options": "i"}
             }
-            apps = list(job_applications_collection.find(app_query, {"email": 1, "score": 1, "applied_at": 1, "updated_at": 1}))
+            apps = await asyncio.to_thread(
+                lambda: list(job_applications_collection.find(
+                    app_query,
+                    {"email": 1, "score": 1, "applied_at": 1, "updated_at": 1},
+                ))
+            )
             
             for app in apps:
                 email = app.get("email")
@@ -2984,32 +3144,18 @@ async def get_dashboard_stats(admin_id: Optional[str] = None, current_admin: dic
 
         if comp_id:
             # 1. Recruiters Count
-            recruiters_count = admins_collection.count_documents({"company_id": comp_id, "role": "admin"})
+            recruiters_count = await asyncio.to_thread(
+                admins_collection.count_documents, {"company_id": comp_id, "role": "admin"}
+            )
             
             # 2. Last 7 Days Usage
             for i in range(6, -1, -1):
                 day = now - timedelta(days=i)
                 start_of_day = datetime(day.year, day.month, day.day, tzinfo=timezone.utc)
-                end_of_day = start_of_day + timedelta(days=1)
-                
-                count = interview_sessions_collection.count_documents({
-                    **query,
-                    "created_at": {
-                        "$gte": start_of_day.isoformat(),
-                        "$lt": end_of_day.isoformat()
-                    }
-                })
+                count = daily_counts.get(start_of_day.date().isoformat(), 0)
                 chart_labels.append(day.strftime("%m/%d"))
                 chart_data.append(count)
                 
-            # 3. Recruiter Breakdown — count from all_sessions (same source as total/completed/pending)
-            # all_sessions already contains created_by and is filtered by company_id
-            session_by_creator = {}
-            for s in all_sessions:
-                cb = s.get("created_by") or ""
-                if cb:
-                    session_by_creator[cb] = session_by_creator.get(cb, 0) + 1
-
             # Sessions with created_by='admin' (frontend fallback string) are attributed to the current admin
             if "admin" in session_by_creator:
                 session_by_creator[current_admin["admin_id"]] = (
@@ -3017,10 +3163,12 @@ async def get_dashboard_stats(admin_id: Optional[str] = None, current_admin: dic
                 )
 
             # Load all admins in this company and map each to their session count
-            all_company_admins = list(admins_collection.find(
-                {"company_id": comp_id},
-                {"_id": 1, "name": 1, "username": 1, "email": 1}
-            ))
+            all_company_admins = await asyncio.to_thread(
+                lambda: list(admins_collection.find(
+                    {"company_id": comp_id},
+                    {"_id": 1, "name": 1, "username": 1, "email": 1},
+                ))
+            )
             seen_admin_ids = set()
             for a in all_company_admins:
                 aid = str(a["_id"])
@@ -3040,8 +3188,9 @@ async def get_dashboard_stats(admin_id: Optional[str] = None, current_admin: dic
             # 4. Credits Used vs Available
             # Each interview session costs exactly 1 credit (deducted atomically at creation).
             # credits_used = total non-deactivated sessions for this company.
-            credits_used = interview_sessions_collection.count_documents(
-                {"company_id": comp_id, "$or": [{"is_deactivated": False}, {"is_deactivated": {"$exists": False}}]}
+            credits_used = await asyncio.to_thread(
+                interview_sessions_collection.count_documents,
+                {"company_id": comp_id, "$or": [{"is_deactivated": False}, {"is_deactivated": {"$exists": False}}]},
             )
 
         stats = {
@@ -4126,8 +4275,6 @@ def get_session_by_link(link_id: str):
         return {
             "status": "success",
             "candidate_name": row.get("candidate_name"),
-            "resume_text": row.get("resume_text"),
-            "job_description": row.get("job_description"),
             "session_status": status,
             "interview_duration": interview_duration,
             "interview_format": row.get("interview_format", "Standard"),
@@ -4262,8 +4409,7 @@ def delete_session(link_id: str, current_admin: dict = Depends(require_role("adm
     if not row:
         raise HTTPException(status_code=404, detail="Session not found")
         
-    if current_admin.get("role") != "master" and row.get("company_id") != current_admin.get("company_id"):
-        raise HTTPException(status_code=403, detail="Access denied")
+    _require_admin_session_access(row, current_admin)
         
     # Delete from interview tracking
     interview_id = row.get("interview_id")
@@ -4271,7 +4417,7 @@ def delete_session(link_id: str, current_admin: dict = Depends(require_role("adm
         interviews_collection.delete_one({"id": interview_id})
         answers_collection.delete_many({"interview_id": interview_id})
         if get_session(interview_id):
-            delete_session(interview_id)
+            delete_cached_session(interview_id)
             
     # Delete the session link
     interview_sessions_collection.delete_one({"link_id": link_id})
@@ -4283,8 +4429,7 @@ def deactivate_session(link_id: str, current_admin: dict = Depends(require_role(
     row = interview_sessions_collection.find_one({"link_id": link_id})
     if not row:
         raise HTTPException(status_code=404, detail="Session not found")
-    if current_admin.get("role") != "master" and row.get("company_id") != current_admin.get("company_id"):
-        raise HTTPException(status_code=403, detail="Access denied")
+    _require_admin_session_access(row, current_admin)
         
     interview_sessions_collection.update_one({"link_id": link_id}, {"$set": {"is_deactivated": True}})
     return {"status": "success"}
@@ -4294,8 +4439,7 @@ def activate_session(link_id: str, current_admin: dict = Depends(require_role("a
     row = interview_sessions_collection.find_one({"link_id": link_id})
     if not row:
         raise HTTPException(status_code=404, detail="Session not found")
-    if current_admin.get("role") != "master" and row.get("company_id") != current_admin.get("company_id"):
-        raise HTTPException(status_code=403, detail="Access denied")
+    _require_admin_session_access(row, current_admin)
         
     interview_sessions_collection.update_one({"link_id": link_id}, {"$set": {"is_deactivated": False}})
     return {"status": "success"}
@@ -4309,8 +4453,7 @@ def reschedule_session(link_id: str, new_expiry: str = Form(...), new_start: str
     row = interview_sessions_collection.find_one({"link_id": link_id})
     if not row:
         raise HTTPException(status_code=404, detail="Session not found")
-    if current_admin.get("role") != "master" and row.get("company_id") != current_admin.get("company_id"):
-        raise HTTPException(status_code=403, detail="Access denied")
+    _require_admin_session_access(row, current_admin)
     update_data = {
         "expires_at": new_expiry,
         "status": "pending",
@@ -4668,7 +4811,12 @@ async def start_session_interview(link_id: str = Form(...)):
     }
 
 @router.post("/session/{interview_id}/violation")
-def log_violation(interview_id: str, violation: ViolationRequest):
+def log_violation(
+    interview_id: str,
+    violation: ViolationRequest,
+    credentials: Optional[HTTPAuthorizationCredentials] = Depends(candidate_monitoring_security),
+):
+    _require_candidate_session(credentials, interview_id=interview_id)
     print(f" VIOLATION detected for session {interview_id}: {violation.type} (#{violation.count}) at {violation.timestamp}")
     try:
         interview_sessions_collection.update_one(
@@ -4691,13 +4839,21 @@ class ProctoringViolationRequest(BaseModel):
 
 
 @router.post("/proctoring/violation")
-def log_proctoring_violation(data: ProctoringViolationRequest):
+def log_proctoring_violation(
+    data: ProctoringViolationRequest,
+    credentials: Optional[HTTPAuthorizationCredentials] = Depends(candidate_monitoring_security),
+):
     """
     Unified proctoring violation endpoint.
     Accepts interview_id OR link_id to locate the session.
     Stores violation in session.violations[] and increments violation_count.
     Returns current violation_count so the caller can enforce termination threshold.
     """
+    _require_candidate_session(
+        credentials,
+        link_id=data.link_id or None,
+        interview_id=data.interview_id or None,
+    )
     ts = data.timestamp or datetime.now(timezone.utc).isoformat()
 
     violation_doc = {
@@ -4755,6 +4911,14 @@ def update_decision(data: DecisionRequest, current_admin: dict = Depends(require
                 app = job_applications_collection.find_one({"omni_call_id": app_id})
             if not app:
                 raise HTTPException(status_code=404, detail="AI Call candidate not found")
+
+            job = jobs_collection.find_one({"job_id": app.get("job_id")})
+            if not job:
+                raise HTTPException(status_code=403, detail="Unable to verify candidate ownership")
+            if current_admin.get("role") != "master" and job.get("company_id") != current_admin.get("company_id"):
+                raise HTTPException(status_code=403, detail="Access denied")
+            if current_admin.get("role") == "admin" and str(job.get("admin_id") or "") != str(current_admin.get("admin_id") or ""):
+                raise HTTPException(status_code=403, detail="Access denied to another recruiter's candidate")
                 
             job_applications_collection.update_one({"_id": app["_id"]}, {"$set": {"decision": data.decision}})
             
@@ -4777,8 +4941,7 @@ def update_decision(data: DecisionRequest, current_admin: dict = Depends(require
             print(f" Session NOT found for link_id: {data.link_id}")
             raise HTTPException(status_code=404, detail="Session not found")
         
-        if current_admin.get("role") != "master" and row.get("company_id") != current_admin.get("company_id"):
-            raise HTTPException(status_code=403, detail="Access denied")
+        _require_admin_session_access(row, current_admin)
         
         name = row.get("candidate_name")
         email = row.get("candidate_email")
@@ -5469,8 +5632,13 @@ class CandidateFeedbackRequest(BaseModel):
     feedback_text: str
 
 @router.post("/submit-feedback/{link_id}")
-def submit_feedback(link_id: str, payload: CandidateFeedbackRequest):
+def submit_feedback(
+    link_id: str,
+    payload: CandidateFeedbackRequest,
+    credentials: Optional[HTTPAuthorizationCredentials] = Depends(candidate_monitoring_security),
+):
     """Save candidate feedback into the interview session."""
+    _require_candidate_session(credentials, link_id=link_id, allow_completed=True)
     try:
         session = interview_sessions_collection.find_one({"link_id": link_id})
         if not session:
@@ -5498,9 +5666,11 @@ def complete_session(
     link_id: str, 
     payload: Optional[CompleteSessionRequest] = None,
     warnings: Optional[int] = None,
-    reason: Optional[str] = None
+    reason: Optional[str] = None,
+    credentials: Optional[HTTPAuthorizationCredentials] = Depends(candidate_monitoring_security),
 ):
     """Mark a session as completed and send notification emails (Task 3)."""
+    _require_candidate_session(credentials, link_id=link_id, allow_completed=True)
     try:
         session = interview_sessions_collection.find_one({"link_id": link_id})
         # Use default payload if none was sent by the client
@@ -7276,9 +7446,6 @@ def delete_sub_admin(admin_id: str, current_admin: dict = Depends(get_current_ad
         raise HTTPException(status_code=404, detail="Sub-admin not found")
     return {"status": "success"}
 
-class AddCreditsRequest(BaseModel):
-    credits: int
-
 @router.post("/super-admin/admins/{admin_id}/add-credits")
 def add_sub_admin_credits(admin_id: str, data: AddCreditsRequest, current_admin: dict = Depends(get_current_admin_details)):
     if current_admin.get("role") != "super_admin":
@@ -7292,23 +7459,26 @@ def add_sub_admin_credits(admin_id: str, data: AddCreditsRequest, current_admin:
     if admin_doc.get("login_enabled") == False:
         raise HTTPException(status_code=400, detail="Cannot add credits to a deactivated admin account.")
 
-    # Deduct from Super Admin atomically
     super_admin_id = current_admin["admin_id"]
-    sa_doc = admins_collection.find_one_and_update(
-        {"_id": ObjectId(super_admin_id), "credits": {"$gte": data.credits}},
-        {"$inc": {"credits": -data.credits}},
-        return_document=ReturnDocument.AFTER
-    )
-    
-    if not sa_doc:
-        raise HTTPException(status_code=400, detail="Insufficient credits in Super Admin account.")
-        
-    # Add to Sub-Admin atomically
-    updated_admin = admins_collection.find_one_and_update(
-        {"_id": ObjectId(admin_id)},
-        {"$inc": {"credits": data.credits}},
-        return_document=ReturnDocument.AFTER
-    )
+    with mongo_client.start_session() as db_session:
+        with db_session.start_transaction():
+            sa_doc = admins_collection.find_one_and_update(
+                {"_id": ObjectId(super_admin_id), "credits": {"$gte": data.credits}},
+                {"$inc": {"credits": -data.credits}},
+                return_document=ReturnDocument.AFTER,
+                session=db_session,
+            )
+            if not sa_doc:
+                raise HTTPException(status_code=400, detail="Insufficient credits in Super Admin account.")
+
+            updated_admin = admins_collection.find_one_and_update(
+                {"_id": ObjectId(admin_id), "company_id": company_id},
+                {"$inc": {"credits": data.credits}},
+                return_document=ReturnDocument.AFTER,
+                session=db_session,
+            )
+            if not updated_admin:
+                raise HTTPException(status_code=404, detail="Sub-admin not found")
     
     return {"status": "success", "credits": updated_admin.get("credits", 0), "super_admin_credits": sa_doc.get("credits", 0)}
 
@@ -7443,32 +7613,45 @@ def update_credit_request(request_id: str, data: CreditRequestUpdate, current_ad
         raise HTTPException(status_code=403, detail="Super Admin access required")
         
     company_id = current_admin.get("company_id")
-    req = credit_requests_collection.find_one({"_id": ObjectId(request_id), "company_id": company_id})
-    if not req:
-        raise HTTPException(status_code=404, detail="Request not found")
-        
-    if req["status"] != "pending":
-        raise HTTPException(status_code=400, detail="Request is already processed")
-        
     if data.status not in ["approved", "rejected"]:
         raise HTTPException(status_code=400, detail="Invalid status")
-        
-    credit_requests_collection.update_one(
-        {"_id": ObjectId(request_id)},
-        {"$set": {
-            "status": data.status,
-            "processed_at": datetime.now(timezone.utc).isoformat(),
-            "processed_by": current_admin["admin_id"]
-        }}
-    )
-    
-    if data.status == "approved":
-        amount = req["amount"]
-        # Deduct from company (Super Admin's pool)
-        if company_id:
-            companies_collection.update_one({"_id": ObjectId(company_id)}, {"$inc": {"credits": -amount}})
-        # Add to the requesting admin
-        admins_collection.update_one({"_id": ObjectId(req["admin_id"])}, {"$inc": {"credits": amount}})
+
+    with mongo_client.start_session() as db_session:
+        with db_session.start_transaction():
+            req = credit_requests_collection.find_one_and_update(
+                {
+                    "_id": ObjectId(request_id),
+                    "company_id": company_id,
+                    "status": "pending",
+                },
+                {"$set": {
+                    "status": data.status,
+                    "processed_at": datetime.now(timezone.utc).isoformat(),
+                    "processed_by": current_admin["admin_id"],
+                }},
+                return_document=ReturnDocument.BEFORE,
+                session=db_session,
+            )
+            if not req:
+                raise HTTPException(status_code=409, detail="Request was already processed or does not exist")
+
+            if data.status == "approved":
+                amount = req["amount"]
+                company = companies_collection.find_one_and_update(
+                    {"_id": ObjectId(company_id), "credits": {"$gte": amount}},
+                    {"$inc": {"credits": -amount}},
+                    return_document=ReturnDocument.AFTER,
+                    session=db_session,
+                )
+                if not company:
+                    raise HTTPException(status_code=400, detail="Insufficient company credits")
+                admin_result = admins_collection.update_one(
+                    {"_id": ObjectId(req["admin_id"]), "company_id": company_id},
+                    {"$inc": {"credits": amount}},
+                    session=db_session,
+                )
+                if admin_result.matched_count != 1:
+                    raise HTTPException(status_code=404, detail="Requesting admin no longer exists")
         
     # Send notification to the requesting admin
     try:
@@ -7558,10 +7741,13 @@ async def get_dashboard_aggregated_data(
                 "interview_duration": 1,
                 "is_deactivated": 1,
             }
-        candidate_cursor = interview_sessions_collection.find(c_query_filter, candidate_projection).sort("created_at", -1)
-        if summary_only:
-            candidate_cursor = candidate_cursor.limit(8)
-        candidates_cursor = list(candidate_cursor)
+        def _load_dashboard_candidates():
+            cursor = interview_sessions_collection.find(c_query_filter, candidate_projection).sort("created_at", -1)
+            if summary_only:
+                cursor = cursor.limit(8)
+            return list(cursor)
+
+        candidates_cursor = await asyncio.to_thread(_load_dashboard_candidates)
         
         # Get AI Calling interested candidates
         apps = []
@@ -7571,13 +7757,14 @@ async def get_dashboard_aggregated_data(
                 jobs_query["admin_id"] = current_admin["admin_id"]
             elif admin_id:
                 jobs_query["admin_id"] = admin_id
-            jobs = [] if summary_only else list(jobs_collection.find(jobs_query))
+            jobs = [] if summary_only else await asyncio.to_thread(lambda: list(jobs_collection.find(jobs_query)))
             job_ids = [j.get("job_id") for j in jobs if j.get("job_id")]
             
             app_query = {
                 "job_id": {"$in": job_ids}
             }
-            apps = list(job_applications_collection.find(app_query))
+            if job_ids:
+                apps = await asyncio.to_thread(lambda: list(job_applications_collection.find(app_query)))
         except Exception as e:
             print(f"Error fetching AI Calling candidates: {e}")
             
@@ -7637,7 +7824,9 @@ async def get_dashboard_aggregated_data(
         ongoing_coding_count = 0
         
         # Plan capability checks
-        admin_user_doc = admins_collection.find_one({"_id": ObjectId(current_admin["admin_id"])})
+        admin_user_doc = await asyncio.to_thread(
+            admins_collection.find_one, {"_id": ObjectId(current_admin["admin_id"])}
+        )
         plan_ctx = get_admin_plan_context(admin_user_doc) if admin_user_doc else None
         has_live = plan_ctx.get("capabilities", {}).get("live_monitoring", False) if plan_ctx else False
         
@@ -7653,10 +7842,13 @@ async def get_dashboard_aggregated_data(
             elif admin_id:
                 query_filter["created_by"] = admin_id
             
-            rows = list(interview_sessions_collection.find(
-                query_filter,
-                {"link_id": 1, "candidate_name": 1, "candidate_email": 1, "created_at": 1, "interview_id": 1, "interview_title": 1, "started_at": 1}
-            ).sort("created_at", -1))
+            rows = await asyncio.to_thread(
+                lambda: list(interview_sessions_collection.find(
+                    query_filter,
+                    {"link_id": 1, "candidate_name": 1, "candidate_email": 1, "created_at": 1, "interview_id": 1, "interview_title": 1, "started_at": 1, "interview_duration": 1, "status": 1},
+                ).sort("created_at", -1))
+            )
+            rows = [row for row in rows if sync_session_status(row) == "started"]
             
             ongoing_monitored_count = len(rows)
             snapshots = await _load_live_snapshots([row.get("link_id", "") for row in rows])
@@ -7710,7 +7902,12 @@ async def get_dashboard_aggregated_data(
 
         credit_reqs = []
         if current_admin.get("role") in ["master", "super_admin"]:
-            reqs = list(credit_requests_collection.find({"status": "pending"}).sort("created_at", -1))
+            credit_filter = {"status": "pending"}
+            if current_admin.get("role") != "master":
+                credit_filter["company_id"] = current_admin.get("company_id")
+            reqs = await asyncio.to_thread(
+                lambda: list(credit_requests_collection.find(credit_filter).sort("created_at", -1))
+            )
             for r in reqs:
                 r["id"] = str(r["_id"])
                 r["_id"] = str(r["_id"])
@@ -7795,7 +7992,7 @@ def bulk_delete_candidates(data: BulkDeleteRequest, current_admin: dict = Depend
                     interviews_collection.delete_one({"id": interview_id})
                     answers_collection.delete_many({"interview_id": interview_id})
                     if get_session(interview_id):
-                        delete_session(interview_id)
+                        delete_cached_session(interview_id)
                 
                 interview_sessions_collection.delete_one({"_id": row["_id"]})
                 deleted_count += 1
@@ -7817,7 +8014,7 @@ def delete_session_alias(link_id: str, current_admin: dict = Depends(get_current
             interviews_collection.delete_one({"id": interview_id})
             answers_collection.delete_many({"interview_id": interview_id})
             if get_session(interview_id):
-                delete_session(interview_id)
+                delete_cached_session(interview_id)
 
         # Delete the session link itself
         interview_sessions_collection.delete_one({"link_id": link_id})
@@ -9282,8 +9479,12 @@ class CodingChatRequest(BaseModel):
     run_result: Optional[Dict[str, Any]] = None
 
 @router.post("/coding-round/chat")
-async def coding_round_chat(req: CodingChatRequest):
+async def coding_round_chat(
+    req: CodingChatRequest,
+    credentials: Optional[HTTPAuthorizationCredentials] = Depends(candidate_monitoring_security),
+):
     """Provide conversational AI responses during the coding round"""
+    _require_candidate_session(credentials, interview_id=req.interview_id)
     try:
         # Load interview context
         interview = get_interview_or_404(req.interview_id)

@@ -2,6 +2,7 @@ import { useState, useEffect, useRef } from 'react'
 import { useNavigate } from 'react-router-dom'
 import Swal from 'sweetalert2'
 import api from '../../utils/api'
+import { candidateFetch, setCandidateSessionAuth } from '../../utils/candidateAuth'
 import useCandidateWebRTC from '../../hooks/useCandidateWebRTC'
 import { useProctoring } from '../../hooks/useProctoring'
 import { useScreenshotProtection } from '../../hooks/useScreenshotProtection'
@@ -456,10 +457,15 @@ export const useInterviewSession = (sessionId, interviewType, startRoundTwo) => 
       }
 
       if (sessionId && isDisclaimerAccepted) {
-        navigator.sendBeacon(`${api.defaults.baseURL || ''}/interview/${sessionId}/alert`, JSON.stringify({
-          type: "warning",
-          message: "Candidate refreshed or closed the window."
-        }))
+        candidateFetch(`${api.defaults.baseURL || ''}/interview/${sessionId}/alert`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            type: "warning",
+            message: "Candidate refreshed or closed the window."
+          }),
+          keepalive: true,
+        }).catch(() => {})
       }
     }
     window.addEventListener("beforeunload", handleUnload)
@@ -763,7 +769,9 @@ export const useInterviewSession = (sessionId, interviewType, startRoundTwo) => 
         }
         setQuestions(qList)
         setInterviewId(startPayload.interview_id || '')
-        setMonitoringToken(startPayload.monitoring_token || '')
+        const candidateToken = startPayload.monitoring_token || ''
+        setMonitoringToken(candidateToken)
+        setCandidateSessionAuth(candidateToken, sessionId, startPayload.interview_id || '')
         // Snapshot candidate details into refs NOW (synchronously) so that the
         // async Whisper MediaRecorder onstop callback always has correct values.
         // Using refs avoids the race condition where sessionDetail state hasn't
@@ -1057,6 +1065,15 @@ export const useInterviewSession = (sessionId, interviewType, startRoundTwo) => 
     rec.onerror = (e) => {
       if (e.error === 'not-allowed' || e.error === 'service-not-allowed') {
         console.error("Microphone permission denied:", e.error)
+        isSpeechRecordingRef.current = false
+        setError('Voice recognition permission was denied. Enable microphone and speech-recognition access, then retry the interview setup.')
+        Swal.fire({
+          title: 'Voice Recognition Permission Required',
+          text: 'The interview has paused and no answer was submitted. Enable microphone and speech-recognition access before continuing.',
+          icon: 'error',
+          background: '#161c2d',
+          color: '#fff',
+        })
         return
       }
       if (e.error === 'no-speech') {
@@ -1460,6 +1477,9 @@ export const useInterviewSession = (sessionId, interviewType, startRoundTwo) => 
 
   const setupMedia = async () => {
     try {
+      if (!('webkitSpeechRecognition' in window || 'SpeechRecognition' in window)) {
+        throw new Error('speech_recognition_unsupported')
+      }
       let stream
       try {
         stream = await navigator.mediaDevices.getUserMedia({
@@ -1597,6 +1617,9 @@ export const useInterviewSession = (sessionId, interviewType, startRoundTwo) => 
         errTitle = 'Screen Sharing Required'
         errText = 'You must share your entire screen to proceed with the secure proctored interview.'
         errIcon = 'warning'
+      } else if (err.message === 'speech_recognition_unsupported') {
+        errTitle = 'Voice Recognition Unavailable'
+        errText = 'This interview requires the latest Chrome or Edge browser with speech recognition enabled.'
       }
 
       Swal.fire({
@@ -2066,7 +2089,7 @@ export const useInterviewSession = (sessionId, interviewType, startRoundTwo) => 
           fd.append('interview_id', iid)
           fd.append('asked_question_ids', alreadyAskedIds)
           fd.append('count', '5')
-          fetch(`${import.meta.env.VITE_API_URL || ''}/generate-more-questions`, { method: 'POST', body: fd })
+          candidateFetch(`${api.defaults.baseURL || ''}/generate-more-questions`, { method: 'POST', body: fd })
             .then(r => r.json())
             .then(data => {
               if (data.questions && data.questions.length > 0) {
@@ -2174,6 +2197,9 @@ export const useInterviewSession = (sessionId, interviewType, startRoundTwo) => 
 
           const xhr = new XMLHttpRequest()
           xhr.open('POST', `${api.defaults.baseURL || ''}/upload-full-recording`, true)
+          if (monitoringToken) {
+            xhr.setRequestHeader('Authorization', `Bearer ${monitoringToken}`)
+          }
 
           xhr.upload.onprogress = (e) => {
             if (e.lengthComputable && type === 'camera') {

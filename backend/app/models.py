@@ -34,11 +34,14 @@ class SubAdminCreate(BaseModel):
     credits: int = 0
 
 class CreditRequestCreate(BaseModel):
-    amount: int
+    amount: int = Field(gt=0, le=1_000_000)
     reason: Optional[str] = None
 
 class CreditRequestUpdate(BaseModel):
     status: str  # 'approved' or 'rejected'
+
+class AddCreditsRequest(BaseModel):
+    credits: int = Field(gt=0, le=1_000_000)
 
 class TenantCreate(BaseModel):
     company_name: str

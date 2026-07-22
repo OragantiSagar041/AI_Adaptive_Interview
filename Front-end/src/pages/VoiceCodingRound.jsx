@@ -6,6 +6,7 @@
 import React, { useState, useRef, useCallback, useEffect } from 'react'
 import Editor from '@monaco-editor/react'
 import { API_BASE_URL } from '../apiConfig'
+import { candidateFetch } from '../utils/candidateAuth'
 import Swal from 'sweetalert2'
 import 'sweetalert2/dist/sweetalert2.min.css'
 import aiVideoUrl from '../assets/ai_avatar.mp4'
@@ -241,10 +242,15 @@ export default function VoiceCodingRound({
     active: true,
     onConfirmExit: async () => {
       if (linkId) {
-        navigator.sendBeacon(`${API_BASE_URL}/interview/${linkId}/alert`, JSON.stringify({
-          type: "warning",
-          message: "Candidate closed the window during the coding round."
-        }))
+        await candidateFetch(`${API_BASE_URL}/interview/${linkId}/alert`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            type: "warning",
+            message: "Candidate closed the window during the coding round."
+          }),
+          keepalive: true,
+        })
       }
     },
     message: `You are in the middle of the <strong>Coding Round</strong>.<br/><br/>If you leave now, your current code will not be submitted and your session may be marked as <strong>incomplete</strong>.<br/><br/>Are you sure you want to exit?`,
@@ -321,7 +327,7 @@ export default function VoiceCodingRound({
 
   const askAIForReply = useCallback(async (transcriptText, runResult) => {
     try {
-      const res = await fetch(`${API_BASE_URL}/coding-round/chat`, {
+      const res = await candidateFetch(`${API_BASE_URL}/coding-round/chat`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -440,7 +446,7 @@ export default function VoiceCodingRound({
               fd.append('question_text', 'Coding approach explanation')
               fd.append('answer_text', answer)
               fd.append('candidate_name', sessionDetail?.candidate_name || 'Candidate')
-              fetch(`${API_BASE_URL}/save-answer`, { method: 'POST', body: fd }).catch(() => { })
+              candidateFetch(`${API_BASE_URL}/save-answer`, { method: 'POST', body: fd }).catch(() => { })
             }
             setTimeout(() => aiSay("Great! Now implement your solution and talk through your thinking as you code."), 400)
           } else {
@@ -486,7 +492,7 @@ export default function VoiceCodingRound({
   const handleRun = async () => {
     setRunning(true); setRunOutput(''); setRunResultData(null)
     try {
-      const res = await fetch(`${API_BASE_URL}/coding-round/run`, {
+      const res = await candidateFetch(`${API_BASE_URL}/coding-round/run`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ interview_id: interviewId, code, language: selectedLang })
@@ -572,7 +578,7 @@ export default function VoiceCodingRound({
       aiSay(message, resolve)
     })
 
-    const fetchPromise = fetch(`${API_BASE_URL}/coding-round/submit`, {
+    const fetchPromise = candidateFetch(`${API_BASE_URL}/coding-round/submit`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ interview_id: interviewId, code, language: selectedLang })

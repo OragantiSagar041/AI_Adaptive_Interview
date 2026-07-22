@@ -1,5 +1,6 @@
 import axios from "axios";
 import { API_BASE_URL } from "../apiConfig";
+import { getCandidateSessionToken } from "./candidateAuth";
 
 // Create a single, consistent Axios instance
 const api = axios.create({
@@ -13,28 +14,23 @@ const api = axios.create({
 ============================================================================= */
 api.interceptors.request.use(
   (config) => {
-    // 1. Priority: Check for masterToken first
-    let token = sessionStorage.getItem("masterToken");
+    const requestPath = String(config.url || "");
+    const candidateRequest = /^\/?(?:save-answer|save-behavioral-data|coding-round|case-study|upload-full-recording|complete-session|submit-feedback|proctoring\/violation|session\/[^/]+\/violation|interview\/[^/]+\/(?:summary|ai-summary|alert)|generate-more-questions|live-heartbeat)(?:\/|\?|$)/.test(requestPath);
+    let token = candidateRequest ? getCandidateSessionToken() : sessionStorage.getItem("masterToken");
 
-    // 2. Fallback: Check for adminToken (used in master layout/dashboard)
-    if (!token) {
-      token = sessionStorage.getItem("adminToken");
-    }
+    if (!candidateRequest) {
+      if (!token) token = sessionStorage.getItem("adminToken");
+      if (!token) token = sessionStorage.getItem("token");
 
-    // 3. Fallback: Check for generic token
-    if (!token) {
-      token = sessionStorage.getItem("token");
-    }
-
-    // 4. Fallback: Check inside parsed adminUser object
-    if (!token) {
-      const adminUserStr = sessionStorage.getItem("adminUser");
-      if (adminUserStr) {
-        try {
-          const parsed = JSON.parse(adminUserStr);
-          token = parsed.token || (parsed.data && parsed.data.token);
-        } catch (e) {
-          console.error("Error parsing adminUser for token:", e);
+      if (!token) {
+        const adminUserStr = sessionStorage.getItem("adminUser");
+        if (adminUserStr) {
+          try {
+            const parsed = JSON.parse(adminUserStr);
+            token = parsed.token || (parsed.data && parsed.data.token);
+          } catch (e) {
+            console.error("Error parsing adminUser for token:", e);
+          }
         }
       }
     }

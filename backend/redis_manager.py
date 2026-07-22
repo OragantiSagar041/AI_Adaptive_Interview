@@ -2,6 +2,7 @@ import os
 import json
 import asyncio
 import logging
+import time
 from typing import Any, Dict, List, Optional
 from fastapi import WebSocket
 from app.live_monitoring_security import admin_can_receive_dashboard_event
@@ -20,22 +21,41 @@ class RedisConnectionManager:
         self.local_connections: Dict[str, Dict[str, any]] = {}
         self.dashboard_connections: List[Dict[str, Any]] = []
         self.listener_task: Optional[asyncio.Task] = None
-        self._redis_failed = False
+        self._connect_lock = asyncio.Lock()
+        self._next_retry_at = 0.0
+        self._retry_delay = 1.0
 
     async def connect_redis(self):
-        if not self.redis and not self._redis_failed:
+        if self.redis or time.monotonic() < self._next_retry_at:
+            return
+        async with self._connect_lock:
+            if self.redis or time.monotonic() < self._next_retry_at:
+                return
             try:
                 temp_redis = redis.from_url(REDIS_URL, decode_responses=True)
                 await temp_redis.ping()
                 self.redis = temp_redis
                 self.pubsub = self.redis.pubsub()
+                channels = set()
+                for link_id, group in self.local_connections.items():
+                    if group.get("candidate"):
+                        channels.add(f"session:{link_id}:candidate")
+                    if group.get("admins"):
+                        channels.add(f"session:{link_id}:admins")
+                if self.dashboard_connections:
+                    channels.add("dashboard:updates")
+                if channels:
+                    await self.pubsub.subscribe(*channels)
                 self.listener_task = asyncio.create_task(self._listen_to_redis())
+                self._retry_delay = 1.0
+                self._next_retry_at = 0.0
                 logger.info(f"Connected to Redis at {REDIS_URL}")
             except Exception as e:
                 logger.warning(f"Could not connect to Redis: {e}. Falling back to in-memory routing.")
-                self._redis_failed = True
                 self.redis = None
                 self.pubsub = None
+                self._next_retry_at = time.monotonic() + self._retry_delay
+                self._retry_delay = min(self._retry_delay * 2, 30.0)
 
     async def disconnect_redis(self):
         if self.listener_task:
@@ -80,6 +100,10 @@ class RedisConnectionManager:
             pass
         except Exception as e:
             logger.error(f"Redis listener failed: {e}")
+            self.redis = None
+            self.pubsub = None
+            self._next_retry_at = time.monotonic() + self._retry_delay
+            self._retry_delay = min(self._retry_delay * 2, 30.0)
 
     async def connect_candidate(self, websocket: WebSocket, link_id: str):
         await websocket.accept()

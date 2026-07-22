@@ -74,6 +74,8 @@ async def lifespan(app: FastAPI):
     try:
         interview_sessions_collection.create_index([("company_id", ASCENDING), ("status", ASCENDING)])
         interview_sessions_collection.create_index([("company_id", ASCENDING), ("created_at", DESCENDING)])
+        interview_sessions_collection.create_index([("company_id", ASCENDING), ("created_by", ASCENDING), ("status", ASCENDING)])
+        interview_sessions_collection.create_index([("company_id", ASCENDING), ("created_by", ASCENDING), ("created_at", DESCENDING)])
         interview_sessions_collection.create_index([("link_id", ASCENDING)], unique=True)
         print("MongoDB Indexes Initialized Successfully!")
     except Exception as e:
@@ -81,7 +83,11 @@ async def lifespan(app: FastAPI):
         
     startup_event_cloudinary()
     await startup_event_db_and_email()
-    yield
+    await voice_routes.start_realtime_services()
+    try:
+        yield
+    finally:
+        await voice_routes.stop_realtime_services()
 
 app = FastAPI(
     title="HireIQ AI Interview Platform",
