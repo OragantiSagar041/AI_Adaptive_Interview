@@ -2944,7 +2944,7 @@ def send_submission_notification(candidate_email: str, candidate_name: str, admi
         res = requests.post(url, json={
             "sender": {"name": sender_name, "email": sender_email_addr},
             "to": [{"email": candidate_email, "name": candidate_name}],
-            "subject": "Your Interview Has Been Submitted — Mock Interview",
+            "subject": "Your Interview Has Been Submitted — HireIQ",
             "htmlContent": candidate_html
         }, headers=headers, timeout=10)
         results.append(res.status_code < 300)
@@ -3324,7 +3324,7 @@ async def startup_event_db_and_email():
             import secrets
             master_pw = os.getenv("DEFAULT_MASTER_PASSWORD") or secrets.token_urlsafe(12)
             hashed_pw = hash_password(master_pw)
-            default_email = os.getenv("BREVO_SENDER_EMAIL", "no-reply@mockinterview.com")
+            default_email = os.getenv("BREVO_SENDER_EMAIL", "no-reply@hireiq.co.in")
             admins_collection.insert_one({
         "custom_id": get_next_sequence_value("recruiter", "RC"),
                 "username": "master",
@@ -3341,7 +3341,7 @@ async def startup_event_db_and_email():
             import secrets
             admin_pw = os.getenv("DEFAULT_ADMIN_PASSWORD") or secrets.token_urlsafe(12)
             hashed_pw = hash_password(admin_pw)
-            default_email = os.getenv("BREVO_SENDER_EMAIL", "no-reply@mockinterview.com")
+            default_email = os.getenv("BREVO_SENDER_EMAIL", "no-reply@hireiq.co.in")
             admins_collection.insert_one({
         "custom_id": get_next_sequence_value("recruiter", "RC"),
                 "username": "admin",
@@ -3357,7 +3357,7 @@ async def startup_event_db_and_email():
         else:
             # Upgrade legacy admin to tenant
             update_data = {}
-            if not row.get("email"): update_data["email"] = os.getenv("BREVO_SENDER_EMAIL", "no-reply@mockinterview.com")
+            if not row.get("email"): update_data["email"] = os.getenv("BREVO_SENDER_EMAIL", "no-reply@hireiq.co.in")
             if not row.get("role"): update_data["role"] = "tenant"
             if not row.get("subscription_plan"):
                 update_data["subscription_plan"] = "advance"
@@ -3531,7 +3531,7 @@ def send_otp_email(email: str, name: str, otp: str):
         <p>You requested to reset your admin password. Please use the following One-Time Password (OTP) to proceed:</p>
         <h2 style='color: #6366f1; letter-spacing: 5px; font-size: 2rem;'>{otp}</h2>
         <p>This code is valid for 10 minutes. If you did not request this, please ignore this email.</p>
-        <p>Best Regards,<br/>Mock Interview</p>
+        <p>Best Regards,<br/>HireIQ</p>
     </body></html>
     """
 
@@ -5085,7 +5085,7 @@ def admin_copilot_chat(request: CopilotRequest, raw_request: Request, current_ad
             pass
         plans_context = "\n".join(dynamic_plans)
 
-        system_prompt = f"""You are the 'Hire IQ Admin Copilot', a specialized AI assistant embedded within the Admin Dashboard of the Hire IQ Mock Interview platform.
+        system_prompt = f"""You are the 'Hire IQ Admin Copilot', a specialized AI assistant embedded within the Admin Dashboard of the Hire IQ Adaptive Interview platform.
 You are currently talking to a user with the role: {role.upper()}.
 
 YOUR PURPOSE:
@@ -5173,7 +5173,7 @@ CRITICAL RULES:
                 {"candidate_name": 1, "candidate_email": 1, "avg_score": 1, "decision": 1, "_id": 0}
             ).sort("created_at", -1).limit(3))
             if recent_sessions:
-                context_data += "\n--- YOUR RECENT CANDIDATE MOCK INTERVIEWS ---\n"
+                context_data += "\n--- YOUR RECENT CANDIDATE INTERVIEWS ---\n"
                 for s in recent_sessions:
                     context_data += f"- Candidate: {s.get('candidate_name', 'Unknown')} | Email: {s.get('candidate_email', 'Unknown')} | Score: {s.get('avg_score', 'N/A')}/100 | Decision: {s.get('decision', 'None')}\n"
 
@@ -5189,7 +5189,7 @@ CRITICAL RULES:
                 {"candidate_name": 1, "candidate_email": 1, "avg_score": 1, "decision": 1, "created_by": 1, "_id": 0}
             ).sort("created_at", -1).limit(3))
             if recent_sessions:
-                context_data += "\n--- COMPANY CANDIDATE MOCK INTERVIEWS ---\n"
+                context_data += "\n--- COMPANY CANDIDATE INTERVIEWS ---\n"
                 for s in recent_sessions:
                     context_data += f"- Candidate: {s.get('candidate_name')} | Email: {s.get('candidate_email')} | Score: {s.get('avg_score')} | Created By ID: {s.get('created_by')}\n"
 

@@ -2499,7 +2499,7 @@ def send_interview_email(candidate_email: str, candidate_name: str, link_url: st
     load_dotenv(env_path, override=True)
     brevo_api_key = os.getenv("BREVO_API_KEY")
     sender_name = "Hire IQ Recruiting"
-    sender_email = os.getenv("BREVO_SENDER_EMAIL", "no-reply@mockinterview.com")
+    sender_email = os.getenv("BREVO_SENDER_EMAIL", "no-reply@hireiq.co.in")
 
     if not brevo_api_key:
         print("Warning: BREVO_API_KEY not found in environment")
@@ -2519,7 +2519,7 @@ def send_interview_email(candidate_email: str, candidate_name: str, link_url: st
     payload = {
         "sender": {"name": sender_name, "email": sender_email},
         "to": [{"email": candidate_email, "name": candidate_name}],
-        "subject": "Interview Invitation by Mock Interview",
+        "subject": "Interview Invitation by HireIQ",
         "htmlContent": html_content
     }
 

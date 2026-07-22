@@ -91,7 +91,7 @@ async def lifespan(app: FastAPI):
 
 app = FastAPI(
     title="HireIQ AI Interview Platform",
-    description="Backend API for AI-powered mock interviews",
+    description="Backend API for HireIQ AI-powered interviews",
     version="2.0.0",
     lifespan=lifespan,
 )

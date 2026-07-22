@@ -1,5 +1,5 @@
 ---
-description: Deploy the Mock Interview Application
+description: Deploy the HireIQ Interview Application
 ---
 # Deployment Guide
 

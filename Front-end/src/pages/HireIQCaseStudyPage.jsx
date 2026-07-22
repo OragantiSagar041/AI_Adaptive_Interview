@@ -210,7 +210,7 @@ export default function HireIQCaseStudyPage() {
             className="order-2 lg:order-1 relative"
           >
             <div className="absolute inset-0 glow-cyan opacity-20 rounded-full blur-[100px]" />
-            <img src={data.images.solution} alt="Mock Interview" className="relative z-10 w-full rounded-[40px] border border-white/10 shadow-2xl glass object-cover aspect-[4/3]" />
+            <img src={data.images.solution} alt="HireIQ Interview" className="relative z-10 w-full rounded-[40px] border border-white/10 shadow-2xl glass object-cover aspect-[4/3]" />
           </motion.div>
 
           <motion.div 
