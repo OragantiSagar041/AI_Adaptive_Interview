@@ -43,6 +43,78 @@ import cloudinary.api
 import edge_tts
 import PyPDF2
 from bson import ObjectId
+
+def process_temp_cloudinary_upload(temp_url: str, collection_name: str, field_name: str):
+    if not temp_url or not temp_url.startswith("temp://"):
+        return
+    import os
+    import cloudinary.uploader
+    from mongo_db import interviews_collection, interview_sessions_collection
+    filename = temp_url.replace("temp://", "")
+    temp_path = os.path.join(os.getcwd(), "temp_uploads", filename)
+    
+    if os.path.exists(temp_path):
+        try:
+            with open(temp_path, "rb") as f:
+                content_bytes = f.read()
+            upload_res = cloudinary.uploader.upload(
+                content_bytes,
+                resource_type="raw",
+                folder="jds" if "jd" in field_name.lower() else "resumes",
+                public_id=filename
+            )
+            secure_url = upload_res.get("secure_url")
+            
+            if collection_name == "interviews":
+                interviews_collection.update_many({field_name: temp_url}, {"$set": {field_name: secure_url}})
+            elif collection_name == "interview_sessions":
+                interview_sessions_collection.update_many({field_name: temp_url}, {"$set": {field_name: secure_url}})
+        except Exception as e:
+            print(f"Background upload failed: {e}")
+        finally:
+            try:
+                os.remove(temp_path)
+            except:
+                pass
+
+MAIN_LOOP = None
+
+def broadcast_profile_update(admin_id: str, company_id: str, credits: int = None, login_enabled: bool = None, extra: dict = None):
+    from redis_manager import manager
+    import json
+    import asyncio
+    
+    payload = {
+        "type": "profile_update",
+        "admin_id": str(admin_id),
+        "company_id": str(company_id or ""),
+    }
+    if credits is not None:
+        payload["credits"] = credits
+    if login_enabled is not None:
+        payload["login_enabled"] = login_enabled
+    if extra:
+        payload.update(extra)
+        
+    async def _send():
+        if manager.redis:
+            await manager.redis.publish("dashboard:updates", json.dumps(payload))
+        else:
+            await manager.broadcast_dashboard(payload)
+            
+    global MAIN_LOOP
+    if MAIN_LOOP and MAIN_LOOP.is_running():
+        asyncio.run_coroutine_threadsafe(_send(), MAIN_LOOP)
+    else:
+        try:
+            loop = asyncio.get_running_loop()
+            if loop.is_running():
+                asyncio.run_coroutine_threadsafe(_send(), loop)
+            else:
+                loop.run_until_complete(_send())
+        except RuntimeError:
+            asyncio.run(_send())
+
 from bson.errors import InvalidId
 from docx import Document
 from dotenv import load_dotenv
@@ -844,7 +916,8 @@ def sync_session_to_application(link_id: str):
                 "hireiq_job_description_text": session.get("job_description_text", ""),
                 "hireiq_recommendation": session.get("overall_recommendation") or "No recommendation",
                 "hireiq_completion_time": session.get("updated_at") or session.get("created_at") or datetime.now(timezone.utc).isoformat(),
-                "hireiq_final_result": session.get("decision") or "pending"
+                "hireiq_final_result": session.get("decision") or "pending",
+                "detected_accent": session.get("detected_accent") or "Unknown"
             }
             
             if session.get("status") == "completed":
@@ -1231,10 +1304,18 @@ def _generate_case_study_questions_offline(job_description: str, num_questions: 
                 selected = random.sample(lang_cases, min(num_questions, len(lang_cases)))
                 results = []
                 for idx, c in enumerate(selected):
+                    sep = "।" if "।" in c else "."
+                    parts = c.split(sep, 1)
+                    if len(parts) > 1 and parts[1].strip():
+                        scenario = parts[0].strip() + sep
+                        question = parts[1].strip()
+                    else:
+                        scenario = c
+                        question = c
                     results.append({
                         "id": str(idx + 1),
-                        "scenario": c["scenario"],
-                        "question": c["task"],
+                        "scenario": scenario,
+                        "question": question,
                         "skill_tested": "Scenario",
                         "difficulty": "Medium",
                         "time_limit": 300,
@@ -3167,7 +3248,8 @@ def invitation_email_scheduler_loop():
 async def startup_event_db_and_email():
     import mongo_db
     await mongo_db.init_db_indexes()
-    global EMAIL_SCHEDULER_STARTED
+    global EMAIL_SCHEDULER_STARTED, MAIN_LOOP
+    MAIN_LOOP = asyncio.get_running_loop()
     # Create default MASTER admin if not exists
     try:
         master_row = admins_collection.find_one({"username": "master"})
@@ -3434,6 +3516,22 @@ def update_profile(data: UpdateProfileRequest, current_admin: str = Depends(get_
             
         admins_collection.update_one({"_id": admin_id_obj}, {"$set": update_fields})
         
+        # Broadcast updated profile details
+        admin_doc = admins_collection.find_one({"_id": admin_id_obj})
+        if admin_doc:
+            broadcast_profile_update(
+                admin_id=str(admin_id_obj),
+                company_id=str(admin_doc.get("company_id") or ""),
+                credits=admin_doc.get("credits"),
+                login_enabled=admin_doc.get("login_enabled"),
+                extra={
+                    "name": admin_doc.get("name"),
+                    "username": admin_doc.get("username"),
+                    "email": admin_doc.get("email"),
+                    "company_name": admin_doc.get("company_name")
+                }
+            )
+        
         # Remove password from response if present
         if "password" in update_fields:
             del update_fields["password"]
@@ -3481,6 +3579,15 @@ def upload_profile_image(
         admins_collection.update_one(
             {"_id": admin_id_obj},
             {"$set": {"profile_image": secure_url, "avatar": secure_url}}
+        )
+        
+        # Broadcast updated profile image
+        broadcast_profile_update(
+            admin_id=str(admin_id_obj),
+            company_id=str(admin.get("company_id") or ""),
+            credits=admin.get("credits"),
+            login_enabled=admin.get("login_enabled"),
+            extra={"profile_image": secure_url, "avatar": secure_url}
         )
         
         return {
@@ -3779,6 +3886,24 @@ def create_session(data: CreateSession, current_admin: dict = Depends(get_curren
     
     email_result = queue_or_send_interview_email(session_doc, link_url)
     
+    # Broadcast updated credits/profile to sync in real-time
+    admin_doc = admins_collection.find_one({"_id": ObjectId(current_admin["admin_id"])})
+    if admin_doc:
+        broadcast_profile_update(
+            admin_id=str(admin_doc["_id"]),
+            company_id=str(admin_doc.get("company_id") or ""),
+            credits=admin_doc.get("credits"),
+            login_enabled=admin_doc.get("login_enabled")
+        )
+    if company_id:
+        comp_doc = companies_collection.find_one({"_id": ObjectId(company_id)})
+        if comp_doc:
+            broadcast_profile_update(
+                admin_id=current_admin["admin_id"],
+                company_id=str(company_id),
+                credits=comp_doc.get("credits", 0)
+            )
+            
     return {
         "status": "success", 
         "link_id": link_id, 
@@ -4029,6 +4154,25 @@ def bulk_create_sessions(data: BulkCreateSession, background_tasks: BackgroundTa
             admins_collection.update_one({"_id": ObjectId(current_admin["admin_id"])}, {"$inc": {"credits": failed}})
         elif not company_id:
             admins_collection.update_one({"_id": ObjectId(current_admin["admin_id"])}, {"$inc": {"credits": failed}})
+
+    # Broadcast updated credits/profile to sync in real-time
+    admin_doc = admins_collection.find_one({"_id": ObjectId(current_admin["admin_id"])})
+    if admin_doc:
+        broadcast_profile_update(
+            admin_id=str(admin_doc["_id"]),
+            company_id=str(admin_doc.get("company_id") or ""),
+            credits=admin_doc.get("credits"),
+            login_enabled=admin_doc.get("login_enabled")
+        )
+    company_id = current_admin.get("company_id")
+    if company_id:
+        comp_doc = companies_collection.find_one({"_id": ObjectId(company_id)})
+        if comp_doc:
+            broadcast_profile_update(
+                admin_id=current_admin["admin_id"],
+                company_id=str(company_id),
+                credits=comp_doc.get("credits", 0)
+            )
 
     return {
         "status": "success",
@@ -5540,6 +5684,24 @@ def complete_session(
                 
         interview_sessions_collection.update_one({"link_id": link_id}, {"$set": update_data})
         sync_session_to_application(link_id)
+        
+        # Broadcast real-time completion to update credits and dashboard
+        if session:
+            admin_id = session.get("created_by")
+            if admin_id:
+                try:
+                    from bson import ObjectId
+                    admin_doc = admins_collection.find_one({"_id": ObjectId(admin_id)})
+                    if admin_doc:
+                        broadcast_profile_update(
+                            admin_id=str(admin_id),
+                            company_id=str(session.get("company_id") or ""),
+                            credits=admin_doc.get("credits"),
+                            login_enabled=admin_doc.get("login_enabled"),
+                            extra={"status_change": "completed", "link_id": link_id}
+                        )
+                except:
+                    pass
         
         # Task 3: Trigger submission logic IF all answers are scored.
         # Otherwise, the background scoring thread will trigger this later.
@@ -7263,6 +7425,13 @@ def toggle_sub_admin_status(admin_id: str, current_admin: dict = Depends(get_cur
         
     new_status = not admin_doc.get("login_enabled", True)
     admins_collection.update_one({"_id": ObjectId(admin_id)}, {"$set": {"login_enabled": new_status}})
+    
+    broadcast_profile_update(
+        admin_id=admin_id,
+        company_id=str(company_id or ""),
+        credits=admin_doc.get("credits"),
+        login_enabled=new_status
+    )
     return {"status": "success", "login_enabled": new_status}
 
 @router.delete("/super-admin/admins/{admin_id}")
@@ -7274,6 +7443,13 @@ def delete_sub_admin(admin_id: str, current_admin: dict = Depends(get_current_ad
     result = admins_collection.delete_one({"_id": ObjectId(admin_id), "company_id": company_id})
     if result.deleted_count == 0:
         raise HTTPException(status_code=404, detail="Sub-admin not found")
+        
+    broadcast_profile_update(
+        admin_id=admin_id,
+        company_id=str(company_id or ""),
+        login_enabled=False,
+        extra={"deleted": True}
+    )
     return {"status": "success"}
 
 class AddCreditsRequest(BaseModel):
@@ -7308,6 +7484,21 @@ def add_sub_admin_credits(admin_id: str, data: AddCreditsRequest, current_admin:
         {"_id": ObjectId(admin_id)},
         {"$inc": {"credits": data.credits}},
         return_document=ReturnDocument.AFTER
+    )
+    
+    # Broadcast to requesting sub-admin
+    broadcast_profile_update(
+        admin_id=admin_id,
+        company_id=str(company_id or ""),
+        credits=updated_admin.get("credits", 0),
+        login_enabled=updated_admin.get("login_enabled")
+    )
+    # Broadcast to Super Admin (to update their layout header credits in real-time)
+    broadcast_profile_update(
+        admin_id=super_admin_id,
+        company_id=str(company_id or ""),
+        credits=sa_doc.get("credits", 0),
+        login_enabled=sa_doc.get("login_enabled")
     )
     
     return {"status": "success", "credits": updated_admin.get("credits", 0), "super_admin_credits": sa_doc.get("credits", 0)}
@@ -7469,6 +7660,30 @@ def update_credit_request(request_id: str, data: CreditRequestUpdate, current_ad
             companies_collection.update_one({"_id": ObjectId(company_id)}, {"$inc": {"credits": -amount}})
         # Add to the requesting admin
         admins_collection.update_one({"_id": ObjectId(req["admin_id"])}, {"$inc": {"credits": amount}})
+        
+        # Broadcast to requesting admin
+        updated_admin = admins_collection.find_one({"_id": ObjectId(req["admin_id"])})
+        if updated_admin:
+            broadcast_profile_update(
+                admin_id=str(req["admin_id"]),
+                company_id=str(company_id or ""),
+                credits=updated_admin.get("credits", 0),
+                login_enabled=updated_admin.get("login_enabled")
+            )
+            
+        # Broadcast to Super Admin (company credits updated)
+        broadcast_profile_update(
+            admin_id=current_admin["admin_id"],
+            company_id=str(company_id or ""),
+            credits=companies_collection.find_one({"_id": ObjectId(company_id)}).get("credits", 0) if company_id else 0
+        )
+    else:
+        # If rejected, still broadcast an event so the Super Admin list updates to show the request is no longer pending!
+        broadcast_profile_update(
+            admin_id=str(req["admin_id"]),
+            company_id=str(company_id or ""),
+            extra={"status_change": "rejected"}
+        )
         
     # Send notification to the requesting admin
     try:

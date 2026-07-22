@@ -264,6 +264,8 @@ export default function SuperAdminLayout() {
         const data = JSON.parse(event.data)
         if (data.type === 'live_snapshot') {
           dispatch(updateLiveSnapshot(data))
+        } else if (data.type === 'profile_update') {
+          window.dispatchEvent(new CustomEvent('admin_profile_updated', { detail: data }))
         }
       } catch (err) {
         console.error('Error parsing dashboard ws message:', err)

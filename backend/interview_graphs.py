@@ -146,24 +146,46 @@ def qg_parse_context(state: QuestionGenerationState) -> QuestionGenerationState:
 
 def qg_draft_questions(state: QuestionGenerationState) -> QuestionGenerationState:
     num = state.get("num_questions", 6)
-    sys = "Draft technical interview questions as JSON array."
-    usr = f"Topics: {state.get('extracted_topics')}\nGenerate {num} questions in language {state.get('language')}.\nReturn JSON: {{'questions': [{{'question':'...', 'difficulty':'Medium', 'type':'Technical', 'category':'Core'}}]}}"
+    lang = state.get("language", "English")
+    sys = f"Draft technical interview questions as a JSON array. CRITICAL: You MUST generate all question texts strictly in the {lang} language. Do NOT use English."
+    usr = f"Topics: {state.get('extracted_topics')}\nGenerate {num} questions in language {lang}.\nReturn JSON: {{'questions': [{{'question':'...', 'difficulty':'Medium', 'type':'Technical', 'category':'Core'}}]}}"
     res = _llm_json(sys, usr, fallback={"questions": []})
     state["drafts"] = res.get("questions", [])
     return state
 
 def qg_validate_format(state: QuestionGenerationState) -> QuestionGenerationState:
     drafts = state.get("drafts", [])
+    lang = state.get("language", "English")
     valid_qs = []
     for i, d in enumerate(drafts):
         try:
-            q = _parse_with_schema(json.dumps(d), InterviewQuestion, InterviewQuestion(question="Fallback", id=i+1))
+            default_q = "Could you describe your experience with technology?"
+            if lang != "English":
+                try:
+                    from offline_language_fallback import OFFLINE_LANGUAGE_TECHNICAL_QUESTIONS
+                    lang_tech = OFFLINE_LANGUAGE_TECHNICAL_QUESTIONS.get(lang, [])
+                    if lang_tech:
+                        default_q = lang_tech[i % len(lang_tech)]
+                except Exception:
+                    pass
+            q = _parse_with_schema(json.dumps(d), InterviewQuestion, InterviewQuestion(question=default_q, id=i+1))
             q.id = i + 1
-            valid_qs.append(q.to_dict())
+            item = q.to_dict()
+            item["_generation_origin"] = "LLM" if item.get("question") != default_q else "validation fallback"
+            valid_qs.append(item)
         except Exception:
             pass
     if not valid_qs:
-        valid_qs = [InterviewQuestion(question="Could you tell me about your experience?", id=1).to_dict()]
+        fallback_q = "Could you tell me about your experience?"
+        if lang != "English":
+            try:
+                from offline_language_fallback import OFFLINE_LANGUAGE_INTRO_QUESTIONS
+                fallback_q = OFFLINE_LANGUAGE_INTRO_QUESTIONS.get(lang, fallback_q)
+            except Exception:
+                pass
+        item = InterviewQuestion(question=fallback_q, id=1).to_dict()
+        item["_generation_origin"] = "validation fallback"
+        valid_qs = [item]
     state["result"] = valid_qs
     return state
 
