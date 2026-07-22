@@ -27,6 +27,7 @@ from typing import Any, Dict, List, Optional, Union
 from app.services import parse_iso_datetime
 from app.session_store import get_session, delete_session
 from pymongo import ReturnDocument
+from interview_graphs import run_followup_graph
 
 sys.stdout.reconfigure(encoding='utf-8')
 sys.stderr.reconfigure(encoding='utf-8')
@@ -47,6 +48,38 @@ from bson.errors import InvalidId
 from docx import Document
 from dotenv import load_dotenv
 from groq import AsyncGroq
+
+def process_temp_cloudinary_upload(temp_url: str, collection_name: str, field_name: str):
+    if not temp_url or not temp_url.startswith("temp://"):
+        return
+    import os
+    import cloudinary.uploader
+    filename = temp_url.replace("temp://", "")
+    temp_path = os.path.join(os.getcwd(), "temp_uploads", filename)
+    
+    if os.path.exists(temp_path):
+        try:
+            with open(temp_path, "rb") as f:
+                content_bytes = f.read()
+            upload_res = cloudinary.uploader.upload(
+                content_bytes,
+                resource_type="raw",
+                folder="jds" if "jd" in field_name.lower() else "resumes",
+                public_id=filename
+            )
+            secure_url = upload_res.get("secure_url")
+            
+            if collection_name == "interviews":
+                interviews_collection.update_many({field_name: temp_url}, {"$set": {field_name: secure_url}})
+            elif collection_name == "interview_sessions":
+                interview_sessions_collection.update_many({field_name: temp_url}, {"$set": {field_name: secure_url}})
+        except Exception as e:
+            print(f"Background upload failed: {e}")
+        finally:
+            try:
+                os.remove(temp_path)
+            except:
+                pass
 from pydantic import BaseModel, validator, Field
 from starlette.background import BackgroundTask
 
@@ -424,7 +457,7 @@ def api_gen_next_question(req: NextQuestionRequest):
     try:
         # Generate the question
         language = interview.get("language", "English")
-        new_question = generate_followup_question(
+        new_question = run_followup_graph(
             req.answer_text, 
             interview.get("profile_text", ""),
             interview.get("job_description", ""),
@@ -660,6 +693,7 @@ async def generate_more_questions_endpoint(
                 row = interviews_collection.find_one({"id": interview_id})
                 if row:
                     try:
+                        session_row = interview_sessions_collection.find_one({"interview_id": interview_id}) or {}
                         loaded_questions = json.loads(row.get("questions", "[]"))
                         session = {
                             "id": interview_id,
@@ -667,9 +701,9 @@ async def generate_more_questions_endpoint(
                             "profile_text": row.get("profile_text", ""),
                             "questions": loaded_questions,
                             "answers": {},
-                            "industry": row.get("industry", "General"),
-                            "interview_type": row.get("interview_type", "Technical"),
-                            "language": row.get("language", "English")
+                            "industry": row.get("industry") or row.get("industry_type") or session_row.get("industry") or session_row.get("industry_type") or "General",
+                            "interview_type": row.get("interview_type") or session_row.get("interview_type") or "Technical",
+                            "language": row.get("language") or session_row.get("language") or "English"
                         }
                         set_session(interview_id, session)
                     except Exception:
@@ -695,12 +729,12 @@ async def generate_more_questions_endpoint(
                 if str(q.get("id", "")) in asked_ids or asked_ids == set()
             }
 
-            # Generate a new batch of questions
+            # Generate a new batch of questions — request extra to survive duplicate filtering
             new_questions = await run_in_threadpool(
                 generate_mock_questions,
                 text=profile_text,
                 source=source,
-                num_questions=count + 4,
+                num_questions=count + 8,
                 interview_type=session.get("interview_type", "Technical"),
                 industry=session.get("industry", "General"),
                 language=session.get("language", "English")
@@ -2844,7 +2878,9 @@ async def get_dashboard_stats(admin_id: Optional[str] = None, current_admin: dic
 
     try:
         comp_id = current_admin.get("company_id")
-        query = {"company_id": comp_id}
+        query = {}
+        if current_admin.get("role") != "master":
+            query["company_id"] = comp_id
         
         if current_admin.get("role") == "admin":
             admin_doc = admins_collection.find_one({"_id": ObjectId(current_admin["admin_id"])})
@@ -3662,16 +3698,20 @@ Return a pure JSON object with these keys. If not found, return empty string for
 @router.get("/admin/candidate/check")
 def check_candidate(email: str, current_admin: dict = Depends(get_current_admin_details)):
     try:
-        # Check if candidate exists for this company
+        # Check if candidate exists for this company (or globally if super admin)
+        query = {"candidate_email": email}
+        if current_admin.get("role") not in ["super_admin", "master"]:
+            query["company_id"] = current_admin.get("company_id")
+            
         session = interview_sessions_collection.find_one(
-            {"company_id": current_admin.get("company_id"), "candidate_email": email},
+            query,
             sort=[("created_at", -1)]
         )
-        if session and session.get("resume_text"):
+        if session:
             return {
                 "exists": True,
-                "resume_text": session.get("resume_text"),
-                "candidate_name": session.get("candidate_name")
+                "resume_text": session.get("resume_text", ""),
+                "candidate_name": session.get("candidate_name", "")
             }
         return {"exists": False}
     except Exception as e:
@@ -4622,7 +4662,9 @@ async def start_session_interview(link_id: str = Form(...)):
         "candidate_name": candidate_name,
         "candidate_email": candidate_email,
         "status": status,
-        "language": language
+        "language": language,
+        "interview_type": interview_type,
+        "industry": industry_val
     })
     
     # Store interview data (DB)
@@ -5537,6 +5579,19 @@ def complete_session(
             candidate_id = session.get("candidate_id")
             if candidate_id and not candidate_id.endswith("IQ"):
                 update_data["candidate_id"] = f"{candidate_id}IQ"
+            
+            # Calculate total time for the dashboard
+            started_at = session.get("started_at") or session.get("updated_at")
+            if started_at:
+                try:
+                    s_dt = datetime.fromisoformat(started_at.replace("Z", "+00:00"))
+                    e_dt = datetime.fromisoformat(update_data["completed_at"].replace("Z", "+00:00"))
+                    delta = (e_dt - s_dt).total_seconds()
+                    update_data["integrity"]["total_time_minutes"] = round(delta / 60, 1) if delta > 0 else 0
+                except:
+                    update_data["integrity"]["total_time_minutes"] = 0
+            else:
+                update_data["integrity"]["total_time_minutes"] = 0
                 
         interview_sessions_collection.update_one({"link_id": link_id}, {"$set": update_data})
         sync_session_to_application(link_id)
@@ -7532,9 +7587,10 @@ async def get_dashboard_aggregated_data(
         
         # Restore candidate query since the frontend still expects candidates in this payload
         c_query_filter = {
-            "company_id": current_admin.get("company_id"),
             "$or": [{"is_deactivated": False}, {"is_deactivated": {"$exists": False}}]
         }
+        if current_admin.get("role") != "master":
+            c_query_filter["company_id"] = current_admin.get("company_id")
         if current_admin.get("role") == "admin":
             c_query_filter["created_by"] = current_admin["admin_id"]
         elif admin_id:
@@ -7566,7 +7622,9 @@ async def get_dashboard_aggregated_data(
         # Get AI Calling interested candidates
         apps = []
         try:
-            jobs_query = {"company_id": current_admin.get("company_id")}
+            jobs_query = {}
+            if current_admin.get("role") != "master":
+                jobs_query["company_id"] = current_admin.get("company_id")
             if current_admin.get("role") == "admin":
                 jobs_query["admin_id"] = current_admin["admin_id"]
             elif admin_id:
@@ -8020,7 +8078,9 @@ def superadmin_recruitment_funnel(adminId: Optional[str] = None, current_admin: 
         raise HTTPException(status_code=403, detail="Super Admin access required")
     try:
         company_id = current_admin.get("company_id")
-        base_q = {"company_id": company_id}
+        base_q = {}
+        if current_admin.get("role") != "master":
+            base_q["company_id"] = company_id
         if adminId:
             base_q["created_by"] = adminId
 
@@ -8032,7 +8092,9 @@ def superadmin_recruitment_funnel(adminId: Optional[str] = None, current_admin: 
         # Count AI calling candidates
         ai_call_apps = 0
         try:
-            jobs_q = {"company_id": company_id}
+            jobs_q = {}
+            if current_admin.get("role") != "master":
+                jobs_q["company_id"] = company_id
             if adminId:
                 jobs_q["admin_id"] = adminId
             job_ids = [j.get("job_id") for j in jobs_collection.find(jobs_q, {"job_id": 1}) if j.get("job_id")]

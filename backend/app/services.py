@@ -1505,7 +1505,7 @@ def generate_mock_questions(text: str, source: str, num_questions: int = 6, resu
     
     # ── HR SCREENING QUESTIONS (inserted before closing) ──
     if hr_screening:
-        screening_questions = _generate_hr_screening_questions(hr_screening, jd_text or text)
+        screening_questions = _generate_hr_screening_questions(hr_screening, jd_text or text, language)
         for q in screening_questions:
             q["id"] = idx
             all_questions.append(q)
@@ -1734,7 +1734,7 @@ def _generate_offline_questions(resume_text: str, jd_text: str, total_count: int
     return questions
 
 
-def _generate_hr_screening_questions(hr_screening: dict, jd_text: str) -> List[Dict[str, str]]:
+def _generate_hr_screening_questions(hr_screening: dict, jd_text: str, language: str = "English") -> List[Dict[str, str]]:
     """
     Generate HR screening questions based on admin preferences.
     Tries to extract relevant info from the JD first for contextual questions.
@@ -1857,6 +1857,7 @@ def _generate_hr_screening_questions(hr_screening: dict, jd_text: str) -> List[D
             f"{topic_list}\n\n"
             f"Job Description:\n{jd_text[:3000]}\n\n"
             "Rules:\n"
+            f"- Generate the questions entirely in {language}.\n"
             "- Extract any relevant details from the JD (like location, work mode) and reference them.\n"
             "- Each question should be conversational and professional.\n"
             '- Return ONLY a valid JSON array of objects with keys: "question", "difficulty", "type", "category".\n'
@@ -2082,7 +2083,19 @@ def get_current_admin_details(credentials: HTTPAuthorizationCredentials = Depend
         except InvalidId:
             raise HTTPException(status_code=401, detail="Invalid token format")
             
-        admin_doc = admins_collection.find_one({"_id": admin_oid})
+        from pymongo.errors import AutoReconnect
+        import time
+        
+        admin_doc = None
+        for _ in range(3):
+            try:
+                admin_doc = admins_collection.find_one({"_id": admin_oid})
+                break
+            except AutoReconnect:
+                time.sleep(0.2)
+        else:
+            admin_doc = admins_collection.find_one({"_id": admin_oid})
+
         if not admin_doc:
             raise HTTPException(status_code=401, detail="Account not found")
         if admin_doc.get("login_enabled") == False:

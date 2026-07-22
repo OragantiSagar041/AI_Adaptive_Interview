@@ -92,6 +92,7 @@ export const useInterviewSession = (sessionId, interviewType, startRoundTwo) => 
   const [noiseAlertCount, setNoiseAlertCount] = useState(0)
   const noiseAlertCountRef = useRef(0)
   const isSubmittingRef = useRef(false)
+  const isNextingRef = useRef(false)
   const [showNoiseBanner, setShowNoiseBanner] = useState(false)
   const [fullscreenWarning, setFullscreenWarning] = useState(false)
   const [screenShareWarning, setScreenShareWarning] = useState(false)
@@ -792,17 +793,22 @@ export const useInterviewSession = (sessionId, interviewType, startRoundTwo) => 
           const fullDuration = dur * 60
           setTotalDuration(fullDuration)
 
+          // Normal interviews are single-round: use full duration.
+          // Technical/Non-Technical interviews split into 2 rounds: use half.
+          const interviewType = startPayload.interview_type || ''
+          const isSingleRound = interviewType === 'Normal'
+
           if (_savedSession?.startedAt && _savedSession?.accepted) {
             const elapsedSeconds = Math.floor((Date.now() - _savedSession.startedAt) / 1000)
-            const halfDur = fullDuration / 2
-            const remaining = Math.max(0, halfDur - elapsedSeconds)
+            const roundDur = isSingleRound ? fullDuration : fullDuration / 2
+            const remaining = Math.max(0, roundDur - elapsedSeconds)
             setGlobalCountdown(remaining)
             if (_savedSession.isRoundTwo) {
               setIsRoundTwo(true)
               isRoundTwoRef.current = true
             }
           } else {
-            setGlobalCountdown((dur / 2) * 60)
+            setGlobalCountdown(isSingleRound ? fullDuration : (dur / 2) * 60)
           }
         } else {
           setTotalDuration(30 * 60)
@@ -1944,6 +1950,8 @@ export const useInterviewSession = (sessionId, interviewType, startRoundTwo) => 
 
   const handleNextQuestion = async () => {
     if (currentQuestionIndex >= questions.length) return
+    if (isNextingRef.current) return  // prevent rapid-click double submit
+    isNextingRef.current = true
     const currentQuestion = questions[currentQuestionIndex]
     stopSilenceTimer()
 
@@ -2106,6 +2114,8 @@ export const useInterviewSession = (sessionId, interviewType, startRoundTwo) => 
         },
         buttonsStyling: false
       })
+    } finally {
+      isNextingRef.current = false  // release lock so user can click Next again
     }
   }
 
