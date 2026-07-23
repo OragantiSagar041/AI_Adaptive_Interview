@@ -22,7 +22,7 @@ const GRADIENT_ACCENTS = [
   'from-sky-500 via-blue-500 to-sky-600',
 ];
 
-const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || 'http://localhost:8000';
+import { API_BASE_URL } from "../../apiConfig";
 
 export default function SuperAdminJobsPage() {
   const dispatch = useDispatch();
