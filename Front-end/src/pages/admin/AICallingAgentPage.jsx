@@ -143,104 +143,466 @@ function AssistantDetailsTab({ agentSettings, loading }) {
   )
 }
 
-function CallConfigTab({ config, loading }) {
-  if (loading) return <SectionLoader />
-  if (!config) return <EmptyState message="No call configuration found." />
+function ModeSwitch({ isDynamic, onChange }) {
+  return (
+    <div className="flex items-center gap-2 text-xs font-semibold select-none">
+      <span className={!isDynamic ? "text-slate-800 font-bold" : "text-slate-400"}>Static</span>
+      <button
+        type="button"
+        onClick={() => onChange(!isDynamic)}
+        className={`w-9 h-4.5 rounded-full p-0.5 transition-colors flex items-center cursor-pointer ${
+          isDynamic ? "bg-indigo-600 justify-end" : "bg-slate-300 justify-start"
+        }`}
+      >
+        <div className="w-3.5 h-3.5 bg-white rounded-full shadow-md" />
+      </button>
+      <span className={isDynamic ? "text-indigo-600 font-bold" : "text-slate-400"}>Dynamic</span>
+    </div>
+  )
+}
 
-  const sections = [
-    {
-      title: 'Silence Handling',
-      description: 'What happens when a caller goes quiet or stops responding',
-      icon: <Timer size={18} />, color: 'blue',
-      rows: [
-        { label: 'Silence Timeout (ms)', value: config.silence_timeout },
-        { label: 'User Idle Threshold (sec)', value: config.user_idle_threshold_sec },
-        { label: 'Min Speech Duration (ms)', value: config.min_speech_duration_ms },
-        { label: 'Idle Message 1', value: config.first_ideal_message },
-        { label: 'Idle Message 2', value: config.second_ideal_message },
-        { label: 'Final Idle Message', value: config.last_ideal_message },
-      ]
-    },
-    {
-      title: 'End Call Rules',
-      description: 'Set conditions for when the assistant should hang up',
-      icon: <XCircle size={18} />, color: 'rose',
-      rows: [
-        { label: 'End Call Enabled', value: config.is_end_call_enabled ? 'Yes' : 'No' },
-        { label: 'Condition', value: config.end_call_condition },
-        { label: 'End Message', value: config.end_call_message },
-        { label: 'Max Duration (sec)', value: config.max_call_duration_in_sec ? `${config.max_call_duration_in_sec}s (${Math.round(config.max_call_duration_in_sec / 60)} min)` : null },
-      ]
-    },
-    {
-      title: 'Transfer & Routing',
-      description: 'Route callers to phone numbers based on conditions',
-      icon: <PhoneCall size={18} />, color: 'violet',
-      rows: [
-        { label: 'Transfer Enabled', value: config.is_transfer_enabled ? 'Yes' : 'No' },
-      ]
-    },
-    {
-      title: 'Response Behavior',
-      description: 'Filler phrases and personality style',
-      icon: <MessageSquare size={18} />, color: 'amber',
-      rows: [
-        { label: 'Speech Speed', value: config.speech_speed ? `${config.speech_speed}x` : null },
-      ]
-    },
-    {
-      title: 'Initial Ringing Sound',
-      description: 'Play a ring tone until the agent says its first word',
-      icon: <Phone size={18} />, color: 'emerald',
-      rows: [
-        { label: 'Ringing Sound Enabled', value: config.initial_ringing_sound_enabled ? 'Yes' : 'No' },
-      ]
-    },
-    {
-      title: 'Ambient Sound',
-      description: 'Add background music or noise to calls',
-      icon: <Volume2 size={18} />, color: 'cyan',
-      rows: [
-        { label: 'Background Noise Enabled', value: config.background_noise_enabled ? 'Yes' : 'No' },
-        { label: 'Sound Type', value: config.background_noice_name?.replace('_', ' ') },
-        { label: 'Volume', value: config.background_audio_volume != null ? `${Math.round(config.background_audio_volume * 100)}%` : null },
-      ]
-    },
-    {
-      title: 'Voicemail',
-      description: 'Handle calls that reach voicemail',
-      icon: <MailCheck size={18} />, color: 'orange',
-      rows: [
-        { label: 'Voicemail Enabled', value: config.voicemail_enabled ? 'Yes' : 'No' },
-        { label: 'Voicemail Message', value: config.voicemail_message },
-      ]
-    },
-  ]
+function CyanToggleSwitch({ checked, onChange, label = "" }) {
+  return (
+    <div className="flex items-center gap-2.5 select-none cursor-pointer" onClick={() => onChange(!checked)}>
+      {label && <span className={`text-xs font-bold ${checked ? "text-slate-800" : "text-slate-400"}`}>{label}</span>}
+      <div className={`w-9 h-4.5 rounded-full p-0.5 transition-colors flex items-center ${
+        checked ? "bg-indigo-600 justify-end" : "bg-slate-300 justify-start"
+      }`}>
+        <div className="w-3.5 h-3.5 bg-white rounded-full shadow-md" />
+      </div>
+    </div>
+  )
+}
+
+function CallConfigTab({ config, loading, omniApiKey, onRefresh }) {
+  const [saving, setSaving] = useState(false)
+  const [saveSuccess, setSaveSuccess] = useState('')
+  const [saveError, setSaveError] = useState('')
+
+  const [openSilence, setOpenSilence] = useState(true)
+  const [openEndCall, setOpenEndCall] = useState(true)
+  const [openResponse, setOpenResponse] = useState(true)
+
+  const c = config || {}
+
+  const [formData, setFormData] = useState(() => ({
+    user_idle_threshold_sec: c.user_idle_threshold_sec ?? 10,
+    first_idle_dynamic: c.first_idle_dynamic ?? true,
+    first_ideal_message: c.first_ideal_message || "Are you still there?",
+    second_idle_dynamic: c.second_idle_dynamic ?? true,
+    second_ideal_message: c.second_ideal_message || "I am still here if you need any help.",
+    last_ideal_message: c.last_ideal_message || "I'll leave you for now. Have a nice day!",
+
+    max_call_duration_in_sec: c.max_call_duration_in_sec ?? 600,
+    is_end_call_enabled: c.is_end_call_enabled ?? true,
+    end_call_condition: c.end_call_condition || "End the call when the user says goodbye, thank you, or indicates they are done with the conversation",
+    end_call_message: c.end_call_message || "Thank you for speaking with me today. Goodbye!",
+
+    speech_speed: c.speech_speed ?? 1.0,
+    initial_ringing_sound_enabled: c.initial_ringing_sound_enabled ?? true,
+    is_transfer_enabled: c.is_transfer_enabled ?? false,
+    background_noise_enabled: c.background_noise_enabled ?? false,
+    background_noice_name: typeof c.background_noice_name === 'string' ? c.background_noice_name : 'office_ambiance',
+    background_audio_volume: c.background_audio_volume ?? 0.15,
+    voicemail_enabled: c.voicemail_enabled ?? false,
+    voicemail_message: c.voicemail_message || "Hi, I reached your voicemail. Please call back when available.",
+  }))
+
+  useEffect(() => {
+    if (config && typeof config === 'object' && Object.keys(config).length > 0) {
+      setFormData({
+        user_idle_threshold_sec: config.user_idle_threshold_sec ?? 10,
+        first_idle_dynamic: config.first_idle_dynamic ?? true,
+        first_ideal_message: config.first_ideal_message || "Are you still there?",
+        second_idle_dynamic: config.second_idle_dynamic ?? true,
+        second_ideal_message: config.second_ideal_message || "I am still here if you need any help.",
+        last_ideal_message: config.last_ideal_message || "I'll leave you for now. Have a nice day!",
+
+        max_call_duration_in_sec: config.max_call_duration_in_sec ?? 600,
+        is_end_call_enabled: config.is_end_call_enabled ?? true,
+        end_call_condition: config.end_call_condition || "End the call when the user says goodbye, thank you, or indicates they are done with the conversation",
+        end_call_message: config.end_call_message || "Thank you for speaking with me today. Goodbye!",
+
+        speech_speed: config.speech_speed ?? 1.0,
+        initial_ringing_sound_enabled: config.initial_ringing_sound_enabled ?? true,
+        is_transfer_enabled: config.is_transfer_enabled ?? false,
+        background_noise_enabled: config.background_noise_enabled ?? false,
+        background_noice_name: typeof config.background_noice_name === 'string' ? config.background_noice_name : 'office_ambiance',
+        background_audio_volume: config.background_audio_volume ?? 0.15,
+        voicemail_enabled: config.voicemail_enabled ?? false,
+        voicemail_message: config.voicemail_message || "Hi, I reached your voicemail. Please call back when available.",
+      })
+    }
+  }, [config])
+
+  const handleChange = (field, value) => {
+    setFormData(prev => ({ ...prev, [field]: value }))
+  }
+
+  const handleSaveConfig = async (e) => {
+    if (e) e.preventDefault()
+    setSaving(true)
+    setSaveSuccess('')
+    setSaveError('')
+    try {
+      const token = localStorage.getItem('token')
+      const res = await fetch(`${API_BASE_URL}/api/calls/call-config`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${token}`,
+          ...(omniApiKey ? { 'X-Omni-Dimension-API-Key': omniApiKey } : {}),
+        },
+        body: JSON.stringify(formData)
+      })
+      const data = await res.json()
+      if (res.ok) {
+        setSaveSuccess('Call Configuration updated & synced to Omni Dimension!')
+        if (onRefresh) onRefresh()
+        setTimeout(() => setSaveSuccess(''), 3000)
+      } else {
+        setSaveError(data.detail || 'Failed to update call configuration')
+      }
+    } catch (err) {
+      setSaveError(err.message)
+    } finally {
+      setSaving(false)
+    }
+  }
+
+  if (loading) return <SectionLoader />
 
   return (
-    <div className="divide-y divide-slate-100 bg-white rounded-2xl border border-slate-200 shadow-sm">
-      {sections.map(({ title, description, icon, color, rows }) => {
-        const hasData = rows.some(r => r.value !== null && r.value !== undefined && r.value !== false && r.value !== '')
-        return (
-          <div key={title} className="px-6 py-5 hover:bg-slate-50 transition-colors">
-            <div className="flex items-start gap-4">
-              <div className={`p-2 rounded-lg bg-${color}-50 text-${color}-500 mt-0.5 shrink-0`}>
-                {icon}
+    <form onSubmit={handleSaveConfig} className="space-y-5 max-w-5xl mx-auto text-slate-800">
+      {/* Alert Messages */}
+      {saveSuccess && (
+        <div className="p-4 rounded-xl bg-emerald-50 border border-emerald-200 text-emerald-600 text-xs font-semibold flex items-center justify-between animate-in fade-in">
+          <span>{saveSuccess}</span>
+          <CheckCircle2 size={16} />
+        </div>
+      )}
+      {saveError && (
+        <div className="p-4 rounded-xl bg-rose-50 border border-rose-200 text-rose-600 text-xs font-semibold flex items-center justify-between animate-in fade-in">
+          <span>{saveError}</span>
+          <XCircle size={16} />
+        </div>
+      )}
+
+      {/* Top Header bar */}
+      <div className="flex items-center justify-between pb-3 mb-2 border-b border-slate-200">
+        <div>
+          <h3 className="font-extrabold text-xl text-slate-800 tracking-tight flex items-center gap-2">
+            <Cog size={22} className="text-indigo-600" /> Call Configuration
+          </h3>
+          <p className="text-xs text-slate-500 font-medium mt-0.5">Manage live agent silence rules, end-call conditions, ambient audio, and voicemail.</p>
+        </div>
+        <button
+          type="submit"
+          disabled={saving}
+          className="flex items-center gap-2 px-5 py-2.5 bg-indigo-600 hover:bg-indigo-700 disabled:opacity-50 text-white font-bold text-xs rounded-xl transition-all shadow-md shadow-indigo-600/30 cursor-pointer"
+        >
+          {saving ? <RefreshCw size={14} className="animate-spin" /> : <CheckCircle2 size={16} />}
+          {saving ? 'Saving...' : 'Save Settings'}
+        </button>
+      </div>
+
+      {/* SECTION 1: Silence Handling */}
+      <div className="bg-white border border-slate-200 rounded-2xl overflow-hidden shadow-sm">
+        <div 
+          onClick={() => setOpenSilence(!openSilence)}
+          className="flex items-center justify-between px-6 py-4 bg-slate-50/80 border-b border-slate-200 cursor-pointer select-none hover:bg-slate-100/60 transition-colors"
+        >
+          <div className="flex items-center gap-3">
+            <div className="p-2 rounded-lg bg-indigo-50 border border-indigo-100 text-indigo-600">
+              <Timer size={18} />
+            </div>
+            <div>
+              <h4 className="font-bold text-sm text-slate-800">Silence Handling</h4>
+              <p className="text-xs text-slate-500">What happens when a caller goes quiet or stops responding</p>
+            </div>
+          </div>
+          <button type="button" className="text-slate-400 hover:text-slate-600">
+            {openSilence ? <ChevronUp size={18} /> : <ChevronDown size={18} />}
+          </button>
+        </div>
+
+        {openSilence && (
+          <div className="p-6 space-y-6 bg-white">
+            {/* User idle threshold */}
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 pb-5 border-b border-slate-100">
+              <div>
+                <label className="block text-xs font-bold text-slate-800 mb-0.5">User idle threshold</label>
+                <p className="text-[0.72rem] text-slate-500">How long to wait before the agent nudges a silent caller.</p>
               </div>
-              <div className="flex-1 min-w-0">
-                <h4 className="font-bold text-slate-800 text-sm">{title}</h4>
-                <p className="text-xs text-slate-500 mt-0.5">{description}</p>
-                {hasData && (
-                  <div className="mt-4 bg-slate-50 border border-slate-200 rounded-lg px-4 py-1 divide-y divide-slate-100 shadow-[inset_0_1px_3px_rgba(0,0,0,0.02)]">
-                    {rows.map(r => <InfoRow key={r.label} label={r.label} value={r.value} />)}
+              <div className="flex items-center gap-2 shrink-0">
+                <input
+                  type="number"
+                  value={formData.user_idle_threshold_sec}
+                  onChange={e => handleChange('user_idle_threshold_sec', parseInt(e.target.value) || 0)}
+                  className="w-20 px-3 py-1.5 bg-slate-50 border border-slate-200 rounded-lg text-xs font-mono text-slate-800 text-right focus:outline-none focus:border-indigo-500"
+                />
+                <span className="text-xs font-semibold text-slate-500">sec</span>
+              </div>
+            </div>
+
+            {/* Idle messages heading */}
+            <div>
+              <div className="text-xs font-bold tracking-wide uppercase text-slate-500 mb-4">Idle messages (what the agent says)</div>
+              
+              {/* First Idle Message */}
+              <div className="space-y-2 mb-5">
+                <div className="flex items-center justify-between">
+                  <span className="text-xs font-bold text-slate-800">First idle message</span>
+                  <ModeSwitch 
+                    isDynamic={formData.first_idle_dynamic} 
+                    onChange={val => handleChange('first_idle_dynamic', val)} 
+                  />
+                </div>
+                <p className="text-[0.7rem] text-slate-500">Generated live in the ongoing language if the caller is silent for {formData.user_idle_threshold_sec} seconds.</p>
+                {!formData.first_idle_dynamic && (
+                  <input
+                    type="text"
+                    value={formData.first_ideal_message}
+                    onChange={e => handleChange('first_ideal_message', e.target.value)}
+                    className="w-full px-4 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-xs text-slate-800 placeholder-slate-400 focus:outline-none focus:border-indigo-500"
+                  />
+                )}
+              </div>
+
+              {/* Second Idle Message */}
+              <div className="space-y-2 mb-5">
+                <div className="flex items-center justify-between">
+                  <span className="text-xs font-bold text-slate-800">Second idle message</span>
+                  <ModeSwitch 
+                    isDynamic={formData.second_idle_dynamic} 
+                    onChange={val => handleChange('second_idle_dynamic', val)} 
+                  />
+                </div>
+                <p className="text-[0.7rem] text-slate-500">Generated live in the ongoing language if the caller stays silent another {formData.user_idle_threshold_sec} seconds.</p>
+                {!formData.second_idle_dynamic && (
+                  <input
+                    type="text"
+                    value={formData.second_ideal_message}
+                    onChange={e => handleChange('second_ideal_message', e.target.value)}
+                    className="w-full px-4 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-xs text-slate-800 placeholder-slate-400 focus:outline-none focus:border-indigo-500"
+                  />
+                )}
+              </div>
+
+              {/* Last Idle Message */}
+              <div className="space-y-2">
+                <span className="text-xs font-bold text-slate-800 block">Last idle message</span>
+                <input
+                  type="text"
+                  value={formData.last_ideal_message}
+                  onChange={e => handleChange('last_ideal_message', e.target.value)}
+                  placeholder="I'll leave you for now. Have a nice day!"
+                  className="w-full px-4 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-xs text-slate-800 placeholder-slate-400 focus:outline-none focus:border-indigo-500 font-medium"
+                />
+                <p className="text-[0.7rem] text-slate-500">Spoken after a final {formData.user_idle_threshold_sec} seconds of silence, then the call hangs up automatically.</p>
+              </div>
+            </div>
+          </div>
+        )}
+      </div>
+
+      {/* SECTION 2: End Call Rules */}
+      <div className="bg-white border border-slate-200 rounded-2xl overflow-hidden shadow-sm">
+        <div 
+          onClick={() => setOpenEndCall(!openEndCall)}
+          className="flex items-center justify-between px-6 py-4 bg-slate-50/80 border-b border-slate-200 cursor-pointer select-none hover:bg-slate-100/60 transition-colors"
+        >
+          <div className="flex items-center gap-3">
+            <div className="p-2 rounded-lg bg-rose-50 border border-rose-100 text-rose-600">
+              <XCircle size={18} />
+            </div>
+            <div>
+              <h4 className="font-bold text-sm text-slate-800">End Call Rules</h4>
+              <p className="text-xs text-slate-500">Set conditions for when the assistant should hang up</p>
+            </div>
+          </div>
+          <button type="button" className="text-slate-400 hover:text-slate-600">
+            {openEndCall ? <ChevronUp size={18} /> : <ChevronDown size={18} />}
+          </button>
+        </div>
+
+        {openEndCall && (
+          <div className="p-6 space-y-6 bg-white">
+            {/* Max Call Duration */}
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 pb-5 border-b border-slate-100">
+              <div>
+                <label className="block text-xs font-bold text-slate-800 mb-0.5 flex items-center gap-1">
+                  Max Call Duration (sec) <span className="text-slate-400 text-[0.65rem]">ⓘ</span>
+                </label>
+                <p className="text-[0.72rem] text-slate-500">The maximum duration in seconds before the call is automatically ended.</p>
+              </div>
+              <div className="flex items-center gap-2 shrink-0">
+                <input
+                  type="number"
+                  value={formData.max_call_duration_in_sec}
+                  onChange={e => handleChange('max_call_duration_in_sec', parseInt(e.target.value) || 0)}
+                  className="w-24 px-3 py-1.5 bg-slate-50 border border-slate-200 rounded-lg text-xs font-mono text-slate-800 text-right focus:outline-none focus:border-indigo-500"
+                />
+                <span className="text-xs font-semibold text-slate-500">Second(s)</span>
+              </div>
+            </div>
+
+            {/* Enable Automatic Call Ending */}
+            <div className="flex items-center justify-between pb-5 border-b border-slate-100">
+              <div>
+                <label className="block text-xs font-bold text-slate-800 mb-0.5">Enable Automatic Call Ending</label>
+                <p className="text-[0.72rem] text-slate-500">Allow your agent to automatically end calls based on specific conditions</p>
+              </div>
+              <CyanToggleSwitch 
+                checked={formData.is_end_call_enabled} 
+                onChange={val => handleChange('is_end_call_enabled', val)} 
+                label={formData.is_end_call_enabled ? "Enabled" : "Disabled"}
+              />
+            </div>
+
+            {/* End Call Settings */}
+            <div className="space-y-4">
+              <div className="text-xs font-bold text-slate-500 uppercase">End Call Settings</div>
+              
+              <div>
+                <label className="block text-xs font-bold text-slate-800 mb-1">End Call Condition *</label>
+                <input
+                  type="text"
+                  value={formData.end_call_condition}
+                  onChange={e => handleChange('end_call_condition', e.target.value)}
+                  placeholder="End the call when the user says goodbye, thank you, or indicates they are done with the conversation"
+                  className="w-full px-4 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-xs text-slate-800 placeholder-slate-400 focus:outline-none focus:border-indigo-500 font-medium"
+                />
+              </div>
+
+              <div>
+                <label className="block text-xs font-bold text-slate-800 mb-1">End Call Goodbye Message</label>
+                <input
+                  type="text"
+                  value={formData.end_call_message}
+                  onChange={e => handleChange('end_call_message', e.target.value)}
+                  placeholder="Thank you for speaking with me today. Goodbye!"
+                  className="w-full px-4 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-xs text-slate-800 placeholder-slate-400 focus:outline-none focus:border-indigo-500 font-medium"
+                />
+              </div>
+            </div>
+          </div>
+        )}
+      </div>
+
+      {/* SECTION 3: Response & Ambient Noise */}
+      <div className="bg-white border border-slate-200 rounded-2xl overflow-hidden shadow-sm">
+        <div 
+          onClick={() => setOpenResponse(!openResponse)}
+          className="flex items-center justify-between px-6 py-4 bg-slate-50/80 border-b border-slate-200 cursor-pointer select-none hover:bg-slate-100/60 transition-colors"
+        >
+          <div className="flex items-center gap-3">
+            <div className="p-2 rounded-lg bg-amber-50 border border-amber-100 text-amber-600">
+              <Volume2 size={18} />
+            </div>
+            <div>
+              <h4 className="font-bold text-sm text-slate-800">Response Behavior & Ambient Audio</h4>
+              <p className="text-xs text-slate-500">Speech speed, ring tones, ambient noise, and voicemail detection</p>
+            </div>
+          </div>
+          <button type="button" className="text-slate-400 hover:text-slate-600">
+            {openResponse ? <ChevronUp size={18} /> : <ChevronDown size={18} />}
+          </button>
+        </div>
+
+        {openResponse && (
+          <div className="p-6 space-y-6 bg-white">
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+              <div>
+                <label className="block text-xs font-bold text-slate-800 mb-2">Speech Speed ({formData.speech_speed}x)</label>
+                <input
+                  type="range" min="0.7" max="1.3" step="0.05"
+                  value={formData.speech_speed}
+                  onChange={e => handleChange('speech_speed', parseFloat(e.target.value))}
+                  className="w-full accent-indigo-600 cursor-pointer"
+                />
+              </div>
+              <div className="flex items-center justify-between">
+                <div>
+                  <label className="block text-xs font-bold text-slate-800 mb-0.5">Initial Ringing Sound</label>
+                  <p className="text-[0.72rem] text-slate-500">Play ring tone before agent speaks first word</p>
+                </div>
+                <CyanToggleSwitch 
+                  checked={formData.initial_ringing_sound_enabled} 
+                  onChange={val => handleChange('initial_ringing_sound_enabled', val)} 
+                />
+              </div>
+            </div>
+
+            <div className="border-t border-slate-100 pt-4 grid grid-cols-1 md:grid-cols-2 gap-6">
+              <div className="space-y-3">
+                <div className="flex items-center justify-between">
+                  <label className="block text-xs font-bold text-slate-800">Background Ambient Noise</label>
+                  <CyanToggleSwitch 
+                    checked={formData.background_noise_enabled} 
+                    onChange={val => handleChange('background_noise_enabled', val)} 
+                  />
+                </div>
+                {formData.background_noise_enabled && (
+                  <div className="space-y-3 pt-1">
+                    <select
+                      value={formData.background_noice_name}
+                      onChange={e => handleChange('background_noice_name', e.target.value)}
+                      className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-lg text-xs text-slate-800 outline-none focus:border-indigo-500 cursor-pointer"
+                    >
+                      <option value="office_ambiance">Office Ambiance</option>
+                      <option value="call_center">Call Center Noise</option>
+                      <option value="cafe_sound">Cafe / Soft Coffee Shop</option>
+                      <option value="white_noise">Subtle White Noise</option>
+                    </select>
+                    <div>
+                      <span className="text-[0.7rem] text-slate-500 font-bold block mb-1">Volume ({Math.round(formData.background_audio_volume * 100)}%)</span>
+                      <input
+                        type="range" min="0.05" max="0.5" step="0.05"
+                        value={formData.background_audio_volume}
+                        onChange={e => handleChange('background_audio_volume', parseFloat(e.target.value))}
+                        className="w-full accent-indigo-600 cursor-pointer"
+                      />
+                    </div>
                   </div>
+                )}
+              </div>
+
+              <div className="space-y-3">
+                <div className="flex items-center justify-between">
+                  <label className="block text-xs font-bold text-slate-800">Voicemail Detection</label>
+                  <CyanToggleSwitch 
+                    checked={formData.voicemail_enabled} 
+                    onChange={val => handleChange('voicemail_enabled', val)} 
+                  />
+                </div>
+                {formData.voicemail_enabled && (
+                  <input
+                    type="text"
+                    value={formData.voicemail_message}
+                    onChange={e => handleChange('voicemail_message', e.target.value)}
+                    placeholder="Hi, I reached your voicemail. Please call back when available."
+                    className="w-full px-4 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-xs text-slate-800 placeholder-slate-400 focus:outline-none focus:border-indigo-500 font-medium"
+                  />
                 )}
               </div>
             </div>
           </div>
-        )
-      })}
-    </div>
+        )}
+      </div>
+
+      {/* Save Button */}
+      <div className="flex justify-end pt-2">
+        <button
+          type="submit"
+          disabled={saving}
+          className="flex items-center gap-2 px-7 py-3 bg-indigo-600 hover:bg-indigo-700 disabled:opacity-50 text-white font-bold text-xs rounded-xl transition-all shadow-lg shadow-indigo-600/30 cursor-pointer"
+        >
+          {saving ? <RefreshCw size={14} className="animate-spin" /> : <CheckCircle2 size={16} />}
+          {saving ? 'Saving...' : 'Save Call Configuration'}
+        </button>
+      </div>
+    </form>
   )
 }
 
