@@ -8,6 +8,7 @@ import { useProctoring } from '../../hooks/useProctoring'
 import { useScreenshotProtection } from '../../hooks/useScreenshotProtection'
 import { useExamSecurity } from '../../hooks/useExamSecurity'
 import { countFillers } from './interviewUtils'
+import { normalizeInterviewQuestions, unwrapInterviewPayload } from './interviewPayload'
 
 const langMap = {
   'Hindi': 'hi-IN',
@@ -280,12 +281,7 @@ export const useInterviewSession = (sessionId, interviewType, startRoundTwo) => 
   const TTS_CACHE_MAX = 20
 
   const normalizeQuestions = (rawQuestions = []) => {
-    return rawQuestions.map((question, index) => ({
-      ...question,
-      id: question.id ?? index + 1,
-      text: question.text || question.question || question.prompt || '',
-      type: question.type || question.category || 'Interview'
-    }))
+    return normalizeInterviewQuestions(rawQuestions)
   }
 
   useEffect(() => {
@@ -706,7 +702,7 @@ export const useInterviewSession = (sessionId, interviewType, startRoundTwo) => 
       } catch (e) {}
 
       try {
-        const payload = await api.get(`/session/${sessionId}`).then(r => r.data)
+        const payload = await api.get(`/session/${sessionId}`).then(r => unwrapInterviewPayload(r.data))
         if (payload.status !== 'success') {
           throw new Error(payload.detail || payload.message || "Failed to load session details.")
         }
@@ -745,7 +741,7 @@ export const useInterviewSession = (sessionId, interviewType, startRoundTwo) => 
 
         const startPayload = await api.post(`/start-session-interview`, formData, {
           headers: { 'Content-Type': 'multipart/form-data' }
-        }).then(r => r.data)
+        }).then(r => unwrapInterviewPayload(r.data))
         if (startPayload.is_expired) {
           throw new Error(startPayload.message || "This interview link has expired.")
         }
@@ -758,12 +754,7 @@ export const useInterviewSession = (sessionId, interviewType, startRoundTwo) => 
           return
         }
 
-        const rawQuestions = startPayload.questions?.length
-          ? startPayload.questions
-          : startPayload.first_question
-            ? [startPayload.first_question]
-            : []
-        const qList = normalizeQuestions(rawQuestions)
+        const qList = normalizeQuestions(startPayload)
         if (qList.length === 0) {
           throw new Error("No interview questions are available for this session. Please contact the recruiter.")
         }

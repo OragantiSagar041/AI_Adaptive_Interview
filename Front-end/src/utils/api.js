@@ -15,7 +15,7 @@ const api = axios.create({
 api.interceptors.request.use(
   (config) => {
     const requestPath = String(config.url || "");
-    const candidateRequest = /^\/?(?:save-answer|save-behavioral-data|coding-round|case-study|upload-full-recording|complete-session|submit-feedback|proctoring\/violation|session\/[^/]+\/violation|interview\/[^/]+\/(?:summary|ai-summary|alert)|generate-more-questions|live-heartbeat)(?:\/|\?|$)/.test(requestPath);
+    const candidateRequest = /^\/?(?:transcribe|save-answer|save-behavioral-data|coding-round|case-study|upload-full-recording|complete-session|submit-feedback|proctoring\/violation|session\/[^/]+\/violation|interview\/[^/]+\/(?:summary|ai-summary|alert)|generate-more-questions|live-heartbeat)(?:\/|\?|$)/.test(requestPath);
     let token = candidateRequest ? getCandidateSessionToken() : sessionStorage.getItem("masterToken");
 
     if (!candidateRequest) {

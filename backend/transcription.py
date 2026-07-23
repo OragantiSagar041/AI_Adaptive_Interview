@@ -2,7 +2,7 @@ import os
 import tempfile
 from functools import lru_cache
 from difflib import SequenceMatcher
-from fastapi import APIRouter, UploadFile, File, Form
+from fastapi import APIRouter, UploadFile, File, Form, HTTPException
 from groq import Groq
 
 router = APIRouter()
@@ -56,7 +56,7 @@ async def transcribe_audio(
         # Use the cached Groq singleton instead of creating a new client per request.
         groq_api_key = os.environ.get("GROQ_API_KEY")
         if not groq_api_key:
-            return {"error": "GROQ_API_KEY not found in environment."}
+            raise HTTPException(status_code=503, detail="Voice transcription is temporarily unavailable.")
 
         client = _get_groq_client()
         
@@ -148,8 +148,12 @@ async def transcribe_audio(
         text = re.sub(r'(?i)\b(tsh|tch)[\s,]+', '', text)
         text = re.sub(r'\s+', ' ', text).strip()
             
-    except Exception as e:
-        text = f"Transcription failed: {str(e)}"
+    except HTTPException:
+        raise
+    except Exception:
+        # Never return an operational error as candidate speech; older behavior
+        # caused the frontend to save "Transcription failed: ..." as an answer.
+        raise HTTPException(status_code=503, detail="Voice transcription failed. Please retry.")
     finally:
         os.remove(path)
 

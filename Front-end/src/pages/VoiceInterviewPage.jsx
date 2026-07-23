@@ -32,6 +32,7 @@ import { useExitConfirmation } from '../hooks/useExitConfirmation'
 import DeviceCheckModal from '../components/DeviceCheckModal'
 
 import { VOICE_TRANSLATIONS } from '../utils/voiceTranslations'
+import { normalizeInterviewQuestions, unwrapInterviewPayload } from './interview/interviewPayload'
 
 // ── Video Avatar Component ────────────────────────────────────────────────────
 function VideoAvatar({ status, size = 220 }) {
@@ -603,7 +604,7 @@ export default function VoiceInterviewPage() {
       try {
         const r = await fetch(`${API_BASE_URL}/session/${linkId}`)
         if (hasTimedOut) return
-        const d = await r.json()
+        const d = unwrapInterviewPayload(await r.json())
         if (hasTimedOut) return
         if (!r.ok || d.status !== 'success') throw new Error(d.detail || 'Session not found.')
         if (d.is_deactivated) throw new Error('This link is deactivated.')
@@ -648,13 +649,12 @@ export default function VoiceInterviewPage() {
         const fd = new FormData(); fd.append('link_id', linkId)
         const sr = await fetch(`${API_BASE_URL}/start-session-interview`, { method: 'POST', body: fd })
         if (hasTimedOut) return
-        const sd = await sr.json()
+        const sd = unwrapInterviewPayload(await sr.json())
         if (hasTimedOut) return
         if (!sr.ok) throw new Error(sd.detail || 'Failed to start session.')
         if (sd.session_status === 'completed') throw new Error('Interview already completed.')
 
-        const qs = (sd.questions?.length ? sd.questions : sd.first_question ? [sd.first_question] : [])
-          .map((q, i) => ({ ...q, id: q.id ?? i + 1, text: q.text || q.question || q.prompt || '', type: q.type || 'Interview' }))
+        const qs = normalizeInterviewQuestions(sd)
           .filter(q => q.type !== 'coding' && q.type !== 'case_study') // verbal only
 
         if (!qs.length) throw new Error('No questions found for this session.')
@@ -926,7 +926,7 @@ export default function VoiceInterviewPage() {
     setAiStatus('idle')
   }, [stopAudio])
 
-  const startListening = useCallback((onFinish) => {
+  const startListening = useCallback((onFinish, preserveTranscript = false) => {
     const SR = window.SpeechRecognition || window.webkitSpeechRecognition
     if (!SR) {
       isListeningRef.current = false
@@ -953,8 +953,10 @@ export default function VoiceInterviewPage() {
     rec.maxAlternatives = 1
     recognitionRef.current = rec
     isListeningRef.current = true
-    currentTxRef.current = ''
-    setTranscript('')
+    if (!preserveTranscript) {
+      currentTxRef.current = ''
+      setTranscript('')
+    }
     setInterimText('')
     setAiStatus('listening')
 
@@ -1000,7 +1002,7 @@ export default function VoiceInterviewPage() {
         try { rec.stop() } catch (_) { }
         if (isListeningRef.current) {
           setTimeout(() => {
-            if (isListeningRef.current) startListening(onFinish)
+            if (isListeningRef.current) startListening(onFinish, true)
           }, 1000)
         }
         return
@@ -1031,7 +1033,7 @@ export default function VoiceInterviewPage() {
           }
         } catch (e) {
           // InvalidStateError or similar — start a fresh instance
-          if (isListeningRef.current) startListening(onFinish)
+          if (isListeningRef.current) startListening(onFinish, true)
         }
       }, 150)
     }

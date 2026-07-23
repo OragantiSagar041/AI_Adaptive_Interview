@@ -28,14 +28,10 @@ import { FaceLandmarker, FilesetResolver, ObjectDetector } from '@mediapipe/task
 const DEBUG = false;
 
 const MODEL_URLS = {
-  wasm:
-    import.meta.env.VITE_MEDIAPIPE_WASM_URL ||
-    'https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@0.10.35/wasm',
+  wasm: 'https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@0.10.35/wasm',
   faceLandmarker:
-    import.meta.env.VITE_FACE_LANDMARKER_MODEL_URL ||
     'https://storage.googleapis.com/mediapipe-models/face_landmarker/face_landmarker/float16/1/face_landmarker.task',
   objectDetector:
-    import.meta.env.VITE_OBJECT_DETECTOR_MODEL_URL ||
     'https://storage.googleapis.com/mediapipe-models/object_detector/efficientdet_lite0/int8/1/efficientdet_lite0.tflite',
 };
 
@@ -66,9 +62,21 @@ function log(...args) {
   if (DEBUG) console.debug('[ProctoringWorker]', ...args);
 }
 
+/**
+ * Some CDN/bundler combinations for @mediapipe/tasks-vision don't reliably
+ * auto-register the WASM ModuleFactory global in a Worker context.
+ * Fetching and evaluating the loader script directly ensures it exists.
+ */
+async function ensureWasmModuleFactory(vision) {
+  const scriptText = await (await fetch(vision.wasmLoaderPath)).text();
+  // eslint-disable-next-line no-eval
+  (0, eval)(scriptText);
+}
+
 async function loadModels() {
   const vision = await FilesetResolver.forVisionTasks(MODEL_URLS.wasm);
 
+  await ensureWasmModuleFactory(vision);
   faceLandmarker = await FaceLandmarker.createFromOptions(vision, {
     baseOptions: { modelAssetPath: MODEL_URLS.faceLandmarker, delegate: 'CPU' },
     outputFaceBlendshapes: true,
@@ -80,6 +88,7 @@ async function loadModels() {
   });
   log('FaceLandmarker ready');
 
+  await ensureWasmModuleFactory(vision);
   objectDetector = await ObjectDetector.createFromOptions(vision, {
     baseOptions: { modelAssetPath: MODEL_URLS.objectDetector, delegate: 'CPU' },
     runningMode: 'IMAGE',
@@ -149,7 +158,10 @@ function extractPhoneCandidates(detections) {
       const label = `${category.categoryName ?? ''} ${category.displayName ?? ''}`.toLowerCase();
       if (
         label.includes('phone') ||
-        label.includes('telephone')
+        label.includes('mobile') ||
+        label.includes('cell') ||
+        label.includes('tablet') ||
+        label.includes('remote')
       ) {
         candidates.push({ score: category.score ?? 0 });
       }
