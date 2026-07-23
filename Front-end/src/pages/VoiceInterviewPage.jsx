@@ -122,50 +122,8 @@ const langMap = {
   'Malayalam': 'ml-IN', 'Kannada': 'kn-IN', 'English': 'en-US'
 }
 
-// ── Conversational follow-up engine ──────────────────────────────────────────
-const FOLLOWUP_MAP = [
-  {
-    keywords: ['react', 'vue', 'angular', 'frontend', 'ui', 'component', 'hook'],
-    questions: ["Can you tell me more about which state management approach you prefer?", "How do you handle performance optimization in frontend applications?", "Walk me through how you'd architect a complex React app."]
-  },
-  {
-    keywords: ['python', 'java', 'node', 'backend', 'api', 'rest', 'graphql', 'server'],
-    questions: ["How do you handle error management and logging in your backend services?", "Can you describe a time you improved API performance significantly?", "How do you approach securing REST APIs?"]
-  },
-  {
-    keywords: ['team', 'lead', 'mentor', 'manage', 'collaborate', 'agile', 'scrum'],
-    questions: ["How do you handle disagreements within your team?", "Tell me about a time you had to give critical feedback to a peer.", "How do you keep your team aligned when requirements change frequently?"]
-  },
-  {
-    keywords: ['challenge', 'difficult', 'problem', 'solved', 'debug', 'issue', 'bug'],
-    questions: ["What made that problem particularly challenging?", "How did that experience change your approach to similar problems?", "What would you do differently looking back?"]
-  },
-  {
-    keywords: ['database', 'sql', 'nosql', 'mongo', 'postgres', 'redis', 'query'],
-    questions: ["How do you decide between SQL and NoSQL for a given problem?", "Walk me through how you'd optimize a slow database query.", "How do you think about data modeling for scalability?"]
-  },
-  {
-    keywords: ['ml', 'ai', 'machine learning', 'model', 'neural', 'data science', 'training'],
-    questions: ["How do you validate that an ML model is production-ready?", "How do you handle data drift in deployed models?", "Walk me through your feature engineering process."]
-  },
-  {
-    keywords: ['cloud', 'aws', 'azure', 'gcp', 'docker', 'kubernetes', 'devops', 'deploy', 'ci'],
-    questions: ["How do you approach zero-downtime deployments?", "Describe your ideal CI/CD pipeline.", "How do you handle infrastructure costs at scale?"]
-  },
-]
+// Offline follow-ups removed; now utilizing the backend AI-generated follow-up pipeline.
 
-function getFollowUp(transcript, usedIdx, language = 'English') {
-  const text = transcript.toLowerCase()
-  for (const entry of FOLLOWUP_MAP) {
-    if (entry.keywords.some(k => text.includes(k))) {
-      const unused = entry.questions.filter((_, i) => !usedIdx.has(entry.questions.indexOf(entry.questions[i])))
-      if (unused.length) return unused[0]
-    }
-  }
-  const t = VOICE_TRANSLATIONS[language] || VOICE_TRANSLATIONS['English']
-  const generics = t.generics
-  return generics[Math.floor(Math.random() * generics.length)]
-}
 
 // ── Chat Bubble ───────────────────────────────────────────────────────────────
 function Bubble({ role, text, isNew }) {
@@ -200,6 +158,16 @@ export default function VoiceInterviewPage() {
   const _sessionKey = linkId ? `voice_session_${linkId}` : null
   const _savedSession = _sessionKey ? (() => { try { return JSON.parse(sessionStorage.getItem(_sessionKey) || 'null') } catch { return null } })() : null
 
+  //  Derive initial round + meta from sessionStorage ──────────────────────────────
+  // Persisted fields: { startedAt, currentQIdx, round, answeredCount }
+  // 'waiting' is restored directly so the hold-screen shows with the correct remaining time.
+  // 'verbal'  is restored so the candidate skips pre_checks / intro on refresh.
+  // All other rounds let the server guard (session_status=completed) handle them.
+  const _savedRound = _savedSession?.round
+  const _restoredRound = (_savedRound === 'verbal' || _savedRound === 'waiting')
+    ? _savedRound
+    : 'pre_checks'
+
   // Session
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState(null)
@@ -213,8 +181,9 @@ export default function VoiceInterviewPage() {
   const [interviewType, setInterviewType] = useState('Technical')
 
   // Round control
-  const [round, setRound] = useState('pre_checks')
-  // 'pre_checks' | 'voice_clone_setup' | 'intro' | 'verbal' | 'coding' | 'case_study' | 'done'
+  const [round, setRound] = useState(_restoredRound)
+  // 'pre_checks' | 'voice_clone_setup' | 'intro' | 'verbal' | 'waiting' | 'coding' | 'case_study' | 'done'
+  // 'waiting' = all questions answered, timer still running — submission blocked until countdown reaches 0
   const [permissionsGranted, setPermissionsGranted] = useState(false)
   const [showDeviceCheck, setShowDeviceCheck] = useState(false)
 
@@ -236,12 +205,15 @@ export default function VoiceInterviewPage() {
   const [proctoringBanner, setProctoringBanner] = useState(null)
   const [interimText, setInterimText] = useState('')
   const [countdown, setCountdown] = useState(0)
+  const countdownRef = useRef(0)
   const [roundDuration, setRoundDuration] = useState(900)
-  const [answeredCount, setAnsweredCount] = useState(0)
+  const [answeredCount, setAnsweredCount] = useState(_savedSession?.answeredCount || 0)
   const [isSaving, setIsSaving] = useState(false)
   const prefetchedQuestionsRef = useRef([])  // background-fetched next batch
   const isPrefetchingRef = useRef(false)     // prevent duplicate fetches
   const [followUpCount, setFollowUpCount] = useState(0)  // follow-ups per question
+  const [askedFollowUpsCount, setAskedFollowUpsCount] = useState(_savedSession?.askedFollowUpsCount || 0)
+  const askedFollowUpsCountRef = useRef(_savedSession?.askedFollowUpsCount || 0)
   const [warningsCount, setWarningsCount] = useState(0)
   const [proctoringState, setProctoringState] = useState({
     modelsReady: false,
@@ -309,14 +281,14 @@ export default function VoiceInterviewPage() {
   const roundRef = useRef('pre_checks')
   const chatBottomRef = useRef(null)
   const wsRef = useRef(null)
-  const wsReconnectAttemptsRef = useRef(0)  // Phase 2: WS auto-reconnect counter
+  const wsReconnectAttemptsRef = useRef(0)  // : WS auto-reconnect counter
   const wsReconnectTimeoutRef = useRef(null)
-  const heartbeatFailCountRef = useRef(0)   // Phase 2: consecutive heartbeat failure counter
+  const heartbeatFailCountRef = useRef(0)   //  consecutive heartbeat failure counter
   const languageRef = useRef('English')
   const currentAudioRef = useRef(null)    // ← tracks active TTS audio so stopAudio() can kill it
   const isTransitioningRef = useRef(false)
 
-  // ── Phase 3: Browser online/offline detection ────────────────────────────
+  // ── Browser online/offline detection ────────────────────────────
   const [isOnline, setIsOnline] = useState(() => navigator.onLine)
   useEffect(() => {
     const goOnline = () => setIsOnline(true)
@@ -384,6 +356,8 @@ export default function VoiceInterviewPage() {
   useEffect(() => { sessionDetailRef.current = sessionDetail }, [sessionDetail])
   useEffect(() => { roundRef.current = round }, [round])
   useEffect(() => { languageRef.current = language }, [language])
+  useEffect(() => { countdownRef.current = countdown }, [countdown])
+  useEffect(() => { askedFollowUpsCountRef.current = askedFollowUpsCount }, [askedFollowUpsCount])
   useEffect(() => { chatBottomRef.current?.scrollIntoView({ behavior: 'smooth' }) }, [chatMessages])
 
   useEffect(() => {
@@ -413,9 +387,9 @@ export default function VoiceInterviewPage() {
       }
 
       ws.onclose = (evt) => {
-        // Don't reconnect if interview is done or if this was an intentional close (code 1000)
+        // Don't reconnect if interview is done/submitting/waiting, or intentional close (code 1000)
         const round = roundRef.current
-        if (round === 'done' || round === 'submitting' || evt.code === 1000) return
+        if (round === 'done' || round === 'submitting' || round === 'waiting' || evt.code === 1000) return
 
         const attempt = wsReconnectAttemptsRef.current
         if (attempt < MAX_WS_RETRIES) {
@@ -462,23 +436,58 @@ export default function VoiceInterviewPage() {
   const fmt = s => `${String(Math.floor(s / 60)).padStart(2, '0')}:${String(s % 60).padStart(2, '0')}`
 
 
-  // ── Persistence & Unload Tracking ──────────────────────────────────────────
+  //  Distinguish page REFRESH from true tab CLOSE
+  // beforeunload writes a 'refreshing' flag; pagehide reads it:
+  //   • Refresh: flag is present → skip beacon; pageshow clears it afterward.
+  //   • True close: pageshow never fires, flag is NOT present → fire beacon.
+  // Also checks a cross-tab localStorage flag to prevent double-submission.
   useEffect(() => {
+    const REFRESH_FLAG = `_refreshing_${linkId}`
+    const SUBMIT_FLAG = `submitting_pending_${linkId}`
+
+    // Clear any stale flag from a previous cycle
+    try { sessionStorage.removeItem(REFRESH_FLAG) } catch (_) { }
+
+    // beforeunload: mark that we are about to navigate away (could be refresh or close)
+    const handleBeforeUnload = () => {
+      try { sessionStorage.setItem(REFRESH_FLAG, '1') } catch (_) { }
+    }
+
+    // pageshow: fires on reload or bfcache restore — clear the refresh flag
+    const handlePageShow = () => {
+      try { sessionStorage.removeItem(REFRESH_FLAG) } catch (_) { }
+    }
+
+    // pagehide: fires on both refresh and close
     const handleUnload = () => {
       if (!linkId) return
       const roundNow = roundRef.current
-      // If interview is actively in progress (not done/intro/pre_checks), auto-complete it
-      if (roundNow && roundNow !== 'done' && roundNow !== 'intro' && roundNow !== 'pre_checks') {
-        // sendBeacon is the ONLY reliable way to fire a request on tab close
-        navigator.sendBeacon(
-          `${API_BASE_URL}/complete-session/${linkId}?warnings=${warningsCount}&reason=tab_closed`,
-          JSON.stringify({ reason: 'candidate_exited', timestamp: new Date().toISOString() })
-        )
-      }
+
+      // Skip if not in an active interview round
+      if (!roundNow || roundNow === 'done' || roundNow === 'intro' || roundNow === 'pre_checks') return
+
+      // Skip if this is a page refresh — beforeunload set the flag, pageshow hasn't cleared it yet
+      try { if (sessionStorage.getItem(REFRESH_FLAG) === '1') return } catch (_) { }
+
+      // Skip if a submission is already running (cross-tab dedup)
+      try { if (localStorage.getItem(SUBMIT_FLAG)) return } catch (_) { }
+
+      // Do not submit early if time is still remaining on the clock
+      if (countdownRef.current > 0) return
+
+      // True tab-close: fire the beacon
+      navigator.sendBeacon(
+        `${API_BASE_URL}/complete-session/${linkId}?warnings=${warningsCount}&reason=tab_closed`,
+        JSON.stringify({ reason: 'candidate_exited', timestamp: new Date().toISOString() })
+      )
     }
-    // pagehide fires on mobile browsers where beforeunload is unreliable
+
+    window.addEventListener('beforeunload', handleBeforeUnload)
+    window.addEventListener('pageshow', handlePageShow)
     window.addEventListener('pagehide', handleUnload)
     return () => {
+      window.removeEventListener('beforeunload', handleBeforeUnload)
+      window.removeEventListener('pageshow', handlePageShow)
       window.removeEventListener('pagehide', handleUnload)
     }
   }, [linkId, warningsCount])
@@ -488,6 +497,8 @@ export default function VoiceInterviewPage() {
   useExitConfirmation({
     active: isInterviewActive,
     onConfirmExit: async () => {
+      // Do not submit early if time is still remaining on the clock
+      if (countdownRef.current > 0) return
       if (linkId) {
         navigator.sendBeacon(
           `${API_BASE_URL}/complete-session/${linkId}?warnings=${warningsCount}&reason=tab_closed`,
@@ -564,14 +575,20 @@ export default function VoiceInterviewPage() {
   // ─────────────────────────────────────────────────────────────────────────
 
 
+  //  Persist round, answeredCount, and startedAt to sessionStorage ─────
+  // On every round change: write the new round so refresh can restore it.
+  // 'startedAt' is written once when verbal begins (to anchor the countdown).
+  // We deliberately do NOT persist 'submitting' or 'done' — those are server-side truths.
   useEffect(() => {
     if (!_sessionKey) return
     const existing = (() => { try { return JSON.parse(sessionStorage.getItem(_sessionKey) || '{}') } catch { return {} } })()
     if (round === 'verbal' && !existing.startedAt) {
-      sessionStorage.setItem(_sessionKey, JSON.stringify({ ...existing, startedAt: Date.now() }))
+      sessionStorage.setItem(_sessionKey, JSON.stringify({ ...existing, startedAt: Date.now(), round }))
+    } else if (round === 'verbal' || round === 'waiting') {
+      // Keep round persisted for active interview rounds only
+      sessionStorage.setItem(_sessionKey, JSON.stringify({ ...existing, round }))
     }
   }, [round, _sessionKey])
-
 
   useEffect(() => {
     if (!_sessionKey) return
@@ -580,8 +597,20 @@ export default function VoiceInterviewPage() {
   }, [currentQIdx, _sessionKey])
 
   useEffect(() => {
+    if (!_sessionKey) return
+    const existing = (() => { try { return JSON.parse(sessionStorage.getItem(_sessionKey) || '{}') } catch { return {} } })()
+    sessionStorage.setItem(_sessionKey, JSON.stringify({ ...existing, answeredCount }))
+  }, [answeredCount, _sessionKey])
+
+  useEffect(() => {
+    if (!_sessionKey) return
+    const existing = (() => { try { return JSON.parse(sessionStorage.getItem(_sessionKey) || '{}') } catch { return {} } })()
+    sessionStorage.setItem(_sessionKey, JSON.stringify({ ...existing, askedFollowUpsCount }))
+  }, [askedFollowUpsCount, _sessionKey])
+
+  useEffect(() => {
     if (!linkId) { setError('Missing session ID.'); setLoading(false); return }
-    // ── Phase 2: Loading safeguard ────────────────────────────────────────────
+    //  Loading safeguard ────────────────────────────────────────────
     let hasTimedOut = false
     const loadingTimeout = setTimeout(() => {
       hasTimedOut = true
@@ -606,9 +635,9 @@ export default function VoiceInterviewPage() {
           if (localStorage.getItem(pendingKey) === '1') {
             fetch(`${API_BASE_URL}/complete-session/${linkId}`, { method: 'POST' })
               .then(res => { if (res.ok) localStorage.removeItem(pendingKey) })
-              .catch(() => {})
+              .catch(() => { })
           }
-        } catch (_) {}
+        } catch (_) { }
         setSessionDetail(d)
         const langVal = d.language || 'English'
         setLanguage(langVal.charAt(0).toUpperCase() + langVal.slice(1).toLowerCase())
@@ -902,14 +931,131 @@ export default function VoiceInterviewPage() {
     await Promise.all(uploads)
   }, [linkId])
 
-  // ── STT ───────────────────────────────────────────────────────────────────
+  // ── Hybrid STT (Web Speech API captions + Continuous Whisper STT) ───────────
+  const interimTextRef = useRef('')
+  const whisperTxRef = useRef('')
+  const whisperRecorderRef = useRef(null)
+  const whisperChunksRef = useRef([])
+
+  // ── STT Concurrency, Queue & Sequence Control ─────────────────────────────
+  const sttInFlightRef = useRef(false)
+  const queuedChunkRef = useRef(null)
+  const sttSeqRef = useRef(0)
+  const lastProcessedSeqRef = useRef(0)
+
+  // Send /stt request with HTTP 429 exponential backoff retry
+  const sendSttRequestWithRetry = useCallback(async (seq, validAudioBlob, langCode, retriesLeft = 3, backoffMs = 1000) => {
+    const fd = new FormData()
+    fd.append('file', validAudioBlob, `utterance_${seq}.webm`)
+    const t0 = performance.now()
+
+    try {
+      const res = await fetch(`${API_BASE_URL}/stt?language=${langCode}`, { method: 'POST', body: fd })
+      const dt = Math.round(performance.now() - t0)
+
+      if (res.status === 429 && retriesLeft > 0) {
+        const jitter = Math.floor(Math.random() * 400)
+        const delay = backoffMs + jitter
+        console.warn(`🚨 [STT CONCURRENCY] HTTP 429 Rate Limit Exceeded for Seq #${seq}. Retrying in ${delay}ms... (${retriesLeft} retries left)`)
+        await new Promise(r => setTimeout(r, delay))
+        return sendSttRequestWithRetry(seq, validAudioBlob, langCode, retriesLeft - 1, backoffMs * 2)
+      }
+
+      if (res.ok) {
+        const data = await res.json()
+        console.log(`✅ [STT CONCURRENCY] Seq #${seq} HTTP 200 OK (${dt}ms) | Response:`, data)
+
+        // Sequence ID check: Ignore out-of-order Whisper responses
+        if (seq < lastProcessedSeqRef.current) {
+          console.warn(`⚠️ [STT CONCURRENCY] Discarded out-of-order Seq #${seq} (Current Last Processed: #${lastProcessedSeqRef.current})`)
+          return
+        }
+        lastProcessedSeqRef.current = seq
+
+        if (data && data.transcript && data.transcript.trim()) {
+          whisperTxRef.current = data.transcript.trim()
+          console.log(`📝 [STT CONCURRENCY] Authoritative Whisper Transcript Updated (Seq #${seq}): '${whisperTxRef.current}'`)
+        }
+      } else {
+        console.warn(`❌ [STT CONCURRENCY] Seq #${seq} Failed with HTTP ${res.status}`)
+      }
+    } catch (err) {
+      console.warn(`❌ [STT CONCURRENCY ERROR] Seq #${seq} Network/API Error:`, err)
+    }
+  }, [])
+
+  // Process next queued STT chunk sequentially (1 in-flight request per interview)
+  const processNextQueuedStt = useCallback(async () => {
+    if (sttInFlightRef.current) return
+    if (!queuedChunkRef.current) return
+
+    const { seq, validAudioBlob, langCode } = queuedChunkRef.current
+    queuedChunkRef.current = null // Drain queue
+    sttInFlightRef.current = true
+
+    try {
+      await sendSttRequestWithRetry(seq, validAudioBlob, langCode)
+    } finally {
+      sttInFlightRef.current = false
+      // If a newer chunk arrived while in-flight, process ONLY the latest queued chunk
+      if (queuedChunkRef.current) {
+        processNextQueuedStt()
+      }
+    }
+  }, [sendSttRequestWithRetry])
+
+  const enqueueSttChunk = useCallback((validAudioBlob, langCode) => {
+    sttSeqRef.current += 1
+    const seq = sttSeqRef.current
+
+    // Queue ONLY the latest audio chunk
+    queuedChunkRef.current = { seq, validAudioBlob, langCode }
+    processNextQueuedStt()
+  }, [processNextQueuedStt])
+
+  const getFullTranscript = useCallback(() => {
+    const finalTx = currentTxRef.current.trim()
+    const interimTx = interimTextRef.current.trim()
+    if (!interimTx) return finalTx
+    if (!finalTx) return interimTx
+    if (finalTx.endsWith(interimTx)) return finalTx
+    return `${finalTx} ${interimTx}`.trim()
+  }, [])
+
+  // Authoritative transcript: Whisper is single source of truth, Web Speech is fallback
+  const getAuthoritativeTranscript = useCallback(() => {
+    const whisperVal = whisperTxRef.current.trim()
+    const webSpeechVal = getFullTranscript()
+    console.log('🔍 [FINAL PAYLOAD EVALUATION]:', { whisperVal, webSpeechVal, chosen: (whisperVal && whisperVal.length >= 3) ? 'WHISPER' : 'WEB_SPEECH' })
+    if (whisperVal && whisperVal.length >= 3) {
+      return whisperVal
+    }
+    return webSpeechVal
+  }, [getFullTranscript])
+
   const stopListening = useCallback(() => {
     isListeningRef.current = false
     clearTimeout(silenceTimerRef.current)
     try { recognitionRef.current?.stop() } catch (_) { }
     recognitionRef.current = null
-    stopAudio()   // ← also kill any in-flight TTS so it doesn't bleed into next state
-    setInterimText('')   // clear cursor indicator but KEEP transcript so user sees what was captured
+
+    if (whisperRecorderRef.current && whisperRecorderRef.current.state !== 'inactive') {
+      try { whisperRecorderRef.current.stop() } catch (_) {}
+    }
+    whisperRecorderRef.current = null
+
+    stopAudio()   // ← kill any in-flight TTS
+
+    // Merge any active interim text before clearing
+    if (interimTextRef.current.trim()) {
+      const interimStr = interimTextRef.current.trim()
+      if (!currentTxRef.current.trim().endsWith(interimStr)) {
+        currentTxRef.current = (currentTxRef.current.trim() + ' ' + interimStr).trim()
+      }
+      setTranscript(currentTxRef.current)
+    }
+    interimTextRef.current = ''
+    setInterimText('')   // clear cursor indicator
     setAiStatus('idle')
   }, [stopAudio])
 
@@ -929,9 +1075,13 @@ export default function VoiceInterviewPage() {
       return
     }
 
-    // Always clean up previous instance first
+    // Clean up previous instances first
     try { recognitionRef.current?.stop() } catch (_) { }
     recognitionRef.current = null
+    if (whisperRecorderRef.current && whisperRecorderRef.current.state !== 'inactive') {
+      try { whisperRecorderRef.current.stop() } catch (_) {}
+    }
+    whisperRecorderRef.current = null
 
     const rec = new SR()
     rec.lang = langMap[languageRef.current] || 'en-US'
@@ -941,31 +1091,84 @@ export default function VoiceInterviewPage() {
     recognitionRef.current = rec
     isListeningRef.current = true
     currentTxRef.current = ''
+    interimTextRef.current = ''
+    whisperTxRef.current = ''
+    chunkCountRef.current = 0
+    whisperChunksRef.current = []
+    sttInFlightRef.current = false
+    queuedChunkRef.current = null
+    sttSeqRef.current = 0
+    lastProcessedSeqRef.current = 0
+
     setTranscript('')
     setInterimText('')
     setAiStatus('listening')
 
-    // Grace period: if nothing heard in 10s, auto-submit
+    // ── Continuous 2.5s decodable audio stream recorder for Groq Whisper ──
+    if (cameraStreamRef.current && cameraStreamRef.current.getAudioTracks().length > 0) {
+      try {
+        const audioStream = new MediaStream(cameraStreamRef.current.getAudioTracks())
+        const mime = MediaRecorder.isTypeSupported('audio/webm;codecs=opus') ? 'audio/webm;codecs=opus' : 'audio/webm'
+        const mr = new MediaRecorder(audioStream, { mimeType: mime })
+        whisperRecorderRef.current = mr
+
+        mr.ondataavailable = async (e) => {
+          if (!isListeningRef.current) return
+          if (e.data && e.data.size > 0) {
+            whisperChunksRef.current.push(e.data)
+            chunkCountRef.current += 1
+
+            // Produce a 100% valid standalone decodable WebM audio file (includes EBML header from chunk 1)
+            const validAudioBlob = new Blob(whisperChunksRef.current, { type: mime })
+            const size = validAudioBlob.size
+
+            if (size > 1000) {
+              const langCode = (langMap[languageRef.current] || 'en-US').split('-')[0]
+              enqueueSttChunk(validAudioBlob, langCode)
+            }
+          }
+        }
+        mr.start(2500)
+      } catch (err) {
+        console.warn('Failed to start Whisper chunk recorder:', err)
+      }
+    }
+
+    // Grace period: if nothing heard in 12s, auto-submit
     clearTimeout(silenceTimerRef.current)
     silenceTimerRef.current = setTimeout(() => {
-      if (isListeningRef.current) { stopListening(); onFinish?.(currentTxRef.current.trim()) }
-    }, 10000)
+      if (isListeningRef.current) {
+        const fullAns = getAuthoritativeTranscript()
+        stopListening()
+        onFinish?.(fullAns)
+      }
+    }, 12000)
 
     rec.onresult = ev => {
       if (!isListeningRef.current) return
-      let fin = '', interim = ''
-      for (let i = ev.resultIndex; i < ev.results.length; i++) {
-        if (ev.results[i].isFinal) fin += ev.results[i][0].transcript
-        else interim += ev.results[i][0].transcript
+      let finalStr = '', interimStr = ''
+      for (let i = 0; i < ev.results.length; i++) {
+        if (ev.results[i].isFinal) {
+          finalStr += ev.results[i][0].transcript + ' '
+        } else {
+          interimStr += ev.results[i][0].transcript
+        }
       }
-      if (fin) { currentTxRef.current += fin + ' '; setTranscript(currentTxRef.current) }
-      setInterimText(interim)
+      currentTxRef.current = finalStr.trim()
+      interimTextRef.current = interimStr.trim()
+
+      setTranscript(currentTxRef.current)
+      setInterimText(interimTextRef.current)
 
       // Reset silence timer whenever speech is heard
       clearTimeout(silenceTimerRef.current)
       silenceTimerRef.current = setTimeout(() => {
-        if (isListeningRef.current) { stopListening(); onFinish?.(currentTxRef.current.trim()) }
-      }, 10000)
+        if (isListeningRef.current) {
+          const fullAns = getAuthoritativeTranscript()
+          stopListening()
+          onFinish?.(fullAns)
+        }
+      }, 12000)
     }
 
     // ── Smart error handler ────────────────────────────────────────────────
@@ -1100,80 +1303,161 @@ export default function VoiceInterviewPage() {
     }
 
     // Decide: follow-up or next question
-    if (fupCount < 1) {
-      const fu = getFollowUp(answer, usedFollowUps.current, languageRef.current)
-      if (fu) {
-        usedFollowUps.current.add(fu)
-        const t = VOICE_TRANSLATIONS[languageRef.current] || VOICE_TRANSLATIONS['English']
-        const acks = t.acks
-        const ack = acks[Math.floor(Math.random() * acks.length)]
-        setTimeout(() => aiSay(`${ack} ${fu}`, () => startListening(ans => handleAnswer(ans, qIdx, fupCount + 1))), 400)
-        return
-      }
-    }
+    const checkAndGenerateFollowUp = async () => {
+      const currentQ = qs[qIdx]
+      const isCurrentFollowUp = currentQ && (
+        String(currentQ.type).toLowerCase().includes('follow-up') ||
+        String(currentQ.type).toLowerCase().includes('jd-based') ||
+        fupCount > 0
+      )
 
-    // Next question
-    setAnsweredCount(p => p + 1)
-    const nextIdx = qIdx + 1
+      if (askedFollowUpsCountRef.current < 5 && !isCurrentFollowUp && answer.trim()) {
+        setAiStatus('thinking')
+        try {
+          const res = await fetch(`${API_BASE_URL}/generate-next-question`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              interview_id: interviewIdRef.current,
+              current_question_id: Number(currentQ.id),
+              answer_text: answer
+            })
+          })
+          if (res.ok) {
+            const data = await res.json()
+            if (data && !data.skip_followup && (data.question || data.text)) {
+              // Increment follow-up count
+              const nextFupCount = askedFollowUpsCountRef.current + 1
+              setAskedFollowUpsCount(nextFupCount)
+              askedFollowUpsCountRef.current = nextFupCount
 
-    // ── Pre-fetch next batch when candidate is on second-to-last question ──
-    const iid = interviewIdRef.current
-    if (iid && !isPrefetchingRef.current && qs.length - qIdx <= 2 && prefetchedQuestionsRef.current.length === 0) {
-      isPrefetchingRef.current = true
-      const alreadyAskedIds = qs.map(q => String(q.id || '')).join(',')
-      const fd = new FormData()
-      fd.append('interview_id', iid)
-      fd.append('asked_question_ids', alreadyAskedIds)
-      fd.append('count', '5')
-      fetch(`${API_BASE_URL}/generate-more-questions`, { method: 'POST', body: fd })
-        .then(r => r.json())
-        .then(data => {
-          if (data.questions && data.questions.length > 0) {
-            prefetchedQuestionsRef.current = data.questions
+              // Sync to sessionStorage
+              if (_sessionKey) {
+                try {
+                  const existing = JSON.parse(sessionStorage.getItem(_sessionKey) || '{}')
+                  sessionStorage.setItem(_sessionKey, JSON.stringify({
+                    ...existing,
+                    askedFollowUpsCount: nextFupCount
+                  }))
+                } catch (_) {}
+              }
+
+              // Create the follow-up question object
+              const newQ = {
+                id: data.id,
+                text: data.question || data.text,
+                type: data.type || 'Follow-up',
+                category: data.category || 'Deep Dive'
+              }
+
+              // Insert it at qIdx + 1
+              const updatedQs = [...qs]
+              updatedQs.splice(qIdx + 1, 0, newQ)
+              setQuestions(updatedQs)
+              questionsRef.current = updatedQs
+              setCurrentQIdx(qIdx + 1)
+
+              // Set AI to speaking and say the question
+              setAiStatus('speaking')
+              const t = VOICE_TRANSLATIONS[languageRef.current] || VOICE_TRANSLATIONS['English']
+              const acks = t.acks
+              const ack = acks[Math.floor(Math.random() * acks.length)]
+              
+              aiSay(`${ack} ${newQ.text}`, () => startListening(ans => handleAnswer(ans, qIdx + 1, 1)))
+              return
+            }
           }
-        })
-        .catch(() => {})
-        .finally(() => { isPrefetchingRef.current = false })
+        } catch (err) {
+          console.warn("Failed to generate AI follow-up, moving to next main question:", err)
+        }
+      }
+
+      // If we skipped generating follow-up or the generation failed, proceed to next question
+      proceedToNextQuestion()
     }
 
-    if (!qs[nextIdx]) {
-      // Check if we have pre-fetched questions ready
-      if (prefetchedQuestionsRef.current.length > 0) {
-        const batch = prefetchedQuestionsRef.current
-        prefetchedQuestionsRef.current = []
-        const newQs = [...qs, ...batch]
-        setQuestions(newQs)
-        questionsRef.current = newQs
+    const proceedToNextQuestion = () => {
+      // Next question
+      setAnsweredCount(p => p + 1)
+      const nextIdx = qIdx + 1
+
+      // ── Pre-fetch next batch when candidate is on second-to-last question ──
+      const iid = interviewIdRef.current
+      if (iid && !isPrefetchingRef.current && qs.length - qIdx <= 2 && prefetchedQuestionsRef.current.length === 0) {
+        isPrefetchingRef.current = true
+        const alreadyAskedIds = qs.map(q => String(q.id || '')).join(',')
+        const fd = new FormData()
+        fd.append('interview_id', iid)
+        fd.append('asked_question_ids', alreadyAskedIds)
+        fd.append('count', '5')
+        fetch(`${API_BASE_URL}/generate-more-questions`, { method: 'POST', body: fd })
+          .then(r => r.json())
+          .then(data => {
+            if (data.questions && data.questions.length > 0) {
+              prefetchedQuestionsRef.current = data.questions
+            }
+          })
+          .catch(() => { })
+          .finally(() => { isPrefetchingRef.current = false })
+      }
+
+      if (!qs[nextIdx]) {
+        // Check if we have pre-fetched questions ready
+        if (prefetchedQuestionsRef.current.length > 0) {
+          const batch = prefetchedQuestionsRef.current
+          prefetchedQuestionsRef.current = []
+          const newQs = [...qs, ...batch]
+          setQuestions(newQs)
+          questionsRef.current = newQs
+          setCurrentQIdx(nextIdx)
+          const t = VOICE_TRANSLATIONS[languageRef.current] || VOICE_TRANSLATIONS['English']
+          const acks = t.acks
+          const transition = acks[Math.floor(Math.random() * acks.length)] + " "
+          setTimeout(() => {
+            aiSay(`${transition}${t.nextQuestion.replace('[X]', nextIdx + 1)}${newQs[nextIdx].text}`, () => startListening(ans => handleAnswer(ans, nextIdx, 0)))
+          }, 500)
+        } else {
+          // No pre-fetched questions yet — proceed to next round as usual
+          transitionToNextRound()
+        }
+      } else {
         setCurrentQIdx(nextIdx)
         const t = VOICE_TRANSLATIONS[languageRef.current] || VOICE_TRANSLATIONS['English']
         const acks = t.acks
         const transition = acks[Math.floor(Math.random() * acks.length)] + " "
         setTimeout(() => {
-          aiSay(`${transition}${t.nextQuestion.replace('[X]', nextIdx + 1)}${newQs[nextIdx].text}`, () => startListening(ans => handleAnswer(ans, nextIdx, 0)))
+          aiSay(`${transition}${t.nextQuestion.replace('[X]', nextIdx + 1)}${qs[nextIdx].text}`, () => startListening(ans => handleAnswer(ans, nextIdx, 0)))
         }, 500)
-      } else {
-        // No pre-fetched questions yet — proceed to next round as usual
-        transitionToNextRound()
       }
-    } else {
-      setCurrentQIdx(nextIdx)
-      const t = VOICE_TRANSLATIONS[languageRef.current] || VOICE_TRANSLATIONS['English']
-      const acks = t.acks
-      const transition = acks[Math.floor(Math.random() * acks.length)] + " "
-      setTimeout(() => {
-        aiSay(`${transition}${t.nextQuestion.replace('[X]', nextIdx + 1)}${qs[nextIdx].text}`, () => startListening(ans => handleAnswer(ans, nextIdx, 0)))
-      }, 500)
     }
-  }, [addMsg, aiSay, startListening])
+
+    checkAndGenerateFollowUp()
+  }, [addMsg, aiSay, startListening, transitionToNextRound])
 
   // ── Complete interview ────────────────────────────────────────────────────
   const completeInterview = useCallback(async (options = {}) => {
+    // Fallback for legacy calls that pass a boolean (isTimeout)
+    const isTimeout = typeof options === 'boolean' ? options : (options.isTimeout || false)
+
+    // Single authoritative guard: completeInterview() can only execute if isTimeout === true OR countdownRef.current <= 0
+    if (!isTimeout && countdownRef.current > 0) {
+      stopListening(); window.speechSynthesis?.cancel(); stopAudio()
+      isTransitioningRef.current = false
+      setRound('waiting')
+      return
+    }
+
     if (submittingRef.current) return
     submittingRef.current = true
     setIsSaving(true)
-    
-    // Fallback for legacy calls that pass a boolean (isTimeout)
-    const isTimeout = typeof options === 'boolean' ? options : (options.isTimeout || false)
+
+    //  Cross-tab dedup flag ───────────────────────────────────────
+    // Set a localStorage flag so: (a) the pagehide beacon skips if this tab is uploading,
+    // (b) a second browser tab sees the flag and skips its own /complete-session call.
+    // Cleared on success or failure so future genuine re-opens are not blocked.
+    const SUBMIT_FLAG = `submitting_pending_${linkId}`
+    try { localStorage.setItem(SUBMIT_FLAG, String(Date.now())) } catch (_) { }
+
     const completionReason = typeof options === 'object' && options.reason ? options.reason : 'normal'
 
     integrityMetricsRef.current.reason = completionReason
@@ -1189,8 +1473,27 @@ export default function VoiceInterviewPage() {
       ? "Thank you for the interview. We are saving your interview, please wait."
       : "We are saving your interview, please wait.";
 
-    // Speak asynchronously
+    // Speak asynchronously — fire-and-forget, don't await so we don't block submission
     aiSay(message)
+
+    //  Grace period for in-flight WS answer saves ─────────────────
+    // The backend MongoBatchWriter flushes every 3 s. When the timer fires, the
+    // very last answer may still be queued. Waiting 3.5 s ensures it is persisted
+    // before /complete-session marks the session closed on the server.
+    // Only applied on timer-triggered completions (isTimeout === true).
+    if (isTimeout) {
+      await new Promise(resolve => setTimeout(resolve, 3500))
+    }
+
+    // ── Gracefully close the WebSocket before calling /complete-session ──────
+    // Using code 1000 (normal closure) prevents the onclose handler from attempting
+    // a reconnect. We null-out the ref so send() calls after this point are no-ops.
+    if (wsRef.current && wsRef.current.readyState !== WebSocket.CLOSED) {
+      try {
+        wsRef.current.close(1000, 'interview complete')
+      } catch (_) { /* ignore — socket may already be closing */ }
+      wsRef.current = null
+    }
 
     // Fire backend completion with detailed integrity metrics
     try {
@@ -1210,6 +1513,8 @@ export default function VoiceInterviewPage() {
     } catch (completionError) {
       console.error('Failed to complete voice interview:', completionError)
       submittingRef.current = false
+      //  clear dedup flag on failure so the candidate can retry
+      try { localStorage.removeItem(SUBMIT_FLAG) } catch (_) { }
       setRound(previousRound)
       Swal.fire({
         title: 'Submission Failed',
@@ -1220,7 +1525,7 @@ export default function VoiceInterviewPage() {
       })
       return
     }
-    
+
     // Upload heavy recording and WAIT for it so it's not lost
     try {
       await stopAndUploadRecording(iid)
@@ -1230,6 +1535,21 @@ export default function VoiceInterviewPage() {
 
     // Stop audio and mark done ONLY after upload finishes
     stopAudio()
+
+    //  clean up persistence state ──────────────────────────────────────
+    // Clear the cross-tab dedup flag now that submission is done.
+    // Clear the sessionStorage round key so a future reload doesn’t restore 'verbal';
+    // the server’s session_status=completed guard handles that case cleanly.
+    try { localStorage.removeItem(SUBMIT_FLAG) } catch (_) { }
+    try {
+      if (_sessionKey) {
+        const existing = JSON.parse(sessionStorage.getItem(_sessionKey) || '{}')
+        delete existing.round
+        delete existing.askedFollowUpsCount
+        sessionStorage.setItem(_sessionKey, JSON.stringify(existing))
+      }
+    } catch (_) { }
+
     setRound('done')
     setIsSaving(false)
   }, [stopListening, linkId, stopAndUploadRecording, warningsCount, stopAudio, aiSay])
@@ -1246,9 +1566,6 @@ export default function VoiceInterviewPage() {
 
     const type = interviewType
     const iid = interviewIdRef.current
-
-    // Check timeout flag
-    const timeoutFlag = typeof isTimeout === 'boolean' ? isTimeout : false;
 
     if (type === 'Technical' || type === 'Non-Technical') {
       setAiStatus('thinking')
@@ -1313,7 +1630,16 @@ export default function VoiceInterviewPage() {
         }
       }
     } else {
-      completeInterview(timeoutFlag)
+      // If time is still remaining after verbal questions are exhausted, hold candidate in
+      // 'waiting' round rather than immediately submitting. The countdown timer will fire
+      // transitionToNextRound(true) when it reaches zero, which then calls completeInterview.
+      if (!timeoutFlag && countdownRef.current > 0) {
+        stopListening(); window.speechSynthesis?.cancel(); stopAudio()
+        isTransitioningRef.current = false  // allow future transition when timer fires
+        setRound('waiting')
+      } else {
+        completeInterview(timeoutFlag)
+      }
     }
   }, [interviewType, stopListening, aiSay, completeInterview])
 
@@ -1331,8 +1657,9 @@ export default function VoiceInterviewPage() {
   }, [isSaving])
 
   // ── Countdown ─────────────────────────────────────────────────────────────
+  // Ticks during both 'verbal' (active Q&A) and 'waiting' (all Qs answered, timer still live)
   useEffect(() => {
-    if (round !== 'verbal' || countdown <= 0) return
+    if ((round !== 'verbal' && round !== 'waiting') || countdown <= 0) return
     const t = setInterval(() => setCountdown(p => {
       if (p <= 1) { clearInterval(t); transitionToNextRound(true); return 0 }
       return p - 1
@@ -1342,6 +1669,7 @@ export default function VoiceInterviewPage() {
 
   // ── Finish Early handler ──────────────────────────────────────────────────
   const handleFinishEarly = useCallback(() => {
+    if (countdownRef.current > 0) return // Disable underlying logic if timer is still running
     Swal.fire({
       title: 'Finish Interview?',
       html: '<p style="color:#94a3b8;font-size:14px">Are you sure you want to end the interview now? Your answers will be saved and submitted.</p>',
@@ -1473,7 +1801,7 @@ export default function VoiceInterviewPage() {
         confirmButtonText: 'OK',
         allowOutsideClick: false,
         allowEscapeKey: false,
-      }).then(() => completeInterview())
+      }).then(() => completeInterview({ isTimeout: true, reason: 'Terminated due to screen sharing violations.' }))
     } else {
       Swal.fire({
         icon: 'warning',
@@ -1511,7 +1839,7 @@ export default function VoiceInterviewPage() {
             confirmButtonColor: '#ef4444',
             confirmButtonText: 'OK',
             allowOutsideClick: false,
-          }).then(() => completeInterview({ reason: 'Terminated due to multiple tab switching violations.' }))
+          }).then(() => completeInterview({ isTimeout: true, reason: 'Terminated due to multiple tab switching violations.' }))
         } else {
           Swal.fire({
             icon: 'warning',
@@ -1546,7 +1874,7 @@ export default function VoiceInterviewPage() {
               document.documentElement.requestFullscreen().catch(() => { })
             }
           } else {
-            completeInterview({ reason: 'Terminated due to fullscreen mode exit.' })
+            completeInterview({ isTimeout: true, reason: 'Terminated due to fullscreen mode exit.' })
           }
         })
       }
@@ -1585,7 +1913,7 @@ export default function VoiceInterviewPage() {
         color: '#fff',
       })
     },
-    onTerminate: () => completeInterview({ reason: 'Terminated due to multiple AI proctoring alerts (Face/Camera violations).' })
+    onTerminate: () => completeInterview({ isTimeout: true, reason: 'Terminated due to multiple AI proctoring alerts (Face/Camera violations).' })
   })
 
   useEffect(() => {
@@ -1670,7 +1998,7 @@ export default function VoiceInterviewPage() {
       }
     }
 
-    // Phase 2: Use AbortController to prevent fetch from hanging indefinitely
+    //  Use AbortController to prevent fetch from hanging indefinitely
     const HEARTBEAT_TIMEOUT_MS = 8000
     const HEARTBEAT_FAIL_THRESHOLD = 3 // consecutive failures before warning
 
@@ -1825,12 +2153,123 @@ export default function VoiceInterviewPage() {
     </div>
   )
 
+  // ── Waiting screen: all questions answered, timer still running ───────────
+  // Camera, mic, WebSocket, and proctoring remain fully active.
+  // The countdown above continues ticking and triggers submission when it hits zero.
+  if (round === 'waiting') return (
+    <div className="h-screen w-screen overflow-hidden bg-[#07091a] flex flex-col text-white" style={{ fontFamily: "'Inter',sans-serif" }}>
+      {/* Proctoring Banner */}
+      {proctoringBanner && (
+        <div style={{
+          position: 'fixed', top: 0, left: 0, right: 0, zIndex: 9999,
+          background: proctoringBanner.type === 'tab_switch' ? 'linear-gradient(90deg,#b91c1c,#dc2626)' : 'linear-gradient(90deg,#7c3aed,#6d28d9)',
+          color: 'white', padding: '12px 24px',
+          display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '12px',
+          fontSize: '15px', fontWeight: '700',
+          boxShadow: '0 4px 20px rgba(0,0,0,0.4)',
+        }}>
+          <span style={{ fontSize: '20px' }}>{proctoringBanner.type === 'tab_switch' ? '🚨' : '⚠️'}</span>
+          <span>{proctoringBanner.message}</span>
+        </div>
+      )}
+
+      {/* Header with live timer */}
+      <header className="flex items-center justify-between px-6 py-4 border-b border-white/6 bg-[#0a0f1e]/90 backdrop-blur sticky top-0 z-40">
+        <div className="flex items-center gap-3">
+          <div className="w-8 h-8 rounded-lg bg-gradient-to-tr from-indigo-500 to-purple-600 flex items-center justify-center">
+            <i className="fas fa-brain text-sm text-white" />
+          </div>
+          <span className="font-black tracking-tight">HireIQ <span className="text-transparent bg-clip-text bg-gradient-to-r from-indigo-400 to-purple-400 font-medium">Voice AI</span></span>
+          <span className="ml-2 text-xs font-semibold text-amber-400 bg-amber-500/10 border border-amber-500/20 rounded-full px-2.5 py-0.5 uppercase tracking-widest">
+            <i className="fas fa-hourglass-half mr-1" />Waiting
+          </span>
+        </div>
+        <div className="flex items-center gap-3">
+          <div className={`text-sm font-mono font-bold px-4 py-1.5 rounded-full border ${countdown < 300 ? 'border-rose-500/50 text-rose-400 bg-rose-500/10' : 'border-indigo-500/30 text-indigo-300 bg-indigo-500/10'}`}>
+            <i className="fas fa-clock mr-2" />{fmt(countdown)}
+          </div>
+        </div>
+      </header>
+
+      {/* Center content */}
+      <div className="flex-1 flex flex-col items-center justify-center gap-8 px-6">
+        <style>{`
+          @keyframes waiting-pulse { 0%,100%{transform:scale(1);opacity:.7} 50%{transform:scale(1.06);opacity:1} }
+          @keyframes waiting-ring  { 0%{transform:scale(.95);opacity:.3} 100%{transform:scale(1.18);opacity:0} }
+        `}</style>
+
+        {/* Animated hourglass icon */}
+        <div className="relative flex items-center justify-center">
+          <div className="absolute w-28 h-28 rounded-full border-2 border-amber-500/30"
+            style={{ animation: 'waiting-ring 2s ease-out infinite' }} />
+          <div className="absolute w-36 h-36 rounded-full border border-amber-500/15"
+            style={{ animation: 'waiting-ring 2s ease-out infinite', animationDelay: '0.5s' }} />
+          <div className="w-20 h-20 rounded-full bg-gradient-to-tr from-amber-500 to-orange-500 flex items-center justify-center shadow-[0_0_40px_rgba(245,158,11,.5)]"
+            style={{ animation: 'waiting-pulse 2.5s ease-in-out infinite' }}>
+            <i className="fas fa-hourglass-half text-3xl text-white" />
+          </div>
+        </div>
+
+        {/* Message */}
+        <div className="text-center max-w-md">
+          <h2 className="text-2xl font-black text-white mb-3">You've answered all questions!</h2>
+          <p className="text-slate-400 leading-relaxed">
+            Waiting for the interview timer to finish. Please stay on this page — your camera, microphone, and proctoring remain active.
+          </p>
+        </div>
+
+        {/* Live countdown pill */}
+        <div className="flex flex-col items-center gap-2">
+          <span className="text-xs font-bold text-slate-500 uppercase tracking-widest">Time remaining</span>
+          <div className={`text-4xl font-black font-mono px-8 py-4 rounded-2xl border-2 ${countdown < 60
+            ? 'text-rose-400 border-rose-500/40 bg-rose-500/10 shadow-[0_0_30px_rgba(239,68,68,.2)]'
+            : countdown < 300
+              ? 'text-amber-400 border-amber-500/40 bg-amber-500/10 shadow-[0_0_30px_rgba(245,158,11,.2)]'
+              : 'text-indigo-300 border-indigo-500/30 bg-indigo-500/10'
+            }`}>
+            {fmt(countdown)}
+          </div>
+        </div>
+
+        {/* Info note */}
+        <div className="flex items-center gap-2 text-xs text-slate-500 bg-white/4 border border-white/8 rounded-xl px-5 py-3 max-w-sm text-center">
+          <i className="fas fa-info-circle text-slate-400" />
+          <span>The interview will submit automatically when the timer reaches zero.</span>
+        </div>
+
+        {/* Disabled submit button — visible but not actionable, to signal intent is clear */}
+        <button
+          disabled
+          onClick={(e) => { e.preventDefault(); return; }}
+          className="px-8 py-3 rounded-2xl bg-slate-800 text-slate-600 border border-white/6 text-sm font-bold cursor-not-allowed flex items-center gap-2"
+          title="Submission is locked until the timer reaches zero"
+        >
+          <i className="fas fa-lock" />
+          Submit Locked — Timer Running
+        </button>
+      </div>
+
+      {/* Hidden video for AI Proctoring — must stay visible for MediaPipe frame decoding */}
+      {candidateVideoElement}
+
+      {/* Proctoring model failure alert */}
+      {proctoring?.modelsFailed && (
+        <div className="fixed top-4 left-1/2 -translate-x-1/2 z-[100] bg-rose-500/90 backdrop-blur-md text-white px-6 py-3 rounded-full shadow-2xl flex items-center gap-3">
+          <i className="fas fa-exclamation-triangle" />
+          <span className="text-sm font-bold">⚠️ Proctoring AI models failed to load. Monitoring is temporarily disabled.</span>
+        </div>
+      )}
+    </div>
+  )
+
   if (round === 'done') return (
     <div className="min-h-screen bg-[#0a0f1e] flex flex-col items-center justify-center text-white px-6 text-center gap-8 py-10 overflow-y-auto">
       <style>{`@keyframes pop{0%{transform:scale(.5);opacity:0}80%{transform:scale(1.1)}100%{transform:scale(1);opacity:1}}`}</style>
 
       {!feedbackSuccess ? (
         <div className="max-w-xl w-full flex flex-col items-center gap-6">
+
+          {/* ── Completion badge ── */}
           <div className="w-24 h-24 rounded-full bg-emerald-500/10 border-4 border-emerald-500 flex items-center justify-center shadow-[0_0_60px_rgba(16,185,129,0.4)]" style={{ animation: 'pop 0.6s ease forwards' }}>
             <i className="fas fa-check text-5xl text-emerald-400" />
           </div>
@@ -1839,8 +2278,19 @@ export default function VoiceInterviewPage() {
             <p className="text-slate-400 max-w-md">Excellent work! You answered {answeredCount} question{answeredCount !== 1 ? 's' : ''} across all rounds. Your responses have been sent to the recruiter.</p>
           </div>
 
-          <div className="w-full bg-[#0d1117] border border-white/10 rounded-2xl p-6 shadow-xl mt-4 text-left">
-            <h3 className="text-lg font-bold text-white mb-2">How was your experience?</h3>
+          {/*  Exit button — the only action that is always enabled ── */}
+          <button
+            id="exit-interview-btn"
+            onClick={() => { window.location.href = '/' }}
+            className="w-full py-4 rounded-2xl bg-gradient-to-r from-emerald-500 to-teal-500 text-white font-bold text-lg shadow-[0_4px_30px_rgba(16,185,129,0.4)] hover:shadow-[0_4px_50px_rgba(16,185,129,0.6)] hover:scale-[1.02] transition-all flex items-center justify-center gap-3"
+          >
+            <i className="fas fa-sign-out-alt" />
+            Exit Interview
+          </button>
+
+          {/* ── Optional feedback (secondary) ── */}
+          <div className="w-full bg-[#0d1117] border border-white/10 rounded-2xl p-6 shadow-xl text-left">
+            <h3 className="text-lg font-bold text-white mb-2">How was your experience? <span className="text-xs font-normal text-slate-500">(optional)</span></h3>
             <p className="text-sm text-slate-400 mb-4">Your feedback helps us improve the AI interview experience.</p>
             <textarea
               value={feedback}
@@ -1882,6 +2332,15 @@ export default function VoiceInterviewPage() {
             <h1 className="text-3xl font-black mb-2">Thank You!</h1>
             <p className="text-slate-400 max-w-md">Your feedback has been recorded. You can now close this tab.</p>
           </div>
+          {/* Exit button also visible after feedback submission */}
+          <button
+            id="exit-interview-btn-post-feedback"
+            onClick={() => { window.location.href = '/' }}
+            className="px-8 py-3 rounded-2xl bg-emerald-500/15 text-emerald-400 border border-emerald-500/30 hover:bg-emerald-500/25 font-bold text-sm transition-all flex items-center gap-2"
+          >
+            <i className="fas fa-sign-out-alt" />
+            Exit Interview
+          </button>
         </div>
       )}
     </div>
@@ -2184,7 +2643,7 @@ export default function VoiceInterviewPage() {
         @keyframes spin-slow{from{transform:rotate(0deg)}to{transform:rotate(360deg)}}
       `}</style>
 
-      {/* Phase 3: Offline warning banner */}
+      {/*  Offline warning banner */}
       {!isOnline && (
         <div style={{ position: 'fixed', top: 0, left: 0, right: 0, zIndex: 100000, background: '#b45309', color: '#fff', padding: '10px 20px', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '10px', fontSize: '14px', fontWeight: '600', boxShadow: '0 2px 8px rgba(0,0,0,0.4)' }}>
           <span>⚠️</span>
@@ -2311,8 +2770,9 @@ export default function VoiceInterviewPage() {
           <div className="flex gap-2">
             <button onClick={() => {
               if (aiStatus === 'listening') {
+                const fullAns = getAuthoritativeTranscript()
                 stopListening()
-                handleAnswer(currentTxRef.current.trim(), currentQIdx, 0)
+                handleAnswer(fullAns, currentQIdx, 0)
               }
               else { startListening(ans => handleAnswer(ans, currentQIdx, 0)) }
             }} className={`flex-1 py-3.5 rounded-2xl text-sm font-bold transition-all flex items-center justify-center gap-2.5 ${aiStatus === 'listening'
@@ -2322,11 +2782,33 @@ export default function VoiceInterviewPage() {
               <i className={`fas ${aiStatus === 'listening' ? 'fa-stop-circle' : 'fa-microphone'} text-base`} />
               {aiStatus === 'listening' ? 'Done Speaking' : 'Speak Answer'}
             </button>
-            <button onClick={transitionToNextRound} className="px-6 py-3.5 rounded-2xl bg-white/5 text-slate-400 border border-white/8 hover:bg-white/10 text-xs font-bold transition-all uppercase tracking-widest">
+            <button
+              onClick={(e) => {
+                if (countdown > 0) return
+                transitionToNextRound(e)
+              }}
+              disabled={countdown > 0}
+              className={`px-6 py-3.5 rounded-2xl text-xs font-bold transition-all uppercase tracking-widest ${countdown > 0
+                ? 'bg-white/3 text-slate-600 border border-white/5 cursor-not-allowed'
+                : 'bg-white/5 text-slate-400 border border-white/8 hover:bg-white/10'
+                }`}
+              title={countdown > 0 ? 'Available when timer reaches zero' : 'Proceed to next round'}
+            >
               Next Round
             </button>
-            <button onClick={handleFinishEarly} className="px-6 py-3.5 rounded-2xl bg-rose-500/10 text-rose-400 border border-rose-500/20 hover:bg-rose-500/20 text-xs font-bold transition-all uppercase tracking-widest">
-              Finish Early
+            <button
+              onClick={(e) => {
+                if (countdown > 0) return
+                handleFinishEarly(e)
+              }}
+              disabled={countdown > 0}
+              className={`px-6 py-3.5 rounded-2xl text-xs font-bold transition-all uppercase tracking-widest ${countdown > 0
+                ? 'bg-rose-500/4 text-rose-900 border border-rose-500/8 cursor-not-allowed'
+                : 'bg-rose-500/10 text-rose-400 border border-rose-500/20 hover:bg-rose-500/20'
+                }`}
+              title={countdown > 0 ? 'Cannot finish early while timer is still running' : 'End interview early'}
+            >
+              {countdown > 0 ? <><i className="fas fa-lock mr-1" />Finish Early</> : 'Finish Early'}
             </button>
           </div>
 

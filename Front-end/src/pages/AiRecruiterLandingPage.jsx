@@ -913,17 +913,18 @@ function InterviewDemo() {
     offset: ["start end", "end start"],
   });
 
-  const sp = (v) => useSpring(v, { stiffness: 80, damping: 22, mass: 0.6 });
+  const useSp = (v) => useSpring(v, { stiffness: 80, damping: 22, mass: 0.6 });
 
-  const yImage = sp(useTransform(scrollYProgress, [0, 1], [80, -120]));
-  const scaleImage = sp(useTransform(scrollYProgress, [0, 0.5, 1], [0.92, 1.04, 0.98]));
-  const rotateImage = sp(useTransform(scrollYProgress, [0, 1], [4, -4]));
+  const yImage = useSp(useTransform(scrollYProgress, [0, 1], [80, -120]));
+  const scaleImage = useSp(useTransform(scrollYProgress, [0, 0.5, 1], [0.92, 1.04, 0.98]));
+  const rotateImage = useSp(useTransform(scrollYProgress, [0, 1], [4, -4]));
   const opacityImage = useTransform(scrollYProgress, [0, 0.15, 0.85, 1], [0, 1, 1, 0.55]);
   const glowOpacity = useTransform(scrollYProgress, [0, 0.5, 1], [0.25, 0.85, 0.35]);
-  const glowScale = sp(useTransform(scrollYProgress, [0, 0.5, 1], [0.85, 1.15, 0.95]));
+  const glowScale = useSp(useTransform(scrollYProgress, [0, 0.5, 1], [0.85, 1.15, 0.95]));
   const glowHue = useTransform(scrollYProgress, [0, 1], [0, 40]);
   const glowFilter = useTransform(glowHue, (h) => `blur(60px) hue-rotate(${h}deg)`);
-  const badgeY = sp(useTransform(scrollYProgress, [0, 1], [30, -30]));
+  const badgeY = useSp(useTransform(scrollYProgress, [0, 1], [30, -30]));
+  const badge2Y = useSp(useTransform(scrollYProgress, [0, 1], [-20, 20]));
 
   const turns = [
     { who: "AI", text: "Hi Sarah — thanks for picking up. Could you walk me through a project you led recently?" },

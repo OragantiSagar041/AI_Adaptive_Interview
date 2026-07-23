@@ -1038,7 +1038,8 @@ def generate_resume_questions(resume_text: str, language: str = "English", indus
             "question": intro_q_text,
             "difficulty": "Easy",
             "type": "Self-Introduction",
-            "category": "Basic"
+            "category": "Basic",
+            "_generation_origin": "opening"
         },
         {
             "id": 2,
@@ -1296,8 +1297,12 @@ def generate_jd_questions(jd_text: str, ai_instructions: str = "", interview_typ
     """
 
     try:
+        system_content = f"You are a precise technical recruiter. You MUST generate all questions and content STRICTLY in the {language} language. Do NOT use English unless the selected language is English."
         raw = chat_completion(
-            messages=[{"role": "user", "content": prompt}],
+            messages=[
+                {"role": "system", "content": system_content},
+                {"role": "user", "content": prompt}
+            ],
             model="openai/gpt-4o-mini"
         )
         data = extract_json(raw) or {}
@@ -1422,12 +1427,21 @@ def generate_mock_questions(text: str, source: str, num_questions: int = 6, resu
     # Translate closing questions if language is not English
     if language != "English":
         try:
-            from offline_language_fallback import OFFLINE_LANGUAGE_CLOSING_QUESTIONS
-            lang_closing = OFFLINE_LANGUAGE_CLOSING_QUESTIONS.get(language, [])
-            if lang_closing:
+            from offline_language_fallback import OFFLINE_LANGUAGE_CLOSING_QUESTIONS_LISTS, OFFLINE_LANGUAGE_CLOSING_QUESTIONS
+            lang_closing_list = OFFLINE_LANGUAGE_CLOSING_QUESTIONS_LISTS.get(language)
+            if not lang_closing_list:
+                single_q = OFFLINE_LANGUAGE_CLOSING_QUESTIONS.get(language)
+                if single_q:
+                    lang_closing_list = [
+                        "What do you consider your biggest strengths and weaknesses?",
+                        "Where do you see yourself in the next 5 years, and how does this role fit into that vision?",
+                        single_q
+                    ]
+            
+            if lang_closing_list:
                 for i, q in enumerate(closing):
-                    if i < len(lang_closing):
-                        q["question"] = lang_closing[i]
+                    if i < len(lang_closing_list):
+                        q["question"] = lang_closing_list[i]
         except ImportError:
             pass
     
@@ -1449,18 +1463,52 @@ def generate_mock_questions(text: str, source: str, num_questions: int = 6, resu
                 })
             print(f" Loaded {len(custom_q_list)} custom questions")
             
-        # 2. Add AI questions (Instructions and JD/Resume)
-        if _GRAPH_LAYER_AVAILABLE:
-            if "resume" in source.lower():
-                ai_questions = run_question_generation_graph(text, "", middle_count, interview_type, industry, language)
+        # 2. Add AI questions (Instructions and JD/Resume) with dynamic validation & regeneration
+        ai_questions = []
+        def run_ai_generation(stricter=False):
+            lang_inst = ai_instructions
+            if stricter and language != "English":
+                lang_inst += f"\nSTRICT LANGUAGE REQUIREMENT: You MUST generate all question texts STRICTLY in the {language} language. Do NOT use English under any circumstances."
+            
+            if _GRAPH_LAYER_AVAILABLE:
+                if "resume" in source.lower():
+                    return run_question_generation_graph(text, "", middle_count, interview_type, industry, language)
+                else:
+                    return run_question_generation_graph("", text, middle_count, interview_type, industry, language)
             else:
-                ai_questions = run_question_generation_graph("", text, middle_count, interview_type, industry, language)
-        else:
-            if "resume" in source.lower():
-                ai_questions = generate_resume_questions(text, language=language, industry=industry)
-            else:
-                ai_questions = generate_jd_questions(text, ai_instructions=ai_instructions, interview_type=interview_type, industry=industry, language=language)
+                if "resume" in source.lower():
+                    return generate_resume_questions(text, language=language, industry=industry)
+                else:
+                    return generate_jd_questions(text, ai_instructions=lang_inst, interview_type=interview_type, industry=industry, language=language)
+
+        ai_questions = run_ai_generation()
         
+        # Validate that the generated technical questions match the selected language (combined output, not each question)
+        if language != "English" and ai_questions:
+            from typed_ai_layer import detect_spoken_language
+            combined_text = " ".join([q.get("question", "") for q in ai_questions if q.get("question")])
+            is_correct_lang = True
+            if combined_text:
+                detected = detect_spoken_language(combined_text)
+                if detected != "Unknown" and detected.lower() != language.lower():
+                    is_correct_lang = False
+            
+            if not is_correct_lang:
+                print(f"Language validation failed for {language} generated questions. Regenerating once with stricter prompt...")
+                ai_questions = run_ai_generation(stricter=True)
+                
+                # Final check after regeneration on combined output
+                combined_text_regen = " ".join([q.get("question", "") for q in ai_questions if q.get("question")])
+                is_correct_lang = True
+                if combined_text_regen:
+                    detected = detect_spoken_language(combined_text_regen)
+                    if detected != "Unknown" and detected.lower() != language.lower():
+                        is_correct_lang = False
+                
+                if not is_correct_lang:
+                    print("Language validation failed again after regeneration. Forcing fallback to offline templates.")
+                    ai_questions = []
+
         ai_added = 0
         for q in ai_questions:
             qtype = q.get("type", "").lower()
@@ -1469,6 +1517,7 @@ def generate_mock_questions(text: str, source: str, num_questions: int = 6, resu
                 continue
             if any(x in qcat for x in ["basic", "background", "future goals", "closing"]):
                 continue
+            q.setdefault("_generation_origin", "LLM")
             middle_questions.append(q)
             ai_added += 1
             
@@ -1505,13 +1554,14 @@ def generate_mock_questions(text: str, source: str, num_questions: int = 6, resu
     
     # ── HR SCREENING QUESTIONS (inserted before closing) ──
     if hr_screening:
-        screening_questions = _generate_hr_screening_questions(hr_screening, jd_text or text)
+        screening_questions = _generate_hr_screening_questions(hr_screening, jd_text or text, language=language)
         for q in screening_questions:
             q["id"] = idx
             all_questions.append(q)
             idx += 1
     
     for q in closing:
+        q["_generation_origin"] = "closing"
         q["id"] = idx
         all_questions.append(q)
         idx += 1
@@ -1577,58 +1627,64 @@ def _generate_offline_questions(resume_text: str, jd_text: str, total_count: int
             lang_tmpl = []
             lang_case = []
             
-        if interview_type == "Non-Technical":
-            non_tech_keywords = ["Team Management", "Leadership", "Stakeholder Management", "Conflict Resolution", "Project Management", "Agile", "Budgeting", "Client Relations"]
-            jd_non_tech = [kw for kw in non_tech_keywords if kw.lower() in jd_lower]
-            if not jd_non_tech: jd_non_tech = ["Team Collaboration", "Problem Solving", "Time Management"]
-            
-            if lang_case:
-                for i in range(max(10, target)):
-                    skill = jd_non_tech[i % len(jd_non_tech)]
-                    template = lang_case[i % len(lang_case)]
-                    try:
-                        q_text = template.format(skill=skill, industry=industry)
-                    except (KeyError, IndexError):
-                        q_text = template.replace("{skill}", skill).replace("{industry}", industry)
+        # Check if the selected language has offline templates in the configuration
+        has_offline_templates = bool(lang_tech or lang_tmpl or lang_case)
+        if has_offline_templates:
+            if interview_type == "Non-Technical":
+                non_tech_keywords = ["Team Management", "Leadership", "Stakeholder Management", "Conflict Resolution", "Project Management", "Agile", "Budgeting", "Client Relations"]
+                jd_non_tech = [kw for kw in non_tech_keywords if kw.lower() in jd_lower]
+                if not jd_non_tech: jd_non_tech = ["Team Collaboration", "Problem Solving", "Time Management"]
+                
+                if lang_case:
+                    for i in range(max(10, target)):
+                        skill = jd_non_tech[i % len(jd_non_tech)]
+                        template = lang_case[i % len(lang_case)]
+                        try:
+                            q_text = template.format(skill=skill, industry=industry)
+                        except (KeyError, IndexError):
+                            q_text = template.replace("{skill}", skill).replace("{industry}", industry)
+                        questions.append({
+                            "question": q_text,
+                            "difficulty": ["Medium", "Hard"][i % 2],
+                            "type": "Behavioral",
+                            "category": f"{skill} Case Study",
+                            "_generation_origin": "offline case study"
+                        })
+                return questions[:target]
+            else:
+                # Get skills from resume/JD to personalize template questions
+                skills_to_ask = resume_skills if resume_skills else jd_skills
+                if not skills_to_ask:
+                    skills_to_ask = generic_skills
+                
+                # Add all the pre-translated technical questions
+                for i, q_text in enumerate(lang_tech):
                     questions.append({
                         "question": q_text,
-                        "difficulty": ["Medium", "Hard"][i % 2],
-                        "type": "Behavioral",
-                        "category": f"{skill} Case Study"
-                    })
-            return questions[:target]
-        else:
-            # Get skills from resume/JD to personalize template questions
-            skills_to_ask = resume_skills if resume_skills else jd_skills
-            if not skills_to_ask:
-                skills_to_ask = generic_skills
-            
-            # Add all the pre-translated technical questions
-            for i, q_text in enumerate(lang_tech):
-                questions.append({
-                    "question": q_text,
-                    "difficulty": ["Easy", "Medium", "Hard"][i % 3],
-                    "type": "Technical",
-                    "category": "Technical Expertise"
-                })
-            
-            # Add skill-specific questions using translated templates
-            if lang_tmpl:
-                for i in range(max(10, target - len(questions))):
-                    skill = skills_to_ask[i % len(skills_to_ask)]
-                    template = lang_tmpl[i % len(lang_tmpl)]
-                    try:
-                        q_text = template.format(skill=skill, industry=industry)
-                    except (KeyError, IndexError):
-                        q_text = template.replace("{skill}", skill).replace("{industry}", industry)
-                    questions.append({
-                        "question": q_text,
-                        "difficulty": ["Medium", "Hard"][i % 2],
+                        "difficulty": ["Easy", "Medium", "Hard"][i % 3],
                         "type": "Technical",
-                        "category": f"{skill} Expertise"
+                        "category": "Technical Expertise",
+                        "_generation_origin": "offline technical"
                     })
-            
-            return questions[:target]
+                
+                # Add skill-specific questions using translated templates
+                if lang_tmpl:
+                    for i in range(max(10, target - len(questions))):
+                        skill = skills_to_ask[i % len(skills_to_ask)]
+                        template = lang_tmpl[i % len(lang_tmpl)]
+                        try:
+                            q_text = template.format(skill=skill, industry=industry)
+                        except (KeyError, IndexError):
+                            q_text = template.replace("{skill}", skill).replace("{industry}", industry)
+                        questions.append({
+                            "question": q_text,
+                            "difficulty": ["Medium", "Hard"][i % 2],
+                            "type": "Technical",
+                            "category": f"{skill} Expertise",
+                            "_generation_origin": "offline technical"
+                        })
+                
+                return questions[:target]
     
     # --- PHASE 1: SELF-INTRO / BACKGROUND ---
     if has_resume:
@@ -1734,7 +1790,7 @@ def _generate_offline_questions(resume_text: str, jd_text: str, total_count: int
     return questions
 
 
-def _generate_hr_screening_questions(hr_screening: dict, jd_text: str) -> List[Dict[str, str]]:
+def _generate_hr_screening_questions(hr_screening: dict, jd_text: str, language: str = "English") -> List[Dict[str, str]]:
     """
     Generate HR screening questions based on admin preferences.
     Tries to extract relevant info from the JD first for contextual questions.
@@ -1749,6 +1805,59 @@ def _generate_hr_screening_questions(hr_screening: dict, jd_text: str) -> List[D
     ask_bond = hr_screening.get("ask_bond", False)
 
     if not any([work_mode, location, ask_bond]):
+        return questions
+
+    # Regional-language interviews must not rely on the English LLM/static
+    # fallback below. These templates are authored directly in the selected
+    # language, so a transient model failure cannot introduce an English prompt.
+    if language != "English":
+        templates = {
+            "Hindi": {
+                "work_mode": "इस भूमिका में {work_mode} कार्य व्यवस्था अपेक्षित है। क्या आप इस व्यवस्था के साथ सहज हैं?",
+                "preferred": "आपकी पसंदीदा कार्य-स्थान क्या है? यदि भूमिका किसी दूसरे शहर में है, तो क्या आप स्थानांतरित होने के लिए तैयार हैं?",
+                "current": "आप वर्तमान में कहाँ रहते हैं? यदि कार्यालय दूसरे शहर में है, तो आप यात्रा या स्थानांतरण की व्यवस्था कैसे करेंगे?",
+                "bond": "क्या आप वर्तमान नियोक्ता के साथ किसी सेवा अनुबंध या बंधन में हैं? आपकी नोटिस अवधि कितनी है और आप कब तक जुड़ सकते हैं?",
+                "work_modes": {"Remote": "दूरस्थ", "Hybrid": "हाइब्रिड", "On-site": "कार्यालय-आधारित"},
+            },
+            "Telugu": {
+                "work_mode": "ఈ పాత్రకు {work_mode} పని విధానం అవసరం. ఈ విధానంతో మీరు సౌకర్యంగా ఉన్నారా?",
+                "preferred": "మీకు ఇష్టమైన పని ప్రదేశం ఏమిటి? పాత్ర వేరే నగరంలో ఉంటే, అక్కడికి మారడానికి మీరు సిద్ధంగా ఉన్నారా?",
+                "current": "మీరు ప్రస్తుతం ఎక్కడ నివసిస్తున్నారు? కార్యాలయం వేరే నగరంలో ఉంటే, ప్రయాణం లేదా మార్పును ఎలా నిర్వహిస్తారు?",
+                "bond": "మీ ప్రస్తుత యజమానితో మీకు ఏదైనా సేవా ఒప్పందం లేదా బంధం ఉందా? మీ నోటీసు కాలం ఎంత, ఎప్పుడు చేరగలరు?",
+                "work_modes": {"Remote": "రిమోట్", "Hybrid": "హైబ్రిడ్", "On-site": "కార్యాలయ-ఆధారిత"},
+            },
+            "Tamil": {
+                "work_mode": "இந்தப் பணிக்கு {work_mode} வேலை முறை தேவைப்படுகிறது. இந்த முறையில் பணிபுரிய நீங்கள் வசதியாக உள்ளீர்களா?",
+                "preferred": "உங்களுக்கு விருப்பமான பணியிடம் எது? பணி வேறு நகரத்தில் இருந்தால் அங்கு இடம்பெயர நீங்கள் தயாரா?",
+                "current": "நீங்கள் தற்போது எங்கு வசிக்கிறீர்கள்? அலுவலகம் வேறு நகரத்தில் இருந்தால் பயணம் அல்லது இடமாற்றத்தை எவ்வாறு நிர்வகிப்பீர்கள்?",
+                "bond": "உங்கள் தற்போதைய நிறுவனத்துடன் ஏதேனும் சேவை ஒப்பந்தம் அல்லது பிணைப்பு உள்ளதா? உங்கள் அறிவிப்பு காலம் எவ்வளவு, எப்போது பணியில் சேர முடியும்?",
+                "work_modes": {"Remote": "தொலைநிலை", "Hybrid": "கலப்பு", "On-site": "அலுவலக-அடிப்படையிலான"},
+            },
+            "Malayalam": {
+                "work_mode": "ഈ സ്ഥാനത്തിന് {work_mode} ജോലി ക്രമീകരണം ആവശ്യമാണ്. ഈ ക്രമീകരണത്തിൽ ജോലി ചെയ്യാൻ നിങ്ങൾക്ക് സൗകര്യമുണ്ടോ?",
+                "preferred": "നിങ്ങൾക്ക് ഇഷ്ടമുള്ള ജോലി സ്ഥലം ഏതാണ്? ഈ സ്ഥാനം മറ്റൊരു നഗരത്തിലാണെങ്കിൽ അവിടേക്ക് മാറാൻ നിങ്ങൾ തയ്യാറാണോ?",
+                "current": "നിങ്ങൾ ഇപ്പോൾ എവിടെയാണ് താമസിക്കുന്നത്? ഓഫീസ് മറ്റൊരു നഗരത്തിലാണെങ്കിൽ യാത്രയോ മാറ്റമോ എങ്ങനെ കൈകാര്യം ചെയ്യും?",
+                "bond": "നിലവിലെ തൊഴിലുടമയുമായി നിങ്ങൾക്ക് സേവന കരാറോ ബോണ്ടോ ഉണ്ടോ? നിങ്ങളുടെ നോട്ടീസ് കാലയളവ് എത്രയാണ്, എപ്പോൾ ചേരാൻ കഴിയും?",
+                "work_modes": {"Remote": "വിദൂര", "Hybrid": "ഹൈബ്രിഡ്", "On-site": "ഓഫീസ്-അടിസ്ഥാന"},
+            },
+            "Kannada": {
+                "work_mode": "ಈ ಹುದ್ದೆಗೆ {work_mode} ಕೆಲಸದ ವ್ಯವಸ್ಥೆ ಅಗತ್ಯವಿದೆ. ಈ ವ್ಯವಸ್ಥೆಯಲ್ಲಿ ಕೆಲಸ ಮಾಡಲು ನಿಮಗೆ ಅನುಕೂಲವಾಗಿದೆಯೇ?",
+                "preferred": "ನಿಮಗೆ ಇಷ್ಟವಾದ ಕೆಲಸದ ಸ್ಥಳ ಯಾವುದು? ಹುದ್ದೆ ಬೇರೆ ನಗರದಲ್ಲಿದ್ದರೆ ಅಲ್ಲಿಗೆ ಸ್ಥಳಾಂತರಗೊಳ್ಳಲು ನೀವು ಸಿದ್ಧರಿದ್ದೀರಾ?",
+                "current": "ನೀವು ಪ್ರಸ್ತುತ ಎಲ್ಲಿ ವಾಸಿಸುತ್ತಿದ್ದೀರಿ? ಕಚೇರಿ ಬೇರೆ ನಗರದಲ್ಲಿದ್ದರೆ ಪ್ರಯಾಣ ಅಥವಾ ಸ್ಥಳಾಂತರವನ್ನು ಹೇಗೆ ನಿರ್ವಹಿಸುತ್ತೀರಿ?",
+                "bond": "ನಿಮ್ಮ ಪ್ರಸ್ತುತ ಉದ್ಯೋಗದಾತರೊಂದಿಗೆ ಯಾವುದೇ ಸೇವಾ ಒಪ್ಪಂದ ಅಥವಾ ಬಾಂಡ್ ಇದೆಯೇ? ನಿಮ್ಮ ಸೂಚನೆ ಅವಧಿ ಎಷ್ಟು, ಮತ್ತು ನೀವು ಯಾವಾಗ ಸೇರಬಹುದು?",
+                "work_modes": {"Remote": "ದೂರಸ್ಥ", "Hybrid": "ಹೈಬ್ರಿಡ್", "On-site": "ಕಚೇರಿ-ಆಧಾರಿತ"},
+            },
+        }.get(language)
+        if not templates:
+            raise ValueError(f"No direct HR screening templates configured for supported language: {language}")
+        if work_mode:
+            questions.append({"question": templates["work_mode"].format(work_mode=templates["work_modes"].get(work_mode, work_mode)), "difficulty": "Easy", "type": "HR Screening", "category": "Work Mode", "_generation_origin": "emergency fallback"})
+        if location == "Preferred":
+            questions.append({"question": templates["preferred"], "difficulty": "Easy", "type": "HR Screening", "category": "Preferred Location", "_generation_origin": "emergency fallback"})
+        elif location == "Current":
+            questions.append({"question": templates["current"], "difficulty": "Easy", "type": "HR Screening", "category": "Current Location", "_generation_origin": "emergency fallback"})
+        if ask_bond:
+            questions.append({"question": templates["bond"], "difficulty": "Easy", "type": "HR Screening", "category": "Bond/Notice Period", "_generation_origin": "emergency fallback"})
         return questions
 
     # Try AI-powered contextual question generation
@@ -1790,7 +1899,8 @@ def _generate_hr_screening_questions(hr_screening: dict, jd_text: str) -> List[D
                         "question": q["question"],
                         "difficulty": q.get("difficulty", "Easy"),
                         "type": "HR Screening",
-                        "category": q.get("category", "HR Screening")
+                        "category": q.get("category", "HR Screening"),
+                        "_generation_origin": "LLM"
                     })
             print(f"AI generated {len(questions)} HR screening questions")
             return questions
@@ -1803,28 +1913,32 @@ def _generate_hr_screening_questions(hr_screening: dict, jd_text: str) -> List[D
             "question": f"This role requires a {work_mode} work arrangement. Are you comfortable with this setup?",
             "difficulty": "Easy",
             "type": "HR Screening",
-            "category": "Work Mode"
+            "category": "Work Mode",
+            "_generation_origin": "emergency fallback"
         })
     if location == "Preferred":
         questions.append({
             "question": "What is your preferred work location? If the role is based in a different city, would you be open to relocating?",
             "difficulty": "Easy",
             "type": "HR Screening",
-            "category": "Preferred Location"
+            "category": "Preferred Location",
+            "_generation_origin": "emergency fallback"
         })
     elif location == "Current":
         questions.append({
             "question": "Where are you currently located? How would you manage the commute or transition to our office?",
             "difficulty": "Easy",
             "type": "HR Screening",
-            "category": "Current Location"
+            "category": "Current Location",
+            "_generation_origin": "emergency fallback"
         })
     if ask_bond:
         questions.append({
             "question": "Are you currently under any service agreement or bond with your current employer? What is your notice period, and how soon would you be available to join if selected?",
             "difficulty": "Easy",
             "type": "HR Screening",
-            "category": "Bond/Notice Period"
+            "category": "Bond/Notice Period",
+            "_generation_origin": "emergency fallback"
         })
 
     print(f"Added {len(questions)} static HR screening questions")
@@ -1857,6 +1971,7 @@ def _generate_hr_screening_questions(hr_screening: dict, jd_text: str) -> List[D
             f"{topic_list}\n\n"
             f"Job Description:\n{jd_text[:3000]}\n\n"
             "Rules:\n"
+            f"- Generate the questions entirely in {language}.\n"
             "- Extract any relevant details from the JD (like location, work mode) and reference them.\n"
             "- Each question should be conversational and professional.\n"
             '- Return ONLY a valid JSON array of objects with keys: "question", "difficulty", "type", "category".\n'
@@ -2082,7 +2197,19 @@ def get_current_admin_details(credentials: HTTPAuthorizationCredentials = Depend
         except InvalidId:
             raise HTTPException(status_code=401, detail="Invalid token format")
             
-        admin_doc = admins_collection.find_one({"_id": admin_oid})
+        from pymongo.errors import AutoReconnect
+        import time
+        
+        admin_doc = None
+        for _ in range(3):
+            try:
+                admin_doc = admins_collection.find_one({"_id": admin_oid})
+                break
+            except AutoReconnect:
+                time.sleep(0.2)
+        else:
+            admin_doc = admins_collection.find_one({"_id": admin_oid})
+
         if not admin_doc:
             raise HTTPException(status_code=401, detail="Account not found")
         if admin_doc.get("login_enabled") == False:

@@ -27,6 +27,7 @@ from typing import Any, Dict, List, Optional, Union
 from app.services import parse_iso_datetime
 from app.session_store import get_session, delete_session
 from pymongo import ReturnDocument
+from interview_graphs import run_followup_graph
 
 sys.stdout.reconfigure(encoding='utf-8')
 sys.stderr.reconfigure(encoding='utf-8')
@@ -43,10 +44,114 @@ import cloudinary.api
 import edge_tts
 import PyPDF2
 from bson import ObjectId
+
+def process_temp_cloudinary_upload(temp_url: str, collection_name: str, field_name: str):
+    if not temp_url or not temp_url.startswith("temp://"):
+        return
+    import os
+    import cloudinary.uploader
+    from mongo_db import interviews_collection, interview_sessions_collection
+    filename = temp_url.replace("temp://", "")
+    temp_path = os.path.join(os.getcwd(), "temp_uploads", filename)
+    
+    if os.path.exists(temp_path):
+        try:
+            with open(temp_path, "rb") as f:
+                content_bytes = f.read()
+            upload_res = cloudinary.uploader.upload(
+                content_bytes,
+                resource_type="raw",
+                folder="jds" if "jd" in field_name.lower() else "resumes",
+                public_id=filename
+            )
+            secure_url = upload_res.get("secure_url")
+            
+            if collection_name == "interviews":
+                interviews_collection.update_many({field_name: temp_url}, {"$set": {field_name: secure_url}})
+            elif collection_name == "interview_sessions":
+                interview_sessions_collection.update_many({field_name: temp_url}, {"$set": {field_name: secure_url}})
+        except Exception as e:
+            print(f"Background upload failed: {e}")
+        finally:
+            try:
+                os.remove(temp_path)
+            except:
+                pass
+
+MAIN_LOOP = None
+
+def broadcast_profile_update(admin_id: str, company_id: str, credits: int = None, login_enabled: bool = None, extra: dict = None):
+    from redis_manager import manager
+    import json
+    import asyncio
+    
+    payload = {
+        "type": "profile_update",
+        "admin_id": str(admin_id),
+        "company_id": str(company_id or ""),
+    }
+    if credits is not None:
+        payload["credits"] = credits
+    if login_enabled is not None:
+        payload["login_enabled"] = login_enabled
+    if extra:
+        payload.update(extra)
+        
+    async def _send():
+        if manager.redis:
+            await manager.redis.publish("dashboard:updates", json.dumps(payload))
+        else:
+            await manager.broadcast_dashboard(payload)
+            
+    global MAIN_LOOP
+    if MAIN_LOOP and MAIN_LOOP.is_running():
+        asyncio.run_coroutine_threadsafe(_send(), MAIN_LOOP)
+    else:
+        try:
+            loop = asyncio.get_running_loop()
+            if loop.is_running():
+                asyncio.run_coroutine_threadsafe(_send(), loop)
+            else:
+                loop.run_until_complete(_send())
+        except RuntimeError:
+            asyncio.run(_send())
+
 from bson.errors import InvalidId
 from docx import Document
 from dotenv import load_dotenv
 from groq import AsyncGroq
+
+def process_temp_cloudinary_upload(temp_url: str, collection_name: str, field_name: str):
+    if not temp_url or not temp_url.startswith("temp://"):
+        return
+    import os
+    import cloudinary.uploader
+    filename = temp_url.replace("temp://", "")
+    temp_path = os.path.join(os.getcwd(), "temp_uploads", filename)
+    
+    if os.path.exists(temp_path):
+        try:
+            with open(temp_path, "rb") as f:
+                content_bytes = f.read()
+            upload_res = cloudinary.uploader.upload(
+                content_bytes,
+                resource_type="raw",
+                folder="jds" if "jd" in field_name.lower() else "resumes",
+                public_id=filename
+            )
+            secure_url = upload_res.get("secure_url")
+            
+            if collection_name == "interviews":
+                interviews_collection.update_many({field_name: temp_url}, {"$set": {field_name: secure_url}})
+            elif collection_name == "interview_sessions":
+                interview_sessions_collection.update_many({field_name: temp_url}, {"$set": {field_name: secure_url}})
+        except Exception as e:
+            print(f"Background upload failed: {e}")
+        finally:
+            try:
+                os.remove(temp_path)
+            except:
+                pass
 from pydantic import BaseModel, validator, Field
 from starlette.background import BackgroundTask
 
@@ -424,7 +529,7 @@ def api_gen_next_question(req: NextQuestionRequest):
     try:
         # Generate the question
         language = interview.get("language", "English")
-        new_question = generate_followup_question(
+        new_question = run_followup_graph(
             req.answer_text, 
             interview.get("profile_text", ""),
             interview.get("job_description", ""),
@@ -660,6 +765,7 @@ async def generate_more_questions_endpoint(
                 row = interviews_collection.find_one({"id": interview_id})
                 if row:
                     try:
+                        session_row = interview_sessions_collection.find_one({"interview_id": interview_id}) or {}
                         loaded_questions = json.loads(row.get("questions", "[]"))
                         session = {
                             "id": interview_id,
@@ -667,9 +773,9 @@ async def generate_more_questions_endpoint(
                             "profile_text": row.get("profile_text", ""),
                             "questions": loaded_questions,
                             "answers": {},
-                            "industry": row.get("industry", "General"),
-                            "interview_type": row.get("interview_type", "Technical"),
-                            "language": row.get("language", "English")
+                            "industry": row.get("industry") or row.get("industry_type") or session_row.get("industry") or session_row.get("industry_type") or "General",
+                            "interview_type": row.get("interview_type") or session_row.get("interview_type") or "Technical",
+                            "language": row.get("language") or session_row.get("language") or "English"
                         }
                         set_session(interview_id, session)
                     except Exception:
@@ -695,12 +801,12 @@ async def generate_more_questions_endpoint(
                 if str(q.get("id", "")) in asked_ids or asked_ids == set()
             }
 
-            # Generate a new batch of questions
+            # Generate a new batch of questions — request extra to survive duplicate filtering
             new_questions = await run_in_threadpool(
                 generate_mock_questions,
                 text=profile_text,
                 source=source,
-                num_questions=count + 4,
+                num_questions=count + 8,
                 interview_type=session.get("interview_type", "Technical"),
                 industry=session.get("industry", "General"),
                 language=session.get("language", "English")
@@ -844,7 +950,8 @@ def sync_session_to_application(link_id: str):
                 "hireiq_job_description_text": session.get("job_description_text", ""),
                 "hireiq_recommendation": session.get("overall_recommendation") or "No recommendation",
                 "hireiq_completion_time": session.get("updated_at") or session.get("created_at") or datetime.now(timezone.utc).isoformat(),
-                "hireiq_final_result": session.get("decision") or "pending"
+                "hireiq_final_result": session.get("decision") or "pending",
+                "detected_accent": session.get("detected_accent") or "Unknown"
             }
             
             if session.get("status") == "completed":
@@ -1231,10 +1338,18 @@ def _generate_case_study_questions_offline(job_description: str, num_questions: 
                 selected = random.sample(lang_cases, min(num_questions, len(lang_cases)))
                 results = []
                 for idx, c in enumerate(selected):
+                    sep = "।" if "।" in c else "."
+                    parts = c.split(sep, 1)
+                    if len(parts) > 1 and parts[1].strip():
+                        scenario = parts[0].strip() + sep
+                        question = parts[1].strip()
+                    else:
+                        scenario = c
+                        question = c
                     results.append({
                         "id": str(idx + 1),
-                        "scenario": c["scenario"],
-                        "question": c["task"],
+                        "scenario": scenario,
+                        "question": question,
                         "skill_tested": "Scenario",
                         "difficulty": "Medium",
                         "time_limit": 300,
@@ -2075,11 +2190,6 @@ def get_interview_details(link_id: str, current_admin: dict = Depends(get_curren
     current_status = session_data.get("status")
     candidate_email = session_data.get("candidate_email")
 
-    # Fallback: If results exist but status is still 'started', mark as 'completed'
-    if current_status == 'started' and actual_interview_id:
-        if answers_collection.find_one({"interview_id": actual_interview_id}):
-            print(f" Fallback: Marking session {link_id} as completed because results exist.")
-            interview_sessions_collection.update_one({"link_id": link_id}, {"$set": {"status": "completed"}})
 
     def get_url_from_raw_path(rpath):
         if not rpath: return None
@@ -2805,7 +2915,7 @@ def send_submission_notification(candidate_email: str, candidate_name: str, admi
         res = requests.post(url, json={
             "sender": {"name": sender_name, "email": sender_email_addr},
             "to": [{"email": candidate_email, "name": candidate_name}],
-            "subject": "Your Interview Has Been Submitted — Mock Interview",
+            "subject": "Your Interview Has Been Submitted — Hire IQ",
             "htmlContent": candidate_html
         }, headers=headers, timeout=10)
         results.append(res.status_code < 300)
@@ -2844,7 +2954,9 @@ async def get_dashboard_stats(admin_id: Optional[str] = None, current_admin: dic
 
     try:
         comp_id = current_admin.get("company_id")
-        query = {"company_id": comp_id}
+        query = {}
+        if current_admin.get("role") != "master":
+            query["company_id"] = comp_id
         
         if current_admin.get("role") == "admin":
             admin_doc = admins_collection.find_one({"_id": ObjectId(current_admin["admin_id"])})
@@ -3167,7 +3279,8 @@ def invitation_email_scheduler_loop():
 async def startup_event_db_and_email():
     import mongo_db
     await mongo_db.init_db_indexes()
-    global EMAIL_SCHEDULER_STARTED
+    global EMAIL_SCHEDULER_STARTED, MAIN_LOOP
+    MAIN_LOOP = asyncio.get_running_loop()
     # Create default MASTER admin if not exists
     try:
         master_row = admins_collection.find_one({"username": "master"})
@@ -3382,7 +3495,7 @@ def send_otp_email(email: str, name: str, otp: str):
         <p>You requested to reset your admin password. Please use the following One-Time Password (OTP) to proceed:</p>
         <h2 style='color: #6366f1; letter-spacing: 5px; font-size: 2rem;'>{otp}</h2>
         <p>This code is valid for 10 minutes. If you did not request this, please ignore this email.</p>
-        <p>Best Regards,<br/>Mock Interview</p>
+        <p>Best Regards,<br/>Hire IQ</p>
     </body></html>
     """
 
@@ -3434,6 +3547,22 @@ def update_profile(data: UpdateProfileRequest, current_admin: str = Depends(get_
             
         admins_collection.update_one({"_id": admin_id_obj}, {"$set": update_fields})
         
+        # Broadcast updated profile details
+        admin_doc = admins_collection.find_one({"_id": admin_id_obj})
+        if admin_doc:
+            broadcast_profile_update(
+                admin_id=str(admin_id_obj),
+                company_id=str(admin_doc.get("company_id") or ""),
+                credits=admin_doc.get("credits"),
+                login_enabled=admin_doc.get("login_enabled"),
+                extra={
+                    "name": admin_doc.get("name"),
+                    "username": admin_doc.get("username"),
+                    "email": admin_doc.get("email"),
+                    "company_name": admin_doc.get("company_name")
+                }
+            )
+        
         # Remove password from response if present
         if "password" in update_fields:
             del update_fields["password"]
@@ -3481,6 +3610,15 @@ def upload_profile_image(
         admins_collection.update_one(
             {"_id": admin_id_obj},
             {"$set": {"profile_image": secure_url, "avatar": secure_url}}
+        )
+        
+        # Broadcast updated profile image
+        broadcast_profile_update(
+            admin_id=str(admin_id_obj),
+            company_id=str(admin.get("company_id") or ""),
+            credits=admin.get("credits"),
+            login_enabled=admin.get("login_enabled"),
+            extra={"profile_image": secure_url, "avatar": secure_url}
         )
         
         return {
@@ -3662,16 +3800,20 @@ Return a pure JSON object with these keys. If not found, return empty string for
 @router.get("/admin/candidate/check")
 def check_candidate(email: str, current_admin: dict = Depends(get_current_admin_details)):
     try:
-        # Check if candidate exists for this company
+        # Check if candidate exists for this company (or globally if super admin)
+        query = {"candidate_email": email}
+        if current_admin.get("role") not in ["super_admin", "master"]:
+            query["company_id"] = current_admin.get("company_id")
+            
         session = interview_sessions_collection.find_one(
-            {"company_id": current_admin.get("company_id"), "candidate_email": email},
+            query,
             sort=[("created_at", -1)]
         )
-        if session and session.get("resume_text"):
+        if session:
             return {
                 "exists": True,
-                "resume_text": session.get("resume_text"),
-                "candidate_name": session.get("candidate_name")
+                "resume_text": session.get("resume_text", ""),
+                "candidate_name": session.get("candidate_name", "")
             }
         return {"exists": False}
     except Exception as e:
@@ -3779,6 +3921,24 @@ def create_session(data: CreateSession, current_admin: dict = Depends(get_curren
     
     email_result = queue_or_send_interview_email(session_doc, link_url)
     
+    # Broadcast updated credits/profile to sync in real-time
+    admin_doc = admins_collection.find_one({"_id": ObjectId(current_admin["admin_id"])})
+    if admin_doc:
+        broadcast_profile_update(
+            admin_id=str(admin_doc["_id"]),
+            company_id=str(admin_doc.get("company_id") or ""),
+            credits=admin_doc.get("credits"),
+            login_enabled=admin_doc.get("login_enabled")
+        )
+    if company_id:
+        comp_doc = companies_collection.find_one({"_id": ObjectId(company_id)})
+        if comp_doc:
+            broadcast_profile_update(
+                admin_id=current_admin["admin_id"],
+                company_id=str(company_id),
+                credits=comp_doc.get("credits", 0)
+            )
+            
     return {
         "status": "success", 
         "link_id": link_id, 
@@ -4008,9 +4168,9 @@ def bulk_create_sessions(data: BulkCreateSession, background_tasks: BackgroundTa
         else:
             r.pop("session_doc", None)
 
-    # Queue the slow email sending process to run in the background (Celery)
+    # Queue the slow email sending process to run in the background (FastAPI native)
     from app.tasks import process_bulk_emails_task
-    process_bulk_emails_task.delay(email_jobs)
+    background_tasks.add_task(process_bulk_emails_task, email_jobs)
     # Process temp JD URLs in the background for bulk sessions
     if data.jd_file_url and data.jd_file_url.startswith("temp://"):
         threading.Thread(target=process_temp_cloudinary_upload, args=(data.jd_file_url, "interview_sessions", "jd_file_url")).start()
@@ -4029,6 +4189,25 @@ def bulk_create_sessions(data: BulkCreateSession, background_tasks: BackgroundTa
             admins_collection.update_one({"_id": ObjectId(current_admin["admin_id"])}, {"$inc": {"credits": failed}})
         elif not company_id:
             admins_collection.update_one({"_id": ObjectId(current_admin["admin_id"])}, {"$inc": {"credits": failed}})
+
+    # Broadcast updated credits/profile to sync in real-time
+    admin_doc = admins_collection.find_one({"_id": ObjectId(current_admin["admin_id"])})
+    if admin_doc:
+        broadcast_profile_update(
+            admin_id=str(admin_doc["_id"]),
+            company_id=str(admin_doc.get("company_id") or ""),
+            credits=admin_doc.get("credits"),
+            login_enabled=admin_doc.get("login_enabled")
+        )
+    company_id = current_admin.get("company_id")
+    if company_id:
+        comp_doc = companies_collection.find_one({"_id": ObjectId(company_id)})
+        if comp_doc:
+            broadcast_profile_update(
+                admin_id=current_admin["admin_id"],
+                company_id=str(company_id),
+                credits=comp_doc.get("credits", 0)
+            )
 
     return {
         "status": "success",
@@ -4622,7 +4801,9 @@ async def start_session_interview(link_id: str = Form(...)):
         "candidate_name": candidate_name,
         "candidate_email": candidate_email,
         "status": status,
-        "language": language
+        "language": language,
+        "interview_type": interview_type,
+        "industry": industry_val
     })
     
     # Store interview data (DB)
@@ -5537,9 +5718,40 @@ def complete_session(
             candidate_id = session.get("candidate_id")
             if candidate_id and not candidate_id.endswith("IQ"):
                 update_data["candidate_id"] = f"{candidate_id}IQ"
+            
+            # Calculate total time for the dashboard
+            started_at = session.get("started_at") or session.get("updated_at")
+            if started_at:
+                try:
+                    s_dt = datetime.fromisoformat(started_at.replace("Z", "+00:00"))
+                    e_dt = datetime.fromisoformat(update_data["completed_at"].replace("Z", "+00:00"))
+                    delta = (e_dt - s_dt).total_seconds()
+                    update_data["integrity"]["total_time_minutes"] = round(delta / 60, 1) if delta > 0 else 0
+                except:
+                    update_data["integrity"]["total_time_minutes"] = 0
+            else:
+                update_data["integrity"]["total_time_minutes"] = 0
                 
         interview_sessions_collection.update_one({"link_id": link_id}, {"$set": update_data})
         sync_session_to_application(link_id)
+        
+        # Broadcast real-time completion to update credits and dashboard
+        if session:
+            admin_id = session.get("created_by")
+            if admin_id:
+                try:
+                    from bson import ObjectId
+                    admin_doc = admins_collection.find_one({"_id": ObjectId(admin_id)})
+                    if admin_doc:
+                        broadcast_profile_update(
+                            admin_id=str(admin_id),
+                            company_id=str(session.get("company_id") or ""),
+                            credits=admin_doc.get("credits"),
+                            login_enabled=admin_doc.get("login_enabled"),
+                            extra={"status_change": "completed", "link_id": link_id}
+                        )
+                except:
+                    pass
         
         # Task 3: Trigger submission logic IF all answers are scored.
         # Otherwise, the background scoring thread will trigger this later.
@@ -5995,19 +6207,39 @@ async def webrtc_endpoint(websocket: WebSocket, role: str, link_id: str, token: 
 
     last_telemetry_at = 0.0
     try:
+        # Notify admin immediately that they are connected so the frontend
+        # can start the WebRTC offer right away without waiting for a message.
+        if role == "admin":
+            try:
+                await websocket.send_json({"type": "admin_connected"})
+            except Exception:
+                pass
+
         while True:
             data = await websocket.receive_json()
-            # Signaling relay
+            msg_type = data.get("type", "")
+
             if role == "candidate":
-                if data.get("type") == "telemetry":
+                # Heartbeat ping — just pong back, never relay to admins
+                if msg_type == "ping":
+                    try:
+                        await websocket.send_json({"type": "pong"})
+                    except Exception:
+                        pass
+                    continue
+
+                # Throttle telemetry: at most one per second
+                if msg_type == "telemetry":
                     now_monotonic = time.monotonic()
                     if now_monotonic - last_telemetry_at < 1.0:
                         continue
                     last_telemetry_at = now_monotonic
+
+                # Relay all signaling messages (offer/answer/ICE) to admins
                 await manager.send_to_admins(link_id, data)
-                
-                # Parse telemetry data if it's there
-                if data.get("type") == "telemetry":
+
+                # Persist telemetry snapshot to MongoDB / Redis for the dashboard
+                if msg_type == "telemetry":
                     telemetry_payload = data.get("data", {}) or {}
                     proctoring_status = telemetry_payload.get("proctoring_status", {}) or {}
                     updates = {
@@ -6025,7 +6257,9 @@ async def webrtc_endpoint(websocket: WebSocket, role: str, link_id: str, token: 
                         "eye_contact_lost": _optional_bool(proctoring_status.get("eyeContactLost")),
                     }
                     await _store_live_snapshot(link_id, updates, candidate_session)
+
             elif role == "admin":
+                # Forward all admin signaling (offer/answer/ICE) directly to the candidate
                 await manager.send_to_candidate(link_id, data)
     except WebSocketDisconnect:
         webrtc_log_path = os.path.join(tempfile.gettempdir(), "webrtc_debug.log")
@@ -7263,6 +7497,13 @@ def toggle_sub_admin_status(admin_id: str, current_admin: dict = Depends(get_cur
         
     new_status = not admin_doc.get("login_enabled", True)
     admins_collection.update_one({"_id": ObjectId(admin_id)}, {"$set": {"login_enabled": new_status}})
+    
+    broadcast_profile_update(
+        admin_id=admin_id,
+        company_id=str(company_id or ""),
+        credits=admin_doc.get("credits"),
+        login_enabled=new_status
+    )
     return {"status": "success", "login_enabled": new_status}
 
 @router.delete("/super-admin/admins/{admin_id}")
@@ -7274,6 +7515,13 @@ def delete_sub_admin(admin_id: str, current_admin: dict = Depends(get_current_ad
     result = admins_collection.delete_one({"_id": ObjectId(admin_id), "company_id": company_id})
     if result.deleted_count == 0:
         raise HTTPException(status_code=404, detail="Sub-admin not found")
+        
+    broadcast_profile_update(
+        admin_id=admin_id,
+        company_id=str(company_id or ""),
+        login_enabled=False,
+        extra={"deleted": True}
+    )
     return {"status": "success"}
 
 class AddCreditsRequest(BaseModel):
@@ -7308,6 +7556,21 @@ def add_sub_admin_credits(admin_id: str, data: AddCreditsRequest, current_admin:
         {"_id": ObjectId(admin_id)},
         {"$inc": {"credits": data.credits}},
         return_document=ReturnDocument.AFTER
+    )
+    
+    # Broadcast to requesting sub-admin
+    broadcast_profile_update(
+        admin_id=admin_id,
+        company_id=str(company_id or ""),
+        credits=updated_admin.get("credits", 0),
+        login_enabled=updated_admin.get("login_enabled")
+    )
+    # Broadcast to Super Admin (to update their layout header credits in real-time)
+    broadcast_profile_update(
+        admin_id=super_admin_id,
+        company_id=str(company_id or ""),
+        credits=sa_doc.get("credits", 0),
+        login_enabled=sa_doc.get("login_enabled")
     )
     
     return {"status": "success", "credits": updated_admin.get("credits", 0), "super_admin_credits": sa_doc.get("credits", 0)}
@@ -7470,6 +7733,30 @@ def update_credit_request(request_id: str, data: CreditRequestUpdate, current_ad
         # Add to the requesting admin
         admins_collection.update_one({"_id": ObjectId(req["admin_id"])}, {"$inc": {"credits": amount}})
         
+        # Broadcast to requesting admin
+        updated_admin = admins_collection.find_one({"_id": ObjectId(req["admin_id"])})
+        if updated_admin:
+            broadcast_profile_update(
+                admin_id=str(req["admin_id"]),
+                company_id=str(company_id or ""),
+                credits=updated_admin.get("credits", 0),
+                login_enabled=updated_admin.get("login_enabled")
+            )
+            
+        # Broadcast to Super Admin (company credits updated)
+        broadcast_profile_update(
+            admin_id=current_admin["admin_id"],
+            company_id=str(company_id or ""),
+            credits=companies_collection.find_one({"_id": ObjectId(company_id)}).get("credits", 0) if company_id else 0
+        )
+    else:
+        # If rejected, still broadcast an event so the Super Admin list updates to show the request is no longer pending!
+        broadcast_profile_update(
+            admin_id=str(req["admin_id"]),
+            company_id=str(company_id or ""),
+            extra={"status_change": "rejected"}
+        )
+        
     # Send notification to the requesting admin
     try:
         notifications_collection.insert_one({
@@ -7532,9 +7819,10 @@ async def get_dashboard_aggregated_data(
         
         # Restore candidate query since the frontend still expects candidates in this payload
         c_query_filter = {
-            "company_id": current_admin.get("company_id"),
             "$or": [{"is_deactivated": False}, {"is_deactivated": {"$exists": False}}]
         }
+        if current_admin.get("role") != "master":
+            c_query_filter["company_id"] = current_admin.get("company_id")
         if current_admin.get("role") == "admin":
             c_query_filter["created_by"] = current_admin["admin_id"]
         elif admin_id:
@@ -7566,7 +7854,9 @@ async def get_dashboard_aggregated_data(
         # Get AI Calling interested candidates
         apps = []
         try:
-            jobs_query = {"company_id": current_admin.get("company_id")}
+            jobs_query = {}
+            if current_admin.get("role") != "master":
+                jobs_query["company_id"] = current_admin.get("company_id")
             if current_admin.get("role") == "admin":
                 jobs_query["admin_id"] = current_admin["admin_id"]
             elif admin_id:
@@ -8098,7 +8388,9 @@ def superadmin_recruitment_funnel(adminId: Optional[str] = None, current_admin: 
         raise HTTPException(status_code=403, detail="Super Admin access required")
     try:
         company_id = current_admin.get("company_id")
-        base_q = {"company_id": company_id}
+        base_q = {}
+        if current_admin.get("role") != "master":
+            base_q["company_id"] = company_id
         if adminId:
             base_q["created_by"] = adminId
 
@@ -8110,7 +8402,9 @@ def superadmin_recruitment_funnel(adminId: Optional[str] = None, current_admin: 
         # Count AI calling candidates
         ai_call_apps = 0
         try:
-            jobs_q = {"company_id": company_id}
+            jobs_q = {}
+            if current_admin.get("role") != "master":
+                jobs_q["company_id"] = company_id
             if adminId:
                 jobs_q["admin_id"] = adminId
             job_ids = [j.get("job_id") for j in jobs_collection.find(jobs_q, {"job_id": 1}) if j.get("job_id")]
@@ -8620,22 +8914,29 @@ async def generate_tts(req: TTSRequest):
 
 
 
+stt_inflight_counter = 0
+
 @router.post("/stt")
 async def stt_endpoint(file: UploadFile = File(...), language: Optional[str] = None):
-    """Transcribe audio via Groq Whisper with optimized Indian English accent support"""
+    """Transcribe audio via Groq Whisper with concurrency & rate limit tracking"""
+    global stt_inflight_counter
+    stt_inflight_counter += 1
+    current_inflight = stt_inflight_counter
+    req_id = uuid.uuid4().hex[:8]
+    t0 = time.time()
+    
     try:
         audio_content = await file.read()
+        file_size = len(audio_content)
+        header_hex = audio_content[:16].hex() if file_size >= 16 else ""
+        print(f"📊 [STT CONCURRENCY TRACE - REQ #{req_id}] Started | In-Flight Requests: {current_inflight} | File: {file.filename} ({file_size} bytes)")
         
-        temp_filename = f"temp_stt_{uuid.uuid4().hex}.webm"
+        temp_filename = f"temp_stt_{req_id}.webm"
         with open(temp_filename, "wb") as f:
             f.write(audio_content)
             
         try:
             with open(temp_filename, "rb") as f:
-                # Use whisper-large-v3-turbo for better accuracy with Indian accents.
-                # Pass initial_prompt to prime the model with Indian English context which
-                # dramatically reduces hallucinations and accent-related transcription errors.
-                # IMPORTANT: Only pass an English prompt if the target language is English!
                 iso_lang = language or "en"
                 sys_prompt = "The speaker has an Indian English accent. Transcribe technical terms, programming concepts, and software engineering terminology accurately." if iso_lang == "en" else ""
                 
@@ -8644,15 +8945,26 @@ async def stt_endpoint(file: UploadFile = File(...), language: Optional[str] = N
                     file=f,
                     language=iso_lang,
                     prompt=sys_prompt,
-                    temperature=0.0,  # Lower temperature = more deterministic, fewer hallucinations
+                    temperature=0.0,
                 )
+                dur = round(time.time() - t0, 3)
+                print(f"✅ [STT CONCURRENCY TRACE - REQ #{req_id}] HTTP 200 OK | Latency: {dur}s | Text: '{transcript.text}'")
             return {"transcript": transcript.text}
         finally:
             if os.path.exists(temp_filename):
                 os.remove(temp_filename)
     except Exception as e:
-        print(f"STT Error: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
+        dur = round(time.time() - t0, 3)
+        err_str = str(e)
+        status_code = getattr(e, 'status_code', 500)
+        if "429" in err_str or status_code == 429 or "rate_limit" in err_str.lower():
+            print(f"🚨 [STT RATE LIMIT EXCEEDED - REQ #{req_id}] HTTP 429 TOO MANY REQUESTS | Latency: {dur}s | Error: {err_str}")
+            raise HTTPException(status_code=429, detail=f"Groq Rate Limit Exceeded: {err_str}")
+        else:
+            print(f"❌ [STT CONCURRENCY ERROR - REQ #{req_id}] HTTP {status_code} | Latency: {dur}s | Error: {err_str}")
+            raise HTTPException(status_code=status_code, detail=err_str)
+    finally:
+        stt_inflight_counter = max(0, stt_inflight_counter - 1)
 
 # ─── Omni Dimension AI Calling Endpoints ──────────────────────────────────────
 
@@ -9854,12 +10166,39 @@ def create_demo_request(req: DemoRequestCreate):
             'first_name': req.first_name,
             'last_name': req.last_name,
             'work_email': req.work_email,
+            'mobile_number': req.mobile_number,
             'company_name': req.company_name,
             'help_text': req.help_text,
             'status': 'NEW',
             'created_at': datetime.utcnow().isoformat()
         }
         result = demo_requests_collection.insert_one(new_request)
+
+        # Send email notification to master
+        brevo_key = os.getenv("BREVO_API_KEY")
+        master_email = os.getenv("MASTER_EMAIL", os.getenv("BREVO_SENDER_EMAIL", "support@hireiq.com"))
+        if brevo_key and master_email:
+            try:
+                import requests
+                email_html = f"""
+                <html><body style="font-family: Arial, sans-serif; padding: 20px;">
+                    <h2 style="color: #4f46e5;">New Demo Request</h2>
+                    <p><b>Name:</b> {req.first_name} {req.last_name}</p>
+                    <p><b>Company:</b> {req.company_name}</p>
+                    <p><b>Email:</b> {req.work_email}</p>
+                    <p><b>Mobile:</b> {req.mobile_number}</p>
+                    <p><b>Message:</b><br>{req.help_text}</p>
+                </body></html>
+                """
+                requests.post("https://api.brevo.com/v3/smtp/email", json={
+                    "sender": {"name": "Hire IQ Alerts", "email": master_email},
+                    "to": [{"email": master_email, "name": "Hire IQ Admin"}],
+                    "subject": f"New Demo Request from {req.company_name}",
+                    "htmlContent": email_html
+                }, headers={"api-key": brevo_key, "content-type": "application/json"}, timeout=5)
+            except Exception as email_err:
+                print(f'Error sending demo request email: {email_err}')
+
         return {'status': 'success', 'id': str(result.inserted_id)}
     except Exception as e:
         print(f'Error saving demo request: {e}')

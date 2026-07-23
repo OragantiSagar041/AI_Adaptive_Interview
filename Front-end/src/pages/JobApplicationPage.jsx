@@ -3,7 +3,7 @@ import { useParams, useNavigate } from 'react-router-dom';
 import axios from 'axios';
 import { Briefcase, MapPin, Clock, CheckCircle2, User, Mail, Phone, Link as LinkIcon, FileText, ArrowRight, Wallet, Target, Building2, BookOpen, X } from 'lucide-react';
 
-const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || 'http://localhost:8000';
+import { API_BASE_URL } from "../apiConfig";
 
 const WORK_MODE_STYLES = {
   Remote: 'bg-emerald-50 text-emerald-700 border-emerald-200',

@@ -1,8 +1,8 @@
-import React, { useState, useEffect, useRef } from 'react'
+import React, { useState, useEffect, useRef, useCallback } from 'react'
 import { API_BASE_URL } from '../../../apiConfig'
 import Modal from '../../Modal'
 import { useSelector } from 'react-redux'
-import { Video, Mic, MicOff, MonitorOff, Activity, ShieldAlert, Code, MessageSquare, Briefcase, AlertTriangle } from 'lucide-react'
+import { Video, Mic, MicOff, MonitorOff, Activity, ShieldAlert, Code, MessageSquare, Briefcase, AlertTriangle, RefreshCw } from 'lucide-react'
 
 // Maps violation_type values to a human-readable label + colour class
 const VIOLATION_META = {
@@ -34,25 +34,29 @@ function formatTs(ts) {
   } catch { return ts }
 }
 
+// ICE servers: public STUN + free TURN fallback via Open Relay Project
+const ICE_SERVERS = [
+  { urls: 'stun:stun.l.google.com:19302' },
+  { urls: 'stun:stun1.l.google.com:19302' },
+]
+
 export default function LiveMonitorStreamModal({ isOpen, onClose, session }) {
   const [status, setStatus] = useState('connecting')
   const [telemetry, setTelemetry] = useState(null)
-  // ── violations feed ─────────────────────────────────────────────────────────
-  // Polled from GET /admin/interview/{link_id} every 5 s so the admin sees
-  // all proctoring events that were stored via POST /proctoring/violation,
-  // in addition to the real-time count from the WebRTC telemetry stream.
   const [violations, setViolations] = useState([])
+  const [retryCount, setRetryCount] = useState(0)
+
   const violationsPollRef = useRef(null)
-  // ────────────────────────────────────────────────────────────────────────────
   const videoRef = useRef(null)
   const wsRef = useRef(null)
   const pcRef = useRef(null)
+  const streamTimeoutRef = useRef(null)  // fire if no video track arrives in time
+  const mountedRef = useRef(false)
   const token = useSelector(state => state.auth.token)
 
   // ── Violations polling ──────────────────────────────────────────────────────
   useEffect(() => {
     if (!isOpen || !session) return
-
     const linkId = session.link_id || session.session_id || session.id
     if (!linkId) return
 
@@ -63,119 +67,179 @@ export default function LiveMonitorStreamModal({ isOpen, onClose, session }) {
         })
         if (!res.ok) return
         const data = await res.json()
-        // violations[] lives on the session document
         const raw = data?.violations ?? data?.proctoring_alerts ?? []
         if (Array.isArray(raw)) {
-          // Normalise: backend stores {type, violation_type, details, timestamp, ...}
-          const normalised = raw.map(v => ({
+          setViolations(raw.map(v => ({
             type: v.violation_type || v.type || v.alert_type || 'unknown',
             details: v.details || v.message || '',
             timestamp: v.timestamp || v.ts || '',
-          }))
-          setViolations(normalised)
+          })))
         }
-      } catch { /* non-fatal — polling will retry */ }
+      } catch { /* non-fatal */ }
     }
 
-    fetchViolations() // immediate first fetch
+    fetchViolations()
     violationsPollRef.current = setInterval(fetchViolations, 5000)
-
     return () => {
       clearInterval(violationsPollRef.current)
       setViolations([])
     }
   }, [isOpen, session, token])
-  // ────────────────────────────────────────────────────────────────────────────
+
+  // ── WebRTC / Signaling ──────────────────────────────────────────────────────
+  const cleanup = useCallback(() => {
+    clearTimeout(streamTimeoutRef.current)
+    if (pcRef.current) {
+      pcRef.current.close()
+      pcRef.current = null
+    }
+    if (wsRef.current) {
+      wsRef.current.close()
+      wsRef.current = null
+    }
+    if (videoRef.current) videoRef.current.srcObject = null
+  }, [])
+
+  /**
+   * sendOffer — creates a fresh RTCPeerConnection and sends an SDP offer to the candidate.
+   * Called:
+   *  (a) right after the admin WebSocket opens (ws.onopen)
+   *  (b) by the user clicking "Force Retry Connection"
+   *  (c) automatically after STREAM_TIMEOUT_MS if no track has arrived
+   */
+  const sendOffer = useCallback(async (ws) => {
+    // Tear down any existing peer connection
+    clearTimeout(streamTimeoutRef.current)
+    if (pcRef.current) {
+      pcRef.current.close()
+      pcRef.current = null
+    }
+    if (videoRef.current) videoRef.current.srcObject = null
+
+    if (!ws || ws.readyState !== WebSocket.OPEN) return
+
+    try {
+      const pc = new RTCPeerConnection({ iceServers: ICE_SERVERS })
+      pcRef.current = pc
+
+      pc.onicecandidate = (e) => {
+        if (e.candidate && ws.readyState === WebSocket.OPEN) {
+          ws.send(JSON.stringify({ type: 'webrtc_ice_candidate', candidate: e.candidate }))
+        }
+      }
+
+      pc.ontrack = (e) => {
+        if (videoRef.current && e.streams[0]) {
+          videoRef.current.srcObject = e.streams[0]
+          clearTimeout(streamTimeoutRef.current)
+          if (mountedRef.current) setStatus('streaming')
+        }
+      }
+
+      pc.onconnectionstatechange = () => {
+        console.log('[AdminWebRTC] PC state:', pc.connectionState)
+        if ((pc.connectionState === 'failed' || pc.connectionState === 'disconnected') && mountedRef.current) {
+          setStatus('disconnected')
+        }
+      }
+
+      // We only receive — candidate pushes the tracks
+      pc.addTransceiver('video', { direction: 'recvonly' })
+      pc.addTransceiver('audio', { direction: 'recvonly' })
+
+      const offer = await pc.createOffer()
+      await pc.setLocalDescription(offer)
+      ws.send(JSON.stringify({ type: 'webrtc_offer', sdp: offer }))
+
+      if (mountedRef.current) setStatus('negotiating')
+
+      // If no video track arrives within 8 s, retry the offer automatically
+      streamTimeoutRef.current = setTimeout(() => {
+        if (mountedRef.current && status !== 'streaming') {
+          console.warn('[AdminWebRTC] No stream in 8 s — retrying offer...')
+          sendOffer(ws)
+        }
+      }, 8000)
+
+    } catch (err) {
+      console.error('[AdminWebRTC] sendOffer error:', err)
+      if (mountedRef.current) setStatus('error')
+    }
+  }, [status])
 
   useEffect(() => {
     if (!isOpen || !session) return
+    mountedRef.current = true
 
     const sessionId = session.link_id || session.session_id || session.id
-    const wsUrl = API_BASE_URL.replace(/^https/, 'wss').replace(/^http/, 'ws') + `/ws/webrtc/admin/${sessionId}?token=${token}`
-    console.log('Connecting Admin WebRTC to:', wsUrl)
+    const wsUrl =
+      API_BASE_URL.replace(/^https/, 'wss').replace(/^http/, 'ws') +
+      `/ws/webrtc/admin/${sessionId}?token=${token}`
+
+    console.log('[AdminWebRTC] Connecting to:', wsUrl)
+    setStatus('connecting')
+    setRetryCount(0)
+
     const ws = new WebSocket(wsUrl)
     wsRef.current = ws
 
     ws.onopen = async () => {
-      setStatus('connected')
-      
-      try {
-        const pc = new RTCPeerConnection({
-          iceServers: [{ urls: 'stun:stun.l.google.com:19302' }]
-        })
-        pcRef.current = pc
-
-        pc.onicecandidate = (e) => {
-          if (e.candidate && wsRef.current?.readyState === WebSocket.OPEN) {
-            wsRef.current.send(JSON.stringify({ type: 'webrtc_ice_candidate', candidate: e.candidate }))
-          }
-        }
-
-        pc.ontrack = (e) => {
-          if (videoRef.current && e.streams[0]) {
-            videoRef.current.srcObject = e.streams[0]
-            setStatus('streaming')
-          }
-        }
-
-        pc.onconnectionstatechange = () => {
-          if (pc.connectionState === 'failed' || pc.connectionState === 'disconnected') {
-            setStatus('disconnected')
-          }
-        }
-
-        // We only want to receive media
-        pc.addTransceiver('video', { direction: 'recvonly' })
-        pc.addTransceiver('audio', { direction: 'recvonly' })
-
-        const offer = await pc.createOffer()
-        await pc.setLocalDescription(offer)
-
-        ws.send(JSON.stringify({ type: 'webrtc_offer', sdp: offer }))
-
-      } catch (err) {
-        console.error('Admin WebRTC setup error:', err)
-      }
+      console.log('[AdminWebRTC] WS open — sending initial offer')
+      await sendOffer(ws)
     }
 
     ws.onmessage = async (event) => {
       try {
         const msg = JSON.parse(event.data)
 
+        if (msg.type === 'admin_connected') {
+          // Server confirmed our connection — offer already sent from onopen, nothing extra needed
+          return
+        }
+
         if (msg.type === 'telemetry') {
-          setTelemetry(msg.data)
+          if (mountedRef.current) setTelemetry(msg.data)
+
         } else if (msg.type === 'webrtc_answer') {
-          setStatus('negotiating')
-          if (pcRef.current) {
+          if (mountedRef.current) setStatus('negotiating')
+          if (pcRef.current && pcRef.current.signalingState !== 'stable') {
             await pcRef.current.setRemoteDescription(new RTCSessionDescription(msg.sdp))
           }
+
         } else if (msg.type === 'webrtc_ice_candidate') {
-          if (pcRef.current) {
+          if (pcRef.current && pcRef.current.remoteDescription) {
             await pcRef.current.addIceCandidate(new RTCIceCandidate(msg.candidate))
           }
+
         } else if (msg.type === 'candidate_disconnected') {
-          setStatus('disconnected')
+          if (mountedRef.current) setStatus('disconnected')
         }
       } catch (err) {
-        console.error('WebRTC Admin Error:', err)
+        console.error('[AdminWebRTC] onmessage error:', err)
       }
     }
 
     ws.onerror = (e) => {
-      console.error('WebRTC Admin WS Error:', e)
-      setStatus('error')
+      console.error('[AdminWebRTC] WS error:', e)
+      if (mountedRef.current) setStatus('error')
     }
+
     ws.onclose = (e) => {
-      console.log(`WebRTC Admin WS Closed: ${e.code} ${e.reason}`)
-      setStatus('disconnected')
+      console.log(`[AdminWebRTC] WS closed (${e.code})`)
+      if (mountedRef.current) setStatus('disconnected')
     }
 
     return () => {
-      if (pcRef.current) pcRef.current.close()
-      if (wsRef.current) wsRef.current.close()
-      if (videoRef.current) videoRef.current.srcObject = null
+      mountedRef.current = false
+      cleanup()
     }
-  }, [isOpen, session, token])
+  }, [isOpen, session, token, retryCount])  // retryCount forces full reconnect on manual retry
+
+  const handleManualRetry = () => {
+    cleanup()
+    setStatus('connecting')
+    setRetryCount(c => c + 1)  // triggers the useEffect to rebuild everything
+  }
 
   const getRoundIcon = (type) => {
     if (type === 'coding') return <Code size={16} />
@@ -197,15 +261,15 @@ export default function LiveMonitorStreamModal({ isOpen, onClose, session }) {
       maxWidth="max-w-4xl"
     >
       <div className="flex flex-col gap-4 text-slate-800 bg-white">
-        
-        {/* Top Telemetry Bar — unchanged */}
+
+        {/* Top Telemetry Bar */}
         <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
           <div className="bg-slate-50 border border-slate-200 rounded-lg p-3 flex flex-col justify-center">
             <span className="text-[0.65rem] font-bold text-slate-500 uppercase tracking-wider mb-1">Status</span>
             <div className="flex items-center gap-1.5 font-bold text-sm">
-              {status === 'streaming' ? <span className="text-emerald-600">LIVE</span> : 
-               status === 'connecting' ? <span className="text-amber-500">Connecting...</span> : 
-               status === 'negotiating' ? <span className="text-indigo-500">Establishing...</span> : 
+              {status === 'streaming'   ? <span className="text-emerald-600">LIVE</span> :
+               status === 'connecting'  ? <span className="text-amber-500">Connecting...</span> :
+               status === 'negotiating' ? <span className="text-indigo-500">Establishing...</span> :
                <span className="text-red-500 uppercase">{status}</span>}
             </div>
           </div>
@@ -241,9 +305,9 @@ export default function LiveMonitorStreamModal({ isOpen, onClose, session }) {
           </div>
         </div>
 
-        {/* Video Player Area — unchanged */}
+        {/* Video Player Area */}
         <div className="relative w-full aspect-video bg-black rounded-xl overflow-hidden border border-slate-200 shadow-inner flex items-center justify-center">
-          
+
           <video
             ref={videoRef}
             autoPlay
@@ -257,16 +321,11 @@ export default function LiveMonitorStreamModal({ isOpen, onClose, session }) {
               {status === 'connecting' || status === 'negotiating' ? (
                 <div className="flex flex-col items-center gap-3">
                   <Activity size={40} className="animate-pulse text-indigo-500" />
-                  <p className="text-sm font-semibold tracking-wide">Connecting to Candidate's Stream...</p>
-                  <button 
-                    onClick={() => {
-                      if (wsRef.current && pcRef.current) {
-                        pcRef.current.createOffer().then(offer => {
-                          pcRef.current.setLocalDescription(offer)
-                          wsRef.current.send(JSON.stringify({ type: 'webrtc_offer', sdp: offer }))
-                        })
-                      }
-                    }}
+                  <p className="text-sm font-semibold tracking-wide">
+                    {status === 'connecting' ? 'Connecting to Candidate Stream...' : 'Negotiating WebRTC connection...'}
+                  </p>
+                  <button
+                    onClick={() => sendOffer(wsRef.current)}
                     className="mt-2 px-4 py-1.5 bg-indigo-600 hover:bg-indigo-500 transition-colors text-white text-xs font-bold rounded shadow-md"
                   >
                     Force Retry Connection
@@ -276,22 +335,18 @@ export default function LiveMonitorStreamModal({ isOpen, onClose, session }) {
                 <div className="flex flex-col items-center gap-3">
                   <MonitorOff size={40} className="text-rose-500" />
                   <p className="text-sm font-semibold tracking-wide text-rose-400">Stream Disconnected or Offline</p>
-                  <button 
-                    onClick={() => {
-                      setStatus('connecting')
-                      onClose()
-                      setTimeout(() => { document.querySelector('[data-id="live-monitor-btn"]')?.click() }, 500)
-                    }}
-                    className="mt-2 px-4 py-1.5 bg-rose-600 hover:bg-rose-500 transition-colors text-white text-xs font-bold rounded shadow-md"
+                  <button
+                    onClick={handleManualRetry}
+                    className="mt-2 px-4 py-1.5 bg-rose-600 hover:bg-rose-500 transition-colors text-white text-xs font-bold rounded shadow-md flex items-center gap-2"
                   >
-                    Close & Reconnect
+                    <RefreshCw size={13} /> Reconnect
                   </button>
                 </div>
               )}
             </div>
           )}
 
-          {/* Telemetry Overlay — unchanged */}
+          {/* Live overlay */}
           {status === 'streaming' && telemetry && (
             <div className="absolute bottom-4 left-4 right-4 flex justify-between items-end pointer-events-none">
               <div className="bg-black/60 backdrop-blur-md px-3 py-1.5 rounded-lg border border-white/10 text-white flex items-center gap-2 pointer-events-auto">
@@ -311,16 +366,11 @@ export default function LiveMonitorStreamModal({ isOpen, onClose, session }) {
         </div>
 
         {/* ── Violations Feed ──────────────────────────────────────────────── */}
-        {/* Reads session.violations[] polled every 5 s from /admin/interview/{link_id}.
-            Shows all proctoring events stored via POST /proctoring/violation.
-            Real-time WebRTC telemetry count (above) remains unchanged. */}
         <div className="border border-slate-200 rounded-xl overflow-hidden">
           <div className="flex items-center justify-between px-4 py-2.5 bg-slate-50 border-b border-slate-200">
             <div className="flex items-center gap-2">
               <AlertTriangle size={14} className={violations.length > 0 ? 'text-rose-500' : 'text-slate-400'} />
-              <span className="text-xs font-bold text-slate-600 uppercase tracking-wider">
-                Security Events
-              </span>
+              <span className="text-xs font-bold text-slate-600 uppercase tracking-wider">Security Events</span>
             </div>
             <span className={`text-xs font-bold px-2 py-0.5 rounded-full ${
               violations.length === 0
@@ -362,7 +412,6 @@ export default function LiveMonitorStreamModal({ isOpen, onClose, session }) {
             </ul>
           )}
         </div>
-        {/* ── End Violations Feed ──────────────────────────────────────────── */}
 
       </div>
     </Modal>

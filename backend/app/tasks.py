@@ -51,17 +51,32 @@ def score_answer_task(
         try:
             session_doc = interview_sessions_collection.find_one(
                 {"$or": [{"link_id": interview_id}, {"interview_id": interview_id}]},
-                {"detected_accent": 1}
+                {"detected_accent": 1, "link_id": 1}
             )
             current_accent = session_doc.get("detected_accent") if session_doc else None
+            # If the user selected a non-English language but we currently have "English" or "Unknown" (e.g. from a short initial greeting),
+            # we should continue running language detection on subsequent answers to get the correct spoken language.
+            interview_lang = language or "English"
+            should_detect = False
             if not current_accent or current_accent == "Unknown":
+                should_detect = True
+            elif current_accent.lower() == "english" and interview_lang.lower() != "english":
+                should_detect = True
+
+            if should_detect:
                 from typed_ai_layer import detect_spoken_language
                 detected = detect_spoken_language(answer_text)
                 if detected and detected != "Unknown":
-                    interview_sessions_collection.update_one(
+                    update_res = interview_sessions_collection.update_one(
                         {"$or": [{"link_id": interview_id}, {"interview_id": interview_id}]},
                         {"$set": {"detected_accent": detected}}
                     )
+                    # Sync to application immediately so the details card is updated in real-time
+                    if session_doc:
+                        link_id = session_doc.get("link_id")
+                        if link_id:
+                            from app.routes import sync_session_to_application
+                            sync_session_to_application(link_id)
         except Exception as lang_err:
             logger.warning(f"Language detection background update failed: {lang_err}")
 
