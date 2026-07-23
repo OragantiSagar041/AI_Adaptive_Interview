@@ -34,7 +34,8 @@ export const InterviewTechnical = () => {
       setSelectedLanguage(recommendedLang)
       setCodingRoundData(payload)
 
-      const constraintsText = (task.constraints || []).join(' | ')
+      const constraintsArray = Array.isArray(task.constraints) ? task.constraints : (task.constraints ? [task.constraints] : [])
+      const constraintsText = constraintsArray.join(' | ')
       const questionText = [
         `🖥️ CODING ROUND — ${task.title || 'Coding Challenge'}`,
         '',
@@ -429,7 +430,7 @@ export const InterviewTechnical = () => {
                     </div>
                   )}
 
-                  {codingTask.examples && codingTask.examples.length > 0 && (
+                  {Array.isArray(codingTask.examples) && codingTask.examples.length > 0 && (
                     <div style={{ display: 'flex', flexDirection: 'column', gap: '20px', marginTop: '20px' }}>
                       {codingTask.examples.map((ex, idx) => (
                         <div key={idx} style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>

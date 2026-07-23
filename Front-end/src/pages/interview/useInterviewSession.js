@@ -241,7 +241,12 @@ export const useInterviewSession = (sessionId, interviewType, startRoundTwo) => 
   // Speech Recognition Reference
   const recognitionRef = useRef(null)
   const isSpeechRecordingRef = useRef(false)
+  const isTTSPlayingRef = useRef(false) // blocks rec.onend auto-restart during TTS playback
   const whisperMediaRecorderRef = useRef(null)
+  const interimTextRef = useRef('')
+  const currentAudioRef = useRef(null)
+  const speakRequestIdRef = useRef(0)
+
   const whisperAudioChunksRef = useRef([])
   const whisperPauseTimeoutRef = useRef(null)
   // Refs that hold session-data values used in async transcription callbacks.
@@ -1005,23 +1010,36 @@ export const useInterviewSession = (sessionId, interviewType, startRoundTwo) => 
     }
 
     rec.onstart = () => {
-      isSpeechRecordingRef.current = true
+      // Intentionally left blank. We now set isSpeechRecordingRef.current = true 
+      // immediately before calling start(), to avoid async race conditions.
       // Note: Whisper path is disabled — Web Speech API is used as the sole
       // transcript source for all languages. It is real-time, accurate, and
       // avoids Whisper hallucination + latency issues.
     }
 
     rec.onend = () => {
+      // Commit any leftover interim text so we don't lose the last few words if it stopped abruptly
+      if (interimTextRef.current) {
+        const leftover = interimTextRef.current
+        interimTextRef.current = ''
+        setInterimTranscriptText('')
+        setTranscriptionText(prev => prev + leftover + ' ')
+      }
+
       // With continuous=true this fires only on error/abort — restart with a small delay
       // to avoid rapid restart storms and InvalidStateError exceptions in Chrome.
-      if (isSpeechRecordingRef.current) {
+      // IMPORTANT: Do NOT restart during TTS playback (isTTSPlayingRef guards this).
+      if (isSpeechRecordingRef.current && !isTTSPlayingRef.current) {
         setTimeout(() => {
-          if (!isSpeechRecordingRef.current) return
+          if (!isSpeechRecordingRef.current || isTTSPlayingRef.current) return
           try {
             rec.start()
           } catch (e) {
             // InvalidStateError or similar — start a fresh recognition instance
-            if (isSpeechRecordingRef.current) initSpeechRecognition()
+            if (isSpeechRecordingRef.current) {
+              initSpeechRecognition()
+              try { recognitionRef.current?.start() } catch (_) {}
+            }
           }
         }, 150)
       }
@@ -1048,8 +1066,10 @@ export const useInterviewSession = (sessionId, interviewType, startRoundTwo) => 
         }
       }
       // Show interim text in real time (visible while speaking)
+      interimTextRef.current = interimText
       setInterimTranscriptText(interimText)
       if (finalText) {
+        interimTextRef.current = ''
         setInterimTranscriptText('')
         // Use Web Speech API final results for ALL languages (English + regional).
         // The browser's Google speech engine is real-time, zero-latency, and highly
@@ -1073,7 +1093,12 @@ export const useInterviewSession = (sessionId, interviewType, startRoundTwo) => 
       if (e.error === 'network') {
         // Network blip — restart after a longer pause
         if (isSpeechRecordingRef.current) {
-          setTimeout(() => { if (isSpeechRecordingRef.current) initSpeechRecognition() }, 1000)
+          setTimeout(() => { 
+            if (isSpeechRecordingRef.current) {
+              initSpeechRecognition()
+              try { recognitionRef.current?.start() } catch (_) {}
+            }
+          }, 1000)
         }
         return
       }
@@ -1564,6 +1589,7 @@ export const useInterviewSession = (sessionId, interviewType, startRoundTwo) => 
 
       initSpeechRecognition()
       if (recognitionRef.current) {
+        isSpeechRecordingRef.current = true
         recognitionRef.current.start()
       }
 
@@ -1737,6 +1763,31 @@ export const useInterviewSession = (sessionId, interviewType, startRoundTwo) => 
     // We do NOT set a timer here before TTS plays — that would give extra-long wait.
     if (silenceIntervalRef.current) clearInterval(silenceIntervalRef.current)
 
+    // Generate a unique ID for this TTS request to handle rapid clicks
+    const reqId = Date.now()
+    speakRequestIdRef.current = reqId
+
+    // Stop any currently playing high-quality audio
+    if (currentAudioRef.current) {
+      try {
+        currentAudioRef.current.pause()
+        currentAudioRef.current.currentTime = 0
+      } catch (e) {}
+      currentAudioRef.current = null
+    }
+
+    // ── PAUSE speech recognition so the AI's own voice is NOT transcribed ──
+    // Set isTTSPlayingRef FIRST so that when rec.stop() triggers rec.onend,
+    // the auto-restart logic is blocked. Without this flag, rec.onend would
+    // restart the mic 150ms later right in the middle of TTS audio.
+    isTTSPlayingRef.current = true
+    if (recognitionRef.current) {
+      try { recognitionRef.current.stop() } catch (_) {}
+    }
+    // Clear any gibberish that got captured while recognition was still on
+    setTranscriptionText('')
+    setInterimTranscriptText('')
+
     // --- High-Quality TTS (Backend: Cartesia or Edge TTS) ---
     try {
       if (window.speechSynthesis) window.speechSynthesis.cancel()
@@ -1771,7 +1822,11 @@ export const useInterviewSession = (sessionId, interviewType, startRoundTwo) => 
         ttsCacheRef.current.set(ttsCacheKey, url)
       }
 
+      // If user clicked 'Next' again while we were fetching, discard this stale audio!
+      if (speakRequestIdRef.current !== reqId) return
+
       const audio = new Audio(url)
+      currentAudioRef.current = audio
       
       // --- Web Audio Mixer Routing ---
       if (audioMixerCtxRef.current && audioMixerDestRef.current) {
@@ -1787,9 +1842,19 @@ export const useInterviewSession = (sessionId, interviewType, startRoundTwo) => 
         if (!ttsCacheRef.current.has(ttsCacheKey)) {
           URL.revokeObjectURL(url)
         }
+        // ── RESTART speech recognition now that the AI has finished speaking ──
+        // Clear the TTS flag first so rec.onend won't block the restart.
+        isTTSPlayingRef.current = false
+        isSpeechRecordingRef.current = true
+        initSpeechRecognition()
+        try { recognitionRef.current?.start() } catch (_) {}
         startSilenceTimer(10000)
       }
-      audio.play()
+      
+      // Double check reqId before playing just in case
+      if (speakRequestIdRef.current === reqId) {
+        audio.play()
+      }
       return // Successfully used backend high-quality TTS
     } catch (err) {
       console.error("Backend TTS failed, falling back to browser TTS", err)
@@ -1802,6 +1867,10 @@ export const useInterviewSession = (sessionId, interviewType, startRoundTwo) => 
       startSilenceTimer(15000)
       return
     }
+    
+    // If a new request came in, abort browser fallback setup
+    if (speakRequestIdRef.current !== reqId) return
+
     window.speechSynthesis.cancel()
     const utterance = new SpeechSynthesisUtterance(text)
 
@@ -1820,6 +1889,11 @@ export const useInterviewSession = (sessionId, interviewType, startRoundTwo) => 
       }
 
       utterance.onend = () => {
+        // ── RESTART recognition after browser TTS fallback finishes ──
+        isTTSPlayingRef.current = false
+        isSpeechRecordingRef.current = true
+        initSpeechRecognition()
+        try { recognitionRef.current?.start() } catch (_) {}
         startSilenceTimer(10000)
       }
 
@@ -2132,6 +2206,8 @@ export const useInterviewSession = (sessionId, interviewType, startRoundTwo) => 
     // This prevents the interview from staying visible during async cleanup,
     // and stops back-navigation from re-showing the interview.
     setIsCompleted(true)
+    setUploadingText("Finalizing interview...")
+    setUploadPercentage(10)
 
     if (window.speechSynthesis) window.speechSynthesis.cancel()
     stopSilenceTimer()
@@ -2151,12 +2227,26 @@ export const useInterviewSession = (sessionId, interviewType, startRoundTwo) => 
     }
     if (whisperPauseTimeoutRef.current) clearTimeout(whisperPauseTimeoutRef.current)
 
-    if (mediaStreamRef.current) {
-      mediaStreamRef.current.getTracks().forEach(track => track.stop())
-    }
-    if (screenStreamRef.current) {
-      screenStreamRef.current.getTracks().forEach(track => track.stop())
-    }
+    try {
+      if (mediaStreamRef.current) {
+        mediaStreamRef.current.getTracks().forEach(track => { try { track.stop() } catch(e){} })
+      }
+    } catch(e) { console.error("Error stopping media tracks:", e) }
+
+    try {
+      if (screenStreamRef.current) {
+        screenStreamRef.current.getTracks().forEach(track => { try { track.stop() } catch(e){} })
+      }
+    } catch(e) { console.error("Error stopping screen tracks:", e) }
+
+    try {
+      if (audioMixerDestRef.current && audioMixerDestRef.current.stream) {
+        audioMixerDestRef.current.stream.getTracks().forEach(track => { try { track.stop() } catch(e){} })
+      }
+      if (audioMixerCtxRef.current && audioMixerCtxRef.current.state !== 'closed') {
+        audioMixerCtxRef.current.close().catch(e => console.error("Error closing audio mixer:", e))
+      }
+    } catch(e) { console.error("Error stopping audio mixer:", e) }
 
     if (cameraRecorderRef.current && cameraRecorderRef.current.state !== 'inactive') {
       cameraRecorderRef.current.stop()
@@ -2301,8 +2391,8 @@ export const useInterviewSession = (sessionId, interviewType, startRoundTwo) => 
       html: '<p style="color:#94a3b8;font-size:14px">Are you sure you want to end the interview now? Your answers will be saved and submitted.</p>',
       icon: 'question',
       showCancelButton: true,
-      confirmButtonText: 'Yes, Finish',
-      cancelButtonText: 'Continue Interview',
+      confirmButtonText: 'Confirm finish interview',
+      cancelButtonText: 'Continue the interview',
       confirmButtonColor: '#ef4444',
       cancelButtonColor: '#6366f1',
       background: '#0f172a',
@@ -2310,6 +2400,9 @@ export const useInterviewSession = (sessionId, interviewType, startRoundTwo) => 
       customClass: {
         popup: 'border border-white/10 rounded-2xl shadow-2xl',
         title: 'text-xl font-bold text-white',
+        actions: 'flex gap-4 mt-4 w-full justify-center',
+        confirmButton: 'bg-red-500 hover:bg-red-600 text-white rounded-lg px-5 py-2.5 font-medium transition-colors cursor-pointer border-none outline-none',
+        cancelButton: 'bg-indigo-500 hover:bg-indigo-600 text-white rounded-lg px-5 py-2.5 font-medium transition-colors cursor-pointer border-none outline-none'
       },
       buttonsStyling: false
     }).then(async result => {

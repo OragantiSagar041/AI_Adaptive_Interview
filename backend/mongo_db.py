@@ -46,10 +46,26 @@ def get_next_sequence_value(sequence_name: str, prefix: str) -> str:
     return f"{prefix}{sequence_document['sequence_value']}"
 
 async def init_db_indexes():
-    candidates_collection.create_index("name", unique=True)
-    admins_collection.create_index("username", unique=True)
-    interview_sessions_collection.create_index("link_id", unique=True)
-    answers_collection.create_index([("interview_id", 1), ("question_id", 1)], unique=True)
-    interviews_collection.create_index("id", unique=True)
-    plans_collection.create_index("plan_name", unique=True)
+    from pymongo.errors import OperationFailure
+    
+    def safe_create_index(collection, index_keys, **kwargs):
+        try:
+            collection.create_index(index_keys, **kwargs)
+        except OperationFailure:
+            try:
+                if isinstance(index_keys, str):
+                    name = f"{index_keys}_1"
+                else:
+                    name = "_".join([f"{k}_{v}" for k, v in index_keys])
+                collection.drop_index(name)
+                collection.create_index(index_keys, **kwargs)
+            except Exception as e:
+                print(f"Warning: Failed to fix index {index_keys} on {collection.name}: {e}")
+
+    safe_create_index(candidates_collection, "name", unique=True)
+    safe_create_index(admins_collection, "username", unique=True)
+    safe_create_index(interview_sessions_collection, "link_id", unique=True)
+    safe_create_index(answers_collection, [("interview_id", 1), ("question_id", 1)], unique=True)
+    safe_create_index(interviews_collection, "id", unique=True)
+    safe_create_index(plans_collection, "plan_name", unique=True)
     print("MongoDB connected and initialized.")

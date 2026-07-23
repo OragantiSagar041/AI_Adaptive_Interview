@@ -148,6 +148,17 @@ def _normalize_task(task: Dict[str, Any]) -> Dict[str, Any]:
     fallback = _default_task()
     normalized = dict(fallback)
     normalized.update(task or {})
+    
+    # Normalize constraints
+    constraints = normalized.get("constraints")
+    if not isinstance(constraints, list):
+        normalized["constraints"] = [str(constraints)] if constraints else fallback["constraints"]
+        
+    # Normalize examples
+    examples = normalized.get("examples")
+    if not isinstance(examples, list):
+        normalized["examples"] = fallback["examples"]
+        
     signature = normalized.get("starter_function_signature") or fallback["starter_function_signature"]
     normalized["starter_function_signature"] = signature
     normalized["function_name"] = normalized.get("function_name") or _extract_function_name(signature)

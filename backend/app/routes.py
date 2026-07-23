@@ -2697,7 +2697,9 @@ def generate_report(interview_id: str):
             
         if coding_round.get("final_evaluation"):
             story.append(Paragraph("<b>AI Evaluation:</b>", normal_style))
-            safe_eval = coding_round["final_evaluation"].replace("&", "&amp;").replace("<", "&lt;").replace(">", "&gt;").replace("\n", "<br/>")
+            eval_data = coding_round["final_evaluation"]
+            eval_text = json.dumps(eval_data, indent=2) if isinstance(eval_data, dict) else str(eval_data)
+            safe_eval = eval_text.replace("&", "&amp;").replace("<", "&lt;").replace(">", "&gt;").replace("\n", "<br/>")
             story.append(Paragraph(safe_eval, normal_style))
             story.append(Spacer(1, 15))
             
