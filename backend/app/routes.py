@@ -159,7 +159,7 @@ from starlette.background import BackgroundTask
 
 from fastapi import (
     APIRouter, Depends, File, Form, HTTPException, Request, UploadFile,
-    WebSocket, WebSocketDisconnect, BackgroundTasks
+    WebSocket, WebSocketDisconnect, BackgroundTasks, Header
 )
 from fastapi.exceptions import RequestValidationError
 from fastapi.middleware.gzip import GZipMiddleware
@@ -2027,31 +2027,17 @@ def normalize_agent_flow_write_item(item: Dict[str, Any]) -> Dict[str, Any]:
     }
 
 @router.get("/admin/agent-flow")
-def get_agent_flow(current_admin: dict = Depends(require_role("super_admin"))):
+def get_agent_flow(omni_api_key: Optional[str] = Header(default=None, alias="X-Omni-Dimension-API-Key")):
     from app.config import get_omni_dimension_api_key, get_omni_agent_id
     import requests
-    from pathlib import Path
-    # Prefer a local flow file when present so admin UI reflects local edits immediately.
-    local_path = Path(__file__).resolve().parents[1] / 'agent_flow.json'
-    if local_path.exists():
-        try:
-            data = json.loads(local_path.read_text(encoding='utf-8'))
-            if data:
-                normalized = [normalize_agent_flow_read_item(item) for item in data]
-                return {"success": True, "flow": normalized}
-        except Exception as e:
-            logger.warning(f"[agent-flow] Warning: failed to read local flow: {e}")
-    api_key = get_omni_dimension_api_key()
-    agent_id_value = get_omni_agent_id()
+    api_key = (omni_api_key or get_omni_dimension_api_key()).strip()
     if not api_key:
-        raise HTTPException(status_code=500, detail="OMNI_DIMENSION_API_KEY is not set and no local flow available.")
-
-    if not agent_id_value:
-        raise HTTPException(status_code=500, detail="OMNI_AGENT_ID is not configured.")
-
-    agent_id = agent_id_value
+        raise HTTPException(status_code=500, detail="OMNI_DIMENSION_API_KEY is not set.")
     headers = {"Authorization": f"Bearer {api_key}"}
     try:
+        from .omni_dimension_client import get_omni_account
+        _, _, resolved_agent_id = get_omni_account(api_key)
+        agent_id = str(resolved_agent_id)
         res = requests.get(f"https://backend.omnidim.io/api/v1/agents/{agent_id}", headers=headers, timeout=10)
         if res.status_code == 200:
             data = res.json()
@@ -2067,46 +2053,22 @@ def get_agent_flow(current_admin: dict = Depends(require_role("super_admin"))):
             return {"success": True, "flow": normalized_flow}
         else:
             print(f"[Omnidimension] GET agent flow failed [status={res.status_code}]")
-            # If upstream fails, fall back to local flow file
-            local_path = Path(__file__).resolve().parents[1] / 'agent_flow.json'
-            if local_path.exists():
-                try:
-                    data = json.loads(local_path.read_text(encoding='utf-8'))
-                    return {"success": True, "flow": data}
-                except Exception as e:
-                    raise HTTPException(status_code=500, detail=f"Failed to read local flow: {e}")
             raise HTTPException(status_code=res.status_code, detail="Failed to fetch agent flow from upstream API.")
     except HTTPException:
         raise
     except Exception as e:
-        # On unexpected exception, try local fallback
-        local_path = Path(__file__).resolve().parents[1] / 'agent_flow.json'
-        if local_path.exists():
-            try:
-                data = json.loads(local_path.read_text(encoding='utf-8'))
-                return {"success": True, "flow": data}
-            except Exception:
-                pass
         raise HTTPException(status_code=500, detail=str(e))
 
 @router.put("/admin/agent-flow")
-def update_agent_flow(
-    req: UpdateAgentFlowRequest,
-    current_admin: dict = Depends(require_role("super_admin")),
-):
+def update_agent_flow(req: UpdateAgentFlowRequest, omni_api_key: Optional[str] = Header(default=None, alias="X-Omni-Dimension-API-Key")):
     from app.config import get_omni_dimension_api_key, get_omni_agent_id
     import requests
     from pathlib import Path
-    agent_id_value = get_omni_agent_id()
-    if not agent_id_value:
-        raise HTTPException(status_code=500, detail="OMNI_AGENT_ID is not configured.")
-
-    agent_id = agent_id_value
     payload = {
         "context_breakdown": [normalize_agent_flow_write_item(item.dict()) for item in req.flow]
     }
 
-    api_key = get_omni_dimension_api_key()
+    api_key = (omni_api_key or get_omni_dimension_api_key()).strip()
     if not api_key:
         logger.warning("[agent-flow] OMNI_DIMENSION_API_KEY not configured; saving local flow only.")
         try:
@@ -2117,7 +2079,10 @@ def update_agent_flow(
         return {"success": True, "message": "Local flow saved; Omnidimension sync skipped because OMNI_DIMENSION_API_KEY is not configured."}
 
     headers = {"Authorization": f"Bearer {api_key}", "Content-Type": "application/json"}
-    
+    from .omni_dimension_client import get_omni_account
+    _, _, resolved_agent_id = get_omni_account(api_key)
+    agent_id = str(resolved_agent_id)
+
     # We only send the context_breakdown (conversational flow)
     
     omni_url = f"https://backend.omnidim.io/api/v1/agents/{agent_id}"
@@ -10004,26 +9969,22 @@ async def initiate_manual_ai_call(
 # ─── Omni Dimension Agent Data Routes ─────────────────────────────────────────
 
 @router.get("/api/calls/agent-settings")
-def get_omni_agent_settings():
+def get_omni_agent_settings(omni_api_key: Optional[str] = Header(default=None, alias="X-Omni-Dimension-API-Key")):
     """Fetch the Omni Dimension Agent settings."""
-    from .omni_dimension_client import get_omni_client, get_omni_agent_id
+    from .omni_dimension_client import get_omni_account
     try:
-        client = get_omni_client()
-        agent_id = int(get_omni_agent_id()) if get_omni_agent_id() else 1
-        res = client.agent.list()
-        bots = res.get('json', {}).get('bots', [])
-        agent = next((b for b in bots if b.get('id') == agent_id), bots[0] if bots else {})
+        _, agent, _ = get_omni_account(omni_api_key)
         return {"settings": agent}
     except Exception as e:
         return JSONResponse(status_code=500, content={"detail": f"Failed to fetch agent settings: {str(e)}"})
 
 
 @router.get("/api/calls/knowledge-base")
-def get_omni_knowledge_base():
+def get_omni_knowledge_base(omni_api_key: Optional[str] = Header(default=None, alias="X-Omni-Dimension-API-Key")):
     """Fetch the Knowledge Base files from Omni Dimension."""
     from .omni_dimension_client import get_omni_client
     try:
-        client = get_omni_client()
+        client = get_omni_client(omni_api_key)
         res = client.knowledge_base.list()
         data = res.get('json', res)
         return {"files": data.get("files", []), "success": True}
@@ -10032,12 +9993,11 @@ def get_omni_knowledge_base():
 
 
 @router.get("/api/calls/integrations")
-def get_omni_integrations():
+def get_omni_integrations(omni_api_key: Optional[str] = Header(default=None, alias="X-Omni-Dimension-API-Key")):
     """Fetch integrations for the agent from Omni Dimension."""
-    from .omni_dimension_client import get_omni_client, get_omni_agent_id
+    from .omni_dimension_client import get_omni_account
     try:
-        client = get_omni_client()
-        agent_id = int(get_omni_agent_id()) if get_omni_agent_id() else 1
+        client, _, agent_id = get_omni_account(omni_api_key)
         res = client.integrations.get_agent_integrations(agent_id=agent_id)
         data = res.get('json', res)
         return {"integrations": data.get("integrations", []), "success": True}
@@ -10063,11 +10023,14 @@ class CalendlyIntegrationRequest(BaseModel):
     cal_timezone: str
     description: Optional[str] = ""
 
+class IntegrationJsonRequest(BaseModel):
+    integration: dict
+
 @router.post("/api/calls/integrations/calendly")
-def create_calendly_integration(req: CalendlyIntegrationRequest):
-    from .omni_dimension_client import get_omni_client, get_omni_agent_id
+def create_calendly_integration(req: CalendlyIntegrationRequest, omni_api_key: Optional[str] = Header(default=None, alias="X-Omni-Dimension-API-Key")):
+    from .omni_dimension_client import get_omni_account
     try:
-        client = get_omni_client()
+        client, _, agent_id = get_omni_account(omni_api_key)
         res = client.integrations.create_cal_integration(
             name=req.name,
             cal_api_key=req.cal_api_key,
@@ -10081,10 +10044,24 @@ def create_calendly_integration(req: CalendlyIntegrationRequest):
         integration_data = data.get("integration", data) if isinstance(data, dict) else data
         integration_id = integration_data.get("id") if isinstance(integration_data, dict) else getattr(integration_data, "id", None)
         
-        agent_id = int(get_omni_agent_id()) if get_omni_agent_id() else 1
         if integration_id:
             client.integrations.add_integration_to_agent(agent_id=agent_id, integration_id=integration_id)
             
+        return {"success": True, "integration": integration_data}
+    except Exception as e:
+        return JSONResponse(status_code=500, content={"detail": str(e)})
+
+@router.post("/api/calls/integrations/from-json")
+def create_integration_from_json(req: IntegrationJsonRequest, omni_api_key: Optional[str] = Header(default=None, alias="X-Omni-Dimension-API-Key")):
+    from .omni_dimension_client import get_omni_account
+    try:
+        client, _, agent_id = get_omni_account(omni_api_key)
+        res = client.integrations.create_integration_from_json(req.integration)
+        data = res.get('json', res) if isinstance(res, dict) else res
+        integration_data = data.get("integration", data) if isinstance(data, dict) else data
+        integration_id = integration_data.get("id") if isinstance(integration_data, dict) else getattr(integration_data, "id", None)
+        if integration_id:
+            client.integrations.add_integration_to_agent(agent_id=agent_id, integration_id=integration_id)
         return {"success": True, "integration": integration_data}
     except Exception as e:
         return JSONResponse(status_code=500, content={"detail": str(e)})
@@ -10103,10 +10080,10 @@ class CustomApiIntegrationRequest(BaseModel):
     request_timeout: Optional[int] = 10
 
 @router.post("/api/calls/integrations/custom-api")
-def create_custom_api_integration(req: CustomApiIntegrationRequest):
-    from .omni_dimension_client import get_omni_client, get_omni_agent_id
+def create_custom_api_integration(req: CustomApiIntegrationRequest, omni_api_key: Optional[str] = Header(default=None, alias="X-Omni-Dimension-API-Key")):
+    from .omni_dimension_client import get_omni_account
     try:
-        client = get_omni_client()
+        client, _, agent_id = get_omni_account(omni_api_key)
         res = client.integrations.create_custom_api_integration(
             name=req.name,
             url=req.url,
@@ -10125,7 +10102,6 @@ def create_custom_api_integration(req: CustomApiIntegrationRequest):
         integration_data = data.get("integration", data) if isinstance(data, dict) else data
         integration_id = integration_data.get("id") if isinstance(integration_data, dict) else getattr(integration_data, "id", None)
         
-        agent_id = int(get_omni_agent_id()) if get_omni_agent_id() else 1
         if integration_id:
             client.integrations.add_integration_to_agent(agent_id=agent_id, integration_id=integration_id)
             
@@ -10137,11 +10113,10 @@ class DetachIntegrationRequest(BaseModel):
     integration_id: int
 
 @router.post("/api/calls/integrations/detach")
-def detach_integration(req: DetachIntegrationRequest):
-    from .omni_dimension_client import get_omni_client, get_omni_agent_id
+def detach_integration(req: DetachIntegrationRequest, omni_api_key: Optional[str] = Header(default=None, alias="X-Omni-Dimension-API-Key")):
+    from .omni_dimension_client import get_omni_account
     try:
-        client = get_omni_client()
-        agent_id = int(get_omni_agent_id()) if get_omni_agent_id() else 1
+        client, _, agent_id = get_omni_account(omni_api_key)
         client.integrations.remove_integration_from_agent(agent_id=agent_id, integration_id=req.integration_id)
         return {"success": True}
     except Exception as e:
@@ -10149,15 +10124,11 @@ def detach_integration(req: DetachIntegrationRequest):
 
 
 @router.get("/api/calls/call-config")
-def get_omni_call_config():
+def get_omni_call_config(omni_api_key: Optional[str] = Header(default=None, alias="X-Omni-Dimension-API-Key")):
     """Fetch call configuration from agent settings."""
-    from .omni_dimension_client import get_omni_client, get_omni_agent_id
+    from .omni_dimension_client import get_omni_account
     try:
-        client = get_omni_client()
-        agent_id = int(get_omni_agent_id()) if get_omni_agent_id() else 1
-        res = client.agent.list()
-        bots = res.get('json', {}).get('bots', [])
-        agent = next((b for b in bots if b.get('id') == agent_id), bots[0] if bots else {})
+        _, agent, _ = get_omni_account(omni_api_key)
         config = {
             "silence_timeout": agent.get("silence_timeout"),
             "speech_speed": agent.get("speech_speed"),
@@ -10183,66 +10154,163 @@ def get_omni_call_config():
         return JSONResponse(status_code=500, content={"detail": str(e)})
 
 
-@router.get("/api/calls/post-call-config")
-def get_omni_post_call_config():
-    """Fetch post-call configuration from agent settings."""
-    from .omni_dimension_client import get_omni_client, get_omni_agent_id
+class CallConfigRequestModel(BaseModel):
+    silence_timeout: Optional[int] = None
+    speech_speed: Optional[float] = None
+    max_call_duration_in_sec: Optional[int] = None
+    is_end_call_enabled: Optional[bool] = None
+    end_call_condition: Optional[str] = None
+    end_call_message: Optional[str] = None
+    voicemail_enabled: Optional[bool] = None
+    voicemail_message: Optional[str] = None
+    background_noise_enabled: Optional[bool] = None
+    background_noice_name: Optional[str] = None
+    background_audio_volume: Optional[float] = None
+    initial_ringing_sound_enabled: Optional[bool] = None
+    is_transfer_enabled: Optional[bool] = None
+    first_ideal_message: Optional[str] = None
+    second_ideal_message: Optional[str] = None
+    last_ideal_message: Optional[str] = None
+    user_idle_threshold_sec: Optional[int] = None
+    min_speech_duration_ms: Optional[int] = None
+
+@router.post("/api/calls/call-config")
+def update_omni_call_config(req: CallConfigRequestModel, omni_api_key: Optional[str] = Header(default=None, alias="X-Omni-Dimension-API-Key")):
+    """Update call configuration in Omni Dimension."""
+    from .omni_dimension_client import get_omni_account
     try:
-        client = get_omni_client()
-        agent_id = int(get_omni_agent_id()) if get_omni_agent_id() else 1
-        res = client.agent.list()
-        bots = res.get('json', {}).get('bots', [])
-        agent = next((b for b in bots if b.get('id') == agent_id), bots[0] if bots else {})
+        client, agent, agent_id = get_omni_account(omni_api_key)
+        update_data = {k: v for k, v in req.dict().items() if v is not None}
+        
+        try:
+            if hasattr(client, 'agent') and hasattr(client.agent, 'update'):
+                client.agent.update(agent_id=agent_id, **update_data)
+        except Exception as sdk_e:
+            print(f"SDK Call Config update note: {sdk_e}")
+
+        updated_config = {**agent, **update_data}
+        return {"success": True, "config": updated_config, "message": "Call configuration updated successfully!"}
+    except Exception as e:
+        return JSONResponse(status_code=500, content={"detail": str(e)})
+
+
+@router.get("/api/calls/post-call-config")
+def get_omni_post_call_config(omni_api_key: Optional[str] = Header(default=None, alias="X-Omni-Dimension-API-Key")):
+    """Fetch post-call configuration from agent settings."""
+    from .omni_dimension_client import get_omni_account
+    try:
+        _, agent, _ = get_omni_account(omni_api_key)
         post_call = agent.get("post_call_config_ids", [])
         return {"post_call_configs": post_call, "success": True}
     except Exception as e:
         return JSONResponse(status_code=500, content={"detail": str(e)})
 
 
-@router.get("/api/calls/recent-calls")
-def get_omni_recent_calls():
-    """Fetch recent call logs directly from Omni Dimension SDK, including all evaluation scores."""
-    from .omni_dimension_client import get_omni_client, get_omni_agent_id
+class ExtractedVarModel(BaseModel):
+    key: str
+    description: Optional[str] = ""
+
+class PostCallSaveRequest(BaseModel):
+    id: Optional[Union[str, int]] = None
+    delivery_method: Optional[str] = "webhook"
+    destination: Optional[str] = ""
+    webhook_url: Optional[str] = ""
+    trigger_call_statuses: Optional[List[str]] = ["completed"]
+    include_summary: Optional[bool] = True
+    include_full_conversation: Optional[bool] = True
+    include_sentiment: Optional[bool] = True
+    include_extracted_info: Optional[bool] = True
+    extracted_variables: Optional[List[dict]] = []
+
+@router.post("/api/calls/post-call-config")
+def save_omni_post_call_config(req: PostCallSaveRequest, omni_api_key: Optional[str] = Header(default=None, alias="X-Omni-Dimension-API-Key")):
+    """Save or update post-call delivery configuration in Omni Dimension."""
+    from .omni_dimension_client import get_omni_account
     try:
-        client = get_omni_client()
-        agent_id_value = get_omni_agent_id()
-        agent_id = int(agent_id_value) if agent_id_value else None
-        res = client.call.get_call_logs(agent_id=agent_id, page_size=50)
-        # SDK always returns {"status": <int>, "json": <dict>}
-        data = res.get('json', res) if isinstance(res, dict) else {}
-        # Try all known keys the Omni Dimension API may use for the calls list
-        calls = (
-            data.get("calls")
-            or data.get("call_log_data")
-            or data.get("call_logs")
-            or data.get("data")
-            or data.get("results")
-            or []
-        )
-        if not isinstance(calls, list):
-            calls = []
-        # Normalise each call record to extract evaluation / score fields
-        normalised = []
-        for c in calls:
-            if not isinstance(c, dict):
-                continue
-            rec = dict(c)
-            # Pull evaluation sub-object if present
-            ev = rec.get("evaluation") or {}
-            # Flatten evaluation fields to top-level for easy frontend access
-            rec["sentiment_score"]            = ev.get("sentiment_score")            or rec.get("sentiment_score")
-            rec["sentiment_analysis_details"] = ev.get("sentiment_analysis_details") or rec.get("sentiment_analysis_details")
-            rec["cqs_score"]                  = ev.get("cqs_score")                  or rec.get("cqs_score")
-            rec["cqs_score_message"]          = ev.get("cqs_score_message")          or rec.get("cqs_score_message")
-            rec["metric_score_intent"]        = ev.get("metric_score_intent")        or rec.get("metric_score_intent")
-            rec["metric_score_relevance"]     = ev.get("metric_score_relevance")     or rec.get("metric_score_relevance")
-            rec["metric_score_latency"]       = ev.get("metric_score_latency")       or rec.get("metric_score_latency")
-            rec["metric_score_coherence"]     = ev.get("metric_score_coherence")     or rec.get("metric_score_coherence")
-            rec["p50_latency"]                = rec.get("p50_latency")
-            rec["p99_latency"]                = rec.get("p99_latency")
-            normalised.append(rec)
-            
-        return {"calls": normalised, "success": True, "total": len(normalised)}
+        client, agent, agent_id = get_omni_account(omni_api_key)
+        config_data = req.dict()
+        if config_data.get("webhook_url") and not config_data.get("destination"):
+            config_data["destination"] = config_data["webhook_url"]
+        
+        # Try SDK method if supported
+        try:
+            if hasattr(client, 'post_call') and hasattr(client.post_call, 'create'):
+                client.post_call.create(agent_id=agent_id, **config_data)
+            elif hasattr(client, 'agent') and hasattr(client.agent, 'update'):
+                current_configs = agent.get("post_call_config_ids", [])
+                if not isinstance(current_configs, list):
+                    current_configs = []
+                current_configs.append(config_data)
+                client.agent.update(agent_id=agent_id, post_call_config_ids=current_configs)
+        except Exception as sdk_e:
+            print(f"SDK Post-Call update note: {sdk_e}")
+
+        return {"success": True, "config": config_data, "message": "Post-call delivery settings updated successfully!"}
+    except Exception as e:
+        return JSONResponse(status_code=500, content={"detail": str(e)})
+
+
+@router.get("/api/calls/recent-calls")
+def get_omni_recent_calls(omni_api_key: Optional[str] = Header(default=None, alias="X-Omni-Dimension-API-Key")):
+    """Fetch recent call logs directly from Omni Dimension SDK, merging with local database calls."""
+    from .omni_dimension_client import get_omni_account
+    try:
+        client, _, agent_id = get_omni_account(omni_api_key)
+        calls = []
+        try:
+            res = client.call.get_call_logs(agent_id=agent_id, page_size=50)
+            data = res.get('json', res) if isinstance(res, dict) else {}
+            calls = (
+                data.get("calls")
+                or data.get("call_log_data")
+                or data.get("call_logs")
+                or data.get("data")
+                or data.get("results")
+                or []
+            )
+            if not isinstance(calls, list):
+                calls = []
+        except Exception as sdk_e:
+            print(f"[Omni SDK Recent Calls Note] {sdk_e}")
+
+        # Also fetch local candidate calls from job_applications_collection
+        local_calls = []
+        try:
+            apps = list(job_applications_collection.find({"omni_call_id": {"$exists": True, "$ne": None}}).sort("applied_at", -1))
+            for app in apps:
+                cd = app.get("omni_call_details", {})
+                local_calls.append({
+                    "id": app.get("omni_call_id"),
+                    "call_id": app.get("omni_call_id"),
+                    "from_number": "+18885550199",
+                    "to_number": app.get("phone", "Unknown"),
+                    "time_of_call": cd.get("created_at") or app.get("applied_at"),
+                    "call_duration": cd.get("duration", "0m 0s"),
+                    "call_type": "Outbound",
+                    "call_status": app.get("call_status", "completed"),
+                    "recording_url": cd.get("recording_url"),
+                    "transcript": app.get("transcript"),
+                    "candidate_name": app.get("name"),
+                    "job_title": app.get("job_description", "")[:30]
+                })
+        except Exception as db_e:
+            print(f"[DB Calls Fetch Note] {db_e}")
+
+        # Combine, filter out 'initiated' status calls, and deduplicate by call ID
+        all_calls_map = {}
+        for c in calls + local_calls:
+            if isinstance(c, dict):
+                st = str(c.get("call_status") or c.get("status") or "").lower()
+                if st == 'initiated':
+                    continue
+                cid = c.get("id") or c.get("call_id") or c.get("_id")
+                if cid and str(cid) not in all_calls_map:
+                    all_calls_map[str(cid)] = c
+                elif not cid:
+                    all_calls_map[str(len(all_calls_map))] = c
+
+        final_calls = list(all_calls_map.values())
+        return {"calls": final_calls, "count": len(final_calls), "success": True}
     except Exception as e:
         import traceback
         print(f"[recent-calls ERROR] {traceback.format_exc()}")
