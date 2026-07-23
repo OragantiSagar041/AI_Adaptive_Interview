@@ -410,7 +410,7 @@ export default function SuperAdminLayout() {
      { id: 'rejected', label: 'Rejected Candidates', path: '/superadmin/rejected-candidates' },
      { id: 'create', label: 'Create Interview', icon: Plus, path: '/superadmin/create-interview' },
      { id: 'ai-calling', label: 'AI Calling Agent', icon: Radio, path: '/superadmin/ai-calling' },
-     { id: 'conversational-flow', label: 'Conversational Flow', icon: MessageSquare, path: '/superadmin/conversational-flow' },
+
      { id: 'jobs', label: 'Jobs', path: '/superadmin/jobs' },
      { id: 'settings', label: 'Settings', path: '/superadmin/profile-settings' },
      // { id: 'organizations', label: 'Organizations', path: '/superadmin/organizations' },

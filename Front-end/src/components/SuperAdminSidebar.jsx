@@ -37,7 +37,7 @@ export default function SuperAdminSidebar({
     { id: 'rejected', label: 'Rejected Candidates', icon: XCircle },
     { id: 'create', label: 'Create Interview', icon: Plus, path: '/superadmin/create-interview' },
     { id: 'ai-calling', label: 'AI Calling Agent', icon: Radio, path: '/superadmin/ai-calling' },
-    { id: 'conversational-flow', label: 'Conversational Flow', icon: MessageSquare, path: '/superadmin/conversational-flow' },
+
     { id: 'jobs', label: 'Jobs', icon: Briefcase, path: '/superadmin/jobs' },
     { id: 'settings', label: 'Profile Settings', icon: Settings },
   ]

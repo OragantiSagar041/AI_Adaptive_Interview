@@ -173,7 +173,7 @@ export default function AdminLayout({
     { id: 'rejected', label: 'Rejected Candidates', path: '/admin/rejected-candidates' },
     { id: 'create', label: 'Create Interview', path: '/admin/create-interview' },
     { id: 'ai-calling', label: 'AI Calling Agent', path: '/admin/ai-calling' },
-    { id: 'conversational-flow', label: 'Conversational Flow', path: '/admin/conversational-flow' },
+
     { id: 'jobs', label: 'Jobs', path: '/admin/jobs' },
     { id: 'settings', label: 'Profile Settings', path: '/admin/profile-settings' },
   ]

@@ -175,7 +175,7 @@ function CyanToggleSwitch({ checked, onChange, label = "" }) {
   )
 }
 
-function CallConfigTab({ config, loading, omniApiKey, onRefresh }) {
+function CallConfigTab({ config, loading, onRefresh }) {
   const [saving, setSaving] = useState(false)
   const [saveSuccess, setSaveSuccess] = useState('')
   const [saveError, setSaveError] = useState('')
@@ -252,7 +252,7 @@ function CallConfigTab({ config, loading, omniApiKey, onRefresh }) {
         headers: {
           'Content-Type': 'application/json',
           Authorization: `Bearer ${token}`,
-          ...(omniApiKey ? { 'X-Omni-Dimension-API-Key': omniApiKey } : {}),
+
         },
         body: JSON.stringify(formData)
       })
@@ -672,7 +672,7 @@ function KnowledgeBaseTab({ files, loading, onUpload, onRemove }) {
   )
 }
 
-function IntegrationsTab({ integrations, loading, onRefresh, omniApiKey }) {
+function IntegrationsTab({ integrations, loading, onRefresh }) {
   const [showModal, setShowModal] = useState(false)
   const [detaching, setDetaching] = useState(null)
 
@@ -687,7 +687,7 @@ function IntegrationsTab({ integrations, loading, onRefresh, omniApiKey }) {
         headers: {
           'Content-Type': 'application/json',
           Authorization: `Bearer ${token}`,
-          ...(omniApiKey ? { 'X-Omni-Dimension-API-Key': omniApiKey } : {}),
+
         },
         body: JSON.stringify({ integration_id: integrationId })
       })
@@ -761,13 +761,12 @@ function IntegrationsTab({ integrations, loading, onRefresh, omniApiKey }) {
         isOpen={showModal}
         onClose={() => setShowModal(false)}
         onRefresh={onRefresh}
-        omniApiKey={omniApiKey}
       />
     </div>
   )
 }
 
-function PostCallTab({ configs, loading, omniApiKey, onRefresh }) {
+function PostCallTab({ configs, loading, onRefresh }) {
   const [saving, setSaving] = useState(false)
   const [saveSuccess, setSaveSuccess] = useState('')
   const [saveError, setSaveError] = useState('')
@@ -868,7 +867,7 @@ function PostCallTab({ configs, loading, omniApiKey, onRefresh }) {
         headers: {
           'Content-Type': 'application/json',
           Authorization: `Bearer ${token}`,
-          ...(omniApiKey ? { 'X-Omni-Dimension-API-Key': omniApiKey } : {}),
+
         },
         body: JSON.stringify(payload)
       })
@@ -1256,8 +1255,6 @@ export default function AICallingAgentPage() {
   const token = useSelector(state => state.auth.token)
 
   const [activeTab, setActiveTab] = useState('assistant')
-  const [omniApiKey, setOmniApiKey] = useState(() => sessionStorage.getItem('omniDimensionApiKey') || '')
-  const [apiKeyDraft, setApiKeyDraft] = useState(() => sessionStorage.getItem('omniDimensionApiKey') || '')
   const [accountVersion, setAccountVersion] = useState(0)
   const [selectedCallId, setSelectedCallId] = useState(null)
 
@@ -1303,8 +1300,7 @@ export default function AICallingAgentPage() {
   }, [token, API_BASE_URL])
 
   const headers = {
-    Authorization: `Bearer ${token}`,
-    ...(omniApiKey ? { 'X-Omni-Dimension-API-Key': omniApiKey } : {}),
+    Authorization: `Bearer ${token}`
   }
 
   const setLoading = (key, val) => setLoadingMap(m => ({ ...m, [key]: val }))
@@ -1415,19 +1411,6 @@ export default function AICallingAgentPage() {
     if (fetchMap[activeTab]) fetchMap[activeTab]()
   }, [activeTab])
 
-  const applyOmniApiKey = () => {
-    const nextKey = apiKeyDraft.trim()
-    if (nextKey) sessionStorage.setItem('omniDimensionApiKey', nextKey)
-    else sessionStorage.removeItem('omniDimensionApiKey')
-    setOmniApiKey(nextKey)
-    setAgentSettings(null)
-    setCallConfig(null)
-    setKnowledgeBase([])
-    setIntegrations([])
-    setPostCallConfigs([])
-    setRecentCalls([])
-    setAccountVersion(version => version + 1)
-  }
 
   const handleManualCall = async () => {
     if (!manualCall.phone) { alert('Please enter a phone number'); return }
@@ -1495,38 +1478,14 @@ export default function AICallingAgentPage() {
             Live sync of your Omni Dimension AI Voice Agent — knowledge base, integrations, call configuration, post-call settings, and recent calls.
           </motion.p>
         </div>
-        <div className="w-full sm:w-auto sm:min-w-[400px] bg-white border border-slate-200 rounded-2xl p-3.5 shadow-sm">
-          <div className="flex items-center justify-between mb-2">
-            <label htmlFor="omni-api-key" className="block text-xs font-bold uppercase tracking-wider text-slate-500">
-              Omni Dimension API Key
-            </label>
-            <button
-              type="button"
-              onClick={fetchAllOmniValues}
-              className="text-indigo-600 hover:text-indigo-800 text-[0.7rem] font-bold flex items-center gap-1 transition-colors cursor-pointer"
-              title="Re-fetch all values from Omni Dimension"
-            >
-              <RefreshCw size={12} className="animate-spin-hover" /> Sync All
-            </button>
-          </div>
-          <div className="flex gap-2">
-            <input
-              id="omni-api-key"
-              type="password"
-              value={apiKeyDraft}
-              onChange={event => setApiKeyDraft(event.target.value)}
-              onKeyDown={event => { if (event.key === 'Enter') applyOmniApiKey() }}
-              placeholder="Use server default key"
-              className="min-w-0 flex-1 rounded-lg border border-slate-200 bg-slate-50 px-3 py-2 text-xs text-slate-800 outline-none focus:border-indigo-500 focus:ring-2 focus:ring-indigo-500/20 font-mono"
-            />
-            <button
-              type="button"
-              onClick={applyOmniApiKey}
-              className="rounded-lg bg-indigo-600 px-3.5 py-2 text-xs font-bold text-white hover:bg-indigo-700 transition-colors shadow-sm cursor-pointer"
-            >
-              Apply
-            </button>
-          </div>
+        <div className="w-full sm:w-auto flex sm:items-end justify-end">
+          <button
+            type="button"
+            onClick={fetchAllOmniValues}
+            className="rounded-lg bg-white border border-slate-200 px-4 py-2.5 text-xs font-bold text-slate-700 hover:bg-slate-50 transition-colors shadow-sm flex items-center gap-2 cursor-pointer"
+          >
+            <RefreshCw size={14} className="text-indigo-600 animate-spin-hover" /> Sync Agent Settings
+          </button>
         </div>
       </motion.div>
 
@@ -1538,12 +1497,12 @@ export default function AICallingAgentPage() {
         className="bg-white/80 backdrop-blur-xl rounded-[30px] border border-white/60 overflow-hidden shadow-[0_8px_30px_rgb(0,0,0,0.04)] relative z-10"
       >
         {/* Tab Bar */}
-        <div className="flex items-center gap-2 px-4 pt-4 overflow-x-auto scrollbar-none border-b border-slate-200 bg-white/50 relative z-10 after:content-[''] after:w-4 after:shrink-0">
+        <div className="flex items-center flex-wrap gap-2 px-4 pt-4 border-b border-slate-200 bg-white/50 relative z-10">
           {TABS.map(({ id, label, icon }) => (
             <button
               key={id}
               onClick={() => setActiveTab(id)}
-              className={`relative flex items-center gap-2 px-5 py-3 text-sm font-bold rounded-t-xl transition-colors whitespace-nowrap outline-none flex-shrink-0 ${
+              className={`relative flex items-center gap-2 px-5 py-3 text-sm font-bold rounded-t-xl transition-colors whitespace-nowrap outline-none ${
                 activeTab === id
                   ? 'text-indigo-700'
                   : 'text-slate-500 hover:text-slate-800 hover:bg-slate-50'
@@ -1574,12 +1533,11 @@ export default function AICallingAgentPage() {
               {activeTab === 'assistant' && (
                 <AssistantDetailsTab agentSettings={agentSettings} loading={loadingMap.assistant} />
               )}
-              {activeTab === 'conversationflow' && <ConversationalFlowPage omniApiKey={omniApiKey} />}
+              {activeTab === 'conversationflow' && <ConversationalFlowPage />}
               {activeTab === 'callconfig' && (
                 <CallConfigTab
                   config={callConfig}
                   loading={loadingMap.callconfig}
-                  omniApiKey={omniApiKey}
                   onRefresh={fetchCallConfig}
                 />
               )}
@@ -1606,15 +1564,13 @@ export default function AICallingAgentPage() {
                 <IntegrationsTab
                   integrations={integrations}
                   loading={loadingMap.integrations}
-                  omniApiKey={omniApiKey}
                   onRefresh={() => {
                     const fetchIntegrations = async () => {
                       try {
                         const token = localStorage.getItem('token');
                         const r = await fetch(`${API_BASE_URL}/api/calls/integrations`, {
                           headers: {
-                            Authorization: `Bearer ${token}`,
-                            ...(omniApiKey ? { 'X-Omni-Dimension-API-Key': omniApiKey } : {}),
+                            Authorization: `Bearer ${token}`
                           }
                         });
                         const d = await r.json();
@@ -1629,7 +1585,6 @@ export default function AICallingAgentPage() {
                 <PostCallTab
                   configs={postCallConfigs}
                   loading={loadingMap.postcall}
-                  omniApiKey={omniApiKey}
                   onRefresh={fetchPostCall}
                 />
               )}

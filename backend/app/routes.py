@@ -44,6 +44,7 @@ import cloudinary.uploader
 import cloudinary.api
 import cloudinary.utils
 import edge_tts
+# pyrefly: ignore [missing-import]
 import pypdf
 from bson import ObjectId
 
@@ -9570,6 +9571,7 @@ async def voice_clone_instant(
     """
     import asyncio
     try:
+        # pyrefly: ignore [missing-import]
         from cartesia import Cartesia
     except ImportError:
         raise HTTPException(status_code=500, detail="Cartesia SDK not installed. Run `pip install cartesia`.")
@@ -9707,6 +9709,7 @@ async def generate_tts(
     if req.use_custom_voice and cartesia_api_key and actual_cartesia_voice_id and not is_regional:
         try:
             import asyncio
+            # pyrefly: ignore [missing-import]
             from cartesia import Cartesia
 
             def _call_cartesia():
@@ -11087,6 +11090,7 @@ def update_application_status(
         raise HTTPException(status_code=404, detail="Application not found")
     return {"status": "success", "message": f"Status updated to '{new_status}'"}
 
+# pyrefly: ignore [missing-import]
 import pypdf
 import io
 
