@@ -8,6 +8,9 @@ from fastapi import WebSocket
 from app.live_monitoring_security import admin_can_receive_dashboard_event
 
 import redis.asyncio as redis
+from dotenv import load_dotenv
+
+load_dotenv()
 
 logger = logging.getLogger(__name__)
 
