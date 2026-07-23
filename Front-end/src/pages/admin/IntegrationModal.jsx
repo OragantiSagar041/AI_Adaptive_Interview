@@ -143,30 +143,30 @@ export default function IntegrationModal({ isOpen, onClose, onRefresh }) {
   })
 
   return (
-    <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-black/80 backdrop-blur-sm animate-in fade-in">
-      <div className={`bg-[#0a0a0a] border border-white/10 rounded-2xl w-full ${selectedConfig ? 'max-w-xl' : 'max-w-6xl'} overflow-hidden shadow-2xl flex flex-col max-h-[90vh] transition-all duration-300`}>
+    <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-slate-900/40 backdrop-blur-sm animate-in fade-in">
+      <div className={`bg-white border border-slate-200 rounded-3xl w-full ${selectedConfig ? 'max-w-xl' : 'max-w-6xl'} overflow-hidden shadow-2xl flex flex-col max-h-[90vh] transition-all duration-300`}>
         
         {/* Dynamic Header */}
-        <div className="flex items-center justify-between px-6 py-5 border-b border-white/10 bg-[#111111] shrink-0">
+        <div className="flex items-center justify-between px-6 py-5 border-b border-slate-200 bg-slate-50/90 shrink-0">
           <div className="flex items-center gap-3">
             {selectedConfig ? (
-              <button onClick={() => {setSelectedConfig(null); setError(''); setSuccess('')}} className="p-1.5 text-slate-400 hover:text-white rounded-lg hover:bg-white/5 transition-colors border border-transparent hover:border-white/10">
+              <button onClick={() => {setSelectedConfig(null); setError(''); setSuccess('')}} className="p-1.5 text-slate-500 hover:text-indigo-600 rounded-xl hover:bg-slate-100 transition-colors border border-slate-200">
                 <ChevronLeft size={20} />
               </button>
             ) : (
-              <div className="w-5" />
+              <div className="w-2" />
             )}
-            <h2 className="text-lg font-bold text-white tracking-wide">
+            <h2 className="text-lg font-bold text-slate-800 tracking-wide">
               {selectedConfig === 'calendly' ? 'Connect Calendly' : selectedConfig === 'custom_api' ? 'Connect Custom API' : 'Connect New Integrations'}
             </h2>
           </div>
-          <button onClick={handleClose} className="p-2 text-slate-400 hover:text-white rounded-lg hover:bg-white/5 transition-colors">
+          <button onClick={handleClose} className="p-2 text-slate-400 hover:text-slate-700 rounded-xl hover:bg-slate-100 transition-colors">
             <X size={20} />
           </button>
         </div>
 
         {/* Content Area */}
-        <div className="flex-1 overflow-y-auto">
+        <div className="flex-1 overflow-y-auto bg-white">
           {!selectedConfig ? (
             // GRID VIEW
             <div className="p-6">
@@ -179,22 +179,22 @@ export default function IntegrationModal({ isOpen, onClose, onRefresh }) {
                       onClick={() => setActiveCategory(cat.id)}
                       className={`px-3.5 py-1.5 rounded-full text-xs font-semibold tracking-wide border transition-colors ${
                         activeCategory === cat.id 
-                          ? 'bg-teal-500/20 border-teal-500/50 text-teal-400' 
-                          : 'bg-transparent border-white/10 text-slate-400 hover:border-white/30 hover:text-white hover:bg-white/5'
+                          ? 'bg-indigo-600 border-indigo-600 text-white shadow-sm font-bold' 
+                          : 'bg-slate-50 border-slate-200 text-slate-600 hover:border-slate-300 hover:text-slate-900 hover:bg-slate-100'
                       }`}
                     >
-                      {cat.id} <span className="opacity-50 ml-1.5">{cat.count}</span>
+                      {cat.id} <span className="opacity-60 ml-1.5">{cat.count}</span>
                     </button>
                   ))}
                 </div>
                 <div className="relative w-full md:w-64">
-                  <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-500" />
+                  <Search size={14} className="absolute left-3.5 top-1/2 -translate-y-1/2 text-slate-400" />
                   <input 
                     type="text" 
                     placeholder="Search Integrations"
                     value={searchQuery}
                     onChange={(e) => setSearchQuery(e.target.value)}
-                    className="w-full bg-[#111111] border border-white/10 rounded-lg pl-9 pr-4 py-1.5 text-sm text-white placeholder-slate-600 focus:outline-none focus:border-indigo-500 transition-colors"
+                    className="w-full bg-slate-50 border border-slate-200 rounded-xl pl-9 pr-4 py-2 text-xs text-slate-800 placeholder-slate-400 focus:outline-none focus:border-indigo-500 transition-colors"
                   />
                 </div>
               </div>
@@ -202,26 +202,26 @@ export default function IntegrationModal({ isOpen, onClose, onRefresh }) {
               {/* Grid */}
               <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-5">
                 {filteredIntegrations.map((int, idx) => (
-                  <div key={idx} className="bg-[#111111] border border-white/10 rounded-xl overflow-hidden flex flex-col group hover:border-white/20 transition-all shadow-sm">
+                  <div key={idx} className="bg-white border border-slate-200 rounded-2xl overflow-hidden flex flex-col group hover:border-indigo-300 hover:shadow-md transition-all">
                     <div className="p-5 flex-1 flex flex-col">
                       <div className="flex items-start justify-between mb-4">
                         <div className="flex items-center gap-3">
-                          <div className={`p-2 rounded-xl ${int.bg} border border-white/5`}>
+                          <div className={`p-2.5 rounded-xl ${int.bg} border border-slate-100`}>
                             <int.icon size={22} className={int.color} />
                           </div>
-                          <span className="font-bold text-white tracking-wide">{int.name}</span>
+                          <span className="font-bold text-slate-800 text-sm tracking-wide">{int.name}</span>
                         </div>
-                        <span className={`px-2 py-0.5 rounded text-[0.6rem] font-bold tracking-wider uppercase border flex items-center gap-1 shrink-0 ${
-                          int.tag === 'During Call' ? 'bg-emerald-500/10 border-emerald-500/30 text-emerald-500' : 'bg-indigo-500/10 border-indigo-500/30 text-indigo-400'
+                        <span className={`px-2 py-0.5 rounded-full text-[0.6rem] font-bold tracking-wider uppercase border flex items-center gap-1 shrink-0 ${
+                          int.tag === 'During Call' ? 'bg-emerald-50 border-emerald-200 text-emerald-600' : 'bg-indigo-50 border-indigo-200 text-indigo-600'
                         }`}>
                           {int.tag}
                         </span>
                       </div>
-                      <p className="text-xs text-slate-400 leading-relaxed line-clamp-3">
+                      <p className="text-xs text-slate-500 leading-relaxed line-clamp-3">
                         {int.desc}
                       </p>
                     </div>
-                    <div className="border-t border-white/5 p-3.5 flex justify-start bg-white/[0.02]">
+                    <div className="border-t border-slate-100 p-3.5 flex justify-start bg-slate-50/50">
                       <button 
                         onClick={() => {
                           if (int.id === 'calendly' || int.id === 'custom_api') {
@@ -230,9 +230,9 @@ export default function IntegrationModal({ isOpen, onClose, onRefresh }) {
                             alert('This integration is currently a mockup and not fully implemented yet.')
                           }
                         }}
-                        className="flex items-center gap-1.5 px-3.5 py-1.5 bg-white/5 hover:bg-white/10 border border-white/10 rounded-lg text-xs font-bold text-white transition-colors group-hover:border-white/20"
+                        className="flex items-center gap-1.5 px-4 py-1.5 bg-indigo-50 hover:bg-indigo-100 border border-indigo-200 rounded-xl text-xs font-bold text-indigo-600 transition-colors group-hover:border-indigo-300"
                       >
-                        Connect <ExternalLink size={12} className="text-slate-400 group-hover:text-white transition-colors" />
+                        Connect <ExternalLink size={12} className="text-indigo-400 group-hover:text-indigo-600 transition-colors" />
                       </button>
                     </div>
                   </div>
@@ -242,27 +242,27 @@ export default function IntegrationModal({ isOpen, onClose, onRefresh }) {
           ) : (
             // CONFIG FORMS
             <div className="p-8">
-              {error && <div className="mb-6 p-4 rounded-lg bg-rose-500/10 border border-rose-500/20 text-rose-400 text-sm font-medium">{error}</div>}
-              {success && <div className="mb-6 p-4 rounded-lg bg-emerald-500/10 border border-emerald-500/20 text-emerald-400 text-sm font-medium">{success}</div>}
+              {error && <div className="mb-6 p-4 rounded-xl bg-rose-50 border border-rose-200 text-rose-600 text-xs font-semibold">{error}</div>}
+              {success && <div className="mb-6 p-4 rounded-xl bg-emerald-50 border border-emerald-200 text-emerald-600 text-xs font-semibold">{success}</div>}
 
               {selectedConfig === 'calendly' && (
                 <form onSubmit={handleCalendlySubmit} className="space-y-5">
                   <div className="mb-6">
-                    <p className="text-sm text-slate-400">
+                    <p className="text-sm text-slate-600 leading-relaxed">
                       Connect your Calendly account to allow your voice assistant to check your availability and schedule appointments seamlessly during a call.
                     </p>
                   </div>
                   <div>
-                    <label className="block text-xs font-bold text-slate-400 mb-2 uppercase tracking-wide">Personal Access Token *</label>
+                    <label className="block text-xs font-bold text-slate-700 mb-2 uppercase tracking-wide">Personal Access Token *</label>
                     <input
                       type="text"
                       required
                       value={calendlyForm.token}
                       onChange={e => setCalendlyForm({ ...calendlyForm, token: e.target.value })}
                       placeholder="Enter your Calendly PAT..."
-                      className="w-full px-4 py-3 bg-[#111111] border border-white/10 rounded-lg text-sm text-white placeholder-slate-600 focus:outline-none focus:border-indigo-500 transition-colors"
+                      className="w-full px-4 py-3 bg-slate-50 border border-slate-200 rounded-xl text-xs text-slate-800 placeholder-slate-400 focus:outline-none focus:border-indigo-500 transition-colors"
                     />
-                    <p className="text-[0.65rem] text-slate-500 mt-2">
+                    <p className="text-[0.68rem] text-slate-500 mt-2 font-medium">
                       Get this from Calendly Settings &gt; Integrations &gt; API & Webhooks.
                     </p>
                   </div>
@@ -270,7 +270,7 @@ export default function IntegrationModal({ isOpen, onClose, onRefresh }) {
                     <button
                       type="submit"
                       disabled={loading || !calendlyForm.token}
-                      className="flex items-center gap-2 px-6 py-2.5 bg-indigo-600 hover:bg-indigo-500 disabled:opacity-50 text-white font-bold text-sm rounded-lg transition-colors shadow-lg shadow-indigo-600/30"
+                      className="flex items-center gap-2 px-6 py-2.5 bg-indigo-600 hover:bg-indigo-700 disabled:opacity-50 text-white font-bold text-xs rounded-xl transition-colors shadow-md shadow-indigo-600/20"
                     >
                       {loading ? <Loader2 size={16} className="animate-spin" /> : <Plug size={16} />}
                       Connect Calendly
@@ -282,27 +282,27 @@ export default function IntegrationModal({ isOpen, onClose, onRefresh }) {
               {selectedConfig === 'custom_api' && (
                 <form onSubmit={handleWebhookSubmit} className="space-y-5">
                   <div className="mb-6">
-                    <p className="text-sm text-slate-400">
+                    <p className="text-sm text-slate-600 leading-relaxed">
                       Connect to a custom API or webhook endpoint. Your voice assistant can trigger this endpoint to pass extracted data and trigger workflows.
                     </p>
                   </div>
                   <div>
-                    <label className="block text-xs font-bold text-slate-400 mb-2 uppercase tracking-wide">Integration Name *</label>
+                    <label className="block text-xs font-bold text-slate-700 mb-2 uppercase tracking-wide">Integration Name *</label>
                     <input
                       type="text" required
                       value={webhookForm.name}
                       onChange={e => setWebhookForm({ ...webhookForm, name: e.target.value })}
                       placeholder="e.g. My Custom CRM Data Webhook"
-                      className="w-full px-4 py-2.5 bg-[#111111] border border-white/10 rounded-lg text-sm text-white focus:outline-none focus:border-indigo-500 transition-colors"
+                      className="w-full px-4 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-xs text-slate-800 focus:outline-none focus:border-indigo-500 transition-colors"
                     />
                   </div>
                   <div className="grid grid-cols-4 gap-4">
                     <div className="col-span-1">
-                      <label className="block text-xs font-bold text-slate-400 mb-2 uppercase tracking-wide">Method</label>
+                      <label className="block text-xs font-bold text-slate-700 mb-2 uppercase tracking-wide">Method</label>
                       <select
                         value={webhookForm.method}
                         onChange={e => setWebhookForm({ ...webhookForm, method: e.target.value })}
-                        className="w-full px-3 py-2.5 bg-[#111111] border border-white/10 rounded-lg text-sm text-white focus:outline-none focus:border-indigo-500 transition-colors cursor-pointer"
+                        className="w-full px-3 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-xs text-slate-800 focus:outline-none focus:border-indigo-500 transition-colors cursor-pointer"
                       >
                         <option>POST</option>
                         <option>GET</option>
@@ -312,39 +312,39 @@ export default function IntegrationModal({ isOpen, onClose, onRefresh }) {
                       </select>
                     </div>
                     <div className="col-span-3">
-                      <label className="block text-xs font-bold text-slate-400 mb-2 uppercase tracking-wide">URL *</label>
+                      <label className="block text-xs font-bold text-slate-700 mb-2 uppercase tracking-wide">URL *</label>
                       <input
                         type="url" required
                         value={webhookForm.url}
                         onChange={e => setWebhookForm({ ...webhookForm, url: e.target.value })}
                         placeholder="https://api.example.com/webhook"
-                        className="w-full px-4 py-2.5 bg-[#111111] border border-white/10 rounded-lg text-sm text-white focus:outline-none focus:border-indigo-500 transition-colors"
+                        className="w-full px-4 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-xs text-slate-800 focus:outline-none focus:border-indigo-500 transition-colors font-mono"
                       />
                     </div>
                   </div>
                   <div>
-                    <label className="block text-xs font-bold text-slate-400 mb-2 uppercase tracking-wide">Headers (JSON)</label>
+                    <label className="block text-xs font-bold text-slate-700 mb-2 uppercase tracking-wide">Headers (JSON)</label>
                     <textarea
                       value={webhookForm.headers}
                       onChange={e => setWebhookForm({ ...webhookForm, headers: e.target.value })}
                       placeholder='{"Authorization": "Bearer token", "Content-Type": "application/json"}'
-                      className="w-full px-4 py-3 bg-[#111111] border border-white/10 rounded-lg text-sm text-white font-mono h-24 focus:outline-none focus:border-indigo-500 transition-colors resize-none"
+                      className="w-full px-4 py-3 bg-slate-50 border border-slate-200 rounded-xl text-xs text-slate-800 font-mono h-24 focus:outline-none focus:border-indigo-500 transition-colors resize-none"
                     />
                   </div>
                   <div>
-                    <label className="block text-xs font-bold text-slate-400 mb-2 uppercase tracking-wide">Body Template (JSON)</label>
+                    <label className="block text-xs font-bold text-slate-700 mb-2 uppercase tracking-wide">Body Template (JSON)</label>
                     <textarea
                       value={webhookForm.body}
                       onChange={e => setWebhookForm({ ...webhookForm, body: e.target.value })}
                       placeholder='{"event": "call_ended", "data": {}}'
-                      className="w-full px-4 py-3 bg-[#111111] border border-white/10 rounded-lg text-sm text-white font-mono h-24 focus:outline-none focus:border-indigo-500 transition-colors resize-none"
+                      className="w-full px-4 py-3 bg-slate-50 border border-slate-200 rounded-xl text-xs text-slate-800 font-mono h-24 focus:outline-none focus:border-indigo-500 transition-colors resize-none"
                     />
                   </div>
                   <div className="pt-6 flex justify-end">
                     <button
                       type="submit"
                       disabled={loading || !webhookForm.name || !webhookForm.url}
-                      className="flex items-center gap-2 px-6 py-2.5 bg-indigo-600 hover:bg-indigo-500 disabled:opacity-50 text-white font-bold text-sm rounded-lg transition-colors shadow-lg shadow-indigo-600/30"
+                      className="flex items-center gap-2 px-6 py-2.5 bg-indigo-600 hover:bg-indigo-700 disabled:opacity-50 text-white font-bold text-xs rounded-xl transition-colors shadow-md shadow-indigo-600/20"
                     >
                       {loading ? <Loader2 size={16} className="animate-spin" /> : <Plug size={16} />}
                       Connect Custom API
