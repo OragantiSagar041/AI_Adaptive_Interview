@@ -18,7 +18,7 @@ const DeviceCheckModal = ({ onSuccess, onCancel }) => {
     videoRef,
     enabled: isReady && !error
   });
-  
+
   const hasFaceVerified = proctoring.faceVisible && proctoring.faceCount === 1;
 
   useEffect(() => {
@@ -30,7 +30,7 @@ const DeviceCheckModal = ({ onSuccess, onCancel }) => {
           video: { width: { ideal: 640 }, height: { ideal: 480 }, frameRate: 15 },
           audio: true
         });
-        
+
         if (!active) {
           stream.getTracks().forEach(t => t.stop());
           return;
@@ -47,10 +47,10 @@ const DeviceCheckModal = ({ onSuccess, onCancel }) => {
         const analyser = audioCtx.createAnalyser();
         analyser.fftSize = 256;
         analyserRef.current = analyser;
-        
+
         const source = audioCtx.createMediaStreamSource(stream);
         source.connect(analyser);
-        
+
         const bufferLength = analyser.frequencyBinCount;
         const dataArray = new Uint8Array(bufferLength);
         dataArrayRef.current = dataArray;
@@ -58,7 +58,7 @@ const DeviceCheckModal = ({ onSuccess, onCancel }) => {
         const updateVolume = () => {
           if (!analyserRef.current || !dataArrayRef.current) return;
           analyserRef.current.getByteFrequencyData(dataArrayRef.current);
-          
+
           let sum = 0;
           for (let i = 0; i < bufferLength; i++) {
             sum += dataArrayRef.current[i];
@@ -67,14 +67,14 @@ const DeviceCheckModal = ({ onSuccess, onCancel }) => {
           // Map 0-255 to 0-100 percentage
           const currentVol = Math.min(100, (avg / 128) * 100);
           setVolLevel(currentVol);
-          
+
           if (currentVol > 5) {
             setHasAudioVerified(true);
           }
-          
+
           animationFrameRef.current = requestAnimationFrame(updateVolume);
         };
-        
+
         updateVolume();
         setIsReady(true);
       } catch (err) {
@@ -100,7 +100,7 @@ const DeviceCheckModal = ({ onSuccess, onCancel }) => {
       active = false;
       if (animationFrameRef.current) cancelAnimationFrame(animationFrameRef.current);
       if (audioContextRef.current && audioContextRef.current.state !== 'closed') {
-        audioContextRef.current.close().catch(() => {});
+        audioContextRef.current.close().catch(() => { });
       }
       if (streamRef.current) {
         streamRef.current.getTracks().forEach(t => t.stop());
@@ -120,7 +120,7 @@ const DeviceCheckModal = ({ onSuccess, onCancel }) => {
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-[#0a0f1e]/90 backdrop-blur-sm p-4">
       <div className="bg-[#161c2d] border border-white/10 rounded-2xl shadow-2xl max-w-2xl w-full p-8 text-white relative overflow-hidden">
-        
+
         {/* Header */}
         <div className="mb-6 text-center">
           <h2 className="text-2xl font-bold mb-2">Hardware Check</h2>
@@ -145,7 +145,7 @@ const DeviceCheckModal = ({ onSuccess, onCancel }) => {
               className="w-full h-full object-cover transform -scale-x-100" // mirror video
             />
           )}
-          
+
           {!isReady && !error && (
             <div className="absolute inset-0 flex flex-col items-center justify-center bg-black/50 backdrop-blur-sm">
               <i className="fas fa-spinner fa-spin text-3xl text-indigo-400 mb-3"></i>
@@ -167,7 +167,7 @@ const DeviceCheckModal = ({ onSuccess, onCancel }) => {
             ) : null}
           </div>
           <div className="h-3 w-full bg-slate-800 rounded-full overflow-hidden">
-            <div 
+            <div
               className="h-full bg-gradient-to-r from-indigo-500 to-emerald-400 transition-all duration-75"
               style={{ width: `${volLevel}%` }}
             />
@@ -199,16 +199,15 @@ const DeviceCheckModal = ({ onSuccess, onCancel }) => {
           <button
             onClick={handleProceed}
             disabled={!isReady || !!error || !hasAudioVerified || !hasFaceVerified}
-            className={`flex-1 py-3 rounded-xl font-bold text-sm transition-all shadow-lg ${
-              isReady && !error && hasAudioVerified && hasFaceVerified
-                ? 'bg-primary hover:bg-primary-hover text-white shadow-primary/25 hover:shadow-primary/40 hover:-translate-y-0.5' 
+            className={`flex-1 py-3 rounded-xl font-bold text-sm transition-all shadow-lg ${isReady && !error && hasAudioVerified && hasFaceVerified
+                ? 'bg-primary hover:bg-primary-hover text-white shadow-primary/25 hover:shadow-primary/40 hover:-translate-y-0.5'
                 : 'bg-slate-700 text-slate-500 cursor-not-allowed shadow-none'
-            }`}
+              }`}
           >
             {isReady && !error && (!hasAudioVerified || !hasFaceVerified) ? 'Awaiting Checks...' : 'Proceed to Interview'}
           </button>
         </div>
-        
+
       </div>
     </div>
   );

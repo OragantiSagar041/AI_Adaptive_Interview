@@ -5,6 +5,7 @@
  */
 import React, { useState, useRef, useEffect, useCallback } from 'react'
 import { API_BASE_URL } from '../apiConfig'
+import { candidateFetch } from '../utils/candidateAuth'
 import OrbAvatar from '../components/OrbAvatar'
 import { VOICE_TRANSLATIONS } from '../utils/voiceTranslations'
 import Swal from 'sweetalert2'
@@ -228,10 +229,15 @@ export default function VoiceCaseStudy({
     active: true,
     onConfirmExit: async () => {
       if (linkId) {
-        navigator.sendBeacon(`${API_BASE_URL}/interview/${linkId}/alert`, JSON.stringify({
-          type: "warning",
-          message: "Candidate closed the window during the case study round."
-        }))
+        await candidateFetch(`${API_BASE_URL}/interview/${linkId}/alert`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            type: "warning",
+            message: "Candidate closed the window during the case study round."
+          }),
+          keepalive: true,
+        })
       }
     },
     message: `You are in the middle of the <strong>Case Study Round</strong>.<br/><br/>If you leave now, your response will not be saved and your session may be marked as <strong>incomplete</strong>.<br/><br/>Are you sure you want to exit?`,
@@ -291,7 +297,7 @@ export default function VoiceCaseStudy({
         playingAudioRef.current = null
       }
       
-      const res = await fetch(`${API_BASE_URL}/tts`, {
+      const res = await candidateFetch(`${API_BASE_URL}/tts`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ 
@@ -412,7 +418,7 @@ export default function VoiceCaseStudy({
           fd.append('file', audioBlob, 'audio.webm')
           try {
             const targetLang = langMap[sessionLang] || 'en-US'
-            const res = await fetch(`${API_BASE_URL}/stt?language=${targetLang.split('-')[0]}`, { method: 'POST', body: fd })
+            const res = await candidateFetch(`${API_BASE_URL}/stt?language=${targetLang.split('-')[0]}`, { method: 'POST', body: fd })
             const data = await res.json()
             if (data.transcript) {
               setTranscript(data.transcript)
@@ -508,7 +514,7 @@ export default function VoiceCaseStudy({
         fd.append('question_text', scenario.text)
         fd.append('answer_text', answer)
         fd.append('candidate_name', sessionDetail?.candidate_name || 'Candidate')
-        fetch(`${API_BASE_URL}/save-answer`, { method: 'POST', body: fd }).catch(()=>{})
+        candidateFetch(`${API_BASE_URL}/save-answer`, { method: 'POST', body: fd }).catch(()=>{})
       }
     }
 
@@ -590,9 +596,9 @@ export default function VoiceCaseStudy({
       playingAudioRef.current = null
     }
     
-    try { await fetch(`${API_BASE_URL}/complete-session/${linkId}`, { method: 'POST' }) } catch(_) {}
+    try { await candidateFetch(`${API_BASE_URL}/complete-session/${linkId}`, { method: 'POST' }) } catch(_) {}
     onComplete?.()
-  }, [stopListening, linkId, onComplete])
+  }, [stopListening, onComplete])
 
   useEffect(() => {
     return () => {

@@ -36,6 +36,7 @@ export function useExitConfirmation({
 } = {}) {
   const activeRef = useRef(active)
   const dialogOpenRef = useRef(false)
+  const allowExitRef = useRef(false)
 
   // Keep ref in sync so event handlers always see latest value
   useEffect(() => {
@@ -48,7 +49,7 @@ export function useExitConfirmation({
   // the unload fires via a pointer/keyboard heuristic (see below).
   useEffect(() => {
     const handleBeforeUnload = (e) => {
-      if (!activeRef.current) return
+      if (!activeRef.current || allowExitRef.current) return
       // Standard cross-browser way to show the native "Leave site?" dialog
       e.preventDefault()
       e.returnValue = 'Your interview is in progress. Are you sure you want to leave?'
@@ -101,9 +102,9 @@ export function useExitConfirmation({
 
     if (result.isConfirmed) {
       if (onConfirmExit) await onConfirmExit()
-      // Temporarily remove the beforeunload guard so the page can close
-      window.onbeforeunload = null
+      allowExitRef.current = true
       window.close()
+      setTimeout(() => window.location.assign('/'), 100)
     }
   }, [message, onConfirmExit])
 
@@ -151,8 +152,9 @@ export function useExitConfirmation({
 
           if (result.isConfirmed) {
             if (onConfirmExit) await onConfirmExit()
-            window.onbeforeunload = null
+            allowExitRef.current = true
             window.close()
+            setTimeout(() => window.location.assign('/'), 100)
           }
         }, 200)
       }

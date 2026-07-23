@@ -32,6 +32,8 @@ conversation_flows_collection = db["conversation_flows"]
 agents_collection = db["agents"]
 counters_collection = db["counters"]
 demo_requests_collection = db["demo_requests"]
+payment_orders_collection = db["payment_orders"]
+pending_signups_collection = db["pending_signups"]
 
 def get_next_sequence_value(sequence_name: str, prefix: str) -> str:
     """
@@ -46,17 +48,20 @@ def get_next_sequence_value(sequence_name: str, prefix: str) -> str:
     return f"{prefix}{sequence_document['sequence_value']}"
 
 async def init_db_indexes():
-    indexes_to_create = [
-        (candidates_collection, "name", {"unique": True}),
-        (admins_collection, "username", {"unique": True}),
-        (interview_sessions_collection, "link_id", {"unique": True}),
-        (answers_collection, [("interview_id", 1), ("question_id", 1)], {"unique": True}),
-        (interviews_collection, "id", {"unique": True}),
-        (plans_collection, "plan_name", {"unique": True}),
-    ]
-    for coll, keys, kwargs in indexes_to_create:
-        try:
-            coll.create_index(keys, **kwargs)
-        except Exception as e:
-            print(f"Warning: Index creation skipped/failed for {coll.name} ({keys}): {e}")
+    candidate_indexes = candidates_collection.index_information()
+    name_index = candidate_indexes.get("name_1")
+    if name_index and name_index.get("unique"):
+        # Candidate names are not identities. The legacy unique index merged or
+        # rejected different people who happened to share the same name.
+        candidates_collection.drop_index("name_1")
+    candidates_collection.create_index("name")
+    admins_collection.create_index("username", unique=True)
+    interview_sessions_collection.create_index("link_id", unique=True)
+    answers_collection.create_index([("interview_id", 1), ("question_id", 1)], unique=True)
+    interviews_collection.create_index("id", unique=True)
+    plans_collection.create_index("plan_name", unique=True)
+    payment_orders_collection.create_index("order_id", unique=True)
+    payment_orders_collection.create_index("payment_id", unique=True, sparse=True)
+    pending_signups_collection.create_index("expires_at", expireAfterSeconds=0)
+    admins_collection.create_index("stripe_session_id", unique=True, sparse=True)
     print("MongoDB connected and initialized.")

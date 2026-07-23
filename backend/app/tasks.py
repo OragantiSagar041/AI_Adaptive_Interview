@@ -24,6 +24,74 @@ logger = logging.getLogger(__name__)
 # Task: score an interview answer in the background
 # ---------------------------------------------------------------------------
 
+@celery_app.task(name="app.tasks.requeue_delayed_answer_scoring")
+def requeue_delayed_answer_scoring():
+    """Recover answers saved while the broker or worker queue was unavailable."""
+    recovered = 0
+    cursor = answers_collection.find(
+        {"scoring_status": "queue_failed"},
+        {
+            "interview_id": 1,
+            "question_id": 1,
+            "question_text": 1,
+            "answer_text": 1,
+            "time_spent_seconds": 1,
+            "time_limit_seconds": 1,
+            "answer_version": 1,
+        },
+    ).limit(100)
+    for answer in cursor:
+        interview_id = str(answer.get("interview_id") or "")
+        question_id = str(answer.get("question_id") or "")
+        answer_version = str(answer.get("answer_version") or "")
+        claimed = answers_collection.find_one_and_update(
+            {
+                "_id": answer["_id"],
+                "scoring_status": "queue_failed",
+                "answer_version": answer_version,
+            },
+            {"$set": {"scoring_status": "pending"}},
+        )
+        if not claimed:
+            continue
+
+        interview = interviews_collection.find_one(
+            {"id": interview_id},
+            {"source": 1, "profile_text": 1, "language": 1},
+        ) or {}
+        context = (
+            f"Candidate's {interview.get('source', 'Resume')}: "
+            f"{interview.get('profile_text', '')}"
+        )
+        try:
+            score_answer_task.delay(
+                interview_id=interview_id,
+                question_id=question_id,
+                question_text=answer.get("question_text", ""),
+                answer_text=answer.get("answer_text", ""),
+                context=context,
+                time_spent_seconds=int(answer.get("time_spent_seconds") or 0),
+                time_limit_seconds=int(answer.get("time_limit_seconds") or 120),
+                language=interview.get("language") or "English",
+                answer_version=answer_version,
+            )
+            recovered += 1
+        except Exception:
+            answers_collection.update_one(
+                {
+                    "_id": answer["_id"],
+                    "scoring_status": "pending",
+                    "answer_version": answer_version,
+                },
+                {"$set": {"scoring_status": "queue_failed"}},
+            )
+            logger.exception(
+                "Failed to requeue delayed scoring for interview=%s question=%s",
+                interview_id,
+                question_id,
+            )
+    return {"requeued": recovered}
+
 @celery_app.task(bind=True, name="app.tasks.score_answer_task", max_retries=3)
 def score_answer_task(
     self,
@@ -35,6 +103,7 @@ def score_answer_task(
     time_spent_seconds: int,
     time_limit_seconds: int,
     language: str,
+    answer_version: str = "",
 ):
     try:
         logger.info(f"Scoring answer for interview {interview_id}, Q{question_id} (Attempt {self.request.retries + 1})")
@@ -51,25 +120,43 @@ def score_answer_task(
         try:
             session_doc = interview_sessions_collection.find_one(
                 {"$or": [{"link_id": interview_id}, {"interview_id": interview_id}]},
-                {"detected_accent": 1}
+                {"detected_accent": 1, "link_id": 1}
             )
             current_accent = session_doc.get("detected_accent") if session_doc else None
+            # If the user selected a non-English language but we currently have "English" or "Unknown" (e.g. from a short initial greeting),
+            # we should continue running language detection on subsequent answers to get the correct spoken language.
+            interview_lang = language or "English"
+            should_detect = False
             if not current_accent or current_accent == "Unknown":
+                should_detect = True
+            elif current_accent.lower() == "english" and interview_lang.lower() != "english":
+                should_detect = True
+
+            if should_detect:
                 from typed_ai_layer import detect_spoken_language
                 detected = detect_spoken_language(answer_text)
                 if detected and detected != "Unknown":
-                    interview_sessions_collection.update_one(
+                    update_res = interview_sessions_collection.update_one(
                         {"$or": [{"link_id": interview_id}, {"interview_id": interview_id}]},
                         {"$set": {"detected_accent": detected}}
                     )
+                    # Sync to application immediately so the details card is updated in real-time
+                    if session_doc:
+                        link_id = session_doc.get("link_id")
+                        if link_id:
+                            from app.routes import sync_session_to_application
+                            sync_session_to_application(link_id)
         except Exception as lang_err:
             logger.warning(f"Language detection background update failed: {lang_err}")
 
         keywords = ai_result.get("keywords", [])
         keywords_str = ",".join(keywords) if isinstance(keywords, list) else str(keywords)
 
-        answers_collection.update_one(
-            {"interview_id": interview_id, "question_id": question_id},
+        answer_filter = {"interview_id": interview_id, "question_id": str(question_id)}
+        if answer_version:
+            answer_filter["answer_version"] = answer_version
+        update_result = answers_collection.update_one(
+            answer_filter,
             {
                 "$set": {
                     "ai_score": ai_result.get("overall_score", 0),
@@ -86,6 +173,13 @@ def score_answer_task(
                 }
             },
         )
+        if update_result.matched_count == 0:
+            logger.info(
+                "Discarded stale scoring result for interview %s Q%s",
+                interview_id,
+                question_id,
+            )
+            return {"status": "stale", "question_id": question_id}
         logger.info(f"Background scoring complete for Q{question_id}: {ai_result.get('overall_score', 0)}/100")
 
         # Post-scoring checks: Recalculate avg_score (composite) and trigger completion events if ready
@@ -210,17 +304,24 @@ def score_answer_task(
         return {"status": "success", "question_id": question_id, "score": ai_result.get("overall_score", 0)}
     except Exception as e:
         logger.warning(f"Attempt {self.request.retries + 1} failed for Q{question_id} scoring: {e}")
-        try:
-            # Exponential backoff: 2s, 4s, 8s
+        if self.request.retries < self.max_retries:
             countdown = 2 ** (self.request.retries + 1)
             raise self.retry(exc=e, countdown=countdown)
-        except MaxRetriesExceededError:
-            logger.error(f"Background scoring permanently failed for Q{question_id} after maximum retries.")
-            answers_collection.update_one(
-                {"interview_id": interview_id, "question_id": question_id},
-                {"$set": {"scoring_status": "failed", "ai_score": 0}},
-            )
-            raise e
+        logger.error(f"Background scoring permanently failed for Q{question_id} after maximum retries.")
+        failed_filter = {"interview_id": interview_id, "question_id": str(question_id)}
+        if answer_version:
+            failed_filter["answer_version"] = answer_version
+        answers_collection.update_one(
+            failed_filter,
+            {
+                "$set": {
+                    "scoring_status": "failed",
+                    "ai_score": 0,
+                    "ai_feedback": "Automatic scoring failed after multiple retries.",
+                }
+            },
+        )
+        raise
 
 
 # ---------------------------------------------------------------------------
@@ -268,10 +369,10 @@ def send_email_task(
         payload = {
             "sender": {
                 "name": "HireIQ Recruiting",
-                "email": os.getenv("BREVO_SENDER_EMAIL", "no-reply@mockinterview.com"),
+                "email": os.getenv("BREVO_SENDER_EMAIL", "no-reply@hireiq.co.in"),
             },
             "to": [{"email": candidate_email, "name": candidate_name}],
-            "subject": "Invitation to your AI Mock Interview",
+            "subject": "Invitation to your HireIQ AI Interview",
             "htmlContent": html_content,
         }
 

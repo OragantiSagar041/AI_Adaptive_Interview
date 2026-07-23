@@ -22,7 +22,7 @@ def rewrite():
         print("Blocks not found")
         return
 
-    new_block = '''def generate_mock_questions(text: str, source: str, num_questions: int = 6, resume_text: str = None, jd_text: str = None) -> List[Dict[str, str]]:
+    new_block = r'''def generate_mock_questions(text: str, source: str, num_questions: int = 6, resume_text: str = None, jd_text: str = None) -> List[Dict[str, str]]:
     """
     Generate structured interview questions.
     Structure: Self-Intro → Technical Middle → Closing

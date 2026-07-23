@@ -1,6 +1,6 @@
 # Project Skills
 
-This file contains custom skills and routines specific to the Mock Interview platform.
+This file contains custom skills and routines specific to the HireIQ Interview platform.
 
 You can instruct Gemini to perform complex, repeated tasks by referencing skills in this file, or you can run custom scripts from here.
 
