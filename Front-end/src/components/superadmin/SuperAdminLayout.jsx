@@ -226,7 +226,7 @@ export default function SuperAdminLayout() {
     }).then((result) => {
       if (result.isConfirmed) {
         dispatch(handleUpdateDecision({ linkId, decision })).then(() => {
-          if (token) dispatch(loadSuperAdminDashboard({ adminFilter: selectedAdminFilter, summaryOnly: true }))
+          if (token) dispatch(loadSuperAdminDashboard({ adminFilter: selectedAdminFilter,  }))
         })
       }
     })
@@ -253,7 +253,7 @@ export default function SuperAdminLayout() {
   // Initial load and WebSocket setup
   useEffect(() => {
     if (!token) return
-    dispatch(loadSuperAdminDashboard({ adminFilter: selectedAdminFilter, summaryOnly: true }))
+    dispatch(loadSuperAdminDashboard({ adminFilter: selectedAdminFilter,  }))
     dispatch(loadSuperAdminProfile())
 
     const wsUrl = API_BASE_URL.replace(/^http/, 'ws') + `/ws/dashboard?token=${encodeURIComponent(token)}`
@@ -392,7 +392,7 @@ export default function SuperAdminLayout() {
                 dispatch({ type: 'auth/updateCredits', payload: (adminUser?.credits || 0) + verifyRes.data.credits_added })
               }
               dispatch(loadSuperAdminProfile())
-              dispatch(loadSuperAdminDashboard({ summaryOnly: true }))
+              dispatch(loadSuperAdminDashboard({  }))
             }
           } catch (e) {
             alert("Payment verification failed")

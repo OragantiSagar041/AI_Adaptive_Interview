@@ -1,7 +1,7 @@
 import { motion, useScroll, useTransform } from "framer-motion";
-import { useRef, useEffect, useState } from "react";
+import React, { useRef, useEffect, useState } from "react";
 export function FadeIn({ children, delay = 0, duration = 0.7, x = 0, y = 30, as = "div", className, }) {
-    const Comp = motion.create(as);
+    const Comp = React.useMemo(() => motion.create(as), [as]);
     return (<Comp initial={{ opacity: 0, x, y }} whileInView={{ opacity: 1, x: 0, y: 0 }} viewport={{ once: true, margin: "50px", amount: 0 }} transition={{ delay, duration, ease: [0.25, 0.1, 0.25, 1] }} className={className}>
       {children}
     </Comp>);

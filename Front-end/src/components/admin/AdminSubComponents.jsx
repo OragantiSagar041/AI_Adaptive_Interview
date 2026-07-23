@@ -104,6 +104,7 @@ export function CandidateFilters({
         >
           <option value="score">Top Score</option>
           <option value="date">Newest First</option>
+          <option value="oldest">Earliest First</option>
         </select>
       </div>
 

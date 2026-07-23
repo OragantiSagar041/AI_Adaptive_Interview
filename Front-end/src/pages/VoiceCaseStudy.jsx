@@ -222,10 +222,7 @@ export default function VoiceCaseStudy({
   const scenarios = allQuestions?.length ? allQuestions : [question]
 
   useEffect(() => { chatBottomRef.current?.scrollIntoView({ behavior: 'smooth' }) }, [chatMessages])
-  useEffect(() => {
-    const t = setInterval(() => setTimeLeft(p => { if (p <= 1) { handleComplete(); return 0 } return p - 1 }), 1000)
-    return () => clearInterval(t)
-  }, [])
+  // Temporarily removed timer effect to place it below handleComplete
 
   // Unload Tracking + Exit Confirmation Dialog
   useExitConfirmation({
@@ -582,6 +579,11 @@ export default function VoiceCaseStudy({
     const intro = introTemplate.replace('[COUNT]', scenarios.length)
     setTimeout(() => aiSay(intro, () => presentScenario(0)), 800)
   }, [])  
+
+  useEffect(() => {
+    const t = setInterval(() => setTimeLeft(p => { if (p <= 1) { handleComplete(); return 0 } return p - 1 }), 1000)
+    return () => clearInterval(t)
+  }, [handleComplete])
 
   const handleComplete = useCallback(async () => {
     if (submittingRef.current) return
