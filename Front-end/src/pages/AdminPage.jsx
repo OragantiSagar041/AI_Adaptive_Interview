@@ -342,6 +342,14 @@ export default function AdminPage({ role: initialRole = 'admin' }) {
     fetchSubscriptionPlans()
   }, [token, adminUser, role, API_BASE_URL])
 
+  useEffect(() => {
+    const handler = () => {
+      dispatch(loadDashboardData(selectedAdminId))
+    }
+    window.addEventListener('admin_profile_updated', handler)
+    return () => window.removeEventListener('admin_profile_updated', handler)
+  }, [dispatch, selectedAdminId])
+
   const refreshDashboardData = () => dispatch(loadDashboardData(selectedAdminId))
 
   // Form input setters

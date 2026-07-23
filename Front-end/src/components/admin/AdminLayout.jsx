@@ -22,6 +22,7 @@ import logoImage from '../../assets/logo.png'
 import AdminCopilot from './copilot/AdminCopilot'
 import { getNotifications, markNotificationAsRead, markAllNotificationsAsRead } from '../../utils/api'
 import { setLiveResultsModalOpen } from '../../store/slices/interviewSlice'
+import { updateAdminUser } from '../../store/slices/authSlice'
 
 export default function AdminLayout({
   children,
@@ -41,6 +42,7 @@ export default function AdminLayout({
   const location = useLocation()
   
   const token = useSelector(state => state.auth.token)
+  const API_BASE_URL = useSelector(state => state.auth.API_BASE_URL)
   const userName = adminUser?.name || adminUser?.username || 'Admin'
 
   const [notifications, setNotifications] = useState([])
@@ -65,6 +67,35 @@ export default function AdminLayout({
       return () => clearInterval(interval)
     }
   }, [token])
+
+  // Real-time WebSocket synchronization
+  useEffect(() => {
+    if (!token || !API_BASE_URL) return
+
+    const wsUrl = API_BASE_URL.replace(/^http/, 'ws') + `/ws/dashboard?token=${encodeURIComponent(token)}`
+    const ws = new WebSocket(wsUrl)
+
+    ws.onmessage = (event) => {
+      try {
+        const data = JSON.parse(event.data)
+        if (data.type === 'profile_update') {
+          const currentAdminId = adminUser?.admin_id || adminUser?.id || adminUser?._id
+          if (data.admin_id === currentAdminId) {
+            const { admin_id, company_id, type, ...fieldsToUpdate } = data
+            dispatch(updateAdminUser(fieldsToUpdate))
+          }
+          // Dispatch custom event so any active admin components can update
+          window.dispatchEvent(new CustomEvent('admin_profile_updated', { detail: data }))
+        }
+      } catch (err) {
+        console.error('Error parsing admin ws message:', err)
+      }
+    }
+
+    return () => {
+      ws.close()
+    }
+  }, [dispatch, token, API_BASE_URL, adminUser])
 
   useEffect(() => {
     function handleClickOutside(event) {
