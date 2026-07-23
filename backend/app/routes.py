@@ -2839,7 +2839,7 @@ def send_submission_notification(candidate_email: str, candidate_name: str, admi
         res = requests.post(url, json={
             "sender": {"name": sender_name, "email": sender_email_addr},
             "to": [{"email": candidate_email, "name": candidate_name}],
-            "subject": "Your Interview Has Been Submitted — Mock Interview",
+            "subject": "Your Interview Has Been Submitted — Hire IQ",
             "htmlContent": candidate_html
         }, headers=headers, timeout=10)
         results.append(res.status_code < 300)
@@ -3418,7 +3418,7 @@ def send_otp_email(email: str, name: str, otp: str):
         <p>You requested to reset your admin password. Please use the following One-Time Password (OTP) to proceed:</p>
         <h2 style='color: #6366f1; letter-spacing: 5px; font-size: 2rem;'>{otp}</h2>
         <p>This code is valid for 10 minutes. If you did not request this, please ignore this email.</p>
-        <p>Best Regards,<br/>Mock Interview</p>
+        <p>Best Regards,<br/>Hire IQ</p>
     </body></html>
     """
 
@@ -9860,12 +9860,39 @@ def create_demo_request(req: DemoRequestCreate):
             'first_name': req.first_name,
             'last_name': req.last_name,
             'work_email': req.work_email,
+            'mobile_number': req.mobile_number,
             'company_name': req.company_name,
             'help_text': req.help_text,
             'status': 'NEW',
             'created_at': datetime.utcnow().isoformat()
         }
         result = demo_requests_collection.insert_one(new_request)
+
+        # Send email notification to master
+        brevo_key = os.getenv("BREVO_API_KEY")
+        master_email = os.getenv("MASTER_EMAIL", os.getenv("BREVO_SENDER_EMAIL", "support@hireiq.com"))
+        if brevo_key and master_email:
+            try:
+                import requests
+                email_html = f"""
+                <html><body style="font-family: Arial, sans-serif; padding: 20px;">
+                    <h2 style="color: #4f46e5;">New Demo Request</h2>
+                    <p><b>Name:</b> {req.first_name} {req.last_name}</p>
+                    <p><b>Company:</b> {req.company_name}</p>
+                    <p><b>Email:</b> {req.work_email}</p>
+                    <p><b>Mobile:</b> {req.mobile_number}</p>
+                    <p><b>Message:</b><br>{req.help_text}</p>
+                </body></html>
+                """
+                requests.post("https://api.brevo.com/v3/smtp/email", json={
+                    "sender": {"name": "Hire IQ Alerts", "email": master_email},
+                    "to": [{"email": master_email, "name": "Hire IQ Admin"}],
+                    "subject": f"New Demo Request from {req.company_name}",
+                    "htmlContent": email_html
+                }, headers={"api-key": brevo_key, "content-type": "application/json"}, timeout=5)
+            except Exception as email_err:
+                print(f'Error sending demo request email: {email_err}')
+
         return {'status': 'success', 'id': str(result.inserted_id)}
     except Exception as e:
         print(f'Error saving demo request: {e}')
