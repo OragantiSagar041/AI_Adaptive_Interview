@@ -555,7 +555,10 @@ export default function OverviewDashboardPage() {
                             {initials(c.candidate_name || c.name || "C")}
                           </AvatarFallback>
                         </Avatar>
-                        <div className="font-medium">{c.candidate_name || c.name || "Candidate"}</div>
+                        <div className="font-medium">
+                          {c.candidate_id && <span className="text-[0.65rem] bg-slate-100 text-slate-500 px-1.5 py-0.5 rounded font-bold mr-1">{c.candidate_id}</span>}
+                          {c.candidate_name || c.name || "Candidate"}
+                        </div>
                       </div>
                     </td>
                     <td className="px-3 py-3 text-muted-foreground">{c.interview_title || c.job_title || "N/A"}</td>
@@ -876,7 +879,10 @@ export default function OverviewDashboardPage() {
                   {listModalCandidates.map((c) => (
                     <tr key={c.id || c._id} className="hover:bg-slate-50">
                       <td className="px-4 py-3.5">
-                        <div className="font-semibold text-slate-800">{c.candidate_name || c.name || "Candidate"}</div>
+                        <div className="font-semibold text-slate-800">
+                          {c.candidate_id && <span className="text-[0.65rem] bg-slate-100 text-slate-500 px-1.5 py-0.5 rounded font-bold mr-1">{c.candidate_id}</span>}
+                          {c.candidate_name || c.name || "Candidate"}
+                        </div>
                         <div className="text-xs text-muted-foreground">{c.candidate_email || c.email}</div>
                       </td>
                       <td className="px-4 py-3.5 text-slate-600">{c.interview_title || c.job_title || "N/A"}</td>

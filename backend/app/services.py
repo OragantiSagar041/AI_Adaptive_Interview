@@ -2088,6 +2088,9 @@ def get_current_admin_details(credentials: HTTPAuthorizationCredentials = Depend
         if admin_doc.get("login_enabled") == False:
             raise HTTPException(status_code=403, detail="Account is deactivated")
             
+        if not company_id:
+            company_id = str(admin_doc.get("company_id") or "")
+            
         return {"admin_id": admin_id, "company_id": company_id, "role": role}
     except jwt.PyJWTError:
         raise HTTPException(status_code=401, detail="Invalid or expired token")

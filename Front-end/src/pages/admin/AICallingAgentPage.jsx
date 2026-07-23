@@ -601,8 +601,9 @@ function RecentCallsTab({ calls, loading, onViewDetails }) {
                     {isOutbound ? <ArrowUpRight size={10} strokeWidth={3} /> : <ArrowDownLeft size={10} strokeWidth={3} />}
                     {isOutbound ? 'Outgoing' : 'Inbound'}
                   </span>
-                  <span className="text-slate-800 font-bold tracking-wide text-[15px]">
-                    {call.from_number || '+Unknown'} <span className="text-slate-400 mx-1 font-normal">→</span> {call.to_number || '+Unknown'}
+                  <span className="text-slate-800 font-bold tracking-wide text-[15px] flex items-center gap-2">
+                    {call.candidate_id && <span className="bg-slate-100 text-slate-500 px-1.5 py-0.5 rounded text-[0.65rem] border border-slate-200">{call.candidate_id}</span>}
+                    {call.candidate_name || call.user_name || call.name || call.from_number || '+Unknown'} <span className="text-slate-400 mx-1 font-normal">→</span> {call.to_number || '+Unknown'}
                   </span>
                 </div>
                 <div className="flex items-center gap-2 text-slate-500 text-xs font-medium">
