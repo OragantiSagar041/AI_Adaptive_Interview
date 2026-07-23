@@ -1,5 +1,6 @@
 import axios from "axios";
 import { API_BASE_URL } from "../apiConfig";
+import { clearCandidateSessionAuth, getCandidateSessionToken } from "./candidateAuth";
 
 // Create a single, consistent Axios instance
 const api = axios.create({
@@ -7,34 +8,30 @@ const api = axios.create({
   timeout: 50000,
   headers: { "Content-Type": "application/json" },
 });
+const CANDIDATE_ROUTE_RE = /^\/?(?:transcribe|stt|tts|voice-clone-instant|save-answer|save-behavioral-data|coding-round|case-study|upload-full-recording|recording-upload-failure|complete-session|submit-feedback|proctoring\/violation|session\/[^/]+\/violation|interview\/[^/]+\/(?:summary|ai-summary|alert)|generate-next-question|generate-more-questions|live-heartbeat)(?:\/|\?|$)/
 
 /* =============================================================================
    REQUEST INTERCEPTOR → attaches token from sessionStorage
 ============================================================================= */
 api.interceptors.request.use(
   (config) => {
-    // 1. Priority: Check for masterToken first
-    let token = sessionStorage.getItem("masterToken");
+    const requestPath = String(config.url || "");
+    const candidateRequest = CANDIDATE_ROUTE_RE.test(requestPath);
+    let token = candidateRequest ? getCandidateSessionToken() : sessionStorage.getItem("masterToken");
 
-    // 2. Fallback: Check for adminToken (used in master layout/dashboard)
-    if (!token) {
-      token = sessionStorage.getItem("adminToken");
-    }
+    if (!candidateRequest) {
+      if (!token) token = sessionStorage.getItem("adminToken");
+      if (!token) token = sessionStorage.getItem("token");
 
-    // 3. Fallback: Check for generic token
-    if (!token) {
-      token = sessionStorage.getItem("token");
-    }
-
-    // 4. Fallback: Check inside parsed adminUser object
-    if (!token) {
-      const adminUserStr = sessionStorage.getItem("adminUser");
-      if (adminUserStr) {
-        try {
-          const parsed = JSON.parse(adminUserStr);
-          token = parsed.token || (parsed.data && parsed.data.token);
-        } catch (e) {
-          console.error("Error parsing adminUser for token:", e);
+      if (!token) {
+        const adminUserStr = sessionStorage.getItem("adminUser");
+        if (adminUserStr) {
+          try {
+            const parsed = JSON.parse(adminUserStr);
+            token = parsed.token || (parsed.data && parsed.data.token);
+          } catch (e) {
+            console.error("Error parsing adminUser for token:", e);
+          }
         }
       }
     }
@@ -54,7 +51,23 @@ api.interceptors.request.use(
 ============================================================================= */
 api.interceptors.response.use(
   (response) => response,
-  (error) => Promise.reject(error),
+  (error) => {
+    if (error.response?.status === 401) {
+      const requestPath = String(error.config?.url || "")
+      const candidateRequest = CANDIDATE_ROUTE_RE.test(requestPath)
+      if (candidateRequest) {
+        clearCandidateSessionAuth()
+      } else if (!window.__hireIqAuthRedirecting) {
+        window.__hireIqAuthRedirecting = true
+        sessionStorage.removeItem("auth")
+        sessionStorage.removeItem("masterToken")
+        sessionStorage.removeItem("adminToken")
+        sessionStorage.removeItem("token")
+        window.location.assign("/login")
+      }
+    }
+    return Promise.reject(error)
+  },
 );
 
 /* =============================================================================

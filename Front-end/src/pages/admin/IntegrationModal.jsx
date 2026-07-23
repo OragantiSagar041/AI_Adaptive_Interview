@@ -88,7 +88,7 @@ export default function IntegrationModal({ isOpen, onClose, onRefresh }) {
         try {
           parsedHeaders = JSON.parse(webhookForm.headers)
         } catch(e) {
-          throw new Error('Headers must be valid JSON')
+          throw new Error('Headers must be valid JSON', { cause: e })
         }
       }
       let parsedBody = {}
@@ -96,7 +96,7 @@ export default function IntegrationModal({ isOpen, onClose, onRefresh }) {
         try {
           parsedBody = JSON.parse(webhookForm.body)
         } catch(e) {
-          throw new Error('Body must be valid JSON')
+          throw new Error('Body must be valid JSON', { cause: e })
         }
       }
 

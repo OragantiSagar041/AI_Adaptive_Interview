@@ -23,13 +23,14 @@ class AsyncPubSub:
         self.pubsub = None
         self.listen_task: Optional[asyncio.Task] = None
         self.lock = asyncio.Lock()
-        self.redis_failed = False
+        self.next_retry_at = 0.0
+        self.retry_delay = 1.0
         
     async def _ensure_connected(self):
-        if self.redis or self.redis_failed:
+        if self.redis or time.monotonic() < self.next_retry_at:
             return
         async with self.lock:
-            if self.redis or self.redis_failed:
+            if self.redis or time.monotonic() < self.next_retry_at:
                 return
             try:
                 # Configure socket timeouts to fail fast if Redis is down
@@ -41,13 +42,18 @@ class AsyncPubSub:
                 )
                 await self.redis.ping()
                 self.pubsub = self.redis.pubsub()
+                if self.subscribers:
+                    await self.pubsub.subscribe(*self.subscribers.keys())
                 self.listen_task = asyncio.create_task(self._redis_listener())
+                self.retry_delay = 1.0
+                self.next_retry_at = 0.0
                 logger.info(f"AsyncPubSub successfully connected to Redis at {REDIS_URL}")
             except Exception as e:
                 logger.warning(f"AsyncPubSub could not connect to Redis: {e}. Falling back to in-memory mode.")
                 self.redis = None
                 self.pubsub = None
-                self.redis_failed = True
+                self.next_retry_at = time.monotonic() + self.retry_delay
+                self.retry_delay = min(self.retry_delay * 2, 30.0)
                 
     async def _redis_listener(self):
         """Background listener that listens to Redis messages and puts them into local queues."""
@@ -71,7 +77,10 @@ class AsyncPubSub:
             pass
         except Exception as e:
             logger.error(f"AsyncPubSub Redis listener task failed: {e}")
-            self.redis_failed = True
+            self.redis = None
+            self.pubsub = None
+            self.next_retry_at = time.monotonic() + self.retry_delay
+            self.retry_delay = min(self.retry_delay * 2, 30.0)
             
     async def subscribe(self, channel: str) -> asyncio.Queue:
         """Subscribe to a channel and return a queue to listen on."""
@@ -79,7 +88,7 @@ class AsyncPubSub:
         queue = asyncio.Queue()
         self.subscribers[channel].add(queue)
         
-        if self.pubsub and not self.redis_failed:
+        if self.pubsub:
             try:
                 await self.pubsub.subscribe(channel)
             except Exception as e:
@@ -93,7 +102,7 @@ class AsyncPubSub:
             self.subscribers[channel].remove(queue)
             if not self.subscribers[channel]:
                 del self.subscribers[channel]
-                if self.pubsub and not self.redis_failed:
+                if self.pubsub:
                     try:
                         await self.pubsub.unsubscribe(channel)
                     except Exception as e:
@@ -102,13 +111,17 @@ class AsyncPubSub:
     async def publish(self, channel: str, message: Any):
         """Publish a message to a channel (broadcasts globally via Redis)."""
         await self._ensure_connected()
-        if self.redis and not self.redis_failed:
+        if self.redis:
             try:
                 msg_str = json.dumps(message)
                 await self.redis.publish(channel, msg_str)
                 return
             except Exception as e:
                 logger.error(f"Failed to publish to Redis channel {channel}: {e}. Falling back to in-memory.")
+                self.redis = None
+                self.pubsub = None
+                self.next_retry_at = time.monotonic() + self.retry_delay
+                self.retry_delay = min(self.retry_delay * 2, 30.0)
                 
         # Graceful fallback: local in-memory dispatch
         if channel in self.subscribers:
@@ -163,15 +176,20 @@ class ProducerConsumerQueue:
         
     async def start(self):
         """Start consumer workers."""
+        if self.workers:
+            return
         for i in range(self.max_workers):
             task = asyncio.create_task(self._worker(i))
             self.workers.append(task)
             
     async def stop(self):
         """Stop all workers gracefully."""
+        if not self.workers:
+            return
         for _ in range(self.max_workers):
             await self.queue.put(None) # Sentinel to stop
         await asyncio.gather(*self.workers)
+        self.workers.clear()
         
     async def produce(self, task_func: Callable, *args, **kwargs):
         """Add a task to the queue."""
@@ -213,11 +231,18 @@ class MongoBatchWriter:
         self._lock = asyncio.Lock()
         
     async def start(self):
+        if self._task and not self._task.done():
+            return
         self._task = asyncio.create_task(self._flush_loop())
         
     async def stop(self):
         if self._task:
             self._task.cancel()
+            try:
+                await self._task
+            except asyncio.CancelledError:
+                pass
+            self._task = None
         await self._flush_now()
         
     async def insert(self, document: dict):
@@ -247,4 +272,5 @@ class MongoBatchWriter:
             logger.info(f"Batched {len(to_insert)} writes to {self.collection.name}")
         except Exception as e:
             logger.error(f"Failed bulk write: {e}")
-            # Could re-queue here if critical
+            async with self._lock:
+                self.buffer[0:0] = to_insert

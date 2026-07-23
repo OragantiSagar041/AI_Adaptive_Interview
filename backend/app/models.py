@@ -3,7 +3,7 @@ sys.stdout.reconfigure(encoding='utf-8')
 sys.stderr.reconfigure(encoding='utf-8')
 
 from typing import Any, Dict, List, Optional, Union
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, ConfigDict, Field
 
 
 # ---------------------------------------------------------------------------
@@ -34,11 +34,14 @@ class SubAdminCreate(BaseModel):
     credits: int = 0
 
 class CreditRequestCreate(BaseModel):
-    amount: int
+    amount: int = Field(gt=0, le=1_000_000)
     reason: Optional[str] = None
 
 class CreditRequestUpdate(BaseModel):
     status: str  # 'approved' or 'rejected'
+
+class AddCreditsRequest(BaseModel):
+    credits: int = Field(gt=0, le=1_000_000)
 
 class TenantCreate(BaseModel):
     company_name: str
@@ -54,14 +57,13 @@ class TenantUpdate(BaseModel):
     add_credits: int = 0
 
 class HRScreening(BaseModel):
+    model_config = ConfigDict(populate_by_name=True)
+
     work_mode: str = Field(default="", alias="workModeType")
     location: str = Field(default="", alias="locationType")
     ask_bond: bool = Field(default=False, alias="askBond")
     ask_work_mode: bool = Field(default=False, alias="askWorkMode")
     ask_location: bool = Field(default=False, alias="askLocation")
-
-    class Config:
-        populate_by_name = True
 
 class CreateSession(BaseModel):
     candidate_name: str

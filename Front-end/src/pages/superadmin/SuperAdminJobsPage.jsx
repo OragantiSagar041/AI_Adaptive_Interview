@@ -7,6 +7,7 @@ import { useSelector, useDispatch } from 'react-redux';
 import { loadSuperAdminDashboard } from '../../store/slices/dashboardSlice';
 import { getComputedStatus } from '../../utils/adminFormatters';
 import axios from 'axios';
+import { API_BASE_URL } from '../../apiConfig';
 const WORK_MODE_STYLES = {
   Remote: 'bg-emerald-50 text-emerald-700 border-emerald-200',
   Hybrid: 'bg-blue-50 text-blue-700 border-blue-200',
@@ -21,8 +22,6 @@ const GRADIENT_ACCENTS = [
   'from-violet-500 via-purple-500 to-violet-600',
   'from-sky-500 via-blue-500 to-sky-600',
 ];
-
-import { API_BASE_URL } from "../../apiConfig";
 
 export default function SuperAdminJobsPage() {
   const dispatch = useDispatch();

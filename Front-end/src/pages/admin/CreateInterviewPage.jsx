@@ -372,6 +372,8 @@ export default function CreateInterviewPage() {
       const response = await axios.post(`${API_BASE_URL}/admin/ats-score`, {
         resume_text: resume,
         jd_text: jd
+      }, {
+        headers: { Authorization: `Bearer ${token}` }
       })
       const data = response.data
       setAtsScoreData({

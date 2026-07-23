@@ -69,8 +69,16 @@ function log(...args) {
  */
 async function ensureWasmModuleFactory(vision) {
   const scriptText = await (await fetch(vision.wasmLoaderPath)).text();
-  // eslint-disable-next-line no-eval
-  (0, eval)(scriptText);
+  
+  // In ESM workers or strict mode, `var` inside eval doesn't leak to the global scope.
+  // By using a Function and explicitly assigning it to globalThis, we guarantee it's accessible.
+  const executeAndExport = new Function(`
+    ${scriptText}
+    if (typeof ModuleFactory !== 'undefined') {
+      globalThis.ModuleFactory = ModuleFactory;
+    }
+  `);
+  executeAndExport();
 }
 
 async function loadModels() {
@@ -160,8 +168,7 @@ function extractPhoneCandidates(detections) {
         label.includes('phone') ||
         label.includes('mobile') ||
         label.includes('cell') ||
-        label.includes('tablet') ||
-        label.includes('remote')
+        label.includes('tablet')
       ) {
         candidates.push({ score: category.score ?? 0 });
       }

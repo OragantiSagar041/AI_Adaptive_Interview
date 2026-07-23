@@ -25,8 +25,9 @@ from collections import defaultdict
 from datetime import datetime, timedelta, timezone
 from typing import Any, Dict, List, Optional, Union
 from app.services import parse_iso_datetime
-from app.session_store import get_session, delete_session
+from app.session_store import get_session, set_session, delete_session as delete_cached_session
 from pymongo import ReturnDocument
+from pymongo.errors import DuplicateKeyError
 from interview_graphs import run_followup_graph
 
 sys.stdout.reconfigure(encoding='utf-8')
@@ -41,8 +42,9 @@ import requests
 import cloudinary
 import cloudinary.uploader
 import cloudinary.api
+import cloudinary.utils
 import edge_tts
-import PyPDF2
+import pypdf
 from bson import ObjectId
 
 def process_temp_cloudinary_upload(temp_url: str, collection_name: str, field_name: str):
@@ -182,19 +184,21 @@ from industry_fallback_data import INDUSTRY_TECHNICAL_QUESTIONS, INDUSTRY_CASE_S
 from redis_manager import manager
 import transcription
 from routes import voice_routes
+from mongo_db import client as mongo_client
 
 from .models import *
 from .database import *
 from .config import *
 from . import omni_dimension_client
 from .services import *
-from app.session_store import get_session, set_session, delete_session
 from app.live_monitoring_security import (
+    MONITORING_SCOPE,
     admin_can_access_session,
     create_monitoring_token,
     decode_monitoring_token,
     validate_snapshot_dataurl,
 )
+from app.candidate_auth import require_active_candidate
 
 load_dotenv()
 
@@ -244,6 +248,61 @@ def _validate_candidate_monitoring_token(token: str, link_id: str) -> Dict[str, 
     if token_interview_id and session_interview_id and not hmac.compare_digest(token_interview_id, session_interview_id):
         raise HTTPException(status_code=403, detail="Monitoring token is no longer valid for this interview")
     return session
+
+
+def _require_candidate_session(
+    credentials: Optional[HTTPAuthorizationCredentials],
+    *,
+    link_id: Optional[str] = None,
+    interview_id: Optional[str] = None,
+    allow_completed: bool = False,
+) -> Dict[str, Any]:
+    """Authorize a candidate operation against the session-scoped bearer token."""
+    if not credentials:
+        raise HTTPException(status_code=401, detail="Candidate session token is required")
+
+    try:
+        payload = jwt.decode(credentials.credentials, JWT_SECRET_KEY, algorithms=[ALGORITHM])
+    except jwt.PyJWTError as exc:
+        raise HTTPException(status_code=401, detail="Invalid or expired candidate session token") from exc
+
+    token_link_id = str(payload.get("link_id") or "")
+    token_interview_id = str(payload.get("interview_id") or "")
+    if payload.get("scope") != MONITORING_SCOPE or not token_link_id:
+        raise HTTPException(status_code=401, detail="Invalid candidate session token scope")
+    if link_id and not hmac.compare_digest(token_link_id, str(link_id)):
+        raise HTTPException(status_code=403, detail="Candidate token does not match this session")
+    if interview_id and not hmac.compare_digest(token_interview_id, str(interview_id)):
+        raise HTTPException(status_code=403, detail="Candidate token does not match this interview")
+
+    session = interview_sessions_collection.find_one(
+        {"link_id": token_link_id},
+        {"link_id": 1, "interview_id": 1, "status": 1, "is_deactivated": 1},
+    )
+    if not session:
+        raise HTTPException(status_code=404, detail="Session not found")
+    if session.get("is_deactivated"):
+        raise HTTPException(status_code=403, detail="This interview session is deactivated")
+
+    session_interview_id = str(session.get("interview_id") or "")
+    if session_interview_id and not hmac.compare_digest(token_interview_id, session_interview_id):
+        raise HTTPException(status_code=403, detail="Candidate token is no longer valid for this interview")
+
+    allowed_statuses = {"started", "completed"} if allow_completed else {"started"}
+    if session.get("status") not in allowed_statuses:
+        raise HTTPException(status_code=403, detail="This interview session is not active")
+    return session
+
+
+def _require_admin_session_access(session: Dict[str, Any], current_admin: Dict[str, Any]) -> None:
+    """Enforce tenant isolation and per-recruiter ownership for normal admins."""
+    role = current_admin.get("role")
+    if role == "master":
+        return
+    if session.get("company_id") != current_admin.get("company_id"):
+        raise HTTPException(status_code=403, detail="Access denied")
+    if role == "admin" and str(session.get("created_by") or "") != str(current_admin.get("admin_id") or ""):
+        raise HTTPException(status_code=403, detail="Access denied to another recruiter's interview")
 
 
 def _get_authorized_live_session(link_id: str, current_admin: Dict[str, Any]) -> Dict[str, Any]:
@@ -487,7 +546,11 @@ def build_coding_test_payload(coding_round: Dict[str, Any]) -> Dict[str, Any]:
 
 
 @router.post("/generate-next-question")
-def api_gen_next_question(req: NextQuestionRequest):
+def api_gen_next_question(
+    req: NextQuestionRequest,
+    credentials: Optional[HTTPAuthorizationCredentials] = Depends(candidate_monitoring_security),
+):
+    _require_candidate_session(credentials, interview_id=req.interview_id)
     if not get_session(req.interview_id):
         raise HTTPException(status_code=404, detail="Interview not found")
         
@@ -748,13 +811,15 @@ _question_generation_locks = defaultdict(asyncio.Lock)
 async def generate_more_questions_endpoint(
     interview_id: str = Form(...),
     asked_question_ids: str = Form(""),
-    count: int = Form(5)
+    count: int = Form(5),
+    credentials: Optional[HTTPAuthorizationCredentials] = Depends(candidate_monitoring_security),
 ):
     """
     Generate additional questions for an interview session when the candidate
     finishes all questions but still has time left on the clock.
     Returns only NEW questions not already asked.
     """
+    _require_candidate_session(credentials, interview_id=interview_id)
     try:
         from starlette.concurrency import run_in_threadpool
 
@@ -969,8 +1034,12 @@ def sync_session_to_application(link_id: str):
         print(f"⚠️ Error syncing interview to application: {e}")
 
 @router.get("/interview/{interview_id}/summary")
-def get_interview_summary(interview_id: str):
+def get_interview_summary(
+    interview_id: str,
+    credentials: Optional[HTTPAuthorizationCredentials] = Depends(candidate_monitoring_security),
+):
     """Get a summary of the interview including all questions and answers."""
+    _require_candidate_session(credentials, interview_id=interview_id, allow_completed=True)
     if not get_session(interview_id):
         raise HTTPException(status_code=404, detail="Interview not found")
     
@@ -989,7 +1058,7 @@ def get_interview_summary(interview_id: str):
 class ChatRequest(BaseModel):
     message: str
 @router.post("/chat")
-def chat(req: ChatRequest):
+def chat(req: ChatRequest, current_admin: dict = Depends(get_current_admin_details)):
     try:
         reply = chat_completion(
             messages=[
@@ -1000,7 +1069,8 @@ def chat(req: ChatRequest):
         )
         return {"reply": reply}
     except Exception as e:
-        return {"reply": f"Sorry, I am currently unavailable. ({str(e)})"}
+        logger.exception("Admin chat completion failed")
+        return {"reply": "Sorry, I am currently unavailable."}
 
 class AnswerRequest(BaseModel):
     interview_id: str
@@ -1020,8 +1090,31 @@ def save_answer(
     candidate_name: str = Form("Candidate"),
     time_spent_seconds: str = Form("0"),
     time_limit_seconds: str = Form("120"),
+    credentials: Optional[HTTPAuthorizationCredentials] = Depends(candidate_monitoring_security),
 ):
+    candidate_session = _require_candidate_session(credentials, interview_id=interview_id)
     current_session_id.set(interview_id)
+    from app.answer_service import persist_answer_and_enqueue_scoring
+
+    try:
+        result = persist_answer_and_enqueue_scoring(
+            interview_id=interview_id,
+            question_id=question_id,
+            question_text=question_text,
+            answer_text=answer_text,
+            candidate_name=candidate_session.get("candidate_name") or candidate_name,
+            time_spent_seconds=time_spent_seconds,
+            time_limit_seconds=time_limit_seconds,
+        )
+    except ValueError as exc:
+        raise HTTPException(status_code=422, detail=str(exc)) from exc
+
+    return {
+        **result,
+        "ai_score": None,
+        "message": "Answer saved. Scoring is running in the background.",
+    }
+
     print(f"⚡ Instant save for Q{question_id} ➝ AI scoring in background...")
 
     # ── STEP 1: Get context (fast — RAM first) ──────────────────────────────
@@ -1104,8 +1197,12 @@ class BehavioralData(BaseModel):
     noise_alerts: int = 0
 
 @router.post("/save-behavioral-data")
-def save_behavioral_data(data: BehavioralData):
+def save_behavioral_data(
+    data: BehavioralData,
+    credentials: Optional[HTTPAuthorizationCredentials] = Depends(candidate_monitoring_security),
+):
     """Saves per-question behavioral and proctoring metrics"""
+    _require_candidate_session(credentials, interview_id=data.interview_id, allow_completed=True)
     try:
         # Check if this is a case study question
         is_case_study = False
@@ -1186,7 +1283,11 @@ class CodingRoundObserveRequest(CodingRoundCheckpointRequest):
 
 
 @router.post("/coding-round/start")
-async def start_coding_round(req: CodingRoundStartRequest):
+async def start_coding_round(
+    req: CodingRoundStartRequest,
+    credentials: Optional[HTTPAuthorizationCredentials] = Depends(candidate_monitoring_security),
+):
+    _require_candidate_session(credentials, interview_id=req.interview_id)
     import asyncio
     from fastapi.concurrency import run_in_threadpool
 
@@ -1456,7 +1557,11 @@ def _generate_case_study_questions_offline(job_description: str, num_questions: 
 
 
 @router.post("/case-study/start")
-async def start_case_study_round(req: CaseStudyStartRequest):
+async def start_case_study_round(
+    req: CaseStudyStartRequest,
+    credentials: Optional[HTTPAuthorizationCredentials] = Depends(candidate_monitoring_security),
+):
+    _require_candidate_session(credentials, interview_id=req.interview_id)
     interview = get_interview_or_404(req.interview_id)
     
     # Check if case study round already exists
@@ -1526,7 +1631,11 @@ async def start_case_study_round(req: CaseStudyStartRequest):
 
 
 @router.post("/case-study/submit-answer")
-def submit_case_study_answer(req: CaseStudyAnswerRequest):
+def submit_case_study_answer(
+    req: CaseStudyAnswerRequest,
+    credentials: Optional[HTTPAuthorizationCredentials] = Depends(candidate_monitoring_security),
+):
+    _require_candidate_session(credentials, interview_id=req.interview_id)
     interview = get_interview_or_404(req.interview_id)
     case_study = interview.get("case_study_round")
     if not case_study:
@@ -1550,7 +1659,11 @@ def submit_case_study_answer(req: CaseStudyAnswerRequest):
     return {"status": "saved", "question_index": req.question_index}
 
 @router.get("/coding-round/{interview_id}")
-def get_coding_round(interview_id: str):
+def get_coding_round(
+    interview_id: str,
+    credentials: Optional[HTTPAuthorizationCredentials] = Depends(candidate_monitoring_security),
+):
+    _require_candidate_session(credentials, interview_id=interview_id, allow_completed=True)
     interview = get_interview_or_404(interview_id)
     coding_round = interview.get("coding_round")
     if not coding_round:
@@ -1632,17 +1745,29 @@ def _run_coding_feedback(req: CodingRoundCheckpointRequest, feedback_mode: str) 
 
 
 @router.post("/coding-round/checkpoint")
-def coding_round_checkpoint(req: CodingRoundCheckpointRequest):
+def coding_round_checkpoint(
+    req: CodingRoundCheckpointRequest,
+    credentials: Optional[HTTPAuthorizationCredentials] = Depends(candidate_monitoring_security),
+):
+    _require_candidate_session(credentials, interview_id=req.interview_id)
     return _run_coding_feedback(req, "checkpoint")
 
 
 @router.post("/coding-round/submit")
-def coding_round_submit(req: CodingRoundSubmitRequest):
+def coding_round_submit(
+    req: CodingRoundSubmitRequest,
+    credentials: Optional[HTTPAuthorizationCredentials] = Depends(candidate_monitoring_security),
+):
+    _require_candidate_session(credentials, interview_id=req.interview_id)
     return _run_coding_feedback(req, "final")
 
 
 @router.post("/coding-round/run")
-def coding_round_run(req: CodingRoundRunRequest):
+def coding_round_run(
+    req: CodingRoundRunRequest,
+    credentials: Optional[HTTPAuthorizationCredentials] = Depends(candidate_monitoring_security),
+):
+    _require_candidate_session(credentials, interview_id=req.interview_id)
     interview = get_interview_or_404(req.interview_id)
     coding_round = interview.get("coding_round")
     if not coding_round or not coding_round.get("task"):
@@ -1664,7 +1789,11 @@ def coding_round_run(req: CodingRoundRunRequest):
 
 
 @router.post("/coding-round/observe")
-def coding_round_observe(req: CodingRoundObserveRequest):
+def coding_round_observe(
+    req: CodingRoundObserveRequest,
+    credentials: Optional[HTTPAuthorizationCredentials] = Depends(candidate_monitoring_security),
+):
+    _require_candidate_session(credentials, interview_id=req.interview_id)
     interview = get_interview_or_404(req.interview_id)
     coding_round = interview.get("coding_round")
     if not coding_round or not coding_round.get("task"):
@@ -1684,7 +1813,11 @@ def coding_round_observe(req: CodingRoundObserveRequest):
     return {"interview_id": req.interview_id, "observation": observation}
 
 @router.get("/interview/{interview_id}/ai-summary")
-def interview_ai_summary(interview_id: str):
+def interview_ai_summary(
+    interview_id: str,
+    credentials: Optional[HTTPAuthorizationCredentials] = Depends(candidate_monitoring_security),
+):
+    _require_candidate_session(credentials, interview_id=interview_id, allow_completed=True)
     answers = answers_collection.find({"interview_id": interview_id, "ai_score": {"$ne": None}})
     scores = [a.get("ai_score", 0) for a in answers]
     avg_score = round(sum(scores) / len(scores), 2) if scores else 0
@@ -1704,7 +1837,12 @@ from fastapi import Request
 import json
 
 @router.post("/interview/{interview_id}/alert")
-async def log_interview_alert(interview_id: str, request: Request):
+async def log_interview_alert(
+    interview_id: str,
+    request: Request,
+    credentials: Optional[HTTPAuthorizationCredentials] = Depends(candidate_monitoring_security),
+):
+    _require_candidate_session(credentials, link_id=interview_id)
     try:
         body_bytes = await request.body()
         data = json.loads(body_bytes)
@@ -1889,7 +2027,7 @@ def normalize_agent_flow_write_item(item: Dict[str, Any]) -> Dict[str, Any]:
     }
 
 @router.get("/admin/agent-flow")
-def get_agent_flow():
+def get_agent_flow(current_admin: dict = Depends(require_role("super_admin"))):
     from app.config import get_omni_dimension_api_key, get_omni_agent_id
     import requests
     from pathlib import Path
@@ -1952,7 +2090,10 @@ def get_agent_flow():
         raise HTTPException(status_code=500, detail=str(e))
 
 @router.put("/admin/agent-flow")
-def update_agent_flow(req: UpdateAgentFlowRequest):
+def update_agent_flow(
+    req: UpdateAgentFlowRequest,
+    current_admin: dict = Depends(require_role("super_admin")),
+):
     from app.config import get_omni_dimension_api_key, get_omni_agent_id
     import requests
     from pathlib import Path
@@ -1982,7 +2123,7 @@ def update_agent_flow(req: UpdateAgentFlowRequest):
     omni_url = f"https://backend.omnidim.io/api/v1/agents/{agent_id}"
     try:
         logger.info("[agent-flow] OmniDimension sync request: method=PUT url=%s agent_id=%s", omni_url, agent_id)
-        logger.info("[agent-flow] OmniDimension headers: %s", headers)
+        logger.info("[agent-flow] OmniDimension authorization configured: %s", bool(api_key))
         logger.info("[agent-flow] OmniDimension request body: %s", json.dumps(payload, ensure_ascii=False))
         res = requests.put(omni_url, headers=headers, json=payload, timeout=10)
         logger.info("[agent-flow] OmniDimension response status: %s", res.status_code)
@@ -2193,6 +2334,16 @@ def get_interview_details(link_id: str, current_admin: dict = Depends(get_curren
 
     def get_url_from_raw_path(rpath):
         if not rpath: return None
+        if rpath.startswith("cloudinary-authenticated://"):
+            public_id = rpath.split("://", 1)[1]
+            signed_url, _ = cloudinary.utils.cloudinary_url(
+                public_id,
+                resource_type="video",
+                type="authenticated",
+                secure=True,
+                sign_url=True,
+            )
+            return signed_url
         if rpath.startswith("http"): return rpath
         
         raw_path_fixed = rpath.replace("\\", "/")
@@ -2552,9 +2703,59 @@ def upload_full_recording(
     interview_id: str = Form(...),
     link_id: Optional[str] = Form(None),
     recording_type: Optional[str] = Form("camera"),
-    file: UploadFile = File(...)
+    recording_truncated: bool = Form(False),
+    recording_upload_id: Optional[str] = Form(None),
+    file: UploadFile = File(...),
+    credentials: Optional[HTTPAuthorizationCredentials] = Depends(candidate_monitoring_security),
 ):
-    if getattr(file, "size", 0) and file.size > 500 * 1024 * 1024:
+    session = _require_candidate_session(
+        credentials,
+        link_id=link_id,
+        interview_id=interview_id,
+        allow_completed=True,
+    )
+    link_id = session.get("link_id")
+    if recording_type not in {"camera", "screen"}:
+        raise HTTPException(status_code=422, detail="Recording type must be camera or screen")
+    path_key = "recording_path" if recording_type == "camera" else "screen_recording_path"
+    existing_interview = interviews_collection.find_one(
+        {"id": interview_id},
+        {path_key: 1, f"{path_key}_cloudinary_public_id": 1},
+    ) or {}
+    previous_public_ids = {
+        value
+        for value in (
+            session.get(f"{path_key}_cloudinary_public_id"),
+            existing_interview.get(f"{path_key}_cloudinary_public_id"),
+        )
+        if value
+    }
+    previous_local_paths = {
+        value
+        for value in (session.get(path_key), existing_interview.get(path_key))
+        if value and not str(value).startswith("cloudinary-authenticated://")
+    }
+    if recording_upload_id:
+        recording_upload_id = recording_upload_id.strip()
+        if len(recording_upload_id) > 100 or not all(
+            character.isalnum() or character in {"-", "_"}
+            for character in recording_upload_id
+        ):
+            raise HTTPException(status_code=422, detail="Invalid recording upload ID")
+        if (
+            session.get(f"{path_key}_upload_id") == recording_upload_id
+            and session.get(path_key)
+        ):
+            return {
+                "status": "success",
+                "idempotent": True,
+                "recording_truncated": bool(session.get(f"{path_key}_truncated")),
+                "saved_to_session": True,
+            }
+    if file.content_type not in {"video/webm", "video/mp4", "application/octet-stream"}:
+        raise HTTPException(status_code=415, detail="Only WebM or MP4 interview recordings are accepted")
+    max_recording_bytes = 500 * 1024 * 1024
+    if getattr(file, "size", 0) and file.size > max_recording_bytes:
         raise HTTPException(status_code=413, detail="Recording too large. Maximum size is 500MB.")
         
     try:
@@ -2564,44 +2765,63 @@ def upload_full_recording(
         
         # Generate filename
         prefix = "camera" if recording_type == "camera" else "screen"
-        filename = f"{interview_id}_{prefix}_recording.webm"
+        filename = f"{uuid.uuid4().hex}_{prefix}_recording.webm"
         file_path = os.path.join(recordings_dir, filename)
         
         # Save file locally first since it can be large
-        with open(file_path, "wb") as buffer:
-            shutil.copyfileobj(file.file, buffer)
+        bytes_written = 0
+        try:
+            with open(file_path, "wb") as buffer:
+                while chunk := file.file.read(1024 * 1024):
+                    bytes_written += len(chunk)
+                    if bytes_written > max_recording_bytes:
+                        raise HTTPException(status_code=413, detail="Recording too large. Maximum size is 500MB.")
+                    buffer.write(chunk)
+        except Exception:
+            if os.path.exists(file_path):
+                os.remove(file_path)
+            raise
             
         # Upload to Cloudinary
         try:
             upload_result = cloudinary.uploader.upload_large(
                 file_path,
                 resource_type="video",
-                folder="mock_interview_recordings"
+                type="authenticated",
+                folder="hireiq_interview_recordings",
             )
-            normalized_path = upload_result.get("secure_url")
             cloudinary_public_id = upload_result.get("public_id")
+            normalized_path = f"cloudinary-authenticated://{cloudinary_public_id}"
             
             # Clean up local file after successful upload
             os.remove(file_path)
             
         except Exception as cloud_e:
-            print(f"Error uploading to cloudinary: {cloud_e}")
-            # Fallback to local path if cloudinary fails
-            normalized_path = file_path.replace("\\\\", "/")
+            logger.exception("Recording upload to private Cloudinary storage failed")
+            if os.getenv("ENV", "local") == "production":
+                if os.path.exists(file_path):
+                    os.remove(file_path)
+                raise HTTPException(
+                    status_code=503,
+                    detail="Secure recording storage is temporarily unavailable",
+                ) from cloud_e
+            normalized_path = file_path.replace("\\", "/")
             cloudinary_public_id = None
 
         # Update database
         uploaded_at = datetime.now(timezone.utc)
-        
-        path_key = "recording_path" if recording_type == "camera" else "screen_recording_path"
         
         update_data = {
             path_key: normalized_path,
             f"{path_key}_uploaded_at": uploaded_at.isoformat(),
             f"{path_key}_expires_at": (uploaded_at + timedelta(days=RECORDING_RETENTION_DAYS)).isoformat(),
             f"{path_key}_retention_days": RECORDING_RETENTION_DAYS,
-            f"{path_key}_storage": "cloudinary" if cloudinary_public_id else "local"
+            f"{path_key}_storage": "cloudinary" if cloudinary_public_id else "local",
+            f"{path_key}_truncated": bool(recording_truncated),
+            f"{path_key}_upload_status": "complete",
         }
+        if recording_upload_id:
+            update_data[f"{path_key}_upload_id"] = recording_upload_id
         if cloudinary_public_id:
             update_data[f"{path_key}_cloudinary_public_id"] = cloudinary_public_id
             
@@ -2620,22 +2840,98 @@ def upload_full_recording(
         )
 
         if interview_update.matched_count == 0 and session_update.matched_count == 0:
-            print(f" Recording uploaded but no DB record matched interview_id={interview_id}, link_id={link_id}")
-        
+            if cloudinary_public_id:
+                cloudinary.uploader.destroy(
+                    cloudinary_public_id,
+                    resource_type="video",
+                    type="authenticated",
+                    invalidate=True,
+                )
+            elif os.path.exists(normalized_path):
+                os.remove(normalized_path)
+            raise HTTPException(status_code=404, detail="Interview record no longer exists")
+
+        for previous_public_id in previous_public_ids:
+            if previous_public_id == cloudinary_public_id:
+                continue
+            try:
+                cloudinary.uploader.destroy(
+                    previous_public_id,
+                    resource_type="video",
+                    type="authenticated",
+                    invalidate=True,
+                )
+            except Exception:
+                logger.exception("Failed to delete a superseded private recording")
+        recordings_root = os.path.abspath(recordings_dir)
+        for previous_path in previous_local_paths:
+            previous_absolute = os.path.abspath(previous_path)
+            try:
+                within_recordings = os.path.commonpath(
+                    [recordings_root, previous_absolute]
+                ) == recordings_root
+            except ValueError:
+                within_recordings = False
+            if (
+                within_recordings
+                and previous_absolute != os.path.abspath(normalized_path)
+                and os.path.isfile(previous_absolute)
+            ):
+                try:
+                    os.remove(previous_absolute)
+                except OSError:
+                    logger.exception("Failed to delete a superseded local recording")
+
         return {
             "status": "success",
-            "file_path": normalized_path,
-            "recording_url": normalized_path,
+            "recording_truncated": bool(recording_truncated),
             "saved_to_interviews": interview_update.matched_count > 0,
             "saved_to_session": session_update.matched_count > 0
         }
+    except HTTPException:
+        raise
     except Exception as e:
-        print(f"Error saving full recording: {e}")
+        logger.exception("Error saving full recording")
         raise HTTPException(status_code=500, detail=str(e))
 
 
+class RecordingUploadFailure(BaseModel):
+    interview_id: str
+    link_id: Optional[str] = None
+
+
+@router.post("/recording-upload-failure")
+def record_recording_upload_failure(
+    data: RecordingUploadFailure,
+    credentials: Optional[HTTPAuthorizationCredentials] = Depends(candidate_monitoring_security),
+):
+    session = _require_candidate_session(
+        credentials,
+        link_id=data.link_id,
+        interview_id=data.interview_id,
+        allow_completed=True,
+    )
+    interview_sessions_collection.update_one(
+        {"_id": session["_id"]},
+        {
+            "$set": {
+                "recording_upload_status": "failed",
+                "recording_upload_failed_at": datetime.now(timezone.utc).isoformat(),
+            }
+        },
+    )
+    return {"status": "recorded"}
+
+
 @router.get("/generate-report/{interview_id}")
-def generate_report(interview_id: str):
+def generate_report(
+    interview_id: str,
+    current_admin: dict = Depends(get_current_admin_details),
+):
+    session = interview_sessions_collection.find_one({"interview_id": interview_id})
+    if not session:
+        raise HTTPException(status_code=404, detail="Session not found")
+    _require_admin_session_access(session, current_admin)
     # Fetch interview data
     interview_data = interviews_collection.find_one({"id": interview_id})
     if not interview_data:
@@ -2851,7 +3147,7 @@ for _route in router.routes:
 def send_submission_notification(candidate_email: str, candidate_name: str, admin_email: str, avg_score: float, total_questions: int):
     """Send test submission notification to both admin and candidate."""
     env_path = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), ".env")
-    load_dotenv(env_path, override=True)
+    load_dotenv(env_path, override=False)
     api_key = os.getenv("BREVO_API_KEY")
     sender_name = "Hire IQ Recruiting"
     sender_email_addr = os.getenv("BREVO_SENDER_EMAIL")
@@ -2915,7 +3211,7 @@ def send_submission_notification(candidate_email: str, candidate_name: str, admi
         res = requests.post(url, json={
             "sender": {"name": sender_name, "email": sender_email_addr},
             "to": [{"email": candidate_email, "name": candidate_name}],
-            "subject": "Your Interview Has Been Submitted — Hire IQ",
+            "subject": "Your Interview Has Been Submitted — HireIQ",
             "htmlContent": candidate_html
         }, headers=headers, timeout=10)
         results.append(res.status_code < 300)
@@ -2959,11 +3255,13 @@ async def get_dashboard_stats(admin_id: Optional[str] = None, current_admin: dic
             query["company_id"] = comp_id
         
         if current_admin.get("role") == "admin":
-            admin_doc = admins_collection.find_one({"_id": ObjectId(current_admin["admin_id"])})
+            admin_doc = await asyncio.to_thread(
+                admins_collection.find_one, {"_id": ObjectId(current_admin["admin_id"])}
+            )
             credits = admin_doc.get("credits", 0) if admin_doc else 0
         elif comp_id:
             # super_admin and master: use company credits (sessions deduct from company pool)
-            company = companies_collection.find_one({"_id": ObjectId(comp_id)})
+            company = await asyncio.to_thread(companies_collection.find_one, {"_id": ObjectId(comp_id)})
             credits = company.get("credits", 0) if company else 0
         else:
             credits = 0
@@ -2976,64 +3274,78 @@ async def get_dashboard_stats(admin_id: Optional[str] = None, current_admin: dic
         elif admin_id:
             query["created_by"] = admin_id
             
-        all_sessions = list(interview_sessions_collection.find(
-            query,
-            {"created_at": 1, "status": 1, "decision": 1, "avg_score": 1, "is_deactivated": 1, "expires_at": 1, "created_by": 1, "candidate_email": 1, "email": 1}
-        ))
         now = datetime.now(timezone.utc)
         from datetime import timedelta
-        
-        active_sessions = [s for s in all_sessions if not s.get("is_deactivated", False)]
-        total = len(active_sessions)
-        pending = 0
-        completed = 0
-        started = 0
-        expired = 0
-        selected = 0
-        rejected = 0
-        total_score = 0
-        scored_count = 0
-        today_count = 0
-        week_count = 0
-        
-        seen_emails = set()
-        
-        for s in all_sessions:
-            if s.get("is_deactivated", False):
-                continue
-                
-            email = s.get("candidate_email") or s.get("email")
-            if email:
-                seen_emails.add(email.strip().lower())
-                
-            status = sync_session_status(s, now)
-            
-            if status == "completed":
-                completed += 1
-            elif status == "started":
-                started += 1
-            elif status == "expired":
-                expired += 1
-            else:
-                pending += 1
-            
-            if s.get("decision") == "selected":
-                selected += 1
-            elif s.get("decision") == "rejected":
-                rejected += 1
-            
-            if s.get("avg_score") is not None:
-                total_score += s["avg_score"]
-                scored_count += 1
-            
-            try:
-                created = datetime.fromisoformat(s.get("created_at", ""))
-                if created.date() == now.date():
-                    today_count += 1
-                if (now - created).days <= 7:
-                    week_count += 1
-            except Exception:
-                pass
+        today_start = datetime(now.year, now.month, now.day, tzinfo=timezone.utc).isoformat()
+        week_start = (now - timedelta(days=7)).isoformat()
+        active_query = {
+            **query,
+            "$or": [{"is_deactivated": False}, {"is_deactivated": {"$exists": False}}],
+        }
+        dashboard_pipeline = [
+            {"$match": active_query},
+            {"$set": {
+                "effective_status": {
+                    "$cond": [
+                        {"$and": [
+                            {"$eq": ["$status", "pending"]},
+                            {"$ne": [{"$ifNull": ["$expires_at", None]}, None]},
+                            {"$lt": ["$expires_at", now.isoformat()]},
+                        ]},
+                        "expired",
+                        "$status",
+                    ]
+                }
+            }},
+            {"$facet": {
+                "summary": [{"$group": {
+                    "_id": None,
+                    "total": {"$sum": 1},
+                    "completed": {"$sum": {"$cond": [{"$eq": ["$effective_status", "completed"]}, 1, 0]}},
+                    "started": {"$sum": {"$cond": [{"$eq": ["$effective_status", "started"]}, 1, 0]}},
+                    "expired": {"$sum": {"$cond": [{"$eq": ["$effective_status", "expired"]}, 1, 0]}},
+                    "selected": {"$sum": {"$cond": [{"$eq": ["$decision", "selected"]}, 1, 0]}},
+                    "rejected": {"$sum": {"$cond": [{"$eq": ["$decision", "rejected"]}, 1, 0]}},
+                    "total_score": {"$sum": {"$ifNull": ["$avg_score", 0]}},
+                    "scored_count": {"$sum": {"$cond": [{"$ne": [{"$ifNull": ["$avg_score", None]}, None]}, 1, 0]}},
+                    "today": {"$sum": {"$cond": [{"$gte": ["$created_at", today_start]}, 1, 0]}},
+                    "this_week": {"$sum": {"$cond": [{"$gte": ["$created_at", week_start]}, 1, 0]}},
+                    "candidate_emails": {"$addToSet": {"$toLower": {"$ifNull": ["$candidate_email", "$email"]}}},
+                }}],
+                "by_creator": [{"$group": {"_id": "$created_by", "count": {"$sum": 1}}}],
+                "daily": [
+                    {"$match": {"created_at": {"$gte": week_start}}},
+                    {"$group": {"_id": {"$substrBytes": ["$created_at", 0, 10]}, "count": {"$sum": 1}}},
+                ],
+            }},
+        ]
+        aggregate_rows = await asyncio.to_thread(
+            lambda: list(interview_sessions_collection.aggregate(dashboard_pipeline))
+        )
+        aggregate_data = aggregate_rows[0] if aggregate_rows else {}
+        summary = (aggregate_data.get("summary") or [{}])[0]
+        total = summary.get("total", 0)
+        completed = summary.get("completed", 0)
+        started = summary.get("started", 0)
+        expired = summary.get("expired", 0)
+        pending = max(0, total - completed - started - expired)
+        selected = summary.get("selected", 0)
+        rejected = summary.get("rejected", 0)
+        total_score = summary.get("total_score", 0)
+        scored_count = summary.get("scored_count", 0)
+        today_count = summary.get("today", 0)
+        week_count = summary.get("this_week", 0)
+        seen_emails = {email for email in summary.get("candidate_emails", []) if email}
+        session_by_creator = {
+            str(row.get("_id") or ""): row.get("count", 0)
+            for row in aggregate_data.get("by_creator", [])
+            if row.get("_id")
+        }
+        daily_counts = {
+            row.get("_id"): row.get("count", 0)
+            for row in aggregate_data.get("daily", [])
+            if row.get("_id")
+        }
                 
         # Merge stats from AI Calling interested candidates
         try:
@@ -3042,14 +3354,19 @@ async def get_dashboard_stats(admin_id: Optional[str] = None, current_admin: dic
                 jobs_query["admin_id"] = current_admin["admin_id"]
             elif admin_id:
                 jobs_query["admin_id"] = admin_id
-            jobs = list(jobs_collection.find(jobs_query))
+            jobs = await asyncio.to_thread(lambda: list(jobs_collection.find(jobs_query)))
             job_ids = [j.get("job_id") for j in jobs if j.get("job_id")]
             
             app_query = {
                 "job_id": {"$in": job_ids},
                 "interest": {"$regex": "interested", "$options": "i"}
             }
-            apps = list(job_applications_collection.find(app_query, {"email": 1, "score": 1, "applied_at": 1, "updated_at": 1}))
+            apps = await asyncio.to_thread(
+                lambda: list(job_applications_collection.find(
+                    app_query,
+                    {"email": 1, "score": 1, "applied_at": 1, "updated_at": 1},
+                ))
+            )
             
             for app in apps:
                 email = app.get("email")
@@ -3096,32 +3413,18 @@ async def get_dashboard_stats(admin_id: Optional[str] = None, current_admin: dic
 
         if comp_id:
             # 1. Recruiters Count
-            recruiters_count = admins_collection.count_documents({"company_id": comp_id, "role": "admin"})
+            recruiters_count = await asyncio.to_thread(
+                admins_collection.count_documents, {"company_id": comp_id, "role": "admin"}
+            )
             
             # 2. Last 7 Days Usage
             for i in range(6, -1, -1):
                 day = now - timedelta(days=i)
                 start_of_day = datetime(day.year, day.month, day.day, tzinfo=timezone.utc)
-                end_of_day = start_of_day + timedelta(days=1)
-                
-                count = interview_sessions_collection.count_documents({
-                    **query,
-                    "created_at": {
-                        "$gte": start_of_day.isoformat(),
-                        "$lt": end_of_day.isoformat()
-                    }
-                })
+                count = daily_counts.get(start_of_day.date().isoformat(), 0)
                 chart_labels.append(day.strftime("%m/%d"))
                 chart_data.append(count)
                 
-            # 3. Recruiter Breakdown — count from all_sessions (same source as total/completed/pending)
-            # all_sessions already contains created_by and is filtered by company_id
-            session_by_creator = {}
-            for s in all_sessions:
-                cb = s.get("created_by") or ""
-                if cb:
-                    session_by_creator[cb] = session_by_creator.get(cb, 0) + 1
-
             # Sessions with created_by='admin' (frontend fallback string) are attributed to the current admin
             if "admin" in session_by_creator:
                 session_by_creator[current_admin["admin_id"]] = (
@@ -3129,10 +3432,12 @@ async def get_dashboard_stats(admin_id: Optional[str] = None, current_admin: dic
                 )
 
             # Load all admins in this company and map each to their session count
-            all_company_admins = list(admins_collection.find(
-                {"company_id": comp_id},
-                {"_id": 1, "name": 1, "username": 1, "email": 1}
-            ))
+            all_company_admins = await asyncio.to_thread(
+                lambda: list(admins_collection.find(
+                    {"company_id": comp_id},
+                    {"_id": 1, "name": 1, "username": 1, "email": 1},
+                ))
+            )
             seen_admin_ids = set()
             for a in all_company_admins:
                 aid = str(a["_id"])
@@ -3152,8 +3457,9 @@ async def get_dashboard_stats(admin_id: Optional[str] = None, current_admin: dic
             # 4. Credits Used vs Available
             # Each interview session costs exactly 1 credit (deducted atomically at creation).
             # credits_used = total non-deactivated sessions for this company.
-            credits_used = interview_sessions_collection.count_documents(
-                {"company_id": comp_id, "$or": [{"is_deactivated": False}, {"is_deactivated": {"$exists": False}}]}
+            credits_used = await asyncio.to_thread(
+                interview_sessions_collection.count_documents,
+                {"company_id": comp_id, "$or": [{"is_deactivated": False}, {"is_deactivated": {"$exists": False}}]},
             )
 
         stats = {
@@ -3288,7 +3594,7 @@ async def startup_event_db_and_email():
             import secrets
             master_pw = os.getenv("DEFAULT_MASTER_PASSWORD") or secrets.token_urlsafe(12)
             hashed_pw = hash_password(master_pw)
-            default_email = os.getenv("BREVO_SENDER_EMAIL", "no-reply@mockinterview.com")
+            default_email = os.getenv("BREVO_SENDER_EMAIL", "no-reply@hireiq.co.in")
             admins_collection.insert_one({
         "custom_id": get_next_sequence_value("recruiter", "RC"),
                 "username": "master",
@@ -3305,7 +3611,7 @@ async def startup_event_db_and_email():
             import secrets
             admin_pw = os.getenv("DEFAULT_ADMIN_PASSWORD") or secrets.token_urlsafe(12)
             hashed_pw = hash_password(admin_pw)
-            default_email = os.getenv("BREVO_SENDER_EMAIL", "no-reply@mockinterview.com")
+            default_email = os.getenv("BREVO_SENDER_EMAIL", "no-reply@hireiq.co.in")
             admins_collection.insert_one({
         "custom_id": get_next_sequence_value("recruiter", "RC"),
                 "username": "admin",
@@ -3321,7 +3627,7 @@ async def startup_event_db_and_email():
         else:
             # Upgrade legacy admin to tenant
             update_data = {}
-            if not row.get("email"): update_data["email"] = os.getenv("BREVO_SENDER_EMAIL", "no-reply@mockinterview.com")
+            if not row.get("email"): update_data["email"] = os.getenv("BREVO_SENDER_EMAIL", "no-reply@hireiq.co.in")
             if not row.get("role"): update_data["role"] = "tenant"
             if not row.get("subscription_plan"):
                 update_data["subscription_plan"] = "advance"
@@ -3381,7 +3687,14 @@ async def startup_event_db_and_email():
         EMAIL_SCHEDULER_STARTED = True
 
 @router.get("/api/interview/{interview_id}/insights")
-def get_interview_insights(interview_id: str):
+def get_interview_insights(
+    interview_id: str,
+    current_admin: dict = Depends(get_current_admin_details),
+):
+    session = interview_sessions_collection.find_one({"interview_id": interview_id})
+    if not session:
+        raise HTTPException(status_code=404, detail="Interview session not found")
+    _require_admin_session_access(session, current_admin)
     answers = list(answers_collection.find({"interview_id": interview_id}))
     
     if not answers:
@@ -3481,7 +3794,7 @@ def reset_password(data: ResetPasswordRequest):
 
 def send_otp_email(email: str, name: str, otp: str):
     env_path = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), ".env")
-    load_dotenv(env_path, override=True)
+    load_dotenv(env_path, override=False)
     api_key = os.getenv("BREVO_API_KEY")
     sender_name = "Hire IQ Recruiting"
     sender_email = os.getenv("BREVO_SENDER_EMAIL")
@@ -4305,8 +4618,6 @@ def get_session_by_link(link_id: str):
         return {
             "status": "success",
             "candidate_name": row.get("candidate_name"),
-            "resume_text": row.get("resume_text"),
-            "job_description": row.get("job_description"),
             "session_status": status,
             "interview_duration": interview_duration,
             "interview_format": row.get("interview_format", "Standard"),
@@ -4441,8 +4752,7 @@ def delete_session(link_id: str, current_admin: dict = Depends(require_role("adm
     if not row:
         raise HTTPException(status_code=404, detail="Session not found")
         
-    if current_admin.get("role") != "master" and row.get("company_id") != current_admin.get("company_id"):
-        raise HTTPException(status_code=403, detail="Access denied")
+    _require_admin_session_access(row, current_admin)
         
     # Delete from interview tracking
     interview_id = row.get("interview_id")
@@ -4450,7 +4760,7 @@ def delete_session(link_id: str, current_admin: dict = Depends(require_role("adm
         interviews_collection.delete_one({"id": interview_id})
         answers_collection.delete_many({"interview_id": interview_id})
         if get_session(interview_id):
-            delete_session(interview_id)
+            delete_cached_session(interview_id)
             
     # Delete the session link
     interview_sessions_collection.delete_one({"link_id": link_id})
@@ -4462,8 +4772,7 @@ def deactivate_session(link_id: str, current_admin: dict = Depends(require_role(
     row = interview_sessions_collection.find_one({"link_id": link_id})
     if not row:
         raise HTTPException(status_code=404, detail="Session not found")
-    if current_admin.get("role") != "master" and row.get("company_id") != current_admin.get("company_id"):
-        raise HTTPException(status_code=403, detail="Access denied")
+    _require_admin_session_access(row, current_admin)
         
     interview_sessions_collection.update_one({"link_id": link_id}, {"$set": {"is_deactivated": True}})
     return {"status": "success"}
@@ -4473,8 +4782,7 @@ def activate_session(link_id: str, current_admin: dict = Depends(require_role("a
     row = interview_sessions_collection.find_one({"link_id": link_id})
     if not row:
         raise HTTPException(status_code=404, detail="Session not found")
-    if current_admin.get("role") != "master" and row.get("company_id") != current_admin.get("company_id"):
-        raise HTTPException(status_code=403, detail="Access denied")
+    _require_admin_session_access(row, current_admin)
         
     interview_sessions_collection.update_one({"link_id": link_id}, {"$set": {"is_deactivated": False}})
     return {"status": "success"}
@@ -4488,8 +4796,7 @@ def reschedule_session(link_id: str, new_expiry: str = Form(...), new_start: str
     row = interview_sessions_collection.find_one({"link_id": link_id})
     if not row:
         raise HTTPException(status_code=404, detail="Session not found")
-    if current_admin.get("role") != "master" and row.get("company_id") != current_admin.get("company_id"):
-        raise HTTPException(status_code=403, detail="Access denied")
+    _require_admin_session_access(row, current_admin)
     update_data = {
         "expires_at": new_expiry,
         "status": "pending",
@@ -4849,7 +5156,12 @@ async def start_session_interview(link_id: str = Form(...)):
     }
 
 @router.post("/session/{interview_id}/violation")
-def log_violation(interview_id: str, violation: ViolationRequest):
+def log_violation(
+    interview_id: str,
+    violation: ViolationRequest,
+    credentials: Optional[HTTPAuthorizationCredentials] = Depends(candidate_monitoring_security),
+):
+    _require_candidate_session(credentials, interview_id=interview_id)
     print(f" VIOLATION detected for session {interview_id}: {violation.type} (#{violation.count}) at {violation.timestamp}")
     try:
         interview_sessions_collection.update_one(
@@ -4872,13 +5184,21 @@ class ProctoringViolationRequest(BaseModel):
 
 
 @router.post("/proctoring/violation")
-def log_proctoring_violation(data: ProctoringViolationRequest):
+def log_proctoring_violation(
+    data: ProctoringViolationRequest,
+    credentials: Optional[HTTPAuthorizationCredentials] = Depends(candidate_monitoring_security),
+):
     """
     Unified proctoring violation endpoint.
     Accepts interview_id OR link_id to locate the session.
     Stores violation in session.violations[] and increments violation_count.
     Returns current violation_count so the caller can enforce termination threshold.
     """
+    _require_candidate_session(
+        credentials,
+        link_id=data.link_id or None,
+        interview_id=data.interview_id or None,
+    )
     ts = data.timestamp or datetime.now(timezone.utc).isoformat()
 
     violation_doc = {
@@ -4936,6 +5256,14 @@ def update_decision(data: DecisionRequest, current_admin: dict = Depends(require
                 app = job_applications_collection.find_one({"omni_call_id": app_id})
             if not app:
                 raise HTTPException(status_code=404, detail="AI Call candidate not found")
+
+            job = jobs_collection.find_one({"job_id": app.get("job_id")})
+            if not job:
+                raise HTTPException(status_code=403, detail="Unable to verify candidate ownership")
+            if current_admin.get("role") != "master" and job.get("company_id") != current_admin.get("company_id"):
+                raise HTTPException(status_code=403, detail="Access denied")
+            if current_admin.get("role") == "admin" and str(job.get("admin_id") or "") != str(current_admin.get("admin_id") or ""):
+                raise HTTPException(status_code=403, detail="Access denied to another recruiter's candidate")
                 
             job_applications_collection.update_one({"_id": app["_id"]}, {"$set": {"decision": data.decision}})
             
@@ -4943,7 +5271,7 @@ def update_decision(data: DecisionRequest, current_admin: dict = Depends(require
             email = app.get("email")
             jd = app.get("job_description") or ""
             
-            load_dotenv(override=True)
+            load_dotenv(override=False)
             email_sent = False
             email_reason = "No candidate email found"
             if email:
@@ -4958,8 +5286,7 @@ def update_decision(data: DecisionRequest, current_admin: dict = Depends(require
             print(f" Session NOT found for link_id: {data.link_id}")
             raise HTTPException(status_code=404, detail="Session not found")
         
-        if current_admin.get("role") != "master" and row.get("company_id") != current_admin.get("company_id"):
-            raise HTTPException(status_code=403, detail="Access denied")
+        _require_admin_session_access(row, current_admin)
         
         name = row.get("candidate_name")
         email = row.get("candidate_email")
@@ -4972,7 +5299,7 @@ def update_decision(data: DecisionRequest, current_admin: dict = Depends(require
         sync_session_to_application(data.link_id)
         
         # 3. Send Email
-        load_dotenv(override=True)
+        load_dotenv(override=False)
         email_sent = False
         email_reason = "No candidate email found"
         if email:
@@ -4990,7 +5317,7 @@ def update_decision(data: DecisionRequest, current_admin: dict = Depends(require
 def send_decision_email(email: str, name: str, decision: str, jd: str):
     import requests
     env_path = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), ".env")
-    load_dotenv(env_path, override=True)
+    load_dotenv(env_path, override=False)
     api_key = os.getenv("BREVO_API_KEY")
     sender_name = "Hire IQ Recruiting"
     sender_email = os.getenv("BREVO_SENDER_EMAIL")
@@ -5103,7 +5430,7 @@ def admin_copilot_chat(request: CopilotRequest, raw_request: Request, current_ad
             pass
         plans_context = "\n".join(dynamic_plans)
 
-        system_prompt = f"""You are the 'Hire IQ Admin Copilot', a specialized AI assistant embedded within the Admin Dashboard of the Hire IQ Mock Interview platform.
+        system_prompt = f"""You are the 'Hire IQ Admin Copilot', a specialized AI assistant embedded within the Admin Dashboard of the Hire IQ Adaptive Interview platform.
 You are currently talking to a user with the role: {role.upper()}.
 
 YOUR PURPOSE:
@@ -5191,7 +5518,7 @@ CRITICAL RULES:
                 {"candidate_name": 1, "candidate_email": 1, "avg_score": 1, "decision": 1, "_id": 0}
             ).sort("created_at", -1).limit(3))
             if recent_sessions:
-                context_data += "\n--- YOUR RECENT CANDIDATE MOCK INTERVIEWS ---\n"
+                context_data += "\n--- YOUR RECENT CANDIDATE INTERVIEWS ---\n"
                 for s in recent_sessions:
                     context_data += f"- Candidate: {s.get('candidate_name', 'Unknown')} | Email: {s.get('candidate_email', 'Unknown')} | Score: {s.get('avg_score', 'N/A')}/100 | Decision: {s.get('decision', 'None')}\n"
 
@@ -5207,7 +5534,7 @@ CRITICAL RULES:
                 {"candidate_name": 1, "candidate_email": 1, "avg_score": 1, "decision": 1, "created_by": 1, "_id": 0}
             ).sort("created_at", -1).limit(3))
             if recent_sessions:
-                context_data += "\n--- COMPANY CANDIDATE MOCK INTERVIEWS ---\n"
+                context_data += "\n--- COMPANY CANDIDATE INTERVIEWS ---\n"
                 for s in recent_sessions:
                     context_data += f"- Candidate: {s.get('candidate_name')} | Email: {s.get('candidate_email')} | Score: {s.get('avg_score')} | Created By ID: {s.get('created_by')}\n"
 
@@ -5421,7 +5748,10 @@ class ATSRequest(BaseModel):
     jd_text: str
 
 @router.post("/admin/ats-score")
-def calculate_ats_score(request: ATSRequest):
+def calculate_ats_score(
+    request: ATSRequest,
+    current_admin: dict = Depends(get_current_admin_details),
+):
     try:
         resume_text = request.resume_text.strip()[:3000]
         jd_text = request.jd_text.strip()[:3000]
@@ -5650,8 +5980,13 @@ class CandidateFeedbackRequest(BaseModel):
     feedback_text: str
 
 @router.post("/submit-feedback/{link_id}")
-def submit_feedback(link_id: str, payload: CandidateFeedbackRequest):
+def submit_feedback(
+    link_id: str,
+    payload: CandidateFeedbackRequest,
+    credentials: Optional[HTTPAuthorizationCredentials] = Depends(candidate_monitoring_security),
+):
     """Save candidate feedback into the interview session."""
+    _require_candidate_session(credentials, link_id=link_id, allow_completed=True)
     try:
         session = interview_sessions_collection.find_one({"link_id": link_id})
         if not session:
@@ -5679,9 +6014,11 @@ def complete_session(
     link_id: str, 
     payload: Optional[CompleteSessionRequest] = None,
     warnings: Optional[int] = None,
-    reason: Optional[str] = None
+    reason: Optional[str] = None,
+    credentials: Optional[HTTPAuthorizationCredentials] = Depends(candidate_monitoring_security),
 ):
     """Mark a session as completed and send notification emails (Task 3)."""
+    _require_candidate_session(credentials, link_id=link_id, allow_completed=True)
     try:
         session = interview_sessions_collection.find_one({"link_id": link_id})
         # Use default payload if none was sent by the client
@@ -6960,6 +7297,21 @@ def create_razorpay_order(data: RazorpayOrderRequest):
     if int(plan_info.get("price", 0)) <= 0:
         raise HTTPException(status_code=400, detail="This plan does not require payment")
 
+    pending_signup_id = uuid.uuid4().hex
+    pending_signups_collection.insert_one({
+        "_id": pending_signup_id,
+        "name": signup["name"],
+        "email": signup["email"],
+        "password_hash": hash_password(signup["password"]),
+        "phone": signup["phone"],
+        "company_name": signup["company_name"],
+        "plan_name": plan_info["plan_name"],
+        "created_at": datetime.now(timezone.utc),
+        "expires_at": datetime.now(timezone.utc) + timedelta(hours=2),
+        "status": "pending",
+        "provider": "razorpay",
+    })
+
     receipt = f"aii_{int(time.time())}_{uuid.uuid4().hex[:8]}"
     payload = {
         "amount": int(plan_info["price"]) * 100,
@@ -6967,8 +7319,7 @@ def create_razorpay_order(data: RazorpayOrderRequest):
         "receipt": receipt[:40],
         "notes": {
             "plan_name": plan_info["plan_name"],
-            "email": signup["email"][:255],
-            "company_name": signup["company_name"][:255],
+            "pending_signup_id": pending_signup_id,
         },
     }
 
@@ -6988,6 +7339,18 @@ def create_razorpay_order(data: RazorpayOrderRequest):
             raise HTTPException(status_code=502, detail=f"Razorpay order creation failed: {error_message}")
 
         order = response.json()
+        payment_orders_collection.insert_one({
+            "order_id": order["id"],
+            "provider": "razorpay",
+            "purpose": "signup",
+            "pending_signup_id": pending_signup_id,
+            "email": signup["email"],
+            "plan_name": plan_info["plan_name"],
+            "amount": int(plan_info["price"]) * 100,
+            "currency": "INR",
+            "status": "created",
+            "created_at": datetime.now(timezone.utc),
+        })
         plan_def = get_plan_definition(plan_info["plan_name"])
         return {
             "status": "success",
@@ -7011,14 +7374,230 @@ def create_razorpay_order(data: RazorpayOrderRequest):
             },
         }
     except HTTPException:
+        pending_signups_collection.delete_one({"_id": pending_signup_id, "status": "pending"})
         raise
     except Exception as exc:
+        pending_signups_collection.delete_one({"_id": pending_signup_id, "status": "pending"})
         raise HTTPException(status_code=500, detail=f"Unable to initialize Razorpay payment: {str(exc)}")
+
+
+def _verify_razorpay_signup_payment(data: RazorpayVerifyRequest, key_id: str, key_secret: str):
+    order_record = payment_orders_collection.find_one({"order_id": data.razorpay_order_id})
+    if not order_record or order_record.get("purpose") != "signup":
+        raise HTTPException(status_code=400, detail="Unknown or expired payment order")
+    if order_record.get("plan_name") != data.plan_name:
+        raise HTTPException(status_code=400, detail="Payment order does not match the selected plan")
+
+    if order_record.get("status") == "consumed":
+        if order_record.get("payment_id") == data.razorpay_payment_id:
+            return {
+                "status": "success",
+                "message": "Subscription is already activated for this account.",
+                "idempotent": True,
+            }
+        raise HTTPException(status_code=409, detail="Payment order has already been consumed")
+
+    signature_payload = f"{data.razorpay_order_id}|{data.razorpay_payment_id}".encode("utf-8")
+    expected_signature = hmac.new(
+        key_secret.encode("utf-8"),
+        signature_payload,
+        hashlib.sha256,
+    ).hexdigest()
+    if not hmac.compare_digest(expected_signature, data.razorpay_signature):
+        raise HTTPException(status_code=400, detail="Payment signature verification failed")
+
+    try:
+        order_response = requests.get(
+            f"https://api.razorpay.com/v1/orders/{data.razorpay_order_id}",
+            auth=(key_id, key_secret),
+            timeout=30,
+        )
+        payment_response = requests.get(
+            f"https://api.razorpay.com/v1/payments/{data.razorpay_payment_id}",
+            auth=(key_id, key_secret),
+            timeout=30,
+        )
+    except requests.RequestException as exc:
+        raise HTTPException(status_code=502, detail="Unable to verify payment with Razorpay") from exc
+    if not order_response.ok or not payment_response.ok:
+        raise HTTPException(status_code=502, detail="Razorpay payment verification failed")
+
+    plan_info = plans_collection.find_one({"plan_name": order_record["plan_name"]})
+    if not plan_info or int(plan_info.get("price", 0)) <= 0:
+        raise HTTPException(status_code=400, detail="The purchased plan is no longer available")
+
+    order_info = order_response.json()
+    payment_info = payment_response.json()
+    expected_amount = int(order_record["amount"])
+    notes = order_info.get("notes") or {}
+    if (
+        int(order_info.get("amount", 0)) != expected_amount
+        or (order_info.get("currency") or "").upper() != order_record.get("currency", "INR")
+        or notes.get("plan_name") != order_record["plan_name"]
+        or notes.get("pending_signup_id") != order_record.get("pending_signup_id")
+    ):
+        raise HTTPException(status_code=400, detail="Razorpay order details do not match")
+    if (
+        payment_info.get("order_id") != data.razorpay_order_id
+        or int(payment_info.get("amount", 0)) != expected_amount
+        or (payment_info.get("currency") or "").upper() != order_record.get("currency", "INR")
+        or (payment_info.get("status") or "").lower() not in {"authorized", "captured"}
+    ):
+        raise HTTPException(status_code=400, detail="Razorpay payment is incomplete or does not match")
+
+    try:
+        claimed_order = payment_orders_collection.find_one_and_update(
+            {"order_id": data.razorpay_order_id, "status": "created"},
+            {
+                "$set": {
+                    "status": "processing",
+                    "payment_id": data.razorpay_payment_id,
+                    "processing_at": datetime.now(timezone.utc),
+                }
+            },
+            return_document=ReturnDocument.AFTER,
+        )
+    except DuplicateKeyError as exc:
+        raise HTTPException(status_code=409, detail="Payment has already been used") from exc
+
+    if not claimed_order:
+        claimed_order = payment_orders_collection.find_one({"order_id": data.razorpay_order_id})
+        if not (
+            claimed_order
+            and claimed_order.get("status") == "processing"
+            and claimed_order.get("payment_id") == data.razorpay_payment_id
+        ):
+            raise HTTPException(status_code=409, detail="Payment order is already being processed")
+
+    pending_signup_id = claimed_order.get("pending_signup_id")
+    pending_signup = pending_signups_collection.find_one({"_id": pending_signup_id})
+    if not pending_signup:
+        existing_admin = admins_collection.find_one({
+            "razorpay_order_id": data.razorpay_order_id,
+            "razorpay_payment_id": data.razorpay_payment_id,
+        })
+        if existing_admin:
+            payment_orders_collection.update_one(
+                {"order_id": data.razorpay_order_id, "status": "processing"},
+                {"$set": {"status": "consumed", "consumed_at": datetime.now(timezone.utc)}},
+            )
+            return {
+                "status": "success",
+                "message": "Subscription is already activated for this account.",
+                "idempotent": True,
+            }
+        raise HTTPException(status_code=410, detail="Signup details expired. Contact support with your payment ID.")
+
+    if (
+        pending_signup.get("plan_name") != claimed_order.get("plan_name")
+        or pending_signup.get("email") != claimed_order.get("email")
+    ):
+        raise HTTPException(status_code=400, detail="Stored signup details do not match this payment")
+
+    pending_signup = pending_signups_collection.find_one_and_update(
+        {"_id": pending_signup_id, "status": "pending"},
+        {"$set": {"status": "processing", "processing_at": datetime.now(timezone.utc)}},
+        return_document=ReturnDocument.AFTER,
+    ) or pending_signups_collection.find_one({"_id": pending_signup_id, "status": "processing"})
+    if not pending_signup:
+        raise HTTPException(status_code=409, detail="Signup is already being activated")
+
+    existing_user = admins_collection.find_one({"email": pending_signup["email"]})
+    if existing_user:
+        if (
+            existing_user.get("razorpay_order_id") == data.razorpay_order_id
+            and existing_user.get("razorpay_payment_id") == data.razorpay_payment_id
+        ):
+            payment_orders_collection.update_one(
+                {"order_id": data.razorpay_order_id, "status": "processing"},
+                {"$set": {"status": "consumed", "consumed_at": datetime.now(timezone.utc)}},
+            )
+            pending_signups_collection.delete_one({"_id": pending_signup_id})
+            return {
+                "status": "success",
+                "message": "Subscription is already activated for this account.",
+                "idempotent": True,
+            }
+        raise HTTPException(status_code=400, detail="An account with this email already exists")
+
+    now = datetime.now(timezone.utc)
+    plan_def = get_plan_definition(claimed_order["plan_name"])
+    credits_to_grant = plan_def.get("credits_granted", 0)
+    company_doc = {
+        "name": pending_signup.get("company_name", ""),
+        "subscription_plan": claimed_order["plan_name"],
+        "subscription_start": now.isoformat(),
+        "subscription_expiry": (now + timedelta(days=3650)).isoformat(),
+        "is_paid": True,
+        "credits": credits_to_grant,
+        "created_at": now.isoformat(),
+    }
+    company_insert = companies_collection.insert_one(company_doc)
+    try:
+        admins_collection.insert_one({
+            "custom_id": get_next_sequence_value("recruiter", "RC"),
+            "username": pending_signup["email"],
+            "password": pending_signup["password_hash"],
+            "email": pending_signup["email"],
+            "name": pending_signup["name"],
+            "phone": pending_signup.get("phone", ""),
+            "company_name": pending_signup.get("company_name", ""),
+            "company_id": str(company_insert.inserted_id),
+            "role": "super_admin",
+            "subscription_plan": claimed_order["plan_name"],
+            "subscription_start": now.isoformat(),
+            "subscription_expiry": (now + timedelta(days=3650)).isoformat(),
+            "credits": credits_to_grant,
+            "is_paid": True,
+            "payment_provider": "razorpay",
+            "payment_status": payment_info.get("status"),
+            "amount_paid": expected_amount // 100,
+            "razorpay_order_id": data.razorpay_order_id,
+            "razorpay_payment_id": data.razorpay_payment_id,
+            "payment_verified_at": now.isoformat(),
+            "login_enabled": True,
+            "created_at": now.isoformat(),
+        })
+    except Exception:
+        companies_collection.delete_one({"_id": company_insert.inserted_id})
+        pending_signups_collection.update_one(
+            {"_id": pending_signup_id, "status": "processing"},
+            {"$set": {"status": "pending"}, "$unset": {"processing_at": ""}},
+        )
+        payment_orders_collection.update_one(
+            {
+                "order_id": data.razorpay_order_id,
+                "status": "processing",
+                "payment_id": data.razorpay_payment_id,
+            },
+            {"$set": {"status": "created"}, "$unset": {"payment_id": "", "processing_at": ""}},
+        )
+        raise
+
+    consume_result = payment_orders_collection.update_one(
+        {
+            "order_id": data.razorpay_order_id,
+            "status": "processing",
+            "payment_id": data.razorpay_payment_id,
+        },
+        {"$set": {"status": "consumed", "consumed_at": datetime.now(timezone.utc)}},
+    )
+    if consume_result.modified_count != 1:
+        raise HTTPException(status_code=500, detail="Account created but payment receipt finalization failed")
+    pending_signups_collection.delete_one({"_id": pending_signup_id})
+    return {
+        "status": "success",
+        "message": f"Payment verified. Your {claimed_order['plan_name']} subscription is now active.",
+    }
+
 
 @router.post("/api/razorpay/verify-payment")
 def verify_razorpay_payment(data: RazorpayVerifyRequest):
     """Verify Razorpay signature and activate the paid subscription."""
-    _, key_secret = get_razorpay_credentials()
+    key_id, key_secret = get_razorpay_credentials()
+    return _verify_razorpay_signup_payment(data, key_id, key_secret)
+
+    # Legacy implementation kept below temporarily for database migration reference.
     signup = validate_signup_form(data.signup_form or {})
 
     plan_info = plans_collection.find_one({"plan_name": data.plan_name})
@@ -7127,10 +7706,16 @@ def verify_razorpay_payment(data: RazorpayVerifyRequest):
 
 
 @router.post("/api/razorpay/create-upgrade-order")
-def create_razorpay_upgrade_order(data: RazorpayUpgradeOrderRequest):
+def create_razorpay_upgrade_order(
+    data: RazorpayUpgradeOrderRequest,
+    current_admin: dict = Depends(get_current_admin_details),
+):
     """Create a Razorpay order for purchasing credits / upgrading."""
     key_id, key_secret = get_razorpay_credentials()
-    admin = admins_collection.find_one({"_id": ObjectId(data.admin_id)})
+    authenticated_admin_id = str(current_admin["admin_id"])
+    if data.admin_id and not hmac.compare_digest(str(data.admin_id), authenticated_admin_id):
+        raise HTTPException(status_code=403, detail="Cannot create an order for another account")
+    admin = admins_collection.find_one({"_id": ObjectId(authenticated_admin_id)})
     if not admin:
         raise HTTPException(status_code=404, detail="Admin not found")
         
@@ -7146,7 +7731,7 @@ def create_razorpay_upgrade_order(data: RazorpayUpgradeOrderRequest):
         "currency": "INR",
         "receipt": receipt[:40],
         "notes": {
-            "upgrade_admin_id": data.admin_id,
+            "upgrade_admin_id": authenticated_admin_id,
             "plan_name": data.plan_name
         }
     }
@@ -7162,6 +7747,18 @@ def create_razorpay_upgrade_order(data: RazorpayUpgradeOrderRequest):
             raise HTTPException(status_code=500, detail=f"Razorpay error: {response.text}")
         
         order_data = response.json()
+        payment_orders_collection.insert_one({
+            "order_id": order_data["id"],
+            "provider": "razorpay",
+            "purpose": "upgrade",
+            "admin_id": authenticated_admin_id,
+            "company_id": str(admin.get("company_id") or ""),
+            "plan_name": plan_info["plan_name"],
+            "amount": int(plan_info["price"]) * 100,
+            "currency": "INR",
+            "status": "created",
+            "created_at": datetime.now(timezone.utc),
+        })
         return {
             "status": "success",
             "razorpay_order_id": order_data["id"],
@@ -7169,16 +7766,24 @@ def create_razorpay_upgrade_order(data: RazorpayUpgradeOrderRequest):
             "currency": order_data["currency"],
             "key_id": key_id
         }
+    except HTTPException:
+        raise
     except Exception as e:
         print(f"Razorpay Upgrade error: {e}")
         raise HTTPException(status_code=500, detail=str(e))
 
 @router.post("/api/razorpay/verify-upgrade")
-def verify_razorpay_upgrade(data: RazorpayUpgradeVerifyRequest):
+def verify_razorpay_upgrade(
+    data: RazorpayUpgradeVerifyRequest,
+    current_admin: dict = Depends(get_current_admin_details),
+):
     """Verify Razorpay signature and add credits to the user/company."""
     key_id, key_secret = get_razorpay_credentials()
-    
-    admin = admins_collection.find_one({"_id": ObjectId(data.admin_id)})
+
+    authenticated_admin_id = str(current_admin["admin_id"])
+    if data.admin_id and not hmac.compare_digest(str(data.admin_id), authenticated_admin_id):
+        raise HTTPException(status_code=403, detail="Cannot verify a payment for another account")
+    admin = admins_collection.find_one({"_id": ObjectId(authenticated_admin_id)})
     if not admin:
         raise HTTPException(status_code=404, detail="Admin not found")
 
@@ -7192,6 +7797,24 @@ def verify_razorpay_upgrade(data: RazorpayUpgradeVerifyRequest):
     if not hmac.compare_digest(expected_signature, data.razorpay_signature):
         raise HTTPException(status_code=400, detail="Payment signature verification failed")
 
+    order_record = payment_orders_collection.find_one({"order_id": data.razorpay_order_id})
+    if not order_record:
+        raise HTTPException(status_code=400, detail="Unknown or expired payment order")
+    if order_record.get("status") == "consumed":
+        if order_record.get("payment_id") == data.razorpay_payment_id:
+            return {
+                "status": "success",
+                "message": "Payment was already applied.",
+                "credits_added": 0,
+                "idempotent": True,
+            }
+        raise HTTPException(status_code=409, detail="Payment order has already been consumed")
+    if (
+        str(order_record.get("admin_id") or "") != authenticated_admin_id
+        or order_record.get("plan_name") != data.plan_name
+    ):
+        raise HTTPException(status_code=403, detail="Payment order does not belong to this account and plan")
+
     plan_info = plans_collection.find_one({"plan_name": data.plan_name})
     if not plan_info:
         raise HTTPException(status_code=400, detail="Invalid plan selected")
@@ -7199,27 +7822,81 @@ def verify_razorpay_upgrade(data: RazorpayUpgradeVerifyRequest):
     plan_def = get_plan_definition(plan_info["plan_name"])
     credits_to_grant = plan_def.get("credits_granted", 0)
 
+    try:
+        order_response = requests.get(
+            f"https://api.razorpay.com/v1/orders/{data.razorpay_order_id}",
+            auth=(key_id, key_secret),
+            timeout=30,
+        )
+        payment_response = requests.get(
+            f"https://api.razorpay.com/v1/payments/{data.razorpay_payment_id}",
+            auth=(key_id, key_secret),
+            timeout=30,
+        )
+    except requests.RequestException as exc:
+        raise HTTPException(status_code=502, detail="Unable to verify payment with Razorpay") from exc
+    if not order_response.ok or not payment_response.ok:
+        raise HTTPException(status_code=502, detail="Razorpay payment verification failed")
+
+    order_info = order_response.json()
+    payment_info = payment_response.json()
+    expected_amount = int(plan_info["price"]) * 100
+    if int(order_info.get("amount", 0)) != expected_amount:
+        raise HTTPException(status_code=400, detail="Paid amount does not match the selected plan")
+    if (order_info.get("currency") or "").upper() != "INR":
+        raise HTTPException(status_code=400, detail="Unexpected payment currency")
+    notes = order_info.get("notes") or {}
+    if (
+        str(notes.get("upgrade_admin_id") or "") != authenticated_admin_id
+        or notes.get("plan_name") != data.plan_name
+    ):
+        raise HTTPException(status_code=400, detail="Razorpay order metadata does not match")
+    if payment_info.get("order_id") != data.razorpay_order_id:
+        raise HTTPException(status_code=400, detail="Payment does not belong to this order")
+    if (payment_info.get("status") or "").lower() not in {"authorized", "captured"}:
+        raise HTTPException(status_code=400, detail="Payment has not completed")
+    if int(payment_info.get("amount", 0)) != expected_amount:
+        raise HTTPException(status_code=400, detail="Payment amount does not match")
+
+    try:
+        claimed_order = payment_orders_collection.find_one_and_update(
+            {"order_id": data.razorpay_order_id, "status": "created"},
+            {
+                "$set": {
+                    "status": "processing",
+                    "payment_id": data.razorpay_payment_id,
+                    "processing_at": datetime.now(timezone.utc),
+                }
+            },
+            return_document=ReturnDocument.AFTER,
+        )
+    except DuplicateKeyError as exc:
+        raise HTTPException(status_code=409, detail="Payment has already been used") from exc
+    if not claimed_order:
+        existing_order = payment_orders_collection.find_one({"order_id": data.razorpay_order_id})
+        if not (
+            existing_order
+            and existing_order.get("status") == "processing"
+            and existing_order.get("payment_id") == data.razorpay_payment_id
+        ):
+            raise HTTPException(status_code=409, detail="Payment order is already being processed")
+        claimed_order = existing_order
+
     now = datetime.now(timezone.utc).isoformat()
     expiry = (datetime.now(timezone.utc) + timedelta(days=3650)).isoformat()
 
     if admin.get("company_id"):
-        # Update Company
-        companies_collection.update_one(
-            {"_id": ObjectId(admin["company_id"])},
-            {
-                "$set": {
-                    "subscription_plan": data.plan_name,
-                    "subscription_start": now,
-                    "subscription_expiry": expiry,
-                    "is_paid": True,
-                },
-                "$inc": {"credits": credits_to_grant}
-            }
-        )
+        target_collection = companies_collection
+        target_id = ObjectId(admin["company_id"])
     else:
-        # Update Admin
-        admins_collection.update_one(
-            {"_id": ObjectId(data.admin_id)},
+        target_collection = admins_collection
+        target_id = ObjectId(authenticated_admin_id)
+
+    target_result = target_collection.update_one(
+            {
+                "_id": target_id,
+                "applied_payment_ids": {"$ne": data.razorpay_payment_id},
+            },
             {
                 "$set": {
                     "subscription_plan": data.plan_name,
@@ -7227,10 +7904,34 @@ def verify_razorpay_upgrade(data: RazorpayUpgradeVerifyRequest):
                     "subscription_expiry": expiry,
                     "is_paid": True,
                 },
-                "$inc": {"credits": credits_to_grant}
+                "$inc": {"credits": credits_to_grant},
+                "$addToSet": {"applied_payment_ids": data.razorpay_payment_id},
             }
         )
-        
+    if target_result.matched_count == 0:
+        target = target_collection.find_one({"_id": target_id})
+        if not target:
+            raise HTTPException(status_code=404, detail="Subscription account no longer exists")
+        if data.razorpay_payment_id not in target.get("applied_payment_ids", []):
+            raise HTTPException(status_code=500, detail="Unable to apply purchased credits")
+
+    consume_result = payment_orders_collection.update_one(
+        {
+            "order_id": data.razorpay_order_id,
+            "status": "processing",
+            "payment_id": data.razorpay_payment_id,
+        },
+        {
+            "$set": {
+                "status": "consumed",
+                "payment_id": data.razorpay_payment_id,
+                "consumed_at": datetime.now(timezone.utc),
+            }
+        },
+    )
+    if consume_result.modified_count != 1:
+        raise HTTPException(status_code=500, detail="Payment applied but receipt finalization failed")
+
     return {
         "status": "success",
         "message": f"Payment verified. {credits_to_grant} credits added to your account.",
@@ -7252,6 +7953,10 @@ def create_stripe_checkout(data: StripeCheckoutRequest):
     
     stripe.api_key = stripe_key
     
+    signup = validate_signup_form(data.signup_form or {})
+    if admins_collection.find_one({"email": signup["email"]}):
+        raise HTTPException(status_code=400, detail="An account with this email already exists")
+
     plan_info = plans_collection.find_one({"plan_name": data.plan_name})
     if not plan_info:
         raise HTTPException(status_code=400, detail="Invalid plan")
@@ -7259,11 +7964,24 @@ def create_stripe_checkout(data: StripeCheckoutRequest):
         raise HTTPException(status_code=400, detail="Free plans don't require payment")
     
     frontend_url = os.getenv("FRONTEND_URL", "https://localhost:3000")
+    pending_signup_id = uuid.uuid4().hex
+    pending_signups_collection.insert_one({
+        "_id": pending_signup_id,
+        "name": signup["name"],
+        "email": signup["email"],
+        "password_hash": hash_password(signup["password"]),
+        "phone": signup["phone"],
+        "company_name": signup["company_name"],
+        "plan_name": plan_info["plan_name"],
+        "created_at": datetime.now(timezone.utc),
+        "expires_at": datetime.now(timezone.utc) + timedelta(hours=2),
+        "status": "pending",
+    })
     
     try:
         session = stripe.checkout.Session.create(
             mode="subscription",
-            customer_email=data.signup_form.get("email"),
+            customer_email=signup["email"],
             line_items=[{
                 "price_data": {
                     "currency": "inr",
@@ -7282,15 +8000,13 @@ def create_stripe_checkout(data: StripeCheckoutRequest):
             success_url=f"{frontend_url}/?payment=success",
             cancel_url=f"{frontend_url}/?payment=cancelled",
             metadata={
-                "name": data.signup_form.get("name", ""),
-                "email": data.signup_form.get("email", ""),
-                "password": data.signup_form.get("password", ""),
-                "phone": data.signup_form.get("phone", ""),
+                "pending_signup_id": pending_signup_id,
                 "plan": plan_info["plan_name"],
             },
         )
         return {"status": "success", "url": session.url}
     except Exception as e:
+        pending_signups_collection.delete_one({"_id": pending_signup_id, "status": "pending"})
         raise HTTPException(status_code=500, detail=f"Stripe error: {str(e)}")
 
 @router.post("/api/stripe/webhook")
@@ -7316,42 +8032,110 @@ async def stripe_webhook(request):
         session = event["data"]["object"]
         if session.get("mode") != "subscription":
             return {"received": True}
-        
-        metadata = session.get("metadata", {})
-        name = metadata.get("name")
-        email = metadata.get("email")
-        password = metadata.get("password")
-        plan_name = metadata.get("plan")
-        
-        if not all([name, email, password, plan_name]):
+        if (session.get("payment_status") or "").lower() not in {"paid", "no_payment_required"}:
             return {"received": True}
         
-        if admins_collection.find_one({"email": email}):
+        metadata = session.get("metadata", {})
+        pending_signup_id = metadata.get("pending_signup_id")
+        if not pending_signup_id:
+            return {"received": True}
+
+        pending_signup = pending_signups_collection.find_one_and_update(
+            {"_id": pending_signup_id, "status": "pending"},
+            {
+                "$set": {
+                    "status": "processing",
+                    "stripe_event_id": event.get("id"),
+                    "stripe_session_id": session.get("id"),
+                }
+            },
+            return_document=ReturnDocument.AFTER,
+        )
+        if not pending_signup:
+            pending_signup = pending_signups_collection.find_one({
+                "_id": pending_signup_id,
+                "status": "processing",
+                "stripe_session_id": session.get("id"),
+            })
+        if not pending_signup:
+            return {"received": True}
+
+        name = pending_signup["name"]
+        email = pending_signup["email"]
+        password_hash = pending_signup["password_hash"]
+        plan_name = pending_signup["plan_name"]
+
+        existing_admin = admins_collection.find_one({"email": email})
+        if existing_admin:
+            if existing_admin.get("stripe_session_id") == session.get("id"):
+                pending_signups_collection.delete_one({"_id": pending_signup_id})
+                return {"received": True}
+            pending_signups_collection.update_one(
+                {"_id": pending_signup_id},
+                {"$set": {"status": "conflict", "conflict_at": datetime.now(timezone.utc)}},
+            )
+            logger.error("Stripe signup conflict for an existing account")
             return {"received": True}
         
         plan_info = plans_collection.find_one({"plan_name": plan_name})
-        credits_granted = plan_info.get("credits_granted", 30) if plan_info else 30
-        duration = plan_info.get("duration", 30) if plan_info else 30
+        if not plan_info or metadata.get("plan") != plan_name:
+            raise HTTPException(status_code=400, detail="Stripe checkout plan does not match")
+        expected_amount = int(plan_info.get("price", 0)) * 100
+        if (
+            int(session.get("amount_total") or 0) != expected_amount
+            or (session.get("currency") or "").lower() != "inr"
+        ):
+            raise HTTPException(status_code=400, detail="Stripe checkout amount does not match")
+
+        credits_granted = plan_info.get("credits_granted", 30)
+        duration = plan_info.get("duration", 30)
         now = datetime.now(timezone.utc)
-        
-        admins_collection.insert_one({
-        "custom_id": get_next_sequence_value("recruiter", "RC"),
-            "username": email,
-            "password": hash_password(password),
-            "email": email,
-            "name": name,
-            "phone": metadata.get("phone", ""),
-            "role": "super_admin",
+        company_insert = companies_collection.insert_one({
+            "name": pending_signup.get("company_name", ""),
             "subscription_plan": plan_name,
             "subscription_start": now.isoformat(),
             "subscription_expiry": (now + timedelta(days=duration)).isoformat(),
             "is_paid": True,
-            "stripe_customer_id": session.get("customer"),
-            "stripe_subscription_id": session.get("subscription"),
-            "login_enabled": True,
-            "created_at": now.isoformat()
+            "credits": credits_granted,
+            "created_at": now.isoformat(),
         })
-        print(f"Paid admin created via Stripe: {email} ({plan_name})")
+
+        try:
+            admins_collection.insert_one({
+                "custom_id": get_next_sequence_value("recruiter", "RC"),
+                "username": email,
+                "password": password_hash,
+                "email": email,
+                "name": name,
+                "phone": pending_signup.get("phone", ""),
+                "company_name": pending_signup.get("company_name", ""),
+                "company_id": str(company_insert.inserted_id),
+                "role": "super_admin",
+                "subscription_plan": plan_name,
+                "subscription_start": now.isoformat(),
+                "subscription_expiry": (now + timedelta(days=duration)).isoformat(),
+                "is_paid": True,
+                "stripe_customer_id": session.get("customer"),
+                "stripe_subscription_id": session.get("subscription"),
+                "stripe_session_id": session.get("id"),
+                "login_enabled": True,
+                "created_at": now.isoformat()
+            })
+        except Exception:
+            companies_collection.delete_one({"_id": company_insert.inserted_id})
+            pending_signups_collection.update_one(
+                {"_id": pending_signup_id, "status": "processing"},
+                {
+                    "$set": {"status": "pending"},
+                    "$unset": {
+                        "stripe_event_id": "",
+                        "stripe_session_id": "",
+                    },
+                },
+            )
+            raise
+        pending_signups_collection.delete_one({"_id": pending_signup_id})
+        logger.info("Paid admin created via Stripe for plan %s", plan_name)
     
     return {"received": True}
 
@@ -7524,9 +8308,6 @@ def delete_sub_admin(admin_id: str, current_admin: dict = Depends(get_current_ad
     )
     return {"status": "success"}
 
-class AddCreditsRequest(BaseModel):
-    credits: int
-
 @router.post("/super-admin/admins/{admin_id}/add-credits")
 def add_sub_admin_credits(admin_id: str, data: AddCreditsRequest, current_admin: dict = Depends(get_current_admin_details)):
     if current_admin.get("role") != "super_admin":
@@ -7540,23 +8321,26 @@ def add_sub_admin_credits(admin_id: str, data: AddCreditsRequest, current_admin:
     if admin_doc.get("login_enabled") == False:
         raise HTTPException(status_code=400, detail="Cannot add credits to a deactivated admin account.")
 
-    # Deduct from Super Admin atomically
     super_admin_id = current_admin["admin_id"]
-    sa_doc = admins_collection.find_one_and_update(
-        {"_id": ObjectId(super_admin_id), "credits": {"$gte": data.credits}},
-        {"$inc": {"credits": -data.credits}},
-        return_document=ReturnDocument.AFTER
-    )
-    
-    if not sa_doc:
-        raise HTTPException(status_code=400, detail="Insufficient credits in Super Admin account.")
-        
-    # Add to Sub-Admin atomically
-    updated_admin = admins_collection.find_one_and_update(
-        {"_id": ObjectId(admin_id)},
-        {"$inc": {"credits": data.credits}},
-        return_document=ReturnDocument.AFTER
-    )
+    with mongo_client.start_session() as db_session:
+        with db_session.start_transaction():
+            sa_doc = admins_collection.find_one_and_update(
+                {"_id": ObjectId(super_admin_id), "credits": {"$gte": data.credits}},
+                {"$inc": {"credits": -data.credits}},
+                return_document=ReturnDocument.AFTER,
+                session=db_session,
+            )
+            if not sa_doc:
+                raise HTTPException(status_code=400, detail="Insufficient credits in Super Admin account.")
+
+            updated_admin = admins_collection.find_one_and_update(
+                {"_id": ObjectId(admin_id), "company_id": company_id},
+                {"$inc": {"credits": data.credits}},
+                return_document=ReturnDocument.AFTER,
+                session=db_session,
+            )
+            if not updated_admin:
+                raise HTTPException(status_code=404, detail="Sub-admin not found")
     
     # Broadcast to requesting sub-admin
     broadcast_profile_update(
@@ -7706,33 +8490,47 @@ def update_credit_request(request_id: str, data: CreditRequestUpdate, current_ad
         raise HTTPException(status_code=403, detail="Super Admin access required")
         
     company_id = current_admin.get("company_id")
-    req = credit_requests_collection.find_one({"_id": ObjectId(request_id), "company_id": company_id})
-    if not req:
-        raise HTTPException(status_code=404, detail="Request not found")
-        
-    if req["status"] != "pending":
-        raise HTTPException(status_code=400, detail="Request is already processed")
-        
     if data.status not in ["approved", "rejected"]:
         raise HTTPException(status_code=400, detail="Invalid status")
+
+    with mongo_client.start_session() as db_session:
+        with db_session.start_transaction():
+            req = credit_requests_collection.find_one_and_update(
+                {
+                    "_id": ObjectId(request_id),
+                    "company_id": company_id,
+                    "status": "pending",
+                },
+                {"$set": {
+                    "status": data.status,
+                    "processed_at": datetime.now(timezone.utc).isoformat(),
+                    "processed_by": current_admin["admin_id"],
+                }},
+                return_document=ReturnDocument.BEFORE,
+                session=db_session,
+            )
+            if not req:
+                raise HTTPException(status_code=409, detail="Request was already processed or does not exist")
+
+            if data.status == "approved":
+                amount = req["amount"]
+                company = companies_collection.find_one_and_update(
+                    {"_id": ObjectId(company_id), "credits": {"$gte": amount}},
+                    {"$inc": {"credits": -amount}},
+                    return_document=ReturnDocument.AFTER,
+                    session=db_session,
+                )
+                if not company:
+                    raise HTTPException(status_code=400, detail="Insufficient company credits")
+                admin_result = admins_collection.update_one(
+                    {"_id": ObjectId(req["admin_id"]), "company_id": company_id},
+                    {"$inc": {"credits": amount}},
+                    session=db_session,
+                )
+                if admin_result.matched_count != 1:
+                    raise HTTPException(status_code=404, detail="Requesting admin no longer exists")
         
-    credit_requests_collection.update_one(
-        {"_id": ObjectId(request_id)},
-        {"$set": {
-            "status": data.status,
-            "processed_at": datetime.now(timezone.utc).isoformat(),
-            "processed_by": current_admin["admin_id"]
-        }}
-    )
-    
     if data.status == "approved":
-        amount = req["amount"]
-        # Deduct from company (Super Admin's pool)
-        if company_id:
-            companies_collection.update_one({"_id": ObjectId(company_id)}, {"$inc": {"credits": -amount}})
-        # Add to the requesting admin
-        admins_collection.update_one({"_id": ObjectId(req["admin_id"])}, {"$inc": {"credits": amount}})
-        
         # Broadcast to requesting admin
         updated_admin = admins_collection.find_one({"_id": ObjectId(req["admin_id"])})
         if updated_admin:
@@ -7846,10 +8644,13 @@ async def get_dashboard_aggregated_data(
                 "interview_duration": 1,
                 "is_deactivated": 1,
             }
-        candidate_cursor = interview_sessions_collection.find(c_query_filter, candidate_projection).sort("created_at", -1)
-        if summary_only:
-            candidate_cursor = candidate_cursor.limit(8)
-        candidates_cursor = list(candidate_cursor)
+        def _load_dashboard_candidates():
+            cursor = interview_sessions_collection.find(c_query_filter, candidate_projection).sort("created_at", -1)
+            if summary_only:
+                cursor = cursor.limit(8)
+            return list(cursor)
+
+        candidates_cursor = await asyncio.to_thread(_load_dashboard_candidates)
         
         # Get AI Calling interested candidates
         apps = []
@@ -7861,13 +8662,14 @@ async def get_dashboard_aggregated_data(
                 jobs_query["admin_id"] = current_admin["admin_id"]
             elif admin_id:
                 jobs_query["admin_id"] = admin_id
-            jobs = [] if summary_only else list(jobs_collection.find(jobs_query))
+            jobs = [] if summary_only else await asyncio.to_thread(lambda: list(jobs_collection.find(jobs_query)))
             job_ids = [j.get("job_id") for j in jobs if j.get("job_id")]
             
             app_query = {
                 "job_id": {"$in": job_ids}
             }
-            apps = list(job_applications_collection.find(app_query))
+            if job_ids:
+                apps = await asyncio.to_thread(lambda: list(job_applications_collection.find(app_query)))
         except Exception as e:
             print(f"Error fetching AI Calling candidates: {e}")
             
@@ -7927,7 +8729,9 @@ async def get_dashboard_aggregated_data(
         ongoing_coding_count = 0
         
         # Plan capability checks
-        admin_user_doc = admins_collection.find_one({"_id": ObjectId(current_admin["admin_id"])})
+        admin_user_doc = await asyncio.to_thread(
+            admins_collection.find_one, {"_id": ObjectId(current_admin["admin_id"])}
+        )
         plan_ctx = get_admin_plan_context(admin_user_doc) if admin_user_doc else None
         has_live = plan_ctx.get("capabilities", {}).get("live_monitoring", False) if plan_ctx else False
         
@@ -7943,10 +8747,13 @@ async def get_dashboard_aggregated_data(
             elif admin_id:
                 query_filter["created_by"] = admin_id
             
-            rows = list(interview_sessions_collection.find(
-                query_filter,
-                {"link_id": 1, "candidate_name": 1, "candidate_email": 1, "created_at": 1, "interview_id": 1, "interview_title": 1, "started_at": 1}
-            ).sort("created_at", -1))
+            rows = await asyncio.to_thread(
+                lambda: list(interview_sessions_collection.find(
+                    query_filter,
+                    {"link_id": 1, "candidate_name": 1, "candidate_email": 1, "created_at": 1, "interview_id": 1, "interview_title": 1, "started_at": 1, "interview_duration": 1, "status": 1},
+                ).sort("created_at", -1))
+            )
+            rows = [row for row in rows if sync_session_status(row) == "started"]
             
             ongoing_monitored_count = len(rows)
             snapshots = await _load_live_snapshots([row.get("link_id", "") for row in rows])
@@ -8000,7 +8807,12 @@ async def get_dashboard_aggregated_data(
 
         credit_reqs = []
         if current_admin.get("role") in ["master", "super_admin"]:
-            reqs = list(credit_requests_collection.find({"status": "pending"}).sort("created_at", -1))
+            credit_filter = {"status": "pending"}
+            if current_admin.get("role") != "master":
+                credit_filter["company_id"] = current_admin.get("company_id")
+            reqs = await asyncio.to_thread(
+                lambda: list(credit_requests_collection.find(credit_filter).sort("created_at", -1))
+            )
             for r in reqs:
                 r["id"] = str(r["_id"])
                 r["_id"] = str(r["_id"])
@@ -8163,7 +8975,7 @@ def bulk_delete_candidates(data: BulkDeleteRequest, current_admin: dict = Depend
                     interviews_collection.delete_one({"id": interview_id})
                     answers_collection.delete_many({"interview_id": interview_id})
                     if get_session(interview_id):
-                        delete_session(interview_id)
+                        delete_cached_session(interview_id)
                 
                 interview_sessions_collection.delete_one({"_id": row["_id"]})
                 deleted_count += 1
@@ -8185,7 +8997,7 @@ def delete_session_alias(link_id: str, current_admin: dict = Depends(get_current
             interviews_collection.delete_one({"id": interview_id})
             answers_collection.delete_many({"interview_id": interview_id})
             if get_session(interview_id):
-                delete_session(interview_id)
+                delete_cached_session(interview_id)
 
         # Delete the session link itself
         interview_sessions_collection.delete_one({"link_id": link_id})
@@ -8729,10 +9541,10 @@ def superadmin_get_interview_details(link_id: str, current_admin: dict = Depends
 # -------------------------------------------------------------------------------------
 
 class TTSRequest(BaseModel):
-    text: str
-    voice: str = "nova"
-    language: str = "English"
-    voice_id: Optional[str] = None   # Per-session cloned voice override
+    text: str = Field(..., min_length=1, max_length=5000)
+    voice: str = Field("nova", max_length=100)
+    language: str = Field("English", max_length=100)
+    voice_id: Optional[str] = Field(None, max_length=200)
     use_custom_voice: bool = True    # Flag to determine if Cartesia should be used
 
 @router.get("/admin/voices")
@@ -8742,7 +9554,7 @@ def get_admin_voices(current_admin: dict = Depends(get_current_admin_details)):
     Keys like CARTESIA_VOICE_ID and CARTESIA_VOICE_ID_MALE are loaded.
     """
     env_path = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), ".env")
-    load_dotenv(env_path, override=True)
+    load_dotenv(env_path, override=False)
     
     voices = []
     
@@ -8761,7 +9573,11 @@ def get_admin_voices(current_admin: dict = Depends(get_current_admin_details)):
     return {"status": "success", "voices": voices}
 
 @router.post("/voice-clone-instant")
-async def voice_clone_instant(audio: UploadFile = File(...), voice_name: Optional[str] = "CandidateVoice"):
+async def voice_clone_instant(
+    audio: UploadFile = File(...),
+    voice_name: Optional[str] = "CandidateVoice",
+    candidate_session: dict = Depends(require_active_candidate),
+):
     """
     Cartesia Instant Voice Cloning endpoint.
     Accepts a short audio sample (webm/mp3/wav), sends it to Cartesia,
@@ -8774,20 +9590,39 @@ async def voice_clone_instant(audio: UploadFile = File(...), voice_name: Optiona
     except ImportError:
         raise HTTPException(status_code=500, detail="Cartesia SDK not installed. Run `pip install cartesia`.")
 
-    load_dotenv(os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), ".env"), override=True)
+    load_dotenv(os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), ".env"), override=False)
 
 
     api_key = os.getenv("CARTESIA_API_KEY", "").strip()
     if not api_key:
         raise HTTPException(status_code=503, detail="Cartesia API key not configured. Voice cloning is unavailable.")
 
-    # Save the uploaded file to a temp location
+    allowed_audio_types = {
+        "audio/webm",
+        "audio/mpeg",
+        "audio/mp3",
+        "audio/wav",
+        "audio/x-wav",
+        "audio/ogg",
+        "audio/mp4",
+        "application/octet-stream",
+    }
+    if audio.content_type not in allowed_audio_types:
+        raise HTTPException(status_code=415, detail="Unsupported voice sample format")
+
+    # Save the uploaded file to a private temporary location.
     ext = "webm"
     if audio.filename:
         ext = audio.filename.rsplit(".", 1)[-1].lower() if "." in audio.filename else "webm"
-    temp_audio = f"temp_voice_sample_{uuid.uuid4().hex}.{ext}"
+    temp_handle = tempfile.NamedTemporaryFile(delete=False, suffix=f".{ext}")
+    temp_audio = temp_handle.name
+    temp_handle.close()
     try:
-        audio_bytes = await audio.read()
+        audio_bytes = await audio.read(10 * 1024 * 1024 + 1)
+        if len(audio_bytes) > 10 * 1024 * 1024:
+            raise HTTPException(status_code=413, detail="Voice sample exceeds 10 MB")
+        if len(audio_bytes) < 1000:
+            raise HTTPException(status_code=422, detail="Voice sample is too short")
         with open(temp_audio, "wb") as f:
             f.write(audio_bytes)
 
@@ -8808,10 +9643,21 @@ async def voice_clone_instant(audio: UploadFile = File(...), voice_name: Optiona
         
         if not voice_id:
             raise Exception("No voice ID returned from Cartesia.")
-            
+
+        interview_sessions_collection.update_one(
+            {"_id": candidate_session["_id"]},
+            {
+                "$set": {
+                    "cloned_voice_id": voice_id,
+                    "cloned_voice_created_at": datetime.now(timezone.utc).isoformat(),
+                }
+            },
+        )
         print(f"[VoiceClone] Created Cartesia voice_id={voice_id}")
         return {"voice_id": voice_id, "status": "success"}
 
+    except HTTPException:
+        raise
     except Exception as e:
         print(f"[VoiceClone] Cartesia Error: {e}")
         raise HTTPException(status_code=500, detail=f"Cartesia error: {str(e)}")
@@ -8820,7 +9666,10 @@ async def voice_clone_instant(audio: UploadFile = File(...), voice_name: Optiona
             os.remove(temp_audio)
 
 @router.post("/tts")
-async def generate_tts(req: TTSRequest):
+async def generate_tts(
+    req: TTSRequest,
+    candidate_session: dict = Depends(require_active_candidate),
+):
     """
     Hybrid TTS: Cartesia (primary) → Microsoft Edge TTS (fallback).
 
@@ -8832,10 +9681,16 @@ async def generate_tts(req: TTSRequest):
     - If Cartesia quota is exceeded, the API key is missing, or any other error
       occurs, the system silently falls back to the free Microsoft Edge TTS voice.
     """
-    load_dotenv(os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), ".env"), override=True)
+    load_dotenv(os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), ".env"), override=False)
     cartesia_api_key = os.getenv("CARTESIA_API_KEY", "").strip()
-    # Per-session cloned voice (from /voice-clone-instant) takes priority over the global static voice
-    cartesia_voice_id = (req.voice_id or "").strip() or os.getenv("CARTESIA_VOICE_ID", "").strip()
+    session_voice_id = str(candidate_session.get("cloned_voice_id") or "").strip()
+    requested_voice_id = str(req.voice_id or "").strip()
+    if requested_voice_id and not (
+        session_voice_id and hmac.compare_digest(requested_voice_id, session_voice_id)
+    ):
+        raise HTTPException(status_code=403, detail="Voice ID does not belong to this interview session")
+    # A per-session clone takes priority over the configured global voice.
+    cartesia_voice_id = session_voice_id or os.getenv("CARTESIA_VOICE_ID", "").strip()
 
     from fastapi.responses import StreamingResponse
     import io
@@ -8863,7 +9718,7 @@ async def generate_tts(req: TTSRequest):
     temp_filename = f"temp_tts_{uuid.uuid4().hex}.mp3"
     
     # Determine the actual voice ID to use
-    actual_cartesia_voice_id = req.voice_id if req.voice_id else cartesia_voice_id
+    actual_cartesia_voice_id = cartesia_voice_id
 
     if req.use_custom_voice and cartesia_api_key and actual_cartesia_voice_id and not is_regional:
         try:
@@ -8917,7 +9772,11 @@ async def generate_tts(req: TTSRequest):
 stt_inflight_counter = 0
 
 @router.post("/stt")
-async def stt_endpoint(file: UploadFile = File(...), language: Optional[str] = None):
+async def stt_endpoint(
+    file: UploadFile = File(...),
+    language: Optional[str] = None,
+    candidate_session: dict = Depends(require_active_candidate),
+):
     """Transcribe audio via Groq Whisper with concurrency & rate limit tracking"""
     global stt_inflight_counter
     stt_inflight_counter += 1
@@ -8926,18 +9785,28 @@ async def stt_endpoint(file: UploadFile = File(...), language: Optional[str] = N
     t0 = time.time()
     
     try:
-        audio_content = await file.read()
+        audio_content = await file.read(25 * 1024 * 1024 + 1)
         file_size = len(audio_content)
+        if file_size > 25 * 1024 * 1024:
+            raise HTTPException(status_code=413, detail="Audio upload exceeds 25 MB")
+        if file_size < 12_000:
+            return {"transcript": ""}
         header_hex = audio_content[:16].hex() if file_size >= 16 else ""
         print(f"📊 [STT CONCURRENCY TRACE - REQ #{req_id}] Started | In-Flight Requests: {current_inflight} | File: {file.filename} ({file_size} bytes)")
         
-        temp_filename = f"temp_stt_{req_id}.webm"
-        with open(temp_filename, "wb") as f:
-            f.write(audio_content)
+        original_name = file.filename or "audio.webm"
+        extension = original_name.rsplit(".", 1)[-1].lower() if "." in original_name else "webm"
+        if extension not in {"webm", "ogg", "mp4", "wav", "m4a", "mp3"}:
+            extension = "webm"
+        with tempfile.NamedTemporaryFile(delete=False, suffix=f".{extension}") as temp_file:
+            temp_file.write(audio_content)
+            temp_filename = temp_file.name
             
         try:
             with open(temp_filename, "rb") as f:
                 iso_lang = language or "en"
+                if iso_lang not in {"en", "hi", "te", "ta", "ml", "kn"}:
+                    raise HTTPException(status_code=422, detail="Unsupported transcription language")
                 sys_prompt = "The speaker has an Indian English accent. Transcribe technical terms, programming concepts, and software engineering terminology accurately." if iso_lang == "en" else ""
                 
                 transcript = await groq_client.audio.transcriptions.create(
@@ -8945,11 +9814,41 @@ async def stt_endpoint(file: UploadFile = File(...), language: Optional[str] = N
                     file=f,
                     language=iso_lang,
                     prompt=sys_prompt,
+                    response_format="verbose_json",
                     temperature=0.0,
                 )
+                valid_segments = []
+                for segment in getattr(transcript, "segments", []) or []:
+                    no_speech = segment.get("no_speech_prob", 0) if isinstance(segment, dict) else getattr(segment, "no_speech_prob", 0)
+                    avg_logprob = segment.get("avg_logprob", 0) if isinstance(segment, dict) else getattr(segment, "avg_logprob", 0)
+                    compression = segment.get("compression_ratio", 0) if isinstance(segment, dict) else getattr(segment, "compression_ratio", 0)
+                    segment_text = segment.get("text", "") if isinstance(segment, dict) else getattr(segment, "text", "")
+                    if iso_lang == "en":
+                        if no_speech > 0.45 or avg_logprob < -1.0 or compression > 2.4:
+                            continue
+                    elif no_speech > 0.75 or compression > 2.4:
+                        continue
+                    valid_segments.append(segment_text.strip())
+
+                raw_text = str(getattr(transcript, "text", "") or "").strip()
+                transcript_text = " ".join(value for value in valid_segments if value).strip()
+                if not getattr(transcript, "segments", None):
+                    transcript_text = raw_text
+                if transcript_text.lower() in {
+                    "thank you",
+                    "thank you.",
+                    "thanks",
+                    "thanks.",
+                    "okay",
+                    "okay.",
+                    "you",
+                    "bye",
+                    "bye.",
+                }:
+                    transcript_text = ""
                 dur = round(time.time() - t0, 3)
-                print(f"✅ [STT CONCURRENCY TRACE - REQ #{req_id}] HTTP 200 OK | Latency: {dur}s | Text: '{transcript.text}'")
-            return {"transcript": transcript.text}
+                print(f"✅ [STT CONCURRENCY TRACE - REQ #{req_id}] HTTP 200 OK | Latency: {dur}s")
+            return {"transcript": transcript_text}
         finally:
             if os.path.exists(temp_filename):
                 os.remove(temp_filename)
@@ -9672,8 +10571,12 @@ class CodingChatRequest(BaseModel):
     run_result: Optional[Dict[str, Any]] = None
 
 @router.post("/coding-round/chat")
-async def coding_round_chat(req: CodingChatRequest):
+async def coding_round_chat(
+    req: CodingChatRequest,
+    credentials: Optional[HTTPAuthorizationCredentials] = Depends(candidate_monitoring_security),
+):
     """Provide conversational AI responses during the coding round"""
+    _require_candidate_session(credentials, interview_id=req.interview_id)
     try:
         # Load interview context
         interview = get_interview_or_404(req.interview_id)
@@ -10097,19 +11000,30 @@ def update_application_status(
         raise HTTPException(status_code=404, detail="Application not found")
     return {"status": "success", "message": f"Status updated to '{new_status}'"}
 
-import PyPDF2
+import pypdf
 import io
 
 @router.post("/api/public/jobs/parse-resume")
 def parse_resume(resume: UploadFile = File(...)):
     try:
+        allowed_types = {
+            "application/pdf",
+            "text/plain",
+        }
+        if resume.content_type and resume.content_type not in allowed_types:
+            raise HTTPException(status_code=415, detail="Only PDF and plain-text resumes are supported")
+        if getattr(resume, "size", 0) and resume.size > 5 * 1024 * 1024:
+            raise HTTPException(status_code=413, detail="Resume exceeds the 5 MB limit")
+
         # Read the file content
-        content = resume.file.read()
+        content = resume.file.read(5 * 1024 * 1024 + 1)
+        if len(content) > 5 * 1024 * 1024:
+            raise HTTPException(status_code=413, detail="Resume exceeds the 5 MB limit")
         
         # We'll just handle PDFs for now as an example, but we can easily extend this
         extracted_text = ""
         if resume.filename.lower().endswith(".pdf"):
-            pdf_reader = PyPDF2.PdfReader(io.BytesIO(content))
+            pdf_reader = pypdf.PdfReader(io.BytesIO(content))
             for page in pdf_reader.pages:
                 extracted_text += page.extract_text() + "\n"
         else:
@@ -10147,6 +11061,8 @@ def parse_resume(resume: UploadFile = File(...)):
                 "linkedin_url": parsed_data.get("linkedin_url", "")
             }
         }
+    except HTTPException:
+        raise
     except Exception as e:
         print(f"Error parsing resume: {e}")
         return {"status": "error", "data": {"name": "", "email": "", "phone": "", "linkedin_url": ""}}
