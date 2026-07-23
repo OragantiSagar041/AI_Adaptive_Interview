@@ -4,7 +4,7 @@ import { Link, useParams, Navigate } from 'react-router-dom';
 import { ArrowLeft, CheckCircle2, TrendingUp, Users, Clock, ArrowRight, Zap, Shield, Target, Award } from 'lucide-react';
 import interviewerImg from '../assets/ai-interviewer.png';
 import dashboardImg from '../assets/hireiq-dashboard.png';
-import mockInterviewImg from '../assets/ai-mock-interview.jpeg';
+import hireiqInterviewImg from '../assets/hireiq-interview.jpeg';
 import interviewerDeskImg from '../assets/ai-interviewer-desk.png';
 
 const CASE_STUDIES = {
@@ -30,7 +30,7 @@ const CASE_STUDIES = {
     images: {
       hero: interviewerImg,
       parallax: dashboardImg,
-      solution: mockInterviewImg
+      solution: hireiqInterviewImg
     }
   },
   aura: {
@@ -55,7 +55,7 @@ const CASE_STUDIES = {
     images: {
       hero: interviewerDeskImg,
       parallax: dashboardImg,
-      solution: mockInterviewImg
+      solution: hireiqInterviewImg
     }
   },
   solaris: {
@@ -78,7 +78,7 @@ const CASE_STUDIES = {
       "Automatically shortlisted candidates who met the exact cultural and linguistic benchmarks."
     ],
     images: {
-      hero: mockInterviewImg,
+      hero: hireiqInterviewImg,
       parallax: interviewerImg,
       solution: interviewerDeskImg
     }

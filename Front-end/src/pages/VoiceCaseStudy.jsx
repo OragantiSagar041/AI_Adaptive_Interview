@@ -598,7 +598,7 @@ export default function VoiceCaseStudy({
     
     try { await candidateFetch(`${API_BASE_URL}/complete-session/${linkId}`, { method: 'POST' }) } catch(_) {}
     onComplete?.()
-  }, [stopListening, linkId, onComplete])
+  }, [stopListening, onComplete])
 
   useEffect(() => {
     return () => {

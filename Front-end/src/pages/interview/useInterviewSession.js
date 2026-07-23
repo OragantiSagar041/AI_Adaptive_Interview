@@ -156,6 +156,11 @@ export const useInterviewSession = (sessionId, interviewType, startRoundTwo) => 
   const [activeRightTab, setActiveRightTab] = useState('code')
   const [compiling, setCompiling] = useState(false)
   const [globalCountdown, setGlobalCountdown] = useState(0)
+  const globalCountdownRef = useRef(0)
+  useEffect(() => {
+    globalCountdownRef.current = globalCountdown
+  }, [globalCountdown])
+  const canSubmit = globalCountdown <= 0
   const [totalDuration, setTotalDuration] = useState(0)
   const [isRoundTwo, setIsRoundTwo] = useState(false)
   const isRoundTwoRef = useRef(false)
@@ -246,6 +251,7 @@ export const useInterviewSession = (sessionId, interviewType, startRoundTwo) => 
   const whisperMediaRecorderRef = useRef(null)
   const whisperAudioChunksRef = useRef([])
   const whisperPauseTimeoutRef = useRef(null)
+  const whisperTranscriptRef = useRef('')
   // Refs that hold session-data values used in async transcription callbacks.
   // Using refs (not state) prevents the stale-closure / race-condition where
   // sessionDetail state is not yet populated when the MediaRecorder onstop fires.
@@ -1986,7 +1992,11 @@ export const useInterviewSession = (sessionId, interviewType, startRoundTwo) => 
         answerForm.append('interview_id', iid)
         answerForm.append('question_id', currentQuestion.id || (currentQuestionIndex + 1))
         answerForm.append('question_text', currentQuestion.text || currentQuestion.question || '')
-        answerForm.append('answer_text', currentQuestion.type === 'coding' ? (codeAnswer || ' ') : (transcriptionText || ' '))
+        const combinedText = (transcriptionText + ' ' + interimTranscriptText).trim() || ' '
+        const finalAnswerText = (whisperTranscriptRef.current && whisperTranscriptRef.current.trim().length >= 3)
+          ? whisperTranscriptRef.current.trim()
+          : combinedText
+        answerForm.append('answer_text', currentQuestion.type === 'coding' ? (codeAnswer || ' ') : finalAnswerText)
         answerForm.append('candidate_name', sessionDetail?.candidate_name || 'Candidate')
         answerForm.append('time_spent_seconds', timeSpent.toString())
         answerForm.append('time_limit_seconds', '120')
@@ -2138,6 +2148,12 @@ export const useInterviewSession = (sessionId, interviewType, startRoundTwo) => 
   }, [handleNextQuestion])
 
   const handleSubmitInterview = async (forceClose = false, terminationReason = null) => {
+    const isTimeout = forceClose === true || (typeof forceClose === 'boolean' && forceClose)
+    const canSubmitNow = globalCountdownRef.current <= 0 || isTimeout
+    if (!canSubmitNow) {
+      return
+    }
+
     if (isSubmittingRef.current) return  // Prevent double-submit
     isSubmittingRef.current = true
     setIsSaving(true)
@@ -2313,6 +2329,7 @@ export const useInterviewSession = (sessionId, interviewType, startRoundTwo) => 
   }
 
   const handleFinishEarly = () => {
+    if (globalCountdownRef.current > 0) return
     Swal.fire({
       title: 'Finish Interview?',
       html: '<p style="color:#94a3b8;font-size:14px">Are you sure you want to end the interview now? Your answers will be saved and submitted.</p>',
@@ -2422,6 +2439,7 @@ export const useInterviewSession = (sessionId, interviewType, startRoundTwo) => 
     totalDuration,
     isRoundTwo,
     setIsRoundTwo,
+    canSubmit,
     showRound2Confirm,
     setShowRound2Confirm,
     codingRoundLoading,

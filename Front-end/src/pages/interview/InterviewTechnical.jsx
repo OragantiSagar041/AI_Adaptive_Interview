@@ -743,7 +743,7 @@ export const InterviewTechnical = () => {
     handleStartRound2Click,
     proceedToRoundTwo,
     handleNextQuestion,
-    handleSubmitInterview,
+    canSubmit,
     handleFinishEarly,
     handleSkipUpload,
     isMobileDevice,
@@ -1185,10 +1185,19 @@ export const InterviewTechnical = () => {
               )}
 
               <button 
-                className="w-full py-3 px-4 rounded-xl font-bold text-xs bg-slate-800 hover:bg-slate-700 text-white transition-all cursor-pointer border-none shadow-md flex items-center justify-center gap-2 hover:-translate-y-0.5" 
-                onClick={handleFinishEarly}
+                className={`w-full py-3 px-4 rounded-xl font-bold text-xs transition-all border-none shadow-md flex items-center justify-center gap-2 ${
+                  !canSubmit || globalCountdown > 0
+                    ? 'bg-slate-800/40 text-slate-500 cursor-not-allowed border border-white/5 opacity-50'
+                    : 'bg-slate-800 hover:bg-slate-700 text-white cursor-pointer hover:-translate-y-0.5'
+                }`} 
+                onClick={(e) => {
+                  if (!canSubmit || globalCountdown > 0) return
+                  handleFinishEarly(e)
+                }}
+                disabled={!canSubmit || globalCountdown > 0}
+                title={!canSubmit || globalCountdown > 0 ? "Locked until countdown reaches zero" : "Finish Interview"}
               >
-                ⏹ Finish Interview
+                {!canSubmit || globalCountdown > 0 ? '🔒 Finish Interview (Locked)' : '⏹ Finish Interview'}
               </button>
             </div>
 
@@ -1379,10 +1388,19 @@ export const InterviewTechnical = () => {
                       </div>
                     ) : (
                       <button 
-                        className="px-8 py-3.5 rounded-xl font-bold text-sm text-white bg-red-500 hover:bg-red-600 shadow-lg shadow-red-500/20 hover:shadow-red-500/30 transition-all duration-200 cursor-pointer border-none"
-                        onClick={() => handleSubmitInterview(false)}
+                        className={`px-8 py-3.5 rounded-xl font-bold text-sm text-white transition-all duration-200 border-none ${
+                          !canSubmit || globalCountdown > 0 
+                            ? 'bg-red-950/40 text-red-400/50 cursor-not-allowed opacity-50' 
+                            : 'bg-red-500 hover:bg-red-600 shadow-lg shadow-red-500/20 hover:shadow-red-500/30 cursor-pointer'
+                        }`}
+                        onClick={(e) => {
+                          if (!canSubmit || globalCountdown > 0) return
+                          handleFinishEarly(e)
+                        }}
+                        disabled={!canSubmit || globalCountdown > 0}
+                        title={!canSubmit || globalCountdown > 0 ? "Locked until countdown reaches zero" : "Submit Interview"}
                       >
-                        Submit Interview
+                        {!canSubmit || globalCountdown > 0 ? '🔒 Submit Interview (Locked)' : 'Submit Interview'}
                       </button>
                     )
                   ) : (

@@ -144,6 +144,7 @@ class DemoRequestCreate(BaseModel):
     first_name: str
     last_name: str
     work_email: str
+    mobile_number: str
     company_name: str
     help_text: str
 
