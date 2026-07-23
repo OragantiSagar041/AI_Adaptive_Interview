@@ -3633,20 +3633,44 @@ def upload_profile_image(
 
 def extract_info_from_resume(text: str) -> Dict:
     import re
-    email = None
+    email = ""
     email_match = re.search(r'[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}', text)
     if email_match:
-        email = email_match.group(0)
-        
-    name = None
+        email = email_match.group(0).strip()
+
+    phone = ""
+    phone_match = re.search(r'(?:\+?\d{1,4}[-.\s]?)?\(?\d{2,4}\)?[-.\s]?\d{3,4}[-.\s]?\d{3,4}', text)
+    if phone_match:
+        phone_candidate = phone_match.group(0).strip()
+        if len(re.sub(r'\D', '', phone_candidate)) >= 7:
+            phone = phone_candidate
+
+    linkedin_url = ""
+    linkedin_match = re.search(r'(https?://(?:www\.)?linkedin\.com/in/[a-zA-Z0-9_-]+)', text, re.IGNORECASE)
+    if linkedin_match:
+        linkedin_url = linkedin_match.group(0).strip()
+    else:
+        linkedin_simple = re.search(r'(linkedin\.com/in/[a-zA-Z0-9_-]+)', text, re.IGNORECASE)
+        if linkedin_simple:
+            linkedin_url = f"https://{linkedin_simple.group(0).strip()}"
+
+    name = ""
     lines = [line.strip() for line in text.split('\n') if line.strip()]
-    # First non-empty line that doesn't look like an email or phone
+    skip_keywords = {"resume", "curriculum", "vitae", "cv", "profile", "contact", "email", "phone", "summary", "experience", "education", "skills"}
     for line in lines[:10]:
-        if len(line) < 40 and not re.search(r'[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}', line) and not re.search(r'\d{10}', line):
-            name = line
-            break
-    
-    return {"name": name, "email": email}
+        line_clean = re.sub(r'[^a-zA-Z\s]', '', line).strip()
+        if line_clean and len(line_clean) < 50 and len(line_clean.split()) <= 4:
+            words = [w.lower() for w in line_clean.split()]
+            if not any(kw in words for kw in skip_keywords):
+                name = line_clean
+                break
+
+    return {
+        "name": name,
+        "email": email,
+        "phone": phone,
+        "linkedin_url": linkedin_url
+    }
 
 @router.post("/admin/parse-resume")
 async def parse_resume(
@@ -9783,19 +9807,89 @@ def get_ai_call_status(link_id: str, current_admin: dict = Depends(get_current_a
 # Jobs & Applications (Super Admin / Public)
 # ---------------------------------------------------------------------------
 
+def verify_job_access(job: dict, current_admin: dict) -> bool:
+    """
+    Enforces multi-tenant isolation for job resources.
+    Master role: Full global access.
+    Super Admin / Admin: Restricted to their company, created_by, or linked super_admin_id.
+    """
+    role = current_admin.get("role")
+    if role == "master":
+        return True
+
+    admin_id = current_admin.get("admin_id")
+    company_id = current_admin.get("company_id")
+
+    job_admin_id = job.get("admin_id")
+    job_company_id = job.get("company_id")
+    job_super_admin_id = job.get("super_admin_id")
+
+    # 1. Direct creator or direct super_admin match
+    if admin_id and (job_admin_id == admin_id or job_super_admin_id == admin_id):
+        return True
+
+    # 2. Company / Tenant match
+    if company_id and job_company_id and job_company_id == company_id:
+        return True
+
+    # 3. Linked Sub-Admin to Super Admin check
+    if role == "admin" and admin_id:
+        try:
+            from bson import ObjectId
+            admin_doc = admins_collection.find_one({"_id": ObjectId(admin_id)})
+            if admin_doc:
+                linked_sa = admin_doc.get("super_admin_id") or admin_doc.get("created_by")
+                if linked_sa and (job_admin_id == linked_sa or job_super_admin_id == linked_sa):
+                    return True
+        except Exception:
+            pass
+
+    return False
+
 @router.post("/api/jobs")
 def create_job(job: JobCreate, current_admin: dict = Depends(get_current_admin_details)):
     job_dict = job.dict()
     import random
     import string
+    from bson import ObjectId
+
+    admin_id = current_admin["admin_id"]
+    company_id = current_admin.get("company_id")
+    role = current_admin.get("role", "tenant")
+
     job_id = f"JOB-{''.join(random.choices(string.ascii_uppercase + string.digits, k=6))}"
     job_dict["job_id"] = job_id
-    job_dict["admin_id"] = current_admin["admin_id"]
+    job_dict["admin_id"] = admin_id
+
+    if company_id:
+        job_dict["company_id"] = company_id
+
+    # Determine and store super_admin_id explicitly
+    if role in ["super_admin", "superadmin"]:
+        job_dict["super_admin_id"] = admin_id
+    else:
+        super_admin_id = None
+        try:
+            admin_doc = admins_collection.find_one({"_id": ObjectId(admin_id)})
+            if admin_doc:
+                super_admin_id = admin_doc.get("super_admin_id") or admin_doc.get("created_by")
+        except Exception:
+            pass
+
+        if not super_admin_id and company_id:
+            sa_doc = admins_collection.find_one({"company_id": company_id, "role": {"$in": ["super_admin", "superadmin"]}})
+            if sa_doc:
+                super_admin_id = str(sa_doc["_id"])
+
+        if super_admin_id:
+            job_dict["super_admin_id"] = super_admin_id
+
     job_dict["created_at"] = datetime.now(timezone.utc).isoformat()
     job_dict["application_count"] = 0
     job_dict["custom_id"] = get_next_sequence_value("job", "JOB")
     result = jobs_collection.insert_one(job_dict)
     job_dict["_id"] = str(result.inserted_id)
+    
     return {"status": "success", "job": job_dict}
 
 @router.get("/api/jobs")
@@ -9805,11 +9899,33 @@ def get_admin_jobs(page: int = 1, limit: int = 20, current_admin: dict = Depends
         raise HTTPException(status_code=400, detail="page must be >= 1")
     if limit < 1 or limit > 100:
         raise HTTPException(status_code=400, detail="limit must be between 1 and 100")
-    # Return jobs with pagination
     skip = (page - 1) * limit
+
+    role = current_admin.get("role")
+    admin_id = current_admin.get("admin_id")
+    company_id = current_admin.get("company_id")
+
     query = {}
-    if current_admin["role"] == "admin":
-        query = {"admin_id": current_admin["admin_id"]}
+    if role != "master":
+        super_admin_id = None
+        if role == "admin" and admin_id:
+            try:
+                from bson import ObjectId
+                admin_doc = admins_collection.find_one({"_id": ObjectId(admin_id)})
+                if admin_doc:
+                    super_admin_id = admin_doc.get("super_admin_id") or admin_doc.get("created_by")
+            except Exception:
+                pass
+
+        query_conditions = [{"admin_id": admin_id}]
+        if company_id:
+            query_conditions.append({"company_id": company_id})
+        if super_admin_id:
+            query_conditions.append({"super_admin_id": super_admin_id})
+            query_conditions.append({"admin_id": super_admin_id})
+
+        query = {"$or": query_conditions}
+
     total_jobs = jobs_collection.count_documents(query)
     jobs = list(jobs_collection.find(query).sort("created_at", -1).skip(skip).limit(limit))
     for j in jobs:
@@ -9835,7 +9951,7 @@ def update_job(job_id: str, job_update: JobCreate, current_admin: dict = Depends
     if not job:
         raise HTTPException(status_code=404, detail="Job not found")
 
-    if current_admin["role"] == "admin" and job.get("admin_id") != current_admin["admin_id"]:
+    if not verify_job_access(job, current_admin):
         raise HTTPException(status_code=403, detail="Access denied")
 
     update_data = job_update.dict()
@@ -9857,7 +9973,7 @@ def delete_job(job_id: str, current_admin: dict = Depends(get_current_admin_deta
     if not job:
         raise HTTPException(status_code=404, detail="Job not found")
 
-    if current_admin["role"] == "admin" and job.get("admin_id") != current_admin["admin_id"]:
+    if not verify_job_access(job, current_admin):
         raise HTTPException(status_code=403, detail="Access denied")
 
     result = jobs_collection.delete_one({"job_id": job_id})
@@ -9923,7 +10039,7 @@ def apply_for_job(job_id: str, application: JobApplicationCreate):
 def get_job_applications(job_id: str, current_admin: dict = Depends(get_current_admin_details)):
     """
     Returns all applications submitted for a given job_id.
-    Super-admins can view applications for any job; admins only for their own jobs.
+    Enforces multi-tenant job access verification.
     """
     job = jobs_collection.find_one({"job_id": job_id})
     if not job:
@@ -9932,9 +10048,10 @@ def get_job_applications(job_id: str, current_admin: dict = Depends(get_current_
             job = jobs_collection.find_one({"_id": ObjectId(job_id)})
     if not job:
         raise HTTPException(status_code=404, detail="Job not found")
-    # Admins can only see applications for jobs they own (stored as admin_id since last fix)
-    if current_admin["role"] == "admin" and job.get("admin_id") != current_admin["admin_id"]:
+
+    if not verify_job_access(job, current_admin):
         raise HTTPException(status_code=403, detail="Access denied")
+
     actual_job_id = job.get("job_id") or str(job["_id"])
     applications = list(job_applications_collection.find({"job_id": actual_job_id}).sort("applied_at", -1))
     
@@ -9990,7 +10107,7 @@ def update_application_status(
     if not job:
         raise HTTPException(status_code=404, detail="Job not found")
 
-    if current_admin["role"] == "admin" and job.get("admin_id") != current_admin["admin_id"]:
+    if not verify_job_access(job, current_admin):
         raise HTTPException(status_code=403, detail="Access denied")
 
     from bson import ObjectId as BsonObjectId
@@ -10025,48 +10142,44 @@ import io
 @router.post("/api/public/jobs/parse-resume")
 def parse_resume(resume: UploadFile = File(...)):
     try:
-        # Read the file content
         content = resume.file.read()
-        
-        # We'll just handle PDFs for now as an example, but we can easily extend this
-        extracted_text = ""
-        if resume.filename.lower().endswith(".pdf"):
-            pdf_reader = PyPDF2.PdfReader(io.BytesIO(content))
-            for page in pdf_reader.pages:
-                extracted_text += page.extract_text() + "\n"
-        else:
-            # If not PDF, just decode assuming txt or string (we can add docx later if needed)
-            # Or just take a best effort for other text-based
-            try:
-                extracted_text = content.decode('utf-8', errors='ignore')
-            except:
-                extracted_text = ""
+        extracted_text = extract_text_from_file(content, resume.filename)
 
         if not extracted_text.strip():
-             return {"status": "success", "data": {"name": "", "email": "", "phone": "", "linkedin_url": ""}}
+            return {"status": "success", "data": {"name": "", "email": "", "phone": "", "linkedin_url": ""}}
 
-        # Ensure text is not insanely large for the LLM context (truncate if necessary)
-        extracted_text = extracted_text[:10000]
+        # Always compute robust offline regex/heuristic extraction first
+        fallback_data = extract_info_from_resume(extracted_text)
 
-        prompt = f"""
-        Extract the following information from the provided resume text. 
-        Format the output strictly as JSON with keys: "name", "email", "phone", "linkedin_url".
-        If a field is not found, leave it as an empty string. Do not include markdown formatting or comments.
-        
-        Resume Text:
-        {extracted_text}
-        """
-        
-        raw_response = chat_completion([{"role": "user", "content": prompt}])
-        parsed_data = extract_json(raw_response) or {}
-        
+        parsed_data = {}
+        try:
+            truncated_text = extracted_text[:8000]
+            prompt = f"""
+            Extract the following information from the provided resume text. 
+            Format the output strictly as JSON with keys: "name", "email", "phone", "linkedin_url".
+            If a field is not found, leave it as an empty string. Do not include markdown formatting or comments.
+            
+            Resume Text:
+            {truncated_text}
+            """
+            raw_response = chat_completion([{"role": "user", "content": prompt}], timeout=10)
+            parsed_data = extract_json(raw_response) or {}
+        except Exception as ai_err:
+            print(f"⚠️ LLM resume parsing unavailable or rate-limited ({ai_err}). Using offline regex parser fallback.")
+
+        # Merge extracted fields: prefer LLM values if non-empty, otherwise use regex fallback
+        name = str(parsed_data.get("name") or fallback_data.get("name") or "").strip()
+        email = str(parsed_data.get("email") or fallback_data.get("email") or "").strip()
+        phone = str(parsed_data.get("phone") or fallback_data.get("phone") or "").strip()
+        linkedin_url = str(parsed_data.get("linkedin_url") or fallback_data.get("linkedin_url") or "").strip()
+
         return {
             "status": "success", 
             "data": {
-                "name": parsed_data.get("name", ""),
-                "email": parsed_data.get("email", ""),
-                "phone": parsed_data.get("phone", ""),
-                "linkedin_url": parsed_data.get("linkedin_url", "")
+                "name": name,
+                "email": email,
+                "phone": phone,
+                "linkedin_url": linkedin_url
             }
         }
     except Exception as e:
