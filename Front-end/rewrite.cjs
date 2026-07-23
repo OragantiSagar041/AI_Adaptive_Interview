@@ -1,6 +1,6 @@
 const fs = require('fs');
 
-const code = import React, { useEffect } from "react";
+const code = `import React, { useEffect } from "react";
 import { useDispatch, useSelector } from "react-redux";
 import { loadSuperAdminDashboard } from "@/store/slices/dashboardSlice";
 import {
@@ -85,7 +85,7 @@ export default function SuperDashboardPage() {
     { label: "Active Today", value: formatNum(dbStats?.today), delta: "", up: true, icon: Activity, tint: "from-blue-500/15 to-blue-500/0" },
     { label: "Completed Interviews", value: formatNum(dbStats?.completed), delta: "", up: true, icon: CheckCircle2, tint: "from-emerald-500/15 to-emerald-500/0" },
     { label: "Pending Interviews", value: formatNum(dbStats?.pending), delta: "", up: true, icon: Clock, tint: "from-amber-500/15 to-amber-500/0" },
-    { label: "Avg AI Score", value: \\\\\\%\\\, delta: "", up: true, icon: Star, tint: "from-fuchsia-500/15 to-fuchsia-500/0" },
+    { label: "Avg AI Score", value: \`\${(dbStats?.avg_score || 0).toFixed(1)}%\`, delta: "", up: true, icon: Star, tint: "from-fuchsia-500/15 to-fuchsia-500/0" },
     { label: "Candidates Hired", value: formatNum(dbStats?.selected), delta: "", up: true, icon: Target, tint: "from-teal-500/15 to-teal-500/0" },
     { label: "Candidates Rejected", value: formatNum(dbStats?.rejected), delta: "", up: false, icon: XCircle, tint: "from-rose-500/15 to-rose-500/0" },
     { label: "Expired Links", value: formatNum(dbStats?.expired), delta: "", up: false, icon: AlertTriangle, tint: "from-red-500/15 to-red-500/0" }
@@ -122,7 +122,7 @@ export default function SuperDashboardPage() {
           const Icon = k.icon;
           return (
             <Card key={k.label} className="relative overflow-hidden bg-white text-slate-900 border-slate-200 shadow-sm">
-              <div className={\\\pointer-events-none absolute inset-0 bg-gradient-to-br \\\\\\} />
+              <div className={\`pointer-events-none absolute inset-0 bg-gradient-to-br \${k.tint}\`} />
               <CardContent className="relative p-4">
                 <div className="flex items-start justify-between">
                   <div className="grid h-9 w-9 place-items-center rounded-lg bg-white text-slate-900 border-slate-200 shadow-sm ring-1 ring-slate-200">
@@ -278,6 +278,6 @@ export default function SuperDashboardPage() {
     </div>
   );
 }
-\;
+`;
 
 fs.writeFileSync('src/pages/superadmin/SuperDashboardPage.jsx', code);

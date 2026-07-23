@@ -45,6 +45,7 @@ const AdminNotifications = React.lazy(() => import('./pages/admin/AdminNotificat
 const ConversationalFlowPage = React.lazy(() => import('./pages/admin/ConversationalFlowPage'))
 
 const SuperAdminLayout = React.lazy(() => import('./components/superadmin/SuperAdminLayout'))
+const SuperAdminInterviewsPage = React.lazy(() => import('./pages/superadmin/SuperAdminInterviewsPage'))
 const SuperDashboardPage = React.lazy(() => import('./pages/superadmin/SuperDashboardPage'))
 const NewSuperDashboardPage = React.lazy(() => import('./pages/superadmin/NewSuperDashboardPage'))
 const TeamManagementPage = React.lazy(() => import('./pages/superadmin/TeamManagementPage'))
@@ -109,6 +110,7 @@ function App() {
             <Route path="new-dashboard" element={<NewSuperDashboardPage />} />
             <Route path="team" element={<TeamManagementPage />} />
             <Route path="dashboard" element={<SuperDashboardPage />} />
+            <Route path="interviews" element={<SuperAdminInterviewsPage />} />
             <Route path="qualified-candidates" element={<SuperAdminQualifiedCandidatesPage />} />
             <Route path="rejected-candidates" element={<SuperAdminRejectedCandidatesPage />} />
             <Route path="create-interview" element={<SuperAdminCreateInterviewPage />} />

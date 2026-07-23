@@ -7730,6 +7730,84 @@ async def get_dashboard_aggregated_data(
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 
+@router.get("/api/superadmin/live-sessions")
+@router.get("/superadmin/live-sessions")
+async def superadmin_live_sessions(
+    adminId: Optional[str] = None,
+    current_admin: dict = Depends(get_current_admin_details),
+):
+    """Fast endpoint returning only the live session snapshots for the active-today card."""
+    if current_admin.get("role") not in ["super_admin", "master"]:
+        raise HTTPException(status_code=403, detail="Super Admin access required")
+    try:
+        from redis_manager import manager
+        live_sessions = []
+        ongoing_live_count = 0
+        ongoing_alert_count = 0
+
+        query_filter = {
+            "status": "started",
+            "$or": [{"is_deactivated": False}, {"is_deactivated": {"$exists": False}}]
+        }
+        if current_admin.get("role") != "master":
+            query_filter["company_id"] = current_admin.get("company_id")
+        if current_admin.get("role") == "admin":
+            query_filter["created_by"] = current_admin["admin_id"]
+        elif adminId:
+            query_filter["created_by"] = adminId
+
+        rows = list(interview_sessions_collection.find(
+            query_filter,
+            {"link_id": 1, "candidate_name": 1, "candidate_email": 1, "created_at": 1, "interview_title": 1, "started_at": 1}
+        ).sort("created_at", -1).limit(50))
+
+        snapshots = await _load_live_snapshots([row.get("link_id", "") for row in rows])
+        now = datetime.now(timezone.utc)
+
+        for row in rows:
+            link_id = row.get("link_id", "")
+            snap = snapshots.get(link_id, {})
+            online = False
+            if snap.get("ts"):
+                try:
+                    ts_dt = datetime.fromisoformat(snap["ts"].replace("Z", "+00:00"))
+                    age_secs = (now - ts_dt).total_seconds()
+                    online = age_secs < 60
+                except Exception:
+                    pass
+
+            audio_level = snap.get("audio_level", 0)
+            session_item = {
+                "online": online,
+                "audio_level": audio_level,
+                "current_question": snap.get("current_question", ""),
+                "proctoring_alerts": snap.get("proctoring_alerts", 0),
+                "alert_types": snap.get("alert_types", []),
+                "face_visible": snap.get("face_visible"),
+                "face_count": snap.get("face_count", 0),
+                "round_type": snap.get("round_type"),
+                "link_id": link_id,
+                "candidate_name": row.get("candidate_name", ""),
+                "candidate_email": row.get("candidate_email", ""),
+                "interview_title": row.get("interview_title", ""),
+                "session_id": str(row.get("_id", ""))
+            }
+            live_sessions.append(session_item)
+            if online:
+                ongoing_live_count += 1
+            if snap.get("proctoring_alerts", 0) > 0:
+                ongoing_alert_count += 1
+
+        return {
+            "liveSessions": live_sessions,
+            "ongoingLiveCount": ongoing_live_count,
+            "ongoingMonitoredCount": len(rows),
+            "ongoingAlertCount": ongoing_alert_count,
+        }
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
 @router.post("/api/export/excel")
 def export_excel(data: ExportExcelRequest, current_admin: dict = Depends(get_current_admin_details)):
     import csv
