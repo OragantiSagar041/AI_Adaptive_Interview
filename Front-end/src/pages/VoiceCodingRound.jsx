@@ -284,7 +284,7 @@ export default function VoiceCodingRound({
       }
       setAiStatus('speaking')
       setOrbLabel('Zara speaking…')
-      const res = await fetch(`${API_BASE_URL}/tts`, {
+      const res = await candidateFetch(`${API_BASE_URL}/tts`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ 
@@ -386,7 +386,7 @@ export default function VoiceCodingRound({
         try {
           const langMap = { 'Hindi': 'hi', 'Telugu': 'te', 'Tamil': 'ta', 'Malayalam': 'ml', 'Kannada': 'kn', 'English': 'en' };
           const sttLang = langMap[sessionLang] || 'en';
-          const res = await fetch(`${API_BASE_URL}/stt?language=${sttLang}`, { method: 'POST', body: fd })
+          const res = await candidateFetch(`${API_BASE_URL}/stt?language=${sttLang}`, { method: 'POST', body: fd })
           const data = await res.json()
           if (data.transcript) {
             setTranscript(data.transcript)

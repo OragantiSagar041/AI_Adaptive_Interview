@@ -1,4 +1,3 @@
- 
 import React, { useState, useEffect, useRef } from 'react'
 import { useSelector, useDispatch } from 'react-redux'
 import { useNavigate, useLocation, NavLink, Outlet } from 'react-router-dom'
@@ -7,35 +6,20 @@ import {
   Tags,
   Users,
   UserPlus,
-  Radio,
-  Shield,
   LogOut,
-  User,
-  Settings,
-  ChevronDown,
-  ChevronLeft,
-  ChevronRight,
-  Menu,
-  X,
   Bell,
+  Shield,
   CreditCard,
   AlertCircle,
-  Mail
+  Mail,
+  Zap,
+  ChevronDown,
+  User
 } from 'lucide-react'
-import logoImage from '../../assets/logo.png'
 import { logout, loadSuperAdminProfile } from '../../store/slices/authSlice'
 import { persistor } from '../../store/store'
 import AdminCopilot from '../admin/copilot/AdminCopilot'
 import { getMasterNotifications, markNotificationAsRead, markAllNotificationsAsRead } from '../../utils/api'
-
-function hexToRgba(hex, alpha) {
-  const cleanHex = hex.replace('#', '')
-  const value = parseInt(cleanHex, 16)
-  const r = (value >> 16) & 255
-  const g = (value >> 8) & 255
-  const b = value & 255
-  return `rgba(${r}, ${g}, ${b}, ${alpha})`
-}
 
 export default function MasterLayout() {
   const navigate = useNavigate()
@@ -46,12 +30,12 @@ export default function MasterLayout() {
   const token = useSelector(state => state.auth.token)
   const role = useSelector(state => state.auth.role)
   const adminUser = useSelector(state => state.auth.adminUser)
+  const userName = adminUser?.name || adminUser?.username || 'Master Admin'
 
   useEffect(() => {
     if (token) {
       dispatch(loadSuperAdminProfile())
     }
-   
   }, [dispatch, token])
 
   // Local theme states
@@ -78,7 +62,6 @@ export default function MasterLayout() {
       const interval = setInterval(fetchNotifications, 30000)
       return () => clearInterval(interval)
     }
-   
   }, [token])
 
   const handleMarkRead = async (id) => {
@@ -149,37 +132,7 @@ export default function MasterLayout() {
     return () => {
       document.removeEventListener("mousedown", handleClickOutside)
     }
-   
   }, [])
-  const [isCollapsed, setIsCollapsed] = useState(false)
-  const [isMobile, setIsMobile] = useState(false)
-  const [isMobileOpen, setIsMobileOpen] = useState(false)
-
-  useEffect(() => {
-    const handleResize = () => {
-      const mobile = window.innerWidth < 768
-      setIsMobile(mobile)
-      if (!mobile) {
-        setIsMobileOpen(false)
-      }
-    }
-    handleResize()
-    window.addEventListener('resize', handleResize)
-    return () => window.removeEventListener('resize', handleResize)
-   
-  }, [])
-
-  useEffect(() => {
-    if (isMobile && isMobileOpen) {
-      document.body.style.overflow = 'hidden'
-    } else {
-      document.body.style.overflow = ''
-    }
-    return () => {
-      document.body.style.overflow = ''
-    }
-   
-  }, [isMobile, isMobileOpen])
 
   const accentColors = {
     teal: { primary: '#0d9488', hover: '#0f766e', glow: 'rgba(13, 148, 136, 0.15)' },
@@ -197,7 +150,6 @@ export default function MasterLayout() {
     document.documentElement.style.setProperty('--primary-color', currentAccent.primary)
     document.documentElement.style.setProperty('--primary-hover', currentAccent.hover)
     document.documentElement.style.setProperty('--primary-glow', currentAccent.glow)
-   
   }, [accentName])
 
   const handleLogout = () => {
@@ -206,11 +158,6 @@ export default function MasterLayout() {
     persistor.purge()
     navigate('/login')
   }
-
-  const accentWash = hexToRgba(currentAccent.primary, 0.16)
-  const accentWashStrong = hexToRgba(currentAccent.primary, 0.26)
-  const accentPage = hexToRgba(currentAccent.primary, 0.12)
-  const accentPageStrong = hexToRgba(currentAccent.primary, 0.20)
 
   const navItems = [
     { id: 'dashboard', label: 'Dashboard', icon: LayoutDashboard, path: '/master/dashboard' },
@@ -231,244 +178,166 @@ export default function MasterLayout() {
   }
 
   return (
-      <div
-        className="grid grid-cols-1 min-h-screen text-[#0f172a]"
-        style={{
-          gridTemplateColumns: isMobile ? '1fr' : (isCollapsed ? '80px 1fr' : '260px 1fr'),
-          background: `
-            radial-gradient(circle at 50% 5%, rgba(255,255,255,.95) 0%, rgba(248,243,255,.9) 20%, rgba(236,222,255,.75) 38%, rgba(216,188,255,.35) 60%, transparent 80%),
-            radial-gradient(circle at 12% 88%, #5b00ff 0%, #6f19ff 25%, #8b53ff 48%, rgba(139,83,255,.45) 68%, transparent 82%),
-            radial-gradient(circle at 88% 92%, #9d00ff 0%, #b328ff 22%, #c65dff 45%, rgba(198,93,255,.4) 68%, transparent 82%),
-            linear-gradient(180deg, #ffffff 0%, #f4ecff 25%, #e5d4ff 55%, #d2b5ff 100%)
-          `,
-        }}
-      >
-      {/* Sidebar Backdrop for Mobile */}
-      {isMobile && isMobileOpen && (
-        <div
-          onClick={() => setIsMobileOpen(false)}
-          className="fixed inset-0 bg-slate-950/40 backdrop-blur-xs z-[45] transition-opacity"
-        />
-      )}
-
+    <div className="min-h-screen bg-slate-50 text-slate-900 flex font-sans overflow-hidden">
       {/* Sidebar */}
-      <aside
-        className={`text-white flex flex-col z-50 shadow-lg shrink-0 overflow-hidden transition-all duration-300 ${
-          isMobile
-            ? `fixed left-0 top-0 ${isMobileOpen ? 'translate-x-0' : '-translate-x-full'} w-[260px] p-5 gap-5 h-[100dvh]`
-            : `sticky top-0 ${isCollapsed ? 'w-[80px] p-4 items-center gap-4 h-screen' : 'w-[260px] p-5 gap-5 h-screen'}`
-        }`}
-        style={{
-          background: `
-            radial-gradient(circle at 20% 18%, rgba(255, 255, 255, 0.12), transparent 24%),
-            linear-gradient(180deg, rgba(20, 37, 91, 0.96) 0%, rgba(30, 58, 138, 0.94) 46%, rgba(37, 99, 235, 0.9) 100%)
-          `,
-          boxShadow: `0 20px 60px rgba(15, 23, 42, 0.12)`
-        }}
-      >
-        <div className={`flex w-full ${(isCollapsed && !isMobile) ? 'flex-col items-center gap-4' : 'items-center justify-between gap-2.5'}`}>
-          <div className="flex items-center gap-2.5 overflow-hidden">
-            <img src={logoImage} alt="Hire IQ Logo" className="w-8 h-8 object-contain" />
-            {(!isCollapsed || isMobile) && (
-              <strong className="text-xl font-bold tracking-tight text-white font-title truncate">Hire IQ</strong>
-            )}
+      <aside className="hidden w-64 shrink-0 border-r border-slate-200 bg-white md:flex flex-col h-screen">
+        {/* Brand / Logo */}
+        <div className="flex items-center gap-3 px-6 h-16 border-b border-slate-200 shrink-0">
+          <div className="grid h-8 w-8 place-items-center rounded-lg bg-indigo-600 text-white shadow-sm">
+            <Zap className="h-4 w-4" />
           </div>
-          {isMobile ? (
-            <button
-              onClick={() => setIsMobileOpen(false)}
-              className="p-1 rounded-lg hover:bg-white/10 text-white/80 hover:text-white border-none cursor-pointer outline-none transition-colors shrink-0"
-              title="Close Sidebar"
-            >
-              <X size={18} />
-            </button>
-          ) : (
-            <button
-              onClick={() => setIsCollapsed(!isCollapsed)}
-              className="p-1 rounded-lg hover:bg-white/10 text-white/80 hover:text-white border-none cursor-pointer outline-none transition-colors shrink-0"
-              title={isCollapsed ? "Expand Sidebar" : "Collapse Sidebar"}
-            >
-              {isCollapsed ? <ChevronRight size={18} /> : <ChevronLeft size={18} />}
-            </button>
-          )}
+          <div className="leading-tight">
+            <div className="text-sm font-semibold">HireIQ</div>
+            <div className="text-[11px] text-slate-500">Master Admin</div>
+          </div>
         </div>
 
-        <nav className="flex flex-col gap-1.5 flex-grow overflow-y-auto scrollbar-none w-full">
-          {(!isCollapsed || isMobile) && (
-            <div className="text-[0.62rem] font-bold text-white/50 uppercase tracking-widest px-3 mb-1">
-              Master Control
-            </div>
-          )}
-          {navItems.map(({ id, label, icon: Icon, path }) => (
+        {/* Navigation Items */}
+        <div className="space-y-1 p-3 overflow-y-auto flex-1">
+          {navItems.map((item) => (
             <NavLink
-              key={id}
-              to={path}
-              onClick={() => isMobile && setIsMobileOpen(false)}
-              title={(isCollapsed && !isMobile) ? label : ""}
+              key={item.id}
+              to={item.path}
               className={({ isActive }) =>
-                `w-full text-left flex items-center rounded-lg text-sm font-semibold transition-all border-none outline-none cursor-pointer no-underline ${
-                  (isCollapsed && !isMobile) ? 'justify-center p-2' : 'px-3.5 py-2 gap-3'
-                } ${
+                `flex items-center gap-3 rounded-md px-3 py-2 text-sm font-medium transition-colors ${
                   isActive
-                    ? 'text-white shadow-sm'
-                    : 'bg-transparent text-white/80 hover:bg-white/10 hover:text-white'
+                    ? 'text-white'
+                    : 'text-slate-500 hover:bg-slate-100 hover:text-slate-900'
                 }`
               }
               style={({ isActive }) => ({
-                background: isActive ? `linear-gradient(135deg, rgba(255, 255, 255, 0.15), rgba(255, 255, 255, 0.05))` : 'transparent'
+                background: isActive ? `linear-gradient(135deg, ${currentAccent.primary} 0%, ${currentAccent.hover} 100%)` : 'transparent'
               })}
             >
-              <Icon size={16} className="shrink-0" />
-              {(!isCollapsed || isMobile) && <span>{label}</span>}
+              {({ isActive }) => (
+                <>
+                  <item.icon className="h-5 w-5 shrink-0" />
+                  {item.label}
+                </>
+              )}
             </NavLink>
           ))}
+        </div>
 
-          <div className="border-t border-white/10 my-2 w-full" />
-          
-          {/* Pulsing Live Monitor Indicator */}
-          {(isCollapsed && !isMobile) ? (
-            <div className="flex justify-center p-2 rounded-lg bg-emerald-500/10 text-emerald-400 border border-emerald-500/20 w-full" title="Live Monitor Active">
-              <span className="relative flex h-2 w-2">
-                <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75"></span>
-                <span className="relative inline-flex rounded-full h-2 w-2 bg-emerald-500"></span>
-              </span>
-            </div>
-          ) : (
-            <div className="w-full flex items-center gap-3 px-3.5 py-2 rounded-lg text-sm font-semibold bg-emerald-500/10 text-emerald-400 border border-emerald-500/20 select-none">
-              <span className="relative flex h-2 w-2 shrink-0">
-                <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75"></span>
-                <span className="relative inline-flex rounded-full h-2 w-2 bg-emerald-500"></span>
-              </span>
-              Live Monitor Active
-            </div>
-          )}
-        </nav>
-
-        <button
-          onClick={handleLogout}
-          title={(isCollapsed && !isMobile) ? "Logout" : ""}
-          className={`text-left flex items-center border border-white/20 hover:bg-white/10 text-white outline-none cursor-pointer transition-all ${
-            (isCollapsed && !isMobile) ? 'justify-center p-2 rounded-xl' : 'px-3.5 py-2 rounded-lg gap-3 w-full'
-          }`}
-        >
-          <LogOut size={16} className="shrink-0" />
-          {(!isCollapsed || isMobile) && <span>Logout</span>}
-        </button>
+        {/* Bottom Sidebar Actions */}
+        <div className="p-3 border-t border-slate-200 space-y-1 shrink-0">
+          <div className="w-full flex items-center gap-3 px-3 py-2 rounded-md text-sm font-medium transition-colors bg-emerald-500/10 text-emerald-600 border border-emerald-500/20 select-none">
+            <span className="relative flex h-2 w-2 shrink-0">
+              <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75"></span>
+              <span className="relative inline-flex rounded-full h-2 w-2 bg-emerald-500"></span>
+            </span>
+            Live Monitor Active
+          </div>
+        </div>
       </aside>
 
-      {/* Main Panel */}
-      <div className="flex flex-col min-w-0">
-        {/* Navbar */}
+      {/* Main Content Wrapper */}
+      <div className="flex-1 flex flex-col min-w-0 h-screen">
+        {/* Top bar */}
         <header
-          className="relative z-30 border-b px-4 sm:px-8 py-4 flex justify-between items-center text-[#1e293b] shadow-sm backdrop-blur-md"
+          className="relative z-30 border-b px-4 sm:px-8 py-4 flex justify-between items-center text-[#1e293b] shadow-sm backdrop-blur-md shrink-0"
           style={{
-            background: `linear-gradient(90deg, rgba(255,255,255,0.92), ${hexToRgba(currentAccent.primary, 0.14)})`,
-            borderColor: hexToRgba(currentAccent.primary, 0.22),
+            background: `linear-gradient(90deg, rgba(255,255,255,0.92), ${currentAccent ? `rgba(${parseInt(currentAccent.primary.slice(1,3),16)}, ${parseInt(currentAccent.primary.slice(3,5),16)}, ${parseInt(currentAccent.primary.slice(5,7),16)}, 0.14)` : 'rgba(99,102,241,0.14)'})`,
+            borderColor: currentAccent ? `rgba(${parseInt(currentAccent.primary.slice(1,3),16)}, ${parseInt(currentAccent.primary.slice(3,5),16)}, ${parseInt(currentAccent.primary.slice(5,7),16)}, 0.22)` : 'rgba(99,102,241,0.22)'
           }}
         >
-          <div className="flex items-center gap-2 min-w-0">
-            {isMobile && (
-              <button
-                onClick={() => setIsMobileOpen(true)}
-                className="p-1.5 -ml-1 hover:bg-slate-100 rounded-xl text-slate-600 hover:text-slate-800 transition-colors border-none bg-transparent cursor-pointer outline-none flex items-center justify-center shrink-0"
-              >
-                <Menu size={18} />
-              </button>
-            )}
-            <h2 className="text-sm sm:text-xl font-bold text-slate-800 truncate" title={getPageTitle()}>{getPageTitle()}</h2>
+          {/* Left Side: Brand & Toggles */}
+          <div className="flex items-center gap-6">
+            <h2 className="text-[17px] font-bold text-slate-800">{getPageTitle()}</h2>
           </div>
 
-          <div className="flex items-center gap-3 sm:gap-4 shrink-0">
-            <div className="max-md:hidden flex items-center gap-1.5 bg-slate-100 rounded-full p-1 border border-slate-200">
+          {/* Right Side: Toggles, Notifications & User Profile */}
+          <div className="flex items-center gap-5">
+            {/* Theme Toggle Dots */}
+            <div className="flex items-center gap-1.5 bg-white rounded-full px-2 py-1 shadow-sm border border-slate-100">
               {Object.keys(accentColors).map(color => (
                 <button
                   key={color}
                   onClick={() => setAccentName(color)}
-                  className="w-3.5 h-3.5 rounded-full border-2 border-white cursor-pointer p-0 transition-all"
+                  className="w-4 h-4 rounded-full border border-white/50 cursor-pointer p-0 transition-all hover:scale-110"
                   style={{
                     background: accentColors[color].primary,
-                    boxShadow: accentName === color ? `0 0 0 2px ${accentColors[color].primary}` : 'none',
+                    boxShadow: accentName === color ? `0 0 0 2px white, 0 0 0 4px ${accentColors[color].primary}` : 'none',
                   }}
                   title={color}
                 />
               ))}
             </div>
 
-            <span className="text-sm text-slate-600 max-lg:hidden block">
-              Welcome back, <strong className="text-slate-800">{adminUser?.username || 'Master Admin'}</strong>
+            <span className="text-sm text-slate-600 max-lg:hidden block ml-2">
+              Welcome back, <strong className="text-slate-800">{userName}</strong>
             </span>
 
             {/* Notification Bell */}
             <div ref={notifRef} className="relative">
               <button
                 onClick={() => setNotifDropdownOpen(!notifDropdownOpen)}
-                className="relative p-2 text-slate-500 hover:text-slate-700 hover:bg-slate-100 rounded-xl transition-all cursor-pointer border border-slate-200 bg-white flex items-center justify-center"
+                className="relative p-2.5 text-slate-500 hover:text-slate-700 hover:bg-slate-50 bg-white rounded-xl shadow-sm border border-slate-100 transition-all cursor-pointer flex items-center justify-center"
                 title="Notifications"
               >
                 <Bell size={18} />
                 {unreadCount > 0 && (
-                  <span className="absolute -top-1 -right-1 bg-primary text-white font-extrabold text-[9px] min-w-[16px] h-4 px-1 rounded-full flex items-center justify-center animate-bounce">
+                  <span className="absolute -top-1 -right-1 bg-sky-500 text-white font-extrabold text-[9px] min-w-[18px] h-[18px] px-1 rounded-full flex items-center justify-center shadow-sm border-2 border-white">
                     {unreadCount}
                   </span>
                 )}
               </button>
-              
+
               {notifDropdownOpen && (
-                  <div className="absolute right-0 top-full mt-2 w-80 bg-white border border-slate-200 rounded-2xl shadow-xl py-2 z-50">
-                    <div className="flex items-center justify-between px-4 py-2 border-b border-slate-100">
-                      <span className="text-xs font-bold text-slate-800 font-sans">Recent Notifications</span>
-                      {unreadCount > 0 && (
-                        <button
-                          onClick={handleMarkAllRead}
-                          className="text-[10px] font-bold text-primary hover:underline cursor-pointer border-none bg-transparent"
-                        >
-                          Mark all read
-                        </button>
-                      )}
-                    </div>
-                    
-                    <div className="max-h-64 overflow-y-auto divide-y divide-slate-50">
-                      {notifications.length === 0 ? (
-                        <div className="py-8 text-center text-xs text-slate-400 font-sans">No notifications</div>
-                      ) : (
-                        notifications.slice(0, 5).map(n => (
-                          <div
-                            key={n.id}
-                            onClick={() => {
-                              if (!n.read) handleMarkRead(n.id)
-                              setNotifDropdownOpen(false)
-                              if (n.type === 'tenant_created' || n.type === 'payment') navigate('/master/subscribers')
-                              else navigate('/master/dashboard')
-                            }}
-                            className={`p-3 text-left hover:bg-slate-50 cursor-pointer transition-colors flex gap-2.5 items-start ${
-                              !n.read ? 'bg-slate-50/30' : ''
-                            }`}
-                          >
-                            <div className="p-1.5 rounded-lg bg-slate-50 flex-shrink-0 mt-0.5">
-                              {getNotifIcon(n.type)}
-                            </div>
-                            <div className="space-y-0.5 min-w-0">
-                              <div className="flex items-center gap-1.5 justify-between">
-                                <span className={`text-xs font-bold truncate block ${!n.read ? 'text-slate-800' : 'text-slate-600'}`}>{n.title}</span>
-                                {!n.read && <span className="w-1.5 h-1.5 rounded-full bg-primary shrink-0" />}
-                              </div>
-                              <p className="text-[11px] text-slate-500 leading-normal line-clamp-2 font-sans">{n.message}</p>
-                              <span className="text-[9px] text-slate-400 block pt-0.5 font-sans">{formatRelativeTime(n.created_at)}</span>
-                            </div>
-                          </div>
-                        ))
-                      )}
-                    </div>
-                    
-                    <div className="border-t border-slate-100 px-4 pt-2 pb-1 text-center">
-                      <NavLink
-                        to="/master/notifications"
-                        onClick={() => setNotifDropdownOpen(false)}
-                        className="text-[11px] font-bold text-primary hover:underline no-underline block py-1 font-sans"
+                <div className="absolute right-0 top-full mt-2 w-80 bg-white border border-slate-200 rounded-2xl shadow-xl py-2 z-50">
+                  <div className="flex items-center justify-between px-4 py-2 border-b border-slate-100">
+                    <span className="text-xs font-bold text-slate-800 font-sans">Recent Notifications</span>
+                    {unreadCount > 0 && (
+                      <button
+                        onClick={handleMarkAllRead}
+                        className="text-[10px] font-bold text-indigo-600 hover:underline cursor-pointer border-none bg-transparent"
                       >
-                        View All Notifications
-                      </NavLink>
-                    </div>
+                        Mark all read
+                      </button>
+                    )}
                   </div>
+
+                  <div className="max-h-64 overflow-y-auto divide-y divide-slate-50">
+                    {notifications.length === 0 ? (
+                      <div className="py-8 text-center text-xs text-slate-400 font-sans">No notifications</div>
+                    ) : (
+                      notifications.slice(0, 5).map(n => (
+                        <div
+                          key={n.id}
+                          onClick={() => {
+                            if (!n.read) handleMarkRead(n.id)
+                            setNotifDropdownOpen(false)
+                            if (n.type === 'tenant_created' || n.type === 'payment') navigate('/master/subscribers')
+                            else navigate('/master/dashboard')
+                          }}
+                          className={`p-3 text-left hover:bg-slate-50 cursor-pointer transition-colors flex gap-2.5 items-start ${!n.read ? 'bg-indigo-50/30' : ''}`}
+                        >
+                          <div className="p-1.5 rounded-lg bg-slate-50 flex-shrink-0 mt-0.5">
+                            {getNotifIcon(n.type)}
+                          </div>
+                          <div className="space-y-0.5 min-w-0">
+                            <div className="flex items-center gap-1.5 justify-between">
+                              <span className={`text-xs font-bold truncate block ${!n.read ? 'text-slate-800' : 'text-slate-600'}`}>{n.title}</span>
+                              {!n.read && <span className="w-1.5 h-1.5 rounded-full bg-indigo-600 shrink-0" />}
+                            </div>
+                            <p className="text-[11px] text-slate-500 leading-normal line-clamp-2 font-sans">{n.message}</p>
+                            <span className="text-[9px] text-slate-400 block pt-0.5 font-sans">{formatRelativeTime(n.created_at)}</span>
+                          </div>
+                        </div>
+                      ))
+                    )}
+                  </div>
+
+                  <div className="border-t border-slate-100 px-4 pt-2 pb-1 text-center">
+                    <NavLink
+                      to="/master/notifications"
+                      onClick={() => setNotifDropdownOpen(false)}
+                      className="text-[11px] font-bold text-indigo-600 hover:underline no-underline block py-1 font-sans"
+                    >
+                      View All Notifications
+                    </NavLink>
+                  </div>
+                </div>
               )}
             </div>
 
@@ -476,18 +345,18 @@ export default function MasterLayout() {
             <div className="relative">
               <button
                 onClick={() => setDropdownOpen(!dropdownOpen)}
-                className="flex items-center gap-2 p-1.5 hover:bg-slate-50 rounded-xl transition-all cursor-pointer border border-slate-200 bg-white"
+                className="flex items-center gap-2 p-1.5 px-2 hover:bg-slate-50 rounded-xl shadow-sm transition-all cursor-pointer border border-slate-100 bg-white"
               >
                 <img
-                  src={adminUser?.profile_image || adminUser?.avatar}
+                  src={adminUser?.profile_image || adminUser?.avatar || "https://ui-avatars.com/api/?name=Master&background=random"}
                   alt="Avatar"
-                  className="w-8 h-8 rounded-full object-cover"
+                  className="w-8 h-8 rounded-full object-cover border border-slate-200"
                 />
                 <div className="text-left hidden sm:block">
-                  <div className="text-xs font-semibold text-slate-800 leading-none">{adminUser?.username || 'Master Admin'}</div>
+                  <div className="text-[13px] font-semibold text-slate-800 leading-none">{userName}</div>
                   <span className="text-[10px] text-slate-400 font-medium">Master Control</span>
                 </div>
-                <ChevronDown size={14} className="text-slate-400" />
+                <ChevronDown size={14} className="text-slate-400 ml-1" />
               </button>
 
               {dropdownOpen && (
@@ -499,7 +368,7 @@ export default function MasterLayout() {
                       onClick={() => setDropdownOpen(false)}
                       className="flex items-center gap-2.5 px-4 py-2 text-sm text-slate-700 hover:bg-slate-50 no-underline"
                     >
-                      <User size={14} /> My Profile
+                      <User size={15} /> My Profile
                     </NavLink>
 
                     <hr className="border-slate-100 my-1" />
@@ -510,7 +379,7 @@ export default function MasterLayout() {
                       }}
                       className="w-full text-left flex items-center gap-2.5 px-4 py-2 text-sm text-red-600 hover:bg-red-50 hover:text-red-700 font-medium cursor-pointer border-none bg-transparent"
                     >
-                      <LogOut size={14} /> Logout
+                      <LogOut size={15} /> Logout
                     </button>
                   </div>
                 </>
@@ -519,12 +388,8 @@ export default function MasterLayout() {
           </div>
         </header>
 
-        <main
-          className="p-4 sm:p-8 flex-grow overflow-y-auto"
-          style={{
-            background: `linear-gradient(135deg, ${accentPageStrong} 0%, rgba(255,255,255,0.85) 30%, rgba(255,255,255,0.85) 70%, ${accentPage} 100%)`,
-          }}
-        >
+        {/* Main Content Area */}
+        <main className="flex-1 overflow-y-auto bg-slate-50/50 p-4 lg:p-8 relative">
           <Outlet />
         </main>
       </div>

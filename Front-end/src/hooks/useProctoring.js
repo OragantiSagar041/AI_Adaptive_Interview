@@ -4,7 +4,7 @@ import ProctoringWorker from './proctoring.worker.js?worker'
 // ── Tunable thresholds ──────────────────────────────────────────────────
 const DETECT_INTERVAL_MS = 700          // how often a frame is sent to the worker
 
-const PHONE_ALERT_CONFIDENCE = 0.25     // raised from 0.15 — eliminates false positives
+const PHONE_ALERT_CONFIDENCE = 0.45     // raised to eliminate false positives for spectacles
 // from mugs, glasses, dark objects at low confidence
 const PHONE_CONSECUTIVE_FRAMES = 3      // 3 consecutive frames (~2.1s) — reduces false positives
 // a real phone in view persists; a misclassification does not

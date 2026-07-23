@@ -168,8 +168,7 @@ function extractPhoneCandidates(detections) {
         label.includes('phone') ||
         label.includes('mobile') ||
         label.includes('cell') ||
-        label.includes('tablet') ||
-        label.includes('remote')
+        label.includes('tablet')
       ) {
         candidates.push({ score: category.score ?? 0 });
       }

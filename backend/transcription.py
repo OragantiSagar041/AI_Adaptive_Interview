@@ -1,9 +1,11 @@
 import os
+import asyncio
 import tempfile
 from functools import lru_cache
 from difflib import SequenceMatcher
-from fastapi import APIRouter, UploadFile, File, Form, HTTPException
+from fastapi import APIRouter, UploadFile, File, Form, HTTPException, Depends
 from groq import Groq
+from app.candidate_auth import require_active_candidate
 
 router = APIRouter()
 
@@ -31,9 +33,17 @@ def fix_name(text, name):
 async def transcribe_audio(
     audio: UploadFile = File(...),
     candidate_name: str = Form(...),
-    language: str = Form("English")
+    language: str = Form("English"),
+    candidate_session: dict = Depends(require_active_candidate),
 ):
-    data = await audio.read()
+    candidate_name = candidate_name.strip()[:200] or "Candidate"
+    allowed_languages = {"Hindi", "Telugu", "Tamil", "Malayalam", "Kannada", "English"}
+    if language not in allowed_languages:
+        raise HTTPException(status_code=422, detail="Unsupported interview language")
+
+    data = await audio.read(25 * 1024 * 1024 + 1)
+    if len(data) > 25 * 1024 * 1024:
+        raise HTTPException(status_code=413, detail="Audio upload exceeds 25 MB")
 
     # Use the original filename extension so Groq gets correct format
     original_filename = audio.filename or 'audio.webm'
@@ -88,15 +98,18 @@ async def transcribe_audio(
         else:
             sys_prompt = native_prompts.get(iso_lang, "")
 
-        with open(path, "rb") as file:
-            transcription = client.audio.transcriptions.create(
-                file=(os.path.basename(path), file.read()),
-                model="whisper-large-v3-turbo",
-                language=iso_lang,
-                prompt=sys_prompt,
-                response_format="verbose_json",
-                temperature=0.0
-            )
+        def call_transcription_api():
+            with open(path, "rb") as file:
+                return client.audio.transcriptions.create(
+                    file=(os.path.basename(path), file.read()),
+                    model="whisper-large-v3-turbo",
+                    language=iso_lang,
+                    prompt=sys_prompt,
+                    response_format="verbose_json",
+                    temperature=0.0
+                )
+
+        transcription = await asyncio.to_thread(call_transcription_api)
 
         valid_texts = []
         segments = getattr(transcription, 'segments', [])
@@ -122,9 +135,9 @@ async def transcribe_audio(
                         continue
                     
                 valid_texts.append(seg_text.strip())
-            # Fallback: if every segment was filtered out, use the raw transcription text
-            # This prevents silent failures where the user spoke but nothing is returned.
-            text = " ".join(valid_texts).strip() or transcription.text.strip()
+            # If every segment was filtered out, treat it as silence. Falling back
+            # to raw text here reintroduces Whisper's common silence hallucinations.
+            text = " ".join(valid_texts).strip()
         else:
             text = transcription.text.strip()
 

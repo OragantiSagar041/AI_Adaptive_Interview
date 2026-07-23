@@ -1,5 +1,6 @@
 import { useEffect, useRef } from 'react'
 import { API_BASE_URL } from '../apiConfig'
+import { getIceServers } from '../utils/webrtcConfig'
 
 /**
  * useCandidateWebRTC
@@ -104,10 +105,7 @@ export default function useCandidateWebRTC(linkId, mediaStreamRef, telemetryData
             }
 
             const pc = new RTCPeerConnection({
-              iceServers: [
-                { urls: 'stun:stun.l.google.com:19302' },
-                { urls: 'stun:stun1.l.google.com:19302' },
-              ]
+              iceServers: getIceServers(),
             })
             pcsRef.current[adminId] = pc
 

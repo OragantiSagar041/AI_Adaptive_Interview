@@ -4,6 +4,7 @@ import { Video, Volume2, ArrowRight, ShieldAlert, Cpu, AlertTriangle, RefreshCw 
 import { useInterviewSession } from './useInterviewSession'
 import DeviceCheckModal from '../../components/DeviceCheckModal'
 import { API_BASE_URL } from '../../apiConfig'
+import { candidateFetch } from '../../utils/candidateAuth'
 import api from '../../utils/api'
 import '../../Interview.css'
 import { motion } from 'framer-motion'
@@ -103,6 +104,7 @@ export const InterviewNonTechnical = () => {
     handleStartRound2Click,
     proceedToRoundTwo,
     handleNextQuestion,
+    handleSubmitInterview,
     canSubmit,
     handleFinishEarly,
     handleSkipUpload,
@@ -139,7 +141,7 @@ export const InterviewNonTechnical = () => {
           const fd = new FormData()
           fd.append('audio', blob, 'voice_sample.webm')
           fd.append('voice_name', `Candidate_${sessionId}`)
-          const resp = await fetch(`${API_BASE_URL}/voice-clone-instant`, { method: 'POST', body: fd })
+          const resp = await candidateFetch(`${API_BASE_URL}/voice-clone-instant`, { method: 'POST', body: fd })
           const data = await resp.json()
           if (!resp.ok) throw new Error(data.detail || 'Cloning failed')
           setLocalVoiceId(data.voice_id)
@@ -549,18 +551,18 @@ export const InterviewNonTechnical = () => {
 
               <button 
                 className={`w-full py-3 px-4 rounded-xl font-bold text-xs transition-all border-none shadow-md flex items-center justify-center gap-2 ${
-                  !canSubmit || globalCountdown > 0
+                  !canSubmit
                     ? 'bg-slate-800/40 text-slate-500 cursor-not-allowed border border-white/5 opacity-50'
                     : 'bg-slate-800 hover:bg-slate-700 text-white cursor-pointer hover:-translate-y-0.5'
                 }`} 
                 onClick={(e) => {
-                  if (!canSubmit || globalCountdown > 0) return
+                  if (!canSubmit) return
                   handleFinishEarly(e)
                 }}
-                disabled={!canSubmit || globalCountdown > 0}
-                title={!canSubmit || globalCountdown > 0 ? "Locked until countdown reaches zero" : "Finish Interview"}
+                disabled={!canSubmit}
+                title={!canSubmit ? "Interview cannot be submitted yet" : "Finish Interview"}
               >
-                {!canSubmit || globalCountdown > 0 ? '🔒 Finish Interview (Locked)' : '⏹ Finish Interview'}
+                {!canSubmit ? '🔒 Finish Interview (Locked)' : '⏹ Finish Interview'}
               </button>
             </div>
 
@@ -773,18 +775,18 @@ export const InterviewNonTechnical = () => {
                     ) : (
                       <button 
                         className={`px-8 py-3.5 rounded-xl font-bold text-sm text-white transition-all duration-200 border-none ${
-                          !canSubmit || globalCountdown > 0 
+                          !canSubmit
                             ? 'bg-red-950/40 text-red-400/50 cursor-not-allowed opacity-50' 
                             : 'bg-red-500 hover:bg-red-600 shadow-lg shadow-red-500/20 hover:shadow-red-500/30 cursor-pointer'
                         }`}
                         onClick={(e) => {
-                          if (!canSubmit || globalCountdown > 0) return
+                          if (!canSubmit) return
                           handleFinishEarly(e)
                         }}
-                        disabled={!canSubmit || globalCountdown > 0}
-                        title={!canSubmit || globalCountdown > 0 ? "Locked until countdown reaches zero" : "Submit Interview"}
+                        disabled={!canSubmit}
+                        title={!canSubmit ? "Interview cannot be submitted yet" : "Submit Interview"}
                       >
-                        {!canSubmit || globalCountdown > 0 ? '🔒 Submit Interview (Locked)' : 'Submit Interview'}
+                        {!canSubmit ? '🔒 Submit Interview (Locked)' : 'Submit Interview'}
                       </button>
                     )
                   ) : (

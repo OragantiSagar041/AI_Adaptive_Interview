@@ -297,7 +297,7 @@ export default function VoiceCaseStudy({
         playingAudioRef.current = null
       }
       
-      const res = await fetch(`${API_BASE_URL}/tts`, {
+      const res = await candidateFetch(`${API_BASE_URL}/tts`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ 
@@ -418,7 +418,7 @@ export default function VoiceCaseStudy({
           fd.append('file', audioBlob, 'audio.webm')
           try {
             const targetLang = langMap[sessionLang] || 'en-US'
-            const res = await fetch(`${API_BASE_URL}/stt?language=${targetLang.split('-')[0]}`, { method: 'POST', body: fd })
+            const res = await candidateFetch(`${API_BASE_URL}/stt?language=${targetLang.split('-')[0]}`, { method: 'POST', body: fd })
             const data = await res.json()
             if (data.transcript) {
               setTranscript(data.transcript)

@@ -37,7 +37,7 @@ import cloudinary
 import cloudinary.uploader
 import cloudinary.api
 import edge_tts
-import PyPDF2
+import pypdf
 from bson import ObjectId
 from docx import Document
 from dotenv import load_dotenv
@@ -92,51 +92,90 @@ load_dotenv()
 
 def cloudinary_cleanup_loop():
     while True:
+        cleanup_lock = None
         try:
+            if os.getenv("ENV", "local") == "production":
+                import redis
+                cleanup_redis = redis.Redis.from_url(
+                    os.getenv("REDIS_URL", "redis://localhost:6379/0"),
+                    socket_connect_timeout=2,
+                    socket_timeout=2,
+                )
+                cleanup_lock = cleanup_redis.lock(
+                    "maintenance:cloudinary-recording-cleanup",
+                    timeout=2 * 60 * 60,
+                    blocking_timeout=0,
+                )
+                if not cleanup_lock.acquire(blocking=False):
+                    time.sleep(60 * 60)
+                    continue
+
             now = datetime.now(timezone.utc)
             cutoff = now - timedelta(days=RECORDING_RETENTION_DAYS)
             
             print(f"[Cleanup] Running Cloudinary maintenance (Cutoff: {cutoff.isoformat()})...")
             
-            old_recordings = interviews_collection.find({
-                "cloudinary_public_id": {"$exists": True, "$ne": ""},
-                "$or": [
-                    {"recording_expires_at": {"$lt": now.isoformat()}},
-                    {
-                        "recording_expires_at": {"$exists": False},
-                        "recording_uploaded_at": {"$lt": cutoff.isoformat()}
-                    }
-                ]
-            })
-            
+            expiry_fields = (
+                ("recording_path", "recording_path_cloudinary_public_id"),
+                ("screen_recording_path", "screen_recording_path_cloudinary_public_id"),
+            )
             count = 0
-            for rec in old_recordings:
-                public_id = rec.get("cloudinary_public_id")
-                created_at = rec.get("created_at", "unknown")
-                if public_id:
-                    try:
-                        print(f" [Cleanup] Deleting old recording {public_id} (Created: {created_at})")
-                        cloudinary.uploader.destroy(public_id, resource_type="video")
-                        interviews_collection.update_one(
-                            {"_id": rec["_id"]},
-                            {"$unset": {
-                                "recording_path": "",
-                                "cloudinary_public_id": "",
-                                "recording_uploaded_at": "",
-                                "recording_expires_at": "",
-                                "recording_retention_days": "",
-                                "recording_storage": ""
-                            }}
-                        )
-                        count += 1
-                    except Exception as e:
-                        print(f"[Error] [Cleanup] Error deleting {public_id}: {e}")
+            deleted_public_ids = set()
+            for collection in (interviews_collection, interview_sessions_collection):
+                old_recordings = collection.find({
+                    "$or": [
+                        {
+                            public_id_field: {"$exists": True, "$ne": ""},
+                            f"{path_field}_expires_at": {"$lt": now.isoformat()},
+                        }
+                        for path_field, public_id_field in expiry_fields
+                    ]
+                })
+                for rec in old_recordings:
+                    for path_field, public_id_field in expiry_fields:
+                        public_id = rec.get(public_id_field)
+                        expires_at = parse_iso_datetime(rec.get(f"{path_field}_expires_at"))
+                        if not public_id or not expires_at or expires_at >= now:
+                            continue
+                        try:
+                            if public_id not in deleted_public_ids:
+                                print(f" [Cleanup] Deleting expired recording {public_id}")
+                                cloudinary.uploader.destroy(
+                                    public_id,
+                                    resource_type="video",
+                                    type="authenticated",
+                                    invalidate=True,
+                                )
+                                deleted_public_ids.add(public_id)
+                                count += 1
+                            collection.update_one(
+                                {"_id": rec["_id"]},
+                                {"$unset": {
+                                    path_field: "",
+                                    public_id_field: "",
+                                    f"{path_field}_uploaded_at": "",
+                                    f"{path_field}_expires_at": "",
+                                    f"{path_field}_retention_days": "",
+                                    f"{path_field}_storage": "",
+                                    f"{path_field}_truncated": "",
+                                    f"{path_field}_upload_status": "",
+                                }}
+                            )
+                        except Exception as e:
+                            print(f"[Error] [Cleanup] Error deleting {public_id}: {e}")
             
             if count > 0:
                 print(f"[OK] [Cleanup] Successfully removed {count} old recordings.")
                 
         except Exception as e:
             print(f"[Error] [Cleanup] Loop error: {e}")
+        finally:
+            if cleanup_lock:
+                try:
+                    if cleanup_lock.owned():
+                        cleanup_lock.release()
+                except Exception:
+                    pass
         
         # Run once every 24 hours
         time.sleep(86400)
@@ -1184,7 +1223,7 @@ def extract_text_from_file(file_content: bytes, filename: str) -> str:
     try:
         if file_extension == 'pdf':
             # Extract text from PDF
-            pdf_reader = PyPDF2.PdfReader(io.BytesIO(file_content))
+            pdf_reader = pypdf.PdfReader(io.BytesIO(file_content))
             text = ""
             for page in pdf_reader.pages:
                 text += page.extract_text() + "\n"
@@ -2623,7 +2662,7 @@ def send_interview_email(candidate_email: str, candidate_name: str, link_url: st
     from dotenv import load_dotenv
 
     env_path = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), ".env")
-    load_dotenv(env_path, override=True)
+    load_dotenv(env_path, override=False)
     brevo_api_key = os.getenv("BREVO_API_KEY")
     sender_name = "Hire IQ Recruiting"
     sender_email = os.getenv("BREVO_SENDER_EMAIL", "no-reply@hireiq.co.in")

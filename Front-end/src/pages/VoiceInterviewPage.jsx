@@ -34,6 +34,9 @@ import DeviceCheckModal from '../components/DeviceCheckModal'
 import { VOICE_TRANSLATIONS } from '../utils/voiceTranslations'
 import { normalizeInterviewQuestions, unwrapInterviewPayload } from './interview/interviewPayload'
 
+const MAX_RECORDING_BYTES_PER_STREAM = 128 * 1024 * 1024
+const RECORDING_OPTIONS = { videoBitsPerSecond: 450000, audioBitsPerSecond: 48000 }
+
 // ── Video Avatar Component ────────────────────────────────────────────────────
 function VideoAvatar({ status, size = 220 }) {
   const videoRef = useRef(null)
@@ -156,6 +159,9 @@ function Bubble({ role, text, isNew }) {
 // ── Main Component ────────────────────────────────────────────────────────────
 export default function VoiceInterviewPage() {
   const { linkId } = useParams()
+  const [recordingUploadSessionId] = useState(
+    () => globalThis.crypto?.randomUUID?.() || `${Date.now()}-${Math.random()}`,
+  )
 
   const _sessionKey = linkId ? `voice_session_${linkId}` : null
   const _savedSession = _sessionKey ? (() => { try { return JSON.parse(sessionStorage.getItem(_sessionKey) || 'null') } catch { return null } })() : null
@@ -236,6 +242,7 @@ export default function VoiceInterviewPage() {
   const screenShareViolationsRef = useRef(0)
   const screenShareViolationHandlerRef = useRef(null)  // stable ref to avoid circular deps
   const usedFollowUps = useRef(new Set())
+  const unclearAnswerRetryRef = useRef({ key: '', count: 0 })
   const [displayedQuestion, setDisplayedQuestion] = useState('')  // typewriter text
   const [isTyping, setIsTyping] = useState(false)              // typewriter running
   const typewriterRef = useRef(null)
@@ -244,6 +251,8 @@ export default function VoiceInterviewPage() {
   const mediaRecorderRef = useRef(null)
   const mediaStreamRef = useRef(null)
   const recordedChunksRef = useRef([])
+  const recordedBytesRef = useRef(0)
+  const screenRecordingTruncatedRef = useRef(false)
   const [isRecording, setIsRecording] = useState(false)
   const [feedback, setFeedback] = useState('')
   const [isSubmittingFeedback, setIsSubmittingFeedback] = useState(false)
@@ -254,6 +263,8 @@ export default function VoiceInterviewPage() {
   const cameraRecorderRef = useRef(null)
   const cameraStreamRef = useRef(null)
   const cameraChunksRef = useRef([])
+  const cameraBytesRef = useRef(0)
+  const cameraRecordingTruncatedRef = useRef(false)
   const candidateVideoRef = useRef(null)
 
 
@@ -289,6 +300,7 @@ export default function VoiceInterviewPage() {
   const languageRef = useRef('English')
   const currentAudioRef = useRef(null)    // ← tracks active TTS audio so stopAudio() can kill it
   const isTransitioningRef = useRef(false)
+  const transitionToNextRoundRef = useRef(null)
 
   // ── Browser online/offline detection ────────────────────────────
   const [isOnline, setIsOnline] = useState(() => navigator.onLine)
@@ -500,8 +512,6 @@ export default function VoiceInterviewPage() {
   useExitConfirmation({
     active: isInterviewActive,
     onConfirmExit: async () => {
-      // Do not submit early if time is still remaining on the clock
-      if (countdownRef.current > 0) return
       if (linkId) {
         await candidateFetch(
           `${API_BASE_URL}/complete-session/${linkId}?warnings=${warningsCount}&reason=tab_closed`,
@@ -677,6 +687,11 @@ export default function VoiceInterviewPage() {
         const sd = unwrapInterviewPayload(await sr.json())
         if (hasTimedOut) return
         if (!sr.ok) throw new Error(sd.detail || 'Failed to start session.')
+        if (sd.is_expired) throw new Error(sd.message || 'This interview link has expired.')
+        if (sd.is_before_schedule) {
+          const scheduled = sd.scheduled_start ? new Date(sd.scheduled_start).toLocaleString() : 'the scheduled time'
+          throw new Error(`This interview is not available yet. It starts at ${scheduled}.`)
+        }
         if (sd.session_status === 'completed') throw new Error('Interview already completed.')
 
         const qs = normalizeInterviewQuestions(sd)
@@ -684,6 +699,11 @@ export default function VoiceInterviewPage() {
 
         if (!qs.length) throw new Error('No questions found for this session.')
         setQuestions(qs)
+        if (_savedSession?.currentQIdx == null) {
+          const resumeQuestionId = Number(sd.resume_question_id || sd.first_question?.id || 1)
+          const resumeIndex = qs.findIndex(question => Number(question.id) === resumeQuestionId)
+          setCurrentQIdx(resumeIndex >= 0 ? resumeIndex : 0)
+        }
         setInterviewId(sd.interview_id || '')
         const candidateToken = sd.monitoring_token || ''
         setMonitoringToken(candidateToken)
@@ -716,7 +736,7 @@ export default function VoiceInterviewPage() {
     stopAudio()  // cancel any previous audio first
     try {
       setAiStatus('speaking')
-      const res = await fetch(`${API_BASE_URL}/tts`, {
+      const res = await candidateFetch(`${API_BASE_URL}/tts`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -790,8 +810,18 @@ export default function VoiceInterviewPage() {
   }, [currentQIdx, questions])
 
   // ── Screen & Camera Recording ───────────────────────────────────────────────
+  const createVideoRecorder = useCallback((stream, preferredTypes = []) => {
+    const mimeType = preferredTypes.find(type => {
+      try { return MediaRecorder.isTypeSupported(type) } catch (_) { return false }
+    })
+    return new MediaRecorder(stream, {
+      ...RECORDING_OPTIONS,
+      ...(mimeType ? { mimeType } : {}),
+    })
+  }, [])
+
   const startScreenRecording = useCallback(async () => {
-    if (!sessionDetailRef.current?.record_video) return;
+    if (!sessionDetailRef.current?.record_video) return true
 
     try {
       // Force fullscreen mode
@@ -821,14 +851,32 @@ export default function VoiceInterviewPage() {
       let micStream = cameraStreamRef.current
       try {
         if (!micStream || micStream.getTracks().some(t => t.readyState === 'ended')) {
-          micStream = await navigator.mediaDevices.getUserMedia({ video: true, audio: true })
+          micStream = await navigator.mediaDevices.getUserMedia({
+            video: { width: { ideal: 640 }, height: { ideal: 360 }, frameRate: { ideal: 15, max: 20 } },
+            audio: true,
+          })
           cameraStreamRef.current = micStream
         }
 
         // Start Camera Recorder
-        const cameraMr = new MediaRecorder(micStream, { mimeType: 'video/webm' })
+        const cameraMr = createVideoRecorder(micStream, [
+          'video/webm;codecs=vp8,opus',
+          'video/webm',
+          'video/mp4',
+        ])
         cameraChunksRef.current = []
-        cameraMr.ondataavailable = e => { if (e.data.size > 0) cameraChunksRef.current.push(e.data) }
+        cameraBytesRef.current = 0
+        cameraRecordingTruncatedRef.current = false
+        cameraMr.ondataavailable = e => {
+          if (e.data.size <= 0) return
+          if (cameraBytesRef.current + e.data.size > MAX_RECORDING_BYTES_PER_STREAM) {
+            cameraRecordingTruncatedRef.current = true
+            if (cameraMr.state === 'recording') cameraMr.stop()
+            return
+          }
+          cameraBytesRef.current += e.data.size
+          cameraChunksRef.current.push(e.data)
+        }
         cameraMr.start(5000)
         cameraRecorderRef.current = cameraMr
 
@@ -857,25 +905,64 @@ export default function VoiceInterviewPage() {
         const combinedScreen = new MediaStream([...screenStream.getVideoTracks(), ...dest.stream.getAudioTracks()])
         mediaStreamRef.current = combinedScreen
 
-        const mr = new MediaRecorder(combinedScreen, { mimeType: 'video/webm;codecs=vp8,opus' })
+        const mr = createVideoRecorder(combinedScreen, [
+          'video/webm;codecs=vp8,opus',
+          'video/webm',
+          'video/mp4',
+        ])
         recordedChunksRef.current = []
-        mr.ondataavailable = e => { if (e.data.size > 0) recordedChunksRef.current.push(e.data) }
+        recordedBytesRef.current = 0
+        screenRecordingTruncatedRef.current = false
+        mr.ondataavailable = e => {
+          if (e.data.size <= 0) return
+          if (recordedBytesRef.current + e.data.size > MAX_RECORDING_BYTES_PER_STREAM) {
+            screenRecordingTruncatedRef.current = true
+            if (mr.state === 'recording') mr.stop()
+            return
+          }
+          recordedBytesRef.current += e.data.size
+          recordedChunksRef.current.push(e.data)
+        }
         mr.start(5000)
         mediaRecorderRef.current = mr
       } else {
         mediaStreamRef.current = screenStream
-        const mr = new MediaRecorder(screenStream, { mimeType: 'video/webm' })
+        const mr = createVideoRecorder(screenStream, [
+          'video/webm;codecs=vp8',
+          'video/webm',
+          'video/mp4',
+        ])
         recordedChunksRef.current = []
-        mr.ondataavailable = e => { if (e.data.size > 0) recordedChunksRef.current.push(e.data) }
+        recordedBytesRef.current = 0
+        screenRecordingTruncatedRef.current = false
+        mr.ondataavailable = e => {
+          if (e.data.size <= 0) return
+          if (recordedBytesRef.current + e.data.size > MAX_RECORDING_BYTES_PER_STREAM) {
+            screenRecordingTruncatedRef.current = true
+            if (mr.state === 'recording') mr.stop()
+            return
+          }
+          recordedBytesRef.current += e.data.size
+          recordedChunksRef.current.push(e.data)
+        }
         mr.start(5000)
         mediaRecorderRef.current = mr
       }
 
       setIsRecording(true)
+      return true
     } catch (e) {
       console.warn('Screen recording not available or denied:', e)
+      await Swal.fire({
+        title: 'Screen Sharing Required',
+        text: e?.message || 'Share your entire screen to start this proctored interview.',
+        icon: 'warning',
+        background: '#161c2d',
+        color: '#fff',
+      })
+      return false
     }
-  }, [])
+  }, [createVideoRecorder])
 
   const stopAndUploadRecording = useCallback(async (iid) => {
     const screenMr = mediaRecorderRef.current
@@ -883,62 +970,85 @@ export default function VoiceInterviewPage() {
 
     setIsRecording(false)
 
-    const uploads = []
+    const stopRecorderAndFlush = recorder => new Promise(resolve => {
+      if (!recorder || recorder.state === 'inactive') {
+        resolve()
+        return
+      }
+      const timeout = setTimeout(resolve, 4000)
+      recorder.onstop = () => {
+        clearTimeout(timeout)
+        resolve()
+      }
+      try { recorder.requestData() } catch (_) { }
+      try { recorder.stop() } catch (_) {
+        clearTimeout(timeout)
+        resolve()
+      }
+    })
 
-    // 1. Upload Screen Recording
-    if (screenMr && screenMr.state !== 'inactive') {
-      const screenPromise = new Promise(resolve => {
-        screenMr.onstop = async () => {
-          const blob = new Blob(recordedChunksRef.current, { type: 'video/webm' })
-          if (blob.size >= 1000) {
-            const fd = new FormData()
-            fd.append('interview_id', iid)
-            fd.append('link_id', linkId || '')
-            fd.append('recording_type', 'screen')
-            fd.append('file', blob, 'screen_recording.webm')
-            try {
-              await candidateFetch(`${API_BASE_URL}/upload-full-recording`, { method: 'POST', body: fd })
-              // Screen recording successfully uploaded
-            } catch (e) {
-              console.warn('Screen upload failed:', e)
-            }
-          }
-          resolve()
+    await Promise.all([
+      stopRecorderAndFlush(screenMr),
+      stopRecorderAndFlush(cameraMr),
+    ])
+    mediaStreamRef.current?.getTracks().forEach(t => t.stop())
+    cameraStreamRef.current?.getTracks().forEach(t => t.stop())
+
+    const uploadRecording = async (chunksRef, bytesRef, type, truncated) => {
+      if (!chunksRef.current.length) return
+      const blob = new Blob(chunksRef.current, { type: 'video/webm' })
+      if (blob.size < 1000) return
+
+      const fd = new FormData()
+      fd.append('interview_id', iid)
+      fd.append('link_id', linkId || '')
+      fd.append('recording_type', type)
+      fd.append('recording_upload_id', `${recordingUploadSessionId}-${type}`)
+      fd.append('recording_truncated', String(truncated))
+      fd.append('file', blob, `${type}_recording.webm`)
+
+      let lastError
+      for (let attempt = 0; attempt < 3; attempt += 1) {
+        const controller = new AbortController()
+        const uploadTimeout = setTimeout(() => controller.abort(), 5 * 60 * 1000)
+        try {
+          const response = await candidateFetch(`${API_BASE_URL}/upload-full-recording`, {
+            method: 'POST',
+            body: fd,
+            signal: controller.signal,
+          })
+          if (!response.ok) throw new Error(`HTTP ${response.status}`)
+          chunksRef.current = []
+          bytesRef.current = 0
+          return
+        } catch (error) {
+          lastError = error
+          await new Promise(resolve => setTimeout(resolve, 800 * (attempt + 1)))
+        } finally {
+          clearTimeout(uploadTimeout)
         }
-        screenMr.stop()
-        mediaStreamRef.current?.getTracks().forEach(t => t.stop())
-      })
-      uploads.push(screenPromise)
+      }
+      throw lastError
     }
 
-    // 2. Upload Camera Recording
-    if (cameraMr && cameraMr.state !== 'inactive') {
-      const cameraPromise = new Promise(resolve => {
-        cameraMr.onstop = async () => {
-          const blob = new Blob(cameraChunksRef.current, { type: 'video/webm' })
-          if (blob.size >= 1000) {
-            const fd = new FormData()
-            fd.append('interview_id', iid)
-            fd.append('link_id', linkId || '')
-            fd.append('recording_type', 'camera')
-            fd.append('file', blob, 'camera_recording.webm')
-            try {
-              await candidateFetch(`${API_BASE_URL}/upload-full-recording`, { method: 'POST', body: fd })
-              // Camera recording successfully uploaded
-            } catch (e) {
-              console.warn('Camera upload failed:', e)
-            }
-          }
-          resolve()
-        }
-        cameraMr.stop()
-        cameraStreamRef.current?.getTracks().forEach(t => t.stop())
-      })
-      uploads.push(cameraPromise)
+    try {
+      await uploadRecording(
+        cameraChunksRef,
+        cameraBytesRef,
+        'camera',
+        cameraRecordingTruncatedRef.current,
+      )
+      await uploadRecording(
+        recordedChunksRef,
+        recordedBytesRef,
+        'screen',
+        screenRecordingTruncatedRef.current,
+      )
+    } catch (error) {
+      console.warn('Interview recording upload failed after retries:', error)
+      throw error
     }
-
-    await Promise.all(uploads)
-  }, [linkId])
+  }, [linkId, recordingUploadSessionId])
 
   // ── Hybrid STT (Web Speech API captions + Continuous Whisper STT) ───────────
   const interimTextRef = useRef('')
@@ -951,15 +1061,34 @@ export default function VoiceInterviewPage() {
   const queuedChunkRef = useRef(null)
   const sttSeqRef = useRef(0)
   const lastProcessedSeqRef = useRef(0)
+  const whisperStopPromiseRef = useRef(Promise.resolve())
+  const resolveWhisperStopRef = useRef(null)
+  const lastSttHadAudioRef = useRef(false)
+  const lastSttFailedRef = useRef(false)
 
   // Send /stt request with HTTP 429 exponential backoff retry
-  const sendSttRequestWithRetry = useCallback(async (seq, validAudioBlob, langCode, retriesLeft = 3, backoffMs = 1000) => {
+  const sendSttRequestWithRetry = useCallback(async (seq, validAudioBlob, langCode, retriesLeft = 1, backoffMs = 800) => {
     const fd = new FormData()
-    fd.append('file', validAudioBlob, `utterance_${seq}.webm`)
+    const extension = validAudioBlob.type.includes('ogg')
+      ? 'ogg'
+      : validAudioBlob.type.includes('mp4')
+        ? 'mp4'
+        : 'webm'
+    fd.append('file', validAudioBlob, `utterance_${seq}.${extension}`)
     const t0 = performance.now()
 
     try {
-      const res = await fetch(`${API_BASE_URL}/stt?language=${langCode}`, { method: 'POST', body: fd })
+      const controller = new AbortController()
+      const timeoutId = setTimeout(() => controller.abort(), 15000)
+      let res
+      try {
+        res = await candidateFetch(
+          `${API_BASE_URL}/stt?language=${langCode}`,
+          { method: 'POST', body: fd, signal: controller.signal },
+        )
+      } finally {
+        clearTimeout(timeoutId)
+      }
       const dt = Math.round(performance.now() - t0)
 
       if (res.status === 429 && retriesLeft > 0) {
@@ -972,7 +1101,7 @@ export default function VoiceInterviewPage() {
 
       if (res.ok) {
         const data = await res.json()
-        console.log(`✅ [STT CONCURRENCY] Seq #${seq} HTTP 200 OK (${dt}ms) | Response:`, data)
+        console.debug(`STT request #${seq} completed in ${dt}ms`)
 
         // Sequence ID check: Ignore out-of-order Whisper responses
         if (seq < lastProcessedSeqRef.current) {
@@ -983,13 +1112,23 @@ export default function VoiceInterviewPage() {
 
         if (data && data.transcript && data.transcript.trim()) {
           whisperTxRef.current = data.transcript.trim()
-          console.log(`📝 [STT CONCURRENCY] Authoritative Whisper Transcript Updated (Seq #${seq}): '${whisperTxRef.current}'`)
         }
-      } else {
-        console.warn(`❌ [STT CONCURRENCY] Seq #${seq} Failed with HTTP ${res.status}`)
+        return data?.transcript?.trim() || ''
       }
+      throw new Error(`STT failed with HTTP ${res.status}`)
     } catch (err) {
       console.warn(`❌ [STT CONCURRENCY ERROR] Seq #${seq} Network/API Error:`, err)
+      if (retriesLeft > 0) {
+        await new Promise(resolve => setTimeout(resolve, backoffMs))
+        return sendSttRequestWithRetry(
+          seq,
+          validAudioBlob,
+          langCode,
+          retriesLeft - 1,
+          backoffMs * 2,
+        )
+      }
+      throw err
     }
   }, [])
 
@@ -1035,7 +1174,6 @@ export default function VoiceInterviewPage() {
   const getAuthoritativeTranscript = useCallback(() => {
     const whisperVal = whisperTxRef.current.trim()
     const webSpeechVal = getFullTranscript()
-    console.log('🔍 [FINAL PAYLOAD EVALUATION]:', { whisperVal, webSpeechVal, chosen: (whisperVal && whisperVal.length >= 3) ? 'WHISPER' : 'WEB_SPEECH' })
     if (whisperVal && whisperVal.length >= 3) {
       return whisperVal
     }
@@ -1068,78 +1206,123 @@ export default function VoiceInterviewPage() {
     setAiStatus('idle')
   }, [stopAudio])
 
+  const finishListening = useCallback(async () => {
+    if (!isListeningRef.current) return getAuthoritativeTranscript()
+
+    isListeningRef.current = false
+    clearTimeout(silenceTimerRef.current)
+
+    if (interimTextRef.current.trim()) {
+      const interimStr = interimTextRef.current.trim()
+      if (!currentTxRef.current.trim().endsWith(interimStr)) {
+        currentTxRef.current = `${currentTxRef.current.trim()} ${interimStr}`.trim()
+      }
+      setTranscript(currentTxRef.current)
+    }
+    interimTextRef.current = ''
+    setInterimText('')
+
+    try { recognitionRef.current?.stop() } catch (_) { }
+    recognitionRef.current = null
+
+    const recorder = whisperRecorderRef.current
+    if (recorder && recorder.state !== 'inactive') {
+      try { recorder.requestData() } catch (_) { }
+      try { recorder.stop() } catch (_) { }
+      await Promise.race([
+        whisperStopPromiseRef.current,
+        new Promise(resolve => setTimeout(resolve, 33000)),
+      ])
+    }
+
+    whisperRecorderRef.current = null
+    setAiStatus('idle')
+    return getAuthoritativeTranscript()
+  }, [getAuthoritativeTranscript])
+
   const startListening = useCallback((onFinish, preserveTranscript = false) => {
     const SR = window.SpeechRecognition || window.webkitSpeechRecognition
-    if (!SR) {
-      isListeningRef.current = false
-      setAiStatus('idle')
-      Swal.fire({
-        title: 'Voice Recognition Unavailable',
-        text: 'This browser does not support live speech recognition. Please continue in the latest Chrome or Edge browser.',
-        icon: 'error',
-        background: '#161c2d',
-        color: '#fff',
-        allowOutsideClick: false,
-      })
-      return
-    }
 
     // Clean up previous instances first
     try { recognitionRef.current?.stop() } catch (_) { }
     recognitionRef.current = null
-    if (whisperRecorderRef.current && whisperRecorderRef.current.state !== 'inactive') {
+    if (!preserveTranscript && whisperRecorderRef.current && whisperRecorderRef.current.state !== 'inactive') {
       try { whisperRecorderRef.current.stop() } catch (_) {}
+      whisperRecorderRef.current = null
     }
-    whisperRecorderRef.current = null
 
-    const rec = new SR()
-    rec.lang = langMap[languageRef.current] || 'en-US'
-    rec.continuous = true
-    rec.interimResults = true
-    rec.maxAlternatives = 1
-    recognitionRef.current = rec
+    const rec = SR ? new SR() : null
+    if (rec) {
+      rec.lang = langMap[languageRef.current] || 'en-US'
+      rec.continuous = true
+      rec.interimResults = true
+      rec.maxAlternatives = 1
+      recognitionRef.current = rec
+    }
     isListeningRef.current = true
-    currentTxRef.current = ''
-    interimTextRef.current = ''
-    whisperTxRef.current = ''
-    chunkCountRef.current = 0
-    whisperChunksRef.current = []
-    sttInFlightRef.current = false
-    queuedChunkRef.current = null
-    sttSeqRef.current = 0
-    lastProcessedSeqRef.current = 0
-
-    setTranscript('')
-    setInterimText('')
+    if (!preserveTranscript) {
+      currentTxRef.current = ''
+      interimTextRef.current = ''
+      whisperTxRef.current = ''
+      whisperChunksRef.current = []
+      sttInFlightRef.current = false
+      queuedChunkRef.current = null
+      sttSeqRef.current = 0
+      lastProcessedSeqRef.current = 0
+      lastSttHadAudioRef.current = false
+      lastSttFailedRef.current = false
+      setTranscript('')
+      setInterimText('')
+    }
     setAiStatus('listening')
 
     // ── Continuous 2.5s decodable audio stream recorder for Groq Whisper ──
-    if (cameraStreamRef.current && cameraStreamRef.current.getAudioTracks().length > 0) {
+    if (
+      (!whisperRecorderRef.current || whisperRecorderRef.current.state === 'inactive') &&
+      cameraStreamRef.current &&
+      cameraStreamRef.current.getAudioTracks().length > 0
+    ) {
       try {
         const audioStream = new MediaStream(cameraStreamRef.current.getAudioTracks())
-        const mime = MediaRecorder.isTypeSupported('audio/webm;codecs=opus') ? 'audio/webm;codecs=opus' : 'audio/webm'
-        const mr = new MediaRecorder(audioStream, { mimeType: mime })
+        const mimeCandidates = ['audio/webm;codecs=opus', 'audio/webm', 'audio/ogg;codecs=opus', 'audio/mp4']
+        const mime = mimeCandidates.find(value => MediaRecorder.isTypeSupported(value)) || ''
+        const mr = new MediaRecorder(audioStream, mime ? { mimeType: mime } : undefined)
         whisperRecorderRef.current = mr
+        whisperChunksRef.current = []
+        whisperStopPromiseRef.current = new Promise(resolve => {
+          resolveWhisperStopRef.current = resolve
+        })
 
-        mr.ondataavailable = async (e) => {
-          if (!isListeningRef.current) return
+        mr.ondataavailable = (e) => {
           if (e.data && e.data.size > 0) {
             whisperChunksRef.current.push(e.data)
-            chunkCountRef.current += 1
-
-            // Produce a 100% valid standalone decodable WebM audio file (includes EBML header from chunk 1)
-            const validAudioBlob = new Blob(whisperChunksRef.current, { type: mime })
-            const size = validAudioBlob.size
-
-            if (size > 1000) {
-              const langCode = (langMap[languageRef.current] || 'en-US').split('-')[0]
-              enqueueSttChunk(validAudioBlob, langCode)
-            }
           }
         }
-        mr.start(2500)
+        mr.onstop = async () => {
+          try {
+            const validAudioBlob = new Blob(whisperChunksRef.current, {
+              type: mr.mimeType || mime || 'audio/webm',
+            })
+            if (validAudioBlob.size > 1000) {
+              lastSttHadAudioRef.current = true
+              sttSeqRef.current += 1
+              const langCode = (langMap[languageRef.current] || 'en-US').split('-')[0]
+              try {
+                await sendSttRequestWithRetry(sttSeqRef.current, validAudioBlob, langCode)
+              } catch (error) {
+                lastSttFailedRef.current = true
+                console.warn('Final server transcription failed:', error)
+              }
+            }
+          } finally {
+            resolveWhisperStopRef.current?.()
+            resolveWhisperStopRef.current = null
+          }
+        }
+        mr.start()
       } catch (err) {
         console.warn('Failed to start Whisper chunk recorder:', err)
+        resolveWhisperStopRef.current?.()
       }
     }
 
@@ -1147,13 +1330,11 @@ export default function VoiceInterviewPage() {
     clearTimeout(silenceTimerRef.current)
     silenceTimerRef.current = setTimeout(() => {
       if (isListeningRef.current) {
-        const fullAns = getAuthoritativeTranscript()
-        stopListening()
-        onFinish?.(fullAns)
+        finishListening().then(fullAns => onFinish?.(fullAns))
       }
-    }, 12000)
+    }, rec ? 12000 : 30000)
 
-    rec.onresult = ev => {
+    if (rec) rec.onresult = ev => {
       if (!isListeningRef.current) return
       let finalStr = '', interimStr = ''
       for (let i = 0; i < ev.results.length; i++) {
@@ -1173,52 +1354,65 @@ export default function VoiceInterviewPage() {
       clearTimeout(silenceTimerRef.current)
       silenceTimerRef.current = setTimeout(() => {
         if (isListeningRef.current) {
-          const fullAns = getAuthoritativeTranscript()
-          stopListening()
-          onFinish?.(fullAns)
+          finishListening().then(fullAns => onFinish?.(fullAns))
         }
       }, 12000)
     }
 
     // ── Smart error handler ────────────────────────────────────────────────
-    rec.onerror = (e) => {
+    if (rec) rec.onerror = (e) => {
       const err = e.error
       if (err === 'no-speech') {
         // Not truly a failure — silence detected. Reset timer so we keep waiting.
         clearTimeout(silenceTimerRef.current)
         silenceTimerRef.current = setTimeout(() => {
-          if (isListeningRef.current) { stopListening(); onFinish?.(currentTxRef.current.trim()) }
+          if (isListeningRef.current) {
+            finishListening().then(fullAns => onFinish?.(fullAns))
+          }
         }, 10000)
         return
       }
       if (err === 'aborted') return  // intentional stop — do nothing
 
       if (err === 'network') {
-        // Network blip: stop current instance, restart after a brief pause
-        console.warn('SR: network error — restarting in 1s')
+        // Browser speech services commonly fail behind corporate networks.
+        // Keep the MediaRecorder running and let server transcription finish.
+        console.warn('SR: network error — continuing with server transcription')
         try { rec.stop() } catch (_) { }
-        if (isListeningRef.current) {
-          setTimeout(() => {
-            if (isListeningRef.current) startListening(onFinish, true)
-          }, 1000)
-        }
+        recognitionRef.current = null
+        clearTimeout(silenceTimerRef.current)
+        silenceTimerRef.current = setTimeout(() => {
+          if (isListeningRef.current) {
+            finishListening().then(fullAns => onFinish?.(fullAns))
+          }
+        }, 30000)
         return
       }
 
-      // Any other fatal error (not-allowed, service-not-allowed, etc.)
+      // Speech-service permission failures do not affect the already-authorized
+      // microphone stream, so continue with the server transcription fallback.
       console.warn('SR:', err)
-      stopListening()
+      try { rec.stop() } catch (_) { }
+      recognitionRef.current = null
+      clearTimeout(silenceTimerRef.current)
+      silenceTimerRef.current = setTimeout(() => {
+        if (isListeningRef.current) {
+          finishListening().then(fullAns => onFinish?.(fullAns))
+        }
+      }, 30000)
       Swal.fire({
-        title: 'Microphone Recognition Stopped',
-        text: 'Speech recognition could not continue. Check microphone and browser permissions, then use the microphone button to retry. Your answer was not submitted.',
-        icon: 'error',
+        title: 'Backup Voice Recognition Enabled',
+        text: 'The browser speech service is unavailable, so secure server transcription will process your answer.',
+        icon: 'info',
         background: '#161c2d',
         color: '#fff',
+        timer: 3500,
+        showConfirmButton: false,
       })
     }
 
     // ── onend: only restart if still intentionally listening ──────────────
-    rec.onend = () => {
+    if (rec) rec.onend = () => {
       if (!isListeningRef.current) return  // we stopped on purpose — don't restart
       // Recognition stopped by itself (common in Chrome) — restart after a short delay
       // to prevent rapid restart storms and InvalidStateError exceptions.
@@ -1235,21 +1429,31 @@ export default function VoiceInterviewPage() {
       }, 150)
     }
 
-    try { rec.start() } catch (e) {
-      console.warn('SR start error:', e)
-      stopListening()
-      Swal.fire({
-        title: 'Unable to Start Voice Recognition',
-        text: 'Check microphone permissions and retry. No answer was submitted.',
-        icon: 'error',
-        background: '#161c2d',
-        color: '#fff',
-      })
+    if (rec) {
+      try { rec.start() } catch (e) {
+        console.warn('SR start error:', e)
+        recognitionRef.current = null
+        clearTimeout(silenceTimerRef.current)
+        silenceTimerRef.current = setTimeout(() => {
+          if (isListeningRef.current) {
+            finishListening().then(fullAns => onFinish?.(fullAns))
+          }
+        }, 30000)
+        Swal.fire({
+          title: 'Backup Voice Recognition Enabled',
+          text: 'The browser speech service could not start, so secure server transcription will process your answer.',
+          icon: 'info',
+          background: '#161c2d',
+          color: '#fff',
+          timer: 3500,
+          showConfirmButton: false,
+        })
+      }
     }
-  }, [stopListening])
+  }, [finishListening, sendSttRequestWithRetry, stopListening])
 
   // ── Handle one verbal answer ──────────────────────────────────────────────
-  const handleAnswer = useCallback((answer, qIdx, fupCount) => {
+  const handleAnswer = useCallback(async (answer, qIdx, fupCount) => {
     if (isTransitioningRef.current) return // Prevent any action if transitioning
 
     const qs = questionsRef.current
@@ -1261,10 +1465,11 @@ export default function VoiceInterviewPage() {
     const isRepeat = /(repeat|come again|didn't understand|not understand|what did you say|say that again)/.test(lowerAns)
 
     if (isSkip) {
+      unclearAnswerRetryRef.current = { key: '', count: 0 }
       addMsg('user', answer)
       const nextIdx = qIdx + 1
       if (!qs[nextIdx]) {
-        aiSay(t.wrapUpVerbal, () => transitionToNextRound())
+        aiSay(t.wrapUpVerbal, () => transitionToNextRoundRef.current?.())
       } else {
         setCurrentQIdx(nextIdx)
         aiSay(`${t.nextQuestion.replace('[X]', nextIdx + 1)}${qs[nextIdx].text}`, () => startListening(ans => handleAnswer(ans, nextIdx, 0)))
@@ -1281,45 +1486,62 @@ export default function VoiceInterviewPage() {
     }
 
     if (!answer?.trim()) {
+      const retryKey = `${qIdx}:${fupCount}`
+      const retryState = unclearAnswerRetryRef.current
+      if (
+        lastSttHadAudioRef.current
+        && (lastSttFailedRef.current || !whisperTxRef.current.trim())
+        && (retryState.key !== retryKey || retryState.count < 1)
+      ) {
+        unclearAnswerRetryRef.current = { key: retryKey, count: 1 }
+        const retryPrompt = t.csNeedMore || 'I could not hear that clearly. Please try your answer once more, or say skip.'
+        aiSay(retryPrompt, () => startListening(ans => handleAnswer(ans, qIdx, fupCount)))
+        return
+      }
+      unclearAnswerRetryRef.current = { key: '', count: 0 }
       // 10s silence -> Skip to next question without AI saying anything
       const nextIdx = qIdx + 1
       if (!qs[nextIdx]) {
-        transitionToNextRound()
+        transitionToNextRoundRef.current?.()
       } else {
         setCurrentQIdx(nextIdx)
         setTimeout(() => startListening(ans => handleAnswer(ans, nextIdx, 0)), 500)
       }
       return
     }
+    unclearAnswerRetryRef.current = { key: '', count: 0 }
     addMsg('user', answer)
 
     // Save answer
     const q = questionsRef.current[qIdx]
     if (q && interviewIdRef.current) {
-      if (wsRef.current && wsRef.current.readyState === WebSocket.OPEN) {
-        wsRef.current.send(JSON.stringify({
-          action: "save_answer",
-          interview_id: interviewIdRef.current,
-          question_id: q.id,
-          question_text: q.text,
-          answer_text: answer,
-          candidate_name: sessionDetailRef.current?.candidate_name || 'Candidate',
-          timestamp: new Date().toISOString()
-        }))
-      } else {
-        // Fallback to HTTP if WS is closed
-        const fd = new FormData()
-        fd.append('interview_id', interviewIdRef.current)
-        fd.append('question_id', q.id)
-        fd.append('question_text', q.text)
-        fd.append('answer_text', answer)
-        fd.append('candidate_name', sessionDetailRef.current?.candidate_name || 'Candidate')
-        // Attempt once; if it fails, retry once more before warning
-        candidateFetch(`${API_BASE_URL}/save-answer`, { method: 'POST', body: fd })
-          .catch(() =>
-            candidateFetch(`${API_BASE_URL}/save-answer`, { method: 'POST', body: fd })
-              .catch(err => console.warn('Voice /save-answer failed after retry — answer may be lost:', err))
-          )
+      const fd = new FormData()
+      fd.append('interview_id', interviewIdRef.current)
+      fd.append('question_id', q.id)
+      fd.append('question_text', q.text)
+      fd.append('answer_text', answer)
+      fd.append('candidate_name', sessionDetailRef.current?.candidate_name || 'Candidate')
+      let saved = false
+      for (let attempt = 0; attempt < 2 && !saved; attempt += 1) {
+        try {
+          const response = await candidateFetch(`${API_BASE_URL}/save-answer`, { method: 'POST', body: fd })
+          if (!response.ok) throw new Error(`HTTP ${response.status}`)
+          saved = true
+        } catch (err) {
+          if (attempt === 1) {
+            console.warn('Voice answer save failed after retry:', err)
+            await Swal.fire({
+              title: 'Answer Not Saved',
+              text: 'Your connection interrupted the save. Please retry your answer before continuing.',
+              icon: 'error',
+              background: '#161c2d',
+              color: '#fff',
+            })
+            setAiStatus('idle')
+            return
+          }
+          await new Promise(resolve => setTimeout(resolve, 600))
+        }
       }
     }
 
@@ -1335,7 +1557,7 @@ export default function VoiceInterviewPage() {
       if (askedFollowUpsCountRef.current < 5 && !isCurrentFollowUp && answer.trim()) {
         setAiStatus('thinking')
         try {
-          const res = await fetch(`${API_BASE_URL}/generate-next-question`, {
+          const res = await candidateFetch(`${API_BASE_URL}/generate-next-question`, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({
@@ -1411,7 +1633,7 @@ export default function VoiceInterviewPage() {
         fd.append('interview_id', iid)
         fd.append('asked_question_ids', alreadyAskedIds)
         fd.append('count', '5')
-        fetch(`${API_BASE_URL}/generate-more-questions`, { method: 'POST', body: fd })
+        candidateFetch(`${API_BASE_URL}/generate-more-questions`, { method: 'POST', body: fd })
           .then(r => r.json())
           .then(data => {
             if (data.questions && data.questions.length > 0) {
@@ -1439,7 +1661,7 @@ export default function VoiceInterviewPage() {
           }, 500)
         } else {
           // No pre-fetched questions yet — proceed to next round as usual
-          transitionToNextRound()
+          transitionToNextRoundRef.current?.()
         }
       } else {
         setCurrentQIdx(nextIdx)
@@ -1453,20 +1675,12 @@ export default function VoiceInterviewPage() {
     }
 
     checkAndGenerateFollowUp()
-  }, [addMsg, aiSay, startListening, transitionToNextRound])
+  }, [addMsg, aiSay, startListening])
 
   // ── Complete interview ────────────────────────────────────────────────────
   const completeInterview = useCallback(async (options = {}) => {
     // Fallback for legacy calls that pass a boolean (isTimeout)
     const isTimeout = typeof options === 'boolean' ? options : (options.isTimeout || false)
-
-    // Single authoritative guard: completeInterview() can only execute if isTimeout === true OR countdownRef.current <= 0
-    if (!isTimeout && countdownRef.current > 0) {
-      stopListening(); window.speechSynthesis?.cancel(); stopAudio()
-      isTransitioningRef.current = false
-      setRound('waiting')
-      return
-    }
 
     if (submittingRef.current) return
     submittingRef.current = true
@@ -1496,15 +1710,6 @@ export default function VoiceInterviewPage() {
 
     // Speak asynchronously — fire-and-forget, don't await so we don't block submission
     aiSay(message)
-
-    //  Grace period for in-flight WS answer saves ─────────────────
-    // The backend MongoBatchWriter flushes every 3 s. When the timer fires, the
-    // very last answer may still be queued. Waiting 3.5 s ensures it is persisted
-    // before /complete-session marks the session closed on the server.
-    // Only applied on timer-triggered completions (isTimeout === true).
-    if (isTimeout) {
-      await new Promise(resolve => setTimeout(resolve, 3500))
-    }
 
     // ── Gracefully close the WebSocket before calling /complete-session ──────
     // Using code 1000 (normal closure) prevents the onclose handler from attempting
@@ -1552,6 +1757,18 @@ export default function VoiceInterviewPage() {
       await stopAndUploadRecording(iid)
     } catch (err) {
       console.error("Recording upload failed:", err)
+      await candidateFetch(`${API_BASE_URL}/recording-upload-failure`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ interview_id: iid, link_id: linkId }),
+      }).catch(() => {})
+      await Swal.fire({
+        title: 'Interview Saved',
+        text: 'Your answers were submitted, but the recording upload was interrupted. The interview team has been notified.',
+        icon: 'warning',
+        background: '#161c2d',
+        color: '#fff',
+      })
     }
 
     // Stop audio and mark done ONLY after upload finishes
@@ -1651,18 +1868,13 @@ export default function VoiceInterviewPage() {
         }
       }
     } else {
-      // If time is still remaining after verbal questions are exhausted, hold candidate in
-      // 'waiting' round rather than immediately submitting. The countdown timer will fire
-      // transitionToNextRound(true) when it reaches zero, which then calls completeInterview.
-      if (!timeoutFlag && countdownRef.current > 0) {
-        stopListening(); window.speechSynthesis?.cancel(); stopAudio()
-        isTransitioningRef.current = false  // allow future transition when timer fires
-        setRound('waiting')
-      } else {
-        completeInterview(timeoutFlag)
-      }
+      completeInterview(isTimeout)
     }
   }, [interviewType, stopListening, aiSay, completeInterview])
+
+  useEffect(() => {
+    transitionToNextRoundRef.current = transitionToNextRound
+  }, [transitionToNextRound])
 
   // ── Tab close protection while saving ────────────────────────────────────
   useEffect(() => {
@@ -1690,7 +1902,6 @@ export default function VoiceInterviewPage() {
 
   // ── Finish Early handler ──────────────────────────────────────────────────
   const handleFinishEarly = useCallback(() => {
-    if (countdownRef.current > 0) return // Disable underlying logic if timer is still running
     Swal.fire({
       title: 'Finish Interview?',
       html: '<p style="color:#94a3b8;font-size:14px">Are you sure you want to end the interview now? Your answers will be saved and submitted.</p>',
@@ -1715,7 +1926,8 @@ export default function VoiceInterviewPage() {
 
   // ── Start verbal interview ────────────────────────────────────────────────
   const startInterview = useCallback(async () => {
-    await startScreenRecording()
+    const recordingStarted = await startScreenRecording()
+    if (!recordingStarted) return
     setRound('verbal')
     const q = questionsRef.current[0]
     if (!q) return
@@ -2466,7 +2678,7 @@ export default function VoiceInterviewPage() {
             const fd = new FormData()
             fd.append('audio', blob, 'voice_sample.webm')
             fd.append('voice_name', `Candidate_${linkId}`)
-            const resp = await fetch(`${API_BASE_URL}/voice-clone-instant`, { method: 'POST', body: fd })
+            const resp = await candidateFetch(`${API_BASE_URL}/voice-clone-instant`, { method: 'POST', body: fd })
             const data = await resp.json()
             if (!resp.ok) throw new Error(data.detail || 'Cloning failed')
             setVoiceCloneId(data.voice_id)
@@ -2789,10 +3001,9 @@ export default function VoiceInterviewPage() {
         {/* Bottom controls */}
         <div className="w-full max-w-lg space-y-4 shrink-0 mt-6">
           <div className="flex gap-2">
-            <button onClick={() => {
+            <button onClick={async () => {
               if (aiStatus === 'listening') {
-                const fullAns = getAuthoritativeTranscript()
-                stopListening()
+                const fullAns = await finishListening()
                 handleAnswer(fullAns, currentQIdx, 0)
               }
               else { startListening(ans => handleAnswer(ans, currentQIdx, 0)) }
@@ -2804,32 +3015,18 @@ export default function VoiceInterviewPage() {
               {aiStatus === 'listening' ? 'Done Speaking' : 'Speak Answer'}
             </button>
             <button
-              onClick={(e) => {
-                if (countdown > 0) return
-                transitionToNextRound(e)
-              }}
-              disabled={countdown > 0}
-              className={`px-6 py-3.5 rounded-2xl text-xs font-bold transition-all uppercase tracking-widest ${countdown > 0
-                ? 'bg-white/3 text-slate-600 border border-white/5 cursor-not-allowed'
-                : 'bg-white/5 text-slate-400 border border-white/8 hover:bg-white/10'
-                }`}
-              title={countdown > 0 ? 'Available when timer reaches zero' : 'Proceed to next round'}
+              onClick={() => transitionToNextRound(false)}
+              className="px-6 py-3.5 rounded-2xl text-xs font-bold transition-all uppercase tracking-widest bg-white/5 text-slate-400 border border-white/8 hover:bg-white/10"
+              title="Proceed to the next round"
             >
               Next Round
             </button>
             <button
-              onClick={(e) => {
-                if (countdown > 0) return
-                handleFinishEarly(e)
-              }}
-              disabled={countdown > 0}
-              className={`px-6 py-3.5 rounded-2xl text-xs font-bold transition-all uppercase tracking-widest ${countdown > 0
-                ? 'bg-rose-500/4 text-rose-900 border border-rose-500/8 cursor-not-allowed'
-                : 'bg-rose-500/10 text-rose-400 border border-rose-500/20 hover:bg-rose-500/20'
-                }`}
-              title={countdown > 0 ? 'Cannot finish early while timer is still running' : 'End interview early'}
+              onClick={handleFinishEarly}
+              className="px-6 py-3.5 rounded-2xl text-xs font-bold transition-all uppercase tracking-widest bg-rose-500/10 text-rose-400 border border-rose-500/20 hover:bg-rose-500/20"
+              title="End interview early"
             >
-              {countdown > 0 ? <><i className="fas fa-lock mr-1" />Finish Early</> : 'Finish Early'}
+              Finish Early
             </button>
           </div>
 

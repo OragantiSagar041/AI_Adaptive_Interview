@@ -6,12 +6,13 @@ export function unwrapInterviewPayload(value) {
     if (!nested || typeof nested !== 'object') break
     // Preserve envelope metadata such as status/message while allowing the
     // actual response fields to win. Production gateways commonly wrap JSON.
-    payload = Array.isArray(nested) ? nested : { ...payload, ...nested }
-    if (!Array.isArray(payload)) {
-      delete payload.data
-      delete payload.payload
-      delete payload.result
-    }
+    const {
+      data: _outerData,
+      payload: _outerPayload,
+      result: _outerResult,
+      ...outerMetadata
+    } = payload
+    payload = Array.isArray(nested) ? nested : { ...outerMetadata, ...nested }
   }
   return payload || {}
 }

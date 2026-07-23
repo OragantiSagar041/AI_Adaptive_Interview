@@ -1,7 +1,6 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { Settings, Save, RefreshCw, ChevronDown, ChevronUp, CheckCircle, AlertCircle, Plus, Trash2 } from 'lucide-react';
-import axios from 'axios';
-import { API_BASE_URL } from '../../apiConfig';
+import api from '../../utils/api';
 import ErrorBoundary from '../../components/ErrorBoundary';
 
 const generateSectionId = () => `section-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
@@ -38,7 +37,7 @@ export default function ConversationalFlowPage() {
     try {
       setLoading(true);
       setError(null);
-      const res = await axios.get(`${API_BASE_URL}/admin/agent-flow`);
+      const res = await api.get('/admin/agent-flow');
       if (res.data.success) {
         const normalizedFlow = (res.data.flow || []).map((item, index) => normalizeFlowItem(item, item?.id ?? `section-${index}`));
         setFlowData(normalizedFlow);
@@ -75,7 +74,7 @@ export default function ConversationalFlowPage() {
           is_enabled: section.is_enabled,
         })),
       };
-      const res = await axios.put(`${API_BASE_URL}/admin/agent-flow`, payload);
+      const res = await api.put('/admin/agent-flow', payload);
       
       if (res.data.success) {
         await fetchFlowData();
