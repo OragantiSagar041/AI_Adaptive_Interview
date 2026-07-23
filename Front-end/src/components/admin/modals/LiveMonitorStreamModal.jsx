@@ -1,5 +1,6 @@
 import React, { useState, useEffect, useRef, useCallback } from 'react'
 import { API_BASE_URL } from '../../../apiConfig'
+import { getIceServers } from '../../../utils/webrtcConfig'
 import Modal from '../../Modal'
 import { useSelector } from 'react-redux'
 import { Video, Mic, MicOff, MonitorOff, Activity, ShieldAlert, Code, MessageSquare, Briefcase, AlertTriangle, RefreshCw } from 'lucide-react'
@@ -34,11 +35,7 @@ function formatTs(ts) {
   } catch { return ts }
 }
 
-// ICE servers: public STUN + free TURN fallback via Open Relay Project
-const ICE_SERVERS = [
-  { urls: 'stun:stun.l.google.com:19302' },
-  { urls: 'stun:stun1.l.google.com:19302' },
-]
+const ICE_SERVERS = getIceServers()
 
 export default function LiveMonitorStreamModal({ isOpen, onClose, session }) {
   const [status, setStatus] = useState('connecting')

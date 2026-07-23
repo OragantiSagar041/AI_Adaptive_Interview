@@ -4,6 +4,7 @@ import { Video, Volume2, ArrowRight, ShieldAlert, Cpu, AlertTriangle, RefreshCw 
 import { useInterviewSession } from './useInterviewSession'
 import DeviceCheckModal from '../../components/DeviceCheckModal'
 import { API_BASE_URL } from '../../apiConfig'
+import { candidateFetch } from '../../utils/candidateAuth'
 import '../../Interview.css'
 import { motion } from 'framer-motion'
 
@@ -59,6 +60,7 @@ export const InterviewNormal = () => {
     proceedToRoundTwo,
     handleNextQuestion,
     handleSubmitInterview,
+    canSubmit,
     handleFinishEarly,
     handleSkipUpload,
     isMobileDevice,
@@ -94,7 +96,7 @@ export const InterviewNormal = () => {
           const fd = new FormData()
           fd.append('audio', blob, 'voice_sample.webm')
           fd.append('voice_name', `Candidate_${sessionId}`)
-          const resp = await fetch(`${API_BASE_URL}/voice-clone-instant`, { method: 'POST', body: fd })
+          const resp = await candidateFetch(`${API_BASE_URL}/voice-clone-instant`, { method: 'POST', body: fd })
           const data = await resp.json()
           if (!resp.ok) throw new Error(data.detail || 'Cloning failed')
           setLocalVoiceId(data.voice_id)
@@ -496,10 +498,19 @@ export const InterviewNormal = () => {
 
 
               <button 
-                className="w-full py-3 px-4 rounded-xl font-bold text-xs bg-slate-800 hover:bg-slate-700 text-white transition-all cursor-pointer border-none shadow-md flex items-center justify-center gap-2 hover:-translate-y-0.5" 
-                onClick={handleFinishEarly}
+                className={`w-full py-3 px-4 rounded-xl font-bold text-xs transition-all border-none shadow-md flex items-center justify-center gap-2 ${
+                  !canSubmit
+                    ? 'bg-slate-800/40 text-slate-500 cursor-not-allowed border border-white/5 opacity-50'
+                    : 'bg-slate-800 hover:bg-slate-700 text-white cursor-pointer hover:-translate-y-0.5'
+                }`} 
+                onClick={(e) => {
+                  if (!canSubmit) return
+                  handleFinishEarly(e)
+                }}
+                disabled={!canSubmit}
+                title={!canSubmit ? "Interview cannot be submitted yet" : "Finish Interview"}
               >
-                ⏹ Finish Interview
+                {!canSubmit ? '🔒 Finish Interview (Locked)' : '⏹ Finish Interview'}
               </button>
             </div>
 
@@ -683,10 +694,19 @@ export const InterviewNormal = () => {
                 <div className="flex gap-3 justify-center items-center mt-2 shrink-0">
                   {currentQuestionIndex === questions.length - 1 ? (
                     <button 
-                      className="px-8 py-3.5 rounded-xl font-bold text-sm text-white bg-red-500 hover:bg-red-600 shadow-lg shadow-red-500/20 hover:shadow-red-500/30 transition-all duration-200 cursor-pointer border-none"
-                      onClick={() => handleSubmitInterview(false)}
+                      className={`px-8 py-3.5 rounded-xl font-bold text-sm text-white transition-all duration-200 border-none ${
+                        !canSubmit
+                          ? 'bg-red-950/40 text-red-400/50 cursor-not-allowed opacity-50' 
+                          : 'bg-red-500 hover:bg-red-600 shadow-lg shadow-red-500/20 hover:shadow-red-500/30 cursor-pointer'
+                      }`}
+                      onClick={(e) => {
+                        if (!canSubmit) return
+                        handleFinishEarly(e)
+                      }}
+                      disabled={!canSubmit}
+                      title={!canSubmit ? "Interview cannot be submitted yet" : "Submit Interview"}
                     >
-                      Submit Interview
+                      {!canSubmit ? '🔒 Submit Interview (Locked)' : 'Submit Interview'}
                     </button>
                   ) : (
                     <button 

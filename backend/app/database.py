@@ -15,6 +15,8 @@ from mongo_db import (
     job_applications_collection,
     conversation_flows_collection,
     counters_collection,
+    payment_orders_collection,
+    pending_signups_collection,
     get_next_sequence_value,
 )
 
@@ -35,5 +37,7 @@ __all__ = [
     "job_applications_collection",
     "conversation_flows_collection",
     "counters_collection",
+    "payment_orders_collection",
+    "pending_signups_collection",
     "get_next_sequence_value",
 ]

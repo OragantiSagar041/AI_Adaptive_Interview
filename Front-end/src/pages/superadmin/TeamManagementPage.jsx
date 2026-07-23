@@ -142,13 +142,24 @@ export default function TeamManagementPage() {
     }
   }
 
-  // Fetch data on mount
+  // Fetch data on mount and listen for real-time updates
   useEffect(() => {
     if (token) {
       loadTeamManagement()
       loadCreditRequests()
     }
 
+    const handler = () => {
+      if (token) {
+        loadTeamManagement()
+        loadCreditRequests()
+      }
+    }
+
+    window.addEventListener('admin_profile_updated', handler)
+    return () => {
+      window.removeEventListener('admin_profile_updated', handler)
+    }
   }, [token])
 
   const handleToggleStatus = async (admin) => {

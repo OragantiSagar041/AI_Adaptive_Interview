@@ -52,6 +52,18 @@ const authSlice = createSlice({
           // ignore
         }
       }
+    },
+    updateAdminUser: (state, action) => {
+      if (state.adminUser) {
+        state.adminUser = { ...state.adminUser, ...action.payload }
+        try {
+          const stored = JSON.parse(sessionStorage.getItem('adminUser')) || {}
+          const updated = { ...stored, ...action.payload }
+          sessionStorage.setItem('adminUser', JSON.stringify(updated))
+        } catch (e) {
+          // ignore
+        }
+      }
     }
   },
   extraReducers: (builder) => {
@@ -61,5 +73,5 @@ const authSlice = createSlice({
   }
 })
 
-export const { setCredentials, logout, updateCredits } = authSlice.actions
+export const { setCredentials, logout, updateCredits, updateAdminUser } = authSlice.actions
 export default authSlice.reducer

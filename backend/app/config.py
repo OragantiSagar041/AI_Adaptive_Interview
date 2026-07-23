@@ -14,7 +14,7 @@ from fastapi.security import HTTPBearer
 sys.stdout.reconfigure(encoding='utf-8')
 sys.stderr.reconfigure(encoding='utf-8')
 
-load_dotenv(override=True)
+load_dotenv(override=False)
 
 # ---------------------------------------------------------------------------
 # Third-party client setup
@@ -32,17 +32,17 @@ DATABASE_URL = os.getenv("DATABASE_URL", "postgresql+psycopg2://user:password@lo
 
 
 def get_omni_dimension_api_key() -> str:
-    load_dotenv(override=True)
+    load_dotenv(override=False)
     return (os.getenv("OMNI_DIMENSION_API_KEY") or "").strip()
 
 
 def get_omni_voice_id() -> str:
-    load_dotenv(override=True)
+    load_dotenv(override=False)
     return (os.getenv("OMNI_DIMENSION_VOICE_ID") or "").strip()
 
 
 def get_omni_agent_id() -> str:
-    load_dotenv(override=True)
+    load_dotenv(override=False)
     return (os.getenv("OMNI_DIMENSION_AGENT_ID") or "").strip()
 
 # ---------------------------------------------------------------------------
@@ -169,15 +169,30 @@ PLAN_ALIASES = {
 LAST_422_ERROR = None
 
 request_counts = defaultdict(list)
-RATE_LIMIT = 300  # requests per minute per IP
+RATE_LIMIT = 120  # general requests per minute per IP
+EXPENSIVE_RATE_LIMIT = 20
+PUBLIC_RESUME_RATE_LIMIT = 5
 RATE_LIMIT_WINDOW = 60
+EXPENSIVE_RATE_LIMIT_PATHS = {
+    "/chat",
+    "/stt",
+    "/tts",
+    "/transcribe",
+    "/voice-clone-instant",
+    "/start-interview",
+    "/generate-next-question",
+    "/generate-more-questions",
+    "/coding-round/start",
+    "/coding-round/chat",
+    "/case-study/start",
+    "/admin/ats-score",
+}
 RATE_LIMIT_EXEMPT_PATHS = {
     "/",
     "/health",
     "/live-heartbeat",
 }
 RATE_LIMIT_EXEMPT_PREFIXES = (
-    "/uploads",
     "/superadmin/profile",
     "/api/notifications",
 )
@@ -196,6 +211,8 @@ if not JWT_SECRET_KEY:
 # so the app doesn't crash and no InsecureKeyLengthWarning is raised.
 _raw_key_bytes = JWT_SECRET_KEY.encode("utf-8")
 if len(_raw_key_bytes) < 32:
+    if os.getenv("ENV", "local").lower() == "production":
+        raise ValueError("FATAL ERROR: JWT_SECRET_KEY must contain at least 32 bytes in production.")
     import warnings as _warnings
     _warnings.warn(
         f"JWT_SECRET_KEY is only {len(_raw_key_bytes)} bytes — deriving a 32-byte key via SHA-256. "

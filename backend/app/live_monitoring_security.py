@@ -82,5 +82,7 @@ def admin_can_receive_dashboard_event(current_admin: Dict[str, Any], event: Dict
     if str(current_admin.get("company_id") or "") != str(event.get("company_id") or ""):
         return False
     if role == "admin":
+        if event.get("type") == "profile_update":
+            return str(current_admin.get("admin_id") or "") == str(event.get("admin_id") or "")
         return str(current_admin.get("admin_id") or "") == str(event.get("created_by") or "")
     return True

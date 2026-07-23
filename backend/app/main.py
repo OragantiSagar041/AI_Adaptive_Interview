@@ -15,6 +15,7 @@ sys.stdout.reconfigure(encoding='utf-8')
 sys.stderr.reconfigure(encoding='utf-8')
 
 import time
+import asyncio
 from contextlib import asynccontextmanager
 from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
@@ -47,6 +48,8 @@ import os
 import redis as _redis_module
 
 _REDIS_URL = os.environ.get("REDIS_URL", "redis://localhost:6379/0")
+_TRUST_PROXY_HEADERS = os.environ.get("TRUST_PROXY_HEADERS", "false").lower() == "true"
+_last_rate_limit_cleanup = 0.0
 try:
     # socket_connect_timeout: max seconds to wait for TCP connection
     # socket_timeout: max seconds to wait for any command response (incl. PING)
@@ -74,6 +77,8 @@ async def lifespan(app: FastAPI):
     try:
         interview_sessions_collection.create_index([("company_id", ASCENDING), ("status", ASCENDING)])
         interview_sessions_collection.create_index([("company_id", ASCENDING), ("created_at", DESCENDING)])
+        interview_sessions_collection.create_index([("company_id", ASCENDING), ("created_by", ASCENDING), ("status", ASCENDING)])
+        interview_sessions_collection.create_index([("company_id", ASCENDING), ("created_by", ASCENDING), ("created_at", DESCENDING)])
         interview_sessions_collection.create_index([("link_id", ASCENDING)], unique=True)
         print("MongoDB Indexes Initialized Successfully!")
     except Exception as e:
@@ -81,11 +86,15 @@ async def lifespan(app: FastAPI):
         
     startup_event_cloudinary()
     await startup_event_db_and_email()
-    yield
+    await voice_routes.start_realtime_services()
+    try:
+        yield
+    finally:
+        await voice_routes.stop_realtime_services()
 
 app = FastAPI(
     title="HireIQ AI Interview Platform",
-    description="Backend API for AI-powered mock interviews",
+    description="Backend API for HireIQ AI-powered interviews",
     version="2.0.0",
     lifespan=lifespan,
 )
@@ -93,37 +102,85 @@ app = FastAPI(
 
 class RateLimitMiddleware(BaseHTTPMiddleware):
     async def dispatch(self, request: Request, call_next):
+        global _last_rate_limit_cleanup
         # Live monitor polling/heartbeats are intentionally frequent and low-risk.
         if request.url.path in config.RATE_LIMIT_EXEMPT_PATHS or request.url.path.startswith(config.RATE_LIMIT_EXEMPT_PREFIXES):
             return await call_next(request)
 
-        forwarded_for = request.headers.get("x-forwarded-for", "")
-        client_ip = forwarded_for.split(",")[0].strip() if forwarded_for else (request.client.host if request.client else "unknown")
+        client_ip = request.client.host if request.client else "unknown"
+        if _TRUST_PROXY_HEADERS:
+            real_ip = request.headers.get("x-real-ip", "").strip()
+            forwarded_for = request.headers.get("x-forwarded-for", "")
+            client_ip = real_ip or (forwarded_for.split(",")[0].strip() if forwarded_for else client_ip)
+
+        # Normalize a trailing slash so duplicate FastAPI route spellings cannot
+        # bypass the stricter bucket (for example /start-interview/).
+        path = request.url.path.rstrip("/") or "/"
+        if path == "/api/public/jobs/parse-resume":
+            request_limit = config.PUBLIC_RESUME_RATE_LIMIT
+            bucket = "public-resume"
+        elif path in config.EXPENSIVE_RATE_LIMIT_PATHS:
+            request_limit = config.EXPENSIVE_RATE_LIMIT
+            bucket = "expensive"
+        else:
+            request_limit = config.RATE_LIMIT
+            bucket = "general"
 
         try:
             if _redis_client is None:
                 raise _redis_module.exceptions.ConnectionError("Redis not available")
-            key = f"rl:{client_ip}"
-            count = _redis_client.incr(key)
+            key = f"rl:{bucket}:{client_ip}"
+            count = await asyncio.to_thread(_redis_client.incr, key)
             if count == 1:
-                _redis_client.expire(key, config.RATE_LIMIT_WINDOW)
-            if count > config.RATE_LIMIT:
+                await asyncio.to_thread(_redis_client.expire, key, config.RATE_LIMIT_WINDOW)
+            if count > request_limit:
                 return JSONResponse(status_code=429, content={"detail": "Too many requests. Please slow down."})
-        except _redis_module.exceptions.ConnectionError:
+        except _redis_module.exceptions.RedisError:
             # Fallback: in-memory rate limiting (local dev / Redis down)
             now = time.time()
-            if client_ip not in config.request_counts:
-                config.request_counts[client_ip] = []
-            config.request_counts[client_ip] = [ts for ts in config.request_counts[client_ip] if now - ts < config.RATE_LIMIT_WINDOW]
-            if len(config.request_counts[client_ip]) >= config.RATE_LIMIT:
+            if now - _last_rate_limit_cleanup >= config.RATE_LIMIT_WINDOW:
+                cutoff = now - config.RATE_LIMIT_WINDOW
+                for existing_key, timestamps in list(config.request_counts.items()):
+                    recent = [timestamp for timestamp in timestamps if timestamp >= cutoff]
+                    if recent:
+                        config.request_counts[existing_key] = recent
+                    else:
+                        config.request_counts.pop(existing_key, None)
+                _last_rate_limit_cleanup = now
+            memory_key = f"{bucket}:{client_ip}"
+            if memory_key not in config.request_counts and len(config.request_counts) >= 50_000:
+                return JSONResponse(status_code=429, content={"detail": "Rate limiter is at capacity. Please retry shortly."})
+            if memory_key not in config.request_counts:
+                config.request_counts[memory_key] = []
+            config.request_counts[memory_key] = [ts for ts in config.request_counts[memory_key] if now - ts < config.RATE_LIMIT_WINDOW]
+            if len(config.request_counts[memory_key]) >= request_limit:
                 return JSONResponse(status_code=429, content={"detail": "Too many requests. Please slow down. (Local Mode)"})
-            config.request_counts[client_ip].append(now)
+            config.request_counts[memory_key].append(now)
         return await call_next(request)
+
+
+class SecurityHeadersMiddleware(BaseHTTPMiddleware):
+    async def dispatch(self, request: Request, call_next):
+        response = await call_next(request)
+        response.headers.setdefault("X-Content-Type-Options", "nosniff")
+        response.headers.setdefault("X-Frame-Options", "DENY")
+        response.headers.setdefault("Referrer-Policy", "no-referrer")
+        response.headers.setdefault(
+            "Permissions-Policy",
+            "camera=(), microphone=(), geolocation=(), payment=()",
+        )
+        if os.getenv("ENV", "local").lower() == "production":
+            response.headers.setdefault(
+                "Strict-Transport-Security",
+                "max-age=31536000; includeSubDomains",
+            )
+        return response
 
 # --- Middleware ---
 # Middlewares are executed top-down. We want CORSMiddleware to be the outermost (last added)
 app.add_middleware(GZipMiddleware, minimum_size=1000)
 app.add_middleware(RateLimitMiddleware)
+app.add_middleware(SecurityHeadersMiddleware)
 app.add_middleware(
     CORSMiddleware,
     allow_origins=[
@@ -142,15 +199,17 @@ app.add_middleware(
         "http://127.0.0.1:5174",
         "https://hire-ai-iq.netlify.app",
     ],
-    allow_origin_regex=r"https://.*\.vercel\.app",
+    allow_origin_regex=os.getenv("CORS_ORIGIN_REGEX") or None,
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
 )
 
-# Mount uploads folder to serve files (only if directory exists)
+# Local uploads are a development fallback only. Production recordings are
+# private Cloudinary assets and must never be exposed by an unauthenticated
+# static-file mount.
 import os as _os
-if _os.path.isdir("uploads"):
+if _os.getenv("ENV", "local") != "production" and _os.path.isdir("uploads"):
     app.mount("/uploads", StaticFiles(directory="uploads"), name="uploads")
 
 # --- Routers ---
@@ -164,11 +223,8 @@ from fastapi.exceptions import RequestValidationError
 
 @app.exception_handler(RequestValidationError)
 def validation_exception_handler(request, exc):
-    config.LAST_422_ERROR = {"errors": exc.errors(), "body": exc.body}
-    print(f"================ 422 ERROR ON {request.url.path} ================")
-    print("Errors:", exc.errors())
-    print("Body:", exc.body)
-    print("================================================================")
+    config.LAST_422_ERROR = {"errors": exc.errors(), "path": request.url.path}
+    print(f"Validation error on {request.url.path}: {exc.errors()}")
     return JSONResponse(status_code=422, content={"detail": jsonable_encoder(exc.errors())})
 
 # ---------------------------------------------------------------------------

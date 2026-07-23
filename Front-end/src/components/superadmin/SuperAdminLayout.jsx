@@ -264,6 +264,8 @@ export default function SuperAdminLayout() {
         const data = JSON.parse(event.data)
         if (data.type === 'live_snapshot') {
           dispatch(updateLiveSnapshot(data))
+        } else if (data.type === 'profile_update') {
+          window.dispatchEvent(new CustomEvent('admin_profile_updated', { detail: data }))
         }
       } catch (err) {
         console.error('Error parsing dashboard ws message:', err)
@@ -317,26 +319,6 @@ export default function SuperAdminLayout() {
 
     setProcessingPlanId(plan.id)
     try {
-      // Dynamic key resolution: query registration order endpoint with randomized email to get actual key
-      let dynamicKey = 'rzp_test_SgtZz5GYGtOM5F'; // fallback key from backend .env
-      try {
-        const keyRes = await axios.post(`${API_BASE_URL}/api/razorpay/create-order`, {
-          plan_name: plan.name,
-          signup_form: {
-            name: 'Temp Key Fetcher',
-            email: `temp_key_fetch_${Date.now()}_${Math.round(Math.random() * 100000)}@dummy.com`,
-            password: 'TemporaryPassword123!',
-            phone: '1234567890',
-            company_name: 'Temp Company'
-          }
-        });
-        if (keyRes.data && keyRes.data.key) {
-          dynamicKey = keyRes.data.key;
-        }
-      } catch (keyError) {
-        console.warn("Could not fetch Razorpay key dynamically, using local fallback:", keyError);
-      }
-
       // Call endpoint to create upgrade/buy credits order
       const orderRes = await axios.post(`${API_BASE_URL}/api/razorpay/create-upgrade-order`, {
         plan_name: plan.name,
@@ -348,8 +330,6 @@ export default function SuperAdminLayout() {
       });
 
       const orderData = orderRes.data;
-      const isMock = !orderData.key_id && !orderData.key;
-
       const storedUser = (() => {
         try {
           return JSON.parse(sessionStorage.getItem('adminUser')) || {};
@@ -363,8 +343,8 @@ export default function SuperAdminLayout() {
       const userPhone = adminUser?.phone || storedUser?.phone || '';
 
       const options = {
-        key: orderData.key_id || orderData.key || dynamicKey,
-        amount: plan.price,
+        key: orderData.key_id || orderData.key,
+        amount: orderData.amount,
         currency: 'INR',
         name: 'Hire IQ Credits',
         description: `Purchase ${plan.credits} Credits`,
@@ -381,7 +361,7 @@ export default function SuperAdminLayout() {
               admin_id: adminUser?.id || adminUser?._id || '',
               razorpay_order_id: response.razorpay_order_id || orderData.razorpay_order_id || '',
               razorpay_payment_id: response.razorpay_payment_id,
-              razorpay_signature: response.razorpay_signature || 'mock_signature'
+              razorpay_signature: response.razorpay_signature
             }, {
               headers: { 'Authorization': `Bearer ${token}` }
             });
@@ -405,9 +385,7 @@ export default function SuperAdminLayout() {
         }
       };
 
-      if (!isMock) {
-        options.order_id = orderData.razorpay_order_id;
-      }
+      options.order_id = orderData.razorpay_order_id;
 
       const rzp = new window.Razorpay(options);
       rzp.open();

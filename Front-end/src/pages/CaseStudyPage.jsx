@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useRef } from 'react'
 import { useSearchParams, Link } from 'react-router-dom'
 import { API_BASE_URL } from '../apiConfig'
+import { candidateFetch } from '../utils/candidateAuth'
 import { Volume2, ArrowRight, ShieldAlert, Cpu, AlertTriangle, RefreshCw, CheckCircle2 } from 'lucide-react'
 import Swal from 'sweetalert2'
 import 'sweetalert2/dist/sweetalert2.min.css'
@@ -47,7 +48,7 @@ export default function CaseStudyPage() {
 
     async function loadCaseStudy() {
       try {
-        const res = await fetch(`${API_BASE_URL}/case-study/start`, {
+        const res = await candidateFetch(`${API_BASE_URL}/case-study/start`, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ interview_id: interviewId })
@@ -253,7 +254,7 @@ export default function CaseStudyPage() {
     setAnswers(updated)
 
     try {
-      const response = await fetch(`${API_BASE_URL}/case-study/submit-answer`, {
+      const response = await candidateFetch(`${API_BASE_URL}/case-study/submit-answer`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({

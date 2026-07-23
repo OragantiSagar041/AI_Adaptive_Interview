@@ -4,10 +4,10 @@ import ProctoringWorker from './proctoring.worker.js?worker'
 // ── Tunable thresholds ──────────────────────────────────────────────────
 const DETECT_INTERVAL_MS = 700          // how often a frame is sent to the worker
 
-const PHONE_ALERT_CONFIDENCE = 0.25     // raised from 0.15 — eliminates false positives
-                                        // from mugs, glasses, dark objects at low confidence
+const PHONE_ALERT_CONFIDENCE = 0.45     // raised to eliminate false positives for spectacles
+// from mugs, glasses, dark objects at low confidence
 const PHONE_CONSECUTIVE_FRAMES = 3      // 3 consecutive frames (~2.1s) — reduces false positives
-                                        // a real phone in view persists; a misclassification does not
+// a real phone in view persists; a misclassification does not
 
 const MULTI_FACE_CONSECUTIVE_FRAMES = 2 // 2 frames (~1.4s) before raising the alert
 const NO_FACE_CONSECUTIVE_FRAMES = 4    // ~2.8s of no face at 700ms interval
@@ -70,7 +70,7 @@ export function useProctoring({
 
     console.warn(`[useProctoring] 🚨 Violation: ${alertType} — ${message}`)
     setState((s) => ({ ...s, lastAlertType: alertType }))
-    
+
     onViolationRef.current?.({ type: alertType, message, count: next })
     if (next >= maxAlerts) onTerminateRef.current?.({ type: alertType, message })
   }, [maxAlerts])
@@ -216,7 +216,7 @@ export function useProctoring({
         navigator.clipboard.writeText('');
         raiseViolation('screenshot_attempt', 'Screenshot attempt detected');
       }
-      
+
       // Prevent common Mac screenshot shortcuts (Cmd + Shift + 3/4/5)
       if (e.metaKey && e.shiftKey && (e.key === '3' || e.key === '4' || e.key === '5')) {
         e.preventDefault();
@@ -230,12 +230,12 @@ export function useProctoring({
         navigator.clipboard.writeText('');
         raiseViolation('screenshot_attempt', 'Screenshot attempt detected');
       }
-      
+
       // Prevent Save As (Cmd/Ctrl + S)
       if ((e.metaKey || e.ctrlKey) && (e.key === 's' || e.key === 'S')) {
         e.preventDefault();
       }
-      
+
       // Prevent Print (Cmd/Ctrl + P)
       if ((e.metaKey || e.ctrlKey) && (e.key === 'p' || e.key === 'P')) {
         e.preventDefault();
@@ -265,7 +265,7 @@ export function useProctoring({
       window.removeEventListener('keyup', handleKeyDown);
       window.removeEventListener('contextmenu', handleContextMenu);
       window.removeEventListener('copy', handleCopy);
-      
+
       document.body.style.userSelect = '';
       document.body.style.webkitUserSelect = '';
     };

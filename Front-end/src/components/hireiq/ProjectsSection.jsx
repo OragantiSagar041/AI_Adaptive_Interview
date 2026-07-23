@@ -4,7 +4,7 @@ import { Link } from "react-router-dom";
 import { GhostButton } from "./primitives";
 import interviewerImg from "../../assets/ai-interviewer.png";
 import interviewerDeskImg from "../../assets/ai-interviewer-desk.png";
-import mockInterviewImg from "../../assets/ai-mock-interview.jpeg";
+import hireiqInterviewImg from "../../assets/hireiq-interview.jpeg";
 import dashboardImg from "../../assets/hireiq-dashboard.png";
 const PROJECTS = [
     {
@@ -12,21 +12,21 @@ const PROJECTS = [
         n: "01",
         category: "Enterprise SaaS",
         name: "Nexus — 40,000 hires / year",
-        imgs: [interviewerImg, mockInterviewImg, dashboardImg],
+        imgs: [interviewerImg, hireiqInterviewImg, dashboardImg],
     },
     {
         id: "aura",
         n: "02",
         category: "High-Growth Startup",
         name: "Aura — 12× faster engineering hiring",
-        imgs: [interviewerDeskImg, dashboardImg, mockInterviewImg],
+        imgs: [interviewerDeskImg, dashboardImg, hireiqInterviewImg],
     },
     {
         id: "solaris",
         n: "03",
         category: "Global BPO",
         name: "Solaris — 2.4M candidates screened",
-        imgs: [mockInterviewImg, interviewerImg, interviewerDeskImg],
+        imgs: [hireiqInterviewImg, interviewerImg, interviewerDeskImg],
     },
 ];
 export function ProjectsSection() {

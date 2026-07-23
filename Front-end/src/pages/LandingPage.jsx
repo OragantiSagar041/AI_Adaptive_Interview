@@ -1150,6 +1150,7 @@ function DemoModal() {
     first_name: '',
     last_name: '',
     work_email: '',
+    mobile_number: '',
     company_name: '',
     help_text: ''
   });
@@ -1163,6 +1164,7 @@ function DemoModal() {
         first_name: '',
         last_name: '',
         work_email: '',
+        mobile_number: '',
         company_name: '',
         help_text: ''
       });
@@ -1240,9 +1242,15 @@ function DemoModal() {
                 </div>
               </div>
 
-              <div className="space-y-1.5 text-left">
-                <label className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">Work Email</label>
-                <input required name="work_email" value={formData.work_email} onChange={handleChange} type="email" className="w-full bg-black/40 border border-white/10 rounded-xl px-4 py-3 text-white placeholder-muted-foreground/50 focus:outline-none focus:border-primary/50 focus:ring-1 focus:ring-primary/50 transition" placeholder="john@company.com" />
+              <div className="grid grid-cols-2 gap-4">
+                <div className="space-y-1.5 text-left">
+                  <label className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">Work Email</label>
+                  <input required name="work_email" value={formData.work_email} onChange={handleChange} type="email" className="w-full bg-black/40 border border-white/10 rounded-xl px-4 py-3 text-white placeholder-muted-foreground/50 focus:outline-none focus:border-primary/50 focus:ring-1 focus:ring-primary/50 transition" placeholder="john@company.com" />
+                </div>
+                <div className="space-y-1.5 text-left">
+                  <label className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">Mobile Number</label>
+                  <input required name="mobile_number" value={formData.mobile_number} onChange={handleChange} type="tel" className="w-full bg-black/40 border border-white/10 rounded-xl px-4 py-3 text-white placeholder-muted-foreground/50 focus:outline-none focus:border-primary/50 focus:ring-1 focus:ring-primary/50 transition" placeholder="+1 (555) 000-0000" />
+                </div>
               </div>
 
               <div className="space-y-1.5 text-left">

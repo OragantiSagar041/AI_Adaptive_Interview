@@ -342,6 +342,14 @@ export default function AdminPage({ role: initialRole = 'admin' }) {
     fetchSubscriptionPlans()
   }, [token, adminUser, role, API_BASE_URL])
 
+  useEffect(() => {
+    const handler = () => {
+      dispatch(loadDashboardData(selectedAdminId))
+    }
+    window.addEventListener('admin_profile_updated', handler)
+    return () => window.removeEventListener('admin_profile_updated', handler)
+  }, [dispatch, selectedAdminId])
+
   const refreshDashboardData = () => dispatch(loadDashboardData(selectedAdminId))
 
   // Form input setters
@@ -429,7 +437,10 @@ export default function AdminPage({ role: initialRole = 'admin' }) {
     try {
       const response = await fetch(`${API_BASE_URL}/admin/ats-score`, {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${token}`,
+        },
         body: JSON.stringify({ resume_text: resume, jd_text: jd })
       })
       if (response.ok) {
@@ -878,26 +889,6 @@ export default function AdminPage({ role: initialRole = 'admin' }) {
 
     setProcessingPlanId(plan.id)
     try {
-      // Dynamic key resolution: query registration order endpoint with randomized email to get actual key
-      let dynamicKey = 'rzp_test_SgtZz5GYGtOM5F'; // fallback key from backend .env
-      try {
-        const keyRes = await axios.post(`${API_BASE_URL}/api/razorpay/create-order`, {
-          plan_name: plan.name,
-          signup_form: {
-            name: 'Temp Key Fetcher',
-            email: `temp_key_fetch_${Date.now()}_${Math.round(Math.random() * 100000)}@dummy.com`,
-            password: 'TemporaryPassword123!',
-            phone: '1234567890',
-            company_name: 'Temp Company'
-          }
-        });
-        if (keyRes.data && keyRes.data.key) {
-          dynamicKey = keyRes.data.key;
-        }
-      } catch (keyError) {
-        console.warn("Could not fetch Razorpay key dynamically, using local fallback:", keyError);
-      }
-
       // Call endpoint to create upgrade/buy credits order
       const orderRes = await axios.post(`${API_BASE_URL}/api/razorpay/create-upgrade-order`, {
         plan_name: plan.name,
@@ -909,8 +900,6 @@ export default function AdminPage({ role: initialRole = 'admin' }) {
       });
 
       const orderData = orderRes.data;
-      const isMock = !orderData.key_id && !orderData.key;
-
       const storedUser = (() => {
         try {
           return JSON.parse(sessionStorage.getItem('adminUser')) || {};
@@ -924,8 +913,8 @@ export default function AdminPage({ role: initialRole = 'admin' }) {
       const userPhone = adminUser?.phone || storedUser?.phone || '';
 
       const options = {
-        key: orderData.key_id || orderData.key || dynamicKey,
-        amount: plan.price,
+        key: orderData.key_id || orderData.key,
+        amount: orderData.amount,
         currency: 'INR',
         name: 'Hire IQ Credits',
         description: `Purchase ${plan.credits} Credits`,
@@ -942,7 +931,7 @@ export default function AdminPage({ role: initialRole = 'admin' }) {
               admin_id: adminUser?.id || adminUser?._id || '',
               razorpay_order_id: response.razorpay_order_id || orderData.razorpay_order_id || '',
               razorpay_payment_id: response.razorpay_payment_id,
-              razorpay_signature: response.razorpay_signature || 'mock_signature'
+              razorpay_signature: response.razorpay_signature
             }, {
               headers: { 'Authorization': `Bearer ${token}` }
             });
@@ -962,9 +951,7 @@ export default function AdminPage({ role: initialRole = 'admin' }) {
         }
       };
 
-      if (!isMock) {
-        options.order_id = orderData.razorpay_order_id;
-      }
+      options.order_id = orderData.razorpay_order_id;
 
       const rzp = new window.Razorpay(options);
       rzp.open();

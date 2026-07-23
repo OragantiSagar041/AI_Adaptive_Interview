@@ -13,6 +13,16 @@ import Swal from 'sweetalert2'
 axios.interceptors.response.use(
   (response) => response,
   (error) => {
+    if (error.response?.status === 401 && !window.__hireIqAuthRedirecting) {
+      window.__hireIqAuthRedirecting = true
+      store.dispatch(logout())
+      sessionStorage.removeItem('auth')
+      sessionStorage.removeItem('masterToken')
+      sessionStorage.removeItem('adminToken')
+      sessionStorage.removeItem('token')
+      window.location.assign('/login')
+      return Promise.reject(error)
+    }
     if (error.response && error.response.status === 403) {
       const detail = error.response.data?.detail;
       if (detail && detail.toLowerCase().includes('deactivated')) {

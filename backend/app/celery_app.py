@@ -18,6 +18,10 @@ celery_app.conf.update(
     enable_utc=True,
     task_track_started=True,
     task_time_limit=3600,  # 1 hour max
+    task_acks_late=True,
+    task_reject_on_worker_lost=True,
+    worker_prefetch_multiplier=1,
+    broker_connection_retry_on_startup=True,
 
     # Run tasks synchronously locally to avoid requiring Redis
     task_always_eager=os.getenv("ENV", "local") == "local",
@@ -26,8 +30,15 @@ celery_app.conf.update(
     # Route tasks to distinct queues for multi-instance scaling
     task_routes={
         "app.tasks.score_answer_task": {"queue": "ai"},
+        "app.tasks.requeue_delayed_answer_scoring": {"queue": "celery"},
         "app.tasks.send_email_task": {"queue": "email"},
         "app.tasks.process_bulk_emails_task": {"queue": "email"},
         "app.tasks.generate_report_task": {"queue": "reports"},
+    },
+    beat_schedule={
+        "recover-delayed-answer-scoring": {
+            "task": "app.tasks.requeue_delayed_answer_scoring",
+            "schedule": 60.0,
+        },
     },
 )

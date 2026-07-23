@@ -1,15 +1,15 @@
 import { useEffect, useRef, useState } from "react";
 import interviewerImg from "../../assets/ai-interviewer.png";
 import interviewerDeskImg from "../../assets/ai-interviewer-desk.png";
-import mockInterviewImg from "../../assets/ai-mock-interview.jpeg";
+import hireiqInterviewImg from "../../assets/hireiq-interview.jpeg";
 import dashboardImg from "../../assets/hireiq-dashboard.png";
 const BASE = [
     dashboardImg,
-    mockInterviewImg,
+    hireiqInterviewImg,
     interviewerImg,
     interviewerDeskImg,
     dashboardImg,
-    mockInterviewImg,
+    hireiqInterviewImg,
     interviewerDeskImg,
 ];
 const ROW1 = [...BASE, ...BASE, ...BASE];
