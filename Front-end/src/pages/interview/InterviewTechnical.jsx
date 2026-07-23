@@ -360,7 +360,9 @@ export const InterviewTechnical = () => {
       } catch (e) {
         console.error("Failed to submit coding answer:", e)
       }
-      handleSubmitInterview(false)
+      if (canSubmit || globalCountdown <= 0) {
+        handleSubmitInterview(false)
+      }
     }
 
     return (

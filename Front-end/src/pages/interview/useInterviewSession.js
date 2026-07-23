@@ -2378,7 +2378,13 @@ export const useInterviewSession = (sessionId, interviewType, startRoundTwo) => 
   }, [handleNextQuestion])
 
   const handleSubmitInterview = async (forceClose = false, terminationReason = null) => {
+    // ── Single Authoritative Timer Guard ───────────────────────────────────────
+    // Submission can ONLY occur if countdown <= 0 OR if forceClose === true (proctoring/timeout)
     const isTimeout = forceClose === true || (typeof forceClose === 'boolean' && forceClose)
+    if (globalCountdownRef.current > 0 && !isTimeout) {
+      console.warn('[handleSubmitInterview BLOCKED] Submission rejected: countdown > 0 and not forceClose.')
+      return
+    }
 
     if (isSubmittingRef.current) return  // Prevent double-submit
     isSubmittingRef.current = true
