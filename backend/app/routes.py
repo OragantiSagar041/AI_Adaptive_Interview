@@ -3277,6 +3277,7 @@ async def get_dashboard_stats(admin_id: Optional[str] = None, current_admin: dic
         now = datetime.now(timezone.utc)
         from datetime import timedelta
         today_start = datetime(now.year, now.month, now.day, tzinfo=timezone.utc).isoformat()
+        yesterday_start = (datetime(now.year, now.month, now.day, tzinfo=timezone.utc) - timedelta(days=1)).isoformat()
         week_start = (now - timedelta(days=7)).isoformat()
         active_query = {
             **query,
@@ -3311,6 +3312,14 @@ async def get_dashboard_stats(admin_id: Optional[str] = None, current_admin: dic
                     "today": {"$sum": {"$cond": [{"$gte": ["$created_at", today_start]}, 1, 0]}},
                     "this_week": {"$sum": {"$cond": [{"$gte": ["$created_at", week_start]}, 1, 0]}},
                     "candidate_emails": {"$addToSet": {"$toLower": {"$ifNull": ["$candidate_email", "$email"]}}},
+                    "completed_today": {"$sum": {"$cond": [{"$and": [{"$eq": ["$effective_status", "completed"]}, {"$gte": ["$created_at", today_start]}]}, 1, 0]}},
+                    "completed_yesterday": {"$sum": {"$cond": [{"$and": [{"$eq": ["$effective_status", "completed"]}, {"$gte": ["$created_at", yesterday_start]}, {"$lt": ["$created_at", today_start]}]}, 1, 0]}},
+                    "selected_today": {"$sum": {"$cond": [{"$and": [{"$eq": ["$decision", "selected"]}, {"$gte": ["$created_at", today_start]}]}, 1, 0]}},
+                    "selected_yesterday": {"$sum": {"$cond": [{"$and": [{"$eq": ["$decision", "selected"]}, {"$gte": ["$created_at", yesterday_start]}, {"$lt": ["$created_at", today_start]}]}, 1, 0]}},
+                    "rejected_today": {"$sum": {"$cond": [{"$and": [{"$eq": ["$decision", "rejected"]}, {"$gte": ["$created_at", today_start]}]}, 1, 0]}},
+                    "rejected_yesterday": {"$sum": {"$cond": [{"$and": [{"$eq": ["$decision", "rejected"]}, {"$gte": ["$created_at", yesterday_start]}, {"$lt": ["$created_at", today_start]}]}, 1, 0]}},
+                    "expired_today": {"$sum": {"$cond": [{"$and": [{"$eq": ["$effective_status", "expired"]}, {"$gte": ["$created_at", today_start]}]}, 1, 0]}},
+                    "expired_yesterday": {"$sum": {"$cond": [{"$and": [{"$eq": ["$effective_status", "expired"]}, {"$gte": ["$created_at", yesterday_start]}, {"$lt": ["$created_at", today_start]}]}, 1, 0]}},
                 }}],
                 "by_creator": [{"$group": {"_id": "$created_by", "count": {"$sum": 1}}}],
                 "daily": [
@@ -3482,6 +3491,16 @@ async def get_dashboard_stats(admin_id: Optional[str] = None, current_admin: dic
             "admin_labels": admin_labels,
             "admin_data": admin_data
         }
+
+        def calc_trend(today_val, yesterday_val):
+            if yesterday_val == 0:
+                return 100.0 if today_val > 0 else 0.0
+            return round(((today_val - yesterday_val) / yesterday_val) * 100, 1)
+
+        stats["completed_trend"] = calc_trend(summary.get("completed_today", 0), summary.get("completed_yesterday", 0))
+        stats["selected_trend"] = calc_trend(summary.get("selected_today", 0), summary.get("selected_yesterday", 0))
+        stats["rejected_trend"] = calc_trend(summary.get("rejected_today", 0), summary.get("rejected_yesterday", 0))
+        stats["expired_trend"] = calc_trend(summary.get("expired_today", 0), summary.get("expired_yesterday", 0))
         
         if manager.redis:
             await manager.redis.setex(cache_key, 30, json.dumps(stats))

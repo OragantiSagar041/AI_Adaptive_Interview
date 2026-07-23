@@ -61,6 +61,31 @@ function formatNum(n) {
   return Number(n).toLocaleString();
 }
 
+function renderTrend(trend, goodIsUp = true) {
+  if (trend == null) return <div className="text-[10px] text-slate-400">Loading...</div>;
+  const isPositive = trend > 0;
+  const isZero = trend === 0;
+  
+  let color = "text-slate-400";
+  let Icon = TrendingUp;
+  
+  if (!isZero) {
+    if (isPositive) {
+      color = goodIsUp ? "text-emerald-500" : "text-rose-400";
+      Icon = TrendingUp;
+    } else {
+      color = goodIsUp ? "text-rose-400" : "text-emerald-500";
+      Icon = TrendingDown;
+    }
+  }
+
+  return (
+    <div className={`flex items-center justify-end ${color} text-[10px] font-bold`}>
+      <Icon className="w-3 h-3 mr-0.5" /> {isPositive ? "+" : ""}{trend}%
+    </div>
+  );
+}
+
 export default function SuperDashboardPage() {
   const navigate = useNavigate();
   const { handleOpenLiveStreamAction } = useOutletContext() || {};
@@ -148,6 +173,8 @@ export default function SuperDashboardPage() {
     { name: "Completed", value: dbStats?.completed || 0, fill: "oklch(0.62 0.15 175)" },
     { name: "Hired", value: dbStats?.selected || 0, fill: "oklch(0.72 0.18 70)" }
   ]).sort((a, b) => b.value - a.value);
+
+  const maxFunnelValue = Math.max(...funnelData.map(d => Number(d.value) || 0));
 
   // Real 7-day sparkline from backend chart_data
   const sparklineData = Array.isArray(dbStats?.chart_data) && dbStats.chart_data.length > 0
@@ -344,9 +371,7 @@ export default function SuperDashboardPage() {
             <div className="mt-4 flex items-end justify-between">
               <div className="text-3xl font-bold text-slate-900">{formatNum(dbStats?.completed) || "0"}</div>
               <div className="text-right">
-                <div className="flex items-center justify-end text-emerald-500 text-[10px] font-bold">
-                  <TrendingUp className="w-3 h-3 mr-0.5" /> 12.1%
-                </div>
+                {renderTrend(dbStats?.completed_trend, true)}
                 <div className="text-[10px] text-slate-400">vs yesterday</div>
               </div>
             </div>
@@ -356,7 +381,10 @@ export default function SuperDashboardPage() {
               <div className="text-[10px] text-slate-400 mt-1.5">{formatNum(dbStats?.completed) || 0} / {formatNum(dbStats?.total) || 0} completed</div>
             </div>
             <div className="mt-3 flex items-center justify-end text-[11px]">
-              <span className="text-emerald-500 font-medium cursor-pointer flex items-center hover:underline" onClick={() => navigate('/superadmin/qualified-candidates')}>
+              <span className="text-emerald-500 font-medium cursor-pointer flex items-center hover:underline" onClick={() => {
+                dispatch(setStatusFilter('completed'));
+                navigate('/superadmin/interviews');
+              }}>
                 View details <ArrowRight className="w-3 h-3 ml-0.5" />
               </span>
             </div>
@@ -469,9 +497,7 @@ export default function SuperDashboardPage() {
             <div className="mt-4 flex items-end justify-between">
               <div className="text-3xl font-bold text-slate-900">{formatNum(dbStats?.selected) || "0"}</div>
               <div className="text-right">
-                <div className="flex items-center justify-end text-emerald-500 text-[10px] font-bold">
-                  <TrendingUp className="w-3 h-3 mr-0.5" /> 33.3%
-                </div>
+                {renderTrend(dbStats?.selected_trend, true)}
                 <div className="text-[10px] text-slate-400">vs yesterday</div>
               </div>
             </div>
@@ -515,9 +541,7 @@ export default function SuperDashboardPage() {
             <div className="mt-4 flex items-end justify-between">
               <div className="text-3xl font-bold text-slate-900">{formatNum(dbStats?.rejected) || "0"}</div>
               <div className="text-right">
-                <div className="flex items-center justify-end text-rose-400 text-[10px] font-bold">
-                  <TrendingDown className="w-3 h-3 mr-0.5" /> 0.2%
-                </div>
+                {renderTrend(dbStats?.rejected_trend, false)}
                 <div className="text-[10px] text-slate-400">vs yesterday</div>
               </div>
             </div>
@@ -561,9 +585,7 @@ export default function SuperDashboardPage() {
             <div className="mt-4 flex items-end justify-between">
               <div className="text-3xl font-bold text-slate-900">{formatNum(dbStats?.expired) || "0"}</div>
               <div className="text-right">
-                <div className="flex items-center justify-end text-rose-400 text-[10px] font-bold">
-                  <TrendingUp className="w-3 h-3 mr-0.5" /> 8.5%
-                </div>
+                {renderTrend(dbStats?.expired_trend, false)}
                 <div className="text-[10px] text-slate-400">vs yesterday</div>
               </div>
             </div>
@@ -614,21 +636,28 @@ export default function SuperDashboardPage() {
           <div className="px-6 pb-6">
             <div className="h-[320px]">
               <ResponsiveContainer width="100%" height="100%">
-                <FunnelChart>
-                  <RTooltip
-                    formatter={(v) => formatNum(v)}
-                    contentStyle={{
-                      background: "#ffffff",
-                      border: "1px solid #e2e8f0",
-                      borderRadius: 8,
-                      fontSize: 12
-                    }}
-                  />
-                  <Funnel dataKey="value" data={funnelData} isAnimationActive>
-                    <LabelList position="right" fill="#0f172a" stroke="none" dataKey="name" fontSize={12} />
-                    <LabelList position="center" fill="#fff" stroke="none" fontSize={12} formatter={(v) => formatNum(v)} />
-                  </Funnel>
-                </FunnelChart>
+                {maxFunnelValue > 0 ? (
+                  <FunnelChart>
+                    <RTooltip
+                      formatter={(v) => formatNum(v)}
+                      contentStyle={{
+                        background: "#ffffff",
+                        border: "1px solid #e2e8f0",
+                        borderRadius: 8,
+                        fontSize: 12
+                      }}
+                    />
+                    <Funnel dataKey="value" data={funnelData} isAnimationActive>
+                      <LabelList position="right" fill="#0f172a" stroke="none" dataKey="name" fontSize={12} />
+                      <LabelList position="center" fill="#fff" stroke="none" dataKey="value" fontSize={12} formatter={(v) => formatNum(v)} />
+                    </Funnel>
+                  </FunnelChart>
+                ) : (
+                  <div className="flex flex-col items-center justify-center h-full text-slate-400">
+                    <div className="text-3xl mb-2">📊</div>
+                    <div className="text-sm font-medium">No candidate data yet</div>
+                  </div>
+                )}
               </ResponsiveContainer>
             </div>
           </div>

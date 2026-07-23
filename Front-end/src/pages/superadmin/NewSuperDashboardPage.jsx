@@ -3,6 +3,7 @@ import React, { useEffect } from "react";
 import { useDispatch, useSelector } from "react-redux";
 import { useNavigate } from "react-router-dom";
 import { loadSuperAdminDashboard } from "@/store/slices/dashboardSlice";
+import { setStatusFilter } from "@/store/slices/candidatesSlice";
 import {
   Coins,
   Video,
@@ -103,7 +104,10 @@ export default function NewSuperDashboardPage() {
 
         <Card
           className="bg-white border-none shadow-sm flex flex-col justify-center h-28 cursor-pointer transition-all hover:-translate-y-0.5 hover:shadow-md hover:border hover:border-indigo-200"
-          onClick={() => navigate('/superadmin/qualified-candidates')}
+          onClick={() => {
+            dispatch(setStatusFilter('completed'));
+            navigate('/superadmin/interviews');
+          }}
         >
           <CardContent className="p-4 flex items-center justify-between">
             <div className="flex flex-col">
