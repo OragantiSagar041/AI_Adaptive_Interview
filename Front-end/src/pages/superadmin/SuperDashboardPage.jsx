@@ -149,14 +149,35 @@ export default function SuperDashboardPage() {
     if (token) {
       fetchAdmins();
     }
+  }, [API_BASE_URL, token]);
+
+  useEffect(() => {
+    // Initial fetch without summaryOnly to populate the Candidates table
     dispatch(loadSuperAdminDashboard(selectedAdminFilter));
-    dispatch(loadRecruitmentFunnel());
-    dispatch(loadPlatformAnalytics());
+    dispatch(loadRecruitmentFunnel(selectedAdminFilter));
+    dispatch(loadPlatformAnalytics(selectedAdminFilter));
     const interval = setInterval(() => {
-      dispatch(loadSuperAdminDashboard(selectedAdminFilter));
-    }, 30000);
-    return () => clearInterval(interval);
-  }, [dispatch, token, API_BASE_URL, selectedAdminFilter]);
+      // Poll with summaryOnly to update stats without re-fetching all candidates
+      dispatch(loadSuperAdminDashboard({ adminFilter: selectedAdminFilter, summaryOnly: true }));
+      dispatch(loadRecruitmentFunnel(selectedAdminFilter));
+      dispatch(loadPlatformAnalytics(selectedAdminFilter));
+    }, 30000); // refresh every 30s
+    return () => {
+      clearInterval(interval);
+      dispatch(setSelectedIds([]));
+    }
+  }, [dispatch, selectedAdminFilter]);
+
+  const kpis = [
+    { label: "Total AI Interviews", value: formatNum(dbStats?.total), delta: "", up: true, icon: Mic, tint: "from-violet-500/15 to-violet-500/0", navPath: "/superadmin/dashboard" },
+    { label: "Active Today", value: formatNum(dbStats?.today), delta: "", up: true, icon: Activity, tint: "from-blue-500/15 to-blue-500/0", navPath: "/superadmin/dashboard" },
+    { label: "Completed Interviews", value: formatNum(dbStats?.completed), delta: "", up: true, icon: CheckCircle2, tint: "from-emerald-500/15 to-emerald-500/0", navPath: "/superadmin/qualified-candidates" },
+    { label: "Pending Interviews", value: formatNum(dbStats?.pending), delta: "", up: true, icon: Clock, tint: "from-amber-500/15 to-amber-500/0", navPath: "/superadmin/dashboard" },
+    { label: "Avg AI Score", value: `${dbStats?.avg_score || 0}%`, delta: "", up: true, icon: Star, tint: "from-fuchsia-500/15 to-fuchsia-500/0", navPath: "/superadmin/qualified-candidates" },
+    { label: "Candidates Hired", value: formatNum(dbStats?.selected), delta: "", up: true, icon: Target, tint: "from-teal-500/15 to-teal-500/0", navPath: "/superadmin/qualified-candidates" },
+    { label: "Candidates Rejected", value: formatNum(dbStats?.rejected), delta: "", up: false, icon: XCircle, tint: "from-rose-500/15 to-rose-500/0", navPath: "/superadmin/rejected-candidates" },
+    { label: "Expired Links", value: formatNum(dbStats?.expired), delta: "", up: false, icon: AlertTriangle, tint: "from-red-500/15 to-red-500/0", navPath: "/superadmin/dashboard" }
+  ];
 
   const platformActivity = [
     { metric: "Live Monitored Sessions", value: ongoingMonitoredCount || 0 },

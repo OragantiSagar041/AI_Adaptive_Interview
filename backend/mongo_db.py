@@ -48,20 +48,29 @@ def get_next_sequence_value(sequence_name: str, prefix: str) -> str:
     return f"{prefix}{sequence_document['sequence_value']}"
 
 async def init_db_indexes():
-    candidate_indexes = candidates_collection.index_information()
-    name_index = candidate_indexes.get("name_1")
-    if name_index and name_index.get("unique"):
-        # Candidate names are not identities. The legacy unique index merged or
-        # rejected different people who happened to share the same name.
-        candidates_collection.drop_index("name_1")
-    candidates_collection.create_index("name")
-    admins_collection.create_index("username", unique=True)
-    interview_sessions_collection.create_index("link_id", unique=True)
-    answers_collection.create_index([("interview_id", 1), ("question_id", 1)], unique=True)
-    interviews_collection.create_index("id", unique=True)
-    plans_collection.create_index("plan_name", unique=True)
-    payment_orders_collection.create_index("order_id", unique=True)
-    payment_orders_collection.create_index("payment_id", unique=True, sparse=True)
-    pending_signups_collection.create_index("expires_at", expireAfterSeconds=0)
-    admins_collection.create_index("stripe_session_id", unique=True, sparse=True)
+    indexes = [
+        (candidates_collection, "name", False),
+        (admins_collection, "username", True),
+        (interview_sessions_collection, "link_id", True),
+        (interviews_collection, "id", True),
+        (plans_collection, "plan_name", True)
+    ]
+    
+    for coll, key, is_unique in indexes:
+        try:
+            coll.create_index(key, unique=is_unique)
+        except Exception as e:
+            if "IndexKeySpecsConflict" in str(e) or "already exists with different options" in str(e):
+                try:
+                    coll.drop_index(f"{key}_1")
+                    coll.create_index(key, unique=is_unique)
+                except Exception as inner_e:
+                    print(f"Warning: Failed to recreate index {key} on {coll.name}: {inner_e}")
+            else:
+                print(f"Warning: Failed to create index {key} on {coll.name}: {e}")
+                
+    try:
+        answers_collection.create_index([("interview_id", 1), ("question_id", 1)], unique=True)
+    except Exception:
+        pass
     print("MongoDB connected and initialized.")
