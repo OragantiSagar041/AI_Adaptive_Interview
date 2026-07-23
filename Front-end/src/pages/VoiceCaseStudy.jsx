@@ -588,9 +588,8 @@ export default function VoiceCaseStudy({
       playingAudioRef.current = null
     }
     
-    try { await fetch(`${API_BASE_URL}/complete-session/${linkId}`, { method: 'POST' }) } catch(_) {}
     onComplete?.()
-  }, [stopListening, linkId, onComplete])
+  }, [stopListening, onComplete])
 
   useEffect(() => {
     return () => {

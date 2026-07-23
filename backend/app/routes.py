@@ -2156,11 +2156,6 @@ def get_interview_details(link_id: str, current_admin: dict = Depends(get_curren
     current_status = session_data.get("status")
     candidate_email = session_data.get("candidate_email")
 
-    # Fallback: If results exist but status is still 'started', mark as 'completed'
-    if current_status == 'started' and actual_interview_id:
-        if answers_collection.find_one({"interview_id": actual_interview_id}):
-            print(f" Fallback: Marking session {link_id} as completed because results exist.")
-            interview_sessions_collection.update_one({"link_id": link_id}, {"$set": {"status": "completed"}})
 
     def get_url_from_raw_path(rpath):
         if not rpath: return None
@@ -8757,22 +8752,29 @@ async def generate_tts(req: TTSRequest):
 
 
 
+stt_inflight_counter = 0
+
 @router.post("/stt")
 async def stt_endpoint(file: UploadFile = File(...), language: Optional[str] = None):
-    """Transcribe audio via Groq Whisper with optimized Indian English accent support"""
+    """Transcribe audio via Groq Whisper with concurrency & rate limit tracking"""
+    global stt_inflight_counter
+    stt_inflight_counter += 1
+    current_inflight = stt_inflight_counter
+    req_id = uuid.uuid4().hex[:8]
+    t0 = time.time()
+    
     try:
         audio_content = await file.read()
+        file_size = len(audio_content)
+        header_hex = audio_content[:16].hex() if file_size >= 16 else ""
+        print(f"📊 [STT CONCURRENCY TRACE - REQ #{req_id}] Started | In-Flight Requests: {current_inflight} | File: {file.filename} ({file_size} bytes)")
         
-        temp_filename = f"temp_stt_{uuid.uuid4().hex}.webm"
+        temp_filename = f"temp_stt_{req_id}.webm"
         with open(temp_filename, "wb") as f:
             f.write(audio_content)
             
         try:
             with open(temp_filename, "rb") as f:
-                # Use whisper-large-v3-turbo for better accuracy with Indian accents.
-                # Pass initial_prompt to prime the model with Indian English context which
-                # dramatically reduces hallucinations and accent-related transcription errors.
-                # IMPORTANT: Only pass an English prompt if the target language is English!
                 iso_lang = language or "en"
                 sys_prompt = "The speaker has an Indian English accent. Transcribe technical terms, programming concepts, and software engineering terminology accurately." if iso_lang == "en" else ""
                 
@@ -8781,15 +8783,26 @@ async def stt_endpoint(file: UploadFile = File(...), language: Optional[str] = N
                     file=f,
                     language=iso_lang,
                     prompt=sys_prompt,
-                    temperature=0.0,  # Lower temperature = more deterministic, fewer hallucinations
+                    temperature=0.0,
                 )
+                dur = round(time.time() - t0, 3)
+                print(f"✅ [STT CONCURRENCY TRACE - REQ #{req_id}] HTTP 200 OK | Latency: {dur}s | Text: '{transcript.text}'")
             return {"transcript": transcript.text}
         finally:
             if os.path.exists(temp_filename):
                 os.remove(temp_filename)
     except Exception as e:
-        print(f"STT Error: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
+        dur = round(time.time() - t0, 3)
+        err_str = str(e)
+        status_code = getattr(e, 'status_code', 500)
+        if "429" in err_str or status_code == 429 or "rate_limit" in err_str.lower():
+            print(f"🚨 [STT RATE LIMIT EXCEEDED - REQ #{req_id}] HTTP 429 TOO MANY REQUESTS | Latency: {dur}s | Error: {err_str}")
+            raise HTTPException(status_code=429, detail=f"Groq Rate Limit Exceeded: {err_str}")
+        else:
+            print(f"❌ [STT CONCURRENCY ERROR - REQ #{req_id}] HTTP {status_code} | Latency: {dur}s | Error: {err_str}")
+            raise HTTPException(status_code=status_code, detail=err_str)
+    finally:
+        stt_inflight_counter = max(0, stt_inflight_counter - 1)
 
 # ─── Omni Dimension AI Calling Endpoints ──────────────────────────────────────
 
