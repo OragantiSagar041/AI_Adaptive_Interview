@@ -320,7 +320,7 @@ export default function CreateInterviewPage() {
         headers: { 'Authorization': `Bearer ${token}` }
       })
       const data = response.data
-      if (data.exists && data.resume_text) {
+      if (data.exists) {
         const result = await Swal.fire({
           title: 'Candidate Profile Found',
           html: `
@@ -350,9 +350,9 @@ export default function CreateInterviewPage() {
           setSingleCandidate(prev => ({
             ...prev,
             name: data.candidate_name || prev.name,
-            resumeText: data.resume_text
+            resumeText: data.resume_text || prev.resumeText
           }))
-          if (singleCandidate.jobDescription) {
+          if (singleCandidate.jobDescription && data.resume_text) {
             handleCalculateAts(data.resume_text, singleCandidate.jobDescription)
           }
         }

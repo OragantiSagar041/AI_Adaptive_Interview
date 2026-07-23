@@ -113,7 +113,7 @@ export default function MasterPage() {
     }
   }, [activeTab, companies])
 
-  const fetchCompanies = async () => {
+  async function fetchCompanies() {
     setLoadingCompanies(true)
     try {
       const res = await fetch(`${API_BASE_URL}/master/companies?master_id=${encodeURIComponent(adminId)}`, {
@@ -132,7 +132,7 @@ export default function MasterPage() {
     }
   }
 
-  const fetchPlans = async () => {
+  async function fetchPlans() {
     setLoadingPlans(true)
     try {
       const res = await fetch(`${API_BASE_URL}/api/plans`)

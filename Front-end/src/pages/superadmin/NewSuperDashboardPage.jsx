@@ -33,9 +33,9 @@ export default function NewSuperDashboardPage() {
   const selectedAdminFilter = useSelector((state) => state.dashboard.selectedAdminFilter);
 
   useEffect(() => {
-    dispatch(loadSuperAdminDashboard({ adminFilter: selectedAdminFilter, summaryOnly: true }));
+    dispatch(loadSuperAdminDashboard({ adminFilter: selectedAdminFilter,  }));
     const interval = setInterval(() => {
-      dispatch(loadSuperAdminDashboard({ adminFilter: selectedAdminFilter, summaryOnly: true }));
+      dispatch(loadSuperAdminDashboard({ adminFilter: selectedAdminFilter,  }));
     }, 15000); // Poll every 15s for fresh backend data
     return () => clearInterval(interval);
   }, [dispatch, selectedAdminFilter]);

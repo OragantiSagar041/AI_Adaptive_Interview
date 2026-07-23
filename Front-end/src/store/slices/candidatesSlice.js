@@ -267,6 +267,10 @@ function recomputeFilteredCandidates(state) {
     if (state.sortBy === 'score') {
       return Number(b.score ?? b.avg_score ?? 0) - Number(a.score ?? a.avg_score ?? 0)
     }
+    if (state.sortBy === 'oldest') {
+      return new Date(a.created_at) - new Date(b.created_at)
+    }
+    // default to date (Newest First)
     return new Date(b.created_at) - new Date(a.created_at)
   })
 
@@ -292,11 +296,11 @@ const candidatesSlice = createSlice({
     searchTerm: '',
     startDate: '',
     endDate: '',
-    statusFilter: 'all',
+    statusFilter: 'completed',
     adminFilter: 'all',
     pipelineFilter: 'all',
     positionFilter: 'all',
-    sortBy: 'score',
+    sortBy: 'date',
     totalPages: 1,
     startIndex: 0,
     endIndex: 0,

@@ -50,60 +50,33 @@ class AnswerScoringState(TypedDict, total=False):
     # final output
     result: Dict[str, Any]
 
-def as_extract_facts(state: AnswerScoringState) -> AnswerScoringState:
-    sys_prompt = "You are an expert interviewer. Generate an ideal answer and extract 3-5 core factual concepts required."
-    usr_prompt = f"Question: {state.get('question')}\nContext: {state.get('context')}\n\nReturn JSON: {{'ideal_answer': '...', 'key_facts_required': ['fact1']}}"
-    res = _llm_json(sys_prompt, usr_prompt, fallback={"ideal_answer": "N/A", "key_facts_required": []})
+def as_evaluate_answer(state: AnswerScoringState) -> AnswerScoringState:
+    sys_prompt = "You are an expert technical interviewer. Score the candidate's answer based on relevance, facts hit, and time spent. Return JSON matching the AnswerScore schema, but also include 'ideal_answer', 'key_facts_required' (list of facts), 'facts_mentioned_by_candidate' (list of facts), and 'is_relevant' (boolean)."
+    usr_prompt = f"Question: {state.get('question')}\nContext: {state.get('context')}\nAnswer: {state.get('answer')}\nTime Context: {state.get('time_context')}\nTime Hint: {state.get('time_score_hint')}\nLanguage: {state.get('language')}\n\nReturn JSON."
     
-    state["ideal_answer"] = res.get("ideal_answer", "N/A")
-    state["key_facts_required"] = res.get("key_facts_required", [])
-    return state
-
-def as_analyze_candidate(state: AnswerScoringState) -> AnswerScoringState:
-    sys_prompt = "Analyze if the candidate mentioned the required facts. Is the answer relevant? Return JSON."
-    usr_prompt = f"Candidate Answer: {state.get('answer')}\nRequired Facts: {state.get('key_facts_required')}\n\nReturn JSON: {{'is_relevant': true, 'facts_mentioned': ['fact1']}}"
-    res = _llm_json(sys_prompt, usr_prompt, fallback={"is_relevant": False, "facts_mentioned": []})
+    fallback = AnswerScore(feedback="Failed to score.", overall_score=0, content_score=0, relevance_score=0).to_dict()
+    res = _llm_json(sys_prompt, usr_prompt, fallback=fallback)
     
-    # Be forgiving if boolean is string
-    rel = res.get("is_relevant", False)
-    if isinstance(rel, str):
-        rel = rel.lower() == 'true'
-        
-    state["is_relevant"] = rel
-    state["facts_mentioned"] = res.get("facts_mentioned", [])
-    return state
-
-def as_compute_score(state: AnswerScoringState) -> AnswerScoringState:
-    sys_prompt = "Score the answer based on facts hit, relevance, and time. Return JSON conforming to the schema."
-    usr_prompt = f"""
-Candidate Answer: {state.get('answer')}
-Is Relevant: {state.get('is_relevant')}
-Required Facts: {state.get('key_facts_required')}
-Facts Hit: {state.get('facts_mentioned')}
-Time Context: {state.get('time_context')}
-Time Hint: {state.get('time_score_hint')}
-
-Return JSON matching AnswerScore schema. Include 'corrected_answer': '{state.get('ideal_answer')}'.
-    """
-    fallback = AnswerScore(feedback="Failed to score.", overall_score=0, content_score=0, relevance_score=0)
-    result = _llm_json(sys_prompt, usr_prompt, schema_class=AnswerScore, fallback=fallback)
+    result = AnswerScore(
+        feedback=res.get("feedback", fallback.get("feedback")),
+        overall_score=res.get("overall_score", 0),
+        content_score=res.get("content_score", 0),
+        relevance_score=res.get("relevance_score", 0),
+        corrected_answer=res.get("ideal_answer", "")
+    ).to_dict()
     
-    result["key_facts_required"] = state.get("key_facts_required", [])
-    result["facts_mentioned_by_candidate"] = state.get("facts_mentioned", [])
-    result["is_relevant"] = state.get("is_relevant", False)
+    result["key_facts_required"] = res.get("key_facts_required", [])
+    result["facts_mentioned_by_candidate"] = res.get("facts_mentioned_by_candidate", [])
+    result["is_relevant"] = res.get("is_relevant", False)
     
     state["result"] = result
     return state
 
 def build_answer_scoring_graph():
     g = StateGraph(AnswerScoringState)
-    g.add_node("extract_facts", as_extract_facts)
-    g.add_node("analyze_candidate", as_analyze_candidate)
-    g.add_node("compute_score", as_compute_score)
-    g.set_entry_point("extract_facts")
-    g.add_edge("extract_facts", "analyze_candidate")
-    g.add_edge("analyze_candidate", "compute_score")
-    g.add_edge("compute_score", END)
+    g.add_node("evaluate_answer", as_evaluate_answer)
+    g.set_entry_point("evaluate_answer")
+    g.add_edge("evaluate_answer", END)
     return g.compile()
 
 ANSWER_SCORING_GRAPH = build_answer_scoring_graph()
@@ -137,19 +110,27 @@ class QuestionGenerationState(TypedDict, total=False):
     # final output
     result: List[Dict]
 
-def qg_parse_context(state: QuestionGenerationState) -> QuestionGenerationState:
-    sys = "Extract key topics from JD/Resume for interview questions."
-    usr = f"JD: {state.get('jd_text', '')}\nResume: {state.get('resume_text', '')}\nReturn JSON: {{'topics': ['topic1']}}"
-    res = _llm_json(sys, usr, fallback={"topics": ["General Experience"]})
-    state["extracted_topics"] = res.get("topics", ["General Experience"])
-    return state
-
-def qg_draft_questions(state: QuestionGenerationState) -> QuestionGenerationState:
+def qg_generate_all(state: QuestionGenerationState) -> QuestionGenerationState:
     num = state.get("num_questions", 6)
     lang = state.get("language", "English")
-    sys = f"Draft technical interview questions as a JSON array. CRITICAL: You MUST generate all question texts strictly in the {lang} language. Do NOT use English."
-    usr = f"Topics: {state.get('extracted_topics')}\nGenerate {num} questions in language {lang}.\nReturn JSON: {{'questions': [{{'question':'...', 'difficulty':'Medium', 'type':'Technical', 'category':'Core'}}]}}"
-    res = _llm_json(sys, usr, fallback={"questions": []})
+
+    sys = (
+        "You are an expert recruiter. Generate technical interview questions based on the candidate's "
+        "Resume and Job Description. Extract key topics first, then write the questions. "
+        f"All questions MUST be generated strictly in {lang}. Do NOT use English unless the selected language is English. "
+        "Return JSON."
+    )
+
+    usr = (
+        f"JD: {state.get('jd_text', '')}\n"
+        f"Resume: {state.get('resume_text', '')}\n"
+        f"Topics: {state.get('extracted_topics')}\n"
+        f"Generate {num} questions in {lang}.\n"
+        "Return JSON: {'questions': [{'question':'...', 'difficulty':'Medium', 'type':'Technical', 'category':'Core'}]}"
+    )
+
+    res = _llm_json(sys, usr, fallback={"questions": []}, temperature=0.7)
+
     state["drafts"] = res.get("questions", [])
     return state
 
@@ -191,12 +172,10 @@ def qg_validate_format(state: QuestionGenerationState) -> QuestionGenerationStat
 
 def build_question_generation_graph():
     g = StateGraph(QuestionGenerationState)
-    g.add_node("parse_context", qg_parse_context)
-    g.add_node("draft_questions", qg_draft_questions)
+    g.add_node("generate_all", qg_generate_all)
     g.add_node("validate_format", qg_validate_format)
-    g.set_entry_point("parse_context")
-    g.add_edge("parse_context", "draft_questions")
-    g.add_edge("draft_questions", "validate_format")
+    g.set_entry_point("generate_all")
+    g.add_edge("generate_all", "validate_format")
     g.add_edge("validate_format", END)
     return g.compile()
 
@@ -231,28 +210,22 @@ class FollowUpState(TypedDict, total=False):
     # final
     result: Dict[str, Any]
 
-def fu_analyze_gap(state: FollowUpState) -> FollowUpState:
-    sys = "Analyze the candidate's answer and identify one missing depth/weakness."
-    usr = f"Answer: {state.get('answer')}\nReturn JSON: {{'missing_depth': '...'}}"
-    res = _llm_json(sys, usr, fallback={"missing_depth": "No obvious gaps."})
-    state["gap_analysis"] = res.get("missing_depth", "No obvious gaps.")
-    return state
-
-def fu_draft_followup(state: FollowUpState) -> FollowUpState:
-    sys = "Draft a follow-up question based on the missing depth. Keep it conversational."
-    usr = f"Missing Depth: {state.get('gap_analysis')}\nLanguage: {state.get('language')}\nReturn JSON for FollowupQuestion schema."
-    res = _llm_json(sys, usr, schema_class=FollowupQuestion, fallback=FollowupQuestion(question="Can you elaborate on that?"))
+def fu_generate_all(state: FollowUpState) -> FollowUpState:
+    sys = "Analyze the candidate's answer to identify a missing depth, then draft a follow-up question. Keep it conversational."
+    usr = f"Q: {state.get('original_question')}\nA: {state.get('answer')}\nLanguage: {state.get('language')}\nReturn JSON for FollowupQuestion schema with fields 'question' and 'expected_answer'."
+    res = _llm_json(sys, usr, schema_class=FollowupQuestion, fallback=FollowupQuestion(question="Can you elaborate on that?").to_dict())
+    
+    if hasattr(res, 'to_dict'):
+        res = res.to_dict()
     res["id"] = state.get("current_q_id", 0) + 1
     state["result"] = res
     return state
 
 def build_followup_graph():
     g = StateGraph(FollowUpState)
-    g.add_node("analyze_gap", fu_analyze_gap)
-    g.add_node("draft_followup", fu_draft_followup)
-    g.set_entry_point("analyze_gap")
-    g.add_edge("analyze_gap", "draft_followup")
-    g.add_edge("draft_followup", END)
+    g.add_node("generate_all", fu_generate_all)
+    g.set_entry_point("generate_all")
+    g.add_edge("generate_all", END)
     return g.compile()
 
 FOLLOW_UP_GRAPH = build_followup_graph()
@@ -285,28 +258,21 @@ class SummaryState(TypedDict, total=False):
     # final
     result: Dict[str, Any]
 
-def sg_aggregate(state: SummaryState) -> SummaryState:
-    ans = state.get("answers_data", [])
-    avg = sum(a.get("ai_score", 0) or 0 for a in ans) / len(ans) if ans else 0
-    state["aggregate_stats"] = {"avg": avg, "count": len(ans)}
-    return state
-
 def sg_draft_summary(state: SummaryState) -> SummaryState:
     sys = "Draft a final interview summary matching the InterviewSummary schema."
     ans = state.get("answers_data", [])
+    avg = sum(a.get("ai_score", 0) or 0 for a in ans) / len(ans) if ans else 0
     compressed = "\n".join([f"Q: {a.get('question_text', '')[:50]} | Score: {a.get('ai_score', 0)}" for a in ans])
-    usr = f"Candidate: {state.get('candidate_name')}\nStats: {state.get('aggregate_stats')}\nQA: {compressed}\nReturn JSON."
+    usr = f"Candidate: {state.get('candidate_name')}\nStats: {avg} avg\nQA: {compressed}\nReturn JSON."
     fallback = InterviewSummary(recommendation="Borderline")
     res = _llm_json(sys, usr, schema_class=InterviewSummary, fallback=fallback)
-    state["result"] = res
+    state["result"] = res.to_dict() if hasattr(res, 'to_dict') else res
     return state
 
 def build_summary_graph():
     g = StateGraph(SummaryState)
-    g.add_node("aggregate", sg_aggregate)
     g.add_node("draft_summary", sg_draft_summary)
-    g.set_entry_point("aggregate")
-    g.add_edge("aggregate", "draft_summary")
+    g.set_entry_point("draft_summary")
     g.add_edge("draft_summary", END)
     return g.compile()
 

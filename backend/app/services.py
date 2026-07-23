@@ -1676,12 +1676,12 @@ def _generate_offline_questions(resume_text: str, jd_text: str, total_count: int
                             q_text = template.format(skill=skill, industry=industry)
                         except (KeyError, IndexError):
                             q_text = template.replace("{skill}", skill).replace("{industry}", industry)
-                    questions.append({
-                        "question": q_text,
-                        "difficulty": ["Medium", "Hard"][i % 2],
-                        "type": "Technical",
-                        "category": f"{skill} Expertise",
-                        "_generation_origin": "offline technical"
+                        questions.append({
+                            "question": q_text,
+                            "difficulty": ["Medium", "Hard"][i % 2],
+                            "type": "Technical",
+                            "category": f"{skill} Expertise",
+                            "_generation_origin": "offline technical"
                         })
                 
                 return questions[:target]
@@ -1971,6 +1971,7 @@ def _generate_hr_screening_questions(hr_screening: dict, jd_text: str, language:
             f"{topic_list}\n\n"
             f"Job Description:\n{jd_text[:3000]}\n\n"
             "Rules:\n"
+            f"- Generate the questions entirely in {language}.\n"
             "- Extract any relevant details from the JD (like location, work mode) and reference them.\n"
             "- Each question should be conversational and professional.\n"
             '- Return ONLY a valid JSON array of objects with keys: "question", "difficulty", "type", "category".\n'
@@ -2196,7 +2197,19 @@ def get_current_admin_details(credentials: HTTPAuthorizationCredentials = Depend
         except InvalidId:
             raise HTTPException(status_code=401, detail="Invalid token format")
             
-        admin_doc = admins_collection.find_one({"_id": admin_oid})
+        from pymongo.errors import AutoReconnect
+        import time
+        
+        admin_doc = None
+        for _ in range(3):
+            try:
+                admin_doc = admins_collection.find_one({"_id": admin_oid})
+                break
+            except AutoReconnect:
+                time.sleep(0.2)
+        else:
+            admin_doc = admins_collection.find_one({"_id": admin_oid})
+
         if not admin_doc:
             raise HTTPException(status_code=401, detail="Account not found")
         if admin_doc.get("login_enabled") == False:
