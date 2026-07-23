@@ -3,11 +3,42 @@ from omnidimension import Client
 from .config import get_omni_dimension_api_key, get_omni_voice_id, get_omni_agent_id
 
 
-def get_omni_client():
-    api_key = get_omni_dimension_api_key()
+def get_omni_client(api_key: str = None):
+    api_key = (api_key or get_omni_dimension_api_key()).strip()
     if not api_key:
         raise ValueError("OMNI_DIMENSION_API_KEY is not set.")
     return Client(api_key)
+
+
+def get_omni_account(api_key: str = None):
+    """Return a client and agent belonging to the supplied Omni account."""
+    client = get_omni_client(api_key)
+    configured_agent_id = get_omni_agent_id()
+    configured_agent_id = int(configured_agent_id) if configured_agent_id else None
+    response = client.agent.list()
+    data = response.get("json", response) if isinstance(response, dict) else {}
+    agents = data.get("bots", []) if isinstance(data, dict) else []
+    if not isinstance(agents, list):
+        agents = []
+    agent = next((item for item in agents if item.get("id") == configured_agent_id), None)
+    if agent is None and agents:
+        agent = agents[0]
+    if not agent:
+        raise ValueError("No Omni Dimension agents were found for this API key.")
+
+    # Fetch fresh detailed agent parameters if client.agent.get is available
+    try:
+        if hasattr(client.agent, 'get'):
+            detail_res = client.agent.get(agent_id=agent.get("id"))
+            detail_data = detail_res.get("json", detail_res) if isinstance(detail_res, dict) else {}
+            if isinstance(detail_data, dict):
+                bot_obj = detail_data.get("bot") or detail_data.get("agent") or detail_data.get("data")
+                if isinstance(bot_obj, dict):
+                    agent = {**agent, **bot_obj}
+    except Exception as e:
+        print(f"[Omni Client Note] Agent detail fetch note: {e}")
+
+    return client, agent, agent.get("id")
 
 def start_omni_call(phone_number: str, candidate_name: str, job_description: str, resume_text: str, duration: int, skills: str):
     """

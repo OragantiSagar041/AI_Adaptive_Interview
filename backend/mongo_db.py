@@ -46,10 +46,17 @@ def get_next_sequence_value(sequence_name: str, prefix: str) -> str:
     return f"{prefix}{sequence_document['sequence_value']}"
 
 async def init_db_indexes():
-    candidates_collection.create_index("name", unique=True)
-    admins_collection.create_index("username", unique=True)
-    interview_sessions_collection.create_index("link_id", unique=True)
-    answers_collection.create_index([("interview_id", 1), ("question_id", 1)], unique=True)
-    interviews_collection.create_index("id", unique=True)
-    plans_collection.create_index("plan_name", unique=True)
+    indexes_to_create = [
+        (candidates_collection, "name", {"unique": True}),
+        (admins_collection, "username", {"unique": True}),
+        (interview_sessions_collection, "link_id", {"unique": True}),
+        (answers_collection, [("interview_id", 1), ("question_id", 1)], {"unique": True}),
+        (interviews_collection, "id", {"unique": True}),
+        (plans_collection, "plan_name", {"unique": True}),
+    ]
+    for coll, keys, kwargs in indexes_to_create:
+        try:
+            coll.create_index(keys, **kwargs)
+        except Exception as e:
+            print(f"Warning: Index creation skipped/failed for {coll.name} ({keys}): {e}")
     print("MongoDB connected and initialized.")
