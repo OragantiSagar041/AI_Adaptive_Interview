@@ -4,6 +4,13 @@ from dotenv import load_dotenv
 
 load_dotenv()
 
+try:
+    import dns.resolver
+    dns.resolver.default_resolver = dns.resolver.Resolver(configure=False)
+    dns.resolver.default_resolver.nameservers = ['8.8.8.8', '8.8.4.4', '1.1.1.1']
+except Exception as e:
+    print(f"Warning: Could not configure custom DNS resolver: {e}")
+
 MONGO_URI = os.getenv("MONGO_URI", "mongodb://localhost:27017/")
 client = MongoClient(MONGO_URI, connect=False)
 db = client["AI_Interview"]
@@ -22,6 +29,7 @@ omni_call_logs_collection = db["omni_call_logs"]
 jobs_collection = db["jobs"]
 job_applications_collection = db["job_applications"]
 conversation_flows_collection = db["conversation_flows"]
+agents_collection = db["agents"]
 counters_collection = db["counters"]
 demo_requests_collection = db["demo_requests"]
 

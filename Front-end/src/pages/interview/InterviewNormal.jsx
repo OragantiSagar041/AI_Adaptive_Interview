@@ -59,13 +59,15 @@ export const InterviewNormal = () => {
     proceedToRoundTwo,
     handleNextQuestion,
     handleSubmitInterview,
+    handleFinishEarly,
     handleSkipUpload,
     isMobileDevice,
     recognitionRef,
     isSpeechRecordingRef,
     showDeviceCheck,
     setShowDeviceCheck,
-    promptScreenShare
+    promptScreenShare,
+    isOnline
   } = session
 
   // ── Voice Cloning Setup State (UI only) ──────────────────────────────────
@@ -170,6 +172,65 @@ export const InterviewNormal = () => {
         <h2 className="text-2xl font-bold text-slate-900 tracking-tight">Access Denied</h2>
         <p className="text-slate-600 mt-2 max-w-md text-sm">{error}</p>
         <Link to="/" className="inline-flex items-center justify-center gap-2 px-6 py-3 rounded-full font-semibold text-sm bg-primary hover:bg-primary-hover text-white transition-all shadow-[0_4px_14px_rgba(99,102,241,0.15)] mt-6 no-underline">Go to Platform Page</Link>
+      </div>
+    )
+  }
+
+  // Show upload progress / Thank-You screen FIRST — takes priority so the
+  // upload spinner remains visible even after isCompleted is set to true.
+  if (showAllSet || uploadingText) {
+    return (
+      <div className="container">
+        <div style={{ marginTop: '3rem', background: '#fff', padding: '5rem 2rem', borderRadius: '20px', boxShadow: '0 10px 40px rgba(0,0,0,0.08)', textAlign: 'center', border: '1px solid #eff6ff' }}>
+          <div>
+            <h1 style={{ color: '#6366f1', fontSize: '3rem', marginBottom: '0.5rem', fontWeight: '800' }}>🎉 Thank You!</h1>
+            <p style={{ fontSize: '1.25rem', color: '#4b5563', marginBottom: '3rem', fontWeight: '500' }}>Your interview has been successfully submitted.</p>
+          </div>
+
+          {!showAllSet ? (
+            <div style={{ background: '#f8fafc', padding: '2.5rem', borderRadius: '16px', border: '1px dashed #cbd5e1', maxWidth: '500px', margin: '0 auto' }}>
+              <div style={{ fontSize: '3rem', marginBottom: '1.5rem', animation: 'spin 2s linear infinite' }}>⏳</div>
+              <h3 style={{ color: '#1e293b', marginBottom: '0.75rem', fontSize: '1.5rem', fontWeight: 'bold' }}>Saving Your Recording</h3>
+              <p style={{ fontSize: '1rem', color: '#64748b', marginBottom: '1.5rem' }}>
+                We are uploading your video interview. Time depends on your connection speed and interview length.
+              </p>
+              <div style={{ background: '#fee2e2', color: '#dc2626', padding: '12px', borderRadius: '8px', fontWeight: '700', display: 'inline-flex', alignItems: 'center', gap: '8px' }}>
+                ⚠️ PLEASE DO NOT CLOSE THIS TAB
+              </div>
+              <div style={{ marginTop: '1.5rem', width: '100%', height: '10px', background: '#e2e8f0', borderRadius: '5px', overflow: 'hidden', position: 'relative' }}>
+                <div style={{ width: `${uploadPercentage}%`, height: '100%', background: '#6366f1', transition: 'width 0.3s ease' }}></div>
+              </div>
+              <div style={{ display: 'flex', justifyContent: 'space-between', marginTop: '0.5rem' }}>
+                <div style={{ fontSize: '0.85rem', color: '#6366f1', fontWeight: '700' }}>{uploadingText || 'Preparing video file...'}</div>
+                <div style={{ fontSize: '0.85rem', color: '#64748b', fontWeight: '600' }}>Est: 1-2 mins</div>
+              </div>
+
+              {showSkipButton && (
+                <div style={{ marginTop: '1.5rem', fontSize: '0.8rem', color: '#64748b', borderTop: '1px solid #f1f5f9', paddingTop: '1rem' }}>
+                  Taking too long? <a href="#" onClick={(e) => { e.preventDefault(); if (skipCountdown <= 0) handleSkipUpload(); }} style={{ color: skipCountdown <= 0 ? '#6366f1' : '#94a3b8', textDecoration: skipCountdown <= 0 ? 'underline' : 'none', fontWeight: '600', cursor: skipCountdown <= 0 ? 'pointer' : 'not-allowed' }}>Finish &amp; Exit anyway</a>
+                  {skipCountdown > 0 && <span style={{ color: '#94a3b8' }}> (available in <span>{skipCountdown}</span>s)</span>}
+                  <div style={{ fontSize: '0.75rem', marginTop: '4px', color: '#94a3b8' }}>(Your interview responses are already safely submitted)</div>
+                </div>
+              )}
+            </div>
+          ) : (
+            <div style={{ background: '#f0fdf4', padding: '3rem 2rem', borderRadius: '16px', border: '1px dashed #bbf7d0', maxWidth: '500px', margin: '0 auto' }}>
+              <div style={{ background: '#22c55e', width: '60px', height: '60px', borderRadius: '50%', display: 'flex', alignItems: 'center', justifyContent: 'center', margin: '0 auto 1.5rem auto' }}>
+                <svg style={{ width: '30px', height: '30px', color: '#fff' }} fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="3" d="M5 13l4 4L19 7"></path></svg>
+              </div>
+              <h2 style={{ color: '#166534', marginBottom: '1rem', fontSize: '2rem', fontWeight: 'bold' }}>All Set!</h2>
+              <p style={{ fontSize: '1.1rem', color: '#15803d', marginBottom: '2rem', lineHeight: '1.6' }}>Your recording has been safe-stored. You may now safely close this window or exit the browser.</p>
+              <button onClick={() => {
+                if (document.fullscreenElement) {
+                  document.exitFullscreen().catch(err => console.log(err))
+                }
+                window.location.href = '/'
+              }} style={{ background: '#1e293b', color: 'white', padding: '12px 32px', borderRadius: '9999px', fontSize: '1.1rem', fontWeight: '600', border: 'none', cursor: 'pointer', boxShadow: '0 4px 10px rgba(0,0,0,0.1)' }}>
+                Exit Now
+              </button>
+            </div>
+          )}
+        </div>
       </div>
     )
   }
@@ -321,64 +382,6 @@ export const InterviewNormal = () => {
     </div>
   )
 
-  // Render Video uploading progress & "All Set!" screen
-  if (showAllSet || uploadingText) {
-    return (
-      <div className="container">
-        <div style={{ marginTop: '3rem', background: '#fff', padding: '5rem 2rem', borderRadius: '20px', boxShadow: '0 10px 40px rgba(0,0,0,0.08)', textAlign: 'center', border: '1px solid #eff6ff' }}>
-          <div>
-            <h1 style={{ color: '#6366f1', fontSize: '3rem', marginBottom: '0.5rem', fontWeight: '800' }}>🎉 Thank You!</h1>
-            <p style={{ fontSize: '1.25rem', color: '#4b5563', marginBottom: '3rem', fontWeight: '500' }}>Your interview has been successfully submitted.</p>
-          </div>
-
-          {!showAllSet ? (
-            <div style={{ background: '#f8fafc', padding: '2.5rem', borderRadius: '16px', border: '1px dashed #cbd5e1', maxWidth: '500px', margin: '0 auto' }}>
-              <div style={{ fontSize: '3rem', marginBottom: '1.5rem', animation: 'spin 2s linear infinite' }}>⏳</div>
-              <h3 style={{ color: '#1e293b', marginBottom: '0.75rem', fontSize: '1.5rem', fontWeight: 'bold' }}>Saving Your Recording</h3>
-              <p style={{ fontSize: '1rem', color: '#64748b', marginBottom: '1.5rem' }}>
-                We are uploading your video interview. Time depends on your connection speed and interview length.
-              </p>
-              <div style={{ background: '#fee2e2', color: '#dc2626', padding: '12px', borderRadius: '8px', fontWeight: '700', display: 'inline-flex', alignItems: 'center', gap: '8px' }}>
-                ⚠️ PLEASE DO NOT CLOSE THIS TAB
-              </div>
-              <div style={{ marginTop: '1.5rem', width: '100%', height: '10px', background: '#e2e8f0', borderRadius: '5px', overflow: 'hidden', position: 'relative' }}>
-                <div style={{ width: `${uploadPercentage}%`, height: '100%', background: '#6366f1', transition: 'width 0.3s ease' }}></div>
-              </div>
-              <div style={{ display: 'flex', justifyContent: 'space-between', marginTop: '0.5rem' }}>
-                <div style={{ fontSize: '0.85rem', color: '#6366f1', fontWeight: '700' }}>{uploadingText || 'Preparing video file...'}</div>
-                <div style={{ fontSize: '0.85rem', color: '#64748b', fontWeight: '600' }}>Est: 1-2 mins</div>
-              </div>
-
-              {showSkipButton && (
-                <div style={{ marginTop: '1.5rem', fontSize: '0.8rem', color: '#64748b', borderTop: '1px solid #f1f5f9', paddingTop: '1rem' }}>
-                  Taking too long? <a href="#" onClick={(e) => { e.preventDefault(); if (skipCountdown <= 0) handleSkipUpload(); }} style={{ color: skipCountdown <= 0 ? '#6366f1' : '#94a3b8', textDecoration: skipCountdown <= 0 ? 'underline' : 'none', fontWeight: '600', cursor: skipCountdown <= 0 ? 'pointer' : 'not-allowed' }}>Finish & Exit anyway</a>
-                  {skipCountdown > 0 && <span style={{ color: '#94a3b8' }}> (available in <span>{skipCountdown}</span>s)</span>}
-                  <div style={{ fontSize: '0.75rem', marginTop: '4px', color: '#94a3b8' }}>(Your interview responses are already safely submitted)</div>
-                </div>
-              )}
-            </div>
-          ) : (
-            <div style={{ background: '#f0fdf4', padding: '3rem 2rem', borderRadius: '16px', border: '1px dashed #bbf7d0', maxWidth: '500px', margin: '0 auto' }}>
-              <div style={{ background: '#22c55e', width: '60px', height: '60px', borderRadius: '50%', display: 'flex', alignItems: 'center', justifyContent: 'center', margin: '0 auto 1.5rem auto' }}>
-                <svg style={{ width: '30px', height: '30px', color: '#fff' }} fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="3" d="M5 13l4 4L19 7"></path></svg>
-              </div>
-              <h2 style={{ color: '#166534', marginBottom: '1rem', fontSize: '2rem', fontWeight: 'bold' }}>All Set!</h2>
-              <p style={{ fontSize: '1.1rem', color: '#15803d', marginBottom: '2rem', lineHeight: '1.6' }}>Your recording has been safe-stored. You may now safely close this window or exit the browser.</p>
-              <button onClick={() => {
-                if (document.fullscreenElement) {
-                  document.exitFullscreen().catch(err => console.log(err))
-                }
-                window.location.href = '/'
-              }} style={{ background: '#1e293b', color: 'white', padding: '12px 32px', borderRadius: '9999px', fontSize: '1.1rem', fontWeight: '600', border: 'none', cursor: 'pointer', boxShadow: '0 4px 10px rgba(0,0,0,0.1)' }}>
-                Exit Now
-              </button>
-            </div>
-          )}
-        </div>
-      </div>
-    )
-  }
-
   const currentQuestionText = currentQuestion?.text || currentQuestion?.question || currentQuestion?.prompt || ''
 
   const displayQuestionNum = currentQuestion?.caseStudyIndex !== undefined 
@@ -391,6 +394,14 @@ export const InterviewNormal = () => {
 
   return (
     <div className={currentQuestion?.type === 'coding' ? "w-screen h-screen p-0 m-0 max-w-none overflow-hidden flex flex-col" : "min-h-screen bg-[radial-gradient(ellipse_at_top_right,_var(--tw-gradient-stops))] from-slate-50 via-white to-indigo-50/40 text-slate-900 overflow-hidden flex flex-col relative"}>
+      {/* Phase 3: Offline warning banner */}
+      {!isOnline && (
+        <div style={{ position: 'fixed', top: 0, left: 0, right: 0, zIndex: 100000, background: '#b45309', color: '#fff', padding: '10px 20px', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '10px', fontSize: '14px', fontWeight: '600', boxShadow: '0 2px 8px rgba(0,0,0,0.3)' }}>
+          <span>⚠️</span>
+          <span>You are offline. Reconnecting... Your answers will be saved when connection is restored.</span>
+        </div>
+      )}
+
       {/* Alerts */}
       {showNoiseBanner && (
         <div style={{ position: 'fixed', top: '20px', right: '20px', zIndex: 99999, padding: '16px', borderRadius: '12px', background: 'rgba(245, 158, 11, 0.1)', border: '1px solid #f59e0b', color: '#f59e0b', display: 'flex', alignItems: 'center', gap: '12px', boxShadow: '0 4px 6px rgba(0,0,0,0.1)', maxWidth: '380px' }}>
@@ -486,9 +497,9 @@ export const InterviewNormal = () => {
 
               <button 
                 className="w-full py-3 px-4 rounded-xl font-bold text-xs bg-slate-800 hover:bg-slate-700 text-white transition-all cursor-pointer border-none shadow-md flex items-center justify-center gap-2 hover:-translate-y-0.5" 
-                onClick={() => handleSubmitInterview(false)}
+                onClick={handleFinishEarly}
               >
-                ⏹ End Interview
+                ⏹ Finish Interview
               </button>
             </div>
 

@@ -56,13 +56,15 @@ const SuperAdminJobsPage = React.lazy(() => import('./pages/superadmin/SuperAdmi
 const SuperAdminProfileSettings = React.lazy(() => import('./components/superadmin/ProfileSettings'))
 const SuperAdminNotifications = React.lazy(() => import('./pages/superadmin/SuperAdminNotifications'))
 const AICallPage = React.lazy(() => import('./pages/admin/AICallPage'))
-const ProfileViewPage = React.lazy(() => import('./pages/superadmin/ProfileViewPage.jsx'))
+const ProfileViewPage = React.lazy(() => import('./pages/superadmin/ProfileViewPage'))
+import ErrorBoundary from './components/ErrorBoundary'
 
 function App() {
   return (
     <BrowserRouter>
       <React.Suspense fallback={<div className="flex h-screen items-center justify-center bg-gray-900 text-white font-semibold text-lg tracking-wide">Loading Interface...</div>}>
-        <Routes>
+        <ErrorBoundary>
+          <Routes>
           <Route path="/" element={<LandingPage />} />
           <Route path="/voice-recruiter" element={<AiRecruiterLandingPage />} />
           <Route path="/login" element={<LoginPage />} />
@@ -144,9 +146,21 @@ function App() {
             <Route path="notifications" element={<AdminNotifications />} />
           </Route>
 
+          {/* Unauthorized Route */}
+          <Route path="/unauthorized" element={
+            <div className="flex flex-col items-center justify-center min-h-screen bg-slate-50 text-slate-800">
+              <h1 className="text-4xl font-bold mb-4">403 - Unauthorized</h1>
+              <p className="text-lg mb-6">You don't have permission to access this page.</p>
+              <a href="/" className="px-6 py-2 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 transition-colors">
+                Go to Homepage
+              </a>
+            </div>
+          } />
+
           {/* Fallback route */}
           <Route path="*" element={<Navigate to="/" replace />} />
         </Routes>
+        </ErrorBoundary>
       </React.Suspense>
     </BrowserRouter>
   )

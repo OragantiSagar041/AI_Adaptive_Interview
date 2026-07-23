@@ -10,6 +10,7 @@ import { VOICE_TRANSLATIONS } from '../utils/voiceTranslations'
 import Swal from 'sweetalert2'
 import 'sweetalert2/dist/sweetalert2.min.css'
 import aiVideoUrl from '../assets/ai_avatar.mp4'
+import { useExitConfirmation } from '../hooks/useExitConfirmation'
 
 // ── VideoAvatar for case study ─────────────────────────────────────────────────────
 function CaseStudyVideoAvatar({ status, size = 200 }) {
@@ -220,24 +221,21 @@ export default function VoiceCaseStudy({
   const scenarios = allQuestions?.length ? allQuestions : [question]
 
   useEffect(() => { chatBottomRef.current?.scrollIntoView({ behavior: 'smooth' }) }, [chatMessages])
-  useEffect(() => {
-    const t = setInterval(() => setTimeLeft(p => { if (p <= 1) { handleComplete(); return 0 } return p - 1 }), 1000)
-    return () => clearInterval(t)
-  }, [])
+  // Temporarily removed timer effect to place it below handleComplete
 
-  // Unload Tracking
-  useEffect(() => {
-    const handleUnload = () => {
+  // Unload Tracking + Exit Confirmation Dialog
+  useExitConfirmation({
+    active: true,
+    onConfirmExit: async () => {
       if (linkId) {
         navigator.sendBeacon(`${API_BASE_URL}/interview/${linkId}/alert`, JSON.stringify({
           type: "warning",
-          message: "Candidate refreshed or closed the window during the case study round."
+          message: "Candidate closed the window during the case study round."
         }))
       }
-    }
-    window.addEventListener("beforeunload", handleUnload)
-    return () => window.removeEventListener("beforeunload", handleUnload)
-  }, [linkId])
+    },
+    message: `You are in the middle of the <strong>Case Study Round</strong>.<br/><br/>If you leave now, your response will not be saved and your session may be marked as <strong>incomplete</strong>.<br/><br/>Are you sure you want to exit?`,
+  })
 
   const fmt = s => `${String(Math.floor(s/60)).padStart(2,'0')}:${String(s%60).padStart(2,'0')}`
 
@@ -575,6 +573,11 @@ export default function VoiceCaseStudy({
     const intro = introTemplate.replace('[COUNT]', scenarios.length)
     setTimeout(() => aiSay(intro, () => presentScenario(0)), 800)
   }, [])  
+
+  useEffect(() => {
+    const t = setInterval(() => setTimeLeft(p => { if (p <= 1) { handleComplete(); return 0 } return p - 1 }), 1000)
+    return () => clearInterval(t)
+  }, [handleComplete])
 
   const handleComplete = useCallback(async () => {
     if (submittingRef.current) return

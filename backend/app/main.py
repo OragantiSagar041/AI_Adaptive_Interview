@@ -148,8 +148,10 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-# Mount uploads folder to serve files
-app.mount("/uploads", StaticFiles(directory="uploads"), name="uploads")
+# Mount uploads folder to serve files (only if directory exists)
+import os as _os
+if _os.path.isdir("uploads"):
+    app.mount("/uploads", StaticFiles(directory="uploads"), name="uploads")
 
 # --- Routers ---
 app.include_router(router)
@@ -161,7 +163,7 @@ from fastapi.encoders import jsonable_encoder
 from fastapi.exceptions import RequestValidationError
 
 @app.exception_handler(RequestValidationError)
-async def validation_exception_handler(request, exc):
+def validation_exception_handler(request, exc):
     config.LAST_422_ERROR = {"errors": exc.errors(), "body": exc.body}
     print(f"================ 422 ERROR ON {request.url.path} ================")
     print("Errors:", exc.errors())
@@ -174,10 +176,10 @@ async def validation_exception_handler(request, exc):
 # ---------------------------------------------------------------------------
 
 @app.get("/")
-async def root():
+def root():
     return {"status": "ok", "service": "HireIQ Backend"}
 
 
 @app.get("/health")
-async def health():
+def health():
     return {"status": "healthy"}

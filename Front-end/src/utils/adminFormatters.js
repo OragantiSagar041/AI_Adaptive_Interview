@@ -46,7 +46,9 @@ export function parseDateStringToUtc(value) {
 
 export function formatDateTimeMedium(value) {
   if (!value) return ''
-  return new Date(normalizeIsoDateStringToUtc(value)).toLocaleString('en-IN', {
+  const date = parseDateStringToUtc(value)
+  if (!date || Number.isNaN(date.getTime())) return ''
+  return date.toLocaleString('en-IN', {
     dateStyle: 'medium',
     timeStyle: 'short',
     timeZone: INDIAN_TIMEZONE

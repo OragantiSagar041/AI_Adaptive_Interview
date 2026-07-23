@@ -178,9 +178,6 @@ RATE_LIMIT_EXEMPT_PATHS = {
 }
 RATE_LIMIT_EXEMPT_PREFIXES = (
     "/uploads",
-    "/admin/ongoing-interviews",
-    "/admin/live-snapshot",
-    "/superadmin/dashboard",
     "/superadmin/profile",
     "/api/notifications",
 )
@@ -189,9 +186,24 @@ RATE_LIMIT_EXEMPT_PREFIXES = (
 # JWT / auth
 # ---------------------------------------------------------------------------
 
+import hashlib as _hashlib
+
 JWT_SECRET_KEY = os.getenv("JWT_SECRET_KEY")
 if not JWT_SECRET_KEY:
     raise ValueError("FATAL ERROR: JWT_SECRET_KEY environment variable is not set. Refusing to start.")
+
+# If the key is shorter than 32 bytes, derive a proper 32-byte key via SHA-256
+# so the app doesn't crash and no InsecureKeyLengthWarning is raised.
+_raw_key_bytes = JWT_SECRET_KEY.encode("utf-8")
+if len(_raw_key_bytes) < 32:
+    import warnings as _warnings
+    _warnings.warn(
+        f"JWT_SECRET_KEY is only {len(_raw_key_bytes)} bytes — deriving a 32-byte key via SHA-256. "
+        "Set a 64-char key in your environment for production.",
+        stacklevel=1,
+    )
+    JWT_SECRET_KEY = _hashlib.sha256(_raw_key_bytes).hexdigest()  # 64 hex chars = 32 bytes
+
 ALGORITHM = "HS256"
 
 security = HTTPBearer()

@@ -246,6 +246,20 @@ function recomputeFilteredCandidates(state) {
       if (createdDate > endDateTime) return false
     }
 
+    if (state.adminFilter && state.adminFilter !== 'all') {
+      if (c.created_by !== state.adminFilter) return false
+    }
+
+    if (state.pipelineFilter && state.pipelineFilter !== 'all') {
+      const isAICalling = (c.id || '').startsWith('ai_call_') || (c.link_id || '').startsWith('ai_call_')
+      if (state.pipelineFilter === 'ai_calling' && !isAICalling) return false
+      if (state.pipelineFilter === 'hireiq' && isAICalling) return false
+    }
+
+    if (state.positionFilter && state.positionFilter !== 'all') {
+      if ((c.interview_title || '') !== state.positionFilter) return false
+    }
+
     return true
   })
 
@@ -253,6 +267,10 @@ function recomputeFilteredCandidates(state) {
     if (state.sortBy === 'score') {
       return Number(b.score ?? b.avg_score ?? 0) - Number(a.score ?? a.avg_score ?? 0)
     }
+    if (state.sortBy === 'oldest') {
+      return new Date(a.created_at) - new Date(b.created_at)
+    }
+    // default to date (Newest First)
     return new Date(b.created_at) - new Date(a.created_at)
   })
 
@@ -264,6 +282,7 @@ function recomputeFilteredCandidates(state) {
   }
   state.startIndex = (state.currentPage - 1) * pageSize
   state.endIndex = Math.min(state.startIndex + pageSize, state.totalItems)
+  state.filteredCandidates = sorted
   state.paginatedCandidates = sorted.slice(state.startIndex, state.endIndex)
 }
 
@@ -271,13 +290,17 @@ const candidatesSlice = createSlice({
   name: 'candidates',
   initialState: {
     candidates: [],
+    filteredCandidates: [],
     paginatedCandidates: [],
     selectedIds: [],
     searchTerm: '',
     startDate: '',
     endDate: '',
-    statusFilter: 'all',
-    sortBy: 'score',
+    statusFilter: 'completed',
+    adminFilter: 'all',
+    pipelineFilter: 'all',
+    positionFilter: 'all',
+    sortBy: 'date',
     totalPages: 1,
     startIndex: 0,
     endIndex: 0,
@@ -304,6 +327,21 @@ const candidatesSlice = createSlice({
     },
     setStatusFilter: (state, action) => {
       state.statusFilter = action.payload
+      state.currentPage = 1
+      recomputeFilteredCandidates(state)
+    },
+    setAdminFilter: (state, action) => {
+      state.adminFilter = action.payload
+      state.currentPage = 1
+      recomputeFilteredCandidates(state)
+    },
+    setPipelineFilter: (state, action) => {
+      state.pipelineFilter = action.payload
+      state.currentPage = 1
+      recomputeFilteredCandidates(state)
+    },
+    setPositionFilter: (state, action) => {
+      state.positionFilter = action.payload
       state.currentPage = 1
       recomputeFilteredCandidates(state)
     },
@@ -356,6 +394,7 @@ const candidatesSlice = createSlice({
       })
       .addCase(loadSuperAdminDashboard.fulfilled, (state, action) => {
         state.status = 'succeeded'
+        if (action.meta.arg && typeof action.meta.arg === 'object' && action.meta.arg.summaryOnly) return
         state.candidates = action.payload.candidates || []
         recomputeFilteredCandidates(state)
       })
@@ -430,6 +469,9 @@ export const {
   setStartDate,
   setEndDate,
   setStatusFilter,
+  setAdminFilter,
+  setPipelineFilter,
+  setPositionFilter,
   setSortBy,
   setSelectedIds,
   setCurrentPage

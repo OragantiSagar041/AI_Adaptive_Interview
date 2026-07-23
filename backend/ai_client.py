@@ -265,12 +265,15 @@ def chat_completion(
     messages: List[Dict[str, str]],
     model: str = "openai/gpt-4o-mini",
     temperature: float = 0.1,
-    timeout: int = 15,
+    timeout: int = 45,
     max_tokens: int = 1024,
 ) -> str:
     """
     Send a chat completion request.
-    If OpenRouter fails or is out of quota, falls back to Groq, then to HuggingFace, before going offline.
+    Provider chain: OpenRouter (primary) → HuggingFace (fallback).
+
+    NOTE: Groq is intentionally excluded here — it is reserved exclusively
+    for Whisper voice transcription (routes.py /transcribe endpoint).
     """
     # 1. Primary path: try OpenRouter if not in cooldown
     if not _is_in_cooldown() and OPENROUTER_API_KEY:
@@ -280,30 +283,21 @@ def chat_completion(
             err_msg = str(openrouter_exc)
             if _is_quota_error(openrouter_exc):
                 _mark_quota_exhausted(err_msg)
-                print(f"⚡ OpenRouter quota hit: {err_msg}. Switching to fallbacks...")
+                print(f"⚡ OpenRouter quota hit: {err_msg}. Switching to HuggingFace fallback...")
             else:
-                print(f"⚠️ OpenRouter failed: {openrouter_exc}. Switching to fallbacks...")
+                print(f"⚠️ OpenRouter failed: {openrouter_exc}. Switching to HuggingFace fallback...")
     else:
         if _is_in_cooldown():
-            print("⏳ OpenRouter is in cooldown. Trying Groq fallback directly...")
+            print("⏳ OpenRouter is in cooldown. Using HuggingFace fallback...")
         else:
-            print("⚠️ No OpenRouter API key. Trying Groq fallback directly...")
+            print("⚠️ No OpenRouter API key. Using HuggingFace fallback...")
 
-    # 2. Secondary path: Groq fallback
-    GROQ_API_KEY = os.getenv("GROQ_API_KEY", "")
-    if GROQ_API_KEY:
-        try:
-            print("🤖 Calling Groq LLM (llama-3.1-8b-instant)...")
-            return _call_groq(messages, "llama-3.1-8b-instant", temperature, timeout, max_tokens)
-        except Exception as groq_exc:
-            print(f"⚠️ Groq fallback failed: {groq_exc}. Trying HuggingFace fallback...")
-            
-    # 3. Tertiary path: HuggingFace fallback
+    # 2. Fallback: HuggingFace (Groq is reserved for voice transcription only)
     try:
         print("🤗 Calling HuggingFace fallback model...")
         return _call_huggingface(messages, temperature=temperature, timeout=timeout)
     except Exception as hf_exc:
-        print(f"❌ All LLM providers failed: OpenRouter, Groq, and HuggingFace.")
+        print(f"❌ All LLM providers failed: OpenRouter and HuggingFace.")
         raise RuntimeError("QUOTA_EXHAUSTED_INSTANT_OFFLINE")
 
 

@@ -26,7 +26,8 @@ export const InterviewTechnical = () => {
   }) => {
     setCodingRoundLoading(true)
     try {
-      const payload = await api.post(`/coding-round/start`, { interview_id: interviewId }).then(r => r.data)
+      // LLM task generation can take 30-90s — override the default 50s timeout
+      const payload = await api.post(`/coding-round/start`, { interview_id: interviewId }, { timeout: 120000 }).then(r => r.data)
 
       const task = payload.coding_round?.task || {}
       const recommendedLang = task.recommended_language || 'python'
@@ -743,10 +744,12 @@ export const InterviewTechnical = () => {
     proceedToRoundTwo,
     handleNextQuestion,
     handleSubmitInterview,
+    handleFinishEarly,
     handleSkipUpload,
     isMobileDevice,
     recognitionRef,
-    isSpeechRecordingRef
+    isSpeechRecordingRef,
+    isOnline
   } = session
 
   // ── Voice Cloning Setup State (UI only) ──────────────────────────────────
@@ -1072,6 +1075,14 @@ export const InterviewTechnical = () => {
 
   return (
     <div className={currentQuestion?.type === 'coding' ? "w-screen h-screen p-0 m-0 max-w-none overflow-hidden flex flex-col" : "min-h-screen bg-[radial-gradient(ellipse_at_top_right,_var(--tw-gradient-stops))] from-slate-50 via-white to-indigo-50/40 text-slate-900 overflow-hidden flex flex-col relative"}>
+      {/* Phase 3: Offline warning banner */}
+      {!isOnline && (
+        <div style={{ position: 'fixed', top: 0, left: 0, right: 0, zIndex: 100000, background: '#b45309', color: '#fff', padding: '10px 20px', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '10px', fontSize: '14px', fontWeight: '600', boxShadow: '0 2px 8px rgba(0,0,0,0.3)' }}>
+          <span>⚠️</span>
+          <span>You are offline. Reconnecting... Your answers will be saved when connection is restored.</span>
+        </div>
+      )}
+
       {/* Alerts */}
       {showNoiseBanner && (
         <div style={{ position: 'fixed', top: '20px', right: '20px', zIndex: 99999, padding: '16px', borderRadius: '12px', background: 'rgba(245, 158, 11, 0.1)', border: '1px solid #f59e0b', color: '#f59e0b', display: 'flex', alignItems: 'center', gap: '12px', boxShadow: '0 4px 6px rgba(0,0,0,0.1)', maxWidth: '380px' }}>
@@ -1175,9 +1186,9 @@ export const InterviewTechnical = () => {
 
               <button 
                 className="w-full py-3 px-4 rounded-xl font-bold text-xs bg-slate-800 hover:bg-slate-700 text-white transition-all cursor-pointer border-none shadow-md flex items-center justify-center gap-2 hover:-translate-y-0.5" 
-                onClick={() => handleSubmitInterview(false)}
+                onClick={handleFinishEarly}
               >
-                ⏹ End Interview
+                ⏹ Finish Interview
               </button>
             </div>
 

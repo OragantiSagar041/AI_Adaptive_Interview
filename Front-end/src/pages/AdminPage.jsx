@@ -584,7 +584,7 @@ export default function AdminPage({ role: initialRole = 'admin' }) {
           candidate_email: email,
           resume_text: resumeText,
           job_description: jobDescription,
-          admin_id: adminUser?.admin_id || 'admin',
+          admin_id: adminUser?.admin_id || adminUser?.id || adminUser?._id || 'admin',
           interview_duration: Number(duration),
           interview_type: interviewType,
           industry: industry,
@@ -789,7 +789,7 @@ export default function AdminPage({ role: initialRole = 'admin' }) {
               interview_type: interviewType,
               language: language,
               case_study_count: interviewType === 'Non-Technical' ? Number(caseStudyCount) : 0,
-              admin_id: adminUser?.admin_id || 'admin',
+              admin_id: adminUser?.admin_id || adminUser?.id || adminUser?._id || 'admin',
               interview_duration: Number(duration),
               record_video: recordVideo,
               custom_email_html: customEmailHtml || "",
@@ -1062,6 +1062,15 @@ export default function AdminPage({ role: initialRole = 'admin' }) {
     }))))
   }
 
+  // ── Must be declared before any early return to satisfy Rules of Hooks ──────
+  const [isInitialLoad, setIsInitialLoad] = useState(true)
+
+  useEffect(() => {
+    if (dashboardStatus === 'succeeded' || dashboardStatus === 'failed') {
+      setIsInitialLoad(false)
+    }
+  }, [dashboardStatus])
+
   if (!token) {
     return <Navigate to="/login" replace />
   }
@@ -1136,6 +1145,7 @@ export default function AdminPage({ role: initialRole = 'admin' }) {
     getComputedStatus
   }
 
+
   const renderContent = () => {
     if (role === 'superadmin') {
       switch (activeTab) {
@@ -1188,7 +1198,7 @@ export default function AdminPage({ role: initialRole = 'admin' }) {
           }
         }}
       >
-        {loadingData && candidates.length === 0 ? (
+        {isInitialLoad && loadingData ? (
           <div className="flex items-center gap-2.5 text-slate-500">
             <RefreshCw size={18} className="animate-spin" />
             <span>Refreshing console workspace...</span>

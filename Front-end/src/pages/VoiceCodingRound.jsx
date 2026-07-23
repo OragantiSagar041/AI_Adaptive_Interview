@@ -9,6 +9,7 @@ import { API_BASE_URL } from '../apiConfig'
 import Swal from 'sweetalert2'
 import 'sweetalert2/dist/sweetalert2.min.css'
 import aiVideoUrl from '../assets/ai_avatar.mp4'
+import { useExitConfirmation } from '../hooks/useExitConfirmation'
 
 // ── Language config with brand colors ─────────────────────────────────────
 const LANGUAGES = [
@@ -235,19 +236,19 @@ export default function VoiceCodingRound({
   const lastRunResultRef = useRef(null)  // stores latest run result for chat context
   const activeAudioRef = useRef(null)    // prevents overlapping audio
 
-  // Unload Tracking
-  useEffect(() => {
-    const handleUnload = () => {
+  // Unload Tracking + Exit Confirmation Dialog
+  useExitConfirmation({
+    active: true,
+    onConfirmExit: async () => {
       if (linkId) {
         navigator.sendBeacon(`${API_BASE_URL}/interview/${linkId}/alert`, JSON.stringify({
           type: "warning",
-          message: "Candidate refreshed or closed the window during the coding round."
+          message: "Candidate closed the window during the coding round."
         }))
       }
-    }
-    window.addEventListener("beforeunload", handleUnload)
-    return () => window.removeEventListener("beforeunload", handleUnload)
-  }, [linkId])
+    },
+    message: `You are in the middle of the <strong>Coding Round</strong>.<br/><br/>If you leave now, your current code will not be submitted and your session may be marked as <strong>incomplete</strong>.<br/><br/>Are you sure you want to exit?`,
+  })
 
   // Test case animation
   useEffect(() => {

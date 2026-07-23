@@ -4,13 +4,14 @@ import { useNavigate } from 'react-router-dom'
 import Swal from 'sweetalert2'
 import axios from 'axios'
 import { handleUpdateDecision } from '../../store/slices/interviewSlice'
-import ScheduleModal from '../../pages/ScheduleModal'
+import ScheduleModal from './ScheduleModal'
 import {
   Mail, Phone, MapPin, Building2, IndianRupee, Clock, Download,
   Play, FileText, Sparkles, Star, Check, X, Calendar, Send,
   MessageSquare, Video, Scale, Loader2, AlertCircle, Monitor,
-  Mic, ShieldAlert, Eye, ChevronRight
+  Mic, ShieldAlert, Eye, ChevronRight, Code
 } from "lucide-react"
+import { jsPDF } from 'jspdf'
 
 // ── Score Ring ──────────────────────────────────────────────────────────────
 function ScoreRing({ value, size = 140, strokeWidth = 12, label, tone }) {
@@ -21,16 +22,16 @@ function ScoreRing({ value, size = 140, strokeWidth = 12, label, tone }) {
 
   let colorClass = tone === "success" ? "text-emerald-500"
     : tone === "warning" ? "text-amber-500"
-    : tone === "danger" ? "text-rose-500"
-    : num >= 80 ? "text-emerald-500"
-    : num >= 60 ? "text-amber-500"
-    : "text-rose-500"
+      : tone === "danger" ? "text-rose-500"
+        : num >= 80 ? "text-emerald-500"
+          : num >= 60 ? "text-amber-500"
+            : "text-rose-500"
 
   return (
     <div className="relative flex flex-col items-center justify-center" style={{ width: size, height: size }}>
       <svg className="transform -rotate-90 w-full h-full" viewBox={`0 0 ${size} ${size}`}>
-        <circle cx={size/2} cy={size/2} r={radius} stroke="currentColor" strokeWidth={strokeWidth} fill="transparent" className="text-slate-100" />
-        <circle cx={size/2} cy={size/2} r={radius} stroke="currentColor" strokeWidth={strokeWidth} fill="transparent"
+        <circle cx={size / 2} cy={size / 2} r={radius} stroke="currentColor" strokeWidth={strokeWidth} fill="transparent" className="text-slate-100" />
+        <circle cx={size / 2} cy={size / 2} r={radius} stroke="currentColor" strokeWidth={strokeWidth} fill="transparent"
           strokeDasharray={circumference} strokeDashoffset={offset}
           className={`${colorClass} transition-all duration-1000 ease-out`} strokeLinecap="round" />
       </svg>
@@ -73,10 +74,17 @@ export default function CandidateDialog({ candidate, open, onOpenChange, onStatu
   const [loading, setLoading] = useState(false)
   const [atsLoading, setAtsLoading] = useState(false)
   const [error, setError] = useState(null)
-  const [isScheduleModalOpen, setIsScheduleModalOpen] = useState(false)
   const [showResumeModal, setShowResumeModal] = useState(false)
   const [showRecordingModal, setShowRecordingModal] = useState(false)
   const [showTranscriptModal, setShowTranscriptModal] = useState(false)
+  const [transcriptTab, setTranscriptTab] = useState('verbal')
+  // New States
+  const [extractingInfo, setExtractingInfo] = useState(false)
+  const [showNotes, setShowNotes] = useState(false)
+  const [newNote, setNewNote] = useState("")
+  const [notesSaving, setNotesSaving] = useState(false)
+  const [showScheduleModal, setShowScheduleModal] = useState(false)
+
   const token = useSelector(state => state.auth.token)
   const API_BASE_URL = useSelector(state => state.auth.API_BASE_URL)
 
@@ -140,6 +148,107 @@ export default function CandidateDialog({ candidate, open, onOpenChange, onStatu
     fetchAts()
   }, [activeTab, detail, atsData, API_BASE_URL, token])
 
+  // Extract candidate info via frontend Regex if missing
+  useEffect(() => {
+    if (!open || !detail) return
+
+    const hasResume = detail.resume_text || detail.profile_text || detail.resume_url;
+
+    // Check if we need to extract info
+    if (!detail.info_extracted && (!detail.experience || detail.experience === "N/A") && hasResume && !extractingInfo) {
+      setExtractingInfo(true)
+
+      const resume = detail.resume_text || detail.profile_text || "";
+      let extExp = "";
+      let extLocation = "";
+      let extCTC = "";
+      let extMobile = "";
+      let extCompany = "";
+      let extExpectedCTC = "";
+      let extNotice = "";
+
+      // Simple frontend regex extraction
+      if (resume) {
+        // Look for X years, X+ years, X yrs, or Fresher
+        const expMatch = resume.match(/(?:experience[\s:\-]{1,4})?(\d+(?:\.\d+)?)\+?\s*(?:years?|yrs?|y)(?:\s*of)?\s*(?:experience)?\b/i);
+        const fresherMatch = resume.match(/(?:fresher|entry[- ]level|0\s*years?)/i);
+        if (expMatch) extExp = expMatch[1] + " Years";
+        else if (fresherMatch) extExp = "0 Years";
+
+        const locMatch = resume.match(/(?:location|city|address|residing\s*in|place|based\s*in)[\s:\-]{1,4}([A-Za-z]+(?:,\s*[A-Za-z]+)*)/i);
+        if (locMatch) extLocation = locMatch[1];
+
+        const ctcMatch = resume.match(/(?:current\s*ctc|ctc|package|salary|current\s*salary)[\s:\-]{1,4}([\d\.]+\s*(?:lpa|k|m|LPA))/i);
+        if (ctcMatch) extCTC = ctcMatch[1].toUpperCase();
+
+        const mobileMatch = resume.match(/(?:mobile|phone|ph|contact)[\s:\-]{1,4}(\+?[\d\-\s]{10,15})/i) || resume.match(/(?:\+91|91)?[-\s]?[6-9]\d{9}/);
+        if (mobileMatch) extMobile = (mobileMatch[1] || mobileMatch[0]).trim();
+
+        const compMatch = resume.match(/(?:company|employer|organization|currently\s*working\s*at|current\s*company|worked\s*at|role\s*at)[\s:\-]{1,4}([A-Za-z0-9\s\&\.\-]+?)(?=\n|$|\|)/i);
+        if (compMatch) extCompany = compMatch[1].trim();
+
+        const expCtcMatch = resume.match(/(?:expected\s*ctc|expected\s*salary|expected|expected\s*package)[\s:\-]{1,4}([\d\.]+\s*(?:lpa|k|m|LPA))/i);
+        if (expCtcMatch) extExpectedCTC = expCtcMatch[1].toUpperCase();
+
+        const noticeMatch = resume.match(/(?:notice\s*period|availability|can\s*join\s*in|joining\s*in)[\s:\-]{1,5}(\d+\s*(?:days?|months?|weeks?|day|month|week))/i);
+        if (noticeMatch) extNotice = noticeMatch[1];
+
+        // Strategy 2: Line-by-line key-value fallback
+        // This is for when the user manually pastes vertical lists (e.g. "Experience\n2 Years")
+        const lines = resume.split('\n').map(l => l.trim()).filter(l => l.length > 0);
+        for (let i = 0; i < lines.length - 1; i++) {
+          const lower = lines[i].toLowerCase().replace(/[:\-]/g, '').trim();
+          const next = lines[i + 1];
+
+          if (!extExp && (lower === "experience" || lower === "total experience" || lower === "exp")) {
+            extExp = next;
+          }
+          if (!extCTC && (lower === "current ctc" || lower === "ctc" || lower === "current salary")) {
+            extCTC = next;
+          }
+          if (!extExpectedCTC && (lower === "expected ctc" || lower === "expected salary")) {
+            extExpectedCTC = next;
+          }
+          if (!extNotice && (lower === "notice period" || lower === "availability")) {
+            extNotice = next;
+          }
+          if (!extCompany && (lower === "current company" || lower === "company" || lower === "organization")) {
+            extCompany = next;
+          }
+          if (!extLocation && (lower === "location" || lower === "city")) {
+            extLocation = next;
+          }
+          if (!extMobile && (lower === "mobile" || lower === "phone" || lower === "contact")) {
+            extMobile = next;
+          }
+        }
+      }
+
+      // Simulate a small delay for extraction feeling
+      const timerId = setTimeout(() => {
+        setDetail(prev => {
+          if (!prev) return prev;
+          return {
+            ...prev,
+            experience: (!prev.experience || prev.experience === "N/A") ? extExp : prev.experience,
+            location: (!prev.location || prev.location === "N/A") ? extLocation : prev.location,
+            current_ctc: (!prev.current_ctc || prev.current_ctc === "N/A") ? extCTC : prev.current_ctc,
+            candidate_phone: (!prev.candidate_phone || prev.candidate_phone === "N/A") && (!prev.phone || prev.phone === "N/A") ? extMobile : (prev.candidate_phone || prev.phone),
+            current_company: (!prev.current_company || prev.current_company === "N/A") ? extCompany : prev.current_company,
+            expected_ctc: (!prev.expected_ctc || prev.expected_ctc === "N/A") ? extExpectedCTC : prev.expected_ctc,
+            notice_period: (!prev.notice_period || prev.notice_period === "N/A") ? extNotice : prev.notice_period,
+            info_extracted: true
+          };
+        })
+        setExtractingInfo(false)
+      }, 800);
+
+      return () => clearTimeout(timerId);
+    }
+  }, [open, detail, extractingInfo])
+
+  // No AI Notes Extraction anymore, we use DB directly.
+
   if (!open || !candidate) return null
 
   // Merge candidate + detail for display
@@ -173,8 +282,167 @@ export default function CandidateDialog({ candidate, open, onOpenChange, onStatu
     { label: isQualified ? "Selected ✓" : "Rejected ✗", done: !!(c.decision || candidate.decision), bad: !isQualified }
   ]
 
-  const recordingUrl = c.recording_url
-  const screenRecordingUrl = c.screen_recording_url
+  const formatMediaUrl = (url) => {
+    if (!url) return null
+    if (url.startsWith('http')) return url
+    return `${API_BASE_URL}/${url.replace(/^\/+/, '')}`
+  }
+
+  const recordingUrl = formatMediaUrl(c.recording_url)
+  const screenRecordingUrl = formatMediaUrl(c.screen_recording_url)
+
+  const handleDownloadRecording = async () => {
+    const urlsToDownload = [];
+    if (recordingUrl) urlsToDownload.push({ url: recordingUrl, name: 'camera_recording.mp4' });
+    if (screenRecordingUrl) urlsToDownload.push({ url: screenRecordingUrl, name: 'screen_recording.mp4' });
+
+    if (urlsToDownload.length === 0) return;
+
+    for (const { url, name } of urlsToDownload) {
+      try {
+        const response = await fetch(url);
+        const blob = await response.blob();
+        const blobUrl = window.URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = blobUrl;
+        a.download = `${c.candidate_name?.replace(/\s+/g, '_') || 'Candidate'}_${name}`;
+        document.body.appendChild(a);
+        a.click();
+        a.remove();
+        window.URL.revokeObjectURL(blobUrl);
+      } catch (error) {
+        console.error("Direct download failed, falling back to new tab:", error);
+        window.open(url, '_blank');
+      }
+    }
+  };
+
+  const handleDownloadTranscript = () => {
+    if (!c.answers || c.answers.length === 0) return;
+
+    const doc = new jsPDF();
+    
+    const margin = 15;
+    const pageHeight = doc.internal.pageSize.height;
+    const pageWidth = doc.internal.pageSize.width;
+    let y = 20;
+
+    const checkPageBreak = (neededHeight) => {
+      if (y + neededHeight > pageHeight - margin) {
+        doc.addPage();
+        y = margin + 5;
+      }
+    };
+
+    doc.setFontSize(16);
+    doc.setFont("helvetica", "bold");
+    doc.text(`Interview Transcript: ${c.candidate_name || 'Unknown Candidate'}`, margin, y);
+    y += 10;
+
+    doc.setFontSize(11);
+    doc.setFont("helvetica", "normal");
+    doc.text(`Status: ${c.status || "Completed"}`, margin, y);
+    y += 6;
+    if (c.created_at) {
+      doc.text(`Date: ${new Date(c.created_at).toLocaleString()}`, margin, y);
+      y += 6;
+    }
+    doc.text(`Total Score: ${c.score || c.avg_score || 0}/100`, margin, y);
+    y += 10;
+    
+    doc.setDrawColor(200);
+    doc.line(margin, y, pageWidth - margin, y);
+    y += 10;
+
+    c.answers.forEach((a, index) => {
+      checkPageBreak(10);
+      doc.setFont("helvetica", "bold");
+      const qText = `Q${index + 1}: ${a.question_text || 'No question recorded'}`;
+      const qLines = doc.splitTextToSize(qText, pageWidth - 2 * margin);
+      checkPageBreak(qLines.length * 5 + 5);
+      doc.text(qLines, margin, y);
+      y += qLines.length * 5 + 3;
+
+      doc.setFont("helvetica", "normal");
+      const ansLabel = "Candidate's Answer/Code:";
+      checkPageBreak(5);
+      doc.text(ansLabel, margin, y);
+      y += 5;
+
+      doc.setFont("courier", "normal");
+      const aText = a.answer_text || c.coding_round?.latest_code || 'No answer provided';
+      const aLines = doc.splitTextToSize(aText, pageWidth - 2 * margin);
+      
+      for (let i = 0; i < aLines.length; i++) {
+        checkPageBreak(5);
+        doc.text(aLines[i], margin, y);
+        y += 5;
+      }
+      y += 3;
+
+      if (a.ai_score !== null && a.ai_score !== undefined) {
+        checkPageBreak(5);
+        doc.setFont("helvetica", "bold");
+        doc.text(`AI Score: ${Number(a.ai_score).toFixed(0)}%`, margin, y);
+        y += 5;
+      }
+
+      if (a.ai_feedback) {
+        checkPageBreak(5);
+        doc.setFont("helvetica", "italic");
+        doc.text("AI Feedback:", margin, y);
+        y += 5;
+        doc.setFont("helvetica", "normal");
+        const fLines = doc.splitTextToSize(a.ai_feedback, pageWidth - 2 * margin);
+        for (let i = 0; i < fLines.length; i++) {
+          checkPageBreak(5);
+          doc.text(fLines[i], margin, y);
+          y += 5;
+        }
+      }
+      
+      y += 5;
+      checkPageBreak(5);
+      doc.setDrawColor(200);
+      doc.line(margin, y, pageWidth - margin, y);
+      y += 10;
+    });
+
+    // ── EVALUATION RESULTS ──
+    checkPageBreak(30);
+    doc.setFontSize(14);
+    doc.setFont("helvetica", "bold");
+    doc.text("Evaluation Results", margin, y);
+    y += 8;
+    
+    doc.setFontSize(11);
+    
+    checkPageBreak(10);
+    doc.setFont("helvetica", "bold");
+    doc.text("Overall AI Score: ", margin, y);
+    doc.setFont("helvetica", "normal");
+    doc.text(`${aiScore.toFixed(0)}%`, margin + doc.getTextWidth("Overall AI Score: ") + 2, y);
+    y += 8;
+
+    scoreItems.forEach(([label, score]) => {
+      checkPageBreak(10);
+      doc.setFont("helvetica", "bold");
+      doc.text(`${label}: `, margin, y);
+      doc.setFont("helvetica", "normal");
+      doc.text(`${Number(score).toFixed(0)}%`, margin + doc.getTextWidth(`${label}: `) + 2, y);
+      y += 8;
+    });
+
+    const detectedLanguageAccent = c.detected_accent || c.detected_language || "Not detected";
+    checkPageBreak(10);
+    doc.setFont("helvetica", "bold");
+    doc.text("Detected Language / Accent: ", margin, y);
+    doc.setFont("helvetica", "normal");
+    doc.text(detectedLanguageAccent, margin + doc.getTextWidth("Detected Language / Accent: ") + 2, y);
+    y += 8;
+
+    doc.save(`${c.candidate_name?.replace(/\s+/g, '_') || 'Candidate'}_transcript.pdf`);
+  };
 
   const handleDecision = async (newDecision) => {
     if (!candidate) return;
@@ -186,6 +454,8 @@ export default function CandidateDialog({ candidate, open, onOpenChange, onStatu
       Swal.fire('Success', `Candidate marked as ${newDecision.toUpperCase()}`, 'success')
       if (onStatusUpdate) onStatusUpdate(newDecision)
       onOpenChange(false)
+      const basePath = window.location.pathname.startsWith('/superadmin') ? '/superadmin' : '/admin'
+      navigate(`${basePath}/${newDecision === 'selected' ? 'qualified-candidates' : 'rejected-candidates'}`)
     } catch (err) {
       Swal.fire('Error', 'Failed to update decision', 'error')
     }
@@ -208,7 +478,7 @@ export default function CandidateDialog({ candidate, open, onOpenChange, onStatu
   }
 
   const handleSchedule = () => {
-    setIsScheduleModalOpen(true);
+    setShowScheduleModal(true)
   }
 
   const handleOffer = () => {
@@ -228,459 +498,594 @@ export default function CandidateDialog({ candidate, open, onOpenChange, onStatu
   }
 
   const handleViewProfile = () => {
-    const linkId = c.link_id || c.id || c._id;
-    onOpenChange(false);
-    navigate(`/admin/candidate/profile/${linkId}`, { state: { candidate: c } });
+    onOpenChange(false)
+    const linkId = c.link_id || candidate.link_id || c.id || candidate.id || c._id || candidate._id
+    const basePath = window.location.pathname.startsWith('/superadmin') ? '/superadmin' : '/admin'
+    navigate(`${basePath}/candidate/profile/${linkId}`)
   }
+
 
   const tabs = ["overview", "resume", "interview", "evaluation", "timeline"]
 
+  // Action handlers
+  const handleReject = async () => {
+    if (!window.confirm("Are you sure you want to reject this candidate?")) return
+    const appId = c.link_id || candidate.link_id || c.id || candidate.id || c._id || candidate._id
+    try {
+      await axios.post(`${API_BASE_URL}/admin/update-decision`, {
+        link_id: appId,
+        decision: "rejected"
+      }, { headers: { Authorization: `Bearer ${token}` } })
+      onOpenChange(false)
+
+      // Reload so the candidate is instantly removed from the current list
+      window.location.reload()
+    } catch (e) {
+      console.error("Failed to reject", e)
+    }
+  }
+
+  const handleQualify = async () => {
+    if (!window.confirm("Are you sure you want to qualify this candidate?")) return
+    const appId = c.link_id || candidate.link_id || c.id || candidate.id || c._id || candidate._id
+    try {
+      await axios.post(`${API_BASE_URL}/admin/update-decision`, {
+        link_id: appId,
+        decision: "selected"
+      }, { headers: { Authorization: `Bearer ${token}` } })
+      onOpenChange(false)
+
+      // Reload so the candidate is instantly added to the qualified list
+      window.location.reload()
+    } catch (e) {
+      console.error("Failed to qualify", e)
+    }
+  }
+
+
+
+  const handleAddNote = async () => {
+    if (!newNote.trim()) return
+    setNotesSaving(true)
+    const linkId = c.link_id || candidate.link_id || c.interview_id || candidate.interview_id || c.id || candidate.id || c._id || candidate._id
+
+    try {
+      const noteObj = {
+        text: newNote,
+        added_by: "Admin",
+        added_at: new Date().toISOString()
+      };
+
+      const updatedNotes = [...(c.notes || []), noteObj]
+
+      // Save to backend database
+      await axios.post(`${API_BASE_URL}/admin/interview/${linkId}/notes`, { notes: updatedNotes }, {
+        headers: { Authorization: `Bearer ${token}` }
+      })
+
+      setDetail(prev => ({
+        ...prev,
+        notes: updatedNotes
+      }));
+      setNewNote("");
+    } catch (e) {
+      console.error("Error adding note", e)
+      Swal.fire('Error', 'Failed to save note to database', 'error')
+    } finally {
+      setNotesSaving(false)
+    }
+  }
+
   return (
     <>
-    <div className="fixed inset-0 z-[200] flex items-center justify-center bg-slate-900/60 backdrop-blur-sm p-4" onClick={(e) => { if (e.target === e.currentTarget) onOpenChange(false) }}>
-      <div className="bg-white rounded-2xl shadow-2xl w-full max-w-5xl max-h-[90vh] flex flex-col overflow-hidden">
+      <div className="fixed inset-0 z-[200] flex items-center justify-center bg-slate-900/60 backdrop-blur-sm p-4" onClick={(e) => { if (e.target === e.currentTarget) onOpenChange(false) }}>
+        <div className="bg-white rounded-2xl shadow-2xl w-full max-w-5xl max-h-[90vh] flex flex-col overflow-hidden">
 
-        {/* ── Header ── */}
-        <div className="relative p-6 pb-4 border-b border-slate-100 bg-gradient-to-br from-indigo-50/60 to-white shrink-0">
-          <button onClick={() => onOpenChange(false)} className="absolute top-4 right-4 p-2 rounded-full hover:bg-slate-100 text-slate-400 hover:text-slate-700 transition-colors">
-            <X size={20} />
-          </button>
-
-          {loading ? (
-            <div className="flex items-center gap-3 py-4">
-              <Loader2 size={28} className="animate-spin text-indigo-500" />
-              <span className="text-slate-500 font-medium">Loading candidate details…</span>
-            </div>
-          ) : (
-            <div className="flex items-start gap-4">
-              <div className="flex h-16 w-16 items-center justify-center rounded-2xl bg-indigo-600 text-white text-xl font-bold shrink-0 shadow-sm">
-                {initials}
-              </div>
-              <div className="flex-1 min-w-0">
-                <h2 className="text-2xl font-black text-slate-800 truncate">{name}</h2>
-                <p className="text-sm font-medium text-slate-500 mt-0.5">{jobTitle}</p>
-                <div className="flex flex-wrap items-center gap-2 mt-3">
-                  <span className={`inline-flex items-center gap-1 rounded-full px-2.5 py-1 text-xs font-bold ${isQualified ? 'bg-emerald-100 text-emerald-700' : 'bg-rose-100 text-rose-700'}`}>
-                    {isQualified ? 'Hire' : 'Rejected'}
-                  </span>
-                  <span className="inline-flex items-center gap-1 rounded-full border border-slate-200 bg-slate-100 px-2.5 py-1 text-xs font-semibold text-slate-700">
-                    {isQualified ? 'Qualified' : 'Rejected'}
-                  </span>
-                  <span className="text-xs font-medium text-slate-400">ID: {candidate.link_id || candidate.id}</span>
-                </div>
-              </div>
-              <div className="hidden sm:flex flex-col items-center justify-center mr-8">
-                <div className="text-[11px] font-bold text-slate-400 uppercase tracking-wider">AI Score</div>
-                <div className={`text-4xl font-black tabular-nums tracking-tighter mt-1 ${aiScore >= 75 ? 'text-emerald-600' : aiScore >= 50 ? 'text-amber-500' : 'text-rose-500'}`}>{aiScore.toFixed(0)}%</div>
-              </div>
-            </div>
-          )}
-
-          {error && (
-            <div className="mt-3 flex items-center gap-2 text-xs font-medium text-amber-600 bg-amber-50 border border-amber-100 rounded-lg px-3 py-2">
-              <AlertCircle size={14} /> {error}
-            </div>
-          )}
-        </div>
-
-        {/* ── Tabs ── */}
-        <div className="flex items-center gap-4 px-6 border-b border-slate-100 bg-white overflow-x-auto shrink-0">
-          {tabs.map(t => (
-            <button key={t} onClick={() => setActiveTab(t)} className={`capitalize whitespace-nowrap px-1 py-4 text-sm font-bold border-b-2 transition-colors ${activeTab === t ? "border-indigo-600 text-indigo-600" : "border-transparent text-slate-500 hover:text-slate-800"}`}>
-              {t}
+          {/* ── Header ── */}
+          <div className="relative p-6 pb-4 border-b border-slate-100 bg-gradient-to-br from-indigo-50/60 to-white shrink-0">
+            <button onClick={() => onOpenChange(false)} className="absolute top-4 right-4 p-2 rounded-full hover:bg-slate-100 text-slate-400 hover:text-slate-700 transition-colors">
+              <X size={20} />
             </button>
-          ))}
-        </div>
 
-        {/* ── Content ── */}
-        <div className="flex-1 overflow-y-auto p-6 bg-slate-50/50">
-
-          {/* ─ Overview Tab ─ */}
-          {activeTab === 'overview' && (
-            <div className="space-y-6">
-              <section className="bg-white rounded-xl border border-slate-200/60 p-5 shadow-sm">
-                <h3 className="text-sm font-black text-slate-800 mb-4">Candidate Information</h3>
-                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-x-6 gap-y-5">
-                  <InfoRow icon={Mail} label="Email" value={email} />
-                  <InfoRow icon={Phone} label="Mobile" value={phone} />
-                  <InfoRow icon={Clock} label="Experience" value={c.experience} />
-                  <InfoRow icon={Building2} label="Current Company" value={c.current_company} />
-                  <InfoRow icon={IndianRupee} label="Current CTC" value={c.current_ctc} />
-                  <InfoRow icon={IndianRupee} label="Expected CTC" value={c.expected_ctc} />
-                  <InfoRow icon={Clock} label="Notice Period" value={c.notice_period} />
-                  <InfoRow icon={MapPin} label="Location" value={c.location} />
+            {loading ? (
+              <div className="flex items-center gap-3 py-4">
+                <Loader2 size={28} className="animate-spin text-indigo-500" />
+                <span className="text-slate-500 font-medium">Loading candidate details…</span>
+              </div>
+            ) : (
+              <div className="flex items-start gap-4">
+                <div className="flex h-16 w-16 items-center justify-center rounded-2xl bg-indigo-600 text-white text-xl font-bold shrink-0 shadow-sm">
+                  {initials}
                 </div>
-              </section>
-
-              <section className="bg-white rounded-xl border border-slate-200/60 p-5 shadow-sm">
-                <h3 className="text-sm font-black text-slate-800 mb-3 flex items-center gap-2">
-                  <Sparkles className="h-4 w-4 text-indigo-600" /> AI Recommendation
-                </h3>
-                <div className="rounded-xl border border-slate-100 bg-gradient-to-br from-indigo-50/40 to-white p-4">
-                  <div className="flex items-center gap-2 mb-3">
+                <div className="flex-1 min-w-0">
+                  <h2 className="text-2xl font-black text-slate-800 truncate">{name}</h2>
+                  <p className="text-sm font-medium text-slate-500 mt-0.5">{jobTitle}</p>
+                  <div className="flex flex-wrap items-center gap-2 mt-3">
                     <span className={`inline-flex items-center gap-1 rounded-full px-2.5 py-1 text-xs font-bold ${isQualified ? 'bg-emerald-100 text-emerald-700' : 'bg-rose-100 text-rose-700'}`}>
-                      {c.overall_recommendation || (isQualified ? 'Hire' : 'Reject')}
+                      {isQualified ? 'Hire' : 'Rejected'}
                     </span>
-                    <span className="text-sm font-medium text-slate-500">
-                      {isQualified ? 'Ready for Technical Round / Hiring' : 'Does not meet required threshold'}
+                    <span className="inline-flex items-center gap-1 rounded-full border border-slate-200 bg-slate-100 px-2.5 py-1 text-xs font-semibold text-slate-700">
+                      {isQualified ? 'Qualified' : 'Rejected'}
                     </span>
+                    <span className="text-xs font-medium text-slate-400">ID: {candidate.link_id || candidate.id}</span>
+                    {c.started_at && (
+                      <span className="flex items-center gap-1 text-xs font-medium text-slate-500 bg-slate-100/50 px-2.5 py-1 rounded-md border border-slate-200/50">
+                        <Calendar size={13} className="text-slate-400" /> Attended: {new Date(c.started_at).toLocaleString('en-US', { month: 'short', day: 'numeric', year: 'numeric', hour: 'numeric', minute: '2-digit', hour12: true })}
+                      </span>
+                    )}
                   </div>
-                  {c.strengths_summary && (
-                    <div className="mb-3">
-                      <div className="text-xs font-bold text-slate-500 uppercase tracking-wider mb-2">Strengths</div>
-                      <p className="text-sm font-medium text-slate-700 bg-emerald-50/60 rounded-lg p-3 border border-emerald-100">{c.strengths_summary}</p>
-                    </div>
-                  )}
-                  {c.weaknesses_summary && (
-                    <div>
-                      <div className="text-xs font-bold text-slate-500 uppercase tracking-wider mb-2">Areas to Improve</div>
-                      <p className="text-sm font-medium text-slate-700 bg-rose-50/60 rounded-lg p-3 border border-rose-100">{c.weaknesses_summary}</p>
-                    </div>
-                  )}
-                  {!c.strengths_summary && !c.weaknesses_summary && (
-                    <p className="text-sm text-slate-500">No AI summary available for this candidate yet.</p>
-                  )}
                 </div>
-              </section>
+                <div className="hidden sm:flex flex-col items-center justify-center mr-8">
+                  <div className="text-[11px] font-bold text-slate-400 uppercase tracking-wider">AI Score</div>
+                  <div className={`text-4xl font-black tabular-nums tracking-tighter mt-1 ${aiScore >= 75 ? 'text-emerald-600' : aiScore >= 50 ? 'text-amber-500' : 'text-rose-500'}`}>{aiScore.toFixed(0)}%</div>
+                </div>
+              </div>
+            )}
 
-              {/* Integrity */}
-              {c.integrity && (
+            {error && (
+              <div className="mt-3 flex items-center gap-2 text-xs font-medium text-amber-600 bg-amber-50 border border-amber-100 rounded-lg px-3 py-2">
+                <AlertCircle size={14} /> {error}
+              </div>
+            )}
+          </div>
+
+          {/* ── Tabs ── */}
+          <div className="flex items-center gap-4 px-6 border-b border-slate-100 bg-white overflow-x-auto shrink-0">
+            {tabs.map(t => (
+              <button key={t} onClick={() => setActiveTab(t)} className={`capitalize whitespace-nowrap px-1 py-4 text-sm font-bold border-b-2 transition-colors ${activeTab === t ? "border-indigo-600 text-indigo-600" : "border-transparent text-slate-500 hover:text-slate-800"}`}>
+                {t}
+              </button>
+            ))}
+          </div>
+
+          {/* ── Content ── */}
+          <div className="flex-1 overflow-y-auto p-6 bg-slate-50/50">
+
+            {/* ─ Overview Tab ─ */}
+            {activeTab === 'overview' && (
+              <div className="space-y-6">
                 <section className="bg-white rounded-xl border border-slate-200/60 p-5 shadow-sm">
-                  <h3 className="text-sm font-black text-slate-800 mb-4 flex items-center gap-2">
-                    <ShieldAlert className="h-4 w-4 text-amber-500" /> Interview Integrity
-                  </h3>
-                  <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-                    <StatCard label="Tab Switches" value={c.integrity.total_tab_switches} />
-                    <StatCard label="Face Alerts" value={c.integrity.total_face_alerts} />
-                    <StatCard label="Noise Alerts" value={c.integrity.total_noise_alerts} />
-                    <StatCard label="Total Duration" value={`${c.integrity.total_time_minutes} min`} />
+                  <h3 className="text-sm font-black text-slate-800 mb-4">Candidate Information</h3>
+                  <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-x-6 gap-y-5">
+                    <InfoRow icon={Mail} label="Email" value={email} />
+                    <InfoRow icon={Phone} label="Mobile" value={phone} />
+                    <InfoRow icon={Clock} label="Experience" value={c.experience} />
+                    <InfoRow icon={Building2} label="Current Company" value={c.current_company} />
+                    <InfoRow icon={IndianRupee} label="Current CTC" value={c.current_ctc} />
+                    <InfoRow icon={IndianRupee} label="Expected CTC" value={c.expected_ctc} />
+                    <InfoRow icon={Clock} label="Notice Period" value={c.notice_period} />
+                    <InfoRow icon={MapPin} label="Location" value={c.location} />
                   </div>
                 </section>
-              )}
-            </div>
-          )}
 
-          {/* ─ Resume Tab ─ */}
-          {activeTab === 'resume' && (
-            <div className="space-y-6">
-              {/* Resume Button */}
-              {resumeText && (
+                <section className="bg-white rounded-xl border border-slate-200/60 p-5 shadow-sm">
+                  <h3 className="text-sm font-black text-slate-800 mb-3 flex items-center gap-2">
+                    <Sparkles className="h-4 w-4 text-indigo-600" /> AI Recommendation
+                  </h3>
+                  <div className="rounded-xl border border-slate-100 bg-gradient-to-br from-indigo-50/40 to-white p-4">
+                    <div className="flex items-center gap-2 mb-3">
+                      <span className={`inline-flex items-center gap-1 rounded-full px-2.5 py-1 text-xs font-bold ${isQualified ? 'bg-emerald-100 text-emerald-700' : 'bg-rose-100 text-rose-700'}`}>
+                        {c.overall_recommendation || (isQualified ? 'Hire' : 'Reject')}
+                      </span>
+                      <span className="text-sm font-medium text-slate-500">
+                        {isQualified ? 'Ready for Technical Round / Hiring' : 'Does not meet required threshold'}
+                      </span>
+                    </div>
+                    {c.strengths_summary && (
+                      <div className="mb-3">
+                        <div className="text-xs font-bold text-slate-500 uppercase tracking-wider mb-2">Strengths</div>
+                        <p className="text-sm font-medium text-slate-700 bg-emerald-50/60 rounded-lg p-3 border border-emerald-100">{c.strengths_summary}</p>
+                      </div>
+                    )}
+                    {c.weaknesses_summary && (
+                      <div>
+                        <div className="text-xs font-bold text-slate-500 uppercase tracking-wider mb-2">Areas to Improve</div>
+                        <p className="text-sm font-medium text-slate-700 bg-rose-50/60 rounded-lg p-3 border border-rose-100">{c.weaknesses_summary}</p>
+                      </div>
+                    )}
+                    {!c.strengths_summary && !c.weaknesses_summary && (
+                      <p className="text-sm text-slate-500">No AI summary available for this candidate yet.</p>
+                    )}
+                  </div>
+                </section>
+
+                {/* Integrity */}
+                {c.integrity && (
+                  <section className="bg-white rounded-xl border border-slate-200/60 p-5 shadow-sm">
+                    <h3 className="text-sm font-black text-slate-800 mb-4 flex items-center gap-2">
+                      <ShieldAlert className="h-4 w-4 text-amber-500" /> Interview Integrity
+                    </h3>
+                    <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+                      <StatCard label="Tab Switches" value={c.integrity.total_tab_switches} />
+                      <StatCard label="Face Alerts" value={c.integrity.total_face_alerts} />
+                      <StatCard label="Noise Alerts" value={c.integrity.total_noise_alerts} />
+                      <StatCard label="Total Duration" value={`${c.integrity.total_time_minutes} min`} />
+                    </div>
+                  </section>
+                )}
+              </div>
+            )}
+
+            {/* ─ Resume Tab ─ */}
+            {activeTab === 'resume' && (
+              <div className="space-y-6">
+                {/* Resume Button */}
+                {resumeText && (
+                  <section className="bg-white rounded-xl border border-slate-200/60 p-5 shadow-sm">
+                    <div className="flex items-center justify-between">
+                      <div>
+                        <h3 className="text-sm font-black text-slate-800">Resume / Profile Text</h3>
+                        <p className="text-xs text-slate-400 font-medium mt-0.5">Candidate's submitted resume</p>
+                      </div>
+                      <button
+                        onClick={() => setShowResumeModal(true)}
+                        className="flex items-center gap-2 px-4 py-2 text-sm font-bold text-indigo-600 bg-indigo-50 border border-indigo-100 rounded-xl hover:bg-indigo-100 transition-colors shadow-sm"
+                      >
+                        <FileText size={16} /> Resume <ChevronRight size={14} />
+                      </button>
+                    </div>
+                  </section>
+                )}
+
+                {/* ATS Score */}
+                <section className="bg-white rounded-xl border border-slate-200/60 p-5 shadow-sm">
+                  <div className="flex items-center justify-between mb-3">
+                    <h3 className="text-sm font-black text-slate-800">ATS Resume Match Score</h3>
+                    {atsLoading ? (
+                      <div className="flex items-center gap-1.5 text-xs text-indigo-600 font-medium">
+                        <Loader2 size={14} className="animate-spin" /> Analyzing…
+                      </div>
+                    ) : atsData ? (
+                      <span className="text-lg font-black text-indigo-600">{atsData.score}%</span>
+                    ) : null}
+                  </div>
+
+                  {atsData ? (
+                    <>
+                      <div className="h-2.5 w-full bg-slate-100 rounded-full overflow-hidden mb-4">
+                        <div className="h-full bg-indigo-600 rounded-full transition-all duration-700" style={{ width: `${atsData.score}%` }} />
+                      </div>
+                      {atsData.summary && (
+                        <p className="text-xs text-slate-500 bg-slate-50 rounded-lg p-3 border mb-4">{atsData.summary}</p>
+                      )}
+                      <div className="grid md:grid-cols-2 gap-5">
+                        <div>
+                          <h4 className="text-xs font-black text-slate-700 uppercase tracking-wider mb-3 flex items-center gap-1.5">
+                            <Check size={14} className="text-emerald-500" /> Matched Skills ({atsData.matched_skills?.length || 0})
+                          </h4>
+                          <div className="flex flex-wrap gap-2">
+                            {(atsData.matched_skills || []).map(s => (
+                              <span key={s} className="inline-flex items-center gap-1.5 rounded-lg border border-emerald-200 bg-emerald-50 px-3 py-1.5 text-xs font-bold text-emerald-700">
+                                <Check size={12} strokeWidth={3} /> {s}
+                              </span>
+                            ))}
+                            {!atsData.matched_skills?.length && <p className="text-xs text-slate-400">None found</p>}
+                          </div>
+                        </div>
+                        <div>
+                          <h4 className="text-xs font-black text-slate-700 uppercase tracking-wider mb-3 flex items-center gap-1.5">
+                            <X size={14} className="text-rose-500" /> Missing Skills ({atsData.missing_skills?.length || 0})
+                          </h4>
+                          <div className="flex flex-wrap gap-2">
+                            {(atsData.missing_skills || []).map(s => (
+                              <span key={s} className="inline-flex items-center gap-1.5 rounded-lg border border-rose-200 bg-rose-50 px-3 py-1.5 text-xs font-bold text-rose-700">
+                                <X size={12} strokeWidth={3} /> {s}
+                              </span>
+                            ))}
+                            {!atsData.missing_skills?.length && <p className="text-xs text-slate-400">None found</p>}
+                          </div>
+                        </div>
+                      </div>
+                    </>
+                  ) : !atsLoading && (
+                    <div className="text-xs text-slate-400 text-center py-4">
+                      {resumeText && !jdText
+                        ? "ATS analysis not available — job description missing."
+                        : !resumeText && jdText
+                          ? "No resume text found for this candidate. ATS analysis requires a resume."
+                          : loading
+                            ? "Loading resume data..."
+                            : "No resume or job description data found for this candidate."}
+                    </div>
+                  )}
+                </section>
+              </div>
+            )}
+
+            {/* ─ Interview Tab ─ */}
+            {activeTab === 'interview' && (
+              <div className="space-y-6">
+                <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+                  <StatCard label="Status" value={c.status || "Completed"} />
+                  <StatCard label="Duration" value={c.integrity ? `${c.integrity.total_time_minutes} min` : "N/A"} />
+                  <StatCard label="Questions Answered" value={c.answers?.length ?? "N/A"} />
+                </div>
+
+                {/* Recordings Button */}
                 <section className="bg-white rounded-xl border border-slate-200/60 p-5 shadow-sm">
                   <div className="flex items-center justify-between">
                     <div>
-                      <h3 className="text-sm font-black text-slate-800">Resume / Profile Text</h3>
-                      <p className="text-xs text-slate-400 font-medium mt-0.5">Candidate's submitted resume</p>
+                      <h3 className="text-sm font-black text-slate-800">Recordings</h3>
+                      <p className="text-xs text-slate-400 font-medium mt-0.5">
+                        {recordingUrl || screenRecordingUrl ? 'Camera & screen recording available' : 'No recordings available'}
+                      </p>
                     </div>
-                    <button
-                      onClick={() => setShowResumeModal(true)}
-                      className="flex items-center gap-2 px-4 py-2 text-sm font-bold text-indigo-600 bg-indigo-50 border border-indigo-100 rounded-xl hover:bg-indigo-100 transition-colors shadow-sm"
-                    >
-                      <FileText size={16} /> Resume <ChevronRight size={14} />
-                    </button>
+                    <div className="flex items-center gap-2">
+                      {(recordingUrl || screenRecordingUrl) && (
+                        <button
+                          onClick={handleDownloadRecording}
+                          className="flex items-center gap-2 px-4 py-2 text-sm font-bold text-slate-600 bg-slate-50 border border-slate-200 rounded-xl hover:bg-slate-100 transition-colors shadow-sm"
+                          title="Download Recording"
+                        >
+                          <Download size={16} /> Download
+                        </button>
+                      )}
+                      <button
+                        onClick={() => setShowRecordingModal(true)}
+                        className="flex items-center gap-2 px-4 py-2 text-sm font-bold text-emerald-600 bg-emerald-50 border border-emerald-100 rounded-xl hover:bg-emerald-100 transition-colors shadow-sm"
+                      >
+                        <Video size={16} /> Recording <ChevronRight size={14} />
+                      </button>
+                    </div>
                   </div>
                 </section>
-              )}
 
-              {/* ATS Score */}
-              <section className="bg-white rounded-xl border border-slate-200/60 p-5 shadow-sm">
-                <div className="flex items-center justify-between mb-3">
-                  <h3 className="text-sm font-black text-slate-800">ATS Resume Match Score</h3>
-                  {atsLoading ? (
-                    <div className="flex items-center gap-1.5 text-xs text-indigo-600 font-medium">
-                      <Loader2 size={14} className="animate-spin" /> Analyzing…
+                {/* Transcript Button */}
+                {c.answers && c.answers.length > 0 && (
+                  <section className="bg-white rounded-xl border border-slate-200/60 p-5 shadow-sm">
+                    <div className="flex items-center justify-between">
+                      <div>
+                        <h3 className="text-sm font-black text-slate-800">Interview Q&A</h3>
+                        <p className="text-xs text-slate-400 font-medium mt-0.5">{c.answers.length} questions answered</p>
+                      </div>
+                    <div className="flex items-center gap-2">
+                      <button
+                        onClick={handleDownloadTranscript}
+                        className="flex items-center gap-2 px-4 py-2 text-sm font-bold text-slate-600 bg-slate-50 border border-slate-200 rounded-xl hover:bg-slate-100 transition-colors shadow-sm"
+                        title="Download Transcript"
+                      >
+                        <Download size={16} /> Download
+                      </button>
+                      <button
+                        onClick={() => setShowTranscriptModal(true)}
+                        className="flex items-center gap-2 px-4 py-2 text-sm font-bold text-violet-600 bg-violet-50 border border-violet-100 rounded-xl hover:bg-violet-100 transition-colors shadow-sm"
+                      >
+                        <MessageSquare size={16} /> Transcript <ChevronRight size={14} />
+                      </button>
                     </div>
-                  ) : atsData ? (
-                    <span className="text-lg font-black text-indigo-600">{atsData.score}%</span>
-                  ) : null}
+                  </div>
+                </section>
+                )}
+              </div>
+            )}
+
+            {/* ─ Evaluation Tab ─ */}
+            {activeTab === 'evaluation' && (
+              <div className="space-y-10">
+                <div className="flex justify-center mt-6">
+                  <ScoreRing value={aiScore} size={160} strokeWidth={14} />
                 </div>
 
-                {atsData ? (
-                  <>
-                    <div className="h-2.5 w-full bg-slate-100 rounded-full overflow-hidden mb-4">
-                      <div className="h-full bg-indigo-600 rounded-full transition-all duration-700" style={{ width: `${atsData.score}%` }} />
-                    </div>
-                    {atsData.summary && (
-                      <p className="text-xs text-slate-500 bg-slate-50 rounded-lg p-3 border mb-4">{atsData.summary}</p>
-                    )}
-                    <div className="grid md:grid-cols-2 gap-5">
-                      <div>
-                        <h4 className="text-xs font-black text-slate-700 uppercase tracking-wider mb-3 flex items-center gap-1.5">
-                          <Check size={14} className="text-emerald-500" /> Matched Skills ({atsData.matched_skills?.length || 0})
-                        </h4>
-                        <div className="flex flex-wrap gap-2">
-                          {(atsData.matched_skills || []).map(s => (
-                            <span key={s} className="inline-flex items-center gap-1.5 rounded-lg border border-emerald-200 bg-emerald-50 px-3 py-1.5 text-xs font-bold text-emerald-700">
-                              <Check size={12} strokeWidth={3} /> {s}
-                            </span>
-                          ))}
-                          {!atsData.matched_skills?.length && <p className="text-xs text-slate-400">None found</p>}
-                        </div>
+                {scoreItems.length > 0 ? (
+                  <div className="grid grid-cols-2 md:grid-cols-3 gap-6 px-4">
+                    {scoreItems.map(([label, val]) => (
+                      <div key={label} className="bg-white rounded-2xl border border-slate-200/60 p-6 flex flex-col items-center shadow-sm">
+                        <ScoreRing value={Number(val || 0)} size={90} strokeWidth={9}
+                          tone={Number(val) >= 80 ? "success" : Number(val) >= 60 ? "" : "danger"} />
+                        <div className="text-xs font-bold text-slate-500 uppercase tracking-wider mt-6 text-center">{label}</div>
                       </div>
-                      <div>
-                        <h4 className="text-xs font-black text-slate-700 uppercase tracking-wider mb-3 flex items-center gap-1.5">
-                          <X size={14} className="text-rose-500" /> Missing Skills ({atsData.missing_skills?.length || 0})
-                        </h4>
-                        <div className="flex flex-wrap gap-2">
-                          {(atsData.missing_skills || []).map(s => (
-                            <span key={s} className="inline-flex items-center gap-1.5 rounded-lg border border-rose-200 bg-rose-50 px-3 py-1.5 text-xs font-bold text-rose-700">
-                              <X size={12} strokeWidth={3} /> {s}
-                            </span>
-                          ))}
-                          {!atsData.missing_skills?.length && <p className="text-xs text-slate-400">None found</p>}
-                        </div>
-                      </div>
-                    </div>
-                  </>
-                ) : !atsLoading && (
-                  <div className="text-xs text-slate-400 text-center py-4">
-                    {resumeText && !jdText
-                      ? "ATS analysis not available — job description missing."
-                      : !resumeText && jdText
-                      ? "No resume text found for this candidate. ATS analysis requires a resume."
-                      : loading
-                      ? "Loading resume data..."
-                      : "No resume or job description data found for this candidate."}
+                    ))}
+                  </div>
+                ) : (
+                  <div className="text-center py-10 text-slate-400 text-sm font-medium">
+                    Evaluation scores not available yet. The candidate may not have completed the interview.
                   </div>
                 )}
-              </section>
-            </div>
-          )}
 
-          {/* ─ Interview Tab ─ */}
-          {activeTab === 'interview' && (
-            <div className="space-y-6">
-              <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
-                <StatCard label="Status" value={c.status || "Completed"} />
-                <StatCard label="Duration" value={c.integrity ? `${c.integrity.total_time_minutes} min` : "N/A"} />
-                <StatCard label="Questions Answered" value={c.answers?.length ?? "N/A"} />
-              </div>
-
-              {/* Recordings Button */}
-              <section className="bg-white rounded-xl border border-slate-200/60 p-5 shadow-sm">
-                <div className="flex items-center justify-between">
-                  <div>
-                    <h3 className="text-sm font-black text-slate-800">Recordings</h3>
-                    <p className="text-xs text-slate-400 font-medium mt-0.5">
-                      {recordingUrl || screenRecordingUrl ? 'Camera & screen recording available' : 'No recordings available'}
-                    </p>
-                  </div>
-                  <button
-                    onClick={() => setShowRecordingModal(true)}
-                    className="flex items-center gap-2 px-4 py-2 text-sm font-bold text-emerald-600 bg-emerald-50 border border-emerald-100 rounded-xl hover:bg-emerald-100 transition-colors shadow-sm"
-                  >
-                    <Video size={16} /> Recording <ChevronRight size={14} />
-                  </button>
-                </div>
-              </section>
-
-              {/* Transcript Button */}
-              {c.answers && c.answers.length > 0 && (
-                <section className="bg-white rounded-xl border border-slate-200/60 p-5 shadow-sm">
-                  <div className="flex items-center justify-between">
+                {c.detected_accent && (
+                  <div className="bg-white rounded-xl border border-slate-200/60 p-4 shadow-sm flex items-center gap-3">
+                    <Mic size={18} className="text-indigo-400" />
                     <div>
-                      <h3 className="text-sm font-black text-slate-800">Interview Q&A</h3>
-                      <p className="text-xs text-slate-400 font-medium mt-0.5">{c.answers.length} questions answered</p>
+                      <div className="text-[11px] font-bold text-slate-400 uppercase tracking-wider">Detected Language / Accent</div>
+                      <div className="text-sm font-bold text-slate-700">{c.detected_accent}</div>
                     </div>
-                    <button
-                      onClick={() => setShowTranscriptModal(true)}
-                      className="flex items-center gap-2 px-4 py-2 text-sm font-bold text-violet-600 bg-violet-50 border border-violet-100 rounded-xl hover:bg-violet-100 transition-colors shadow-sm"
-                    >
-                      <MessageSquare size={16} /> Transcript <ChevronRight size={14} />
-                    </button>
                   </div>
-                </section>
-              )}
-            </div>
-          )}
-
-          {/* ─ Evaluation Tab ─ */}
-          {activeTab === 'evaluation' && (
-            <div className="space-y-10">
-              <div className="flex justify-center mt-6">
-                <ScoreRing value={aiScore} size={160} strokeWidth={14} />
+                )}
               </div>
+            )}
 
-              {scoreItems.length > 0 ? (
-                <div className="grid grid-cols-2 md:grid-cols-3 gap-6 px-4">
-                  {scoreItems.map(([label, val]) => (
-                    <div key={label} className="bg-white rounded-2xl border border-slate-200/60 p-6 flex flex-col items-center shadow-sm">
-                      <ScoreRing value={Number(val || 0)} size={90} strokeWidth={9}
-                        tone={Number(val) >= 80 ? "success" : Number(val) >= 60 ? "" : "danger"} />
-                      <div className="text-xs font-bold text-slate-500 uppercase tracking-wider mt-6 text-center">{label}</div>
+            {/* ─ Timeline Tab ─ */}
+            {activeTab === 'timeline' && (
+              <div className="max-w-2xl mx-auto py-6">
+                <div className="relative border-l-2 border-slate-200 ml-4 space-y-8">
+                  {timeline.map((step, i) => (
+                    <div key={step.label} className="relative pl-8">
+                      <span className={`absolute -left-[11px] top-0.5 flex h-5 w-5 items-center justify-center rounded-full ring-4 ring-slate-50 shadow-sm ${step.done ? (step.bad ? "bg-rose-500 text-white" : "bg-indigo-600 text-white") : "bg-white border-2 border-slate-300"}`}>
+                        {step.done && <Check size={12} strokeWidth={4} />}
+                      </span>
+                      <div className="flex items-center gap-3">
+                        <h4 className={`text-sm font-black ${step.done ? (step.bad ? "text-rose-700" : "text-slate-800") : "text-slate-400"}`}>
+                          {step.label}
+                        </h4>
+                        {i === timeline.findIndex(t => !t.done) && (
+                          <span className="px-2 py-0.5 rounded text-[10px] font-bold bg-indigo-100 text-indigo-700 uppercase tracking-wider">Next up</span>
+                        )}
+                      </div>
+                      {step.done && <p className="text-xs font-medium text-slate-500 mt-1">Completed.</p>}
                     </div>
                   ))}
                 </div>
-              ) : (
-                <div className="text-center py-10 text-slate-400 text-sm font-medium">
-                  Evaluation scores not available yet. The candidate may not have completed the interview.
-                </div>
-              )}
+              </div>
+            )}
+          </div>
 
-              {c.detected_accent && (
-                <div className="bg-white rounded-xl border border-slate-200/60 p-4 shadow-sm flex items-center gap-3">
-                  <Mic size={18} className="text-indigo-400" />
-                  <div>
-                    <div className="text-[11px] font-bold text-slate-400 uppercase tracking-wider">Detected Language / Accent</div>
-                    <div className="text-sm font-bold text-slate-700">{c.detected_accent}</div>
-                  </div>
-                </div>
-              )}
-            </div>
-          )}
-
-          {/* ─ Timeline Tab ─ */}
-          {activeTab === 'timeline' && (
-            <div className="max-w-2xl mx-auto py-6">
-              <div className="relative border-l-2 border-slate-200 ml-4 space-y-8">
-                {timeline.map((step, i) => (
-                  <div key={step.label} className="relative pl-8">
-                    <span className={`absolute -left-[11px] top-0.5 flex h-5 w-5 items-center justify-center rounded-full ring-4 ring-slate-50 shadow-sm ${step.done ? (step.bad ? "bg-rose-500 text-white" : "bg-indigo-600 text-white") : "bg-white border-2 border-slate-300"}`}>
-                      {step.done && <Check size={12} strokeWidth={4} />}
-                    </span>
-                    <div className="flex items-center gap-3">
-                      <h4 className={`text-sm font-black ${step.done ? (step.bad ? "text-rose-700" : "text-slate-800") : "text-slate-400"}`}>
-                        {step.label}
-                      </h4>
-                      {i === timeline.findIndex(t => !t.done) && (
-                        <span className="px-2 py-0.5 rounded text-[10px] font-bold bg-indigo-100 text-indigo-700 uppercase tracking-wider">Next up</span>
-                      )}
+          {/* ─ Notes Side Panel ─ */}
+          {showNotes && (
+            <div className="absolute top-[88px] right-0 bottom-[73px] w-80 bg-white border-l border-slate-200 shadow-xl flex flex-col z-10 animate-in slide-in-from-right-8 duration-200">
+              <div className="p-4 border-b border-slate-100 flex justify-between items-center bg-slate-50/50">
+                <h3 className="font-bold text-slate-800">Candidate Notes</h3>
+                <button onClick={() => setShowNotes(false)} className="text-slate-400 hover:text-slate-700"><X size={16} /></button>
+              </div>
+              <div className="flex-1 overflow-y-auto p-4 space-y-4">
+                {(c.notes || []).length === 0 ? (
+                  <p className="text-xs text-slate-400 text-center py-4">No notes added yet.</p>
+                ) : (
+                  (c.notes || []).map((n, i) => (
+                    <div key={i} className="bg-slate-50 rounded-lg p-3 border border-slate-100">
+                      <p className="text-sm text-slate-700 whitespace-pre-wrap">{n.text}</p>
+                      <div className="flex justify-between items-center mt-2 text-[10px] text-slate-400 font-medium">
+                        <span>{n.added_by}</span>
+                        <span>{new Date(n.added_at).toLocaleDateString()}</span>
+                      </div>
                     </div>
-                    {step.done && <p className="text-xs font-medium text-slate-500 mt-1">Completed.</p>}
-                  </div>
-                ))}
+                  ))
+                )}
+              </div>
+              <div className="p-4 border-t border-slate-100 bg-slate-50/50">
+                <textarea
+                  value={newNote}
+                  onChange={e => setNewNote(e.target.value)}
+                  placeholder="Type a note..."
+                  className="w-full text-sm rounded-xl border-slate-200 resize-none focus:ring-indigo-500 focus:border-indigo-500 mb-2 p-3 text-slate-800"
+                  rows={3}
+                />
+                <button
+                  onClick={handleAddNote}
+                  disabled={notesSaving || !newNote.trim()}
+                  className="w-full flex items-center justify-center gap-2 py-2 bg-indigo-600 hover:bg-indigo-700 disabled:opacity-50 text-white rounded-lg text-sm font-bold transition-colors"
+                >
+                  {notesSaving ? <Loader2 size={16} className="animate-spin" /> : <Send size={16} />} Save Note
+                </button>
               </div>
             </div>
           )}
-        </div>
 
-        {/* ── Footer Actions ── */}
-        <div className="border-t border-slate-200/80 p-4 bg-white flex flex-wrap items-center justify-end gap-3 shrink-0">
-          <button onClick={handleNotes} className="flex items-center gap-2 px-4 py-2 text-sm font-bold text-slate-600 bg-white border border-slate-200 rounded-xl hover:bg-slate-50 transition-colors shadow-sm">
-            <MessageSquare size={16} /> Add Notes
-          </button>
-          <button onClick={handleViewProfile} className="flex items-center gap-2 px-4 py-2 text-sm font-bold text-slate-600 bg-white border border-slate-200 rounded-xl hover:bg-slate-50 transition-colors shadow-sm">
-            <Eye size={16} /> View Profile
-          </button>
-          <div className="w-px h-6 bg-slate-200 mx-1" />
-          {!isQualified && (
-            <>
+          {/* ── Footer Actions ── */}
+          <div className="border-t border-slate-200/80 p-4 bg-white flex flex-wrap items-center justify-end gap-3 shrink-0">
+            <button onClick={() => setShowNotes(!showNotes)} className={`flex items-center gap-2 px-4 py-2 text-sm font-bold border rounded-xl transition-colors shadow-sm ${showNotes ? 'bg-indigo-50 text-indigo-700 border-indigo-200' : 'text-slate-600 bg-white border-slate-200 hover:bg-slate-50'}`}>
+              <MessageSquare size={16} /> Notes {(c.notes?.length > 0) && <span className="bg-indigo-100 text-indigo-700 px-1.5 py-0.5 rounded text-[10px] leading-none ml-1">{c.notes.length}</span>}
+            </button>
+            <button onClick={handleViewProfile} className="flex items-center gap-2 px-4 py-2 text-sm font-bold text-slate-600 bg-white border border-slate-200 rounded-xl hover:bg-slate-50 transition-colors shadow-sm">
+              <Eye size={16} /> View Profile
+            </button>
+            <div className="w-px h-6 bg-slate-200 mx-1" />
+            {c.decision !== 'rejected' && (
               <button onClick={() => handleDecision('rejected')} className="flex items-center gap-2 px-4 py-2 text-sm font-bold text-rose-600 bg-rose-50 border border-rose-100 rounded-xl hover:bg-rose-100 transition-colors shadow-sm">
                 <X size={16} strokeWidth={3} /> Reject
               </button>
-              <button onClick={() => handleDecision('pending')} className="flex items-center gap-2 px-4 py-2 text-sm font-bold text-amber-600 bg-amber-50 border border-amber-100 rounded-xl hover:bg-amber-100 transition-colors shadow-sm">
-                <Clock size={16} strokeWidth={3} /> Pending
-              </button>
+            )}
+            {c.decision !== 'selected' && c.decision !== 'hired' && (
               <button onClick={() => handleDecision('selected')} className="flex items-center gap-2 px-4 py-2 text-sm font-bold text-emerald-600 bg-emerald-50 border border-emerald-100 rounded-xl hover:bg-emerald-100 transition-colors shadow-sm">
                 <Check size={16} strokeWidth={3} /> Select
               </button>
-            </>
-          )}
-          <button onClick={handleSchedule} className="flex items-center gap-2 px-4 py-2 text-sm font-bold text-indigo-600 bg-indigo-50 border border-indigo-100 rounded-xl hover:bg-indigo-100 transition-colors shadow-sm">
-            <Calendar size={16} /> Schedule
-          </button>
-          <button onClick={handleOffer} className="flex items-center gap-2 px-5 py-2 text-sm font-bold text-white bg-indigo-600 rounded-xl hover:bg-indigo-700 transition-colors shadow-sm">
-            <Send size={16} /> Send Offer
-          </button>
-        </div>
-      </div>
-
-      <ScheduleModal 
-        isOpen={isScheduleModalOpen}
-        onClose={() => setIsScheduleModalOpen(false)}
-        candidate={c}
-      />
-    </div>
-
-    {/* ── Resume Sub-Modal ── */}
-    {showResumeModal && (
-      <div className="fixed inset-0 z-[300] flex items-center justify-center bg-slate-900/70 backdrop-blur-sm p-4" onClick={() => setShowResumeModal(false)}>
-        <div className="bg-white rounded-2xl shadow-2xl w-full max-w-2xl max-h-[80vh] flex flex-col overflow-hidden" onClick={e => e.stopPropagation()}>
-          <div className="flex items-center justify-between px-6 py-4 border-b border-slate-100 shrink-0">
-            <div className="flex items-center gap-2">
-              <div className="p-2 bg-indigo-50 text-indigo-600 rounded-lg"><FileText size={18} /></div>
-              <div>
-                <h3 className="text-sm font-black text-slate-800">Resume / Profile Text</h3>
-                <p className="text-xs text-slate-400 font-medium">{name}</p>
-              </div>
-            </div>
-            <button onClick={() => setShowResumeModal(false)} className="p-2 rounded-full hover:bg-slate-100 text-slate-400 hover:text-slate-700 transition-colors">
-              <X size={18} />
+            )}
+            <button onClick={handleSchedule} className="flex items-center gap-2 px-4 py-2 text-sm font-bold text-indigo-600 bg-indigo-50 border border-indigo-100 rounded-xl hover:bg-indigo-100 transition-colors shadow-sm">
+              <Calendar size={16} /> Schedule
+            </button>
+            <button onClick={handleOffer} className="flex items-center gap-2 px-5 py-2 text-sm font-bold text-white bg-indigo-600 rounded-xl hover:bg-indigo-700 transition-colors shadow-sm">
+              <Send size={16} /> Send Offer
             </button>
           </div>
-          <div className="flex-1 overflow-y-auto p-6">
-            <pre className="text-sm text-slate-700 bg-slate-50 rounded-xl p-5 whitespace-pre-wrap font-sans border border-slate-200 leading-relaxed">{resumeText}</pre>
-          </div>
         </div>
-      </div>
-    )}
 
-    {/* ── Recording Sub-Modal ── */}
-    {showRecordingModal && (
-      <div className="fixed inset-0 z-[300] flex items-center justify-center bg-slate-900/70 backdrop-blur-sm p-4" onClick={() => setShowRecordingModal(false)}>
-        <div className="bg-white rounded-2xl shadow-2xl w-full max-w-3xl max-h-[85vh] flex flex-col overflow-hidden" onClick={e => e.stopPropagation()}>
-          <div className="flex items-center justify-between px-6 py-4 border-b border-slate-100 shrink-0">
-            <div className="flex items-center gap-2">
-              <div className="p-2 bg-emerald-50 text-emerald-600 rounded-lg"><Video size={18} /></div>
-              <div>
-                <h3 className="text-sm font-black text-slate-800">Recordings</h3>
-                <p className="text-xs text-slate-400 font-medium">{name}</p>
+        <ScheduleModal
+          isOpen={showScheduleModal}
+          onClose={() => setShowScheduleModal(false)}
+          candidate={c}
+        />
+      </div>
+
+      {/* ── Resume Sub-Modal ── */}
+      {showResumeModal && (
+        <div className="fixed inset-0 z-[300] flex items-center justify-center bg-slate-900/70 backdrop-blur-sm p-4" onClick={() => setShowResumeModal(false)}>
+          <div className="bg-white rounded-2xl shadow-2xl w-full max-w-2xl max-h-[80vh] flex flex-col overflow-hidden" onClick={e => e.stopPropagation()}>
+            <div className="flex items-center justify-between px-6 py-4 border-b border-slate-100 shrink-0">
+              <div className="flex items-center gap-2">
+                <div className="p-2 bg-indigo-50 text-indigo-600 rounded-lg"><FileText size={18} /></div>
+                <div>
+                  <h3 className="text-sm font-black text-slate-800">Resume / Profile Text</h3>
+                  <p className="text-xs text-slate-400 font-medium">{name}</p>
+                </div>
               </div>
+              <button onClick={() => setShowResumeModal(false)} className="p-2 rounded-full hover:bg-slate-100 text-slate-400 hover:text-slate-700 transition-colors">
+                <X size={18} />
+              </button>
             </div>
-            <button onClick={() => setShowRecordingModal(false)} className="p-2 rounded-full hover:bg-slate-100 text-slate-400 hover:text-slate-700 transition-colors">
-              <X size={18} />
-            </button>
+            <div className="flex-1 overflow-y-auto p-6">
+              <pre className="text-sm text-slate-700 bg-slate-50 rounded-xl p-5 whitespace-pre-wrap font-sans border border-slate-200 leading-relaxed">{resumeText}</pre>
+            </div>
           </div>
-          <div className="flex-1 overflow-y-auto p-6">
-            <div className="grid sm:grid-cols-2 gap-5">
-              {/* Camera Recording */}
-              <div className="rounded-xl border border-slate-200 bg-slate-50 p-4">
-                <div className="flex items-center gap-2 mb-3">
-                  <div className="p-2 bg-indigo-50 text-indigo-600 rounded-lg"><Video size={18} /></div>
-                  <div>
-                    <div className="text-sm font-black text-slate-800">Camera Recording</div>
-                    <div className="text-xs text-slate-400 font-medium">Interview video feed</div>
-                  </div>
+        </div>
+      )}
+
+      {/* ── Recording Sub-Modal ── */}
+      {showRecordingModal && (
+        <div className="fixed inset-0 z-[300] flex items-center justify-center bg-slate-900/70 backdrop-blur-sm p-4" onClick={() => setShowRecordingModal(false)}>
+          <div className="bg-white rounded-2xl shadow-2xl w-full max-w-3xl max-h-[85vh] flex flex-col overflow-hidden" onClick={e => e.stopPropagation()}>
+            <div className="flex items-center justify-between px-6 py-4 border-b border-slate-100 shrink-0">
+              <div className="flex items-center gap-2">
+                <div className="p-2 bg-emerald-50 text-emerald-600 rounded-lg"><Video size={18} /></div>
+                <div>
+                  <h3 className="text-sm font-black text-slate-800">Recordings</h3>
+                  <p className="text-xs text-slate-400 font-medium">{name}</p>
                 </div>
-                {recordingUrl ? (
-                  <video controls className="w-full rounded-lg border border-slate-200 bg-black" src={recordingUrl}>
-                    Your browser does not support video.
-                  </video>
-                ) : (
-                  <div className="h-32 flex items-center justify-center rounded-lg border-2 border-dashed border-slate-200 text-xs font-medium text-slate-400">
-                    No camera recording available
-                  </div>
-                )}
               </div>
-              {/* Screen Recording */}
-              <div className="rounded-xl border border-slate-200 bg-slate-50 p-4">
-                <div className="flex items-center gap-2 mb-3">
-                  <div className="p-2 bg-emerald-50 text-emerald-600 rounded-lg"><Monitor size={18} /></div>
-                  <div>
-                    <div className="text-sm font-black text-slate-800">Screen Recording</div>
-                    <div className="text-xs text-slate-400 font-medium">Screen share capture</div>
+              <button onClick={() => setShowRecordingModal(false)} className="p-2 rounded-full hover:bg-slate-100 text-slate-400 hover:text-slate-700 transition-colors">
+                <X size={18} />
+              </button>
+            </div>
+            <div className="flex-1 overflow-y-auto p-6">
+              <div className="grid sm:grid-cols-2 gap-5">
+                {/* Camera Recording */}
+                <div className="rounded-xl border border-slate-200 bg-slate-50 p-4">
+                  <div className="flex items-center gap-2 mb-3">
+                    <div className="p-2 bg-indigo-50 text-indigo-600 rounded-lg"><Video size={18} /></div>
+                    <div>
+                      <div className="text-sm font-black text-slate-800">Camera Recording</div>
+                      <div className="text-xs text-slate-400 font-medium">Interview video feed</div>
+                    </div>
                   </div>
+                  {recordingUrl ? (
+                    <video controls className="w-full rounded-lg border border-slate-200 bg-black" src={recordingUrl}>
+                      Your browser does not support video.
+                    </video>
+                  ) : (
+                    <div className="h-32 flex items-center justify-center rounded-lg border-2 border-dashed border-slate-200 text-xs font-medium text-slate-400">
+                      No camera recording available
+                    </div>
+                  )}
                 </div>
-                {screenRecordingUrl ? (
-                  <video controls className="w-full rounded-lg border border-slate-200 bg-black" src={screenRecordingUrl}>
-                    Your browser does not support video.
-                  </video>
-                ) : (
-                  <div className="h-32 flex items-center justify-center rounded-lg border-2 border-dashed border-slate-200 text-xs font-medium text-slate-400">
-                    No screen recording available
+                {/* Screen Recording */}
+                <div className="rounded-xl border border-slate-200 bg-slate-50 p-4">
+                  <div className="flex items-center gap-2 mb-3">
+                    <div className="p-2 bg-emerald-50 text-emerald-600 rounded-lg"><Monitor size={18} /></div>
+                    <div>
+                      <div className="text-sm font-black text-slate-800">Screen Recording</div>
+                      <div className="text-xs text-slate-400 font-medium">Screen share capture</div>
+                    </div>
                   </div>
-                )}
+                  {screenRecordingUrl ? (
+                    <video controls className="w-full rounded-lg border border-slate-200 bg-black" src={screenRecordingUrl}>
+                      Your browser does not support video.
+                    </video>
+                  ) : (
+                    <div className="h-32 flex items-center justify-center rounded-lg border-2 border-dashed border-slate-200 text-xs font-medium text-slate-400">
+                      No screen recording available
+                    </div>
+                  )}
+                </div>
               </div>
             </div>
           </div>
         </div>
-      </div>
-    )}
+      )}
+
 
     {/* ── Transcript Sub-Modal ── */}
     {showTranscriptModal && (
       <div className="fixed inset-0 z-[300] flex items-center justify-center bg-slate-900/70 backdrop-blur-sm p-4" onClick={() => setShowTranscriptModal(false)}>
         <div className="bg-white rounded-2xl shadow-2xl w-full max-w-3xl max-h-[90vh] flex flex-col overflow-hidden" onClick={e => e.stopPropagation()}>
-          <div className="flex items-center justify-between px-6 py-4 border-b border-slate-100 shrink-0">
+          <div className="flex items-center justify-between px-6 py-4 shrink-0">
             <div className="flex items-center gap-2">
               <div className="p-2 bg-violet-50 text-violet-600 rounded-lg"><MessageSquare size={18} /></div>
               <div>
@@ -692,9 +1097,25 @@ export default function CandidateDialog({ candidate, open, onOpenChange, onStatu
               <X size={18} />
             </button>
           </div>
+          
+          <div className="px-6 py-2 border-b border-slate-100 bg-slate-50 flex items-center gap-2 shrink-0">
+            <button
+              onClick={() => setTranscriptTab('verbal')}
+              className={`px-4 py-2 rounded-lg text-sm font-bold transition-all ${transcriptTab === 'verbal' ? 'bg-indigo-600 text-white shadow-sm' : 'bg-transparent text-slate-500 hover:bg-slate-200'}`}
+            >
+              Verbal
+            </button>
+            <button
+              onClick={() => setTranscriptTab('coding')}
+              className={`px-4 py-2 rounded-lg text-sm font-bold transition-all ${transcriptTab === 'coding' ? 'bg-indigo-600 text-white shadow-sm' : 'bg-transparent text-slate-500 hover:bg-slate-200'}`}
+            >
+              Coding or Case Study
+            </button>
+          </div>
+
           <div className="flex-1 overflow-y-auto p-6">
             <div className="space-y-5">
-              {(c.answers || []).map((a, idx) => {
+              {(c.answers || []).filter(a => transcriptTab === 'coding' ? a.question_text?.toLowerCase().includes('coding round') || a.question_text?.toLowerCase().includes('case study') : !a.question_text?.toLowerCase().includes('coding round') && !a.question_text?.toLowerCase().includes('case study')).map((a, idx) => {
                 const score = Number(a.ai_score ?? 0)
                 const scoreBg = score >= 75 ? 'bg-emerald-100 text-emerald-700' : score >= 50 ? 'bg-amber-100 text-amber-700' : 'bg-rose-100 text-rose-700'
                 const wpm = Number(a.wpm ?? 0)
@@ -708,7 +1129,11 @@ export default function CandidateDialog({ candidate, open, onOpenChange, onStatu
                     <div className="flex items-start justify-between gap-3 p-4 bg-slate-50 border-b border-slate-100">
                       <div className="flex items-start gap-2 flex-1 min-w-0">
                         <span className="mt-0.5 shrink-0 inline-flex items-center justify-center w-6 h-6 rounded-full bg-indigo-600 text-white text-[10px] font-black">Q{idx + 1}</span>
-                        <p className="text-sm font-bold text-slate-800 leading-snug">{a.question_text || 'No question recorded'}</p>
+                        <p className="text-sm font-bold text-slate-800 leading-snug whitespace-pre-wrap">
+                          {a.question_text?.toLowerCase().includes('coding round') 
+                            ? (a.question_text || '').replace(/(Input:)/gi, '\n\n$1').replace(/(Output:)/gi, '\n$1').replace(/(Constraints:)/gi, '\n\n$1').replace(/(Example:)/gi, '\n\n$1').trim()
+                            : (a.question_text || 'No question recorded')}
+                        </p>
                       </div>
                       {a.ai_score !== null && a.ai_score !== undefined && (
                         <span className={`shrink-0 text-xs font-black px-2.5 py-1 rounded-full ${scoreBg}`}>
@@ -720,6 +1145,11 @@ export default function CandidateDialog({ candidate, open, onOpenChange, onStatu
                     <div className="p-4 space-y-4">
                       {/* Stats row: WPM + alerts */}
                       <div className="flex flex-wrap gap-2">
+                        {Number(a.time_spent_seconds || 0) > 0 && (
+                          <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-[11px] font-bold bg-slate-100 text-slate-700 border border-slate-200">
+                            <Clock size={11} /> {Math.floor(Number(a.time_spent_seconds) / 60) > 0 ? `${Math.floor(Number(a.time_spent_seconds) / 60)}m ${Number(a.time_spent_seconds) % 60}s` : `${Number(a.time_spent_seconds)}s`}
+                          </span>
+                        )}
                         {wpm > 0 && (
                           <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-[11px] font-bold bg-blue-50 text-blue-700 border border-blue-100">
                             <Mic size={11} /> {wpm.toFixed(0)} WPM
@@ -745,38 +1175,135 @@ export default function CandidateDialog({ candidate, open, onOpenChange, onStatu
                         )}
                       </div>
 
-                      {/* Candidate Answer */}
-                      <div>
-                        <div className="text-[10px] font-black text-slate-500 uppercase tracking-wider mb-1.5 flex items-center gap-1">
-                          <MessageSquare size={10} /> Candidate Answer
-                        </div>
-                        <div className="bg-slate-50 border border-slate-200 rounded-xl p-3 text-sm text-slate-700 leading-relaxed">
-                          {a.answer_text || <span className="italic text-slate-400">No answer recorded</span>}
-                        </div>
-                      </div>
+                      {a.question_text?.toLowerCase().includes('coding round') ? (
+                        <>
+                          <div className="bg-slate-900 rounded-xl overflow-hidden shadow-inner border border-slate-700 mt-2">
+                            <div className="bg-slate-800 px-4 py-2 border-b border-slate-700 flex items-center justify-between">
+                              <span className="text-xs font-black text-slate-300 tracking-wider flex items-center gap-2">
+                                <Code size={14} /> CANDIDATE CODE
+                              </span>
+                              {c.coding_round?.latest_run && (
+                                <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full ${(((c.coding_round.latest_run.visible_results || []).filter(r => r.passed).length) + (c.coding_round.latest_run.hidden_summary?.passed || 0)) === (((c.coding_round.latest_run.visible_results || []).length) + (c.coding_round.latest_run.hidden_summary?.total || 0)) && (((c.coding_round.latest_run.visible_results || []).length) + (c.coding_round.latest_run.hidden_summary?.total || 0)) > 0 ? 'bg-emerald-500/20 text-emerald-400' : 'bg-rose-500/20 text-rose-400'}`}>
+                                  Test Cases Passed: {(((c.coding_round.latest_run.visible_results || []).filter(r => r.passed).length) + (c.coding_round.latest_run.hidden_summary?.passed || 0))} / {(((c.coding_round.latest_run.visible_results || []).length) + (c.coding_round.latest_run.hidden_summary?.total || 0))}
+                                </span>
+                              )}
+                            </div>
+                            <div className="p-4 overflow-x-auto">
+                              <pre className="text-sm font-mono text-emerald-400 leading-relaxed whitespace-pre-wrap">
+                                {a.answer_text || c.coding_round?.latest_code || 'No code provided.'}
+                              </pre>
+                            </div>
 
-                      {/* Corrected Answer */}
-                      {a.corrected_answer && a.corrected_answer !== 'N/A' && a.corrected_answer !== 'Scoring in progress...' && (
-                        <div>
-                          <div className="text-[10px] font-black text-emerald-600 uppercase tracking-wider mb-1.5 flex items-center gap-1">
-                            <Check size={10} /> Corrected / Model Answer
+                            {/* Failed Test Cases / Errors / Default Test Cases */}
+                            {c.coding_round?.latest_run ? (
+                              <div className="bg-slate-900 border-t border-slate-700 p-4">
+                                {c.coding_round.latest_run.runtime_error ? (
+                                  <div className="text-rose-400 text-xs font-mono whitespace-pre-wrap bg-slate-950 p-3 rounded-lg border border-rose-900/50">
+                                    <strong className="text-rose-500 block mb-1">Runtime Error:</strong>
+                                    {c.coding_round.latest_run.runtime_error}
+                                  </div>
+                                ) : (
+                                  <div className="space-y-2">
+                                    {(c.coding_round.latest_run.visible_results || []).filter(r => !r.passed).map((r, i) => (
+                                      <div key={i} className="text-xs font-mono text-slate-300 bg-slate-950 p-3 rounded-lg border border-slate-800">
+                                        <div className="text-rose-400 font-bold mb-2 flex items-center gap-1.5"><X size={12} /> Test Case Failed</div>
+                                        <div className="grid grid-cols-[80px,1fr] gap-1 mb-1">
+                                          <span className="text-slate-500">Input:</span> 
+                                          <span className="text-slate-300">{r.input}</span>
+                                        </div>
+                                        <div className="grid grid-cols-[80px,1fr] gap-1 mb-1">
+                                          <span className="text-slate-500">Expected:</span> 
+                                          <span className="text-emerald-400">{r.expected}</span>
+                                        </div>
+                                        <div className="grid grid-cols-[80px,1fr] gap-1">
+                                          <span className="text-slate-500">Output:</span> 
+                                          <span className="text-amber-400">{r.output}</span>
+                                        </div>
+                                      </div>
+                                    ))}
+                                    {(c.coding_round.latest_run.visible_results || []).filter(r => !r.passed).length === 0 && ((c.coding_round.latest_run.hidden_summary?.total || 0) > (c.coding_round.latest_run.hidden_summary?.passed || 0)) && (
+                                      <div className="text-xs font-mono text-amber-400 bg-slate-950 p-3 rounded-lg border border-amber-900/30">
+                                        Some hidden test cases failed.
+                                      </div>
+                                    )}
+                                    {(((c.coding_round.latest_run.visible_results || []).filter(r => r.passed).length) + (c.coding_round.latest_run.hidden_summary?.passed || 0)) === (((c.coding_round.latest_run.visible_results || []).length) + (c.coding_round.latest_run.hidden_summary?.total || 0)) && (((c.coding_round.latest_run.visible_results || []).length) + (c.coding_round.latest_run.hidden_summary?.total || 0)) > 0 && (
+                                      <div className="text-xs font-mono text-emerald-400 bg-slate-950 p-3 rounded-lg border border-emerald-900/30 flex items-center gap-2">
+                                        <Check size={14} /> All test cases passed successfully!
+                                      </div>
+                                    )}
+                                  </div>
+                                )}
+                              </div>
+                            ) : c.coding_round?.task?.test_cases ? (
+                              <div className="bg-slate-900 border-t border-slate-700 p-4 space-y-2">
+                                <div className="text-xs font-black text-slate-400 uppercase tracking-wider mb-2">Visible Test Cases</div>
+                                {c.coding_round.task.test_cases.filter(t => t.visible !== false).map((t, i) => (
+                                  <div key={i} className="text-xs font-mono text-slate-300 bg-slate-950 p-3 rounded-lg border border-slate-800">
+                                    <div className="grid grid-cols-[80px,1fr] gap-1 mb-1">
+                                      <span className="text-slate-500">Input:</span> 
+                                      <span className="text-slate-300">{typeof t.input === 'string' ? t.input : JSON.stringify(t.input)}</span>
+                                    </div>
+                                    <div className="grid grid-cols-[80px,1fr] gap-1">
+                                      <span className="text-slate-500">Expected:</span> 
+                                      <span className="text-emerald-400">{typeof t.expected === 'string' ? t.expected : JSON.stringify(t.expected)}</span>
+                                    </div>
+                                  </div>
+                                ))}
+                                <div className="text-[10px] font-medium text-slate-500 italic mt-3">
+                                  * Candidate did not run these tests during the interview. No execution output is available.
+                                </div>
+                              </div>
+                            ) : null}
                           </div>
-                          <div className="bg-emerald-50 border border-emerald-100 rounded-xl p-3 text-sm text-emerald-800 leading-relaxed">
-                            {a.corrected_answer}
+                          
+                          {/* AI Feedback */}
+                          {a.ai_feedback && (
+                            <div>
+                              <div className="text-[10px] font-black text-indigo-500 uppercase tracking-wider mb-1.5 flex items-center gap-1 mt-4">
+                                <Sparkles size={10} /> AI Feedback
+                              </div>
+                              <div className="bg-indigo-50 border border-indigo-100 rounded-xl p-3 text-sm text-indigo-800 italic leading-relaxed whitespace-pre-wrap">
+                                {a.ai_feedback}
+                              </div>
+                            </div>
+                          )}
+                        </>
+                      ) : (
+                        <>
+                          {/* Candidate Answer */}
+                          <div>
+                            <div className="text-[10px] font-black text-slate-500 uppercase tracking-wider mb-1.5 flex items-center gap-1">
+                              <MessageSquare size={10} /> Candidate Answer
+                            </div>
+                            <div className="bg-slate-50 border border-slate-200 rounded-xl p-3 text-sm text-slate-700 leading-relaxed whitespace-pre-wrap">
+                              {a.answer_text || <span className="italic text-slate-400">No answer recorded</span>}
+                            </div>
                           </div>
-                        </div>
-                      )}
 
-                      {/* AI Feedback */}
-                      {a.ai_feedback && (
-                        <div>
-                          <div className="text-[10px] font-black text-indigo-500 uppercase tracking-wider mb-1.5 flex items-center gap-1">
-                            <Sparkles size={10} /> AI Feedback
-                          </div>
-                          <div className="bg-indigo-50 border border-indigo-100 rounded-xl p-3 text-sm text-indigo-800 italic leading-relaxed">
-                            {a.ai_feedback}
-                          </div>
-                        </div>
+                          {/* Corrected Answer */}
+                          {a.corrected_answer && a.corrected_answer !== 'N/A' && a.corrected_answer !== 'Scoring in progress...' && (
+                            <div>
+                              <div className="text-[10px] font-black text-emerald-600 uppercase tracking-wider mb-1.5 flex items-center gap-1">
+                                <Check size={10} /> Corrected / Model Answer
+                              </div>
+                              <div className="bg-emerald-50 border border-emerald-100 rounded-xl p-3 text-sm text-emerald-800 leading-relaxed whitespace-pre-wrap">
+                                {a.corrected_answer}
+                              </div>
+                            </div>
+                          )}
+
+                          {/* AI Feedback */}
+                          {a.ai_feedback && (
+                            <div>
+                              <div className="text-[10px] font-black text-indigo-500 uppercase tracking-wider mb-1.5 flex items-center gap-1">
+                                <Sparkles size={10} /> AI Feedback
+                              </div>
+                              <div className="bg-indigo-50 border border-indigo-100 rounded-xl p-3 text-sm text-indigo-800 italic leading-relaxed whitespace-pre-wrap">
+                                {a.ai_feedback}
+                              </div>
+                            </div>
+                          )}
+                        </>
                       )}
                     </div>
                   </div>
@@ -792,6 +1319,8 @@ export default function CandidateDialog({ candidate, open, onOpenChange, onStatu
         </div>
       </div>
     )}
+
+
   </>
   )
 }

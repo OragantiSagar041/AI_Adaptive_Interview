@@ -47,6 +47,20 @@ export const useInterviewSession = (sessionId, interviewType, startRoundTwo) => 
   const [agreeChecked, setAgreeChecked] = useState(false)
   const [autoReconnecting, setAutoReconnecting] = useState(!!_savedSession?.accepted)
 
+  // ── Phase 3: Browser online/offline detection ────────────────────────────
+  // navigator.onLine gives the initial state; events keep it up to date.
+  const [isOnline, setIsOnline] = useState(() => navigator.onLine)
+  useEffect(() => {
+    const goOnline = () => setIsOnline(true)
+    const goOffline = () => setIsOnline(false)
+    window.addEventListener('online', goOnline)
+    window.addEventListener('offline', goOffline)
+    return () => {
+      window.removeEventListener('online', goOnline)
+      window.removeEventListener('offline', goOffline)
+    }
+  }, [])
+
   // Voice Cloning intermediate state
   const [showVoiceCloneSetup, setShowVoiceCloneSetup] = useState(false)
   const [clonedVoiceId, setClonedVoiceId] = useState(null)
@@ -56,6 +70,7 @@ export const useInterviewSession = (sessionId, interviewType, startRoundTwo) => 
   const [sessionDetail, setSessionDetail] = useState(null)
   const sessionDetailRef = useRef(null)   // ref so async callbacks always read the latest value
   const [interviewId, setInterviewId] = useState('')
+  const [monitoringToken, setMonitoringToken] = useState('')
   const interviewIdRef = useRef('') // Add ref for interviewId to access in async functions
 
   useEffect(() => {
@@ -77,6 +92,7 @@ export const useInterviewSession = (sessionId, interviewType, startRoundTwo) => 
   const [noiseAlertCount, setNoiseAlertCount] = useState(0)
   const noiseAlertCountRef = useRef(0)
   const isSubmittingRef = useRef(false)
+  const isNextingRef = useRef(false)
   const [showNoiseBanner, setShowNoiseBanner] = useState(false)
   const [fullscreenWarning, setFullscreenWarning] = useState(false)
   const [screenShareWarning, setScreenShareWarning] = useState(false)
@@ -147,6 +163,9 @@ export const useInterviewSession = (sessionId, interviewType, startRoundTwo) => 
   const [codingRoundData, setCodingRoundData] = useState(null)
   const [aiInsights, setAiInsights] = useState({ clarity: 50, technicalDepth: 50, confidence: 50 })
   const [showDeviceCheck, setShowDeviceCheck] = useState(false)
+  const [isSaving, setIsSaving] = useState(false)
+  const prefetchedQuestionsRef = useRef([])  // background-fetched next batch
+  const isPrefetchingRef = useRef(false)     // prevent duplicate fetches
 
   // Fetch AI Insights dynamically
   useEffect(() => {
@@ -259,17 +278,6 @@ export const useInterviewSession = (sessionId, interviewType, startRoundTwo) => 
   // Capped at 20 entries (FIFO) to prevent unbounded memory growth.
   const ttsCacheRef = useRef(new Map())
   const TTS_CACHE_MAX = 20
-
-  // WebRTC Candidate Logic
-  const telemetryData = {
-    round_type: isRoundTwo ? 'coding' : 'verbal',
-    current_question: currentQuestionIndex + 1,
-    total_questions: questions.length,
-    question_text: questions[currentQuestionIndex]?.text || '',
-    audio_level: 50,
-    proctoring_alerts: screenShareViolations + noiseAlertCount + behavioralStatsRef.current.faceAlerts + behavioralStatsRef.current.tabSwitches
-  }
-  useCandidateWebRTC(sessionId, mediaStreamRef, telemetryData)
 
   const normalizeQuestions = (rawQuestions = []) => {
     return rawQuestions.map((question, index) => ({
@@ -438,7 +446,16 @@ export const useInterviewSession = (sessionId, interviewType, startRoundTwo) => 
 
   // Track unload events (Refresh or Close tab)
   useEffect(() => {
-    const handleUnload = () => {
+    const handleUnload = (e) => {
+      const isUploading = uploadingText && uploadPercentage < 100;
+      const isActiveSession = sessionId && isDisclaimerAccepted && !isCompleted;
+      
+      // Prevent exiting during active interview or during video upload
+      if (isActiveSession || isUploading) {
+        e.preventDefault();
+        e.returnValue = '';
+      }
+
       if (sessionId && isDisclaimerAccepted) {
         navigator.sendBeacon(`${api.defaults.baseURL || ''}/interview/${sessionId}/alert`, JSON.stringify({
           type: "warning",
@@ -448,7 +465,7 @@ export const useInterviewSession = (sessionId, interviewType, startRoundTwo) => 
     }
     window.addEventListener("beforeunload", handleUnload)
     return () => window.removeEventListener("beforeunload", handleUnload)
-  }, [sessionId, isDisclaimerAccepted])
+  }, [sessionId, isDisclaimerAccepted, isCompleted, uploadingText, uploadPercentage])
 
   // Persist current question index
   useEffect(() => {
@@ -613,6 +630,19 @@ export const useInterviewSession = (sessionId, interviewType, startRoundTwo) => 
     return () => clearInterval(interval)
   }, [isDisclaimerAccepted, showAllSet, globalCountdown, questions.length])
 
+  // Tab close protection while saving/uploading
+  useEffect(() => {
+    if (!isSaving) return
+    const handleBeforeUnload = (e) => {
+      const msg = 'Your interview is still being saved. Please wait before closing this tab.'
+      e.preventDefault()
+      e.returnValue = msg
+      return msg
+    }
+    window.addEventListener('beforeunload', handleBeforeUnload)
+    return () => window.removeEventListener('beforeunload', handleBeforeUnload)
+  }, [isSaving])
+
   const handleSkipUpload = () => {
     setShowSkipButton(false)
     setShowAllSet(true)
@@ -626,6 +656,50 @@ export const useInterviewSession = (sessionId, interviewType, startRoundTwo) => 
     }
 
     async function verifySession() {
+      // ── Drain any pending completion that failed on a previous load ──────
+      // If /complete-session failed (network drop, server crash) on the last
+      // visit, we stored a retry key. Attempt the call now, silently.
+      try {
+        const pendingKey = `complete_session_pending_${sessionId}`
+        if (localStorage.getItem(pendingKey) === '1') {
+          api.post(`/complete-session/${sessionId}`)
+            .then(() => localStorage.removeItem(pendingKey))
+            .catch(() => {})
+        }
+      } catch (e) {}
+
+      // ── Drain any failed answers from a previous forceClose ──────
+      try {
+        const keys = Object.keys(localStorage)
+        for (const key of keys) {
+          if (key.startsWith(`failed_answer_${sessionId}_`)) {
+            const answerData = JSON.parse(localStorage.getItem(key))
+            const answerForm = new FormData()
+            answerForm.append('interview_id', answerData.interview_id || sessionId)
+            answerForm.append('question_id', answerData.question_id)
+            answerForm.append('question_text', answerData.question_text || '')
+            answerForm.append('answer_text', answerData.answer_text || ' ')
+            answerForm.append('candidate_name', 'Candidate')
+            answerForm.append('time_spent_seconds', answerData.time_spent_seconds || '0')
+            answerForm.append('time_limit_seconds', '120')
+
+            api.post(`/save-answer`, answerForm, {
+              headers: { 'Content-Type': 'multipart/form-data' }
+            }).then(() => localStorage.removeItem(key)).catch(() => {})
+          }
+        }
+      } catch (e) {}
+
+      // Fast-path: if this browser already completed this session, show the
+      // completed screen immediately without waiting for the API round-trip.
+      try {
+        if (localStorage.getItem(`interview_done_${sessionId}`) === '1') {
+          setIsCompleted(true)
+          setLoading(false)
+          return
+        }
+      } catch (e) {}
+
       try {
         const payload = await api.get(`/session/${sessionId}`).then(r => r.data)
         if (payload.status !== 'success') {
@@ -690,6 +764,7 @@ export const useInterviewSession = (sessionId, interviewType, startRoundTwo) => 
         }
         setQuestions(qList)
         setInterviewId(startPayload.interview_id || '')
+        setMonitoringToken(startPayload.monitoring_token || '')
         // Snapshot candidate details into refs NOW (synchronously) so that the
         // async Whisper MediaRecorder onstop callback always has correct values.
         // Using refs avoids the race condition where sessionDetail state hasn't
@@ -718,17 +793,22 @@ export const useInterviewSession = (sessionId, interviewType, startRoundTwo) => 
           const fullDuration = dur * 60
           setTotalDuration(fullDuration)
 
+          // Normal interviews are single-round: use full duration.
+          // Technical/Non-Technical interviews split into 2 rounds: use half.
+          const interviewType = startPayload.interview_type || ''
+          const isSingleRound = interviewType === 'Normal'
+
           if (_savedSession?.startedAt && _savedSession?.accepted) {
             const elapsedSeconds = Math.floor((Date.now() - _savedSession.startedAt) / 1000)
-            const halfDur = fullDuration / 2
-            const remaining = Math.max(0, halfDur - elapsedSeconds)
+            const roundDur = isSingleRound ? fullDuration : fullDuration / 2
+            const remaining = Math.max(0, roundDur - elapsedSeconds)
             setGlobalCountdown(remaining)
             if (_savedSession.isRoundTwo) {
               setIsRoundTwo(true)
               isRoundTwoRef.current = true
             }
           } else {
-            setGlobalCountdown((dur / 2) * 60)
+            setGlobalCountdown(isSingleRound ? fullDuration : (dur / 2) * 60)
           }
         } else {
           setTotalDuration(30 * 60)
@@ -840,6 +920,7 @@ export const useInterviewSession = (sessionId, interviewType, startRoundTwo) => 
     const rec = new SpeechRecognition()
     rec.continuous = true  // Keep listening continuously without restarting
     rec.interimResults = true
+    rec.maxAlternatives = 3  // Consider top 3 alternatives for better accuracy
     const targetLang = langMap[sessionDetail?.language] || 'en-IN'
     rec.lang = targetLang
 
@@ -925,13 +1006,24 @@ export const useInterviewSession = (sessionId, interviewType, startRoundTwo) => 
 
     rec.onstart = () => {
       isSpeechRecordingRef.current = true
-      ensureWhisperRunning()
+      // Note: Whisper path is disabled — Web Speech API is used as the sole
+      // transcript source for all languages. It is real-time, accurate, and
+      // avoids Whisper hallucination + latency issues.
     }
 
     rec.onend = () => {
-      // With continuous=true this fires only on error/abort, restart it
+      // With continuous=true this fires only on error/abort — restart with a small delay
+      // to avoid rapid restart storms and InvalidStateError exceptions in Chrome.
       if (isSpeechRecordingRef.current) {
-        try { rec.start() } catch (e) { }
+        setTimeout(() => {
+          if (!isSpeechRecordingRef.current) return
+          try {
+            rec.start()
+          } catch (e) {
+            // InvalidStateError or similar — start a fresh recognition instance
+            if (isSpeechRecordingRef.current) initSpeechRecognition()
+          }
+        }, 150)
       }
     }
 
@@ -939,26 +1031,32 @@ export const useInterviewSession = (sessionId, interviewType, startRoundTwo) => 
       let interimText = ''
       let finalText = ''
       for (let i = event.resultIndex; i < event.results.length; i++) {
-        const t = event.results[i][0].transcript
         if (event.results[i].isFinal) {
-          finalText += t + ' '
+          // Pick the highest-confidence alternative for best accuracy
+          let bestTranscript = event.results[i][0].transcript
+          let bestConfidence = event.results[i][0].confidence || 0
+          for (let j = 1; j < event.results[i].length; j++) {
+            const alt = event.results[i][j]
+            if ((alt.confidence || 0) > bestConfidence) {
+              bestConfidence = alt.confidence
+              bestTranscript = alt.transcript
+            }
+          }
+          finalText += bestTranscript + ' '
         } else {
-          interimText += t
+          interimText += event.results[i][0].transcript
         }
       }
       // Show interim text in real time (visible while speaking)
       setInterimTranscriptText(interimText)
       if (finalText) {
         setInterimTranscriptText('')
-        // For non-English languages, the browser Web Speech API (Google) is
-        // far more accurate than Whisper for regional Indian languages like
-        // Telugu, Hindi, Tamil, etc. Use it as the primary transcript source.
-        // Whisper is still used for English where it excels.
-        const lang = interviewLanguageRef.current || 'English'
-        if (lang !== 'English') {
-          setTranscriptionText(prev => prev + finalText)
-        }
-        // For English, Whisper handles it via the VAD MediaRecorder path below.
+        // Use Web Speech API final results for ALL languages (English + regional).
+        // The browser's Google speech engine is real-time, zero-latency, and highly
+        // accurate — far superior to Whisper for live transcription. Whisper's
+        // batch approach (fires after 2.5s silence) caused mismatches, duplications,
+        // and hallucinations that made transcription appear inaccurate.
+        setTranscriptionText(prev => prev + finalText)
       }
     }
 
@@ -967,10 +1065,19 @@ export const useInterviewSession = (sessionId, interviewType, startRoundTwo) => 
         console.error("Microphone permission denied:", e.error)
         return
       }
-      // For no-speech or other transient errors, just restart
-      if (isSpeechRecordingRef.current) {
-        setTimeout(() => { try { rec.start() } catch (err) { } }, 300)
+      if (e.error === 'no-speech') {
+        // Not a failure — browser detected silence. Do NOT immediately restart;
+        // the onend handler will fire and handle the restart with a delay.
+        return
       }
+      if (e.error === 'network') {
+        // Network blip — restart after a longer pause
+        if (isSpeechRecordingRef.current) {
+          setTimeout(() => { if (isSpeechRecordingRef.current) initSpeechRecognition() }, 1000)
+        }
+        return
+      }
+      // Other transient errors — restart via onend (which fires after onerror)
     }
 
     recognitionRef.current = rec
@@ -1019,23 +1126,10 @@ export const useInterviewSession = (sessionId, interviewType, startRoundTwo) => 
           lastSpeechTimeRef.current = now
         }
 
-        // True Voice Activity Detection (VAD) for Whisper
-        const mr = whisperMediaRecorderRef.current
-        if (mr && isSpeechRecordingRef.current) {
-          if (rms > 0.03) {
-            // Speech detected: ensure recorder is capturing
-            if (mr.state === 'inactive') {
-              try { mr.start() } catch (e) { }
-            }
-          } else {
-            // Silence detected: if silent for > 2.5s, stop and flush to backend.
-            // 2.5s gives Whisper a longer, more meaningful chunk which dramatically
-            // reduces hallucination compared to short 1-2 second fragments.
-            if (mr.state === 'recording' && (now - lastSpeechTimeRef.current > 2500)) {
-              try { mr.stop() } catch (e) { }
-            }
-          }
-        }
+        // VAD (Voice Activity Detection) — used only for proctoring noise alerts.
+        // Whisper MediaRecorder path is disabled: Web Speech API is now the sole
+        // transcript source. This eliminates the hallucination and latency issues
+        // that made transcription appear inaccurate.
 
         if (rms > 0.18 && now > noiseCooldownRef.current) {
           noiseFrameCountRef.current++
@@ -1198,6 +1292,78 @@ export const useInterviewSession = (sessionId, interviewType, startRoundTwo) => 
       }
     }
   });
+
+  const telemetryRoundType = currentQuestion?.type === 'case_study'
+    ? 'case_study'
+    : (startRoundTwo || currentQuestion?.type === 'coding' ? 'coding' : 'verbal')
+  const telemetryData = {
+    round_type: telemetryRoundType,
+    current_question: currentQuestionIndex + 1,
+    total_questions: questions.length,
+    question_text: currentQuestion?.text || '',
+    proctoring_alerts: screenShareViolations + noiseAlertCount + faceAlertCount + behavioralStatsRef.current.tabSwitches,
+    proctoring_status: {
+      modelsReady: proctoring.modelsReady,
+      modelsFailed: proctoring.modelsFailed,
+      faceVisible: proctoring.faceVisible,
+      faceCount: proctoring.faceCount,
+      multiFace: proctoring.multiFace,
+      phoneDetected: proctoring.phoneDetected,
+      eyeContactLost: proctoring.eyeContactLost,
+      lastAlertType: proctoring.lastAlertType,
+    },
+  }
+  useCandidateWebRTC(sessionId, mediaStreamRef, telemetryData, monitoringToken)
+
+  const liveHeartbeatDataRef = useRef(null)
+  useEffect(() => {
+    liveHeartbeatDataRef.current = telemetryData
+  }, [telemetryData])
+
+  useEffect(() => {
+    if (!sessionId || !monitoringToken) return
+
+    const captureSnapshot = () => {
+      const video = videoPreviewRef.current
+      if (!video || video.readyState < 2 || !video.videoWidth || !video.videoHeight) return null
+      try {
+        const canvas = document.createElement('canvas')
+        canvas.width = 320
+        canvas.height = Math.max(1, Math.round((video.videoHeight / video.videoWidth) * canvas.width))
+        canvas.getContext('2d').drawImage(video, 0, 0, canvas.width, canvas.height)
+        return canvas.toDataURL('image/jpeg', 0.55)
+      } catch {
+        return null
+      }
+    }
+
+    const sendHeartbeat = () => {
+      const liveData = liveHeartbeatDataRef.current || {}
+      const proctoringStatus = liveData.proctoring_status || {}
+      const alertTypes = [proctoringStatus.lastAlertType].filter(Boolean)
+      api.post('/live-heartbeat', {
+        link_id: sessionId,
+        snapshot_dataurl: captureSnapshot(),
+        current_question: liveData.current_question,
+        total_questions: liveData.total_questions,
+        face_visible: proctoringStatus.faceVisible,
+        proctoring_alerts: liveData.proctoring_alerts || 0,
+        alert_types: alertTypes,
+        last_alert_type: proctoringStatus.lastAlertType || null,
+        face_count: proctoringStatus.faceCount || 0,
+        multi_face: !!proctoringStatus.multiFace,
+        phone_detected: !!proctoringStatus.phoneDetected,
+        eye_contact_lost: !!proctoringStatus.eyeContactLost,
+        round_type: liveData.round_type,
+      }, {
+        headers: { Authorization: `Bearer ${monitoringToken}` },
+      }).catch(() => {})
+    }
+
+    sendHeartbeat()
+    const intervalId = setInterval(sendHeartbeat, 5000)
+    return () => clearInterval(intervalId)
+  }, [sessionId, monitoringToken, videoPreviewRef])
 
 // Screenshot / capture-attempt deterrence & logging.
   // NOTE: this can only catch in-browser vectors (shortcuts, right-click,
@@ -1698,6 +1864,7 @@ export const useInterviewSession = (sessionId, interviewType, startRoundTwo) => 
       }
     } catch (err) {
       console.error("Failed to start round 2:", err)
+      isRoundTwoRef.current = false  // allow retry if user tries again
       Swal.fire({
         icon: 'error',
         title: 'Failed to start Round 2',
@@ -1721,23 +1888,41 @@ export const useInterviewSession = (sessionId, interviewType, startRoundTwo) => 
     stopSilenceTimer()
     setShowRound2Confirm(false)
 
-    try {
-      const activeQuestion = questions[currentQuestionIndex]
-      const iid = interviewId || sessionDetail?.interview_id || sessionId
-      const answerForm = new FormData()
-      answerForm.append('interview_id', iid)
-      answerForm.append('question_id', activeQuestion?.id || (currentQuestionIndex + 1))
-      answerForm.append('question_text', activeQuestion?.text || activeQuestion?.question || '')
-      answerForm.append('answer_text', activeQuestion?.type === 'coding' ? (codeAnswer || ' ') : (transcriptionText || ' '))
-      answerForm.append('candidate_name', sessionDetail?.candidate_name || 'Candidate')
-      const timeSpent = Math.round((Date.now() - questionStartTimeRef.current) / 1000)
-      answerForm.append('time_spent_seconds', timeSpent.toString())
-      answerForm.append('time_limit_seconds', '120')
+    const activeQuestion = questions[currentQuestionIndex]
+    const iid = interviewId || sessionDetail?.interview_id || sessionId
+    const timeSpent = Math.round((Date.now() - questionStartTimeRef.current) / 1000)
 
+    // ── Save the final verbal answer before transitioning ────────────────────
+    // If this fails, we stop here and warn the candidate so no answer is lost.
+    const answerForm = new FormData()
+    answerForm.append('interview_id', iid)
+    answerForm.append('question_id', activeQuestion?.id || (currentQuestionIndex + 1))
+    answerForm.append('question_text', activeQuestion?.text || activeQuestion?.question || '')
+    answerForm.append('answer_text', activeQuestion?.type === 'coding' ? (codeAnswer || ' ') : (transcriptionText || ' '))
+    answerForm.append('candidate_name', sessionDetail?.candidate_name || 'Candidate')
+    answerForm.append('time_spent_seconds', timeSpent.toString())
+    answerForm.append('time_limit_seconds', '120')
+
+    try {
       await api.post(`/save-answer`, answerForm, {
         headers: { 'Content-Type': 'multipart/form-data' }
       })
+    } catch (e) {
+      console.error("Failed to save answer during round transition:", e)
+      await Swal.fire({
+        icon: 'error',
+        title: 'Connection Error',
+        text: 'Your answer could not be saved — please check your connection and try again.',
+        confirmButtonText: 'Retry',
+        allowOutsideClick: false
+      })
+      // Restore the confirm modal so the candidate can retry
+      setShowRound2Confirm(true)
+      return
+    }
 
+    // Behavioral data save is best-effort; failure must not block transition
+    try {
       const words = transcriptionText.trim().split(/\s+/).filter(w => w.length > 0).length
       const wpm = timeSpent > 0 ? Math.round((words / timeSpent) * 60) : 0
       await api.post(`/save-behavioral-data`, {
@@ -1746,12 +1931,13 @@ export const useInterviewSession = (sessionId, interviewType, startRoundTwo) => 
         filler_count: countFillers(transcriptionText),
         wpm: wpm,
         pause_count: behavioralStatsRef.current.pauseCount,
+        time_spent_seconds: timeSpent,
         tab_switches: behavioralStatsRef.current.tabSwitches,
         face_alerts: behavioralStatsRef.current.faceAlerts,
         noise_alerts: behavioralStatsRef.current.noiseAlerts
       })
     } catch (e) {
-      console.error("Failed to save answer during transition:", e)
+      console.error("Failed to save behavioral data during round transition:", e)
     }
 
     setTranscriptionText('')
@@ -1764,6 +1950,8 @@ export const useInterviewSession = (sessionId, interviewType, startRoundTwo) => 
 
   const handleNextQuestion = async () => {
     if (currentQuestionIndex >= questions.length) return
+    if (isNextingRef.current) return  // prevent rapid-click double submit
+    isNextingRef.current = true
     const currentQuestion = questions[currentQuestionIndex]
     stopSilenceTimer()
 
@@ -1801,6 +1989,7 @@ export const useInterviewSession = (sessionId, interviewType, startRoundTwo) => 
         filler_count: countFillers(transcriptionText),
         wpm: wpm,
         pause_count: behavioralStatsRef.current.pauseCount,
+        time_spent_seconds: timeSpent,
         tab_switches: behavioralStatsRef.current.tabSwitches,
         face_alerts: behavioralStatsRef.current.faceAlerts,
         noise_alerts: behavioralStatsRef.current.noiseAlerts
@@ -1834,9 +2023,68 @@ export const useInterviewSession = (sessionId, interviewType, startRoundTwo) => 
           questionStartTimeRef.current = Date.now()
           startNextRound()
         } else {
-          handleSubmitInterview()
+          // Time still remaining? Try to load pre-fetched questions seamlessly
+          if (isPrefetchingRef.current && globalCountdown > 30) {
+            Swal.fire({
+              title: 'Generating Next Question...',
+              html: 'Just a moment...',
+              allowOutsideClick: false,
+              didOpen: () => { Swal.showLoading() },
+              background: '#0f172a',
+              color: '#fff'
+            })
+            let waits = 0;
+            while (isPrefetchingRef.current && waits < 30) {
+              await new Promise(r => setTimeout(r, 500))
+              waits++;
+            }
+            Swal.close()
+          }
+
+          if (prefetchedQuestionsRef.current.length > 0 && globalCountdown > 30) {
+            const batch = prefetchedQuestionsRef.current
+            prefetchedQuestionsRef.current = []
+            const nextIdx = currentQuestionIndex + 1
+            setQuestions(prev => {
+              const updated = [...prev, ...batch]
+              return updated
+            })
+            setTranscriptionText('')
+            setInterimTranscriptText('')
+            setCodeAnswer('')
+            setCodeOutput('')
+            behavioralStatsRef.current = { wordCount: 0, fillerCount: 0, pauseCount: 0, faceAlerts: 0, tabSwitches: 0, noiseAlerts: 0 }
+            setCurrentQuestionIndex(nextIdx)
+            questionStartTimeRef.current = Date.now()
+            const nextQ = questions[nextIdx] || batch[0]
+            if (nextQ && nextQ.type !== 'coding') {
+              speakAIQuestion(nextQ.text || nextQ.question || nextQ.prompt || '')
+            }
+          } else {
+            handleSubmitInterview()
+          }
         }
       } else {
+        // ── Pre-fetch next batch when on second-to-last question ──
+        const qsLen = questions.length
+        if (!isPrefetchingRef.current && qsLen - currentQuestionIndex <= 2 && prefetchedQuestionsRef.current.length === 0) {
+          isPrefetchingRef.current = true
+          const alreadyAskedIds = questions.map(q => String(q.id || '')).join(',')
+          const fd = new FormData()
+          fd.append('interview_id', iid)
+          fd.append('asked_question_ids', alreadyAskedIds)
+          fd.append('count', '5')
+          fetch(`${import.meta.env.VITE_API_URL || ''}/generate-more-questions`, { method: 'POST', body: fd })
+            .then(r => r.json())
+            .then(data => {
+              if (data.questions && data.questions.length > 0) {
+                prefetchedQuestionsRef.current = data.questions
+              }
+            })
+            .catch(() => {})
+            .finally(() => { isPrefetchingRef.current = false })
+        }
+
         setTranscriptionText('')
         setInterimTranscriptText('')
         setCodeAnswer('')
@@ -1866,6 +2114,8 @@ export const useInterviewSession = (sessionId, interviewType, startRoundTwo) => 
         },
         buttonsStyling: false
       })
+    } finally {
+      isNextingRef.current = false  // release lock so user can click Next again
     }
   }
 
@@ -1874,7 +2124,15 @@ export const useInterviewSession = (sessionId, interviewType, startRoundTwo) => 
   }, [handleNextQuestion])
 
   const handleSubmitInterview = async (forceClose = false, terminationReason = null) => {
+    if (isSubmittingRef.current) return  // Prevent double-submit
     isSubmittingRef.current = true
+    setIsSaving(true)
+
+    // ── Immediately mark as completed so the interview UI hides right away ──
+    // This prevents the interview from staying visible during async cleanup,
+    // and stops back-navigation from re-showing the interview.
+    setIsCompleted(true)
+
     if (window.speechSynthesis) window.speechSynthesis.cancel()
     stopSilenceTimer()
     if (_sessionKey) sessionStorage.removeItem(_sessionKey)
@@ -1906,6 +2164,8 @@ export const useInterviewSession = (sessionId, interviewType, startRoundTwo) => 
     if (screenRecorderRef.current && screenRecorderRef.current.state !== 'inactive') {
       screenRecorderRef.current.stop()
     }
+
+    let uploadPromiseChain = Promise.resolve()
 
     if (cameraChunksRef.current.length > 0 || screenChunksRef.current.length > 0) {
       setUploadingText("Uploading video recordings...")
@@ -1941,13 +2201,11 @@ export const useInterviewSession = (sessionId, interviewType, startRoundTwo) => 
         })
       }
 
-      // Fire and forget background upload
-      Promise.all([
+      // Keep track of the upload promise to await it later
+      uploadPromiseChain = Promise.all([
         uploadPromise(cameraChunksRef.current, 'camera'),
         uploadPromise(screenChunksRef.current, 'screen')
-      ]).then(() => {
-        setUploadPercentage(100)
-      }).catch(err => console.error("Background upload failed:", err))
+      ]).catch(err => console.error("Background upload failed:", err))
     }
 
     try {
@@ -1971,7 +2229,20 @@ export const useInterviewSession = (sessionId, interviewType, startRoundTwo) => 
           await api.post(`/save-answer`, answerForm, {
             headers: { 'Content-Type': 'multipart/form-data' }
           })
-        } catch (e) { }
+        } catch (e) {
+          // Persist failed answers before promising automatic recovery (forceClose submission)
+          try {
+            const failedKey = `failed_answer_${sessionId}_${currentQuestion.id || (currentQuestionIndex + 1)}`
+            const answerData = {
+              interview_id: iid,
+              question_id: currentQuestion.id || (currentQuestionIndex + 1),
+              question_text: currentQuestion.text || currentQuestion.question || '',
+              answer_text: currentQuestion.type === 'coding' ? (codeAnswer || ' ') : (transcriptionText || ' '),
+              time_spent_seconds: timeSpent
+            }
+            localStorage.setItem(failedKey, JSON.stringify(answerData))
+          } catch (_) {}
+        }
       }
 
       const payload = {
@@ -1992,16 +2263,83 @@ export const useInterviewSession = (sessionId, interviewType, startRoundTwo) => 
     try {
       const queryParams = terminationReason ? `?reason=${encodeURIComponent(terminationReason)}` : ''
       await api.post(`/complete-session/${sessionId}${queryParams}`)
-    } catch (e) { }
+      if (sessionId) {
+        try { localStorage.setItem(`interview_done_${sessionId}`, '1') } catch (e) {}
+      }
+    } catch (completionError) {
+      console.error('Failed to complete interview session:', completionError)
+      isSubmittingRef.current = false
+      setIsCompleted(false)
+      Swal.fire({
+        title: 'Submission Failed',
+        text: 'Your interview could not be finalized. Please check your connection and submit again.',
+        icon: 'error',
+        background: '#161c2d',
+        color: '#fff',
+      })
+      return
+    }
+
+    // Wait for the video upload to finish before marking everything complete
+    await uploadPromiseChain
 
     setShowSkipButton(false)
     setUploadPercentage(100)
+    setUploadingText("")
     setTimeout(() => {
       if (document.fullscreenElement) {
         document.exitFullscreen().catch(err => console.log(err))
       }
       setShowAllSet(true)
+      setIsSaving(false)  // Upload complete, allow tab close
     }, 1500)
+  }
+
+  const handleFinishEarly = () => {
+    Swal.fire({
+      title: 'Finish Interview?',
+      html: '<p style="color:#94a3b8;font-size:14px">Are you sure you want to end the interview now? Your answers will be saved and submitted.</p>',
+      icon: 'question',
+      showCancelButton: true,
+      confirmButtonText: 'Yes, Finish',
+      cancelButtonText: 'Continue Interview',
+      confirmButtonColor: '#ef4444',
+      cancelButtonColor: '#6366f1',
+      background: '#0f172a',
+      color: '#fff',
+      customClass: {
+        popup: 'border border-white/10 rounded-2xl shadow-2xl',
+        title: 'text-xl font-bold text-white',
+      },
+      buttonsStyling: false
+    }).then(async result => {
+      if (result.isConfirmed) {
+        // Save current answer before early exit
+        const currentQuestion = questions[currentQuestionIndex]
+        if (currentQuestion && (transcriptionText.trim() || codeAnswer.trim())) {
+          const timeSpent = Math.round((Date.now() - questionStartTimeRef.current) / 1000)
+          const iid = interviewId || sessionDetail?.interview_id || sessionId
+          if (currentQuestion.type === 'case_study') {
+            await api.post(`/case-study/submit-answer`, {
+              interview_id: iid,
+              question_index: currentQuestion.caseStudyIndex,
+              answer_text: transcriptionText || ' '
+            }).catch(()=>{})
+          } else {
+            const answerForm = new FormData()
+            answerForm.append('interview_id', iid)
+            answerForm.append('question_id', currentQuestion.id || (currentQuestionIndex + 1))
+            answerForm.append('question_text', currentQuestion.text || currentQuestion.question || '')
+            answerForm.append('answer_text', currentQuestion.type === 'coding' ? (codeAnswer || ' ') : (transcriptionText || ' '))
+            answerForm.append('candidate_name', sessionDetail?.candidate_name || 'Candidate')
+            answerForm.append('time_spent_seconds', timeSpent.toString())
+            answerForm.append('time_limit_seconds', '120')
+            await api.post(`/save-answer`, answerForm).catch(()=>{})
+          }
+        }
+        handleSubmitInterview(false, 'early_exit')
+      }
+    })
   }
 
   return {
@@ -2026,7 +2364,9 @@ export const useInterviewSession = (sessionId, interviewType, startRoundTwo) => 
     currentQuestion,
     codingTask,
     isMediaReady,
-    proctoringAlert,
+    proctoringAlert: proctoring.modelsFailed
+      ? 'Proctoring AI models failed to load. Face and object monitoring is unavailable.'
+      : proctoringAlert,
     faceAlertCount,
     noiseAlertCount,
     showNoiseBanner,
@@ -2083,11 +2423,13 @@ export const useInterviewSession = (sessionId, interviewType, startRoundTwo) => 
     proceedToRoundTwo,
     handleNextQuestion,
     handleSubmitInterview,
+    handleFinishEarly,
     handleSkipUpload,
     isMobileDevice,
     recognitionRef,
     isSpeechRecordingRef,
     interimTranscriptText,
-    isCompleted
+    isCompleted,
+    isOnline
   }
 }

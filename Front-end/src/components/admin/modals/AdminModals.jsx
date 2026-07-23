@@ -81,6 +81,11 @@ export function CandidateScorecardModal({
     if (isOpen) setActiveTab('verbal');
   }, [isOpen, selectedCandidate]);
 
+  // Helper to get the overall average directly from the backend to ensure Table and Modal match perfectly
+  const calculateOverallAverage = (detail, candidate) => {
+    return Number(candidate?.score ?? candidate?.avg_score ?? detail?.avg_score ?? detail?.score ?? 0).toFixed(1);
+  };
+
   const handleDownloadPdf = () => {
     setIsGeneratingPdf(true);
     // Give React time to render all tabs before capturing
@@ -132,7 +137,6 @@ export function CandidateScorecardModal({
 
             const currentMarginTop = parseFloat(window.getComputedStyle(el).marginTop || '0');
             originalMargins.set(el, el.style.marginTop);
-            
             // Push element down using margin to avoid flexbox gap calculation issues
             el.style.marginTop = `${currentMarginTop + pushAmount}px`;
           }
@@ -184,7 +188,8 @@ export function CandidateScorecardModal({
     if (candidateDetail?.multi_dimensional_analysis?.[key]) {
       return Math.floor(candidateDetail.multi_dimensional_analysis[key].score || 0);
     }
-    const baseScore = selectedCandidate?.score || 0;
+    // Fallback to average score if multi-dimensional analysis API fails
+    const baseScore = selectedCandidate?.score ?? candidateDetail?.avg_score ?? selectedCandidate?.avg_score ?? 0;
     return Math.floor(baseScore);
   };
 
@@ -260,9 +265,9 @@ export function CandidateScorecardModal({
               <span className="text-[0.68rem] text-slate-400 font-bold uppercase tracking-wider block mb-2">Average Score</span>
               <div className="flex items-baseline gap-1">
                 {(() => {
-                  const s = selectedCandidate?.score ?? selectedCandidate?.avg_score ?? candidateDetail?.avg_score
+                  const s = calculateOverallAverage(candidateDetail, selectedCandidate);
                   return <>
-                    <span className="text-4xl font-black text-[#f43f5e] tracking-tight">{s != null ? Number(s).toFixed(1) : '--'}</span>
+                    <span className="text-4xl font-black text-[#f43f5e] tracking-tight">{s != null && !isNaN(s) ? Number(s).toFixed(1) : '--'}</span>
                     <span className="text-sm font-bold text-[#f43f5e]">/100</span>
                   </>
                 })()}
@@ -281,8 +286,8 @@ export function CandidateScorecardModal({
               </div>
             </div>
             <div className="bg-white border border-slate-200 shadow-sm rounded-xl p-5">
-              <span className="text-[0.68rem] text-slate-400 font-bold uppercase tracking-wider block mb-2">Detected Accent</span>
-              <span className="text-2xl font-black text-slate-800 tracking-tight block mt-1">{selectedCandidate?.language || 'Unknown'}</span>
+              <span className="text-[0.68rem] text-slate-400 font-bold uppercase tracking-wider block mb-2">Detected Language</span>
+              <span className="text-2xl font-black text-slate-800 tracking-tight block mt-1">{selectedCandidate?.detected_accent ?? candidateDetail?.detected_accent ?? 'Unknown'}</span>
             </div>
             <div className="bg-white border border-slate-200 shadow-sm rounded-xl p-5">
               <span className="text-[0.68rem] text-slate-400 font-bold uppercase tracking-wider block mb-2">Questions Answered</span>
@@ -490,7 +495,7 @@ export function CandidateScorecardModal({
                 </button>
               )}
 
-              {candidateDetail?.case_study_round?.scenario && (
+              {(candidateDetail?.case_study_round?.scenario || (candidateDetail?.case_study_round?.questions && candidateDetail.case_study_round.questions.length > 0)) && (
                 <button
                   onClick={() => setActiveTab('case_study')}
                   className={`pb-3 px-4 text-sm font-bold transition-all border-b-2 flex items-center gap-2 ${activeTab === 'case_study'
@@ -519,7 +524,7 @@ export function CandidateScorecardModal({
                       Q{idx + 1}: {ans.question_text}
                     </h4>
                     <div className="flex items-baseline gap-1">
-                      <span className="text-2xl font-black text-[#f43f5e] shrink-0">{ans?.ai_score != null ? Math.floor(ans.ai_score) : '--'}</span>
+                      <span className="text-2xl font-black text-[#f43f5e] shrink-0">{ans.ai_score != null ? Math.floor(Number(ans.ai_score)) : '--'}</span>
                       <span className="text-sm font-bold text-[#f43f5e]">/100</span>
                     </div>
                   </div>
@@ -558,11 +563,24 @@ export function CandidateScorecardModal({
                     </p>
                   </div>
 
-                  <div className="bg-[#f8f9fa] border-l-4 border-[#6366f1] p-4 rounded-r-lg mt-5">
+                  {ans.ai_feedback && (
+                    <div className="bg-slate-50 border border-slate-200 p-4 rounded-lg mt-4">
+                      <span className="text-[0.68rem] text-slate-500 font-bold uppercase tracking-wider flex items-center gap-1.5 mb-2">
+                        <i className="fas fa-comment-medical text-emerald-500"></i> AI Evaluator Feedback
+                      </span>
+                      <p className="text-sm text-slate-700 leading-relaxed">{ans.ai_feedback}</p>
+                    </div>
+                  )}
+
+                  <div className="bg-[#f8f9fa] border-l-4 border-[#6366f1] p-4 rounded-r-lg mt-4">
                     <span className="text-[0.68rem] text-[#6366f1] font-bold uppercase tracking-wider flex items-center gap-1.5 mb-2">
                       <i className="fas fa-lightbulb text-amber-400"></i> Suggested Answer
                     </span>
-                    <p className="text-sm text-slate-500 italic">Analysis unavailable (Offline Mode)</p>
+                    <p className="text-sm text-slate-700 leading-relaxed">
+                      {ans.corrected_answer && ans.corrected_answer !== "N/A"
+                        ? ans.corrected_answer
+                        : <span className="text-slate-500 italic">No suggested answer available.</span>}
+                    </p>
                   </div>
                 </div>
               ))}
@@ -651,29 +669,52 @@ export function CandidateScorecardModal({
           )}
 
           {/* TAB CONTENT: Case Study Round Breakdown */}
-          {(activeTab === 'case_study' || isGeneratingPdf) && candidateDetail?.case_study_round?.scenario && (
+          {(activeTab === 'case_study' || isGeneratingPdf) && (candidateDetail?.case_study_round?.scenario || (candidateDetail?.case_study_round?.questions && candidateDetail.case_study_round.questions.length > 0)) && (
             <div className="bg-slate-50/50 border border-slate-200 rounded-xl p-5 relative overflow-hidden mt-2 avoid-break">
               <h4 className="text-[1rem] font-bold text-slate-900 leading-snug mb-4 border-b border-slate-200 pb-3 flex items-center gap-2">
                 <i className="fas fa-briefcase text-amber-500"></i> Case Study Round
               </h4>
-              <div className="mb-5">
-                <span className="text-[0.68rem] text-slate-500 font-bold uppercase tracking-wider block mb-2">Scenario</span>
-                <p className="text-[0.95rem] text-slate-700 leading-relaxed whitespace-pre-wrap bg-white border border-slate-200 p-4 rounded-lg">{candidateDetail.case_study_round.scenario}</p>
-              </div>
-
-              {candidateDetail.case_study_round.messages && candidateDetail.case_study_round.messages.length > 1 && (
-                <div>
-                  <span className="text-[0.68rem] text-slate-500 font-bold uppercase tracking-wider block mb-3">Conversation Transcript</span>
-                  <div className={`space-y-3 bg-white border border-slate-200 p-4 rounded-lg ${isGeneratingPdf ? '' : 'max-h-[400px] overflow-y-auto'}`}>
-                    {candidateDetail.case_study_round.messages.filter(m => m.role !== 'system').map((msg, i) => (
-                      <div key={i} className={`p-3 rounded-xl text-sm ${msg.role === 'user' ? 'bg-indigo-50 border-indigo-100 border text-indigo-900 ml-8 rounded-tr-sm' : 'bg-slate-50 border-slate-200 border text-slate-700 mr-8 rounded-tl-sm'}`}>
-                        <strong className={`block mb-1 text-[0.65rem] uppercase tracking-widest ${msg.role === 'user' ? 'text-indigo-400' : 'text-slate-400'}`}>
-                          {msg.role === 'user' ? 'Candidate' : 'Interviewer'}
-                        </strong>
-                        <div className="whitespace-pre-wrap leading-relaxed">{msg.content}</div>
-                      </div>
-                    ))}
+              
+              {candidateDetail.case_study_round.scenario ? (
+                <>
+                  <div className="mb-5">
+                    <span className="text-[0.68rem] text-slate-500 font-bold uppercase tracking-wider block mb-2">Scenario</span>
+                    <p className="text-[0.95rem] text-slate-700 leading-relaxed whitespace-pre-wrap bg-white border border-slate-200 p-4 rounded-lg">{candidateDetail.case_study_round.scenario}</p>
                   </div>
+
+                  {candidateDetail.case_study_round.messages && candidateDetail.case_study_round.messages.length > 1 && (
+                    <div>
+                      <span className="text-[0.68rem] text-slate-500 font-bold uppercase tracking-wider block mb-3">Conversation Transcript</span>
+                      <div className={`space-y-3 bg-white border border-slate-200 p-4 rounded-lg ${isGeneratingPdf ? '' : 'max-h-[400px] overflow-y-auto'}`}>
+                        {candidateDetail.case_study_round.messages.filter(m => m.role !== 'system').map((msg, i) => (
+                          <div key={i} className={`p-3 rounded-xl text-sm ${msg.role === 'user' ? 'bg-indigo-50 border-indigo-100 border text-indigo-900 ml-8 rounded-tr-sm' : 'bg-slate-50 border-slate-200 border text-slate-700 mr-8 rounded-tl-sm'}`}>
+                            <strong className={`block mb-1 text-[0.65rem] uppercase tracking-widest ${msg.role === 'user' ? 'text-indigo-400' : 'text-slate-400'}`}>
+                              {msg.role === 'user' ? 'Candidate' : 'Interviewer'}
+                            </strong>
+                            <div className="whitespace-pre-wrap leading-relaxed">{msg.content}</div>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+                </>
+              ) : (
+                <div className="space-y-6">
+                  {candidateDetail.case_study_round.questions.map((q, idx) => {
+                    const ans = candidateDetail.case_study_round.answers?.[idx];
+                    const ansText = typeof ans === 'string' ? ans : (ans?.answer_text || '(No answer recorded)');
+                    return (
+                      <div key={idx} className="border-b border-slate-200/60 pb-4 last:border-b-0 last:pb-0">
+                        <span className="text-[0.68rem] text-slate-500 font-bold uppercase tracking-wider block mb-1">Scenario {idx + 1}</span>
+                        <p className="text-sm font-bold text-slate-800 mb-2">{q.scenario || q.text}</p>
+                        <p className="text-xs text-[#6366f1] font-semibold mb-2">Question: {q.question || q.text}</p>
+                        <div className="bg-white border border-slate-200 p-3 rounded-lg text-sm text-slate-700">
+                          <strong className="block mb-1 text-[0.65rem] uppercase tracking-widest text-slate-400">Candidate's Answer</strong>
+                          <div className="whitespace-pre-wrap leading-relaxed">{ansText}</div>
+                        </div>
+                      </div>
+                    );
+                  })}
                 </div>
               )}
             </div>
@@ -698,25 +739,21 @@ export function CandidateScorecardModal({
 
 export const convertHtmlToPlainText = (htmlString, candidateName = '', jobDescription = '', duration = '') => {
   if (!htmlString) return '';
-  
   try {
     const parser = new DOMParser();
     const doc = parser.parseFromString(htmlString, 'text/html');
     const whiteCard = doc.body.querySelector('div[style*="background: white"]') || doc.body.children[1] || doc.body;
     const blocks = [];
-    
     let extractedName = '';
     const dearPara = Array.from(whiteCard.querySelectorAll('p')).find(p => p.innerText.includes('Dear'));
     if (dearPara) {
       extractedName = dearPara.innerText.replace('Dear', '').replace(',', '').trim();
     }
-    
     let extractedJd = '';
     const jdPara = Array.from(whiteCard.querySelectorAll('p')).find(p => p.previousElementSibling && p.previousElementSibling.innerText.includes('Role Details'));
     if (jdPara) {
       extractedJd = jdPara.innerText.trim();
     }
-    
     let extractedDuration = '';
     const durationPara = Array.from(whiteCard.querySelectorAll('p')).find(p => p.innerText.includes('Duration:'));
     if (durationPara) {
@@ -726,28 +763,23 @@ export const convertHtmlToPlainText = (htmlString, candidateName = '', jobDescri
 
     Array.from(whiteCard.children).forEach(child => {
       const text = child.innerText || '';
-      
       if (child.tagName === 'DIV' && (child.style.borderLeft || text.includes('Role Details'))) {
         blocks.push('📋 Role Details:\n{job_description}');
         return;
       }
-      
       if (child.querySelector('a') || (child.tagName === 'DIV' && child.style.textAlign === 'center' && text.includes('Start Interview'))) {
         blocks.push('[Start Interview Button]');
         return;
       }
-      
       if (text.includes('Mandatory Interview Guidelines')) {
         const bulletPoints = Array.from(child.querySelectorAll('li')).map(li => `• ${li.innerText.trim()}`).join('\n');
         blocks.push(`⚠️ Mandatory Interview Guidelines\n${bulletPoints || '• Full-Screen Mode: You must maintain full-screen mode at all times.\n• Video Proctoring: Your camera will be active.\n• Audio Environment: Please ensure you are in a quiet room.'}`);
         return;
       }
-      
       if (text.includes('Scheduled Time') || text.includes('Scheduled Window') || text.includes('scheduled time window')) {
         blocks.push('{schedule_info}');
         return;
       }
-      
       if (child.tagName === 'DIV' && (child.style.backgroundColor === 'rgb(254, 243, 199)' || text.includes('Important:') || text.includes('expire'))) {
         blocks.push(`⚠️ Important: This interview link will expire in exactly 24 hours. Ensure a stable internet connection and a quiet environment.`);
         return;
@@ -756,10 +788,10 @@ export const convertHtmlToPlainText = (htmlString, candidateName = '', jobDescri
       if (child.tagName === 'HR') {
         return;
       }
-      
+
       let blockText = text.trim();
       if (!blockText) return;
-      
+
       if (extractedName && blockText.includes(extractedName)) {
         blockText = blockText.replaceAll(extractedName, '{candidate_name}');
       }
@@ -767,32 +799,30 @@ export const convertHtmlToPlainText = (htmlString, candidateName = '', jobDescri
         blockText = blockText.replaceAll(candidateName, '{candidate_name}');
       }
       blockText = blockText.replace(/Dear\s+Dear\s+\{candidate_name\},/gi, 'Dear {candidate_name},')
-                           .replace(/Dear\s+<b>.*?<\/b>,/gi, 'Dear {candidate_name},')
-                           .replace(/Dear\s+.*?,/gi, 'Dear {candidate_name},');
-      
+        .replace(/Dear\s+<b>.*?<\/b>,/gi, 'Dear {candidate_name},')
+        .replace(/Dear\s+.*?,/gi, 'Dear {candidate_name},');
+
       if (extractedDuration && blockText.includes(extractedDuration) && blockText.includes('Duration:')) {
         blockText = blockText.replaceAll(extractedDuration, '{duration}');
       }
       if (duration && blockText.includes(String(duration)) && blockText.includes('Duration:')) {
         blockText = blockText.replaceAll(String(duration), '{duration}');
       }
-      
       if (extractedJd && blockText.includes(extractedJd)) {
         blockText = blockText.replaceAll(extractedJd, '{job_description}');
       }
       if (jobDescription && blockText.includes(jobDescription)) {
         blockText = blockText.replaceAll(jobDescription, '{job_description}');
       }
-      
+
       blocks.push(blockText);
     });
-    
+
     if (blocks.length === 0) {
       let clean = htmlString.replace(/<\/?[^>]+(>|$)/g, "\n");
       clean = clean.replace(/\n\s*\n/g, '\n\n').trim();
       return clean;
     }
-    
     return blocks.join('\n\n');
   } catch (err) {
     console.error("Error converting HTML to plain text", err);
@@ -804,13 +834,13 @@ export const convertHtmlToPlainText = (htmlString, candidateName = '', jobDescri
 
 export const convertPlainTextToHtml = (plainText, candidateName = 'Candidate Name', jobDescription = 'Job description will appear here', duration = 30, scheduleBlock = '') => {
   if (!plainText) return '';
-  
+
   const paragraphs = plainText.split(/\n\n+/);
-  
+
   const compiledParagraphs = paragraphs.map(p => {
     const text = p.trim();
     if (!text) return '';
-    
+
     if (text.includes('Mandatory Interview Guidelines')) {
       const lines = text.split('\n');
       const items = lines.slice(1).map(line => {
@@ -823,7 +853,6 @@ export const convertPlainTextToHtml = (plainText, candidateName = 'Candidate Nam
         }
         return `<li>${cleanLine}</li>`;
       }).join('\n');
-      
       return `
         <div style="background-color: #f8fafc; border-radius: 8px; padding: 20px; margin: 24px 0; border: 1px solid #e2e8f0; border-left: 4px solid #ef4444; text-align: left;">
             <h3 style="margin: 0 0 12px; font-size: 14px; color: #0f172a; font-weight: 700; text-transform: uppercase; letter-spacing: 0.05em;">⚠️ Mandatory Interview Guidelines</h3>
@@ -833,7 +862,6 @@ export const convertPlainTextToHtml = (plainText, candidateName = 'Candidate Nam
         </div>
       `;
     }
-    
     if (text.includes('Role Details') || text.includes('{job_description}')) {
       const formattedJd = String(jobDescription || '').replace(/\n/g, '<br/>');
       return `
@@ -843,7 +871,6 @@ export const convertPlainTextToHtml = (plainText, candidateName = 'Candidate Nam
         </div>
       `;
     }
-    
     if (text.includes('[Start Interview Button]')) {
       return `
         <div style="text-align: center; margin: 32px 0;">
@@ -853,7 +880,6 @@ export const convertPlainTextToHtml = (plainText, candidateName = 'Candidate Nam
         </div>
       `;
     }
-    
     if (text.includes('{schedule_info}')) {
       if (scheduleBlock) return scheduleBlock;
       return `
@@ -862,7 +888,6 @@ export const convertPlainTextToHtml = (plainText, candidateName = 'Candidate Nam
         </div>
       `;
     }
-    
     if (text.includes('Important:') || text.includes('expire')) {
       let cleanText = text.replace('⚠️', '').trim();
       return `
@@ -871,17 +896,14 @@ export const convertPlainTextToHtml = (plainText, candidateName = 'Candidate Nam
         </div>
       `;
     }
-    
     let cleanText = text
       .replaceAll('{candidate_name}', candidateName)
       .replaceAll('{duration}', String(duration))
       .replaceAll('{job_description}', jobDescription);
-      
     if (cleanText.startsWith('Dear ')) {
       const greetingName = cleanText.substring(5).replace(/,$/, '').trim();
       return `<p style="font-size: 16px; color: #0f172a; text-align: left; margin: 0 0 20px 0;">Dear <b>${greetingName}</b>,</p>`;
     }
-    
     if (cleanText.startsWith('Best regards,') || cleanText.startsWith('Regards,')) {
       const lines = cleanText.split('\n');
       const formattedLines = lines.map((l, idx) => {
@@ -893,11 +915,11 @@ export const convertPlainTextToHtml = (plainText, candidateName = 'Candidate Nam
         <p style="color: #64748b; font-size: 14px; margin: 0; text-align: left; line-height: 1.6;">${formattedLines}</p>
       `;
     }
-    
+
     const lines = cleanText.split('\n').join('<br/>');
     return `<p style="color: #475569; line-height: 1.6; font-size: 14px; margin: 10px 0; text-align: left;">${lines}</p>`;
   });
-  
+
   return compiledParagraphs.filter(Boolean).join('\n');
 };
 
@@ -957,14 +979,14 @@ export function EmailPreviewModal({
         <div className="flex flex-col border border-slate-200 rounded-xl bg-slate-50/50 overflow-hidden h-full">
           <div className="flex justify-between items-center bg-slate-100/70 border-b border-slate-200 px-4 py-3 text-xs font-bold text-slate-700 uppercase tracking-wide">
             <span>Email Template Editor (WYSIWYG)</span>
-            <button 
-              onClick={handleApplyChanges} 
+            <button
+              onClick={handleApplyChanges}
               className="bg-indigo-600 hover:bg-indigo-700 text-white transition-colors py-1 px-3 rounded-md text-[0.65rem] shadow-sm font-semibold tracking-wide"
             >
               Apply to Preview
             </button>
           </div>
-          <IframeWYSIWYG 
+          <IframeWYSIWYG
             initialHtml={buildEmailHtml()}
             onChange={(newBodyInnerHtml) => {
               setDraftInnerHtml(newBodyInnerHtml);
@@ -1022,11 +1044,10 @@ export function BulkResultsModal({
               <div className="text-[0.68rem] text-emerald-400 font-bold uppercase tracking-wider">Successful</div>
               <div className="text-3xl font-extrabold text-emerald-500 mt-1">{bulkResultsData.successful}</div>
             </div>
-            <div className={`p-4 rounded-xl text-center border ${
-              bulkResultsData.total - bulkResultsData.successful > 0
-                ? 'bg-rose-500/5 border-rose-500/10 text-rose-500'
-                : 'bg-slate-900/20 border-white/5 text-slate-400'
-            }`}>
+            <div className={`p-4 rounded-xl text-center border ${bulkResultsData.total - bulkResultsData.successful > 0
+              ? 'bg-rose-500/5 border-rose-500/10 text-rose-500'
+              : 'bg-slate-900/20 border-white/5 text-slate-400'
+              }`}>
               <div className="text-[0.68rem] font-bold uppercase tracking-wider">Failed</div>
               <div className="text-3xl font-extrabold mt-1">{bulkResultsData.total - bulkResultsData.successful}</div>
             </div>
@@ -1284,9 +1305,9 @@ export function UpgradePlansModal({
         {plans.map((plan, idx) => {
           const isPopular = idx === 1;
           const displayPrice = plan.price / 100;
-          
+
           const isProcessingThisPlan = isProcessing === plan.id || isProcessing === plan.name || isProcessing === true;
-          
+
           return (
             <div key={plan.id || idx} className={`bg-white border ${isPopular ? 'border-[#f43f5e]' : 'border-slate-200'} rounded-2xl p-6 shadow-sm hover:shadow-md transition-all flex flex-col items-center text-center relative overflow-hidden`}>
               {isPopular && <div className="absolute top-0 left-0 w-full bg-[#f43f5e] text-white text-[0.65rem] font-bold py-1 uppercase tracking-widest shadow-sm">Most Popular</div>}
@@ -1297,9 +1318,9 @@ export function UpgradePlansModal({
               <div className="text-sm font-bold text-emerald-600 bg-emerald-50 border border-emerald-200/50 px-3.5 py-1.5 rounded-full mb-4 mt-2 inline-flex shadow-sm">
                 {plan.credits} Credits
               </div>
-              
+
               <p className="text-xs text-slate-500 mb-6 font-medium leading-relaxed">{plan.summary}</p>
-              
+
               <ul className="text-sm text-slate-600 font-medium flex flex-col gap-3 mb-8 w-full text-left">
                 {plan.features?.slice(0, 5).map((feature, fIdx) => (
                   <li key={fIdx} className="flex gap-2.5 items-center">
@@ -1311,10 +1332,9 @@ export function UpgradePlansModal({
               <button
                 onClick={() => handleSelectPlan(plan)}
                 disabled={isProcessingThisPlan || displayPrice === 0}
-                className={`mt-auto w-full py-3 rounded-full font-bold text-sm shadow-sm transition-all cursor-pointer ${
-                  displayPrice === 0 ? 'bg-slate-100 text-slate-400 border border-slate-200 cursor-not-allowed' :
+                className={`mt-auto w-full py-3 rounded-full font-bold text-sm shadow-sm transition-all cursor-pointer ${displayPrice === 0 ? 'bg-slate-100 text-slate-400 border border-slate-200 cursor-not-allowed' :
                   isPopular ? 'bg-[#6366f1] text-white hover:bg-[#4f46e5] hover:shadow-md' : 'bg-slate-100 text-slate-700 hover:bg-slate-200 hover:text-slate-900 border border-slate-200'
-                }`}
+                  }`}
               >
                 {isProcessingThisPlan ? 'Processing...' : (displayPrice === 0 ? 'Current Plan' : 'Buy via Razorpay')}
               </button>

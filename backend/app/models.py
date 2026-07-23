@@ -2,7 +2,7 @@ import sys
 sys.stdout.reconfigure(encoding='utf-8')
 sys.stderr.reconfigure(encoding='utf-8')
 
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, List, Optional, Union
 from pydantic import BaseModel, Field
 
 
@@ -79,13 +79,15 @@ class CreateSession(BaseModel):
     scheduled_start: str = ""
     scheduled_end: str = ""
     hr_screening: HRScreening = HRScreening()
-    custom_questions: str = ""
-    ai_instructions: str = ""
+    custom_questions: Union[str, List[str]] = ""
+    ai_instructions: Union[str, List[str]] = ""
     case_study_count: int = 0
     voice_clone: bool = False
     custom_voice_id: str = ""
     application_id: Optional[str] = None
     candidate_phone: Optional[str] = ""
+    ats_score: Optional[int] = None
+    jd_file_url: Optional[str] = None
 
 class ForgotPasswordRequest(BaseModel):
     username: str

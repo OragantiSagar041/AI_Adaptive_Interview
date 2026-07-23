@@ -35,7 +35,6 @@ export default function CreateInterviewPage() {
   const [bulkQuestionsOpen, setBulkQuestionsOpen] = useState(false)
   const [bulkInstructionsOpen, setBulkInstructionsOpen] = useState(false)
 
-  // Single Candidate Form
   const [singleCandidate, setSingleCandidate] = useState(() => {
     let defaultState = {
       name: '',
@@ -44,8 +43,8 @@ export default function CreateInterviewPage() {
       resumeText: '',
       jobDescription: '',
       applicationId: '',
-      customQuestions: '',
-      aiInstructions: '',
+      customQuestions: [],
+      aiInstructions: [],
       industry: 'General',
       interviewFormat: 'Standard',
       interviewType: 'Technical',
@@ -68,7 +67,14 @@ export default function CreateInterviewPage() {
     try {
       const stored = sessionStorage.getItem('createInterview_singleCandidate')
       if (stored) {
-        defaultState = { ...defaultState, ...JSON.parse(stored) };
+        let parsed = JSON.parse(stored);
+        if (typeof parsed.customQuestions === 'string') {
+          parsed.customQuestions = parsed.customQuestions ? parsed.customQuestions.split('\n').map(q => q.trim()).filter(Boolean) : [];
+        }
+        if (typeof parsed.aiInstructions === 'string') {
+          parsed.aiInstructions = parsed.aiInstructions ? parsed.aiInstructions.split('\n').map(i => i.trim()).filter(Boolean) : [];
+        }
+        defaultState = { ...defaultState, ...parsed };
       }
     } catch (e) {
       console.error('Failed to parse stored singleCandidate', e)
@@ -97,6 +103,11 @@ export default function CreateInterviewPage() {
   const [atsCalculating, setAtsCalculating] = useState(false)
   const [atsScoreData, setAtsScoreData] = useState(null) // { score, summary, matched_skills, missing_skills }
 
+  const [newSingleQuestion, setNewSingleQuestion] = useState('')
+  const [newSingleInstruction, setNewSingleInstruction] = useState('')
+  const [newBulkQuestion, setNewBulkQuestion] = useState('')
+  const [newBulkInstruction, setNewBulkInstruction] = useState('')
+
   // Email Preview Modal
   const [emailPreviewModalOpen, setEmailPreviewModalOpen] = useState(false)
   const [emailTemplate, setEmailTemplate] = useState({
@@ -109,16 +120,10 @@ export default function CreateInterviewPage() {
 
   // Bulk Send Configurations
   const [bulkConfig, setBulkConfig] = useState(() => {
-    try {
-      const stored = sessionStorage.getItem('createInterview_bulkConfig')
-      if (stored) return JSON.parse(stored)
-    } catch (e) {
-      console.error('Failed to parse stored bulkConfig', e)
-    }
-    return {
+    let defaultState = {
       jobDescription: '',
-      customQuestions: '',
-      aiInstructions: '',
+      customQuestions: [],
+      aiInstructions: [],
       industry: 'General',
       interviewFormat: 'Standard',
       interviewType: 'Technical',
@@ -136,7 +141,24 @@ export default function CreateInterviewPage() {
         locationType: 'Current',
         askBond: false
       }
+    };
+
+    try {
+      const stored = sessionStorage.getItem('createInterview_bulkConfig')
+      if (stored) {
+        let parsed = JSON.parse(stored);
+        if (typeof parsed.customQuestions === 'string') {
+          parsed.customQuestions = parsed.customQuestions ? parsed.customQuestions.split('\n').map(q => q.trim()).filter(Boolean) : [];
+        }
+        if (typeof parsed.aiInstructions === 'string') {
+          parsed.aiInstructions = parsed.aiInstructions ? parsed.aiInstructions.split('\n').map(i => i.trim()).filter(Boolean) : [];
+        }
+        defaultState = { ...defaultState, ...parsed };
+      }
+    } catch (e) {
+      console.error('Failed to parse stored bulkConfig', e)
     }
+    return defaultState;
   })
 
   useEffect(() => {
@@ -228,21 +250,57 @@ export default function CreateInterviewPage() {
     }))
   }
 
+  const addSingleQuestion = () => {
+    if (!newSingleQuestion.trim()) return
+    handleSingleChange('customQuestions', [...(singleCandidate.customQuestions || []), newSingleQuestion.trim()])
+    setNewSingleQuestion('')
+  }
+  const deleteSingleQuestion = (index) => {
+    handleSingleChange('customQuestions', (singleCandidate.customQuestions || []).filter((_, i) => i !== index))
+  }
+
+  const addSingleInstruction = () => {
+    if (!newSingleInstruction.trim()) return
+    handleSingleChange('aiInstructions', [...(singleCandidate.aiInstructions || []), newSingleInstruction.trim()])
+    setNewSingleInstruction('')
+  }
+  const deleteSingleInstruction = (index) => {
+    handleSingleChange('aiInstructions', (singleCandidate.aiInstructions || []).filter((_, i) => i !== index))
+  }
+
+  const addBulkQuestion = () => {
+    if (!newBulkQuestion.trim()) return
+    handleBulkConfigChange('customQuestions', [...(bulkConfig.customQuestions || []), newBulkQuestion.trim()])
+    setNewBulkQuestion('')
+  }
+  const deleteBulkQuestion = (index) => {
+    handleBulkConfigChange('customQuestions', (bulkConfig.customQuestions || []).filter((_, i) => i !== index))
+  }
+
+  const addBulkInstruction = () => {
+    if (!newBulkInstruction.trim()) return
+    handleBulkConfigChange('aiInstructions', [...(bulkConfig.aiInstructions || []), newBulkInstruction.trim()])
+    setNewBulkInstruction('')
+  }
+  const deleteBulkInstruction = (index) => {
+    handleBulkConfigChange('aiInstructions', (bulkConfig.aiInstructions || []).filter((_, i) => i !== index))
+  }
+
   // Parse file content
-  const handleParseFile = async (file, onParsed, onLoading) => {
+  const handleParseFile = async (file, onParsed, onLoading, source = 'resume', uploadToCloud = false) => {
     if (!file) return
-    if (file.size > 5 * 1024 * 1024) {
-      onParsed('File exceeds 5MB limit')
-      return
-    }
     onLoading(true)
     const formData = new FormData()
     formData.append('file', file)
+    formData.append('source', source)
+    if (uploadToCloud) {
+      formData.append('upload_to_cloud', 'true')
+    }
     try {
       const response = await axios.post(`${API_BASE_URL}/admin/parse-resume`, formData, {
         headers: {
           'Content-Type': 'multipart/form-data',
-          'Authorization': `Bearer ${sessionStorage.getItem('adminToken')}`
+          'Authorization': `Bearer ${sessionStorage.getItem('superadminToken') || sessionStorage.getItem('adminToken')}`
         }
       })
       onParsed(null, response.data)
@@ -262,7 +320,7 @@ export default function CreateInterviewPage() {
         headers: { 'Authorization': `Bearer ${token}` }
       })
       const data = response.data
-      if (data.exists && data.resume_text) {
+      if (data.exists) {
         const result = await Swal.fire({
           title: 'Candidate Profile Found',
           html: `
@@ -292,9 +350,9 @@ export default function CreateInterviewPage() {
           setSingleCandidate(prev => ({
             ...prev,
             name: data.candidate_name || prev.name,
-            resumeText: data.resume_text
+            resumeText: data.resume_text || prev.resumeText
           }))
-          if (singleCandidate.jobDescription) {
+          if (singleCandidate.jobDescription && data.resume_text) {
             handleCalculateAts(data.resume_text, singleCandidate.jobDescription)
           }
         }
@@ -351,7 +409,7 @@ export default function CreateInterviewPage() {
       if (singleCandidate.resumeText && singleCandidate.jobDescription) {
         handleCalculateAts(singleCandidate.resumeText, singleCandidate.jobDescription)
       }
-    }, 800)
+    }, 600)
     return () => clearTimeout(timer)
   }, [singleCandidate.resumeText, singleCandidate.jobDescription])
 
@@ -614,7 +672,7 @@ Congratulations! You have been selected for an AI-powered interview. Please revi
         candidate_email: email,
         resume_text: resumeText,
         job_description: jobDescription,
-        admin_id: adminUser?.admin_id || 'admin',
+        admin_id: adminUser?.admin_id || adminUser?.id || adminUser?._id || 'admin',
         interview_duration: Number(duration),
         interview_format: interviewFormat,
         interview_type: interviewType,
@@ -631,7 +689,9 @@ Congratulations! You have been selected for an AI-powered interview. Please revi
         voice_clone: voiceCloning,
         custom_voice_id: singleCandidate.customVoiceId || "",
         application_id: singleCandidate.applicationId || "",
-        candidate_phone: singleCandidate.phone || ""
+        candidate_phone: singleCandidate.phone || "",
+        ats_score: atsScoreData ? atsScoreData.score : null,
+        jd_file_url: singleCandidate.jdFileUrl || null
       })).unwrap()
 
       let msg = `Secure interview link created successfully!`
@@ -852,7 +912,7 @@ Congratulations! You have been selected for an AI-powered interview. Please revi
         interview_type: interviewType,
         language: language,
         case_study_count: interviewType === 'Non-Technical' ? Number(caseStudyCount) : 0,
-        admin_id: adminUser?.admin_id || 'admin',
+        admin_id: adminUser?.admin_id || adminUser?.id || adminUser?._id || 'admin',
         interview_duration: Number(duration),
         record_video: recordVideo,
         custom_email_html: customEmailHtml || "",
@@ -862,7 +922,8 @@ Congratulations! You have been selected for an AI-powered interview. Please revi
         custom_questions: customQuestions,
         ai_instructions: aiInstructions,
         voice_clone: bulkConfig.voiceCloning,
-        custom_voice_id: bulkConfig.customVoiceId || ""
+        custom_voice_id: bulkConfig.customVoiceId || "",
+        jd_file_url: bulkConfig.jdFileUrl || null
       })).unwrap()
 
       Swal.fire({
@@ -1124,9 +1185,14 @@ Congratulations! You have been selected for an AI-powered interview. Please revi
                             })
                             setJdParsing(false)
                           } else {
-                            handleSingleChange('jobDescription', data.text || '')
+                            if (data.text) {
+                              handleSingleChange('jobDescription', data.text)
+                            }
+                            if (data.file_url) {
+                              handleSingleChange('jdFileUrl', data.file_url)
+                            }
                           }
-                        }, setJdParsing)
+                        }, setJdParsing, 'jd', true)
                       }}
                     />
                   </div>
@@ -1141,6 +1207,7 @@ Congratulations! You have been selected for an AI-powered interview. Please revi
                 {/* ATS Match Score */}
                 {atsScoreData && (
                   <div className="bg-indigo-50/30 border border-indigo-100/80 rounded-2xl p-5 mt-2 flex flex-col gap-4">
+                    {/* Header */}
                     <div className="flex justify-between items-center">
                       <h4 className="text-sm font-bold text-slate-800 flex items-center gap-1.5">
                         <i className="fas fa-chart-line text-primary"></i> ATS Resume Match Score
@@ -1154,18 +1221,23 @@ Congratulations! You have been selected for an AI-powered interview. Please revi
                         {atsCalculating ? "Analyzing..." : <><i className="fas fa-sync-alt mr-1"></i> Recalculate</>}
                       </Button>
                     </div>
-                    <div className="flex gap-6 items-start flex-col sm:flex-row">
-                      <div className="flex-shrink-0 text-center mx-auto sm:mx-0">
+
+                    {/* Score ring + summary */}
+                    <div className="flex gap-5 items-center">
+                      <div className="flex-shrink-0 text-center">
                         <div className="relative w-20 h-20 flex items-center justify-center">
                           <svg className="w-20 h-20 transform -rotate-90">
+                            <defs>
+                              <linearGradient id="scoreGradient" x1="0%" y1="0%" x2="100%" y2="100%">
+                                <stop offset="0%" stopColor="#6366f1" />
+                                <stop offset="100%" stopColor="#4f46e5" />
+                              </linearGradient>
+                            </defs>
                             <circle cx="40" cy="40" r="34" stroke="#e2e8f0" strokeWidth="6" fill="transparent" />
                             <circle
-                              cx="40"
-                              cy="40"
-                              r="34"
+                              cx="40" cy="40" r="34"
                               stroke={atsScoreData.score >= 75 ? '#10b981' : atsScoreData.score >= 50 ? '#f59e0b' : '#ef4444'}
-                              strokeWidth="6"
-                              fill="transparent"
+                              strokeWidth="6" fill="transparent"
                               strokeDasharray={213.6}
                               strokeDashoffset={213.6 - (213.6 * atsScoreData.score) / 100}
                               strokeLinecap="round"
@@ -1174,29 +1246,62 @@ Congratulations! You have been selected for an AI-powered interview. Please revi
                           </svg>
                           <span className="absolute text-lg font-extrabold text-slate-800">{atsScoreData.score}%</span>
                         </div>
-                        <div className="text-[0.65rem] text-slate-500 font-bold uppercase tracking-wider mt-2">Overall Match</div>
+                        <div className="text-[0.62rem] text-slate-500 font-bold uppercase tracking-wider mt-1.5">Overall Match</div>
                       </div>
-                      <div className="flex-grow text-xs text-slate-600 leading-relaxed">
-                        <p className="mb-3 font-medium text-slate-700 bg-white/50 p-3 rounded-lg border border-slate-100">{atsScoreData.summary}</p>
-                        <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-                          <div className="bg-emerald-500/5 p-3 rounded-xl border border-emerald-500/10">
-                            <strong className="text-emerald-600 block mb-1.5 text-[0.7rem] uppercase tracking-wide"><i className="fas fa-check mr-1"></i> Matched Skills</strong>
-                            <div className="flex flex-wrap gap-1 mt-1.5">
-                              {atsScoreData.matched_skills.map((skill, idx) => (
-                                <span key={idx} className="bg-emerald-50 border border-emerald-100 text-emerald-700 px-2.5 py-0.5 rounded-full text-[0.65rem] font-bold">{skill}</span>
-                              ))}
-                              {atsScoreData.matched_skills.length === 0 && <span className="text-slate-400">None identified</span>}
-                            </div>
-                          </div>
-                          <div className="bg-rose-500/5 p-3 rounded-xl border border-rose-500/10">
-                            <strong className="text-rose-600 block mb-1.5 text-[0.7rem] uppercase tracking-wide"><i className="fas fa-triangle-exclamation mr-1"></i> Missing Skills</strong>
-                            <div className="flex flex-wrap gap-1 mt-1.5">
-                              {atsScoreData.missing_skills.map((skill, idx) => (
-                                <span key={idx} className="bg-rose-50 border border-rose-100 text-rose-700 px-2.5 py-0.5 rounded-full text-[0.65rem] font-bold">{skill}</span>
-                              ))}
-                              {atsScoreData.missing_skills.length === 0 && <span className="text-slate-400">None identified</span>}
-                            </div>
-                          </div>
+                      <p className="flex-grow text-xs font-medium text-slate-600 bg-white/60 p-3 rounded-xl border border-slate-100 leading-relaxed">{atsScoreData.summary}</p>
+                    </div>
+
+                    {/* Weighted Category Breakdown */}
+                    {atsScoreData.breakdown && atsScoreData.breakdown.length > 0 && (
+                      <div className="flex flex-col gap-2">
+                        <span className="text-[0.65rem] font-bold text-slate-500 uppercase tracking-wider flex items-center gap-1.5">
+                          <i className="fas fa-sliders-h text-primary/70"></i> Score Breakdown by Category
+                        </span>
+                        <div className="flex flex-col gap-1.5">
+                          {atsScoreData.breakdown.map((item, idx) => {
+                            const barColor = item.score >= 75 ? 'bg-emerald-500' : item.score >= 50 ? 'bg-amber-400' : 'bg-rose-500'
+                            const textColor = item.score >= 75 ? 'text-emerald-600' : item.score >= 50 ? 'text-amber-600' : 'text-rose-600'
+                            return (
+                              <div key={idx} className="bg-white/70 border border-slate-100 rounded-xl px-3.5 py-2.5 flex items-center gap-3">
+                                <div className="w-[140px] shrink-0">
+                                  <div className="text-[0.68rem] font-bold text-slate-700 leading-tight">{item.category}</div>
+                                  <div className="text-[0.6rem] text-slate-400 font-medium mt-0.5">Weight: {item.weight}%</div>
+                                </div>
+                                <div className="flex-grow">
+                                  <div className="h-2 bg-slate-100 rounded-full overflow-hidden">
+                                    <div
+                                      className={`h-full rounded-full transition-all duration-700 ${barColor}`}
+                                      style={{ width: `${item.score}%` }}
+                                    />
+                                  </div>
+                                  {item.note && <p className="text-[0.6rem] text-slate-400 mt-1 leading-tight truncate">{item.note}</p>}
+                                </div>
+                                <div className={`text-sm font-extrabold w-10 text-right shrink-0 ${textColor}`}>{item.score}%</div>
+                              </div>
+                            )
+                          })}
+                        </div>
+                      </div>
+                    )}
+
+                    {/* Matched / Missing skills chips */}
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                      <div className="bg-emerald-500/5 p-3 rounded-xl border border-emerald-500/10">
+                        <strong className="text-emerald-600 block mb-1.5 text-[0.7rem] uppercase tracking-wide"><i className="fas fa-check mr-1"></i> Matched Skills</strong>
+                        <div className="flex flex-wrap gap-1 mt-1.5">
+                          {atsScoreData.matched_skills.map((skill, idx) => (
+                            <span key={idx} className="bg-emerald-50 border border-emerald-100 text-emerald-700 px-2.5 py-0.5 rounded-full text-[0.65rem] font-bold">{skill}</span>
+                          ))}
+                          {atsScoreData.matched_skills.length === 0 && <span className="text-slate-400 text-xs">None identified</span>}
+                        </div>
+                      </div>
+                      <div className="bg-rose-500/5 p-3 rounded-xl border border-rose-500/10">
+                        <strong className="text-rose-600 block mb-1.5 text-[0.7rem] uppercase tracking-wide"><i className="fas fa-triangle-exclamation mr-1"></i> Missing Skills</strong>
+                        <div className="flex flex-wrap gap-1 mt-1.5">
+                          {atsScoreData.missing_skills.map((skill, idx) => (
+                            <span key={idx} className="bg-rose-50 border border-rose-100 text-rose-700 px-2.5 py-0.5 rounded-full text-[0.65rem] font-bold">{skill}</span>
+                          ))}
+                          {atsScoreData.missing_skills.length === 0 && <span className="text-slate-400 text-xs">None identified</span>}
                         </div>
                       </div>
                     </div>
@@ -1247,18 +1352,62 @@ Congratulations! You have been selected for an AI-powered interview. Please revi
                               })
                               setCustomQuestionsParsing(false)
                             } else {
-                              handleSingleChange('customQuestions', data.text || '')
+                              const lines = (data.text || '')
+                                .split('\n')
+                                .map(line => line.trim())
+                                .filter(Boolean);
+                              handleSingleChange('customQuestions', [...(singleCandidate.customQuestions || []), ...lines])
                             }
                           }, setCustomQuestionsParsing)
                         }}
                       />
                     </div>
-                    {customQuestionsParsing && <span className="text-xs text-warning font-semibold"><i className="fas fa-spinner fa-spin mr-1"></i> Parsing questions file...</span>}
-                    <Textarea
-                      placeholder="Enter custom screening questions here (one per line) or attach a file above. If provided, the AI interviewer will prioritize these questions."
-                      value={singleCandidate.customQuestions}
-                      onChange={(e) => handleSingleChange('customQuestions', e.target.value)}
-                    />
+                    {customQuestionsParsing && (
+                      <span className="text-xs text-warning font-semibold mt-1 block">
+                        <i className="fas fa-spinner fa-spin mr-1"></i> Parsing questions file...
+                      </span>
+                    )}
+                    <div className="flex gap-2 items-center w-full">
+                      <input
+                        type="text"
+                        placeholder="Add a custom screening question..."
+                        className="flex-1 bg-slate-50/95 border border-slate-200 rounded-[5px] px-4 py-2.5 text-slate-900 text-[0.95rem] outline-none transition-all duration-200 focus:border-primary focus:bg-white focus:shadow-[0_0_0_3px_rgba(99,102,241,0.12)] placeholder:text-slate-400"
+                        value={newSingleQuestion}
+                        onChange={(e) => setNewSingleQuestion(e.target.value)}
+                        onKeyDown={(e) => {
+                          if (e.key === 'Enter') {
+                            e.preventDefault();
+                            addSingleQuestion();
+                          }
+                        }}
+                      />
+                      <button
+                        type="button"
+                        onClick={addSingleQuestion}
+                        className="bg-indigo-650 hover:bg-indigo-700 text-white text-xs font-bold px-4 py-2.5 rounded-[5px] transition-colors cursor-pointer"
+                        style={{ backgroundColor: '#6366f1' }}
+                      >
+                        Add
+                      </button>
+                    </div>
+                    {singleCandidate.customQuestions && singleCandidate.customQuestions.length > 0 && (
+                      <ol className="list-decimal pl-5 flex flex-col gap-2 mt-2 max-h-60 overflow-y-auto">
+                        {singleCandidate.customQuestions.map((q, idx) => (
+                          <li key={idx} className="text-sm text-slate-700 font-medium">
+                            <div className="flex justify-between items-start gap-4 group">
+                              <span className="break-all">{q}</span>
+                              <button
+                                type="button"
+                                onClick={() => deleteSingleQuestion(idx)}
+                                className="text-rose-500 hover:text-rose-700 transition-colors p-1 cursor-pointer flex-shrink-0 bg-transparent border-none"
+                              >
+                                <i className="fas fa-trash"></i>
+                              </button>
+                            </div>
+                          </li>
+                        ))}
+                      </ol>
+                    )}
                   </div>
                 </div>
 
@@ -1297,18 +1446,62 @@ Congratulations! You have been selected for an AI-powered interview. Please revi
                               })
                               setAiInstructionsParsing(false)
                             } else {
-                              handleSingleChange('aiInstructions', data.text || '')
+                              const lines = (data.text || '')
+                                .split('\n')
+                                .map(line => line.trim())
+                                .filter(Boolean);
+                              handleSingleChange('aiInstructions', [...(singleCandidate.aiInstructions || []), ...lines])
                             }
                           }, setAiInstructionsParsing)
                         }}
                       />
                     </div>
-                    {aiInstructionsParsing && <span className="text-xs text-warning font-semibold"><i className="fas fa-spinner fa-spin mr-1"></i> Parsing instructions file...</span>}
-                    <Textarea
-                      placeholder="e.g. 'Focus heavily on microservices architecture and system design. Restrict standard icebreakers. Keep the conversation extremely professional.'"
-                      value={singleCandidate.aiInstructions}
-                      onChange={(e) => handleSingleChange('aiInstructions', e.target.value)}
-                    />
+                    {aiInstructionsParsing && (
+                      <span className="text-xs text-warning font-semibold mt-1 block">
+                        <i className="fas fa-spinner fa-spin mr-1"></i> Parsing instructions file...
+                      </span>
+                    )}
+                    <div className="flex gap-2 items-center w-full">
+                      <input
+                        type="text"
+                        placeholder="Add a custom interviewer instruction..."
+                        className="flex-1 bg-slate-50/95 border border-slate-200 rounded-[5px] px-4 py-2.5 text-slate-900 text-[0.95rem] outline-none transition-all duration-200 focus:border-primary focus:bg-white focus:shadow-[0_0_0_3px_rgba(99,102,241,0.12)] placeholder:text-slate-400"
+                        value={newSingleInstruction}
+                        onChange={(e) => setNewSingleInstruction(e.target.value)}
+                        onKeyDown={(e) => {
+                          if (e.key === 'Enter') {
+                            e.preventDefault();
+                            addSingleInstruction();
+                          }
+                        }}
+                      />
+                      <button
+                        type="button"
+                        onClick={addSingleInstruction}
+                        className="bg-indigo-650 hover:bg-indigo-700 text-white text-xs font-bold px-4 py-2.5 rounded-[5px] transition-colors cursor-pointer"
+                        style={{ backgroundColor: '#6366f1' }}
+                      >
+                        Add
+                      </button>
+                    </div>
+                    {singleCandidate.aiInstructions && singleCandidate.aiInstructions.length > 0 && (
+                      <ol className="list-decimal pl-5 flex flex-col gap-2 mt-2 max-h-60 overflow-y-auto">
+                        {singleCandidate.aiInstructions.map((inst, idx) => (
+                          <li key={idx} className="text-sm text-slate-700 font-medium">
+                            <div className="flex justify-between items-start gap-4 group">
+                              <span className="break-all">{inst}</span>
+                              <button
+                                type="button"
+                                onClick={() => deleteSingleInstruction(idx)}
+                                className="text-rose-500 hover:text-rose-700 transition-colors p-1 cursor-pointer flex-shrink-0 bg-transparent border-none"
+                              >
+                                <i className="fas fa-trash"></i>
+                              </button>
+                            </div>
+                          </li>
+                        ))}
+                      </ol>
+                    )}
                   </div>
                 </div>
               </div>
@@ -1733,9 +1926,14 @@ Congratulations! You have been selected for an AI-powered interview. Please revi
                             })
                             setBulkJdParsing(false)
                           } else {
-                            handleBulkConfigChange('jobDescription', data.text || '')
+                            if (data.text) {
+                              handleBulkConfigChange('jobDescription', data.text)
+                            }
+                            if (data.file_url) {
+                              handleBulkConfigChange('jdFileUrl', data.file_url)
+                            }
                           }
-                        }, setBulkJdParsing)
+                        }, setBulkJdParsing, 'jd', true)
                       }}
                     />
                   </div>
@@ -1785,18 +1983,62 @@ Congratulations! You have been selected for an AI-powered interview. Please revi
                               })
                               setBulkCustomQuestionsParsing(false)
                             } else {
-                              handleBulkConfigChange('customQuestions', data.text || '')
+                              const lines = (data.text || '')
+                                .split('\n')
+                                .map(line => line.trim())
+                                .filter(Boolean);
+                              handleBulkConfigChange('customQuestions', [...(bulkConfig.customQuestions || []), ...lines])
                             }
                           }, setBulkCustomQuestionsParsing)
                         }}
                       />
                     </div>
-                    {bulkCustomQuestionsParsing && <span className="text-xs text-warning font-semibold"><i className="fas fa-spinner fa-spin mr-1"></i> Parsing questions file...</span>}
-                    <Textarea
-                      placeholder="Enter custom screening questions here (one per line) or attach a file above. If provided, the AI interviewer will prioritize these questions."
-                      value={bulkConfig.customQuestions}
-                      onChange={(e) => handleBulkConfigChange('customQuestions', e.target.value)}
-                    />
+                    {bulkCustomQuestionsParsing && (
+                      <span className="text-xs text-warning font-semibold mt-1 block">
+                        <i className="fas fa-spinner fa-spin mr-1"></i> Parsing questions file...
+                      </span>
+                    )}
+                    <div className="flex gap-2 items-center w-full">
+                      <input
+                        type="text"
+                        placeholder="Add a custom screening question..."
+                        className="flex-1 bg-slate-50/95 border border-slate-200 rounded-[5px] px-4 py-2.5 text-slate-900 text-[0.95rem] outline-none transition-all duration-200 focus:border-primary focus:bg-white focus:shadow-[0_0_0_3px_rgba(99,102,241,0.12)] placeholder:text-slate-400"
+                        value={newBulkQuestion}
+                        onChange={(e) => setNewBulkQuestion(e.target.value)}
+                        onKeyDown={(e) => {
+                          if (e.key === 'Enter') {
+                            e.preventDefault();
+                            addBulkQuestion();
+                          }
+                        }}
+                      />
+                      <button
+                        type="button"
+                        onClick={addBulkQuestion}
+                        className="bg-indigo-650 hover:bg-indigo-700 text-white text-xs font-bold px-4 py-2.5 rounded-[5px] transition-colors cursor-pointer"
+                        style={{ backgroundColor: '#6366f1' }}
+                      >
+                        Add
+                      </button>
+                    </div>
+                    {bulkConfig.customQuestions && bulkConfig.customQuestions.length > 0 && (
+                      <ol className="list-decimal pl-5 flex flex-col gap-2 mt-2 max-h-60 overflow-y-auto">
+                        {bulkConfig.customQuestions.map((q, idx) => (
+                          <li key={idx} className="text-sm text-slate-700 font-medium">
+                            <div className="flex justify-between items-start gap-4 group">
+                              <span className="break-all">{q}</span>
+                              <button
+                                type="button"
+                                onClick={() => deleteBulkQuestion(idx)}
+                                className="text-rose-500 hover:text-rose-700 transition-colors p-1 cursor-pointer flex-shrink-0 bg-transparent border-none"
+                              >
+                                <i className="fas fa-trash"></i>
+                              </button>
+                            </div>
+                          </li>
+                        ))}
+                      </ol>
+                    )}
                   </div>
                 </div>
 
@@ -1835,18 +2077,62 @@ Congratulations! You have been selected for an AI-powered interview. Please revi
                               })
                               setBulkAiInstructionsParsing(false)
                             } else {
-                              handleBulkConfigChange('aiInstructions', data.text || '')
+                              const lines = (data.text || '')
+                                .split('\n')
+                                .map(line => line.trim())
+                                .filter(Boolean);
+                              handleBulkConfigChange('aiInstructions', [...(bulkConfig.aiInstructions || []), ...lines])
                             }
                           }, setBulkAiInstructionsParsing)
                         }}
                       />
                     </div>
-                    {bulkAiInstructionsParsing && <span className="text-xs text-warning font-semibold"><i className="fas fa-spinner fa-spin mr-1"></i> Parsing instructions file...</span>}
-                    <Textarea
-                      placeholder="e.g. 'Focus heavily on microservices architecture and system design. Restrict standard icebreakers. Keep the conversation extremely professional.'"
-                      value={bulkConfig.aiInstructions}
-                      onChange={(e) => handleBulkConfigChange('aiInstructions', e.target.value)}
-                    />
+                    {bulkAiInstructionsParsing && (
+                      <span className="text-xs text-warning font-semibold mt-1 block">
+                        <i className="fas fa-spinner fa-spin mr-1"></i> Parsing instructions file...
+                      </span>
+                    )}
+                    <div className="flex gap-2 items-center w-full">
+                      <input
+                        type="text"
+                        placeholder="Add a custom interviewer instruction..."
+                        className="flex-1 bg-slate-50/95 border border-slate-200 rounded-[5px] px-4 py-2.5 text-slate-900 text-[0.95rem] outline-none transition-all duration-200 focus:border-primary focus:bg-white focus:shadow-[0_0_0_3px_rgba(99,102,241,0.12)] placeholder:text-slate-400"
+                        value={newBulkInstruction}
+                        onChange={(e) => setNewBulkInstruction(e.target.value)}
+                        onKeyDown={(e) => {
+                          if (e.key === 'Enter') {
+                            e.preventDefault();
+                            addBulkInstruction();
+                          }
+                        }}
+                      />
+                      <button
+                        type="button"
+                        onClick={addBulkInstruction}
+                        className="bg-indigo-650 hover:bg-indigo-700 text-white text-xs font-bold px-4 py-2.5 rounded-[5px] transition-colors cursor-pointer"
+                        style={{ backgroundColor: '#6366f1' }}
+                      >
+                        Add
+                      </button>
+                    </div>
+                    {bulkConfig.aiInstructions && bulkConfig.aiInstructions.length > 0 && (
+                      <ol className="list-decimal pl-5 flex flex-col gap-2 mt-2 max-h-60 overflow-y-auto">
+                        {bulkConfig.aiInstructions.map((inst, idx) => (
+                          <li key={idx} className="text-sm text-slate-700 font-medium">
+                            <div className="flex justify-between items-start gap-4 group">
+                              <span className="break-all">{inst}</span>
+                              <button
+                                type="button"
+                                onClick={() => deleteBulkInstruction(idx)}
+                                className="text-rose-500 hover:text-rose-700 transition-colors p-1 cursor-pointer flex-shrink-0 bg-transparent border-none"
+                              >
+                                <i className="fas fa-trash"></i>
+                              </button>
+                            </div>
+                          </li>
+                        ))}
+                      </ol>
+                    )}
                   </div>
                 </div>
               </div>

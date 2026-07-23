@@ -324,12 +324,18 @@ export const completeSession = async (linkId) => {
   }
 };
 
-export const liveHeartbeat = async (data) => {
+export const liveHeartbeat = async (data, monitoringToken) => {
   try {
-    const response = await api.post("/live-heartbeat", data);
+    if (!monitoringToken) {
+      throw new Error("Candidate monitoring token is required");
+    }
+
+    const response = await api.post("/live-heartbeat", data, {
+      headers: { Authorization: `Bearer ${monitoringToken}` },
+    });
     return response.data;
   } catch (error) {
-    throw error.response?.data?.detail || error.response?.data?.message || "Heartbeat failed";
+    throw error.response?.data?.detail || error.response?.data?.message || error.message || "Heartbeat failed";
   }
 };
 

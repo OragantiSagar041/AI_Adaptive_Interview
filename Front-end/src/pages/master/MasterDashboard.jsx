@@ -171,7 +171,10 @@ export default function MasterDashboard() {
       {/* Enhanced Stat Cards */}
       <div className="grid grid-cols-2 gap-4 lg:grid-cols-4">
         {/* MRR Card */}
-        <div className="bg-white border border-slate-200/60 p-4 sm:p-6 rounded-2xl shadow-[0_4px_20px_rgba(0,0,0,0.04)] flex justify-between items-start gap-2">
+        <div
+          onClick={() => navigate('/master/subscribers')}
+          className="bg-white border border-slate-200/60 p-4 sm:p-6 rounded-2xl shadow-[0_4px_20px_rgba(0,0,0,0.04)] flex justify-between items-start gap-2 cursor-pointer transition-all hover:-translate-y-0.5 hover:shadow-lg hover:border-emerald-200"
+        >
           <div>
             <span className="text-[0.62rem] sm:text-[0.68rem] font-bold text-slate-400 uppercase tracking-widest block leading-tight">Monthly Recurring Revenue</span>
             <h3 className="text-xl sm:text-3xl font-extrabold mt-1.5 text-slate-900">$12,450</h3>
@@ -185,7 +188,10 @@ export default function MasterDashboard() {
         </div>
 
         {/* Active Companies Card */}
-        <div className="bg-white border border-slate-200/60 p-4 sm:p-6 rounded-2xl shadow-[0_4px_20px_rgba(0,0,0,0.04)] flex justify-between items-start gap-2">
+        <div
+          onClick={() => navigate('/master/subscribers')}
+          className="bg-white border border-slate-200/60 p-4 sm:p-6 rounded-2xl shadow-[0_4px_20px_rgba(0,0,0,0.04)] flex justify-between items-start gap-2 cursor-pointer transition-all hover:-translate-y-0.5 hover:shadow-lg hover:border-indigo-200"
+        >
           <div>
             <span className="text-[0.62rem] sm:text-[0.68rem] font-bold text-slate-400 uppercase tracking-widest block leading-tight">Active Companies</span>
             <h3 className="text-xl sm:text-3xl font-extrabold mt-1.5 text-slate-900">{companies.length}</h3>
@@ -199,7 +205,10 @@ export default function MasterDashboard() {
         </div>
 
         {/* Interviews Card */}
-        <div className="bg-white border border-slate-200/60 p-4 sm:p-6 rounded-2xl shadow-[0_4px_20px_rgba(0,0,0,0.04)] flex justify-between items-start gap-2">
+        <div
+          onClick={() => navigate('/master/subscribers')}
+          className="bg-white border border-slate-200/60 p-4 sm:p-6 rounded-2xl shadow-[0_4px_20px_rgba(0,0,0,0.04)] flex justify-between items-start gap-2 cursor-pointer transition-all hover:-translate-y-0.5 hover:shadow-lg hover:border-amber-200"
+        >
           <div>
             <span className="text-[0.62rem] sm:text-[0.68rem] font-bold text-slate-400 uppercase tracking-widest block leading-tight">Total Conducted</span>
             <h3 className="text-xl sm:text-3xl font-extrabold mt-1.5 text-slate-900">{Math.max(1204, totalInterviewsConducted)}</h3>
@@ -213,7 +222,9 @@ export default function MasterDashboard() {
         </div>
 
         {/* System Health Card */}
-        <div className="bg-white border border-slate-200/60 p-4 sm:p-6 rounded-2xl shadow-[0_4px_20px_rgba(0,0,0,0.04)] flex justify-between items-start gap-2">
+        <div
+          className="bg-white border border-slate-200/60 p-4 sm:p-6 rounded-2xl shadow-[0_4px_20px_rgba(0,0,0,0.04)] flex justify-between items-start gap-2"
+        >
           <div>
             <span className="text-[0.62rem] sm:text-[0.68rem] font-bold text-slate-400 uppercase tracking-widest block leading-tight">System Health</span>
             <h3 className="text-xl sm:text-3xl font-extrabold mt-1.5 text-slate-900">99.9%</h3>

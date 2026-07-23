@@ -10,7 +10,6 @@ python-dotenv
 # ─── Database ─────────────────────────────────────────────────────────────────
 pymongo[srv]
 certifi
-psycopg2-binary
 
 # ─── Auth & Security ──────────────────────────────────────────────────────────
 PyJWT

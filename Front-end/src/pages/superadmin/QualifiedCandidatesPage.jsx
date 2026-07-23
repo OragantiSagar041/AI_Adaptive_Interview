@@ -284,7 +284,7 @@ export default function QualifiedCandidatesPage() {
                   }
 
                   return (
-                    <tr key={c.id || c.link_id || c.email} className="hover:bg-slate-50/50 transition-colors group whitespace-nowrap">
+                    <tr key={c.id || c.link_id || c.email} onClick={() => setSelectedCandidate(c)} className="hover:bg-slate-50/50 transition-colors group whitespace-nowrap cursor-pointer">
                       <td className="px-5 py-4">
                         <div className="flex items-center gap-3">
                           <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-indigo-50 text-indigo-600 font-bold shrink-0 shadow-sm border border-indigo-100/50">
@@ -292,13 +292,15 @@ export default function QualifiedCandidatesPage() {
                           </div>
                           <div>
                             <div className="font-bold text-slate-800 text-sm">{c.candidate_name}</div>
-                            <div className="text-xs font-medium text-slate-400 mt-0.5">{c.email || 'No email provided'}</div>
+                            <div className="text-xs font-medium text-slate-400 mt-0.5">{c.candidate_email || c.email || 'No email provided'}</div>
                           </div>
                         </div>
                       </td>
                       <td className="px-5 py-4 text-sm font-semibold text-slate-600">{c.interview_title || c.job_applied}</td>
                       <td className="px-5 py-4 text-sm font-bold text-slate-700 tabular-nums">{scoreNum.toFixed(0)}%</td>
-                      <td className="px-5 py-4 text-sm font-medium text-slate-500">{c.skills_match || (scoreNum > 0 ? `${Math.min(scoreNum + 5, 99).toFixed(0)}%` : "N/A")}</td>
+                      <td className="px-5 py-4 text-sm font-medium text-slate-500">
+                        {c.ats_score != null ? `${c.ats_score}%` : (c.skills_match || '--')}
+                      </td>
                       <td className="px-5 py-4">
                         <span className="inline-flex items-center gap-1.5 text-xs font-semibold text-slate-600">
                           <span className={cn("h-1.5 w-1.5 rounded-full", c.decision === 'selected' ? "bg-emerald-500" : "bg-amber-500")} />
@@ -319,7 +321,7 @@ export default function QualifiedCandidatesPage() {
                       </td>
                       <td className="px-5 py-4 text-right">
                         <button
-                          onClick={() => setSelectedCandidate(c)}
+                          onClick={(e) => { e.stopPropagation(); setSelectedCandidate(c); }}
                           className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-bold bg-white border border-slate-200 text-slate-600 hover:text-indigo-600 hover:border-indigo-200 hover:bg-indigo-50 shadow-sm transition-all cursor-pointer"
                         >
                           <Eye className="h-3.5 w-3.5" /> View

@@ -1,10 +1,25 @@
 import React, { useEffect, useState } from "react";
+import { useOutletContext, useNavigate } from "react-router-dom";
 import { useDispatch, useSelector } from "react-redux";
-import { loadSuperAdminDashboard } from "@/store/slices/dashboardSlice";
-import { CandidateTable } from "../../components/admin/AdminSubComponents";
+import { loadSuperAdminDashboard, loadRecruitmentFunnel, loadPlatformAnalytics } from "@/store/slices/dashboardSlice";
+import { CandidateTable, CandidateFilters } from "../../components/admin/AdminSubComponents";
 import CandidateDialog from "../../components/superadmin/CandidateDialog";
+import CallDetailsModal from "../admin/CallDetailsModal";
 import { getComputedStatus } from "../../utils/adminFormatters";
-import { setSelectedIds, setCurrentPage } from "../../store/slices/candidatesSlice";
+import { 
+  setSelectedIds, 
+  setCurrentPage,
+  setSearchTerm,
+  setStartDate,
+  setEndDate,
+  setStatusFilter,
+  setSortBy,
+  setAdminFilter,
+  setPipelineFilter,
+  setPositionFilter,
+  handleSuperAdminBulkDelete,
+  handleSuperAdminExportExcel
+} from "../../store/slices/candidatesSlice";
 import { handleOpenScorecard, handleDeleteSession } from "../../store/slices/interviewSlice";
 import {
   Building2,
@@ -65,6 +80,8 @@ function formatNum(n) {
 }
 
 export default function SuperDashboardPage() {
+  const navigate = useNavigate();
+  const { handleOpenLiveStreamAction } = useOutletContext() || {};
   const dispatch = useDispatch();
   const { 
     dbStats, 
@@ -74,10 +91,13 @@ export default function SuperDashboardPage() {
     ongoingSpeakingCount, 
     ongoingCodingCount,
     liveSessions,
-    status
+    status,
+    funnelData: rawFunnelData,
+    analyticsData,
+    avgTimeToHire
   } = useSelector(state => state.dashboard);
   
-  const { API_BASE_URL } = useSelector(state => state.auth);
+  const { API_BASE_URL, token } = useSelector(state => state.auth);
   const selectedAdminFilter = useSelector(state => state.dashboard.selectedAdminFilter);
   
   const paginatedCandidates = useSelector(state => state.candidates.paginatedCandidates);
@@ -87,13 +107,49 @@ export default function SuperDashboardPage() {
   const endIndex = useSelector(state => state.candidates.endIndex);
   const totalItems = useSelector(state => state.candidates.totalItems);
   const currentPage = useSelector(state => state.candidates.currentPage);
+  
+  const searchTerm = useSelector(state => state.candidates.searchTerm);
+  const startDate = useSelector(state => state.candidates.startDate);
+  const endDate = useSelector(state => state.candidates.endDate);
+  const statusFilter = useSelector(state => state.candidates.statusFilter);
+  const adminFilter = useSelector(state => state.candidates.adminFilter);
+  const pipelineFilter = useSelector(state => state.candidates.pipelineFilter);
+  const positionFilter = useSelector(state => state.candidates.positionFilter);
+  const sortBy = useSelector(state => state.candidates.sortBy);
+  
+  const allCandidates = useSelector(state => state.candidates.candidates);
+  const filteredCandidates = useSelector(state => state.candidates.filteredCandidates);
 
   const [selectedCandidate, setSelectedCandidate] = useState(null);
+  const [adminsList, setAdminsList] = useState([]);
+
+  useEffect(() => {
+    const fetchAdmins = async () => {
+      try {
+        const res = await fetch(`${API_BASE_URL}/super-admin/admins`, {
+          headers: { 'Authorization': `Bearer ${token}` }
+        });
+        const json = await res.json();
+        if (json && json.data) {
+          setAdminsList(json.data);
+        }
+      } catch (e) {
+        console.error('Failed to fetch admins:', e);
+      }
+    };
+    if (token) {
+      fetchAdmins();
+    }
+  }, [API_BASE_URL, token]);
 
   useEffect(() => {
     dispatch(loadSuperAdminDashboard(selectedAdminFilter));
+    dispatch(loadRecruitmentFunnel(selectedAdminFilter));
+    dispatch(loadPlatformAnalytics(selectedAdminFilter));
     const interval = setInterval(() => {
-      dispatch(loadSuperAdminDashboard(selectedAdminFilter));
+      dispatch(loadSuperAdminDashboard({ adminFilter: selectedAdminFilter,  }));
+      dispatch(loadRecruitmentFunnel(selectedAdminFilter));
+      dispatch(loadPlatformAnalytics(selectedAdminFilter));
     }, 30000); // refresh every 30s
     return () => {
       clearInterval(interval);
@@ -102,14 +158,14 @@ export default function SuperDashboardPage() {
   }, [dispatch, selectedAdminFilter]);
 
   const kpis = [
-    { label: "Total AI Interviews", value: formatNum(dbStats?.total), delta: "", up: true, icon: Mic, tint: "from-violet-500/15 to-violet-500/0" },
-    { label: "Active Today", value: formatNum(dbStats?.today), delta: "", up: true, icon: Activity, tint: "from-blue-500/15 to-blue-500/0" },
-    { label: "Completed Interviews", value: formatNum(dbStats?.completed), delta: "", up: true, icon: CheckCircle2, tint: "from-emerald-500/15 to-emerald-500/0" },
-    { label: "Pending Interviews", value: formatNum(dbStats?.pending), delta: "", up: true, icon: Clock, tint: "from-amber-500/15 to-amber-500/0" },
-    { label: "Avg AI Score", value: `${dbStats?.avg_score || 0}%`, delta: "", up: true, icon: Star, tint: "from-fuchsia-500/15 to-fuchsia-500/0" },
-    { label: "Candidates Hired", value: formatNum(dbStats?.selected), delta: "", up: true, icon: Target, tint: "from-teal-500/15 to-teal-500/0" },
-    { label: "Candidates Rejected", value: formatNum(dbStats?.rejected), delta: "", up: false, icon: XCircle, tint: "from-rose-500/15 to-rose-500/0" },
-    { label: "Expired Links", value: formatNum(dbStats?.expired), delta: "", up: false, icon: AlertTriangle, tint: "from-red-500/15 to-red-500/0" }
+    { label: "Total AI Interviews", value: formatNum(dbStats?.total), delta: "", up: true, icon: Mic, tint: "from-violet-500/15 to-violet-500/0", navPath: "/superadmin/dashboard" },
+    { label: "Active Today", value: formatNum(dbStats?.today), delta: "", up: true, icon: Activity, tint: "from-blue-500/15 to-blue-500/0", navPath: "/superadmin/dashboard" },
+    { label: "Completed Interviews", value: formatNum(dbStats?.completed), delta: "", up: true, icon: CheckCircle2, tint: "from-emerald-500/15 to-emerald-500/0", navPath: "/superadmin/qualified-candidates" },
+    { label: "Pending Interviews", value: formatNum(dbStats?.pending), delta: "", up: true, icon: Clock, tint: "from-amber-500/15 to-amber-500/0", navPath: "/superadmin/dashboard" },
+    { label: "Avg AI Score", value: `${dbStats?.avg_score || 0}%`, delta: "", up: true, icon: Star, tint: "from-fuchsia-500/15 to-fuchsia-500/0", navPath: "/superadmin/qualified-candidates" },
+    { label: "Candidates Hired", value: formatNum(dbStats?.selected), delta: "", up: true, icon: Target, tint: "from-teal-500/15 to-teal-500/0", navPath: "/superadmin/qualified-candidates" },
+    { label: "Candidates Rejected", value: formatNum(dbStats?.rejected), delta: "", up: false, icon: XCircle, tint: "from-rose-500/15 to-rose-500/0", navPath: "/superadmin/rejected-candidates" },
+    { label: "Expired Links", value: formatNum(dbStats?.expired), delta: "", up: false, icon: AlertTriangle, tint: "from-red-500/15 to-red-500/0", navPath: "/superadmin/dashboard" }
   ];
 
   const platformActivity = [
@@ -121,7 +177,7 @@ export default function SuperDashboardPage() {
     { metric: "Coding Sessions", value: ongoingCodingCount || 0 }
   ];
 
-  const funnelData = [
+  const defaultFunnelTemplate = [
     { name: "Applications Received", value: 42000, fill: "#3b82f6" },
     { name: "AI Resume Screening", value: 28400, fill: "#0ea5e9" },
     { name: "AI Voice Screening", value: 19860, fill: "#0284c7" },
@@ -132,15 +188,18 @@ export default function SuperDashboardPage() {
     { name: "Candidates Hired", value: 82, fill: "#f59e0b" }
   ];
 
-  const analytics = [
-    { label: "AI Resume Screening Success Rate", value: 82 },
-    { label: "Interview Completion Rate", value: 91 },
-    { label: "Average AI Match Score", value: 89 },
-    { label: "Offer Acceptance Rate", value: 76 },
-    { label: "Candidate Conversion Rate", value: 34 },
-    { label: "Recruiter Productivity", value: 93 },
-    { label: "AI Recommendation Accuracy", value: 88 }
-  ];
+  const isFunnelEmpty = !rawFunnelData || rawFunnelData.length === 0 || rawFunnelData.every(d => d.value === 0);
+  const displayFunnelData = isFunnelEmpty
+    ? defaultFunnelTemplate.map((d, i) => ({
+        ...d,
+        shapeValue: d.value,
+        displayValue: rawFunnelData?.[i]?.value || 0
+      }))
+    : rawFunnelData.map(d => ({
+        ...d,
+        shapeValue: d.value,
+        displayValue: d.value
+      }));
 
   return (
     <div className="space-y-6">
@@ -156,13 +215,22 @@ export default function SuperDashboardPage() {
         {kpis.map((k) => {
           const Icon = k.icon;
           return (
-            <Card key={k.label} className="relative overflow-hidden bg-white text-slate-900 border-slate-200 shadow-sm">
+            <Card
+              key={k.label}
+              onClick={() => k.navPath && navigate(k.navPath)}
+              className={`relative overflow-hidden bg-white text-slate-900 border-slate-200 shadow-sm transition-all hover:-translate-y-0.5 ${
+                k.navPath ? "cursor-pointer hover:border-indigo-300 hover:shadow-md" : ""
+              }`}
+            >
               <div className={`pointer-events-none absolute inset-0 bg-gradient-to-br ${k.tint}`} />
               <CardContent className="relative p-4">
                 <div className="flex items-start justify-between">
                   <div className="grid h-9 w-9 place-items-center rounded-lg bg-white text-slate-900 border-slate-200 shadow-sm ring-1 ring-slate-200">
                     <Icon className="h-4 w-4 text-slate-900" />
                   </div>
+                  {k.navPath && (
+                    <ChevronRight className="h-4 w-4 text-slate-400 opacity-0 group-hover:opacity-100 transition-opacity" />
+                  )}
                 </div>
                 <div className="mt-3 text-2xl font-semibold tracking-tight">{status === 'loading' && !dbStats?.total ? '...' : k.value}</div>
                 <div className="text-xs text-slate-500">{k.label}</div>
@@ -198,11 +266,16 @@ export default function SuperDashboardPage() {
             <CardDescription>Stage-by-stage conversion across the platform.</CardDescription>
           </CardHeader>
           <CardContent>
-            <div className="h-[360px]">
+            <div className="h-[360px] relative">
+              {isFunnelEmpty && status !== 'loading' && (
+                <div className="absolute top-0 right-2 text-xs text-slate-400 bg-slate-50 px-2 py-1 rounded-md border border-slate-200 z-10">
+                  Demo Data (No active pipeline)
+                </div>
+              )}
               <ResponsiveContainer width="100%" height="100%">
                 <FunnelChart>
                   <RTooltip
-                    formatter={(v) => formatNum(v)}
+                    formatter={(v, name, props) => formatNum(props.payload.displayValue)}
                     contentStyle={{
                       background: "#ffffff",
                       border: "1px solid #e2e8f0",
@@ -210,9 +283,9 @@ export default function SuperDashboardPage() {
                       fontSize: 12
                     }}
                   />
-                  <Funnel dataKey="value" data={funnelData} isAnimationActive>
+                  <Funnel dataKey="shapeValue" data={displayFunnelData} isAnimationActive>
                     <LabelList position="right" fill="#0f172a" stroke="none" dataKey="name" fontSize={12} />
-                    <LabelList position="center" fill="#fff" stroke="none" fontSize={12} formatter={(v) => formatNum(v)} />
+                    <LabelList position="center" fill="#fff" stroke="none" dataKey="displayValue" fontSize={12} formatter={(v) => formatNum(v)} />
                   </Funnel>
                 </FunnelChart>
               </ResponsiveContainer>
@@ -228,15 +301,19 @@ export default function SuperDashboardPage() {
           </CardHeader>
           <CardContent className="flex-1 flex flex-col justify-between">
             <div className="space-y-4">
-              {analytics.map((item, idx) => (
-                <div key={idx} className="space-y-1">
-                  <div className="flex items-center justify-between text-xs">
-                    <span className="text-slate-500">{item.label}</span>
-                    <span className="font-medium">{item.value}%</span>
+              {analyticsData.length === 0 ? (
+                <div className="text-center text-sm text-slate-400 py-4">Loading analytics…</div>
+              ) : (
+                analyticsData.map((item, idx) => (
+                  <div key={idx} className="space-y-1">
+                    <div className="flex items-center justify-between text-xs">
+                      <span className="text-slate-500">{item.label}</span>
+                      <span className="font-medium">{item.value}%</span>
+                    </div>
+                    <Progress value={item.value} className="h-1.5" />
                   </div>
-                  <Progress value={item.value} className="h-1.5" />
-                </div>
-              ))}
+                ))
+              )}
             </div>
             <div className="mt-6">
               <div className="rounded-lg border border-slate-200 bg-slate-50 p-3 flex items-center justify-between">
@@ -244,7 +321,9 @@ export default function SuperDashboardPage() {
                   <Clock className="mr-2 h-4 w-4" />
                   <span className="text-sm">Average Time-to-Hire</span>
                 </div>
-                <div className="font-semibold">22 days</div>
+                <div className="font-semibold">
+                  {avgTimeToHire != null ? `${avgTimeToHire} days` : '—'}
+                </div>
               </div>
             </div>
           </CardContent>
@@ -264,8 +343,10 @@ export default function SuperDashboardPage() {
                 <TableHead className="text-slate-500">Candidate</TableHead>
                 <TableHead className="text-slate-500">Interview</TableHead>
                 <TableHead className="text-right text-slate-500">Status</TableHead>
+                <TableHead className="text-center text-slate-500">Progress</TableHead>
                 <TableHead className="text-right text-slate-500">Alerts</TableHead>
                 <TableHead className="text-right text-slate-500">Audio Level</TableHead>
+                <TableHead className="text-right text-slate-500">Action</TableHead>
               </TableRow>
             </TableHeader>
             <TableBody>
@@ -278,15 +359,41 @@ export default function SuperDashboardPage() {
                       {session.online ? "Online" : "Offline"}
                     </Badge>
                   </TableCell>
+                  <TableCell className="text-center whitespace-nowrap">
+                    {session.current_question ? (
+                      <div className="flex flex-col items-center gap-1">
+                        {session.round_type && (
+                          <span className="text-[10px] uppercase font-bold text-indigo-600 bg-indigo-50 px-1.5 py-0.5 rounded">
+                            {session.round_type}
+                          </span>
+                        )}
+                        <span className="text-xs font-semibold text-slate-700 bg-slate-100 px-2 py-1 rounded-md">
+                          Q{session.current_question} / {session.total_questions || '-'}
+                        </span>
+                      </div>
+                    ) : (
+                      <span className="text-xs text-slate-400">N/A</span>
+                    )}
+                  </TableCell>
                   <TableCell className="text-right tabular-nums">{session.proctoring_alerts || 0}</TableCell>
                   <TableCell className="text-right flex items-center justify-end">
                     <Progress value={(session.audio_level || 0) * 10} className="h-1.5 w-16 ml-2" />
+                  </TableCell>
+                  <TableCell className="text-right">
+                    <Button 
+                      size="sm" 
+                      variant="outline" 
+                      onClick={() => handleOpenLiveStreamAction && handleOpenLiveStreamAction(session)}
+                      className="h-8 text-xs font-semibold hover:bg-indigo-50 hover:text-indigo-600 border-indigo-100 transition-colors"
+                    >
+                      <Eye className="w-3.5 h-3.5 mr-1.5" /> Monitor
+                    </Button>
                   </TableCell>
                 </TableRow>
               ))}
               {(!liveSessions || liveSessions.length === 0) && (
                 <TableRow>
-                  <TableCell colSpan={5} className="text-center text-slate-500 py-6">No active sessions being monitored</TableCell>
+                  <TableCell colSpan={6} className="text-center text-slate-500 py-6">No active sessions being monitored</TableCell>
                 </TableRow>
               )}
             </TableBody>
@@ -301,6 +408,29 @@ export default function SuperDashboardPage() {
           <CardDescription>Latest candidates evaluated by the AI.</CardDescription>
         </CardHeader>
         <CardContent>
+          <CandidateFilters
+            searchTerm={searchTerm}
+            setSearchTerm={(val) => dispatch(setSearchTerm(val))}
+            startDate={startDate}
+            setStartDate={(val) => dispatch(setStartDate(val))}
+            endDate={endDate}
+            setEndDate={(val) => dispatch(setEndDate(val))}
+            statusFilter={statusFilter}
+            setStatusFilter={(val) => dispatch(setStatusFilter(val))}
+            adminFilter={adminFilter}
+            setAdminFilter={(val) => dispatch(setAdminFilter(val))}
+            pipelineFilter={pipelineFilter}
+            setPipelineFilter={(val) => dispatch(setPipelineFilter(val))}
+            positionFilter={positionFilter}
+            setPositionFilter={(val) => dispatch(setPositionFilter(val))}
+            sortBy={sortBy}
+            setSortBy={(val) => dispatch(setSortBy(val))}
+            handleExportExcel={() => dispatch(handleSuperAdminExportExcel(paginatedCandidates))}
+            selectedIds={selectedIds}
+            handleBulkDelete={() => dispatch(handleSuperAdminBulkDelete(selectedIds))}
+            allCandidates={allCandidates}
+            adminsList={adminsList}
+          />
           <CandidateTable
             paginatedCandidates={paginatedCandidates}
             selectedIds={selectedIds}
@@ -323,17 +453,26 @@ export default function SuperDashboardPage() {
         </CardContent>
       </Card>
 
-      <CandidateDialog
-        candidate={selectedCandidate}
-        open={!!selectedCandidate}
-        onOpenChange={(v) => {
-          if (!v) setSelectedCandidate(null);
-        }}
-        onStatusUpdate={() => {
-          dispatch(loadSuperAdminDashboard(selectedAdminFilter));
-        }}
-      />
+      {selectedCandidate?.id?.startsWith('ai_call_omni_') ? (
+        <CallDetailsModal
+          isOpen={!!selectedCandidate}
+          onClose={() => setSelectedCandidate(null)}
+          callId={selectedCandidate.id.replace('ai_call_omni_', '')}
+          API_BASE_URL={API_BASE_URL}
+          token={token}
+        />
+      ) : (
+        <CandidateDialog
+          candidate={selectedCandidate}
+          open={!!selectedCandidate}
+          onOpenChange={(v) => {
+            if (!v) setSelectedCandidate(null);
+          }}
+          onStatusUpdate={() => {
+            dispatch(loadSuperAdminDashboard(selectedAdminFilter));
+          }}
+        />
+      )}
     </div>
   );
 }
- 

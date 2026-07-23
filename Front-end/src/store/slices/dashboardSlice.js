@@ -24,10 +24,13 @@ export const loadDashboardData = createAsyncThunk(
 // ─── SuperAdmin Thunks ─────────────────────────────────
 export const loadSuperAdminDashboard = createAsyncThunk(
   'dashboard/loadSuperAdminData',
-  async (adminFilter = null, { getState, rejectWithValue }) => {
+  async (arg = null, { getState, rejectWithValue }) => {
     try {
       const { API_BASE_URL, token } = getState().auth
-      const params = adminFilter ? { adminId: adminFilter } : {}
+      const adminFilter = typeof arg === 'object' && arg !== null ? arg.adminFilter ?? null : arg
+      const summaryOnly = typeof arg === 'object' && arg !== null ? !!arg.summaryOnly : false
+      const params = { summary_only: summaryOnly }
+      if (adminFilter) params.adminId = adminFilter
       const res = await axios.get(`${API_BASE_URL}/superadmin/dashboard`, {
         headers: { Authorization: `Bearer ${token}` },
         params
@@ -35,6 +38,44 @@ export const loadSuperAdminDashboard = createAsyncThunk(
       return res.data
     } catch (err) {
       const errorMsg = err.response?.data?.detail || err.response?.data?.message || err.message || 'Failed to load superadmin dashboard'
+      return rejectWithValue(typeof errorMsg === 'object' ? JSON.stringify(errorMsg) : errorMsg)
+    }
+  }
+)
+
+// ─── Recruitment Funnel Thunk ───────────────────────────────────────────────
+export const loadRecruitmentFunnel = createAsyncThunk(
+  'dashboard/loadRecruitmentFunnel',
+  async (adminFilter = null, { getState, rejectWithValue }) => {
+    try {
+      const { API_BASE_URL, token } = getState().auth
+      const params = adminFilter ? { adminId: adminFilter } : {}
+      const res = await axios.get(`${API_BASE_URL}/superadmin/recruitment-funnel`, {
+        headers: { Authorization: `Bearer ${token}` },
+        params
+      })
+      return res.data.funnel ?? []
+    } catch (err) {
+      const errorMsg = err.response?.data?.detail || err.message || 'Failed to load funnel'
+      return rejectWithValue(typeof errorMsg === 'object' ? JSON.stringify(errorMsg) : errorMsg)
+    }
+  }
+)
+
+// ─── Platform Analytics Thunk ───────────────────────────────────────────────
+export const loadPlatformAnalytics = createAsyncThunk(
+  'dashboard/loadPlatformAnalytics',
+  async (adminFilter = null, { getState, rejectWithValue }) => {
+    try {
+      const { API_BASE_URL, token } = getState().auth
+      const params = adminFilter ? { adminId: adminFilter } : {}
+      const res = await axios.get(`${API_BASE_URL}/superadmin/platform-analytics`, {
+        headers: { Authorization: `Bearer ${token}` },
+        params
+      })
+      return res.data
+    } catch (err) {
+      const errorMsg = err.response?.data?.detail || err.message || 'Failed to load analytics'
       return rejectWithValue(typeof errorMsg === 'object' ? JSON.stringify(errorMsg) : errorMsg)
     }
   }
@@ -65,6 +106,9 @@ const dashboardSlice = createSlice({
       avg_score: '--',
       today: '--'
     },
+    funnelData: [],
+    analyticsData: [],
+    avgTimeToHire: null,
     selectedAdminFilter: null,
     ongoingLiveCount: 0,
     ongoingAlertCount: 0,
@@ -87,10 +131,16 @@ const dashboardSlice = createSlice({
         const session = state.liveSessions[sessionIndex];
         state.liveSessions[sessionIndex] = {
           ...session,
+          ...data,
           online: true,
-          audio_level: data.audio_level || 0,
-          current_question: data.current_question || session.current_question
+          audio_level: data.audio_level ?? session.audio_level ?? 0,
+          current_question: data.current_question ?? session.current_question
         };
+        state.ongoingMonitoredCount = state.liveSessions.length
+        state.ongoingLiveCount = state.liveSessions.filter(item => item.online).length
+        state.ongoingAlertCount = state.liveSessions.filter(item => (item.proctoring_alerts || 0) > 0).length
+        state.ongoingSpeakingCount = state.liveSessions.filter(item => (item.audio_level || 0) > 5).length
+        state.ongoingCodingCount = state.liveSessions.filter(item => item.round_type === 'coding').length
       }
     }
   },
@@ -139,6 +189,14 @@ const dashboardSlice = createSlice({
       .addCase(loadSuperAdminDashboard.rejected, (state, action) => {
         state.status = 'failed'
         state.error = action.payload
+      })
+      .addCase(loadRecruitmentFunnel.fulfilled, (state, action) => {
+        state.funnelData = Array.isArray(action.payload) ? action.payload : []
+      })
+      .addCase(loadPlatformAnalytics.fulfilled, (state, action) => {
+        const payload = action.payload || {}
+        state.analyticsData = Array.isArray(payload.analytics) ? payload.analytics : []
+        state.avgTimeToHire = payload.avg_time_to_hire_days ?? null
       })
   }
 })

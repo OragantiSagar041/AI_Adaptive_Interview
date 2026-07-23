@@ -27,6 +27,7 @@ import aiVideoUrl from '../assets/ai_avatar.mp4'
 import { useProctoring } from '../hooks/useProctoring'
 import { useScreenshotProtection } from '../hooks/useScreenshotProtection'
 import { useExamSecurity } from '../hooks/useExamSecurity'
+import { useExitConfirmation } from '../hooks/useExitConfirmation'
 import DeviceCheckModal from '../components/DeviceCheckModal'
 
 import { VOICE_TRANSLATIONS } from '../utils/voiceTranslations'
@@ -207,6 +208,7 @@ export default function VoiceInterviewPage() {
   const [codingQuestion, setCodingQuestion] = useState(null)
   const [caseStudyQuestions, setCaseStudyQuestions] = useState([])
   const [interviewId, setInterviewId] = useState('')
+  const [monitoringToken, setMonitoringToken] = useState('')
   const [language, setLanguage] = useState('English')
   const [interviewType, setInterviewType] = useState('Technical')
 
@@ -236,6 +238,9 @@ export default function VoiceInterviewPage() {
   const [countdown, setCountdown] = useState(0)
   const [roundDuration, setRoundDuration] = useState(900)
   const [answeredCount, setAnsweredCount] = useState(0)
+  const [isSaving, setIsSaving] = useState(false)
+  const prefetchedQuestionsRef = useRef([])  // background-fetched next batch
+  const isPrefetchingRef = useRef(false)     // prevent duplicate fetches
   const [followUpCount, setFollowUpCount] = useState(0)  // follow-ups per question
   const [warningsCount, setWarningsCount] = useState(0)
   const [proctoringState, setProctoringState] = useState({
@@ -276,25 +281,20 @@ export default function VoiceInterviewPage() {
   const cameraStreamRef = useRef(null)
   const cameraChunksRef = useRef([])
   const candidateVideoRef = useRef(null)
-  
 
 
-  // Set a mock audio level that bounces slightly when speaking, or 0 when silent
-  const isSpeaking = aiStatus === 'listening' && interimText.length > 0
-  const mockAudioLevel = isSpeaking ? Math.floor(Math.random() * 40) + 20 : 0
 
   // Initialize WebRTC
   const telemetryData = {
-    round_type: round,
+    round_type: ['verbal', 'coding', 'case_study'].includes(round) ? round : 'verbal',
     status: aiStatus === 'idle' ? 'online' : aiStatus,
     proctoring_alerts: warningsCount,
     proctoring_status: proctoringState,
     current_question: currentQIdx + 1,
     total_questions: questions.length || 0,
-    audio_level: mockAudioLevel,
     question_text: questions[currentQIdx] ? questions[currentQIdx].question_text : ''
   }
-  useCandidateWebRTC(linkId, cameraStreamRef, telemetryData)
+  useCandidateWebRTC(linkId, cameraStreamRef, telemetryData, monitoringToken)
 
   // Refs
   const recognitionRef = useRef(null)
@@ -309,9 +309,25 @@ export default function VoiceInterviewPage() {
   const roundRef = useRef('pre_checks')
   const chatBottomRef = useRef(null)
   const wsRef = useRef(null)
+  const wsReconnectAttemptsRef = useRef(0)  // Phase 2: WS auto-reconnect counter
+  const wsReconnectTimeoutRef = useRef(null)
+  const heartbeatFailCountRef = useRef(0)   // Phase 2: consecutive heartbeat failure counter
   const languageRef = useRef('English')
   const currentAudioRef = useRef(null)    // ← tracks active TTS audio so stopAudio() can kill it
   const isTransitioningRef = useRef(false)
+
+  // ── Phase 3: Browser online/offline detection ────────────────────────────
+  const [isOnline, setIsOnline] = useState(() => navigator.onLine)
+  useEffect(() => {
+    const goOnline = () => setIsOnline(true)
+    const goOffline = () => setIsOnline(false)
+    window.addEventListener('online', goOnline)
+    window.addEventListener('offline', goOffline)
+    return () => {
+      window.removeEventListener('online', goOnline)
+      window.removeEventListener('offline', goOffline)
+    }
+  }, [])
   // Camera preview element for proctoring - must remain VISIBLE (even if small) for browser to
   // keep decoding frames. A fully hidden/off-screen video gets throttled by Chrome and freezes
   // causing MediaPipe to never detect faces.
@@ -372,18 +388,75 @@ export default function VoiceInterviewPage() {
 
   useEffect(() => {
     if (!linkId) return
-    const wsUrl = API_BASE_URL.replace('http', 'ws') + `/ws/interview/${linkId}`
-    const ws = new WebSocket(wsUrl)
-    ws.onmessage = (event) => {
-      try {
-        const data = JSON.parse(event.data)
-        if (data.type === 'ai_state' && roundRef.current === 'verbal') {
-          // Can sync state from backend if needed
+    const MAX_WS_RETRIES = 3
+
+    function connectWs() {
+      const wsUrl = API_BASE_URL.replace('http', 'ws') + `/ws/interview/${linkId}`
+      const ws = new WebSocket(wsUrl)
+
+      ws.onmessage = (event) => {
+        try {
+          const data = JSON.parse(event.data)
+          if (data.type === 'ai_state' && roundRef.current === 'verbal') {
+            // Can sync state from backend if needed
+          }
+        } catch (e) { }
+      }
+
+      ws.onopen = () => {
+        // Reset reconnect counter on successful connection
+        wsReconnectAttemptsRef.current = 0
+      }
+
+      ws.onerror = (err) => {
+        console.warn('[WS] Connection error:', err)
+      }
+
+      ws.onclose = (evt) => {
+        // Don't reconnect if interview is done or if this was an intentional close (code 1000)
+        const round = roundRef.current
+        if (round === 'done' || round === 'submitting' || evt.code === 1000) return
+
+        const attempt = wsReconnectAttemptsRef.current
+        if (attempt < MAX_WS_RETRIES) {
+          wsReconnectAttemptsRef.current = attempt + 1
+          Swal.fire({
+            icon: 'warning',
+            title: 'Connection Lost',
+            text: `Reconnecting to interview server (attempt ${attempt + 1}/${MAX_WS_RETRIES})...`,
+            toast: true,
+            position: 'top-end',
+            showConfirmButton: false,
+            timer: 3000,
+            background: '#161c2d',
+            color: '#fff',
+          })
+          wsReconnectTimeoutRef.current = setTimeout(() => {
+            wsRef.current = null
+            connectWs()
+          }, 2000)
+        } else {
+          // Exhausted retries — warn the candidate; HTTP fallback is already in place for save-answer
+          Swal.fire({
+            icon: 'warning',
+            title: 'Server Unreachable',
+            text: 'Real-time connection to the server could not be restored. Your answers will still be saved automatically. Continue the interview.',
+            confirmButtonText: 'Continue',
+            background: '#161c2d',
+            color: '#fff',
+            allowOutsideClick: false,
+          })
         }
-      } catch (e) { }
+      }
+
+      wsRef.current = ws
     }
-    wsRef.current = ws
-    return () => ws.close()
+
+    connectWs()
+    return () => {
+      if (wsReconnectTimeoutRef.current) clearTimeout(wsReconnectTimeoutRef.current)
+      if (wsRef.current) wsRef.current.close(1000, 'component unmounted')
+    }
   }, [linkId])
 
   const fmt = s => `${String(Math.floor(s / 60)).padStart(2, '0')}:${String(s % 60).padStart(2, '0')}`
@@ -404,13 +477,26 @@ export default function VoiceInterviewPage() {
       }
     }
     // pagehide fires on mobile browsers where beforeunload is unreliable
-    window.addEventListener('beforeunload', handleUnload)
     window.addEventListener('pagehide', handleUnload)
     return () => {
-      window.removeEventListener('beforeunload', handleUnload)
       window.removeEventListener('pagehide', handleUnload)
     }
   }, [linkId, warningsCount])
+
+  // ── Exit Confirmation Dialog ────────────────────────────────────────────────
+  const isInterviewActive = round && round !== 'done' && round !== 'intro' && round !== 'pre_checks'
+  useExitConfirmation({
+    active: isInterviewActive,
+    onConfirmExit: async () => {
+      if (linkId) {
+        navigator.sendBeacon(
+          `${API_BASE_URL}/complete-session/${linkId}?warnings=${warningsCount}&reason=tab_closed`,
+          JSON.stringify({ reason: 'candidate_exited', timestamp: new Date().toISOString() })
+        )
+      }
+    },
+    message: `Your interview is still in progress.<br/><br/>If you leave now, your session will be marked as <strong>incomplete</strong> and you may not be able to re-enter.<br/><br/>Are you sure you want to exit?`,
+  })
 
   // ── Screenshot / Screen-capture Prevention ───────────────────────────────
   // Active while the interview is in progress. Silently swallows PrintScreen,
@@ -464,13 +550,13 @@ export default function VoiceInterviewPage() {
     `
     document.head.appendChild(styleEl)
 
-    document.addEventListener('keydown',  handleKeyDown,  true)
-    document.addEventListener('keyup',    handleKeyUp,    true)
+    document.addEventListener('keydown', handleKeyDown, true)
+    document.addEventListener('keyup', handleKeyUp, true)
     document.addEventListener('keypress', handleKeyPress, true)
 
     return () => {
-      document.removeEventListener('keydown',  handleKeyDown,  true)
-      document.removeEventListener('keyup',    handleKeyUp,    true)
+      document.removeEventListener('keydown', handleKeyDown, true)
+      document.removeEventListener('keyup', handleKeyUp, true)
       document.removeEventListener('keypress', handleKeyPress, true)
       document.getElementById('voice-interview-screenshot-guard')?.remove()
     }
@@ -493,17 +579,36 @@ export default function VoiceInterviewPage() {
     sessionStorage.setItem(_sessionKey, JSON.stringify({ ...existing, currentQIdx }))
   }, [currentQIdx, _sessionKey])
 
-  // ── Load Session ──────────────────────────────────────────────────────────
   useEffect(() => {
     if (!linkId) { setError('Missing session ID.'); setLoading(false); return }
+    // ── Phase 2: Loading safeguard ────────────────────────────────────────────
+    let hasTimedOut = false
+    const loadingTimeout = setTimeout(() => {
+      hasTimedOut = true
+      setError('Unable to reach the interview server. Please check your connection and refresh the page.')
+      setLoading(false)
+    }, 20000)
     async function init() {
       try {
         const r = await fetch(`${API_BASE_URL}/session/${linkId}`)
+        if (hasTimedOut) return
         const d = await r.json()
+        if (hasTimedOut) return
         if (!r.ok || d.status !== 'success') throw new Error(d.detail || 'Session not found.')
         if (d.is_deactivated) throw new Error('This link is deactivated.')
         if (d.is_expired) throw new Error('This link has expired.')
         if (d.session_status === 'completed') throw new Error('Interview already completed.')
+
+        // ── Drain any complete-session that failed on the previous load ────────
+        // If /complete-session failed (network/server crash), we stored a retry key.
+        try {
+          const pendingKey = `complete_session_pending_${linkId}`
+          if (localStorage.getItem(pendingKey) === '1') {
+            fetch(`${API_BASE_URL}/complete-session/${linkId}`, { method: 'POST' })
+              .then(res => { if (res.ok) localStorage.removeItem(pendingKey) })
+              .catch(() => {})
+          }
+        } catch (_) {}
         setSessionDetail(d)
         const langVal = d.language || 'English'
         setLanguage(langVal.charAt(0).toUpperCase() + langVal.slice(1).toLowerCase())
@@ -531,7 +636,9 @@ export default function VoiceInterviewPage() {
 
         const fd = new FormData(); fd.append('link_id', linkId)
         const sr = await fetch(`${API_BASE_URL}/start-session-interview`, { method: 'POST', body: fd })
+        if (hasTimedOut) return
         const sd = await sr.json()
+        if (hasTimedOut) return
         if (!sr.ok) throw new Error(sd.detail || 'Failed to start session.')
         if (sd.session_status === 'completed') throw new Error('Interview already completed.')
 
@@ -540,10 +647,14 @@ export default function VoiceInterviewPage() {
           .filter(q => q.type !== 'coding' && q.type !== 'case_study') // verbal only
 
         if (!qs.length) throw new Error('No questions found for this session.')
-        setQuestions(qs); setInterviewId(sd.interview_id || ''); setLoading(false)
+        setQuestions(qs)
+        setInterviewId(sd.interview_id || '')
+        setMonitoringToken(sd.monitoring_token || '')
+        setLoading(false)
       } catch (e) { setError(e.message); setLoading(false) }
     }
     init()
+    return () => clearTimeout(loadingTimeout)
   }, [linkId])
 
   // ── TTS with female voice ──────────────────────────────────────────────────
@@ -638,7 +749,7 @@ export default function VoiceInterviewPage() {
   useEffect(() => {
     const q = questions[currentQIdx]
     if (q?.text) typewrite(q.text)
-  }, [currentQIdx, questions])  
+  }, [currentQIdx, questions])
 
   // ── Screen & Camera Recording ───────────────────────────────────────────────
   const startScreenRecording = useCallback(async () => {
@@ -804,7 +915,19 @@ export default function VoiceInterviewPage() {
 
   const startListening = useCallback((onFinish) => {
     const SR = window.SpeechRecognition || window.webkitSpeechRecognition
-    if (!SR) { onFinish?.(''); return }
+    if (!SR) {
+      isListeningRef.current = false
+      setAiStatus('idle')
+      Swal.fire({
+        title: 'Voice Recognition Unavailable',
+        text: 'This browser does not support live speech recognition. Please continue in the latest Chrome or Edge browser.',
+        icon: 'error',
+        background: '#161c2d',
+        color: '#fff',
+        allowOutsideClick: false,
+      })
+      return
+    }
 
     // Always clean up previous instance first
     try { recognitionRef.current?.stop() } catch (_) { }
@@ -848,7 +971,14 @@ export default function VoiceInterviewPage() {
     // ── Smart error handler ────────────────────────────────────────────────
     rec.onerror = (e) => {
       const err = e.error
-      if (err === 'no-speech') return  // harmless — silence, keep listening
+      if (err === 'no-speech') {
+        // Not truly a failure — silence detected. Reset timer so we keep waiting.
+        clearTimeout(silenceTimerRef.current)
+        silenceTimerRef.current = setTimeout(() => {
+          if (isListeningRef.current) { stopListening(); onFinish?.(currentTxRef.current.trim()) }
+        }, 10000)
+        return
+      }
       if (err === 'aborted') return  // intentional stop — do nothing
 
       if (err === 'network') {
@@ -872,12 +1002,19 @@ export default function VoiceInterviewPage() {
     // ── onend: only restart if still intentionally listening ──────────────
     rec.onend = () => {
       if (!isListeningRef.current) return  // we stopped on purpose — don't restart
-      // Recognition stopped by itself (common in Chrome) — restart seamlessly
-      try {
-        if (recognitionRef.current === rec) {  // guard: ensure this is still the active instance
-          rec.start()
+      // Recognition stopped by itself (common in Chrome) — restart after a short delay
+      // to prevent rapid restart storms and InvalidStateError exceptions.
+      setTimeout(() => {
+        if (!isListeningRef.current) return
+        try {
+          if (recognitionRef.current === rec) {  // guard: ensure this is still the active instance
+            rec.start()
+          }
+        } catch (e) {
+          // InvalidStateError or similar — start a fresh instance
+          if (isListeningRef.current) startListening(onFinish)
         }
-      } catch (_) { }
+      }, 150)
     }
 
     try { rec.start() } catch (e) {
@@ -953,7 +1090,12 @@ export default function VoiceInterviewPage() {
         fd.append('question_text', q.text)
         fd.append('answer_text', answer)
         fd.append('candidate_name', sessionDetailRef.current?.candidate_name || 'Candidate')
-        fetch(`${API_BASE_URL}/save-answer`, { method: 'POST', body: fd }).catch(() => { })
+        // Attempt once; if it fails, retry once more before warning
+        fetch(`${API_BASE_URL}/save-answer`, { method: 'POST', body: fd })
+          .catch(() =>
+            fetch(`${API_BASE_URL}/save-answer`, { method: 'POST', body: fd })
+              .catch(err => console.warn('Voice /save-answer failed after retry — answer may be lost:', err))
+          )
       }
     }
 
@@ -973,8 +1115,46 @@ export default function VoiceInterviewPage() {
     // Next question
     setAnsweredCount(p => p + 1)
     const nextIdx = qIdx + 1
+
+    // ── Pre-fetch next batch when candidate is on second-to-last question ──
+    const iid = interviewIdRef.current
+    if (iid && !isPrefetchingRef.current && qs.length - qIdx <= 2 && prefetchedQuestionsRef.current.length === 0) {
+      isPrefetchingRef.current = true
+      const alreadyAskedIds = qs.map(q => String(q.id || '')).join(',')
+      const fd = new FormData()
+      fd.append('interview_id', iid)
+      fd.append('asked_question_ids', alreadyAskedIds)
+      fd.append('count', '5')
+      fetch(`${API_BASE_URL}/generate-more-questions`, { method: 'POST', body: fd })
+        .then(r => r.json())
+        .then(data => {
+          if (data.questions && data.questions.length > 0) {
+            prefetchedQuestionsRef.current = data.questions
+          }
+        })
+        .catch(() => {})
+        .finally(() => { isPrefetchingRef.current = false })
+    }
+
     if (!qs[nextIdx]) {
-      transitionToNextRound()
+      // Check if we have pre-fetched questions ready
+      if (prefetchedQuestionsRef.current.length > 0) {
+        const batch = prefetchedQuestionsRef.current
+        prefetchedQuestionsRef.current = []
+        const newQs = [...qs, ...batch]
+        setQuestions(newQs)
+        questionsRef.current = newQs
+        setCurrentQIdx(nextIdx)
+        const t = VOICE_TRANSLATIONS[languageRef.current] || VOICE_TRANSLATIONS['English']
+        const acks = t.acks
+        const transition = acks[Math.floor(Math.random() * acks.length)] + " "
+        setTimeout(() => {
+          aiSay(`${transition}${t.nextQuestion.replace('[X]', nextIdx + 1)}${newQs[nextIdx].text}`, () => startListening(ans => handleAnswer(ans, nextIdx, 0)))
+        }, 500)
+      } else {
+        // No pre-fetched questions yet — proceed to next round as usual
+        transitionToNextRound()
+      }
     } else {
       setCurrentQIdx(nextIdx)
       const t = VOICE_TRANSLATIONS[languageRef.current] || VOICE_TRANSLATIONS['English']
@@ -984,39 +1164,41 @@ export default function VoiceInterviewPage() {
         aiSay(`${transition}${t.nextQuestion.replace('[X]', nextIdx + 1)}${qs[nextIdx].text}`, () => startListening(ans => handleAnswer(ans, nextIdx, 0)))
       }, 500)
     }
-  }, [addMsg, aiSay, startListening])  
+  }, [addMsg, aiSay, startListening])
 
   // ── Complete interview ────────────────────────────────────────────────────
   const completeInterview = useCallback(async (options = {}) => {
     if (submittingRef.current) return
     submittingRef.current = true
+    setIsSaving(true)
     
     // Fallback for legacy calls that pass a boolean (isTimeout)
     const isTimeout = typeof options === 'boolean' ? options : (options.isTimeout || false)
     const completionReason = typeof options === 'object' && options.reason ? options.reason : 'normal'
-    
+
     integrityMetricsRef.current.reason = completionReason
 
     stopListening(); window.speechSynthesis?.cancel(); stopAudio()
     const iid = interviewIdRef.current
+    const previousRound = roundRef.current
 
     // Switch UI to submitting immediately
     setRound('submitting')
-    
-    const message = isTimeout 
+
+    const message = isTimeout
       ? "Thank you for the interview. We are saving your interview, please wait."
       : "We are saving your interview, please wait.";
-      
+
     // Speak asynchronously
     aiSay(message)
 
     // Fire backend completion with detailed integrity metrics
     try {
-      await fetch(`${API_BASE_URL}/complete-session/${linkId}`, { 
+      const response = await fetch(`${API_BASE_URL}/complete-session/${linkId}`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          warnings: warningsCountRef.current || warningsCount, // use ref if available to avoid stale closures
+          warnings: warningsCountRef.current || warningsCount,
           reason: integrityMetricsRef.current.reason,
           total_tab_switches: integrityMetricsRef.current.tabSwitches,
           total_face_alerts: integrityMetricsRef.current.faceAlerts,
@@ -1024,7 +1206,20 @@ export default function VoiceInterviewPage() {
           total_fullscreen_exits: integrityMetricsRef.current.fullscreenExits
         })
       })
-    } catch (_) { }
+      if (!response.ok) throw new Error(`Completion failed with status ${response.status}`)
+    } catch (completionError) {
+      console.error('Failed to complete voice interview:', completionError)
+      submittingRef.current = false
+      setRound(previousRound)
+      Swal.fire({
+        title: 'Submission Failed',
+        text: 'Your interview could not be finalized. Please check your connection and try again.',
+        icon: 'error',
+        background: '#161c2d',
+        color: '#fff',
+      })
+      return
+    }
     
     // Upload heavy recording and WAIT for it so it's not lost
     try {
@@ -1032,10 +1227,11 @@ export default function VoiceInterviewPage() {
     } catch (err) {
       console.error("Recording upload failed:", err)
     }
-    
+
     // Stop audio and mark done ONLY after upload finishes
-    stopAudio() 
+    stopAudio()
     setRound('done')
+    setIsSaving(false)
   }, [stopListening, linkId, stopAndUploadRecording, warningsCount, stopAudio, aiSay])
 
   // ── Load coding/case study round questions ────────────────────────────────
@@ -1050,7 +1246,7 @@ export default function VoiceInterviewPage() {
 
     const type = interviewType
     const iid = interviewIdRef.current
-    
+
     // Check timeout flag
     const timeoutFlag = typeof isTimeout === 'boolean' ? isTimeout : false;
 
@@ -1079,10 +1275,12 @@ export default function VoiceInterviewPage() {
             codingTask: task, codingTests: data.tests || []
           }
           setCodingQuestion(codingQ)
+          isTransitioningRef.current = false  // allow future transitions/retries
           setRound('coding')
           setLoading(false)
         } catch (err) {
           console.error("Coding round start failed:", err)
+          isTransitioningRef.current = false  // allow retry
           setError('Failed to load coding round. Please retry.')
           setRound('error')
           setLoading(false)
@@ -1103,10 +1301,12 @@ export default function VoiceInterviewPage() {
             id: `cs_${i}`, type: 'case_study', text: q.text, caseStudyIndex: i
           }))
           setCaseStudyQuestions(cqs.length ? cqs : [{ id: 'cs_0', type: 'case_study', text: data.scenario || 'Present your business case.', caseStudyIndex: 0 }])
+          isTransitioningRef.current = false  // allow future transitions/retries
           setRound('case_study')
           setLoading(false)
         } catch (err) {
           console.error('Case study start failed:', err)
+          isTransitioningRef.current = false  // allow retry
           setError('Failed to load case study. Please retry.')
           setRound('error')
           setLoading(false)
@@ -1117,6 +1317,19 @@ export default function VoiceInterviewPage() {
     }
   }, [interviewType, stopListening, aiSay, completeInterview])
 
+  // ── Tab close protection while saving ────────────────────────────────────
+  useEffect(() => {
+    if (!isSaving) return
+    const handleBeforeUnload = (e) => {
+      const msg = 'Your interview is still being saved. Please wait before closing this tab.'
+      e.preventDefault()
+      e.returnValue = msg
+      return msg
+    }
+    window.addEventListener('beforeunload', handleBeforeUnload)
+    return () => window.removeEventListener('beforeunload', handleBeforeUnload)
+  }, [isSaving])
+
   // ── Countdown ─────────────────────────────────────────────────────────────
   useEffect(() => {
     if (round !== 'verbal' || countdown <= 0) return
@@ -1126,6 +1339,30 @@ export default function VoiceInterviewPage() {
     }), 1000)
     return () => clearInterval(t)
   }, [round, transitionToNextRound])
+
+  // ── Finish Early handler ──────────────────────────────────────────────────
+  const handleFinishEarly = useCallback(() => {
+    Swal.fire({
+      title: 'Finish Interview?',
+      html: '<p style="color:#94a3b8;font-size:14px">Are you sure you want to end the interview now? Your answers will be saved and submitted.</p>',
+      icon: 'question',
+      showCancelButton: true,
+      confirmButtonText: 'Yes, Finish',
+      cancelButtonText: 'Continue Interview',
+      confirmButtonColor: '#ef4444',
+      cancelButtonColor: '#6366f1',
+      background: '#0f172a',
+      color: '#fff',
+      customClass: {
+        popup: 'border border-white/10 rounded-2xl shadow-2xl',
+        title: 'text-xl font-bold text-white',
+      }
+    }).then(result => {
+      if (result.isConfirmed) {
+        completeInterview({ reason: 'early_exit' })
+      }
+    })
+  }, [completeInterview])
 
   // ── Start verbal interview ────────────────────────────────────────────────
   const startInterview = useCallback(async () => {
@@ -1213,7 +1450,7 @@ export default function VoiceInterviewPage() {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({ type: alertType, count: newCount, timestamp: ts, details }),
-          }).catch(() => {})
+          }).catch(() => { })
         }
       })
 
@@ -1404,8 +1641,19 @@ export default function VoiceInterviewPage() {
     },
   })
 
+  const heartbeatStateRef = useRef(null)
   useEffect(() => {
-    if (!linkId || round === 'done' || round === 'pre_checks' || round === 'intro') return
+    heartbeatStateRef.current = {
+      round,
+      currentQIdx,
+      totalQuestions: questions.length || 0,
+      proctoringState,
+      warningsCount,
+    }
+  }, [round, currentQIdx, questions.length, proctoringState, warningsCount])
+
+  useEffect(() => {
+    if (!linkId || !monitoringToken) return
 
     const captureSnapshot = () => {
       const video = candidateVideoRef.current
@@ -1422,40 +1670,79 @@ export default function VoiceInterviewPage() {
       }
     }
 
+    // Phase 2: Use AbortController to prevent fetch from hanging indefinitely
+    const HEARTBEAT_TIMEOUT_MS = 8000
+    const HEARTBEAT_FAIL_THRESHOLD = 3 // consecutive failures before warning
+
     const sendHeartbeat = () => {
+      const current = heartbeatStateRef.current
+      if (!current || current.round === 'done' || current.round === 'pre_checks' || current.round === 'intro') return
+      if (!['verbal', 'coding', 'case_study'].includes(current.round)) return
+      const currentProctoring = current.proctoringState || {}
       const alertTypes = []
-      if (proctoringState.multiFace) alertTypes.push('multi_person')
-      if (proctoringState.faceVisible === false) alertTypes.push('no_face')
-      if (proctoringState.phoneDetected) alertTypes.push('phone')
-      if (proctoringState.eyeContactLost) alertTypes.push('eye_contact')
-      if (proctoringState.lastAlertType) alertTypes.push(proctoringState.lastAlertType)
+      if (currentProctoring.multiFace) alertTypes.push('multi_person')
+      if (currentProctoring.faceVisible === false) alertTypes.push('no_face')
+      if (currentProctoring.phoneDetected) alertTypes.push('phone')
+      if (currentProctoring.eyeContactLost) alertTypes.push('eye_contact')
+      if (currentProctoring.lastAlertType) alertTypes.push(currentProctoring.lastAlertType)
+
+      const controller = new AbortController()
+      const timeoutId = setTimeout(() => controller.abort(), HEARTBEAT_TIMEOUT_MS)
 
       fetch(`${API_BASE_URL}/live-heartbeat`, {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${monitoringToken}`,
+        },
         body: JSON.stringify({
           link_id: linkId,
           snapshot_dataurl: captureSnapshot(),
-          audio_level: mockAudioLevel,
-          current_question: currentQIdx + 1,
-          total_questions: questions.length || 0,
+          current_question: current.currentQIdx + 1,
+          total_questions: current.totalQuestions,
           tab_active: !document.hidden,
-          face_visible: proctoringState.faceVisible,
-          proctoring_alerts: warningsCount,
+          face_visible: currentProctoring.faceVisible,
+          proctoring_alerts: current.warningsCount,
           alert_types: [...new Set(alertTypes)],
-          last_alert_type: proctoringState.lastAlertType || null,
-          face_count: proctoringState.faceCount || 0,
-          multi_face: !!proctoringState.multiFace,
-          phone_detected: !!proctoringState.phoneDetected,
-          eye_contact_lost: !!proctoringState.eyeContactLost
+          round_type: current.round,
+          last_alert_type: currentProctoring.lastAlertType || null,
+          face_count: currentProctoring.faceCount || 0,
+          multi_face: !!currentProctoring.multiFace,
+          phone_detected: !!currentProctoring.phoneDetected,
+          eye_contact_lost: !!currentProctoring.eyeContactLost
         })
-      }).catch(() => { })
+      })
+        .then(() => {
+          clearTimeout(timeoutId)
+          // Reset failure counter on success
+          heartbeatFailCountRef.current = 0
+        })
+        .catch((err) => {
+          clearTimeout(timeoutId)
+          // Silently absorb AbortError (timed out) and network failures
+          // but count consecutive failures to warn the candidate
+          const failCount = heartbeatFailCountRef.current + 1
+          heartbeatFailCountRef.current = failCount
+          if (failCount === HEARTBEAT_FAIL_THRESHOLD) {
+            Swal.fire({
+              icon: 'warning',
+              title: 'Connection Issue',
+              text: 'Having trouble reaching the server. Please check your internet connection. Your interview is still in progress.',
+              toast: true,
+              position: 'top-end',
+              showConfirmButton: false,
+              timer: 6000,
+              background: '#161c2d',
+              color: '#fff',
+            })
+          }
+        })
     }
 
     sendHeartbeat()
     const heartbeatInterval = setInterval(sendHeartbeat, 5000)
     return () => clearInterval(heartbeatInterval)
-  }, [linkId, round, mockAudioLevel, currentQIdx, questions.length, proctoringState, warningsCount])
+  }, [linkId, monitoringToken])
 
   // (Removed old round === 'verbal' useEffect for video srcObject, handled by callback ref now)
 
@@ -1470,18 +1757,18 @@ export default function VoiceInterviewPage() {
           <React.Suspense fallback={<div className="flex h-screen items-center justify-center text-white text-xl bg-[#0a0f1e]">Loading coding environment...</div>}>
             <VoiceCodingRound question={codingQuestion} interviewId={interviewId} linkId={linkId} duration={roundDuration}
               sessionDetail={sessionDetail} language={language} wsRef={wsRef} onComplete={() => {
-              const type = interviewType
-              if (type === 'Non-Technical') {
-                // fetch case study after coding
-                fetch(`${API_BASE_URL}/case-study/start`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ interview_id: interviewId }) })
-                  .then(r => r.json()).then(data => {
-                    const cqs = (data.case_study_round?.questions || []).map((q, i) => ({ id: `cs_${i}`, type: 'case_study', text: q.text || q.scenario || '', caseStudyIndex: i }))
-                    setCaseStudyQuestions(cqs); setRound('case_study')
-                  }).catch(() => completeInterview())
-              } else {
-                completeInterview()
-              }
-            }} />
+                const type = interviewType
+                if (type === 'Non-Technical') {
+                  // fetch case study after coding
+                  fetch(`${API_BASE_URL}/case-study/start`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ interview_id: interviewId }) })
+                    .then(r => r.json()).then(data => {
+                      const cqs = (data.case_study_round?.questions || []).map((q, i) => ({ id: `cs_${i}`, type: 'case_study', text: q.text || q.scenario || '', caseStudyIndex: i }))
+                      setCaseStudyQuestions(cqs); setRound('case_study')
+                    }).catch(() => completeInterview())
+                } else {
+                  completeInterview()
+                }
+              }} />
           </React.Suspense>
         </ErrorBoundary>
         {candidateVideoElement}
@@ -1495,8 +1782,8 @@ export default function VoiceInterviewPage() {
         <ErrorBoundary>
           <React.Suspense fallback={<div className="flex h-screen items-center justify-center text-white text-xl bg-[#0a0f1e]">Loading case study environment...</div>}>
             <VoiceCaseStudy question={caseStudyQuestions[0]} allQuestions={caseStudyQuestions} duration={roundDuration}
-            interviewId={interviewId} linkId={linkId} sessionDetail={sessionDetail}
-            language={language} wsRef={wsRef} onComplete={completeInterview} />
+              interviewId={interviewId} linkId={linkId} sessionDetail={sessionDetail}
+              language={language} wsRef={wsRef} onComplete={completeInterview} />
           </React.Suspense>
         </ErrorBoundary>
         {candidateVideoElement}
@@ -1654,7 +1941,7 @@ export default function VoiceInterviewPage() {
       </div>
 
       {showDeviceCheck && (
-        <DeviceCheckModal 
+        <DeviceCheckModal
           onSuccess={() => {
             if (document.documentElement.requestFullscreen) {
               document.documentElement.requestFullscreen().catch(() => { })
@@ -1897,8 +2184,17 @@ export default function VoiceInterviewPage() {
         @keyframes spin-slow{from{transform:rotate(0deg)}to{transform:rotate(360deg)}}
       `}</style>
 
+      {/* Phase 3: Offline warning banner */}
+      {!isOnline && (
+        <div style={{ position: 'fixed', top: 0, left: 0, right: 0, zIndex: 100000, background: '#b45309', color: '#fff', padding: '10px 20px', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '10px', fontSize: '14px', fontWeight: '600', boxShadow: '0 2px 8px rgba(0,0,0,0.4)' }}>
+          <span>⚠️</span>
+          <span>You are offline. Reconnecting... Your answers will be saved when connection is restored.</span>
+        </div>
+      )}
+
       {/* Proctoring Banner */}
       {proctoringBanner && (
+
         <div style={{
           position: 'fixed', top: 0, left: 0, right: 0, zIndex: 9999,
           background: proctoringBanner.type === 'tab_switch' ? 'linear-gradient(90deg,#b91c1c,#dc2626)' : 'linear-gradient(90deg,#7c3aed,#6d28d9)',
@@ -2029,19 +2325,20 @@ export default function VoiceInterviewPage() {
             <button onClick={transitionToNextRound} className="px-6 py-3.5 rounded-2xl bg-white/5 text-slate-400 border border-white/8 hover:bg-white/10 text-xs font-bold transition-all uppercase tracking-widest">
               Next Round
             </button>
-            <button onClick={completeInterview} className="px-6 py-3.5 rounded-2xl bg-rose-500/10 text-rose-400 border border-rose-500/20 hover:bg-rose-500/20 text-xs font-bold transition-all uppercase tracking-widest">
-              End Interview
+            <button onClick={handleFinishEarly} className="px-6 py-3.5 rounded-2xl bg-rose-500/10 text-rose-400 border border-rose-500/20 hover:bg-rose-500/20 text-xs font-bold transition-all uppercase tracking-widest">
+              Finish Early
             </button>
           </div>
 
-          {/* Progress dots */}
+          {/* Progress dots — only show first 30 to avoid overflow */}
           <div className="flex items-center justify-center gap-1.5 flex-wrap">
-            {questions.map((_, i) => (
+            {questions.slice(0, 30).map((_, i) => (
               <div key={i} className={`rounded-full transition-all duration-300 ${i < currentQIdx ? 'w-2 h-2 bg-emerald-500' :
                 i === currentQIdx ? 'w-3.5 h-3.5 bg-indigo-500 shadow-[0_0_10px_rgba(99,102,241,.8)]' :
                   'w-2 h-2 bg-white/10'
                 }`} />
             ))}
+            {questions.length > 30 && <span className="text-xs text-slate-500">+{questions.length - 30} more</span>}
           </div>
         </div>
       </div>
