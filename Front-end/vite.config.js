@@ -49,5 +49,21 @@ export default defineConfig({
   worker: {
     format: 'es',
   },
+  build: {
+    rollupOptions: {
+      output: {
+        manualChunks(id) {
+          if (id.includes('node_modules')) {
+            if (id.includes('@monaco-editor')) return 'monaco';
+            if (id.includes('react/') || id.includes('react-dom') || id.includes('react-router-dom')) return 'react';
+            if (id.includes('recharts')) return 'recharts';
+            if (id.includes('@reduxjs') || id.includes('react-redux') || id.includes('redux-persist')) return 'redux';
+            if (id.includes('axios') || id.includes('sweetalert2') || id.includes('framer-motion')) return 'vendor';
+            return 'dependencies';
+          }
+        }
+      }
+    }
+  }
 })
 

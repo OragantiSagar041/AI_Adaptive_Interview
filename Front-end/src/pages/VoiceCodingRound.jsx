@@ -3,8 +3,9 @@
  * AI-powered coding round — clean, immersive layout
  * Left: Problem only | Center: Editor | Floating orb: voice indicator
  */
-import React, { useState, useRef, useCallback, useEffect } from 'react'
-import Editor from '@monaco-editor/react'
+import React, { useState, useRef, useCallback, useEffect, Suspense } from 'react'
+
+const Editor = React.lazy(() => import('@monaco-editor/react'))
 import { API_BASE_URL } from '../apiConfig'
 import { candidateFetch } from '../utils/candidateAuth'
 import Swal from 'sweetalert2'
@@ -824,24 +825,26 @@ export default function VoiceCodingRound({
 
           {/* Monaco */}
           <div className="flex-1 overflow-hidden">
-            <Editor
-              height="100%"
-              language={selectedLang === 'cpp' ? 'cpp' : selectedLang}
-              value={code}
-              onChange={handleCodeChange}
-              theme="vs-dark"
-              options={{
-                fontSize: 14,
-                fontFamily: "'JetBrains Mono', 'Fira Code', monospace",
-                minimap: { enabled: false },
-                scrollBeyondLastLine: false,
-                lineNumbers: 'on',
-                wordWrap: 'on',
-                padding: { top: 16, bottom: 16 },
-                suggestOnTriggerCharacters: true,
-                quickSuggestions: true,
-              }}
-            />
+            <Suspense fallback={<div className="flex h-full items-center justify-center text-white/50 text-sm">Loading Editor...</div>}>
+              <Editor
+                height="100%"
+                language={selectedLang === 'cpp' ? 'cpp' : selectedLang}
+                value={code}
+                onChange={handleCodeChange}
+                theme="vs-dark"
+                options={{
+                  fontSize: 14,
+                  fontFamily: "'JetBrains Mono', 'Fira Code', monospace",
+                  minimap: { enabled: false },
+                  scrollBeyondLastLine: false,
+                  lineNumbers: 'on',
+                  wordWrap: 'on',
+                  padding: { top: 16, bottom: 16 },
+                  suggestOnTriggerCharacters: true,
+                  quickSuggestions: true,
+                }}
+              />
+            </Suspense>
           </div>
 
           {/* Output Panel */}

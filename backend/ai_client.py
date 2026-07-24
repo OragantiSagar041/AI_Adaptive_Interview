@@ -25,6 +25,8 @@ import time
 import json
 import threading
 import requests as http_requests
+from app.groq_manager import groq_key_manager
+import requests as http_requests
 from typing import List, Dict, Optional
 from dotenv import load_dotenv
 import contextvars
@@ -231,25 +233,39 @@ def _call_groq(
     max_tokens: int = 1024,
 ) -> str:
     """Call Groq API (completions)."""
-    GROQ_API_KEY = os.getenv("GROQ_API_KEY", "")
-    if not GROQ_API_KEY:
-        raise RuntimeError("No Groq API key available")
     url = "https://api.groq.com/openai/v1/chat/completions"
-    headers = {
-        "Authorization": f"Bearer {GROQ_API_KEY}",
-        "Content-Type": "application/json",
-    }
     payload = {
         "model": model,
         "messages": messages,
         "temperature": temperature,
         "max_tokens": max_tokens,
     }
-    resp = http_requests.post(url, headers=headers, json=payload, timeout=timeout)
-    if resp.status_code != 200:
-        raise RuntimeError(f"Groq error {resp.status_code}: {resp.text[:300]}")
-    data = resp.json()
-    return data["choices"][0]["message"]["content"]
+    
+    max_attempts = groq_key_manager.get_total_keys() or 1
+    last_error_text = ""
+    last_status = 500
+
+    for _ in range(max_attempts):
+        api_key = groq_key_manager.get_next_key()
+        if not api_key:
+            raise RuntimeError("No Groq API keys available")
+            
+        headers = {
+            "Authorization": f"Bearer {api_key}",
+            "Content-Type": "application/json",
+        }
+        resp = http_requests.post(url, headers=headers, json=payload, timeout=timeout)
+        if resp.status_code == 200:
+            data = resp.json()
+            return data["choices"][0]["message"]["content"]
+        elif resp.status_code == 429:
+            last_status = resp.status_code
+            last_error_text = resp.text[:300]
+            continue # Try next key
+        else:
+            raise RuntimeError(f"Groq error {resp.status_code}: {resp.text[:300]}")
+            
+    raise RuntimeError(f"Groq error {last_status} after exhausting all keys: {last_error_text}")
 
 
 # ─── Custom Exception ────────────────────────────────────────────────────────

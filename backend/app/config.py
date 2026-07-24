@@ -20,7 +20,7 @@ load_dotenv(override=False)
 # Third-party client setup
 # ---------------------------------------------------------------------------
 
-groq_client = AsyncGroq(api_key=os.getenv("GROQ_API_KEY"))
+# groq_client is removed to support dynamic key rotation via groq_manager
 
 cloudinary.config(
     cloud_name=os.getenv("CLOUDINARY_CLOUD_NAME"),
