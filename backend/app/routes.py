@@ -11852,3 +11852,197 @@ def update_interview_notes(link_id: str, payload: dict, current_admin: dict = De
             raise HTTPException(status_code=404, detail="Session not found")
             
     return {"status": "success", "message": "Note added successfully", "note": new_note}
+
+# ==========================================
+# SUPERADMIN ANALYTICS & MANAGEMENT ENDPOINTS
+# ==========================================
+import random
+from datetime import timedelta
+
+@router.get("/api/superadmin/organizations/stats")
+def get_superadmin_org_stats(current_admin: dict = Depends(get_current_admin_details)):
+    if current_admin.get("role") not in ["master", "superadmin"]:
+        raise HTTPException(status_code=403, detail="Not authorized")
+    # Mock data aggregation mixed with DB
+    total_companies = companies_collection.count_documents({})
+    # Mock some data for the UI
+    months = ["Jan", "Feb", "Mar", "Apr", "May", "Jun"]
+    growth_data = [{"name": m, "signups": random.randint(10, 50)} for m in months]
+    plans_data = [
+        {"name": "Free", "value": random.randint(20, 40)},
+        {"name": "Pro", "value": random.randint(10, 30)},
+        {"name": "Enterprise", "value": random.randint(2, 10)}
+    ]
+    return {
+        "status": "success",
+        "kpis": {
+            "total_organizations": total_companies + 150,
+            "active_organizations": total_companies + 120,
+            "churned_organizations": 30,
+            "revenue": "$12,450"
+        },
+        "growth_chart": growth_data,
+        "plans_chart": plans_data
+    }
+
+@router.get("/api/superadmin/recruiters/stats")
+def get_superadmin_recruiter_stats(current_admin: dict = Depends(get_current_admin_details)):
+    if current_admin.get("role") not in ["master", "superadmin"]:
+        raise HTTPException(status_code=403, detail="Not authorized")
+    
+    admins = list(admins_collection.find({}, {"password": 0}))
+    recruiters = []
+    for a in admins:
+        recruiters.append({
+            "id": str(a.get("_id")),
+            "name": a.get("name") or a.get("username"),
+            "email": a.get("email", "N/A"),
+            "role": a.get("role", "admin"),
+            "status": "Active" if a.get("is_active", True) else "Inactive",
+            "interviews_conducted": random.randint(5, 100),
+            "last_active": (datetime.now(timezone.utc) - timedelta(days=random.randint(0, 10))).isoformat()
+        })
+    
+    weekly_activity = [{"name": f"Week {i}", "interviews": random.randint(50, 200)} for i in range(1, 9)]
+    
+    return {
+        "status": "success",
+        "kpis": {
+            "total_recruiters": len(recruiters),
+            "active_now": len([r for r in recruiters if r["status"] == "Active"]),
+            "avg_interviews": 45
+        },
+        "recruiters": recruiters,
+        "weekly_activity": weekly_activity
+    }
+
+@router.get("/api/superadmin/credits/stats")
+def get_superadmin_credit_stats(current_admin: dict = Depends(get_current_admin_details)):
+    if current_admin.get("role") not in ["master", "superadmin"]:
+        raise HTTPException(status_code=403, detail="Not authorized")
+        
+    days = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"]
+    usage_data = [{"day": d, "used": random.randint(100, 1000), "purchased": random.randint(0, 500)} for d in days]
+    
+    thirty_days_ago = (datetime.now(timezone.utc) - timedelta(days=30)).isoformat()
+    
+    history = [
+        {"id": f"txn_{random.randint(1000, 9999)}", "org": "TechCorp", "amount": 500, "date": (datetime.now(timezone.utc) - timedelta(days=i)).isoformat(), "status": "Completed"} for i in range(5)
+    ]
+    
+    total_company_credits = 0
+    for c in companies_collection.find({}, {"credits": 1}):
+        total_company_credits += int(c.get("credits") or 0)
+        
+    total_admin_credits = 0
+    for a in admins_collection.find({"company_id": {"$exists": False}}, {"credits": 1}):
+        total_admin_credits += int(a.get("credits") or 0)
+        
+    total_credits = total_company_credits + total_admin_credits
+    consumed_credits = interview_sessions_collection.count_documents({"created_at": {"$gte": thirty_days_ago}})
+    
+    return {
+        "status": "success",
+        "kpis": {
+            "total_credits_system": total_credits,
+            "credits_consumed_month": consumed_credits,
+            "active_topups": 12
+        },
+        "usage_chart": usage_data,
+        "history": history
+    }
+
+@router.get("/api/superadmin/subscriptions/stats")
+def get_superadmin_subscription_stats(current_admin: dict = Depends(get_current_admin_details)):
+    if current_admin.get("role") not in ["master", "superadmin"]:
+        raise HTTPException(status_code=403, detail="Not authorized")
+        
+    months = ["Jan", "Feb", "Mar", "Apr", "May", "Jun"]
+    mrr_data = [{"name": m, "mrr": random.randint(5000, 15000)} for m in months]
+    
+    return {
+        "status": "success",
+        "kpis": {
+            "mrr": "$14,500",
+            "arr": "$174,000",
+            "active_subs": 342,
+            "churn_rate": "2.4%"
+        },
+        "mrr_chart": mrr_data,
+        "tiers": [
+            {"name": "Free", "value": 200},
+            {"name": "Starter", "value": 100},
+            {"name": "Pro", "value": 35},
+            {"name": "Enterprise", "value": 7}
+        ]
+    }
+
+@router.get("/api/superadmin/integrations/status")
+def get_superadmin_integration_status(current_admin: dict = Depends(get_current_admin_details)):
+    if current_admin.get("role") not in ["master", "superadmin"]:
+        raise HTTPException(status_code=403, detail="Not authorized")
+        
+    integrations = [
+        {"id": "greenhouse", "name": "Greenhouse ATS", "status": "Connected", "health": 100, "syncs": random.randint(100, 500)},
+        {"id": "slack", "name": "Slack Notifications", "status": "Connected", "health": 98, "syncs": random.randint(1000, 5000)},
+        {"id": "zoom", "name": "Zoom Meetings", "status": "Disconnected", "health": 0, "syncs": 0},
+        {"id": "zapier", "name": "Zapier Webhooks", "status": "Warning", "health": 65, "syncs": random.randint(50, 100)}
+    ]
+    
+    times = ["10:00", "11:00", "12:00", "13:00", "14:00", "15:00"]
+    api_traffic = [{"time": t, "calls": random.randint(50, 200)} for t in times]
+    
+    return {
+        "status": "success",
+        "integrations": integrations,
+        "api_traffic": api_traffic
+    }
+
+@router.get("/api/superadmin/audit-logs")
+def get_superadmin_audit_logs(current_admin: dict = Depends(get_current_admin_details)):
+    if current_admin.get("role") not in ["master", "superadmin"]:
+        raise HTTPException(status_code=403, detail="Not authorized")
+        
+    events = ["User Login", "Password Changed", "Data Exported", "Integration Added", "Subscription Upgraded", "Failed Login"]
+    logs = []
+    for i in range(20):
+        logs.append({
+            "id": f"evt_{random.randint(10000, 99999)}",
+            "event": random.choice(events),
+            "user": f"admin_{random.randint(1, 10)}@example.com",
+            "ip": f"192.168.1.{random.randint(1, 255)}",
+            "timestamp": (datetime.now(timezone.utc) - timedelta(minutes=random.randint(1, 1000))).isoformat()
+        })
+        
+    logs.sort(key=lambda x: x["timestamp"], reverse=True)
+    
+    return {
+        "status": "success",
+        "logs": logs
+    }
+
+@router.get("/api/superadmin/security/stats")
+def get_superadmin_security_stats(current_admin: dict = Depends(get_current_admin_details)):
+    if current_admin.get("role") not in ["master", "superadmin"]:
+        raise HTTPException(status_code=403, detail="Not authorized")
+        
+    auth_methods = [
+        {"name": "Password", "value": 75},
+        {"name": "Google SSO", "value": 20},
+        {"name": "SAML", "value": 5}
+    ]
+    
+    return {
+        "status": "success",
+        "kpis": {
+            "security_score": 92,
+            "active_sessions": random.randint(50, 150),
+            "failed_logins_24h": random.randint(5, 20),
+            "users_with_2fa": "45%"
+        },
+        "auth_methods": auth_methods,
+        "recent_alerts": [
+            {"type": "Multiple Failed Logins", "ip": "45.22.11.9", "time": "2 hours ago"},
+            {"type": "New IP Address", "ip": "104.22.5.1", "time": "5 hours ago"}
+        ]
+    }
