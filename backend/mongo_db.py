@@ -1,10 +1,13 @@
 import os
+# pyrefly: ignore [missing-import]
 from pymongo import MongoClient
+# pyrefly: ignore [missing-import]
 from dotenv import load_dotenv
 
 load_dotenv()
 
 try:
+    # pyrefly: ignore [missing-import]
     import dns.resolver
     dns.resolver.default_resolver = dns.resolver.Resolver(configure=False)
     dns.resolver.default_resolver.nameservers = ['8.8.8.8', '8.8.4.4', '1.1.1.1']
@@ -46,10 +49,21 @@ def get_next_sequence_value(sequence_name: str, prefix: str) -> str:
     return f"{prefix}{sequence_document['sequence_value']}"
 
 async def init_db_indexes():
-    candidates_collection.create_index("name", unique=True)
-    admins_collection.create_index("username", unique=True)
-    interview_sessions_collection.create_index("link_id", unique=True)
-    answers_collection.create_index([("interview_id", 1), ("question_id", 1)], unique=True)
-    interviews_collection.create_index("id", unique=True)
-    plans_collection.create_index("plan_name", unique=True)
+    # pyrefly: ignore [missing-import]
+    from pymongo.errors import OperationFailure
+    indexes = [
+        (candidates_collection, "name", False),
+        (admins_collection, "username", True),
+        (interview_sessions_collection, "link_id", True),
+        (answers_collection, [("interview_id", 1), ("question_id", 1)], True),
+        (interviews_collection, "id", True),
+        (plans_collection, "plan_name", True)
+    ]
+    for coll, key, is_unique in indexes:
+        try:
+            coll.create_index(key, unique=is_unique)
+        except OperationFailure as e:
+            print(f"Ignoring index creation error for {coll.name}: {e}")
+        except Exception as e:
+            print(f"Unexpected error creating index for {coll.name}: {e}")
     print("MongoDB connected and initialized.")

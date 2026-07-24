@@ -169,6 +169,7 @@ export default function AdminLayout({
 
   const navItems = [
     { id: 'dashboard', label: 'Overview Dashboard', path: '/admin/dashboard' },
+    { id: 'interviews', label: 'Interviews', path: '/admin/interviews' },
     { id: 'qualified', label: 'Qualified Candidates', path: '/admin/qualified-candidates' },
     { id: 'rejected', label: 'Rejected Candidates', path: '/admin/rejected-candidates' },
     { id: 'create', label: 'Create Interview', path: '/admin/create-interview' },
