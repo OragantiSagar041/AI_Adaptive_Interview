@@ -206,16 +206,16 @@ export default function AdminLayout({
     }
   }
 
-  const baseNavItems = [
-    { id: 'dashboard', label: 'Dashboard', icon: LayoutDashboard, path: '/admin/dashboard' },
-    { id: 'interviews', label: 'Interviews', icon: ClipboardList, path: '/admin/interviews' },
-    { id: 'qualified', label: 'Qualified Candidates', icon: CheckCircle, path: '/admin/qualified-candidates' },
-    { id: 'rejected', label: 'Rejected Candidates', icon: XCircle, path: '/admin/rejected-candidates' },
-    { id: 'create', label: 'Create Interview', icon: Plus, path: '/admin/create-interview' },
-    { id: 'ai-calling', label: 'AI Calling Agent', icon: Radio, path: '/admin/ai-calling' },
-
-    { id: 'jobs', label: 'Jobs', icon: Briefcase, path: '/admin/jobs' },
-    { id: 'settings', label: 'Settings', icon: Settings, path: '/admin/profile-settings' },
+  const navItems = [
+    { id: 'dashboard', label: 'Overview Dashboard', path: '/admin/dashboard' },
+    { id: 'interviews', label: 'Interviews', path: '/admin/interviews' },
+    { id: 'qualified', label: 'Qualified Candidates', path: '/admin/qualified-candidates' },
+    { id: 'rejected', label: 'Rejected Candidates', path: '/admin/rejected-candidates' },
+    { id: 'create', label: 'Create Interview', path: '/admin/create-interview' },
+    { id: 'ai-calling', label: 'AI Calling Agent', path: '/admin/ai-calling' },
+    { id: 'conversational-flow', label: 'Conversational Flow', path: '/admin/conversational-flow' },
+    { id: 'jobs', label: 'Jobs', path: '/admin/jobs' },
+    { id: 'settings', label: 'Profile Settings', path: '/admin/profile-settings' },
   ]
   const userFeatures = adminUser?.plan_features
   const filteredNavItems = (userFeatures && userFeatures.length > 0)
