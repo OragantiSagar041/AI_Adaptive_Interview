@@ -2174,9 +2174,10 @@ export const useInterviewSession = (sessionId, interviewType, startRoundTwo) => 
         }
       }
     } catch (e) {
+      const errMsg = e.response?.data?.detail || e.message || 'Unknown error'
       Swal.fire({
         title: 'Save Failed',
-        text: 'Failed to save your response. Please try again.',
+        text: `Failed to save your response. Error: ${errMsg}. Please try again.`,
         icon: 'error',
         background: '#161c2d',
         color: '#fff',
