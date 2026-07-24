@@ -3,6 +3,7 @@ import { useNavigate } from 'react-router-dom'
 import Swal from 'sweetalert2'
 import api from '../../utils/api'
 import useCandidateWebRTC from '../../hooks/useCandidateWebRTC'
+import { setCandidateSessionAuth } from '../../utils/candidateAuth'
 import { useProctoring } from '../../hooks/useProctoring'
 import { useScreenshotProtection } from '../../hooks/useScreenshotProtection'
 import { useExamSecurity } from '../../hooks/useExamSecurity'
@@ -770,6 +771,9 @@ export const useInterviewSession = (sessionId, interviewType, startRoundTwo) => 
         setQuestions(qList)
         setInterviewId(startPayload.interview_id || '')
         setMonitoringToken(startPayload.monitoring_token || '')
+        if (startPayload.monitoring_token) {
+          setCandidateSessionAuth(startPayload.monitoring_token, sessionId, startPayload.interview_id)
+        }
         // Snapshot candidate details into refs NOW (synchronously) so that the
         // async Whisper MediaRecorder onstop callback always has correct values.
         // Using refs avoids the race condition where sessionDetail state hasn't
@@ -2045,7 +2049,7 @@ export const useInterviewSession = (sessionId, interviewType, startRoundTwo) => 
         const answerForm = new FormData()
         answerForm.append('interview_id', iid)
         answerForm.append('question_id', currentQuestion.id || (currentQuestionIndex + 1))
-        answerForm.append('question_text', currentQuestion.text || currentQuestion.question || '')
+        answerForm.append('question_text', currentQuestion.text || currentQuestion.question || currentQuestion.prompt || currentQuestion.scenario || currentQuestion.question_text || '')
         answerForm.append('answer_text', currentQuestion.type === 'coding' ? (codeAnswer || ' ') : (transcriptionText || ' '))
         answerForm.append('candidate_name', sessionDetail?.candidate_name || 'Candidate')
         answerForm.append('time_spent_seconds', timeSpent.toString())

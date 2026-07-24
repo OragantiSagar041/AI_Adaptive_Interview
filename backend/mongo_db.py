@@ -67,6 +67,12 @@ async def init_db_indexes():
             except Exception as e:
                 print(f"Warning: Failed to fix index {index_keys} on {collection.name}: {e}")
 
+    safe_create_index(candidates_collection, "name", unique=True)
+    safe_create_index(admins_collection, "username", unique=True)
+    safe_create_index(interview_sessions_collection, "link_id", unique=True)
+    safe_create_index(answers_collection, [("interview_id", 1), ("question_id", 1)], unique=True)
+    safe_create_index(interviews_collection, "id", unique=True)
+    safe_create_index(plans_collection, "plan_name", unique=True)
     candidate_indexes = candidates_collection.index_information()
     name_index = candidate_indexes.get("name_1")
     if name_index and name_index.get("unique"):

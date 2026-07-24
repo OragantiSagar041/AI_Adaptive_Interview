@@ -1109,11 +1109,11 @@ def save_answer(
     time_limit_seconds: str = Form("120"),
     credentials: Optional[HTTPAuthorizationCredentials] = Depends(candidate_monitoring_security),
 ):
-    candidate_session = _require_candidate_session(credentials, interview_id=interview_id)
-    current_session_id.set(interview_id)
-    from app.answer_service import persist_answer_and_enqueue_scoring
-
     try:
+        candidate_session = _require_candidate_session(credentials, interview_id=interview_id)
+        current_session_id.set(interview_id)
+        from app.answer_service import persist_answer_and_enqueue_scoring
+
         result = persist_answer_and_enqueue_scoring(
             interview_id=interview_id,
             question_id=question_id,
@@ -1123,14 +1123,16 @@ def save_answer(
             time_spent_seconds=time_spent_seconds,
             time_limit_seconds=time_limit_seconds,
         )
-    except ValueError as exc:
-        raise HTTPException(status_code=422, detail=str(exc)) from exc
-
-    return {
-        **result,
-        "ai_score": None,
-        "message": "Answer saved. Scoring is running in the background.",
-    }
+        return {
+            **result,
+            "ai_score": None,
+            "message": "Answer saved. Scoring is running in the background.",
+        }
+    except Exception as exc:
+        import traceback
+        with open("error_log.txt", "a") as f:
+            f.write(f"Error in save_answer: {exc}\n{traceback.format_exc()}\n")
+        raise HTTPException(status_code=500, detail=str(exc)) from exc
 
     print(f"⚡ Instant save for Q{question_id} ➝ AI scoring in background...")
 
