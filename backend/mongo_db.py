@@ -51,31 +51,43 @@ def get_next_sequence_value(sequence_name: str, prefix: str) -> str:
     return f"{prefix}{sequence_document['sequence_value']}"
 
 async def init_db_indexes():
-    # pyrefly: ignore [missing-import]
     from pymongo.errors import OperationFailure
-    indexes = [
-        (candidates_collection, "name", False),
-        (admins_collection, "username", True),
-        (interview_sessions_collection, "link_id", True),
-        (interviews_collection, "id", True),
-        (plans_collection, "plan_name", True)
-    ]
     
-    for coll, key, is_unique in indexes:
+    def safe_create_index(collection, index_keys, **kwargs):
         try:
-            coll.create_index(key, unique=is_unique)
-        except Exception as e:
-            if "IndexKeySpecsConflict" in str(e) or "already exists with different options" in str(e):
-                try:
-                    coll.drop_index(f"{key}_1")
-                    coll.create_index(key, unique=is_unique)
-                except Exception as inner_e:
-                    print(f"Warning: Failed to recreate index {key} on {coll.name}: {inner_e}")
-            else:
-                print(f"Warning: Failed to create index {key} on {coll.name}: {e}")
-                
-    try:
-        answers_collection.create_index([("interview_id", 1), ("question_id", 1)], unique=True)
-    except Exception:
-        pass
+            collection.create_index(index_keys, **kwargs)
+        except OperationFailure:
+            try:
+                if isinstance(index_keys, str):
+                    name = f"{index_keys}_1"
+                else:
+                    name = "_".join([f"{k}_{v}" for k, v in index_keys])
+                collection.drop_index(name)
+                collection.create_index(index_keys, **kwargs)
+            except Exception as e:
+                print(f"Warning: Failed to fix index {index_keys} on {collection.name}: {e}")
+
+    safe_create_index(candidates_collection, "name", unique=True)
+    safe_create_index(admins_collection, "username", unique=True)
+    safe_create_index(interview_sessions_collection, "link_id", unique=True)
+    safe_create_index(answers_collection, [("interview_id", 1), ("question_id", 1)], unique=True)
+    safe_create_index(interviews_collection, "id", unique=True)
+    safe_create_index(plans_collection, "plan_name", unique=True)
+    candidate_indexes = candidates_collection.index_information()
+    name_index = candidate_indexes.get("name_1")
+    if name_index and name_index.get("unique"):
+        # Candidate names are not identities. The legacy unique index merged or
+        # rejected different people who happened to share the same name.
+        candidates_collection.drop_index("name_1")
+    
+    safe_create_index(candidates_collection, "name")
+    safe_create_index(admins_collection, "username", unique=True)
+    safe_create_index(interview_sessions_collection, "link_id", unique=True)
+    safe_create_index(answers_collection, [("interview_id", 1), ("question_id", 1)], unique=True)
+    safe_create_index(interviews_collection, "id", unique=True)
+    safe_create_index(plans_collection, "plan_name", unique=True)
+    safe_create_index(payment_orders_collection, "order_id", unique=True)
+    safe_create_index(payment_orders_collection, "payment_id", unique=True, sparse=True)
+    safe_create_index(pending_signups_collection, "expires_at", expireAfterSeconds=0)
+    safe_create_index(admins_collection, "stripe_session_id", unique=True, sparse=True)
     print("MongoDB connected and initialized.")

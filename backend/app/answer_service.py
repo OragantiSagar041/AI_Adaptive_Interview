@@ -54,7 +54,7 @@ def persist_answer_and_enqueue_scoring(
         question_text, field="question_text", maximum=MAX_QUESTION_TEXT_LENGTH
     )
     normalized_answer_text = _bounded_text(
-        answer_text, field="answer_text", maximum=MAX_ANSWER_TEXT_LENGTH
+        answer_text, field="answer_text", maximum=MAX_ANSWER_TEXT_LENGTH, required=False
     )
     normalized_candidate_name = _bounded_text(
         candidate_name,

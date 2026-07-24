@@ -1109,11 +1109,11 @@ def save_answer(
     time_limit_seconds: str = Form("120"),
     credentials: Optional[HTTPAuthorizationCredentials] = Depends(candidate_monitoring_security),
 ):
-    candidate_session = _require_candidate_session(credentials, interview_id=interview_id)
-    current_session_id.set(interview_id)
-    from app.answer_service import persist_answer_and_enqueue_scoring
-
     try:
+        candidate_session = _require_candidate_session(credentials, interview_id=interview_id)
+        current_session_id.set(interview_id)
+        from app.answer_service import persist_answer_and_enqueue_scoring
+
         result = persist_answer_and_enqueue_scoring(
             interview_id=interview_id,
             question_id=question_id,
@@ -1123,14 +1123,16 @@ def save_answer(
             time_spent_seconds=time_spent_seconds,
             time_limit_seconds=time_limit_seconds,
         )
-    except ValueError as exc:
-        raise HTTPException(status_code=422, detail=str(exc)) from exc
-
-    return {
-        **result,
-        "ai_score": None,
-        "message": "Answer saved. Scoring is running in the background.",
-    }
+        return {
+            **result,
+            "ai_score": None,
+            "message": "Answer saved. Scoring is running in the background.",
+        }
+    except Exception as exc:
+        import traceback
+        with open("error_log.txt", "a") as f:
+            f.write(f"Error in save_answer: {exc}\n{traceback.format_exc()}\n")
+        raise HTTPException(status_code=500, detail=str(exc)) from exc
 
     print(f"⚡ Instant save for Q{question_id} ➝ AI scoring in background...")
 
@@ -3051,7 +3053,9 @@ def generate_report(
             
         if coding_round.get("final_evaluation"):
             story.append(Paragraph("<b>AI Evaluation:</b>", normal_style))
-            safe_eval = coding_round["final_evaluation"].replace("&", "&amp;").replace("<", "&lt;").replace(">", "&gt;").replace("\n", "<br/>")
+            eval_data = coding_round["final_evaluation"]
+            eval_text = json.dumps(eval_data, indent=2) if isinstance(eval_data, dict) else str(eval_data)
+            safe_eval = eval_text.replace("&", "&amp;").replace("<", "&lt;").replace(">", "&gt;").replace("\n", "<br/>")
             story.append(Paragraph(safe_eval, normal_style))
             story.append(Spacer(1, 15))
             

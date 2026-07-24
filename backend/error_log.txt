@@ -1,0 +1,48 @@
+Error in save_answer: 401: Candidate session token is required
+Traceback (most recent call last):
+  File "C:\Users\swara\Downloads\AI_Adaptive_Interview\backend\app\routes.py", line 1113, in save_answer
+    candidate_session = _require_candidate_session(credentials, interview_id=interview_id)
+  File "C:\Users\swara\Downloads\AI_Adaptive_Interview\backend\app\routes.py", line 263, in _require_candidate_session
+    raise HTTPException(status_code=401, detail="Candidate session token is required")
+fastapi.exceptions.HTTPException: 401: Candidate session token is required
+
+Error in save_answer: 401: Candidate session token is required
+Traceback (most recent call last):
+  File "C:\Users\swara\Downloads\AI_Adaptive_Interview\backend\app\routes.py", line 1113, in save_answer
+    candidate_session = _require_candidate_session(credentials, interview_id=interview_id)
+  File "C:\Users\swara\Downloads\AI_Adaptive_Interview\backend\app\routes.py", line 263, in _require_candidate_session
+    raise HTTPException(status_code=401, detail="Candidate session token is required")
+fastapi.exceptions.HTTPException: 401: Candidate session token is required
+
+Error in save_answer: 401: Candidate session token is required
+Traceback (most recent call last):
+  File "C:\Users\swara\Downloads\AI_Adaptive_Interview\backend\app\routes.py", line 1113, in save_answer
+    candidate_session = _require_candidate_session(credentials, interview_id=interview_id)
+  File "C:\Users\swara\Downloads\AI_Adaptive_Interview\backend\app\routes.py", line 263, in _require_candidate_session
+    raise HTTPException(status_code=401, detail="Candidate session token is required")
+fastapi.exceptions.HTTPException: 401: Candidate session token is required
+
+Error in save_answer: 401: Candidate session token is required
+Traceback (most recent call last):
+  File "C:\Users\swara\Downloads\AI_Adaptive_Interview\backend\app\routes.py", line 1113, in save_answer
+    candidate_session = _require_candidate_session(credentials, interview_id=interview_id)
+  File "C:\Users\swara\Downloads\AI_Adaptive_Interview\backend\app\routes.py", line 263, in _require_candidate_session
+    raise HTTPException(status_code=401, detail="Candidate session token is required")
+fastapi.exceptions.HTTPException: 401: Candidate session token is required
+
+Error in save_answer: 401: Candidate session token is required
+Traceback (most recent call last):
+  File "C:\Users\swara\Downloads\AI_Adaptive_Interview\backend\app\routes.py", line 1113, in save_answer
+    candidate_session = _require_candidate_session(credentials, interview_id=interview_id)
+  File "C:\Users\swara\Downloads\AI_Adaptive_Interview\backend\app\routes.py", line 263, in _require_candidate_session
+    raise HTTPException(status_code=401, detail="Candidate session token is required")
+fastapi.exceptions.HTTPException: 401: Candidate session token is required
+
+Error in save_answer: 401: Candidate session token is required
+Traceback (most recent call last):
+  File "C:\Users\swara\Downloads\AI_Adaptive_Interview\backend\app\routes.py", line 1113, in save_answer
+    candidate_session = _require_candidate_session(credentials, interview_id=interview_id)
+  File "C:\Users\swara\Downloads\AI_Adaptive_Interview\backend\app\routes.py", line 263, in _require_candidate_session
+    raise HTTPException(status_code=401, detail="Candidate session token is required")
+fastapi.exceptions.HTTPException: 401: Candidate session token is required
+
