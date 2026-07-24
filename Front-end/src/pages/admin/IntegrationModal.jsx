@@ -1,4 +1,5 @@
 import React, { useState } from 'react'
+import { createPortal } from 'react-dom'
 import { X, Calendar, Globe, Plug, Loader2, Search, MessageSquare, Database, Phone, ChevronLeft, ExternalLink, TrendingUp } from 'lucide-react'
 import { API_BASE_URL } from '../../apiConfig'
 
@@ -142,9 +143,9 @@ export default function IntegrationModal({ isOpen, onClose, onRefresh }) {
     return matchesCategory && matchesSearch
   })
 
-  return (
+  return createPortal(
     <div 
-      className="fixed inset-0 z-[100] flex items-center justify-center p-4 sm:p-6 md:p-8 bg-slate-900/50 backdrop-blur-md animate-in fade-in"
+      className="fixed inset-0 z-[9999] flex items-center justify-center p-4 sm:p-6 overflow-y-auto bg-slate-900/60 backdrop-blur-sm animate-in fade-in"
       onClick={(e) => {
         if (e.target === e.currentTarget) handleClose()
       }}
@@ -152,10 +153,10 @@ export default function IntegrationModal({ isOpen, onClose, onRefresh }) {
       <div 
         className={`bg-white border border-slate-200 rounded-3xl w-full ${
           selectedConfig ? 'max-w-xl' : 'max-w-5xl'
-        } max-h-[85vh] shadow-2xl flex flex-col overflow-hidden relative transition-all duration-300`}
+        } my-auto shadow-2xl flex flex-col overflow-hidden relative transition-all duration-300`}
       >
         {/* Dynamic Header with Prominent Top-Right Close Button */}
-        <div className="flex items-center justify-between px-6 py-4.5 border-b border-slate-200 bg-slate-50/90 shrink-0 sticky top-0 z-20">
+        <div className="flex items-center justify-between px-6 py-4 bg-slate-50 border-b border-slate-200 shrink-0">
           <div className="flex items-center gap-3">
             {selectedConfig ? (
               <button 
@@ -184,7 +185,7 @@ export default function IntegrationModal({ isOpen, onClose, onRefresh }) {
           <button 
             type="button"
             onClick={handleClose} 
-            className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-bold text-slate-600 hover:text-rose-600 bg-white hover:bg-rose-50 border border-slate-200 hover:border-rose-200 rounded-xl transition-all shadow-sm cursor-pointer"
+            className="flex items-center gap-1.5 px-3.5 py-1.5 text-xs font-bold text-rose-600 bg-rose-50 hover:bg-rose-100 border border-rose-200 rounded-xl transition-all shadow-sm cursor-pointer"
             title="Close Window"
           >
             <span>Close</span>
@@ -193,7 +194,7 @@ export default function IntegrationModal({ isOpen, onClose, onRefresh }) {
         </div>
 
         {/* Content Area */}
-        <div className="flex-1 overflow-y-auto bg-white p-6">
+        <div className="flex-1 overflow-y-auto max-h-[75vh] bg-white p-6">
           {!selectedConfig ? (
             // GRID VIEW
             <div>
@@ -384,7 +385,7 @@ export default function IntegrationModal({ isOpen, onClose, onRefresh }) {
             </div>
           )}
         </div>
-      </div>
-    </div>
+    </div>,
+    document.body
   )
 }
