@@ -2,13 +2,11 @@ import { useState, useEffect, useRef } from 'react'
 import { useNavigate } from 'react-router-dom'
 import Swal from 'sweetalert2'
 import api from '../../utils/api'
-import { candidateFetch, setCandidateSessionAuth } from '../../utils/candidateAuth'
 import useCandidateWebRTC from '../../hooks/useCandidateWebRTC'
 import { useProctoring } from '../../hooks/useProctoring'
 import { useScreenshotProtection } from '../../hooks/useScreenshotProtection'
 import { useExamSecurity } from '../../hooks/useExamSecurity'
 import { countFillers } from './interviewUtils'
-import { normalizeInterviewQuestions, unwrapInterviewPayload } from './interviewPayload'
 
 const langMap = {
   'Hindi': 'hi-IN',
@@ -18,14 +16,9 @@ const langMap = {
   'Kannada': 'kn-IN',
   'English': 'en-IN'
 }
-const MAX_RECORDING_BYTES_PER_STREAM = 128 * 1024 * 1024
-const RECORDING_OPTIONS = { videoBitsPerSecond: 450000, audioBitsPerSecond: 48000 }
 
 export const useInterviewSession = (sessionId, interviewType, startRoundTwo) => {
   const navigate = useNavigate()
-  const [recordingUploadSessionId] = useState(
-    () => globalThis.crypto?.randomUUID?.() || `${Date.now()}-${Math.random()}`,
-  )
 
   // Screen States
   const [loading, setLoading] = useState(true)
@@ -42,28 +35,11 @@ export const useInterviewSession = (sessionId, interviewType, startRoundTwo) => 
   // WebRTC Global Cleanup
   useEffect(() => {
     return () => {
-      if (window.speechSynthesis) window.speechSynthesis.cancel()
-      if (activeQuestionAudioRef.current) {
-        activeQuestionAudioRef.current.pause()
-        activeQuestionAudioRef.current.src = ''
-        activeQuestionAudioRef.current = null
-      }
-      isAiSpeakingRef.current = false
-      if (recognitionRef.current) {
-        isSpeechRecordingRef.current = false
-        try { recognitionRef.current.abort() } catch (_) { }
-      }
-      if (whisperMediaRecorderRef.current?.state === 'recording') {
-        try { whisperMediaRecorderRef.current.stop() } catch (_) { }
-      }
       if (mediaStreamRef.current) {
         mediaStreamRef.current.getTracks().forEach(t => t.stop())
       }
       if (screenStreamRef.current) {
         screenStreamRef.current.getTracks().forEach(t => t.stop())
-      }
-      if (audioMixerCtxRef.current?.state !== 'closed') {
-        audioMixerCtxRef.current?.close().catch(() => {})
       }
     }
   }, [])
@@ -178,11 +154,6 @@ export const useInterviewSession = (sessionId, interviewType, startRoundTwo) => 
   const [activeRightTab, setActiveRightTab] = useState('code')
   const [compiling, setCompiling] = useState(false)
   const [globalCountdown, setGlobalCountdown] = useState(0)
-  const globalCountdownRef = useRef(0)
-  useEffect(() => {
-    globalCountdownRef.current = globalCountdown
-  }, [globalCountdown])
-  const canSubmit = true
   const [totalDuration, setTotalDuration] = useState(0)
   const [isRoundTwo, setIsRoundTwo] = useState(false)
   const isRoundTwoRef = useRef(false)
@@ -264,20 +235,13 @@ export const useInterviewSession = (sessionId, interviewType, startRoundTwo) => 
   const screenRecorderRef = useRef(null)
   const cameraChunksRef = useRef([])
   const screenChunksRef = useRef([])
-  const cameraBytesRef = useRef(0)
-  const screenBytesRef = useRef(0)
-  const cameraRecordingTruncatedRef = useRef(false)
-  const screenRecordingTruncatedRef = useRef(false)
   const mediaStreamRef = useRef(null)
   const screenStreamRef = useRef(null)
 
   // Speech Recognition Reference
   const recognitionRef = useRef(null)
   const isSpeechRecordingRef = useRef(false)
-  const webSpeechDisabledRef = useRef(false)
-  const speechNetworkFailuresRef = useRef(0)
-  const isAiSpeakingRef = useRef(false)
-  const activeQuestionAudioRef = useRef(null)
+  const isTTSPlayingRef = useRef(false) // blocks rec.onend auto-restart during TTS playback
   const whisperMediaRecorderRef = useRef(null)
   const interimTextRef = useRef('')
   const currentAudioRef = useRef(null)
@@ -285,22 +249,12 @@ export const useInterviewSession = (sessionId, interviewType, startRoundTwo) => 
 
   const whisperAudioChunksRef = useRef([])
   const whisperPauseTimeoutRef = useRef(null)
-  const whisperTranscriptRef = useRef('')
-  const whisperCompletionRef = useRef(Promise.resolve(''))
-  const resolveWhisperCompletionRef = useRef(null)
   // Refs that hold session-data values used in async transcription callbacks.
   // Using refs (not state) prevents the stale-closure / race-condition where
   // sessionDetail state is not yet populated when the MediaRecorder onstop fires.
   const candidateNameRef = useRef('Candidate')
   const interviewLanguageRef = useRef('English')
   const transcribeInFlightRef = useRef(false) // prevent overlapping Whisper API calls
-
-  const selectBestTranscript = (...values) => (
-    values
-      .map(value => String(value || '').trim())
-      .filter(Boolean)
-      .sort((left, right) => right.length - left.length)[0] || ''
-  )
 
   // Proctoring Loops
   const faceDetectionIntervalRef = useRef(null)
@@ -331,7 +285,12 @@ export const useInterviewSession = (sessionId, interviewType, startRoundTwo) => 
   const TTS_CACHE_MAX = 20
 
   const normalizeQuestions = (rawQuestions = []) => {
-    return normalizeInterviewQuestions(rawQuestions)
+    return rawQuestions.map((question, index) => ({
+      ...question,
+      id: question.id ?? index + 1,
+      text: question.text || question.question || question.prompt || '',
+      type: question.type || question.category || 'Interview'
+    }))
   }
 
   useEffect(() => {
@@ -503,15 +462,10 @@ export const useInterviewSession = (sessionId, interviewType, startRoundTwo) => 
       }
 
       if (sessionId && isDisclaimerAccepted) {
-        candidateFetch(`${api.defaults.baseURL || ''}/interview/${sessionId}/alert`, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            type: "warning",
-            message: "Candidate refreshed or closed the window."
-          }),
-          keepalive: true,
-        }).catch(() => {})
+        navigator.sendBeacon(`${api.defaults.baseURL || ''}/interview/${sessionId}/alert`, JSON.stringify({
+          type: "warning",
+          message: "Candidate refreshed or closed the window."
+        }))
       }
     }
     window.addEventListener("beforeunload", handleUnload)
@@ -752,7 +706,7 @@ export const useInterviewSession = (sessionId, interviewType, startRoundTwo) => 
       } catch (e) {}
 
       try {
-        const payload = await api.get(`/session/${sessionId}`).then(r => unwrapInterviewPayload(r.data))
+        const payload = await api.get(`/session/${sessionId}`).then(r => r.data)
         if (payload.status !== 'success') {
           throw new Error(payload.detail || payload.message || "Failed to load session details.")
         }
@@ -791,7 +745,7 @@ export const useInterviewSession = (sessionId, interviewType, startRoundTwo) => 
 
         const startPayload = await api.post(`/start-session-interview`, formData, {
           headers: { 'Content-Type': 'multipart/form-data' }
-        }).then(r => unwrapInterviewPayload(r.data))
+        }).then(r => r.data)
         if (startPayload.is_expired) {
           throw new Error(startPayload.message || "This interview link has expired.")
         }
@@ -804,15 +758,18 @@ export const useInterviewSession = (sessionId, interviewType, startRoundTwo) => 
           return
         }
 
-        const qList = normalizeQuestions(startPayload)
+        const rawQuestions = startPayload.questions?.length
+          ? startPayload.questions
+          : startPayload.first_question
+            ? [startPayload.first_question]
+            : []
+        const qList = normalizeQuestions(rawQuestions)
         if (qList.length === 0) {
           throw new Error("No interview questions are available for this session. Please contact the recruiter.")
         }
         setQuestions(qList)
         setInterviewId(startPayload.interview_id || '')
-        const candidateToken = startPayload.monitoring_token || ''
-        setMonitoringToken(candidateToken)
-        setCandidateSessionAuth(candidateToken, sessionId, startPayload.interview_id || '')
+        setMonitoringToken(startPayload.monitoring_token || '')
         // Snapshot candidate details into refs NOW (synchronously) so that the
         // async Whisper MediaRecorder onstop callback always has correct values.
         // Using refs avoids the race condition where sessionDetail state hasn't
@@ -959,115 +916,9 @@ export const useInterviewSession = (sessionId, interviewType, startRoundTwo) => 
     setFullscreenWarning(false)
   }
 
-  const ensureWhisperCapture = () => {
-    if (!mediaStreamRef.current) return whisperMediaRecorderRef.current
-    if (whisperMediaRecorderRef.current && whisperMediaRecorderRef.current.state !== 'inactive') {
-      return whisperMediaRecorderRef.current
-    }
-
-    const audioTracks = mediaStreamRef.current.getAudioTracks()
-    if (!audioTracks.length) return null
-
-    try {
-      const audioStream = new MediaStream(audioTracks)
-      const mimeTypes = ['audio/webm;codecs=opus', 'audio/webm', 'audio/ogg;codecs=opus', 'audio/mp4']
-      const supportedMime = mimeTypes.find(value => {
-        try { return MediaRecorder.isTypeSupported(value) } catch (_) { return false }
-      }) || ''
-      const recorder = new MediaRecorder(audioStream, supportedMime ? { mimeType: supportedMime } : undefined)
-      whisperAudioChunksRef.current = []
-
-      recorder.ondataavailable = event => {
-        if (event.data?.size > 0) whisperAudioChunksRef.current.push(event.data)
-      }
-      recorder.onstop = async () => {
-        let finalText = ''
-        try {
-          const chunks = [...whisperAudioChunksRef.current]
-          whisperAudioChunksRef.current = []
-          if (!chunks.length) return
-
-          const actualMime = recorder.mimeType || supportedMime || 'audio/webm'
-          const blob = new Blob(chunks, { type: actualMime })
-          if (blob.size < 1000) return
-
-          const extension = actualMime.includes('ogg') ? 'ogg' : actualMime.includes('mp4') ? 'mp4' : 'webm'
-          const formData = new FormData()
-          formData.append('audio', blob, `utterance.${extension}`)
-          formData.append('candidate_name', candidateNameRef.current)
-          formData.append('language', interviewLanguageRef.current || 'English')
-          transcribeInFlightRef.current = true
-          const response = await api.post('/transcribe', formData, {
-            headers: { 'Content-Type': 'multipart/form-data' },
-            timeout: 20000,
-          })
-          const text = response.data?.text?.trim()
-          if (text) {
-            finalText = text
-            whisperTranscriptRef.current = `${whisperTranscriptRef.current} ${text}`.trim()
-            setTranscriptionText(previous => {
-              const normalized = previous.trim()
-              return normalized.endsWith(text) ? previous : `${previous}${normalized ? ' ' : ''}${text} `
-            })
-          }
-        } catch (error) {
-          console.error('Whisper transcription failed:', error)
-        } finally {
-          transcribeInFlightRef.current = false
-          whisperMediaRecorderRef.current = null
-          resolveWhisperCompletionRef.current?.(finalText)
-          resolveWhisperCompletionRef.current = null
-        }
-      }
-      whisperMediaRecorderRef.current = recorder
-      return recorder
-    } catch (error) {
-      console.error('Failed to initialize Whisper recorder:', error)
-      whisperMediaRecorderRef.current = null
-      return null
-    }
-  }
-
-  const flushWhisperCapture = async () => {
-    const recorder = whisperMediaRecorderRef.current
-    if (!recorder) return whisperTranscriptRef.current
-
-    let shouldAwait = transcribeInFlightRef.current
-    if (recorder.state === 'recording') {
-      shouldAwait = true
-      try { recorder.requestData() } catch (_) { }
-      try { recorder.stop() } catch (_) { }
-    }
-    if (!shouldAwait) return whisperTranscriptRef.current
-
-    await Promise.race([
-      whisperCompletionRef.current,
-      new Promise(resolve => setTimeout(resolve, 22000)),
-    ])
-    return whisperTranscriptRef.current
-  }
-
-  const startWhisperCapture = () => {
-    if (isAiSpeakingRef.current || transcribeInFlightRef.current) return
-    const recorder = ensureWhisperCapture()
-    if (recorder?.state === 'inactive') {
-      whisperCompletionRef.current = new Promise(resolve => {
-        resolveWhisperCompletionRef.current = resolve
-      })
-      try { recorder.start(1000) } catch (error) {
-        resolveWhisperCompletionRef.current?.('')
-        resolveWhisperCompletionRef.current = null
-        console.warn('Unable to start server transcription capture:', error)
-      }
-    }
-  }
-
   const initSpeechRecognition = () => {
     if (!('webkitSpeechRecognition' in window || 'SpeechRecognition' in window)) {
-      console.warn("Web Speech is unavailable; using the server transcription fallback.")
-      webSpeechDisabledRef.current = true
-      isSpeechRecordingRef.current = true
-      ensureWhisperCapture()
+      console.warn("Speech recognition not supported in this browser.")
       return
     }
     const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition
@@ -1159,8 +1010,8 @@ export const useInterviewSession = (sessionId, interviewType, startRoundTwo) => 
     }
 
     rec.onstart = () => {
-      isSpeechRecordingRef.current = true
-      ensureWhisperCapture()
+      // Intentionally left blank. We now set isSpeechRecordingRef.current = true 
+      // immediately before calling start(), to avoid async race conditions.
       // Note: Whisper path is disabled — Web Speech API is used as the sole
       // transcript source for all languages. It is real-time, accurate, and
       // avoids Whisper hallucination + latency issues.
@@ -1177,7 +1028,8 @@ export const useInterviewSession = (sessionId, interviewType, startRoundTwo) => 
 
       // With continuous=true this fires only on error/abort — restart with a small delay
       // to avoid rapid restart storms and InvalidStateError exceptions in Chrome.
-      if (isSpeechRecordingRef.current && !webSpeechDisabledRef.current) {
+      // IMPORTANT: Do NOT restart during TTS playback (isTTSPlayingRef guards this).
+      if (isSpeechRecordingRef.current && !isTTSPlayingRef.current) {
         setTimeout(() => {
           if (!isSpeechRecordingRef.current || isTTSPlayingRef.current) return
           try {
@@ -1194,8 +1046,6 @@ export const useInterviewSession = (sessionId, interviewType, startRoundTwo) => 
     }
 
     rec.onresult = (event) => {
-      if (isAiSpeakingRef.current) return
-      speechNetworkFailuresRef.current = 0
       let interimText = ''
       let finalText = ''
       for (let i = event.resultIndex; i < event.results.length; i++) {
@@ -1232,20 +1082,7 @@ export const useInterviewSession = (sessionId, interviewType, startRoundTwo) => 
 
     rec.onerror = (e) => {
       if (e.error === 'not-allowed' || e.error === 'service-not-allowed') {
-        console.warn("Browser speech recognition is unavailable; switching to server transcription:", e.error)
-        webSpeechDisabledRef.current = true
-        isSpeechRecordingRef.current = true
-        recognitionRef.current = null
-        ensureWhisperCapture()
-        Swal.fire({
-          title: 'Backup Voice Recognition Enabled',
-          text: 'Browser speech recognition is unavailable, so the interview switched to secure server transcription.',
-          icon: 'info',
-          background: '#161c2d',
-          color: '#fff',
-          timer: 3500,
-          showConfirmButton: false,
-        })
+        console.error("Microphone permission denied:", e.error)
         return
       }
       if (e.error === 'no-speech') {
@@ -1254,13 +1091,14 @@ export const useInterviewSession = (sessionId, interviewType, startRoundTwo) => 
         return
       }
       if (e.error === 'network') {
-        speechNetworkFailuresRef.current += 1
-        if (speechNetworkFailuresRef.current >= 2) {
-          webSpeechDisabledRef.current = true
-          recognitionRef.current = null
-          ensureWhisperCapture()
-        } else if (isSpeechRecordingRef.current) {
-          setTimeout(() => { if (isSpeechRecordingRef.current) initSpeechRecognition() }, 1000)
+        // Network blip — restart after a longer pause
+        if (isSpeechRecordingRef.current) {
+          setTimeout(() => { 
+            if (isSpeechRecordingRef.current) {
+              initSpeechRecognition()
+              try { recognitionRef.current?.start() } catch (_) {}
+            }
+          }, 1000)
         }
         return
       }
@@ -1308,14 +1146,17 @@ export const useInterviewSession = (sessionId, interviewType, startRoundTwo) => 
 
         const now = Date.now()
         
-        // Treat RMS > 0.03 as candidate speech. Ignore the AI question audio.
-        if (!isAiSpeakingRef.current && rms > 0.03) {
+        // Treat RMS > 0.03 as speech and bump the silence timer
+        if (rms > 0.03) {
           lastSpeechTimeRef.current = now
         }
 
-        // The server-transcription recorder runs continuously for the question.
+        // VAD (Voice Activity Detection) — used only for proctoring noise alerts.
+        // Whisper MediaRecorder path is disabled: Web Speech API is now the sole
+        // transcript source. This eliminates the hallucination and latency issues
+        // that made transcription appear inaccurate.
 
-        if (!isAiSpeakingRef.current && rms > 0.18 && now > noiseCooldownRef.current) {
+        if (rms > 0.18 && now > noiseCooldownRef.current) {
           noiseFrameCountRef.current++
         } else {
           noiseFrameCountRef.current = Math.max(0, noiseFrameCountRef.current - 2)
@@ -1653,17 +1494,17 @@ export const useInterviewSession = (sessionId, interviewType, startRoundTwo) => 
       let stream
       try {
         stream = await navigator.mediaDevices.getUserMedia({
-          video: { width: { ideal: 640 }, height: { ideal: 360 }, frameRate: { ideal: 15, max: 20 } },
+          video: { width: { ideal: 720 }, height: { ideal: 1280 }, frameRate: 15 },
           audio: true
         })
       } catch (err) {
         console.error("Camera/Mic getUserMedia error:", err)
         if (err.name === 'NotFoundError' || err.name === 'DevicesNotFoundError') {
-          throw new Error("webcam_mic_not_found", { cause: err })
+          throw new Error("webcam_mic_not_found")
         } else if (err.name === 'NotAllowedError' || err.name === 'PermissionDeniedError') {
-          throw new Error("webcam_mic_denied", { cause: err })
+          throw new Error("webcam_mic_denied")
         } else {
-          throw new Error(`webcam_mic_failed: ${err.message || err.name}`, { cause: err })
+          throw new Error(`webcam_mic_failed: ${err.message || err.name}`)
         }
       }
 
@@ -1677,9 +1518,9 @@ export const useInterviewSession = (sessionId, interviewType, startRoundTwo) => 
         console.error("Screen Share getDisplayMedia error:", err)
         stream.getTracks().forEach(t => t.stop())
         if (err.name === 'NotAllowedError' || err.name === 'PermissionDeniedError') {
-          throw new Error("screenshare_denied", { cause: err })
+          throw new Error("screenshare_denied")
         } else {
-          throw new Error(`screenshare_failed: ${err.message || err.name}`, { cause: err })
+          throw new Error(`screenshare_failed: ${err.message || err.name}`)
         }
       }
 
@@ -1725,35 +1566,17 @@ export const useInterviewSession = (sessionId, interviewType, startRoundTwo) => 
         screenStream.addTrack(mixedTrack)
       }
 
-      const options = RECORDING_OPTIONS
+      let options = { videoBitsPerSecond: 800000, audioBitsPerSecond: 64000 }
       cameraRecorderRef.current = new MediaRecorder(stream, options)
       cameraChunksRef.current = []
-      cameraBytesRef.current = 0
-      cameraRecordingTruncatedRef.current = false
       cameraRecorderRef.current.ondataavailable = e => {
-        if (e.data.size <= 0) return
-        if (cameraBytesRef.current + e.data.size > MAX_RECORDING_BYTES_PER_STREAM) {
-          cameraRecordingTruncatedRef.current = true
-          if (cameraRecorderRef.current?.state === 'recording') cameraRecorderRef.current.stop()
-          return
-        }
-        cameraBytesRef.current += e.data.size
-        cameraChunksRef.current.push(e.data)
+        if (e.data.size > 0) cameraChunksRef.current.push(e.data)
       }
 
       screenRecorderRef.current = new MediaRecorder(screenStream, options)
       screenChunksRef.current = []
-      screenBytesRef.current = 0
-      screenRecordingTruncatedRef.current = false
       screenRecorderRef.current.ondataavailable = e => {
-        if (e.data.size <= 0) return
-        if (screenBytesRef.current + e.data.size > MAX_RECORDING_BYTES_PER_STREAM) {
-          screenRecordingTruncatedRef.current = true
-          if (screenRecorderRef.current?.state === 'recording') screenRecorderRef.current.stop()
-          return
-        }
-        screenBytesRef.current += e.data.size
-        screenChunksRef.current.push(e.data)
+        if (e.data.size > 0) screenChunksRef.current.push(e.data)
       }
 
       cameraRecorderRef.current.start(2000)
@@ -1806,9 +1629,6 @@ export const useInterviewSession = (sessionId, interviewType, startRoundTwo) => 
         errTitle = 'Screen Sharing Required'
         errText = 'You must share your entire screen to proceed with the secure proctored interview.'
         errIcon = 'warning'
-      } else if (err.message === 'speech_recognition_unsupported') {
-        errTitle = 'Voice Recognition Unavailable'
-        errText = 'This interview requires the latest Chrome or Edge browser with speech recognition enabled.'
       }
 
       Swal.fire({
@@ -1893,17 +1713,11 @@ export const useInterviewSession = (sessionId, interviewType, startRoundTwo) => 
         }
       }
 
-      const options = RECORDING_OPTIONS
+      let options = { videoBitsPerSecond: 800000, audioBitsPerSecond: 64000 }
       screenRecorderRef.current = new MediaRecorder(screenStream, options)
+      screenChunksRef.current = []
       screenRecorderRef.current.ondataavailable = e => {
-        if (e.data.size <= 0) return
-        if (screenBytesRef.current + e.data.size > MAX_RECORDING_BYTES_PER_STREAM) {
-          screenRecordingTruncatedRef.current = true
-          if (screenRecorderRef.current?.state === 'recording') screenRecorderRef.current.stop()
-          return
-        }
-        screenBytesRef.current += e.data.size
-        screenChunksRef.current.push(e.data)
+        if (e.data.size > 0) screenChunksRef.current.push(e.data)
       }
       screenRecorderRef.current.start(2000)
     } catch (e) {
@@ -1948,11 +1762,6 @@ export const useInterviewSession = (sessionId, interviewType, startRoundTwo) => 
     // so the candidate gets exactly 10 seconds of silence before auto-advancing.
     // We do NOT set a timer here before TTS plays — that would give extra-long wait.
     if (silenceIntervalRef.current) clearInterval(silenceIntervalRef.current)
-    if (activeQuestionAudioRef.current) {
-      activeQuestionAudioRef.current.pause()
-      activeQuestionAudioRef.current = null
-    }
-    isAiSpeakingRef.current = false
 
     // Generate a unique ID for this TTS request to handle rapid clicks
     const reqId = Date.now()
@@ -1996,7 +1805,7 @@ export const useInterviewSession = (sessionId, interviewType, startRoundTwo) => 
       let url = ttsCacheRef.current.get(ttsCacheKey)
 
       if (!url) {
-        const res = await candidateFetch(`${api.defaults.baseURL || ''}/tts`, {
+        const res = await fetch(`${api.defaults.baseURL || ''}/tts`, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify(bodyPayload)
@@ -2028,9 +1837,6 @@ export const useInterviewSession = (sessionId, interviewType, startRoundTwo) => 
       }
 
       audio.onended = () => {
-        isAiSpeakingRef.current = false
-        activeQuestionAudioRef.current = null
-        startWhisperCapture()
         // Revoke object URL after playback to free browser memory.
         // Only revoke if not in the cache (cached URLs must stay valid for replay).
         if (!ttsCacheRef.current.has(ttsCacheKey)) {
@@ -2051,8 +1857,6 @@ export const useInterviewSession = (sessionId, interviewType, startRoundTwo) => 
       }
       return // Successfully used backend high-quality TTS
     } catch (err) {
-      isAiSpeakingRef.current = false
-      activeQuestionAudioRef.current = null
       console.error("Backend TTS failed, falling back to browser TTS", err)
     }
 
@@ -2060,8 +1864,6 @@ export const useInterviewSession = (sessionId, interviewType, startRoundTwo) => 
     // If browser speechSynthesis is also missing, set a 15s fallback silence timer
     // so the interview never gets permanently stuck.
     if (!window.speechSynthesis) {
-      isAiSpeakingRef.current = false
-      startWhisperCapture()
       startSilenceTimer(15000)
       return
     }
@@ -2087,17 +1889,14 @@ export const useInterviewSession = (sessionId, interviewType, startRoundTwo) => 
       }
 
       utterance.onend = () => {
-        isAiSpeakingRef.current = false
-        startWhisperCapture()
+        // ── RESTART recognition after browser TTS fallback finishes ──
+        isTTSPlayingRef.current = false
+        isSpeechRecordingRef.current = true
+        initSpeechRecognition()
+        try { recognitionRef.current?.start() } catch (_) {}
         startSilenceTimer(10000)
       }
-      utterance.onerror = () => {
-        isAiSpeakingRef.current = false
-        startWhisperCapture()
-        startSilenceTimer(15000)
-      }
 
-      isAiSpeakingRef.current = true
       window.speechSynthesis.speak(utterance)
     }
 
@@ -2163,12 +1962,6 @@ export const useInterviewSession = (sessionId, interviewType, startRoundTwo) => 
     stopSilenceTimer()
     setShowRound2Confirm(false)
 
-    const capturedWhisper = await flushWhisperCapture()
-    const effectiveTranscript = selectBestTranscript(
-      capturedWhisper,
-      transcriptionText,
-      interimTranscriptText,
-    )
     const activeQuestion = questions[currentQuestionIndex]
     const iid = interviewId || sessionDetail?.interview_id || sessionId
     const timeSpent = Math.round((Date.now() - questionStartTimeRef.current) / 1000)
@@ -2179,7 +1972,7 @@ export const useInterviewSession = (sessionId, interviewType, startRoundTwo) => 
     answerForm.append('interview_id', iid)
     answerForm.append('question_id', activeQuestion?.id || (currentQuestionIndex + 1))
     answerForm.append('question_text', activeQuestion?.text || activeQuestion?.question || '')
-    answerForm.append('answer_text', activeQuestion?.type === 'coding' ? (codeAnswer || ' ') : (effectiveTranscript || ' '))
+    answerForm.append('answer_text', activeQuestion?.type === 'coding' ? (codeAnswer || ' ') : (transcriptionText || ' '))
     answerForm.append('candidate_name', sessionDetail?.candidate_name || 'Candidate')
     answerForm.append('time_spent_seconds', timeSpent.toString())
     answerForm.append('time_limit_seconds', '120')
@@ -2204,12 +1997,12 @@ export const useInterviewSession = (sessionId, interviewType, startRoundTwo) => 
 
     // Behavioral data save is best-effort; failure must not block transition
     try {
-      const words = effectiveTranscript.trim().split(/\s+/).filter(w => w.length > 0).length
+      const words = transcriptionText.trim().split(/\s+/).filter(w => w.length > 0).length
       const wpm = timeSpent > 0 ? Math.round((words / timeSpent) * 60) : 0
       await api.post(`/save-behavioral-data`, {
         interview_id: iid,
         question_id: (activeQuestion?.id || (currentQuestionIndex + 1)).toString(),
-        filler_count: countFillers(effectiveTranscript),
+        filler_count: countFillers(transcriptionText),
         wpm: wpm,
         pause_count: behavioralStatsRef.current.pauseCount,
         time_spent_seconds: timeSpent,
@@ -2222,7 +2015,6 @@ export const useInterviewSession = (sessionId, interviewType, startRoundTwo) => 
     }
 
     setTranscriptionText('')
-    whisperTranscriptRef.current = ''
     setCodeAnswer('')
     setCodeOutput('')
     behavioralStatsRef.current = { wordCount: 0, fillerCount: 0, pauseCount: 0, faceAlerts: 0, tabSwitches: 0, noiseAlerts: 0 }
@@ -2234,29 +2026,11 @@ export const useInterviewSession = (sessionId, interviewType, startRoundTwo) => 
     if (currentQuestionIndex >= questions.length) return
     if (isNextingRef.current) return  // prevent rapid-click double submit
     isNextingRef.current = true
-    const capturedWhisper = await flushWhisperCapture()
-    const effectiveTranscript = selectBestTranscript(
-      capturedWhisper,
-      `${transcriptionText} ${interimTranscriptText}`,
-    )
     const currentQuestion = questions[currentQuestionIndex]
-    if (currentQuestion.type !== 'coding' && !effectiveTranscript.trim()) {
-      stopSilenceTimer()
-      await Swal.fire({
-        title: 'No Clear Answer Detected',
-        text: 'We could not hear a complete answer. Please check your microphone and try again.',
-        icon: 'warning',
-        background: '#161c2d',
-        color: '#fff',
-      })
-      startWhisperCapture()
-      startSilenceTimer(15000)
-      return
-    }
     stopSilenceTimer()
 
     const timeSpent = Math.round((Date.now() - questionStartTimeRef.current) / 1000)
-    const words = effectiveTranscript.trim().split(/\s+/).filter(w => w.length > 0).length
+    const words = transcriptionText.trim().split(/\s+/).filter(w => w.length > 0).length
     const wpm = timeSpent > 0 ? Math.round((words / timeSpent) * 60) : 0
     try {
       const iid = interviewId || sessionDetail?.interview_id || sessionId
@@ -2264,7 +2038,7 @@ export const useInterviewSession = (sessionId, interviewType, startRoundTwo) => 
         const response = await api.post(`/case-study/submit-answer`, {
           interview_id: iid,
           question_index: currentQuestion.caseStudyIndex,
-          answer_text: effectiveTranscript || ' '
+          answer_text: transcriptionText || ' '
         })
         if (!response.data || response.status !== 200) throw new Error('Failed to submit case study answer')
       } else {
@@ -2272,11 +2046,7 @@ export const useInterviewSession = (sessionId, interviewType, startRoundTwo) => 
         answerForm.append('interview_id', iid)
         answerForm.append('question_id', currentQuestion.id || (currentQuestionIndex + 1))
         answerForm.append('question_text', currentQuestion.text || currentQuestion.question || '')
-        const finalAnswerText = effectiveTranscript
-        answerForm.append(
-          'answer_text',
-          currentQuestion.type === 'coding' ? (codeAnswer || 'No code submitted') : finalAnswerText,
-        )
+        answerForm.append('answer_text', currentQuestion.type === 'coding' ? (codeAnswer || ' ') : (transcriptionText || ' '))
         answerForm.append('candidate_name', sessionDetail?.candidate_name || 'Candidate')
         answerForm.append('time_spent_seconds', timeSpent.toString())
         answerForm.append('time_limit_seconds', '120')
@@ -2290,7 +2060,7 @@ export const useInterviewSession = (sessionId, interviewType, startRoundTwo) => 
       const payload = {
         interview_id: iid,
         question_id: (currentQuestion.id || (currentQuestionIndex + 1)).toString(),
-        filler_count: countFillers(effectiveTranscript),
+        filler_count: countFillers(transcriptionText),
         wpm: wpm,
         pause_count: behavioralStatsRef.current.pauseCount,
         time_spent_seconds: timeSpent,
@@ -2320,7 +2090,6 @@ export const useInterviewSession = (sessionId, interviewType, startRoundTwo) => 
           handleSubmitInterview()
         } else if (!isRoundTwo && sessionDetail?.interview_type !== 'Normal') {
           setTranscriptionText('')
-          whisperTranscriptRef.current = ''
           setInterimTranscriptText('')
           setCodeAnswer('')
           setCodeOutput('')
@@ -2355,7 +2124,6 @@ export const useInterviewSession = (sessionId, interviewType, startRoundTwo) => 
               return updated
             })
             setTranscriptionText('')
-            whisperTranscriptRef.current = ''
             setInterimTranscriptText('')
             setCodeAnswer('')
             setCodeOutput('')
@@ -2380,7 +2148,7 @@ export const useInterviewSession = (sessionId, interviewType, startRoundTwo) => 
           fd.append('interview_id', iid)
           fd.append('asked_question_ids', alreadyAskedIds)
           fd.append('count', '5')
-          candidateFetch(`${api.defaults.baseURL || ''}/generate-more-questions`, { method: 'POST', body: fd })
+          fetch(`${import.meta.env.VITE_API_URL || ''}/generate-more-questions`, { method: 'POST', body: fd })
             .then(r => r.json())
             .then(data => {
               if (data.questions && data.questions.length > 0) {
@@ -2392,7 +2160,6 @@ export const useInterviewSession = (sessionId, interviewType, startRoundTwo) => 
         }
 
         setTranscriptionText('')
-        whisperTranscriptRef.current = ''
         setInterimTranscriptText('')
         setCodeAnswer('')
         setCodeOutput('')
@@ -2431,8 +2198,6 @@ export const useInterviewSession = (sessionId, interviewType, startRoundTwo) => 
   }, [handleNextQuestion])
 
   const handleSubmitInterview = async (forceClose = false, terminationReason = null) => {
-    const isTimeout = forceClose === true || (typeof forceClose === 'boolean' && forceClose)
-
     if (isSubmittingRef.current) return  // Prevent double-submit
     isSubmittingRef.current = true
     setIsSaving(true)
@@ -2445,11 +2210,6 @@ export const useInterviewSession = (sessionId, interviewType, startRoundTwo) => 
     setUploadPercentage(10)
 
     if (window.speechSynthesis) window.speechSynthesis.cancel()
-    if (activeQuestionAudioRef.current) {
-      activeQuestionAudioRef.current.pause()
-      activeQuestionAudioRef.current = null
-    }
-    isAiSpeakingRef.current = false
     stopSilenceTimer()
     if (_sessionKey) sessionStorage.removeItem(_sessionKey)
     visualizerActiveRef.current = false
@@ -2460,12 +2220,11 @@ export const useInterviewSession = (sessionId, interviewType, startRoundTwo) => 
     if (recognitionRef.current) {
       try { recognitionRef.current.stop() } catch (e) { }
     }
-
-    const capturedWhisper = await flushWhisperCapture()
-    const finalTranscript = selectBestTranscript(
-      capturedWhisper,
-      `${transcriptionText} ${interimTranscriptText}`,
-    )
+    
+    if (whisperMediaRecorderRef.current && whisperMediaRecorderRef.current.state !== 'inactive') {
+      try { whisperMediaRecorderRef.current.stop() } catch (e) { }
+      whisperMediaRecorderRef.current = null
+    }
     if (whisperPauseTimeoutRef.current) clearTimeout(whisperPauseTimeoutRef.current)
 
     try {
@@ -2489,85 +2248,59 @@ export const useInterviewSession = (sessionId, interviewType, startRoundTwo) => 
       }
     } catch(e) { console.error("Error stopping audio mixer:", e) }
 
-    mediaStreamRef.current?.getTracks().forEach(track => track.stop())
-    screenStreamRef.current?.getTracks().forEach(track => track.stop())
+    if (cameraRecorderRef.current && cameraRecorderRef.current.state !== 'inactive') {
+      cameraRecorderRef.current.stop()
+    }
+    if (screenRecorderRef.current && screenRecorderRef.current.state !== 'inactive') {
+      screenRecorderRef.current.stop()
+    }
 
     let uploadPromiseChain = Promise.resolve()
-    let recordingUploadError = null
 
     if (cameraChunksRef.current.length > 0 || screenChunksRef.current.length > 0) {
       setUploadingText("Uploading video recordings...")
       setUploadPercentage(10)
-      setShowSkipButton(false)
+      setShowSkipButton(true)
 
-      const uploadPromise = async (chunks, type) => {
-        if (chunks.length === 0) return
-        const blob = new Blob(chunks, { type: 'video/webm' })
-        const formData = new FormData()
-        formData.append('file', blob, `interview_${type}.webm`)
-        formData.append('interview_id', sessionDetail.interview_id)
-        formData.append('recording_type', type)
-        formData.append('recording_upload_id', `${recordingUploadSessionId}-${type}`)
-        formData.append(
-          'recording_truncated',
-          String(type === 'camera'
-            ? cameraRecordingTruncatedRef.current
-            : screenRecordingTruncatedRef.current),
-        )
-        formData.append('link_id', sessionId)
+      const uploadPromise = (chunks, type) => {
+        return new Promise((resolve, reject) => {
+          if (chunks.length === 0) return resolve()
+          const blob = new Blob(chunks, { type: 'video/webm' })
+          const formData = new FormData()
+          formData.append('file', blob, `interview_${type}.webm`)
+          formData.append('interview_id', sessionDetail.interview_id)
+          formData.append('recording_type', type)
+          formData.append('link_id', sessionId)
 
-        let lastError
-        for (let attempt = 0; attempt < 3; attempt += 1) {
-          try {
-            await new Promise((resolve, reject) => {
-              const xhr = new XMLHttpRequest()
-              xhr.open('POST', `${api.defaults.baseURL || ''}/upload-full-recording`, true)
-              xhr.timeout = 5 * 60 * 1000
-              if (monitoringToken) {
-                xhr.setRequestHeader('Authorization', `Bearer ${monitoringToken}`)
-              }
+          const xhr = new XMLHttpRequest()
+          xhr.open('POST', `${api.defaults.baseURL || ''}/upload-full-recording`, true)
 
-              xhr.upload.onprogress = (e) => {
-                if (e.lengthComputable && type === 'camera') {
-                  const percent = Math.floor((e.loaded / e.total) * 100)
-                  setUploadPercentage(percent)
-                }
-              }
-
-              xhr.onload = () => {
-                if (xhr.status === 200) resolve()
-                else reject(new Error(`Upload failed with HTTP ${xhr.status}`))
-              }
-              xhr.onerror = () => reject(new Error("Network error"))
-              xhr.ontimeout = () => reject(new Error("Upload timed out"))
-              xhr.send(formData)
-            })
-            return
-          } catch (error) {
-            lastError = error
-            await new Promise(resolve => setTimeout(resolve, 800 * (attempt + 1)))
+          xhr.upload.onprogress = (e) => {
+            if (e.lengthComputable && type === 'camera') {
+              const percent = Math.floor((e.loaded / e.total) * 100)
+              setUploadPercentage(percent)
+            }
           }
-        }
-        throw lastError
+
+          xhr.onload = () => {
+            if (xhr.status === 200) resolve()
+            else reject(new Error("Upload failed"))
+          }
+          xhr.onerror = () => reject(new Error("Network error"))
+          xhr.send(formData)
+        })
       }
 
       // Keep track of the upload promise to await it later
-      uploadPromiseChain = (async () => {
-        await uploadPromise(cameraChunksRef.current, 'camera')
-        cameraChunksRef.current = []
-        cameraBytesRef.current = 0
-        await uploadPromise(screenChunksRef.current, 'screen')
-        screenChunksRef.current = []
-        screenBytesRef.current = 0
-      })().catch(err => {
-        recordingUploadError = err
-        console.error("Background upload failed:", err)
-      })
+      uploadPromiseChain = Promise.all([
+        uploadPromise(cameraChunksRef.current, 'camera'),
+        uploadPromise(screenChunksRef.current, 'screen')
+      ]).catch(err => console.error("Background upload failed:", err))
     }
 
     try {
       const timeSpent = Math.round((Date.now() - questionStartTimeRef.current) / 1000)
-      const words = finalTranscript.trim().split(/\s+/).filter(w => w.length > 0).length
+      const words = transcriptionText.trim().split(/\s+/).filter(w => w.length > 0).length
       const wpm = timeSpent > 0 ? Math.round((words / timeSpent) * 60) : 0
       const currentQuestion = questions[currentQuestionIndex] || {}
       
@@ -2578,7 +2311,7 @@ export const useInterviewSession = (sessionId, interviewType, startRoundTwo) => 
         answerForm.append('interview_id', iid)
         answerForm.append('question_id', currentQuestion.id || (currentQuestionIndex + 1))
         answerForm.append('question_text', currentQuestion.text || currentQuestion.question || '')
-        answerForm.append('answer_text', currentQuestion.type === 'coding' ? (codeAnswer || ' ') : (finalTranscript || ' '))
+        answerForm.append('answer_text', currentQuestion.type === 'coding' ? (codeAnswer || ' ') : (transcriptionText || ' '))
         answerForm.append('candidate_name', sessionDetail?.candidate_name || 'Candidate')
         answerForm.append('time_spent_seconds', timeSpent.toString())
         answerForm.append('time_limit_seconds', '120')
@@ -2594,7 +2327,7 @@ export const useInterviewSession = (sessionId, interviewType, startRoundTwo) => 
               interview_id: iid,
               question_id: currentQuestion.id || (currentQuestionIndex + 1),
               question_text: currentQuestion.text || currentQuestion.question || '',
-              answer_text: currentQuestion.type === 'coding' ? (codeAnswer || ' ') : (finalTranscript || ' '),
+              answer_text: currentQuestion.type === 'coding' ? (codeAnswer || ' ') : (transcriptionText || ' '),
               time_spent_seconds: timeSpent
             }
             localStorage.setItem(failedKey, JSON.stringify(answerData))
@@ -2607,7 +2340,7 @@ export const useInterviewSession = (sessionId, interviewType, startRoundTwo) => 
         question_id: (currentQuestion.id || (currentQuestionIndex + 1)).toString(),
         wpm: wpm,
         pause_count: behavioralStatsRef.current.pauseCount,
-        filler_count: countFillers(finalTranscript),
+        filler_count: countFillers(transcriptionText),
         time_spent_seconds: timeSpent,
         keyword_match_pct: 0,
         tab_switches: behavioralStatsRef.current.tabSwitches,
@@ -2639,19 +2372,6 @@ export const useInterviewSession = (sessionId, interviewType, startRoundTwo) => 
 
     // Wait for the video upload to finish before marking everything complete
     await uploadPromiseChain
-    if (recordingUploadError) {
-      await api.post('/recording-upload-failure', {
-        interview_id: interviewIdRef.current || sessionDetail?.interview_id || sessionId,
-        link_id: sessionId,
-      }).catch(() => {})
-      await Swal.fire({
-        title: 'Interview Saved',
-        text: 'Your answers were submitted, but the recording upload was interrupted. The interview team has been notified.',
-        icon: 'warning',
-        background: '#161c2d',
-        color: '#fff',
-      })
-    }
 
     setShowSkipButton(false)
     setUploadPercentage(100)
@@ -2687,47 +2407,30 @@ export const useInterviewSession = (sessionId, interviewType, startRoundTwo) => 
       buttonsStyling: false
     }).then(async result => {
       if (result.isConfirmed) {
-        const capturedWhisper = await flushWhisperCapture()
-        const effectiveTranscript = selectBestTranscript(
-          capturedWhisper,
-          `${transcriptionText} ${interimTranscriptText}`,
-        )
         // Save current answer before early exit
         const currentQuestion = questions[currentQuestionIndex]
-        try {
-          if (currentQuestion && (effectiveTranscript || codeAnswer.trim())) {
-            const timeSpent = Math.round((Date.now() - questionStartTimeRef.current) / 1000)
-            const iid = interviewId || sessionDetail?.interview_id || sessionId
-            if (currentQuestion.type === 'case_study') {
-              await api.post(`/case-study/submit-answer`, {
-                interview_id: iid,
-                question_index: currentQuestion.caseStudyIndex,
-                answer_text: effectiveTranscript || ' '
-              })
-            } else {
-              const answerForm = new FormData()
-              answerForm.append('interview_id', iid)
-              answerForm.append('question_id', currentQuestion.id || (currentQuestionIndex + 1))
-              answerForm.append('question_text', currentQuestion.text || currentQuestion.question || '')
-              answerForm.append('answer_text', currentQuestion.type === 'coding' ? (codeAnswer || ' ') : (effectiveTranscript || ' '))
-              answerForm.append('candidate_name', sessionDetail?.candidate_name || 'Candidate')
-              answerForm.append('time_spent_seconds', timeSpent.toString())
-              answerForm.append('time_limit_seconds', '120')
-              await api.post(`/save-answer`, answerForm)
-            }
+        if (currentQuestion && (transcriptionText.trim() || codeAnswer.trim())) {
+          const timeSpent = Math.round((Date.now() - questionStartTimeRef.current) / 1000)
+          const iid = interviewId || sessionDetail?.interview_id || sessionId
+          if (currentQuestion.type === 'case_study') {
+            await api.post(`/case-study/submit-answer`, {
+              interview_id: iid,
+              question_index: currentQuestion.caseStudyIndex,
+              answer_text: transcriptionText || ' '
+            }).catch(()=>{})
+          } else {
+            const answerForm = new FormData()
+            answerForm.append('interview_id', iid)
+            answerForm.append('question_id', currentQuestion.id || (currentQuestionIndex + 1))
+            answerForm.append('question_text', currentQuestion.text || currentQuestion.question || '')
+            answerForm.append('answer_text', currentQuestion.type === 'coding' ? (codeAnswer || ' ') : (transcriptionText || ' '))
+            answerForm.append('candidate_name', sessionDetail?.candidate_name || 'Candidate')
+            answerForm.append('time_spent_seconds', timeSpent.toString())
+            answerForm.append('time_limit_seconds', '120')
+            await api.post(`/save-answer`, answerForm).catch(()=>{})
           }
-        } catch (error) {
-          console.error('Unable to save the final answer:', error)
-          await Swal.fire({
-            title: 'Answer Not Saved',
-            text: 'Your final answer could not be saved. Check your connection and try finishing again.',
-            icon: 'error',
-            background: '#161c2d',
-            color: '#fff',
-          })
-          return
         }
-        await handleSubmitInterview(false, 'early_exit')
+        handleSubmitInterview(false, 'early_exit')
       }
     })
   }
@@ -2795,7 +2498,6 @@ export const useInterviewSession = (sessionId, interviewType, startRoundTwo) => 
     totalDuration,
     isRoundTwo,
     setIsRoundTwo,
-    canSubmit,
     showRound2Confirm,
     setShowRound2Confirm,
     codingRoundLoading,
