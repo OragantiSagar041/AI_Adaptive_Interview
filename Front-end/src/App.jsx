@@ -34,6 +34,7 @@ const MasterNotifications = React.lazy(() => import('./pages/master/MasterNotifi
 
 const AdminPage = React.lazy(() => import('./pages/AdminPage'))
 const OverviewDashboardPage = React.lazy(() => import('./pages/admin/OverviewDashboardPage'))
+const AdminInterviewsPage = React.lazy(() => import('./pages/admin/AdminInterviewsPage'))
 const QualifiedCandidatesPage = React.lazy(() => import('./pages/admin/QualifiedCandidatesPage'))
 const RejectedCandidatesPage = React.lazy(() => import('./pages/admin/RejectedCandidatesPage'))
 const CreateInterviewPage = React.lazy(() => import('./pages/admin/CreateInterviewPage'))
@@ -137,6 +138,7 @@ function App() {
           >
             <Route index element={<Navigate to="dashboard" replace />} />
             <Route path="dashboard" element={<OverviewDashboardPage />} />
+            <Route path="interviews" element={<AdminInterviewsPage />} />
             <Route path="qualified-candidates" element={<QualifiedCandidatesPage />} />
             <Route path="rejected-candidates" element={<RejectedCandidatesPage />} />
             <Route path="create-interview" element={<CreateInterviewPage />} />

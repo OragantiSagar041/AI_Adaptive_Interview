@@ -1060,10 +1060,41 @@ export default function CandidateDialog({ candidate, open, onOpenChange, onStatu
                   <p className="text-xs text-slate-400 font-medium">{c.answers?.length} questions · {name}</p>
                 </div>
               </div>
-              <button onClick={() => setShowTranscriptModal(false)} className="p-2 rounded-full hover:bg-slate-100 text-slate-400 hover:text-slate-700 transition-colors">
-                <X size={18} />
-              </button>
+              <div className="flex items-center gap-4">
+                {(() => {
+                  const verbalAnsForScore = (c.answers || []).filter(a => !a.question_text?.toLowerCase().includes('coding round') && !a.question_text?.toLowerCase().includes('case study'));
+                  const validVerbalAnsForScore = verbalAnsForScore.filter(a => a.ai_score !== null && a.ai_score !== undefined);
+                  if (validVerbalAnsForScore.length === 0) return null;
+                  const verbalAiScore = validVerbalAnsForScore.reduce((sum, a) => sum + Number(a.ai_score), 0) / validVerbalAnsForScore.length;
+                  return (
+                    <div className="flex flex-col items-end justify-center mr-2">
+                      <div className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">AI Score</div>
+                      <div className={`text-2xl font-black tabular-nums tracking-tighter mt-0.5 ${verbalAiScore >= 75 ? 'text-emerald-600' : verbalAiScore >= 50 ? 'text-amber-500' : 'text-rose-500'}`}>
+                        {verbalAiScore.toFixed(0)}%
+                      </div>
+                    </div>
+                  );
+                })()}
+                <button onClick={() => setShowTranscriptModal(false)} className="p-2 rounded-full hover:bg-slate-100 text-slate-400 hover:text-slate-700 transition-colors">
+                  <X size={18} />
+                </button>
+              </div>
             </div>
+          
+          <div className="px-6 py-2 border-b border-slate-100 bg-slate-50 flex items-center gap-2 shrink-0">
+            <button
+              onClick={() => setTranscriptTab('verbal')}
+              className={`px-4 py-2 rounded-lg text-sm font-bold transition-all ${transcriptTab === 'verbal' ? 'bg-indigo-600 text-white shadow-sm' : 'bg-transparent text-slate-500 hover:bg-slate-200'}`}
+            >
+              Verbal
+            </button>
+            <button
+              onClick={() => setTranscriptTab('coding')}
+              className={`px-4 py-2 rounded-lg text-sm font-bold transition-all ${transcriptTab === 'coding' ? 'bg-indigo-600 text-white shadow-sm' : 'bg-transparent text-slate-500 hover:bg-slate-200'}`}
+            >
+              Coding or Case Study
+            </button>
+          </div>
 
             <div className="px-6 py-2 border-b border-slate-100 bg-slate-50 flex items-center gap-2 shrink-0">
               <button

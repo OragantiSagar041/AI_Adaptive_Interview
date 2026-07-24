@@ -1,10 +1,13 @@
 import os
+# pyrefly: ignore [missing-import]
 from pymongo import MongoClient
+# pyrefly: ignore [missing-import]
 from dotenv import load_dotenv
 
 load_dotenv()
 
 try:
+    # pyrefly: ignore [missing-import]
     import dns.resolver
     dns.resolver.default_resolver = dns.resolver.Resolver(configure=False)
     dns.resolver.default_resolver.nameservers = ['8.8.8.8', '8.8.4.4', '1.1.1.1']
@@ -48,6 +51,8 @@ def get_next_sequence_value(sequence_name: str, prefix: str) -> str:
     return f"{prefix}{sequence_document['sequence_value']}"
 
 async def init_db_indexes():
+    # pyrefly: ignore [missing-import]
+    from pymongo.errors import OperationFailure
     indexes = [
         (candidates_collection, "name", False),
         (admins_collection, "username", True),
