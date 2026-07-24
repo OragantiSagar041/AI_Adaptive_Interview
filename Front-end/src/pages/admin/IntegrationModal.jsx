@@ -1,6 +1,6 @@
 import React, { useState } from 'react'
 import { createPortal } from 'react-dom'
-import { X, Loader2, Search, ExternalLink } from 'lucide-react'
+import { X, Loader2, Search, ExternalLink, Plug } from 'lucide-react'
 import { API_BASE_URL } from '../../apiConfig'
 import { 
   CalComIcon, CalendlyIcon, CustomApiIcon, SalesforceIcon, 
