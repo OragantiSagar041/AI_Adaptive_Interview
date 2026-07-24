@@ -44,6 +44,7 @@ import cloudinary.uploader
 import cloudinary.api
 import cloudinary.utils
 import edge_tts
+# pyrefly: ignore [missing-import]
 import pypdf
 from bson import ObjectId
 
@@ -320,6 +321,22 @@ def _get_authorized_live_session(link_id: str, current_admin: Dict[str, Any]) ->
     if not admin_can_access_session(current_admin, session):
         raise HTTPException(status_code=403, detail="Access denied to this session")
     return session
+
+
+def _get_authorized_creator_ids(current_admin: dict) -> list:
+    """Returns a list of admin_ids whose data the current_admin is authorized to view."""
+    admin_id = str(current_admin.get("admin_id") or "")
+    if current_admin.get("role") == "admin":
+        return [admin_id]
+    
+    # If super admin, they can see their own data + data of recruiters they created
+    # Including legacy recruiters that have no 'created_by' field for backward compatibility
+    my_recruiters = list(admins_collection.find({
+        "role": "admin", 
+        "company_id": current_admin.get("company_id"),
+        "$or": [{"created_by": admin_id}, {"created_by": {"$exists": False}}]
+    }, {"_id": 1}))
+    return [admin_id] + [str(r["_id"]) for r in my_recruiters]
 
 
 def _decode_dashboard_websocket_admin(token: str) -> Dict[str, str]:
@@ -3235,13 +3252,20 @@ async def get_dashboard_stats(admin_id: Optional[str] = None, current_admin: dic
         # If the user is a standard admin, force the query to their own admin_id
         if current_admin.get("role") == "admin":
             query["created_by"] = current_admin["admin_id"]
+        elif current_admin.get("role") in ["super_admin", "superadmin"] and not admin_id:
+            query["created_by"] = {"$in": _get_authorized_creator_ids(current_admin)}
         # If the user is a super admin and requested a specific admin's data, filter by it
         elif admin_id:
+            if current_admin.get("role") in ["super_admin", "superadmin"]:
+                allowed_ids = _get_authorized_creator_ids(current_admin)
+                if admin_id not in allowed_ids:
+                    raise HTTPException(status_code=403, detail="Not authorized to view this admin's data")
             query["created_by"] = admin_id
             
         now = datetime.now(timezone.utc)
         from datetime import timedelta
         today_start = datetime(now.year, now.month, now.day, tzinfo=timezone.utc).isoformat()
+        yesterday_start = (datetime(now.year, now.month, now.day, tzinfo=timezone.utc) - timedelta(days=1)).isoformat()
         week_start = (now - timedelta(days=7)).isoformat()
         active_query = {
             **query,
@@ -3276,6 +3300,14 @@ async def get_dashboard_stats(admin_id: Optional[str] = None, current_admin: dic
                     "today": {"$sum": {"$cond": [{"$gte": ["$created_at", today_start]}, 1, 0]}},
                     "this_week": {"$sum": {"$cond": [{"$gte": ["$created_at", week_start]}, 1, 0]}},
                     "candidate_emails": {"$addToSet": {"$toLower": {"$ifNull": ["$candidate_email", "$email"]}}},
+                    "completed_today": {"$sum": {"$cond": [{"$and": [{"$eq": ["$effective_status", "completed"]}, {"$gte": ["$created_at", today_start]}]}, 1, 0]}},
+                    "completed_yesterday": {"$sum": {"$cond": [{"$and": [{"$eq": ["$effective_status", "completed"]}, {"$gte": ["$created_at", yesterday_start]}, {"$lt": ["$created_at", today_start]}]}, 1, 0]}},
+                    "selected_today": {"$sum": {"$cond": [{"$and": [{"$eq": ["$decision", "selected"]}, {"$gte": ["$created_at", today_start]}]}, 1, 0]}},
+                    "selected_yesterday": {"$sum": {"$cond": [{"$and": [{"$eq": ["$decision", "selected"]}, {"$gte": ["$created_at", yesterday_start]}, {"$lt": ["$created_at", today_start]}]}, 1, 0]}},
+                    "rejected_today": {"$sum": {"$cond": [{"$and": [{"$eq": ["$decision", "rejected"]}, {"$gte": ["$created_at", today_start]}]}, 1, 0]}},
+                    "rejected_yesterday": {"$sum": {"$cond": [{"$and": [{"$eq": ["$decision", "rejected"]}, {"$gte": ["$created_at", yesterday_start]}, {"$lt": ["$created_at", today_start]}]}, 1, 0]}},
+                    "expired_today": {"$sum": {"$cond": [{"$and": [{"$eq": ["$effective_status", "expired"]}, {"$gte": ["$created_at", today_start]}]}, 1, 0]}},
+                    "expired_yesterday": {"$sum": {"$cond": [{"$and": [{"$eq": ["$effective_status", "expired"]}, {"$gte": ["$created_at", yesterday_start]}, {"$lt": ["$created_at", today_start]}]}, 1, 0]}},
                 }}],
                 "by_creator": [{"$group": {"_id": "$created_by", "count": {"$sum": 1}}}],
                 "daily": [
@@ -3447,6 +3479,16 @@ async def get_dashboard_stats(admin_id: Optional[str] = None, current_admin: dic
             "admin_labels": admin_labels,
             "admin_data": admin_data
         }
+
+        def calc_trend(today_val, yesterday_val):
+            if yesterday_val == 0:
+                return 100.0 if today_val > 0 else 0.0
+            return round(((today_val - yesterday_val) / yesterday_val) * 100, 1)
+
+        stats["completed_trend"] = calc_trend(summary.get("completed_today", 0), summary.get("completed_yesterday", 0))
+        stats["selected_trend"] = calc_trend(summary.get("selected_today", 0), summary.get("selected_yesterday", 0))
+        stats["rejected_trend"] = calc_trend(summary.get("rejected_today", 0), summary.get("rejected_yesterday", 0))
+        stats["expired_trend"] = calc_trend(summary.get("expired_today", 0), summary.get("expired_yesterday", 0))
         
         if manager.redis:
             await manager.redis.setex(cache_key, 30, json.dumps(stats))
@@ -3468,6 +3510,12 @@ def export_sessions(current_admin: dict = Depends(get_current_admin_details), st
         "Session export is available on Basic and Advance plans only.",
     )
     query = {"company_id": company_id}
+    
+    # Data Isolation
+    if current_admin.get("role") == "admin":
+        query["created_by"] = admin_id
+    elif current_admin.get("role") in ["super_admin", "superadmin"]:
+        query["created_by"] = {"$in": _get_authorized_creator_ids(current_admin)}
     rows = list(interview_sessions_collection.find(query).sort("created_at", -1))
     now = datetime.now(timezone.utc)
     
@@ -3911,20 +3959,44 @@ def upload_profile_image(
 
 def extract_info_from_resume(text: str) -> Dict:
     import re
-    email = None
+    email = ""
     email_match = re.search(r'[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}', text)
     if email_match:
-        email = email_match.group(0)
-        
-    name = None
+        email = email_match.group(0).strip()
+
+    phone = ""
+    phone_match = re.search(r'(?:\+?\d{1,4}[-.\s]?)?\(?\d{2,4}\)?[-.\s]?\d{3,4}[-.\s]?\d{3,4}', text)
+    if phone_match:
+        phone_candidate = phone_match.group(0).strip()
+        if len(re.sub(r'\D', '', phone_candidate)) >= 7:
+            phone = phone_candidate
+
+    linkedin_url = ""
+    linkedin_match = re.search(r'(https?://(?:www\.)?linkedin\.com/in/[a-zA-Z0-9_-]+)', text, re.IGNORECASE)
+    if linkedin_match:
+        linkedin_url = linkedin_match.group(0).strip()
+    else:
+        linkedin_simple = re.search(r'(linkedin\.com/in/[a-zA-Z0-9_-]+)', text, re.IGNORECASE)
+        if linkedin_simple:
+            linkedin_url = f"https://{linkedin_simple.group(0).strip()}"
+
+    name = ""
     lines = [line.strip() for line in text.split('\n') if line.strip()]
-    # First non-empty line that doesn't look like an email or phone
+    skip_keywords = {"resume", "curriculum", "vitae", "cv", "profile", "contact", "email", "phone", "summary", "experience", "education", "skills"}
     for line in lines[:10]:
-        if len(line) < 40 and not re.search(r'[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}', line) and not re.search(r'\d{10}', line):
-            name = line
-            break
-    
-    return {"name": name, "email": email}
+        line_clean = re.sub(r'[^a-zA-Z\s]', '', line).strip()
+        if line_clean and len(line_clean) < 50 and len(line_clean.split()) <= 4:
+            words = [w.lower() for w in line_clean.split()]
+            if not any(kw in words for kw in skip_keywords):
+                name = line_clean
+                break
+
+    return {
+        "name": name,
+        "email": email,
+        "phone": phone,
+        "linkedin_url": linkedin_url
+    }
 
 @router.post("/admin/parse-resume")
 async def parse_resume(
@@ -4055,20 +4127,69 @@ Return a pure JSON object with these keys. If not found, return empty string for
                 title = lines[0][:50]
     else:
         info = extract_info_from_resume(text)
+        name = info.get("name")
+        email = info.get("email")
+        
+        from app.services import chat_completion
+        from starlette.concurrency import run_in_threadpool
+        try:
+            prompt = f"""Extract the following fields from this candidate resume:
+1. name (string)
+2. email (string)
+3. phone (string)
+4. experience (string, e.g., '2 Years' or '0 Years')
+5. location (string)
+6. current_company (string, e.g. 'Google' or 'N/A')
+7. current_ctc (string, e.g. '5 LPA' or 'N/A')
+8. expected_ctc (string, e.g. '8 LPA' or 'N/A')
+9. notice_period (string, e.g. '30 Days' or 'N/A')
+
+Return a pure JSON object with these keys. If not found, return empty string for that key. Do not use markdown. Resume: {text[:20000]}"""
+            
+            resp = await run_in_threadpool(
+                chat_completion,
+                messages=[{"role": "user", "content": prompt}],
+                model="openai/gpt-4o-mini",
+                temperature=0.0,
+                timeout=15.0
+            )
+            import json, re
+            if resp:
+                resp_clean = re.sub(r"```(?:json)?", "", resp).strip()
+                try:
+                    data = json.loads(resp_clean)
+                    info["name"] = data.get("name") or name
+                    info["email"] = data.get("email") or email
+                    info["phone"] = data.get("phone") or ""
+                    info["experience"] = data.get("experience") or ""
+                    info["location"] = data.get("location") or ""
+                    info["current_company"] = data.get("current_company") or ""
+                    info["current_ctc"] = data.get("current_ctc") or ""
+                    info["expected_ctc"] = data.get("expected_ctc") or ""
+                    info["notice_period"] = data.get("notice_period") or ""
+                except Exception as parse_e:
+                    print("Error parsing JSON for Resume details:", parse_e)
+        except Exception as e:
+            print("Error extracting Resume info:", e)
         
     res_dict = {
         "status": "success",   
         "text": text,
-        "name": info.get("name"), 
-        "email": info.get("email"),
+        "name": info.get("name") if 'info' in locals() else None, 
+        "email": info.get("email") if 'info' in locals() else None,
+        "phone": info.get("phone") if 'info' in locals() else None,
         "file_url": file_url,
         "title": title,
-        "experience": experience,
+        "experience": experience if source == 'jd' else (info.get("experience") if 'info' in locals() else ""),
         "skills": skills_str,
-        "location": location,
+        "location": location if source == 'jd' else (info.get("location") if 'info' in locals() else ""),
         "salary": salary,
         "bond": bond,
-        "workMode": workMode
+        "workMode": workMode,
+        "current_company": info.get("current_company", "") if 'info' in locals() else "",
+        "current_ctc": info.get("current_ctc", "") if 'info' in locals() else "",
+        "expected_ctc": info.get("expected_ctc", "") if 'info' in locals() else "",
+        "notice_period": info.get("notice_period", "") if 'info' in locals() else ""
     }
     if warning:
         res_dict["warning"] = warning
@@ -4146,11 +4267,20 @@ def create_session(data: CreateSession, current_admin: dict = Depends(get_curren
     if isinstance(ai_instructions, list):
         ai_instructions = "\n".join(ai_instructions)
 
+    admin_name = current_admin.get("name") or current_admin.get("username") or "AD"
+    prefix = admin_name[:2].upper()
+
     session_doc = {
         "link_id": link_id,
-        "candidate_id": f"CAN{random.randint(1000, 9999)}",
+        "candidate_id": f"{prefix}{random.randint(1000, 9999)}",
         "candidate_name": data.candidate_name.title(),
         "candidate_email": data.candidate_email,
+        "experience": data.experience,
+        "location": data.location,
+        "current_ctc": data.current_ctc,
+        "expected_ctc": data.expected_ctc,
+        "current_company": data.current_company,
+        "notice_period": data.notice_period,
         "resume_text": data.resume_text,
         "job_description": data.job_description,
         "custom_email_html": data.custom_email_html,
@@ -4233,6 +4363,13 @@ class BulkCandidate(BaseModel):
     candidate_email: str
     resume_text: str = ""
     record_video: bool = True  # Task 5: Per-candidate video toggle
+    experience: str = ""
+    location: str = ""
+    current_ctc: str = ""
+    expected_ctc: str = ""
+    current_company: str = ""
+    notice_period: str = ""
+    candidate_phone: Optional[str] = ""
 
     @validator('candidate_name')
     def name_must_not_be_numeric(cls, v):
@@ -4349,6 +4486,9 @@ def bulk_create_sessions(data: BulkCreateSession, background_tasks: BackgroundTa
     if isinstance(ai_instructions, list):
         ai_instructions = "\n".join(ai_instructions)
 
+    admin_name = current_admin.get("name") or current_admin.get("username") or "AD"
+    prefix = admin_name[:2].upper()
+
     # Step 1: Prepare documents
     for candidate in data.candidates:
         link_id = str(uuid.uuid4())
@@ -4356,9 +4496,16 @@ def bulk_create_sessions(data: BulkCreateSession, background_tasks: BackgroundTa
         
         session_doc = {
             "link_id": link_id,
-            "candidate_id": f"CAN{random.randint(1000, 9999)}",
+            "candidate_id": f"{prefix}{random.randint(1000, 9999)}",
             "candidate_name": candidate.candidate_name.title(),
             "candidate_email": candidate.candidate_email,
+            "candidate_phone": candidate.candidate_phone,
+            "experience": candidate.experience,
+            "location": candidate.location,
+            "current_ctc": candidate.current_ctc,
+            "expected_ctc": candidate.expected_ctc,
+            "current_company": candidate.current_company,
+            "notice_period": candidate.notice_period,
             "resume_text": candidate.resume_text,
             "job_description": data.job_description,
             "custom_email_html": data.custom_email_html,
@@ -4620,7 +4767,13 @@ def get_all_sessions(
     # Data Isolation:
     if current_admin.get("role") == "admin":
         query_filter["created_by"] = current_admin["admin_id"]
+    elif current_admin.get("role") in ["super_admin", "superadmin"] and not admin_id:
+        query_filter["created_by"] = {"$in": _get_authorized_creator_ids(current_admin)}
     elif admin_id:
+        if current_admin.get("role") in ["super_admin", "superadmin"]:
+            allowed_ids = _get_authorized_creator_ids(current_admin)
+            if admin_id not in allowed_ids:
+                raise HTTPException(status_code=403, detail="Not authorized to view this admin's data")
         query_filter["created_by"] = admin_id
 
     
@@ -6380,7 +6533,13 @@ async def get_ongoing_interviews(admin_id: Optional[str] = None, current_admin: 
     # Data Isolation:
     if current_admin.get("role") == "admin":
         query_filter["created_by"] = current_admin["admin_id"]
+    elif current_admin.get("role") in ["super_admin", "superadmin"] and not admin_id:
+        query_filter["created_by"] = {"$in": _get_authorized_creator_ids(current_admin)}
     elif admin_id:
+        if current_admin.get("role") in ["super_admin", "superadmin"]:
+            allowed_ids = _get_authorized_creator_ids(current_admin)
+            if admin_id not in allowed_ids:
+                raise HTTPException(status_code=403, detail="Not authorized to view this admin's data")
         query_filter["created_by"] = admin_id
 
     rows = list(interview_sessions_collection.find(
@@ -8195,7 +8354,12 @@ def get_sub_admins(current_admin: dict = Depends(get_current_admin_details)):
     if not company_id:
         raise HTTPException(status_code=400, detail="Super Admin is not associated with a company")
         
-    admins = list(admins_collection.find({"company_id": company_id, "role": "admin"}, {"password": 0}))
+    query = {
+        "company_id": company_id, 
+        "role": "admin",
+        "$or": [{"created_by": current_admin["admin_id"]}, {"created_by": {"$exists": False}}]
+    }
+    admins = list(admins_collection.find(query, {"password": 0}))
     
     # Enrich with session count created by each admin
     for admin in admins:
@@ -8225,6 +8389,7 @@ def create_sub_admin(data: SubAdminCreate, current_admin: dict = Depends(get_cur
         "name": data.name,
         "role": "admin",
         "company_id": company_id,
+        "created_by": current_admin["admin_id"],
         "credits": data.credits,
         "login_enabled": True,
         "created_at": datetime.now(timezone.utc).isoformat()
@@ -8638,6 +8803,12 @@ async def get_dashboard_aggregated_data(
         except Exception as e:
             print(f"Error fetching AI Calling candidates: {e}")
             
+        # Pre-fetch admins for ID generation
+        admins_in_company = list(admins_collection.find({"company_id": current_admin.get("company_id")}, {"name": 1, "username": 1, "role": 1}))
+        admin_map = {str(a["_id"]): a for a in admins_in_company}
+        super_admin = next((a for a in admins_in_company if a.get("role") == "super_admin"), None)
+        sa_prefix = (super_admin.get("name") or super_admin.get("username") or "SA")[:2].upper() if super_admin else "SA"
+        
         seen_emails = set()
         candidates_list = []
         now = datetime.now(timezone.utc)
@@ -8648,8 +8819,18 @@ async def get_dashboard_aggregated_data(
             
             c["status"] = sync_session_status(c, now)
             
-            c["id"] = str(c["_id"])
-            c["_id"] = str(c["_id"])
+            creator_id = c.get("created_by")
+            creator = admin_map.get(str(creator_id)) if creator_id else None
+            su_prefix = (creator.get("name") or creator.get("username") or "AD")[:2].upper() if creator else sa_prefix
+            
+            c_name = c.get("candidate_name") or "CA"
+            ca_prefix = c_name[:2].upper()
+            
+            base_id = str(c["_id"])
+            c["candidate_id"] = f"{sa_prefix}{su_prefix}{ca_prefix}{base_id[-4:] if len(base_id) >= 4 else base_id}"
+            
+            c["id"] = base_id
+            c["_id"] = base_id
             candidates_list.append(c)
             
         for app in apps:
@@ -8662,10 +8843,17 @@ async def get_dashboard_aggregated_data(
             
             app_id = str(app.get("_id"))
             score = app.get("score") or 0.0
+            
+            su_prefix = sa_prefix 
+            c_name = app.get("name") or "CA"
+            ca_prefix = c_name[:2].upper()
+            cand_id = f"{sa_prefix}{su_prefix}{ca_prefix}{app_id[-4:] if len(app_id) >= 4 else app_id}"
+            
             mock_session = {
                 "id": f"ai_call_{app_id}",
                 "_id": f"ai_call_{app_id}",
                 "link_id": f"ai_call_{app_id}",
+                "candidate_id": cand_id,
                 "candidate_name": app.get("name") or "Candidate",
                 "candidate_email": app.get("email") or "",
                 "candidate_phone": app.get("phone") or "",
@@ -8680,11 +8868,164 @@ async def get_dashboard_aggregated_data(
             }
             candidates_list.append(mock_session)
             
-        # NOTE: Omni Dimension (AI Calling) call logs are intentionally NOT merged
-        # into the main candidates_list here. Those records only have phone numbers
-        # (not real names), hardcoded 'AI Calling' roles, and 0% scores, which
-        # pollute the Recruiter Management table with dummy data.
-        # AI Calling data is available via the dedicated /api/calls/recent endpoint
+        # ── Fetch AI calling logs from Omni Dimension API ────────────────────
+        # The Omni API key is SHARED across all companies on this platform.
+        # We restrict calls admin-wise: they must either be in our local DB or the
+        # user_name of the call must match one of this company's admins' names/usernames.
+        omni_calls = []
+        try:
+            from .omni_dimension_client import get_omni_client
+            omni_client = get_omni_client()
+
+            # 1. Get owned call IDs from local DB
+            company_id_str = str(current_admin.get("company_id") or "")
+            db_query = {"company_id": company_id_str}
+            if current_admin.get("role") == "admin":
+                db_query["admin_id"] = str(current_admin.get("admin_id") or "")
+
+            company_log_docs = list(omni_call_logs_collection.find(db_query, {"call_id": 1}))
+            owned_call_ids = {str(doc["call_id"]) for doc in company_log_docs if doc.get("call_id")}
+
+            session_docs = list(interview_sessions_collection.find(db_query, {"omni_call_id": 1}))
+            for doc in session_docs:
+                if doc.get("omni_call_id"):
+                    owned_call_ids.add(str(doc["omni_call_id"]))
+
+            # 2. Get all admin names/usernames for this company to match against user_name from the Omni API
+            company_admins = list(admins_collection.find({"company_id": company_id_str}, {"name": 1, "username": 1}))
+            company_admin_identifiers = set()
+            for a in company_admins:
+                if a.get("name"):
+                    company_admin_identifiers.add(a["name"].strip().lower())
+                if a.get("username"):
+                    company_admin_identifiers.add(a["username"].strip().lower())
+
+            # Fetch from Omni API
+            omni_page = 1
+            omni_page_size = 100
+            omni_max_pages = 5 if summary_only else 20
+
+            while omni_page <= omni_max_pages:
+                omni_res  = omni_client.call.get_call_logs(page=omni_page, page_size=omni_page_size)
+                omni_data = omni_res.get("json", omni_res) if isinstance(omni_res, dict) else {}
+                omni_page_calls = (
+                    omni_data.get("call_log_data")
+                    or omni_data.get("calls")
+                    or omni_data.get("call_logs")
+                    or omni_data.get("data")
+                    or omni_data.get("results")
+                    or []
+                )
+                if not isinstance(omni_page_calls, list) or not omni_page_calls:
+                    break
+
+                for call in omni_page_calls:
+                    cid = str(call.get("id") or call.get("call_id") or "")
+                    u_name = str(call.get("user_name") or "").strip().lower()
+                    
+                    # Match by database record OR by API user_name matching a company admin
+                    if cid in owned_call_ids or u_name in company_admin_identifiers:
+                        omni_calls.append(call)
+
+                total_omni = omni_data.get("total_records") or 0
+                if len(omni_calls) >= total_omni or len(omni_page_calls) < omni_page_size:
+                    break
+                omni_page += 1
+
+            # Cap to 8 for summary_only (dashboard widget)
+            if summary_only:
+                omni_calls = omni_calls[:8]
+
+        except Exception as omni_err:
+            print(f"[dashboard omni fetch] {omni_err}")
+            omni_calls = []
+
+
+
+        # Pre-fetch candidate sessions for enrichment
+        all_omni_call_ids = [str(o.get("id") or o.get("call_id") or "") for o in omni_calls]
+        matching_sessions = list(interview_sessions_collection.find({"omni_call_id": {"$in": all_omni_call_ids}}))
+        session_map = {str(s["omni_call_id"]): s for s in matching_sessions if s.get("omni_call_id")}
+
+        # Name fallback map
+        api_names = [o.get("candidate_name") for o in omni_calls if o.get("candidate_name")]
+        name_sessions = list(interview_sessions_collection.find({"candidate_name": {"$in": api_names}, "company_id": current_admin.get("company_id")}))
+        name_map = {s["candidate_name"].lower(): s for s in sorted(name_sessions, key=lambda x: x.get("created_at", ""), reverse=True) if s.get("candidate_name")}
+
+        for o_call in omni_calls:
+            call_id = str(o_call.get("id") or o_call.get("call_id") or o_call.get("_id") or "")
+
+            # Resolve candidate name from extracted_variables.full_name first
+            extracted = o_call.get("extracted_variables") or {}
+            if isinstance(extracted, str):
+                try:
+                    import json as _json
+                    extracted = _json.loads(extracted)
+                except Exception:
+                    extracted = {}
+            c_name = (
+                extracted.get("full_name")
+                or o_call.get("candidate_name")
+                or o_call.get("user_name")
+                or o_call.get("to_number")
+                or "CA"
+            )
+
+            # 1. Custom ID Generation
+            creator_id = o_call.get("admin_id")
+            creator   = admin_map.get(str(creator_id)) if creator_id else None
+            su_prefix = (creator.get("name") or creator.get("username") or "AD")[:2].upper() if creator else sa_prefix
+            ca_prefix = c_name[:2].upper()
+            cand_id   = f"{sa_prefix}{su_prefix}{ca_prefix}{call_id[-4:] if len(call_id) >= 4 else call_id}"
+
+            # 2. Map Details from session if available
+            matched_session = session_map.get(call_id) or name_map.get(c_name.lower())
+            cand_email = matched_session.get("candidate_email") or matched_session.get("email") if matched_session else o_call.get("phone_number", "")
+            cand_phone = matched_session.get("candidate_phone") or matched_session.get("phone") if matched_session else o_call.get("to_number", "")
+            int_title  = matched_session.get("job_title") or matched_session.get("interview_title") if matched_session else extracted.get("current_role") or "AI Calling Agent"
+
+            raw_score = o_call.get("cqs_score")
+            try:
+                score = float(raw_score) if raw_score else 0.0
+            except (ValueError, TypeError):
+                score = 0.0
+
+            # Map status
+            raw_status  = o_call.get("call_status") or o_call.get("status") or "initiated"
+            status_remap = {"initiated": "pending", "completed": "completed", "failed": "expired", "no-answer": "expired"}
+            mapped_status = status_remap.get(raw_status, "pending")
+
+            # Standardize date
+            raw_created = o_call.get("time_of_call") or o_call.get("created_at")
+            if raw_created and isinstance(raw_created, str) and "/" in raw_created:
+                try:
+                    parsed_dt = datetime.strptime(raw_created, "%m/%d/%Y %H:%M:%S").replace(tzinfo=timezone.utc)
+                    created_at_iso = parsed_dt.isoformat()
+                except Exception:
+                    created_at_iso = datetime.now(timezone.utc).isoformat()
+            else:
+                created_at_iso = raw_created if isinstance(raw_created, str) else datetime.now(timezone.utc).isoformat()
+
+            mock_session = {
+                "id": f"ai_call_omni_{call_id}",
+                "_id": f"ai_call_omni_{call_id}",
+                "link_id": f"ai_call_omni_{call_id}",
+                "candidate_id": cand_id,
+                "candidate_name": c_name if c_name not in ("CA", "Unknown") else "AI Calling Profile",
+                "candidate_email": cand_email or "",
+                "candidate_phone": cand_phone or "",
+                "interview_title": int_title,
+                "score": score,
+                "avg_score": score,
+                "created_at": created_at_iso,
+                "created_by": creator_id,
+                "decision": "selected" if score > 50 else "rejected",
+                "status": mapped_status,
+                "is_deactivated": False
+            }
+            candidates_list.append(mock_session)
+
+
 
         live_sessions = []
         ongoing_monitored_count = 0
@@ -8796,6 +9137,84 @@ async def get_dashboard_aggregated_data(
         }
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
+
+@router.get("/api/superadmin/live-sessions")
+@router.get("/superadmin/live-sessions")
+async def superadmin_live_sessions(
+    adminId: Optional[str] = None,
+    current_admin: dict = Depends(get_current_admin_details),
+):
+    """Fast endpoint returning only the live session snapshots for the active-today card."""
+    if current_admin.get("role") not in ["super_admin", "master"]:
+        raise HTTPException(status_code=403, detail="Super Admin access required")
+    try:
+        from redis_manager import manager
+        live_sessions = []
+        ongoing_live_count = 0
+        ongoing_alert_count = 0
+
+        query_filter = {
+            "status": "started",
+            "$or": [{"is_deactivated": False}, {"is_deactivated": {"$exists": False}}]
+        }
+        if current_admin.get("role") != "master":
+            query_filter["company_id"] = current_admin.get("company_id")
+        if current_admin.get("role") == "admin":
+            query_filter["created_by"] = current_admin["admin_id"]
+        elif adminId:
+            query_filter["created_by"] = adminId
+
+        rows = list(interview_sessions_collection.find(
+            query_filter,
+            {"link_id": 1, "candidate_name": 1, "candidate_email": 1, "created_at": 1, "interview_title": 1, "started_at": 1}
+        ).sort("created_at", -1).limit(50))
+
+        snapshots = await _load_live_snapshots([row.get("link_id", "") for row in rows])
+        now = datetime.now(timezone.utc)
+
+        for row in rows:
+            link_id = row.get("link_id", "")
+            snap = snapshots.get(link_id, {})
+            online = False
+            if snap.get("ts"):
+                try:
+                    ts_dt = datetime.fromisoformat(snap["ts"].replace("Z", "+00:00"))
+                    age_secs = (now - ts_dt).total_seconds()
+                    online = age_secs < 60
+                except Exception:
+                    pass
+
+            audio_level = snap.get("audio_level", 0)
+            session_item = {
+                "online": online,
+                "audio_level": audio_level,
+                "current_question": snap.get("current_question", ""),
+                "proctoring_alerts": snap.get("proctoring_alerts", 0),
+                "alert_types": snap.get("alert_types", []),
+                "face_visible": snap.get("face_visible"),
+                "face_count": snap.get("face_count", 0),
+                "round_type": snap.get("round_type"),
+                "link_id": link_id,
+                "candidate_name": row.get("candidate_name", ""),
+                "candidate_email": row.get("candidate_email", ""),
+                "interview_title": row.get("interview_title", ""),
+                "session_id": str(row.get("_id", ""))
+            }
+            live_sessions.append(session_item)
+            if online:
+                ongoing_live_count += 1
+            if snap.get("proctoring_alerts", 0) > 0:
+                ongoing_alert_count += 1
+
+        return {
+            "liveSessions": live_sessions,
+            "ongoingLiveCount": ongoing_live_count,
+            "ongoingMonitoredCount": len(rows),
+            "ongoingAlertCount": ongoing_alert_count,
+        }
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
 
 @router.post("/api/export/excel")
 def export_excel(data: ExportExcelRequest, current_admin: dict = Depends(get_current_admin_details)):
@@ -9137,8 +9556,14 @@ def superadmin_platform_analytics(adminId: Optional[str] = None, current_admin: 
     try:
         company_id = current_admin.get("company_id")
         base_q = {"company_id": company_id}
+        
+        allowed_ids = _get_authorized_creator_ids(current_admin)
         if adminId:
+            if current_admin.get("role") in ["super_admin", "superadmin"] and adminId not in allowed_ids:
+                raise HTTPException(status_code=403, detail="Not authorized to view this admin's data")
             base_q["created_by"] = adminId
+        else:
+            base_q["created_by"] = {"$in": allowed_ids}
 
         total     = interview_sessions_collection.count_documents(base_q) or 1
         completed = interview_sessions_collection.count_documents({**base_q, "status": "completed"})
@@ -9205,10 +9630,16 @@ def get_superadmin_qualified(adminId: Optional[str] = None, pipeline: Optional[s
         raise HTTPException(status_code=403, detail="Super Admin access required")
     
     sessions = []
+    
+    allowed_ids = _get_authorized_creator_ids(current_admin)
     if pipeline in ["all", "hireiq"]:
         query = {"company_id": current_admin.get("company_id"), "decision": "selected"}
         if adminId:
+            if current_admin.get("role") in ["super_admin", "superadmin"] and adminId not in allowed_ids:
+                raise HTTPException(status_code=403, detail="Not authorized to view this admin's data")
             query["created_by"] = adminId
+        else:
+            query["created_by"] = {"$in": allowed_ids}
         sessions = list(interview_sessions_collection.find(query).sort("created_at", -1))
     
     # Get AI Calling interested candidates
@@ -9217,7 +9648,11 @@ def get_superadmin_qualified(adminId: Optional[str] = None, pipeline: Optional[s
         try:
             jobs_query = {"company_id": current_admin.get("company_id")}
             if adminId:
+                if current_admin.get("role") in ["super_admin", "superadmin"] and adminId not in allowed_ids:
+                    raise HTTPException(status_code=403, detail="Not authorized to view this admin's data")
                 jobs_query["admin_id"] = adminId
+            else:
+                jobs_query["admin_id"] = {"$in": allowed_ids}
             jobs = list(jobs_collection.find(jobs_query))
             job_ids = [j.get("job_id") for j in jobs if j.get("job_id")]
             
@@ -9279,10 +9714,16 @@ def get_superadmin_rejected(adminId: Optional[str] = None, pipeline: Optional[st
         raise HTTPException(status_code=403, detail="Super Admin access required")
     
     sessions = []
+    
+    allowed_ids = _get_authorized_creator_ids(current_admin)
     if pipeline in ["all", "hireiq"]:
         query = {"company_id": current_admin.get("company_id"), "decision": "rejected"}
         if adminId:
+            if current_admin.get("role") in ["super_admin", "superadmin"] and adminId not in allowed_ids:
+                raise HTTPException(status_code=403, detail="Not authorized to view this admin's data")
             query["created_by"] = adminId
+        else:
+            query["created_by"] = {"$in": allowed_ids}
         sessions = list(interview_sessions_collection.find(query).sort("created_at", -1))
     
     # Get AI Calling rejected candidates
@@ -9291,7 +9732,11 @@ def get_superadmin_rejected(adminId: Optional[str] = None, pipeline: Optional[st
         try:
             jobs_query = {"company_id": current_admin.get("company_id")}
             if adminId:
+                if current_admin.get("role") in ["super_admin", "superadmin"] and adminId not in allowed_ids:
+                    raise HTTPException(status_code=403, detail="Not authorized to view this admin's data")
                 jobs_query["admin_id"] = adminId
+            else:
+                jobs_query["admin_id"] = {"$in": allowed_ids}
             jobs = list(jobs_collection.find(jobs_query))
             job_ids = [j.get("job_id") for j in jobs if j.get("job_id")]
             
@@ -9473,6 +9918,7 @@ async def voice_clone_instant(
     """
     import asyncio
     try:
+        # pyrefly: ignore [missing-import]
         from cartesia import Cartesia
     except ImportError:
         raise HTTPException(status_code=500, detail="Cartesia SDK not installed. Run `pip install cartesia`.")
@@ -9610,6 +10056,7 @@ async def generate_tts(
     if req.use_custom_voice and cartesia_api_key and actual_cartesia_voice_id and not is_regional:
         try:
             import asyncio
+            # pyrefly: ignore [missing-import]
             from cartesia import Cartesia
 
             def _call_cartesia():
@@ -9803,7 +10250,14 @@ async def initiate_ai_call(session_id: str, request: Request):
             skills=skills
         )
         
-        call_id = response.get("call_id") if isinstance(response, dict) else str(response)
+        call_id = ""
+        if isinstance(response, dict):
+            if "json" in response and isinstance(response["json"], dict):
+                call_id = str(response["json"].get("requestId") or response["json"].get("call_id") or "")
+            if not call_id:
+                call_id = str(response.get("requestId") or response.get("call_id") or "")
+        else:
+            call_id = str(response)
         
         # Save call info to session
         interview_sessions_collection.update_one(
@@ -9838,7 +10292,8 @@ async def initiate_manual_ai_call(
     skills: Optional[str] = Form(""),
     job_id: Optional[str] = Form(None),
     application_id: Optional[str] = Form(None),
-    resume: UploadFile = File(None)
+    resume: UploadFile = File(None),
+    current_admin: dict = Depends(get_current_admin_details)
 ):
     """
     Initiates an outbound AI call via Omni Dimension manually, without requiring an existing session.
@@ -9883,7 +10338,14 @@ async def initiate_manual_ai_call(
             skills=skills
         )
         
-        call_id = response.get("call_id") if isinstance(response, dict) else str(response)
+        call_id = ""
+        if isinstance(response, dict):
+            if "json" in response and isinstance(response["json"], dict):
+                call_id = str(response["json"].get("requestId") or response["json"].get("call_id") or "")
+            if not call_id:
+                call_id = str(response.get("requestId") or response.get("call_id") or "")
+        else:
+            call_id = str(response)
         
         # Save to Omni call logs
         omni_call_logs_collection.insert_one({
@@ -9895,6 +10357,8 @@ async def initiate_manual_ai_call(
             "recording_url": None,
             "job_id": job_id,
             "application_id": application_id,
+            "admin_id": current_admin.get("admin_id"),
+            "company_id": current_admin.get("company_id"),
             "created_at": datetime.now(timezone.utc).isoformat()
         })
         
@@ -10206,111 +10670,229 @@ def get_omni_post_call_config(omni_api_key: Optional[str] = Header(default=None,
         return JSONResponse(status_code=500, content={"detail": str(e)})
 
 
-class ExtractedVarModel(BaseModel):
-    key: str
-    description: Optional[str] = ""
-
-class PostCallSaveRequest(BaseModel):
-    id: Optional[Union[str, int]] = None
-    delivery_method: Optional[str] = "webhook"
-    destination: Optional[str] = ""
-    webhook_url: Optional[str] = ""
-    trigger_call_statuses: Optional[List[str]] = ["completed"]
-    include_summary: Optional[bool] = True
-    include_full_conversation: Optional[bool] = True
-    include_sentiment: Optional[bool] = True
-    include_extracted_info: Optional[bool] = True
-    extracted_variables: Optional[List[dict]] = []
-
-@router.post("/api/calls/post-call-config")
-def save_omni_post_call_config(req: PostCallSaveRequest, omni_api_key: Optional[str] = Header(default=None, alias="X-Omni-Dimension-API-Key")):
-    """Save or update post-call delivery configuration in Omni Dimension."""
-    from .omni_dimension_client import get_omni_account
-    try:
-        client, agent, agent_id = get_omni_account(omni_api_key)
-        config_data = req.dict()
-        if config_data.get("webhook_url") and not config_data.get("destination"):
-            config_data["destination"] = config_data["webhook_url"]
-        
-        # Try SDK method if supported
-        try:
-            if hasattr(client, 'post_call') and hasattr(client.post_call, 'create'):
-                client.post_call.create(agent_id=agent_id, **config_data)
-            elif hasattr(client, 'agent') and hasattr(client.agent, 'update'):
-                current_configs = agent.get("post_call_config_ids", [])
-                if not isinstance(current_configs, list):
-                    current_configs = []
-                current_configs.append(config_data)
-                client.agent.update(agent_id=agent_id, post_call_config_ids=current_configs)
-        except Exception as sdk_e:
-            print(f"SDK Post-Call update note: {sdk_e}")
-
-        return {"success": True, "config": config_data, "message": "Post-call delivery settings updated successfully!"}
-    except Exception as e:
-        return JSONResponse(status_code=500, content={"detail": str(e)})
-
-
 @router.get("/api/calls/recent-calls")
-def get_omni_recent_calls(omni_api_key: Optional[str] = Header(default=None, alias="X-Omni-Dimension-API-Key")):
-    """Fetch recent call logs directly from Omni Dimension SDK, merging with local database calls."""
-    from .omni_dimension_client import get_omni_account
+def get_omni_recent_calls(current_admin: dict = Depends(get_current_admin_details)):
+
+    """Fetch recent call logs directly from Omni Dimension SDK, including all evaluation scores."""
+    from .omni_dimension_client import get_omni_client, get_omni_agent_id
     try:
-        client, _, agent_id = get_omni_account(omni_api_key)
-        calls = []
-        try:
-            res = client.call.get_call_logs(agent_id=agent_id, page_size=50)
-            data = res.get('json', res) if isinstance(res, dict) else {}
-            calls = (
-                data.get("calls")
-                or data.get("call_log_data")
+        client = get_omni_client()
+        
+        # ── PAGINATED LOOP: fetch ALL pages from Omni Dimension ──────────────
+        # IMPORTANT: Do NOT pass agent_id — passing it causes the API to return 0 records
+        # even when calls exist. Fetch without it to get ALL historical + new calls.
+        
+        # Pre-fetch admins for ID generation and name resolution
+        admins_in_company = list(admins_collection.find({"company_id": current_admin.get("company_id")}, {"name": 1, "username": 1, "role": 1}))
+        admin_map = {str(a["_id"]): a for a in admins_in_company}
+        
+        my_admin = admin_map.get(current_admin.get("admin_id")) or {}
+
+        all_calls = []
+        page = 1
+        page_size = 100     # max records per request
+        max_pages = 20      # safety cap: 20 x 100 = 2,000 calls max
+
+        while page <= max_pages:
+            res  = client.call.get_call_logs(page=page, page_size=page_size)
+            data = res.get("json", res) if isinstance(res, dict) else {}
+
+            # Omni API returns calls under 'call_log_data' key
+            page_calls = (
+                data.get("call_log_data")
+                or data.get("calls")
                 or data.get("call_logs")
                 or data.get("data")
                 or data.get("results")
                 or []
             )
-            if not isinstance(calls, list):
-                calls = []
-        except Exception as sdk_e:
-            print(f"[Omni SDK Recent Calls Note] {sdk_e}")
+            if not isinstance(page_calls, list) or not page_calls:
+                break
 
-        # Also fetch local candidate calls from job_applications_collection
-        local_calls = []
-        try:
-            apps = list(job_applications_collection.find({"omni_call_id": {"$exists": True, "$ne": None}}).sort("applied_at", -1))
-            for app in apps:
-                cd = app.get("omni_call_details", {})
-                local_calls.append({
-                    "id": app.get("omni_call_id"),
-                    "call_id": app.get("omni_call_id"),
-                    "from_number": "+18885550199",
-                    "to_number": app.get("phone", "Unknown"),
-                    "time_of_call": cd.get("created_at") or app.get("applied_at"),
-                    "call_duration": cd.get("duration", "0m 0s"),
-                    "call_type": "Outbound",
-                    "call_status": app.get("call_status", "completed"),
-                    "recording_url": cd.get("recording_url"),
-                    "transcript": app.get("transcript"),
-                    "candidate_name": app.get("name"),
-                    "job_title": app.get("job_description", "")[:30]
-                })
-        except Exception as db_e:
-            print(f"[DB Calls Fetch Note] {db_e}")
+            all_calls.extend(page_calls)
 
-        # Combine, filter out 'initiated' status calls, and deduplicate by call ID
-        all_calls_map = {}
-        for c in calls + local_calls:
-            if isinstance(c, dict):
-                st = str(c.get("call_status") or c.get("status") or "").lower()
-                if st == 'initiated':
-                    continue
-                cid = c.get("id") or c.get("call_id") or c.get("_id")
-                if cid and str(cid) not in all_calls_map:
-                    all_calls_map[str(cid)] = c
-                elif not cid:
-                    all_calls_map[str(len(all_calls_map))] = c
+            # Stop when we've consumed all available records
+            total_records = data.get("total_records") or 0
+            if len(all_calls) >= total_records or len(page_calls) < page_size:
+                break
 
-        final_calls = list(all_calls_map.values())
-        return {"calls": final_calls, "count": len(final_calls), "success": True}
+            page += 1
+            
+        role = current_admin.get("role")
+        allowed_sessions = []
+        allowed_manuals = []
+        
+        if role != "master":
+            company_id = current_admin.get("company_id")
+            admin_id = current_admin.get("admin_id")
+            
+        # 1. Fetch all calls for this company to identify creators
+        session_query = {
+            "omni_call_id": {"$exists": True, "$ne": None},
+            "company_id": company_id
+        }
+        all_sessions = list(interview_sessions_collection.find(session_query, {"omni_call_id": 1, "created_by": 1, "candidate_name": 1, "name": 1}))
+        
+        manual_query = {
+            "company_id": company_id,
+            "call_id": {"$exists": True, "$ne": None}
+        }
+        all_manuals = list(omni_call_logs_collection.find(manual_query, {"call_id": 1, "admin_id": 1, "candidate_name": 1, "name": 1}))
+
+        session_map = {str(s.get("omni_call_id")): s for s in all_sessions if s.get("omni_call_id")}
+        manual_map = {str(m.get("call_id")): m for m in all_manuals if m.get("call_id")}
+
+        # 2. Get current admin names/usernames to match against user_name for unknown calls
+        current_admin_identifiers = set()
+        my_admin = admins_collection.find_one({"_id": ObjectId(current_admin.get("admin_id"))}) or {}
+        
+        adm_name = (my_admin.get("name") or "").strip().lower()
+        if adm_name:
+            current_admin_identifiers.add(adm_name)
+            
+        adm_username = (my_admin.get("username") or "").strip().lower()
+        if adm_username:
+            current_admin_identifiers.add(adm_username)
+
+        # Filter API calls strictly based on creator
+        filtered_calls = []
+        for call in all_calls:
+            if not isinstance(call, dict):
+                continue
+            
+            cid = str(call.get("id") or call.get("call_id") or "")
+            req_id = str(call.get("call_request_id", {}).get("id") or "")
+            
+            creator_id = None
+            if cid in session_map:
+                creator_id = str(session_map[cid].get("created_by") or "")
+            elif req_id in session_map and req_id:
+                creator_id = str(session_map[req_id].get("created_by") or "")
+            elif cid in manual_map:
+                creator_id = str(manual_map[cid].get("admin_id") or "")
+            elif req_id in manual_map and req_id:
+                creator_id = str(manual_map[req_id].get("admin_id") or "")
+            
+            if creator_id:
+                # If we know who made the call, strictly limit visibility to authorized creators
+                allowed_ids = _get_authorized_creator_ids(current_admin)
+                if creator_id in allowed_ids:
+                    filtered_calls.append(call)
+            else:
+                # If the call is unknown (e.g. inbound directly to Omni), fallback to string matching
+                u_name = str(call.get("user_name") or "").strip().lower()
+                is_current = False
+                if u_name and current_admin_identifiers:
+                    # Use exact matching for better isolation, instead of partial 'in' matches
+                    is_current = any(ident == u_name or ident in u_name.split() for ident in current_admin_identifiers)
+                if is_current:
+                    filtered_calls.append(call)
+                    
+        all_calls = filtered_calls
+        print(f"[DEBUG] Total filtered_calls for {current_admin.get('admin_id')}: {len(all_calls)}")
+
+        # Normalise each call record to extract evaluation / score fields
+        normalised = []
+        
+        # Pre-fetch admins for ID generation
+        admins_in_company = list(admins_collection.find({"company_id": current_admin.get("company_id")}, {"name": 1, "username": 1, "role": 1}))
+        admin_map = {str(a["_id"]): a for a in admins_in_company}
+        super_admin = next((a for a in admins_in_company if a.get("role") == "super_admin"), None)
+        sa_prefix = (super_admin.get("name") or super_admin.get("username") or "SA")[:2].upper() if super_admin else "SA"
+        
+        for c in all_calls:
+            if not isinstance(c, dict):
+                continue
+            rec     = dict(c)
+            call_id = str(rec.get("id") or rec.get("call_id") or "")
+
+            # ── Resolve candidate name ──────────────────────────────────────
+            # Priority: extracted_variables.full_name → user_name → to_number
+            extracted = rec.get("extracted_variables") or {}
+            if isinstance(extracted, str):
+                try:
+                    import json as _json
+                    extracted = _json.loads(extracted)
+                except Exception:
+                    extracted = {}
+            req_id  = str(rec.get("call_request_id", {}).get("id") or "")
+
+            # Ignore placeholders from Omni Dimension
+            api_c_name = rec.get("candidate_name")
+            if api_c_name in ("Not provided", "Unknown", "", None):
+                api_c_name = None
+                
+            c_name = (
+                extracted.get("full_name")
+                or api_c_name
+                or rec.get("user_name")
+                or rec.get("to_number")
+                or "Unknown"
+            )
+            
+            # Prioritize our database records which have the manually entered names
+            if call_id in session_map and (session_map[call_id].get("candidate_name") or session_map[call_id].get("name")):
+                c_name = session_map[call_id].get("candidate_name") or session_map[call_id].get("name")
+            elif req_id in session_map and (session_map[req_id].get("candidate_name") or session_map[req_id].get("name")):
+                c_name = session_map[req_id].get("candidate_name") or session_map[req_id].get("name")
+            elif call_id in manual_map and (manual_map[call_id].get("candidate_name") or manual_map[call_id].get("name")):
+                c_name = manual_map[call_id].get("candidate_name") or manual_map[call_id].get("name")
+            elif req_id in manual_map and (manual_map[req_id].get("candidate_name") or manual_map[req_id].get("name")):
+                c_name = manual_map[req_id].get("candidate_name") or manual_map[req_id].get("name")
+                
+            rec["candidate_name"] = c_name
+
+            # Expose extracted profile fields to the frontend
+            rec["extracted_role"]           = extracted.get("current_role") or ""
+            rec["extracted_experience"]     = extracted.get("years_experience") or ""
+            rec["extracted_city"]           = extracted.get("current_city") or ""
+            rec["extracted_qualification"]  = extracted.get("highest_qualification") or ""
+            rec["extracted_company"]        = extracted.get("current_company") or ""
+            rec["extracted_salary"]         = extracted.get("current_salary") or ""
+
+            
+            creator_id = None
+            if call_id in session_map:
+                creator_id = session_map[call_id].get("created_by")
+            elif req_id in session_map:
+                creator_id = session_map[req_id].get("created_by")
+            elif call_id in manual_map:
+                creator_id = manual_map[call_id].get("admin_id")
+            elif req_id in manual_map:
+                creator_id = manual_map[req_id].get("admin_id")
+                
+            if not creator_id and c.get("user_name"):
+                u_name = str(c.get("user_name")).strip().lower()
+                for a_id, a in admin_map.items():
+                    a_name = (a.get("name") or "").strip().lower()
+                    a_user = (a.get("username") or "").strip().lower()
+                    if (a_name and (a_name in u_name or u_name in a_name)) or (a_user and (a_user in u_name or u_name in a_user)):
+                        creator_id = a_id
+                        break
+
+            creator   = admin_map.get(str(creator_id)) if creator_id else None
+            su_prefix = (creator.get("name") or creator.get("username") or "AD")[:2].upper() if creator else sa_prefix
+            ca_prefix = c_name[:2].upper()
+            
+            rec["candidate_id"] = f"{sa_prefix}{su_prefix}{ca_prefix}{call_id[-4:] if len(call_id) >= 4 else call_id}"
+
+            
+            # Pull evaluation sub-object if present
+            ev = rec.get("evaluation") or {}
+            # Flatten evaluation fields to top-level for easy frontend access
+            rec["sentiment_score"]            = ev.get("sentiment_score")            or rec.get("sentiment_score")
+            rec["sentiment_analysis_details"] = ev.get("sentiment_analysis_details") or rec.get("sentiment_analysis_details")
+            rec["cqs_score"]                  = ev.get("cqs_score")                  or rec.get("cqs_score")
+            rec["cqs_score_message"]          = ev.get("cqs_score_message")          or rec.get("cqs_score_message")
+            rec["metric_score_intent"]        = ev.get("metric_score_intent")        or rec.get("metric_score_intent")
+            rec["metric_score_relevance"]     = ev.get("metric_score_relevance")     or rec.get("metric_score_relevance")
+            rec["metric_score_latency"]       = ev.get("metric_score_latency")       or rec.get("metric_score_latency")
+            rec["metric_score_coherence"]     = ev.get("metric_score_coherence")     or rec.get("metric_score_coherence")
+            rec["p50_latency"]                = rec.get("p50_latency")
+            rec["p99_latency"]                = rec.get("p99_latency")
+            normalised.append(rec)
+            
+        return {"calls": normalised, "success": True, "total": len(normalised)}
     except Exception as e:
         import traceback
         print(f"[recent-calls ERROR] {traceback.format_exc()}")
@@ -10754,19 +11336,71 @@ def get_ai_call_status(link_id: str, current_admin: dict = Depends(get_current_a
 # Jobs & Applications (Super Admin / Public)
 # ---------------------------------------------------------------------------
 
+def verify_job_access(job: dict, current_admin: dict) -> bool:
+    """
+    Enforces multi-tenant isolation for job resources.
+    Master role: Full global access.
+    Super Admin / Admin: Restricted to their company, created_by, or linked super_admin_id.
+    """
+    role = current_admin.get("role")
+    if role == "master":
+        return True
+
+    admin_id = current_admin.get("admin_id")
+    company_id = current_admin.get("company_id")
+
+    job_admin_id = job.get("admin_id")
+    job_company_id = job.get("company_id")
+    job_super_admin_id = job.get("super_admin_id")
+
+    # 1. Direct creator or direct super_admin match
+    if admin_id and (job_admin_id == admin_id or job_super_admin_id == admin_id):
+        return True
+
+    # 2. Company / Tenant match
+    if company_id and job_company_id and job_company_id == company_id:
+        return True
+
+    # 3. Linked Sub-Admin to Super Admin check
+    if role == "admin" and admin_id:
+        try:
+            from bson import ObjectId
+            admin_doc = admins_collection.find_one({"_id": ObjectId(admin_id)})
+            if admin_doc:
+                linked_sa = admin_doc.get("super_admin_id") or admin_doc.get("created_by")
+                if linked_sa and (job_admin_id == linked_sa or job_super_admin_id == linked_sa):
+                    return True
+        except Exception:
+            pass
+
+    return False
+
 @router.post("/api/jobs")
 def create_job(job: JobCreate, current_admin: dict = Depends(get_current_admin_details)):
     job_dict = job.dict()
-    import random
-    import string
-    job_id = f"JOB-{''.join(random.choices(string.ascii_uppercase + string.digits, k=6))}"
+    job_dict["custom_id"] = get_next_sequence_value("job", "JOB")
+    
+    admin_id = current_admin["admin_id"]
+    role = current_admin.get("role", "admin")
+    
+    # Store isolation metadata
+    job_dict["company_id"] = current_admin.get("company_id")
+    job_dict["admin_id"] = admin_id
+    job_dict["created_by_role"] = role
+    job_dict["created_by_name"] = current_admin.get("name") or current_admin.get("username")
+    
+    # Custom format: JOB-[custom_id]-[role]-[admin_id_suffix]
+    safe_role = str(role).replace("_", "").lower()
+    suffix = str(admin_id)[-4:] if len(str(admin_id)) >= 4 else str(admin_id)
+    job_id = f"{job_dict['custom_id']}-{safe_role}-{suffix}"
+    
     job_dict["job_id"] = job_id
-    job_dict["admin_id"] = current_admin["admin_id"]
     job_dict["created_at"] = datetime.now(timezone.utc).isoformat()
     job_dict["application_count"] = 0
-    job_dict["custom_id"] = get_next_sequence_value("job", "JOB")
+    
     result = jobs_collection.insert_one(job_dict)
     job_dict["_id"] = str(result.inserted_id)
+    
     return {"status": "success", "job": job_dict}
 
 @router.get("/api/jobs")
@@ -10776,11 +11410,20 @@ def get_admin_jobs(page: int = 1, limit: int = 20, current_admin: dict = Depends
         raise HTTPException(status_code=400, detail="page must be >= 1")
     if limit < 1 or limit > 100:
         raise HTTPException(status_code=400, detail="limit must be between 1 and 100")
-    # Return jobs with pagination
     skip = (page - 1) * limit
+
+    role = current_admin.get("role")
+    admin_id = current_admin.get("admin_id")
+    company_id = current_admin.get("company_id")
+
     query = {}
+    if current_admin.get("company_id"):
+        query["company_id"] = current_admin.get("company_id")
+        
     if current_admin["role"] == "admin":
-        query = {"admin_id": current_admin["admin_id"]}
+        query["admin_id"] = current_admin["admin_id"]
+    elif current_admin["role"] in ["super_admin", "superadmin"]:
+        query["admin_id"] = {"$in": _get_authorized_creator_ids(current_admin)}
     total_jobs = jobs_collection.count_documents(query)
     jobs = list(jobs_collection.find(query).sort("created_at", -1).skip(skip).limit(limit))
     for j in jobs:
@@ -10806,7 +11449,8 @@ def update_job(job_id: str, job_update: JobCreate, current_admin: dict = Depends
     if not job:
         raise HTTPException(status_code=404, detail="Job not found")
 
-    if current_admin["role"] == "admin" and job.get("admin_id") != current_admin["admin_id"]:
+    allowed_ids = _get_authorized_creator_ids(current_admin)
+    if job.get("admin_id") not in allowed_ids:
         raise HTTPException(status_code=403, detail="Access denied")
 
     update_data = job_update.dict()
@@ -10828,7 +11472,8 @@ def delete_job(job_id: str, current_admin: dict = Depends(get_current_admin_deta
     if not job:
         raise HTTPException(status_code=404, detail="Job not found")
 
-    if current_admin["role"] == "admin" and job.get("admin_id") != current_admin["admin_id"]:
+    allowed_ids = _get_authorized_creator_ids(current_admin)
+    if job.get("admin_id") not in allowed_ids:
         raise HTTPException(status_code=403, detail="Access denied")
 
     result = jobs_collection.delete_one({"job_id": job_id})
@@ -10894,7 +11539,7 @@ def apply_for_job(job_id: str, application: JobApplicationCreate):
 def get_job_applications(job_id: str, current_admin: dict = Depends(get_current_admin_details)):
     """
     Returns all applications submitted for a given job_id.
-    Super-admins can view applications for any job; admins only for their own jobs.
+    Enforces multi-tenant job access verification.
     """
     job = jobs_collection.find_one({"job_id": job_id})
     if not job:
@@ -10903,9 +11548,11 @@ def get_job_applications(job_id: str, current_admin: dict = Depends(get_current_
             job = jobs_collection.find_one({"_id": ObjectId(job_id)})
     if not job:
         raise HTTPException(status_code=404, detail="Job not found")
-    # Admins can only see applications for jobs they own (stored as admin_id since last fix)
-    if current_admin["role"] == "admin" and job.get("admin_id") != current_admin["admin_id"]:
+    # Data Isolation Check
+    allowed_ids = _get_authorized_creator_ids(current_admin)
+    if job.get("admin_id") not in allowed_ids:
         raise HTTPException(status_code=403, detail="Access denied")
+
     actual_job_id = job.get("job_id") or str(job["_id"])
     applications = list(job_applications_collection.find({"job_id": actual_job_id}).sort("applied_at", -1))
     
@@ -10961,7 +11608,8 @@ def update_application_status(
     if not job:
         raise HTTPException(status_code=404, detail="Job not found")
 
-    if current_admin["role"] == "admin" and job.get("admin_id") != current_admin["admin_id"]:
+    allowed_ids = _get_authorized_creator_ids(current_admin)
+    if job.get("admin_id") not in allowed_ids:
         raise HTTPException(status_code=403, detail="Access denied")
 
     from bson import ObjectId as BsonObjectId
@@ -10990,6 +11638,7 @@ def update_application_status(
         raise HTTPException(status_code=404, detail="Application not found")
     return {"status": "success", "message": f"Status updated to '{new_status}'"}
 
+# pyrefly: ignore [missing-import]
 import pypdf
 import io
 
@@ -11025,30 +11674,40 @@ def parse_resume(resume: UploadFile = File(...)):
                 extracted_text = ""
 
         if not extracted_text.strip():
-             return {"status": "success", "data": {"name": "", "email": "", "phone": "", "linkedin_url": ""}}
+            return {"status": "success", "data": {"name": "", "email": "", "phone": "", "linkedin_url": ""}}
 
-        # Ensure text is not insanely large for the LLM context (truncate if necessary)
-        extracted_text = extracted_text[:10000]
+        # Always compute robust offline regex/heuristic extraction first
+        fallback_data = extract_info_from_resume(extracted_text)
 
-        prompt = f"""
-        Extract the following information from the provided resume text. 
-        Format the output strictly as JSON with keys: "name", "email", "phone", "linkedin_url".
-        If a field is not found, leave it as an empty string. Do not include markdown formatting or comments.
-        
-        Resume Text:
-        {extracted_text}
-        """
-        
-        raw_response = chat_completion([{"role": "user", "content": prompt}])
-        parsed_data = extract_json(raw_response) or {}
-        
+        parsed_data = {}
+        try:
+            truncated_text = extracted_text[:8000]
+            prompt = f"""
+            Extract the following information from the provided resume text. 
+            Format the output strictly as JSON with keys: "name", "email", "phone", "linkedin_url".
+            If a field is not found, leave it as an empty string. Do not include markdown formatting or comments.
+            
+            Resume Text:
+            {truncated_text}
+            """
+            raw_response = chat_completion([{"role": "user", "content": prompt}], timeout=10)
+            parsed_data = extract_json(raw_response) or {}
+        except Exception as ai_err:
+            print(f"⚠️ LLM resume parsing unavailable or rate-limited ({ai_err}). Using offline regex parser fallback.")
+
+        # Merge extracted fields: prefer LLM values if non-empty, otherwise use regex fallback
+        name = str(parsed_data.get("name") or fallback_data.get("name") or "").strip()
+        email = str(parsed_data.get("email") or fallback_data.get("email") or "").strip()
+        phone = str(parsed_data.get("phone") or fallback_data.get("phone") or "").strip()
+        linkedin_url = str(parsed_data.get("linkedin_url") or fallback_data.get("linkedin_url") or "").strip()
+
         return {
             "status": "success", 
             "data": {
-                "name": parsed_data.get("name", ""),
-                "email": parsed_data.get("email", ""),
-                "phone": parsed_data.get("phone", ""),
-                "linkedin_url": parsed_data.get("linkedin_url", "")
+                "name": name,
+                "email": email,
+                "phone": phone,
+                "linkedin_url": linkedin_url
             }
         }
     except HTTPException:

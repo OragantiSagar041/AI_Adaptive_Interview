@@ -81,6 +81,25 @@ export const loadPlatformAnalytics = createAsyncThunk(
   }
 )
 
+// ─── Live Sessions Thunk ────────────────────────────────────────────────────
+export const loadLiveSessions = createAsyncThunk(
+  'dashboard/loadLiveSessions',
+  async (adminFilter = null, { getState, rejectWithValue }) => {
+    try {
+      const { API_BASE_URL, token } = getState().auth
+      const params = adminFilter ? { adminId: adminFilter } : {}
+      const res = await axios.get(`${API_BASE_URL}/superadmin/live-sessions`, {
+        headers: { Authorization: `Bearer ${token}` },
+        params
+      })
+      return res.data
+    } catch (err) {
+      const errorMsg = err.response?.data?.detail || err.message || 'Failed to load live sessions'
+      return rejectWithValue(typeof errorMsg === 'object' ? JSON.stringify(errorMsg) : errorMsg)
+    }
+  }
+)
+
 const dashboardSlice = createSlice({
   name: 'dashboard',
   initialState: {
@@ -197,6 +216,13 @@ const dashboardSlice = createSlice({
         const payload = action.payload || {}
         state.analyticsData = Array.isArray(payload.analytics) ? payload.analytics : []
         state.avgTimeToHire = payload.avg_time_to_hire_days ?? null
+      })
+      .addCase(loadLiveSessions.fulfilled, (state, action) => {
+        const payload = action.payload || {}
+        state.liveSessions = payload.liveSessions || []
+        state.ongoingLiveCount = payload.ongoingLiveCount || 0
+        state.ongoingMonitoredCount = payload.ongoingMonitoredCount || 0
+        state.ongoingAlertCount = payload.ongoingAlertCount || 0
       })
   }
 })

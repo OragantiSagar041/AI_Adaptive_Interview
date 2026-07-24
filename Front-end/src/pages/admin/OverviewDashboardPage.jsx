@@ -76,7 +76,7 @@ const Separator = ({ className = "", orientation = "horizontal", ...props }) => 
 const quickActions = [
   { label: "Create AI Interview", icon: Plus, path: "/admin/create-interview" },
   { label: "Upload Job Description", icon: FileUp, path: "/admin/create-interview" },
-  { label: "Invite Candidates", icon: UserPlus, path: "/admin/qualified-candidates" },
+  { label: "Invite Candidates", icon: UserPlus, path: "/admin/interviews" },
   { label: "View Analytics", icon: BarChart3, path: "/admin/dashboard" },
   { label: "Review Top Candidates", icon: Star, path: "/admin/qualified-candidates" },
   { label: "Schedule Interview", icon: CalendarIcon, path: "/admin/create-interview" },
@@ -255,7 +255,7 @@ export default function OverviewDashboardPage() {
   const kpis = [
     { label: "Total Candidates", value: dbStats?.total || "0", icon: Users, tint: "primary", delta: "", filterType: null, navPath: null },
     { label: "Candidates Selected", value: dbStats?.selected || "0", icon: Target, tint: "success", delta: "", filterType: null, navPath: "/admin/qualified-candidates" },
-    { label: "AI Interviews Completed", value: dbStats?.completed || "0", icon: Mic, tint: "accent", delta: "", filterType: "completed", navPath: null },
+    { label: "AI Interviews Completed", value: dbStats?.completed || "0", icon: Mic, tint: "accent", delta: "", filterType: "completed", navPath: "/admin/interviews" },
     { label: "Average AI Score", value: `${dbStats?.avg_score || "0"}%`, icon: Star, tint: "warning", delta: "", filterType: "high_scores", navPath: null },
     { label: "Pending Reviews", value: dbStats?.pending || "0", icon: Clock, tint: "info", delta: "", filterType: "pending", navPath: null },
     { label: "Started", value: dbStats?.started || "0", icon: Activity, tint: "primary", delta: "", filterType: "live", navPath: null },
@@ -555,7 +555,10 @@ export default function OverviewDashboardPage() {
                             {initials(c.candidate_name || c.name || "C")}
                           </AvatarFallback>
                         </Avatar>
-                        <div className="font-medium">{c.candidate_name || c.name || "Candidate"}</div>
+                        <div className="font-medium">
+                          {c.candidate_id && <span className="text-[0.65rem] bg-slate-100 text-slate-500 px-1.5 py-0.5 rounded font-bold mr-1">{c.candidate_id}</span>}
+                          {c.candidate_name || c.name || "Candidate"}
+                        </div>
                       </div>
                     </td>
                     <td className="px-3 py-3 text-muted-foreground">{c.interview_title || c.job_title || "N/A"}</td>
@@ -876,7 +879,10 @@ export default function OverviewDashboardPage() {
                   {listModalCandidates.map((c) => (
                     <tr key={c.id || c._id} className="hover:bg-slate-50">
                       <td className="px-4 py-3.5">
-                        <div className="font-semibold text-slate-800">{c.candidate_name || c.name || "Candidate"}</div>
+                        <div className="font-semibold text-slate-800">
+                          {c.candidate_id && <span className="text-[0.65rem] bg-slate-100 text-slate-500 px-1.5 py-0.5 rounded font-bold mr-1">{c.candidate_id}</span>}
+                          {c.candidate_name || c.name || "Candidate"}
+                        </div>
                         <div className="text-xs text-muted-foreground">{c.candidate_email || c.email}</div>
                       </td>
                       <td className="px-4 py-3.5 text-slate-600">{c.interview_title || c.job_title || "N/A"}</td>

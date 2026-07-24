@@ -32,7 +32,7 @@ const normalizeFlowItem = (item, id) => ({
   is_enabled: typeof item.is_enabled === 'boolean' ? item.is_enabled : (typeof item.enabled === 'boolean' ? item.enabled : true),
 });
 
-export default function ConversationalFlowPage({ omniApiKey = '' }) {
+export default function ConversationalFlowPage() {
   const [flowData, setFlowData] = useState([]);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
@@ -52,7 +52,7 @@ export default function ConversationalFlowPage({ omniApiKey = '' }) {
       setLoading(true);
       setError(null);
       const res = await axios.get(`${API_BASE_URL}/admin/agent-flow`, {
-        headers: omniApiKey ? { 'X-Omni-Dimension-API-Key': omniApiKey } : {},
+        headers: {},
       });
       if (res.data.success && Array.isArray(res.data.flow) && res.data.flow.length > 0) {
         const normalizedFlow = res.data.flow.map((item, index) => normalizeFlowItem(item, item?.id ?? `sec-${index + 1}`));
@@ -84,7 +84,7 @@ export default function ConversationalFlowPage({ omniApiKey = '' }) {
         })),
       };
       const res = await axios.put(`${API_BASE_URL}/admin/agent-flow`, payload, {
-        headers: omniApiKey ? { 'X-Omni-Dimension-API-Key': omniApiKey } : {},
+        headers: {},
       });
       
       if (res.data.success) {
