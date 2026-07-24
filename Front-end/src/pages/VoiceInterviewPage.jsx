@@ -709,7 +709,12 @@ export default function VoiceInterviewPage() {
         setMonitoringToken(candidateToken)
         setCandidateSessionAuth(candidateToken, linkId, sd.interview_id || '')
         setLoading(false)
-      } catch (e) { setError(e.message); setLoading(false) }
+        clearTimeout(loadingTimeout)
+      } catch (e) { 
+        if (!hasTimedOut) setError(e.message)
+        setLoading(false)
+        clearTimeout(loadingTimeout)
+      }
     }
     init()
     return () => clearTimeout(loadingTimeout)
