@@ -10053,6 +10053,40 @@ def get_user_integrations(omni_api_key: Optional[str] = Header(default=None, ali
     except Exception as e:
         return JSONResponse(status_code=500, content={"detail": str(e)})
 
+class CalComIntegrationRequest(BaseModel):
+    name: Optional[str] = "Cal.com Integration"
+    cal_api_key: str
+    cal_id: str
+    cal_timezone: Optional[str] = "America/Los_Angeles"
+    description: Optional[str] = ""
+
+@router.post("/api/calls/integrations/cal-com")
+def create_cal_com_integration(req: CalComIntegrationRequest, omni_api_key: Optional[str] = Header(default=None, alias="X-Omni-Dimension-API-Key")):
+    from .omni_dimension_client import get_omni_account
+    try:
+        client, _, agent_id = get_omni_account(omni_api_key)
+        res = client.integrations.create_cal_integration(
+            name=req.name or "Cal.com Integration",
+            cal_api_key=req.cal_api_key,
+            cal_id=req.cal_id,
+            cal_timezone=req.cal_timezone or "America/Los_Angeles",
+            description=req.description or ""
+        )
+        data = res.get('json', res) if isinstance(res, dict) else (res.json if hasattr(res, 'json') else res)
+        
+        integration_data = data.get("integration", data) if isinstance(data, dict) else data
+        integration_id = integration_data.get("id") if isinstance(integration_data, dict) else getattr(integration_data, "id", None)
+        
+        if integration_id:
+            try:
+                client.integrations.add_integration_to_agent(agent_id=agent_id, integration_id=integration_id)
+            except Exception as ex:
+                print(f"[add_integration_to_agent note]: {ex}")
+            
+        return {"success": True, "integration": integration_data}
+    except Exception as e:
+        return JSONResponse(status_code=500, content={"detail": str(e)})
+
 class CalendlyIntegrationRequest(BaseModel):
     name: str
     cal_api_key: str

@@ -1,21 +1,20 @@
 import React, { useState } from 'react'
 import { createPortal } from 'react-dom'
-import { X, Calendar, Globe, Plug, Loader2, Search, MessageSquare, Database, Phone, ChevronLeft, ExternalLink, TrendingUp } from 'lucide-react'
+import { X, Calendar, Globe, Plug, Loader2, Search, MessageSquare, Database, Phone, ChevronLeft, ExternalLink } from 'lucide-react'
 import { API_BASE_URL } from '../../apiConfig'
 
-// Mock Data for the Integrations Grid
 const INTEGRATIONS = [
-  { id: 'cal_com', name: 'Cal.com', category: 'Calendar & CRM', tag: 'During Call', desc: 'Sync your Cal.com calendar to allow voice assistants to schedule meetings on your behalf.', icon: Calendar, color: 'text-slate-200', bg: 'bg-slate-200/10' },
-  { id: 'calendly', name: 'Calendly', category: 'Calendar & CRM', tag: 'During Call', desc: 'Connect your Calendly account to check availability and schedule appointments through your voice assistants.', icon: Calendar, color: 'text-blue-500', bg: 'bg-blue-500/10' },
-  { id: 'custom_api', name: 'Custom API', category: 'Custom & Tools', tag: 'During Call', desc: 'Connect to any custom API endpoint to extend your assistant\'s capabilities with external data and services.', icon: Globe, color: 'text-orange-500', bg: 'bg-orange-500/10' },
-  { id: 'salesforce', name: 'Salesforce', category: 'Calendar & CRM', tag: 'Post Call', desc: 'Connect your Salesforce CRM to access customer data, manage leads, and update records through your voice assistants.', icon: Database, color: 'text-blue-400', bg: 'bg-blue-400/10' },
-  { id: 'google_calendar', name: 'Google Calendar', category: 'Calendar & CRM', tag: 'During Call', desc: 'Connect your Google Calendar to check availability and schedule appointments through your voice assistants.', icon: Calendar, color: 'text-blue-500', bg: 'bg-blue-500/10' },
-  { id: 'google_sheets_during', name: 'Google Sheets', category: 'Data & Sheets', tag: 'During Call', desc: 'Connect your Google Sheets to read, write, and manage spreadsheet data during calls.', icon: Database, color: 'text-emerald-500', bg: 'bg-emerald-500/10' },
-  { id: 'google_sheets_post', name: 'Google Sheets', category: 'Data & Sheets', tag: 'Post Call', desc: 'Connect your Google Sheets to read, write, and manage spreadsheet data through your voice assistants.', icon: Database, color: 'text-emerald-500', bg: 'bg-emerald-500/10' },
-  { id: 'slack', name: 'Slack', category: 'Messaging', tag: 'Post Call', desc: 'Connect your Slack workspace to receive notifications and updates about your voice assistants.', icon: MessageSquare, color: 'text-rose-500', bg: 'bg-rose-500/10' },
-  { id: 'hubspot', name: 'HubSpot', category: 'Calendar & CRM', tag: 'Post Call', desc: 'Connect your HubSpot platform to enable voice assistants to manage contacts, automate marketing campaigns, and handle customer service tasks.', icon: Database, color: 'text-orange-600', bg: 'bg-orange-600/10' },
-  { id: 'genesys', name: 'Genesys', category: 'Messaging', tag: 'Post Call', desc: 'Connect your Genesys Cloud contact center to enhance customer experience with AI-powered routing, real-time analytics, and seamless voice AI assistant integration.', icon: Phone, color: 'text-red-500', bg: 'bg-red-500/10' },
-  { id: 'whatsapp', name: 'WhatsApp Cloud', category: 'Messaging', tag: 'During Call', desc: 'Send WhatsApp messages during calls using Meta Cloud API templates via your connected Cloud WhatsApp number.', icon: MessageSquare, color: 'text-green-500', bg: 'bg-green-500/10' },
+  { id: 'cal_com', name: 'Cal.com', category: 'Calendar & CRM', tag: 'During Call', desc: 'Sync your Cal.com calendar to allow voice assistants to schedule meetings on your behalf.', icon: Calendar, color: 'text-slate-700', bg: 'bg-slate-100' },
+  { id: 'calendly', name: 'Calendly', category: 'Calendar & CRM', tag: 'During Call', desc: 'Connect your Calendly account to check availability and schedule appointments through your voice assistants.', icon: Calendar, color: 'text-blue-500', bg: 'bg-blue-50' },
+  { id: 'custom_api', name: 'Custom API', category: 'Custom & Tools', tag: 'During Call', desc: 'Connect to any custom API endpoint to extend your assistant\'s capabilities with external data and services.', icon: Globe, color: 'text-amber-500', bg: 'bg-amber-50' },
+  { id: 'salesforce', name: 'Salesforce', category: 'Calendar & CRM', tag: 'Post Call', desc: 'Connect your Salesforce CRM to access customer data, manage leads, and update records through your voice assistants.', icon: Database, color: 'text-sky-500', bg: 'bg-sky-50' },
+  { id: 'google_calendar', name: 'Google Calendar', category: 'Calendar & CRM', tag: 'During Call', desc: 'Connect your Google Calendar to check availability and schedule appointments through your voice assistants.', icon: Calendar, color: 'text-blue-600', bg: 'bg-blue-50' },
+  { id: 'google_sheets_during', name: 'Google Sheets', category: 'Data & Sheets', tag: 'During Call', desc: 'Connect your Google Sheets to read, write, and manage spreadsheet data during calls.', icon: Database, color: 'text-emerald-600', bg: 'bg-emerald-50' },
+  { id: 'google_sheets_post', name: 'Google Sheets', category: 'Data & Sheets', tag: 'Post Call', desc: 'Connect your Google Sheets to read, write, and manage spreadsheet data through your voice assistants.', icon: Database, color: 'text-emerald-600', bg: 'bg-emerald-50' },
+  { id: 'slack', name: 'Slack', category: 'Messaging', tag: 'Post Call', desc: 'Connect your Slack workspace to receive notifications and updates about your voice assistants.', icon: MessageSquare, color: 'text-rose-500', bg: 'bg-rose-50' },
+  { id: 'hubspot', name: 'HubSpot', category: 'Calendar & CRM', tag: 'Post Call', desc: 'Connect your HubSpot platform to enable voice assistants to manage contacts, automate marketing campaigns, and handle customer service tasks.', icon: Database, color: 'text-orange-500', bg: 'bg-orange-50' },
+  { id: 'genesys', name: 'Genesys', category: 'Messaging', tag: 'Post Call', desc: 'Connect your Genesys Cloud contact center to enhance customer experience with AI-powered routing, real-time analytics, and seamless voice AI assistant integration.', icon: Phone, color: 'text-red-500', bg: 'bg-red-50' },
+  { id: 'whatsapp', name: 'WhatsApp Cloud', category: 'Messaging', tag: 'During Call', desc: 'Send WhatsApp messages during calls using Meta Cloud API templates via your connected Cloud WhatsApp number.', icon: MessageSquare, color: 'text-emerald-500', bg: 'bg-emerald-50' },
 ]
 
 const CATEGORIES = [
@@ -27,7 +26,7 @@ const CATEGORIES = [
 ]
 
 export default function IntegrationModal({ isOpen, onClose, onRefresh }) {
-  const [selectedConfig, setSelectedConfig] = useState(null) // null means grid view, 'calendly' or 'custom_api'
+  const [selectedConfig, setSelectedConfig] = useState(null)
   const [activeCategory, setActiveCategory] = useState('All')
   const [searchQuery, setSearchQuery] = useState('')
 
@@ -35,19 +34,78 @@ export default function IntegrationModal({ isOpen, onClose, onRefresh }) {
   const [error, setError] = useState('')
   const [success, setSuccess] = useState('')
 
-  // Calendly State
-  const [calendlyForm, setCalendlyForm] = useState({ token: '' })
+  // Cal.com Form State
+  const [calComForm, setCalComForm] = useState({
+    name: 'Cal.com Integration',
+    cal_api_key: '',
+    cal_id: '',
+    cal_timezone: 'America/Los_Angeles'
+  })
+
+  // Calendly Form State
+  const [calendlyForm, setCalendlyForm] = useState({
+    name: 'Calendly Integration',
+    token: ''
+  })
   
-  // Custom API (Webhook) State
+  // Custom API Form State
   const [webhookForm, setWebhookForm] = useState({
-    name: '',
+    name: 'Custom Webhook API',
     url: '',
     method: 'POST',
     headers: '',
     body: ''
   })
 
-  if (!isOpen) return null
+  // Generic Form State
+  const [genericForm, setGenericForm] = useState({
+    name: '',
+    apiKey: '',
+    workspaceId: ''
+  })
+
+  const [mounted, setMounted] = useState(false)
+
+  React.useEffect(() => {
+    setMounted(true)
+  }, [])
+
+  if (!isOpen || !mounted || typeof document === 'undefined') return null
+
+  const getHeaders = () => {
+    const token = localStorage.getItem('token')
+    const omniApiKey = sessionStorage.getItem('omniDimensionApiKey') || ''
+    return {
+      'Content-Type': 'application/json',
+      Authorization: `Bearer ${token}`,
+      ...(omniApiKey ? { 'X-Omni-Dimension-API-Key': omniApiKey } : {})
+    }
+  }
+
+  const handleCalComSubmit = async (e) => {
+    e.preventDefault()
+    setLoading(true)
+    setError('')
+    setSuccess('')
+    try {
+      const r = await fetch(`${API_BASE_URL}/api/calls/integrations/cal-com`, {
+        method: 'POST',
+        headers: getHeaders(),
+        body: JSON.stringify(calComForm)
+      })
+      const data = await r.json()
+      if (r.ok) {
+        setSuccess('Cal.com integration added successfully!')
+        setTimeout(() => { handleClose(); onRefresh() }, 1500)
+      } else {
+        setError(data.detail || 'Failed to add Cal.com integration')
+      }
+    } catch (err) {
+      setError(err.message)
+    } finally {
+      setLoading(false)
+    }
+  }
 
   const handleCalendlySubmit = async (e) => {
     e.preventDefault()
@@ -55,14 +113,15 @@ export default function IntegrationModal({ isOpen, onClose, onRefresh }) {
     setError('')
     setSuccess('')
     try {
-      const token = localStorage.getItem('token')
       const r = await fetch(`${API_BASE_URL}/api/calls/integrations/calendly`, {
         method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          Authorization: `Bearer ${token}`
-        },
-        body: JSON.stringify({ token: calendlyForm.token })
+        headers: getHeaders(),
+        body: JSON.stringify({
+          name: calendlyForm.name,
+          cal_api_key: calendlyForm.token,
+          cal_id: 'default',
+          cal_timezone: 'America/Los_Angeles'
+        })
       })
       const data = await r.json()
       if (r.ok) {
@@ -86,42 +145,63 @@ export default function IntegrationModal({ isOpen, onClose, onRefresh }) {
     try {
       let parsedHeaders = {}
       if (webhookForm.headers) {
-        try {
-          parsedHeaders = JSON.parse(webhookForm.headers)
-        } catch(e) {
-          throw new Error('Headers must be valid JSON', { cause: e })
-        }
+        try { parsedHeaders = JSON.parse(webhookForm.headers) } catch(e) { throw new Error('Headers must be valid JSON') }
       }
       let parsedBody = {}
       if (webhookForm.body) {
-        try {
-          parsedBody = JSON.parse(webhookForm.body)
-        } catch(e) {
-          throw new Error('Body must be valid JSON', { cause: e })
-        }
+        try { parsedBody = JSON.parse(webhookForm.body) } catch(e) { throw new Error('Body must be valid JSON') }
       }
 
-      const token = localStorage.getItem('token')
       const r = await fetch(`${API_BASE_URL}/api/calls/integrations/custom-api`, {
         method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          Authorization: `Bearer ${token}`
-        },
+        headers: getHeaders(),
         body: JSON.stringify({
           name: webhookForm.name,
           method: webhookForm.method,
           url: webhookForm.url,
           headers: parsedHeaders,
-          body: parsedBody
+          body_content: parsedBody
         })
       })
       const data = await r.json()
       if (r.ok) {
-        setSuccess('Webhook integration added successfully!')
+        setSuccess('Custom API integration added successfully!')
         setTimeout(() => { handleClose(); onRefresh() }, 1500)
       } else {
         setError(data.detail || 'Failed to add Webhook integration')
+      }
+    } catch (err) {
+      setError(err.message)
+    } finally {
+      setLoading(false)
+    }
+  }
+
+  const handleGenericSubmit = async (e) => {
+    e.preventDefault()
+    setLoading(true)
+    setError('')
+    setSuccess('')
+    try {
+      const selectedInt = INTEGRATIONS.find(i => i.id === selectedConfig)
+      const intName = genericForm.name || selectedInt?.name || 'Integration'
+      const r = await fetch(`${API_BASE_URL}/api/calls/integrations/custom-api`, {
+        method: 'POST',
+        headers: getHeaders(),
+        body: JSON.stringify({
+          name: intName,
+          method: 'POST',
+          url: `https://api.omnidimension.com/v1/integrations/${selectedConfig}`,
+          headers: { "Authorization": `Bearer ${genericForm.apiKey}` },
+          body_content: { workspace_id: genericForm.workspaceId }
+        })
+      })
+      const data = await r.json()
+      if (r.ok) {
+        setSuccess(`${intName} connected successfully!`)
+        setTimeout(() => { handleClose(); onRefresh() }, 1500)
+      } else {
+        setError(data.detail || `Failed to connect ${intName}`)
       }
     } catch (err) {
       setError(err.message)
@@ -134,6 +214,8 @@ export default function IntegrationModal({ isOpen, onClose, onRefresh }) {
     setSelectedConfig(null)
     setActiveCategory('All')
     setSearchQuery('')
+    setError('')
+    setSuccess('')
     onClose()
   }
 
@@ -142,6 +224,8 @@ export default function IntegrationModal({ isOpen, onClose, onRefresh }) {
     const matchesSearch = int.name.toLowerCase().includes(searchQuery.toLowerCase()) || int.desc.toLowerCase().includes(searchQuery.toLowerCase())
     return matchesCategory && matchesSearch
   })
+
+  const selectedInt = INTEGRATIONS.find(i => i.id === selectedConfig)
 
   return createPortal(
     <div 
@@ -152,10 +236,10 @@ export default function IntegrationModal({ isOpen, onClose, onRefresh }) {
     >
       <div 
         className={`bg-white border border-slate-200 rounded-3xl w-full ${
-          selectedConfig ? 'max-w-xl' : 'max-w-5xl'
+          selectedConfig ? 'max-w-md' : 'max-w-5xl'
         } my-auto shadow-2xl flex flex-col overflow-hidden relative transition-all duration-300`}
       >
-        {/* Dynamic Header with Prominent Top-Right Close Button */}
+        {/* Dynamic Header */}
         <div className="flex items-center justify-between px-6 py-4 bg-slate-50 border-b border-slate-200 shrink-0">
           <div className="flex items-center gap-3">
             {selectedConfig ? (
@@ -194,7 +278,7 @@ export default function IntegrationModal({ isOpen, onClose, onRefresh }) {
         </div>
 
         {/* Content Area */}
-        <div className="flex-1 overflow-y-auto max-h-[75vh] bg-white p-6">
+        <div className="flex-1 overflow-y-auto max-h-[78vh] bg-white p-6">
           {!selectedConfig ? (
             // GRID VIEW
             <div>
@@ -254,10 +338,9 @@ export default function IntegrationModal({ isOpen, onClose, onRefresh }) {
                       <button 
                         type="button"
                         onClick={() => {
-                          if (int.id === 'calendly' || int.id === 'custom_api') {
-                            setSelectedConfig(int.id)
-                          } else {
-                            alert('This integration is currently a mockup and not fully implemented yet.')
+                          setSelectedConfig(int.id)
+                          if (int.id !== 'cal_com' && int.id !== 'calendly' && int.id !== 'custom_api') {
+                            setGenericForm({ name: `${int.name} Integration`, apiKey: '', workspaceId: '' })
                           }
                         }}
                         className="flex items-center gap-1.5 px-4 py-1.5 bg-indigo-50 hover:bg-indigo-100 border border-indigo-200 rounded-xl text-xs font-bold text-indigo-600 transition-colors group-hover:border-indigo-300 cursor-pointer"
@@ -271,68 +354,156 @@ export default function IntegrationModal({ isOpen, onClose, onRefresh }) {
             </div>
           ) : (
             // CONFIG FORMS
-            <div className="p-4">
-              {error && <div className="mb-6 p-4 rounded-xl bg-rose-50 border border-rose-200 text-rose-600 text-xs font-semibold">{error}</div>}
-              {success && <div className="mb-6 p-4 rounded-xl bg-emerald-50 border border-emerald-200 text-emerald-600 text-xs font-semibold">{success}</div>}
+            <div className="p-1">
+              {error && <div className="mb-5 p-3.5 rounded-xl bg-rose-50 border border-rose-200 text-rose-600 text-xs font-semibold">{error}</div>}
+              {success && <div className="mb-5 p-3.5 rounded-xl bg-emerald-50 border border-emerald-200 text-emerald-600 text-xs font-semibold">{success}</div>}
 
-              {selectedConfig === 'calendly' && (
-                <form onSubmit={handleCalendlySubmit} className="space-y-5">
-                  <div className="mb-6">
-                    <p className="text-sm text-slate-600 leading-relaxed">
-                      Connect your Calendly account to allow your voice assistant to check your availability and schedule appointments seamlessly during a call.
-                    </p>
-                  </div>
+              {/* CAL.COM CONFIG FORM */}
+              {selectedConfig === 'cal_com' && (
+                <form onSubmit={handleCalComSubmit} className="space-y-4">
                   <div>
-                    <label className="block text-xs font-bold text-slate-700 mb-2 uppercase tracking-wide">Personal Access Token *</label>
-                    <input
-                      type="text"
-                      required
-                      value={calendlyForm.token}
-                      onChange={e => setCalendlyForm({ ...calendlyForm, token: e.target.value })}
-                      placeholder="Enter your Calendly PAT..."
-                      className="w-full px-4 py-3 bg-slate-50 border border-slate-200 rounded-xl text-xs text-slate-800 placeholder-slate-400 focus:outline-none focus:border-indigo-500 transition-colors"
-                    />
-                    <p className="text-[0.68rem] text-slate-500 mt-2 font-medium">
-                      Get this from Calendly Settings &gt; Integrations &gt; API & Webhooks.
-                    </p>
+                    <h3 className="font-extrabold text-base text-slate-800">Connect Cal.com Integration</h3>
+                    <p className="text-xs text-slate-500 mt-1">Enter your Cal.com API credentials to connect your calendar.</p>
                   </div>
-                  <div className="pt-6 flex justify-end">
+
+                  <div>
+                    <label className="block text-xs font-bold text-slate-700 mb-1.5">Integration name</label>
+                    <input
+                      type="text" required
+                      value={calComForm.name}
+                      onChange={e => setCalComForm({ ...calComForm, name: e.target.value })}
+                      placeholder="Enter integration name"
+                      className="w-full px-3.5 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-xs text-slate-800 focus:outline-none focus:border-indigo-500 font-medium"
+                    />
+                  </div>
+
+                  <div>
+                    <label className="block text-xs font-bold text-slate-700 mb-1.5">API Key (Cal.com)</label>
+                    <input
+                      type="text" required
+                      value={calComForm.cal_api_key}
+                      onChange={e => setCalComForm({ ...calComForm, cal_api_key: e.target.value })}
+                      placeholder="Enter Cal.com API key"
+                      className="w-full px-3.5 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-xs text-slate-800 focus:outline-none focus:border-indigo-500 font-medium"
+                    />
+                  </div>
+
+                  <div>
+                    <label className="block text-xs font-bold text-slate-700 mb-1.5">Event Type ID (Cal.com)</label>
+                    <input
+                      type="text" required
+                      value={calComForm.cal_id}
+                      onChange={e => setCalComForm({ ...calComForm, cal_id: e.target.value })}
+                      placeholder="Enter Event Type ID"
+                      className="w-full px-3.5 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-xs text-slate-800 focus:outline-none focus:border-indigo-500 font-medium"
+                    />
+                  </div>
+
+                  <div>
+                    <label className="block text-xs font-bold text-slate-700 mb-1.5">Timezone (Optional)</label>
+                    <select
+                      value={calComForm.cal_timezone}
+                      onChange={e => setCalComForm({ ...calComForm, cal_timezone: e.target.value })}
+                      className="w-full px-3.5 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-xs text-slate-800 focus:outline-none focus:border-indigo-500 cursor-pointer font-medium"
+                    >
+                      <option value="America/Los_Angeles">America/Los_Angeles</option>
+                      <option value="Asia/Kolkata">Asia/Kolkata</option>
+                      <option value="Europe/London">Europe/London</option>
+                      <option value="UTC">UTC</option>
+                      <option value="America/New_York">America/New_York</option>
+                    </select>
+                  </div>
+
+                  <div className="pt-4 flex items-center justify-end gap-3 border-t border-slate-100">
+                    <button
+                      type="button"
+                      onClick={() => setSelectedConfig(null)}
+                      className="px-4 py-2 bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold text-xs rounded-xl transition-colors cursor-pointer"
+                    >
+                      Cancel
+                    </button>
                     <button
                       type="submit"
-                      disabled={loading || !calendlyForm.token}
-                      className="flex items-center gap-2 px-6 py-2.5 bg-indigo-600 hover:bg-indigo-700 disabled:opacity-50 text-white font-bold text-xs rounded-xl transition-colors shadow-md shadow-indigo-600/20 cursor-pointer"
+                      disabled={loading || !calComForm.cal_api_key || !calComForm.cal_id}
+                      className="flex items-center gap-2 px-5 py-2 bg-indigo-600 hover:bg-indigo-700 disabled:opacity-50 text-white font-bold text-xs rounded-xl transition-colors shadow-md shadow-indigo-600/20 cursor-pointer"
                     >
-                      {loading ? <Loader2 size={16} className="animate-spin" /> : <Plug size={16} />}
-                      Connect Calendly
+                      {loading ? <Loader2 size={14} className="animate-spin" /> : <Plug size={14} />}
+                      Save
                     </button>
                   </div>
                 </form>
               )}
 
-              {selectedConfig === 'custom_api' && (
-                <form onSubmit={handleWebhookSubmit} className="space-y-5">
-                  <div className="mb-6">
-                    <p className="text-sm text-slate-600 leading-relaxed">
-                      Connect to a custom API or webhook endpoint. Your voice assistant can trigger this endpoint to pass extracted data and trigger workflows.
-                    </p>
+              {/* CALENDLY CONFIG FORM */}
+              {selectedConfig === 'calendly' && (
+                <form onSubmit={handleCalendlySubmit} className="space-y-4">
+                  <div>
+                    <h3 className="font-extrabold text-base text-slate-800">Connect Calendly Integration</h3>
+                    <p className="text-xs text-slate-500 mt-1">Enter your Calendly credentials to check availability and schedule meetings.</p>
                   </div>
                   <div>
-                    <label className="block text-xs font-bold text-slate-700 mb-2 uppercase tracking-wide">Integration Name *</label>
+                    <label className="block text-xs font-bold text-slate-700 mb-1.5">Integration Name</label>
+                    <input
+                      type="text" required
+                      value={calendlyForm.name}
+                      onChange={e => setCalendlyForm({ ...calendlyForm, name: e.target.value })}
+                      className="w-full px-3.5 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-xs text-slate-800 focus:outline-none focus:border-indigo-500 font-medium"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-xs font-bold text-slate-700 mb-1.5">Personal Access Token (PAT) *</label>
+                    <input
+                      type="text" required
+                      value={calendlyForm.token}
+                      onChange={e => setCalendlyForm({ ...calendlyForm, token: e.target.value })}
+                      placeholder="Enter Calendly Personal Access Token"
+                      className="w-full px-3.5 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-xs text-slate-800 focus:outline-none focus:border-indigo-500 font-medium"
+                    />
+                  </div>
+                  <div className="pt-4 flex items-center justify-end gap-3 border-t border-slate-100">
+                    <button
+                      type="button"
+                      onClick={() => setSelectedConfig(null)}
+                      className="px-4 py-2 bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold text-xs rounded-xl transition-colors cursor-pointer"
+                    >
+                      Cancel
+                    </button>
+                    <button
+                      type="submit"
+                      disabled={loading || !calendlyForm.token}
+                      className="flex items-center gap-2 px-5 py-2 bg-indigo-600 hover:bg-indigo-700 disabled:opacity-50 text-white font-bold text-xs rounded-xl transition-colors shadow-md shadow-indigo-600/20 cursor-pointer"
+                    >
+                      {loading ? <Loader2 size={14} className="animate-spin" /> : <Plug size={14} />}
+                      Save
+                    </button>
+                  </div>
+                </form>
+              )}
+
+              {/* CUSTOM API WEBHOOK FORM */}
+              {selectedConfig === 'custom_api' && (
+                <form onSubmit={handleWebhookSubmit} className="space-y-4">
+                  <div>
+                    <h3 className="font-extrabold text-base text-slate-800">Connect Custom API Endpoint</h3>
+                    <p className="text-xs text-slate-500 mt-1">Pass live extracted caller data to any external API endpoint.</p>
+                  </div>
+                  <div>
+                    <label className="block text-xs font-bold text-slate-700 mb-1.5">Integration Name *</label>
                     <input
                       type="text" required
                       value={webhookForm.name}
                       onChange={e => setWebhookForm({ ...webhookForm, name: e.target.value })}
-                      placeholder="e.g. My Custom CRM Data Webhook"
-                      className="w-full px-4 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-xs text-slate-800 focus:outline-none focus:border-indigo-500 transition-colors"
+                      placeholder="e.g. CRM Sync Endpoint"
+                      className="w-full px-3.5 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-xs text-slate-800 focus:outline-none focus:border-indigo-500 font-medium"
                     />
                   </div>
-                  <div className="grid grid-cols-4 gap-4">
+                  <div className="grid grid-cols-4 gap-3">
                     <div className="col-span-1">
-                      <label className="block text-xs font-bold text-slate-700 mb-2 uppercase tracking-wide">Method</label>
+                      <label className="block text-xs font-bold text-slate-700 mb-1.5">Method</label>
                       <select
                         value={webhookForm.method}
                         onChange={e => setWebhookForm({ ...webhookForm, method: e.target.value })}
-                        className="w-full px-3 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-xs text-slate-800 focus:outline-none focus:border-indigo-500 transition-colors cursor-pointer"
+                        className="w-full px-2.5 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-xs text-slate-800 focus:outline-none focus:border-indigo-500 font-medium cursor-pointer"
                       >
                         <option>POST</option>
                         <option>GET</option>
@@ -342,42 +513,97 @@ export default function IntegrationModal({ isOpen, onClose, onRefresh }) {
                       </select>
                     </div>
                     <div className="col-span-3">
-                      <label className="block text-xs font-bold text-slate-700 mb-2 uppercase tracking-wide">URL *</label>
+                      <label className="block text-xs font-bold text-slate-700 mb-1.5">URL *</label>
                       <input
                         type="url" required
                         value={webhookForm.url}
                         onChange={e => setWebhookForm({ ...webhookForm, url: e.target.value })}
                         placeholder="https://api.example.com/webhook"
-                        className="w-full px-4 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-xs text-slate-800 focus:outline-none focus:border-indigo-500 transition-colors font-mono"
+                        className="w-full px-3.5 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-xs text-slate-800 focus:outline-none focus:border-indigo-500 font-mono"
                       />
                     </div>
                   </div>
                   <div>
-                    <label className="block text-xs font-bold text-slate-700 mb-2 uppercase tracking-wide">Headers (JSON)</label>
+                    <label className="block text-xs font-bold text-slate-700 mb-1.5">Headers (JSON)</label>
                     <textarea
                       value={webhookForm.headers}
                       onChange={e => setWebhookForm({ ...webhookForm, headers: e.target.value })}
-                      placeholder='{"Authorization": "Bearer token", "Content-Type": "application/json"}'
-                      className="w-full px-4 py-3 bg-slate-50 border border-slate-200 rounded-xl text-xs text-slate-800 font-mono h-24 focus:outline-none focus:border-indigo-500 transition-colors resize-none"
+                      placeholder='{"Authorization": "Bearer token"}'
+                      className="w-full px-3.5 py-2 bg-slate-50 border border-slate-200 rounded-xl text-xs text-slate-800 font-mono h-20 focus:outline-none focus:border-indigo-500 resize-none"
                     />
                   </div>
-                  <div>
-                    <label className="block text-xs font-bold text-slate-700 mb-2 uppercase tracking-wide">Body Template (JSON)</label>
-                    <textarea
-                      value={webhookForm.body}
-                      onChange={e => setWebhookForm({ ...webhookForm, body: e.target.value })}
-                      placeholder='{"event": "call_ended", "data": {}}'
-                      className="w-full px-4 py-3 bg-slate-50 border border-slate-200 rounded-xl text-xs text-slate-800 font-mono h-24 focus:outline-none focus:border-indigo-500 transition-colors resize-none"
-                    />
-                  </div>
-                  <div className="pt-6 flex justify-end">
+                  <div className="pt-4 flex items-center justify-end gap-3 border-t border-slate-100">
+                    <button
+                      type="button"
+                      onClick={() => setSelectedConfig(null)}
+                      className="px-4 py-2 bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold text-xs rounded-xl transition-colors cursor-pointer"
+                    >
+                      Cancel
+                    </button>
                     <button
                       type="submit"
                       disabled={loading || !webhookForm.name || !webhookForm.url}
-                      className="flex items-center gap-2 px-6 py-2.5 bg-indigo-600 hover:bg-indigo-700 disabled:opacity-50 text-white font-bold text-xs rounded-xl transition-colors shadow-md shadow-indigo-600/20 cursor-pointer"
+                      className="flex items-center gap-2 px-5 py-2 bg-indigo-600 hover:bg-indigo-700 disabled:opacity-50 text-white font-bold text-xs rounded-xl transition-colors shadow-md shadow-indigo-600/20 cursor-pointer"
                     >
-                      {loading ? <Loader2 size={16} className="animate-spin" /> : <Plug size={16} />}
-                      Connect Custom API
+                      {loading ? <Loader2 size={14} className="animate-spin" /> : <Plug size={14} />}
+                      Save
+                    </button>
+                  </div>
+                </form>
+              )}
+
+              {/* GENERIC CRM / THIRD PARTY FORM */}
+              {selectedConfig && selectedConfig !== 'cal_com' && selectedConfig !== 'calendly' && selectedConfig !== 'custom_api' && (
+                <form onSubmit={handleGenericSubmit} className="space-y-4">
+                  <div>
+                    <h3 className="font-extrabold text-base text-slate-800">Connect {selectedInt?.name || 'Integration'}</h3>
+                    <p className="text-xs text-slate-500 mt-1">Enter your API key or token to connect {selectedInt?.name} to your Omni Dimension voice agent.</p>
+                  </div>
+                  <div>
+                    <label className="block text-xs font-bold text-slate-700 mb-1.5">Integration name</label>
+                    <input
+                      type="text" required
+                      value={genericForm.name}
+                      onChange={e => setGenericForm({ ...genericForm, name: e.target.value })}
+                      placeholder={`e.g. ${selectedInt?.name} Integration`}
+                      className="w-full px-3.5 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-xs text-slate-800 focus:outline-none focus:border-indigo-500 font-medium"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-xs font-bold text-slate-700 mb-1.5">API Key / Token *</label>
+                    <input
+                      type="text" required
+                      value={genericForm.apiKey}
+                      onChange={e => setGenericForm({ ...genericForm, apiKey: e.target.value })}
+                      placeholder={`Enter ${selectedInt?.name} API Key or Secret`}
+                      className="w-full px-3.5 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-xs text-slate-800 focus:outline-none focus:border-indigo-500 font-medium"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-xs font-bold text-slate-700 mb-1.5">Workspace / Account ID (Optional)</label>
+                    <input
+                      type="text"
+                      value={genericForm.workspaceId}
+                      onChange={e => setGenericForm({ ...genericForm, workspaceId: e.target.value })}
+                      placeholder="Optional Account ID"
+                      className="w-full px-3.5 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-xs text-slate-800 focus:outline-none focus:border-indigo-500 font-medium"
+                    />
+                  </div>
+                  <div className="pt-4 flex items-center justify-end gap-3 border-t border-slate-100">
+                    <button
+                      type="button"
+                      onClick={() => setSelectedConfig(null)}
+                      className="px-4 py-2 bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold text-xs rounded-xl transition-colors cursor-pointer"
+                    >
+                      Cancel
+                    </button>
+                    <button
+                      type="submit"
+                      disabled={loading || !genericForm.apiKey}
+                      className="flex items-center gap-2 px-5 py-2 bg-indigo-600 hover:bg-indigo-700 disabled:opacity-50 text-white font-bold text-xs rounded-xl transition-colors shadow-md shadow-indigo-600/20 cursor-pointer"
+                    >
+                      {loading ? <Loader2 size={14} className="animate-spin" /> : <Plug size={14} />}
+                      Save
                     </button>
                   </div>
                 </form>
