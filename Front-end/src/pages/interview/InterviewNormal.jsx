@@ -223,11 +223,12 @@ export const InterviewNormal = () => {
               <h2 style={{ color: '#166534', marginBottom: '1rem', fontSize: '2rem', fontWeight: 'bold' }}>All Set!</h2>
               <p style={{ fontSize: '1.1rem', color: '#15803d', marginBottom: '2rem', lineHeight: '1.6' }}>Your recording has been safe-stored. You may now safely close this window or exit the browser.</p>
               <button onClick={() => {
-                if (document.fullscreenElement) {
-                  document.exitFullscreen().catch(err => console.log(err))
-                }
-                window.location.href = '/'
-              }} style={{ background: '#1e293b', color: 'white', padding: '12px 32px', borderRadius: '9999px', fontSize: '1.1rem', fontWeight: '600', border: 'none', cursor: 'pointer', boxShadow: '0 4px 10px rgba(0,0,0,0.1)' }}>
+                  if (document.fullscreenElement) {
+                    document.exitFullscreen().catch(err => console.log(err))
+                  }
+                  window.close();
+                  setTimeout(() => { window.location.href = 'https://www.google.com'; }, 300);
+                }} style={{ background: '#1e293b', color: 'white', padding: '12px 32px', borderRadius: '9999px', fontSize: '1.1rem', fontWeight: '600', border: 'none', cursor: 'pointer', boxShadow: '0 4px 10px rgba(0,0,0,0.1)' }}>
                 Exit Now
               </button>
             </div>
