@@ -57,6 +57,16 @@ const SuperAdminProfileSettings = React.lazy(() => import('./components/superadm
 const SuperAdminNotifications = React.lazy(() => import('./pages/superadmin/SuperAdminNotifications'))
 const AICallPage = React.lazy(() => import('./pages/admin/AICallPage'))
 const ProfileViewPage = React.lazy(() => import('./pages/superadmin/ProfileViewPage'))
+
+// New SuperAdmin Pages
+const OrganizationsPage = React.lazy(() => import('./pages/superadmin/OrganizationsPage'))
+const RecruitersPage = React.lazy(() => import('./pages/superadmin/RecruitersPage'))
+const CreditManagementPage = React.lazy(() => import('./pages/superadmin/CreditManagementPage'))
+const SubscriptionManagementPage = React.lazy(() => import('./pages/superadmin/SubscriptionManagementPage'))
+const IntegrationsPage = React.lazy(() => import('./pages/superadmin/IntegrationsPage'))
+const AuditLogsPage = React.lazy(() => import('./pages/superadmin/AuditLogsPage'))
+const SecurityPage = React.lazy(() => import('./pages/superadmin/SecurityPage'))
+
 import ErrorBoundary from './components/ErrorBoundary'
 
 function App() {
@@ -118,6 +128,13 @@ function App() {
             <Route path="candidate/profile/:id" element={<ProfileViewPage />} />
             <Route path="profile-settings" element={<SuperAdminProfileSettings />} />
             <Route path="notifications" element={<SuperAdminNotifications />} />
+            <Route path="organizations" element={<OrganizationsPage />} />
+            <Route path="recruiters" element={<RecruitersPage />} />
+            <Route path="credit" element={<CreditManagementPage />} />
+            <Route path="subscription" element={<SubscriptionManagementPage />} />
+            <Route path="integrations" element={<IntegrationsPage />} />
+            <Route path="audit" element={<AuditLogsPage />} />
+            <Route path="security" element={<SecurityPage />} />
           </Route>
 
           {/* Legacy URL aliases */}
