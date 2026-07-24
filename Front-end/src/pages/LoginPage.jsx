@@ -355,15 +355,15 @@ export default function LoginPage() {
       if (role === 'super_admin' || role === 'superadmin') finalRole = 'superadmin'
       if (role === 'tenant' || role === 'admin') finalRole = 'admin'
       if (data.token) {
-        sessionStorage.setItem('adminToken', data.token)
+        localStorage.setItem('adminToken', data.token)
         dispatch(setCredentials({ role: finalRole, token: data.token, adminUser: data }))
       }
-      sessionStorage.setItem('adminId', adminId); sessionStorage.setItem('adminEmail', adminEmail)
-      sessionStorage.setItem('adminName', adminName); sessionStorage.setItem('adminRole', finalRole)
-      sessionStorage.setItem('adminUser', JSON.stringify(data)); sessionStorage.setItem('subscriptionPlan', plan)
-      sessionStorage.setItem('subscriptionPlanKey', planKey); sessionStorage.setItem('planCapabilities', JSON.stringify(planCapabilities))
-      sessionStorage.setItem('subscriptionExpiry', data.subscription_expiry || ''); sessionStorage.setItem('subscriptionCredits', data.credits ?? '')
-      sessionStorage.setItem('subscriptionWarningMessage', data.subscription_warning_message || ''); sessionStorage.setItem('adminCompany', data.company_name || '')
+      localStorage.setItem('adminId', adminId); localStorage.setItem('adminEmail', adminEmail)
+      localStorage.setItem('adminName', adminName); localStorage.setItem('adminRole', finalRole)
+      localStorage.setItem('adminUser', JSON.stringify(data)); localStorage.setItem('subscriptionPlan', plan)
+      localStorage.setItem('subscriptionPlanKey', planKey); localStorage.setItem('planCapabilities', JSON.stringify(planCapabilities))
+      localStorage.setItem('subscriptionExpiry', data.subscription_expiry || ''); localStorage.setItem('subscriptionCredits', data.credits ?? '')
+      localStorage.setItem('subscriptionWarningMessage', data.subscription_warning_message || ''); localStorage.setItem('adminCompany', data.company_name || '')
       if (finalRole === 'superadmin') navigate('/superadmin/new-dashboard')
       else if (finalRole === 'admin') navigate('/admin/dashboard')
       else if (finalRole === 'master') navigate('/master/dashboard')

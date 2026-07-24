@@ -17,14 +17,14 @@ api.interceptors.request.use(
   (config) => {
     const requestPath = String(config.url || "");
     const candidateRequest = CANDIDATE_ROUTE_RE.test(requestPath);
-    let token = candidateRequest ? getCandidateSessionToken() : sessionStorage.getItem("masterToken");
+    let token = candidateRequest ? getCandidateSessionToken() : localStorage.getItem("masterToken");
 
     if (!candidateRequest) {
-      if (!token) token = sessionStorage.getItem("adminToken");
-      if (!token) token = sessionStorage.getItem("token");
+      if (!token) token = localStorage.getItem("adminToken");
+      if (!token) token = localStorage.getItem("token");
 
       if (!token) {
-        const adminUserStr = sessionStorage.getItem("adminUser");
+        const adminUserStr = localStorage.getItem("adminUser");
         if (adminUserStr) {
           try {
             const parsed = JSON.parse(adminUserStr);
@@ -59,10 +59,10 @@ api.interceptors.response.use(
         clearCandidateSessionAuth()
       } else if (!window.__hireIqAuthRedirecting) {
         window.__hireIqAuthRedirecting = true
-        sessionStorage.removeItem("auth")
-        sessionStorage.removeItem("masterToken")
-        sessionStorage.removeItem("adminToken")
-        sessionStorage.removeItem("token")
+        localStorage.removeItem("auth")
+        localStorage.removeItem("masterToken")
+        localStorage.removeItem("adminToken")
+        localStorage.removeItem("token")
         window.location.assign("/login")
       }
     }

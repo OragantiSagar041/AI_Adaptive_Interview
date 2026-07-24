@@ -3,7 +3,7 @@ import { useNavigate } from 'react-router-dom'
 import Swal from 'sweetalert2'
 import api from '../../utils/api'
 import useCandidateWebRTC from '../../hooks/useCandidateWebRTC'
-import { setCandidateSessionAuth } from '../../utils/candidateAuth'
+import { setCandidateSessionAuth, getCandidateSessionToken } from '../../utils/candidateAuth'
 import { useProctoring } from '../../hooks/useProctoring'
 import { useScreenshotProtection } from '../../hooks/useScreenshotProtection'
 import { useExamSecurity } from '../../hooks/useExamSecurity'
@@ -2281,6 +2281,10 @@ export const useInterviewSession = (sessionId, interviewType, startRoundTwo) => 
 
           const xhr = new XMLHttpRequest()
           xhr.open('POST', `${api.defaults.baseURL || ''}/upload-full-recording`, true)
+          const token = getCandidateSessionToken()
+          if (token) {
+            xhr.setRequestHeader('Authorization', `Bearer ${token}`)
+          }
 
           xhr.upload.onprogress = (e) => {
             if (e.lengthComputable && type === 'camera') {

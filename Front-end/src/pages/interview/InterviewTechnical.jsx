@@ -1057,7 +1057,8 @@ export const InterviewTechnical = () => {
                 if (document.fullscreenElement) {
                   document.exitFullscreen().catch(err => console.log(err))
                 }
-                window.location.href = '/'
+                window.close();
+                setTimeout(() => { window.location.href = 'https://www.google.com'; }, 300);
               }} style={{ background: '#1e293b', color: 'white', padding: '12px 32px', borderRadius: '9999px', fontSize: '1.1rem', fontWeight: '600', border: 'none', cursor: 'pointer', boxShadow: '0 4px 10px rgba(0,0,0,0.1)' }}>
                 Exit Now
               </button>

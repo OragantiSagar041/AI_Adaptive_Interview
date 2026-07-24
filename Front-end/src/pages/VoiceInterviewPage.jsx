@@ -2519,7 +2519,10 @@ export default function VoiceInterviewPage() {
           {/*  Exit button — the only action that is always enabled ── */}
           <button
             id="exit-interview-btn"
-            onClick={() => { window.location.href = '/' }}
+            onClick={() => {
+                window.close();
+                setTimeout(() => { window.location.href = 'https://www.google.com'; }, 300);
+              }}
             className="w-full py-4 rounded-2xl bg-gradient-to-r from-emerald-500 to-teal-500 text-white font-bold text-lg shadow-[0_4px_30px_rgba(16,185,129,0.4)] hover:shadow-[0_4px_50px_rgba(16,185,129,0.6)] hover:scale-[1.02] transition-all flex items-center justify-center gap-3"
           >
             <i className="fas fa-sign-out-alt" />
@@ -2573,7 +2576,10 @@ export default function VoiceInterviewPage() {
           {/* Exit button also visible after feedback submission */}
           <button
             id="exit-interview-btn-post-feedback"
-            onClick={() => { window.location.href = '/' }}
+            onClick={() => {
+                window.close();
+                setTimeout(() => { window.location.href = 'https://www.google.com'; }, 300);
+              }}
             className="px-8 py-3 rounded-2xl bg-emerald-500/15 text-emerald-400 border border-emerald-500/30 hover:bg-emerald-500/25 font-bold text-sm transition-all flex items-center gap-2"
           >
             <i className="fas fa-sign-out-alt" />

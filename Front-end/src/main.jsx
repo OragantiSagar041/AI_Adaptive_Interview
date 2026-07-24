@@ -16,10 +16,10 @@ axios.interceptors.response.use(
     if (error.response?.status === 401 && !window.__hireIqAuthRedirecting) {
       window.__hireIqAuthRedirecting = true
       store.dispatch(logout())
-      sessionStorage.removeItem('auth')
-      sessionStorage.removeItem('masterToken')
-      sessionStorage.removeItem('adminToken')
-      sessionStorage.removeItem('token')
+      localStorage.removeItem('auth')
+      localStorage.removeItem('masterToken')
+      localStorage.removeItem('adminToken')
+      localStorage.removeItem('token')
       window.location.assign('/login')
       return Promise.reject(error)
     }
