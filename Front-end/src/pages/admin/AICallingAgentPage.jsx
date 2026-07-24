@@ -8,7 +8,7 @@ import {
   Mic, MessageSquare, RefreshCw, ChevronDown, ChevronUp, Timer,
   AlertCircle, User, Calendar, TrendingUp, Play, Plus, Trash2, Copy,
   ArrowUpRight, ArrowDownLeft, Upload, Search, Filter, Users, Settings, 
-  CheckCircle, Eye, Brain, X
+  CheckCircle, Eye, Brain, X, ExternalLink
 } from 'lucide-react'
 import Card from '../../components/Card'
 import Button from '../../components/Button'
