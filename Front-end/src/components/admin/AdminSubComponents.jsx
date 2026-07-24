@@ -290,6 +290,7 @@ export function CandidateTable({
                     </td>
                     <td className="px-4 py-3.5 text-sm font-semibold text-slate-700">
                       <div className="flex items-center gap-1.5">
+                        {c.candidate_id && <span className="text-[0.65rem] bg-slate-100 text-slate-500 px-1.5 py-0.5 rounded font-bold mr-1">{c.candidate_id}</span>}
                         {c.candidate_name}
                         {c.recording_url && <Video size={14} className="text-primary" />}
                         {c.decision === 'selected' && (

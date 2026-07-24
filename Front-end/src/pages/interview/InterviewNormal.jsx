@@ -498,19 +498,11 @@ export const InterviewNormal = () => {
 
 
               <button 
-                className={`w-full py-3 px-4 rounded-xl font-bold text-xs transition-all border-none shadow-md flex items-center justify-center gap-2 ${
-                  !canSubmit
-                    ? 'bg-slate-800/40 text-slate-500 cursor-not-allowed border border-white/5 opacity-50'
-                    : 'bg-slate-800 hover:bg-slate-700 text-white cursor-pointer hover:-translate-y-0.5'
-                }`} 
-                onClick={(e) => {
-                  if (!canSubmit) return
-                  handleFinishEarly(e)
-                }}
-                disabled={!canSubmit}
-                title={!canSubmit ? "Interview cannot be submitted yet" : "Finish Interview"}
+                className="w-full py-3 px-4 rounded-xl font-bold text-xs transition-all border-none shadow-md flex items-center justify-center gap-2 bg-slate-800 hover:bg-slate-700 text-white cursor-pointer hover:-translate-y-0.5"
+                onClick={(e) => handleFinishEarly(e)}
+                title="Finish Interview"
               >
-                {!canSubmit ? '🔒 Finish Interview (Locked)' : '⏹ Finish Interview'}
+                ⏹ Finish Interview
               </button>
             </div>
 
@@ -694,19 +686,11 @@ export const InterviewNormal = () => {
                 <div className="flex gap-3 justify-center items-center mt-2 shrink-0">
                   {currentQuestionIndex === questions.length - 1 ? (
                     <button 
-                      className={`px-8 py-3.5 rounded-xl font-bold text-sm text-white transition-all duration-200 border-none ${
-                        !canSubmit
-                          ? 'bg-red-950/40 text-red-400/50 cursor-not-allowed opacity-50' 
-                          : 'bg-red-500 hover:bg-red-600 shadow-lg shadow-red-500/20 hover:shadow-red-500/30 cursor-pointer'
-                      }`}
-                      onClick={(e) => {
-                        if (!canSubmit) return
-                        handleFinishEarly(e)
-                      }}
-                      disabled={!canSubmit}
-                      title={!canSubmit ? "Interview cannot be submitted yet" : "Submit Interview"}
+                      className="px-8 py-3.5 rounded-xl font-bold text-sm text-white transition-all duration-200 border-none bg-red-500 hover:bg-red-600 shadow-lg shadow-red-500/20 hover:shadow-red-500/30 cursor-pointer"
+                      onClick={(e) => handleFinishEarly(e)}
+                      title="Finish Interview"
                     >
-                      {!canSubmit ? '🔒 Submit Interview (Locked)' : 'Submit Interview'}
+                      Finish Interview
                     </button>
                   ) : (
                     <button 

@@ -34,7 +34,7 @@ export default function Sidebar({
     { id: 'rejected', label: 'Rejected Candidates', icon: XCircle, path: '/admin/rejected-candidates' },
     { id: 'create', label: 'Create Interview', icon: Plus, path: '/admin/create-interview' },
     { id: 'ai-calling', label: 'AI Calling Agent', icon: Radio, path: '/admin/ai-calling' },
-    { id: 'conversational-flow', label: 'Conversational Flow', icon: MessageSquare, path: '/admin/conversational-flow' },
+
     { id: 'jobs', label: 'Jobs', icon: Briefcase, path: '/admin/jobs' },
     { id: 'settings', label: 'Profile Settings', icon: Settings, path: '/admin/profile-settings' },
   ]

@@ -32,11 +32,12 @@ export default function SuperAdminSidebar({
     { id: 'super-dashboard', label: 'Super Admin Dashboard', icon: BarChart2 },
     { id: 'team', label: 'Team Management', icon: Users },
     { id: 'dashboard', label: 'Overview Dashboard', icon: LayoutDashboard },
+    { id: 'interviews', label: 'Interviews', icon: Users, path: '/superadmin/interviews' },
     { id: 'qualified', label: 'Qualified Candidates', icon: CheckCircle },
     { id: 'rejected', label: 'Rejected Candidates', icon: XCircle },
     { id: 'create', label: 'Create Interview', icon: Plus, path: '/superadmin/create-interview' },
     { id: 'ai-calling', label: 'AI Calling Agent', icon: Radio, path: '/superadmin/ai-calling' },
-    { id: 'conversational-flow', label: 'Conversational Flow', icon: MessageSquare, path: '/superadmin/conversational-flow' },
+
     { id: 'jobs', label: 'Jobs', icon: Briefcase, path: '/superadmin/jobs' },
     { id: 'settings', label: 'Profile Settings', icon: Settings },
   ]

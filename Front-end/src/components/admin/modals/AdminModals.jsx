@@ -1273,7 +1273,7 @@ export function RequestCreditsModal({
           <label className="block text-sm font-bold text-slate-700 mb-2">Number of Credits</label>
           <input
             type="number"
-            min="10"
+            min="5"
             className="w-full px-4 py-2 border border-slate-200 rounded-lg text-slate-800 focus:outline-none focus:ring-2 focus:ring-[#6366f1] bg-slate-50"
             placeholder="e.g. 100"
             value={creditsToRequest}

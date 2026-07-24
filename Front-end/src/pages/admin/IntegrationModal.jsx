@@ -102,7 +102,7 @@ const CATEGORIES = [
   { id: 'Custom & Tools', count: 1 }
 ]
 
-export default function IntegrationModal({ isOpen, onClose, onRefresh, omniApiKey = '' }) {
+export default function IntegrationModal({ isOpen, onClose, onRefresh }) {
   const [selectedConfig, setSelectedConfig] = useState(null)
   const [activeCategory, setActiveCategory] = useState('All')
   const [searchQuery, setSearchQuery] = useState('')
@@ -146,7 +146,7 @@ export default function IntegrationModal({ isOpen, onClose, onRefresh, omniApiKe
         headers: {
           'Content-Type': 'application/json',
           Authorization: `Bearer ${token}`,
-          ...(omniApiKey ? { 'X-Omni-Dimension-API-Key': omniApiKey } : {}),
+
         },
         body: JSON.stringify({ name: calendlyForm.name || 'Calendly', cal_api_key: calendlyForm.token, cal_id: calendlyForm.eventTypeId, cal_timezone: calendlyForm.timezone })
       })
@@ -193,7 +193,7 @@ export default function IntegrationModal({ isOpen, onClose, onRefresh, omniApiKe
         headers: {
           'Content-Type': 'application/json',
           Authorization: `Bearer ${token}`,
-          ...(omniApiKey ? { 'X-Omni-Dimension-API-Key': omniApiKey } : {}),
+
         },
         body: JSON.stringify({
           name: webhookForm.name,
@@ -225,7 +225,7 @@ export default function IntegrationModal({ isOpen, onClose, onRefresh, omniApiKe
       const token = localStorage.getItem('token')
       const response = await fetch(`${API_BASE_URL}/api/calls/integrations/calendly`, {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}`, ...(omniApiKey ? { 'X-Omni-Dimension-API-Key': omniApiKey } : {}) },
+        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
         body: JSON.stringify({ name: calComForm.name, cal_api_key: calComForm.apiKey, cal_id: calComForm.eventTypeId, cal_timezone: calComForm.timezone }),
       })
       const data = await response.json()
@@ -244,7 +244,7 @@ export default function IntegrationModal({ isOpen, onClose, onRefresh, omniApiKe
       const token = localStorage.getItem('token')
       const response = await fetch(`${API_BASE_URL}/api/calls/integrations/from-json`, {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}`, ...(omniApiKey ? { 'X-Omni-Dimension-API-Key': omniApiKey } : {}) },
+        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
         body: JSON.stringify({ integration }),
       })
       const data = await response.json()

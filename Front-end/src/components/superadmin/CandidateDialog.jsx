@@ -321,7 +321,7 @@ export default function CandidateDialog({ candidate, open, onOpenChange, onStatu
     if (!c.answers || c.answers.length === 0) return;
 
     const doc = new jsPDF();
-    
+
     const margin = 15;
     const pageHeight = doc.internal.pageSize.height;
     const pageWidth = doc.internal.pageSize.width;
@@ -349,7 +349,7 @@ export default function CandidateDialog({ candidate, open, onOpenChange, onStatu
     }
     doc.text(`Total Score: ${c.score || c.avg_score || 0}/100`, margin, y);
     y += 10;
-    
+
     doc.setDrawColor(200);
     doc.line(margin, y, pageWidth - margin, y);
     y += 10;
@@ -372,7 +372,7 @@ export default function CandidateDialog({ candidate, open, onOpenChange, onStatu
       doc.setFont("courier", "normal");
       const aText = a.answer_text || c.coding_round?.latest_code || 'No answer provided';
       const aLines = doc.splitTextToSize(aText, pageWidth - 2 * margin);
-      
+
       for (let i = 0; i < aLines.length; i++) {
         checkPageBreak(5);
         doc.text(aLines[i], margin, y);
@@ -400,46 +400,13 @@ export default function CandidateDialog({ candidate, open, onOpenChange, onStatu
           y += 5;
         }
       }
-      
+
       y += 5;
       checkPageBreak(5);
       doc.setDrawColor(200);
       doc.line(margin, y, pageWidth - margin, y);
       y += 10;
     });
-
-    // ── EVALUATION RESULTS ──
-    checkPageBreak(30);
-    doc.setFontSize(14);
-    doc.setFont("helvetica", "bold");
-    doc.text("Evaluation Results", margin, y);
-    y += 8;
-    
-    doc.setFontSize(11);
-    
-    checkPageBreak(10);
-    doc.setFont("helvetica", "bold");
-    doc.text("Overall AI Score: ", margin, y);
-    doc.setFont("helvetica", "normal");
-    doc.text(`${aiScore.toFixed(0)}%`, margin + doc.getTextWidth("Overall AI Score: ") + 2, y);
-    y += 8;
-
-    scoreItems.forEach(([label, score]) => {
-      checkPageBreak(10);
-      doc.setFont("helvetica", "bold");
-      doc.text(`${label}: `, margin, y);
-      doc.setFont("helvetica", "normal");
-      doc.text(`${Number(score).toFixed(0)}%`, margin + doc.getTextWidth(`${label}: `) + 2, y);
-      y += 8;
-    });
-
-    const detectedLanguageAccent = c.detected_accent || c.detected_language || "Not detected";
-    checkPageBreak(10);
-    doc.setFont("helvetica", "bold");
-    doc.text("Detected Language / Accent: ", margin, y);
-    doc.setFont("helvetica", "normal");
-    doc.text(detectedLanguageAccent, margin + doc.getTextWidth("Detected Language / Accent: ") + 2, y);
-    y += 8;
 
     doc.save(`${c.candidate_name?.replace(/\s+/g, '_') || 'Candidate'}_transcript.pdf`);
   };
@@ -838,23 +805,23 @@ export default function CandidateDialog({ candidate, open, onOpenChange, onStatu
                         <h3 className="text-sm font-black text-slate-800">Interview Q&A</h3>
                         <p className="text-xs text-slate-400 font-medium mt-0.5">{c.answers.length} questions answered</p>
                       </div>
-                    <div className="flex items-center gap-2">
-                      <button
-                        onClick={handleDownloadTranscript}
-                        className="flex items-center gap-2 px-4 py-2 text-sm font-bold text-slate-600 bg-slate-50 border border-slate-200 rounded-xl hover:bg-slate-100 transition-colors shadow-sm"
-                        title="Download Transcript"
-                      >
-                        <Download size={16} /> Download
-                      </button>
-                      <button
-                        onClick={() => setShowTranscriptModal(true)}
-                        className="flex items-center gap-2 px-4 py-2 text-sm font-bold text-violet-600 bg-violet-50 border border-violet-100 rounded-xl hover:bg-violet-100 transition-colors shadow-sm"
-                      >
-                        <MessageSquare size={16} /> Transcript <ChevronRight size={14} />
-                      </button>
+                      <div className="flex items-center gap-2">
+                        <button
+                          onClick={handleDownloadTranscript}
+                          className="flex items-center gap-2 px-4 py-2 text-sm font-bold text-slate-600 bg-slate-50 border border-slate-200 rounded-xl hover:bg-slate-100 transition-colors shadow-sm"
+                          title="Download Transcript"
+                        >
+                          <Download size={16} /> Download
+                        </button>
+                        <button
+                          onClick={() => setShowTranscriptModal(true)}
+                          className="flex items-center gap-2 px-4 py-2 text-sm font-bold text-violet-600 bg-violet-50 border border-violet-100 rounded-xl hover:bg-violet-100 transition-colors shadow-sm"
+                        >
+                          <MessageSquare size={16} /> Transcript <ChevronRight size={14} />
+                        </button>
+                      </div>
                     </div>
-                  </div>
-                </section>
+                  </section>
                 )}
               </div>
             )}
@@ -1081,22 +1048,38 @@ export default function CandidateDialog({ candidate, open, onOpenChange, onStatu
       )}
 
 
-    {/* ── Transcript Sub-Modal ── */}
-    {showTranscriptModal && (
-      <div className="fixed inset-0 z-[300] flex items-center justify-center bg-slate-900/70 backdrop-blur-sm p-4" onClick={() => setShowTranscriptModal(false)}>
-        <div className="bg-white rounded-2xl shadow-2xl w-full max-w-3xl max-h-[90vh] flex flex-col overflow-hidden" onClick={e => e.stopPropagation()}>
-          <div className="flex items-center justify-between px-6 py-4 shrink-0">
-            <div className="flex items-center gap-2">
-              <div className="p-2 bg-violet-50 text-violet-600 rounded-lg"><MessageSquare size={18} /></div>
-              <div>
-                <h3 className="text-sm font-black text-slate-800">Interview Q&A — Transcript</h3>
-                <p className="text-xs text-slate-400 font-medium">{c.answers?.length} questions · {name}</p>
+      {/* ── Transcript Sub-Modal ── */}
+      {showTranscriptModal && (
+        <div className="fixed inset-0 z-[300] flex items-center justify-center bg-slate-900/70 backdrop-blur-sm p-4" onClick={() => setShowTranscriptModal(false)}>
+          <div className="bg-white rounded-2xl shadow-2xl w-full max-w-3xl max-h-[90vh] flex flex-col overflow-hidden" onClick={e => e.stopPropagation()}>
+            <div className="flex items-center justify-between px-6 py-4 shrink-0">
+              <div className="flex items-center gap-2">
+                <div className="p-2 bg-violet-50 text-violet-600 rounded-lg"><MessageSquare size={18} /></div>
+                <div>
+                  <h3 className="text-sm font-black text-slate-800">Interview Q&A — Transcript</h3>
+                  <p className="text-xs text-slate-400 font-medium">{c.answers?.length} questions · {name}</p>
+                </div>
+              </div>
+              <div className="flex items-center gap-4">
+                {(() => {
+                  const verbalAnsForScore = (c.answers || []).filter(a => !a.question_text?.toLowerCase().includes('coding round') && !a.question_text?.toLowerCase().includes('case study'));
+                  const validVerbalAnsForScore = verbalAnsForScore.filter(a => a.ai_score !== null && a.ai_score !== undefined);
+                  if (validVerbalAnsForScore.length === 0) return null;
+                  const verbalAiScore = validVerbalAnsForScore.reduce((sum, a) => sum + Number(a.ai_score), 0) / validVerbalAnsForScore.length;
+                  return (
+                    <div className="flex flex-col items-end justify-center mr-2">
+                      <div className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">AI Score</div>
+                      <div className={`text-2xl font-black tabular-nums tracking-tighter mt-0.5 ${verbalAiScore >= 75 ? 'text-emerald-600' : verbalAiScore >= 50 ? 'text-amber-500' : 'text-rose-500'}`}>
+                        {verbalAiScore.toFixed(0)}%
+                      </div>
+                    </div>
+                  );
+                })()}
+                <button onClick={() => setShowTranscriptModal(false)} className="p-2 rounded-full hover:bg-slate-100 text-slate-400 hover:text-slate-700 transition-colors">
+                  <X size={18} />
+                </button>
               </div>
             </div>
-            <button onClick={() => setShowTranscriptModal(false)} className="p-2 rounded-full hover:bg-slate-100 text-slate-400 hover:text-slate-700 transition-colors">
-              <X size={18} />
-            </button>
-          </div>
           
           <div className="px-6 py-2 border-b border-slate-100 bg-slate-50 flex items-center gap-2 shrink-0">
             <button
@@ -1113,214 +1096,229 @@ export default function CandidateDialog({ candidate, open, onOpenChange, onStatu
             </button>
           </div>
 
-          <div className="flex-1 overflow-y-auto p-6">
-            <div className="space-y-5">
-              {(c.answers || []).filter(a => transcriptTab === 'coding' ? a.question_text?.toLowerCase().includes('coding round') || a.question_text?.toLowerCase().includes('case study') : !a.question_text?.toLowerCase().includes('coding round') && !a.question_text?.toLowerCase().includes('case study')).map((a, idx) => {
-                const score = Number(a.ai_score ?? 0)
-                const scoreBg = score >= 75 ? 'bg-emerald-100 text-emerald-700' : score >= 50 ? 'bg-amber-100 text-amber-700' : 'bg-rose-100 text-rose-700'
-                const wpm = Number(a.wpm ?? 0)
-                const tabSwitches = Number(a.tab_switches ?? 0)
-                const faceAlerts = Number(a.face_alerts ?? 0)
-                const noiseAlerts = Number(a.noise_alerts ?? 0)
-                const hasAlerts = tabSwitches > 0 || faceAlerts > 0 || noiseAlerts > 0
-                return (
-                  <div key={idx} className="rounded-2xl border border-slate-200 bg-white shadow-sm overflow-hidden">
-                    {/* Question Header */}
-                    <div className="flex items-start justify-between gap-3 p-4 bg-slate-50 border-b border-slate-100">
-                      <div className="flex items-start gap-2 flex-1 min-w-0">
-                        <span className="mt-0.5 shrink-0 inline-flex items-center justify-center w-6 h-6 rounded-full bg-indigo-600 text-white text-[10px] font-black">Q{idx + 1}</span>
-                        <p className="text-sm font-bold text-slate-800 leading-snug whitespace-pre-wrap">
-                          {a.question_text?.toLowerCase().includes('coding round') 
-                            ? (a.question_text || '').replace(/(Input:)/gi, '\n\n$1').replace(/(Output:)/gi, '\n$1').replace(/(Constraints:)/gi, '\n\n$1').replace(/(Example:)/gi, '\n\n$1').trim()
-                            : (a.question_text || 'No question recorded')}
-                        </p>
-                      </div>
-                      {a.ai_score !== null && a.ai_score !== undefined && (
-                        <span className={`shrink-0 text-xs font-black px-2.5 py-1 rounded-full ${scoreBg}`}>
-                          AI Score: {score.toFixed(0)}%
-                        </span>
-                      )}
-                    </div>
+            <div className="px-6 py-2 border-b border-slate-100 bg-slate-50 flex items-center gap-2 shrink-0">
+              <button
+                onClick={() => setTranscriptTab('verbal')}
+                className={`px-4 py-2 rounded-lg text-sm font-bold transition-all ${transcriptTab === 'verbal' ? 'bg-indigo-600 text-white shadow-sm' : 'bg-transparent text-slate-500 hover:bg-slate-200'}`}
+              >
+                Verbal
+              </button>
+              <button
+                onClick={() => setTranscriptTab('coding')}
+                className={`px-4 py-2 rounded-lg text-sm font-bold transition-all ${transcriptTab === 'coding' ? 'bg-indigo-600 text-white shadow-sm' : 'bg-transparent text-slate-500 hover:bg-slate-200'}`}
+              >
+                Coding or Case Study
+              </button>
+            </div>
 
-                    <div className="p-4 space-y-4">
-                      {/* Stats row: WPM + alerts */}
-                      <div className="flex flex-wrap gap-2">
-                        {Number(a.time_spent_seconds || 0) > 0 && (
-                          <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-[11px] font-bold bg-slate-100 text-slate-700 border border-slate-200">
-                            <Clock size={11} /> {Math.floor(Number(a.time_spent_seconds) / 60) > 0 ? `${Math.floor(Number(a.time_spent_seconds) / 60)}m ${Number(a.time_spent_seconds) % 60}s` : `${Number(a.time_spent_seconds)}s`}
+            <div className="flex-1 overflow-y-auto p-6">
+              <div className="space-y-5">
+                {(c.answers || []).filter(a => transcriptTab === 'coding' ? a.question_text?.toLowerCase().includes('coding round') || a.question_text?.toLowerCase().includes('case study') : !a.question_text?.toLowerCase().includes('coding round') && !a.question_text?.toLowerCase().includes('case study')).map((a, idx) => {
+                  const score = Number(a.ai_score ?? 0)
+                  const scoreBg = score >= 75 ? 'bg-emerald-100 text-emerald-700' : score >= 50 ? 'bg-amber-100 text-amber-700' : 'bg-rose-100 text-rose-700'
+                  const wpm = Number(a.wpm ?? 0)
+                  const tabSwitches = Number(a.tab_switches ?? 0)
+                  const faceAlerts = Number(a.face_alerts ?? 0)
+                  const noiseAlerts = Number(a.noise_alerts ?? 0)
+                  const hasAlerts = tabSwitches > 0 || faceAlerts > 0 || noiseAlerts > 0
+                  return (
+                    <div key={idx} className="rounded-2xl border border-slate-200 bg-white shadow-sm overflow-hidden">
+                      {/* Question Header */}
+                      <div className="flex items-start justify-between gap-3 p-4 bg-slate-50 border-b border-slate-100">
+                        <div className="flex items-start gap-2 flex-1 min-w-0">
+                          <span className="mt-0.5 shrink-0 inline-flex items-center justify-center w-6 h-6 rounded-full bg-indigo-600 text-white text-[10px] font-black">Q{idx + 1}</span>
+                          <p className="text-sm font-bold text-slate-800 leading-snug whitespace-pre-wrap">
+                            {a.question_text?.toLowerCase().includes('coding round')
+                              ? (a.question_text || '').replace(/(Input:)/gi, '\n\n$1').replace(/(Output:)/gi, '\n$1').replace(/(Constraints:)/gi, '\n\n$1').replace(/(Example:)/gi, '\n\n$1').trim()
+                              : (a.question_text || 'No question recorded')}
+                          </p>
+                        </div>
+                        {a.ai_score !== null && a.ai_score !== undefined && (
+                          <span className={`shrink-0 text-xs font-black px-2.5 py-1 rounded-full ${scoreBg}`}>
+                            AI Score: {score.toFixed(0)}%
                           </span>
-                        )}
-                        {wpm > 0 && (
-                          <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-[11px] font-bold bg-blue-50 text-blue-700 border border-blue-100">
-                            <Mic size={11} /> {wpm.toFixed(0)} WPM
-                          </span>
-                        )}
-                        {tabSwitches > 0 && (
-                          <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-[11px] font-bold bg-amber-50 text-amber-700 border border-amber-100">
-                            <Monitor size={11} /> {tabSwitches} Tab Switch{tabSwitches > 1 ? 'es' : ''}
-                          </span>
-                        )}
-                        {faceAlerts > 0 && (
-                          <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-[11px] font-bold bg-rose-50 text-rose-700 border border-rose-100">
-                            <ShieldAlert size={11} /> {faceAlerts} Face Alert{faceAlerts > 1 ? 's' : ''}
-                          </span>
-                        )}
-                        {noiseAlerts > 0 && (
-                          <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-[11px] font-bold bg-orange-50 text-orange-700 border border-orange-100">
-                            <AlertCircle size={11} /> {noiseAlerts} Noise Alert{noiseAlerts > 1 ? 's' : ''}
-                          </span>
-                        )}
-                        {!wpm && !hasAlerts && (
-                          <span className="text-[11px] text-slate-400 font-medium">No integrity data recorded</span>
                         )}
                       </div>
 
-                      {a.question_text?.toLowerCase().includes('coding round') ? (
-                        <>
-                          <div className="bg-slate-900 rounded-xl overflow-hidden shadow-inner border border-slate-700 mt-2">
-                            <div className="bg-slate-800 px-4 py-2 border-b border-slate-700 flex items-center justify-between">
-                              <span className="text-xs font-black text-slate-300 tracking-wider flex items-center gap-2">
-                                <Code size={14} /> CANDIDATE CODE
-                              </span>
-                              {c.coding_round?.latest_run && (
-                                <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full ${(((c.coding_round.latest_run.visible_results || []).filter(r => r.passed).length) + (c.coding_round.latest_run.hidden_summary?.passed || 0)) === (((c.coding_round.latest_run.visible_results || []).length) + (c.coding_round.latest_run.hidden_summary?.total || 0)) && (((c.coding_round.latest_run.visible_results || []).length) + (c.coding_round.latest_run.hidden_summary?.total || 0)) > 0 ? 'bg-emerald-500/20 text-emerald-400' : 'bg-rose-500/20 text-rose-400'}`}>
-                                  Test Cases Passed: {(((c.coding_round.latest_run.visible_results || []).filter(r => r.passed).length) + (c.coding_round.latest_run.hidden_summary?.passed || 0))} / {(((c.coding_round.latest_run.visible_results || []).length) + (c.coding_round.latest_run.hidden_summary?.total || 0))}
+                      <div className="p-4 space-y-4">
+                        {/* Stats row: WPM + alerts */}
+                        <div className="flex flex-wrap gap-2">
+                          {Number(a.time_spent_seconds || 0) > 0 && (
+                            <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-[11px] font-bold bg-slate-100 text-slate-700 border border-slate-200">
+                              <Clock size={11} /> {Math.floor(Number(a.time_spent_seconds) / 60) > 0 ? `${Math.floor(Number(a.time_spent_seconds) / 60)}m ${Number(a.time_spent_seconds) % 60}s` : `${Number(a.time_spent_seconds)}s`}
+                            </span>
+                          )}
+                          {wpm > 0 && (
+                            <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-[11px] font-bold bg-blue-50 text-blue-700 border border-blue-100">
+                              <Mic size={11} /> {wpm.toFixed(0)} WPM
+                            </span>
+                          )}
+                          {tabSwitches > 0 && (
+                            <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-[11px] font-bold bg-amber-50 text-amber-700 border border-amber-100">
+                              <Monitor size={11} /> {tabSwitches} Tab Switch{tabSwitches > 1 ? 'es' : ''}
+                            </span>
+                          )}
+                          {faceAlerts > 0 && (
+                            <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-[11px] font-bold bg-rose-50 text-rose-700 border border-rose-100">
+                              <ShieldAlert size={11} /> {faceAlerts} Face Alert{faceAlerts > 1 ? 's' : ''}
+                            </span>
+                          )}
+                          {noiseAlerts > 0 && (
+                            <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-[11px] font-bold bg-orange-50 text-orange-700 border border-orange-100">
+                              <AlertCircle size={11} /> {noiseAlerts} Noise Alert{noiseAlerts > 1 ? 's' : ''}
+                            </span>
+                          )}
+                          {!wpm && !hasAlerts && (
+                            <span className="text-[11px] text-slate-400 font-medium">No integrity data recorded</span>
+                          )}
+                        </div>
+
+                        {a.question_text?.toLowerCase().includes('coding round') ? (
+                          <>
+                            <div className="bg-slate-900 rounded-xl overflow-hidden shadow-inner border border-slate-700 mt-2">
+                              <div className="bg-slate-800 px-4 py-2 border-b border-slate-700 flex items-center justify-between">
+                                <span className="text-xs font-black text-slate-300 tracking-wider flex items-center gap-2">
+                                  <Code size={14} /> CANDIDATE CODE
                                 </span>
-                              )}
-                            </div>
-                            <div className="p-4 overflow-x-auto">
-                              <pre className="text-sm font-mono text-emerald-400 leading-relaxed whitespace-pre-wrap">
-                                {a.answer_text || c.coding_round?.latest_code || 'No code provided.'}
-                              </pre>
-                            </div>
-
-                            {/* Failed Test Cases / Errors / Default Test Cases */}
-                            {c.coding_round?.latest_run ? (
-                              <div className="bg-slate-900 border-t border-slate-700 p-4">
-                                {c.coding_round.latest_run.runtime_error ? (
-                                  <div className="text-rose-400 text-xs font-mono whitespace-pre-wrap bg-slate-950 p-3 rounded-lg border border-rose-900/50">
-                                    <strong className="text-rose-500 block mb-1">Runtime Error:</strong>
-                                    {c.coding_round.latest_run.runtime_error}
-                                  </div>
-                                ) : (
-                                  <div className="space-y-2">
-                                    {(c.coding_round.latest_run.visible_results || []).filter(r => !r.passed).map((r, i) => (
-                                      <div key={i} className="text-xs font-mono text-slate-300 bg-slate-950 p-3 rounded-lg border border-slate-800">
-                                        <div className="text-rose-400 font-bold mb-2 flex items-center gap-1.5"><X size={12} /> Test Case Failed</div>
-                                        <div className="grid grid-cols-[80px,1fr] gap-1 mb-1">
-                                          <span className="text-slate-500">Input:</span> 
-                                          <span className="text-slate-300">{r.input}</span>
-                                        </div>
-                                        <div className="grid grid-cols-[80px,1fr] gap-1 mb-1">
-                                          <span className="text-slate-500">Expected:</span> 
-                                          <span className="text-emerald-400">{r.expected}</span>
-                                        </div>
-                                        <div className="grid grid-cols-[80px,1fr] gap-1">
-                                          <span className="text-slate-500">Output:</span> 
-                                          <span className="text-amber-400">{r.output}</span>
-                                        </div>
-                                      </div>
-                                    ))}
-                                    {(c.coding_round.latest_run.visible_results || []).filter(r => !r.passed).length === 0 && ((c.coding_round.latest_run.hidden_summary?.total || 0) > (c.coding_round.latest_run.hidden_summary?.passed || 0)) && (
-                                      <div className="text-xs font-mono text-amber-400 bg-slate-950 p-3 rounded-lg border border-amber-900/30">
-                                        Some hidden test cases failed.
-                                      </div>
-                                    )}
-                                    {(((c.coding_round.latest_run.visible_results || []).filter(r => r.passed).length) + (c.coding_round.latest_run.hidden_summary?.passed || 0)) === (((c.coding_round.latest_run.visible_results || []).length) + (c.coding_round.latest_run.hidden_summary?.total || 0)) && (((c.coding_round.latest_run.visible_results || []).length) + (c.coding_round.latest_run.hidden_summary?.total || 0)) > 0 && (
-                                      <div className="text-xs font-mono text-emerald-400 bg-slate-950 p-3 rounded-lg border border-emerald-900/30 flex items-center gap-2">
-                                        <Check size={14} /> All test cases passed successfully!
-                                      </div>
-                                    )}
-                                  </div>
+                                {c.coding_round?.latest_run && (
+                                  <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full ${(((c.coding_round.latest_run.visible_results || []).filter(r => r.passed).length) + (c.coding_round.latest_run.hidden_summary?.passed || 0)) === (((c.coding_round.latest_run.visible_results || []).length) + (c.coding_round.latest_run.hidden_summary?.total || 0)) && (((c.coding_round.latest_run.visible_results || []).length) + (c.coding_round.latest_run.hidden_summary?.total || 0)) > 0 ? 'bg-emerald-500/20 text-emerald-400' : 'bg-rose-500/20 text-rose-400'}`}>
+                                    Test Cases Passed: {(((c.coding_round.latest_run.visible_results || []).filter(r => r.passed).length) + (c.coding_round.latest_run.hidden_summary?.passed || 0))} / {(((c.coding_round.latest_run.visible_results || []).length) + (c.coding_round.latest_run.hidden_summary?.total || 0))}
+                                  </span>
                                 )}
                               </div>
-                            ) : c.coding_round?.task?.test_cases ? (
-                              <div className="bg-slate-900 border-t border-slate-700 p-4 space-y-2">
-                                <div className="text-xs font-black text-slate-400 uppercase tracking-wider mb-2">Visible Test Cases</div>
-                                {c.coding_round.task.test_cases.filter(t => t.visible !== false).map((t, i) => (
-                                  <div key={i} className="text-xs font-mono text-slate-300 bg-slate-950 p-3 rounded-lg border border-slate-800">
-                                    <div className="grid grid-cols-[80px,1fr] gap-1 mb-1">
-                                      <span className="text-slate-500">Input:</span> 
-                                      <span className="text-slate-300">{typeof t.input === 'string' ? t.input : JSON.stringify(t.input)}</span>
+                              <div className="p-4 overflow-x-auto">
+                                <pre className="text-sm font-mono text-emerald-400 leading-relaxed whitespace-pre-wrap">
+                                  {a.answer_text || c.coding_round?.latest_code || 'No code provided.'}
+                                </pre>
+                              </div>
+
+                              {/* Failed Test Cases / Errors / Default Test Cases */}
+                              {c.coding_round?.latest_run ? (
+                                <div className="bg-slate-900 border-t border-slate-700 p-4">
+                                  {c.coding_round.latest_run.runtime_error ? (
+                                    <div className="text-rose-400 text-xs font-mono whitespace-pre-wrap bg-slate-950 p-3 rounded-lg border border-rose-900/50">
+                                      <strong className="text-rose-500 block mb-1">Runtime Error:</strong>
+                                      {c.coding_round.latest_run.runtime_error}
                                     </div>
-                                    <div className="grid grid-cols-[80px,1fr] gap-1">
-                                      <span className="text-slate-500">Expected:</span> 
-                                      <span className="text-emerald-400">{typeof t.expected === 'string' ? t.expected : JSON.stringify(t.expected)}</span>
+                                  ) : (
+                                    <div className="space-y-2">
+                                      {(c.coding_round.latest_run.visible_results || []).filter(r => !r.passed).map((r, i) => (
+                                        <div key={i} className="text-xs font-mono text-slate-300 bg-slate-950 p-3 rounded-lg border border-slate-800">
+                                          <div className="text-rose-400 font-bold mb-2 flex items-center gap-1.5"><X size={12} /> Test Case Failed</div>
+                                          <div className="grid grid-cols-[80px,1fr] gap-1 mb-1">
+                                            <span className="text-slate-500">Input:</span>
+                                            <span className="text-slate-300">{r.input}</span>
+                                          </div>
+                                          <div className="grid grid-cols-[80px,1fr] gap-1 mb-1">
+                                            <span className="text-slate-500">Expected:</span>
+                                            <span className="text-emerald-400">{r.expected}</span>
+                                          </div>
+                                          <div className="grid grid-cols-[80px,1fr] gap-1">
+                                            <span className="text-slate-500">Output:</span>
+                                            <span className="text-amber-400">{r.output}</span>
+                                          </div>
+                                        </div>
+                                      ))}
+                                      {(c.coding_round.latest_run.visible_results || []).filter(r => !r.passed).length === 0 && ((c.coding_round.latest_run.hidden_summary?.total || 0) > (c.coding_round.latest_run.hidden_summary?.passed || 0)) && (
+                                        <div className="text-xs font-mono text-amber-400 bg-slate-950 p-3 rounded-lg border border-amber-900/30">
+                                          Some hidden test cases failed.
+                                        </div>
+                                      )}
+                                      {(((c.coding_round.latest_run.visible_results || []).filter(r => r.passed).length) + (c.coding_round.latest_run.hidden_summary?.passed || 0)) === (((c.coding_round.latest_run.visible_results || []).length) + (c.coding_round.latest_run.hidden_summary?.total || 0)) && (((c.coding_round.latest_run.visible_results || []).length) + (c.coding_round.latest_run.hidden_summary?.total || 0)) > 0 && (
+                                        <div className="text-xs font-mono text-emerald-400 bg-slate-950 p-3 rounded-lg border border-emerald-900/30 flex items-center gap-2">
+                                          <Check size={14} /> All test cases passed successfully!
+                                        </div>
+                                      )}
                                     </div>
+                                  )}
+                                </div>
+                              ) : c.coding_round?.task?.test_cases ? (
+                                <div className="bg-slate-900 border-t border-slate-700 p-4 space-y-2">
+                                  <div className="text-xs font-black text-slate-400 uppercase tracking-wider mb-2">Visible Test Cases</div>
+                                  {c.coding_round.task.test_cases.filter(t => t.visible !== false).map((t, i) => (
+                                    <div key={i} className="text-xs font-mono text-slate-300 bg-slate-950 p-3 rounded-lg border border-slate-800">
+                                      <div className="grid grid-cols-[80px,1fr] gap-1 mb-1">
+                                        <span className="text-slate-500">Input:</span>
+                                        <span className="text-slate-300">{typeof t.input === 'string' ? t.input : JSON.stringify(t.input)}</span>
+                                      </div>
+                                      <div className="grid grid-cols-[80px,1fr] gap-1">
+                                        <span className="text-slate-500">Expected:</span>
+                                        <span className="text-emerald-400">{typeof t.expected === 'string' ? t.expected : JSON.stringify(t.expected)}</span>
+                                      </div>
+                                    </div>
+                                  ))}
+                                  <div className="text-[10px] font-medium text-slate-500 italic mt-3">
+                                    * Candidate did not run these tests during the interview. No execution output is available.
                                   </div>
-                                ))}
-                                <div className="text-[10px] font-medium text-slate-500 italic mt-3">
-                                  * Candidate did not run these tests during the interview. No execution output is available.
+                                </div>
+                              ) : null}
+                            </div>
+
+                            {/* AI Feedback */}
+                            {a.ai_feedback && (
+                              <div>
+                                <div className="text-[10px] font-black text-indigo-500 uppercase tracking-wider mb-1.5 flex items-center gap-1 mt-4">
+                                  <Sparkles size={10} /> AI Feedback
+                                </div>
+                                <div className="bg-indigo-50 border border-indigo-100 rounded-xl p-3 text-sm text-indigo-800 italic leading-relaxed whitespace-pre-wrap">
+                                  {a.ai_feedback}
                                 </div>
                               </div>
-                            ) : null}
-                          </div>
-                          
-                          {/* AI Feedback */}
-                          {a.ai_feedback && (
+                            )}
+                          </>
+                        ) : (
+                          <>
+                            {/* Candidate Answer */}
                             <div>
-                              <div className="text-[10px] font-black text-indigo-500 uppercase tracking-wider mb-1.5 flex items-center gap-1 mt-4">
-                                <Sparkles size={10} /> AI Feedback
+                              <div className="text-[10px] font-black text-slate-500 uppercase tracking-wider mb-1.5 flex items-center gap-1">
+                                <MessageSquare size={10} /> Candidate Answer
                               </div>
-                              <div className="bg-indigo-50 border border-indigo-100 rounded-xl p-3 text-sm text-indigo-800 italic leading-relaxed whitespace-pre-wrap">
-                                {a.ai_feedback}
+                              <div className="bg-slate-50 border border-slate-200 rounded-xl p-3 text-sm text-slate-700 leading-relaxed whitespace-pre-wrap">
+                                {a.answer_text || <span className="italic text-slate-400">No answer recorded</span>}
                               </div>
                             </div>
-                          )}
-                        </>
-                      ) : (
-                        <>
-                          {/* Candidate Answer */}
-                          <div>
-                            <div className="text-[10px] font-black text-slate-500 uppercase tracking-wider mb-1.5 flex items-center gap-1">
-                              <MessageSquare size={10} /> Candidate Answer
-                            </div>
-                            <div className="bg-slate-50 border border-slate-200 rounded-xl p-3 text-sm text-slate-700 leading-relaxed whitespace-pre-wrap">
-                              {a.answer_text || <span className="italic text-slate-400">No answer recorded</span>}
-                            </div>
-                          </div>
 
-                          {/* Corrected Answer */}
-                          {a.corrected_answer && a.corrected_answer !== 'N/A' && a.corrected_answer !== 'Scoring in progress...' && (
-                            <div>
-                              <div className="text-[10px] font-black text-emerald-600 uppercase tracking-wider mb-1.5 flex items-center gap-1">
-                                <Check size={10} /> Corrected / Model Answer
+                            {/* Corrected Answer */}
+                            {a.corrected_answer && a.corrected_answer !== 'N/A' && a.corrected_answer !== 'Scoring in progress...' && (
+                              <div>
+                                <div className="text-[10px] font-black text-emerald-600 uppercase tracking-wider mb-1.5 flex items-center gap-1">
+                                  <Check size={10} /> Corrected / Model Answer
+                                </div>
+                                <div className="bg-emerald-50 border border-emerald-100 rounded-xl p-3 text-sm text-emerald-800 leading-relaxed whitespace-pre-wrap">
+                                  {a.corrected_answer}
+                                </div>
                               </div>
-                              <div className="bg-emerald-50 border border-emerald-100 rounded-xl p-3 text-sm text-emerald-800 leading-relaxed whitespace-pre-wrap">
-                                {a.corrected_answer}
-                              </div>
-                            </div>
-                          )}
+                            )}
 
-                          {/* AI Feedback */}
-                          {a.ai_feedback && (
-                            <div>
-                              <div className="text-[10px] font-black text-indigo-500 uppercase tracking-wider mb-1.5 flex items-center gap-1">
-                                <Sparkles size={10} /> AI Feedback
+                            {/* AI Feedback */}
+                            {a.ai_feedback && (
+                              <div>
+                                <div className="text-[10px] font-black text-indigo-500 uppercase tracking-wider mb-1.5 flex items-center gap-1">
+                                  <Sparkles size={10} /> AI Feedback
+                                </div>
+                                <div className="bg-indigo-50 border border-indigo-100 rounded-xl p-3 text-sm text-indigo-800 italic leading-relaxed whitespace-pre-wrap">
+                                  {a.ai_feedback}
+                                </div>
                               </div>
-                              <div className="bg-indigo-50 border border-indigo-100 rounded-xl p-3 text-sm text-indigo-800 italic leading-relaxed whitespace-pre-wrap">
-                                {a.ai_feedback}
-                              </div>
-                            </div>
-                          )}
-                        </>
-                      )}
+                            )}
+                          </>
+                        )}
+                      </div>
                     </div>
+                  )
+                })}
+                {(!c.answers || c.answers.length === 0) && (
+                  <div className="text-center py-12 text-slate-400 text-sm font-medium">
+                    No transcript available for this candidate.
                   </div>
-                )
-              })}
-              {(!c.answers || c.answers.length === 0) && (
-                <div className="text-center py-12 text-slate-400 text-sm font-medium">
-                  No transcript available for this candidate.
-                </div>
-              )}
+                )}
+              </div>
             </div>
           </div>
         </div>
-      </div>
-    )}
+      )}
 
 
-  </>
+    </>
   )
 }

@@ -2198,6 +2198,8 @@ export const useInterviewSession = (sessionId, interviewType, startRoundTwo) => 
   }, [handleNextQuestion])
 
   const handleSubmitInterview = async (forceClose = false, terminationReason = null) => {
+    const isTimeout = forceClose === true || (typeof forceClose === 'boolean' && forceClose)
+
     if (isSubmittingRef.current) return  // Prevent double-submit
     isSubmittingRef.current = true
     setIsSaving(true)

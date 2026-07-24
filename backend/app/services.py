@@ -37,6 +37,7 @@ import cloudinary
 import cloudinary.uploader
 import cloudinary.api
 import edge_tts
+# pyrefly: ignore [missing-import]
 import pypdf
 from bson import ObjectId
 from docx import Document
@@ -2253,6 +2254,9 @@ def get_current_admin_details(credentials: HTTPAuthorizationCredentials = Depend
             raise HTTPException(status_code=401, detail="Account not found")
         if admin_doc.get("login_enabled") == False:
             raise HTTPException(status_code=403, detail="Account is deactivated")
+            
+        if not company_id:
+            company_id = str(admin_doc.get("company_id") or "")
             
         return {"admin_id": admin_id, "company_id": company_id, "role": role}
     except jwt.PyJWTError:
