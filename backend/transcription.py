@@ -4,20 +4,11 @@ import tempfile
 from functools import lru_cache
 from difflib import SequenceMatcher
 from fastapi import APIRouter, UploadFile, File, Form, HTTPException, Depends
-from groq import Groq
+from groq import Groq, RateLimitError
 from app.candidate_auth import require_active_candidate
+from app.groq_manager import groq_key_manager
 
 router = APIRouter()
-
-# Module-level cached Groq client — created once on first use.
-# Avoids the overhead of re-authenticating + setting up an HTTP session
-# inside every /transcribe request.
-@lru_cache(maxsize=1)
-def _get_groq_client() -> Groq:
-    api_key = os.environ.get("GROQ_API_KEY")
-    if not api_key:
-        raise RuntimeError("GROQ_API_KEY not found in environment.")
-    return Groq(api_key=api_key)
 
 def similarity(a, b):
     return SequenceMatcher(None, a.lower(), b.lower()).ratio()
@@ -63,13 +54,6 @@ async def transcribe_audio(
         path = f.name
 
     try:
-        # Use the cached Groq singleton instead of creating a new client per request.
-        groq_api_key = os.environ.get("GROQ_API_KEY")
-        if not groq_api_key:
-            raise HTTPException(status_code=503, detail="Voice transcription is temporarily unavailable.")
-
-        client = _get_groq_client()
-        
         # Map frontend language names to ISO-639-1 for Whisper
         lang_map = {
             "Hindi": "hi",
@@ -82,10 +66,6 @@ async def transcribe_audio(
         iso_lang = lang_map.get(language, "en")
         
         # Initial prompt strategy:
-        # - English: English sentence to prime accent and vocabulary.
-        # - Regional languages: A short native-script sentence.
-        #   CRITICAL: The prompt MUST be in the target script. An English prompt
-        #   forces Whisper to translate or hallucinate in English.
         native_prompts = {
             "te": "నమస్కారం. నేను ఒక ఇంటర్వ్యూ ఇస్తున్నాను.",
             "hi": "नमस्ते। मैं एक साक्षात्कार दे रहा हूँ।",
@@ -98,18 +78,42 @@ async def transcribe_audio(
         else:
             sys_prompt = native_prompts.get(iso_lang, "")
 
-        def call_transcription_api():
-            with open(path, "rb") as file:
-                return client.audio.transcriptions.create(
-                    file=(os.path.basename(path), file.read()),
-                    model="whisper-large-v3-turbo",
-                    language=iso_lang,
-                    prompt=sys_prompt,
-                    response_format="verbose_json",
-                    temperature=0.0
-                )
+        max_attempts = groq_key_manager.get_total_keys() or 1
+        transcription = None
+        last_error = None
+        
+        for _ in range(max_attempts):
+            api_key = groq_key_manager.get_next_key()
+            if not api_key:
+                raise HTTPException(status_code=503, detail="Voice transcription is temporarily unavailable.")
+                
+            client = Groq(api_key=api_key)
 
-        transcription = await asyncio.to_thread(call_transcription_api)
+            def call_transcription_api():
+                with open(path, "rb") as file:
+                    return client.audio.transcriptions.create(
+                        file=(os.path.basename(path), file.read()),
+                        model="whisper-large-v3-turbo",
+                        language=iso_lang,
+                        prompt=sys_prompt,
+                        response_format="verbose_json",
+                        temperature=0.0
+                    )
+            
+            try:
+                transcription = await asyncio.to_thread(call_transcription_api)
+                break # Success
+            except RateLimitError as e:
+                last_error = e
+                continue # Try next key
+            except Exception as e:
+                # Other errors like 400 Bad Request, etc.
+                raise
+                
+        if transcription is None:
+            if last_error:
+                raise last_error
+            raise HTTPException(status_code=503, detail="Transcription failed after exhausting all API keys.")
 
         valid_texts = []
         segments = getattr(transcription, 'segments', [])

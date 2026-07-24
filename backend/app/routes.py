@@ -9690,51 +9690,75 @@ async def stt_endpoint(
             temp_filename = temp_file.name
             
         try:
-            with open(temp_filename, "rb") as f:
-                iso_lang = language or "en"
-                if iso_lang not in {"en", "hi", "te", "ta", "ml", "kn"}:
-                    raise HTTPException(status_code=422, detail="Unsupported transcription language")
-                sys_prompt = "The speaker has an Indian English accent. Transcribe technical terms, programming concepts, and software engineering terminology accurately." if iso_lang == "en" else ""
+            iso_lang = language or "en"
+            if iso_lang not in {"en", "hi", "te", "ta", "ml", "kn"}:
+                raise HTTPException(status_code=422, detail="Unsupported transcription language")
+            sys_prompt = "The speaker has an Indian English accent. Transcribe technical terms, programming concepts, and software engineering terminology accurately." if iso_lang == "en" else ""
+            
+            from app.groq_manager import groq_key_manager
+            from groq import AsyncGroq, RateLimitError
+            
+            max_attempts = groq_key_manager.get_total_keys() or 1
+            transcript = None
+            last_error = None
+            
+            for _ in range(max_attempts):
+                api_key = groq_key_manager.get_next_key()
+                if not api_key:
+                    raise HTTPException(status_code=503, detail="Voice transcription is temporarily unavailable.")
                 
-                transcript = await groq_client.audio.transcriptions.create(
-                    model="whisper-large-v3-turbo",
-                    file=f,
-                    language=iso_lang,
-                    prompt=sys_prompt,
-                    response_format="verbose_json",
-                    temperature=0.0,
-                )
-                valid_segments = []
-                for segment in getattr(transcript, "segments", []) or []:
-                    no_speech = segment.get("no_speech_prob", 0) if isinstance(segment, dict) else getattr(segment, "no_speech_prob", 0)
-                    avg_logprob = segment.get("avg_logprob", 0) if isinstance(segment, dict) else getattr(segment, "avg_logprob", 0)
-                    compression = segment.get("compression_ratio", 0) if isinstance(segment, dict) else getattr(segment, "compression_ratio", 0)
-                    segment_text = segment.get("text", "") if isinstance(segment, dict) else getattr(segment, "text", "")
-                    if iso_lang == "en":
-                        if no_speech > 0.45 or avg_logprob < -1.0 or compression > 2.4:
-                            continue
-                    elif no_speech > 0.75 or compression > 2.4:
+                groq_client = AsyncGroq(api_key=api_key)
+                try:
+                    with open(temp_filename, "rb") as f:
+                        transcript = await groq_client.audio.transcriptions.create(
+                            model="whisper-large-v3-turbo",
+                            file=f,
+                            language=iso_lang,
+                            prompt=sys_prompt,
+                            response_format="verbose_json",
+                            temperature=0.0,
+                        )
+                    break
+                except RateLimitError as e:
+                    last_error = e
+                    continue
+                    
+            if transcript is None:
+                if last_error:
+                    raise last_error
+                raise HTTPException(status_code=503, detail="Transcription failed after exhausting all API keys.")
+                
+            valid_segments = []
+            for segment in getattr(transcript, "segments", []) or []:
+                no_speech = segment.get("no_speech_prob", 0) if isinstance(segment, dict) else getattr(segment, "no_speech_prob", 0)
+                avg_logprob = segment.get("avg_logprob", 0) if isinstance(segment, dict) else getattr(segment, "avg_logprob", 0)
+                compression = segment.get("compression_ratio", 0) if isinstance(segment, dict) else getattr(segment, "compression_ratio", 0)
+                segment_text = segment.get("text", "") if isinstance(segment, dict) else getattr(segment, "text", "")
+                if iso_lang == "en":
+                    if no_speech > 0.45 or avg_logprob < -1.0 or compression > 2.4:
                         continue
-                    valid_segments.append(segment_text.strip())
+                elif no_speech > 0.75 or compression > 2.4:
+                    continue
+                valid_segments.append(segment_text.strip())
 
-                raw_text = str(getattr(transcript, "text", "") or "").strip()
-                transcript_text = " ".join(value for value in valid_segments if value).strip()
-                if not getattr(transcript, "segments", None):
-                    transcript_text = raw_text
-                if transcript_text.lower() in {
-                    "thank you",
-                    "thank you.",
-                    "thanks",
-                    "thanks.",
-                    "okay",
-                    "okay.",
-                    "you",
-                    "bye",
-                    "bye.",
-                }:
-                    transcript_text = ""
-                dur = round(time.time() - t0, 3)
-                print(f"✅ [STT CONCURRENCY TRACE - REQ #{req_id}] HTTP 200 OK | Latency: {dur}s")
+            raw_text = str(getattr(transcript, "text", "") or "").strip()
+            transcript_text = " ".join(value for value in valid_segments if value).strip()
+            if not getattr(transcript, "segments", None):
+                transcript_text = raw_text
+            if transcript_text.lower() in {
+                "thank you",
+                "thank you.",
+                "thanks",
+                "thanks.",
+                "okay",
+                "okay.",
+                "you",
+                "bye",
+                "bye.",
+            }:
+                transcript_text = ""
+            dur = round(time.time() - t0, 3)
+            print(f"✅ [STT CONCURRENCY TRACE - REQ #{req_id}] HTTP 200 OK | Latency: {dur}s")
             return {"transcript": transcript_text}
         finally:
             if os.path.exists(temp_filename):
