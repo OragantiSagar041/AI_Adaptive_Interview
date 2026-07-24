@@ -143,41 +143,69 @@ export default function IntegrationModal({ isOpen, onClose, onRefresh }) {
   })
 
   return (
-    <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-slate-900/40 backdrop-blur-sm animate-in fade-in">
-      <div className={`bg-white border border-slate-200 rounded-3xl w-full ${selectedConfig ? 'max-w-xl' : 'max-w-6xl'} overflow-hidden shadow-2xl flex flex-col max-h-[90vh] transition-all duration-300`}>
-        
-        {/* Dynamic Header */}
-        <div className="flex items-center justify-between px-6 py-5 border-b border-slate-200 bg-slate-50/90 shrink-0">
+    <div 
+      className="fixed inset-0 z-[100] flex items-center justify-center p-4 sm:p-6 md:p-8 bg-slate-900/50 backdrop-blur-md animate-in fade-in"
+      onClick={(e) => {
+        if (e.target === e.currentTarget) handleClose()
+      }}
+    >
+      <div 
+        className={`bg-white border border-slate-200 rounded-3xl w-full ${
+          selectedConfig ? 'max-w-xl' : 'max-w-5xl'
+        } max-h-[85vh] shadow-2xl flex flex-col overflow-hidden relative transition-all duration-300`}
+      >
+        {/* Dynamic Header with Prominent Top-Right Close Button */}
+        <div className="flex items-center justify-between px-6 py-4.5 border-b border-slate-200 bg-slate-50/90 shrink-0 sticky top-0 z-20">
           <div className="flex items-center gap-3">
             {selectedConfig ? (
-              <button onClick={() => {setSelectedConfig(null); setError(''); setSuccess('')}} className="p-1.5 text-slate-500 hover:text-indigo-600 rounded-xl hover:bg-slate-100 transition-colors border border-slate-200">
-                <ChevronLeft size={20} />
+              <button 
+                type="button"
+                onClick={() => {setSelectedConfig(null); setError(''); setSuccess('')}} 
+                className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-bold text-slate-700 hover:text-indigo-600 rounded-xl hover:bg-slate-100 transition-colors border border-slate-200 bg-white shadow-sm cursor-pointer"
+              >
+                <ChevronLeft size={16} /> Back
               </button>
             ) : (
-              <div className="w-2" />
+              <div className="flex items-center gap-2.5">
+                <div className="p-2 rounded-xl bg-indigo-50 border border-indigo-100 text-indigo-600">
+                  <Plug size={18} />
+                </div>
+                <div>
+                  <h2 className="text-base font-extrabold text-slate-800 tracking-tight">
+                    Connect New Integrations
+                  </h2>
+                  <p className="text-[0.72rem] text-slate-500 font-medium">Extend your AI assistant with calendar scheduling, CRMs, and custom webhooks.</p>
+                </div>
+              </div>
             )}
-            <h2 className="text-lg font-bold text-slate-800 tracking-wide">
-              {selectedConfig === 'calendly' ? 'Connect Calendly' : selectedConfig === 'custom_api' ? 'Connect Custom API' : 'Connect New Integrations'}
-            </h2>
           </div>
-          <button onClick={handleClose} className="p-2 text-slate-400 hover:text-slate-700 rounded-xl hover:bg-slate-100 transition-colors">
-            <X size={20} />
+
+          {/* Top Right Close Button */}
+          <button 
+            type="button"
+            onClick={handleClose} 
+            className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-bold text-slate-600 hover:text-rose-600 bg-white hover:bg-rose-50 border border-slate-200 hover:border-rose-200 rounded-xl transition-all shadow-sm cursor-pointer"
+            title="Close Window"
+          >
+            <span>Close</span>
+            <X size={16} />
           </button>
         </div>
 
         {/* Content Area */}
-        <div className="flex-1 overflow-y-auto bg-white">
+        <div className="flex-1 overflow-y-auto bg-white p-6">
           {!selectedConfig ? (
             // GRID VIEW
-            <div className="p-6">
+            <div>
               {/* Toolbar */}
-              <div className="flex flex-col md:flex-row items-center justify-between gap-4 mb-8">
+              <div className="flex flex-col md:flex-row items-center justify-between gap-4 mb-6">
                 <div className="flex flex-wrap items-center gap-2">
                   {CATEGORIES.map(cat => (
                     <button
                       key={cat.id}
+                      type="button"
                       onClick={() => setActiveCategory(cat.id)}
-                      className={`px-3.5 py-1.5 rounded-full text-xs font-semibold tracking-wide border transition-colors ${
+                      className={`px-3.5 py-1.5 rounded-full text-xs font-semibold tracking-wide border transition-colors cursor-pointer ${
                         activeCategory === cat.id 
                           ? 'bg-indigo-600 border-indigo-600 text-white shadow-sm font-bold' 
                           : 'bg-slate-50 border-slate-200 text-slate-600 hover:border-slate-300 hover:text-slate-900 hover:bg-slate-100'
@@ -200,14 +228,14 @@ export default function IntegrationModal({ isOpen, onClose, onRefresh }) {
               </div>
 
               {/* Grid */}
-              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-5">
+              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
                 {filteredIntegrations.map((int, idx) => (
                   <div key={idx} className="bg-white border border-slate-200 rounded-2xl overflow-hidden flex flex-col group hover:border-indigo-300 hover:shadow-md transition-all">
                     <div className="p-5 flex-1 flex flex-col">
-                      <div className="flex items-start justify-between mb-4">
+                      <div className="flex items-start justify-between mb-3">
                         <div className="flex items-center gap-3">
                           <div className={`p-2.5 rounded-xl ${int.bg} border border-slate-100`}>
-                            <int.icon size={22} className={int.color} />
+                            <int.icon size={20} className={int.color} />
                           </div>
                           <span className="font-bold text-slate-800 text-sm tracking-wide">{int.name}</span>
                         </div>
@@ -223,6 +251,7 @@ export default function IntegrationModal({ isOpen, onClose, onRefresh }) {
                     </div>
                     <div className="border-t border-slate-100 p-3.5 flex justify-start bg-slate-50/50">
                       <button 
+                        type="button"
                         onClick={() => {
                           if (int.id === 'calendly' || int.id === 'custom_api') {
                             setSelectedConfig(int.id)
@@ -230,7 +259,7 @@ export default function IntegrationModal({ isOpen, onClose, onRefresh }) {
                             alert('This integration is currently a mockup and not fully implemented yet.')
                           }
                         }}
-                        className="flex items-center gap-1.5 px-4 py-1.5 bg-indigo-50 hover:bg-indigo-100 border border-indigo-200 rounded-xl text-xs font-bold text-indigo-600 transition-colors group-hover:border-indigo-300"
+                        className="flex items-center gap-1.5 px-4 py-1.5 bg-indigo-50 hover:bg-indigo-100 border border-indigo-200 rounded-xl text-xs font-bold text-indigo-600 transition-colors group-hover:border-indigo-300 cursor-pointer"
                       >
                         Connect <ExternalLink size={12} className="text-indigo-400 group-hover:text-indigo-600 transition-colors" />
                       </button>
@@ -241,7 +270,7 @@ export default function IntegrationModal({ isOpen, onClose, onRefresh }) {
             </div>
           ) : (
             // CONFIG FORMS
-            <div className="p-8">
+            <div className="p-4">
               {error && <div className="mb-6 p-4 rounded-xl bg-rose-50 border border-rose-200 text-rose-600 text-xs font-semibold">{error}</div>}
               {success && <div className="mb-6 p-4 rounded-xl bg-emerald-50 border border-emerald-200 text-emerald-600 text-xs font-semibold">{success}</div>}
 
@@ -270,7 +299,7 @@ export default function IntegrationModal({ isOpen, onClose, onRefresh }) {
                     <button
                       type="submit"
                       disabled={loading || !calendlyForm.token}
-                      className="flex items-center gap-2 px-6 py-2.5 bg-indigo-600 hover:bg-indigo-700 disabled:opacity-50 text-white font-bold text-xs rounded-xl transition-colors shadow-md shadow-indigo-600/20"
+                      className="flex items-center gap-2 px-6 py-2.5 bg-indigo-600 hover:bg-indigo-700 disabled:opacity-50 text-white font-bold text-xs rounded-xl transition-colors shadow-md shadow-indigo-600/20 cursor-pointer"
                     >
                       {loading ? <Loader2 size={16} className="animate-spin" /> : <Plug size={16} />}
                       Connect Calendly
@@ -344,7 +373,7 @@ export default function IntegrationModal({ isOpen, onClose, onRefresh }) {
                     <button
                       type="submit"
                       disabled={loading || !webhookForm.name || !webhookForm.url}
-                      className="flex items-center gap-2 px-6 py-2.5 bg-indigo-600 hover:bg-indigo-700 disabled:opacity-50 text-white font-bold text-xs rounded-xl transition-colors shadow-md shadow-indigo-600/20"
+                      className="flex items-center gap-2 px-6 py-2.5 bg-indigo-600 hover:bg-indigo-700 disabled:opacity-50 text-white font-bold text-xs rounded-xl transition-colors shadow-md shadow-indigo-600/20 cursor-pointer"
                     >
                       {loading ? <Loader2 size={16} className="animate-spin" /> : <Plug size={16} />}
                       Connect Custom API

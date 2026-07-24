@@ -159,7 +159,7 @@ from starlette.background import BackgroundTask
 
 from fastapi import (
     APIRouter, Depends, File, Form, HTTPException, Request, UploadFile,
-    WebSocket, WebSocketDisconnect, BackgroundTasks
+    WebSocket, WebSocketDisconnect, BackgroundTasks, Header
 )
 from fastapi.exceptions import RequestValidationError
 from fastapi.middleware.gzip import GZipMiddleware
