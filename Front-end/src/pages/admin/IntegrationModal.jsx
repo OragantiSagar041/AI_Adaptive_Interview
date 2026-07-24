@@ -385,6 +385,7 @@ export default function IntegrationModal({ isOpen, onClose, onRefresh }) {
             </div>
           )}
         </div>
+      </div>
     </div>,
     document.body
   )
