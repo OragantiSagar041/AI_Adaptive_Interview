@@ -1,20 +1,25 @@
 import React, { useState } from 'react'
 import { createPortal } from 'react-dom'
-import { X, Calendar, Globe, Plug, Loader2, Search, MessageSquare, Database, Phone, ExternalLink } from 'lucide-react'
+import { X, Loader2, Search, ExternalLink } from 'lucide-react'
 import { API_BASE_URL } from '../../apiConfig'
+import { 
+  CalComIcon, CalendlyIcon, CustomApiIcon, SalesforceIcon, 
+  GoogleCalendarIcon, GoogleSheetsIcon, SlackIcon, HubSpotIcon, 
+  GenesysIcon, WhatsAppIcon 
+} from '../../components/admin/BrandIcons'
 
 const INTEGRATIONS = [
-  { id: 'cal_com', name: 'Cal.com', category: 'Calendar & CRM', tag: 'During Call', desc: 'Sync your Cal.com calendar to allow voice assistants to schedule meetings on your behalf.', icon: Calendar, color: 'text-slate-700', bg: 'bg-slate-100' },
-  { id: 'calendly', name: 'Calendly', category: 'Calendar & CRM', tag: 'During Call', desc: 'Connect your Calendly account to check availability and schedule appointments through your voice assistants.', icon: Calendar, color: 'text-blue-500', bg: 'bg-blue-50' },
-  { id: 'custom_api', name: 'Custom API', category: 'Custom & Tools', tag: 'During Call', desc: 'Connect to any custom API endpoint to extend your assistant\'s capabilities with external data and services.', icon: Globe, color: 'text-amber-500', bg: 'bg-amber-50' },
-  { id: 'salesforce', name: 'Salesforce', category: 'Calendar & CRM', tag: 'Post Call', desc: 'Connect your Salesforce CRM to access customer data, manage leads, and update records through your voice assistants.', icon: Database, color: 'text-sky-500', bg: 'bg-sky-50' },
-  { id: 'google_calendar', name: 'Google Calendar', category: 'Calendar & CRM', tag: 'During Call', desc: 'Connect your Google Calendar to check availability and schedule appointments through your voice assistants.', icon: Calendar, color: 'text-blue-600', bg: 'bg-blue-50' },
-  { id: 'google_sheets_during', name: 'Google Sheets', category: 'Data & Sheets', tag: 'During Call', desc: 'Connect your Google Sheets to read, write, and manage spreadsheet data during calls.', icon: Database, color: 'text-emerald-600', bg: 'bg-emerald-50' },
-  { id: 'google_sheets_post', name: 'Google Sheets', category: 'Data & Sheets', tag: 'Post Call', desc: 'Connect your Google Sheets to read, write, and manage spreadsheet data through your voice assistants.', icon: Database, color: 'text-emerald-600', bg: 'bg-emerald-50' },
-  { id: 'slack', name: 'Slack', category: 'Messaging', tag: 'Post Call', desc: 'Connect your Slack workspace to receive notifications and updates about your voice assistants.', icon: MessageSquare, color: 'text-rose-500', bg: 'bg-rose-50' },
-  { id: 'hubspot', name: 'HubSpot', category: 'Calendar & CRM', tag: 'Post Call', desc: 'Connect your HubSpot platform to enable voice assistants to manage contacts, automate marketing campaigns, and handle customer service tasks.', icon: Database, color: 'text-orange-500', bg: 'bg-orange-50' },
-  { id: 'genesys', name: 'Genesys', category: 'Messaging', tag: 'Post Call', desc: 'Connect your Genesys Cloud contact center to enhance customer experience with AI-powered routing, real-time analytics, and seamless voice AI assistant integration.', icon: Phone, color: 'text-red-500', bg: 'bg-red-50' },
-  { id: 'whatsapp', name: 'WhatsApp Cloud', category: 'Messaging', tag: 'During Call', desc: 'Send WhatsApp messages during calls using Meta Cloud API templates via your connected Cloud WhatsApp number.', icon: MessageSquare, color: 'text-emerald-500', bg: 'bg-emerald-50' },
+  { id: 'cal_com', name: 'Cal.com', category: 'Calendar & CRM', tag: 'During Call', desc: 'Sync your Cal.com calendar to allow voice assistants to schedule meetings on your behalf.', IconComponent: CalComIcon },
+  { id: 'calendly', name: 'Calendly', category: 'Calendar & CRM', tag: 'During Call', desc: 'Connect your Calendly account to check availability and schedule appointments through your voice assistants.', IconComponent: CalendlyIcon },
+  { id: 'custom_api', name: 'Custom API', category: 'Custom & Tools', tag: 'During Call', desc: 'Connect to any custom API endpoint to extend your assistant\'s capabilities with external data and services.', IconComponent: CustomApiIcon },
+  { id: 'salesforce', name: 'Salesforce', category: 'Calendar & CRM', tag: 'Post Call', desc: 'Connect your Salesforce CRM to access customer data, manage leads, and update records through your voice assistants.', IconComponent: SalesforceIcon },
+  { id: 'google_calendar', name: 'Google Calendar', category: 'Calendar & CRM', tag: 'During Call', desc: 'Connect your Google Calendar to check availability and schedule appointments through your voice assistants.', IconComponent: GoogleCalendarIcon },
+  { id: 'google_sheets_during', name: 'Google Sheets', category: 'Data & Sheets', tag: 'During Call', desc: 'Connect your Google Sheets to read, write, and manage spreadsheet data during calls.', IconComponent: GoogleSheetsIcon },
+  { id: 'google_sheets_post', name: 'Google Sheets', category: 'Data & Sheets', tag: 'Post Call', desc: 'Connect your Google Sheets to read, write, and manage spreadsheet data through your voice assistants.', IconComponent: GoogleSheetsIcon },
+  { id: 'slack', name: 'Slack', category: 'Messaging', tag: 'Post Call', desc: 'Connect your Slack workspace to receive notifications and updates about your voice assistants.', IconComponent: SlackIcon },
+  { id: 'hubspot', name: 'HubSpot', category: 'Calendar & CRM', tag: 'Post Call', desc: 'Connect your HubSpot platform to enable voice assistants to manage contacts, automate marketing campaigns, and handle customer service tasks.', IconComponent: HubSpotIcon },
+  { id: 'genesys', name: 'Genesys', category: 'Messaging', tag: 'Post Call', desc: 'Connect your Genesys Cloud contact center to enhance customer experience with AI-powered routing, real-time analytics, and seamless voice AI assistant integration.', IconComponent: GenesysIcon },
+  { id: 'whatsapp', name: 'WhatsApp Cloud', category: 'Messaging', tag: 'During Call', desc: 'Send WhatsApp messages during calls using Meta Cloud API templates via your connected Cloud WhatsApp number.', IconComponent: WhatsAppIcon },
 ]
 
 const CATEGORIES = [
@@ -576,9 +581,7 @@ export default function IntegrationModal({ isOpen, onClose, onRefresh, initialCo
                   <div className="p-5 flex-1 flex flex-col">
                     <div className="flex items-start justify-between mb-3">
                       <div className="flex items-center gap-3">
-                        <div className={`p-2.5 rounded-xl ${int.bg} border border-slate-100`}>
-                          <int.icon size={20} className={int.color} />
-                        </div>
+                        <int.IconComponent className="w-7 h-7" />
                         <span className="font-bold text-slate-800 text-sm tracking-wide">{int.name}</span>
                       </div>
                       <span className={`px-2 py-0.5 rounded-full text-[0.6rem] font-bold tracking-wider uppercase border flex items-center gap-1 shrink-0 ${
