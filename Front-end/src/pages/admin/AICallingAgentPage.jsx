@@ -671,9 +671,25 @@ function KnowledgeBaseTab({ files, loading, onUpload, onRemove }) {
   )
 }
 
+const OMNI_INTEGRATIONS_CATALOG = [
+  { id: 'cal_com', name: 'Cal.com', category: 'Calendar & CRM', tag: 'During Call', desc: 'Sync your Cal.com calendar to allow voice assistants to schedule meetings on your behalf.', icon: Calendar, color: 'text-slate-700', bg: 'bg-slate-100' },
+  { id: 'calendly', name: 'Calendly', category: 'Calendar & CRM', tag: 'During Call', desc: 'Connect your Calendly account to check availability and schedule appointments through your voice assistants.', icon: Calendar, color: 'text-blue-500', bg: 'bg-blue-50' },
+  { id: 'custom_api', name: 'Custom API', category: 'Custom & Tools', tag: 'During Call', desc: 'Connect to any custom API endpoint to extend your assistant\'s capabilities with external data and services.', icon: Globe, color: 'text-amber-500', bg: 'bg-amber-50' },
+  { id: 'salesforce', name: 'Salesforce', category: 'Calendar & CRM', tag: 'Post Call', desc: 'Connect your Salesforce CRM to access customer data, manage leads, and update records through your voice assistants.', icon: Database, color: 'text-sky-500', bg: 'bg-sky-50' },
+  { id: 'google_calendar', name: 'Google Calendar', category: 'Calendar & CRM', tag: 'During Call', desc: 'Connect your Google Calendar to check availability and schedule appointments through your voice assistants.', icon: Calendar, color: 'text-blue-600', bg: 'bg-blue-50' },
+  { id: 'google_sheets_during', name: 'Google Sheets', category: 'Data & Sheets', tag: 'During Call', desc: 'Connect your Google Sheets to read, write, and manage spreadsheet data during calls.', icon: Database, color: 'text-emerald-600', bg: 'bg-emerald-50' },
+  { id: 'google_sheets_post', name: 'Google Sheets', category: 'Data & Sheets', tag: 'Post Call', desc: 'Connect your Google Sheets to read, write, and manage spreadsheet data through your voice assistants.', icon: Database, color: 'text-emerald-600', bg: 'bg-emerald-50' },
+  { id: 'slack', name: 'Slack', category: 'Messaging', tag: 'Post Call', desc: 'Connect your Slack workspace to receive notifications and updates about your voice assistants.', icon: MessageSquare, color: 'text-rose-500', bg: 'bg-rose-50' },
+  { id: 'hubspot', name: 'HubSpot', category: 'Calendar & CRM', tag: 'Post Call', desc: 'Connect your HubSpot platform to enable voice assistants to manage contacts, automate marketing campaigns, and handle customer service tasks.', icon: Database, color: 'text-orange-500', bg: 'bg-orange-50' },
+  { id: 'genesys', name: 'Genesys', category: 'Messaging', tag: 'Post Call', desc: 'Connect your Genesys Cloud contact center to enhance customer experience with AI-powered routing, real-time analytics, and seamless voice AI assistant integration.', icon: Phone, color: 'text-red-500', bg: 'bg-red-50' },
+  { id: 'whatsapp', name: 'WhatsApp Cloud', category: 'Messaging', tag: 'During Call', desc: 'Send WhatsApp messages during calls using Meta Cloud API templates via your connected Cloud WhatsApp number.', icon: MessageSquare, color: 'text-emerald-500', bg: 'bg-emerald-50' },
+]
+
 function IntegrationsTab({ integrations, loading, onRefresh }) {
   const [showModal, setShowModal] = useState(false)
+  const [selectedIntId, setSelectedIntId] = useState(null)
   const [detaching, setDetaching] = useState(null)
+  const [activeCategory, setActiveCategory] = useState('All')
 
   const handleDetach = async (integrationId) => {
     if (!window.confirm('Are you sure you want to detach this integration?')) return
@@ -681,11 +697,13 @@ function IntegrationsTab({ integrations, loading, onRefresh }) {
     setDetaching(integrationId)
     try {
       const token = localStorage.getItem('token')
+      const omniApiKey = sessionStorage.getItem('omniDimensionApiKey') || ''
       const r = await fetch(`${API_BASE_URL}/api/calls/integrations/detach`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
-          Authorization: `Bearer ${token}`
+          Authorization: `Bearer ${token}`,
+          ...(omniApiKey ? { 'X-Omni-Dimension-API-Key': omniApiKey } : {})
         },
         body: JSON.stringify({ integration_id: integrationId })
       })
@@ -702,62 +720,135 @@ function IntegrationsTab({ integrations, loading, onRefresh }) {
     }
   }
 
+  const openConnectModal = (intId = null) => {
+    setSelectedIntId(intId)
+    setShowModal(true)
+  }
+
+  const filteredCatalog = OMNI_INTEGRATIONS_CATALOG.filter(int => {
+    if (activeCategory === 'All') return true
+    return int.category === activeCategory
+  })
+
   return (
-    <div>
-      <div className="flex justify-between items-center mb-6">
+    <div className="space-y-6">
+      {/* Header */}
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 pb-2 border-b border-slate-200">
         <div>
-          <h3 className="text-lg font-bold text-slate-800 flex items-center gap-2">
-            <Plug size={20} className="text-indigo-500" /> Integrations
+          <h3 className="text-lg font-bold text-slate-800 flex items-center gap-2 tracking-tight">
+            <Plug size={20} className="text-indigo-600" /> Omni Dimension Integrations
           </h3>
-          <p className="text-sm text-slate-500 mt-1">Connect third-party services to your agent</p>
+          <p className="text-xs text-slate-500 mt-0.5">Live sync your Omni Dimension AI Voice Agent with CRM, calendar scheduling, webhooks, and messaging tools.</p>
         </div>
         <button
-          onClick={() => setShowModal(true)}
-          className="flex items-center gap-2 px-4 py-2 bg-indigo-600 hover:bg-indigo-700 text-white font-bold text-sm rounded-lg transition-colors shadow-md"
+          onClick={() => openConnectModal(null)}
+          className="flex items-center gap-2 px-4 py-2 bg-indigo-600 hover:bg-indigo-700 text-white font-bold text-xs rounded-xl transition-all shadow-md shadow-indigo-600/20 cursor-pointer shrink-0"
         >
           <Plus size={16} /> Add Integration
         </button>
       </div>
 
-      {loading ? (
-        <SectionLoader />
-      ) : integrations.length === 0 ? (
-        <div className="flex flex-col items-center justify-center py-16 gap-3 text-slate-500 bg-white border border-slate-200 rounded-2xl shadow-sm">
-          <Plug size={32} className="opacity-30 text-indigo-400" />
-          <span className="text-sm font-semibold">No integrations connected to this agent.</span>
-        </div>
-      ) : (
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
-          {integrations.map((int) => (
-            <div key={int.id} className="bg-white border border-slate-200 rounded-2xl p-5 shadow-sm hover:shadow-md hover:border-indigo-200 transition-all relative group">
-              <div className="flex items-start justify-between mb-3">
-                <div className="p-2 bg-violet-50 rounded-lg">
-                  <Plug size={18} className="text-violet-500" />
+      {/* Section 1: Connected Active Integrations */}
+      {integrations && integrations.length > 0 && (
+        <div className="bg-white border border-slate-200 rounded-2xl p-5 shadow-sm space-y-4">
+          <div className="flex items-center justify-between">
+            <h4 className="text-xs font-extrabold uppercase tracking-wider text-slate-500 flex items-center gap-2">
+              <CheckCircle2 size={15} className="text-emerald-500" /> Active Connected Integrations ({integrations.length})
+            </h4>
+          </div>
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+            {integrations.map((int) => (
+              <div key={int.id} className="bg-slate-50/70 border border-slate-200 rounded-xl p-4 relative group hover:border-indigo-300 transition-all">
+                <div className="flex items-start justify-between mb-2">
+                  <div className="p-2 bg-indigo-50 border border-indigo-100 rounded-lg text-indigo-600">
+                    <Plug size={16} />
+                  </div>
+                  <span className="text-[0.65rem] font-bold px-2 py-0.5 rounded-full border border-emerald-200 bg-emerald-50 text-emerald-600 uppercase tracking-wider">
+                    Connected
+                  </span>
                 </div>
-                <span className={`text-[0.65rem] font-bold px-2 py-0.5 rounded-full border uppercase tracking-wider ${int.is_active ? 'bg-emerald-50 border-emerald-200 text-emerald-600' : 'bg-slate-50 border-slate-200 text-slate-500'}`}>
-                  {int.is_active ? 'Active' : 'Inactive'}
-                </span>
-              </div>
-              <div className="font-bold text-sm text-slate-800 leading-tight pr-8">{int.name}</div>
-              <div className="text-xs font-semibold text-indigo-500 uppercase tracking-wider mt-1.5">{int.type?.replace('_', ' ')}</div>
-              <div className="text-[0.7rem] font-mono text-slate-400 mt-1 break-all">ID: {int.id}</div>
+                <div className="font-bold text-sm text-slate-800 leading-tight pr-8">{int.name}</div>
+                <div className="text-[0.7rem] font-bold text-indigo-600 uppercase tracking-wider mt-1">{int.type?.replace('_', ' ')}</div>
+                <div className="text-[0.65rem] font-mono text-slate-400 mt-1 truncate">ID: {int.id}</div>
 
-              <button
-                onClick={() => handleDetach(int.id)}
-                disabled={detaching === int.id}
-                className="absolute right-4 top-12 p-1.5 text-rose-300 group-hover:text-rose-500 hover:bg-rose-50 rounded-lg transition-all disabled:opacity-50"
-                title="Detach Integration"
-              >
-                {detaching === int.id ? <div className="w-4 h-4 border-2 border-rose-500 border-t-transparent rounded-full animate-spin" /> : <Trash2 size={16} />}
-              </button>
-            </div>
-          ))}
+                <button
+                  onClick={() => handleDetach(int.id)}
+                  disabled={detaching === int.id}
+                  className="absolute right-3 top-3 p-1.5 text-slate-400 hover:text-rose-600 hover:bg-rose-50 rounded-lg transition-all disabled:opacity-50 cursor-pointer"
+                  title="Detach Integration"
+                >
+                  {detaching === int.id ? <RefreshCw size={14} className="animate-spin text-rose-500" /> : <Trash2 size={15} />}
+                </button>
+              </div>
+            ))}
+          </div>
         </div>
       )}
 
+      {/* Section 2: Omni Dimension Available Integrations Catalog */}
+      <div className="space-y-4">
+        {/* Category Filters */}
+        <div className="flex flex-wrap items-center gap-2">
+          {['All', 'Calendar & CRM', 'Messaging', 'Data & Sheets', 'Custom & Tools'].map(cat => (
+            <button
+              key={cat}
+              onClick={() => setActiveCategory(cat)}
+              className={`px-3.5 py-1.5 rounded-full text-xs font-semibold tracking-wide border transition-all cursor-pointer ${
+                activeCategory === cat 
+                  ? 'bg-indigo-600 border-indigo-600 text-white shadow-sm font-bold' 
+                  : 'bg-white border-slate-200 text-slate-600 hover:border-slate-300 hover:text-slate-900 hover:bg-slate-50'
+              }`}
+            >
+              {cat}
+            </button>
+          ))}
+        </div>
+
+        {/* Catalog Grid */}
+        {loading ? (
+          <SectionLoader />
+        ) : (
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+            {filteredCatalog.map((int, idx) => (
+              <div key={idx} className="bg-white border border-slate-200 rounded-2xl overflow-hidden flex flex-col group hover:border-indigo-300 hover:shadow-md transition-all">
+                <div className="p-5 flex-1 flex flex-col">
+                  <div className="flex items-start justify-between mb-3">
+                    <div className="flex items-center gap-3">
+                      <div className={`p-2.5 rounded-xl ${int.bg} border border-slate-100`}>
+                        <int.icon size={20} className={int.color} />
+                      </div>
+                      <span className="font-bold text-slate-800 text-sm tracking-wide">{int.name}</span>
+                    </div>
+                    <span className={`px-2 py-0.5 rounded-full text-[0.6rem] font-bold tracking-wider uppercase border flex items-center gap-1 shrink-0 ${
+                      int.tag === 'During Call' ? 'bg-emerald-50 border-emerald-200 text-emerald-600' : 'bg-indigo-50 border-indigo-200 text-indigo-600'
+                    }`}>
+                      {int.tag}
+                    </span>
+                  </div>
+                  <p className="text-xs text-slate-500 leading-relaxed line-clamp-3">
+                    {int.desc}
+                  </p>
+                </div>
+                <div className="border-t border-slate-100 p-3.5 flex justify-start bg-slate-50/50">
+                  <button 
+                    type="button"
+                    onClick={() => openConnectModal(int.id)}
+                    className="flex items-center gap-1.5 px-4 py-1.5 bg-indigo-50 hover:bg-indigo-100 border border-indigo-200 rounded-xl text-xs font-bold text-indigo-600 transition-colors group-hover:border-indigo-300 cursor-pointer"
+                  >
+                    Connect <ExternalLink size={12} className="text-indigo-400 group-hover:text-indigo-600 transition-colors" />
+                  </button>
+                </div>
+              </div>
+            ))}
+          </div>
+        )}
+      </div>
+
+      {/* Integration Modal */}
       <IntegrationModal
         isOpen={showModal}
-        onClose={() => setShowModal(false)}
+        initialConfig={selectedIntId}
+        onClose={() => { setShowModal(false); setSelectedIntId(null); }}
         onRefresh={onRefresh}
       />
     </div>

@@ -25,14 +25,20 @@ const CATEGORIES = [
   { id: 'Custom & Tools', count: 1 }
 ]
 
-export default function IntegrationModal({ isOpen, onClose, onRefresh }) {
-  const [selectedConfig, setSelectedConfig] = useState(null)
+export default function IntegrationModal({ isOpen, onClose, onRefresh, initialConfig = null }) {
+  const [selectedConfig, setSelectedConfig] = useState(initialConfig)
   const [activeCategory, setActiveCategory] = useState('All')
   const [searchQuery, setSearchQuery] = useState('')
 
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState('')
   const [success, setSuccess] = useState('')
+
+  React.useEffect(() => {
+    if (isOpen) {
+      setSelectedConfig(initialConfig)
+    }
+  }, [isOpen, initialConfig])
 
   // Cal.com Form State
   const [calComForm, setCalComForm] = useState({
