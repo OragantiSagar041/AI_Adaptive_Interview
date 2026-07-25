@@ -11,7 +11,9 @@ import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle, DialogT
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import axios from "axios";
-import { useSelector } from "react-redux";
+import { useSelector, useDispatch } from "react-redux";
+import { updateCredits } from "@/store/slices/authSlice";
+import Swal from "sweetalert2";
 import { API_BASE_URL } from "@/apiConfig";
 
 export default function CreditManagementPage() {
@@ -22,6 +24,7 @@ export default function CreditManagementPage() {
   const [open, setOpen] = useState(false);
   
   const token = useSelector((state) => state.auth.token);
+  const dispatch = useDispatch();
 
   const fetchData = async () => {
     try {
@@ -65,12 +68,40 @@ export default function CreditManagementPage() {
     if (token) fetchData();
   }, [token]);
 
+  const handleGiftClick = async (adminId, orgName) => {
+    const { value: amount } = await Swal.fire({
+      title: `Transfer credits`,
+      text: `How many credits do you want to transfer to ${orgName}?`,
+      input: "number",
+      inputLabel: "Amount",
+      inputPlaceholder: "e.g., 10000",
+      showCancelButton: true,
+      confirmButtonText: "Transfer",
+      confirmButtonColor: "#4f46e5",
+      inputValidator: (value) => {
+        if (!value || parseInt(value) <= 0) {
+          return "Please enter a valid positive number!";
+        }
+      }
+    });
+
+    if (amount) {
+      allocate(adminId, parseInt(amount));
+    }
+  };
+
   async function allocate(adminId, amount) {
     try {
-      await axios.post(`${API_BASE_URL}/super-admin/admins/${adminId}/add-credits`, { credits: amount }, {
+      const res = await axios.post(`${API_BASE_URL}/super-admin/admins/${adminId}/add-credits`, { credits: amount }, {
         headers: { Authorization: `Bearer ${token}` }
       });
       toast.success(`Allocated ${amount.toLocaleString()} credits`);
+      
+      // Update the main credit score in the header
+      if (res.data && res.data.super_admin_credits !== undefined) {
+        dispatch(updateCredits(res.data.super_admin_credits));
+      }
+      
       setOpen(false);
       fetchData(); // Refresh data
     } catch (error) {
@@ -122,7 +153,11 @@ export default function CreditManagementPage() {
                   <TableCell className="text-right tabular-nums">{r.used.toLocaleString()}</TableCell>
                   <TableCell className={`text-right tabular-nums font-medium ${low ? "text-rose-600" : "text-emerald-600"}`}>{r.remaining.toLocaleString()}</TableCell>
                   <TableCell><div className="flex items-center gap-2"><Progress value={pct} className="h-1.5" /><span className="w-9 text-right text-xs tabular-nums">{pct}%</span></div></TableCell>
-                  <TableCell className="text-right"><Button size="sm" variant="outline" onClick={() => allocate(r.id, 10000)}><Gift className="h-4 w-4" /> +10k</Button></TableCell>
+                  <TableCell className="text-right">
+                    <Button size="sm" variant="outline" onClick={() => handleGiftClick(r.id, r.org)}>
+                      <Gift className="h-4 w-4" /> Transfer
+                    </Button>
+                  </TableCell>
                 </TableRow>;
             })}
             {rows.length === 0 && (

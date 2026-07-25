@@ -8509,12 +8509,21 @@ def add_sub_admin_credits(admin_id: str, data: AddCreditsRequest, current_admin:
     super_admin_id = current_admin["admin_id"]
     with mongo_client.start_session() as db_session:
         with db_session.start_transaction():
-            sa_doc = admins_collection.find_one_and_update(
-                {"_id": ObjectId(super_admin_id), "credits": {"$gte": data.credits}},
-                {"$inc": {"credits": -data.credits}},
-                return_document=ReturnDocument.AFTER,
-                session=db_session,
-            )
+            if company_id:
+                sa_doc = companies_collection.find_one_and_update(
+                    {"_id": ObjectId(company_id), "credits": {"$gte": data.credits}},
+                    {"$inc": {"credits": -data.credits}},
+                    return_document=ReturnDocument.AFTER,
+                    session=db_session,
+                )
+            else:
+                sa_doc = admins_collection.find_one_and_update(
+                    {"_id": ObjectId(super_admin_id), "credits": {"$gte": data.credits}},
+                    {"$inc": {"credits": -data.credits}},
+                    return_document=ReturnDocument.AFTER,
+                    session=db_session,
+                )
+            
             if not sa_doc:
                 raise HTTPException(status_code=400, detail="Insufficient credits in Super Admin account.")
 
