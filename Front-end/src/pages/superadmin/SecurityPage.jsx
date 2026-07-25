@@ -1,33 +1,68 @@
 import React, { useState, useEffect } from 'react';
 import { useSelector } from 'react-redux';
 import { PieChart, Pie, Cell, ResponsiveContainer, Tooltip, Legend } from 'recharts';
-import { ShieldCheck, ShieldAlert, Key, Users, AlertTriangle } from 'lucide-react';
+import { ShieldCheck, ShieldAlert, Key, Users, AlertTriangle, X } from 'lucide-react';
+
+const ToggleSwitch = ({ checked, onChange }) => (
+  <div onClick={onChange} className={`w-11 h-6 rounded-full flex items-center p-1 cursor-pointer transition-colors ${checked ? 'bg-indigo-600' : 'bg-slate-300'}`}>
+    <div className={`bg-white w-4 h-4 rounded-full shadow-md transform transition-transform ${checked ? 'translate-x-5' : 'translate-x-0'}`}></div>
+  </div>
+);
 import axios from 'axios';
+
+import { API_BASE_URL } from '@/apiConfig';
 
 const COLORS = ['#6366f1', '#10b981', '#f43f5e'];
 
 export default function SecurityPage() {
-  const { API_BASE_URL, token } = useSelector(state => state.auth);
+  const { token } = useSelector(state => state.auth);
   const [data, setData] = useState(null);
   const [loading, setLoading] = useState(true);
+  const [isModalOpen, setIsModalOpen] = useState(false);
+  const [policies, setPolicies] = useState({
+    require_2fa: true,
+    strict_session_timeout: true,
+    restrict_ip: false
+  });
 
   useEffect(() => {
-    const fetchStats = async () => {
+    const fetchSecurityData = async () => {
       try {
+        const [statsRes, policiesRes] = await Promise.all([
+          axios.get(`${API_BASE_URL}/api/superadmin/security/stats`, {
+            headers: { Authorization: `Bearer ${token}` }
+          }),
+          axios.get(`${API_BASE_URL}/api/superadmin/security/policies`, {
+            headers: { Authorization: `Bearer ${token}` }
+          }).catch(() => ({ data: { policies: null } }))
+        ]);
         
-        
-        const res = await axios.get(`${API_BASE_URL}/api/superadmin/security/stats`, {
-          headers: { Authorization: `Bearer ${token}` }
-        });
-        setData(res.data);
+        setData(statsRes.data);
+        if (policiesRes.data.policies) {
+          setPolicies(policiesRes.data.policies);
+        }
       } catch (error) {
-        console.error("Failed to fetch security stats", error);
+        console.error("Failed to fetch security data", error);
       } finally {
         setLoading(false);
       }
     };
-    fetchStats();
-  }, [API_BASE_URL, token]);
+    if (token) fetchSecurityData();
+  }, [token]);
+
+  const handleTogglePolicy = async (key) => {
+    const newPolicies = { ...policies, [key]: !policies[key] };
+    setPolicies(newPolicies);
+    
+    try {
+      await axios.put(`${API_BASE_URL}/api/superadmin/security/policies`, newPolicies, {
+        headers: { Authorization: `Bearer ${token}` }
+      });
+    } catch (error) {
+      console.error("Failed to update policy", error);
+      setPolicies(policies); // revert on failure
+    }
+  };
 
   if (loading) {
     return (
@@ -146,11 +181,84 @@ export default function SecurityPage() {
             )}
           </div>
           
-          <button className="w-full mt-6 py-2 text-indigo-600 font-medium hover:bg-indigo-50:bg-indigo-900/20 rounded-lg transition-colors border border-indigo-100">
-            Review Security Policies
+          <button 
+            onClick={() => setIsModalOpen(true)}
+            className="w-full mt-6 py-3 px-4 bg-gradient-to-r from-indigo-600 to-violet-600 hover:from-indigo-700 hover:to-violet-700 text-white font-semibold rounded-xl shadow-md hover:shadow-lg transition-all duration-300 flex items-center justify-center gap-2 group transform hover:-translate-y-0.5"
+          >
+            <ShieldCheck className="w-5 h-5 text-indigo-200 group-hover:text-white transition-colors" />
+            <span>Review Security Policies</span>
           </button>
         </div>
       </div>
+
+      {/* Security Policies Modal */}
+      {isModalOpen && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/40 backdrop-blur-sm transition-opacity">
+          <div className="bg-white rounded-2xl shadow-2xl w-full max-w-2xl overflow-hidden flex flex-col max-h-[90vh] animate-in fade-in zoom-in-95 duration-200">
+            <div className="flex justify-between items-center p-6 border-b border-slate-100 bg-slate-50/80">
+              <h2 className="text-xl font-bold text-slate-800 flex items-center gap-2">
+                <ShieldCheck className="w-6 h-6 text-indigo-600" />
+                Global Security Policies
+              </h2>
+              <button 
+                onClick={() => setIsModalOpen(false)}
+                className="text-slate-400 hover:text-slate-600 hover:bg-slate-200 p-2 rounded-full transition-colors"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+            
+            <div className="p-6 overflow-y-auto custom-scrollbar flex-1 bg-slate-50/30">
+              <div className="space-y-6">
+                <div>
+                  <h3 className="text-xs font-bold text-slate-400 uppercase tracking-wider mb-3 ml-1">Authentication Requirements</h3>
+                  <div className="space-y-3">
+                    <div className="flex items-center justify-between p-4 bg-white rounded-xl border border-slate-200 shadow-sm hover:border-indigo-200 transition-colors">
+                      <div>
+                        <p className="font-semibold text-slate-800">Require Two-Factor Authentication</p>
+                        <p className="text-sm text-slate-500 mt-1">Enforce 2FA for all Super Admin accounts</p>
+                      </div>
+                      <ToggleSwitch checked={policies.require_2fa} onChange={() => handleTogglePolicy('require_2fa')} />
+                    </div>
+                    <div className="flex items-center justify-between p-4 bg-white rounded-xl border border-slate-200 shadow-sm hover:border-indigo-200 transition-colors">
+                      <div>
+                        <p className="font-semibold text-slate-800">Strict Session Timeout</p>
+                        <p className="text-sm text-slate-500 mt-1">Log out inactive users after 30 minutes of idle time</p>
+                      </div>
+                      <ToggleSwitch checked={policies.strict_session_timeout} onChange={() => handleTogglePolicy('strict_session_timeout')} />
+                    </div>
+                  </div>
+                </div>
+
+                <div>
+                  <h3 className="text-xs font-bold text-slate-400 uppercase tracking-wider mb-3 ml-1">Access Control</h3>
+                  <div className="space-y-3">
+                    <div className="flex items-center justify-between p-4 bg-white rounded-xl border border-slate-200 shadow-sm hover:border-indigo-200 transition-colors">
+                      <div>
+                        <p className="font-semibold text-slate-800">Restrict by IP Address</p>
+                        <p className="text-sm text-slate-500 mt-1">Only allow dashboard logins from recognized corporate IP addresses</p>
+                      </div>
+                      <ToggleSwitch checked={policies.restrict_ip} onChange={() => handleTogglePolicy('restrict_ip')} />
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </div>
+            
+            <div className="p-5 border-t border-slate-100 bg-white flex justify-between items-center">
+              <span className="text-xs text-slate-400 flex items-center gap-1">
+                <ShieldCheck className="w-4 h-4" /> Policy changes take effect immediately.
+              </span>
+              <button 
+                onClick={() => setIsModalOpen(false)}
+                className="px-6 py-2 bg-slate-800 hover:bg-slate-900 text-white rounded-xl font-medium transition-colors shadow-sm hover:shadow-md"
+              >
+                Close Settings
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

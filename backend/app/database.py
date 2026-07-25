@@ -17,6 +17,8 @@ from mongo_db import (
     counters_collection,
     payment_orders_collection,
     pending_signups_collection,
+    security_logs_collection,
+    security_policies_collection,
     get_next_sequence_value,
 )
 
@@ -39,5 +41,7 @@ __all__ = [
     "counters_collection",
     "payment_orders_collection",
     "pending_signups_collection",
+    "security_logs_collection",
+    "security_policies_collection",
     "get_next_sequence_value",
 ]

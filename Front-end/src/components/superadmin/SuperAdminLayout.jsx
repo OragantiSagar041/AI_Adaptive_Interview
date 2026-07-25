@@ -430,14 +430,14 @@ export default function SuperAdminLayout() {
     { id: 'credit', label: 'Credit Management', path: '/superadmin/credit' },
     { id: 'subscription', label: 'Subscription Management', path: '/superadmin/subscription' },
     { id: 'integrations', label: 'Integrations', path: '/superadmin/integrations' },
-    { id: 'audit', label: 'Audit Logs', path: '/superadmin/audit' },
+    // { id: 'audit', label: 'Audit Logs', path: '/superadmin/audit' },
     { id: 'security', label: 'Security', path: '/superadmin/security' },
     { id: 'settings', label: 'Settings', path: '/superadmin/profile-settings' },
   ]
 
   return (
     <SidebarProvider>
-      <div className="min-h-screen bg-slate-50 text-slate-900 flex font-sans w-full overflow-hidden">
+      <div className="superadmin-theme min-h-screen bg-slate-50 text-slate-900 flex font-sans w-full overflow-hidden">
         {/* NEW SHADCN SIDEBAR */}
         <Sidebar className="border-r border-slate-200 bg-white" collapsible="icon">
           <SidebarHeader className="h-16 border-b border-slate-200 px-6 py-0 flex items-center justify-center shrink-0">

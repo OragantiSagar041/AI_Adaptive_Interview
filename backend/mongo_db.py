@@ -37,6 +37,8 @@ counters_collection = db["counters"]
 demo_requests_collection = db["demo_requests"]
 payment_orders_collection = db["payment_orders"]
 pending_signups_collection = db["pending_signups"]
+security_logs_collection = db["security_logs"]
+security_policies_collection = db["security_policies"]
 
 def get_next_sequence_value(sequence_name: str, prefix: str) -> str:
     """

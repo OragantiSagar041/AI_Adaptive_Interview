@@ -4,8 +4,10 @@ import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContaine
 import { Users, UserCheck, Video, MoreHorizontal, Search } from 'lucide-react';
 import axios from 'axios';
 
+import { API_BASE_URL } from '@/apiConfig';
+
 export default function RecruitersPage() {
-  const { API_BASE_URL, token } = useSelector(state => state.auth);
+  const { token } = useSelector(state => state.auth);
   const [data, setData] = useState(null);
   const [loading, setLoading] = useState(true);
   const [searchTerm, setSearchTerm] = useState('');

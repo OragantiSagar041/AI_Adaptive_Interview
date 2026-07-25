@@ -1,161 +1,173 @@
-import React, { useState, useEffect } from 'react';
-import { useSelector } from 'react-redux';
-import { AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from 'recharts';
-import { Coins, Zap, Clock, ArrowUpRight } from 'lucide-react';
-import axios from 'axios';
+import { useState, useEffect } from "react";
+import { Gift, Plus, Loader2 } from "lucide-react";
+import { toast } from "sonner";
+import { AdminShell } from "@/components/admin-shell";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { Progress } from "@/components/ui/progress";
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
+import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
+import { Label } from "@/components/ui/label";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import axios from "axios";
+import { useSelector } from "react-redux";
+import { API_BASE_URL } from "@/apiConfig";
 
 export default function CreditManagementPage() {
-  const { API_BASE_URL, token } = useSelector(state => state.auth);
-  const [data, setData] = useState(null);
+  const [rows, setRows] = useState([]);
+  const [ledger, setLedger] = useState([]);
+  const [kpis, setKpis] = useState({ total_credits_system: 0, credits_consumed_month: 0, active_topups: 0 });
   const [loading, setLoading] = useState(true);
+  const [open, setOpen] = useState(false);
+  
+  const token = useSelector((state) => state.auth.token);
+
+  const fetchData = async () => {
+    try {
+      setLoading(true);
+      const headers = { Authorization: `Bearer ${token}` };
+      const [statsRes, adminsRes] = await Promise.all([
+        axios.get(`${API_BASE_URL}/api/superadmin/credits/stats`, { headers }),
+        axios.get(`${API_BASE_URL}/super-admin/admins`, { headers })
+      ]);
+      
+      const stats = statsRes.data;
+      if (stats.status === "success") {
+        setKpis(stats.kpis || { total_credits_system: 0, credits_consumed_month: 0, active_topups: 0 });
+        setLedger(stats.history || []);
+      }
+
+      const admins = adminsRes.data;
+      if (admins.status === "success") {
+        setRows(admins.data.map(a => {
+          const used = (a.sessions_created || 0) * 100;
+          const remaining = a.credits || 0;
+          const allocated = used + remaining;
+          return {
+            id: a.id,
+            org: a.name || a.username,
+            allocated,
+            used,
+            remaining
+          };
+        }));
+      }
+    } catch (error) {
+      console.error("Failed to load credit data", error);
+      toast.error("Failed to load credit data");
+    } finally {
+      setLoading(false);
+    }
+  };
 
   useEffect(() => {
-    const fetchStats = async () => {
-      try {
-        
-        
-        const res = await axios.get(`${API_BASE_URL}/api/superadmin/credits/stats`, {
-          headers: { Authorization: `Bearer ${token}` }
-        });
-        setData(res.data);
-      } catch (error) {
-        console.error("Failed to fetch credit stats", error);
-      } finally {
-        setLoading(false);
-      }
-    };
-    fetchStats();
-  }, [API_BASE_URL, token]);
+    if (token) fetchData();
+  }, [token]);
+
+  async function allocate(adminId, amount) {
+    try {
+      await axios.post(`${API_BASE_URL}/super-admin/admins/${adminId}/add-credits`, { credits: amount }, {
+        headers: { Authorization: `Bearer ${token}` }
+      });
+      toast.success(`Allocated ${amount.toLocaleString()} credits`);
+      setOpen(false);
+      fetchData(); // Refresh data
+    } catch (error) {
+      console.error("Failed to allocate credits", error);
+      toast.error(error.response?.data?.detail || "Failed to allocate credits");
+    }
+  }
 
   if (loading) {
     return (
-      <div className="flex h-full items-center justify-center min-h-[60vh]">
-        <div className="animate-spin rounded-full h-12 w-12 border-t-2 border-b-2 border-indigo-500"></div>
-      </div>
+      <AdminShell title="Credit Management" description="Allocate AI credits, monitor usage and audit consumption per recruiter.">
+        <div className="flex h-64 items-center justify-center">
+          <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
+        </div>
+      </AdminShell>
     );
   }
 
-  const kpis = data?.kpis || {};
-  const usageChart = data?.usage_chart || [];
-  const history = data?.history || [];
-
   return (
-    <div
-      className="p-8 max-w-7xl mx-auto space-y-8"
-    >
-      <div className="flex justify-between items-center">
-        <div>
-          <h1 className="text-3xl font-bold text-slate-900">Credit Management</h1>
-          <p className="text-slate-500 mt-1">Track platform-wide AI credit consumption and billing.</p>
-        </div>
+    <AdminShell title="Credit Management" description="Allocate AI credits, monitor usage and audit consumption per recruiter." actions={
+      <Dialog open={open} onOpenChange={setOpen}>
+        <DialogTrigger asChild><Button><Plus className="h-4 w-4" /> Allocate Credits</Button></DialogTrigger>
+        {rows.length > 0 && <AllocateForm rows={rows} onAllocate={allocate} />}
+      </Dialog>
+    }>
+      <div className="grid gap-3 md:grid-cols-3">
+        <Card><CardContent className="p-4"><div className="text-xs text-muted-foreground">Total system credits</div><div className="mt-1 text-2xl font-semibold">{kpis.total_credits_system.toLocaleString()}</div></CardContent></Card>
+        <Card><CardContent className="p-4"><div className="text-xs text-muted-foreground">Consumed this month</div><div className="mt-1 text-2xl font-semibold">{kpis.credits_consumed_month.toLocaleString()}</div></CardContent></Card>
+        <Card><CardContent className="p-4"><div className="text-xs text-muted-foreground">Active top-ups</div><div className="mt-1 text-2xl font-semibold text-emerald-600">{kpis.active_topups}</div></CardContent></Card>
       </div>
 
-      {/* KPI Cards */}
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-        <KPICard 
-          title="Total Credits System" 
-          value={kpis.total_credits_system?.toLocaleString()} 
-          icon={<Coins className="w-6 h-6 text-amber-500" />} 
-          delay={0.1}
-        />
-        <KPICard 
-          title="Consumed This Month" 
-          value={kpis.credits_consumed_month?.toLocaleString()} 
-          icon={<Zap className="w-6 h-6 text-rose-500" />} 
-          delay={0.2}
-        />
-        <KPICard 
-          title="Active Top-ups" 
-          value={kpis.active_topups} 
-          icon={<Clock className="w-6 h-6 text-emerald-500" />} 
-          delay={0.3}
-        />
-      </div>
+      <Card><CardHeader className="pb-2"><CardTitle className="text-base">Per-recruiter usage</CardTitle></CardHeader>
+        <CardContent><Table>
+          <TableHeader><TableRow>
+            <TableHead>Recruiter</TableHead>
+            <TableHead className="text-right">Allocated</TableHead>
+            <TableHead className="text-right">Used</TableHead>
+            <TableHead className="text-right">Remaining</TableHead>
+            <TableHead className="w-[220px]">Utilization</TableHead>
+            <TableHead className="text-right">Actions</TableHead>
+          </TableRow></TableHeader>
+          <TableBody>
+            {rows.map((r) => {
+              const pct = r.allocated > 0 ? Math.round((r.used / r.allocated) * 100) : 0;
+              const low = pct >= 90 || r.remaining < 1000;
+              return <TableRow key={r.id}>
+                  <TableCell className="font-medium">{r.org}</TableCell>
+                  <TableCell className="text-right tabular-nums">{r.allocated.toLocaleString()}</TableCell>
+                  <TableCell className="text-right tabular-nums">{r.used.toLocaleString()}</TableCell>
+                  <TableCell className={`text-right tabular-nums font-medium ${low ? "text-rose-600" : "text-emerald-600"}`}>{r.remaining.toLocaleString()}</TableCell>
+                  <TableCell><div className="flex items-center gap-2"><Progress value={pct} className="h-1.5" /><span className="w-9 text-right text-xs tabular-nums">{pct}%</span></div></TableCell>
+                  <TableCell className="text-right"><Button size="sm" variant="outline" onClick={() => allocate(r.id, 10000)}><Gift className="h-4 w-4" /> +10k</Button></TableCell>
+                </TableRow>;
+            })}
+            {rows.length === 0 && (
+              <TableRow>
+                <TableCell colSpan={4} className="h-24 text-center text-muted-foreground">
+                  No recruiters found.
+                </TableCell>
+              </TableRow>
+            )}
+          </TableBody>
+        </Table></CardContent>
+      </Card>
 
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
-        
-        {/* Usage Chart */}
-        <div
-          className="lg:col-span-2 bg-white p-6 rounded-2xl shadow-sm border border-slate-100"
-        >
-          <div className="flex justify-between items-center mb-6">
-            <h2 className="text-lg font-semibold text-slate-800">7-Day Credit Usage</h2>
-            <div className="flex gap-4 text-sm">
-              <div className="flex items-center gap-2"><span className="w-3 h-3 rounded-full bg-rose-500"></span> Used</div>
-              <div className="flex items-center gap-2"><span className="w-3 h-3 rounded-full bg-emerald-500"></span> Purchased</div>
-            </div>
-          </div>
-          <div className="h-72 w-full">
-            <ResponsiveContainer width="100%" height="100%">
-              <AreaChart data={usageChart}>
-                <defs>
-                  <linearGradient id="colorUsed" x1="0" y1="0" x2="0" y2="1">
-                    <stop offset="5%" stopColor="#f43f5e" stopOpacity={0.3}/>
-                    <stop offset="95%" stopColor="#f43f5e" stopOpacity={0}/>
-                  </linearGradient>
-                  <linearGradient id="colorPurchased" x1="0" y1="0" x2="0" y2="1">
-                    <stop offset="5%" stopColor="#10b981" stopOpacity={0.3}/>
-                    <stop offset="95%" stopColor="#10b981" stopOpacity={0}/>
-                  </linearGradient>
-                </defs>
-                <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#e2e8f0" />
-                <XAxis dataKey="day" axisLine={false} tickLine={false} tick={{ fill: '#64748b' }} dy={10} />
-                <YAxis axisLine={false} tickLine={false} tick={{ fill: '#64748b' }} dx={-10} />
-                <Tooltip 
-                  contentStyle={{ borderRadius: '12px', border: 'none', boxShadow: '0 10px 15px -3px rgb(0 0 0 / 0.1)' }}
-                />
-                <Area type="monotone" dataKey="used" stroke="#f43f5e" fillOpacity={1} fill="url(#colorUsed)" />
-                <Area type="monotone" dataKey="purchased" stroke="#10b981" fillOpacity={1} fill="url(#colorPurchased)" />
-              </AreaChart>
-            </ResponsiveContainer>
-          </div>
-        </div>
-
-        {/* Recent Transactions */}
-        <div
-          className="bg-white p-6 rounded-2xl shadow-sm border border-slate-100"
-        >
-          <h2 className="text-lg font-semibold text-slate-800 mb-6">Recent Top-ups</h2>
-          <div className="space-y-4">
-            {history.map((txn, idx) => (
-              <div key={txn.id} className="flex justify-between items-center p-4 bg-slate-50 rounded-xl border border-slate-100 hover:border-indigo-500/30 transition-colors">
-                <div className="flex items-center gap-4">
-                  <div className="w-10 h-10 rounded-full bg-emerald-100 text-emerald-600 flex items-center justify-center">
-                    <ArrowUpRight className="w-5 h-5" />
-                  </div>
-                  <div>
-                    <p className="font-semibold text-slate-800">{txn.org}</p>
-                    <p className="text-xs text-slate-500">{new Date(txn.date).toLocaleDateString()}</p>
-                  </div>
-                </div>
-                <div className="text-right">
-                  <p className="font-bold text-emerald-600">+{txn.amount}</p>
-                  <p className="text-xs text-slate-500">Credits</p>
-                </div>
-              </div>
-            ))}
-          </div>
-          <button className="w-full mt-6 py-2 text-indigo-600 font-medium hover:bg-indigo-50:bg-indigo-900/20 rounded-lg transition-colors">
-            View All Transactions
-          </button>
-        </div>
-      </div>
-    </div>
+      <Card><CardHeader className="pb-2"><CardTitle className="text-base">Recent ledger</CardTitle></CardHeader>
+        <CardContent><Table>
+          <TableHeader><TableRow><TableHead>Time</TableHead><TableHead>Organization</TableHead><TableHead>Action</TableHead><TableHead className="text-right">Amount</TableHead><TableHead>Status</TableHead></TableRow></TableHeader>
+          <TableBody>{ledger.map((l, i) => <TableRow key={i}>
+              <TableCell className="text-muted-foreground text-sm">{l.date ? new Date(l.date).toLocaleString() : ''}</TableCell>
+              <TableCell>{l.org}</TableCell>
+              <TableCell>{l.amount > 0 ? "Top-up" : "Usage"}</TableCell>
+              <TableCell className={`text-right tabular-nums ${l.amount > 0 ? "text-emerald-600" : "text-rose-600"}`}>{l.amount > 0 ? `+${l.amount.toLocaleString()}` : l.amount.toLocaleString()}</TableCell>
+              <TableCell className="text-muted-foreground">{l.status}</TableCell>
+            </TableRow>)}</TableBody>
+        </Table></CardContent>
+      </Card>
+    </AdminShell>
   );
 }
 
-function KPICard({ title, value, icon, delay }) {
-  return (
-    <div
-      className="bg-white p-6 rounded-2xl shadow-sm border border-slate-100 hover:shadow-md transition-shadow flex items-center justify-between"
-    >
-      <div>
-        <p className="text-sm font-medium text-slate-500 mb-1">{title}</p>
-        <h3 className="text-3xl font-bold text-slate-900">{value}</h3>
+function AllocateForm({ rows, onAllocate }) {
+  const [org, setOrg] = useState(rows[0]?.id || "");
+  const [amount, setAmount] = useState(10000);
+  return <DialogContent>
+      <DialogHeader><DialogTitle>Allocate credits</DialogTitle></DialogHeader>
+      <div className="space-y-3">
+        <div className="space-y-1.5"><Label className="text-xs">Recruiter</Label>
+          <Select value={org} onValueChange={setOrg}>
+            <SelectTrigger><SelectValue /></SelectTrigger>
+            <SelectContent>{rows.map((r) => <SelectItem key={r.id} value={r.id}>{r.org}</SelectItem>)}</SelectContent>
+          </Select>
+        </div>
+        <div className="space-y-1.5"><Label className="text-xs">Amount</Label>
+          <Input type="number" value={amount} onChange={(e) => setAmount(+e.target.value)} />
+        </div>
       </div>
-      <div className="p-4 rounded-2xl bg-slate-50">
-        {icon}
-      </div>
-    </div>
-  );
+      <DialogFooter><Button onClick={() => amount > 0 && onAllocate(org, amount)}>Allocate</Button></DialogFooter>
+    </DialogContent>;
 }

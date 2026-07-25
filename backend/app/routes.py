@@ -782,7 +782,7 @@ async def start_interview(
             profile_analysis = {"error": str(e)}
 
         # Generate questions based on Source (Resume vs JD)
-        questions = generate_mock_questions(content, source)
+        questions = await asyncio.to_thread(generate_mock_questions, content, source)
 
         if not questions:
             raise HTTPException(status_code=400, detail="Failed to generate questions")
@@ -799,7 +799,7 @@ async def start_interview(
         })
 
         # Store interview data (DB)
-        try:
+        def _save_interview():
             interviews_collection.insert_one({
                 "id": interview_id,
                 "source": source,
@@ -807,6 +807,8 @@ async def start_interview(
                 "questions": json.dumps(questions),
                 "created_at": datetime.now(timezone.utc).isoformat()
             })
+        try:
+            await asyncio.to_thread(_save_interview)
         except Exception as db_e:
             print(f" DB Save Error: {db_e}")
 
@@ -844,10 +846,10 @@ async def generate_more_questions_endpoint(
             # Fetch session from RAM or DB
             session = get_session(interview_id)
             if not session:
-                row = interviews_collection.find_one({"id": interview_id})
+                row = await asyncio.to_thread(interviews_collection.find_one, {"id": interview_id})
                 if row:
                     try:
-                        session_row = interview_sessions_collection.find_one({"interview_id": interview_id}) or {}
+                        session_row = await asyncio.to_thread(interview_sessions_collection.find_one, {"interview_id": interview_id}) or {}
                         loaded_questions = json.loads(row.get("questions", "[]"))
                         session = {
                             "id": interview_id,
@@ -918,10 +920,12 @@ async def generate_more_questions_endpoint(
             # Persist the newly generated questions back to session and DB
             session["questions"].extend(fresh_questions)
             set_session(interview_id, session)
-            interviews_collection.update_one(
-                {"id": interview_id},
-                {"$set": {"questions": json.dumps(session["questions"])}}
-            )
+            def _update_db():
+                interviews_collection.update_one(
+                    {"id": interview_id},
+                    {"$set": {"questions": json.dumps(session["questions"])}}
+                )
+            await asyncio.to_thread(_update_db)
 
             return {
                 "status": "success",
@@ -6745,13 +6749,37 @@ async def webrtc_endpoint(websocket: WebSocket, role: str, link_id: str, token: 
 # MASTER & SUBSCRIPTION APIs
 # --------------------------------------------------------------------------------
 @router.post("/master/login")
-def master_login(data: AdminLogin):
+def master_login(data: AdminLogin, request: Request):
+    client_ip = request.client.host if request.client else "unknown"
     user = admins_collection.find_one({"username": data.username, "role": "master"})
     if not user:
-        raise HTTPException(status_code=401, detail="Invalid master credentials")
-    if not verify_password(data.password, user["password"]):
+        security_logs_collection.insert_one({
+            "event_type": "FAILED_LOGIN",
+            "username": data.username,
+            "ip_address": client_ip,
+            "timestamp": datetime.now(timezone.utc).isoformat()
+        })
         raise HTTPException(status_code=401, detail="Invalid master credentials")
         
+    if not verify_password(data.password, user["password"]):
+        security_logs_collection.insert_one({
+            "event_type": "FAILED_LOGIN",
+            "username": data.username,
+            "ip_address": client_ip,
+            "timestamp": datetime.now(timezone.utc).isoformat()
+        })
+        raise HTTPException(status_code=401, detail="Invalid master credentials")
+        
+    last_ip = user.get("last_ip")
+    if last_ip and last_ip != client_ip:
+        security_logs_collection.insert_one({
+            "event_type": "NEW_IP_ADDRESS",
+            "username": data.username,
+            "ip_address": client_ip,
+            "timestamp": datetime.now(timezone.utc).isoformat()
+        })
+    admins_collection.update_one({"_id": user["_id"]}, {"$set": {"last_ip": client_ip}})
+    
     access_token = create_access_token(data={"sub": str(user["_id"]), "role": user["role"], "company_id": str(user.get("company_id", ""))})
     return {
         "status": "success",
@@ -7185,7 +7213,8 @@ def firebase_auth(data: FirebaseAuthRequest):
     }
 
 @router.post("/admin/login")
-def admin_login(data: AdminLogin):
+def admin_login(data: AdminLogin, request: Request):
+    client_ip = request.client.host if request.client else "unknown"
     # Try username match first, then email match (for self-registered users)
     user = admins_collection.find_one({"username": data.username, "role": {"$ne": "master"}})
     if not user:
@@ -7196,9 +7225,21 @@ def admin_login(data: AdminLogin):
         if not user:
             user = admins_collection.find_one({"email": data.username})
         if not user:
+            security_logs_collection.insert_one({
+                "event_type": "FAILED_LOGIN",
+                "username": data.username,
+                "ip_address": client_ip,
+                "timestamp": datetime.now(timezone.utc).isoformat()
+            })
             raise HTTPException(status_code=401, detail="Invalid username or password")
             
     if not verify_password(data.password, user["password"]):
+        security_logs_collection.insert_one({
+            "event_type": "FAILED_LOGIN",
+            "username": data.username,
+            "ip_address": client_ip,
+            "timestamp": datetime.now(timezone.utc).isoformat()
+        })
         raise HTTPException(status_code=401, detail="Invalid username or password")
     
     # Check login_enabled
@@ -7215,6 +7256,16 @@ def admin_login(data: AdminLogin):
     # Do NOT block login if expired, because they need to be able to access the dashboard to buy more credits!
     if plan_context["is_expired"]:
         print(f"User {user['username']} logged in with an expired subscription (Credits: {plan_context.get('credits')})")
+        
+    last_ip = user.get("last_ip")
+    if last_ip and last_ip != client_ip:
+        security_logs_collection.insert_one({
+            "event_type": "NEW_IP_ADDRESS",
+            "username": data.username,
+            "ip_address": client_ip,
+            "timestamp": datetime.now(timezone.utc).isoformat()
+        })
+    admins_collection.update_one({"_id": user["_id"]}, {"$set": {"last_ip": client_ip}})
         
     access_token = create_access_token(data={"sub": str(user["_id"]), "role": user.get("role", "tenant"), "company_id": str(user.get("company_id", ""))})
     return {
@@ -9833,6 +9884,23 @@ def get_superadmin_profile(current_admin: dict = Depends(get_current_admin_detai
     admin_doc["subscription_plan_key"] = plan_context["plan_key"]
     return admin_doc
 
+class SuperAdminPlanUpdate(BaseModel):
+    subscription_plan: str
+
+@router.put("/api/superadmin/subscription")
+@router.put("/superadmin/subscription")
+def update_superadmin_subscription(data: SuperAdminPlanUpdate, current_admin: dict = Depends(get_current_admin_details)):
+    if current_admin.get("role") not in ["super_admin", "master"]:
+        raise HTTPException(status_code=403, detail="Super Admin access required")
+    company_id = current_admin.get("company_id")
+    if not company_id:
+        raise HTTPException(status_code=400, detail="No company associated with this admin")
+    companies_collection.update_one(
+        {"_id": ObjectId(company_id)},
+        {"$set": {"subscription_plan": data.subscription_plan}}
+    )
+    return {"status": "success", "message": "Subscription plan updated successfully"}
+
 @router.delete("/api/superadmin/candidates/bulk")
 @router.delete("/superadmin/candidates/bulk")
 def superadmin_bulk_delete(data: BulkDeleteRequest, current_admin: dict = Depends(get_current_admin_details)):
@@ -10066,7 +10134,7 @@ async def generate_tts(
             def _call_cartesia():
                 client = Cartesia(api_key=cartesia_api_key)
                 result = client.tts.generate(
-                    model_id="sonic-2",
+                    model_id="sonic-english",
                     transcript=req.text,
                     voice={"mode": "id", "id": actual_cartesia_voice_id},
                     output_format={
@@ -11915,10 +11983,12 @@ def get_superadmin_org_stats(current_admin: dict = Depends(get_current_admin_det
 
 @router.get("/api/superadmin/recruiters/stats")
 def get_superadmin_recruiter_stats(current_admin: dict = Depends(get_current_admin_details)):
-    if current_admin.get("role") not in ["master", "superadmin"]:
+    if current_admin.get("role") not in ["master", "super_admin"]:
         raise HTTPException(status_code=403, detail="Not authorized")
     
-    admins = list(admins_collection.find({}, {"password": 0}))
+    company_id = current_admin.get("company_id")
+    query = {"company_id": company_id} if company_id else {}
+    admins = list(admins_collection.find(query, {"password": 0}))
     recruiters = []
     for a in admins:
         recruiters.append({
@@ -11946,7 +12016,7 @@ def get_superadmin_recruiter_stats(current_admin: dict = Depends(get_current_adm
 
 @router.get("/api/superadmin/credits/stats")
 def get_superadmin_credit_stats(current_admin: dict = Depends(get_current_admin_details)):
-    if current_admin.get("role") not in ["master", "superadmin"]:
+    if current_admin.get("role") not in ["master", "super_admin"]:
         raise HTTPException(status_code=403, detail="Not authorized")
         
     days = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"]
@@ -11982,7 +12052,7 @@ def get_superadmin_credit_stats(current_admin: dict = Depends(get_current_admin_
 
 @router.get("/api/superadmin/subscriptions/stats")
 def get_superadmin_subscription_stats(current_admin: dict = Depends(get_current_admin_details)):
-    if current_admin.get("role") not in ["master", "superadmin"]:
+    if current_admin.get("role") not in ["master", "super_admin"]:
         raise HTTPException(status_code=403, detail="Not authorized")
         
     months = ["Jan", "Feb", "Mar", "Apr", "May", "Jun"]
@@ -12005,26 +12075,176 @@ def get_superadmin_subscription_stats(current_admin: dict = Depends(get_current_
         ]
     }
 
-@router.get("/api/superadmin/integrations/status")
-def get_superadmin_integration_status(current_admin: dict = Depends(get_current_admin_details)):
-    if current_admin.get("role") not in ["master", "superadmin"]:
+
+# ─── Integration catalog (definitions stay in code, config stored in MongoDB) ───
+INTEGRATION_CATALOG = [
+    {"id": "workday",   "name": "Workday",           "category": "HRIS",     "description": "Sync employee and org data with Workday HRIS.",        "fields": [{"key": "tenant_id", "label": "Tenant ID", "type": "text", "placeholder": "your-tenant"}, {"key": "api_key", "label": "API Key", "type": "password", "placeholder": "wday_***"}, {"key": "base_url", "label": "Base URL", "type": "text", "placeholder": "https://wd3.myworkday.com"}]},
+    {"id": "greenhouse","name": "Greenhouse",        "category": "ATS",      "description": "Two-way sync of candidates and jobs.",                  "fields": [{"key": "api_key", "label": "API Key", "type": "password", "placeholder": "grnhse_***"}, {"key": "board_token", "label": "Board Token", "type": "text", "placeholder": "your-board"}]},
+    {"id": "lever",     "name": "Lever",             "category": "ATS",      "description": "Import Lever pipelines into HireIQ.",                   "fields": [{"key": "api_key", "label": "API Key", "type": "password", "placeholder": "lever_***"}]},
+    {"id": "gcal",      "name": "Google Calendar",   "category": "Calendar", "description": "Schedule interviews on recruiter calendars.",             "fields": [{"key": "client_id", "label": "OAuth Client ID", "type": "text", "placeholder": "*.apps.googleusercontent.com"}, {"key": "client_secret", "label": "Client Secret", "type": "password", "placeholder": "GOCSPX-***"}]},
+    {"id": "outlook",   "name": "Outlook Calendar",  "category": "Calendar", "description": "Two-way calendar sync with Microsoft 365.",               "fields": [{"key": "tenant_id", "label": "Azure Tenant ID", "type": "text", "placeholder": "xxxxxxxx-xxxx"}, {"key": "client_id", "label": "App (Client) ID", "type": "text", "placeholder": "xxxxxxxx-xxxx"}, {"key": "client_secret", "label": "Client Secret", "type": "password", "placeholder": "~abc***"}]},
+    {"id": "slack",     "name": "Slack",             "category": "Chat",     "description": "Send interview and hiring updates to channels.",           "fields": [{"key": "webhook_url", "label": "Webhook URL", "type": "text", "placeholder": "https://hooks.slack.com/services/..."}, {"key": "channel", "label": "Default Channel", "type": "text", "placeholder": "#hiring"}]},
+    {"id": "teams",     "name": "Microsoft Teams",   "category": "Chat",     "description": "Notifications and interview links in Teams.",             "fields": [{"key": "webhook_url", "label": "Incoming Webhook URL", "type": "text", "placeholder": "https://outlook.office.com/webhook/..."}]},
+    {"id": "zoom",      "name": "Zoom",              "category": "Video",    "description": "Auto-generate video interview links.",                    "fields": [{"key": "account_id", "label": "Account ID", "type": "text", "placeholder": "abc123"}, {"key": "client_id", "label": "Client ID", "type": "text", "placeholder": "xyz123"}, {"key": "client_secret", "label": "Client Secret", "type": "password", "placeholder": "secret_***"}]},
+    {"id": "sendgrid",  "name": "SendGrid",          "category": "Email",    "description": "Deliver transactional emails via SendGrid.",              "fields": [{"key": "api_key", "label": "API Key", "type": "password", "placeholder": "SG.***"}, {"key": "from_email", "label": "From Email", "type": "text", "placeholder": "noreply@company.com"}]},
+]
+
+
+@router.get("/api/superadmin/integrations")
+def get_superadmin_integrations(current_admin: dict = Depends(get_current_admin_details)):
+    """Return integration catalog merged with company-specific saved config from MongoDB."""
+    if current_admin.get("role") not in ["master", "super_admin", "superadmin"]:
         raise HTTPException(status_code=403, detail="Not authorized")
-        
-    integrations = [
-        {"id": "greenhouse", "name": "Greenhouse ATS", "status": "Connected", "health": 100, "syncs": random.randint(100, 500)},
-        {"id": "slack", "name": "Slack Notifications", "status": "Connected", "health": 98, "syncs": random.randint(1000, 5000)},
-        {"id": "zoom", "name": "Zoom Meetings", "status": "Disconnected", "health": 0, "syncs": 0},
-        {"id": "zapier", "name": "Zapier Webhooks", "status": "Warning", "health": 65, "syncs": random.randint(50, 100)}
-    ]
-    
-    times = ["10:00", "11:00", "12:00", "13:00", "14:00", "15:00"]
-    api_traffic = [{"time": t, "calls": random.randint(50, 200)} for t in times]
-    
+
+    company_id = current_admin.get("company_id")
+    saved = {}
+    if company_id:
+        try:
+            doc = companies_collection.find_one({"_id": ObjectId(company_id)}, {"integrations": 1})
+            if doc and doc.get("integrations"):
+                saved = {item["id"]: item for item in doc["integrations"]}
+        except Exception:
+            pass
+
+    result = []
+    for defn in INTEGRATION_CATALOG:
+        s = saved.get(defn["id"], {})
+        # Mask secret values – return True/False so frontend knows they exist
+        masked_config = {}
+        for f in defn["fields"]:
+            val = s.get("config", {}).get(f["key"], "")
+            if f["type"] == "password":
+                masked_config[f["key"]] = "••••••••" if val else ""
+            else:
+                masked_config[f["key"]] = val
+        result.append({
+            **defn,
+            "connected": s.get("connected", False),
+            "status": s.get("status", "Disconnected"),
+            "config": masked_config,
+            "configured_at": s.get("configured_at"),
+        })
+    return {"status": "success", "integrations": result}
+
+
+@router.put("/api/superadmin/integrations/{integration_id}")
+def configure_superadmin_integration(
+    integration_id: str,
+    body: dict,
+    current_admin: dict = Depends(get_current_admin_details),
+):
+    """Save (upsert) configuration for a specific integration. Stores full values in MongoDB."""
+    if current_admin.get("role") not in ["master", "super_admin", "superadmin"]:
+        raise HTTPException(status_code=403, detail="Not authorized")
+
+    defn = next((d for d in INTEGRATION_CATALOG if d["id"] == integration_id), None)
+    if not defn:
+        raise HTTPException(status_code=404, detail="Integration not found")
+
+    company_id = current_admin.get("company_id")
+    if not company_id:
+        raise HTTPException(status_code=400, detail="No company associated with your account")
+
+    config = body.get("config", {})
+    # Only keep keys that belong to this integration; ignore empty strings (don't overwrite existing secrets)
+    valid_keys = {f["key"] for f in defn["fields"]}
+    clean_config = {k: v for k, v in config.items() if k in valid_keys and v != "" and v != "••••••••"}
+
+    now_iso = datetime.now(timezone.utc).isoformat()
+
+    # Merge with existing config so we don't wipe saved secrets when only updating one field
+    try:
+        doc = companies_collection.find_one({"_id": ObjectId(company_id)}, {"integrations": 1})
+        existing_list = doc.get("integrations", []) if doc else []
+        existing_map = {item["id"]: item for item in existing_list}
+        prev = existing_map.get(integration_id, {})
+        merged_config = {**prev.get("config", {}), **clean_config}
+    except Exception:
+        merged_config = clean_config
+
+    new_entry = {
+        "id": integration_id,
+        "name": defn["name"],
+        "category": defn["category"],
+        "connected": True,
+        "status": "Healthy",
+        "config": merged_config,
+        "configured_at": now_iso,
+    }
+
+    try:
+        # Upsert into the integrations array by id
+        result = companies_collection.update_one(
+            {"_id": ObjectId(company_id), "integrations.id": integration_id},
+            {"$set": {"integrations.$": new_entry}},
+        )
+        if result.matched_count == 0:
+            # Not yet in array – push it
+            companies_collection.update_one(
+                {"_id": ObjectId(company_id)},
+                {"$push": {"integrations": new_entry}},
+                upsert=True,
+            )
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Failed to save integration: {e}")
+
     return {
         "status": "success",
-        "integrations": integrations,
-        "api_traffic": api_traffic
+        "message": f"{defn['name']} configured successfully",
+        "integration": {k: v for k, v in new_entry.items() if k != "config"},  # don't echo secrets
     }
+
+
+@router.patch("/api/superadmin/integrations/{integration_id}/toggle")
+def toggle_superadmin_integration(
+    integration_id: str,
+    body: dict,
+    current_admin: dict = Depends(get_current_admin_details),
+):
+    """Toggle connected/disconnected state for an integration."""
+    if current_admin.get("role") not in ["master", "super_admin", "superadmin"]:
+        raise HTTPException(status_code=403, detail="Not authorized")
+
+    company_id = current_admin.get("company_id")
+    if not company_id:
+        raise HTTPException(status_code=400, detail="No company associated with your account")
+
+    connected = body.get("connected", False)
+    status = "Healthy" if connected else "Disconnected"
+
+    try:
+        result = companies_collection.update_one(
+            {"_id": ObjectId(company_id), "integrations.id": integration_id},
+            {"$set": {"integrations.$.connected": connected, "integrations.$.status": status}},
+        )
+        if result.matched_count == 0:
+            # Integration not configured yet – create a minimal entry
+            companies_collection.update_one(
+                {"_id": ObjectId(company_id)},
+                {"$push": {"integrations": {
+                    "id": integration_id,
+                    "connected": connected,
+                    "status": status,
+                    "config": {},
+                    "configured_at": None,
+                }}},
+                upsert=True,
+            )
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Failed to toggle integration: {e}")
+
+    return {"status": "success", "connected": connected, "integration_status": status}
+
+
+@router.get("/api/superadmin/integrations/status")
+def get_superadmin_integration_status(current_admin: dict = Depends(get_current_admin_details)):
+    if current_admin.get("role") not in ["master", "superadmin", "super_admin"]:
+        raise HTTPException(status_code=403, detail="Not authorized")
+
+    times = ["10:00", "11:00", "12:00", "13:00", "14:00", "15:00"]
+    api_traffic = [{"time": t, "calls": random.randint(50, 200)} for t in times]
+    return {"status": "success", "api_traffic": api_traffic}
+
 
 @router.get("/api/superadmin/audit-logs")
 def get_superadmin_audit_logs(current_admin: dict = Depends(get_current_admin_details)):
@@ -12051,7 +12271,7 @@ def get_superadmin_audit_logs(current_admin: dict = Depends(get_current_admin_de
 
 @router.get("/api/superadmin/security/stats")
 def get_superadmin_security_stats(current_admin: dict = Depends(get_current_admin_details)):
-    if current_admin.get("role") not in ["master", "superadmin"]:
+    if current_admin.get("role") not in ["master", "super_admin"]:
         raise HTTPException(status_code=403, detail="Not authorized")
         
     auth_methods = [
@@ -12060,17 +12280,91 @@ def get_superadmin_security_stats(current_admin: dict = Depends(get_current_admi
         {"name": "SAML", "value": 5}
     ]
     
+    now_utc = datetime.now(timezone.utc)
+    yesterday = (now_utc - timedelta(days=1)).isoformat()
+    
+    failed_logins_24h = security_logs_collection.count_documents({
+        "event_type": "FAILED_LOGIN",
+        "timestamp": {"$gte": yesterday}
+    })
+    
+    recent_logs_cursor = security_logs_collection.find().sort("timestamp", -1).limit(10)
+    recent_alerts = []
+    
+    for log in recent_logs_cursor:
+        try:
+            log_time = datetime.fromisoformat(log.get("timestamp", now_utc.isoformat()))
+        except ValueError:
+            log_time = now_utc
+            
+        diff = now_utc - log_time
+        
+        if diff.total_seconds() < 60:
+            time_str = "just now"
+        elif diff.total_seconds() < 3600:
+            time_str = f"{int(diff.total_seconds() // 60)} mins ago"
+        elif diff.total_seconds() < 86400:
+            time_str = f"{int(diff.total_seconds() // 3600)} hours ago"
+        else:
+            time_str = f"{int(diff.total_seconds() // 86400)} days ago"
+            
+        event_label = "Failed Login" if log["event_type"] == "FAILED_LOGIN" else "New IP Address"
+        
+        recent_alerts.append({
+            "type": f"{event_label} ({log.get('username', 'unknown')})",
+            "ip": log.get("ip_address", "Unknown IP"),
+            "time": time_str
+        })
+    
     return {
         "status": "success",
         "kpis": {
-            "security_score": 92,
+            "security_score": 92, # Placeholder until full security scoring is implemented
             "active_sessions": random.randint(50, 150),
-            "failed_logins_24h": random.randint(5, 20),
+            "failed_logins_24h": failed_logins_24h,
             "users_with_2fa": "45%"
         },
         "auth_methods": auth_methods,
-        "recent_alerts": [
-            {"type": "Multiple Failed Logins", "ip": "45.22.11.9", "time": "2 hours ago"},
-            {"type": "New IP Address", "ip": "104.22.5.1", "time": "5 hours ago"}
-        ]
+        "recent_alerts": recent_alerts
     }
+
+class SecurityPoliciesUpdate(BaseModel):
+    require_2fa: bool
+    strict_session_timeout: bool
+    restrict_ip: bool
+
+@router.get("/api/superadmin/security/policies")
+def get_security_policies(current_admin: dict = Depends(get_current_admin_details)):
+    if current_admin.get("role") not in ["master", "super_admin"]:
+        raise HTTPException(status_code=403, detail="Not authorized")
+        
+    policies = security_policies_collection.find_one({"_id": "global_policies"})
+    if not policies:
+        policies = {
+            "require_2fa": True,
+            "strict_session_timeout": True,
+            "restrict_ip": False
+        }
+    else:
+        policies.pop("_id", None)
+        
+    return {"status": "success", "policies": policies}
+
+@router.put("/api/superadmin/security/policies")
+def update_security_policies(data: SecurityPoliciesUpdate, current_admin: dict = Depends(get_current_admin_details)):
+    if current_admin.get("role") not in ["master", "super_admin"]:
+        raise HTTPException(status_code=403, detail="Not authorized")
+        
+    security_policies_collection.update_one(
+        {"_id": "global_policies"},
+        {"$set": {
+            "require_2fa": data.require_2fa,
+            "strict_session_timeout": data.strict_session_timeout,
+            "restrict_ip": data.restrict_ip,
+            "updated_at": datetime.now(timezone.utc).isoformat(),
+            "updated_by": current_admin.get("username")
+        }},
+        upsert=True
+    )
+    
+    return {"status": "success", "message": "Security policies updated successfully"}

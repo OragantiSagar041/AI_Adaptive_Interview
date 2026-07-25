@@ -1,164 +1,189 @@
-import React, { useState, useEffect } from 'react';
-import { useSelector } from 'react-redux';
-import { LineChart, Line, PieChart, Pie, Cell, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer } from 'recharts';
-import { DollarSign, ShieldCheck, Repeat, TrendingDown } from 'lucide-react';
-import axios from 'axios';
-
-const COLORS = ['#64748b', '#3b82f6', '#6366f1', '#8b5cf6'];
+import { useState, useEffect } from "react";
+import { Check, Package, Loader2 } from "lucide-react";
+import { toast } from "sonner";
+import { AdminShell } from "@/components/admin-shell";
+import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
+import { Button } from "@/components/ui/button";
+import { Badge } from "@/components/ui/badge";
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import axios from "axios";
+import { useSelector } from "react-redux";
+import { API_BASE_URL } from "@/apiConfig";
 
 export default function SubscriptionManagementPage() {
-  const { API_BASE_URL, token } = useSelector(state => state.auth);
-  const [data, setData] = useState(null);
+  const [subs, setSubs] = useState([]);
+  const [plans, setPlans] = useState([]);
   const [loading, setLoading] = useState(true);
+  
+  const token = useSelector((state) => state.auth.token);
 
   useEffect(() => {
-    const fetchStats = async () => {
+    const fetchData = async () => {
       try {
+        setLoading(true);
+        const headers = { Authorization: `Bearer ${token}` };
         
+        // Fetch plans and profile simultaneously
+        const [plansRes, profileRes] = await Promise.all([
+          axios.get(`${API_BASE_URL}/api/plans`),
+          axios.get(`${API_BASE_URL}/api/superadmin/profile`, { headers })
+        ]);
         
-        const res = await axios.get(`${API_BASE_URL}/api/superadmin/subscriptions/stats`, {
-          headers: { Authorization: `Bearer ${token}` }
-        });
-        setData(res.data);
+        // Transform plans
+        const backendPlans = plansRes.data.map(p => ({
+          id: p.id,
+          name: p.plan_name,
+          price: p.price,
+          credits: `${p.credits / 1000}k / mo`, // format nicely
+          features: p.features || []
+        }));
+        setPlans(backendPlans);
+        
+        // Get own subscription
+        const profile = profileRes.data;
+        const currentPlanKey = profile.subscription_plan_key || "basic";
+        const matchedPlan = backendPlans.find(p => (p.name || "").toLowerCase() === currentPlanKey.toLowerCase()) || backendPlans[0];
+
+        const backendSubs = [{
+          id: profile.company_id || profile.id,
+          org: profile.company_name || profile.username || "Your Organization",
+          plan: matchedPlan?.name || "Basic",
+          renews: "N/A",
+          amount: matchedPlan?.price || 0,
+          status: profile.is_expired ? "Past Due" : "Active"
+        }];
+        setSubs(backendSubs);
+        
       } catch (error) {
-        console.error("Failed to fetch subscription stats", error);
+        console.error("Failed to fetch subscription data:", error);
+        toast.error("Failed to load subscriptions");
       } finally {
         setLoading(false);
       }
     };
-    fetchStats();
-  }, [API_BASE_URL, token]);
+    
+    if (token) {
+      fetchData();
+    }
+  }, [token]);
+
+  async function changePlan(id, newPlanName) {
+    try {
+      const price = plans.find((p) => p.name === newPlanName)?.price ?? 0;
+      
+      // Optomistic UI update
+      setSubs((prev) => prev.map((s) => s.id === id ? { ...s, plan: newPlanName, amount: price } : s));
+      
+      // Find the corresponding plan key for backend (e.g. "Professional" -> "advance" or just pass name)
+      // Usually the backend uses basic/advance/enterprise keys, let's send what they select for now
+      await axios.put(
+        `${API_BASE_URL}/api/superadmin/subscription`,
+        { subscription_plan: newPlanName.toLowerCase() },
+        { headers: { Authorization: `Bearer ${token}` } }
+      );
+      
+      toast.success(`Plan updated to ${newPlanName}`);
+    } catch (error) {
+      console.error("Failed to update plan:", error);
+      toast.error("Failed to update plan on server");
+    }
+  }
 
   if (loading) {
     return (
-      <div className="flex h-full items-center justify-center min-h-[60vh]">
-        <div className="animate-spin rounded-full h-12 w-12 border-t-2 border-b-2 border-indigo-500"></div>
-      </div>
+      <AdminShell title="Subscription Management" description="Plans, renewals and billing for every organization.">
+        <div className="flex h-64 items-center justify-center">
+          <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
+        </div>
+      </AdminShell>
     );
   }
 
-  const kpis = data?.kpis || {};
-  const mrrChart = data?.mrr_chart || [];
-  const tiers = data?.tiers || [];
-
   return (
-    <div
-      className="p-8 max-w-7xl mx-auto space-y-8"
-    >
-      <div className="flex justify-between items-center">
-        <div>
-          <h1 className="text-3xl font-bold text-slate-900">Subscription Management</h1>
-          <p className="text-slate-500 mt-1">Monitor MRR, active plans, and churn rates.</p>
-        </div>
+    <AdminShell title="Subscription Management" description="Plans, renewals and billing for every organization.">
+      <div className="grid gap-4 md:grid-cols-3">
+        {plans.map((p) => (
+          <Card key={p.name} className={p.name === "Professional" ? "border-primary shadow-sm" : ""}>
+            <CardHeader>
+              <div className="flex items-center justify-between">
+                <div className="grid h-9 w-9 place-items-center rounded-md bg-primary/10 text-primary">
+                  <Package className="h-4 w-4" />
+                </div>
+                {p.name === "Professional" && <Badge>Popular</Badge>}
+              </div>
+              <CardTitle>{p.name}</CardTitle>
+              <CardDescription>
+                <span className="text-2xl font-semibold text-foreground">${p.price}</span> / mo · {p.credits}
+              </CardDescription>
+            </CardHeader>
+            <CardContent className="space-y-2 text-sm">
+              {p.features.map((f, i) => (
+                <div key={i} className="flex items-center gap-2">
+                  <Check className="h-4 w-4 text-emerald-500" />
+                  {f}
+                </div>
+              ))}
+              <Button className="mt-3 w-full" variant={p.name === "Professional" ? "default" : "outline"} onClick={() => toast.success(`Editing ${p.name} plan`)}>
+                Manage plan
+              </Button>
+            </CardContent>
+          </Card>
+        ))}
       </div>
 
-      {/* KPI Cards */}
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
-        <KPICard 
-          title="Monthly Recurring Rev" 
-          value={kpis.mrr} 
-          icon={<DollarSign className="w-6 h-6 text-emerald-500" />} 
-          delay={0.1}
-        />
-        <KPICard 
-          title="Annual Run Rate" 
-          value={kpis.arr} 
-          icon={<TrendingDown className="w-6 h-6 text-indigo-500" />} 
-          delay={0.2}
-        />
-        <KPICard 
-          title="Active Subscribers" 
-          value={kpis.active_subs} 
-          icon={<ShieldCheck className="w-6 h-6 text-blue-500" />} 
-          delay={0.3}
-        />
-        <KPICard 
-          title="Churn Rate" 
-          value={kpis.churn_rate} 
-          icon={<Repeat className="w-6 h-6 text-rose-500" />} 
-          delay={0.4}
-        />
-      </div>
-
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
-        
-        {/* MRR Chart */}
-        <div
-          className="lg:col-span-2 bg-white p-6 rounded-2xl shadow-sm border border-slate-100"
-        >
-          <h2 className="text-lg font-semibold text-slate-800 mb-6">MRR Growth (6 Months)</h2>
-          <div className="h-72 w-full">
-            <ResponsiveContainer width="100%" height="100%">
-              <LineChart data={mrrChart}>
-                <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#e2e8f0" />
-                <XAxis dataKey="name" axisLine={false} tickLine={false} tick={{ fill: '#64748b' }} dy={10} />
-                <YAxis axisLine={false} tickLine={false} tick={{ fill: '#64748b' }} dx={-10} tickFormatter={(val) => `$${val}`} />
-                <Tooltip 
-                  formatter={(val) => [`$${val}`, 'MRR']}
-                  contentStyle={{ borderRadius: '12px', border: 'none', boxShadow: '0 10px 15px -3px rgb(0 0 0 / 0.1)' }}
-                  itemStyle={{ color: '#0f172a', fontWeight: 600 }}
-                />
-                <Line 
-                  type="monotone" 
-                  dataKey="mrr" 
-                  stroke="#10b981" 
-                  strokeWidth={3}
-                  dot={{ r: 4, strokeWidth: 2, fill: '#fff' }}
-                  activeDot={{ r: 6, fill: '#10b981' }}
-                />
-              </LineChart>
-            </ResponsiveContainer>
-          </div>
-        </div>
-
-        {/* Tier Distribution */}
-        <div
-          className="bg-white p-6 rounded-2xl shadow-sm border border-slate-100"
-        >
-          <h2 className="text-lg font-semibold text-slate-800 mb-2">Subscriber Tiers</h2>
-          <div className="h-64 w-full">
-            <ResponsiveContainer width="100%" height="100%">
-              <PieChart>
-                <Pie
-                  data={tiers}
-                  cx="50%"
-                  cy="50%"
-                  innerRadius={60}
-                  outerRadius={90}
-                  paddingAngle={5}
-                  dataKey="value"
-                >
-                  {tiers.map((entry, index) => (
-                    <Cell key={`cell-${index}`} fill={COLORS[index % COLORS.length]} />
-                  ))}
-                </Pie>
-                <Tooltip 
-                  contentStyle={{ borderRadius: '12px', border: 'none', boxShadow: '0 10px 15px -3px rgb(0 0 0 / 0.1)' }}
-                />
-                <Legend verticalAlign="bottom" height={36} iconType="circle" />
-              </PieChart>
-            </ResponsiveContainer>
-          </div>
-        </div>
-      </div>
-    </div>
-  );
-}
-
-function KPICard({ title, value, icon, delay }) {
-  return (
-    <div
-      className="bg-white p-6 rounded-2xl shadow-sm border border-slate-100 hover:shadow-md transition-shadow"
-    >
-      <div className="flex justify-between items-start mb-4">
-        <div className="p-3 rounded-xl bg-slate-50">
-          {icon}
-        </div>
-      </div>
-      <div>
-        <p className="text-sm font-medium text-slate-500 mb-1">{title}</p>
-        <h3 className="text-3xl font-bold text-slate-900">{value}</h3>
-      </div>
-    </div>
+      <Card>
+        <CardHeader className="pb-2">
+          <CardTitle className="text-base">Active subscriptions</CardTitle>
+        </CardHeader>
+        <CardContent>
+          <Table>
+            <TableHeader>
+              <TableRow>
+                <TableHead>Organization</TableHead>
+                <TableHead>Plan</TableHead>
+                <TableHead>Renews</TableHead>
+                <TableHead className="text-right">MRR</TableHead>
+                <TableHead>Status</TableHead>
+                <TableHead className="text-right">Actions</TableHead>
+              </TableRow>
+            </TableHeader>
+            <TableBody>
+              {subs.map((s) => (
+                <TableRow key={s.id}>
+                  <TableCell className="font-medium">{s.org}</TableCell>
+                  <TableCell>
+                    <Select value={s.plan} onValueChange={(v) => changePlan(s.id, v)}>
+                      <SelectTrigger className="w-[160px] h-8"><SelectValue /></SelectTrigger>
+                      <SelectContent>
+                        {plans.map((p) => (
+                          <SelectItem key={p.name} value={p.name}>{p.name}</SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </TableCell>
+                  <TableCell className="text-muted-foreground">{s.renews}</TableCell>
+                  <TableCell className="text-right tabular-nums">${s.amount}</TableCell>
+                  <TableCell>
+                    <Badge className={
+                      s.status === "Active" ? "bg-emerald-500/15 text-emerald-700" :
+                      s.status === "Trial" ? "bg-amber-500/15 text-amber-700" :
+                      "bg-rose-500/15 text-rose-700"
+                    }>
+                      {s.status}
+                    </Badge>
+                  </TableCell>
+                  <TableCell className="text-right">
+                    <Button size="sm" variant="ghost" onClick={() => toast.success(`Invoice sent to ${s.org}`)}>
+                      Send invoice
+                    </Button>
+                  </TableCell>
+                </TableRow>
+              ))}
+            </TableBody>
+          </Table>
+        </CardContent>
+      </Card>
+    </AdminShell>
   );
 }
