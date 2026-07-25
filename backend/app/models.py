@@ -32,6 +32,7 @@ class SubAdminCreate(BaseModel):
     email: str
     name: str
     credits: int = 0
+    description: Optional[str] = None
 
 class CreditRequestCreate(BaseModel):
     amount: int = Field(gt=0, le=1_000_000)

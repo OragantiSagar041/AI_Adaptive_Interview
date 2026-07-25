@@ -37,7 +37,11 @@ from app import config
 # Application factory
 # ---------------------------------------------------------------------------
 from pymongo import ASCENDING, DESCENDING
-from mongo_db import interview_sessions_collection
+from mongo_db import (
+    interview_sessions_collection,
+    security_logs_collection,
+    security_policies_collection,
+)
 
 # ---------------------------------------------------------------------------
 # Redis singleton — created ONCE at module load, reused by every request.
@@ -80,6 +84,10 @@ async def lifespan(app: FastAPI):
         interview_sessions_collection.create_index([("company_id", ASCENDING), ("created_by", ASCENDING), ("status", ASCENDING)])
         interview_sessions_collection.create_index([("company_id", ASCENDING), ("created_by", ASCENDING), ("created_at", DESCENDING)])
         interview_sessions_collection.create_index([("link_id", ASCENDING)], unique=True)
+        # Security indexes for fast queries
+        security_logs_collection.create_index([("timestamp", DESCENDING)])
+        security_logs_collection.create_index([("event_type", ASCENDING), ("timestamp", DESCENDING)])
+        security_policies_collection.create_index([("_id", ASCENDING)])
         print("MongoDB Indexes Initialized Successfully!")
     except Exception as e:
         print(f"Failed to initialize indexes: {e}")

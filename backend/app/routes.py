@@ -3873,6 +3873,7 @@ def update_profile(data: UpdateProfileRequest, current_admin: str = Depends(get_
             update_fields["email"] = data.email
         if data.username:
             update_fields["username"] = data.username
+            update_fields["name"] = data.username
         if data.company_name:
             update_fields["company_name"] = data.company_name
             
@@ -8452,6 +8453,20 @@ def create_sub_admin(data: SubAdminCreate, current_admin: dict = Depends(get_cur
     
     new_admin["custom_id"] = get_next_sequence_value("recruiter", "RC")
     admins_collection.insert_one(new_admin)
+    
+    # Trigger credentials email via Celery
+    try:
+        from app.tasks import send_recruiter_credentials_email_task
+        send_recruiter_credentials_email_task.delay(
+            recruiter_email=data.email,
+            recruiter_name=data.name,
+            username=data.username,
+            password=data.password,
+            description=data.description if data.description else ""
+        )
+    except Exception as e:
+        print(f"Failed to enqueue recruiter credentials email task: {e}")
+        
     return {"status": "success", "message": "Sub-admin created successfully"}
 
 @router.post("/super-admin/admins/{admin_id}/toggle-status")
@@ -8526,7 +8541,18 @@ def add_sub_admin_credits(admin_id: str, data: AddCreditsRequest, current_admin:
             )
             if not updated_admin:
                 raise HTTPException(status_code=404, detail="Sub-admin not found")
-    
+            
+            # Record ledger transaction
+            credit_ledger_collection.insert_one({
+                "company_id": company_id,
+                "super_admin_id": super_admin_id,
+                "sub_admin_id": str(admin_id),
+                "org": updated_admin.get("name") or updated_admin.get("username"),
+                "amount": data.credits,
+                "status": "Completed",
+                "date": datetime.now(timezone.utc).isoformat()
+            }, session=db_session)
+
     # Broadcast to requesting sub-admin
     broadcast_profile_update(
         admin_id=admin_id,
@@ -11957,7 +11983,7 @@ from datetime import timedelta
 
 @router.get("/api/superadmin/organizations/stats")
 def get_superadmin_org_stats(current_admin: dict = Depends(get_current_admin_details)):
-    if current_admin.get("role") not in ["master", "superadmin"]:
+    if current_admin.get("role") not in ["master", "super_admin"]:
         raise HTTPException(status_code=403, detail="Not authorized")
     # Mock data aggregation mixed with DB
     total_companies = companies_collection.count_documents({})
@@ -11990,25 +12016,56 @@ def get_superadmin_recruiter_stats(current_admin: dict = Depends(get_current_adm
     query = {"company_id": company_id} if company_id else {}
     admins = list(admins_collection.find(query, {"password": 0}))
     recruiters = []
+    total_interviews = 0
     for a in admins:
+        interviews_count = interview_sessions_collection.count_documents({"admin_id": str(a.get("_id"))})
+        total_interviews += interviews_count
+        
+        last_interview = interview_sessions_collection.find_one(
+            {"admin_id": str(a.get("_id"))},
+            sort=[("created_at", -1)]
+        )
+        last_active = last_interview.get("created_at") if last_interview else a.get("created_at", datetime.now(timezone.utc).isoformat())
+        
         recruiters.append({
             "id": str(a.get("_id")),
             "name": a.get("name") or a.get("username"),
             "email": a.get("email", "N/A"),
             "role": a.get("role", "admin"),
             "status": "Active" if a.get("is_active", True) else "Inactive",
-            "interviews_conducted": random.randint(5, 100),
-            "last_active": (datetime.now(timezone.utc) - timedelta(days=random.randint(0, 10))).isoformat()
+            "credits": a.get("credits", 0),
+            "interviews_conducted": interviews_count,
+            "last_active": last_active
         })
     
-    weekly_activity = [{"name": f"Week {i}", "interviews": random.randint(50, 200)} for i in range(1, 9)]
+    now = datetime.now(timezone.utc)
+    weekly_activity = []
+    
+    for i in range(8, 0, -1):
+        start_date = now - timedelta(days=7*i)
+        end_date = now - timedelta(days=7*(i-1))
+        
+        date_query = {
+            "created_at": {
+                "$gte": start_date.isoformat(),
+                "$lt": end_date.isoformat()
+            }
+        }
+        if company_id:
+            date_query["company_id"] = company_id
+            
+        count = interview_sessions_collection.count_documents(date_query)
+        weekly_activity.append({
+            "name": f"Week {9-i}",
+            "interviews": count
+        })
     
     return {
         "status": "success",
         "kpis": {
             "total_recruiters": len(recruiters),
             "active_now": len([r for r in recruiters if r["status"] == "Active"]),
-            "avg_interviews": 45
+            "avg_interviews": round(total_interviews / len(recruiters)) if recruiters else 0
         },
         "recruiters": recruiters,
         "weekly_activity": weekly_activity
@@ -12024,8 +12081,12 @@ def get_superadmin_credit_stats(current_admin: dict = Depends(get_current_admin_
     
     thirty_days_ago = (datetime.now(timezone.utc) - timedelta(days=30)).isoformat()
     
+    query = {"company_id": current_admin.get("company_id")} if current_admin.get("company_id") else {}
+    history_docs = list(credit_ledger_collection.find(query).sort("date", -1).limit(10))
     history = [
-        {"id": f"txn_{random.randint(1000, 9999)}", "org": "TechCorp", "amount": 500, "date": (datetime.now(timezone.utc) - timedelta(days=i)).isoformat(), "status": "Completed"} for i in range(5)
+        {"id": str(d.get("_id")), "org": d.get("org", "Unknown"), "amount": d.get("amount", 0), 
+         "date": d.get("date"), "status": d.get("status", "Completed")} 
+        for d in history_docs
     ]
     
     total_company_credits = 0
@@ -12368,3 +12429,94 @@ def update_security_policies(data: SecurityPoliciesUpdate, current_admin: dict =
     )
     
     return {"status": "success", "message": "Security policies updated successfully"}
+
+class RecruiterUpdate(BaseModel):
+    name: str
+    email: str
+    role: str
+
+class RecruiterMessage(BaseModel):
+    subject: str
+    body: str
+
+@router.put("/api/superadmin/recruiters/{admin_id}")
+def update_recruiter(admin_id: str, data: RecruiterUpdate, current_admin: dict = Depends(get_current_admin_details)):
+    if current_admin.get("role") not in ["master", "super_admin"]:
+        raise HTTPException(status_code=403, detail="Not authorized")
+        
+    try:
+        from bson import ObjectId
+        obj_id = ObjectId(admin_id)
+    except:
+        raise HTTPException(status_code=400, detail="Invalid admin ID")
+        
+    result = admins_collection.update_one(
+        {"_id": obj_id},
+        {"$set": {
+            "name": data.name,
+            "email": data.email,
+            "role": data.role,
+            "updated_at": datetime.now(timezone.utc).isoformat()
+        }}
+    )
+    
+    if result.modified_count == 0:
+        raise HTTPException(status_code=404, detail="Recruiter not found or no changes made")
+        
+    return {"status": "success", "message": "Recruiter updated successfully"}
+
+@router.post("/api/superadmin/recruiters/{admin_id}/message")
+def send_recruiter_message(admin_id: str, data: RecruiterMessage, current_admin: dict = Depends(get_current_admin_details)):
+    if current_admin.get("role") not in ["master", "super_admin"]:
+        raise HTTPException(status_code=403, detail="Not authorized")
+        
+    try:
+        from bson import ObjectId
+        obj_id = ObjectId(admin_id)
+    except:
+        raise HTTPException(status_code=400, detail="Invalid admin ID")
+        
+    target_admin = admins_collection.find_one({"_id": obj_id})
+    if not target_admin:
+        raise HTTPException(status_code=404, detail="Recruiter not found")
+        
+    messages_collection.insert_one({
+        "sender_id": current_admin.get("_id"),
+        "sender_email": current_admin.get("email"),
+        "receiver_id": obj_id,
+        "receiver_email": target_admin.get("email"),
+        "subject": data.subject,
+        "body": data.body,
+        "timestamp": datetime.now(timezone.utc).isoformat()
+    })
+    
+    return {"status": "success", "message": "Message sent successfully"}
+
+@router.put("/api/superadmin/recruiters/{admin_id}/toggle-status")
+def toggle_recruiter_status(admin_id: str, current_admin: dict = Depends(get_current_admin_details)):
+    if current_admin.get("role") not in ["master", "super_admin"]:
+        raise HTTPException(status_code=403, detail="Not authorized")
+        
+    try:
+        from bson import ObjectId
+        obj_id = ObjectId(admin_id)
+    except:
+        raise HTTPException(status_code=400, detail="Invalid admin ID")
+        
+    target_admin = admins_collection.find_one({"_id": obj_id})
+    if not target_admin:
+        raise HTTPException(status_code=404, detail="Recruiter not found")
+        
+    current_status = target_admin.get("is_active", True)
+    new_status = not current_status
+    
+    admins_collection.update_one(
+        {"_id": obj_id},
+        {"$set": {
+            "is_active": new_status,
+            "updated_at": datetime.now(timezone.utc).isoformat()
+        }}
+    )
+    
+    action = "activated" if new_status else "deactivated"
+    return {"status": "success", "message": f"Recruiter successfully {action}"}
