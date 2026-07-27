@@ -22,6 +22,8 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.middleware.gzip import GZipMiddleware
 from fastapi.responses import JSONResponse
 from fastapi.staticfiles import StaticFiles
+import traceback
+from datetime import datetime, timezone
 from starlette.middleware.base import BaseHTTPMiddleware
 
 # ---------------------------------------------------------------------------
@@ -41,6 +43,7 @@ from mongo_db import (
     interview_sessions_collection,
     security_logs_collection,
     security_policies_collection,
+    crash_logs_collection,
 )
 
 # ---------------------------------------------------------------------------
@@ -106,6 +109,29 @@ app = FastAPI(
     version="2.0.0",
     lifespan=lifespan,
 )
+
+@app.exception_handler(Exception)
+async def global_exception_handler(request: Request, exc: Exception):
+    error_details = {
+        "timestamp": datetime.now(timezone.utc).isoformat(),
+        "method": request.method,
+        "url": str(request.url),
+        "error_type": type(exc).__name__,
+        "error_message": str(exc),
+        "stack_trace": traceback.format_exc(),
+        "status": "unresolved"
+    }
+    try:
+        crash_logs_collection.insert_one(error_details)
+    except:
+        pass
+    
+    # We still want to raise the normal HTTPException if it was one
+    from fastapi.exceptions import HTTPException
+    if isinstance(exc, HTTPException):
+        return JSONResponse(status_code=exc.status_code, content={"detail": exc.detail})
+        
+    return JSONResponse(status_code=500, content={"detail": "Internal Server Error"})
 
 
 class RateLimitMiddleware(BaseHTTPMiddleware):

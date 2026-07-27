@@ -9888,6 +9888,16 @@ def superadmin_interview_create(data: dict, background_tasks: BackgroundTasks, c
         except Exception as e:
             raise HTTPException(status_code=422, detail=str(e))
         return create_session(single_data, current_admin)
+@router.get("/api/superadmin/crash-logs")
+@router.get("/superadmin/crash-logs")
+def get_crash_logs(current_admin: dict = Depends(get_current_admin_details)):
+    if current_admin.get("role") not in ["super_admin", "master"]:
+        raise HTTPException(status_code=403, detail="Super Admin access required")
+    from mongo_db import crash_logs_collection
+    logs = list(crash_logs_collection.find().sort("timestamp", -1).limit(50))
+    for log in logs:
+        log["_id"] = str(log["_id"])
+    return {"status": "success", "logs": logs}
 
 @router.get("/api/superadmin/profile")
 @router.get("/superadmin/profile")
