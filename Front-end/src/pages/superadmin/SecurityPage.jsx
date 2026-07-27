@@ -8,8 +8,8 @@ const ToggleSwitch = ({ checked, onChange }) => (
     <div className={`bg-white w-4 h-4 rounded-full shadow-md transform transition-transform ${checked ? 'translate-x-5' : 'translate-x-0'}`}></div>
   </div>
 );
-import api, { dedupedGet } from '@/lib/api';
-import { API_BASE_URL } from '@/apiConfig';
+import api, { dedupedGet } from '../../lib/api';
+import { API_BASE_URL } from '../../apiConfig';
 
 const COLORS = ['#6366f1', '#10b981', '#f43f5e'];
 
