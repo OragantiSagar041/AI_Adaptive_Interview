@@ -437,10 +437,23 @@ export default function SuperAdminLayout() {
 
   return (
     <SidebarProvider>
-      <div className="superadmin-theme min-h-screen bg-slate-50 text-slate-900 flex font-sans w-full overflow-hidden">
+      <div className="superadmin-theme min-h-screen bg-slate-50 text-slate-900 flex font-sans w-full overflow-hidden relative">
+        {/* Global Premium Background Grid & Dynamic Accent Gradient */}
+        <div className="absolute inset-0 z-0 pointer-events-none">
+          {/* Full-page soft color wash that changes with the theme */}
+          <div 
+            className="absolute inset-0 transition-colors duration-700" 
+            style={{ 
+              background: `linear-gradient(135deg, ${currentAccent.primary}15 0%, transparent 50%, ${currentAccent.primary}10 100%)` 
+            }} 
+          />
+          {/* Grid overlay */}
+          <div className="absolute inset-0 bg-grid-fine opacity-60" />
+        </div>
+
         {/* NEW SHADCN SIDEBAR */}
-        <Sidebar className="border-r border-slate-200 bg-white" collapsible="icon">
-          <SidebarHeader className="h-16 border-b border-slate-200 px-6 py-0 flex items-center justify-center shrink-0">
+        <Sidebar className="border-r border-slate-200/60 bg-white/60 backdrop-blur-xl z-20" collapsible="icon">
+          <SidebarHeader className="h-16 border-b border-slate-200/60 px-6 py-0 flex items-center justify-center shrink-0">
             <div className="flex items-center gap-3 w-full overflow-hidden">
               <div className="grid h-8 w-8 shrink-0 place-items-center rounded-lg bg-indigo-600 text-white shadow-sm">
                 <Zap className="h-4 w-4" />
@@ -512,9 +525,9 @@ export default function SuperAdminLayout() {
         </Sidebar>
 
         {/* Main Content Wrapper */}
-        <div className="flex-1 flex flex-col min-w-0 h-screen overflow-hidden">
+        <div className="flex-1 flex flex-col min-w-0 h-screen overflow-hidden relative z-10">
           {/* Top bar */}
-          <header className="sticky top-0 z-30 border-b border-slate-200 bg-white flex items-center justify-between px-6 h-16 shadow-sm shrink-0">
+          <header className="sticky top-0 z-30 border-b border-slate-200/60 bg-white/60 backdrop-blur-xl flex items-center justify-between px-6 h-16 shadow-sm shrink-0">
           {/* Left Side: Brand & Toggles */}
           <div className="flex items-center gap-6">
             <SidebarTrigger className="-ml-2 md:mr-2 text-slate-500 hover:text-slate-800 transition-colors" />
@@ -581,7 +594,9 @@ export default function SuperAdminLayout() {
         </header>
 
         {/* Main Content */}
-        <main className="flex-1 overflow-y-auto bg-slate-50/50 relative">
+        <main className="flex-1 overflow-y-auto bg-transparent relative">
+          
+          <div className="relative z-10">
           {notifDropdownOpen && (
             <div className="absolute right-4 top-4 w-80 bg-white border border-slate-200 rounded-2xl shadow-xl py-2 z-50">
               <div className="flex items-center justify-between px-4 py-2 border-b border-slate-100">
@@ -643,6 +658,7 @@ export default function SuperAdminLayout() {
 
           <div className="p-4 lg:p-8">
             <Outlet context={{ handleOpenLiveStreamAction }} />
+          </div>
           </div>
         </main>
       </div>
