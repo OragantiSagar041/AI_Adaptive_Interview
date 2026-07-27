@@ -2632,17 +2632,20 @@ def queue_or_send_interview_email(session_doc: Dict[str, Any], link_url: str, sk
 
     # Celery: Push email sending to background
     from app import tasks  # local import to avoid circular imports
-    tasks.send_email_task.delay(
-        candidate_email=session_doc.get("candidate_email", ""),
-        candidate_name=session_doc.get("candidate_name", ""),
-        link_url=link_url,
-        duration=session_doc.get("interview_duration", 30),
-        job_description=session_doc.get("job_description", ""),
-        custom_html=session_doc.get("custom_email_html", ""),
-        scheduled_start=session_doc.get("scheduled_start", ""),
-        scheduled_end=session_doc.get("scheduled_end", ""),
-        jd_file_url=session_doc.get("jd_file_url")
-    )
+    try:
+        tasks.send_email_task.delay(
+            candidate_email=session_doc.get("candidate_email", ""),
+            candidate_name=session_doc.get("candidate_name", ""),
+            link_url=link_url,
+            duration=session_doc.get("interview_duration", 30),
+            job_description=session_doc.get("job_description", ""),
+            custom_html=session_doc.get("custom_email_html", ""),
+            scheduled_start=session_doc.get("scheduled_start", ""),
+            scheduled_end=session_doc.get("scheduled_end", ""),
+            jd_file_url=session_doc.get("jd_file_url")
+        )
+    except Exception as e:
+        print(f"Warning: Failed to queue email task for {session_doc.get('candidate_email')}: {e}")
     email_sent = True # Async operation queued successfully
 
     if not skip_db_update:

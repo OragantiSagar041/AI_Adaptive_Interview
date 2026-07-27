@@ -8421,7 +8421,12 @@ def get_sub_admins(current_admin: dict = Depends(get_current_admin_details)):
         admin["id"] = str(admin["_id"])
         admin["_id"] = str(admin["_id"])
         admin["credits"] = admin.get("credits", 0)
-        admin["sessions_created"] = interview_sessions_collection.count_documents({"admin_id": str(admin["id"])})
+        admin["sessions_created"] = interview_sessions_collection.count_documents({
+            "$or": [
+                {"admin_id": str(admin["id"])},
+                {"created_by": str(admin["id"])}
+            ]
+        })
         
     return {"status": "success", "data": admins}
 
@@ -8529,7 +8534,7 @@ def add_sub_admin_credits(admin_id: str, data: AddCreditsRequest, current_admin:
 
             updated_admin = admins_collection.find_one_and_update(
                 {"_id": ObjectId(admin_id), "company_id": company_id},
-                {"$inc": {"credits": data.credits}},
+                {"$inc": {"credits": data.credits, "total_allocated_credits": data.credits}},
                 return_document=ReturnDocument.AFTER,
                 session=db_session,
             )

@@ -44,9 +44,17 @@ export default function CreditManagementPage() {
       const admins = adminsRes.data;
       if (admins.status === "success") {
         setRows(admins.data.map(a => {
-          const used = (a.sessions_created || 0) * 100;
+          const sessionsCreated = a.sessions_created || 0;
           const remaining = a.credits || 0;
-          const allocated = used + remaining;
+          
+          // Use the exact ledger history (total_allocated_credits) if available, otherwise fallback to legacy approximation
+          const allocated = a.total_allocated_credits !== undefined 
+            ? a.total_allocated_credits 
+            : (sessionsCreated + remaining);
+            
+          // True utilization based on total gifted credits minus what they have left
+          const used = allocated - remaining;
+          
           return {
             id: a.id,
             org: a.name || a.username,
