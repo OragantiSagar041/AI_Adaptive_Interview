@@ -15,7 +15,6 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import axios from "axios";
 import { useSelector, useDispatch } from "react-redux";
 import { updateCredits } from "@/store/slices/authSlice";
-import Swal from "sweetalert2";
 import { API_BASE_URL } from "@/apiConfig";
 
 export default function CreditManagementPage() {
