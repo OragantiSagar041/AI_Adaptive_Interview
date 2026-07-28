@@ -938,7 +938,7 @@ export default function OverviewDashboardPage() {
             }}
             callId={selectedCandidate.id.replace('ai_call_omni_', '')}
             API_BASE_URL={API_BASE_URL}
-            token={token || localStorage.getItem("token")}
+            token={token || sessionStorage.getItem("token")}
           />
         ) : (
           <CandidateDialog
