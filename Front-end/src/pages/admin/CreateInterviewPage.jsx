@@ -20,11 +20,11 @@ export default function CreateInterviewPage() {
 
   // Form input states
   const [createTab, setCreateTab] = useState(() => {
-    return localStorage.getItem('createInterview_tab') || 'single'
+    return sessionStorage.getItem('createInterview_tab') || 'single'
   }) // 'single' | 'bulk'
 
   useEffect(() => {
-    localStorage.setItem('createInterview_tab', createTab)
+    sessionStorage.setItem('createInterview_tab', createTab)
   }, [createTab])
   const [inviting, setInviting] = useState(false)
 
@@ -65,7 +65,7 @@ export default function CreateInterviewPage() {
     };
 
     try {
-      const stored = localStorage.getItem('createInterview_singleCandidate')
+      const stored = sessionStorage.getItem('createInterview_singleCandidate')
       if (stored) {
         let parsed = JSON.parse(stored);
         if (typeof parsed.customQuestions === 'string') {
@@ -92,7 +92,7 @@ export default function CreateInterviewPage() {
   })
 
   useEffect(() => {
-    localStorage.setItem('createInterview_singleCandidate', JSON.stringify(singleCandidate))
+    sessionStorage.setItem('createInterview_singleCandidate', JSON.stringify(singleCandidate))
   }, [singleCandidate])
 
   // Parsing & Calculating statuses
@@ -145,7 +145,7 @@ export default function CreateInterviewPage() {
     };
 
     try {
-      const stored = localStorage.getItem('createInterview_bulkConfig')
+      const stored = sessionStorage.getItem('createInterview_bulkConfig')
       if (stored) {
         let parsed = JSON.parse(stored);
         if (typeof parsed.customQuestions === 'string') {
@@ -163,12 +163,12 @@ export default function CreateInterviewPage() {
   })
 
   useEffect(() => {
-    localStorage.setItem('createInterview_bulkConfig', JSON.stringify(bulkConfig))
+    sessionStorage.setItem('createInterview_bulkConfig', JSON.stringify(bulkConfig))
   }, [bulkConfig])
 
   const [bulkCandidates, setBulkCandidates] = useState(() => {
     try {
-      const stored = localStorage.getItem('createInterview_bulkCandidates')
+      const stored = sessionStorage.getItem('createInterview_bulkCandidates')
       if (stored) return JSON.parse(stored)
     } catch (e) {
       console.error('Failed to parse stored bulkCandidates', e)
@@ -177,7 +177,7 @@ export default function CreateInterviewPage() {
   }) // [{ name, email, record_video }]
 
   useEffect(() => {
-    localStorage.setItem('createInterview_bulkCandidates', JSON.stringify(bulkCandidates))
+    sessionStorage.setItem('createInterview_bulkCandidates', JSON.stringify(bulkCandidates))
   }, [bulkCandidates])
   const [bulkCandidateInput, setBulkCandidateInput] = useState({ name: '', email: '' })
   const [bulkJdParsing, setBulkJdParsing] = useState(false)
@@ -302,7 +302,7 @@ export default function CreateInterviewPage() {
       const response = await axios.post(`${API_BASE_URL}/admin/parse-resume`, formData, {
         headers: {
           'Content-Type': 'multipart/form-data',
-          'Authorization': `Bearer ${localStorage.getItem('adminToken')}`
+          'Authorization': `Bearer ${sessionStorage.getItem('adminToken')}`
         }
       })
       onParsed(null, response.data)

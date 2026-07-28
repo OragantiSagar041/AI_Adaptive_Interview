@@ -45,9 +45,9 @@ const authSlice = createSlice({
       if (state.adminUser) {
         state.adminUser.credits = action.payload
         try {
-          const stored = JSON.parse(localStorage.getItem('adminUser')) || {}
+          const stored = JSON.parse(sessionStorage.getItem('adminUser')) || {}
           stored.credits = action.payload
-          localStorage.setItem('adminUser', JSON.stringify(stored))
+          sessionStorage.setItem('adminUser', JSON.stringify(stored))
         } catch (e) {
           // ignore
         }
@@ -57,9 +57,9 @@ const authSlice = createSlice({
       if (state.adminUser) {
         state.adminUser = { ...state.adminUser, ...action.payload }
         try {
-          const stored = JSON.parse(localStorage.getItem('adminUser')) || {}
+          const stored = JSON.parse(sessionStorage.getItem('adminUser')) || {}
           const updated = { ...stored, ...action.payload }
-          localStorage.setItem('adminUser', JSON.stringify(updated))
+          sessionStorage.setItem('adminUser', JSON.stringify(updated))
         } catch (e) {
           // ignore
         }

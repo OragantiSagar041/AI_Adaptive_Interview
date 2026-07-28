@@ -455,7 +455,7 @@ export default function VoiceInterviewPage() {
   // beforeunload writes a 'refreshing' flag; pagehide reads it:
   //   • Refresh: flag is present → skip beacon; pageshow clears it afterward.
   //   • True close: pageshow never fires, flag is NOT present → fire beacon.
-  // Also checks a cross-tab localStorage flag to prevent double-submission.
+  // Also checks a cross-tab sessionStorage flag to prevent double-submission.
   useEffect(() => {
     const REFRESH_FLAG = `_refreshing_${linkId}`
     const SUBMIT_FLAG = `submitting_pending_${linkId}`
@@ -485,7 +485,7 @@ export default function VoiceInterviewPage() {
       try { if (sessionStorage.getItem(REFRESH_FLAG) === '1') return } catch (_) { }
 
       // Skip if a submission is already running (cross-tab dedup)
-      try { if (localStorage.getItem(SUBMIT_FLAG)) return } catch (_) { }
+      try { if (sessionStorage.getItem(SUBMIT_FLAG)) return } catch (_) { }
 
       // Do not submit early if time is still remaining on the clock
       if (countdownRef.current > 0) return
@@ -650,9 +650,9 @@ export default function VoiceInterviewPage() {
         // If /complete-session failed (network/server crash), we stored a retry key.
         try {
           const pendingKey = `complete_session_pending_${linkId}`
-          if (localStorage.getItem(pendingKey) === '1') {
+          if (sessionStorage.getItem(pendingKey) === '1') {
             candidateFetch(`${API_BASE_URL}/complete-session/${linkId}`, { method: 'POST' })
-              .then(res => { if (res.ok) localStorage.removeItem(pendingKey) })
+              .then(res => { if (res.ok) sessionStorage.removeItem(pendingKey) })
               .catch(() => { })
           }
         } catch (_) { }
@@ -1692,11 +1692,11 @@ export default function VoiceInterviewPage() {
     setIsSaving(true)
 
     //  Cross-tab dedup flag ───────────────────────────────────────
-    // Set a localStorage flag so: (a) the pagehide beacon skips if this tab is uploading,
+    // Set a sessionStorage flag so: (a) the pagehide beacon skips if this tab is uploading,
     // (b) a second browser tab sees the flag and skips its own /complete-session call.
     // Cleared on success or failure so future genuine re-opens are not blocked.
     const SUBMIT_FLAG = `submitting_pending_${linkId}`
-    try { localStorage.setItem(SUBMIT_FLAG, String(Date.now())) } catch (_) { }
+    try { sessionStorage.setItem(SUBMIT_FLAG, String(Date.now())) } catch (_) { }
 
     const completionReason = typeof options === 'object' && options.reason ? options.reason : 'normal'
 
@@ -1745,7 +1745,7 @@ export default function VoiceInterviewPage() {
       console.error('Failed to complete voice interview:', completionError)
       submittingRef.current = false
       //  clear dedup flag on failure so the candidate can retry
-      try { localStorage.removeItem(SUBMIT_FLAG) } catch (_) { }
+      try { sessionStorage.removeItem(SUBMIT_FLAG) } catch (_) { }
       setRound(previousRound)
       Swal.fire({
         title: 'Submission Failed',
@@ -1783,7 +1783,7 @@ export default function VoiceInterviewPage() {
     // Clear the cross-tab dedup flag now that submission is done.
     // Clear the sessionStorage round key so a future reload doesn’t restore 'verbal';
     // the server’s session_status=completed guard handles that case cleanly.
-    try { localStorage.removeItem(SUBMIT_FLAG) } catch (_) { }
+    try { sessionStorage.removeItem(SUBMIT_FLAG) } catch (_) { }
     try {
       if (_sessionKey) {
         const existing = JSON.parse(sessionStorage.getItem(_sessionKey) || '{}')

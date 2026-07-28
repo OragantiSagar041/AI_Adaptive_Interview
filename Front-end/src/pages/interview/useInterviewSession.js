@@ -667,19 +667,19 @@ export const useInterviewSession = (sessionId, interviewType, startRoundTwo) => 
       // visit, we stored a retry key. Attempt the call now, silently.
       try {
         const pendingKey = `complete_session_pending_${sessionId}`
-        if (localStorage.getItem(pendingKey) === '1') {
+        if (sessionStorage.getItem(pendingKey) === '1') {
           api.post(`/complete-session/${sessionId}`)
-            .then(() => localStorage.removeItem(pendingKey))
+            .then(() => sessionStorage.removeItem(pendingKey))
             .catch(() => {})
         }
       } catch (e) {}
 
       // ── Drain any failed answers from a previous forceClose ──────
       try {
-        const keys = Object.keys(localStorage)
+        const keys = Object.keys(sessionStorage)
         for (const key of keys) {
           if (key.startsWith(`failed_answer_${sessionId}_`)) {
-            const answerData = JSON.parse(localStorage.getItem(key))
+            const answerData = JSON.parse(sessionStorage.getItem(key))
             const answerForm = new FormData()
             answerForm.append('interview_id', answerData.interview_id || sessionId)
             answerForm.append('question_id', answerData.question_id)
@@ -691,7 +691,7 @@ export const useInterviewSession = (sessionId, interviewType, startRoundTwo) => 
 
             api.post(`/save-answer`, answerForm, {
               headers: { 'Content-Type': 'multipart/form-data' }
-            }).then(() => localStorage.removeItem(key)).catch(() => {})
+            }).then(() => sessionStorage.removeItem(key)).catch(() => {})
           }
         }
       } catch (e) {}
@@ -699,7 +699,7 @@ export const useInterviewSession = (sessionId, interviewType, startRoundTwo) => 
       // Fast-path: if this browser already completed this session, show the
       // completed screen immediately without waiting for the API round-trip.
       try {
-        if (localStorage.getItem(`interview_done_${sessionId}`) === '1') {
+        if (sessionStorage.getItem(`interview_done_${sessionId}`) === '1') {
           setIsCompleted(true)
           setLoading(false)
           return
@@ -2341,7 +2341,7 @@ export const useInterviewSession = (sessionId, interviewType, startRoundTwo) => 
               answer_text: currentQuestion.type === 'coding' ? (codeAnswer || ' ') : (transcriptionText || ' '),
               time_spent_seconds: timeSpent
             }
-            localStorage.setItem(failedKey, JSON.stringify(answerData))
+            sessionStorage.setItem(failedKey, JSON.stringify(answerData))
           } catch (_) {}
         }
       }
@@ -2365,7 +2365,7 @@ export const useInterviewSession = (sessionId, interviewType, startRoundTwo) => 
       const queryParams = terminationReason ? `?reason=${encodeURIComponent(terminationReason)}` : ''
       await api.post(`/complete-session/${sessionId}${queryParams}`)
       if (sessionId) {
-        try { localStorage.setItem(`interview_done_${sessionId}`, '1') } catch (e) {}
+        try { sessionStorage.setItem(`interview_done_${sessionId}`, '1') } catch (e) {}
       }
     } catch (completionError) {
       console.error('Failed to complete interview session:', completionError)

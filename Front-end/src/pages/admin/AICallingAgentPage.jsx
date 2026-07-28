@@ -246,7 +246,7 @@ function CallConfigTab({ config, loading, onRefresh }) {
     setSaveSuccess('')
     setSaveError('')
     try {
-      const token = localStorage.getItem('token')
+      const token = sessionStorage.getItem('token')
       const res = await fetch(`${API_BASE_URL}/api/calls/call-config`, {
         method: 'POST',
         headers: {
@@ -681,7 +681,7 @@ function IntegrationsTab({ integrations, loading, onRefresh }) {
 
     setDetaching(integrationId)
     try {
-      const token = localStorage.getItem('token')
+      const token = sessionStorage.getItem('token')
       const r = await fetch(`${API_BASE_URL}/api/calls/integrations/detach`, {
         method: 'POST',
         headers: {
@@ -852,7 +852,7 @@ function PostCallTab({ configs, loading, onRefresh }) {
     setSaveSuccess('')
     setSaveError('')
     try {
-      const token = localStorage.getItem('token')
+      const token = sessionStorage.getItem('token')
       const payload = {
         delivery_method: deliveryMethod,
         destination: destination,
@@ -1568,7 +1568,7 @@ export default function AICallingAgentPage() {
                   onRefresh={() => {
                     const fetchIntegrations = async () => {
                       try {
-                        const token = localStorage.getItem('token');
+                        const token = sessionStorage.getItem('token');
                         const r = await fetch(`${API_BASE_URL}/api/calls/integrations`, {
                           headers: {
                             Authorization: `Bearer ${token}`
