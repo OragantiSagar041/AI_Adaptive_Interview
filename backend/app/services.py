@@ -2669,10 +2669,10 @@ def send_interview_email(candidate_email: str, candidate_name: str, link_url: st
     from dotenv import load_dotenv
 
     env_path = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), ".env")
-    load_dotenv(env_path, override=False)
-    brevo_api_key = os.getenv("BREVO_API_KEY")
-    sender_name = "Hire IQ Recruiting"
-    sender_email = os.getenv("BREVO_SENDER_EMAIL", "no-reply@hireiq.co.in")
+    load_dotenv(env_path, override=True)
+    brevo_api_key = (os.getenv("BREVO_API_KEY") or "").strip()
+    sender_name = (os.getenv("BREVO_SENDER_NAME") or "Hire IQ Recruiting").strip()
+    sender_email = (os.getenv("BREVO_SENDER_EMAIL") or "no-reply@hireiq.co.in").strip()
 
     if not brevo_api_key:
         print("Warning: BREVO_API_KEY not found in environment")
@@ -2722,7 +2722,40 @@ def send_interview_email(candidate_email: str, candidate_name: str, link_url: st
             "content": attachment_content
         }]
 
+    # Check if direct SMTP (e.g. Gmail App Password) is configured
+    smtp_host = os.getenv("SMTP_HOST", "smtp.gmail.com")
+    smtp_port = int(os.getenv("SMTP_PORT", 587))
+    smtp_user = (os.getenv("SMTP_USER") or "").strip()
+    smtp_pass = (os.getenv("SMTP_PASSWORD") or "").strip()
+
+    if smtp_user and smtp_pass:
+        try:
+            import smtplib
+            from email.mime.multipart import MIMEMultipart
+            from email.mime.text import MIMEText
+
+            msg = MIMEMultipart("alternative")
+            msg["Subject"] = "Interview Invitation by HireIQ"
+            msg["From"] = f"{sender_name} <{smtp_user}>"
+            msg["To"] = candidate_email
+
+            part = MIMEText(html_content, "html")
+            msg.attach(part)
+
+            server = smtplib.SMTP(smtp_host, smtp_port, timeout=15)
+            server.starttls()
+            server.login(smtp_user, smtp_pass)
+            server.sendmail(smtp_user, candidate_email, msg.as_string())
+            server.quit()
+            print(f"Email successfully sent via SMTP to {candidate_email}")
+            return True
+        except Exception as e:
+            print(f"SMTP send failed, trying Brevo: {e}")
+
     try:
+        # Brevo API email sending
+        payload["sender"] = {"name": sender_name, "email": sender_email}
+
         response = requests.post(
             "https://api.brevo.com/v3/smtp/email",
             json=payload,
@@ -2730,8 +2763,9 @@ def send_interview_email(candidate_email: str, candidate_name: str, link_url: st
                 "accept": "application/json",
                 "api-key": brevo_api_key,
                 "content-type": "application/json"
-            }
-        , timeout=10)
+            },
+            timeout=10
+        )
         response.raise_for_status()
         print(f"Email successfully sent to {candidate_email}")
         return True
