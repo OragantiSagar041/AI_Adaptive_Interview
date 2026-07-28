@@ -57,30 +57,13 @@ function log(...args) {
   if (DEBUG) console.debug('[ProctoringWorker]', ...args);
 }
 
-/**
- * Loads the MediaPipe WASM loader into the worker global scope.
- *
- * importScripts() executes a classic script in the worker's global scope —
- * exactly the environment MediaPipe's UMD loader expects.  This registers
- * the `ModuleFactory` global and all its internal dependencies (custom_dbg,
- * etc.) without any eval / new Function() — fully CSP-safe.
- *
- * The URL must be in script-src (cdn.jsdelivr.net is already whitelisted).
- */
-function loadWasmLoaderViaImportScripts() {
-  if (typeof self.importScripts !== 'function') {
-    // Should never happen in a classic worker, but guard gracefully.
-    throw new Error('importScripts is not available — worker must be classic (IIFE) format');
-  }
-  const loaderUrl = `${WASM_BASE}/vision_wasm_internal.js`;
-  self.importScripts(loaderUrl);
-}
-
 async function loadModels() {
-  // Step 1: Load WASM module factory via importScripts (classic-worker global scope)
-  loadWasmLoaderViaImportScripts();
+  // Step 1: Ensure UMD script attaches globals to `self` instead of trapped in Rollup's exports
+  self.module = undefined;
+  self.exports = undefined;
+  self.define = undefined;
 
-  // Step 2: FilesetResolver uses the now-registered ModuleFactory to init tasks
+  // Step 2: FilesetResolver uses importScripts internally to load vision_wasm_internal.js
   const vision = await FilesetResolver.forVisionTasks(WASM_BASE);
 
   // Step 3: Create FaceLandmarker

@@ -142,7 +142,7 @@ export function useProctoring({
     if (!enabled) return
 
     const worker = workerUrl
-      ? new Worker(workerUrl, { type: 'module' })
+      ? new Worker(workerUrl)
       : new ProctoringWorker()
 
     workerRef.current = worker

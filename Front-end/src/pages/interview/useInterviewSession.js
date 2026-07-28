@@ -675,39 +675,7 @@ export const useInterviewSession = (sessionId, interviewType, startRoundTwo) => 
     }
 
     async function verifySession() {
-      // ── Drain any pending completion that failed on a previous load ──────
-      // If /complete-session failed (network drop, server crash) on the last
-      // visit, we stored a retry key. Attempt the call now, silently.
-      try {
-        const pendingKey = `complete_session_pending_${sessionId}`
-        if (sessionStorage.getItem(pendingKey) === '1') {
-          api.post(`/complete-session/${sessionId}`)
-            .then(() => sessionStorage.removeItem(pendingKey))
-            .catch(() => {})
-        }
-      } catch (e) {}
-
-      // ── Drain any failed answers from a previous forceClose ──────
-      try {
-        const keys = Object.keys(sessionStorage)
-        for (const key of keys) {
-          if (key.startsWith(`failed_answer_${sessionId}_`)) {
-            const answerData = JSON.parse(sessionStorage.getItem(key))
-            const answerForm = new FormData()
-            answerForm.append('interview_id', answerData.interview_id || sessionId)
-            answerForm.append('question_id', answerData.question_id)
-            answerForm.append('question_text', answerData.question_text || '')
-            answerForm.append('answer_text', answerData.answer_text || 'No answer provided')
-            answerForm.append('candidate_name', 'Candidate')
-            answerForm.append('time_spent_seconds', answerData.time_spent_seconds || '0')
-            answerForm.append('time_limit_seconds', '120')
-
-            api.post(`/save-answer`, answerForm, {
-              headers: { 'Content-Type': 'multipart/form-data' }
-            }).then(() => sessionStorage.removeItem(key)).catch(() => {})
-          }
-        }
-      } catch (e) {}
+      // Moved to drainPendingRequests() after session is authenticated
 
       // Fast-path: if this browser already completed this session, show the
       // completed screen immediately without waiting for the API round-trip.
@@ -787,6 +755,38 @@ export const useInterviewSession = (sessionId, interviewType, startRoundTwo) => 
         if (startPayload.monitoring_token) {
           setCandidateSessionAuth(startPayload.monitoring_token, sessionId, startPayload.interview_id)
         }
+        
+        // ── Drain pending requests now that we are authenticated ──────
+        try {
+          const pendingKey = `complete_session_pending_${sessionId}`
+          if (sessionStorage.getItem(pendingKey) === '1') {
+            api.post(`/complete-session/${sessionId}`)
+              .then(() => sessionStorage.removeItem(pendingKey))
+              .catch(() => {})
+          }
+        } catch (e) {}
+
+        try {
+          const keys = Object.keys(sessionStorage)
+          for (const key of keys) {
+            if (key.startsWith(`failed_answer_${sessionId}_`)) {
+              const answerData = JSON.parse(sessionStorage.getItem(key))
+              const answerForm = new FormData()
+              answerForm.append('interview_id', answerData.interview_id || sessionId)
+              answerForm.append('question_id', answerData.question_id)
+              answerForm.append('question_text', answerData.question_text || '')
+              answerForm.append('answer_text', answerData.answer_text || 'No answer provided')
+              answerForm.append('candidate_name', 'Candidate')
+              answerForm.append('time_spent_seconds', answerData.time_spent_seconds || '0')
+              answerForm.append('time_limit_seconds', '120')
+
+              api.post(`/save-answer`, answerForm, {
+                headers: { 'Content-Type': 'multipart/form-data' }
+              }).then(() => sessionStorage.removeItem(key)).catch(() => {})
+            }
+          }
+        } catch (e) {}
+        
         // Snapshot candidate details into refs NOW (synchronously) so that the
         // async Whisper MediaRecorder onstop callback always has correct values.
         // Using refs avoids the race condition where sessionDetail state hasn't
