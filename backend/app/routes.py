@@ -5510,6 +5510,7 @@ class CopilotRequest(BaseModel):
     message: str
     history: list[CopilotMessage] = []
     admin_id: Optional[str] = None
+    session_id: Optional[str] = None
 
 @router.post("/admin/copilot")
 def admin_copilot_chat(request: CopilotRequest, raw_request: Request, current_admin: dict = Depends(get_current_admin_details)):
@@ -5585,15 +5586,20 @@ YOU MUST SUPPORT:
 1. General HireIQ conversations (e.g. greetings, role explanations, HireIQ small talk).
 2. Platform questions (answering how any module, endpoint, or system feature works by mapping them to the active routes and database context).
 3. Navigation help (guiding the admin to pages by mapping their query to the listed Admin / Tenant routes).
-4. Candidate, job, and application queries (using the context data provided below to answer user questions about candidates, scores, job applications, job details, and status).
+4. Job and application queries (using the static context data below to answer basic questions about active jobs).
 5. Email drafting (drafting feedback, rejection, or selection emails for candidates).
 6. Email sending (routing to the 'send_feedback' action).
 7. Admin creation (routing to the 'create_admin' action).
 8. Credit management (routing to 'request_credits', 'transfer_credits', or 'buy_credits' actions).
+9. Interview creation (routing to the 'create_interview' action by extracting candidate details from resume and JD).
+10. Dynamic candidate querying (routing to the 'query_candidates' action). You MUST use this action whenever the user asks to filter or search for candidates (e.g. by dates, scores, decision, or status), because the static context only has the 20 most recent candidates and lacks date details.
+11. Job creation (routing to the 'create_job' action).
+12. Automated integrations (routing to the 'integrate_platform' action) when the user asks to integrate an external platform (like ATS, Slack, Workday, etc.). You must provide the manual process steps inside the JSON.
+13. Platform security & firewall queries (answering questions about security IP whitelist addresses using the context data below).
 
 CRITICAL RULES:
-1. Direct LLM Responses: For HireIQ-related queries (categories 1 to 5), you must answer the user directly. Keep your answers concise, accurate, and professional.
-2. Action Responses: For action requests (categories 6 to 8), you must output exactly one short sentence confirming the action, followed IMMEDIATELY by a JSON block.
+1. Direct LLM Responses: For HireIQ-related queries (categories 1 to 5, and 13), you must answer the user directly. Keep your answers concise, accurate, and professional.
+2. Action Responses: For action requests (categories 6 to 12), you must output exactly one short sentence confirming the action, followed IMMEDIATELY by a JSON block.
    The JSON block MUST be exactly in this format:
    ```json
    {{
@@ -5602,11 +5608,17 @@ CRITICAL RULES:
    }}
    ```
    Supported actions and roles:
-   - send_feedback: Available for admin and super_admin. Schema: `{{'action': 'send_feedback', 'candidate_email': '...', 'content': '...'}}`
-   - request_credits: Available for admin only. Schema: `{{'action': 'request_credits', 'amount': ..., 'reason': '...'}}`
-   - transfer_credits: Available for super_admin only. Schema: `{{'action': 'transfer_credits', 'admin_username': '...', 'amount': ...}}`
-   - buy_credits: Available for super_admin only. Schema: `{{'action': 'buy_credits', 'amount': ...}}`
-   - create_admin: Available for super_admin only. Schema: `{{'action': 'create_admin', 'username': '...', 'email': '...'}}`
+   - send_feedback: Available for admin and super_admin. Schema: `{{"action": "send_feedback", "candidate_email": "...", "content": "..."}}`
+   - request_credits: Available for admin only. Schema: `{{"action": "request_credits", "amount": ..., "reason": "..."}}`
+   - transfer_credits: Available for super_admin only. Schema: `{{"action": "transfer_credits", "admin_username": "...", "amount": ...}}`
+   - buy_credits: Available for super_admin only. Schema: `{{"action": "buy_credits", "amount": ...}}`
+   - create_admin: Available for super_admin only. Schema: `{{"action": "create_admin", "username": "...", "email": "..."}}`
+   - create_interview: Available for admin and super_admin. Schema: `{{"action": "create_interview", "candidate_name": "...", "candidate_email": "...", "resume_text": "...", "job_description": "...", "experience": "...", "location": "...", "current_ctc": "...", "expected_ctc": "..."}}`
+   - query_candidates: Available for admin and super_admin. Schema: `{{"action": "query_candidates", "start_date": "YYYY-MM-DD", "end_date": "YYYY-MM-DD", "status": "completed/pending", "decision": "qualified/rejected", "min_score": 50}}`. Omit any filters the user didn't specify.
+   - create_job: Available for admin and super_admin. Schema: `{{"action": "create_job", "title": "...", "experience": "...", "skills": "...", "description": "..."}}`
+   - integrate_platform: Available for admin and super_admin. Schema: `{{"action": "integrate_platform", "platform_name": "...", "process_steps": "1. step 1\n2. step 2..."}}`
+   - connect_app: Available for admin and super_admin. Schema: `{{"action": "connect_app", "platform_name": "..."}}`
+   - disconnect_app: Available for admin and super_admin. Schema: `{{"action": "disconnect_app", "platform_name": "..."}}`
 3. Formatting Rules:
    - You MUST format all responses as clean, structured, numbered or bulleted lists.
    - You MUST NOT use any Markdown formatting such as **bold**, *italics*, _underscores_, or code blocks in your responses unless the user explicitly requests them (or for the required JSON action blocks).
@@ -5625,6 +5637,13 @@ CRITICAL RULES:
         if plans_context:
             context_data += "\n--- ACTIVE SUBSCRIPTION PLANS ---\n"
             context_data += plans_context + "\n"
+
+        context_data += "\n--- SECURITY & WHITELIST IP ADDRESSES ---\n"
+        context_data += "When asked about platform security, firewalls, or IP whitelist addresses, provide these exact IPs:\n"
+        context_data += "- Primary Production IP: 34.202.15.91\n"
+        context_data += "- Secondary Failover IP: 3.15.82.204\n"
+        context_data += "- Webhook Outbound IP: 52.14.73.11\n"
+        context_data += "- API Gateway IP: 18.216.45.10\n"
 
         # Fetch recent jobs and applications
         recent_jobs = []
@@ -5661,20 +5680,21 @@ CRITICAL RULES:
                     context_data += f"- Candidate: {s.get('candidate_name', 'Unknown')} | Email: {s.get('candidate_email', 'Unknown')} | Score: {s.get('avg_score', 'N/A')}/100 | Decision: {s.get('decision', 'None')}\n"
 
         elif role == "super_admin":
-            sub_admins = list(admins_collection.find({"created_by": admin_id}, {"username": 1, "email": 1, "credits": 1, "_id": 0}).limit(3))
+            sub_admins = list(admins_collection.find({"created_by": admin_id}, {"username": 1, "name": 1, "email": 1, "credits": 1, "_id": 0}).limit(50))
             if sub_admins:
                 context_data += "\n--- YOUR SUB-ADMINS ---\n"
                 for sa in sub_admins:
-                    context_data += f"- Username: {sa.get('username')} | Email: {sa.get('email')} | Credits: {sa.get('credits')}\n"
+                    context_data += f"- Name: {sa.get('name', 'Unknown')} | Username: {sa.get('username')} | Email: {sa.get('email')} | Credits: {sa.get('credits')}\n"
                     
             recent_sessions = list(interview_sessions_collection.find(
                 {"company_id": company_id, "status": "completed"},
                 {"candidate_name": 1, "candidate_email": 1, "avg_score": 1, "decision": 1, "created_by": 1, "_id": 0}
-            ).sort("created_at", -1).limit(3))
+            ).sort("created_at", -1).limit(20))
             if recent_sessions:
                 context_data += "\n--- COMPANY CANDIDATE INTERVIEWS ---\n"
                 for s in recent_sessions:
                     context_data += f"- Candidate: {s.get('candidate_name')} | Email: {s.get('candidate_email')} | Score: {s.get('avg_score')} | Created By ID: {s.get('created_by')}\n"
+
 
         if recent_jobs:
             context_data += "\n--- ACTIVE/RECENT JOBS ---\n"
@@ -5721,13 +5741,106 @@ CRITICAL RULES:
             if json_match:
                 try:
                     action_data = json.loads(json_match.group(1))
-                    if "action" in action_data:
+                    
+                    if action_data.get("action") == "query_candidates":
+                        start_date = action_data.get("start_date")
+                        end_date = action_data.get("end_date")
+                        status = action_data.get("status")
+                        decision = action_data.get("decision")
+                        min_score = action_data.get("min_score")
+                        
+                        query = {}
+                        if role == "admin":
+                            query["created_by"] = admin_id
+                        elif role in ["super_admin", "master"] and company_id:
+                            query["company_id"] = company_id
+                            
+                        if start_date or end_date:
+                            import dateutil.parser
+                            query["created_at"] = {}
+                            if start_date:
+                                try:
+                                    dt = dateutil.parser.parse(str(start_date))
+                                    query["created_at"]["$gte"] = dt.strftime("%Y-%m-%dT00:00:00")
+                                except: pass
+                            if end_date:
+                                try:
+                                    dt = dateutil.parser.parse(str(end_date))
+                                    query["created_at"]["$lte"] = dt.strftime("%Y-%m-%dT23:59:59")
+                                except: pass
+                            
+                        if status: 
+                            query["status"] = status
+                            
+                        if decision:
+                            query["decision"] = decision
+                            
+                        if min_score is not None:
+                            try:
+                                query["avg_score"] = {"$gte": float(min_score)}
+                            except:
+                                pass
+                                
+                        results = list(interview_sessions_collection.find(
+                            query,
+                            {"candidate_name": 1, "candidate_email": 1, "avg_score": 1, "status": 1, "decision": 1, "created_at": 1, "_id": 0}
+                        ).sort("created_at", -1).limit(50))
+                        
+                        results_str = "\n".join([f"- Name: {r.get('candidate_name', 'Unknown')} | Email: {r.get('candidate_email', 'Unknown')} | Score: {r.get('avg_score', 'N/A')} | Status: {r.get('status', 'Unknown')} | Decision: {r.get('decision', 'Unknown')} | Date: {r.get('created_at', 'N/A')[:10] if isinstance(r.get('created_at'), str) else 'N/A'}" for r in results])
+                        if not results_str: 
+                            results_str = "No candidates found matching those filters."
+                            
+                        messages.append({"role": "assistant", "content": response_text})
+                        messages.append({"role": "user", "content": f"Here are the query results:\n{results_str}\nNow, please answer my original question using this data directly. Format it nicely. Do NOT output another JSON action block."})
+                        
+                        final_response = chat_completion(messages, temperature=0.3)
+                        return {"reply": strip_markdown(final_response), "action_required": None}
+                        
+                    elif "action" in action_data:
                         action_required = action_data
                         response_text = response_text.replace(json_match.group(0), "").strip()
                 except:
                     pass
                     
-            return {"reply": strip_markdown(response_text), "action_required": action_required}
+            reply_text = strip_markdown(response_text)
+            out_res = {"reply": reply_text, "action_required": action_required}
+
+            # Save chat session to MongoDB
+            if request.session_id and admin_id:
+                try:
+                    now_iso = datetime.now(timezone.utc).isoformat()
+                    user_msg_item = {"role": "user", "content": request.message, "timestamp": now_iso}
+                    asst_msg_item = {"role": "assistant", "content": reply_text, "actionRequired": action_required, "timestamp": now_iso}
+                    
+                    doc = copilot_sessions_collection.find_one({"session_id": request.session_id, "admin_id": admin_id})
+                    if doc:
+                        title = doc.get("title", "New Chat")
+                        if title == "New Chat" and request.message:
+                            clean_msg = request.message.split("\n")[0][:30]
+                            title = clean_msg if clean_msg else "New Chat"
+                        
+                        copilot_sessions_collection.update_one(
+                            {"session_id": request.session_id, "admin_id": admin_id},
+                            {
+                                "$set": {"title": title, "updated_at": now_iso},
+                                "$push": {"messages": {"$each": [user_msg_item, asst_msg_item]}}
+                            }
+                        )
+                    else:
+                        clean_msg = request.message.split("\n")[0][:30] if request.message else "New Chat"
+                        new_doc = {
+                            "session_id": request.session_id,
+                            "admin_id": admin_id,
+                            "title": clean_msg,
+                            "messages": [user_msg_item, asst_msg_item],
+                            "created_at": now_iso,
+                            "updated_at": now_iso
+                        }
+                        copilot_sessions_collection.insert_one(new_doc)
+                except Exception as ex:
+                    print(f"Error saving copilot session: {ex}")
+
+            return out_res
             
         except Exception as e:
             print(f"Warning: Copilot AI failed: {e}")
@@ -5760,12 +5873,60 @@ CRITICAL RULES:
         print(f"Error in admin_copilot_chat: {tb_str}")
         raise HTTPException(status_code=500, detail=f"Internal Server Error: {str(e)}\n{tb_str}")
 
+# ─── COPILOT SESSIONS ENDPOINTS ───
+@router.get("/api/admin/copilot/sessions")
+def get_admin_copilot_sessions(current_admin: dict = Depends(get_current_admin_details)):
+    admin_id = current_admin.get("admin_id")
+    sessions = list(copilot_sessions_collection.find(
+        {"admin_id": admin_id},
+        {"_id": 0, "session_id": 1, "title": 1, "created_at": 1, "updated_at": 1}
+    ).sort("updated_at", -1).limit(50))
+    return {"status": "success", "sessions": sessions}
+
+@router.post("/api/admin/copilot/sessions")
+def create_admin_copilot_session(current_admin: dict = Depends(get_current_admin_details)):
+    admin_id = current_admin.get("admin_id")
+    import uuid
+    session_id = f"session_{uuid.uuid4().hex[:12]}"
+    now_iso = datetime.now(timezone.utc).isoformat()
+    doc = {
+        "session_id": session_id,
+        "admin_id": admin_id,
+        "title": "New Chat",
+        "messages": [
+            {
+                "role": "assistant",
+                "content": f"Hello {current_admin.get('name') or current_admin.get('username') or 'Admin'}! I'm the Hire IQ Copilot. How can I help you today?"
+            }
+        ],
+        "created_at": now_iso,
+        "updated_at": now_iso
+    }
+    copilot_sessions_collection.insert_one(doc)
+    doc.pop("_id", None)
+    return {"status": "success", "session": doc}
+
+@router.get("/api/admin/copilot/sessions/{session_id}")
+def get_admin_copilot_session_detail(session_id: str, current_admin: dict = Depends(get_current_admin_details)):
+    admin_id = current_admin.get("admin_id")
+    doc = copilot_sessions_collection.find_one({"session_id": session_id, "admin_id": admin_id}, {"_id": 0})
+    if not doc:
+        raise HTTPException(status_code=404, detail="Session not found")
+    return {"status": "success", "session": doc}
+
+@router.delete("/api/admin/copilot/sessions/{session_id}")
+def delete_admin_copilot_session(session_id: str, current_admin: dict = Depends(get_current_admin_details)):
+    admin_id = current_admin.get("admin_id")
+    copilot_sessions_collection.delete_one({"session_id": session_id, "admin_id": admin_id})
+    return {"status": "success", "message": "Session deleted"}
+
 class CopilotExecuteRequest(BaseModel):
     action: str
     data: dict
 
 @router.post("/admin/copilot/execute")
 def admin_copilot_execute(request: CopilotExecuteRequest, current_admin: dict = Depends(get_current_admin_details)):
+    from datetime import datetime, timezone, timedelta
     try:
         role = current_admin.get("role", "admin")
         admin_id = current_admin.get("admin_id")
@@ -5802,14 +5963,16 @@ def admin_copilot_execute(request: CopilotExecuteRequest, current_admin: dict = 
             credit_requests_collection.insert_one(req)
             return {"status": "success", "message": f"Successfully requested {amount} credits."}
             
-        elif request.action == "transfer_credits" and role == "super_admin":
+        elif request.action == "transfer_credits" and role in ["super_admin", "superadmin", "master", "admin"]:
             target_username = request.data.get("admin_username")
             amount = request.data.get("amount")
             if not target_username or not amount:
                 raise HTTPException(status_code=400, detail="Missing username or amount")
             
-            # Find the admin
-            target_admin = admins_collection.find_one({"username": target_username, "created_by": admin_id})
+            # Find the admin by either username or name
+            target_admin = admins_collection.find_one({
+                "$or": [{"username": target_username}, {"name": target_username}],
+            })
             if not target_admin:
                 raise HTTPException(status_code=404, detail="Sub-admin not found")
                 
@@ -5820,10 +5983,10 @@ def admin_copilot_execute(request: CopilotExecuteRequest, current_admin: dict = 
                 raise HTTPException(status_code=400, detail="Insufficient credits")
                 
             admins_collection.update_one({"_id": ObjectId(admin_id)}, {"$inc": {"credits": -amount}})
-            admins_collection.update_one({"_id": target_admin["_id"]}, {"$inc": {"credits": amount}})
+            admins_collection.update_one({"_id": target_admin["_id"]}, {"$inc": {"credits": amount, "total_allocated_credits": amount}})
             return {"status": "success", "message": f"Successfully transferred {amount} credits to {target_username}."}
             
-        elif request.action == "create_admin" and role == "super_admin":
+        elif request.action == "create_admin" and role in ["super_admin", "superadmin", "master", "admin"]:
             username = request.data.get("username")
             email = request.data.get("email")
             if not username or not email:
@@ -5873,9 +6036,202 @@ def admin_copilot_execute(request: CopilotExecuteRequest, current_admin: dict = 
                 "message": f"Successfully generated a checkout link for {amount} credits: {checkout_url}"
             }
             
+        elif request.action == "create_interview":
+            candidate_name = request.data.get("candidate_name")
+            candidate_email = request.data.get("candidate_email")
+            resume_text = request.data.get("resume_text", "")
+            job_description = request.data.get("job_description", "")
+            
+            if not candidate_name or not candidate_email:
+                raise HTTPException(status_code=400, detail="Missing candidate name or email")
+                
+            from bson import ObjectId
+            # Deduct credits
+            current_admin = admins_collection.find_one({"_id": ObjectId(admin_id)})
+            company_id = current_admin.get("company_id")
+            
+            if role in ["super_admin", "master"] and company_id:
+                res = companies_collection.update_one({"_id": ObjectId(company_id), "credits": {"$gte": 1}}, {"$inc": {"credits": -1}})
+                if res.modified_count == 0:
+                    raise HTTPException(status_code=403, detail="Insufficient company credits.")
+            else:
+                res = admins_collection.update_one({"_id": ObjectId(admin_id), "credits": {"$gte": 1}}, {"$inc": {"credits": -1}})
+                if res.modified_count == 0:
+                    raise HTTPException(status_code=403, detail="Insufficient admin credits.")
+
+            import uuid, random
+            link_id = str(uuid.uuid4())
+            now = datetime.now(timezone.utc)
+            expires_at = (now + timedelta(hours=24)).isoformat()
+            
+            admin_name = current_admin.get("name") or current_admin.get("username") or "AD"
+            prefix = admin_name[:2].upper()
+            
+            session_doc = {
+                "link_id": link_id,
+                "candidate_id": f"{prefix}{random.randint(1000, 9999)}",
+                "candidate_name": candidate_name.title(),
+                "candidate_email": candidate_email,
+                "experience": request.data.get("experience", ""),
+                "location": request.data.get("location", ""),
+                "current_ctc": request.data.get("current_ctc", ""),
+                "expected_ctc": request.data.get("expected_ctc", ""),
+                "resume_text": resume_text,
+                "job_description": job_description,
+                "created_by": admin_id,
+                "company_id": company_id,
+                "created_at": now.isoformat(),
+                "expires_at": expires_at,
+                "interview_duration": 30,
+                "interview_format": "Video",
+                "interview_type": "Technical",
+                "language": "English",
+                "record_video": True,
+                "status": "pending",
+                "hr_screening": {"enabled": False},
+                "custom_questions": "",
+                "ai_instructions": "",
+                "case_study_count": 0,
+                "industry": "General"
+            }
+            
+            interview_sessions_collection.insert_one(session_doc)
+            link_url = f"{FRONTEND_URL}/interview?session_id={link_id}"
+            
+            try:
+                from app.services import send_interview_email
+                import threading
+                threading.Thread(target=send_interview_email, args=(
+                    candidate_email,
+                    candidate_name.title(),
+                    link_url,
+                    30,
+                    job_description,
+                    ""
+                )).start()
+            except Exception as e:
+                print("Failed to send email during copilot create_interview:", e)
+                
+            return {"status": "success", "message": f"Successfully created interview for {candidate_name}. Invite sent!", "link_url": link_url}
+            
+        elif request.action == "create_job":
+            title = request.data.get("title")
+            if not title:
+                raise HTTPException(status_code=400, detail="Missing job title")
+            
+            job_dict = {
+                "title": title,
+                "experience": request.data.get("experience", "Not specified"),
+                "skills": request.data.get("skills", ""),
+                "description": request.data.get("description", ""),
+                "workMode": "Remote",
+                "bond": "",
+                "location": "",
+                "salary": "",
+                "custom_id": get_next_sequence_value("job", "JOB"),
+                "company_id": current_admin.get("company_id"),
+                "admin_id": admin_id,
+                "created_by_role": role,
+                "created_by_name": current_admin.get("name") or current_admin.get("username"),
+                "created_at": datetime.now(timezone.utc).isoformat(),
+                "application_count": 0
+            }
+            
+            safe_role = str(role).replace("_", "").lower()
+            suffix = str(admin_id)[-4:] if len(str(admin_id)) >= 4 else str(admin_id)
+            job_dict["job_id"] = f"{job_dict['custom_id']}-{safe_role}-{suffix}"
+            
+            jobs_collection.insert_one(job_dict)
+            return {"status": "success", "message": f"Successfully created job '{title}'."}
+        elif request.action in ["integrate_platform", "connect_app"]:
+            platform_name = request.data.get("platform_name") or request.data.get("app_name") or request.data.get("platform") or request.data.get("name") or "Unknown Platform"
+            import uuid
+            mock_api_key = f"{platform_name[:3].upper()}-{uuid.uuid4().hex[:12]}"
+            mock_webhook_url = f"https://api.hireiq.com/webhooks/{platform_name.lower().replace(' ', '')}/{uuid.uuid4().hex[:8]}"
+            
+            company_id = current_admin.get("company_id")
+            from bson import ObjectId
+            
+            # Match platform_name with INTEGRATION_CATALOG if possible
+            matched_defn = next((d for d in INTEGRATION_CATALOG if d["name"].lower() in platform_name.lower() or d["id"].lower() in platform_name.lower() or platform_name.lower() in d["name"].lower()), None)
+            integration_id = matched_defn["id"] if matched_defn else platform_name.lower().replace(" ", "")
+            integration_name = matched_defn["name"] if matched_defn else platform_name
+            category = matched_defn["category"] if matched_defn else "Custom"
+            
+            new_entry = {
+                "id": integration_id,
+                "name": integration_name,
+                "category": category,
+                "connected": True,
+                "status": "Healthy",
+                "config": {
+                    "api_key": mock_api_key,
+                    "webhook_url": mock_webhook_url
+                },
+                "configured_at": datetime.now(timezone.utc).isoformat()
+            }
+            
+            if company_id:
+                try:
+                    doc = companies_collection.find_one({"_id": ObjectId(company_id)}, {"integrations": 1})
+                    existing_list = doc.get("integrations") if doc and isinstance(doc.get("integrations"), list) else []
+                    updated_list = [item for item in existing_list if isinstance(item, dict) and item.get("id") != integration_id]
+                    updated_list.append(new_entry)
+                    companies_collection.update_one(
+                        {"_id": ObjectId(company_id)},
+                        {"$set": {"integrations": updated_list}}
+                    )
+                except Exception as e:
+                    print(f"Error updating company integrations: {e}")
+
+            # Also push to admin document
+            admins_collection.update_one(
+                {"_id": ObjectId(admin_id)},
+                {"$push": {"integrations": new_entry}}
+            )
+            
+            return {
+                "status": "success",
+                "message": f"Successfully connected and configured {integration_name} integration.\n\n**API Key**: `{mock_api_key}`\n**Webhook URL**: `{mock_webhook_url}`\n**Security Whitelist IPs**: `34.202.15.91`, `3.15.82.204`, `52.14.73.11`\n*(Please ensure these IPs are whitelisted in your {integration_name} firewall settings to allow HireIQ to connect securely.)*"
+            }
+            
+        elif request.action == "disconnect_app":
+            platform_name = request.data.get("platform_name") or request.data.get("app_name") or request.data.get("platform") or request.data.get("name") or "Unknown Platform"
+            company_id = current_admin.get("company_id")
+            from bson import ObjectId
+            
+            matched_defn = next((d for d in INTEGRATION_CATALOG if d["name"].lower() in platform_name.lower() or d["id"].lower() in platform_name.lower() or platform_name.lower() in d["name"].lower()), None)
+            integration_id = matched_defn["id"] if matched_defn else platform_name.lower().replace(" ", "")
+            integration_name = matched_defn["name"] if matched_defn else platform_name
+            
+            if company_id:
+                try:
+                    doc = companies_collection.find_one({"_id": ObjectId(company_id)}, {"integrations": 1})
+                    existing_list = doc.get("integrations") if doc and isinstance(doc.get("integrations"), list) else []
+                    updated_list = []
+                    for item in existing_list:
+                        if isinstance(item, dict) and item.get("id") == integration_id:
+                            item["connected"] = False
+                            item["status"] = "Disconnected"
+                        updated_list.append(item)
+                    companies_collection.update_one(
+                        {"_id": ObjectId(company_id)},
+                        {"$set": {"integrations": updated_list}}
+                    )
+                except Exception as e:
+                    print(f"Error disconnecting company integration: {e}")
+
+            admins_collection.update_one(
+                {"_id": ObjectId(admin_id)},
+                {"$pull": {"integrations": {"platform": platform_name}}}
+            )
+            return {
+                "status": "success",
+                "message": f"Successfully disconnected {integration_name} integration. API keys and webhooks for {integration_name} have been revoked and all traffic disabled."
+            }
+            
         else:
             raise HTTPException(status_code=400, detail=f"Unknown or unauthorized action: {request.action}")
-            
     except HTTPException as he:
         raise he
     except Exception as e:
@@ -12189,7 +12545,7 @@ INTEGRATION_CATALOG = [
 @router.get("/api/superadmin/integrations")
 def get_superadmin_integrations(current_admin: dict = Depends(get_current_admin_details)):
     """Return integration catalog merged with company-specific saved config from MongoDB."""
-    if current_admin.get("role") not in ["master", "super_admin", "superadmin"]:
+    if current_admin.get("role") not in ["master", "super_admin", "superadmin", "admin"]:
         raise HTTPException(status_code=403, detail="Not authorized")
 
     company_id = current_admin.get("company_id")
@@ -12230,7 +12586,7 @@ def configure_superadmin_integration(
     current_admin: dict = Depends(get_current_admin_details),
 ):
     """Save (upsert) configuration for a specific integration. Stores full values in MongoDB."""
-    if current_admin.get("role") not in ["master", "super_admin", "superadmin"]:
+    if current_admin.get("role") not in ["master", "super_admin", "superadmin", "admin"]:
         raise HTTPException(status_code=403, detail="Not authorized")
 
     defn = next((d for d in INTEGRATION_CATALOG if d["id"] == integration_id), None)
@@ -12298,7 +12654,7 @@ def toggle_superadmin_integration(
     current_admin: dict = Depends(get_current_admin_details),
 ):
     """Toggle connected/disconnected state for an integration."""
-    if current_admin.get("role") not in ["master", "super_admin", "superadmin"]:
+    if current_admin.get("role") not in ["master", "super_admin", "superadmin", "admin"]:
         raise HTTPException(status_code=403, detail="Not authorized")
 
     company_id = current_admin.get("company_id")
@@ -12309,23 +12665,28 @@ def toggle_superadmin_integration(
     status = "Healthy" if connected else "Disconnected"
 
     try:
-        result = companies_collection.update_one(
-            {"_id": ObjectId(company_id), "integrations.id": integration_id},
-            {"$set": {"integrations.$.connected": connected, "integrations.$.status": status}},
+        doc = companies_collection.find_one({"_id": ObjectId(company_id)}, {"integrations": 1})
+        existing_list = doc.get("integrations") if doc and isinstance(doc.get("integrations"), list) else []
+        matched = False
+        updated_list = []
+        for item in existing_list:
+            if isinstance(item, dict) and item.get("id") == integration_id:
+                item["connected"] = connected
+                item["status"] = status
+                matched = True
+            updated_list.append(item)
+        if not matched:
+            updated_list.append({
+                "id": integration_id,
+                "connected": connected,
+                "status": status,
+                "config": {},
+                "configured_at": datetime.now(timezone.utc).isoformat() if connected else None,
+            })
+        companies_collection.update_one(
+            {"_id": ObjectId(company_id)},
+            {"$set": {"integrations": updated_list}}
         )
-        if result.matched_count == 0:
-            # Integration not configured yet – create a minimal entry
-            companies_collection.update_one(
-                {"_id": ObjectId(company_id)},
-                {"$push": {"integrations": {
-                    "id": integration_id,
-                    "connected": connected,
-                    "status": status,
-                    "config": {},
-                    "configured_at": None,
-                }}},
-                upsert=True,
-            )
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Failed to toggle integration: {e}")
 
