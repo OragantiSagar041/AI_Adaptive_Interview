@@ -1,5 +1,6 @@
 /**
  * proctoring.worker.js
+ * (Cache busted to apply new CSP headers - 2026-07-28)
  *
  * Web Worker that owns two MediaPipe models (FaceLandmarker, ObjectDetector)
  * and does all per-frame feature extraction off the main thread. Only small
