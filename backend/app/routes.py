@@ -3708,14 +3708,10 @@ async def startup_event_db_and_email():
         EMAIL_SCHEDULER_STARTED = True
 
 @router.get("/api/interview/{interview_id}/insights")
-def get_interview_insights(
-    interview_id: str,
-    current_admin: dict = Depends(get_current_admin_details),
-):
+def get_interview_insights(interview_id: str):
     session = interview_sessions_collection.find_one({"interview_id": interview_id})
     if not session:
         raise HTTPException(status_code=404, detail="Interview session not found")
-    _require_admin_session_access(session, current_admin)
     answers = list(answers_collection.find({"interview_id": interview_id}))
     
     if not answers:
