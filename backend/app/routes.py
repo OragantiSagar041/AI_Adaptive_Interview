@@ -3876,6 +3876,17 @@ def update_profile(data: UpdateProfileRequest, current_admin: str = Depends(get_
             update_fields["name"] = data.username
         if data.company_name:
             update_fields["company_name"] = data.company_name
+            # Also update the actual company document if it exists
+            if admin.get("company_id"):
+                try:
+                    # pyrefly: ignore [missing-import]
+                    from bson import ObjectId
+                    companies_collection.update_one(
+                        {"_id": ObjectId(str(admin["company_id"]))},
+                        {"$set": {"name": data.company_name}}
+                    )
+                except Exception:
+                    pass
             
         if not update_fields:
             return {"status": "success", "message": "No changes made."}
