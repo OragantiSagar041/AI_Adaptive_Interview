@@ -3,7 +3,7 @@ import { useNavigate } from 'react-router-dom'
 import Swal from 'sweetalert2'
 import api from '../../utils/api'
 import useCandidateWebRTC from '../../hooks/useCandidateWebRTC'
-import { setCandidateSessionAuth, getCandidateSessionToken } from '../../utils/candidateAuth'
+import { setCandidateSessionAuth, getCandidateSessionToken, withCandidateAuth } from '../../utils/candidateAuth'
 import { useProctoring } from '../../hooks/useProctoring'
 import { useScreenshotProtection } from '../../hooks/useScreenshotProtection'
 import { useExamSecurity } from '../../hooks/useExamSecurity'
@@ -685,7 +685,7 @@ export const useInterviewSession = (sessionId, interviewType, startRoundTwo) => 
             answerForm.append('interview_id', answerData.interview_id || sessionId)
             answerForm.append('question_id', answerData.question_id)
             answerForm.append('question_text', answerData.question_text || '')
-            answerForm.append('answer_text', answerData.answer_text || ' ')
+            answerForm.append('answer_text', answerData.answer_text || 'No answer provided')
             answerForm.append('candidate_name', 'Candidate')
             answerForm.append('time_spent_seconds', answerData.time_spent_seconds || '0')
             answerForm.append('time_limit_seconds', '120')
@@ -1811,11 +1811,11 @@ export const useInterviewSession = (sessionId, interviewType, startRoundTwo) => 
       let url = ttsCacheRef.current.get(ttsCacheKey)
 
       if (!url) {
-        const res = await fetch(`${api.defaults.baseURL || ''}/tts`, {
+        const res = await fetch(`${api.defaults.baseURL || ''}/tts`, withCandidateAuth({
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify(bodyPayload)
-        })
+        }))
         if (!res.ok) throw new Error('TTS failed')
         const blob = await res.blob()
         url = URL.createObjectURL(blob)
@@ -1978,7 +1978,7 @@ export const useInterviewSession = (sessionId, interviewType, startRoundTwo) => 
     answerForm.append('interview_id', iid)
     answerForm.append('question_id', activeQuestion?.id || (currentQuestionIndex + 1))
     answerForm.append('question_text', activeQuestion?.text || activeQuestion?.question || '')
-    answerForm.append('answer_text', activeQuestion?.type === 'coding' ? (codeAnswer || ' ') : (transcriptionText || ' '))
+    answerForm.append('answer_text', activeQuestion?.type === 'coding' ? (codeAnswer || 'No code submitted') : (transcriptionText.trim() || 'No answer provided'))
     answerForm.append('candidate_name', sessionDetail?.candidate_name || 'Candidate')
     answerForm.append('time_spent_seconds', timeSpent.toString())
     answerForm.append('time_limit_seconds', '120')
@@ -2052,7 +2052,7 @@ export const useInterviewSession = (sessionId, interviewType, startRoundTwo) => 
         answerForm.append('interview_id', iid)
         answerForm.append('question_id', currentQuestion.id || (currentQuestionIndex + 1))
         answerForm.append('question_text', currentQuestion.text || currentQuestion.question || currentQuestion.prompt || currentQuestion.scenario || currentQuestion.question_text || '')
-        answerForm.append('answer_text', currentQuestion.type === 'coding' ? (codeAnswer || ' ') : (transcriptionText || ' '))
+        answerForm.append('answer_text', currentQuestion.type === 'coding' ? (codeAnswer || 'No code submitted') : (transcriptionText.trim() || 'No answer provided'))
         answerForm.append('candidate_name', sessionDetail?.candidate_name || 'Candidate')
         answerForm.append('time_spent_seconds', timeSpent.toString())
         answerForm.append('time_limit_seconds', '120')
@@ -2324,7 +2324,7 @@ export const useInterviewSession = (sessionId, interviewType, startRoundTwo) => 
         answerForm.append('interview_id', iid)
         answerForm.append('question_id', currentQuestion.id || (currentQuestionIndex + 1))
         answerForm.append('question_text', currentQuestion.text || currentQuestion.question || '')
-        answerForm.append('answer_text', currentQuestion.type === 'coding' ? (codeAnswer || ' ') : (transcriptionText || ' '))
+        answerForm.append('answer_text', currentQuestion.type === 'coding' ? (codeAnswer || 'No code submitted') : (transcriptionText.trim() || 'No answer provided'))
         answerForm.append('candidate_name', sessionDetail?.candidate_name || 'Candidate')
         answerForm.append('time_spent_seconds', timeSpent.toString())
         answerForm.append('time_limit_seconds', '120')
@@ -2340,7 +2340,7 @@ export const useInterviewSession = (sessionId, interviewType, startRoundTwo) => 
               interview_id: iid,
               question_id: currentQuestion.id || (currentQuestionIndex + 1),
               question_text: currentQuestion.text || currentQuestion.question || '',
-              answer_text: currentQuestion.type === 'coding' ? (codeAnswer || ' ') : (transcriptionText || ' '),
+              answer_text: currentQuestion.type === 'coding' ? (codeAnswer || 'No code submitted') : (transcriptionText.trim() || 'No answer provided'),
               time_spent_seconds: timeSpent
             }
             sessionStorage.setItem(failedKey, JSON.stringify(answerData))

@@ -20,7 +20,9 @@ logger = logging.getLogger(__name__)
 def _bounded_text(value: Any, *, field: str, maximum: int, required: bool = True) -> str:
     text = str(value or "").strip()
     if required and not text:
-        raise ValueError(f"{field} is required")
+        # Use a placeholder instead of raising a 500 — the candidate already
+        # sees a "no answer" state in the UI; a hard error is worse UX.
+        text = "No answer provided"
     if len(text) > maximum:
         raise ValueError(f"{field} exceeds the {maximum} character limit")
     return text
