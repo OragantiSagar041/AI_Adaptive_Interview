@@ -274,6 +274,7 @@ export const useInterviewSession = (sessionId, interviewType, startRoundTwo) => 
   const silenceIntervalRef = useRef(null)
   const silenceTimeoutRef = useRef(null)
   const lastSpeechTimeRef = useRef(0)
+  // eslint-disable-next-line react-hooks/purity
   const questionStartTimeRef = useRef(Date.now())
   const behavioralStatsRef = useRef({ wordCount: 0, fillerCount: 0, pauseCount: 0, faceAlerts: 0, tabSwitches: 0, noiseAlerts: 0 })
   const globalTabSwitchesRef = useRef(0)
@@ -1504,11 +1505,11 @@ export const useInterviewSession = (sessionId, interviewType, startRoundTwo) => 
       } catch (err) {
         console.error("Camera/Mic getUserMedia error:", err)
         if (err.name === 'NotFoundError' || err.name === 'DevicesNotFoundError') {
-          throw new Error("webcam_mic_not_found")
+          throw new Error("webcam_mic_not_found", { cause: err })
         } else if (err.name === 'NotAllowedError' || err.name === 'PermissionDeniedError') {
-          throw new Error("webcam_mic_denied")
+          throw new Error("webcam_mic_denied", { cause: err })
         } else {
-          throw new Error(`webcam_mic_failed: ${err.message || err.name}`)
+          throw new Error(`webcam_mic_failed: ${err.message || err.name}`, { cause: err })
         }
       }
 
@@ -1522,9 +1523,9 @@ export const useInterviewSession = (sessionId, interviewType, startRoundTwo) => 
         console.error("Screen Share getDisplayMedia error:", err)
         stream.getTracks().forEach(t => t.stop())
         if (err.name === 'NotAllowedError' || err.name === 'PermissionDeniedError') {
-          throw new Error("screenshare_denied")
+          throw new Error("screenshare_denied", { cause: err })
         } else {
-          throw new Error(`screenshare_failed: ${err.message || err.name}`)
+          throw new Error(`screenshare_failed: ${err.message || err.name}`, { cause: err })
         }
       }
 
@@ -1613,6 +1614,7 @@ export const useInterviewSession = (sessionId, interviewType, startRoundTwo) => 
       if (_sessionKey) {
         const sess = JSON.parse(sessionStorage.getItem(_sessionKey) || '{}')
         sess.accepted = true
+        // eslint-disable-next-line react-hooks/purity
         sess.startedAt = sess.startedAt || Date.now()
         sessionStorage.setItem(_sessionKey, JSON.stringify(sess))
       }
