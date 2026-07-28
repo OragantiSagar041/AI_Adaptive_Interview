@@ -67,17 +67,56 @@ function log(...args) {
   if (DEBUG) console.debug('[ProctoringWorker]', ...args);
 }
 
+/**
+ * Registers MediaPipe's WASM ModuleFactory in the worker global scope.
+ *
+ * WHY THIS IS NEEDED:
+ * MediaPipe's WASM loader (vision_wasm_internal.js) is a classic UMD script
+ * that expects to run in a global script context — it sets up a `ModuleFactory`
+ * global that MediaPipe's task classes later call internally. In an ES module
+ * worker, this global is never set, causing "ModuleFactory not set" failures.
+ *
+ * WHY NOT new Function():
+ * new Function(scriptText) is eval-equivalent and is blocked by CSP.
+ *
+ * THE SAFE APPROACH — dynamic import() via Blob URL:
+ * We wrap the script text in an ES module that explicitly assigns to globalThis,
+ * then import it dynamically. Dynamic import() from a blob: URL is NOT eval —
+ * it is a legitimate module load governed by script-src blob:, NOT unsafe-eval.
+ */
+async function ensureWasmModuleFactory(vision) {
+  if (typeof globalThis.ModuleFactory === 'function') return; // already set
+
+  const scriptText = await (await fetch(vision.wasmLoaderPath)).text();
+
+  // Wrap the WASM loader in an ES module that explicitly exports ModuleFactory
+  // to globalThis. Using import() from a blob URL does not require 'unsafe-eval'.
+  const moduleSource = `
+${scriptText}
+if (typeof ModuleFactory !== 'undefined') {
+  globalThis.ModuleFactory = ModuleFactory;
+}
+`;
+  const blob = new Blob([moduleSource], { type: 'text/javascript' });
+  const blobUrl = URL.createObjectURL(blob);
+  try {
+    await import(/* @vite-ignore */ blobUrl);
+  } finally {
+    URL.revokeObjectURL(blobUrl);
+  }
+}
+
 async function loadModels() {
-  // FilesetResolver handles all WASM loading internally via standard fetch().
-  // No eval() or new Function() needed — fully CSP-compliant.
   const vision = await FilesetResolver.forVisionTasks(MODEL_URLS.wasm);
+
+  await ensureWasmModuleFactory(vision);
 
   faceLandmarker = await FaceLandmarker.createFromOptions(vision, {
     baseOptions: { modelAssetPath: MODEL_URLS.faceLandmarker, delegate: 'CPU' },
     outputFaceBlendshapes: true,
     runningMode: 'IMAGE',
-    numFaces: 4,                       // detect up to 4 faces -> powers multi-face detection
-    minFaceDetectionConfidence: 0.30,  // relaxed for occluded/angled faces
+    numFaces: 4,
+    minFaceDetectionConfidence: 0.30,
     minFacePresenceConfidence: 0.30,
     minTrackingConfidence: 0.30,
   });
