@@ -15,7 +15,18 @@ except Exception as e:
     print(f"Warning: Could not configure custom DNS resolver: {e}")
 
 MONGO_URI = os.getenv("MONGO_URI", "mongodb://localhost:27017/")
-client = MongoClient(MONGO_URI, connect=False)
+client = MongoClient(
+    MONGO_URI,
+    connect=False,
+    maxPoolSize=50,           # allow more concurrent connections
+    minPoolSize=5,            # keep warm connections ready
+    serverSelectionTimeoutMS=2000,
+    connectTimeoutMS=2000,
+    socketTimeoutMS=5000,
+    heartbeatFrequencyMS=10000,   # reduce heartbeat overhead
+    retryWrites=True,
+    compressors=["zstd", "zlib"],  # compress wire traffic
+)
 db = client["AI_Interview"]
 
 # Collections
@@ -32,6 +43,7 @@ omni_call_logs_collection = db["omni_call_logs"]
 jobs_collection = db["jobs"]
 job_applications_collection = db["job_applications"]
 conversation_flows_collection = db["conversation_flows"]
+crash_logs_collection = db["crash_logs"]
 agents_collection = db["agents"]
 counters_collection = db["counters"]
 demo_requests_collection = db["demo_requests"]
@@ -39,6 +51,7 @@ payment_orders_collection = db["payment_orders"]
 pending_signups_collection = db["pending_signups"]
 security_logs_collection = db["security_logs"]
 security_policies_collection = db["security_policies"]
+copilot_sessions_collection = db["copilot_sessions"]
 
 def get_next_sequence_value(sequence_name: str, prefix: str) -> str:
     """

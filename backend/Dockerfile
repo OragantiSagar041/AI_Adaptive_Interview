@@ -21,10 +21,17 @@ RUN apt-get purge -y --auto-remove build-essential gcc \
 
 # Copy backend code
 COPY . .
-RUN useradd --create-home --uid 10001 appuser \
+
+# Ensure /tmp exists with full permissions, create user and set ownership
+RUN mkdir -p /tmp && chmod 1777 /tmp \
+    && useradd --create-home --uid 10001 appuser \
     && mkdir -p /app/uploads \
     && chown -R appuser:appuser /app
+
 USER appuser
+
+# Explicitly set TMPDIR environment variable
+ENV TMPDIR=/tmp
 
 # Expose port
 EXPOSE 8000

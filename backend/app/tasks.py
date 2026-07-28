@@ -462,3 +462,81 @@ def process_bulk_emails_task(self, jobs: list):
             
     logger.info(f"Finished processing all {len(jobs)} bulk email jobs.")
     return {"status": "success", "jobs_processed": len(jobs)}
+
+# ---------------------------------------------------------------------------
+# Task: send recruiter credentials email
+# ---------------------------------------------------------------------------
+
+@celery_app.task(bind=True, name="app.tasks.send_recruiter_credentials_email_task", max_retries=3)
+def send_recruiter_credentials_email_task(
+    self,
+    recruiter_email: str,
+    recruiter_name: str,
+    username: str,
+    password: str,
+    description: str = "",
+):
+    logger.info(f"Sending credentials email to {recruiter_email} (Attempt {self.request.retries + 1})")
+
+    BREVO_API_KEY = os.getenv("BREVO_API_KEY", "")
+    if not BREVO_API_KEY:
+        logger.warning("BREVO_API_KEY not set — skipping email send")
+        return {"status": "skipped", "reason": "no_api_key"}
+
+    try:
+        FRONTEND_URL = os.getenv("FRONTEND_URL", "https://www.hireiq.co.in")
+        login_url = f"{FRONTEND_URL}/login"
+        
+        html_content = f"""
+        <html>
+            <body style="font-family: Arial, sans-serif; color: #333;">
+                <h2 style="color: #4F46E5;">Welcome to HireIQ, {recruiter_name}!</h2>
+                <p>An administrator has provisioned a new recruiter account for you.</p>
+                <div style="background-color: #F8FAFC; padding: 20px; border-radius: 8px; margin: 20px 0;">
+                    <p><strong>Username:</strong> {username}</p>
+                    <p><strong>Password:</strong> {password}</p>
+                </div>
+                <p><strong>Additional Details:</strong></p>
+                <p>{description or "You can now log in and manage your AI interviews and candidates."}</p>
+                <div style="margin-top: 30px;">
+                    <a href="{login_url}" style="background-color: #4F46E5; color: white; padding: 12px 24px; text-decoration: none; border-radius: 6px; font-weight: bold; display: inline-block;">Login to HireIQ</a>
+                </div>
+                <p style="margin-top: 30px; font-size: 0.9em; color: #64748b;">
+                    Please change your password after logging in for the first time.
+                </p>
+                <br>
+                <p>Best Regards,<br>The HireIQ Team</p>
+            </body>
+        </html>
+        """
+
+        import requests
+        url = "https://api.brevo.com/v3/smtp/email"
+        headers = {
+            "accept": "application/json",
+            "api-key": BREVO_API_KEY,
+            "content-type": "application/json",
+        }
+        payload = {
+            "sender": {
+                "name": "HireIQ Recruiting",
+                "email": os.getenv("BREVO_SENDER_EMAIL", "no-reply@hireiq.co.in"),
+            },
+            "to": [{"email": recruiter_email, "name": recruiter_name}],
+            "subject": "Your HireIQ Recruiter Account Credentials",
+            "htmlContent": html_content,
+        }
+
+        response = requests.post(url, headers=headers, json=payload)
+        response.raise_for_status()
+        logger.info(f"Credentials email sent successfully to {recruiter_email}")
+        return response.json()
+    except Exception as e:
+        logger.error(f"Failed to send credentials email to {recruiter_email}: {e}")
+        try:
+            from celery.exceptions import MaxRetriesExceededError
+            self.retry(exc=e, countdown=2 ** self.request.retries)
+        except MaxRetriesExceededError:
+            logger.error("Max retries exceeded for credentials email.")
+        raise
+

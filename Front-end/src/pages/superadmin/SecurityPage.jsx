@@ -8,9 +8,8 @@ const ToggleSwitch = ({ checked, onChange }) => (
     <div className={`bg-white w-4 h-4 rounded-full shadow-md transform transition-transform ${checked ? 'translate-x-5' : 'translate-x-0'}`}></div>
   </div>
 );
-import axios from 'axios';
-
-import { API_BASE_URL } from '@/apiConfig';
+import api, { dedupedGet } from '../../lib/api';
+import { API_BASE_URL } from '../../apiConfig';
 
 const COLORS = ['#6366f1', '#10b981', '#f43f5e'];
 
@@ -29,10 +28,10 @@ export default function SecurityPage() {
     const fetchSecurityData = async () => {
       try {
         const [statsRes, policiesRes] = await Promise.all([
-          axios.get(`${API_BASE_URL}/api/superadmin/security/stats`, {
+          dedupedGet(`/api/superadmin/security/stats`, {
             headers: { Authorization: `Bearer ${token}` }
           }),
-          axios.get(`${API_BASE_URL}/api/superadmin/security/policies`, {
+          dedupedGet(`/api/superadmin/security/policies`, {
             headers: { Authorization: `Bearer ${token}` }
           }).catch(() => ({ data: { policies: null } }))
         ]);
@@ -50,18 +49,19 @@ export default function SecurityPage() {
     if (token) fetchSecurityData();
   }, [token]);
 
-  const handleTogglePolicy = async (key) => {
+  // Optimistic update — UI flips instantly, network call happens in background
+  const handleTogglePolicy = (key) => {
+    const prevPolicies = policies;
     const newPolicies = { ...policies, [key]: !policies[key] };
-    setPolicies(newPolicies);
+    setPolicies(newPolicies); // instant UI update — zero perceived latency
     
-    try {
-      await axios.put(`${API_BASE_URL}/api/superadmin/security/policies`, newPolicies, {
-        headers: { Authorization: `Bearer ${token}` }
-      });
-    } catch (error) {
+    // Fire-and-forget: save in background without blocking the UI
+    api.put(`/api/superadmin/security/policies`, newPolicies, {
+      headers: { Authorization: `Bearer ${token}` }
+    }).catch((error) => {
       console.error("Failed to update policy", error);
-      setPolicies(policies); // revert on failure
-    }
+      setPolicies(prevPolicies); // revert on failure
+    });
   };
 
   if (loading) {

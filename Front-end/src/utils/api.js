@@ -568,6 +568,42 @@ export const adminCopilotExecute = async (data) => {
   }
 };
 
+export const getCopilotSessions = async () => {
+  try {
+    const response = await api.get("/api/admin/copilot/sessions");
+    return response.data;
+  } catch (error) {
+    throw error.response?.data?.detail || "Failed to fetch copilot sessions";
+  }
+};
+
+export const createCopilotSession = async () => {
+  try {
+    const response = await api.post("/api/admin/copilot/sessions");
+    return response.data;
+  } catch (error) {
+    throw error.response?.data?.detail || "Failed to create copilot session";
+  }
+};
+
+export const getCopilotSessionDetail = async (sessionId) => {
+  try {
+    const response = await api.get(`/api/admin/copilot/sessions/${sessionId}`);
+    return response.data;
+  } catch (error) {
+    throw error.response?.data?.detail || "Failed to fetch session detail";
+  }
+};
+
+export const deleteCopilotSession = async (sessionId) => {
+  try {
+    const response = await api.delete(`/api/admin/copilot/sessions/${sessionId}`);
+    return response.data;
+  } catch (error) {
+    throw error.response?.data?.detail || "Failed to delete session";
+  }
+};
+
 export const calculateAtsScore = async (data) => {
   try {
     const response = await api.post("/admin/ats-score", data);

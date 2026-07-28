@@ -103,6 +103,8 @@ export default function OverviewDashboardPage() {
 
   // Sub-admins local state
   const [subAdmins, setSubAdmins] = useState([])
+  const [crashLogs, setCrashLogs] = useState([])
+  const [selectedCrashLog, setSelectedCrashLog] = useState(null)
 
   useEffect(() => {
     if (!token) return
@@ -117,6 +119,18 @@ export default function OverviewDashboardPage() {
       }
     }
     fetchSubAdmins()
+    
+    const fetchCrashLogs = async () => {
+      try {
+        const res = await axios.get(`${API_BASE_URL}/superadmin/crash-logs`, {
+          headers: { Authorization: `Bearer ${token}` }
+        })
+        setCrashLogs(res.data.logs || [])
+      } catch (err) {
+        console.error("Error fetching crash logs:", err)
+      }
+    }
+    fetchCrashLogs()
   }, [token, API_BASE_URL])
 
   useEffect(() => {
@@ -293,7 +307,102 @@ export default function OverviewDashboardPage() {
             </div>
           </div>
         )}
+
+        {crashLogs && crashLogs.length > 0 && (
+          <div className="mt-8 border-t border-slate-100 pt-8 px-6 pb-6 bg-red-50/30 rounded-b-xl">
+            <h3 className="text-base font-bold text-red-600 mb-4 flex items-center gap-2">
+              <i className="fas fa-bug"></i> System Crash Logs
+            </h3>
+            <div className="overflow-x-auto">
+              <table className="w-full text-left border-collapse bg-white rounded-xl shadow-sm border border-red-100">
+                <thead>
+                  <tr className="bg-red-50/50 border-b border-red-100 text-xs uppercase tracking-wider text-red-700 font-semibold">
+                    <th className="p-4 rounded-tl-xl">Timestamp</th>
+                    <th className="p-4">Endpoint</th>
+                    <th className="p-4">Error Type</th>
+                    <th className="p-4 text-right rounded-tr-xl">Action</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-red-100">
+                  {crashLogs.map(log => (
+                    <tr key={log._id} className="hover:bg-red-50/30 transition-colors">
+                      <td className="p-4 text-sm text-slate-600 whitespace-nowrap">
+                        {new Date(log.timestamp).toLocaleString()}
+                      </td>
+                      <td className="p-4 text-sm font-medium text-slate-800">
+                        <span className="text-xs bg-slate-100 text-slate-600 px-2 py-1 rounded mr-2">{log.method}</span>
+                        {log.url}
+                      </td>
+                      <td className="p-4 text-sm text-red-600 font-bold">{log.error_type}</td>
+                      <td className="p-4 text-right">
+                        <button 
+                          onClick={() => setSelectedCrashLog(log)} 
+                          className="text-white bg-red-600 hover:bg-red-700 px-3 py-1.5 rounded-lg text-xs font-bold shadow-sm transition-colors cursor-pointer"
+                        >
+                          View Trace
+                        </button>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          </div>
+        )}
       </Card>
+
+      {/* Crash Log Modal */}
+      {selectedCrashLog && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/50 backdrop-blur-sm">
+          <div className="bg-white rounded-2xl shadow-xl w-full max-w-4xl max-h-[90vh] flex flex-col overflow-hidden">
+            <div className="p-6 border-b border-slate-100 flex justify-between items-center bg-red-50">
+              <h2 className="text-xl font-bold text-red-600 flex items-center gap-2">
+                <i className="fas fa-exclamation-triangle"></i> Crash Details
+              </h2>
+              <button 
+                onClick={() => setSelectedCrashLog(null)}
+                className="text-slate-400 hover:text-slate-600 p-2 rounded-full hover:bg-white transition-colors"
+              >
+                <i className="fas fa-times"></i>
+              </button>
+            </div>
+            <div className="p-6 overflow-y-auto bg-slate-50">
+              <div className="grid grid-cols-2 gap-4 mb-6">
+                <div className="bg-white p-4 rounded-xl border border-slate-200">
+                  <p className="text-xs text-slate-500 uppercase tracking-wider font-bold mb-1">Timestamp</p>
+                  <p className="text-sm font-medium text-slate-800">{new Date(selectedCrashLog.timestamp).toLocaleString()}</p>
+                </div>
+                <div className="bg-white p-4 rounded-xl border border-slate-200">
+                  <p className="text-xs text-slate-500 uppercase tracking-wider font-bold mb-1">Error Type</p>
+                  <p className="text-sm font-bold text-red-600">{selectedCrashLog.error_type}</p>
+                </div>
+                <div className="bg-white p-4 rounded-xl border border-slate-200 col-span-2">
+                  <p className="text-xs text-slate-500 uppercase tracking-wider font-bold mb-1">Endpoint</p>
+                  <p className="text-sm font-medium text-slate-800 flex items-center gap-2">
+                    <span className="text-xs bg-slate-100 px-2 py-1 rounded">{selectedCrashLog.method}</span>
+                    {selectedCrashLog.url}
+                  </p>
+                </div>
+                <div className="bg-white p-4 rounded-xl border border-slate-200 col-span-2">
+                  <p className="text-xs text-slate-500 uppercase tracking-wider font-bold mb-1">Error Message</p>
+                  <p className="text-sm font-medium text-slate-800">{selectedCrashLog.error_message}</p>
+                </div>
+              </div>
+              
+              <div className="bg-[#1e1e1e] rounded-xl overflow-hidden border border-slate-800">
+                <div className="px-4 py-2 bg-black/50 border-b border-slate-800 flex items-center justify-between">
+                  <span className="text-xs font-mono text-slate-400">Stack Trace</span>
+                </div>
+                <div className="p-4 overflow-x-auto">
+                  <pre className="text-xs font-mono text-red-400 leading-relaxed whitespace-pre-wrap">
+                    {selectedCrashLog.stack_trace}
+                  </pre>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   )
 }

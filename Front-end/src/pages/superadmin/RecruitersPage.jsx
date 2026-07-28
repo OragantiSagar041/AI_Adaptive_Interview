@@ -1,8 +1,11 @@
 import React, { useState, useEffect } from 'react';
 import { useSelector } from 'react-redux';
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from 'recharts';
-import { Users, UserCheck, Video, MoreHorizontal, Search } from 'lucide-react';
+import { Users, UserCheck, Video, MoreHorizontal, Search, Edit, Mail, Trash2, X, UserPlus, Coins, Download, Eye, EyeOff } from 'lucide-react';
+import Swal from 'sweetalert2';
+import 'sweetalert2/dist/sweetalert2.min.css';
 import axios from 'axios';
+import api from '@/lib/api';
 
 import { API_BASE_URL } from '@/apiConfig';
 
@@ -11,24 +14,161 @@ export default function RecruitersPage() {
   const [data, setData] = useState(null);
   const [loading, setLoading] = useState(true);
   const [searchTerm, setSearchTerm] = useState('');
+  const [openDropdownId, setOpenDropdownId] = useState(null);
+  
+  // Modals state
+  const [editingRecruiter, setEditingRecruiter] = useState(null);
+  const [messagingRecruiter, setMessagingRecruiter] = useState(null);
+  const [deactivatingRecruiter, setDeactivatingRecruiter] = useState(null);
+  const [messageForm, setMessageForm] = useState({ subject: '', body: '' });
+
+  const [isAddAdminOpen, setIsAddAdminOpen] = useState(false);
+  const [newAdminForm, setNewAdminForm] = useState({
+    name: '',
+    username: '',
+    email: '',
+    password: '',
+    credits: 0,
+    description: 'Welcome to HireIQ! You can now log in and manage your AI interviews. Please change your password upon your first login.'
+  });
+  const [addAdminLoading, setAddAdminLoading] = useState(false);
+  const [showPassword, setShowPassword] = useState(false);
+
+  const [addingCreditsRecruiter, setAddingCreditsRecruiter] = useState(null);
+  const [addCreditsAmount, setAddCreditsAmount] = useState(0);
+  
+  const fetchStats = async () => {
+    try {
+      const res = await api.get('/api/superadmin/recruiters/stats', {
+        headers: { Authorization: `Bearer ${token}` }
+      });
+      setData(res.data);
+    } catch (error) {
+      console.error("Failed to fetch recruiter stats", error);
+    } finally {
+      setLoading(false);
+    }
+  };
 
   useEffect(() => {
-    const fetchStats = async () => {
-      try {
-        
-        
-        const res = await axios.get(`${API_BASE_URL}/api/superadmin/recruiters/stats`, {
-          headers: { Authorization: `Bearer ${token}` }
-        });
-        setData(res.data);
-      } catch (error) {
-        console.error("Failed to fetch recruiter stats", error);
-      } finally {
-        setLoading(false);
-      }
-    };
-    fetchStats();
-  }, [API_BASE_URL, token]);
+    if (token) fetchStats();
+  }, [token]);
+
+  const handleAddAdminSubmit = async (e) => {
+    e.preventDefault();
+    setAddAdminLoading(true);
+    try {
+      await axios.post(`${API_BASE_URL}/super-admin/admins`, {
+        name: newAdminForm.name,
+        username: newAdminForm.username,
+        email: newAdminForm.email,
+        password: newAdminForm.password,
+        credits: parseInt(newAdminForm.credits),
+        description: newAdminForm.description
+      }, {
+        headers: { 'Authorization': `Bearer ${token}` }
+      });
+      Swal.fire({
+        title: 'Recruiter Added',
+        text: 'Provisioned recruiter successfully!',
+        icon: 'success',
+        background: '#161c2d',
+        color: '#fff'
+      });
+      setIsAddAdminOpen(false);
+      setNewAdminForm({
+        name: '',
+        username: '',
+        email: '',
+        password: '',
+        credits: 0,
+        description: 'Welcome to HireIQ! You can now log in and manage your AI interviews. Please change your password upon your first login.'
+      });
+      setShowPassword(false);
+      fetchStats();
+    } catch (err) {
+      Swal.fire({
+        title: 'Error',
+        text: err.response?.data?.detail || err.message,
+        icon: 'error',
+        background: '#161c2d',
+        color: '#fff'
+      });
+    } finally {
+      setAddAdminLoading(false);
+    }
+  };
+
+  const handleAddCreditsSubmit = async (e) => {
+    e.preventDefault();
+    if (addCreditsAmount <= 0) return;
+    try {
+      await api.post(`/api/superadmin/recruiters/${addingCreditsRecruiter.id}/add-credits`, { amount: parseInt(addCreditsAmount) }, {
+        headers: { Authorization: `Bearer ${token}` }
+      });
+      Swal.fire({
+        title: 'Credits Added',
+        text: `Successfully added ${addCreditsAmount} credits to ${addingCreditsRecruiter.name}!`,
+        icon: 'success',
+        background: '#161c2d',
+        color: '#fff'
+      });
+      setAddingCreditsRecruiter(null);
+      setAddCreditsAmount(0);
+      fetchStats();
+    } catch (err) {
+      console.error(err);
+      Swal.fire({
+        title: 'Error',
+        text: err.response?.data?.detail || err.message,
+        icon: 'error',
+        background: '#161c2d',
+        color: '#fff'
+      });
+    }
+  };
+
+  const handleEditSubmit = async (e) => {
+    e.preventDefault();
+    try {
+      await api.put(`/api/superadmin/recruiters/${editingRecruiter.id}`, editingRecruiter, {
+        headers: { Authorization: `Bearer ${token}` }
+      });
+      setEditingRecruiter(null);
+      fetchStats(); // refresh data
+    } catch (err) {
+      console.error(err);
+      alert('Failed to update recruiter');
+    }
+  };
+
+  const handleSendMessage = async (e) => {
+    e.preventDefault();
+    try {
+      await api.post(`/api/superadmin/recruiters/${messagingRecruiter.id}/message`, messageForm, {
+        headers: { Authorization: `Bearer ${token}` }
+      });
+      setMessagingRecruiter(null);
+      setMessageForm({ subject: '', body: '' });
+      alert('Message sent successfully!');
+    } catch (err) {
+      console.error(err);
+      alert('Failed to send message');
+    }
+  };
+
+  const handleDeactivate = async () => {
+    try {
+      await api.put(`/api/superadmin/recruiters/${deactivatingRecruiter.id}/toggle-status`, {}, {
+        headers: { Authorization: `Bearer ${token}` }
+      });
+      setDeactivatingRecruiter(null);
+      fetchStats(); // refresh data
+    } catch (err) {
+      console.error(err);
+      alert('Failed to toggle status');
+    }
+  };
 
   if (loading) {
     return (
@@ -47,6 +187,36 @@ export default function RecruitersPage() {
     r.email?.toLowerCase().includes(searchTerm.toLowerCase())
   );
 
+  const handleDownloadCSV = () => {
+    if (!filteredRecruiters || filteredRecruiters.length === 0) return;
+    
+    const headers = ['Recruiter Name', 'Email', 'Role', 'Status', 'Interviews', 'Credits', 'Last Active'];
+    const csvContent = [
+      headers.join(','),
+      ...filteredRecruiters.map(r => [
+        `"${r.name || ''}"`,
+        `"${r.email || ''}"`,
+        `"${r.role || ''}"`,
+        `"${r.status || ''}"`,
+        r.interviews_conducted || 0,
+        r.credits || 0,
+        `"${r.last_active ? new Date(r.last_active).toLocaleDateString() : 'N/A'}"`
+      ].join(','))
+    ].join('\n');
+
+    const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+    const link = document.createElement('a');
+    if (link.download !== undefined) {
+      const url = URL.createObjectURL(blob);
+      link.setAttribute('href', url);
+      link.setAttribute('download', 'recruiters_data.csv');
+      link.style.visibility = 'hidden';
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+    }
+  };
+
   return (
     <div
       className="p-8 max-w-7xl mx-auto space-y-8"
@@ -56,6 +226,10 @@ export default function RecruitersPage() {
           <h1 className="text-3xl font-bold text-slate-900">Recruiters</h1>
           <p className="text-slate-500 mt-1">Manage platform recruiters and monitor their activity.</p>
         </div>
+        <button onClick={() => setIsAddAdminOpen(true)} className="flex items-center gap-2 px-4 py-2 bg-indigo-600 text-white font-semibold rounded-xl hover:bg-indigo-700 shadow-sm transition-colors">
+          <UserPlus className="w-5 h-5" />
+          Add Recruiter
+        </button>
       </div>
 
       {/* KPI Cards */}
@@ -104,23 +278,32 @@ export default function RecruitersPage() {
 
         {/* Recruiters List */}
         <div
-          className="lg:col-span-2 bg-white rounded-2xl shadow-sm border border-slate-100 overflow-hidden flex flex-col"
+          className="lg:col-span-2 bg-white rounded-2xl shadow-sm border border-slate-100 flex flex-col overflow-hidden"
         >
           <div className="p-6 border-b border-slate-100 flex justify-between items-center bg-slate-50">
             <h2 className="text-lg font-semibold text-slate-800">Directory</h2>
-            <div className="relative">
-              <Search className="w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
-              <input 
-                type="text"
-                placeholder="Search recruiters..."
-                value={searchTerm}
-                onChange={e => setSearchTerm(e.target.value)}
-                className="pl-9 pr-4 py-2 text-sm bg-white border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500 w-64 transition-all"
-              />
+            <div className="flex items-center gap-3">
+              <div className="relative">
+                <Search className="w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
+                <input 
+                  type="text"
+                  placeholder="Search recruiters..."
+                  value={searchTerm}
+                  onChange={e => setSearchTerm(e.target.value)}
+                  className="pl-9 pr-4 py-2 text-sm bg-white border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500 w-64 transition-all"
+                />
+              </div>
+              <button 
+                onClick={handleDownloadCSV}
+                className="flex items-center gap-2 px-4 py-2 bg-white border border-slate-200 text-slate-700 font-semibold rounded-lg hover:bg-slate-50 shadow-sm transition-colors text-sm"
+              >
+                <Download className="w-4 h-4" />
+                Export
+              </button>
             </div>
           </div>
           
-          <div className="overflow-x-auto flex-1">
+          <div className="flex-1 overflow-visible">
             <table className="w-full text-left border-collapse">
               <thead>
                 <tr className="bg-white text-slate-500 text-xs uppercase tracking-wider">
@@ -128,7 +311,8 @@ export default function RecruitersPage() {
                   <th className="px-6 py-4 font-medium">Role</th>
                   <th className="px-6 py-4 font-medium">Status</th>
                   <th className="px-6 py-4 font-medium text-center">Interviews</th>
-                  <th className="px-6 py-4 font-medium"></th>
+                  <th className="px-6 py-4 font-medium text-center">Credits</th>
+                  <th className="w-12 px-2 py-4 font-medium"></th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-slate-100 text-sm">
@@ -161,10 +345,52 @@ export default function RecruitersPage() {
                     <td className="px-6 py-4 whitespace-nowrap text-center font-medium text-slate-700">
                       {recruiter.interviews_conducted}
                     </td>
-                    <td className="px-6 py-4 whitespace-nowrap text-right">
-                      <button className="text-slate-400 hover:text-indigo-600 transition-colors p-2 rounded-lg hover:bg-indigo-50:bg-indigo-900/20">
+                    <td className="px-6 py-4 whitespace-nowrap text-center font-bold text-indigo-600">
+                      {recruiter.credits || 0}
+                    </td>
+                    <td className="px-6 py-4 whitespace-nowrap text-right relative">
+                      <button 
+                        onClick={() => setOpenDropdownId(openDropdownId === recruiter.id ? null : recruiter.id)}
+                        className="text-slate-400 hover:text-indigo-600 transition-colors p-2 rounded-lg hover:bg-indigo-50"
+                      >
                         <MoreHorizontal className="w-5 h-5" />
                       </button>
+                      
+                      {openDropdownId === recruiter.id && (
+                        <>
+                          <div 
+                            className="fixed inset-0 z-10" 
+                            onClick={() => setOpenDropdownId(null)}
+                          ></div>
+                          <div className="absolute right-8 top-12 w-48 bg-white rounded-xl shadow-lg border border-slate-100 py-2 z-20 animate-in fade-in slide-in-from-top-2 duration-200 text-left">
+                            <button 
+                              onClick={() => { setEditingRecruiter(recruiter); setOpenDropdownId(null); }}
+                              className="w-full px-4 py-2 text-sm text-slate-700 hover:bg-slate-50 hover:text-indigo-600 flex items-center gap-3 transition-colors"
+                            >
+                              <Edit className="w-4 h-4" /> Edit Recruiter
+                            </button>
+                            <button 
+                              onClick={() => { setAddingCreditsRecruiter(recruiter); setOpenDropdownId(null); }}
+                              className="w-full px-4 py-2 text-sm text-slate-700 hover:bg-slate-50 hover:text-indigo-600 flex items-center gap-3 transition-colors"
+                            >
+                              <Coins className="w-4 h-4" /> Add Credits
+                            </button>
+                            <button 
+                              onClick={() => { setMessagingRecruiter(recruiter); setOpenDropdownId(null); }}
+                              className="w-full px-4 py-2 text-sm text-slate-700 hover:bg-slate-50 hover:text-indigo-600 flex items-center gap-3 transition-colors"
+                            >
+                              <Mail className="w-4 h-4" /> Send Message
+                            </button>
+                            <div className="h-px bg-slate-100 my-1"></div>
+                            <button 
+                              onClick={() => { setDeactivatingRecruiter(recruiter); setOpenDropdownId(null); }}
+                              className={`w-full px-4 py-2 text-sm ${recruiter.status === 'Active' ? 'text-rose-600 hover:bg-rose-50' : 'text-emerald-600 hover:bg-emerald-50'} flex items-center gap-3 transition-colors`}
+                            >
+                              <Trash2 className="w-4 h-4" /> {recruiter.status === 'Active' ? 'Deactivate Account' : 'Activate Account'}
+                            </button>
+                          </div>
+                        </>
+                      )}
                     </td>
                   </tr>
                 ))}
@@ -180,6 +406,262 @@ export default function RecruitersPage() {
           </div>
         </div>
       </div>
+
+      {/* MODAL: ADD ADMIN */}
+      {isAddAdminOpen && (
+        <div className="fixed inset-0 z-[9999] flex items-center justify-center bg-slate-900/40 backdrop-blur-md p-4 animate-in fade-in duration-200">
+          <form onSubmit={handleAddAdminSubmit} className="w-full max-w-lg bg-white/95 backdrop-blur-xl border border-white/60 rounded-[2rem] p-8 shadow-[0_20px_60px_rgba(0,0,0,0.15)] space-y-6 text-slate-800 max-h-[90vh] overflow-y-auto relative animate-in zoom-in-95 duration-200">
+
+            <div className="absolute top-0 left-0 w-full h-32 bg-gradient-to-b from-indigo-50/80 to-transparent pointer-events-none rounded-t-[2rem]" />
+
+            <div className="flex justify-between items-start relative z-10 border-b border-indigo-100/50 pb-5">
+              <div className="flex gap-4 items-center">
+                <div className="w-12 h-12 rounded-2xl flex items-center justify-center bg-gradient-to-br from-indigo-500 to-purple-600 text-white shadow-lg shadow-indigo-500/20 shrink-0">
+                  <UserPlus size={24} />
+                </div>
+                <div>
+                  <h3 className="text-xl font-black text-slate-800 tracking-tight">Provision Recruiter</h3>
+                  <p className="text-xs font-semibold text-slate-500 mt-0.5">Create a new recruiter account</p>
+                </div>
+              </div>
+              <button
+                type="button"
+                onClick={() => setIsAddAdminOpen(false)}
+                className="w-8 h-8 flex items-center justify-center rounded-full bg-slate-100 hover:bg-rose-100 text-slate-500 hover:text-rose-600 border-none cursor-pointer transition-colors"
+              >
+                <X size={16} strokeWidth={2.5} />
+              </button>
+            </div>
+
+            <div className="space-y-5 relative z-10">
+              <div className="grid sm:grid-cols-2 gap-5">
+                <div className="space-y-1.5">
+                  <label className="text-[0.7rem] font-bold text-slate-500 uppercase tracking-wider ml-1">Full Name</label>
+                  <input
+                    type="text"
+                    required
+                    value={newAdminForm.name}
+                    onChange={(e) => setNewAdminForm(prev => ({ ...prev, name: e.target.value.replace(/[0-9]/g, '') }))}
+                    placeholder="e.g. John Doe"
+                    className="w-full rounded-xl border border-slate-200 bg-slate-50/50 px-4 py-3 text-sm text-slate-800 font-medium outline-none focus:bg-white focus:border-indigo-500 focus:ring-4 focus:ring-indigo-500/10 transition-all placeholder:text-slate-400"
+                  />
+                </div>
+
+                <div className="space-y-1.5">
+                  <label className="text-[0.7rem] font-bold text-slate-500 uppercase tracking-wider ml-1">Username</label>
+                  <input
+                    type="text"
+                    required
+                    value={newAdminForm.username}
+                    onChange={(e) => setNewAdminForm(prev => ({ ...prev, username: e.target.value }))}
+                    placeholder="e.g. john_d"
+                    className="w-full rounded-xl border border-slate-200 bg-slate-50/50 px-4 py-3 text-sm text-slate-800 font-medium outline-none focus:bg-white focus:border-indigo-500 focus:ring-4 focus:ring-indigo-500/10 transition-all placeholder:text-slate-400"
+                  />
+                </div>
+              </div>
+
+              <div className="space-y-1.5">
+                <label className="text-[0.7rem] font-bold text-slate-500 uppercase tracking-wider ml-1">Email Address</label>
+                <input
+                  type="email"
+                  required
+                  value={newAdminForm.email}
+                  onChange={(e) => setNewAdminForm(prev => ({ ...prev, email: e.target.value }))}
+                  placeholder="e.g. john@example.com"
+                  className="w-full rounded-xl border border-slate-200 bg-slate-50/50 px-4 py-3 text-sm text-slate-800 font-medium outline-none focus:bg-white focus:border-indigo-500 focus:ring-4 focus:ring-indigo-500/10 transition-all placeholder:text-slate-400"
+                />
+              </div>
+
+              <div className="space-y-1.5">
+                <label className="text-[0.7rem] font-bold text-slate-500 uppercase tracking-wider ml-1">Description (Included in Email)</label>
+                <textarea
+                  value={newAdminForm.description}
+                  onChange={(e) => setNewAdminForm(prev => ({ ...prev, description: e.target.value }))}
+                  placeholder="e.g. You can now log in and manage your AI interviews..."
+                  rows="3"
+                  className="w-full rounded-xl border border-slate-200 bg-slate-50/50 px-4 py-3 text-sm text-slate-800 font-medium outline-none focus:bg-white focus:border-indigo-500 focus:ring-4 focus:ring-indigo-500/10 transition-all placeholder:text-slate-400"
+                />
+              </div>
+
+              <div className="grid sm:grid-cols-2 gap-5">
+                <div className="space-y-1.5">
+                  <label className="text-[0.7rem] font-bold text-slate-500 uppercase tracking-wider ml-1">Password</label>
+                  <div className="relative">
+                    <input
+                      type={showPassword ? "text" : "password"}
+                      required
+                      value={newAdminForm.password}
+                      onChange={(e) => setNewAdminForm(prev => ({ ...prev, password: e.target.value }))}
+                      className="w-full rounded-xl border border-slate-200 bg-slate-50/50 px-4 py-3 pr-10 text-sm text-slate-800 font-medium outline-none focus:bg-white focus:border-indigo-500 focus:ring-4 focus:ring-indigo-500/10 transition-all placeholder:text-slate-400"
+                    />
+                    <button
+                      type="button"
+                      onClick={() => setShowPassword(!showPassword)}
+                      className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600 focus:outline-none"
+                    >
+                      {showPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+                    </button>
+                  </div>
+                </div>
+
+                <div className="space-y-1.5">
+                  <label className="text-[0.7rem] font-bold text-slate-500 uppercase tracking-wider ml-1">Initial Credits</label>
+                  <div className="relative">
+                    <Coins size={16} className="absolute left-3.5 top-1/2 -translate-y-1/2 text-slate-400" />
+                    <input
+                      type="number"
+                      min="0"
+                      value={newAdminForm.credits}
+                      onChange={(e) => setNewAdminForm(prev => ({ ...prev, credits: e.target.value }))}
+                      className="w-full rounded-xl border border-slate-200 bg-slate-50/50 pl-10 pr-4 py-3 text-sm text-slate-800 font-bold outline-none focus:bg-white focus:border-indigo-500 focus:ring-4 focus:ring-indigo-500/10 transition-all placeholder:text-slate-400"
+                    />
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            <div className="flex gap-4 pt-6 mt-6 border-t border-slate-100 relative z-10">
+              <button
+                type="button"
+                onClick={() => setIsAddAdminOpen(false)}
+                className="flex-1 py-3.5 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-600 font-bold text-sm cursor-pointer transition-colors border-none"
+              >
+                Cancel
+              </button>
+              <button
+                type="submit"
+                disabled={addAdminLoading}
+                className="flex-[2] py-3.5 rounded-xl bg-gradient-to-r from-indigo-600 to-indigo-700 hover:from-indigo-500 hover:to-indigo-600 border-none text-white font-bold text-sm cursor-pointer disabled:opacity-50 shadow-lg shadow-indigo-500/30 transition-all hover:-translate-y-0.5 active:translate-y-0"
+              >
+                {addAdminLoading ? 'Provisioning...' : 'Add Recruiter'}
+              </button>
+            </div>
+          </form>
+        </div>
+      )}
+
+      {/* MODAL: ADD CREDITS */}
+      {addingCreditsRecruiter && (
+        <div className="fixed inset-0 bg-slate-900/50 flex items-center justify-center z-[9999] p-4 animate-in fade-in duration-200">
+          <div className="bg-white rounded-2xl w-full max-w-md shadow-xl overflow-hidden animate-in zoom-in-95 duration-200">
+            <div className="p-6 border-b border-slate-100 flex justify-between items-center">
+              <h3 className="text-lg font-bold text-slate-800">Add Credits</h3>
+              <button onClick={() => setAddingCreditsRecruiter(null)} className="text-slate-400 hover:text-slate-600">
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+            <form onSubmit={handleAddCreditsSubmit} className="p-6 space-y-4">
+              <div>
+                <label className="block text-sm font-medium text-slate-700 mb-1">Recruiter</label>
+                <input type="text" disabled value={addingCreditsRecruiter.name} className="w-full px-4 py-2 border border-slate-200 rounded-lg bg-slate-50 text-slate-500" />
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-slate-700 mb-1">Amount to Add</label>
+                <div className="relative">
+                  <Coins className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
+                  <input type="number" min="1" required value={addCreditsAmount} onChange={e => setAddCreditsAmount(e.target.value)} className="w-full pl-9 pr-4 py-2 border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500" />
+                </div>
+              </div>
+              <div className="pt-4 flex gap-3">
+                <button type="button" onClick={() => setAddingCreditsRecruiter(null)} className="flex-1 px-4 py-2 border border-slate-200 text-slate-600 rounded-lg hover:bg-slate-50 transition-colors font-medium">Cancel</button>
+                <button type="submit" className="flex-1 px-4 py-2 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 transition-colors font-medium">Add Credits</button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* Edit Recruiter Modal */}
+      {editingRecruiter && (
+        <div className="fixed inset-0 bg-slate-900/50 flex items-center justify-center z-50 p-4">
+          <div className="bg-white rounded-2xl shadow-xl w-full max-w-md overflow-hidden animate-in fade-in zoom-in-95 duration-200">
+            <div className="p-6 border-b border-slate-100 flex justify-between items-center bg-slate-50/50">
+              <h3 className="font-semibold text-slate-800 text-lg">Edit Recruiter</h3>
+              <button onClick={() => setEditingRecruiter(null)} className="text-slate-400 hover:text-slate-600">
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+            <form onSubmit={handleEditSubmit} className="p-6 space-y-4">
+              <div>
+                <label className="block text-sm font-medium text-slate-700 mb-1">Name</label>
+                <input required type="text" value={editingRecruiter.name} onChange={(e) => setEditingRecruiter({...editingRecruiter, name: e.target.value})} className="w-full px-4 py-2 border border-slate-200 rounded-xl focus:ring-2 focus:ring-indigo-500 focus:outline-none" />
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-slate-700 mb-1">Email</label>
+                <input required type="email" value={editingRecruiter.email} onChange={(e) => setEditingRecruiter({...editingRecruiter, email: e.target.value})} className="w-full px-4 py-2 border border-slate-200 rounded-xl focus:ring-2 focus:ring-indigo-500 focus:outline-none" />
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-slate-700 mb-1">Role</label>
+                <select value={editingRecruiter.role} onChange={(e) => setEditingRecruiter({...editingRecruiter, role: e.target.value})} className="w-full px-4 py-2 border border-slate-200 rounded-xl focus:ring-2 focus:ring-indigo-500 focus:outline-none">
+                  <option value="admin">Admin</option>
+                  <option value="super_admin">Super Admin</option>
+                </select>
+              </div>
+              <div className="flex justify-end gap-3 pt-4">
+                <button type="button" onClick={() => setEditingRecruiter(null)} className="px-5 py-2 text-slate-600 hover:bg-slate-100 rounded-xl font-medium transition-colors">Cancel</button>
+                <button type="submit" className="px-5 py-2 bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl font-medium shadow-sm transition-colors">Save Changes</button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* Message Recruiter Modal */}
+      {messagingRecruiter && (
+        <div className="fixed inset-0 bg-slate-900/50 flex items-center justify-center z-50 p-4">
+          <div className="bg-white rounded-2xl shadow-xl w-full max-w-md overflow-hidden animate-in fade-in zoom-in-95 duration-200">
+            <div className="p-6 border-b border-slate-100 flex justify-between items-center bg-slate-50/50">
+              <h3 className="font-semibold text-slate-800 text-lg">Send Message to {messagingRecruiter.name}</h3>
+              <button onClick={() => setMessagingRecruiter(null)} className="text-slate-400 hover:text-slate-600">
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+            <form onSubmit={handleSendMessage} className="p-6 space-y-4">
+              <div>
+                <label className="block text-sm font-medium text-slate-700 mb-1">Subject</label>
+                <input required type="text" value={messageForm.subject} onChange={(e) => setMessageForm({...messageForm, subject: e.target.value})} className="w-full px-4 py-2 border border-slate-200 rounded-xl focus:ring-2 focus:ring-indigo-500 focus:outline-none" placeholder="Important Update" />
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-slate-700 mb-1">Message</label>
+                <textarea required rows={4} value={messageForm.body} onChange={(e) => setMessageForm({...messageForm, body: e.target.value})} className="w-full px-4 py-2 border border-slate-200 rounded-xl focus:ring-2 focus:ring-indigo-500 focus:outline-none resize-none" placeholder="Type your message here..."></textarea>
+              </div>
+              <div className="flex justify-end gap-3 pt-4">
+                <button type="button" onClick={() => setMessagingRecruiter(null)} className="px-5 py-2 text-slate-600 hover:bg-slate-100 rounded-xl font-medium transition-colors">Cancel</button>
+                <button type="submit" className="px-5 py-2 bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl font-medium shadow-sm transition-colors flex items-center gap-2">
+                  <Mail className="w-4 h-4" /> Send Now
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* Deactivate/Activate Recruiter Modal */}
+      {deactivatingRecruiter && (
+        <div className="fixed inset-0 bg-slate-900/50 flex items-center justify-center z-50 p-4">
+          <div className="bg-white rounded-2xl shadow-xl w-full max-w-sm overflow-hidden animate-in fade-in zoom-in-95 duration-200 text-center p-6">
+            <div className={`w-16 h-16 rounded-full ${deactivatingRecruiter.status === 'Active' ? 'bg-rose-100 text-rose-600' : 'bg-emerald-100 text-emerald-600'} flex items-center justify-center mx-auto mb-4`}>
+              <UserCheck className="w-8 h-8" />
+            </div>
+            <h3 className="font-bold text-slate-800 text-xl mb-2">
+              {deactivatingRecruiter.status === 'Active' ? 'Deactivate' : 'Activate'} {deactivatingRecruiter.name}?
+            </h3>
+            <p className="text-slate-500 mb-6 text-sm">
+              {deactivatingRecruiter.status === 'Active' 
+                ? "This recruiter will immediately lose access to their account and dashboard."
+                : "This recruiter will regain full access to their account and dashboard."}
+            </p>
+            <div className="flex gap-3">
+              <button onClick={() => setDeactivatingRecruiter(null)} className="flex-1 py-3 text-slate-700 bg-slate-100 hover:bg-slate-200 rounded-xl font-medium transition-colors">
+                Cancel
+              </button>
+              <button onClick={handleDeactivate} className={`flex-1 py-3 text-white ${deactivatingRecruiter.status === 'Active' ? 'bg-rose-600 hover:bg-rose-700' : 'bg-emerald-600 hover:bg-emerald-700'} rounded-xl font-medium shadow-sm transition-colors`}>
+                Yes, {deactivatingRecruiter.status === 'Active' ? 'Deactivate' : 'Activate'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
