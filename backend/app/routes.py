@@ -10358,7 +10358,7 @@ class TTSRequest(BaseModel):
     use_custom_voice: bool = True    # Flag to determine if Cartesia should be used
 
 @router.get("/admin/voices")
-def get_admin_voices(current_admin: dict = Depends(get_current_admin_details)):
+def get_admin_voices():
     """
     Returns available Cartesia custom voices configured in the backend .env file.
     Keys like CARTESIA_VOICE_ID and CARTESIA_VOICE_ID_MALE are loaded.

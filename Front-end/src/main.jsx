@@ -14,13 +14,19 @@ axios.interceptors.response.use(
   (response) => response,
   (error) => {
     if (error.response?.status === 401 && !window.__hireIqAuthRedirecting) {
-      window.__hireIqAuthRedirecting = true
-      store.dispatch(logout())
-      localStorage.removeItem('auth')
-      localStorage.removeItem('masterToken')
-      localStorage.removeItem('adminToken')
-      localStorage.removeItem('token')
-      window.location.assign('/login')
+      const isCandidatePath = window.location.pathname.startsWith('/voice-interview') || 
+                              window.location.pathname.startsWith('/interview') ||
+                              window.location.pathname.startsWith('/case-study') ||
+                              window.location.pathname.startsWith('/apply');
+      if (!isCandidatePath) {
+        window.__hireIqAuthRedirecting = true
+        store.dispatch(logout())
+        localStorage.removeItem('auth')
+        localStorage.removeItem('masterToken')
+        localStorage.removeItem('adminToken')
+        localStorage.removeItem('token')
+        window.location.assign('/login')
+      }
       return Promise.reject(error)
     }
     if (error.response && error.response.status === 403) {
