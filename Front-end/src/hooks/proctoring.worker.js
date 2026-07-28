@@ -20,6 +20,10 @@
  *   in  { type: 'detect', data: { bitmap, timestamp } }   (bitmap transferred)
  *   out { type: 'detect_result', timestamp, data: FrameFeatures }
  *   out { type: 'detect_error', timestamp, error }
+ *
+ * CSP NOTE: This worker intentionally uses NO eval / new Function().
+ * MediaPipe's FilesetResolver handles all WASM initialization via standard
+ * fetch() internally, which is fully CSP-safe.
  */
 
 import { FaceLandmarker, FilesetResolver, ObjectDetector } from '@mediapipe/tasks-vision';
@@ -63,29 +67,11 @@ function log(...args) {
   if (DEBUG) console.debug('[ProctoringWorker]', ...args);
 }
 
-/**
- * Some CDN/bundler combinations for @mediapipe/tasks-vision don't reliably
- * auto-register the WASM ModuleFactory global in a Worker context.
- * Fetching and evaluating the loader script directly ensures it exists.
- */
-async function ensureWasmModuleFactory(vision) {
-  const scriptText = await (await fetch(vision.wasmLoaderPath)).text();
-  
-  // In ESM workers or strict mode, `var` inside eval doesn't leak to the global scope.
-  // By using a Function and explicitly assigning it to globalThis, we guarantee it's accessible.
-  const executeAndExport = new Function(`
-    ${scriptText}
-    if (typeof ModuleFactory !== 'undefined') {
-      globalThis.ModuleFactory = ModuleFactory;
-    }
-  `);
-  executeAndExport();
-}
-
 async function loadModels() {
+  // FilesetResolver handles all WASM loading internally via standard fetch().
+  // No eval() or new Function() needed — fully CSP-compliant.
   const vision = await FilesetResolver.forVisionTasks(MODEL_URLS.wasm);
 
-  await ensureWasmModuleFactory(vision);
   faceLandmarker = await FaceLandmarker.createFromOptions(vision, {
     baseOptions: { modelAssetPath: MODEL_URLS.faceLandmarker, delegate: 'CPU' },
     outputFaceBlendshapes: true,
@@ -97,7 +83,6 @@ async function loadModels() {
   });
   log('FaceLandmarker ready');
 
-  await ensureWasmModuleFactory(vision);
   objectDetector = await ObjectDetector.createFromOptions(vision, {
     baseOptions: { modelAssetPath: MODEL_URLS.objectDetector, delegate: 'CPU' },
     runningMode: 'IMAGE',
