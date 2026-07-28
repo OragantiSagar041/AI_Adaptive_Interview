@@ -168,24 +168,36 @@ export const useInterviewSession = (sessionId, interviewType, startRoundTwo) => 
   const prefetchedQuestionsRef = useRef([])  // background-fetched next batch
   const isPrefetchingRef = useRef(false)     // prevent duplicate fetches
 
-  // Fetch AI Insights dynamically
+  // Fetch AI Insights dynamically — only after candidate session is authenticated
   useEffect(() => {
     const iid = interviewId || sessionDetail?.interview_id || sessionId
-    if (!iid) return
+    // Don't attempt until we have both an interview ID and a candidate session token
+    if (!iid || !monitoringToken) return
+
+    let stopped = false
 
     const fetchInsights = async () => {
       try {
         const response = await api.get(`/api/interview/${iid}/insights`)
         setAiInsights(response.data)
       } catch (err) {
+        // Stop polling immediately on auth errors — retrying is pointless
+        // until the candidate session token is available.
+        if (err?.response?.status === 401 || err?.response?.status === 403) {
+          stopped = true
+          return
+        }
         console.error("Failed to fetch AI insights", err)
       }
     }
 
     fetchInsights()
-    const interval = setInterval(fetchInsights, 15000)
+    const interval = setInterval(() => {
+      if (!stopped) fetchInsights()
+    }, 15000)
     return () => clearInterval(interval)
-  }, [interviewId, sessionDetail?.interview_id, sessionId])
+  }, [interviewId, sessionDetail?.interview_id, sessionId, monitoringToken])
+
 
   // Test case animation
   useEffect(() => {
