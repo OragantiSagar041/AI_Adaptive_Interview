@@ -102,7 +102,7 @@ function extractPhoneCandidates(detections) {
       }
     }
   }
-  return candidates;
+  return candidates.sort((a, b) => b.score - a.score);
 }
 
 function computeMouthOpenness(landmarks) {
