@@ -71,6 +71,7 @@ def create_agent(data: AgentCreate, current_admin: dict = Depends(get_current_ad
         sync_error=agent.sync_error,
     )
 
+
 @router.post('/sections', response_model=ConversationSectionResponse)
 def create_section(data: ConversationSectionCreate, service: ConversationFlowSyncService = Depends(get_sync_service)):
     section = service.save_section(data.title, data.instruction, data.enabled, data.display_order)

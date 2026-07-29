@@ -209,3 +209,4 @@ def get_total_credits_consumed(company_id: str) -> int:
     return interview_sessions_collection.count_documents(
         {"company_id": company_id, "status": "completed"}
     )
+
