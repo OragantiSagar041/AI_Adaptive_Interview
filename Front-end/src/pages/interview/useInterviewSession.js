@@ -3,7 +3,7 @@ import { useNavigate } from 'react-router-dom'
 import Swal from 'sweetalert2'
 import api from '../../utils/api'
 import useCandidateWebRTC from '../../hooks/useCandidateWebRTC'
-import { setCandidateSessionAuth, getCandidateSessionToken } from '../../utils/candidateAuth'
+import { setCandidateSessionAuth, getCandidateSessionToken, withCandidateAuth } from '../../utils/candidateAuth'
 import { useProctoring } from '../../hooks/useProctoring'
 import { useScreenshotProtection } from '../../hooks/useScreenshotProtection'
 import { useExamSecurity } from '../../hooks/useExamSecurity'
@@ -168,24 +168,36 @@ export const useInterviewSession = (sessionId, interviewType, startRoundTwo) => 
   const prefetchedQuestionsRef = useRef([])  // background-fetched next batch
   const isPrefetchingRef = useRef(false)     // prevent duplicate fetches
 
-  // Fetch AI Insights dynamically
+  // Fetch AI Insights dynamically — only after candidate session is authenticated
   useEffect(() => {
     const iid = interviewId || sessionDetail?.interview_id || sessionId
-    if (!iid) return
+    // Don't attempt until we have both an interview ID and a candidate session token
+    if (!iid || !monitoringToken) return
+
+    let stopped = false
 
     const fetchInsights = async () => {
       try {
         const response = await api.get(`/api/interview/${iid}/insights`)
         setAiInsights(response.data)
       } catch (err) {
+        // Stop polling immediately on auth errors — retrying is pointless
+        // until the candidate session token is available.
+        if (err?.response?.status === 401 || err?.response?.status === 403) {
+          stopped = true
+          return
+        }
         console.error("Failed to fetch AI insights", err)
       }
     }
 
     fetchInsights()
-    const interval = setInterval(fetchInsights, 15000)
+    const interval = setInterval(() => {
+      if (!stopped) fetchInsights()
+    }, 15000)
     return () => clearInterval(interval)
-  }, [interviewId, sessionDetail?.interview_id, sessionId])
+  }, [interviewId, sessionDetail?.interview_id, sessionId, monitoringToken])
+
 
   // Test case animation
   useEffect(() => {
@@ -274,6 +286,7 @@ export const useInterviewSession = (sessionId, interviewType, startRoundTwo) => 
   const silenceIntervalRef = useRef(null)
   const silenceTimeoutRef = useRef(null)
   const lastSpeechTimeRef = useRef(0)
+  // eslint-disable-next-line react-hooks/purity
   const questionStartTimeRef = useRef(Date.now())
   const behavioralStatsRef = useRef({ wordCount: 0, fillerCount: 0, pauseCount: 0, faceAlerts: 0, tabSwitches: 0, noiseAlerts: 0 })
   const globalTabSwitchesRef = useRef(0)
@@ -662,44 +675,12 @@ export const useInterviewSession = (sessionId, interviewType, startRoundTwo) => 
     }
 
     async function verifySession() {
-      // ── Drain any pending completion that failed on a previous load ──────
-      // If /complete-session failed (network drop, server crash) on the last
-      // visit, we stored a retry key. Attempt the call now, silently.
-      try {
-        const pendingKey = `complete_session_pending_${sessionId}`
-        if (localStorage.getItem(pendingKey) === '1') {
-          api.post(`/complete-session/${sessionId}`)
-            .then(() => localStorage.removeItem(pendingKey))
-            .catch(() => {})
-        }
-      } catch (e) {}
-
-      // ── Drain any failed answers from a previous forceClose ──────
-      try {
-        const keys = Object.keys(localStorage)
-        for (const key of keys) {
-          if (key.startsWith(`failed_answer_${sessionId}_`)) {
-            const answerData = JSON.parse(localStorage.getItem(key))
-            const answerForm = new FormData()
-            answerForm.append('interview_id', answerData.interview_id || sessionId)
-            answerForm.append('question_id', answerData.question_id)
-            answerForm.append('question_text', answerData.question_text || '')
-            answerForm.append('answer_text', answerData.answer_text || ' ')
-            answerForm.append('candidate_name', 'Candidate')
-            answerForm.append('time_spent_seconds', answerData.time_spent_seconds || '0')
-            answerForm.append('time_limit_seconds', '120')
-
-            api.post(`/save-answer`, answerForm, {
-              headers: { 'Content-Type': 'multipart/form-data' }
-            }).then(() => localStorage.removeItem(key)).catch(() => {})
-          }
-        }
-      } catch (e) {}
+      // Moved to drainPendingRequests() after session is authenticated
 
       // Fast-path: if this browser already completed this session, show the
       // completed screen immediately without waiting for the API round-trip.
       try {
-        if (localStorage.getItem(`interview_done_${sessionId}`) === '1') {
+        if (sessionStorage.getItem(`interview_done_${sessionId}`) === '1') {
           setIsCompleted(true)
           setLoading(false)
           return
@@ -774,6 +755,38 @@ export const useInterviewSession = (sessionId, interviewType, startRoundTwo) => 
         if (startPayload.monitoring_token) {
           setCandidateSessionAuth(startPayload.monitoring_token, sessionId, startPayload.interview_id)
         }
+        
+        // ── Drain pending requests now that we are authenticated ──────
+        try {
+          const pendingKey = `complete_session_pending_${sessionId}`
+          if (sessionStorage.getItem(pendingKey) === '1') {
+            api.post(`/complete-session/${sessionId}`)
+              .then(() => sessionStorage.removeItem(pendingKey))
+              .catch(() => {})
+          }
+        } catch (e) {}
+
+        try {
+          const keys = Object.keys(sessionStorage)
+          for (const key of keys) {
+            if (key.startsWith(`failed_answer_${sessionId}_`)) {
+              const answerData = JSON.parse(sessionStorage.getItem(key))
+              const answerForm = new FormData()
+              answerForm.append('interview_id', answerData.interview_id || sessionId)
+              answerForm.append('question_id', answerData.question_id)
+              answerForm.append('question_text', answerData.question_text || '')
+              answerForm.append('answer_text', answerData.answer_text || 'No answer provided')
+              answerForm.append('candidate_name', 'Candidate')
+              answerForm.append('time_spent_seconds', answerData.time_spent_seconds || '0')
+              answerForm.append('time_limit_seconds', '120')
+
+              api.post(`/save-answer`, answerForm, {
+                headers: { 'Content-Type': 'multipart/form-data' }
+              }).then(() => sessionStorage.removeItem(key)).catch(() => {})
+            }
+          }
+        } catch (e) {}
+        
         // Snapshot candidate details into refs NOW (synchronously) so that the
         // async Whisper MediaRecorder onstop callback always has correct values.
         // Using refs avoids the race condition where sessionDetail state hasn't
@@ -1504,11 +1517,11 @@ export const useInterviewSession = (sessionId, interviewType, startRoundTwo) => 
       } catch (err) {
         console.error("Camera/Mic getUserMedia error:", err)
         if (err.name === 'NotFoundError' || err.name === 'DevicesNotFoundError') {
-          throw new Error("webcam_mic_not_found")
+          throw new Error("webcam_mic_not_found", { cause: err })
         } else if (err.name === 'NotAllowedError' || err.name === 'PermissionDeniedError') {
-          throw new Error("webcam_mic_denied")
+          throw new Error("webcam_mic_denied", { cause: err })
         } else {
-          throw new Error(`webcam_mic_failed: ${err.message || err.name}`)
+          throw new Error(`webcam_mic_failed: ${err.message || err.name}`, { cause: err })
         }
       }
 
@@ -1522,9 +1535,9 @@ export const useInterviewSession = (sessionId, interviewType, startRoundTwo) => 
         console.error("Screen Share getDisplayMedia error:", err)
         stream.getTracks().forEach(t => t.stop())
         if (err.name === 'NotAllowedError' || err.name === 'PermissionDeniedError') {
-          throw new Error("screenshare_denied")
+          throw new Error("screenshare_denied", { cause: err })
         } else {
-          throw new Error(`screenshare_failed: ${err.message || err.name}`)
+          throw new Error(`screenshare_failed: ${err.message || err.name}`, { cause: err })
         }
       }
 
@@ -1613,6 +1626,7 @@ export const useInterviewSession = (sessionId, interviewType, startRoundTwo) => 
       if (_sessionKey) {
         const sess = JSON.parse(sessionStorage.getItem(_sessionKey) || '{}')
         sess.accepted = true
+        // eslint-disable-next-line react-hooks/purity
         sess.startedAt = sess.startedAt || Date.now()
         sessionStorage.setItem(_sessionKey, JSON.stringify(sess))
       }
@@ -1809,11 +1823,11 @@ export const useInterviewSession = (sessionId, interviewType, startRoundTwo) => 
       let url = ttsCacheRef.current.get(ttsCacheKey)
 
       if (!url) {
-        const res = await fetch(`${api.defaults.baseURL || ''}/tts`, {
+        const res = await fetch(`${api.defaults.baseURL || ''}/tts`, withCandidateAuth({
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify(bodyPayload)
-        })
+        }))
         if (!res.ok) throw new Error('TTS failed')
         const blob = await res.blob()
         url = URL.createObjectURL(blob)
@@ -1976,7 +1990,7 @@ export const useInterviewSession = (sessionId, interviewType, startRoundTwo) => 
     answerForm.append('interview_id', iid)
     answerForm.append('question_id', activeQuestion?.id || (currentQuestionIndex + 1))
     answerForm.append('question_text', activeQuestion?.text || activeQuestion?.question || '')
-    answerForm.append('answer_text', activeQuestion?.type === 'coding' ? (codeAnswer || ' ') : (transcriptionText || ' '))
+    answerForm.append('answer_text', activeQuestion?.type === 'coding' ? (codeAnswer || 'No code submitted') : (transcriptionText.trim() || 'No answer provided'))
     answerForm.append('candidate_name', sessionDetail?.candidate_name || 'Candidate')
     answerForm.append('time_spent_seconds', timeSpent.toString())
     answerForm.append('time_limit_seconds', '120')
@@ -2050,7 +2064,7 @@ export const useInterviewSession = (sessionId, interviewType, startRoundTwo) => 
         answerForm.append('interview_id', iid)
         answerForm.append('question_id', currentQuestion.id || (currentQuestionIndex + 1))
         answerForm.append('question_text', currentQuestion.text || currentQuestion.question || currentQuestion.prompt || currentQuestion.scenario || currentQuestion.question_text || '')
-        answerForm.append('answer_text', currentQuestion.type === 'coding' ? (codeAnswer || ' ') : (transcriptionText || ' '))
+        answerForm.append('answer_text', currentQuestion.type === 'coding' ? (codeAnswer || 'No code submitted') : (transcriptionText.trim() || 'No answer provided'))
         answerForm.append('candidate_name', sessionDetail?.candidate_name || 'Candidate')
         answerForm.append('time_spent_seconds', timeSpent.toString())
         answerForm.append('time_limit_seconds', '120')
@@ -2322,7 +2336,7 @@ export const useInterviewSession = (sessionId, interviewType, startRoundTwo) => 
         answerForm.append('interview_id', iid)
         answerForm.append('question_id', currentQuestion.id || (currentQuestionIndex + 1))
         answerForm.append('question_text', currentQuestion.text || currentQuestion.question || '')
-        answerForm.append('answer_text', currentQuestion.type === 'coding' ? (codeAnswer || ' ') : (transcriptionText || ' '))
+        answerForm.append('answer_text', currentQuestion.type === 'coding' ? (codeAnswer || 'No code submitted') : (transcriptionText.trim() || 'No answer provided'))
         answerForm.append('candidate_name', sessionDetail?.candidate_name || 'Candidate')
         answerForm.append('time_spent_seconds', timeSpent.toString())
         answerForm.append('time_limit_seconds', '120')
@@ -2338,10 +2352,10 @@ export const useInterviewSession = (sessionId, interviewType, startRoundTwo) => 
               interview_id: iid,
               question_id: currentQuestion.id || (currentQuestionIndex + 1),
               question_text: currentQuestion.text || currentQuestion.question || '',
-              answer_text: currentQuestion.type === 'coding' ? (codeAnswer || ' ') : (transcriptionText || ' '),
+              answer_text: currentQuestion.type === 'coding' ? (codeAnswer || 'No code submitted') : (transcriptionText.trim() || 'No answer provided'),
               time_spent_seconds: timeSpent
             }
-            localStorage.setItem(failedKey, JSON.stringify(answerData))
+            sessionStorage.setItem(failedKey, JSON.stringify(answerData))
           } catch (_) {}
         }
       }
@@ -2365,7 +2379,7 @@ export const useInterviewSession = (sessionId, interviewType, startRoundTwo) => 
       const queryParams = terminationReason ? `?reason=${encodeURIComponent(terminationReason)}` : ''
       await api.post(`/complete-session/${sessionId}${queryParams}`)
       if (sessionId) {
-        try { localStorage.setItem(`interview_done_${sessionId}`, '1') } catch (e) {}
+        try { sessionStorage.setItem(`interview_done_${sessionId}`, '1') } catch (e) {}
       }
     } catch (completionError) {
       console.error('Failed to complete interview session:', completionError)

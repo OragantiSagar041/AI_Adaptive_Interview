@@ -20,6 +20,11 @@ from mongo_db import (
     security_logs_collection,
     security_policies_collection,
     copilot_sessions_collection,
+    credit_ledger_collection,
+    messages_collection,
+    demo_requests_collection,
+    crash_logs_collection,
+    agents_collection,
     get_next_sequence_value,
 )
 
@@ -45,5 +50,10 @@ __all__ = [
     "security_logs_collection",
     "security_policies_collection",
     "copilot_sessions_collection",
+    "credit_ledger_collection",
+    "messages_collection",
+    "demo_requests_collection",
+    "crash_logs_collection",
+    "agents_collection",
     "get_next_sequence_value",
 ]

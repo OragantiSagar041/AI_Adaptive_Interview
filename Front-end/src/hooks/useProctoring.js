@@ -142,7 +142,7 @@ export function useProctoring({
     if (!enabled) return
 
     const worker = workerUrl
-      ? new Worker(workerUrl, { type: 'module' })
+      ? new Worker(workerUrl)
       : new ProctoringWorker()
 
     workerRef.current = worker
@@ -213,21 +213,18 @@ export function useProctoring({
       // Prevent PrintScreen key
       if (e.key === 'PrintScreen') {
         e.preventDefault();
-        navigator.clipboard.writeText('');
         raiseViolation('screenshot_attempt', 'Screenshot attempt detected');
       }
 
       // Prevent common Mac screenshot shortcuts (Cmd + Shift + 3/4/5)
       if (e.metaKey && e.shiftKey && (e.key === '3' || e.key === '4' || e.key === '5')) {
         e.preventDefault();
-        navigator.clipboard.writeText('');
         raiseViolation('screenshot_attempt', 'Screenshot attempt detected');
       }
 
       // Prevent Windows snipping tool shortcut (Win + Shift + S)
       if (e.metaKey && e.shiftKey && (e.key === 's' || e.key === 'S')) {
         e.preventDefault();
-        navigator.clipboard.writeText('');
         raiseViolation('screenshot_attempt', 'Screenshot attempt detected');
       }
 
@@ -248,7 +245,6 @@ export function useProctoring({
 
     const handleCopy = (e) => {
       e.preventDefault();
-      navigator.clipboard.writeText('');
     };
 
     window.addEventListener('keydown', handleKeyDown);

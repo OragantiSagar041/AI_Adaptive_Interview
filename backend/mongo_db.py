@@ -52,6 +52,8 @@ pending_signups_collection = db["pending_signups"]
 security_logs_collection = db["security_logs"]
 security_policies_collection = db["security_policies"]
 copilot_sessions_collection = db["copilot_sessions"]
+credit_ledger_collection = db["credit_ledger"]
+messages_collection = db["messages"]
 
 def get_next_sequence_value(sequence_name: str, prefix: str) -> str:
     """

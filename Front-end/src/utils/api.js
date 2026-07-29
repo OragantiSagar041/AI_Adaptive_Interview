@@ -8,7 +8,7 @@ const api = axios.create({
   timeout: 50000,
   headers: { "Content-Type": "application/json" },
 });
-const CANDIDATE_ROUTE_RE = /^\/?(?:transcribe|stt|tts|voice-clone-instant|save-answer|save-behavioral-data|coding-round|case-study|upload-full-recording|recording-upload-failure|complete-session|submit-feedback|proctoring\/violation|session\/[^/]+\/violation|interview\/[^/]+\/(?:summary|ai-summary|alert)|generate-next-question|generate-more-questions|live-heartbeat)(?:\/|\?|$)/
+const CANDIDATE_ROUTE_RE = /(?:\/|^)(?:transcribe|stt|tts|voice-clone-instant|save-answer|save-behavioral-data|coding-round|case-study|upload-full-recording|recording-upload-failure|complete-session|submit-feedback|proctoring\/violation|session(?:\/.*)?|api\/interview(?:\/.*)?|interview(?:\/.*)?|generate-next-question|generate-more-questions|live-heartbeat)(?:\/|\?|$)/
 
 /* =============================================================================
    REQUEST INTERCEPTOR → attaches token from sessionStorage
@@ -17,14 +17,14 @@ api.interceptors.request.use(
   (config) => {
     const requestPath = String(config.url || "");
     const candidateRequest = CANDIDATE_ROUTE_RE.test(requestPath);
-    let token = candidateRequest ? getCandidateSessionToken() : localStorage.getItem("masterToken");
+    let token = candidateRequest ? getCandidateSessionToken() : sessionStorage.getItem("masterToken");
 
     if (!candidateRequest) {
-      if (!token) token = localStorage.getItem("adminToken");
-      if (!token) token = localStorage.getItem("token");
+      if (!token) token = sessionStorage.getItem("adminToken");
+      if (!token) token = sessionStorage.getItem("token");
 
       if (!token) {
-        const adminUserStr = localStorage.getItem("adminUser");
+        const adminUserStr = sessionStorage.getItem("adminUser");
         if (adminUserStr) {
           try {
             const parsed = JSON.parse(adminUserStr);
@@ -59,10 +59,10 @@ api.interceptors.response.use(
         clearCandidateSessionAuth()
       } else if (!window.__hireIqAuthRedirecting) {
         window.__hireIqAuthRedirecting = true
-        localStorage.removeItem("auth")
-        localStorage.removeItem("masterToken")
-        localStorage.removeItem("adminToken")
-        localStorage.removeItem("token")
+        sessionStorage.removeItem("auth")
+        sessionStorage.removeItem("masterToken")
+        sessionStorage.removeItem("adminToken")
+        sessionStorage.removeItem("token")
         window.location.assign("/login")
       }
     }

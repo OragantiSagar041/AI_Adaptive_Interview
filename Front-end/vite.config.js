@@ -47,7 +47,12 @@ export default defineConfig({
     exclude: ['@mediapipe/tasks-vision'],
   },
   worker: {
-    format: 'es',
+    // IIFE (classic) format is required for MediaPipe WASM workers.
+    // MediaPipe's vision_wasm_internal.js is a UMD script that relies on
+    // classic global-scope execution. Only classic workers support importScripts(),
+    // which is the CSP-safe way to load UMD scripts into the worker global scope.
+    // ES module workers ('es' format) fundamentally cannot do this.
+    format: 'iife',
   },
   build: {
     rollupOptions: {

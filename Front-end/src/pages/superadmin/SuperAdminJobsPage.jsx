@@ -27,7 +27,7 @@ export default function SuperAdminJobsPage() {
   const dispatch = useDispatch();
   // Read the JWT token from Redux state — exactly how every other page does it.
   // Login stores it in Redux (auth.token) + sessionStorage('adminToken').
-  // localStorage is never written, so reading from there always returns null.
+  // sessionStorage is never written, so reading from there always returns null.
   const token = useSelector((state) => state.auth.token);
   const candidates = useSelector((state) => state.candidates?.candidates || []);
 

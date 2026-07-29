@@ -13,9 +13,9 @@ export default function MasterPage() {
   const navigate = useNavigate()
 
   // Session user context
-  const adminId = localStorage.getItem('adminId') || ''
-  const adminName = localStorage.getItem('adminName') || 'Master Admin'
-  const adminRole = localStorage.getItem('adminRole') || 'tenant'
+  const adminId = sessionStorage.getItem('adminId') || ''
+  const adminName = sessionStorage.getItem('adminName') || 'Master Admin'
+  const adminRole = sessionStorage.getItem('adminRole') || 'tenant'
 
   // Verification: Redirect if not master
   useEffect(() => {
@@ -117,7 +117,7 @@ export default function MasterPage() {
     setLoadingCompanies(true)
     try {
       const res = await fetch(`${API_BASE_URL}/master/companies?master_id=${encodeURIComponent(adminId)}`, {
-        headers: { 'Authorization': `Bearer ${localStorage.getItem('adminToken')}` }
+        headers: { 'Authorization': `Bearer ${sessionStorage.getItem('adminToken')}` }
       })
       const data = await res.json()
       if (res.ok && data.status === 'success') {
@@ -231,22 +231,22 @@ export default function MasterPage() {
     try {
       const res = await fetch(`${API_BASE_URL}/master/companies/${tenantId}/login?master_id=${encodeURIComponent(adminId)}`, {
         method: 'POST',
-        headers: { 'Authorization': `Bearer ${localStorage.getItem('adminToken')}` }
+        headers: { 'Authorization': `Bearer ${sessionStorage.getItem('adminToken')}` }
       })
       if (res.ok) {
         const data = await res.json()
         
-        localStorage.setItem('adminToken', data.token)
-        localStorage.setItem('adminId', data.admin_id)
-        localStorage.setItem('adminEmail', data.email || '')
-        localStorage.setItem('adminName', data.username || '')
-        localStorage.setItem('adminRole', data.role || 'tenant')
-        localStorage.setItem('subscriptionPlan', data.subscription_plan || 'Free Trial')
-        localStorage.setItem('subscriptionPlanKey', data.subscription_plan_key || 'trial')
-        localStorage.setItem('planCapabilities', JSON.stringify(data.plan_capabilities || {}))
-        localStorage.setItem('subscriptionExpiry', data.subscription_expiry || '')
-        localStorage.setItem('subscriptionCredits', data.credits ?? '')
-        localStorage.setItem('adminCompany', data.company_name || '')
+        sessionStorage.setItem('adminToken', data.token)
+        sessionStorage.setItem('adminId', data.admin_id)
+        sessionStorage.setItem('adminEmail', data.email || '')
+        sessionStorage.setItem('adminName', data.username || '')
+        sessionStorage.setItem('adminRole', data.role || 'tenant')
+        sessionStorage.setItem('subscriptionPlan', data.subscription_plan || 'Free Trial')
+        sessionStorage.setItem('subscriptionPlanKey', data.subscription_plan_key || 'trial')
+        sessionStorage.setItem('planCapabilities', JSON.stringify(data.plan_capabilities || {}))
+        sessionStorage.setItem('subscriptionExpiry', data.subscription_expiry || '')
+        sessionStorage.setItem('subscriptionCredits', data.credits ?? '')
+        sessionStorage.setItem('adminCompany', data.company_name || '')
 
         Swal.fire({
           title: 'Impersonation Successful',
@@ -286,7 +286,7 @@ export default function MasterPage() {
     try {
       const res = await fetch(`${API_BASE_URL}/master/companies/${encodeURIComponent(tenantId)}?master_id=${encodeURIComponent(adminId)}`, {
         method: 'DELETE',
-        headers: { 'Authorization': `Bearer ${localStorage.getItem('adminToken')}` }
+        headers: { 'Authorization': `Bearer ${sessionStorage.getItem('adminToken')}` }
       })
       if (res.ok) {
         Swal.fire('Deleted!', 'Tenant has been removed.', 'success')
@@ -315,7 +315,7 @@ export default function MasterPage() {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
-          'Authorization': `Bearer ${localStorage.getItem('adminToken')}`
+          'Authorization': `Bearer ${sessionStorage.getItem('adminToken')}`
         },
         body: JSON.stringify({
           plan_name: updateTenantPlan,
@@ -353,7 +353,7 @@ export default function MasterPage() {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
-          'Authorization': `Bearer ${localStorage.getItem('adminToken')}`
+          'Authorization': `Bearer ${sessionStorage.getItem('adminToken')}`
         },
         body: JSON.stringify({
           plan_name: editPlanName,
@@ -385,7 +385,7 @@ export default function MasterPage() {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
-          'Authorization': `Bearer ${localStorage.getItem('adminToken')}`
+          'Authorization': `Bearer ${sessionStorage.getItem('adminToken')}`
         },
         body: JSON.stringify({
           username: createTenantForm.username,

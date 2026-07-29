@@ -20,7 +20,9 @@ logger = logging.getLogger(__name__)
 def _bounded_text(value: Any, *, field: str, maximum: int, required: bool = True) -> str:
     text = str(value or "").strip()
     if required and not text:
-        raise ValueError(f"{field} is required")
+        # Use a placeholder instead of raising a 500 — the candidate already
+        # sees a "no answer" state in the UI; a hard error is worse UX.
+        text = "No answer provided"
     if len(text) > maximum:
         raise ValueError(f"{field} exceeds the {maximum} character limit")
     return text
@@ -54,7 +56,7 @@ def persist_answer_and_enqueue_scoring(
         question_text, field="question_text", maximum=MAX_QUESTION_TEXT_LENGTH
     )
     normalized_answer_text = _bounded_text(
-        answer_text, field="answer_text", maximum=MAX_ANSWER_TEXT_LENGTH, required=False
+        answer_text, field="answer_text", maximum=MAX_ANSWER_TEXT_LENGTH
     )
     normalized_candidate_name = _bounded_text(
         candidate_name,
