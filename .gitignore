@@ -113,3 +113,9 @@ backend/uploads/
 replace_*.py
 fix_*.py
 temp_*.js
+
+# Production Audit Security Fixes
+backend/temp_uploads/
+temp_uploads/
+backend/error_log.txt
+backend/token_tracker.json
