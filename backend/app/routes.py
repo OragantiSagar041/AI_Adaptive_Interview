@@ -1116,6 +1116,10 @@ def save_answer(
     try:
         candidate_session = _require_candidate_session(credentials, interview_id=interview_id)
         current_session_id.set(interview_id)
+        
+        if not answer_text or not answer_text.strip():
+            answer_text = "No answer provided"
+            
         from app.answer_service import persist_answer_and_enqueue_scoring
 
         result = persist_answer_and_enqueue_scoring(
