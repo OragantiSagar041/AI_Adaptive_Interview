@@ -8,11 +8,11 @@ phases:
   build:
     commands:
       - echo Building Docker image...
-      - docker build -t krishna:latest .
+      - docker build -t krishna:latest ./backend
       - docker tag krishna:latest 007050358533.dkr.ecr.us-east-1.amazonaws.com/krishna:latest
   post_build:
     commands:
       - echo Pushing image to Amazon ECR...
       - docker push 007050358533.dkr.ecr.us-east-1.amazonaws.com/krishna:latest
       - echo Deploying updated image to Amazon ECS...
-      - aws ecs update-service --cluster sunny-wolf-zb88n3 --service krishna-7879 --force-new-deployment --region us-east-1a
+      - aws ecs update-service --cluster sunny-wolf-zb88n3 --service krishna-7879 --force-new-deployment --region us-east-1
