@@ -1862,10 +1862,8 @@ import json
 @router.post("/interview/{interview_id}/alert")
 async def log_interview_alert(
     interview_id: str,
-    request: Request,
-    credentials: Optional[HTTPAuthorizationCredentials] = Depends(candidate_monitoring_security),
+    request: Request
 ):
-    _require_candidate_session(credentials, link_id=interview_id)
     try:
         body_bytes = await request.body()
         data = json.loads(body_bytes)
@@ -5298,7 +5296,7 @@ def log_violation(
     violation: ViolationRequest,
     credentials: Optional[HTTPAuthorizationCredentials] = Depends(candidate_monitoring_security),
 ):
-    _require_candidate_session(credentials, interview_id=interview_id)
+    _require_candidate_session(credentials, link_id=interview_id)
     print(f" VIOLATION detected for session {interview_id}: {violation.type} (#{violation.count}) at {violation.timestamp}")
     try:
         interview_sessions_collection.update_one(

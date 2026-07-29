@@ -1,6 +1,4 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
-import ProctoringWorker from './proctoring.worker.js?worker'
-
 // ── Tunable thresholds ──────────────────────────────────────────────────
 const DETECT_INTERVAL_MS = 700          // how often a frame is sent to the worker
 
@@ -143,7 +141,7 @@ export function useProctoring({
 
     const worker = workerUrl
       ? new Worker(workerUrl)
-      : new ProctoringWorker()
+      : new Worker('/proctoring.worker.js')
 
     workerRef.current = worker
     worker.postMessage({ type: 'init' })
