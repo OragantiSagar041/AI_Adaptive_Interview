@@ -255,6 +255,12 @@ app.include_router(conversation_flow_router)
 app.include_router(transcription.router)
 app.include_router(voice_routes.router)
 
+# Subscription Management — dedicated modular router
+from app.routes_subscription import router as subscription_router
+from app.routes_subscription import router_superadmin as subscription_superadmin_router
+app.include_router(subscription_router)
+app.include_router(subscription_superadmin_router)
+
 from fastapi.encoders import jsonable_encoder
 from fastapi.exceptions import RequestValidationError
 
