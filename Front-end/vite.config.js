@@ -42,17 +42,9 @@ export default defineConfig({
     },
   },
   optimizeDeps: {
-    // MediaPipe's WASM loader uses a custom Module factory that breaks when
-    // Vite pre-bundles it — exclude it so the worker gets the raw ESM files.
+    // MediaPipe is loaded from the public/ worker via importScripts() at runtime.
+    // Excluding it here prevents Vite from accidentally pre-bundling stray references.
     exclude: ['@mediapipe/tasks-vision'],
-  },
-  worker: {
-    // IIFE (classic) format is required for MediaPipe WASM workers.
-    // MediaPipe's vision_wasm_internal.js is a UMD script that relies on
-    // classic global-scope execution. Only classic workers support importScripts(),
-    // which is the CSP-safe way to load UMD scripts into the worker global scope.
-    // ES module workers ('es' format) fundamentally cannot do this.
-    format: 'iife',
   },
   build: {
     rollupOptions: {
@@ -71,4 +63,3 @@ export default defineConfig({
     }
   }
 })
-

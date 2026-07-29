@@ -37,11 +37,14 @@ class CodingRoundState(TypedDict, total=False):
 # _get_client removed — all calls now go through ai_client.chat_completion()
 
 
-def _truncate(text: str, limit: int) -> str:
-    text = (text or "").strip()
-    if len(text) <= limit:
-        return text
-    return text[:limit].rstrip() + "\n...[truncated]"
+def _truncate(text: Any, max_length: int = 2000) -> str:
+    if isinstance(text, dict) or isinstance(text, list):
+        import json
+        text = json.dumps(text)
+    elif not isinstance(text, str):
+        text = str(text or "")
+    text = text.strip()
+    return text[:max_length] + "..." if len(text) > max_length else text
 
 
 def _safe_json(content: str, fallback: Dict[str, Any]) -> Dict[str, Any]:

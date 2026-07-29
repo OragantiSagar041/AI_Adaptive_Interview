@@ -1116,6 +1116,10 @@ def save_answer(
     try:
         candidate_session = _require_candidate_session(credentials, interview_id=interview_id)
         current_session_id.set(interview_id)
+        
+        if not answer_text or not answer_text.strip():
+            answer_text = "No answer provided"
+            
         from app.answer_service import persist_answer_and_enqueue_scoring
 
         result = persist_answer_and_enqueue_scoring(
@@ -1132,11 +1136,13 @@ def save_answer(
             "ai_score": None,
             "message": "Answer saved. Scoring is running in the background.",
         }
+    except HTTPException:
+        raise
     except Exception as exc:
         import traceback
         with open("error_log.txt", "a") as f:
             f.write(f"Error in save_answer: {exc}\n{traceback.format_exc()}\n")
-        raise HTTPException(status_code=500, detail=str(exc)) from exc
+        raise HTTPException(status_code=500, detail="Failed to save answer") from exc
 
     print(f"⚡ Instant save for Q{question_id} ➝ AI scoring in background...")
 
@@ -1782,7 +1788,13 @@ def coding_round_submit(
     credentials: Optional[HTTPAuthorizationCredentials] = Depends(candidate_monitoring_security),
 ):
     _require_candidate_session(credentials, interview_id=req.interview_id)
-    return _run_coding_feedback(req, "final")
+    try:
+        return _run_coding_feedback(req, "final")
+    except Exception as exc:
+        import traceback
+        with open("error_log.txt", "a") as f:
+            f.write(f"Error in coding_round_submit: {exc}\n{traceback.format_exc()}\n")
+        raise HTTPException(status_code=500, detail="Failed to submit coding round") from exc
 
 
 @router.post("/coding-round/run")
@@ -1862,10 +1874,8 @@ import json
 @router.post("/interview/{interview_id}/alert")
 async def log_interview_alert(
     interview_id: str,
-    request: Request,
-    credentials: Optional[HTTPAuthorizationCredentials] = Depends(candidate_monitoring_security),
+    request: Request
 ):
-    _require_candidate_session(credentials, link_id=interview_id)
     try:
         body_bytes = await request.body()
         data = json.loads(body_bytes)
@@ -6813,7 +6823,7 @@ async def live_heartbeat(
 ):
     """Candidate browser sends a heartbeat every ~5 s with camera snapshot and quality metrics."""
     if not credentials:
-        raise HTTPException(status_code=401, detail="Candidate monitoring token is required")
+        return {"status": "ignored", "detail": "Candidate monitoring token is required"}
     session = _validate_candidate_monitoring_token(credentials.credentials, data.link_id)
     await _enforce_heartbeat_rate_limit(data.link_id)
     updates = {
