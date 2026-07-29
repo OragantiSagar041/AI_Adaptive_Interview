@@ -34,8 +34,8 @@ from app.service_layer.subscription_service import (
     recharge_subscription,
 )
 
-# Re-use the existing master-auth guard already defined in routes.py
-from app.routes import get_current_admin, require_master_user  # type: ignore[attr-defined]
+# Auth guards are defined in services.py
+from app.services import get_current_admin, require_master_user
 
 router = APIRouter(prefix="/master/subscriptions", tags=["Subscription Management"])
 
@@ -159,7 +159,7 @@ def recharge_company_subscription(
 # ===========================================================================
 # SUPERADMIN ROUTES (Self-serve)
 # ===========================================================================
-from app.routes import get_current_admin_details  # type: ignore[attr-defined]
+from app.services import get_current_admin_details
 
 router_superadmin = APIRouter(prefix="/superadmin/subscriptions", tags=["Subscription Management (SuperAdmin)"])
 
