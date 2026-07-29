@@ -1136,11 +1136,13 @@ def save_answer(
             "ai_score": None,
             "message": "Answer saved. Scoring is running in the background.",
         }
+    except HTTPException:
+        raise
     except Exception as exc:
         import traceback
         with open("error_log.txt", "a") as f:
             f.write(f"Error in save_answer: {exc}\n{traceback.format_exc()}\n")
-        raise HTTPException(status_code=500, detail=str(exc)) from exc
+        raise HTTPException(status_code=500, detail="Failed to save answer") from exc
 
     print(f"⚡ Instant save for Q{question_id} ➝ AI scoring in background...")
 
@@ -1786,7 +1788,13 @@ def coding_round_submit(
     credentials: Optional[HTTPAuthorizationCredentials] = Depends(candidate_monitoring_security),
 ):
     _require_candidate_session(credentials, interview_id=req.interview_id)
-    return _run_coding_feedback(req, "final")
+    try:
+        return _run_coding_feedback(req, "final")
+    except Exception as exc:
+        import traceback
+        with open("error_log.txt", "a") as f:
+            f.write(f"Error in coding_round_submit: {exc}\n{traceback.format_exc()}\n")
+        raise HTTPException(status_code=500, detail="Failed to submit coding round") from exc
 
 
 @router.post("/coding-round/run")
@@ -5300,7 +5308,7 @@ def log_violation(
     violation: ViolationRequest,
     credentials: Optional[HTTPAuthorizationCredentials] = Depends(candidate_monitoring_security),
 ):
-    _require_candidate_session(credentials, link_id=interview_id)
+    _require_candidate_session(credentials, interview_id=interview_id)
     print(f" VIOLATION detected for session {interview_id}: {violation.type} (#{violation.count}) at {violation.timestamp}")
     try:
         interview_sessions_collection.update_one(
@@ -6815,7 +6823,7 @@ async def live_heartbeat(
 ):
     """Candidate browser sends a heartbeat every ~5 s with camera snapshot and quality metrics."""
     if not credentials:
-        raise HTTPException(status_code=401, detail="Candidate monitoring token is required")
+        return {"status": "ignored", "detail": "Candidate monitoring token is required"}
     session = _validate_candidate_monitoring_token(credentials.credentials, data.link_id)
     await _enforce_heartbeat_rate_limit(data.link_id)
     updates = {

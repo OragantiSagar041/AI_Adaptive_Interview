@@ -50,13 +50,22 @@ api.interceptors.request.use(
    RESPONSE INTERCEPTOR → pass-through response/error
 ============================================================================= */
 api.interceptors.response.use(
-  (response) => response,
+  (response) => {
+    const requestPath = String(response.config?.url || "")
+    if (CANDIDATE_ROUTE_RE.test(requestPath)) {
+      window.__candidateAuthFailCount = 0
+    }
+    return response
+  },
   (error) => {
     if (error.response?.status === 401) {
       const requestPath = String(error.config?.url || "")
       const candidateRequest = CANDIDATE_ROUTE_RE.test(requestPath)
       if (candidateRequest) {
-        clearCandidateSessionAuth()
+        window.__candidateAuthFailCount = (window.__candidateAuthFailCount || 0) + 1
+        if (window.__candidateAuthFailCount >= 3) {
+          clearCandidateSessionAuth()
+        }
       } else if (!window.__hireIqAuthRedirecting) {
         window.__hireIqAuthRedirecting = true
         sessionStorage.removeItem("auth")
