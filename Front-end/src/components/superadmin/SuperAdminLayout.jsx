@@ -25,7 +25,12 @@ import {
   PhoneCall,
   Briefcase,
   MessageSquare,
-  Zap
+  Zap,
+  Building,
+  UserCheck,
+  CreditCard,
+  Link,
+  ClipboardList
 } from 'lucide-react'
 import { 
   SidebarProvider, 
@@ -415,24 +420,24 @@ export default function SuperAdminLayout() {
   const accentPageStrong = hexToRgba(currentAccent.primary, 0.20)
 
   const navItems = [
-    { id: 'super-dashboard', label: 'Super Admin Dashboard', path: '/superadmin/new-dashboard' },
-    { id: 'team', label: 'Team Management', path: '/superadmin/team' },
-    { id: 'dashboard', label: 'Dashboard', path: '/superadmin/dashboard' },
-    { id: 'interviews', label: 'Interviews', path: '/superadmin/interviews' },
-    { id: 'qualified', label: 'Qualified Candidates', path: '/superadmin/qualified-candidates' },
-    { id: 'rejected', label: 'Rejected Candidates', path: '/superadmin/rejected-candidates' },
+    { id: 'super-dashboard', label: 'Super Admin Dashboard', icon: BarChart2, path: '/superadmin/new-dashboard' },
+    { id: 'team', label: 'Team Management', icon: Users, path: '/superadmin/team' },
+    { id: 'dashboard', label: 'Dashboard', icon: LayoutDashboard, path: '/superadmin/dashboard' },
+    { id: 'interviews', label: 'Interviews', icon: ClipboardList, path: '/superadmin/interviews' },
+    { id: 'qualified', label: 'Qualified Candidates', icon: CheckCircle, path: '/superadmin/qualified-candidates' },
+    { id: 'rejected', label: 'Rejected Candidates', icon: XCircle, path: '/superadmin/rejected-candidates' },
     { id: 'create', label: 'Create Interview', icon: Plus, path: '/superadmin/create-interview' },
     { id: 'ai-calling', label: 'AI Calling Agent', icon: Radio, path: '/superadmin/ai-calling' },
     { id: 'conversational-flow', label: 'Conversational Flow', icon: MessageSquare, path: '/superadmin/conversational-flow' },
-    { id: 'jobs', label: 'Jobs', path: '/superadmin/jobs' },
-    { id: 'organizations', label: 'Organizations', path: '/superadmin/organizations' },
-    { id: 'recruiters', label: 'Recruiters', path: '/superadmin/recruiters' },
-    { id: 'credit', label: 'Credit Management', path: '/superadmin/credit' },
-    { id: 'subscription', label: 'Subscription Management', path: '/superadmin/subscription' },
-    { id: 'integrations', label: 'Integrations', path: '/superadmin/integrations' },
+    { id: 'jobs', label: 'Jobs', icon: Briefcase, path: '/superadmin/jobs' },
+    { id: 'organizations', label: 'Organizations', icon: Building, path: '/superadmin/organizations' },
+    { id: 'recruiters', label: 'Recruiters', icon: UserCheck, path: '/superadmin/recruiters' },
+    { id: 'credit', label: 'Credit Management', icon: Coins, path: '/superadmin/credit' },
+    { id: 'subscription', label: 'Subscription Management', icon: CreditCard, path: '/superadmin/subscription' },
+    { id: 'integrations', label: 'Integrations', icon: Link, path: '/superadmin/integrations' },
     // { id: 'audit', label: 'Audit Logs', path: '/superadmin/audit' },
-    { id: 'security', label: 'Security', path: '/superadmin/security' },
-    { id: 'settings', label: 'Settings', path: '/superadmin/profile-settings' },
+    { id: 'security', label: 'Security', icon: Shield, path: '/superadmin/security' },
+    { id: 'settings', label: 'Settings', icon: Settings, path: '/superadmin/profile-settings' },
   ]
 
   return (
