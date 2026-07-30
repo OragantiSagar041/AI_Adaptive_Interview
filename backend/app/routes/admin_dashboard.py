@@ -1288,14 +1288,21 @@ async def get_dashboard_stats(admin_id: Optional[str] = None, current_admin: dic
         if current_admin.get("role") != "master":
             query["company_id"] = comp_id
         
+        def safe_object_id(val):
+            try:
+                from bson.errors import InvalidId
+                return ObjectId(val)
+            except Exception:
+                return val
+                
         if current_admin.get("role") == "admin":
             admin_doc = await asyncio.to_thread(
-                admins_collection.find_one, {"_id": ObjectId(current_admin["admin_id"])}
+                admins_collection.find_one, {"_id": safe_object_id(current_admin["admin_id"])}
             )
             credits = admin_doc.get("credits", 0) if admin_doc else 0
         elif comp_id:
             # super_admin and master: use company credits (sessions deduct from company pool)
-            company = await asyncio.to_thread(companies_collection.find_one, {"_id": ObjectId(comp_id)})
+            company = await asyncio.to_thread(companies_collection.find_one, {"_id": safe_object_id(comp_id)})
             credits = company.get("credits", 0) if company else 0
         else:
             credits = 0
@@ -1363,15 +1370,20 @@ async def get_dashboard_stats(admin_id: Optional[str] = None, current_admin: dic
                 }}],
                 "by_creator": [{"$group": {"_id": "$created_by", "count": {"$sum": 1}}}],
                 "daily": [
-                    {"$match": {"created_at": {"$gte": week_start}}},
+                    {"$match": {"created_at": {"$gte": week_start, "$type": "string"}}},
                     {"$group": {"_id": {"$substrBytes": ["$created_at", 0, 10]}, "count": {"$sum": 1}}},
                 ],
             }},
         ]
-        aggregate_rows = await asyncio.to_thread(
-            lambda: list(interview_sessions_collection.aggregate(dashboard_pipeline))
-        )
-        aggregate_data = aggregate_rows[0] if aggregate_rows else {}
+        try:
+            aggregate_rows = await asyncio.to_thread(
+                lambda: list(interview_sessions_collection.aggregate(dashboard_pipeline))
+            )
+            aggregate_data = aggregate_rows[0] if aggregate_rows else {}
+        except Exception as e:
+            print(f"Dashboard aggregation error: {e}")
+            aggregate_data = {}
+            
         summary = (aggregate_data.get("summary") or [{}])[0]
         total = summary.get("total", 0)
         completed = summary.get("completed", 0)
