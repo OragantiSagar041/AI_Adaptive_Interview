@@ -451,7 +451,9 @@ export default function OverviewDashboardPage() {
                 </TableRow>
               </TableHeader>
               <TableBody>
-                {liveSessions?.slice(0, 5).map((session, i) => (
+                {(() => {
+                  const onlineLiveSessions = (liveSessions || []).filter(s => s.online)
+                  return onlineLiveSessions.slice(0, 5).map((session, i) => (
                   <TableRow key={i} className="border-b border-border/50 last:border-0 hover:bg-slate-50">
                     <TableCell className="px-6 py-3 font-medium">{session.candidate_name || "Unknown"}</TableCell>
                     <TableCell className="px-3 py-3 text-muted-foreground">{session.interview_title || session.link_id}</TableCell>
@@ -491,8 +493,9 @@ export default function OverviewDashboardPage() {
                       </Button>
                     </TableCell>
                   </TableRow>
-                ))}
-                {(!liveSessions || liveSessions.length === 0) && (
+                  ))
+                })()}
+                {((!liveSessions || liveSessions.length === 0) || (liveSessions || []).filter(s => s.online).length === 0) && (
                   <TableRow>
                     <TableCell colSpan={7} className="text-center text-slate-500 py-6">No active sessions being monitored</TableCell>
                   </TableRow>

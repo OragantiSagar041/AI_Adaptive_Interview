@@ -335,14 +335,14 @@ export default function SuperDashboardPage() {
                     </div>
                   ) : (
                     <div className="max-h-56 overflow-y-auto divide-y divide-slate-50">
-                      {liveSessions.map((session, i) => (
+                      {liveSessions.filter(session => session.online).map((session, i) => (
                         <button
                           key={session.link_id || i}
                           className="w-full text-left px-3 py-2.5 hover:bg-blue-50 transition-colors cursor-pointer flex items-center justify-between gap-2 bg-transparent border-none"
                           onClick={() => {
                             setShowLivePicker(false);
                             if (handleOpenLiveStreamAction) {
-                              handleOpenLiveStreamAction(session.link_id || session.id);
+                              handleOpenLiveStreamAction(session);
                             }
                           }}
                         >
@@ -721,8 +721,12 @@ export default function SuperDashboardPage() {
       {/* Live Interview Sessions */}
       <Card className="bg-white text-slate-900 border-slate-200 shadow-sm">
         <CardHeader className="pb-2">
-          <CardTitle className="text-base">Live Interview Sessions</CardTitle>
-          <CardDescription>Active and recently monitored candidate sessions.</CardDescription>
+          <div className="flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
+            <div>
+              <CardTitle className="text-base">Live Interview Sessions</CardTitle>
+              <CardDescription>Active and recently monitored candidate sessions.</CardDescription>
+            </div>
+          </div>
         </CardHeader>
         <div className="px-6 pb-6 overflow-x-auto">
           {(!liveSessions || liveSessions.length === 0) ? (
@@ -730,47 +734,56 @@ export default function SuperDashboardPage() {
               No live interview sessions currently active.
             </div>
           ) : (
-            <table className="w-full text-sm text-left">
-              <thead>
-                <tr className="border-b border-slate-200 text-slate-500">
-                  <th className="py-3 font-medium whitespace-nowrap">Candidate</th>
-                  <th className="py-3 font-medium whitespace-nowrap">Interview</th>
-                  <th className="py-3 font-medium text-center whitespace-nowrap">Status</th>
-                  <th className="py-3 font-medium text-center whitespace-nowrap">Progress</th>
-                  <th className="py-3 font-medium text-center whitespace-nowrap">Alerts</th>
-                  <th className="py-3 font-medium text-center whitespace-nowrap">Audio Level</th>
-                  <th className="py-3 font-medium text-right whitespace-nowrap">Action</th>
-                </tr>
-              </thead>
-              <tbody>
-                {liveSessions.map((session, i) => (
-                  <tr key={session.link_id || i} className="border-b border-slate-100 last:border-0 hover:bg-slate-50">
-                    <td className="py-3 font-medium text-slate-900 whitespace-nowrap">{session.candidate_name || 'Unknown Candidate'}</td>
-                    <td className="py-3 text-slate-500 whitespace-nowrap">{session.interview_title || session.link_id}</td>
-                    <td className="py-3 text-center whitespace-nowrap">
-                      <span className={`inline-flex px-2 py-0.5 rounded text-[10px] font-bold ${session.online ? 'bg-slate-900 text-white' : 'bg-slate-900 text-white'}`}>
-                        {session.online ? 'Online' : 'Offline'}
-                      </span>
-                    </td>
-                    <td className="py-3 text-center text-slate-400 text-xs font-medium whitespace-nowrap">N/A</td>
-                    <td className="py-3 text-center text-slate-700 font-medium whitespace-nowrap">{session.proctoring_alerts || 0}</td>
-                    <td className="py-3 text-center whitespace-nowrap">
-                      <div className="w-12 h-1.5 bg-blue-50 rounded-full mx-auto overflow-hidden">
-                        <div className="h-full bg-blue-300 rounded-full" style={{ width: `${Math.min(100, (session.audio_level || 0) * 10)}%` }} />
-                      </div>
-                    </td>
-                    <td className="py-3 text-right whitespace-nowrap">
-                      <button 
-                        onClick={() => handleOpenLiveStreamAction && handleOpenLiveStreamAction(session.link_id || session.id)}
-                        className="inline-flex items-center justify-center gap-1.5 px-3 py-1.5 text-xs font-semibold bg-white border border-slate-200 rounded hover:bg-slate-50 text-slate-700 cursor-pointer"
-                      >
-                        <Eye className="w-3.5 h-3.5" /> Monitor
-                      </button>
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
+            (() => {
+              const onlineLiveSessions = liveSessions.filter(session => session.online)
+              return onlineLiveSessions.length === 0 ? (
+                <div className="text-center py-8 text-sm text-slate-500">
+                  No live interview sessions currently active.
+                </div>
+              ) : (
+                <table className="w-full text-sm text-left">
+                  <thead>
+                    <tr className="border-b border-slate-200 text-slate-500">
+                      <th className="py-3 font-medium whitespace-nowrap">Candidate</th>
+                      <th className="py-3 font-medium whitespace-nowrap">Interview</th>
+                      <th className="py-3 font-medium text-center whitespace-nowrap">Status</th>
+                      <th className="py-3 font-medium text-center whitespace-nowrap">Progress</th>
+                      <th className="py-3 font-medium text-center whitespace-nowrap">Alerts</th>
+                      <th className="py-3 font-medium text-center whitespace-nowrap">Audio Level</th>
+                      <th className="py-3 font-medium text-right whitespace-nowrap">Action</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {onlineLiveSessions.map((session, i) => (
+                      <tr key={session.link_id || i} className="border-b border-slate-100 last:border-0 hover:bg-slate-50">
+                        <td className="py-3 font-medium text-slate-900 whitespace-nowrap">{session.candidate_name || 'Unknown Candidate'}</td>
+                        <td className="py-3 text-slate-500 whitespace-nowrap">{session.interview_title || session.link_id}</td>
+                        <td className="py-3 text-center whitespace-nowrap">
+                          <span className="inline-flex px-2 py-0.5 rounded text-[10px] font-bold bg-slate-900 text-white">
+                            Online
+                          </span>
+                        </td>
+                        <td className="py-3 text-center text-slate-400 text-xs font-medium whitespace-nowrap">N/A</td>
+                        <td className="py-3 text-center text-slate-700 font-medium whitespace-nowrap">{session.proctoring_alerts || 0}</td>
+                        <td className="py-3 text-center whitespace-nowrap">
+                          <div className="w-12 h-1.5 bg-blue-50 rounded-full mx-auto overflow-hidden">
+                            <div className="h-full bg-blue-300 rounded-full" style={{ width: `${Math.min(100, (session.audio_level || 0) * 10)}%` }} />
+                          </div>
+                        </td>
+                        <td className="py-3 text-right whitespace-nowrap">
+                          <button 
+                            onClick={() => handleOpenLiveStreamAction && handleOpenLiveStreamAction(session)}
+                            className="inline-flex items-center justify-center gap-1.5 px-3 py-1.5 text-xs font-semibold bg-white border border-slate-200 rounded hover:bg-slate-50 text-slate-700 cursor-pointer"
+                          >
+                            <Eye className="w-3.5 h-3.5" /> Monitor
+                          </button>
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              )
+            })()
           )}
         </div>
       </Card>

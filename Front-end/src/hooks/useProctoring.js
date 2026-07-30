@@ -3,14 +3,21 @@ import { useCallback, useEffect, useRef, useState } from 'react'
 const DETECT_INTERVAL_MS = 700          // how often a frame is sent to the worker
 
 const PHONE_ALERT_CONFIDENCE = 0.45     // raised to eliminate false positives for spectacles
-// from mugs, glasses, dark objects at low confidence
+const LAPTOP_ALERT_CONFIDENCE = 0.40    // threshold for laptops / external screens
 const PHONE_CONSECUTIVE_FRAMES = 3      // 3 consecutive frames (~2.1s) — reduces false positives
-// a real phone in view persists; a misclassification does not
+const LAPTOP_CONSECUTIVE_FRAMES = 3
 
 const MULTI_FACE_CONSECUTIVE_FRAMES = 2 // 2 frames (~1.4s) before raising the alert
 const NO_FACE_CONSECUTIVE_FRAMES = 4    // ~2.8s of no face at 700ms interval
 
-const EYE_CONTACT_YAW_THRESHOLD = 0.25    // head turned left/right (lowered to be more sensitive)
+// Normalised minimum primary face width/height (0..1) required to count as a visible full face.
+const MIN_FACE_WIDTH = 0.20
+const MIN_FACE_HEIGHT = 0.22
+// Maximum absolute yaw/pitch allowed for a "frontal" face used in verification.
+const MAX_FACE_YAW = 0.35
+const MAX_FACE_PITCH = 0.35
+
+const EYE_CONTACT_YAW_THRESHOLD = 0.25    // head turned left/right
 const EYE_CONTACT_PITCH_THRESHOLD = 0.20  // head tilted up/down
 const EYE_CONTACT_CONSECUTIVE_FRAMES = 4  // ~2.8s of sustained gaze-away
 
@@ -36,7 +43,7 @@ export function useProctoring({
   const workerRef = useRef(null)
   const intervalRef = useRef(null)
   const inFlightRef = useRef(false) // avoid overlapping detect calls if a frame is slow
-  const streakRef = useRef({ multiFace: 0, noFace: 0, phone: 0, eyeAway: 0 })
+  const streakRef = useRef({ multiFace: 0, noFace: 0, phone: 0, laptop: 0, eyeAway: 0 })
 
   const onViolationRef = useRef(onViolation)
   const onTerminateRef = useRef(onTerminate)
@@ -49,9 +56,16 @@ export function useProctoring({
     modelsReady: false,
     modelsFailed: false,
     faceCount: 0,
-    faceVisible: true,
+    primaryFaceWidth: 0,
+    primaryFaceHeight: 0,
+    isFullyContained: false,
+    isCropped: false,
+    cropReason: null,
+    faceVisible: false,
     multiFace: false,
     phoneDetected: false,
+    laptopDetected: false,
+    prohibitedObjectDetected: false,
     eyeContactLost: false,
     jawOpenScore: 0,
     lastAlertType: null,
@@ -74,35 +88,55 @@ export function useProctoring({
   }, [maxAlerts])
 
   const handleFrameResult = useCallback((features) => {
-    // Guard: validate the worker payload shape. The old workers/proctoring.worker.js stub
-    // sends raw landmark arrays (wrong shape) — catch it immediately so it is visible.
     if (typeof features?.faceCount === 'undefined') {
       console.error(
-        '[useProctoring] ❌ Worker payload shape mismatch! ' +
-        'Expected {faceCount, secondaryFaceWidths, phoneCandidates, ...} but got:',
-        features,
-        '\n→ Ensure ONLY src/hooks/proctoring.worker.js is used, not src/workers/proctoring.worker.js'
+        '[useProctoring] ❌ Worker payload shape mismatch! Expected {faceCount, ...} but got:',
+        features
       )
       return
     }
 
-    const { faceCount, secondaryFaceWidths, headYaw, headPitch, phoneCandidates, jawOpenScore } = features
+    const {
+      faceCount,
+      primaryFaceWidth,
+      primaryFaceHeight,
+      isFullyContained,
+      isCropped,
+      cropReason,
+      secondaryFaceWidths,
+      headYaw,
+      headPitch,
+      phoneCandidates,
+      laptopCandidates,
+      jawOpenScore,
+      hasNoseAndChin
+    } = features
     const streak = streakRef.current
 
-    // 1 + 2. Face detection / multi-face detection
-    const faceVisible = faceCount > 0
+    try {
+      console.debug('[useProctoring] frame features:', { faceCount, primaryFaceWidth, primaryFaceHeight, isFullyContained, isCropped, cropReason, headYaw, headPitch })
+    } catch (e) { /* ignore logging */ }
+
+    // 1 + 2. Face detection / multi-face detection / Full face containment
+    const widthOk = (primaryFaceWidth ?? 0) >= MIN_FACE_WIDTH
+    const heightOk = (primaryFaceHeight ?? 0) >= MIN_FACE_HEIGHT
+    const poseOk = Math.abs(headYaw || 0) <= MAX_FACE_YAW && Math.abs(headPitch || 0) <= MAX_FACE_PITCH
+    const noseChinOk = !!hasNoseAndChin
+
+    // Strict faceVisible requires face count === 1, full containment, no edge cropping, and valid pose
+    const faceVisible = faceCount === 1 && !!isFullyContained && widthOk && heightOk && poseOk && noseChinOk && !isCropped
     const isMultiFace = faceCount > 1 || (secondaryFaceWidths?.length ?? 0) > 0
 
     streak.noFace = !faceVisible ? streak.noFace + 1 : 0
     if (streak.noFace >= NO_FACE_CONSECUTIVE_FRAMES) {
-      raiseViolation('no_face', 'No face detected — candidate not visible')
-      streak.noFace = 0 // reset so it can fire again
+      raiseViolation('no_face', cropReason || 'Full face not visible in camera frame')
+      streak.noFace = 0
     }
 
     streak.multiFace = isMultiFace ? streak.multiFace + 1 : 0
     if (streak.multiFace >= MULTI_FACE_CONSECUTIVE_FRAMES) {
       raiseViolation('multi_person', 'Multiple faces detected in frame')
-      streak.multiFace = 0 // reset so it can fire again
+      streak.multiFace = 0
     }
 
     // 3. Eye contact / gaze tracking
@@ -113,23 +147,40 @@ export function useProctoring({
     const eyeContactLost = streak.eyeAway >= EYE_CONTACT_CONSECUTIVE_FRAMES
     if (streak.eyeAway >= EYE_CONTACT_CONSECUTIVE_FRAMES) {
       raiseViolation('eye_contact', 'Please maintain eye contact with the screen')
-      streak.eyeAway = 0 // reset so it can fire again
+      streak.eyeAway = 0
     }
 
-    // 4. Mobile / phone detection
+    // 4. Mobile phone detection
     const isPhone = phoneCandidates?.length > 0 && phoneCandidates[0].score > PHONE_ALERT_CONFIDENCE
     streak.phone = isPhone ? streak.phone + 1 : 0
     if (streak.phone >= PHONE_CONSECUTIVE_FRAMES) {
       raiseViolation('phone', 'Mobile phone detected in frame')
-      streak.phone = 0 // reset so it can fire again
+      streak.phone = 0
     }
+
+    // 5. Laptop / Computer screen detection
+    const isLaptop = laptopCandidates?.length > 0 && laptopCandidates[0].score > LAPTOP_ALERT_CONFIDENCE
+    streak.laptop = isLaptop ? streak.laptop + 1 : 0
+    if (streak.laptop >= LAPTOP_CONSECUTIVE_FRAMES) {
+      raiseViolation('laptop', 'Prohibited laptop / screen detected in frame')
+      streak.laptop = 0
+    }
+
+    const prohibitedObjectDetected = isPhone || isLaptop
 
     setState((s) => ({
       ...s,
       faceCount,
+      primaryFaceWidth: primaryFaceWidth ?? 0,
+      primaryFaceHeight: primaryFaceHeight ?? 0,
+      isFullyContained: !!isFullyContained,
+      isCropped: !!isCropped,
+      cropReason: cropReason || null,
       faceVisible,
       multiFace: isMultiFace,
-      phoneDetected: isPhone,  // isPhone is the variable declared above
+      phoneDetected: isPhone,
+      laptopDetected: isLaptop,
+      prohibitedObjectDetected,
       eyeContactLost,
       jawOpenScore,
     }))
@@ -180,22 +231,18 @@ export function useProctoring({
     if (!enabled || !state.modelsReady) return
 
     intervalRef.current = setInterval(async () => {
-      // Pause frame capture when the tab is backgrounded.
-      // The tab-switch detector (in useInterviewSession) already logs this as
-      // a violation — no need to waste CPU on ML inference while invisible.
       if (document.visibilityState !== 'visible') return
 
       const video = videoRef?.current
       const worker = workerRef.current
       if (!video || !worker || video.readyState < 2 || video.videoWidth === 0 || video.videoHeight === 0) return
-      if (inFlightRef.current) return // skip tick if previous frame hasn't returned yet
+      if (inFlightRef.current) return
 
       try {
         const bitmap = await createImageBitmap(video)
         inFlightRef.current = true
         worker.postMessage({ type: 'detect', data: { bitmap, timestamp: Date.now() } }, [bitmap])
       } catch (e) {
-        // transient capture failures (e.g. video not painted yet) are non-fatal
         console.warn('[useProctoring] frame capture error:', e)
       }
     }, DETECT_INTERVAL_MS)
@@ -203,78 +250,36 @@ export function useProctoring({
     return () => clearInterval(intervalRef.current)
   }, [enabled, state.modelsReady, videoRef])
 
-  // 6. Anti-Screenshot & Copy Protection
+  // Anti-Screenshot & Copy Protection
   useEffect(() => {
     if (!enabled) return;
 
     const handleKeyDown = (e) => {
-      // Prevent PrintScreen key
       if (e.key === 'PrintScreen') {
         e.preventDefault();
         raiseViolation('screenshot_attempt', 'Screenshot attempt detected');
       }
-
-      // Prevent common Mac screenshot shortcuts (Cmd + Shift + 3/4/5)
       if (e.metaKey && e.shiftKey && (e.key === '3' || e.key === '4' || e.key === '5')) {
         e.preventDefault();
         raiseViolation('screenshot_attempt', 'Screenshot attempt detected');
       }
-
-      // Prevent Windows snipping tool shortcut (Win + Shift + S)
       if (e.metaKey && e.shiftKey && (e.key === 's' || e.key === 'S')) {
         e.preventDefault();
         raiseViolation('screenshot_attempt', 'Screenshot attempt detected');
       }
-
-      // Prevent Save As (Cmd/Ctrl + S)
-      if ((e.metaKey || e.ctrlKey) && (e.key === 's' || e.key === 'S')) {
-        e.preventDefault();
-      }
-
-      // Prevent Print (Cmd/Ctrl + P)
-      if ((e.metaKey || e.ctrlKey) && (e.key === 'p' || e.key === 'P')) {
-        e.preventDefault();
-      }
-    };
-
-    const handleContextMenu = (e) => {
-      e.preventDefault(); // Disable right-click
-    };
-
-    const handleCopy = (e) => {
-      e.preventDefault();
     };
 
     window.addEventListener('keydown', handleKeyDown);
-    window.addEventListener('keyup', handleKeyDown); // Catch printscreen on keyup sometimes
-    window.addEventListener('contextmenu', handleContextMenu);
-    window.addEventListener('copy', handleCopy);
-
-    // Apply CSS to prevent text selection
-    document.body.style.userSelect = 'none';
-    document.body.style.webkitUserSelect = 'none';
-
-    return () => {
-      window.removeEventListener('keydown', handleKeyDown);
-      window.removeEventListener('keyup', handleKeyDown);
-      window.removeEventListener('contextmenu', handleContextMenu);
-      window.removeEventListener('copy', handleCopy);
-
-      document.body.style.userSelect = '';
-      document.body.style.webkitUserSelect = '';
-    };
+    return () => window.removeEventListener('keydown', handleKeyDown);
   }, [enabled, raiseViolation]);
-
-  // 5. Lip sync: compare mouth-openness against expected speaking activity.
-  const checkLipSync = useCallback((jawOpenScore, isAudioActive, threshold = 0.12) => {
-    return !!isAudioActive && jawOpenScore < threshold
-  }, [])
 
   return {
     ...state,
     alertCount,
-    maxAlerts,
-    checkLipSync,
+    resetAlerts: useCallback(() => {
+      alertCountRef.current = 0
+      setAlertCount(0)
+    }, []),
   }
 }
 

@@ -1,5 +1,5 @@
 /**
- * proctoring.worker.js  (classic IIFE worker — built with vite worker.format: 'iife')
+ * proctoring.worker.js (classic IIFE worker — built with vite worker.format: 'iife')
  *
  * WHY importScripts IS USED HERE:
  * ─────────────────────────────────────────────────────────────────────────────
@@ -25,12 +25,7 @@
  */
 
 /* ── CDN URLs ──────────────────────────────────────────────────────────────── */
-// Use the REAL published UMD bundle (not jsDelivr's synthetic "+esm" transform).
-// This must be loaded with importScripts() so MediaPipe's internal WASM loader
-// runs in the worker's true global scope and sets `ModuleFactory` correctly.
 const MP_BUNDLE_SCRIPT_URL = '/vision_bundle.js';
-
-// Local WASM directory (served from public/wasm/)
 const WASM_BASE = '/wasm';
 
 const MODEL_URLS = {
@@ -92,17 +87,85 @@ function blendshapeScorer(categories) {
   return (name) => categories?.find((b) => b.categoryName === name)?.score ?? 0;
 }
 
-function extractPhoneCandidates(detections) {
-  const candidates = [];
+function extractProhibitedObjects(detections) {
+  const phones = [];
+  const laptops = [];
   for (const d of detections) {
     for (const cat of d.categories ?? []) {
       const label = `${cat.categoryName ?? ''} ${cat.displayName ?? ''}`.toLowerCase();
       if (label.includes('phone') || label.includes('mobile') || label.includes('cell') || label.includes('tablet')) {
-        candidates.push({ score: cat.score ?? 0 });
+        phones.push({ score: cat.score ?? 0, label: cat.categoryName });
+      }
+      if (label.includes('laptop') || label.includes('computer') || label.includes('desktop') || label.includes('monitor') || label.includes('screen')) {
+        laptops.push({ score: cat.score ?? 0, label: cat.categoryName });
       }
     }
   }
-  return candidates.sort((a, b) => b.score - a.score);
+  return {
+    phoneCandidates: phones.sort((a, b) => b.score - a.score),
+    laptopCandidates: laptops.sort((a, b) => b.score - a.score),
+  };
+}
+
+function computeFaceBounds(landmarks) {
+  if (!landmarks?.length) {
+    return {
+      minX: 0, maxX: 0, minY: 0, maxY: 0,
+      width: 0, height: 0,
+      isCropped: true,
+      hasAllKeyLandmarks: false,
+      isFullyContained: false,
+      cropReason: 'No landmarks detected'
+    };
+  }
+
+  let minX = Infinity, maxX = -Infinity, minY = Infinity, maxY = -Infinity;
+  for (const p of landmarks) {
+    if (p.x < minX) minX = p.x;
+    if (p.x > maxX) maxX = p.x;
+    if (p.y < minY) minY = p.y;
+    if (p.y > maxY) maxY = p.y;
+  }
+
+  const width = maxX - minX;
+  const height = maxY - minY;
+
+  const nose = landmarks[LANDMARK.NOSE_TIP];
+  const forehead = landmarks[LANDMARK.FOREHEAD];
+  const chin = landmarks[LANDMARK.CHIN];
+  const eyeL = landmarks[LANDMARK.EYE_OUTER_LEFT];
+  const eyeR = landmarks[LANDMARK.EYE_OUTER_RIGHT];
+  const lipU = landmarks[LANDMARK.LIP_UPPER];
+  const lipL = landmarks[LANDMARK.LIP_LOWER];
+
+  const hasAllKeyLandmarks = Boolean(nose && forehead && chin && eyeL && eyeR && lipU && lipL);
+
+  let cropReason = null;
+  if (!hasAllKeyLandmarks) {
+    cropReason = 'Missing key facial features (eyes/nose/mouth/chin)';
+  } else if (minY < 0.04) {
+    cropReason = 'Top of forehead cut off at top edge of camera frame';
+  } else if (maxY > 0.94 || (chin && chin.y > 0.93)) {
+    cropReason = 'Chin or lower face cut off at bottom edge of camera frame';
+  } else if (minX < 0.04) {
+    cropReason = 'Face cut off at left edge of camera frame';
+  } else if (maxX > 0.96) {
+    cropReason = 'Face cut off at right edge of camera frame';
+  } else if (height < 0.22 || width < 0.20) {
+    cropReason = 'Face too small or too far from camera';
+  }
+
+  const isCropped = Boolean(cropReason);
+  const isFullyContained = hasAllKeyLandmarks && !isCropped;
+
+  return {
+    minX, maxX, minY, maxY,
+    width, height,
+    isCropped,
+    cropReason,
+    hasAllKeyLandmarks,
+    isFullyContained
+  };
 }
 
 function computeMouthOpenness(landmarks) {
@@ -126,20 +189,28 @@ function extractFrameFeatures(bitmap) {
 
   const score = blendshapeScorer(faceBlendshapes[0]?.categories);
   const pose  = computeHeadPose(faceLandmarks[0]);
+  const bounds = computeFaceBounds(faceLandmarks[0]);
 
-  const primaryFaceWidth     = faceBoxWidth(faceLandmarks[0]);
-  const secondaryFaceWidths  = faceLandmarks.slice(1).map(faceBoxWidth);
+  const secondaryFaceWidths = faceLandmarks.slice(1).map(faceBoxWidth);
 
   const blendshapeJawOpen  = score('jawOpen');
   const geometricJawOpen   = computeMouthOpenness(faceLandmarks[0]);
   const jawOpenScore       = Math.max(blendshapeJawOpen, geometricJawOpen * 0.7);
 
+  const objects = extractProhibitedObjects(objectResult.detections ?? []);
+
   return {
     faceCount: Math.max(faceLandmarks.length, faceBlendshapes.length),
-    primaryFaceWidth,
+    primaryFaceWidth: bounds.width,
+    primaryFaceHeight: bounds.height,
+    isFullyContained: bounds.isFullyContained,
+    isCropped: bounds.isCropped,
+    cropReason: bounds.cropReason,
     secondaryFaceWidths,
     headYaw: pose.yaw,
     headPitch: pose.pitch,
+    hasNoseAndChin: bounds.hasAllKeyLandmarks,
+    noseChinNorm: bounds.height,
     eyeLook: {
       outRight:  score('eyeLookOutRight'),
       outLeft:   score('eyeLookOutLeft'),
@@ -150,31 +221,22 @@ function extractFrameFeatures(bitmap) {
       downRight: score('eyeLookDownRight'),
       downLeft:  score('eyeLookDownLeft'),
     },
-    phoneCandidates: extractPhoneCandidates(objectResult.detections ?? []),
+    phoneCandidates: objects.phoneCandidates,
+    laptopCandidates: objects.laptopCandidates,
     jawOpenScore,
   };
 }
 
 /* ── Model loading ─────────────────────────────────────────────────────────── */
 async function loadModels() {
-  // Synchronous, executes in the worker's real global scope — this is what lets
-  // MediaPipe's internal importScripts() call (triggered later, inside
-  // createFromOptions) correctly set `self.ModuleFactory`.
   importScripts(MP_BUNDLE_SCRIPT_URL);
 
-  // The UMD bundle attaches its exports to a global namespace. Detect whichever
-  // one is actually present rather than hard-coding a name that might not match
-  // this exact build.
   const ns =
     self.vision ||
     self.MediapipeTasksVision ||
     (self.FilesetResolver && self.FaceLandmarker && self.ObjectDetector ? self : null);
 
   if (!ns || !ns.FilesetResolver || !ns.FaceLandmarker || !ns.ObjectDetector) {
-    // If you land here: open devtools in the worker context and run
-    // console.log(Object.keys(self)) right after this importScripts call,
-    // find the object holding FaceLandmarker/ObjectDetector/FilesetResolver,
-    // and add its name to the `ns` lookup above.
     throw new Error(
       '[proctoring.worker] vision_bundle.js loaded but expected classes were not found on self.'
     );
@@ -233,11 +295,11 @@ self.onmessage = async (event) => {
 
     try {
       const features = extractFrameFeatures(bitmap);
+      bitmap.close();
       self.postMessage({ type: 'detect_result', timestamp, data: features });
     } catch (err) {
-      self.postMessage({ type: 'detect_error', timestamp, error: err?.message ?? String(err) });
-    } finally {
       bitmap.close();
+      self.postMessage({ type: 'detect_error', timestamp, error: err?.message ?? String(err) });
     }
   }
 };

@@ -56,7 +56,7 @@ import LiveMonitorStreamModal from '../admin/modals/LiveMonitorStreamModal'
 import axios from 'axios'
 import { getNotifications, markNotificationAsRead, markAllNotificationsAsRead } from '../../utils/api'
 import { setSelectedCandidate, setLiveResultsModalOpen, handleUpdateDecision } from '../../store/slices/interviewSlice'
-import { loadSuperAdminDashboard, setSelectedAdminFilter, updateLiveSnapshot } from '../../store/slices/dashboardSlice'
+import { loadSuperAdminDashboard, loadLiveSessions, setSelectedAdminFilter, updateLiveSnapshot } from '../../store/slices/dashboardSlice'
 
 function hexToRgba(hex, alpha) {
   const cleanHex = hex.replace('#', '')
@@ -222,8 +222,8 @@ export default function SuperAdminLayout() {
     }
   }, [isMobile, sidebarOpen])
 
-  const handleOpenLiveStreamAction = (sessionId) => {
-    setLiveStreamSession(sessionId)
+  const handleOpenLiveStreamAction = (session) => {
+    setLiveStreamSession(session)
     setIsLiveStreamOpen(true)
   }
 
@@ -289,6 +289,12 @@ export default function SuperAdminLayout() {
       ws.close()
     }
   }, [dispatch, token, selectedAdminFilter])
+
+  useEffect(() => {
+    if (liveResultsModalOpen && token) {
+      dispatch(loadLiveSessions(selectedAdminFilter))
+    }
+  }, [dispatch, liveResultsModalOpen, selectedAdminFilter, token])
 
   // Fetch subscription plans on mount
   useEffect(() => {

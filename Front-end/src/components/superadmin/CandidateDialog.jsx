@@ -997,9 +997,11 @@ export default function CandidateDialog({ candidate, open, onOpenChange, onStatu
                   <p className="text-xs text-slate-400 font-medium">{name}</p>
                 </div>
               </div>
-              <button onClick={() => setShowRecordingModal(false)} className="p-2 rounded-full hover:bg-slate-100 text-slate-400 hover:text-slate-700 transition-colors">
-                <X size={18} />
-              </button>
+              <div className="flex items-center gap-2">
+                <button onClick={() => setShowRecordingModal(false)} className="p-2 rounded-full hover:bg-slate-100 text-slate-400 hover:text-slate-700 transition-colors">
+                  <X size={18} />
+                </button>
+              </div>
             </div>
             <div className="flex-1 overflow-y-auto p-6">
               <div className="grid sm:grid-cols-2 gap-5">

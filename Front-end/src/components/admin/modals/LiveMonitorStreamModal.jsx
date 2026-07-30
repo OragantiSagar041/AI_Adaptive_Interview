@@ -3,7 +3,7 @@ import { API_BASE_URL } from '../../../apiConfig'
 import { getIceServers } from '../../../utils/webrtcConfig'
 import Modal from '../../Modal'
 import { useSelector } from 'react-redux'
-import { Video, Mic, MicOff, MonitorOff, Activity, ShieldAlert, Code, MessageSquare, Briefcase, AlertTriangle, RefreshCw } from 'lucide-react'
+import { Video, Mic, MicOff, MonitorOff, Monitor, Camera, Activity, ShieldAlert, Code, MessageSquare, Briefcase, AlertTriangle, RefreshCw } from 'lucide-react'
 
 // Maps violation_type values to a human-readable label + colour class
 const VIOLATION_META = {
@@ -37,11 +37,40 @@ function formatTs(ts) {
 
 const ICE_SERVERS = getIceServers()
 
+function getTrackType(track) {
+  const label = (track.label || '').toLowerCase()
+  if (/screen|display|monitor|window|tab|share/.test(label)) return 'screen'
+  if (/camera|webcam|front|user|face/.test(label)) return 'camera'
+  return 'unknown'
+}
+
+const buildRemoteViewStream = (stream, mode) => {
+  if (!stream) return null
+  const videoTracks = [...stream.getVideoTracks()]
+  const audioTracks = [...stream.getAudioTracks()]
+  let selectedVideoTrack = null
+
+  if (mode === 'camera') {
+    selectedVideoTrack = videoTracks.find(track => getTrackType(track) === 'camera') || videoTracks[1] || videoTracks[0]
+  } else {
+    selectedVideoTrack = videoTracks.find(track => getTrackType(track) === 'screen') || videoTracks[0]
+  }
+
+  if (!selectedVideoTrack) {
+    return stream
+  }
+
+  return new MediaStream([selectedVideoTrack, ...audioTracks])
+}
+
 export default function LiveMonitorStreamModal({ isOpen, onClose, session }) {
   const [status, setStatus] = useState('connecting')
   const [telemetry, setTelemetry] = useState(null)
   const [violations, setViolations] = useState([])
   const [retryCount, setRetryCount] = useState(0)
+  const [viewMode, setViewMode] = useState('screen')
+  const [remoteStream, setRemoteStream] = useState(null)
+  const [trackAvailability, setTrackAvailability] = useState({ camera: false, screen: false })
 
   const violationsPollRef = useRef(null)
   const videoRef = useRef(null)
@@ -95,6 +124,22 @@ export default function LiveMonitorStreamModal({ isOpen, onClose, session }) {
       wsRef.current = null
     }
     if (videoRef.current) videoRef.current.srcObject = null
+    setRemoteStream(null)
+  }, [])
+
+  const updateRemoteStreamFromReceivers = useCallback(() => {
+    const pc = pcRef.current
+    if (!pc) return
+
+    const receiverTracks = pc.getReceivers()
+      .map(receiver => receiver.track)
+      .filter(Boolean)
+
+    if (receiverTracks.length === 0) return
+
+    const receiverStream = new MediaStream(receiverTracks)
+    setRemoteStream(receiverStream)
+    if (mountedRef.current) setStatus('streaming')
   }, [])
 
   /**
@@ -126,10 +171,28 @@ export default function LiveMonitorStreamModal({ isOpen, onClose, session }) {
       }
 
       pc.ontrack = (e) => {
-        if (videoRef.current && e.streams[0]) {
-          videoRef.current.srcObject = e.streams[0]
+        const incomingStream = e.streams && e.streams[0]
+          ? e.streams[0]
+          : e.track
+            ? new MediaStream([e.track])
+            : null
+
+        if (incomingStream) {
+          setRemoteStream(incomingStream)
           clearTimeout(streamTimeoutRef.current)
           if (mountedRef.current) setStatus('streaming')
+        } else {
+          updateRemoteStreamFromReceivers()
+        }
+      }
+
+      pc.onaddstream = (e) => {
+        if (e.stream) {
+          setRemoteStream(e.stream)
+          clearTimeout(streamTimeoutRef.current)
+          if (mountedRef.current) setStatus('streaming')
+        } else {
+          updateRemoteStreamFromReceivers()
         }
       }
 
@@ -199,13 +262,22 @@ export default function LiveMonitorStreamModal({ isOpen, onClose, session }) {
 
         } else if (msg.type === 'webrtc_answer') {
           if (mountedRef.current) setStatus('negotiating')
+          console.debug('[AdminWebRTC] Received answer — applying remote description')
           if (pcRef.current && pcRef.current.signalingState !== 'stable') {
             await pcRef.current.setRemoteDescription(new RTCSessionDescription(msg.sdp))
           }
+          // Try extracting tracks from receivers after applying remote description
+          updateRemoteStreamFromReceivers()
 
         } else if (msg.type === 'webrtc_ice_candidate') {
-          if (pcRef.current && pcRef.current.remoteDescription) {
-            await pcRef.current.addIceCandidate(new RTCIceCandidate(msg.candidate))
+          if (pcRef.current) {
+            try {
+              await pcRef.current.addIceCandidate(new RTCIceCandidate(msg.candidate))
+            } catch (e) {
+              console.warn('[AdminWebRTC] addIceCandidate failed:', e)
+            }
+            // receiver fallback after new ICE candidate
+            updateRemoteStreamFromReceivers()
           }
 
         } else if (msg.type === 'candidate_disconnected') {
@@ -238,6 +310,55 @@ export default function LiveMonitorStreamModal({ isOpen, onClose, session }) {
     setRetryCount(c => c + 1)  // triggers the useEffect to rebuild everything
   }
 
+  const videoTracks = remoteStream?.getVideoTracks() || []
+  const hasCameraTrack = trackAvailability.camera
+  const hasScreenTrack = trackAvailability.screen || videoTracks.length > 0
+
+  useEffect(() => {
+    if (!remoteStream) {
+      setTrackAvailability({ camera: false, screen: false })
+      return
+    }
+
+    const cameraFound = videoTracks.some(track => getTrackType(track) === 'camera')
+    const screenFound = videoTracks.some(track => getTrackType(track) === 'screen')
+    setTrackAvailability({ camera: cameraFound, screen: screenFound })
+  }, [remoteStream, videoTracks.length])
+
+  useEffect(() => {
+    if (!videoRef.current) return
+    if (!remoteStream) {
+      videoRef.current.srcObject = null
+      return
+    }
+    const stream = buildRemoteViewStream(remoteStream, viewMode)
+    videoRef.current.srcObject = stream
+    videoRef.current.muted = true
+    videoRef.current.play().catch(() => {
+      // Autoplay may be blocked, but the video source is attached.
+    })
+  }, [remoteStream, viewMode])
+
+  useEffect(() => {
+    if (!isOpen) return
+    const interval = setInterval(() => {
+      if (!remoteStream) updateRemoteStreamFromReceivers()
+    }, 2500)
+    return () => clearInterval(interval)
+  }, [isOpen, remoteStream, updateRemoteStreamFromReceivers])
+
+  useEffect(() => {
+    if (isOpen && session) {
+      setViewMode('screen')
+    }
+  }, [isOpen, session])
+
+  useEffect(() => {
+    if (viewMode === 'camera' && !hasCameraTrack) {
+      setViewMode('screen')
+    }
+  }, [viewMode, hasCameraTrack])
+
   const getRoundIcon = (type) => {
     if (type === 'coding') return <Code size={16} />
     if (type === 'case_study') return <Briefcase size={16} />
@@ -249,10 +370,17 @@ export default function LiveMonitorStreamModal({ isOpen, onClose, session }) {
       isOpen={isOpen}
       onClose={onClose}
       title={
-        <div className="flex items-center gap-2">
-          <span className={`w-2.5 h-2.5 rounded-full ${status === 'streaming' ? 'bg-success animate-pulse' : 'bg-amber-500'}`} />
-          Live Stream: <span className="font-bold">{session?.candidate_name}</span>
-        </div>
+        <>
+          <div className="flex items-center gap-2">
+            <span className={`w-2.5 h-2.5 rounded-full ${status === 'streaming' ? 'bg-success animate-pulse' : 'bg-amber-500'}`} />
+            Live Stream: <span className="font-bold">{session?.candidate_name}</span>
+          </div>
+
+          <div className="text-xs text-slate-400">
+            <span>WS: {wsRef.current ? wsRef.current.readyState : 'n/a'}</span>
+            <span className="ml-3">PC: {pcRef.current ? (pcRef.current.connectionState || pcRef.current.iceConnectionState || 'n/a') : 'n/a'}</span>
+          </div>
+        </>
       }
       subtitle={`Email: ${session?.candidate_email} | Session: ${session?.session_id}`}
       maxWidth="max-w-4xl"
@@ -302,6 +430,41 @@ export default function LiveMonitorStreamModal({ isOpen, onClose, session }) {
           </div>
         </div>
 
+        <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+          <div className="flex items-center gap-3 text-xs text-slate-500">
+            <div className="font-semibold text-slate-700 uppercase tracking-wide">Stream View</div>
+            <div>{viewMode === 'camera' ? 'Candidate Camera' : 'Screen Share'}</div>
+          </div>
+          <div className="inline-flex rounded-full border border-slate-200 bg-slate-50 overflow-hidden">
+            <button
+              type="button"
+              onClick={() => setViewMode('screen')}
+              disabled={!hasScreenTrack}
+              className={`px-3 py-1 text-xs font-semibold transition ${viewMode === 'screen' ? 'bg-white text-slate-900' : 'text-slate-500 hover:bg-slate-100'} ${!hasScreenTrack ? 'opacity-50 cursor-not-allowed' : ''}`}
+            >
+              <Monitor size={14} />
+              <span className="ml-1">Screen</span>
+            </button>
+            <button
+              type="button"
+              onClick={() => setViewMode('camera')}
+              disabled={!hasCameraTrack}
+              className={`px-3 py-1 text-xs font-semibold transition ${viewMode === 'camera' ? 'bg-white text-slate-900' : 'text-slate-500 hover:bg-slate-100'} ${!hasCameraTrack ? 'opacity-50 cursor-not-allowed' : ''}`}
+            >
+              <Camera size={14} />
+              <span className="ml-1">Camera</span>
+            </button>
+          </div>
+        </div>
+
+        {remoteStream && !hasCameraTrack && viewMode === 'camera' && (
+          <div className="text-xs text-amber-600">Camera feed not detected. Showing available stream data where possible.</div>
+        )}
+
+        {!remoteStream && (
+          <div className="text-xs text-slate-500">Waiting for the candidate stream to arrive...</div>
+        )}
+
         {/* Video Player Area */}
         <div className="relative w-full aspect-video bg-black rounded-xl overflow-hidden border border-slate-200 shadow-inner flex items-center justify-center">
 
@@ -310,10 +473,10 @@ export default function LiveMonitorStreamModal({ isOpen, onClose, session }) {
             autoPlay
             playsInline
             controls
-            className={`w-full h-full object-contain ${status === 'streaming' ? 'opacity-100' : 'opacity-0'}`}
+            className={`w-full h-full object-contain ${remoteStream ? 'opacity-100' : 'opacity-0'}`}
           />
 
-          {status !== 'streaming' && (
+          {!remoteStream && (
             <div className="absolute inset-0 flex flex-col items-center justify-center text-slate-400 bg-slate-900/90 z-10">
               {status === 'connecting' || status === 'negotiating' ? (
                 <div className="flex flex-col items-center gap-3">

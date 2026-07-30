@@ -19,7 +19,20 @@ const DeviceCheckModal = ({ onSuccess, onCancel }) => {
     enabled: isReady && !error
   });
 
-  const hasFaceVerified = proctoring.faceVisible && proctoring.faceCount === 1;
+  // Camera verification STRICT requirements:
+  // 1. Exactly 1 face detected
+  // 2. Face is fully visible & centered (all key features eyes/nose/mouth/chin in frame)
+  // 3. Face is not cropped at top, bottom, left, or right edges
+  // 4. No multiple faces
+  // 5. No mobile phones or laptops detected
+  const hasFaceVerified =
+    proctoring.faceVisible &&
+    proctoring.faceCount === 1 &&
+    proctoring.isFullyContained &&
+    !proctoring.isCropped &&
+    !proctoring.multiFace &&
+    !proctoring.phoneDetected &&
+    !proctoring.laptopDetected;
 
   useEffect(() => {
     let active = true;
@@ -109,7 +122,6 @@ const DeviceCheckModal = ({ onSuccess, onCancel }) => {
   }, []);
 
   const handleProceed = () => {
-    // Stop tracks before proceeding so the next screen can acquire them cleanly
     if (animationFrameRef.current) cancelAnimationFrame(animationFrameRef.current);
     if (streamRef.current) {
       streamRef.current.getTracks().forEach(t => t.stop());
@@ -155,15 +167,15 @@ const DeviceCheckModal = ({ onSuccess, onCancel }) => {
         </div>
 
         {/* Audio Meter */}
-        <div className="bg-white/5 rounded-xl p-4 mb-8">
+        <div className="bg-white/5 rounded-xl p-4 mb-4">
           <div className="flex items-center justify-between mb-2">
             <span className="text-sm font-semibold text-slate-300 flex items-center gap-2">
               <i className="fas fa-microphone text-indigo-400"></i> Microphone Level
             </span>
             {hasAudioVerified ? (
-              <span className="text-xs font-bold text-emerald-400 bg-emerald-400/10 px-2 py-1 rounded">Audio Verified ✓</span>
+              <span className="text-xs font-bold text-emerald-400 bg-emerald-400/10 border border-emerald-400/30 px-2.5 py-1 rounded">Audio Verified ✓</span>
             ) : isReady ? (
-              <span className="text-xs font-bold text-amber-500 bg-amber-500/10 px-2 py-1 rounded">Speak to verify...</span>
+              <span className="text-xs font-bold text-amber-500 bg-amber-500/10 border border-amber-500/30 px-2.5 py-1 rounded">Speak to verify...</span>
             ) : null}
           </div>
           <div className="h-3 w-full bg-slate-800 rounded-full overflow-hidden">
@@ -174,32 +186,58 @@ const DeviceCheckModal = ({ onSuccess, onCancel }) => {
           </div>
         </div>
 
-        {/* Face Detection Status */}
-        <div className="bg-white/5 rounded-xl p-4 mb-8 flex items-center justify-between">
-          <span className="text-sm font-semibold text-slate-300 flex items-center gap-2">
-            <i className="fas fa-user-check text-indigo-400"></i> Face Detection
-          </span>
-          {hasFaceVerified ? (
-            <span className="text-xs font-bold text-emerald-400 bg-emerald-400/10 px-2 py-1 rounded">Face Verified ✓</span>
-          ) : proctoring.multiFace ? (
-            <span className="text-xs font-bold text-red-500 bg-red-500/10 px-2 py-1 rounded">Multiple Faces Detected!</span>
-          ) : isReady ? (
-            <span className="text-xs font-bold text-amber-500 bg-amber-500/10 px-2 py-1 rounded">Looking for face...</span>
-          ) : null}
+        {/* Face Detection & Environment Check Status */}
+        <div className="bg-white/5 rounded-xl p-4 mb-6 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3">
+          <div className="flex flex-col">
+            <span className="text-sm font-semibold text-slate-300 flex items-center gap-2">
+              <i className="fas fa-user-check text-indigo-400"></i> Face & Environment Check
+            </span>
+            <span className="text-xs text-slate-400 mt-0.5">
+              Face must be fully visible and centered. No multiple faces, phones, or laptops allowed.
+            </span>
+          </div>
+
+          <div className="shrink-0">
+            {hasFaceVerified ? (
+              <span className="text-xs font-bold text-emerald-400 bg-emerald-400/10 border border-emerald-400/30 px-3 py-1.5 rounded-lg flex items-center gap-1.5">
+                <i className="fas fa-check-circle"></i> Face Verified ✓
+              </span>
+            ) : proctoring.multiFace ? (
+              <span className="text-xs font-bold text-red-400 bg-red-500/10 border border-red-500/30 px-3 py-1.5 rounded-lg flex items-center gap-1.5">
+                <i className="fas fa-users-slash"></i> Multiple Faces Detected! ❌
+              </span>
+            ) : proctoring.phoneDetected ? (
+              <span className="text-xs font-bold text-red-400 bg-red-500/10 border border-red-500/30 px-3 py-1.5 rounded-lg flex items-center gap-1.5">
+                <i className="fas fa-mobile-alt"></i> Mobile Phone Detected! ❌
+              </span>
+            ) : proctoring.laptopDetected ? (
+              <span className="text-xs font-bold text-red-400 bg-red-500/10 border border-red-500/30 px-3 py-1.5 rounded-lg flex items-center gap-1.5">
+                <i className="fas fa-laptop"></i> Laptop / Extra Screen Detected! ❌
+              </span>
+            ) : proctoring.faceCount === 1 && (proctoring.isCropped || !proctoring.isFullyContained) ? (
+              <span className="text-xs font-bold text-amber-400 bg-amber-500/10 border border-amber-500/30 px-3 py-1.5 rounded-lg flex items-center gap-1.5" title={proctoring.cropReason || ''}>
+                <i className="fas fa-crop-alt"></i> Center your full face in camera ⚠️
+              </span>
+            ) : isReady ? (
+              <span className="text-xs font-bold text-amber-400 bg-amber-500/10 border border-amber-500/30 px-3 py-1.5 rounded-lg flex items-center gap-1.5">
+                <i className="fas fa-user-search"></i> Looking for full face...
+              </span>
+            ) : null}
+          </div>
         </div>
 
         {/* Actions */}
         <div className="flex gap-4">
           <button
             onClick={onCancel}
-            className="flex-1 py-3 rounded-xl font-bold text-sm bg-slate-800 hover:bg-slate-700 text-white transition-all"
+            className="flex-1 py-3 rounded-xl font-bold text-sm bg-slate-800 hover:bg-slate-700 text-white transition-all cursor-pointer"
           >
             Cancel
           </button>
           <button
             onClick={handleProceed}
             disabled={!isReady || !!error || !hasAudioVerified || !hasFaceVerified}
-            className={`flex-1 py-3 rounded-xl font-bold text-sm transition-all shadow-lg ${isReady && !error && hasAudioVerified && hasFaceVerified
+            className={`flex-1 py-3 rounded-xl font-bold text-sm transition-all shadow-lg cursor-pointer ${isReady && !error && hasAudioVerified && hasFaceVerified
                 ? 'bg-primary hover:bg-primary-hover text-white shadow-primary/25 hover:shadow-primary/40 hover:-translate-y-0.5'
                 : 'bg-slate-700 text-slate-500 cursor-not-allowed shadow-none'
               }`}
