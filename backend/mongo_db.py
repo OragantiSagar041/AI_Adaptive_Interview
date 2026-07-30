@@ -20,9 +20,9 @@ client = MongoClient(
     connect=False,
     maxPoolSize=50,           # allow more concurrent connections
     minPoolSize=5,            # keep warm connections ready
-    serverSelectionTimeoutMS=2000,
-    connectTimeoutMS=2000,
-    socketTimeoutMS=5000,
+    serverSelectionTimeoutMS=5000,
+    connectTimeoutMS=5000,
+    socketTimeoutMS=30000,
     heartbeatFrequencyMS=10000,   # reduce heartbeat overhead
     retryWrites=True,
     compressors=["zstd", "zlib"],  # compress wire traffic
@@ -100,6 +100,8 @@ async def init_db_indexes():
     safe_create_index(candidates_collection, "name")
     safe_create_index(admins_collection, "username", unique=True)
     safe_create_index(interview_sessions_collection, "link_id", unique=True)
+    safe_create_index(interview_sessions_collection, [("company_id", 1), ("created_at", -1)])
+    safe_create_index(interview_sessions_collection, [("created_at", -1)])
     safe_create_index(answers_collection, [("interview_id", 1), ("question_id", 1)], unique=True)
     safe_create_index(interviews_collection, "id", unique=True)
     safe_create_index(plans_collection, "plan_name", unique=True)

@@ -9220,7 +9220,7 @@ async def get_dashboard_aggregated_data(
         
         # Restore candidate query since the frontend still expects candidates in this payload
         c_query_filter = {
-            "$or": [{"is_deactivated": False}, {"is_deactivated": {"$exists": False}}]
+            "is_deactivated": {"$ne": True}
         }
         if current_admin.get("role") != "master":
             c_query_filter["company_id"] = current_admin.get("company_id")
@@ -9229,28 +9229,33 @@ async def get_dashboard_aggregated_data(
         elif admin_id:
             c_query_filter["created_by"] = admin_id
             
-        candidate_projection = None
-        if summary_only:
-            candidate_projection = {
-                "link_id": 1,
-                "candidate_name": 1,
-                "candidate_email": 1,
-                "candidate_phone": 1,
-                "interview_title": 1,
-                "score": 1,
-                "avg_score": 1,
-                "status": 1,
-                "decision": 1,
-                "created_at": 1,
-                "expires_at": 1,
-                "started_at": 1,
-                "interview_duration": 1,
-                "is_deactivated": 1,
-            }
+        candidate_projection = {
+            "link_id": 1,
+            "candidate_name": 1,
+            "candidate_email": 1,
+            "candidate_phone": 1,
+            "email": 1,
+            "phone": 1,
+            "interview_title": 1,
+            "job_title": 1,
+            "score": 1,
+            "avg_score": 1,
+            "status": 1,
+            "decision": 1,
+            "created_at": 1,
+            "expires_at": 1,
+            "started_at": 1,
+            "interview_duration": 1,
+            "is_deactivated": 1,
+            "created_by": 1,
+            "omni_call_id": 1,
+        }
         def _load_dashboard_candidates():
             cursor = interview_sessions_collection.find(c_query_filter, candidate_projection).sort("created_at", -1)
             if summary_only:
                 cursor = cursor.limit(8)
+            else:
+                cursor = cursor.limit(500)
             return list(cursor)
 
         candidates_cursor = await asyncio.to_thread(_load_dashboard_candidates)
@@ -9272,7 +9277,17 @@ async def get_dashboard_aggregated_data(
                 "job_id": {"$in": job_ids}
             }
             if job_ids:
-                apps = await asyncio.to_thread(lambda: list(job_applications_collection.find(app_query)))
+                app_projection = {
+                    "email": 1,
+                    "score": 1,
+                    "name": 1,
+                    "phone": 1,
+                    "job_title": 1,
+                    "applied_at": 1,
+                    "updated_at": 1,
+                    "decision": 1
+                }
+                apps = await asyncio.to_thread(lambda: list(job_applications_collection.find(app_query, app_projection).limit(500)))
         except Exception as e:
             print(f"Error fetching AI Calling candidates: {e}")
             
@@ -9417,12 +9432,13 @@ async def get_dashboard_aggregated_data(
 
         # Pre-fetch candidate sessions for enrichment
         all_omni_call_ids = [str(o.get("id") or o.get("call_id") or "") for o in omni_calls]
-        matching_sessions = list(interview_sessions_collection.find({"omni_call_id": {"$in": all_omni_call_ids}}))
+        enrich_proj = {"omni_call_id": 1, "candidate_email": 1, "email": 1, "candidate_phone": 1, "phone": 1, "job_title": 1, "interview_title": 1, "candidate_name": 1, "created_at": 1}
+        matching_sessions = list(interview_sessions_collection.find({"omni_call_id": {"$in": all_omni_call_ids}}, enrich_proj))
         session_map = {str(s["omni_call_id"]): s for s in matching_sessions if s.get("omni_call_id")}
 
         # Name fallback map
         api_names = [o.get("candidate_name") for o in omni_calls if o.get("candidate_name")]
-        name_sessions = list(interview_sessions_collection.find({"candidate_name": {"$in": api_names}, "company_id": current_admin.get("company_id")}))
+        name_sessions = list(interview_sessions_collection.find({"candidate_name": {"$in": api_names}, "company_id": current_admin.get("company_id")}, enrich_proj))
         name_map = {s["candidate_name"].lower(): s for s in sorted(name_sessions, key=lambda x: x.get("created_at", ""), reverse=True) if s.get("candidate_name")}
 
         for o_call in omni_calls:
