@@ -2,9 +2,9 @@ import os
 import logging
 import json
 
-from app.celery_app import celery_app
-from analyze_answer import analyze_answer
-from mongo_db import (
+from app.core.celery_app import celery_app
+from app.ai.analyze_answer import analyze_answer
+from app.db.mongo_db import (
     answers_collection, 
     interviews_collection, 
     interview_sessions_collection,
@@ -133,7 +133,7 @@ def score_answer_task(
                 should_detect = True
 
             if should_detect:
-                from typed_ai_layer import detect_spoken_language
+                from app.ai.typed_ai_layer import detect_spoken_language
                 detected = detect_spoken_language(answer_text)
                 if detected and detected != "Unknown":
                     update_res = interview_sessions_collection.update_one(
@@ -190,7 +190,7 @@ def score_answer_task(
 
             # Composite score: blend with coding / case study if present
             try:
-                from score_rounds import compute_coding_score, compute_case_study_score, blend_scores
+                from app.ai.score_rounds import compute_coding_score, compute_case_study_score, blend_scores
                 session_rec = interview_sessions_collection.find_one({"interview_id": interview_id})
                 if not session_rec:
                     session_rec = interview_sessions_collection.find_one({"link_id": interview_id})
@@ -243,7 +243,7 @@ def score_answer_task(
                         
                         if locked_session:
                             # Generate Multi-Dimensional Analysis!
-                            from analyze_dimensions import analyze_interview_dimensions
+                            from app.ai.analyze_dimensions import analyze_interview_dimensions
                             transcript = [{"Q": a.get("question_text"), "A": a.get("answer_text")} for a in answers]
                             dimensions = analyze_interview_dimensions(transcript, context, language)
                             
@@ -344,7 +344,7 @@ def send_email_task(
     logger.info(f"Sending email via Celery to {candidate_email} (Attempt {self.request.retries + 1})")
 
     # Import here to avoid circular imports at module load time
-    from app.services import build_default_interview_email_html
+    from app.services.services import build_default_interview_email_html
 
     BREVO_API_KEY = os.getenv("BREVO_API_KEY", "")
     if not BREVO_API_KEY:
@@ -376,7 +376,7 @@ def send_email_task(
             "htmlContent": html_content,
         }
 
-        from app.services import should_attach_job_description_pdf, generate_job_description_pdf_base64
+        from app.services.services import should_attach_job_description_pdf, generate_job_description_pdf_base64
         if should_attach_job_description_pdf(job_description):
             payload["attachment"] = [{
                 "name": "job_description.pdf",
@@ -440,7 +440,7 @@ def generate_report_task(self, interview_id: str):
 def process_bulk_emails_task(self, jobs: list):
     logger.info(f"Processing {len(jobs)} bulk email jobs in Celery (Attempt {self.request.retries + 1})...")
     # Import here to avoid circular dependencies
-    from app.services import queue_or_send_interview_email
+    from app.services.services import queue_or_send_interview_email
     
     failures = []
     for job in jobs:

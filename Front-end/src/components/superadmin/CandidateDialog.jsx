@@ -1096,20 +1096,6 @@ export default function CandidateDialog({ candidate, open, onOpenChange, onStatu
             </button>
           </div>
 
-            <div className="px-6 py-2 border-b border-slate-100 bg-slate-50 flex items-center gap-2 shrink-0">
-              <button
-                onClick={() => setTranscriptTab('verbal')}
-                className={`px-4 py-2 rounded-lg text-sm font-bold transition-all ${transcriptTab === 'verbal' ? 'bg-indigo-600 text-white shadow-sm' : 'bg-transparent text-slate-500 hover:bg-slate-200'}`}
-              >
-                Verbal
-              </button>
-              <button
-                onClick={() => setTranscriptTab('coding')}
-                className={`px-4 py-2 rounded-lg text-sm font-bold transition-all ${transcriptTab === 'coding' ? 'bg-indigo-600 text-white shadow-sm' : 'bg-transparent text-slate-500 hover:bg-slate-200'}`}
-              >
-                Coding or Case Study
-              </button>
-            </div>
 
             <div className="flex-1 overflow-y-auto p-6">
               <div className="space-y-5">

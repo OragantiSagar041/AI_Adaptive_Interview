@@ -15,7 +15,7 @@ from typing import Any, Dict, List, Optional, Tuple
 
 from bson import ObjectId
 
-from mongo_db import (
+from app.db.mongo_db import (
     admins_collection,
     companies_collection,
     interview_sessions_collection,
