@@ -205,24 +205,23 @@ export const useInterviewSession = (sessionId, interviewType, startRoundTwo) => 
   }, [runResultData]);
 
   useEffect(() => {
-    if (currentQuestion?.type === 'coding' && currentQuestion?.codingTask) {
-      const task = currentQuestion.codingTask
-      const fn = task.function_name || 'solution'
-      const sig = task.starter_function_signature
+    const task = currentQuestion?.codingTask || currentQuestion || codingRoundData || {}
+    const fn = task.function_name || 'solution'
+    const sig = task.starter_function_signature
 
-      const templates = {
-        python: sig || task.starter_code || `def ${fn}(*args):\n    # Write your solution here\n    pass`,
-        javascript: `function ${fn}(...args) {\n    // Write your solution here\n    \n}`,
-        java: `public class Solution {\n    public static void ${fn}(String[] args) {\n        // Write your solution here\n    }\n}`,
-        cpp: `#include <iostream>\n#include <vector>\n#include <string>\nusing namespace std;\n\nvoid ${fn}() {\n    // Write your solution here\n}\n\nint main() {\n    ${fn}();\n    return 0;\n}`
-      }
-
-      const isDefault = !codeAnswer || Object.values(templates).some(tmpl => codeAnswer.trim() === tmpl.trim())
-      if (isDefault) {
-        setCodeAnswer(templates[selectedLanguage] || templates.python)
-      }
+    const templates = {
+      python: sig || task.starter_code || `def ${fn}(*args):\n    # Write your solution here\n    pass`,
+      javascript: `function ${fn}(...args) {\n    // Write your solution here\n    \n}`,
+      java: `public class Solution {\n    public static void ${fn}(String[] args) {\n        // Write your solution here\n    }\n}`,
+      cpp: `#include <iostream>\n#include <vector>\n#include <string>\nusing namespace std;\n\nvoid ${fn}() {\n    // Write your solution here\n}\n\nint main() {\n    ${fn}();\n    return 0;\n}`
     }
-  }, [currentQuestion, selectedLanguage])
+
+    const currentTmpl = templates[selectedLanguage] || templates.python
+    const isDefault = !codeAnswer || !codeAnswer.trim() || Object.values(templates).some(tmpl => codeAnswer.trim() === tmpl.trim())
+    if (isDefault) {
+      setCodeAnswer(currentTmpl)
+    }
+  }, [currentQuestion, selectedLanguage, codingRoundData])
 
   // Recording Ref elements
   const videoPreviewRef = useRef(null)
