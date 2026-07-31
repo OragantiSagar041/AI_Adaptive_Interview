@@ -198,37 +198,7 @@ export const InterviewTechnical = () => {
       }
 
       const iid = interviewId || sessionDetail?.interview_id || sessionId
-      let errorText = null
-
-      if (selectedLanguage === 'javascript') {
-        try {
-          new Function(codeAnswer)
-        } catch (err) {
-          errorText = `SyntaxError: ${err.message}`
-        }
-      } else if (selectedLanguage === 'python') {
-        let count = 0
-        for (let i = 0; i < codeAnswer.length; i++) {
-          if (codeAnswer[i] === '(') count++
-          if (codeAnswer[i] === ')') count--
-          if (count < 0) {
-            errorText = `SyntaxError: Unmatched closing parenthesis ')' at index ${i}`
-            break
-          }
-        }
-        if (count > 0 && !errorText) {
-          errorText = "SyntaxError: Unmatched opening parenthesis '(' (parenthesis was never closed)"
-        }
-      }
-
       const userStdout = extractStdout(codeAnswer, selectedLanguage)
-
-      if (errorText) {
-        setCodeOutputState(`Code Execution Result:\n❌ Execution Failed / Syntax Error\n\nError:\n${errorText}`)
-        setConsoleOutput(`Current Output:\n\nError:\n${errorText}`)
-        setCompiling(false)
-        return
-      }
 
       try {
         const payload = await api.post(`/coding-round/run`, {

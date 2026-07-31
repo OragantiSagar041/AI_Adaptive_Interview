@@ -253,11 +253,7 @@ export default function VoiceCodingRound({
     }
   }, [selectedLang, question])
 
-  const handleCodeChange = (newCode) => {
-    const val = newCode || ''
-    setCode(val)
-    codeByLangRef.current[selectedLang] = val
-  }
+
 
   const [aiStatus, setAiStatus] = useState('idle')  // idle | speaking | listening
   const [transcript, setTranscript] = useState('')
