@@ -1,6 +1,22 @@
 @import "tailwindcss";
 @import "tw-animate-css";
 
+/* ── Admin Shell Scroll Lock ─────────────────────────────────────────────────
+   When an admin layout (superadmin or regular admin) is rendered, the document
+   itself must NOT scroll — all scrolling should happen inside <main>.
+   We use the html[data-admin] attribute set by the layout to scope this safely.
+──────────────────────────────────────────────────────────────────────────── */
+html, body, #root {
+  height: 100%;
+}
+
+html.admin-layout,
+html.admin-layout body,
+html.admin-layout #root {
+  height: 100%;
+  overflow: hidden;
+}
+
 :root {
   --radius: 0.875rem;
   /* Deep blue stack */

@@ -122,6 +122,14 @@ export default function SuperAdminLayout() {
     }
   }, [token])
 
+  // Lock document-level scroll so only the inner <main> scrolls, not the page
+  useEffect(() => {
+    document.documentElement.classList.add('admin-layout')
+    return () => {
+      document.documentElement.classList.remove('admin-layout')
+    }
+  }, [])
+
   const handleMarkRead = async (id) => {
     try {
       const res = await markNotificationAsRead(id)
@@ -442,7 +450,7 @@ export default function SuperAdminLayout() {
 
   return (
     <SidebarProvider>
-      <div className="superadmin-theme min-h-screen bg-slate-50 text-slate-900 flex font-sans w-full overflow-hidden relative">
+      <div className="superadmin-theme h-screen bg-slate-50 text-slate-900 flex font-sans w-full overflow-hidden relative">
         {/* Global Premium Background Grid & Dynamic Accent Gradient */}
         <div className="absolute inset-0 z-0 pointer-events-none">
           {/* Full-page soft color wash that changes with the theme */}
