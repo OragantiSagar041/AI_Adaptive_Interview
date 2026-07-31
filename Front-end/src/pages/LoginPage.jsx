@@ -463,20 +463,20 @@ export default function LoginPage() {
         <div className="lp-waves-bg">
           <div className="lp-wave lp-w3">
             <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1440 160" preserveAspectRatio="none">
-              <path d={W3} fill="rgba(100,30,200,0.13)"/>
-              <path d={W3} fill="rgba(100,30,200,0.13)" transform="translate(720,0)"/>
+              <path d={W3} fill="rgba(100,30,200,0.13)" />
+              <path d={W3} fill="rgba(100,30,200,0.13)" transform="translate(720,0)" />
             </svg>
           </div>
           <div className="lp-wave lp-w2">
             <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1440 160" preserveAspectRatio="none">
-              <path d={W2} fill="rgba(120,50,210,0.20)"/>
-              <path d={W2} fill="rgba(120,50,210,0.20)" transform="translate(720,0)"/>
+              <path d={W2} fill="rgba(120,50,210,0.20)" />
+              <path d={W2} fill="rgba(120,50,210,0.20)" transform="translate(720,0)" />
             </svg>
           </div>
           <div className="lp-wave lp-w1">
             <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1440 160" preserveAspectRatio="none">
-              <path d={W1} fill="rgba(139,92,246,0.32)"/>
-              <path d={W1} fill="rgba(139,92,246,0.32)" transform="translate(720,0)"/>
+              <path d={W1} fill="rgba(139,92,246,0.32)" />
+              <path d={W1} fill="rgba(139,92,246,0.32)" transform="translate(720,0)" />
             </svg>
           </div>
         </div>
