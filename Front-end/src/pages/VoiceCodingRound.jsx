@@ -211,8 +211,50 @@ export default function VoiceCodingRound({
   duration,
   onComplete
 }) {
-  const [code, setCode] = useState(question?.codingTask?.starter_code || '# Write your solution here\n\n')
+  const getBoilerplateCode = (lang, task) => {
+    const funcName = task?.function_name || 'solution';
+    const sig = task?.starter_function_signature;
+    
+    if (lang === 'python') {
+      return sig || task?.starter_code || `def ${funcName}(*args):\n    # Write your Python solution here\n    pass`;
+    }
+    if (lang === 'javascript') {
+      return `function ${funcName}(...args) {\n    // Write your JavaScript solution here\n    \n}`;
+    }
+    if (lang === 'java') {
+      return `public class Solution {\n    public static void ${funcName}(String[] args) {\n        // Write your Java solution here\n    }\n}`;
+    }
+    if (lang === 'cpp') {
+      return `#include <iostream>\n#include <vector>\n#include <string>\nusing namespace std;\n\nvoid ${funcName}() {\n    // Write your C++ solution here\n}\n\nint main() {\n    ${funcName}();\n    return 0;\n}`;
+    }
+    if (lang === 'typescript') {
+      return `function ${funcName}(...args: any[]): any {\n    // Write your TypeScript solution here\n    \n}`;
+    }
+    if (lang === 'go') {
+      return `package main\n\nimport "fmt"\n\nfunc main() {\n    // Write your Go solution here\n}`;
+    }
+    if (lang === 'rust') {
+      return `fn main() {\n    // Write your Rust solution here\n}`;
+    }
+    return `# Write your solution here\n`;
+  };
+
   const [selectedLang, setSelectedLang] = useState('python')
+  const codeByLangRef = useRef({})
+  const [code, setCode] = useState(() => getBoilerplateCode('python', question?.codingTask))
+
+  useEffect(() => {
+    if (!codeByLangRef.current[selectedLang]) {
+      const tmpl = getBoilerplateCode(selectedLang, question?.codingTask)
+      codeByLangRef.current[selectedLang] = tmpl
+      setCode(tmpl)
+    } else {
+      setCode(codeByLangRef.current[selectedLang])
+    }
+  }, [selectedLang, question])
+
+
+
   const [aiStatus, setAiStatus] = useState('idle')  // idle | speaking | listening
   const [transcript, setTranscript] = useState('')
   const [detectedPatterns, setDetectedPatterns] = useState(new Set())
@@ -824,15 +866,28 @@ export default function VoiceCodingRound({
           </div>
 
           {/* Monaco */}
-          <div className="flex-1 overflow-hidden">
-            <Suspense fallback={<div className="flex h-full items-center justify-center text-white/50 text-sm">Loading Editor...</div>}>
+          <div className="flex-1 overflow-hidden min-h-[380px] relative z-10">
+            <Suspense fallback={
+              <div className="flex h-[380px] w-full items-center justify-center text-white/50 text-sm bg-[#0d1117]">
+                Loading IDE Editor...
+              </div>
+            }>
               <Editor
                 height="100%"
                 language={selectedLang === 'cpp' ? 'cpp' : selectedLang}
                 value={code}
                 onChange={handleCodeChange}
+                onMount={(editor) => {
+                  try {
+                    editor.focus();
+                  } catch (e) {}
+                }}
                 theme="vs-dark"
                 options={{
+                  readOnly: false,
+                  domReadOnly: false,
+                  cursorBlinking: 'blink',
+                  cursorStyle: 'line',
                   fontSize: 14,
                   fontFamily: "'JetBrains Mono', 'Fira Code', monospace",
                   minimap: { enabled: false },
