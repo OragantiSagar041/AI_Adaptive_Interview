@@ -1668,7 +1668,7 @@ YOU MUST SUPPORT:
 7. Admin creation (routing to the 'create_admin' action).
 8. Credit management (routing to 'request_credits', 'transfer_credits', or 'buy_credits' actions).
 9. Interview creation (routing to the 'create_interview' action by extracting candidate details from resume and JD).
-10. Dynamic candidate querying (routing to the 'query_candidates' action). You MUST use this action whenever the user asks to filter or search for candidates (e.g. by dates, scores, decision, or status), because the static context only has the 20 most recent candidates and lacks date details.
+10. Dynamic candidate querying (routing to the 'query_candidates' action). You MUST use this action whenever the user asks to find a candidate by name (e.g. "Deekshitha"), view a candidate profile, or filter/search candidates (by dates, scores, decision, or status).
 11. Job creation (routing to the 'create_job' action).
 12. Automated integrations (routing to the 'integrate_platform' action) when the user asks to integrate an external platform (like ATS, Slack, Workday, etc.). You must provide the manual process steps inside the JSON.
 13. Platform security & firewall queries (answering questions about security IP whitelist addresses using the context data below).
@@ -1690,7 +1690,7 @@ CRITICAL RULES:
    - buy_credits: Available for super_admin only. Schema: `{{"action": "buy_credits", "amount": ...}}`
    - create_admin: Available for super_admin only. Schema: `{{"action": "create_admin", "username": "...", "email": "..."}}`
    - create_interview: Available for admin and super_admin. Schema: `{{"action": "create_interview", "candidate_name": "...", "candidate_email": "...", "resume_text": "...", "job_description": "...", "experience": "...", "location": "...", "current_ctc": "...", "expected_ctc": "..."}}`
-   - query_candidates: Available for admin and super_admin. Schema: `{{"action": "query_candidates", "start_date": "YYYY-MM-DD", "end_date": "YYYY-MM-DD", "status": "completed/pending", "decision": "qualified/rejected", "min_score": 50}}`. Omit any filters the user didn't specify.
+   - query_candidates: Available for admin and super_admin. Schema: `{{"action": "query_candidates", "candidate_name": "...", "start_date": "YYYY-MM-DD", "end_date": "YYYY-MM-DD", "status": "completed/pending", "decision": "qualified/rejected", "min_score": 50}}`. Omit any filters the user didn't specify.
    - create_job: Available for admin and super_admin. Schema: `{{"action": "create_job", "title": "...", "experience": "...", "skills": "...", "description": "..."}}`
    - integrate_platform: Available for admin and super_admin. Schema: `{{"action": "integrate_platform", "platform_name": "...", "process_steps": "1. step 1\n2. step 2..."}}`
    - connect_app: Available for admin and super_admin. Schema: `{{"action": "connect_app", "platform_name": "..."}}`
@@ -1825,7 +1825,11 @@ CRITICAL RULES:
                         decision = action_data.get("decision")
                         min_score = action_data.get("min_score")
                         
+                        candidate_name_filter = action_data.get("candidate_name")
+                        
                         query = {}
+                        if candidate_name_filter:
+                            query["candidate_name"] = {"$regex": str(candidate_name_filter).strip(), "$options": "i"}
                         if role == "admin":
                             query["created_by"] = admin_id
                         elif role in ["super_admin", "master"] and company_id:
