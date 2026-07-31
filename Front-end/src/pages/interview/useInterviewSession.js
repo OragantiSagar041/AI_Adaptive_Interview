@@ -90,6 +90,7 @@ export const useInterviewSession = (sessionId, interviewType, startRoundTwo) => 
   // Proctoring/Recording states
   const [isMediaReady, setIsMediaReady] = useState(false)
   const [proctoringAlert, setProctoringAlert] = useState('')
+  const [securityMessage, setSecurityMessage] = useState('')
   const [noiseAlertCount, setNoiseAlertCount] = useState(0)
   const noiseAlertCountRef = useRef(0)
   const isSubmittingRef = useRef(false)
@@ -1316,25 +1317,8 @@ export const useInterviewSession = (sessionId, interviewType, startRoundTwo) => 
 
       setProctoringAlert(v.message)
       setTimeout(() => setProctoringAlert(''), 3000)
-      if (v.type !== 'noise_alert') {
-        Swal.fire({
-          icon: 'warning',
-          title: '⚠️ Proctoring Alert',
-          text: v.message,
-          toast: true,
-          position: 'top-end',
-          showConfirmButton: false,
-          timer: 3000,
-          background: '#161c2d',
-          color: '#fff',
-          customClass: {
-            popup: 'z-[99999]'
-          }
-        })
-      }
     }
-  });
-
+  })
   const telemetryRoundType = currentQuestion?.type === 'case_study'
     ? 'case_study'
     : (startRoundTwo || currentQuestion?.type === 'coding' ? 'coding' : 'verbal')
@@ -1424,20 +1408,8 @@ export const useInterviewSession = (sessionId, interviewType, startRoundTwo) => 
       if (!recorded) return // throttled — skip duplicate popups
 
       const message = SCREENSHOT_ALERT_MESSAGES[v.type] || 'Screenshots are not allowed during this interview.'
-      setProctoringAlert(message)
-      setTimeout(() => setProctoringAlert(''), 4000)
-      Swal.fire({
-        icon: 'warning',
-        title: '📸 Screenshots Not Allowed',
-        text: message,
-        toast: true,
-        position: 'top-end',
-        showConfirmButton: false,
-        timer: 4000,
-        background: '#161c2d',
-        color: '#fff',
-        customClass: { popup: 'z-[99999]' }
-      })
+      setSecurityMessage(message)
+      setTimeout(() => setSecurityMessage(''), 4000)
     }
   })
   // Track lip sync anomaly (audio is active but mouth isn't moving — suggests a
@@ -1458,17 +1430,8 @@ export const useInterviewSession = (sessionId, interviewType, startRoundTwo) => 
       lipSyncCooldownRef.current = now + 8000
       lipSyncStreakRef.current = 0
       recordAlertMetric('lip_sync')
-      Swal.fire({
-        icon: 'warning',
-        title: '⚠️ Proctoring Alert',
-        text: 'Audio detected without matching lip movement',
-        toast: true,
-        position: 'top-end',
-        showConfirmButton: false,
-        timer: 3000,
-        background: '#161c2d',
-        color: '#fff',
-      })
+      setProctoringAlert('Audio detected without matching lip movement')
+      setTimeout(() => setProctoringAlert(''), 3000)
     }
   }, [proctoring.jawOpenScore, proctoring.checkLipSync])
 
@@ -1479,20 +1442,8 @@ export const useInterviewSession = (sessionId, interviewType, startRoundTwo) => 
       const recorded = await recordAlertMetric(type)
       if (!recorded) return  // throttled by recordAlertMetric's 5-second per-type gate
 
-      setProctoringAlert(message)
-      setTimeout(() => setProctoringAlert(''), 4000)
-      Swal.fire({
-        icon: 'warning',
-        title: '⚠️ Security Alert',
-        text: message,
-        toast: true,
-        position: 'top-end',
-        showConfirmButton: false,
-        timer: 4000,
-        background: '#161c2d',
-        color: '#fff',
-        customClass: { popup: 'z-[99999]' }
-      })
+      setSecurityMessage(message)
+      setTimeout(() => setSecurityMessage(''), 4000)
     },
   })
 
@@ -2488,6 +2439,7 @@ export const useInterviewSession = (sessionId, interviewType, startRoundTwo) => 
     faceAlertCount,
     noiseAlertCount,
     showNoiseBanner,
+    securityMessage,
     fullscreenWarning,
     screenShareWarning,
     screenShareViolations,
