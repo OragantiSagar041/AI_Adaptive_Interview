@@ -5,6 +5,7 @@
     "moduleResolution": "bundler",
     "jsx": "react-jsx",
     "checkJs": false,
+    "ignoreDeprecations": "6.0",
     "forceConsistentCasingInFileNames": false,
     "baseUrl": ".",
     "paths": {

@@ -279,7 +279,7 @@ export default function VoiceInterviewPage() {
     total_questions: questions.length || 0,
     question_text: questions[currentQIdx] ? questions[currentQIdx].question_text : ''
   }
-  useCandidateWebRTC(linkId, cameraStreamRef, telemetryData, monitoringToken)
+  useCandidateWebRTC(linkId, cameraStreamRef, telemetryData, monitoringToken, mediaStreamRef)
 
   // Refs
   const recognitionRef = useRef(null)

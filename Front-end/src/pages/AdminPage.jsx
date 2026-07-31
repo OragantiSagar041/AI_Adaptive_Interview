@@ -172,6 +172,17 @@ export default function AdminPage({ role: initialRole = 'admin' }) {
     }
   }, [tabParam, dispatch])
 
+  useEffect(() => {
+    if (!liveResultsModalOpen || !token) return
+
+    dispatch(loadDashboardData(selectedAdminId))
+    const refreshTimer = setInterval(() => {
+      dispatch(loadDashboardData(selectedAdminId))
+    }, 5000)
+
+    return () => clearInterval(refreshTimer)
+  }, [dispatch, liveResultsModalOpen, selectedAdminId, token])
+
   // Accent color state
   const [accentName, setAccentName] = useState('indigo')
 

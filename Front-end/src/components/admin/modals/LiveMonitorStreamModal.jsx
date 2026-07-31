@@ -51,9 +51,11 @@ const buildRemoteViewStream = (stream, mode) => {
   let selectedVideoTrack = null
 
   if (mode === 'camera') {
-    selectedVideoTrack = videoTracks.find(track => getTrackType(track) === 'camera') || videoTracks[1] || videoTracks[0]
+    selectedVideoTrack = videoTracks.find(track => getTrackType(track) === 'camera') || videoTracks[0] || videoTracks[1]
   } else {
-    selectedVideoTrack = videoTracks.find(track => getTrackType(track) === 'screen') || videoTracks[0]
+    // Candidate publishers add camera first and screen second. Browser track
+    // labels are inconsistent across devices, so preserve that order fallback.
+    selectedVideoTrack = videoTracks.find(track => getTrackType(track) === 'screen') || videoTracks[1] || videoTracks[0]
   }
 
   if (!selectedVideoTrack) {
@@ -171,19 +173,11 @@ export default function LiveMonitorStreamModal({ isOpen, onClose, session }) {
       }
 
       pc.ontrack = (e) => {
-        const incomingStream = e.streams && e.streams[0]
-          ? e.streams[0]
-          : e.track
-            ? new MediaStream([e.track])
-            : null
-
-        if (incomingStream) {
-          setRemoteStream(incomingStream)
-          clearTimeout(streamTimeoutRef.current)
-          if (mountedRef.current) setStatus('streaming')
-        } else {
-          updateRemoteStreamFromReceivers()
-        }
+        // Camera and screen are published from separate MediaStreams. Using
+        // e.streams[0] would keep only the first stream and hide the other one.
+        updateRemoteStreamFromReceivers()
+        clearTimeout(streamTimeoutRef.current)
+        if (mountedRef.current) setStatus('streaming')
       }
 
       pc.onaddstream = (e) => {
@@ -203,7 +197,10 @@ export default function LiveMonitorStreamModal({ isOpen, onClose, session }) {
         }
       }
 
-      // We only receive — candidate pushes the tracks
+      // The candidate publishes two video tracks: camera first, screen second.
+      // Advertise both receive slots so the screen track is negotiated instead
+      // of being dropped by the single-video offer.
+      pc.addTransceiver('video', { direction: 'recvonly' })
       pc.addTransceiver('video', { direction: 'recvonly' })
       pc.addTransceiver('audio', { direction: 'recvonly' })
 
@@ -312,7 +309,7 @@ export default function LiveMonitorStreamModal({ isOpen, onClose, session }) {
 
   const videoTracks = remoteStream?.getVideoTracks() || []
   const hasCameraTrack = trackAvailability.camera
-  const hasScreenTrack = trackAvailability.screen || videoTracks.length > 0
+  const hasScreenTrack = trackAvailability.screen
 
   useEffect(() => {
     if (!remoteStream) {
@@ -320,8 +317,8 @@ export default function LiveMonitorStreamModal({ isOpen, onClose, session }) {
       return
     }
 
-    const cameraFound = videoTracks.some(track => getTrackType(track) === 'camera')
-    const screenFound = videoTracks.some(track => getTrackType(track) === 'screen')
+    const cameraFound = videoTracks.some(track => getTrackType(track) === 'camera') || videoTracks.length >= 1
+    const screenFound = videoTracks.some(track => getTrackType(track) === 'screen') || videoTracks.length >= 2
     setTrackAvailability({ camera: cameraFound, screen: screenFound })
   }, [remoteStream, videoTracks.length])
 

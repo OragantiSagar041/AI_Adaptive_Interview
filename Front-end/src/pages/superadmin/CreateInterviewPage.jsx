@@ -2712,8 +2712,20 @@ Congratulations! You have been selected for an AI-powered interview. Please revi
                       <Button
                         variant="secondary"
                         className="px-3.5 py-1.5 text-xs h-[32px] border-slate-200 rounded-lg bg-white shadow-sm"
-                        onClick={() => {
-                          navigator.clipboard.writeText(`${window.location.origin}/interview?session_id=${link.id}`)
+                        onClick={async () => {
+                          const linkUrl = `${window.location.origin}/interview?session_id=${link.id}`
+                          try {
+                            await navigator.clipboard.writeText(linkUrl)
+                          } catch {
+                            const input = document.createElement('textarea')
+                            input.value = linkUrl
+                            input.style.position = 'fixed'
+                            input.style.opacity = '0'
+                            document.body.appendChild(input)
+                            input.select()
+                            document.execCommand('copy')
+                            input.remove()
+                          }
                           Swal.fire({
                             title: 'Link Copied',
                             text: 'Copied link to clipboard!',

@@ -276,6 +276,9 @@ export function useProctoring({
   return {
     ...state,
     alertCount,
+    checkLipSync: useCallback((jawOpenScore, audioActive) => (
+      Boolean(audioActive) && Number(jawOpenScore || 0) < 0.08
+    ), []),
     resetAlerts: useCallback(() => {
       alertCountRef.current = 0
       setAlertCount(0)
