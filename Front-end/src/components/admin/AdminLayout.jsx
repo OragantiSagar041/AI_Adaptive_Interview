@@ -176,8 +176,8 @@ export default function AdminLayout({
     }
   }
 
-  const navItems = [
-    { id: 'dashboard', label: 'Overview Dashboard', icon: LayoutDashboard, path: '/admin/dashboard' },
+  const baseNavItems = [
+    { id: 'dashboard', label: 'Dashboard', icon: LayoutDashboard, path: '/admin/dashboard' },
     { id: 'interviews', label: 'Interviews', icon: ClipboardList, path: '/admin/interviews' },
     { id: 'qualified', label: 'Qualified Candidates', icon: CheckCircle, path: '/admin/qualified-candidates' },
     { id: 'rejected', label: 'Rejected Candidates', icon: XCircle, path: '/admin/rejected-candidates' },
@@ -185,8 +185,12 @@ export default function AdminLayout({
     { id: 'ai-calling', label: 'AI Calling Agent', icon: Radio, path: '/admin/ai-calling' },
 
     { id: 'jobs', label: 'Jobs', icon: Briefcase, path: '/admin/jobs' },
-    { id: 'settings', label: 'Profile Settings', icon: Settings, path: '/admin/profile-settings' },
+    { id: 'settings', label: 'Settings', icon: Settings, path: '/admin/profile-settings' },
   ]
+  const userFeatures = adminUser?.plan_features
+  const navItems = userFeatures 
+    ? baseNavItems.filter(item => userFeatures.includes(item.label))
+    : baseNavItems
 
   return (
     <div className="h-screen bg-slate-50 text-slate-900 flex font-sans overflow-hidden">

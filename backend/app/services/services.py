@@ -190,6 +190,22 @@ def normalize_plan_key(plan_name: Optional[str]) -> str:
 def get_plan_definition(plan_name: Optional[str]) -> Dict[str, Any]:
     plan_key = normalize_plan_key(plan_name)
     base = PLAN_DEFINITIONS.get(plan_key, PLAN_DEFINITIONS["trial"])
+    
+    db_plan = plans_collection.find_one({"plan_name": plan_name})
+    if not db_plan:
+        db_plan = plans_collection.find_one({"plan_key": plan_key})
+        
+    if db_plan:
+        return {
+            "plan_key": plan_key,
+            "label": db_plan.get("plan_name", base["label"]),
+            "credits_granted": db_plan.get("credits_granted", base["credits_granted"]),
+            "price": db_plan.get("price", base["price"]),
+            "summary": db_plan.get("summary", base["summary"]),
+            "features": list(db_plan.get("features", base["features"])),
+            "capabilities": dict(db_plan.get("capabilities", base["capabilities"])),
+        }
+
     return {
         "plan_key": plan_key,
         "label": base["label"],

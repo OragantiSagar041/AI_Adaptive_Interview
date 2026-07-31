@@ -14,11 +14,18 @@ axios.interceptors.response.use(
   (response) => response,
   (error) => {
     if (error.response?.status === 401 && !window.__hireIqAuthRedirecting) {
-      const isCandidatePath = window.location.pathname.startsWith('/voice-interview') || 
+      const requestUrl = String(error.config?.url || error.response?.config?.url || '')
+
+      // Never auto-redirect on login/auth endpoints — these 401s are handled
+      // by the login form itself (e.g. wrong password, or master-login probe).
+      const isLoginRoute = /\/(master|admin)\/(login|forgot-password|verify-otp|reset-password)/i.test(requestUrl)
+
+      const isCandidatePath = window.location.pathname.startsWith('/voice-interview') ||
                               window.location.pathname.startsWith('/interview') ||
                               window.location.pathname.startsWith('/case-study') ||
-                              window.location.pathname.startsWith('/apply');
-      if (!isCandidatePath) {
+                              window.location.pathname.startsWith('/apply')
+
+      if (!isLoginRoute && !isCandidatePath) {
         window.__hireIqAuthRedirecting = true
         store.dispatch(logout())
         localStorage.removeItem('auth')

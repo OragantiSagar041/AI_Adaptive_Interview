@@ -134,6 +134,14 @@ export default function MasterLayout() {
     }
   }, [])
 
+  // Lock document-level scroll so only the inner <main> scrolls, not the page
+  useEffect(() => {
+    document.documentElement.classList.add('admin-layout')
+    return () => {
+      document.documentElement.classList.remove('admin-layout')
+    }
+  }, [])
+
   const accentColors = {
     teal: { primary: '#0d9488', hover: '#0f766e', glow: 'rgba(13, 148, 136, 0.15)' },
     indigo: { primary: '#6366f1', hover: '#4f46e5', glow: 'rgba(99, 102, 241, 0.15)' },
@@ -178,7 +186,7 @@ export default function MasterLayout() {
   }
 
   return (
-    <div className="min-h-screen bg-slate-50 text-slate-900 flex font-sans overflow-hidden">
+    <div className="h-screen bg-slate-50 text-slate-900 flex font-sans overflow-hidden">
       {/* Sidebar */}
       <aside className="hidden w-64 shrink-0 border-r border-slate-200 bg-white md:flex flex-col h-screen">
         {/* Brand / Logo */}
