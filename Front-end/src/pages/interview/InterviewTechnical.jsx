@@ -1,8 +1,9 @@
 import React, { useState, useRef, useEffect, lazy, Suspense } from 'react'
 import { useSearchParams, Link } from 'react-router-dom'
-import { Video, Volume2, ArrowRight, ShieldAlert, Cpu, AlertTriangle, RefreshCw } from 'lucide-react'
+import { Video, ArrowRight, ShieldAlert, Cpu, AlertTriangle, RefreshCw } from 'lucide-react'
 import { useInterviewSession } from './useInterviewSession'
 import DeviceCheckModal from '../../components/DeviceCheckModal'
+import ProctoringAlerts from '../../components/interview/ProctoringAlerts'
 import { API_BASE_URL } from '../../apiConfig'
 import { candidateFetch } from '../../utils/candidateAuth'
 import api from '../../utils/api'
@@ -697,6 +698,8 @@ export const InterviewTechnical = () => {
     faceAlertCount,
     noiseAlertCount,
     showNoiseBanner,
+    securityMessage,
+    modelsFailed,
     fullscreenWarning,
     screenShareWarning,
     screenShareViolations,
@@ -1063,27 +1066,15 @@ export const InterviewTechnical = () => {
         </div>
       )}
 
-      {/* Alerts */}
-      {showNoiseBanner && (
-        <div style={{ position: 'fixed', top: '20px', right: '20px', zIndex: 99999, padding: '16px', borderRadius: '12px', background: 'rgba(245, 158, 11, 0.1)', border: '1px solid #f59e0b', color: '#f59e0b', display: 'flex', alignItems: 'center', gap: '12px', boxShadow: '0 4px 6px rgba(0,0,0,0.1)', maxWidth: '380px' }}>
-          <Volume2 size={20} style={{ animation: 'bounce 1s infinite' }} />
-          <div>
-            <strong style={{ fontSize: '14px', display: 'block' }}>Background Noise Alert</strong>
-            <p style={{ fontSize: '12px', opacity: 0.9, margin: '2px 0 0 0' }}>Please maintain silence. Alerts: {noiseAlertCount}/10</p>
-          </div>
-        </div>
-      )}
-
-      {/* Face / Proctoring Alert Banner */}
-      {faceAlertCount > 0 && (
-        <div style={{ position: 'fixed', top: showNoiseBanner ? '100px' : '20px', right: '20px', zIndex: 99998, padding: '14px 16px', borderRadius: '12px', background: 'rgba(239, 68, 68, 0.1)', border: '1px solid #ef4444', color: '#ef4444', display: 'flex', alignItems: 'center', gap: '12px', boxShadow: '0 4px 6px rgba(0,0,0,0.15)', maxWidth: '380px', transition: 'top 0.3s ease' }}>
-          <span style={{ fontSize: '18px' }}>👁️</span>
-          <div>
-            <strong style={{ fontSize: '14px', display: 'block' }}>Face Alert</strong>
-            <p style={{ fontSize: '12px', opacity: 0.9, margin: '2px 0 0 0' }}>{proctoringAlert || 'Proctoring violation detected'}. Alerts: {faceAlertCount}/20</p>
-          </div>
-        </div>
-      )}
+      {/* ── Proctoring Alert Pills (portal-mounted, never overlaps page content) ── */}
+      <ProctoringAlerts
+        faceAlertCount={faceAlertCount}
+        noiseAlertCount={noiseAlertCount}
+        showNoiseBanner={showNoiseBanner}
+        securityMessage={securityMessage}
+        proctoringAlert={proctoringAlert}
+        modelsFailed={modelsFailed}
+      />
 
       {fullscreenWarning && (
         <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.95)', zIndex: 99999, display: 'flex', flexDirection: 'column', justifyContent: 'center', alignItems: 'center', gap: '20px', textAlign: 'center', padding: '24px' }}>
