@@ -501,23 +501,32 @@ export const InterviewTechnical = () => {
               <button className="ip-btn-next" style={{ padding: '8px 20px', marginLeft: 'auto', background: '#10b981', color: '#fff', fontWeight: '700', borderRadius: '8px', border: 'none', cursor: 'pointer' }} onClick={handleRunCode}>Run & Evaluate</button>
             </div>
 
-            <div className="coding-editor-wrap" style={{ flexGrow: 1, display: 'flex', flexDirection: 'column', minHeight: '340px', overflow: 'hidden' }}>
+            <div className="coding-editor-wrap" style={{ flexGrow: 1, display: 'flex', flexDirection: 'column', minHeight: '380px', height: '100%', overflow: 'hidden', position: 'relative', zIndex: 1 }}>
               <Suspense fallback={
                 <textarea
-                  style={{ width: '100%', height: '100%', padding: '16px', fontFamily: 'Consolas, monospace', fontSize: '14px', background: '#0d1117', color: '#34d399', border: 'none', outline: 'none', resize: 'none' }}
+                  style={{ width: '100%', height: '100%', minHeight: '380px', padding: '16px', fontFamily: 'Consolas, monospace', fontSize: '14px', background: '#0d1117', color: '#34d399', border: 'none', outline: 'none', resize: 'none' }}
                   value={codeAnswer}
                   onChange={(e) => setCodeAnswer(e.target.value)}
-                  placeholder="Loading IDE Editor..."
+                  placeholder="Type your code solution here..."
+                  autoFocus
                 />
               }>
                 <MonacoEditor
                   height="100%"
-                  minHeight="340px"
                   language={selectedLanguage === 'cpp' ? 'cpp' : selectedLanguage === 'java' ? 'java' : selectedLanguage === 'javascript' ? 'javascript' : 'python'}
                   value={codeAnswer}
                   onChange={(val) => setCodeAnswer(val || '')}
+                  onMount={(editor) => {
+                    try {
+                      editor.focus();
+                    } catch (e) {}
+                  }}
                   theme="vs-light"
                   options={{
+                    readOnly: false,
+                    domReadOnly: false,
+                    cursorBlinking: 'blink',
+                    cursorStyle: 'line',
                     fontSize: 14,
                     minimap: { enabled: false },
                     scrollBeyondLastLine: false,

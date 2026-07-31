@@ -870,15 +870,32 @@ export default function VoiceCodingRound({
           </div>
 
           {/* Monaco */}
-          <div className="flex-1 overflow-hidden">
-            <Suspense fallback={<div className="flex h-full items-center justify-center text-white/50 text-sm">Loading Editor...</div>}>
+          <div className="flex-1 overflow-hidden min-h-[380px] relative z-10">
+            <Suspense fallback={
+              <textarea
+                className="w-full h-full p-4 font-mono text-sm bg-[#0d1117] text-emerald-400 border-none outline-none resize-none"
+                value={code}
+                onChange={(e) => handleCodeChange(e.target.value)}
+                placeholder="Type your code solution here..."
+                autoFocus
+              />
+            }>
               <Editor
                 height="100%"
                 language={selectedLang === 'cpp' ? 'cpp' : selectedLang}
                 value={code}
                 onChange={handleCodeChange}
+                onMount={(editor) => {
+                  try {
+                    editor.focus();
+                  } catch (e) {}
+                }}
                 theme="vs-dark"
                 options={{
+                  readOnly: false,
+                  domReadOnly: false,
+                  cursorBlinking: 'blink',
+                  cursorStyle: 'line',
                   fontSize: 14,
                   fontFamily: "'JetBrains Mono', 'Fira Code', monospace",
                   minimap: { enabled: false },
