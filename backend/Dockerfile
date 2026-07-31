@@ -22,6 +22,11 @@ RUN apt-get purge -y --auto-remove build-essential gcc \
 # Copy backend code
 COPY . .
 
+# Copy entrypoint script that fetches .env from S3 at container start
+COPY entrypoint.sh /app/entrypoint.sh
+COPY fetch_env.py /app/fetch_env.py
+RUN chmod +x /app/entrypoint.sh
+
 # Ensure /tmp exists with full permissions, create user and set ownership
 RUN mkdir -p /tmp && chmod 1777 /tmp \
     && useradd --create-home --uid 10001 appuser \
@@ -36,5 +41,5 @@ ENV TMPDIR=/tmp
 # Expose port
 EXPOSE 8000
 
-# Start command using PORT environment variable for Render
-CMD sh -c "uvicorn main:app --host 0.0.0.0 --port ${PORT:-8000}"
+# Fetch .env from S3, then start the app
+ENTRYPOINT ["/app/entrypoint.sh"]
