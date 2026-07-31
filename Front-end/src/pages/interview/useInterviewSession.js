@@ -207,23 +207,19 @@ export const useInterviewSession = (sessionId, interviewType, startRoundTwo) => 
   useEffect(() => {
     if (currentQuestion?.type === 'coding' && currentQuestion?.codingTask) {
       const task = currentQuestion.codingTask
+      const fn = task.function_name || 'solution'
+      const sig = task.starter_function_signature
+
       const templates = {
-        python: task.starter_function_signature || `def ${task.function_name || 'winner'}(donuts, starter):\n    # Write your code here\n    pass`,
-        javascript: task.function_name === 'winner'
-          ? `function winner(donuts, starter) {\n    // Write your code here\n    \n}`
-          : task.function_name === 'find_duplicates'
-            ? `function find_duplicates(records) {\n    // Write your code here\n    \n}`
-            : `function debounceSimulation(calls, delay) {\n    // Write your code here\n    \n}`,
-        cpp: task.function_name === 'winner'
-          ? `#include <vector>\n#include <string>\n\nstd::vector<std::string> winner(std::vector<int> donuts, std::vector<std::string> starter) {\n    // Write your code here\n    \n}`
-          : task.function_name === 'find_duplicates'
-            ? `#include <vector>\n#include <string>\n\nstd::vector<std::string> findDuplicates(std::vector<std::string> records) {\n    // Write your code here\n    \n}`
-            : `#include <vector>\n\nint debounceSimulation(std::vector<int> calls, int delay) {\n    // Write your code here\n    \n}`
+        python: sig || task.starter_code || `def ${fn}(*args):\n    # Write your solution here\n    pass`,
+        javascript: `function ${fn}(...args) {\n    // Write your solution here\n    \n}`,
+        java: `public class Solution {\n    public static void ${fn}(String[] args) {\n        // Write your solution here\n    }\n}`,
+        cpp: `#include <iostream>\n#include <vector>\n#include <string>\nusing namespace std;\n\nvoid ${fn}() {\n    // Write your solution here\n}\n\nint main() {\n    ${fn}();\n    return 0;\n}`
       }
 
       const isDefault = !codeAnswer || Object.values(templates).some(tmpl => codeAnswer.trim() === tmpl.trim())
       if (isDefault) {
-        setCodeAnswer(templates[selectedLanguage] || '')
+        setCodeAnswer(templates[selectedLanguage] || templates.python)
       }
     }
   }, [currentQuestion, selectedLanguage])

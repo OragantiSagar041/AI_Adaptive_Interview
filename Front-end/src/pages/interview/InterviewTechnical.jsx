@@ -467,17 +467,9 @@ export const InterviewTechnical = () => {
             </div>
           </div>
 
-          <div className="coding-editor-card" style={{ display: 'flex', flexDirection: 'column', height: '100%', overflow: 'hidden' }}>
-            <div className="coding-editor-topbar" style={{ display: 'flex', justifyContent: 'space-between', borderBottom: '1px solid #e2e8f0', padding: '0 16px', flexShrink: 0 }}>
-              <div className="coding-right-tabs" style={{ display: 'flex', gap: '24px' }}>
-                <button onClick={() => setActiveRightTab('code')} className={`coding-right-tab ${activeRightTab === 'code' ? 'active' : ''}`} style={activeRightTab === 'code' ? { borderBottom: '2px solid var(--primary-color)', color: 'var(--text-main)', fontWeight: '600', padding: '16px 0', background: 'transparent', borderTop: 'none', borderLeft: 'none', borderRight: 'none', cursor: 'pointer' } : { color: 'var(--text-muted)', fontWeight: '500', padding: '16px 0', background: 'transparent', border: 'none', cursor: 'pointer' }}>Code</button>
-                <button onClick={() => { setActiveRightTab('testcase'); setActiveConsoleTab('results'); }} className={`coding-right-tab ${activeRightTab === 'testcase' ? 'active' : ''}`} style={activeRightTab === 'testcase' ? { borderBottom: '2px solid var(--primary-color)', color: 'var(--text-main)', fontWeight: '600', padding: '16px 0', background: 'transparent', borderTop: 'none', borderLeft: 'none', borderRight: 'none', cursor: 'pointer' } : { color: 'var(--text-muted)', fontWeight: '500', padding: '16px 0', background: 'transparent', border: 'none', cursor: 'pointer' }}>Testcase</button>
-                <button onClick={() => { setActiveRightTab('result'); setActiveConsoleTab('results'); }} className={`coding-right-tab ${activeRightTab === 'result' ? 'active' : ''}`} style={activeRightTab === 'result' ? { borderBottom: '2px solid var(--primary-color)', color: 'var(--text-main)', fontWeight: '600', padding: '16px 0', background: 'transparent', borderTop: 'none', borderLeft: 'none', borderRight: 'none', cursor: 'pointer' } : { color: 'var(--text-muted)', fontWeight: '500', padding: '16px 0', background: 'transparent', border: 'none', cursor: 'pointer' }}>Result</button>
-              </div>
-            </div>
-
-            <div className="coding-toolbar" style={{ padding: '12px 16px', display: 'flex', gap: '16px', alignItems: 'center', background: 'var(--card-bg)', backdropFilter: 'blur(8px)', borderBottom: '1px solid var(--card-border)', flexShrink: 0 }}>
-              <label style={{ fontSize: '14px', color: 'var(--text-muted)', fontWeight: '600' }}>Language</label>
+          <div className="coding-editor-card" style={{ display: 'flex', flexDirection: 'column', height: '100%', overflow: 'hidden', background: '#fff', borderRadius: '12px', border: '1px solid #e2e8f0' }}>
+            <div className="coding-toolbar" style={{ padding: '12px 16px', display: 'flex', gap: '16px', alignItems: 'center', background: '#f8fafc', borderBottom: '1px solid #e2e8f0', flexShrink: 0 }}>
+              <label style={{ fontSize: '13px', color: '#475569', fontWeight: '700', textTransform: 'uppercase', letterSpacing: '0.5px' }}>Language</label>
               <select
                 value={selectedLanguage}
                 onChange={(e) => {
@@ -487,53 +479,60 @@ export const InterviewTechnical = () => {
                   if (codeAnswersRef.current[newLang] !== undefined) {
                     setCodeAnswer(codeAnswersRef.current[newLang]);
                   } else {
-                    setCodeAnswer(''); // Trigger useInterviewSession to load default template
+                    const task = codingTask || {};
+                    const fn = task.function_name || 'solution';
+                    const sig = task.starter_function_signature;
+                    const tmpls = {
+                      python: sig || task.starter_code || `def ${fn}(*args):\n    # Write your solution here\n    pass`,
+                      javascript: `function ${fn}(...args) {\n    // Write your solution here\n    \n}`,
+                      java: `public class Solution {\n    public static void ${fn}(String[] args) {\n        // Write your solution here\n    }\n}`,
+                      cpp: `#include <iostream>\n#include <vector>\n#include <string>\nusing namespace std;\n\nvoid ${fn}() {\n    // Write your solution here\n}\n\nint main() {\n    ${fn}();\n    return 0;\n}`
+                    };
+                    setCodeAnswer(tmpls[newLang] || tmpls.python);
                   }
                 }}
-                style={{ padding: '8px 16px', borderRadius: 'var(--radius-md)', border: '1px solid #cbd5e1', outline: 'none', background: '#fff', fontWeight: '500', color: 'var(--text-main)' }}
+                style={{ padding: '8px 16px', borderRadius: '8px', border: '1px solid #cbd5e1', outline: 'none', background: '#fff', fontWeight: '600', color: '#0f172a', fontSize: '13px' }}
               >
                 <option value="python">Python</option>
                 <option value="javascript">JavaScript</option>
                 <option value="java">Java</option>
                 <option value="cpp">C++</option>
               </select>
-              <button className="ip-btn-next" style={{ padding: '8px 20px', marginLeft: 'auto' }} onClick={handleRunCode}>Run & Evaluate</button>
+              <button className="ip-btn-next" style={{ padding: '8px 20px', marginLeft: 'auto', background: '#10b981', color: '#fff', fontWeight: '700', borderRadius: '8px', border: 'none', cursor: 'pointer' }} onClick={handleRunCode}>Run & Evaluate</button>
             </div>
 
-            <div className="coding-editor-wrap" style={{ flexGrow: 1, display: 'flex', flexDirection: 'column', minHeight: '0', overflow: 'hidden' }}>
-              <div className="coding-editor-header" style={{ display: 'flex', justifyContent: 'space-between', padding: '12px 16px', background: '#fff', borderBottom: '1px solid #e2e8f0', flexShrink: 0 }}>
-                <div>
-                  <h4 style={{ margin: 0, fontSize: '14px', fontWeight: 'bold', color: '#1e293b' }}>Editor</h4>
-                  <div style={{ fontSize: '12px', color: '#94a3b8' }}>Write your solution in the IDE below.</div>
-                </div>
-                <div style={{ fontSize: '12px', color: '#94a3b8', fontStyle: 'italic' }}>Autosave by language</div>
-              </div>
-
-              {activeRightTab === 'code' && (
-                <Suspense fallback={<div style={{ padding: 16, color: '#64748b', fontSize: 13 }}>Loading editor...</div>}>
-                  <MonacoEditor
-                    height="320px"
-                    language={selectedLanguage === 'cpp' ? 'cpp' : selectedLanguage === 'java' ? 'java' : selectedLanguage === 'javascript' ? 'javascript' : 'python'}
-                    value={codeAnswer}
-                    onChange={(val) => setCodeAnswer(val || '')}
-                    theme="vs-light"
-                    options={{
-                      fontSize: 14,
-                      minimap: { enabled: false },
-                      scrollBeyondLastLine: false,
-                      wordWrap: 'on',
-                      lineNumbers: 'on',
-                      folding: true,
-                      automaticLayout: true,
-                      tabSize: 4,
-                      insertSpaces: true,
-                      fontFamily: 'Consolas, "Courier New", monospace',
-                      padding: { top: 12, bottom: 12 },
-                      scrollbar: { vertical: 'auto' },
-                    }}
-                  />
-                </Suspense>
-              )}
+            <div className="coding-editor-wrap" style={{ flexGrow: 1, display: 'flex', flexDirection: 'column', minHeight: '340px', overflow: 'hidden' }}>
+              <Suspense fallback={
+                <textarea
+                  style={{ width: '100%', height: '100%', padding: '16px', fontFamily: 'Consolas, monospace', fontSize: '14px', background: '#0d1117', color: '#34d399', border: 'none', outline: 'none', resize: 'none' }}
+                  value={codeAnswer}
+                  onChange={(e) => setCodeAnswer(e.target.value)}
+                  placeholder="Loading IDE Editor..."
+                />
+              }>
+                <MonacoEditor
+                  height="100%"
+                  minHeight="340px"
+                  language={selectedLanguage === 'cpp' ? 'cpp' : selectedLanguage === 'java' ? 'java' : selectedLanguage === 'javascript' ? 'javascript' : 'python'}
+                  value={codeAnswer}
+                  onChange={(val) => setCodeAnswer(val || '')}
+                  theme="vs-light"
+                  options={{
+                    fontSize: 14,
+                    minimap: { enabled: false },
+                    scrollBeyondLastLine: false,
+                    wordWrap: 'on',
+                    lineNumbers: 'on',
+                    folding: true,
+                    automaticLayout: true,
+                    tabSize: 4,
+                    insertSpaces: true,
+                    fontFamily: 'Consolas, "Courier New", monospace',
+                    padding: { top: 12, bottom: 12 },
+                    scrollbar: { vertical: 'auto' },
+                  }}
+                />
+              </Suspense>
 
               <div className="coding-console-shell" style={{ borderTop: activeRightTab === 'code' ? '1px solid #e2e8f0' : 'none', background: '#f8fafc', display: 'flex', flexDirection: 'column', maxHeight: activeRightTab === 'code' ? '40%' : '100%', minHeight: activeRightTab === 'code' ? '160px' : '0', flexGrow: activeRightTab === 'code' ? 0 : 1 }}>
                 <div className="coding-console-tabs" style={{ display: 'flex', gap: '2px', background: '#e2e8f0', padding: '8px 8px 0 8px', flexShrink: 0 }}>
