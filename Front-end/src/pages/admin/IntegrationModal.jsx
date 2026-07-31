@@ -273,7 +273,7 @@ export default function IntegrationModal({ isOpen, onClose, onRefresh }) {
 
   return createPortal(
     <div 
-      className="fixed inset-0 z-[9999] flex items-center justify-center p-4 sm:p-6 bg-black/80 backdrop-blur-md animate-in fade-in duration-200" 
+      className="fixed inset-0 z-[9999] flex items-center justify-center p-4 sm:p-6 bg-slate-900/40 backdrop-blur-md animate-in fade-in duration-200" 
       onMouseDown={event => { if (event.target === event.currentTarget && !loading) handleClose() }}
     >
       <div 
@@ -281,16 +281,16 @@ export default function IntegrationModal({ isOpen, onClose, onRefresh }) {
         aria-modal="true" 
         aria-labelledby="integration-modal-title" 
         onMouseDown={event => event.stopPropagation()} 
-        className={`bg-[#0d0d12] border border-white/15 rounded-2xl w-full ${selectedConfig ? 'max-w-xl' : 'max-w-6xl'} overflow-hidden shadow-2xl flex flex-col max-h-[88vh] my-auto transition-all duration-300 relative`}
+        className={`bg-white border border-slate-200 rounded-2xl w-full ${selectedConfig ? 'max-w-xl' : 'max-w-6xl'} overflow-hidden shadow-2xl flex flex-col max-h-[88vh] my-auto transition-all duration-300 relative`}
       >
         
         {/* Dynamic Header */}
-        <div className="flex items-center justify-between px-6 py-4.5 border-b border-white/10 bg-[#14141c] shrink-0 sticky top-0 z-20">
+        <div className="flex items-center justify-between px-6 py-4.5 border-b border-slate-200 bg-slate-50 shrink-0 sticky top-0 z-20">
           <div className="flex items-center gap-3">
             {selectedConfig ? (
               <button 
                 onClick={() => {setSelectedConfig(null); setError(''); setSuccess('')}} 
-                className="p-2 text-slate-400 hover:text-white rounded-xl bg-white/5 hover:bg-white/10 transition-colors border border-white/10"
+                className="p-2 text-slate-500 hover:text-slate-900 rounded-xl bg-white hover:bg-slate-100 transition-colors border border-slate-200"
                 title="Back to all integrations"
               >
                 <ChevronLeft size={18} />
@@ -301,17 +301,17 @@ export default function IntegrationModal({ isOpen, onClose, onRefresh }) {
               </div>
             )}
             <div>
-              <h2 id="integration-modal-title" className="text-lg font-bold text-white tracking-wide leading-tight">
+              <h2 id="integration-modal-title" className="text-lg font-bold text-slate-900 tracking-wide leading-tight">
                 {selectedConfig === 'calendly' ? 'Connect Calendly' : selectedConfig === 'cal_com' ? 'Connect Cal.com' : selectedConfig === 'custom_api' ? 'Connect Custom API' : selectedConfig ? `Connect ${INTEGRATIONS.find(item => item.id === selectedConfig)?.name || 'Integration'}` : 'Connect New Integrations'}
               </h2>
-              <p className="text-xs text-slate-400 mt-0.5">
+              <p className="text-xs text-slate-500 mt-0.5">
                 {selectedConfig ? 'Enter required API details to connect service' : 'Explore available voice agent integrations & tools'}
               </p>
             </div>
           </div>
           <button 
             onClick={handleClose} 
-            className="p-2 text-slate-400 hover:text-white rounded-xl bg-white/5 hover:bg-white/10 border border-white/10 transition-all hover:scale-105 active:scale-95 shadow-sm flex items-center justify-center cursor-pointer"
+            className="p-2 text-slate-500 hover:text-slate-900 rounded-xl bg-white hover:bg-slate-100 border border-slate-200 transition-all hover:scale-105 active:scale-95 shadow-sm flex items-center justify-center cursor-pointer"
             title="Close modal"
           >
             <X size={20} />
@@ -333,24 +333,24 @@ export default function IntegrationModal({ isOpen, onClose, onRefresh }) {
                       className={`px-3.5 py-1.5 rounded-full text-xs font-semibold tracking-wide border transition-all cursor-pointer ${
                         activeCategory === cat.id 
                           ? 'bg-indigo-500/20 border-indigo-500/50 text-indigo-300 shadow-sm' 
-                          : 'bg-white/5 border-white/10 text-slate-400 hover:border-white/30 hover:text-white hover:bg-white/10'
+                          : 'bg-white border-slate-200 text-slate-500 hover:border-white/30 hover:text-slate-900 hover:bg-slate-100'
                       }`}
                     >
-                      {cat.id} <span className="opacity-60 ml-1 text-[0.68rem] bg-white/10 px-1.5 py-0.5 rounded-full">{cat.count}</span>
+                      {cat.id} <span className="opacity-60 ml-1 text-[0.68rem] bg-slate-100 px-1.5 py-0.5 rounded-full">{cat.count}</span>
                     </button>
                   ))}
                 </div>
                 <div className="relative w-full md:w-64 shrink-0">
-                  <Search size={14} className="absolute left-3.5 top-1/2 -translate-y-1/2 text-slate-400" />
+                  <Search size={14} className="absolute left-3.5 top-1/2 -translate-y-1/2 text-slate-500" />
                   <input 
                     type="text" 
                     placeholder="Search integrations..."
                     value={searchQuery}
                     onChange={(e) => setSearchQuery(e.target.value)}
-                    className="w-full bg-[#14141c] border border-white/10 rounded-xl pl-9 pr-8 py-2 text-xs text-white placeholder-slate-500 focus:outline-none focus:border-indigo-500/80 transition-all"
+                    className="w-full bg-slate-50 border border-slate-200 rounded-xl pl-9 pr-8 py-2 text-xs text-slate-900 placeholder-slate-500 focus:outline-none focus:border-indigo-500/80 transition-all"
                   />
                   {searchQuery && (
-                    <button onClick={() => setSearchQuery('')} className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-white">
+                    <button onClick={() => setSearchQuery('')} className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-500 hover:text-slate-900">
                       <X size={12} />
                     </button>
                   )}
@@ -360,16 +360,16 @@ export default function IntegrationModal({ isOpen, onClose, onRefresh }) {
               {/* Grid */}
               <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 sm:gap-5">
                 {filteredIntegrations.map((int, idx) => (
-                  <div key={int.id || idx} className="bg-[#14141c] border border-white/10 hover:border-indigo-500/40 rounded-xl overflow-hidden flex flex-col group hover:shadow-lg hover:shadow-indigo-500/5 transition-all duration-200">
+                  <div key={int.id || idx} className="bg-slate-50 border border-slate-200 hover:border-indigo-500/40 rounded-xl overflow-hidden flex flex-col group hover:shadow-lg hover:shadow-indigo-500/5 transition-all duration-200">
                     <div className="p-5 flex-1 flex flex-col">
                       <div className="flex items-start justify-between mb-4">
                         <div className="flex items-center gap-3">
-                          <div className={`p-2.5 rounded-xl ${int.bg} border border-white/10 group-hover:scale-105 transition-transform flex items-center justify-center shrink-0`}>
+                          <div className={`p-2.5 rounded-xl ${int.bg} border border-slate-200 group-hover:scale-105 transition-transform flex items-center justify-center shrink-0`}>
                             <int.icon className="w-6 h-6" />
                           </div>
                           <div>
-                            <span className="font-bold text-white tracking-wide block text-sm">{int.name}</span>
-                            <span className="text-[0.7rem] text-slate-400 block mt-0.5">{int.category}</span>
+                            <span className="font-bold text-slate-900 tracking-wide block text-sm">{int.name}</span>
+                            <span className="text-[0.7rem] text-slate-500 block mt-0.5">{int.category}</span>
                           </div>
                         </div>
                         <span className={`px-2 py-0.5 rounded text-[0.62rem] font-bold tracking-wider uppercase border flex items-center gap-1 shrink-0 ${
@@ -378,16 +378,16 @@ export default function IntegrationModal({ isOpen, onClose, onRefresh }) {
                           {int.tag}
                         </span>
                       </div>
-                      <p className="text-xs text-slate-400 leading-relaxed line-clamp-3">
+                      <p className="text-xs text-slate-500 leading-relaxed line-clamp-3">
                         {int.desc}
                       </p>
                     </div>
                     <div className="border-t border-white/5 p-3.5 px-5 flex justify-end bg-white/[0.02]">
                       <button 
                         onClick={() => setSelectedConfig(int.id)}
-                        className="flex items-center gap-1.5 px-4 py-1.5 bg-indigo-600/90 hover:bg-indigo-600 border border-indigo-500/30 rounded-lg text-xs font-bold text-white transition-all shadow-sm group-hover:shadow-indigo-500/20 cursor-pointer"
+                        className="flex items-center gap-1.5 px-4 py-1.5 bg-indigo-600/90 hover:bg-indigo-600 border border-indigo-500/30 rounded-lg text-xs font-bold text-slate-900 transition-all shadow-sm group-hover:shadow-indigo-500/20 cursor-pointer"
                       >
-                        Connect <ExternalLink size={12} className="text-indigo-200 group-hover:text-white transition-colors" />
+                        Connect <ExternalLink size={12} className="text-indigo-200 group-hover:text-slate-900 transition-colors" />
                       </button>
                     </div>
                   </div>
@@ -402,12 +402,12 @@ export default function IntegrationModal({ isOpen, onClose, onRefresh }) {
 
               {selectedConfig === 'calendly' && (
                 <form onSubmit={handleCalendlySubmit} className="space-y-5">
-                  <p className="text-xs text-slate-400 leading-relaxed">
+                  <p className="text-xs text-slate-500 leading-relaxed">
                     Connect your Calendly account to allow your voice assistant to check your availability and schedule appointments seamlessly during a call.
                   </p>
                   <div>
                     <label className="block text-xs font-bold text-slate-300 mb-2 uppercase tracking-wide">Integration Name *</label>
-                    <input required value={calendlyForm.name} onChange={e => setCalendlyForm({ ...calendlyForm, name: e.target.value })} placeholder="Integration name" className="w-full px-4 py-3 bg-[#14141c] border border-white/10 rounded-xl text-xs text-white placeholder-slate-600 focus:outline-none focus:border-indigo-500" />
+                    <input required value={calendlyForm.name} onChange={e => setCalendlyForm({ ...calendlyForm, name: e.target.value })} placeholder="Integration name" className="w-full px-4 py-3 bg-slate-50 border border-slate-200 rounded-xl text-xs text-slate-900 placeholder-slate-600 focus:outline-none focus:border-indigo-500" />
                   </div>
                   <div>
                     <label className="block text-xs font-bold text-slate-300 mb-2 uppercase tracking-wide">Personal Access Token *</label>
@@ -417,27 +417,27 @@ export default function IntegrationModal({ isOpen, onClose, onRefresh }) {
                       value={calendlyForm.token}
                       onChange={e => setCalendlyForm({ ...calendlyForm, token: e.target.value })}
                       placeholder="Enter your Calendly PAT..."
-                      className="w-full px-4 py-3 bg-[#14141c] border border-white/10 rounded-xl text-xs text-white placeholder-slate-600 focus:outline-none focus:border-indigo-500 transition-colors"
+                      className="w-full px-4 py-3 bg-slate-50 border border-slate-200 rounded-xl text-xs text-slate-900 placeholder-slate-600 focus:outline-none focus:border-indigo-500 transition-colors"
                     />
-                    <p className="text-[0.65rem] text-slate-400 mt-2">
+                    <p className="text-[0.65rem] text-slate-500 mt-2">
                       Get this from Calendly Settings &gt; Integrations &gt; API & Webhooks.
                     </p>
                   </div>
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                     <div>
                       <label className="block text-xs font-bold text-slate-300 mb-2 uppercase tracking-wide">Event Type ID *</label>
-                      <input required value={calendlyForm.eventTypeId} onChange={e => setCalendlyForm({ ...calendlyForm, eventTypeId: e.target.value })} placeholder="Event Type ID" className="w-full px-4 py-3 bg-[#14141c] border border-white/10 rounded-xl text-xs text-white placeholder-slate-600 focus:outline-none focus:border-indigo-500" />
+                      <input required value={calendlyForm.eventTypeId} onChange={e => setCalendlyForm({ ...calendlyForm, eventTypeId: e.target.value })} placeholder="Event Type ID" className="w-full px-4 py-3 bg-slate-50 border border-slate-200 rounded-xl text-xs text-slate-900 placeholder-slate-600 focus:outline-none focus:border-indigo-500" />
                     </div>
                     <div>
                       <label className="block text-xs font-bold text-slate-300 mb-2 uppercase tracking-wide">Timezone</label>
-                      <input value={calendlyForm.timezone} onChange={e => setCalendlyForm({ ...calendlyForm, timezone: e.target.value })} placeholder="Timezone" className="w-full px-4 py-3 bg-[#14141c] border border-white/10 rounded-xl text-xs text-white placeholder-slate-600 focus:outline-none focus:border-indigo-500" />
+                      <input value={calendlyForm.timezone} onChange={e => setCalendlyForm({ ...calendlyForm, timezone: e.target.value })} placeholder="Timezone" className="w-full px-4 py-3 bg-slate-50 border border-slate-200 rounded-xl text-xs text-slate-900 placeholder-slate-600 focus:outline-none focus:border-indigo-500" />
                     </div>
                   </div>
                   <div className="pt-4 flex justify-end">
                     <button
                       type="submit"
                       disabled={loading || !calendlyForm.name || !calendlyForm.token || !calendlyForm.eventTypeId}
-                      className="flex items-center gap-2 px-6 py-2.5 bg-indigo-600 hover:bg-indigo-500 disabled:opacity-50 text-white font-bold text-xs rounded-xl transition-all shadow-lg shadow-indigo-600/30 cursor-pointer"
+                      className="flex items-center gap-2 px-6 py-2.5 bg-indigo-600 hover:bg-indigo-500 disabled:opacity-50 text-slate-900 font-bold text-xs rounded-xl transition-all shadow-lg shadow-indigo-600/30 cursor-pointer"
                     >
                       {loading ? <Loader2 size={16} className="animate-spin" /> : <Plug size={16} />}
                       Connect Calendly
@@ -448,27 +448,27 @@ export default function IntegrationModal({ isOpen, onClose, onRefresh }) {
 
               {selectedConfig === 'cal_com' && (
                 <form onSubmit={handleCalComSubmit} className="space-y-5">
-                  <p className="text-xs text-slate-400 leading-relaxed">Connect Cal.com so the Omni assistant can check availability and schedule appointments.</p>
+                  <p className="text-xs text-slate-500 leading-relaxed">Connect Cal.com so the Omni assistant can check availability and schedule appointments.</p>
                   <div>
                     <label className="block text-xs font-bold text-slate-300 mb-2 uppercase tracking-wide">Integration Name *</label>
-                    <input required value={calComForm.name} onChange={e => setCalComForm({ ...calComForm, name: e.target.value })} placeholder="Integration name" className="w-full px-4 py-3 bg-[#14141c] border border-white/10 rounded-xl text-xs text-white placeholder-slate-600 focus:outline-none focus:border-indigo-500" />
+                    <input required value={calComForm.name} onChange={e => setCalComForm({ ...calComForm, name: e.target.value })} placeholder="Integration name" className="w-full px-4 py-3 bg-slate-50 border border-slate-200 rounded-xl text-xs text-slate-900 placeholder-slate-600 focus:outline-none focus:border-indigo-500" />
                   </div>
                   <div>
                     <label className="block text-xs font-bold text-slate-300 mb-2 uppercase tracking-wide">API Key *</label>
-                    <input required type="password" value={calComForm.apiKey} onChange={e => setCalComForm({ ...calComForm, apiKey: e.target.value })} placeholder="Cal.com API key" className="w-full px-4 py-3 bg-[#14141c] border border-white/10 rounded-xl text-xs text-white placeholder-slate-600 focus:outline-none focus:border-indigo-500" />
+                    <input required type="password" value={calComForm.apiKey} onChange={e => setCalComForm({ ...calComForm, apiKey: e.target.value })} placeholder="Cal.com API key" className="w-full px-4 py-3 bg-slate-50 border border-slate-200 rounded-xl text-xs text-slate-900 placeholder-slate-600 focus:outline-none focus:border-indigo-500" />
                   </div>
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                     <div>
                       <label className="block text-xs font-bold text-slate-300 mb-2 uppercase tracking-wide">Event Type ID *</label>
-                      <input required value={calComForm.eventTypeId} onChange={e => setCalComForm({ ...calComForm, eventTypeId: e.target.value })} placeholder="Event Type ID" className="w-full px-4 py-3 bg-[#14141c] border border-white/10 rounded-xl text-xs text-white placeholder-slate-600 focus:outline-none focus:border-indigo-500" />
+                      <input required value={calComForm.eventTypeId} onChange={e => setCalComForm({ ...calComForm, eventTypeId: e.target.value })} placeholder="Event Type ID" className="w-full px-4 py-3 bg-slate-50 border border-slate-200 rounded-xl text-xs text-slate-900 placeholder-slate-600 focus:outline-none focus:border-indigo-500" />
                     </div>
                     <div>
                       <label className="block text-xs font-bold text-slate-300 mb-2 uppercase tracking-wide">Timezone</label>
-                      <input value={calComForm.timezone} onChange={e => setCalComForm({ ...calComForm, timezone: e.target.value })} placeholder="Timezone" className="w-full px-4 py-3 bg-[#14141c] border border-white/10 rounded-xl text-xs text-white placeholder-slate-600 focus:outline-none focus:border-indigo-500" />
+                      <input value={calComForm.timezone} onChange={e => setCalComForm({ ...calComForm, timezone: e.target.value })} placeholder="Timezone" className="w-full px-4 py-3 bg-slate-50 border border-slate-200 rounded-xl text-xs text-slate-900 placeholder-slate-600 focus:outline-none focus:border-indigo-500" />
                     </div>
                   </div>
                   <div className="pt-4 flex justify-end">
-                    <button type="submit" disabled={loading} className="flex items-center gap-2 px-6 py-2.5 bg-indigo-600 hover:bg-indigo-500 disabled:opacity-50 text-white font-bold text-xs rounded-xl cursor-pointer">
+                    <button type="submit" disabled={loading} className="flex items-center gap-2 px-6 py-2.5 bg-indigo-600 hover:bg-indigo-500 disabled:opacity-50 text-slate-900 font-bold text-xs rounded-xl cursor-pointer">
                       <Plug size={16} /> {loading ? 'Connecting...' : 'Connect Cal.com'}
                     </button>
                   </div>
@@ -477,7 +477,7 @@ export default function IntegrationModal({ isOpen, onClose, onRefresh }) {
 
               {selectedConfig === 'custom_api' && (
                 <form onSubmit={handleWebhookSubmit} className="space-y-5">
-                  <p className="text-xs text-slate-400 leading-relaxed">
+                  <p className="text-xs text-slate-500 leading-relaxed">
                     Connect to a custom API or webhook endpoint. Your voice assistant can trigger this endpoint to pass extracted data and trigger workflows.
                   </p>
                   <div>
@@ -487,7 +487,7 @@ export default function IntegrationModal({ isOpen, onClose, onRefresh }) {
                       value={webhookForm.name}
                       onChange={e => setWebhookForm({ ...webhookForm, name: e.target.value })}
                       placeholder="e.g. My Custom CRM Data Webhook"
-                      className="w-full px-4 py-3 bg-[#14141c] border border-white/10 rounded-xl text-xs text-white focus:outline-none focus:border-indigo-500 transition-colors"
+                      className="w-full px-4 py-3 bg-slate-50 border border-slate-200 rounded-xl text-xs text-slate-900 focus:outline-none focus:border-indigo-500 transition-colors"
                     />
                   </div>
                   <div className="grid grid-cols-4 gap-4">
@@ -496,7 +496,7 @@ export default function IntegrationModal({ isOpen, onClose, onRefresh }) {
                       <select
                         value={webhookForm.method}
                         onChange={e => setWebhookForm({ ...webhookForm, method: e.target.value })}
-                        className="w-full px-3 py-3 bg-[#14141c] border border-white/10 rounded-xl text-xs text-white focus:outline-none focus:border-indigo-500 cursor-pointer"
+                        className="w-full px-3 py-3 bg-slate-50 border border-slate-200 rounded-xl text-xs text-slate-900 focus:outline-none focus:border-indigo-500 cursor-pointer"
                       >
                         <option>POST</option>
                         <option>GET</option>
@@ -512,7 +512,7 @@ export default function IntegrationModal({ isOpen, onClose, onRefresh }) {
                         value={webhookForm.url}
                         onChange={e => setWebhookForm({ ...webhookForm, url: e.target.value })}
                         placeholder="https://api.example.com/webhook"
-                        className="w-full px-4 py-3 bg-[#14141c] border border-white/10 rounded-xl text-xs text-white focus:outline-none focus:border-indigo-500 transition-colors"
+                        className="w-full px-4 py-3 bg-slate-50 border border-slate-200 rounded-xl text-xs text-slate-900 focus:outline-none focus:border-indigo-500 transition-colors"
                       />
                     </div>
                   </div>
@@ -522,7 +522,7 @@ export default function IntegrationModal({ isOpen, onClose, onRefresh }) {
                       value={webhookForm.headers}
                       onChange={e => setWebhookForm({ ...webhookForm, headers: e.target.value })}
                       placeholder='{"Authorization": "Bearer token", "Content-Type": "application/json"}'
-                      className="w-full px-4 py-3 bg-[#14141c] border border-white/10 rounded-xl text-xs text-white font-mono h-24 focus:outline-none focus:border-indigo-500 resize-none"
+                      className="w-full px-4 py-3 bg-slate-50 border border-slate-200 rounded-xl text-xs text-slate-900 font-mono h-24 focus:outline-none focus:border-indigo-500 resize-none"
                     />
                   </div>
                   <div>
@@ -531,14 +531,14 @@ export default function IntegrationModal({ isOpen, onClose, onRefresh }) {
                       value={webhookForm.body}
                       onChange={e => setWebhookForm({ ...webhookForm, body: e.target.value })}
                       placeholder='{"event": "call_ended", "data": {}}'
-                      className="w-full px-4 py-3 bg-[#14141c] border border-white/10 rounded-xl text-xs text-white font-mono h-24 focus:outline-none focus:border-indigo-500 resize-none"
+                      className="w-full px-4 py-3 bg-slate-50 border border-slate-200 rounded-xl text-xs text-slate-900 font-mono h-24 focus:outline-none focus:border-indigo-500 resize-none"
                     />
                   </div>
                   <div className="pt-4 flex justify-end">
                     <button
                       type="submit"
                       disabled={loading || !webhookForm.name || !webhookForm.url}
-                      className="flex items-center gap-2 px-6 py-2.5 bg-indigo-600 hover:bg-indigo-500 disabled:opacity-50 text-white font-bold text-xs rounded-xl transition-all shadow-lg shadow-indigo-600/30 cursor-pointer"
+                      className="flex items-center gap-2 px-6 py-2.5 bg-indigo-600 hover:bg-indigo-500 disabled:opacity-50 text-slate-900 font-bold text-xs rounded-xl transition-all shadow-lg shadow-indigo-600/30 cursor-pointer"
                     >
                       {loading ? <Loader2 size={16} className="animate-spin" /> : <Plug size={16} />}
                       Connect Custom API
@@ -549,16 +549,16 @@ export default function IntegrationModal({ isOpen, onClose, onRefresh }) {
 
               {!['calendly', 'cal_com', 'custom_api'].includes(selectedConfig) && (
                 <form onSubmit={handleGenericSubmit} className="space-y-5">
-                  <p className="text-xs text-slate-400 leading-relaxed">Paste the Omni Dimension integration payload for {INTEGRATIONS.find(item => item.id === selectedConfig)?.name || 'this integration'}. The payload is sent directly to the active Omni account.</p>
+                  <p className="text-xs text-slate-500 leading-relaxed">Paste the Omni Dimension integration payload for {INTEGRATIONS.find(item => item.id === selectedConfig)?.name || 'this integration'}. The payload is sent directly to the active Omni account.</p>
                   <textarea
                     required
                     value={genericForm}
                     onChange={event => setGenericForm(event.target.value)}
                     placeholder={'{"name":"My integration","type":"...","config":{}}'}
-                    className="w-full min-h-56 px-4 py-3 bg-[#14141c] border border-white/10 rounded-xl text-xs text-white font-mono focus:outline-none focus:border-indigo-500 resize-y"
+                    className="w-full min-h-56 px-4 py-3 bg-slate-50 border border-slate-200 rounded-xl text-xs text-slate-900 font-mono focus:outline-none focus:border-indigo-500 resize-y"
                   />
                   <div className="pt-4 flex justify-end">
-                    <button type="submit" disabled={loading || !genericForm.trim()} className="flex items-center gap-2 px-6 py-2.5 bg-indigo-600 hover:bg-indigo-500 disabled:opacity-50 text-white font-bold text-xs rounded-xl cursor-pointer">
+                    <button type="submit" disabled={loading || !genericForm.trim()} className="flex items-center gap-2 px-6 py-2.5 bg-indigo-600 hover:bg-indigo-500 disabled:opacity-50 text-slate-900 font-bold text-xs rounded-xl cursor-pointer">
                       <Plug size={16} /> {loading ? 'Connecting...' : 'Connect Integration'}
                     </button>
                   </div>

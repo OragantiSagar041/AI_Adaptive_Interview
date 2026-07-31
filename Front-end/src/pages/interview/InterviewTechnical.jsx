@@ -63,7 +63,7 @@ export const InterviewTechnical = () => {
         codingTests: payload.tests || []
       }
       setQuestions(prev => [...prev, codingQ])
-      
+
       const targetIndex = (savedIndex !== null && savedIndex >= verbalQuestionsLength) ? savedIndex : verbalQuestionsLength
       setCurrentQuestionIndex(targetIndex)
     } catch (err) {
@@ -198,37 +198,7 @@ export const InterviewTechnical = () => {
       }
 
       const iid = interviewId || sessionDetail?.interview_id || sessionId
-      let errorText = null
-
-      if (selectedLanguage === 'javascript') {
-        try {
-          new Function(codeAnswer)
-        } catch (err) {
-          errorText = `SyntaxError: ${err.message}`
-        }
-      } else if (selectedLanguage === 'python') {
-        let count = 0
-        for (let i = 0; i < codeAnswer.length; i++) {
-          if (codeAnswer[i] === '(') count++
-          if (codeAnswer[i] === ')') count--
-          if (count < 0) {
-            errorText = `SyntaxError: Unmatched closing parenthesis ')' at index ${i}`
-            break
-          }
-        }
-        if (count > 0 && !errorText) {
-          errorText = "SyntaxError: Unmatched opening parenthesis '(' (parenthesis was never closed)"
-        }
-      }
-
       const userStdout = extractStdout(codeAnswer, selectedLanguage)
-
-      if (errorText) {
-        setCodeOutputState(`Code Execution Result:\n❌ Execution Failed / Syntax Error\n\nError:\n${errorText}`)
-        setConsoleOutput(`Current Output:\n\nError:\n${errorText}`)
-        setCompiling(false)
-        return
-      }
 
       try {
         const payload = await api.post(`/coding-round/run`, {
@@ -466,17 +436,9 @@ export const InterviewTechnical = () => {
             </div>
           </div>
 
-          <div className="coding-editor-card" style={{ display: 'flex', flexDirection: 'column', height: '100%', overflow: 'hidden' }}>
-            <div className="coding-editor-topbar" style={{ display: 'flex', justifyContent: 'space-between', borderBottom: '1px solid #e2e8f0', padding: '0 16px', flexShrink: 0 }}>
-              <div className="coding-right-tabs" style={{ display: 'flex', gap: '24px' }}>
-                <button onClick={() => setActiveRightTab('code')} className={`coding-right-tab ${activeRightTab === 'code' ? 'active' : ''}`} style={activeRightTab === 'code' ? { borderBottom: '2px solid var(--primary-color)', color: 'var(--text-main)', fontWeight: '600', padding: '16px 0', background: 'transparent', borderTop: 'none', borderLeft: 'none', borderRight: 'none', cursor: 'pointer' } : { color: 'var(--text-muted)', fontWeight: '500', padding: '16px 0', background: 'transparent', border: 'none', cursor: 'pointer' }}>Code</button>
-                <button onClick={() => { setActiveRightTab('testcase'); setActiveConsoleTab('results'); }} className={`coding-right-tab ${activeRightTab === 'testcase' ? 'active' : ''}`} style={activeRightTab === 'testcase' ? { borderBottom: '2px solid var(--primary-color)', color: 'var(--text-main)', fontWeight: '600', padding: '16px 0', background: 'transparent', borderTop: 'none', borderLeft: 'none', borderRight: 'none', cursor: 'pointer' } : { color: 'var(--text-muted)', fontWeight: '500', padding: '16px 0', background: 'transparent', border: 'none', cursor: 'pointer' }}>Testcase</button>
-                <button onClick={() => { setActiveRightTab('result'); setActiveConsoleTab('results'); }} className={`coding-right-tab ${activeRightTab === 'result' ? 'active' : ''}`} style={activeRightTab === 'result' ? { borderBottom: '2px solid var(--primary-color)', color: 'var(--text-main)', fontWeight: '600', padding: '16px 0', background: 'transparent', borderTop: 'none', borderLeft: 'none', borderRight: 'none', cursor: 'pointer' } : { color: 'var(--text-muted)', fontWeight: '500', padding: '16px 0', background: 'transparent', border: 'none', cursor: 'pointer' }}>Result</button>
-              </div>
-            </div>
-
-            <div className="coding-toolbar" style={{ padding: '12px 16px', display: 'flex', gap: '16px', alignItems: 'center', background: 'var(--card-bg)', backdropFilter: 'blur(8px)', borderBottom: '1px solid var(--card-border)', flexShrink: 0 }}>
-              <label style={{ fontSize: '14px', color: 'var(--text-muted)', fontWeight: '600' }}>Language</label>
+          <div className="coding-editor-card" style={{ display: 'flex', flexDirection: 'column', height: '100%', overflow: 'hidden', background: '#fff', borderRadius: '12px', border: '1px solid #e2e8f0' }}>
+            <div className="coding-toolbar" style={{ padding: '12px 16px', display: 'flex', gap: '16px', alignItems: 'center', background: '#f8fafc', borderBottom: '1px solid #e2e8f0', flexShrink: 0 }}>
+              <label style={{ fontSize: '13px', color: '#475569', fontWeight: '700', textTransform: 'uppercase', letterSpacing: '0.5px' }}>Language</label>
               <select
                 value={selectedLanguage}
                 onChange={(e) => {
@@ -486,52 +448,65 @@ export const InterviewTechnical = () => {
                   if (codeAnswersRef.current[newLang] !== undefined) {
                     setCodeAnswer(codeAnswersRef.current[newLang]);
                   } else {
-                    setCodeAnswer(''); // Trigger useInterviewSession to load default template
+                    const task = codingTask || {};
+                    const fn = task.function_name || 'solution';
+                    const sig = task.starter_function_signature;
+                    const tmpls = {
+                      python: sig || task.starter_code || `def ${fn}(*args):\n    # Write your solution here\n    pass`,
+                      javascript: `function ${fn}(...args) {\n    // Write your solution here\n    \n}`,
+                      java: `public class Solution {\n    public static void ${fn}(String[] args) {\n        // Write your solution here\n    }\n}`,
+                      cpp: `#include <iostream>\n#include <vector>\n#include <string>\nusing namespace std;\n\nvoid ${fn}() {\n    // Write your solution here\n}\n\nint main() {\n    ${fn}();\n    return 0;\n}`
+                    };
+                    setCodeAnswer(tmpls[newLang] || tmpls.python);
                   }
                 }}
-                style={{ padding: '8px 16px', borderRadius: 'var(--radius-md)', border: '1px solid #cbd5e1', outline: 'none', background: '#fff', fontWeight: '500', color: 'var(--text-main)' }}
+                style={{ padding: '8px 16px', borderRadius: '8px', border: '1px solid #cbd5e1', outline: 'none', background: '#fff', fontWeight: '600', color: '#0f172a', fontSize: '13px' }}
               >
                 <option value="python">Python</option>
                 <option value="javascript">JavaScript</option>
+                <option value="java">Java</option>
                 <option value="cpp">C++</option>
               </select>
-              <button className="ip-btn-next" style={{ padding: '8px 20px', marginLeft: 'auto' }} onClick={handleRunCode}>Run & Evaluate</button>
+              <button className="ip-btn-next" style={{ padding: '8px 20px', marginLeft: 'auto', background: '#10b981', color: '#fff', fontWeight: '700', borderRadius: '8px', border: 'none', cursor: 'pointer' }} onClick={handleRunCode}>Run & Evaluate</button>
             </div>
 
-            <div className="coding-editor-wrap" style={{ flexGrow: 1, display: 'flex', flexDirection: 'column', minHeight: '0', overflow: 'hidden' }}>
-              <div className="coding-editor-header" style={{ display: 'flex', justifyContent: 'space-between', padding: '12px 16px', background: '#fff', borderBottom: '1px solid #e2e8f0', flexShrink: 0 }}>
-                <div>
-                  <h4 style={{ margin: 0, fontSize: '14px', fontWeight: 'bold', color: '#1e293b' }}>Editor</h4>
-                  <div style={{ fontSize: '12px', color: '#94a3b8' }}>Write your solution in the IDE below.</div>
+            <div className="coding-editor-wrap" style={{ flexGrow: 1, display: 'flex', flexDirection: 'column', minHeight: '400px', overflow: 'hidden', position: 'relative' }}>
+              <Suspense fallback={
+                <div style={{ height: '400px', width: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#64748b', fontSize: '13px', background: '#f8fafc', fontWeight: '500' }}>
+                  Loading IDE Editor...
                 </div>
-                <div style={{ fontSize: '12px', color: '#94a3b8', fontStyle: 'italic' }}>Autosave by language</div>
-              </div>
-
-              {activeRightTab === 'code' && (
-                <Suspense fallback={<div style={{ padding: 16, color: '#64748b', fontSize: 13 }}>Loading editor...</div>}>
-                  <MonacoEditor
-                    height="320px"
-                    language={selectedLanguage === 'cpp' ? 'cpp' : selectedLanguage === 'javascript' ? 'javascript' : 'python'}
-                    value={codeAnswer}
-                    onChange={(val) => setCodeAnswer(val || '')}
-                    theme="vs-light"
-                    options={{
-                      fontSize: 14,
-                      minimap: { enabled: false },
-                      scrollBeyondLastLine: false,
-                      wordWrap: 'on',
-                      lineNumbers: 'on',
-                      folding: true,
-                      automaticLayout: true,
-                      tabSize: 4,
-                      insertSpaces: true,
-                      fontFamily: 'Consolas, "Courier New", monospace',
-                      padding: { top: 12, bottom: 12 },
-                      scrollbar: { vertical: 'auto' },
-                    }}
-                  />
-                </Suspense>
-              )}
+              }>
+                <MonacoEditor
+                  height="400px"
+                  language={selectedLanguage === 'cpp' ? 'cpp' : selectedLanguage === 'java' ? 'java' : selectedLanguage === 'javascript' ? 'javascript' : 'python'}
+                  value={codeAnswer}
+                  onChange={(val) => setCodeAnswer(val || '')}
+                  onMount={(editor) => {
+                    try {
+                      editor.focus();
+                    } catch (e) {}
+                  }}
+                  theme="vs-light"
+                  options={{
+                    readOnly: false,
+                    domReadOnly: false,
+                    cursorBlinking: 'blink',
+                    cursorStyle: 'line',
+                    fontSize: 14,
+                    minimap: { enabled: false },
+                    scrollBeyondLastLine: false,
+                    wordWrap: 'on',
+                    lineNumbers: 'on',
+                    folding: true,
+                    automaticLayout: true,
+                    tabSize: 4,
+                    insertSpaces: true,
+                    fontFamily: 'Consolas, "Courier New", monospace',
+                    padding: { top: 12, bottom: 12 },
+                    scrollbar: { vertical: 'auto' },
+                  }}
+                />
+              </Suspense>
 
               <div className="coding-console-shell" style={{ borderTop: activeRightTab === 'code' ? '1px solid #e2e8f0' : 'none', background: '#f8fafc', display: 'flex', flexDirection: 'column', maxHeight: activeRightTab === 'code' ? '40%' : '100%', minHeight: activeRightTab === 'code' ? '160px' : '0', flexGrow: activeRightTab === 'code' ? 0 : 1 }}>
                 <div className="coding-console-tabs" style={{ display: 'flex', gap: '2px', background: '#e2e8f0', padding: '8px 8px 0 8px', flexShrink: 0 }}>
@@ -809,14 +784,14 @@ export const InterviewTechnical = () => {
       // Stop mic if running
       if (recognitionRef?.current) {
         if (isSpeechRecordingRef) isSpeechRecordingRef.current = false
-        try { recognitionRef.current.stop() } catch (e) {}
+        try { recognitionRef.current.stop() } catch (e) { }
       }
     } else {
       setIsPrepMode(false)
       // Ensure mic is running for non-prep modes
       if (recognitionRef?.current) {
         if (isSpeechRecordingRef) isSpeechRecordingRef.current = true
-        try { recognitionRef.current.start() } catch (e) {}
+        try { recognitionRef.current.start() } catch (e) { }
       }
     }
   }, [currentQuestionIndex, currentQuestion?.type, recognitionRef, isSpeechRecordingRef])
@@ -832,7 +807,7 @@ export const InterviewTechnical = () => {
       // Restart mic when prep time finishes
       if (recognitionRef?.current) {
         if (isSpeechRecordingRef) isSpeechRecordingRef.current = true
-        try { recognitionRef.current.start() } catch (e) {}
+        try { recognitionRef.current.start() } catch (e) { }
       }
     }
     return () => clearInterval(timer)
@@ -923,12 +898,12 @@ export const InterviewTechnical = () => {
 
         {/* Device Check Modal */}
         {session.showDeviceCheck && (
-          <DeviceCheckModal 
+          <DeviceCheckModal
             onSuccess={() => {
               session.setShowDeviceCheck(false);
               session.promptScreenShare();
-            }} 
-            onCancel={() => session.setShowDeviceCheck(false)} 
+            }}
+            onCancel={() => session.setShowDeviceCheck(false)}
           />
         )}
       </div>
@@ -957,7 +932,7 @@ export const InterviewTechnical = () => {
         {vcStep === 'recording' && (
           <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '16px', marginBottom: '20px' }}>
             <div style={{ display: 'flex', alignItems: 'flex-end', gap: '4px', height: '40px' }}>
-              {Array.from({length: 9}).map((_,i) => <div key={i} className="vc-bar" style={{animationDelay:`${i*0.1}s`}} />)}
+              {Array.from({ length: 9 }).map((_, i) => <div key={i} className="vc-bar" style={{ animationDelay: `${i * 0.1}s` }} />)}
             </div>
             <p style={{ color: '#c4b5fd', fontSize: '14px', fontWeight: '600' }}>🔴 Recording... speak now</p>
             <button onClick={stopVcRecording} style={{ padding: '10px 24px', background: '#dc2626', color: 'white', borderRadius: '8px', border: 'none', cursor: 'pointer', fontWeight: '700', fontSize: '14px' }}>
@@ -1070,8 +1045,8 @@ export const InterviewTechnical = () => {
 
   const currentQuestionText = currentQuestion?.text || currentQuestion?.question || currentQuestion?.prompt || ''
 
-  const displayQuestionNum = currentQuestion?.caseStudyIndex !== undefined 
-    ? currentQuestion.caseStudyIndex + 1 
+  const displayQuestionNum = currentQuestion?.caseStudyIndex !== undefined
+    ? currentQuestion.caseStudyIndex + 1
     : currentQuestionIndex + 1
 
   const totalDisplayQuestions = currentQuestion?.type === 'case_study'
@@ -1189,7 +1164,7 @@ export const InterviewTechnical = () => {
                 </button>
               )}
 
-              <button 
+              <button
                 className="w-full py-3 px-4 rounded-xl font-bold text-xs transition-all border-none shadow-md flex items-center justify-center gap-2 bg-slate-800 hover:bg-slate-700 text-white cursor-pointer hover:-translate-y-0.5"
                 onClick={(e) => handleFinishEarly(e)}
                 title="Finish Interview"
@@ -1201,7 +1176,7 @@ export const InterviewTechnical = () => {
             {/* AI insights Card */}
             <div className="bg-white/60 backdrop-blur-2xl border border-white shadow-[0_8px_30px_rgb(0,0,0,0.04)] rounded-[24px] p-6 transition-all duration-300 hover:shadow-lg">
               <h4 className="m-0 mb-4 text-[13px] font-bold text-slate-800 tracking-wide uppercase">AI Live Evaluation</h4>
-              
+
               <div className="mb-4">
                 <div className="flex justify-between items-center mb-1">
                   <span className="text-[11px] font-extrabold text-slate-500 tracking-wider">CLARITY & COMMUNICATION</span>
@@ -1270,7 +1245,7 @@ export const InterviewTechnical = () => {
 
                 <div className="flex flex-col gap-2">
                   <h3 className="text-sm font-bold text-indigo-600 uppercase tracking-widest flex items-center gap-2 m-0">
-                    <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"></path></svg> 
+                    <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"></path></svg>
                     Scenario
                   </h3>
                   <div className="text-slate-700 leading-relaxed text-[15px] font-medium bg-slate-50 border-l-4 border-indigo-600 px-5 py-4 rounded-r-xl">
@@ -1310,7 +1285,7 @@ export const InterviewTechnical = () => {
                       setIsPrepMode(false)
                       if (recognitionRef?.current) {
                         if (isSpeechRecordingRef) isSpeechRecordingRef.current = true
-                        try { recognitionRef.current.start() } catch (e) {}
+                        try { recognitionRef.current.start() } catch (e) { }
                       }
                     }}
                     className="px-8 py-3.5 rounded-xl font-bold text-sm text-white bg-indigo-600 hover:bg-indigo-700 border-none cursor-pointer transition-all shadow-md flex items-center gap-2"
@@ -1330,21 +1305,20 @@ export const InterviewTechnical = () => {
                     <span className="px-3 py-1 rounded-full text-[10px] font-bold tracking-wide uppercase bg-indigo-50 text-indigo-600 border border-indigo-100">
                       {currentQuestion?.category || currentQuestion?.type || 'Case Analysis'}
                     </span>
-                    <span className={`px-3 py-1 rounded-full text-[10px] font-bold tracking-wide uppercase border ${
-                      String(currentQuestion?.difficulty || 'Easy').toLowerCase() === 'easy'
+                    <span className={`px-3 py-1 rounded-full text-[10px] font-bold tracking-wide uppercase border ${String(currentQuestion?.difficulty || 'Easy').toLowerCase() === 'easy'
                         ? 'bg-emerald-50 text-emerald-600 border-emerald-100'
                         : String(currentQuestion?.difficulty || 'Easy').toLowerCase() === 'medium'
-                        ? 'bg-amber-50 text-amber-600 border-amber-100'
-                        : 'bg-red-50 text-red-600 border-red-100'
-                    }`}>
+                          ? 'bg-amber-50 text-amber-600 border-amber-100'
+                          : 'bg-red-50 text-red-600 border-red-100'
+                      }`}>
                       {currentQuestion?.difficulty || 'Easy'}
                     </span>
                   </div>
                   <div className="flex gap-4 items-start">
                     <div className="w-1.5 bg-indigo-600 self-stretch rounded-full shrink-0 min-h-[60px]" />
                     <p className="flex-1 text-slate-800 text-base md:text-lg font-semibold leading-relaxed m-0">{currentQuestionText || 'Question is loading...'}</p>
-                    <button 
-                      className="bg-slate-50 hover:bg-slate-100 text-slate-500 hover:text-indigo-600 border border-slate-200 hover:border-indigo-100 cursor-pointer p-2.5 rounded-full transition-all duration-200 shrink-0" 
+                    <button
+                      className="bg-slate-50 hover:bg-slate-100 text-slate-500 hover:text-indigo-600 border border-slate-200 hover:border-indigo-100 cursor-pointer p-2.5 rounded-full transition-all duration-200 shrink-0"
                       onClick={() => speakAIQuestion(currentQuestionText)}
                     >
                       <svg xmlns="http://www.w3.org/2000/svg" className="w-5 h-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
@@ -1384,7 +1358,7 @@ export const InterviewTechnical = () => {
                         </span>
                       </div>
                     ) : (
-                      <button 
+                      <button
                         className="px-8 py-3.5 rounded-xl font-bold text-sm text-white transition-all duration-200 border-none bg-red-500 hover:bg-red-600 shadow-lg shadow-red-500/20 hover:shadow-red-500/30 cursor-pointer"
                         onClick={(e) => handleFinishEarly(e)}
                         title="Finish Interview"
@@ -1393,7 +1367,7 @@ export const InterviewTechnical = () => {
                       </button>
                     )
                   ) : (
-                    <button 
+                    <button
                       className="px-8 py-3.5 rounded-xl font-bold text-sm text-white bg-emerald-500 hover:bg-emerald-600 shadow-lg shadow-emerald-500/20 hover:shadow-emerald-500/30 transition-all duration-200 cursor-pointer border-none"
                       onClick={handleNextQuestion}
                     >
@@ -1409,8 +1383,8 @@ export const InterviewTechnical = () => {
 
       {/* Floating Camera Preview Widget */}
       {isDisclaimerAccepted && !showAllSet && !loading && (
-        <motion.div 
-          drag 
+        <motion.div
+          drag
           dragMomentum={false}
           className="fixed bottom-6 right-6 w-56 h-36 rounded-xl overflow-hidden shadow-2xl border-2 border-indigo-600 z-[9999] bg-black transition-colors duration-300 hover:shadow-[0_15px_30px_rgba(99,102,241,0.25)] hover:border-violet-500 cursor-move"
         >

@@ -60,6 +60,28 @@ import {
 import LiveMonitorStreamModal from '../admin/modals/LiveMonitorStreamModal'
 import axios from 'axios'
 import { getNotifications, markNotificationAsRead, markAllNotificationsAsRead } from '../../utils/api'
+
+export const superAdminNavItems = [
+  { id: 'super-dashboard', label: 'Super Admin Dashboard', icon: BarChart2, path: '/superadmin/new-dashboard' },
+  { id: 'team', label: 'Team Management', icon: Users, path: '/superadmin/team' },
+  { id: 'dashboard', label: 'Dashboard', icon: LayoutDashboard, path: '/superadmin/dashboard' },
+  { id: 'interviews', label: 'Interviews', icon: ClipboardList, path: '/superadmin/interviews' },
+  { id: 'qualified', label: 'Qualified Candidates', icon: CheckCircle, path: '/superadmin/qualified-candidates' },
+  { id: 'rejected', label: 'Rejected Candidates', icon: XCircle, path: '/superadmin/rejected-candidates' },
+  { id: 'create', label: 'Create Interview', icon: Plus, path: '/superadmin/create-interview' },
+  { id: 'ai-calling', label: 'AI Calling Agent', icon: Radio, path: '/superadmin/ai-calling' },
+  { id: 'conversational-flow', label: 'Conversational Flow', icon: MessageSquare, path: '/superadmin/conversational-flow' },
+  { id: 'jobs', label: 'Jobs', icon: Briefcase, path: '/superadmin/jobs' },
+  { id: 'organizations', label: 'Organizations', icon: Building, path: '/superadmin/organizations' },
+  { id: 'recruiters', label: 'Recruiters', icon: UserCheck, path: '/superadmin/recruiters' },
+  { id: 'credit', label: 'Credit Management', icon: Coins, path: '/superadmin/credit' },
+  { id: 'subscription', label: 'Subscription Management', icon: CreditCard, path: '/superadmin/subscription' },
+  { id: 'integrations', label: 'Integrations', icon: Link, path: '/superadmin/integrations' },
+  // { id: 'audit', label: 'Audit Logs', path: '/superadmin/audit' },
+  { id: 'security', label: 'Security', icon: Shield, path: '/superadmin/security' },
+  { id: 'settings', label: 'Settings', icon: Settings, path: '/superadmin/profile-settings' },
+]
+
 import { setSelectedCandidate, setLiveResultsModalOpen, handleUpdateDecision } from '../../store/slices/interviewSlice'
 import { loadSuperAdminDashboard, setSelectedAdminFilter, updateLiveSnapshot } from '../../store/slices/dashboardSlice'
 
@@ -427,26 +449,10 @@ export default function SuperAdminLayout() {
   const accentPage = hexToRgba(currentAccent.primary, 0.12)
   const accentPageStrong = hexToRgba(currentAccent.primary, 0.20)
 
-  const navItems = [
-    { id: 'super-dashboard', label: 'Super Admin Dashboard', icon: BarChart2, path: '/superadmin/new-dashboard' },
-    { id: 'team', label: 'Team Management', icon: Users, path: '/superadmin/team' },
-    { id: 'dashboard', label: 'Dashboard', icon: LayoutDashboard, path: '/superadmin/dashboard' },
-    { id: 'interviews', label: 'Interviews', icon: ClipboardList, path: '/superadmin/interviews' },
-    { id: 'qualified', label: 'Qualified Candidates', icon: CheckCircle, path: '/superadmin/qualified-candidates' },
-    { id: 'rejected', label: 'Rejected Candidates', icon: XCircle, path: '/superadmin/rejected-candidates' },
-    { id: 'create', label: 'Create Interview', icon: Plus, path: '/superadmin/create-interview' },
-    { id: 'ai-calling', label: 'AI Calling Agent', icon: Radio, path: '/superadmin/ai-calling' },
-    { id: 'conversational-flow', label: 'Conversational Flow', icon: MessageSquare, path: '/superadmin/conversational-flow' },
-    { id: 'jobs', label: 'Jobs', icon: Briefcase, path: '/superadmin/jobs' },
-    { id: 'organizations', label: 'Organizations', icon: Building, path: '/superadmin/organizations' },
-    { id: 'recruiters', label: 'Recruiters', icon: UserCheck, path: '/superadmin/recruiters' },
-    { id: 'credit', label: 'Credit Management', icon: Coins, path: '/superadmin/credit' },
-    { id: 'subscription', label: 'Subscription Management', icon: CreditCard, path: '/superadmin/subscription' },
-    { id: 'integrations', label: 'Integrations', icon: Link, path: '/superadmin/integrations' },
-    // { id: 'audit', label: 'Audit Logs', path: '/superadmin/audit' },
-    { id: 'security', label: 'Security', icon: Shield, path: '/superadmin/security' },
-    { id: 'settings', label: 'Settings', icon: Settings, path: '/superadmin/profile-settings' },
-  ]
+  const userFeatures = adminUser?.plan_features
+  const navItems = userFeatures 
+    ? superAdminNavItems.filter(item => userFeatures.includes(item.label))
+    : superAdminNavItems
 
   return (
     <SidebarProvider>
@@ -563,10 +569,12 @@ export default function SuperAdminLayout() {
             </div>
 
             {/* Active Plan Badge */}
-            <div className="flex items-center gap-1.5 px-3 py-1 bg-indigo-50/50 border border-indigo-200/60 text-indigo-700 rounded-full text-xs font-bold shadow-sm">
-              <span className="w-1.5 h-1.5 rounded-full bg-indigo-600"></span>
-              Active Plan: {adminUser?.subscription_plan || 'Advance'}
-            </div>
+            {adminUser?.subscription_plan && (
+              <div className="flex items-center gap-1.5 px-3 py-1 bg-indigo-50/50 border border-indigo-200/60 text-indigo-700 rounded-full text-xs font-bold shadow-sm">
+                <span className="w-1.5 h-1.5 rounded-full bg-indigo-600"></span>
+                Active Plan: {adminUser.subscription_plan}
+              </div>
+            )}
 
             {/* Credits Badge */}
             <div className="flex items-center gap-1.5 px-3 py-1 bg-cyan-50 border border-cyan-100 text-cyan-600 rounded-full text-xs font-bold shadow-sm">

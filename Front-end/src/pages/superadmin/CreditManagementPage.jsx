@@ -345,13 +345,13 @@ export default function CreditManagementPage() {
 function AllocateForm({ rows, onAllocate }) {
   const [org, setOrg] = useState(rows[0]?.id || "");
   const [amount, setAmount] = useState(10000);
-  return <DialogContent>
-      <DialogHeader><DialogTitle>Allocate credits</DialogTitle></DialogHeader>
+  return <DialogContent className="bg-white border-slate-200 text-slate-900 sm:max-w-[425px]">
+      <DialogHeader><DialogTitle className="text-slate-900">Allocate credits</DialogTitle></DialogHeader>
       <div className="space-y-3">
         <div className="space-y-1.5"><Label className="text-xs">Recruiter</Label>
           <Select value={org} onValueChange={setOrg}>
             <SelectTrigger><SelectValue /></SelectTrigger>
-            <SelectContent>{rows.map((r) => <SelectItem key={r.id} value={r.id}>{r.org}</SelectItem>)}</SelectContent>
+            <SelectContent className="bg-white text-slate-900 border-slate-200">{rows.map((r) => <SelectItem key={r.id} value={r.id} className="focus:bg-slate-100 cursor-pointer">{r.org}</SelectItem>)}</SelectContent>
           </Select>
         </div>
         <div className="space-y-1.5"><Label className="text-xs">Amount</Label>

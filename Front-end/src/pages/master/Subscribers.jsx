@@ -206,8 +206,9 @@ export default function Subscribers() {
 
     const matchesStatus =
       statusFilter === 'all' ||
-      (statusFilter === 'expired' && c.is_expired) ||
-      (statusFilter === 'active' && !c.is_expired)
+      (statusFilter === 'expired' && c.status === 'expired') ||
+      (statusFilter === 'active' && c.status === 'active') ||
+      (statusFilter === 'blocked' && c.status === 'blocked')
 
     return matchesSearch && matchesPlan && matchesStatus
   }).sort((a, b) => {
@@ -263,6 +264,7 @@ export default function Subscribers() {
             <option value="all">All Statuses</option>
             <option value="active">Active</option>
             <option value="expired">Expired</option>
+            <option value="blocked">Deactivated</option>
           </select>
         </div>
 
@@ -334,11 +336,13 @@ export default function Subscribers() {
                       </td>
                       <td className="p-4">
                         <span className={`px-2.5 py-0.5 rounded-full text-[0.65rem] font-bold uppercase tracking-wider ${
-                          c.is_expired
-                            ? 'bg-red-500/10 text-red-500 border border-red-500/20'
-                            : 'bg-emerald-500/10 text-emerald-500 border border-emerald-500/20'
+                          c.status === 'blocked'
+                            ? 'bg-amber-500/10 text-amber-500 border border-amber-500/20'
+                            : c.status === 'expired'
+                              ? 'bg-red-500/10 text-red-500 border border-red-500/20'
+                              : 'bg-emerald-500/10 text-emerald-500 border border-emerald-500/20'
                         }`}>
-                          {c.is_expired ? 'Expired' : 'Active'}
+                          {c.status === 'blocked' ? 'Deactivated' : c.status === 'expired' ? 'Expired' : 'Active'}
                         </span>
                       </td>
                       <td className="p-4 text-xs text-slate-500">

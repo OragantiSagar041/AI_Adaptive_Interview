@@ -5,6 +5,7 @@ import { RefreshCw, Edit, X } from 'lucide-react'
 import Swal from 'sweetalert2'
 import 'sweetalert2/dist/sweetalert2.min.css'
 import axios from 'axios'
+import { superAdminNavItems } from '../../components/superadmin/SuperAdminLayout'
 
 export default function Plans() {
   const token = useSelector(state => state.auth.token) || ''
@@ -102,13 +103,9 @@ export default function Plans() {
   }, [token])
 
   const featureOptions = [
-    'Overview Dashboard',
-    'Create Interview',
-    'Qualified Candidates',
-    'Rejected Candidates',
-    'Deactivated Candidates',
-    'Profile Settings',
-    'Live Monitor',
+    ...superAdminNavItems.map(item => item.label),
+    'Live Results',
+    'Available Credits',
     'Analytics & Reports',
     'Bulk Email Invites',
     'Resume Parsing',
@@ -116,12 +113,9 @@ export default function Plans() {
     'Priority Support',
     'API Access',
     'Export Data',
-    'User Management',
     'Role-Based Access',
-    'Integration Webhooks',
     'Industry Type',
-    'ATS Score',
-    'Interview Type'
+    'ATS Score'
   ]
 
   return (
@@ -147,7 +141,7 @@ export default function Plans() {
       ) : (
         <div className="grid gap-6 sm:grid-cols-2 lg:grid-cols-3">
           {plans.map(p => (
-            <article key={p.plan_name} className="bg-white border border-slate-200/60 p-6 rounded-2xl flex flex-col justify-between h-[380px] relative shadow-[0_4px_20px_rgba(0,0,0,0.04)]">
+            <article key={p.plan_name} className="bg-white border border-slate-200/60 p-6 rounded-2xl flex flex-col justify-between h-full relative shadow-[0_4px_20px_rgba(0,0,0,0.04)]">
               {p.is_unlimited && (
                 <span className="absolute top-5 right-5 text-[0.62rem] font-bold tracking-widest text-emerald-600 uppercase bg-emerald-50 px-2 py-0.5 rounded">
                   Scale
@@ -164,7 +158,7 @@ export default function Plans() {
                   {p.summary || 'Custom plan credentials configured for evaluating candidates.'}
                 </p>
 
-                <div className="mt-4 max-h-[120px] overflow-y-auto pr-1">
+                <div className="mt-4 mb-4 pr-1">
                   <ul className="space-y-1 text-slate-500 text-xs">
                     {(p.features || []).map((f, i) => (
                       <li key={i} className="flex gap-1.5 items-center">

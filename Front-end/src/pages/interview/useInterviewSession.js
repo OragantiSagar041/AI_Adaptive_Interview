@@ -217,28 +217,23 @@ export const useInterviewSession = (sessionId, interviewType, startRoundTwo) => 
   }, [runResultData]);
 
   useEffect(() => {
-    if (currentQuestion?.type === 'coding' && currentQuestion?.codingTask) {
-      const task = currentQuestion.codingTask
-      const templates = {
-        python: task.starter_function_signature || `def ${task.function_name || 'winner'}(donuts, starter):\n    # Write your code here\n    pass`,
-        javascript: task.function_name === 'winner'
-          ? `function winner(donuts, starter) {\n    // Write your code here\n    \n}`
-          : task.function_name === 'find_duplicates'
-            ? `function find_duplicates(records) {\n    // Write your code here\n    \n}`
-            : `function debounceSimulation(calls, delay) {\n    // Write your code here\n    \n}`,
-        cpp: task.function_name === 'winner'
-          ? `#include <vector>\n#include <string>\n\nstd::vector<std::string> winner(std::vector<int> donuts, std::vector<std::string> starter) {\n    // Write your code here\n    \n}`
-          : task.function_name === 'find_duplicates'
-            ? `#include <vector>\n#include <string>\n\nstd::vector<std::string> findDuplicates(std::vector<std::string> records) {\n    // Write your code here\n    \n}`
-            : `#include <vector>\n\nint debounceSimulation(std::vector<int> calls, int delay) {\n    // Write your code here\n    \n}`
-      }
+    const task = currentQuestion?.codingTask || currentQuestion || codingRoundData || {}
+    const fn = task.function_name || 'solution'
+    const sig = task.starter_function_signature
 
-      const isDefault = !codeAnswer || Object.values(templates).some(tmpl => codeAnswer.trim() === tmpl.trim())
-      if (isDefault) {
-        setCodeAnswer(templates[selectedLanguage] || '')
-      }
+    const templates = {
+      python: sig || task.starter_code || `def ${fn}(*args):\n    # Write your solution here\n    pass`,
+      javascript: `function ${fn}(...args) {\n    // Write your solution here\n    \n}`,
+      java: `public class Solution {\n    public static void ${fn}(String[] args) {\n        // Write your solution here\n    }\n}`,
+      cpp: `#include <iostream>\n#include <vector>\n#include <string>\nusing namespace std;\n\nvoid ${fn}() {\n    // Write your solution here\n}\n\nint main() {\n    ${fn}();\n    return 0;\n}`
     }
-  }, [currentQuestion, selectedLanguage])
+
+    const currentTmpl = templates[selectedLanguage] || templates.python
+    const isDefault = !codeAnswer || !codeAnswer.trim() || Object.values(templates).some(tmpl => codeAnswer.trim() === tmpl.trim())
+    if (isDefault) {
+      setCodeAnswer(currentTmpl)
+    }
+  }, [currentQuestion, selectedLanguage, codingRoundData])
 
   // Recording Ref elements
   const videoPreviewRef = useRef(null)
@@ -312,7 +307,7 @@ export const useInterviewSession = (sessionId, interviewType, startRoundTwo) => 
       if (document.hidden && isDisclaimerAccepted && !showAllSet && !isSubmittingRef.current) {
         behavioralStatsRef.current.tabSwitches += 1
         globalTabSwitchesRef.current += 1
-        
+
         recordAlertMetric('tab_switch')
 
         if (globalTabSwitchesRef.current >= 3) {
@@ -451,12 +446,12 @@ export const useInterviewSession = (sessionId, interviewType, startRoundTwo) => 
 
     // Capture-phase listeners so they fire before any child handler
     document.addEventListener('keydown', handleKeyDown, true)
-    document.addEventListener('keyup',   handleKeyUp,   true)
+    document.addEventListener('keyup', handleKeyUp, true)
     document.addEventListener('keypress', handleKeyPress, true)
 
     return () => {
       document.removeEventListener('keydown', handleKeyDown, true)
-      document.removeEventListener('keyup',   handleKeyUp,   true)
+      document.removeEventListener('keyup', handleKeyUp, true)
       document.removeEventListener('keypress', handleKeyPress, true)
       document.getElementById('interview-screenshot-guard')?.remove()
     }
@@ -468,7 +463,7 @@ export const useInterviewSession = (sessionId, interviewType, startRoundTwo) => 
     const handleUnload = (e) => {
       const isUploading = uploadingText && uploadPercentage < 100;
       const isActiveSession = sessionId && isDisclaimerAccepted && !isCompleted;
-      
+
       // Prevent exiting during active interview or during video upload
       if (isActiveSession || isUploading) {
         e.preventDefault();
@@ -497,21 +492,21 @@ export const useInterviewSession = (sessionId, interviewType, startRoundTwo) => 
   const visualizeAudio = (stream) => {
     const canvas = visualizerCanvasRef.current
     if (!canvas) return
-    
+
     if (visualizerAudioCtxRef.current) {
-      visualizerAudioCtxRef.current.close().catch(()=>{})
+      visualizerAudioCtxRef.current.close().catch(() => { })
       visualizerAudioCtxRef.current = null
     }
 
     const ctx = canvas.getContext("2d")
-    
+
     try {
       const audioCtx = new (window.AudioContext || window.webkitAudioContext)()
       visualizerAudioCtxRef.current = audioCtx
       if (audioCtx.state === 'suspended') {
         audioCtx.resume().catch(e => console.log("AudioContext resume failed:", e))
       }
-      
+
       const source = audioCtx.createMediaStreamSource(stream)
       const analyser = audioCtx.createAnalyser()
       analyser.fftSize = 256
@@ -528,48 +523,48 @@ export const useInterviewSession = (sessionId, interviewType, startRoundTwo) => 
           return
         }
 
-      requestAnimationFrame(draw)
-      analyser.getByteFrequencyData(dataArray)
+        requestAnimationFrame(draw)
+        analyser.getByteFrequencyData(dataArray)
 
-      // Ensure canvas dimensions match actual size to prevent distortion
-      if (canvas.width !== canvas.clientWidth) canvas.width = canvas.clientWidth
-      if (canvas.height !== canvas.clientHeight) canvas.height = canvas.clientHeight
+        // Ensure canvas dimensions match actual size to prevent distortion
+        if (canvas.width !== canvas.clientWidth) canvas.width = canvas.clientWidth
+        if (canvas.height !== canvas.clientHeight) canvas.height = canvas.clientHeight
 
-      const width = canvas.width
-      const height = canvas.height
-      
-      ctx.clearRect(0, 0, width, height)
-      
-      // Draw frequency bars
-      const numBars = 32 // limit bars for aesthetics
-      const barWidth = width / numBars
-      const step = Math.floor(analyser.frequencyBinCount / numBars)
-      
-      let x = 0
-      for (let i = 0; i < numBars; i++) {
-        // Average the frequencies in this step range for smoother bars
-        let sum = 0
-        for(let j = 0; j < step; j++) {
-           sum += dataArray[i * step + j] || 0
+        const width = canvas.width
+        const height = canvas.height
+
+        ctx.clearRect(0, 0, width, height)
+
+        // Draw frequency bars
+        const numBars = 32 // limit bars for aesthetics
+        const barWidth = width / numBars
+        const step = Math.floor(analyser.frequencyBinCount / numBars)
+
+        let x = 0
+        for (let i = 0; i < numBars; i++) {
+          // Average the frequencies in this step range for smoother bars
+          let sum = 0
+          for (let j = 0; j < step; j++) {
+            sum += dataArray[i * step + j] || 0
+          }
+          const avg = sum / step
+
+          // Map 0-255 to 10%-90% height
+          const barHeight = Math.max(height * 0.1, (avg / 255) * height * 0.9)
+
+          const gradient = ctx.createLinearGradient(0, height, 0, 0)
+          gradient.addColorStop(0, '#6366f1') // Indigo
+          gradient.addColorStop(1, '#a855f7') // Purple
+
+          ctx.fillStyle = gradient
+          ctx.beginPath()
+          ctx.roundRect(x + 2, height - barHeight, barWidth - 4, barHeight, [4, 4, 0, 0])
+          ctx.fill()
+
+          x += barWidth
         }
-        const avg = sum / step
-        
-        // Map 0-255 to 10%-90% height
-        const barHeight = Math.max(height * 0.1, (avg / 255) * height * 0.9)
-        
-        const gradient = ctx.createLinearGradient(0, height, 0, 0)
-        gradient.addColorStop(0, '#6366f1') // Indigo
-        gradient.addColorStop(1, '#a855f7') // Purple
-        
-        ctx.fillStyle = gradient
-        ctx.beginPath()
-        ctx.roundRect(x + 2, height - barHeight, barWidth - 4, barHeight, [4, 4, 0, 0])
-        ctx.fill()
-        
-        x += barWidth
       }
-    }
-    draw()
+      draw()
     } catch (err) {
       console.error("Audio visualizer failed to start:", err)
     }
@@ -590,7 +585,7 @@ export const useInterviewSession = (sessionId, interviewType, startRoundTwo) => 
     return () => {
       visualizerActiveRef.current = false
       if (visualizerAudioCtxRef.current) {
-        visualizerAudioCtxRef.current.close().catch(()=>{})
+        visualizerAudioCtxRef.current.close().catch(() => { })
         visualizerAudioCtxRef.current = null
       }
       if (timeout) clearTimeout(timeout)
@@ -685,7 +680,7 @@ export const useInterviewSession = (sessionId, interviewType, startRoundTwo) => 
           setLoading(false)
           return
         }
-      } catch (e) {}
+      } catch (e) { }
 
       try {
         const payload = await api.get(`/session/${sessionId}`).then(r => r.data)
@@ -694,7 +689,7 @@ export const useInterviewSession = (sessionId, interviewType, startRoundTwo) => 
         }
 
         setSessionDetail(payload)
-        
+
         // Ensure Voice Cloning works for Standard interviews
         if (payload.voice_clone && payload.custom_voice_id) {
           clonedVoiceIdRef.current = payload.custom_voice_id
@@ -755,16 +750,16 @@ export const useInterviewSession = (sessionId, interviewType, startRoundTwo) => 
         if (startPayload.monitoring_token) {
           setCandidateSessionAuth(startPayload.monitoring_token, sessionId, startPayload.interview_id)
         }
-        
+
         // ── Drain pending requests now that we are authenticated ──────
         try {
           const pendingKey = `complete_session_pending_${sessionId}`
           if (sessionStorage.getItem(pendingKey) === '1') {
             api.post(`/complete-session/${sessionId}`)
               .then(() => sessionStorage.removeItem(pendingKey))
-              .catch(() => {})
+              .catch(() => { })
           }
-        } catch (e) {}
+        } catch (e) { }
 
         try {
           const keys = Object.keys(sessionStorage)
@@ -782,11 +777,11 @@ export const useInterviewSession = (sessionId, interviewType, startRoundTwo) => 
 
               api.post(`/save-answer`, answerForm, {
                 headers: { 'Content-Type': 'multipart/form-data' }
-              }).then(() => sessionStorage.removeItem(key)).catch(() => {})
+              }).then(() => sessionStorage.removeItem(key)).catch(() => { })
             }
           }
-        } catch (e) {}
-        
+        } catch (e) { }
+
         // Snapshot candidate details into refs NOW (synchronously) so that the
         // async Whisper MediaRecorder onstop callback always has correct values.
         // Using refs avoids the race condition where sessionDetail state hasn't
@@ -1020,7 +1015,7 @@ export const useInterviewSession = (sessionId, interviewType, startRoundTwo) => 
         }
         whisperMediaRecorderRef.current = mr
         // Do NOT start automatically. The VAD logic in tick() will start it on speech.
-      } catch(e) {
+      } catch (e) {
         console.error('Failed to start Whisper MediaRecorder:', e)
         whisperMediaRecorderRef.current = null
       }
@@ -1055,7 +1050,7 @@ export const useInterviewSession = (sessionId, interviewType, startRoundTwo) => 
             // InvalidStateError or similar — start a fresh recognition instance
             if (isSpeechRecordingRef.current) {
               initSpeechRecognition()
-              try { recognitionRef.current?.start() } catch (_) {}
+              try { recognitionRef.current?.start() } catch (_) { }
             }
           }
         }, 150)
@@ -1110,10 +1105,10 @@ export const useInterviewSession = (sessionId, interviewType, startRoundTwo) => 
       if (e.error === 'network') {
         // Network blip — restart after a longer pause
         if (isSpeechRecordingRef.current) {
-          setTimeout(() => { 
+          setTimeout(() => {
             if (isSpeechRecordingRef.current) {
               initSpeechRecognition()
-              try { recognitionRef.current?.start() } catch (_) {}
+              try { recognitionRef.current?.start() } catch (_) { }
             }
           }, 1000)
         }
@@ -1158,11 +1153,11 @@ export const useInterviewSession = (sessionId, interviewType, startRoundTwo) => 
           sumSquares += normalized * normalized
         }
         const rms = Math.sqrt(sumSquares / dataArray.length)
-        
+
         audioRmsRef.current = rms
 
         const now = Date.now()
-        
+
         // Treat RMS > 0.03 as speech and bump the silence timer
         if (rms > 0.03) {
           lastSpeechTimeRef.current = now
@@ -1267,11 +1262,11 @@ export const useInterviewSession = (sessionId, interviewType, startRoundTwo) => 
     } else if (
       // Advisory-only types: logged to backend but do NOT count toward
       // the face-alert termination cap (not security-critical enough).
-      type === 'window_blur'       ||
-      type === 'devtools_open'     ||
-      type === 'multi_monitor'     ||
+      type === 'window_blur' ||
+      type === 'devtools_open' ||
+      type === 'multi_monitor' ||
       type === 'clipboard_attempt' ||
-      type === 'print_attempt'     ||
+      type === 'print_attempt' ||
       type === 'save_attempt'
     ) {
       // Logged via POST above — no UI counter increment
@@ -1281,7 +1276,7 @@ export const useInterviewSession = (sessionId, interviewType, startRoundTwo) => 
       behavioralStatsRef.current.faceAlerts += 1
       globalFaceAlertsRef.current += 1
       setFaceAlertCount(globalFaceAlertsRef.current)
-      
+
       if (globalFaceAlertsRef.current >= 20) {
         Swal.fire({
           title: 'Interview Terminated',
@@ -1399,7 +1394,7 @@ export const useInterviewSession = (sessionId, interviewType, startRoundTwo) => 
         round_type: liveData.round_type,
       }, {
         headers: { Authorization: `Bearer ${monitoringToken}` },
-      }).catch(() => {})
+      }).catch(() => { })
     }
 
     sendHeartbeat()
@@ -1407,7 +1402,7 @@ export const useInterviewSession = (sessionId, interviewType, startRoundTwo) => 
     return () => clearInterval(intervalId)
   }, [sessionId, monitoringToken, videoPreviewRef])
 
-// Screenshot / capture-attempt deterrence & logging.
+  // Screenshot / capture-attempt deterrence & logging.
   // NOTE: this can only catch in-browser vectors (shortcuts, right-click,
   // DevTools) — OS-level screenshot tools cannot be blocked from the page.
   // Every attempt is routed through recordAlertMetric so it is throttled,
@@ -1613,7 +1608,7 @@ export const useInterviewSession = (sessionId, interviewType, startRoundTwo) => 
       startBackgroundNoiseMonitor(stream)
 
       const savedSess = _sessionKey ? (() => { try { return JSON.parse(sessionStorage.getItem(_sessionKey) || 'null') } catch { return null } })() : null
-      
+
       // Voice cloning setup is now handled server-side via CARTESIA_VOICE_ID env var.
       // Skip the setup screen and go directly to the first question.
       if (!savedSess?.accepted && questions.length > 0) {
@@ -1790,7 +1785,7 @@ export const useInterviewSession = (sessionId, interviewType, startRoundTwo) => 
       try {
         currentAudioRef.current.pause()
         currentAudioRef.current.currentTime = 0
-      } catch (e) {}
+      } catch (e) { }
       currentAudioRef.current = null
     }
 
@@ -1800,7 +1795,7 @@ export const useInterviewSession = (sessionId, interviewType, startRoundTwo) => 
     // restart the mic 150ms later right in the middle of TTS audio.
     isTTSPlayingRef.current = true
     if (recognitionRef.current) {
-      try { recognitionRef.current.stop() } catch (_) {}
+      try { recognitionRef.current.stop() } catch (_) { }
     }
     // Clear any gibberish that got captured while recognition was still on
     setTranscriptionText('')
@@ -1809,9 +1804,9 @@ export const useInterviewSession = (sessionId, interviewType, startRoundTwo) => 
     // --- High-Quality TTS (Backend: Cartesia or Edge TTS) ---
     try {
       if (window.speechSynthesis) window.speechSynthesis.cancel()
-      const bodyPayload = { 
-        text, 
-        voice: 'shimmer', 
+      const bodyPayload = {
+        text,
+        voice: 'shimmer',
         language: sessionDetail?.language || 'English',
         use_custom_voice: !!sessionDetail?.voice_clone
 
@@ -1845,7 +1840,7 @@ export const useInterviewSession = (sessionId, interviewType, startRoundTwo) => 
 
       const audio = new Audio(url)
       currentAudioRef.current = audio
-      
+
       // --- Web Audio Mixer Routing ---
       if (audioMixerCtxRef.current && audioMixerDestRef.current) {
         audio.crossOrigin = "anonymous"
@@ -1865,10 +1860,10 @@ export const useInterviewSession = (sessionId, interviewType, startRoundTwo) => 
         isTTSPlayingRef.current = false
         isSpeechRecordingRef.current = true
         initSpeechRecognition()
-        try { recognitionRef.current?.start() } catch (_) {}
+        try { recognitionRef.current?.start() } catch (_) { }
         startSilenceTimer(10000)
       }
-      
+
       // Double check reqId before playing just in case
       if (speakRequestIdRef.current === reqId) {
         audio.play()
@@ -1885,7 +1880,7 @@ export const useInterviewSession = (sessionId, interviewType, startRoundTwo) => 
       startSilenceTimer(15000)
       return
     }
-    
+
     // If a new request came in, abort browser fallback setup
     if (speakRequestIdRef.current !== reqId) return
 
@@ -1911,7 +1906,7 @@ export const useInterviewSession = (sessionId, interviewType, startRoundTwo) => 
         isTTSPlayingRef.current = false
         isSpeechRecordingRef.current = true
         initSpeechRecognition()
-        try { recognitionRef.current?.start() } catch (_) {}
+        try { recognitionRef.current?.start() } catch (_) { }
         startSilenceTimer(10000)
       }
 
@@ -2173,7 +2168,7 @@ export const useInterviewSession = (sessionId, interviewType, startRoundTwo) => 
                 prefetchedQuestionsRef.current = data.questions
               }
             })
-            .catch(() => {})
+            .catch(() => { })
             .finally(() => { isPrefetchingRef.current = false })
         }
 
@@ -2241,7 +2236,7 @@ export const useInterviewSession = (sessionId, interviewType, startRoundTwo) => 
     if (recognitionRef.current) {
       try { recognitionRef.current.stop() } catch (e) { }
     }
-    
+
     if (whisperMediaRecorderRef.current && whisperMediaRecorderRef.current.state !== 'inactive') {
       try { whisperMediaRecorderRef.current.stop() } catch (e) { }
       whisperMediaRecorderRef.current = null
@@ -2250,24 +2245,24 @@ export const useInterviewSession = (sessionId, interviewType, startRoundTwo) => 
 
     try {
       if (mediaStreamRef.current) {
-        mediaStreamRef.current.getTracks().forEach(track => { try { track.stop() } catch(e){} })
+        mediaStreamRef.current.getTracks().forEach(track => { try { track.stop() } catch (e) { } })
       }
-    } catch(e) { console.error("Error stopping media tracks:", e) }
+    } catch (e) { console.error("Error stopping media tracks:", e) }
 
     try {
       if (screenStreamRef.current) {
-        screenStreamRef.current.getTracks().forEach(track => { try { track.stop() } catch(e){} })
+        screenStreamRef.current.getTracks().forEach(track => { try { track.stop() } catch (e) { } })
       }
-    } catch(e) { console.error("Error stopping screen tracks:", e) }
+    } catch (e) { console.error("Error stopping screen tracks:", e) }
 
     try {
       if (audioMixerDestRef.current && audioMixerDestRef.current.stream) {
-        audioMixerDestRef.current.stream.getTracks().forEach(track => { try { track.stop() } catch(e){} })
+        audioMixerDestRef.current.stream.getTracks().forEach(track => { try { track.stop() } catch (e) { } })
       }
       if (audioMixerCtxRef.current && audioMixerCtxRef.current.state !== 'closed') {
         audioMixerCtxRef.current.close().catch(e => console.error("Error closing audio mixer:", e))
       }
-    } catch(e) { console.error("Error stopping audio mixer:", e) }
+    } catch (e) { console.error("Error stopping audio mixer:", e) }
 
     if (cameraRecorderRef.current && cameraRecorderRef.current.state !== 'inactive') {
       cameraRecorderRef.current.stop()
@@ -2328,7 +2323,7 @@ export const useInterviewSession = (sessionId, interviewType, startRoundTwo) => 
       const words = transcriptionText.trim().split(/\s+/).filter(w => w.length > 0).length
       const wpm = timeSpent > 0 ? Math.round((words / timeSpent) * 60) : 0
       const currentQuestion = questions[currentQuestionIndex] || {}
-      
+
       // If forced termination (e.g., proctoring alert), save the answer first!
       if (forceClose && currentQuestion) {
         const iid = interviewIdRef.current || sessionId
@@ -2356,7 +2351,7 @@ export const useInterviewSession = (sessionId, interviewType, startRoundTwo) => 
               time_spent_seconds: timeSpent
             }
             sessionStorage.setItem(failedKey, JSON.stringify(answerData))
-          } catch (_) {}
+          } catch (_) { }
         }
       }
 
@@ -2379,7 +2374,7 @@ export const useInterviewSession = (sessionId, interviewType, startRoundTwo) => 
       const queryParams = terminationReason ? `?reason=${encodeURIComponent(terminationReason)}` : ''
       await api.post(`/complete-session/${sessionId}${queryParams}`)
       if (sessionId) {
-        try { sessionStorage.setItem(`interview_done_${sessionId}`, '1') } catch (e) {}
+        try { sessionStorage.setItem(`interview_done_${sessionId}`, '1') } catch (e) { }
       }
     } catch (completionError) {
       console.error('Failed to complete interview session:', completionError)
@@ -2442,7 +2437,7 @@ export const useInterviewSession = (sessionId, interviewType, startRoundTwo) => 
               interview_id: iid,
               question_index: currentQuestion.caseStudyIndex,
               answer_text: transcriptionText || ' '
-            }).catch(()=>{})
+            }).catch(() => { })
           } else {
             const answerForm = new FormData()
             answerForm.append('interview_id', iid)
@@ -2452,7 +2447,7 @@ export const useInterviewSession = (sessionId, interviewType, startRoundTwo) => 
             answerForm.append('candidate_name', sessionDetail?.candidate_name || 'Candidate')
             answerForm.append('time_spent_seconds', timeSpent.toString())
             answerForm.append('time_limit_seconds', '120')
-            await api.post(`/save-answer`, answerForm).catch(()=>{})
+            await api.post(`/save-answer`, answerForm).catch(() => { })
           }
         }
         handleSubmitInterview(false, 'early_exit')

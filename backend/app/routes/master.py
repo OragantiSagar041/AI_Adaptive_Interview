@@ -138,22 +138,37 @@ def get_companies(master_id: str = Depends(get_current_admin)):
         
     companies = list(companies_collection.find())
     
+    # Pre-fetch session counts for all companies using an aggregation pipeline
+    pipeline = [
+        {"$group": {
+            "_id": "$company_id",
+            "total": {"$sum": 1},
+            "completed": {"$sum": {"$cond": [{"$eq": ["$status", "completed"]}, 1, 0]}},
+            "started": {"$sum": {"$cond": [{"$eq": ["$status", "started"]}, 1, 0]}},
+            "pending": {"$sum": {"$cond": [{"$eq": ["$status", "pending"]}, 1, 0]}},
+            "deactivated": {"$sum": {"$cond": [{"$eq": ["$is_deactivated", True]}, 1, 0]}}
+        }}
+    ]
+    session_counts = {str(item["_id"]): item for item in interview_sessions_collection.aggregate(pipeline)}
+    
+    # Pre-fetch primary admins for all companies
+    company_ids = [str(c["_id"]) for c in companies]
+    primary_admins = {str(admin["company_id"]): admin for admin in admins_collection.find({"company_id": {"$in": company_ids}, "role": "super_admin"})}
+    
     result = []
     for c in companies:
         company_id = str(c["_id"])
-        # Create a mock user dict to pass to get_admin_plan_context
         mock_user = {"company_id": company_id}
         plan_context = get_admin_plan_context(mock_user)
         
-        session_filter = {"company_id": company_id}
-        total_sessions = interview_sessions_collection.count_documents(session_filter)
-        completed_sessions = interview_sessions_collection.count_documents({**session_filter, "status": "completed"})
-        started_sessions = interview_sessions_collection.count_documents({**session_filter, "status": "started"})
-        pending_sessions = interview_sessions_collection.count_documents({**session_filter, "status": "pending"})
-        deactivated_sessions = interview_sessions_collection.count_documents({**session_filter, "is_deactivated": True})
+        counts = session_counts.get(company_id, {})
+        total_sessions = counts.get("total", 0)
+        completed_sessions = counts.get("completed", 0)
+        started_sessions = counts.get("started", 0)
+        pending_sessions = counts.get("pending", 0)
+        deactivated_sessions = counts.get("deactivated", 0)
         
-        # Get primary admin email
-        primary_admin = admins_collection.find_one({"company_id": company_id, "role": "super_admin"})
+        primary_admin = primary_admins.get(company_id)
         email = primary_admin.get("email", "") if primary_admin else ""
         username = primary_admin.get("username", "") if primary_admin else ""
         login_enabled = primary_admin.get("login_enabled", True) if primary_admin else False

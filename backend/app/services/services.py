@@ -190,6 +190,22 @@ def normalize_plan_key(plan_name: Optional[str]) -> str:
 def get_plan_definition(plan_name: Optional[str]) -> Dict[str, Any]:
     plan_key = normalize_plan_key(plan_name)
     base = PLAN_DEFINITIONS.get(plan_key, PLAN_DEFINITIONS["trial"])
+    
+    db_plan = plans_collection.find_one({"plan_name": plan_name})
+    if not db_plan:
+        db_plan = plans_collection.find_one({"plan_key": plan_key})
+        
+    if db_plan:
+        return {
+            "plan_key": plan_key,
+            "label": db_plan.get("plan_name", base["label"]),
+            "credits_granted": db_plan.get("credits_granted", base["credits_granted"]),
+            "price": db_plan.get("price", base["price"]),
+            "summary": db_plan.get("summary", base["summary"]),
+            "features": list(db_plan.get("features", base["features"])),
+            "capabilities": dict(db_plan.get("capabilities", base["capabilities"])),
+        }
+
     return {
         "plan_key": plan_key,
         "label": base["label"],
@@ -846,13 +862,14 @@ import sys
 tests = json.loads({tests_json})
 results = []
 function_name = "{function_name}"
-
-if function_name in dir():
-    func = eval(function_name)
-elif function_name in locals():
-    func = locals()[function_name]
+func = None
+if function_name and function_name in globals() and callable(globals()[function_name]):
+    func = globals()[function_name]
 else:
-    func = None
+    for name, obj in list(globals().items()):
+        if callable(obj) and not name.startswith("__") and name not in ["json", "sys", "eval"]:
+            func = obj
+            break
 
 if func is not None:
     for test in tests:
@@ -864,7 +881,21 @@ if func is not None:
             output = func(*input_args)
             expected = test.get("expected") if test.get("expected") is not None else test.get("output")
             
-            passed = (output == expected)
+            if isinstance(output, set):
+                output = list(output)
+            if isinstance(expected, set):
+                expected = list(expected)
+                
+            passed = False
+            if output == expected:
+                passed = True
+            elif isinstance(output, list) and isinstance(expected, list):
+                try:
+                    passed = (sorted([str(x) for x in output]) == sorted([str(x) for x in expected]))
+                except Exception:
+                    passed = False
+            elif str(output).strip() == str(expected).strip():
+                passed = True
             
             results.append({{
                 "id": test.get("id"),

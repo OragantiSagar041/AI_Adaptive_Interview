@@ -341,33 +341,77 @@ export default function LoginPage() {
     if (!username || !password) { setLoginError('Please enter both username and password.'); return }
     setLoginLoading(true); setLoginError('')
     try {
-      const response = await axios.post(API_BASE_URL + '/admin/login', { username, password }, { timeout: 10000 })
-      const data = response.data
-      if (data.status === 'expired' || data.status === 'blocked') { setLoginError(data.message || 'Subscription expired.'); setLoginLoading(false); return }
+      // ── Step 1: Try Master login first ────────────────────────────────────
+      // The /admin/login endpoint explicitly excludes master-role users.
+      // We probe /master/login; if credentials match we go to /master/dashboard.
+      let data = null
+      let finalRole = null
+
+      try {
+        const masterRes = await axios.post(API_BASE_URL + '/master/login', { username, password }, { timeout: 10000 })
+        if (masterRes.data?.role === 'master') {
+          data = masterRes.data
+          finalRole = 'master'
+        }
+      } catch (masterErr) {
+        // Not a master user — fall through to admin login below
+        if (masterErr.response?.status !== 401) {
+          // Unexpected error on master route
+          setLoginError(masterErr.response?.data?.detail || masterErr.response?.data?.message || 'Cannot connect to server.')
+          setLoginLoading(false)
+          return
+        }
+      }
+
+      // ── Step 2: Regular admin/superadmin login ────────────────────────────
+      if (!data) {
+        const response = await axios.post(API_BASE_URL + '/admin/login', { username, password }, { timeout: 10000 })
+        data = response.data
+        if (data.status === 'expired' || data.status === 'blocked') {
+          setLoginError(data.message || 'Subscription expired.')
+          setLoginLoading(false)
+          return
+        }
+        const role = data.role || 'tenant'
+        if (role === 'super_admin' || role === 'superadmin') finalRole = 'superadmin'
+        else if (role === 'tenant' || role === 'admin') finalRole = 'admin'
+        else finalRole = role
+      }
+
+      // ── Step 3: Persist credentials ───────────────────────────────────────
       const adminId = data.admin_id || data.master_id
       const adminEmail = data.email || ''
       const adminName = data.username || username
-      const role = data.role || 'tenant'
       const plan = data.subscription_plan || 'Free Trial'
       const planKey = data.subscription_plan_key || 'trial'
       const planCapabilities = data.plan_capabilities || {}
-      let finalRole = role
-      if (role === 'super_admin' || role === 'superadmin') finalRole = 'superadmin'
-      if (role === 'tenant' || role === 'admin') finalRole = 'admin'
+
       if (data.token) {
         sessionStorage.setItem('adminToken', data.token)
+        sessionStorage.setItem('masterToken', data.token)
         dispatch(setCredentials({ role: finalRole, token: data.token, adminUser: data }))
       }
-      sessionStorage.setItem('adminId', adminId); sessionStorage.setItem('adminEmail', adminEmail)
-      sessionStorage.setItem('adminName', adminName); sessionStorage.setItem('adminRole', finalRole)
-      sessionStorage.setItem('adminUser', JSON.stringify(data)); sessionStorage.setItem('subscriptionPlan', plan)
-      sessionStorage.setItem('subscriptionPlanKey', planKey); sessionStorage.setItem('planCapabilities', JSON.stringify(planCapabilities))
-      sessionStorage.setItem('subscriptionExpiry', data.subscription_expiry || ''); sessionStorage.setItem('subscriptionCredits', data.credits ?? '')
-      sessionStorage.setItem('subscriptionWarningMessage', data.subscription_warning_message || ''); sessionStorage.setItem('adminCompany', data.company_name || '')
+
+      sessionStorage.setItem('adminId', adminId)
+      sessionStorage.setItem('adminEmail', adminEmail)
+      sessionStorage.setItem('adminName', adminName)
+      sessionStorage.setItem('adminRole', finalRole)
+      sessionStorage.setItem('adminUser', JSON.stringify(data))
+      sessionStorage.setItem('subscriptionPlan', plan)
+      sessionStorage.setItem('subscriptionPlanKey', planKey)
+      sessionStorage.setItem('planCapabilities', JSON.stringify(planCapabilities))
+      sessionStorage.setItem('subscriptionExpiry', data.subscription_expiry || '')
+      sessionStorage.setItem('subscriptionCredits', data.credits ?? '')
+      sessionStorage.setItem('subscriptionWarningMessage', data.subscription_warning_message || '')
+      sessionStorage.setItem('adminCompany', data.company_name || '')
+
+      // ── Step 4: Navigate to the correct dashboard ─────────────────────────
       if (finalRole === 'superadmin') navigate('/superadmin/new-dashboard')
       else if (finalRole === 'admin') navigate('/admin/dashboard')
       else if (finalRole === 'master') navigate('/master/dashboard')
-      else navigate('/login')
+      else {
+        setLoginError('Unrecognised account role. Please contact support.')
+      }
     } catch (error) {
       if (error.code === 'ECONNABORTED' || error.message?.includes('timeout')) setLoginError('Request timed out.')
       else setLoginError(error.response?.data?.detail || error.response?.data?.message || 'Cannot connect to server.')
@@ -419,20 +463,20 @@ export default function LoginPage() {
         <div className="lp-waves-bg">
           <div className="lp-wave lp-w3">
             <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1440 160" preserveAspectRatio="none">
-              <path d={W3} fill="rgba(100,30,200,0.13)"/>
-              <path d={W3} fill="rgba(100,30,200,0.13)" transform="translate(720,0)"/>
+              <path d={W3} fill="rgba(100,30,200,0.13)" />
+              <path d={W3} fill="rgba(100,30,200,0.13)" transform="translate(720,0)" />
             </svg>
           </div>
           <div className="lp-wave lp-w2">
             <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1440 160" preserveAspectRatio="none">
-              <path d={W2} fill="rgba(120,50,210,0.20)"/>
-              <path d={W2} fill="rgba(120,50,210,0.20)" transform="translate(720,0)"/>
+              <path d={W2} fill="rgba(120,50,210,0.20)" />
+              <path d={W2} fill="rgba(120,50,210,0.20)" transform="translate(720,0)" />
             </svg>
           </div>
           <div className="lp-wave lp-w1">
             <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1440 160" preserveAspectRatio="none">
-              <path d={W1} fill="rgba(139,92,246,0.32)"/>
-              <path d={W1} fill="rgba(139,92,246,0.32)" transform="translate(720,0)"/>
+              <path d={W1} fill="rgba(139,92,246,0.32)" />
+              <path d={W1} fill="rgba(139,92,246,0.32)" transform="translate(720,0)" />
             </svg>
           </div>
         </div>
