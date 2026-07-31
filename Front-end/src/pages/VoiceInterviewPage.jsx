@@ -1337,7 +1337,7 @@ export default function VoiceInterviewPage() {
       if (isListeningRef.current) {
         finishListening().then(fullAns => onFinish?.(fullAns))
       }
-    }, rec ? 12000 : 30000)
+    }, rec ? 3500 : 15000)
 
     if (rec) rec.onresult = ev => {
       if (!isListeningRef.current) return
@@ -1361,7 +1361,7 @@ export default function VoiceInterviewPage() {
         if (isListeningRef.current) {
           finishListening().then(fullAns => onFinish?.(fullAns))
         }
-      }, 12000)
+      }, 3500)
     }
 
     // ── Smart error handler ────────────────────────────────────────────────
@@ -1374,7 +1374,7 @@ export default function VoiceInterviewPage() {
           if (isListeningRef.current) {
             finishListening().then(fullAns => onFinish?.(fullAns))
           }
-        }, 10000)
+        }, 3500)
         return
       }
       if (err === 'aborted') return  // intentional stop — do nothing

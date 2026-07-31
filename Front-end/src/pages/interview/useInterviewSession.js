@@ -1737,7 +1737,7 @@ export const useInterviewSession = (sessionId, interviewType, startRoundTwo) => 
     }
   }
 
-  const startSilenceTimer = (delayMs = 10000) => {
+  const startSilenceTimer = (delayMs = 4000) => {
     if (!isRoundTwoRef.current) {
       if (silenceIntervalRef.current) clearInterval(silenceIntervalRef.current)
       lastSpeechTimeRef.current = Date.now()
@@ -1847,7 +1847,7 @@ export const useInterviewSession = (sessionId, interviewType, startRoundTwo) => 
         isSpeechRecordingRef.current = true
         initSpeechRecognition()
         try { recognitionRef.current?.start() } catch (_) {}
-        startSilenceTimer(10000)
+        startSilenceTimer(4000)
       }
       
       // Double check reqId before playing just in case
@@ -1893,7 +1893,7 @@ export const useInterviewSession = (sessionId, interviewType, startRoundTwo) => 
         isSpeechRecordingRef.current = true
         initSpeechRecognition()
         try { recognitionRef.current?.start() } catch (_) {}
-        startSilenceTimer(10000)
+        startSilenceTimer(4000)
       }
 
       window.speechSynthesis.speak(utterance)

@@ -394,7 +394,7 @@ export default function VoiceCaseStudy({
           clearTimeout(silenceTimerRef.current)
           silenceTimerRef.current = setTimeout(() => {
             if (mediaRecorder.state !== 'inactive') mediaRecorder.stop()
-          }, 5000)  // 5s grace after last detected speech
+          }, 3000)  // 3s grace after last detected speech
         }
         recognition.start()
       }
@@ -441,7 +441,7 @@ export default function VoiceCaseStudy({
       clearTimeout(silenceTimerRef.current)
       silenceTimerRef.current = setTimeout(() => {
         if (mediaRecorder.state !== 'inactive') mediaRecorder.stop()
-      }, 15000)  // 15s initial grace period before first speech
+      }, 6000)  // 6s initial grace period before first speech
 
     } catch (err) {
       console.error("Mic access denied or error:", err)
