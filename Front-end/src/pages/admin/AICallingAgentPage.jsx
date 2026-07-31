@@ -8,13 +8,19 @@ import {
   Mic, MessageSquare, RefreshCw, ChevronDown, ChevronUp, Timer,
   AlertCircle, User, Calendar, TrendingUp, Play, Plus, Trash2, Copy,
   ArrowUpRight, ArrowDownLeft, Upload, Search, Filter, Users, Settings, 
-  CheckCircle, Eye, Brain, X
+  CheckCircle, Eye, Brain, X, ExternalLink, Info
 } from 'lucide-react'
 import Card from '../../components/Card'
 import Button from '../../components/Button'
 import CallDetailsModal from './CallDetailsModal'
 import IntegrationModal from './IntegrationModal'
+
 import ConversationalFlowPage from './ConversationalFlowPage'
+import { 
+  CalComIcon, CalendlyIcon, CustomApiIcon, SalesforceIcon, 
+  GoogleCalendarIcon, GoogleSheetsIcon, SlackIcon, HubSpotIcon, 
+  GenesysIcon, WhatsAppIcon 
+} from '../../components/admin/BrandIcons'
 import { parseDateStringToUtc } from '../../utils/adminFormatters'
 
 // ─── Helpers ───────────────────────────────────────────────────────────────────
@@ -78,67 +84,136 @@ function AssistantDetailsTab({ agentSettings, loading }) {
   if (loading) return <SectionLoader />
   if (!agentSettings) return <EmptyState message="No agent settings found. Check your Omni Dimension API key." />
 
+  const defaultGreeting = "Hello {{candidate_name}}, this is Sarah, the AI Recruitment Assistant from HireIQ, calling on behalf of {{HIRE IQ}} regarding your application for the {{job_role}} position. I'd like to conduct a brief screening interview that will take about {{duration}} minutes. Would you like me to continue?"
+
+  const [isDynamic, setIsDynamic] = useState(true)
+  const [isInterruptible, setIsInterruptible] = useState(false)
+  const [greetingText, setGreetingText] = useState(agentSettings.greeting_message || defaultGreeting)
+
+  useEffect(() => {
+    if (agentSettings?.greeting_message) {
+      setGreetingText(agentSettings.greeting_message)
+    }
+  }, [agentSettings])
+
   return (
     <div className="space-y-6">
-      <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-        {[
-          { label: 'Languages', icon: <Globe size={14} />, color: 'emerald', value: agentSettings.language || 'English' },
-          { label: 'Voice (TTS)', icon: <Volume2 size={14} />, color: 'indigo', value: `${agentSettings.tts_provider || 'Cartesia'} – ${agentSettings.tts_voice_id || 'Riya'}` },
-          { label: 'AI Model', icon: <Zap size={14} />, color: 'amber', value: agentSettings.llm_model || 'gpt-4o-mini' },
-          { label: 'Transcription', icon: <Mic size={14} />, color: 'rose', value: agentSettings.asr_provider || 'Soniox' },
-        ].map(({ label, icon, color, value }, i) => (
-          <motion.div 
-            initial={{ opacity: 0, y: 20 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={{ delay: i * 0.1, duration: 0.5, ease: "easeOut" }}
-            key={label} 
-            className={`bg-white border border-slate-200 hover:border-${color}-300 rounded-2xl p-5 shadow-sm hover:shadow-md transition-all group`}
-          >
-            <div className={`flex items-center gap-2 mb-3 text-${color}-600`}>
-              <div className={`p-1.5 bg-${color}-50 rounded-lg group-hover:scale-110 transition-transform`}>{icon}</div>
-              <span className="text-[0.65rem] font-extrabold uppercase tracking-widest">{label}</span>
+      {/* Assistant Settings Section */}
+      <div className="bg-white border border-slate-200 rounded-2xl p-6 shadow-sm space-y-4">
+        <div className="flex items-center gap-1.5">
+          <h3 className="text-sm font-extrabold text-slate-800 tracking-tight">Assistant Settings</h3>
+          <Info size={14} className="text-slate-400 cursor-pointer hover:text-slate-600 transition-colors" />
+        </div>
+
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3.5">
+          {/* Languages */}
+          <div className="bg-slate-50 hover:bg-slate-100/80 border border-slate-200/80 rounded-xl p-3.5 flex items-center justify-between transition-all group cursor-pointer">
+            <div className="flex items-center gap-3">
+              <div className="p-2 rounded-lg bg-indigo-100/70 text-indigo-600 group-hover:scale-105 transition-transform">
+                <Globe size={16} />
+              </div>
+              <div>
+                <div className="text-[0.7rem] font-bold text-slate-800 leading-tight">Languages</div>
+                <div className="text-[0.68rem] text-slate-500 font-medium mt-0.5">{agentSettings.language || 'English (India), Hindi'}</div>
+              </div>
             </div>
-            <div className="font-semibold text-sm text-slate-800">{value}</div>
-          </motion.div>
-        ))}
+            <Info size={13} className="text-slate-300 group-hover:text-slate-400 transition-colors" />
+          </div>
+
+          {/* Voice (TTS) */}
+          <div className="bg-slate-50 hover:bg-slate-100/80 border border-slate-200/80 rounded-xl p-3.5 flex items-center justify-between transition-all group cursor-pointer">
+            <div className="flex items-center gap-3">
+              <div className="p-2 rounded-lg bg-teal-100/70 text-teal-600 group-hover:scale-105 transition-transform">
+                <Volume2 size={16} />
+              </div>
+              <div>
+                <div className="text-[0.7rem] font-bold text-slate-800 leading-tight">Voice (TTS)</div>
+                <div className="text-[0.68rem] text-slate-500 font-medium mt-0.5">{agentSettings.tts_provider || 'Cartesia'} - {agentSettings.tts_voice_id || 'Riya'}</div>
+              </div>
+            </div>
+            <Info size={13} className="text-slate-300 group-hover:text-slate-400 transition-colors" />
+          </div>
+
+          {/* AI Model (LLM) */}
+          <div className="bg-slate-50 hover:bg-slate-100/80 border border-slate-200/80 rounded-xl p-3.5 flex items-center justify-between transition-all group cursor-pointer">
+            <div className="flex items-center gap-3">
+              <div className="p-2 rounded-lg bg-purple-100/70 text-purple-600 group-hover:scale-105 transition-transform">
+                <Zap size={16} />
+              </div>
+              <div>
+                <div className="text-[0.7rem] font-bold text-slate-800 leading-tight">AI Model (LLM)</div>
+                <div className="text-[0.68rem] text-slate-500 font-medium mt-0.5">{agentSettings.llm_model || 'gpt-4o-mini'}</div>
+              </div>
+            </div>
+            <Info size={13} className="text-slate-300 group-hover:text-slate-400 transition-colors" />
+          </div>
+
+          {/* Transcription (STT) */}
+          <div className="bg-slate-50 hover:bg-slate-100/80 border border-slate-200/80 rounded-xl p-3.5 flex items-center justify-between transition-all group cursor-pointer">
+            <div className="flex items-center gap-3">
+              <div className="p-2 rounded-lg bg-rose-100/70 text-rose-600 group-hover:scale-105 transition-transform">
+                <Mic size={16} />
+              </div>
+              <div>
+                <div className="text-[0.7rem] font-bold text-slate-800 leading-tight">Transcription (STT)</div>
+                <div className="text-[0.68rem] text-slate-500 font-medium mt-0.5">{agentSettings.asr_provider || 'Soniox'}</div>
+              </div>
+            </div>
+            <Info size={13} className="text-slate-300 group-hover:text-slate-400 transition-colors" />
+          </div>
+        </div>
       </div>
 
-      {agentSettings.greeting_message && (
-        <motion.div 
-          initial={{ opacity: 0, y: 20 }}
-          animate={{ opacity: 1, y: 0 }}
-          transition={{ delay: 0.4 }}
-          className="bg-white border border-slate-200 rounded-2xl overflow-hidden hover:border-slate-300 transition-colors shadow-sm"
-        >
-          <div className="flex items-center justify-between px-5 py-3.5 bg-slate-50 border-b border-slate-200">
-            <div className="flex items-center gap-2 text-indigo-600 text-xs font-bold uppercase tracking-wider">
-              <MessageSquare size={14} /> Welcome Message
-            </div>
-            <div className="flex items-center gap-4">
-              <div className="flex items-center gap-1.5"><TogglePill value={true} /><span className="text-[0.7rem] font-bold tracking-wide text-slate-500 uppercase">Dynamic</span></div>
-              <div className="flex items-center gap-1.5"><TogglePill value={true} /><span className="text-[0.7rem] font-bold tracking-wide text-slate-500 uppercase">Interruptible</span></div>
-            </div>
+      {/* Welcome Message Section */}
+      <div className="bg-white border border-slate-200 rounded-2xl p-6 shadow-sm space-y-4">
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+          <div className="flex items-center gap-2 text-slate-800 font-extrabold text-sm tracking-tight">
+            <MessageSquare size={16} className="text-emerald-500" /> Welcome Message
+            <Info size={14} className="text-slate-400 cursor-pointer hover:text-slate-600 transition-colors" />
           </div>
-          <div className="px-5 py-5 text-sm text-slate-700 leading-relaxed bg-white">
-            {agentSettings.greeting_message}
-          </div>
-        </motion.div>
-      )}
 
-      {agentSettings.system_prompt && (
-        <motion.div 
-          initial={{ opacity: 0, y: 20 }}
-          animate={{ opacity: 1, y: 0 }}
-          transition={{ delay: 0.5 }}
-          className="bg-white border border-slate-200 rounded-2xl overflow-hidden hover:border-slate-300 transition-colors shadow-sm"
-        >
-          <div className="px-5 py-3.5 bg-slate-50 border-b border-slate-200 flex items-center gap-2 text-xs font-bold uppercase tracking-wider text-purple-600">
-            <FileText size={14} /> System Prompt (Preview)
+          <div className="flex items-center gap-6">
+            <div className="flex items-center gap-2 select-none cursor-pointer" onClick={() => setIsDynamic(!isDynamic)}>
+              <span className={`text-xs font-bold ${isDynamic ? "text-slate-800" : "text-slate-400"}`}>Dynamic</span>
+              <div className={`w-8 h-4.5 rounded-full p-0.5 transition-colors flex items-center ${isDynamic ? "bg-teal-500 justify-end" : "bg-slate-300 justify-start"}`}>
+                <div className="w-3.5 h-3.5 bg-white rounded-full shadow-sm" />
+              </div>
+            </div>
+
+            <div className="flex items-center gap-2 select-none cursor-pointer" onClick={() => setIsInterruptible(!isInterruptible)}>
+              <span className={`text-xs font-bold ${isInterruptible ? "text-slate-800" : "text-slate-400"}`}>Interruptible</span>
+              <div className={`w-8 h-4.5 rounded-full p-0.5 transition-colors flex items-center ${isInterruptible ? "bg-indigo-600 justify-end" : "bg-slate-300 justify-start"}`}>
+                <div className="w-3.5 h-3.5 bg-white rounded-full shadow-sm" />
+              </div>
+            </div>
           </div>
-          <div className="px-5 py-5 text-[0.8rem] text-slate-600 leading-relaxed max-h-60 overflow-y-auto bg-white font-mono scrollbar-none border-t border-slate-100">
+        </div>
+
+        <div className="relative">
+          <textarea
+            rows={4}
+            value={greetingText}
+            onChange={e => setGreetingText(e.target.value)}
+            className="w-full bg-slate-50 border border-slate-200/90 rounded-xl p-4 text-xs font-medium text-slate-800 placeholder-slate-400 focus:outline-none focus:border-indigo-500 focus:bg-white transition-all leading-relaxed resize-none shadow-inner"
+          />
+          <div className="absolute bottom-3 right-3 text-[0.65rem] font-bold text-slate-400 bg-slate-100 px-2 py-0.5 rounded-md border border-slate-200">
+            {greetingText.length}/600
+          </div>
+        </div>
+      </div>
+
+      {/* System Prompt Section */}
+      {agentSettings.system_prompt && (
+        <div className="bg-white border border-slate-200 rounded-2xl overflow-hidden shadow-sm">
+          <div className="px-6 py-4 bg-slate-50 border-b border-slate-200 flex items-center justify-between">
+            <div className="flex items-center gap-2 text-xs font-extrabold tracking-tight text-slate-800 uppercase">
+              <FileText size={15} className="text-purple-600" /> System Prompt (Preview)
+            </div>
+          </div>
+          <div className="p-6 text-[0.78rem] text-slate-600 leading-relaxed max-h-64 overflow-y-auto bg-white font-mono border-t border-slate-100">
             {agentSettings.system_prompt}
           </div>
-        </motion.div>
+        </div>
       )}
     </div>
   )
@@ -175,7 +250,8 @@ function CyanToggleSwitch({ checked, onChange, label = "" }) {
   )
 }
 
-function CallConfigTab({ config, loading, onRefresh }) {
+
+function CallConfigTab({ config, loading, omniApiKey, onRefresh }) {
   const [saving, setSaving] = useState(false)
   const [saveSuccess, setSaveSuccess] = useState('')
   const [saveError, setSaveError] = useState('')
@@ -246,13 +322,17 @@ function CallConfigTab({ config, loading, onRefresh }) {
     setSaveSuccess('')
     setSaveError('')
     try {
-      const token = sessionStorage.getItem('token')
+
+      const token = sessionStorage.getItem('token') || localStorage.getItem('token')
+      const configuredOmniApiKey = omniApiKey || sessionStorage.getItem('omniDimensionApiKey') || ''
       const res = await fetch(`${API_BASE_URL}/api/calls/call-config`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
           Authorization: `Bearer ${token}`,
 
+
+          ...(configuredOmniApiKey ? { 'X-Omni-Dimension-API-Key': configuredOmniApiKey } : {}),
         },
         body: JSON.stringify(formData)
       })
@@ -672,22 +752,42 @@ function KnowledgeBaseTab({ files, loading, onUpload, onRemove }) {
   )
 }
 
+const OMNI_INTEGRATIONS_CATALOG = [
+  { id: 'cal_com', name: 'Cal.com', category: 'Calendar & CRM', tag: 'During Call', desc: 'Sync your Cal.com calendar to allow voice assistants to schedule meetings on your behalf.', IconComponent: CalComIcon },
+  { id: 'calendly', name: 'Calendly', category: 'Calendar & CRM', tag: 'During Call', desc: 'Connect your Calendly account to check availability and schedule appointments through your voice assistants.', IconComponent: CalendlyIcon },
+  { id: 'custom_api', name: 'Custom API', category: 'Custom & Tools', tag: 'During Call', desc: 'Connect to any custom API endpoint to extend your assistant\'s capabilities with external data and services.', IconComponent: CustomApiIcon },
+  { id: 'salesforce', name: 'Salesforce', category: 'Calendar & CRM', tag: 'Post Call', desc: 'Connect your Salesforce CRM to access customer data, manage leads, and update records through your voice assistants.', IconComponent: SalesforceIcon },
+  { id: 'google_calendar', name: 'Google Calendar', category: 'Calendar & CRM', tag: 'During Call', desc: 'Connect your Google Calendar to check availability and schedule appointments through your voice assistants.', IconComponent: GoogleCalendarIcon },
+  { id: 'google_sheets_during', name: 'Google Sheets', category: 'Data & Sheets', tag: 'During Call', desc: 'Connect your Google Sheets to read, write, and manage spreadsheet data during calls.', IconComponent: GoogleSheetsIcon },
+  { id: 'google_sheets_post', name: 'Google Sheets', category: 'Data & Sheets', tag: 'Post Call', desc: 'Connect your Google Sheets to read, write, and manage spreadsheet data through your voice assistants.', IconComponent: GoogleSheetsIcon },
+  { id: 'slack', name: 'Slack', category: 'Messaging', tag: 'Post Call', desc: 'Connect your Slack workspace to receive notifications and updates about your voice assistants.', IconComponent: SlackIcon },
+  { id: 'hubspot', name: 'HubSpot', category: 'Calendar & CRM', tag: 'Post Call', desc: 'Connect your HubSpot platform to enable voice assistants to manage contacts, automate marketing campaigns, and handle customer service tasks.', IconComponent: HubSpotIcon },
+  { id: 'genesys', name: 'Genesys', category: 'Messaging', tag: 'Post Call', desc: 'Connect your Genesys Cloud contact center to enhance customer experience with AI-powered routing, real-time analytics, and seamless voice AI assistant integration.', IconComponent: GenesysIcon },
+  { id: 'whatsapp', name: 'WhatsApp Cloud', category: 'Messaging', tag: 'During Call', desc: 'Send WhatsApp messages during calls using Meta Cloud API templates via your connected Cloud WhatsApp number.', IconComponent: WhatsAppIcon },
+]
+
 function IntegrationsTab({ integrations, loading, onRefresh }) {
   const [showModal, setShowModal] = useState(false)
+  const [selectedIntId, setSelectedIntId] = useState(null)
   const [detaching, setDetaching] = useState(null)
+  const [activeCategory, setActiveCategory] = useState('All')
 
   const handleDetach = async (integrationId) => {
     if (!window.confirm('Are you sure you want to detach this integration?')) return
 
     setDetaching(integrationId)
     try {
-      const token = sessionStorage.getItem('token')
+
+      const token = sessionStorage.getItem('token') || localStorage.getItem('token')
+      const omniApiKey = sessionStorage.getItem('omniDimensionApiKey') || ''
       const r = await fetch(`${API_BASE_URL}/api/calls/integrations/detach`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
           Authorization: `Bearer ${token}`,
 
+
+          ...(omniApiKey ? { 'X-Omni-Dimension-API-Key': omniApiKey } : {})
         },
         body: JSON.stringify({ integration_id: integrationId })
       })
@@ -704,62 +804,133 @@ function IntegrationsTab({ integrations, loading, onRefresh }) {
     }
   }
 
+  const openConnectModal = (intId = null) => {
+    setSelectedIntId(intId)
+    setShowModal(true)
+  }
+
+  const filteredCatalog = OMNI_INTEGRATIONS_CATALOG.filter(int => {
+    if (activeCategory === 'All') return true
+    return int.category === activeCategory
+  })
+
   return (
-    <div>
-      <div className="flex justify-between items-center mb-6">
+    <div className="space-y-6">
+      {/* Header */}
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 pb-2 border-b border-slate-200">
         <div>
-          <h3 className="text-lg font-bold text-slate-800 flex items-center gap-2">
-            <Plug size={20} className="text-indigo-500" /> Integrations
+          <h3 className="text-lg font-bold text-slate-800 flex items-center gap-2 tracking-tight">
+            <Plug size={20} className="text-indigo-600" /> Omni Dimension Integrations
           </h3>
-          <p className="text-sm text-slate-500 mt-1">Connect third-party services to your agent</p>
+          <p className="text-xs text-slate-500 mt-0.5">Live sync your Omni Dimension AI Voice Agent with CRM, calendar scheduling, webhooks, and messaging tools.</p>
         </div>
         <button
-          onClick={() => setShowModal(true)}
-          className="flex items-center gap-2 px-4 py-2 bg-indigo-600 hover:bg-indigo-700 text-white font-bold text-sm rounded-lg transition-colors shadow-md"
+          onClick={() => openConnectModal(null)}
+          className="flex items-center gap-2 px-4 py-2 bg-indigo-600 hover:bg-indigo-700 text-white font-bold text-xs rounded-xl transition-all shadow-md shadow-indigo-600/20 cursor-pointer shrink-0"
         >
           <Plus size={16} /> Add Integration
         </button>
       </div>
 
-      {loading ? (
-        <SectionLoader />
-      ) : integrations.length === 0 ? (
-        <div className="flex flex-col items-center justify-center py-16 gap-3 text-slate-500 bg-white border border-slate-200 rounded-2xl shadow-sm">
-          <Plug size={32} className="opacity-30 text-indigo-400" />
-          <span className="text-sm font-semibold">No integrations connected to this agent.</span>
-        </div>
-      ) : (
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
-          {integrations.map((int) => (
-            <div key={int.id} className="bg-white border border-slate-200 rounded-2xl p-5 shadow-sm hover:shadow-md hover:border-indigo-200 transition-all relative group">
-              <div className="flex items-start justify-between mb-3">
-                <div className="p-2 bg-violet-50 rounded-lg">
-                  <Plug size={18} className="text-violet-500" />
+      {/* Section 1: Connected Active Integrations */}
+      {integrations && integrations.length > 0 && (
+        <div className="bg-white border border-slate-200 rounded-2xl p-5 shadow-sm space-y-4">
+          <div className="flex items-center justify-between">
+            <h4 className="text-xs font-extrabold uppercase tracking-wider text-slate-500 flex items-center gap-2">
+              <CheckCircle2 size={15} className="text-emerald-500" /> Active Connected Integrations ({integrations.length})
+            </h4>
+          </div>
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+            {integrations.map((int) => (
+              <div key={int.id} className="bg-slate-50/70 border border-slate-200 rounded-xl p-4 relative group hover:border-indigo-300 transition-all">
+                <div className="flex items-start justify-between mb-2">
+                  <div className="p-2 bg-indigo-50 border border-indigo-100 rounded-lg text-indigo-600">
+                    <Plug size={16} />
+                  </div>
+                  <span className="text-[0.65rem] font-bold px-2 py-0.5 rounded-full border border-emerald-200 bg-emerald-50 text-emerald-600 uppercase tracking-wider">
+                    Connected
+                  </span>
                 </div>
-                <span className={`text-[0.65rem] font-bold px-2 py-0.5 rounded-full border uppercase tracking-wider ${int.is_active ? 'bg-emerald-50 border-emerald-200 text-emerald-600' : 'bg-slate-50 border-slate-200 text-slate-500'}`}>
-                  {int.is_active ? 'Active' : 'Inactive'}
-                </span>
-              </div>
-              <div className="font-bold text-sm text-slate-800 leading-tight pr-8">{int.name}</div>
-              <div className="text-xs font-semibold text-indigo-500 uppercase tracking-wider mt-1.5">{int.type?.replace('_', ' ')}</div>
-              <div className="text-[0.7rem] font-mono text-slate-400 mt-1 break-all">ID: {int.id}</div>
+                <div className="font-bold text-sm text-slate-800 leading-tight pr-8">{int.name}</div>
+                <div className="text-[0.7rem] font-bold text-indigo-600 uppercase tracking-wider mt-1">{int.type?.replace('_', ' ')}</div>
+                <div className="text-[0.65rem] font-mono text-slate-400 mt-1 truncate">ID: {int.id}</div>
 
-              <button
-                onClick={() => handleDetach(int.id)}
-                disabled={detaching === int.id}
-                className="absolute right-4 top-12 p-1.5 text-rose-300 group-hover:text-rose-500 hover:bg-rose-50 rounded-lg transition-all disabled:opacity-50"
-                title="Detach Integration"
-              >
-                {detaching === int.id ? <div className="w-4 h-4 border-2 border-rose-500 border-t-transparent rounded-full animate-spin" /> : <Trash2 size={16} />}
-              </button>
-            </div>
-          ))}
+                <button
+                  onClick={() => handleDetach(int.id)}
+                  disabled={detaching === int.id}
+                  className="absolute right-3 top-3 p-1.5 text-slate-400 hover:text-rose-600 hover:bg-rose-50 rounded-lg transition-all disabled:opacity-50 cursor-pointer"
+                  title="Detach Integration"
+                >
+                  {detaching === int.id ? <RefreshCw size={14} className="animate-spin text-rose-500" /> : <Trash2 size={15} />}
+                </button>
+              </div>
+            ))}
+          </div>
         </div>
       )}
 
+      {/* Section 2: Omni Dimension Available Integrations Catalog */}
+      <div className="space-y-4">
+        {/* Category Filters */}
+        <div className="flex flex-wrap items-center gap-2">
+          {['All', 'Calendar & CRM', 'Messaging', 'Data & Sheets', 'Custom & Tools'].map(cat => (
+            <button
+              key={cat}
+              onClick={() => setActiveCategory(cat)}
+              className={`px-3.5 py-1.5 rounded-full text-xs font-semibold tracking-wide border transition-all cursor-pointer ${
+                activeCategory === cat 
+                  ? 'bg-indigo-600 border-indigo-600 text-white shadow-sm font-bold' 
+                  : 'bg-white border-slate-200 text-slate-600 hover:border-slate-300 hover:text-slate-900 hover:bg-slate-50'
+              }`}
+            >
+              {cat}
+            </button>
+          ))}
+        </div>
+
+        {/* Catalog Grid */}
+        {loading ? (
+          <SectionLoader />
+        ) : (
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+            {filteredCatalog.map((int, idx) => (
+              <div key={idx} className="bg-white border border-slate-200 rounded-2xl overflow-hidden flex flex-col group hover:border-indigo-300 hover:shadow-md transition-all">
+                <div className="p-5 flex-1 flex flex-col">
+                  <div className="flex items-start justify-between mb-3">
+                    <div className="flex items-center gap-3">
+                      <int.IconComponent className="w-7 h-7" />
+                      <span className="font-bold text-slate-800 text-sm tracking-wide">{int.name}</span>
+                    </div>
+                    <span className={`px-2 py-0.5 rounded-full text-[0.6rem] font-bold tracking-wider uppercase border flex items-center gap-1 shrink-0 ${
+                      int.tag === 'During Call' ? 'bg-emerald-50 border-emerald-200 text-emerald-600' : 'bg-indigo-50 border-indigo-200 text-indigo-600'
+                    }`}>
+                      {int.tag}
+                    </span>
+                  </div>
+                  <p className="text-xs text-slate-500 leading-relaxed line-clamp-3">
+                    {int.desc}
+                  </p>
+                </div>
+                <div className="border-t border-slate-100 p-3.5 flex justify-start bg-slate-50/50">
+                  <button 
+                    type="button"
+                    onClick={() => openConnectModal(int.id)}
+                    className="flex items-center gap-1.5 px-4 py-1.5 bg-indigo-50 hover:bg-indigo-100 border border-indigo-200 rounded-xl text-xs font-bold text-indigo-600 transition-colors group-hover:border-indigo-300 cursor-pointer"
+                  >
+                    Connect <ExternalLink size={12} className="text-indigo-400 group-hover:text-indigo-600 transition-colors" />
+                  </button>
+                </div>
+              </div>
+            ))}
+          </div>
+        )}
+      </div>
+
+      {/* Integration Modal */}
       <IntegrationModal
         isOpen={showModal}
-        onClose={() => setShowModal(false)}
+        initialConfig={selectedIntId}
+        onClose={() => { setShowModal(false); setSelectedIntId(null); }}
         onRefresh={onRefresh}
       />
     </div>

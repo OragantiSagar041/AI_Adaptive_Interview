@@ -10990,8 +10990,9 @@ def get_omni_knowledge_base(omni_api_key: Optional[str] = Header(default=None, a
     try:
         client = get_omni_client(omni_api_key)
         res = client.knowledge_base.list()
-        data = res.get('json', res)
-        return {"files": data.get("files", []), "success": True}
+        data = res.get('json', res) if isinstance(res, dict) else (res.json if hasattr(res, 'json') else res)
+        files = data.get("files", []) if isinstance(data, dict) else []
+        return {"files": files, "success": True}
     except Exception as e:
         return JSONResponse(status_code=500, content={"detail": str(e)})
 
@@ -11003,20 +11004,55 @@ def get_omni_integrations(omni_api_key: Optional[str] = Header(default=None, ali
     try:
         client, _, agent_id = get_omni_account(omni_api_key)
         res = client.integrations.get_agent_integrations(agent_id=agent_id)
-        data = res.get('json', res)
-        return {"integrations": data.get("integrations", []), "success": True}
+        data = res.get('json', res) if isinstance(res, dict) else (res.json if hasattr(res, 'json') else res)
+        integrations = data.get("integrations", []) if isinstance(data, dict) else []
+        return {"integrations": integrations, "success": True}
     except Exception as e:
         return JSONResponse(status_code=500, content={"detail": str(e)})
 
 
 @router.get("/api/calls/integrations/user")
-def get_user_integrations():
+def get_user_integrations(omni_api_key: Optional[str] = Header(default=None, alias="X-Omni-Dimension-API-Key")):
     from .omni_dimension_client import get_omni_client
     try:
-        client = get_omni_client()
+        client = get_omni_client(omni_api_key)
         res = client.integrations.get_user_integrations()
         data = res.get('json', res) if isinstance(res, dict) else (res.json if hasattr(res, 'json') else res)
         return {"integrations": data.get("integrations", []) if isinstance(data, dict) else [], "success": True}
+    except Exception as e:
+        return JSONResponse(status_code=500, content={"detail": str(e)})
+
+class CalComIntegrationRequest(BaseModel):
+    name: Optional[str] = "Cal.com Integration"
+    cal_api_key: str
+    cal_id: str
+    cal_timezone: Optional[str] = "America/Los_Angeles"
+    description: Optional[str] = ""
+
+@router.post("/api/calls/integrations/cal-com")
+def create_cal_com_integration(req: CalComIntegrationRequest, omni_api_key: Optional[str] = Header(default=None, alias="X-Omni-Dimension-API-Key")):
+    from .omni_dimension_client import get_omni_account
+    try:
+        client, _, agent_id = get_omni_account(omni_api_key)
+        res = client.integrations.create_cal_integration(
+            name=req.name or "Cal.com Integration",
+            cal_api_key=req.cal_api_key,
+            cal_id=req.cal_id,
+            cal_timezone=req.cal_timezone or "America/Los_Angeles",
+            description=req.description or ""
+        )
+        data = res.get('json', res) if isinstance(res, dict) else (res.json if hasattr(res, 'json') else res)
+        
+        integration_data = data.get("integration", data) if isinstance(data, dict) else data
+        integration_id = integration_data.get("id") if isinstance(integration_data, dict) else getattr(integration_data, "id", None)
+        
+        if integration_id:
+            try:
+                client.integrations.add_integration_to_agent(agent_id=agent_id, integration_id=integration_id)
+            except Exception as ex:
+                print(f"[add_integration_to_agent note]: {ex}")
+            
+        return {"success": True, "integration": integration_data}
     except Exception as e:
         return JSONResponse(status_code=500, content={"detail": str(e)})
 
@@ -11044,7 +11080,6 @@ def create_calendly_integration(req: CalendlyIntegrationRequest, omni_api_key: O
         )
         data = res.get('json', res) if isinstance(res, dict) else (res.json if hasattr(res, 'json') else res)
         
-        # Depending on SDK response format, integration data might be nested
         integration_data = data.get("integration", data) if isinstance(data, dict) else data
         integration_id = integration_data.get("id") if isinstance(integration_data, dict) else getattr(integration_data, "id", None)
         
