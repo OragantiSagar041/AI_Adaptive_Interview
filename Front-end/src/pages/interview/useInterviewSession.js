@@ -2447,9 +2447,8 @@ export const useInterviewSession = (sessionId, interviewType, startRoundTwo) => 
     currentQuestion,
     codingTask,
     isMediaReady,
-    proctoringAlert: proctoring.modelsFailed
-      ? 'Proctoring AI models failed to load. Face and object monitoring is unavailable.'
-      : proctoringAlert,
+    proctoringAlert,
+    modelsFailed: proctoring.modelsFailed,
     faceAlertCount,
     noiseAlertCount,
     showNoiseBanner,

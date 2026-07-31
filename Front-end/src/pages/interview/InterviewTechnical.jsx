@@ -724,6 +724,7 @@ export const InterviewTechnical = () => {
     noiseAlertCount,
     showNoiseBanner,
     securityMessage,
+    modelsFailed,
     fullscreenWarning,
     screenShareWarning,
     screenShareViolations,
@@ -1096,6 +1097,8 @@ export const InterviewTechnical = () => {
         noiseAlertCount={noiseAlertCount}
         showNoiseBanner={showNoiseBanner}
         securityMessage={securityMessage}
+        proctoringAlert={proctoringAlert}
+        modelsFailed={modelsFailed}
       />
 
       {fullscreenWarning && (

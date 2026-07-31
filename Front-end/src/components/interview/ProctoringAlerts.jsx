@@ -109,23 +109,39 @@ export default function ProctoringAlerts({
   showNoiseBanner = false,
   securityMessage = '',
   proctoringAlert = '',
+  modelsFailed = false,
 }) {
   const FACE_TOP    = 16
   const GAP         = 52 // px between stacked pills
 
   // Build the stack of active banners top-down
   const stack = []
+  if (modelsFailed)          stack.push('models')
   if (proctoringAlert)       stack.push('face')
   if (showNoiseBanner)       stack.push('noise')
   if (securityMessage)       stack.push('security')
 
   return createPortal(
     <>
+      {/* ── Model Failure Pill ─────────────────────────── */}
+      {modelsFailed && (
+        <div
+          className="proctoring-alert-pill alert-red"
+          style={{ top: FACE_TOP }}
+        >
+          <span className="alert-icon">
+            <ShieldAlert size={13} />
+          </span>
+          <span className="alert-label">System Error</span>
+          Proctoring AI models failed to load.
+        </div>
+      )}
+
       {/* ── Face Alert Pill ─────────────────────────── */}
       {proctoringAlert && (
         <div
           className="proctoring-alert-pill alert-red alert-pulse"
-          style={{ top: FACE_TOP }}
+          style={{ top: FACE_TOP + (modelsFailed ? GAP : 0) }}
         >
           <span className="alert-icon">
             <Eye size={13} />
@@ -140,7 +156,7 @@ export default function ProctoringAlerts({
       {showNoiseBanner && (
         <div
           className="proctoring-alert-pill alert-amber"
-          style={{ top: FACE_TOP + (proctoringAlert ? GAP : 0) }}
+          style={{ top: FACE_TOP + (modelsFailed ? GAP : 0) + (proctoringAlert ? GAP : 0) }}
         >
           <span className="alert-icon">
             <Volume2 size={13} />
@@ -157,6 +173,7 @@ export default function ProctoringAlerts({
           className="proctoring-alert-pill alert-red"
           style={{
             top: FACE_TOP +
+              (modelsFailed ? GAP : 0) +
               (proctoringAlert ? GAP : 0) +
               (showNoiseBanner ? GAP : 0)
           }}
