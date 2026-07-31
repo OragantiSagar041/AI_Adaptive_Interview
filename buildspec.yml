@@ -5,14 +5,23 @@ phases:
     commands:
       - echo Logging in to Amazon ECR...
       - aws ecr get-login-password --region us-east-1 | docker login --username AWS --password-stdin 007050358533.dkr.ecr.us-east-1.amazonaws.com
+      - IMAGE_TAG=$(echo $CODEBUILD_RESOLVED_SOURCE_VERSION | cut -c 1-7)
+      - REPO_URI=007050358533.dkr.ecr.us-east-1.amazonaws.com/hireriq
+
   build:
     commands:
       - echo Building Docker image...
-      - docker build -t krishna:latest ./backend
-      - docker tag krishna:latest 007050358533.dkr.ecr.us-east-1.amazonaws.com/krishna:latest
+      - docker build -t $REPO_URI:$IMAGE_TAG .
+      - docker tag $REPO_URI:$IMAGE_TAG $REPO_URI:latest
+
   post_build:
     commands:
-      - echo Pushing image to Amazon ECR...
-      - docker push 007050358533.dkr.ecr.us-east-1.amazonaws.com/krishna:latest
-      - echo Deploying updated image to Amazon ECS...
-      - aws ecs update-service --cluster sunny-wolf-zb88n3 --service krishna-7879 --force-new-deployment --region us-east-1
+      - echo Pushing image to ECR...
+      - docker push $REPO_URI:$IMAGE_TAG
+      - docker push $REPO_URI:latest
+      - echo Writing imagedefinitions.json...
+      - printf '[{"name":"Main","imageUri":"%s"}]' $REPO_URI:$IMAGE_TAG > imagedefinitions.json
+
+artifacts:
+  files:
+    - imagedefinitions.json

@@ -16,7 +16,8 @@ import {
   Coins,
   CreditCard,
   UserCheck,
-  AlertCircle
+  AlertCircle,
+  ClipboardList
 } from 'lucide-react'
 import logoImage from '../../assets/logo.png'
 import AdminCopilot from './copilot/AdminCopilot'
@@ -109,6 +110,14 @@ export default function AdminLayout({
     }
   }, [])
 
+  // Lock document-level scroll so only the inner <main> scrolls, not the page
+  useEffect(() => {
+    document.documentElement.classList.add('admin-layout')
+    return () => {
+      document.documentElement.classList.remove('admin-layout')
+    }
+  }, [])
+
   const handleMarkRead = async (id) => {
     try {
       const res = await markNotificationAsRead(id)
@@ -168,19 +177,19 @@ export default function AdminLayout({
   }
 
   const navItems = [
-    { id: 'dashboard', label: 'Overview Dashboard', path: '/admin/dashboard' },
-    { id: 'interviews', label: 'Interviews', path: '/admin/interviews' },
-    { id: 'qualified', label: 'Qualified Candidates', path: '/admin/qualified-candidates' },
-    { id: 'rejected', label: 'Rejected Candidates', path: '/admin/rejected-candidates' },
-    { id: 'create', label: 'Create Interview', path: '/admin/create-interview' },
-    { id: 'ai-calling', label: 'AI Calling Agent', path: '/admin/ai-calling' },
+    { id: 'dashboard', label: 'Overview Dashboard', icon: LayoutDashboard, path: '/admin/dashboard' },
+    { id: 'interviews', label: 'Interviews', icon: ClipboardList, path: '/admin/interviews' },
+    { id: 'qualified', label: 'Qualified Candidates', icon: CheckCircle, path: '/admin/qualified-candidates' },
+    { id: 'rejected', label: 'Rejected Candidates', icon: XCircle, path: '/admin/rejected-candidates' },
+    { id: 'create', label: 'Create Interview', icon: Plus, path: '/admin/create-interview' },
+    { id: 'ai-calling', label: 'AI Calling Agent', icon: Radio, path: '/admin/ai-calling' },
 
-    { id: 'jobs', label: 'Jobs', path: '/admin/jobs' },
-    { id: 'settings', label: 'Profile Settings', path: '/admin/profile-settings' },
+    { id: 'jobs', label: 'Jobs', icon: Briefcase, path: '/admin/jobs' },
+    { id: 'settings', label: 'Profile Settings', icon: Settings, path: '/admin/profile-settings' },
   ]
 
   return (
-    <div className="min-h-screen bg-slate-50 text-slate-900 flex font-sans overflow-hidden">
+    <div className="h-screen bg-slate-50 text-slate-900 flex font-sans overflow-hidden">
       {/* Sidebar */}
       <aside className="hidden w-64 shrink-0 border-r border-slate-200 bg-white md:flex flex-col h-screen">
         {/* Brand / Logo */}
@@ -213,7 +222,11 @@ export default function AdminLayout({
             >
               {({ isActive }) => (
                 <>
-                  <span className="h-1.5 w-1.5 rounded-full bg-current opacity-60" />
+                  {item.icon ? (
+                    <item.icon size={16} className="shrink-0" />
+                  ) : (
+                    <span className="h-1.5 w-1.5 rounded-full bg-current opacity-60 shrink-0" />
+                  )}
                   {item.label}
                 </>
               )}

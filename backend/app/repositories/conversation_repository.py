@@ -1,6 +1,6 @@
 from typing import List, Optional
 from datetime import datetime, timezone
-from mongo_db import agents_collection, conversation_flows_collection
+from app.db.mongo_db import agents_collection, conversation_flows_collection
 
 def _now():
     return datetime.now(timezone.utc)

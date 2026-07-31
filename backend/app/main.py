@@ -29,17 +29,37 @@ from starlette.middleware.base import BaseHTTPMiddleware
 # ---------------------------------------------------------------------------
 # Internal routers & modules
 # ---------------------------------------------------------------------------
-from app.routes import router       # Main API router (all endpoints)
-from app.routes_conversation_flow import router as conversation_flow_router
-import transcription                # Voice transcription sub-router
-from routes import voice_routes     # WebRTC voice routes
-from app import config
+from app.routes.admin_dashboard import router as admin_dashboard_router
+from app.routes.ai_calls import router as ai_calls_router
+from app.routes.auth import router as auth_router
+from app.routes.candidates import router as candidates_router
+from app.routes.coding_chat import router as coding_chat_router
+from app.routes.credits import router as credits_router
+from app.routes.demo import router as demo_router
+from app.routes.interview import router as interview_router
+from app.routes.jobs import router as jobs_router
+from app.routes.master import router as master_router
+from app.routes.master_admins import router as master_admins_router
+from app.routes.notes_superadmin2 import router as notes_superadmin2_router
+from app.routes.notifications import router as notifications_router
+from app.routes.payments import router as payments_router
+from app.routes.session_complete import router as session_complete_router
+from app.routes.superadmin import router as superadmin_router
+from app.routes.voice_tts import router as voice_tts_router
+from app.routes.ws_dashboard import router as ws_dashboard_router
+from app.routes.debug_routes import router as debug_router
+from app.routes.plans_routes import router as plans_router
+
+from app.routes.conversation_flow import router as conversation_flow_router
+import app.services.transcription as transcription                # Voice transcription sub-router
+from app.routes import voice_routes     # WebRTC voice routes
+from app.core import config
 
 # ---------------------------------------------------------------------------
 # Application factory
 # ---------------------------------------------------------------------------
 from pymongo import ASCENDING, DESCENDING
-from mongo_db import (
+from app.db.mongo_db import (
     interview_sessions_collection,
     security_logs_collection,
     security_policies_collection,
@@ -76,7 +96,7 @@ except Exception:
     print("WARNING: Redis init failed — falling back to in-memory rate limiting.")
     _redis_client = None
 
-from app.routes import startup_event_cloudinary, startup_event_db_and_email
+from app.core.routes_core import startup_event_cloudinary, startup_event_db_and_email
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
@@ -250,14 +270,34 @@ if _os.getenv("ENV", "local") != "production" and _os.path.isdir("uploads"):
     app.mount("/uploads", StaticFiles(directory="uploads"), name="uploads")
 
 # --- Routers ---
-app.include_router(router)
+app.include_router(admin_dashboard_router)
+app.include_router(ai_calls_router)
+app.include_router(auth_router)
+app.include_router(candidates_router)
+app.include_router(coding_chat_router)
+app.include_router(credits_router)
+app.include_router(demo_router)
+app.include_router(interview_router)
+app.include_router(jobs_router)
+app.include_router(master_router)
+app.include_router(master_admins_router)
+app.include_router(notes_superadmin2_router)
+app.include_router(notifications_router)
+app.include_router(payments_router)
+app.include_router(session_complete_router)
+app.include_router(superadmin_router)
+app.include_router(voice_tts_router)
+app.include_router(ws_dashboard_router)
+app.include_router(debug_router)
+app.include_router(plans_router)
+
 app.include_router(conversation_flow_router)
 app.include_router(transcription.router)
 app.include_router(voice_routes.router)
 
 # Subscription Management — dedicated modular router
-from app.routes_subscription import router as subscription_router
-from app.routes_subscription import router_superadmin as subscription_superadmin_router
+from app.routes.subscription import router as subscription_router
+from app.routes.subscription import router_superadmin as subscription_superadmin_router
 app.include_router(subscription_router)
 app.include_router(subscription_superadmin_router)
 
