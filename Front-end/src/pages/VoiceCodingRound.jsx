@@ -872,13 +872,9 @@ export default function VoiceCodingRound({
           {/* Monaco */}
           <div className="flex-1 overflow-hidden min-h-[380px] relative z-10">
             <Suspense fallback={
-              <textarea
-                className="w-full h-full p-4 font-mono text-sm bg-[#0d1117] text-emerald-400 border-none outline-none resize-none"
-                value={code}
-                onChange={(e) => handleCodeChange(e.target.value)}
-                placeholder="Type your code solution here..."
-                autoFocus
-              />
+              <div className="flex h-[380px] w-full items-center justify-center text-white/50 text-sm bg-[#0d1117]">
+                Loading IDE Editor...
+              </div>
             }>
               <Editor
                 height="100%"

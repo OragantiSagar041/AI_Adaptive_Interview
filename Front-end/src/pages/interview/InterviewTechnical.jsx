@@ -501,18 +501,14 @@ export const InterviewTechnical = () => {
               <button className="ip-btn-next" style={{ padding: '8px 20px', marginLeft: 'auto', background: '#10b981', color: '#fff', fontWeight: '700', borderRadius: '8px', border: 'none', cursor: 'pointer' }} onClick={handleRunCode}>Run & Evaluate</button>
             </div>
 
-            <div className="coding-editor-wrap" style={{ flexGrow: 1, display: 'flex', flexDirection: 'column', minHeight: '380px', height: '100%', overflow: 'hidden', position: 'relative', zIndex: 1 }}>
+            <div className="coding-editor-wrap" style={{ flexGrow: 1, display: 'flex', flexDirection: 'column', minHeight: '400px', overflow: 'hidden', position: 'relative' }}>
               <Suspense fallback={
-                <textarea
-                  style={{ width: '100%', height: '100%', minHeight: '380px', padding: '16px', fontFamily: 'Consolas, monospace', fontSize: '14px', background: '#0d1117', color: '#34d399', border: 'none', outline: 'none', resize: 'none' }}
-                  value={codeAnswer}
-                  onChange={(e) => setCodeAnswer(e.target.value)}
-                  placeholder="Type your code solution here..."
-                  autoFocus
-                />
+                <div style={{ height: '400px', width: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#64748b', fontSize: '13px', background: '#f8fafc', fontWeight: '500' }}>
+                  Loading IDE Editor...
+                </div>
               }>
                 <MonacoEditor
-                  height="100%"
+                  height="400px"
                   language={selectedLanguage === 'cpp' ? 'cpp' : selectedLanguage === 'java' ? 'java' : selectedLanguage === 'javascript' ? 'javascript' : 'python'}
                   value={codeAnswer}
                   onChange={(val) => setCodeAnswer(val || '')}
