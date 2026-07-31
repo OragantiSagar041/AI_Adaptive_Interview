@@ -110,6 +110,14 @@ export default function AdminLayout({
     }
   }, [])
 
+  // Lock document-level scroll so only the inner <main> scrolls, not the page
+  useEffect(() => {
+    document.documentElement.classList.add('admin-layout')
+    return () => {
+      document.documentElement.classList.remove('admin-layout')
+    }
+  }, [])
+
   const handleMarkRead = async (id) => {
     try {
       const res = await markNotificationAsRead(id)
@@ -181,7 +189,7 @@ export default function AdminLayout({
   ]
 
   return (
-    <div className="min-h-screen bg-slate-50 text-slate-900 flex font-sans overflow-hidden">
+    <div className="h-screen bg-slate-50 text-slate-900 flex font-sans overflow-hidden">
       {/* Sidebar */}
       <aside className="hidden w-64 shrink-0 border-r border-slate-200 bg-white md:flex flex-col h-screen">
         {/* Brand / Logo */}
