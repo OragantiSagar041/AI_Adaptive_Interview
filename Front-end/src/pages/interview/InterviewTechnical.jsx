@@ -494,6 +494,7 @@ export const InterviewTechnical = () => {
               >
                 <option value="python">Python</option>
                 <option value="javascript">JavaScript</option>
+                <option value="java">Java</option>
                 <option value="cpp">C++</option>
               </select>
               <button className="ip-btn-next" style={{ padding: '8px 20px', marginLeft: 'auto' }} onClick={handleRunCode}>Run & Evaluate</button>
@@ -512,7 +513,7 @@ export const InterviewTechnical = () => {
                 <Suspense fallback={<div style={{ padding: 16, color: '#64748b', fontSize: 13 }}>Loading editor...</div>}>
                   <MonacoEditor
                     height="320px"
-                    language={selectedLanguage === 'cpp' ? 'cpp' : selectedLanguage === 'javascript' ? 'javascript' : 'python'}
+                    language={selectedLanguage === 'cpp' ? 'cpp' : selectedLanguage === 'java' ? 'java' : selectedLanguage === 'javascript' ? 'javascript' : 'python'}
                     value={codeAnswer}
                     onChange={(val) => setCodeAnswer(val || '')}
                     theme="vs-light"
