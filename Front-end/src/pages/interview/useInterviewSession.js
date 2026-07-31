@@ -91,6 +91,16 @@ export const useInterviewSession = (sessionId, interviewType, startRoundTwo) => 
   const [isMediaReady, setIsMediaReady] = useState(false)
   const [proctoringAlert, setProctoringAlert] = useState('')
   const [securityMessage, setSecurityMessage] = useState('')
+  const proctoringAlertTimeoutRef = useRef(null)
+  const securityMessageTimeoutRef = useRef(null)
+
+  useEffect(() => {
+    return () => {
+      if (proctoringAlertTimeoutRef.current) clearTimeout(proctoringAlertTimeoutRef.current)
+      if (securityMessageTimeoutRef.current) clearTimeout(securityMessageTimeoutRef.current)
+    }
+  }, [])
+
   const [noiseAlertCount, setNoiseAlertCount] = useState(0)
   const noiseAlertCountRef = useRef(0)
   const isSubmittingRef = useRef(false)
@@ -1316,7 +1326,8 @@ export const useInterviewSession = (sessionId, interviewType, startRoundTwo) => 
       if (!recorded) return // skip UI popups if throttled
 
       setProctoringAlert(v.message)
-      setTimeout(() => setProctoringAlert(''), 3000)
+      if (proctoringAlertTimeoutRef.current) clearTimeout(proctoringAlertTimeoutRef.current)
+      proctoringAlertTimeoutRef.current = setTimeout(() => setProctoringAlert(''), 3000)
     }
   })
   const telemetryRoundType = currentQuestion?.type === 'case_study'
@@ -1409,7 +1420,8 @@ export const useInterviewSession = (sessionId, interviewType, startRoundTwo) => 
 
       const message = SCREENSHOT_ALERT_MESSAGES[v.type] || 'Screenshots are not allowed during this interview.'
       setSecurityMessage(message)
-      setTimeout(() => setSecurityMessage(''), 4000)
+      if (securityMessageTimeoutRef.current) clearTimeout(securityMessageTimeoutRef.current)
+      securityMessageTimeoutRef.current = setTimeout(() => setSecurityMessage(''), 4000)
     }
   })
   // Track lip sync anomaly (audio is active but mouth isn't moving — suggests a
@@ -1430,8 +1442,9 @@ export const useInterviewSession = (sessionId, interviewType, startRoundTwo) => 
       lipSyncCooldownRef.current = now + 8000
       lipSyncStreakRef.current = 0
       recordAlertMetric('lip_sync')
-      setProctoringAlert('Audio detected without matching lip movement')
-      setTimeout(() => setProctoringAlert(''), 3000)
+      setSecurityMessage('Audio detected without matching lip movement')
+      if (securityMessageTimeoutRef.current) clearTimeout(securityMessageTimeoutRef.current)
+      securityMessageTimeoutRef.current = setTimeout(() => setSecurityMessage(''), 3000)
     }
   }, [proctoring.jawOpenScore, proctoring.checkLipSync])
 
@@ -1443,7 +1456,8 @@ export const useInterviewSession = (sessionId, interviewType, startRoundTwo) => 
       if (!recorded) return  // throttled by recordAlertMetric's 5-second per-type gate
 
       setSecurityMessage(message)
-      setTimeout(() => setSecurityMessage(''), 4000)
+      if (securityMessageTimeoutRef.current) clearTimeout(securityMessageTimeoutRef.current)
+      securityMessageTimeoutRef.current = setTimeout(() => setSecurityMessage(''), 4000)
     },
   })
 

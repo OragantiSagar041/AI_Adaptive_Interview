@@ -108,20 +108,21 @@ export default function ProctoringAlerts({
   noiseAlertCount = 0,
   showNoiseBanner = false,
   securityMessage = '',
+  proctoringAlert = '',
 }) {
   const FACE_TOP    = 16
   const GAP         = 52 // px between stacked pills
 
   // Build the stack of active banners top-down
   const stack = []
-  if (faceAlertCount > 0)   stack.push('face')
+  if (proctoringAlert)       stack.push('face')
   if (showNoiseBanner)       stack.push('noise')
   if (securityMessage)       stack.push('security')
 
   return createPortal(
     <>
       {/* ── Face Alert Pill ─────────────────────────── */}
-      {faceAlertCount > 0 && (
+      {proctoringAlert && (
         <div
           className="proctoring-alert-pill alert-red alert-pulse"
           style={{ top: FACE_TOP }}
@@ -130,8 +131,8 @@ export default function ProctoringAlerts({
             <Eye size={13} />
           </span>
           <span className="alert-label">Face Alert</span>
-          Face not detected
-          <span className="alert-count">{faceAlertCount}/20</span>
+          {proctoringAlert}
+          {faceAlertCount > 0 && <span className="alert-count">{faceAlertCount}/20</span>}
         </div>
       )}
 
@@ -139,7 +140,7 @@ export default function ProctoringAlerts({
       {showNoiseBanner && (
         <div
           className="proctoring-alert-pill alert-amber"
-          style={{ top: FACE_TOP + (faceAlertCount > 0 ? GAP : 0) }}
+          style={{ top: FACE_TOP + (proctoringAlert ? GAP : 0) }}
         >
           <span className="alert-icon">
             <Volume2 size={13} />
@@ -156,7 +157,7 @@ export default function ProctoringAlerts({
           className="proctoring-alert-pill alert-red"
           style={{
             top: FACE_TOP +
-              (faceAlertCount > 0 ? GAP : 0) +
+              (proctoringAlert ? GAP : 0) +
               (showNoiseBanner ? GAP : 0)
           }}
         >
