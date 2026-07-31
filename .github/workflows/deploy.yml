@@ -8,8 +8,8 @@ env:
   AWS_REGION: us-east-1
   ECR_REPOSITORY: simple-docker-service-0ed690619ab5
   ECS_CLUSTER: sunny-wolf-zb88n3
-  ECS_SERVICE: simple-docker-service-0ed690619ab5-31cd
-  ECS_TASK_DEFINITION_FAMILY: sunny-wolf-zb88n3-simple-docker-service-0ed690619ab5-31cd
+  ECS_SERVICE: simple-docker-service-0ed690619ab5-a7eb
+  ECS_TASK_DEFINITION_FAMILY: sunny-wolf-zb88n3-simple-docker-service-0ed690619ab5-a7eb
   CONTAINER_NAME: Main
 
 jobs:
