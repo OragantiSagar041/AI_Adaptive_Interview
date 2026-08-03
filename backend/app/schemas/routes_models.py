@@ -1,6 +1,11 @@
+import datetime
 from pydantic import BaseModel, Field, validator, root_validator
 from typing import List, Optional, Dict, Any, Union
 from app.schemas.models import *
+from app.services.live_monitoring_security import validate_snapshot_dataurl
+
+MAX_SNAPSHOT_BYTES = 250_000
+
 
 class RazorpayOrderRequest(BaseModel):
     plan_name: str
@@ -229,7 +234,7 @@ class LiveHeartbeatRequest(BaseModel):
         return value
 
     @validator("snapshot_dataurl")
-    def validate_snapshot_dataurl(cls, value):
+    def validate_snapshot_field(cls, value):
         if value is None:
             return value
         return validate_snapshot_dataurl(value, MAX_SNAPSHOT_BYTES)
