@@ -304,8 +304,6 @@ def upsert_plan(data: PlanUpdate, master_id: str = Depends(get_current_admin), c
     if not master:
         raise HTTPException(status_code=401, detail="Unauthorized")
     
-    existing = plans_collection.find_one({"plan_name": data.plan_name})
-    
     plans_collection.update_one(
         {"plan_name": data.plan_name},
         {"$set": {
@@ -316,6 +314,15 @@ def upsert_plan(data: PlanUpdate, master_id: str = Depends(get_current_admin), c
         }},
         upsert=True
     )
+
+    try:
+        admins_collection.update_many(
+            {"plan": data.plan_name, "role": {"$ne": "master"}},
+            {"$set": {"plan_features": data.features}}
+        )
+    except Exception as e:
+        logger.warning(f"Failed to sync plan_features to existing admins: {e}")
+
     return {"status": "success", "message": f"Plan '{data.plan_name}' saved"}
 
 @router.delete("/master/plans/{plan_id}")

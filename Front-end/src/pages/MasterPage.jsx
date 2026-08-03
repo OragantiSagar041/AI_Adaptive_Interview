@@ -1055,16 +1055,40 @@ export default function MasterPage() {
               </div>
 
               <div className="space-y-2">
-                <label className="text-xs font-semibold text-slate-500 block">Select Available Features</label>
-                <div className="grid grid-cols-2 gap-2 max-h-[160px] overflow-y-auto border border-slate-200 rounded-xl p-3.5 bg-slate-50">
-                  {[
-                    'Overview Dashboard',
-                    'Create Interview',
+                <div className="flex justify-between items-center">
+                  <label className="text-xs font-semibold text-slate-500">
+                    Select Available Features ({editPlanFeatures.length} chosen)
+                  </label>
+                  {editPlanFeatures.length > 0 && (
+                    <button
+                      type="button"
+                      onClick={() => setEditPlanFeatures([])}
+                      className="text-[11px] text-rose-500 hover:underline"
+                    >
+                      Clear All
+                    </button>
+                  )}
+                </div>
+                <div className="grid grid-cols-2 gap-2 max-h-[180px] overflow-y-auto border border-slate-200 rounded-xl p-3.5 bg-slate-50">
+                  {Array.from(new Set([
+                    'Super Admin Dashboard',
+                    'Team Management',
+                    'Dashboard',
+                    'Interviews',
                     'Qualified Candidates',
                     'Rejected Candidates',
-                    'Deactivated Candidates',
-                    'Profile Settings',
-                    'Live Monitor',
+                    'Create Interview',
+                    'AI Calling Agent',
+                    'Conversational Flow',
+                    'Jobs',
+                    'Organizations',
+                    'Recruiters',
+                    'Credit Management',
+                    'Subscription Management',
+                    'Integrations',
+                    'Security',
+                    'Settings',
+                    'Live Results',
                     'Analytics & Reports',
                     'Bulk Email Invites',
                     'Resume Parsing',
@@ -1072,13 +1096,11 @@ export default function MasterPage() {
                     'Priority Support',
                     'API Access',
                     'Export Data',
-                    'User Management',
                     'Role-Based Access',
-                    'Integration Webhooks',
                     'Industry Type',
                     'ATS Score',
-                    'Interview Type'
-                  ].map(f => {
+                    ...(editPlanFeatures || [])
+                  ])).map(f => {
                     const isChecked = editPlanFeatures.includes(f)
                     return (
                       <label key={f} className="flex items-center gap-2.5 text-xs text-slate-600 hover:text-slate-800 cursor-pointer select-none">

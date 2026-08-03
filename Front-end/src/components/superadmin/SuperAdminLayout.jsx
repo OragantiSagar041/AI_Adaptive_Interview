@@ -450,14 +450,12 @@ export default function SuperAdminLayout() {
   const accentPageStrong = hexToRgba(currentAccent.primary, 0.20)
 
   const userRole = (role || adminUser?.role || '').toLowerCase()
-  const isSuperOrMaster = userRole === 'superadmin' || userRole === 'master' || userRole === 'super_admin'
-  const userFeatures = adminUser?.plan_features
-  const filteredNavItems = (userFeatures && userFeatures.length > 0)
+  const isMaster = userRole === 'master'
+  const userFeatures = adminUser?.plan_features || []
+  const filteredNavItems = (userFeatures && userFeatures.length > 0 && !isMaster)
     ? superAdminNavItems.filter(item => userFeatures.includes(item.label))
     : superAdminNavItems
-  const navItems = (isSuperOrMaster || !filteredNavItems || filteredNavItems.length === 0)
-    ? superAdminNavItems
-    : filteredNavItems
+  const navItems = isMaster ? superAdminNavItems : (filteredNavItems.length > 0 ? filteredNavItems : superAdminNavItems)
 
   return (
     <SidebarProvider>
