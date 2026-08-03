@@ -5,7 +5,7 @@
  *   Round 2: Coding (Monaco Editor + live code sentinel)
  *   Round 3: Case Study (branching AI discussion)
  */
-import React, { useState, useEffect, useRef, useCallback, Suspense } from 'react'
+import React, { useState, useEffect, useRef, useCallback, Suspense, useMemo } from 'react'
 import { useParams, useNavigate } from 'react-router-dom'
 import {
   Mic, MicOff,
@@ -269,8 +269,10 @@ export default function VoiceInterviewPage() {
 
 
 
-  // Initialize WebRTC
-  const telemetryData = {
+  // Initialize WebRTC — memoize telemetryData so useCandidateWebRTC only sees
+  // a new reference when the values actually change, preventing hook re-runs on
+  // every render cycle (e.g. during animation frames or state updates).
+  const telemetryData = useMemo(() => ({
     round_type: ['verbal', 'coding', 'case_study'].includes(round) ? round : 'verbal',
     status: aiStatus === 'idle' ? 'online' : aiStatus,
     proctoring_alerts: warningsCount,
@@ -278,7 +280,7 @@ export default function VoiceInterviewPage() {
     current_question: currentQIdx + 1,
     total_questions: questions.length || 0,
     question_text: questions[currentQIdx] ? questions[currentQIdx].question_text : ''
-  }
+  }), [round, aiStatus, warningsCount, proctoringState, currentQIdx, questions])
   useCandidateWebRTC(linkId, cameraStreamRef, telemetryData, monitoringToken)
 
   // Refs

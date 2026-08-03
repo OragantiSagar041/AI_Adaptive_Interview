@@ -329,19 +329,17 @@ def _get_authorized_live_session(link_id: str, current_admin: Dict[str, Any]) ->
 
 
 def _get_authorized_creator_ids(current_admin: dict) -> list:
-    """Returns a list of admin_ids whose data the current_admin is authorized to view."""
+    """Returns a list of admin_ids whose data the current_admin is authorized to view within their organization."""
     admin_id = str(current_admin.get("admin_id") or "")
-    if current_admin.get("role") == "admin":
-        return [admin_id]
+    company_id = current_admin.get("company_id")
     
-    # If super admin, they can see their own data + data of recruiters they created
-    # Including legacy recruiters that have no 'created_by' field for backward compatibility
-    my_recruiters = list(admins_collection.find({
-        "role": "admin", 
-        "company_id": current_admin.get("company_id"),
-        "$or": [{"created_by": admin_id}, {"created_by": {"$exists": False}}]
-    }, {"_id": 1}))
-    return [admin_id] + [str(r["_id"]) for r in my_recruiters]
+    if company_id:
+        org_admins = list(admins_collection.find({"company_id": company_id}, {"_id": 1}))
+        ids = [str(a["_id"]) for a in org_admins]
+        if admin_id and admin_id not in ids:
+            ids.append(admin_id)
+        return ids
+    return [admin_id] if admin_id else []
 
 
 def _decode_dashboard_websocket_admin(token: str) -> Dict[str, str]:

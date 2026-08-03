@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef, useCallback } from 'react'
+import React, { useState, useEffect, useRef, useCallback, memo } from 'react'
 import { API_BASE_URL } from '../../../apiConfig'
 import { getIceServers } from '../../../utils/webrtcConfig'
 import Modal from '../../Modal'
@@ -49,6 +49,12 @@ export default function LiveMonitorStreamModal({ isOpen, onClose, session }) {
   const pcRef = useRef(null)
   const streamTimeoutRef = useRef(null)  // fire if no video track arrives in time
   const mountedRef = useRef(false)
+  // Keep a ref to the latest status so the setTimeout inside sendOffer always
+  // reads the current value without needing `status` in its dependency array.
+  // Without this the useCallback recreates on every status transition, which
+  // causes ws.onopen to capture a stale sendOffer reference.
+  const statusRef = useRef(status)
+  useEffect(() => { statusRef.current = status }, [status])
   const token = useSelector(state => state.auth.token)
 
   // ── Violations polling ──────────────────────────────────────────────────────
@@ -150,9 +156,12 @@ export default function LiveMonitorStreamModal({ isOpen, onClose, session }) {
 
       if (mountedRef.current) setStatus('negotiating')
 
-      // If no video track arrives within 8 s, retry the offer automatically
+      // If no video track arrives within 8 s, retry the offer automatically.
+      // Use statusRef instead of `status` state to avoid stale-closure misfires:
+      // the closure here captures statusRef.current at the time the timeout fires,
+      // not at the time sendOffer was called.
       streamTimeoutRef.current = setTimeout(() => {
-        if (mountedRef.current && status !== 'streaming') {
+        if (mountedRef.current && statusRef.current !== 'streaming') {
           console.warn('[AdminWebRTC] No stream in 8 s — retrying offer...')
           sendOffer(ws)
         }
@@ -162,7 +171,7 @@ export default function LiveMonitorStreamModal({ isOpen, onClose, session }) {
       console.error('[AdminWebRTC] sendOffer error:', err)
       if (mountedRef.current) setStatus('error')
     }
-  }, [status])
+  }, [])  // no `status` dep — reads via statusRef to avoid stale closures
 
   useEffect(() => {
     if (!isOpen || !session) return

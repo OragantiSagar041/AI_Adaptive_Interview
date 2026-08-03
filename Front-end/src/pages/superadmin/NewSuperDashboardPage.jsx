@@ -1,4 +1,4 @@
-import React, { useEffect } from "react";
+import React, { useEffect, useMemo } from "react";
 // Vite reload trigger comment - run clean poll
 import { useDispatch, useSelector } from "react-redux";
 import { useNavigate } from "react-router-dom";
@@ -33,32 +33,42 @@ export default function NewSuperDashboardPage() {
   const dbStats = useSelector((state) => state.dashboard.dbStats);
   const selectedAdminFilter = useSelector((state) => state.dashboard.selectedAdminFilter);
 
+  // Initial load on mount
   useEffect(() => {
-    dispatch(loadSuperAdminDashboard({ adminFilter: selectedAdminFilter,  }));
+    dispatch(loadSuperAdminDashboard({ adminFilter: selectedAdminFilter }));
+  }, [dispatch, selectedAdminFilter]);
+
+  // Separate polling interval — only restarts when filter changes, not on every render
+  useEffect(() => {
     const interval = setInterval(() => {
-      dispatch(loadSuperAdminDashboard({ adminFilter: selectedAdminFilter,  }));
+      dispatch(loadSuperAdminDashboard({ adminFilter: selectedAdminFilter }));
     }, 15000); // Poll every 15s for fresh backend data
     return () => clearInterval(interval);
   }, [dispatch, selectedAdminFilter]);
 
-  // Construct chart data dynamically from backend stats
-  const lineData = dbStats?.chart_labels?.map((label, idx) => ({
-    date: label,
-    interviews: dbStats.chart_data?.[idx] || 0
-  })) || [];
+  // Construct chart data dynamically from backend stats — memoized so they
+  // only recalculate when dbStats actually changes, not on every poll tick.
+  const lineData = useMemo(() => (
+    dbStats?.chart_labels?.map((label, idx) => ({
+      date: label,
+      interviews: dbStats.chart_data?.[idx] || 0
+    })) || []
+  ), [dbStats?.chart_labels, dbStats?.chart_data])
 
-  const barData = dbStats?.admin_labels?.map((label, idx) => ({
-    name: label,
-    value: dbStats.admin_data?.[idx] || 0
-  })) || [];
+  const barData = useMemo(() => (
+    dbStats?.admin_labels?.map((label, idx) => ({
+      name: label,
+      value: dbStats.admin_data?.[idx] || 0
+    })) || []
+  ), [dbStats?.admin_labels, dbStats?.admin_data])
 
   const creditsAvailable = Number(dbStats?.credits_available ?? dbStats?.credits ?? 0);
   const creditsUsed = Number(dbStats?.credits_used ?? 0);
 
-  const pieData = [
-    { name: "Credits Available", value: creditsAvailable },
-    { name: "Credits Used", value: creditsUsed }
-  ];
+  const pieData = useMemo(() => [
+    { name: "Credits Available", value: Number(dbStats?.credits_available ?? dbStats?.credits ?? 0) },
+    { name: "Credits Used", value: Number(dbStats?.credits_used ?? 0) }
+  ], [dbStats?.credits_available, dbStats?.credits, dbStats?.credits_used])
 
   const PIE_COLORS = ["#10b981", "#ef4444"]; // Green for available, Red for used
 
