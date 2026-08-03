@@ -785,7 +785,8 @@ def upload_full_recording(
                 "recording_truncated": bool(session.get(f"{path_key}_truncated")),
                 "saved_to_session": True,
             }
-    if file.content_type not in {"video/webm", "video/mp4", "application/octet-stream"}:
+    content_type = (file.content_type or "").lower().split(";")[0].strip()
+    if content_type not in {"video/webm", "video/mp4", "application/octet-stream", "video/x-matroska"}:
         raise HTTPException(status_code=415, detail="Only WebM or MP4 interview recordings are accepted")
     max_recording_bytes = 500 * 1024 * 1024
     if getattr(file, "size", 0) and file.size > max_recording_bytes:
@@ -1414,8 +1415,8 @@ async def get_dashboard_stats(admin_id: Optional[str] = None, current_admin: dic
             jobs_query = {"company_id": current_admin.get("company_id")}
             if current_admin.get("role") == "admin":
                 jobs_query["admin_id"] = current_admin["admin_id"]
-            elif admin_id:
-                jobs_query["admin_id"] = admin_id
+            elif current_admin.get("role") in ["super_admin", "superadmin"]:
+                jobs_query["admin_id"] = {"$in": _get_authorized_creator_ids(current_admin)}
             jobs = await asyncio.to_thread(lambda: list(jobs_collection.find(jobs_query)))
             job_ids = [j.get("job_id") for j in jobs if j.get("job_id")]
             

@@ -52,7 +52,7 @@ from app.db.redis_manager import manager
 import app.services.transcription as transcription
 from app.db.mongo_db import client as mongo_client
 from app.services.services import *
-from app.services.services import parse_iso_datetime
+from app.services.services import require_role
 from app.core.session_store import get_session, set_session, delete_session as delete_cached_session
 from app.schemas.models import *
 from app.db.database import *
@@ -85,14 +85,23 @@ from app.core.routes_core import (
     RazorpayOrderRequest, MAIN_LOOP,
 )
 
-from app.routes.admin_dashboard import DecisionRequest, extract_info_from_resume
-from app.routes.interview import sync_session_to_application
+
 
 load_dotenv()
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
 router = APIRouter()
+
+INTEGRATION_CATALOG = [
+    {"id": "greenhouse", "name": "Greenhouse", "category": "ATS"},
+    {"id": "lever", "name": "Lever", "category": "ATS"},
+    {"id": "workday", "name": "Workday", "category": "HRIS"},
+    {"id": "bamboohr", "name": "BambooHR", "category": "HRIS"},
+    {"id": "slack", "name": "Slack", "category": "Communication"},
+    {"id": "teams", "name": "Microsoft Teams", "category": "Communication"},
+    {"id": "zapier", "name": "Zapier", "category": "Automation"}
+]
 
 @router.post("/admin/parse-resume")
 async def parse_resume(
@@ -222,6 +231,7 @@ Return a pure JSON object with these keys. If not found, return empty string for
             if lines:
                 title = lines[0][:50]
     else:
+        from app.routes.admin_dashboard import extract_info_from_resume
         info = extract_info_from_resume(text)
         name = info.get("name")
         email = info.get("email")
@@ -1510,6 +1520,7 @@ def update_decision(data: DecisionRequest, current_admin: dict = Depends(require
         # 2. Update DB
         interview_sessions_collection.update_one({"link_id": data.link_id}, {"$set": {"decision": data.decision}})
         print(f" DB Updated for {data.link_id}")
+        from app.routes.interview import sync_session_to_application
         sync_session_to_application(data.link_id)
         
         # 3. Send Email
@@ -1731,7 +1742,9 @@ CRITICAL RULES:
             if role == "admin":
                 jobs_query["admin_id"] = admin_id
             else:  # super_admin
-                jobs_query["company_id"] = company_id
+                if company_id:
+                    jobs_query["company_id"] = company_id
+                jobs_query["admin_id"] = {"$in": _get_authorized_creator_ids(current_admin)}
             
             recent_jobs = list(jobs_collection.find(
                 jobs_query, 
@@ -2479,8 +2492,8 @@ Return this EXACT JSON (all score fields are integers 0-100, weighted_total is t
         import re
         try:
             from app.data.offline_skills_dict import COMMON_SKILLS
-        except ImportError:
-            COMMON_SKILLS = set()
+        except Exception:
+            COMMON_SKILLS = {"python", "javascript", "react", "node", "java", "c++", "sql", "aws", "docker", "kubernetes", "git", "html", "css", "typescript", "mongodb", "fastapi", "django", "flask", "rest", "api"}
             
         resume_lower = resume_text.lower()
         jd_lower = jd_text.lower()
@@ -2552,4 +2565,3 @@ Return this EXACT JSON (all score fields are integers 0-100, weighted_total is t
 
 class CandidateFeedbackRequest(BaseModel):
     feedback_text: str
-

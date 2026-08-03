@@ -136,12 +136,10 @@ def get_admin_jobs(page: int = 1, limit: int = 20, current_admin: dict = Depends
     company_id = current_admin.get("company_id")
 
     query = {}
-    if current_admin.get("company_id"):
-        query["company_id"] = current_admin.get("company_id")
+    if company_id:
+        query["company_id"] = company_id
         
-    if current_admin["role"] == "admin":
-        query["admin_id"] = current_admin["admin_id"]
-    elif current_admin["role"] in ["super_admin", "superadmin"]:
+    if role != "master":
         query["admin_id"] = {"$in": _get_authorized_creator_ids(current_admin)}
     total_jobs = jobs_collection.count_documents(query)
     jobs = list(jobs_collection.find(query).sort("created_at", -1).skip(skip).limit(limit))

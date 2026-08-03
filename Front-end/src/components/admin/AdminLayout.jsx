@@ -188,9 +188,10 @@ export default function AdminLayout({
     { id: 'settings', label: 'Settings', icon: Settings, path: '/admin/profile-settings' },
   ]
   const userFeatures = adminUser?.plan_features
-  const navItems = userFeatures 
+  const filteredNavItems = (userFeatures && userFeatures.length > 0)
     ? baseNavItems.filter(item => userFeatures.includes(item.label))
     : baseNavItems
+  const navItems = (!filteredNavItems || filteredNavItems.length === 0) ? baseNavItems : filteredNavItems
 
   return (
     <div className="h-screen bg-slate-50 text-slate-900 flex font-sans overflow-hidden">

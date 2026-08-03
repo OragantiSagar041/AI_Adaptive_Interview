@@ -1331,12 +1331,15 @@ export const InterviewTechnical = () => {
                       RECORDING
                     </div>
                   </div>
-                  <textarea
-                    className="bg-slate-50/50 border border-slate-200 p-5 text-[0.95rem] font-medium leading-relaxed text-slate-800 placeholder:text-slate-400 outline-none shadow-inner resize-none w-full flex-1 overflow-y-auto transition-all rounded-[24px] custom-scrollbar"
-                    placeholder="Your speech will appear here automatically..."
-                    readOnly
-                    value={transcriptionText + (interimTranscriptText ? interimTranscriptText : '')}
-                  />
+                  <div
+                    className="bg-slate-50/50 border border-slate-200 p-5 text-[0.95rem] font-medium leading-relaxed text-slate-800 shadow-inner resize-none w-full flex-1 overflow-y-auto transition-all rounded-[24px] custom-scrollbar"
+                    tabIndex={-1}
+                    aria-live="polite"
+                    aria-label="Live transcript"
+                    style={{ pointerEvents: 'none', userSelect: 'none', cursor: 'default', whiteSpace: 'pre-wrap', wordBreak: 'break-word' }}
+                  >
+                    {transcriptionText + (interimTranscriptText ? interimTranscriptText : '') || <span style={{ color: '#94a3b8' }}>Your speech will appear here automatically...</span>}
+                  </div>
                 </div>
 
                 {/* Navigation buttons */}
