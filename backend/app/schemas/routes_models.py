@@ -1,4 +1,4 @@
-import datetime
+from datetime import datetime, timedelta, timezone
 from pydantic import BaseModel, Field, validator, root_validator
 from typing import List, Optional, Dict, Any, Union
 from app.schemas.models import *
@@ -159,8 +159,8 @@ class BulkCreateSession(BaseModel):
         if start and v:
             try:
                 # Basic ISO format validation check (will be parsed fully in logic)
-                start_dt = datetime.datetime.fromisoformat(start.replace("Z", "+00:00"))
-                end_dt = datetime.datetime.fromisoformat(v.replace("Z", "+00:00"))
+                start_dt = datetime.fromisoformat(start.replace("Z", "+00:00"))
+                end_dt = datetime.fromisoformat(v.replace("Z", "+00:00"))
                 if start_dt >= end_dt:
                     raise ValueError("scheduled_end must be after scheduled_start")
             except ValueError as e:
