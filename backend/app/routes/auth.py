@@ -259,7 +259,9 @@ class StripeCheckoutRequest(BaseModel):
 
 class RazorpayOrderRequest(BaseModel):
     plan_name: str
-    signup_form: dict
+    signup_form: Optional[dict] = None
+    amount_inr: Optional[float] = None
+    credits: Optional[int] = None
 
 class RazorpayVerifyRequest(BaseModel):
     plan_name: str

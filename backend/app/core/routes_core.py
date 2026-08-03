@@ -368,8 +368,9 @@ def _decode_dashboard_websocket_admin(token: str) -> Dict[str, str]:
 
 class RazorpayOrderRequest(BaseModel):
     plan_name: str
-    amount_inr: float
-    credits: int
+    signup_form: Optional[Dict[str, Any]] = None
+    amount_inr: Optional[float] = None
+    credits: Optional[int] = None
 
 
 # Startup functions (to be called by main.py lifespan)

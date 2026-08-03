@@ -4,8 +4,9 @@ from app.schemas.models import *
 
 class RazorpayOrderRequest(BaseModel):
     plan_name: str
-    amount_inr: float
-    credits: int
+    signup_form: Optional[Dict[str, Any]] = None
+    amount_inr: Optional[float] = None
+    credits: Optional[int] = None
 
 
 # Startup functions (to be called by main.py lifespan)
@@ -279,7 +280,9 @@ class StripeCheckoutRequest(BaseModel):
 
 class RazorpayOrderRequest(BaseModel):
     plan_name: str
-    signup_form: dict
+    signup_form: Optional[Dict[str, Any]] = None
+    amount_inr: Optional[float] = None
+    credits: Optional[int] = None
 
 class RazorpayVerifyRequest(BaseModel):
     plan_name: str
