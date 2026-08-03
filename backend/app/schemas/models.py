@@ -156,3 +156,9 @@ class DemoRequestCreate(BaseModel):
 
 class DemoRequestUpdate(BaseModel):
     status: str
+
+class DemoRequestSendEmail(BaseModel):
+    recipient_email: str
+    recipient_name: Optional[str] = ""
+    subject: str
+    message: str

@@ -49,12 +49,35 @@ const AdminCopilot = () => {
 
   const getGreeting = (name, type) => {
     if (type === 'master') {
-      return `Hello ${name}! I'm the Hire IQ Master Copilot. How can I help you manage the platform, plans, and tenants today?`;
+      return `Hello ${name || 'master'}! I'm the Hire IQ Master Copilot. How can I help you manage the platform, plans, and tenants today?`;
     } else if (type === 'super_admin') {
-      return `Hello ${name}! I'm the Hire IQ Super Admin Copilot. How can I assist you with your company's team, interviews, and credits today?`;
+      return `Hello ${name || 'Super Admin'}! I'm the Hire IQ Super Admin Copilot. How can I assist you with your company's team, interviews, and credits today?`;
     } else {
-      return `Hello ${name}! I'm the Hire IQ Recruiter Copilot. How can I help you with candidate evaluations and interviews today?`;
+      return `Hello ${name || 'Recruiter'}! I'm the Hire IQ Recruiter Copilot. How can I help you with candidate evaluations and interviews today?`;
     }
+  };
+
+  const sanitizeSessionMessages = (msgs) => {
+    if (!msgs || msgs.length === 0) {
+      return [{ role: 'assistant', content: getGreeting(displayName, roleType) }];
+    }
+    return msgs.map((msg, idx) => {
+      if (idx === 0 && msg.role === 'assistant') {
+        const c = typeof msg.content === 'string' ? msg.content : '';
+        if (
+          c.includes("Hello Admin!") || 
+          c.includes("I'm the Hire IQ Copilot") || 
+          c.includes("How can I help you today?") ||
+          c.startsWith("Hello ")
+        ) {
+          return {
+            ...msg,
+            content: getGreeting(displayName, roleType)
+          };
+        }
+      }
+      return msg;
+    });
   };
 
   const [isOpen, setIsOpen] = useState(false);
@@ -93,6 +116,10 @@ const AdminCopilot = () => {
     }
   }, [messages, isOpen]);
 
+  useEffect(() => {
+    setMessages(prev => sanitizeSessionMessages(prev));
+  }, [displayName, roleType]);
+
   // Fetch MongoDB Sessions on copilot open
   useEffect(() => {
     if (isOpen) {
@@ -126,7 +153,7 @@ const AdminCopilot = () => {
     try {
       const detail = await getCopilotSessionDetail(sessionId);
       if (detail.session && detail.session.messages) {
-        setMessages(detail.session.messages);
+        setMessages(sanitizeSessionMessages(detail.session.messages));
       }
     } catch (err) {
       console.error("Failed to fetch session detail:", err);
@@ -142,7 +169,7 @@ const AdminCopilot = () => {
       if (res.session) {
         setSessions(prev => [res.session, ...prev]);
         setCurrentSessionId(res.session.session_id);
-        setMessages(res.session.messages || []);
+        setMessages(sanitizeSessionMessages(res.session.messages || []));
         setShowSidebar(false);
       }
     } catch (err) {

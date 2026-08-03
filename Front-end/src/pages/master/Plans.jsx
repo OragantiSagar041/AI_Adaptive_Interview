@@ -112,7 +112,6 @@ export default function Plans() {
     'Rejected Candidates',
     'Create Interview',
     'AI Calling Agent',
-    'Conversational Flow',
     'Jobs',
     'Organizations',
     'Recruiters',

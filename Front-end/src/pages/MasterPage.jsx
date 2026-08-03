@@ -5,7 +5,8 @@ import logo from '../assets/logo.png'
 import Swal from 'sweetalert2'
 import 'sweetalert2/dist/sweetalert2.min.css'
 import { RefreshCw } from 'lucide-react'
-import DemoRequests from './DemoRequests'
+import DemoRequests from './master/DemoRequests'
+import CompanyRevenue from './master/CompanyRevenue'
 
 
 
@@ -178,8 +179,8 @@ export default function MasterPage() {
         data: {
           labels: ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun'],
           datasets: [{
-            label: 'MRR ($)',
-            data: [5000, 6500, 8200, 9500, 11000, companies.length * 150],
+            label: 'MRR (₹)',
+            data: [0, 0, 0, 0, 0, companies.length * 4999],
             borderColor: currentAccent.primary,
             backgroundColor: `${currentAccent.primary}33`,
             borderWidth: 3,
@@ -190,9 +191,26 @@ export default function MasterPage() {
         options: {
           responsive: true,
           maintainAspectRatio: false,
-          plugins: { legend: { display: false } },
+          plugins: {
+            legend: { display: false },
+            tooltip: {
+              callbacks: {
+                label: function (context) {
+                  return ` MRR: ₹${(context.parsed.y || 0).toLocaleString('en-IN')}`
+                }
+              }
+            }
+          },
           scales: {
-            y: { beginAtZero: true, grid: { color: 'rgba(0,0,0,0.05)' } },
+            y: {
+              beginAtZero: true,
+              grid: { color: 'rgba(0,0,0,0.05)' },
+              ticks: {
+                callback: function (value) {
+                  return `₹${value.toLocaleString('en-IN')}`
+                }
+              }
+            },
             x: { grid: { display: false } }
           }
         }
@@ -496,6 +514,17 @@ export default function MasterPage() {
               }`}
             >
               <i className="fas fa-gauge-high" /> Dashboard
+            </button>
+
+            <button
+              onClick={() => setActiveTab('company-revenue')}
+              className={`w-full text-left px-4 py-2.5 rounded-lg text-sm font-semibold flex items-center gap-3 transition-colors border-none outline-none cursor-pointer ${
+                activeTab === 'company-revenue'
+                  ? 'bg-white text-indigo-700 shadow-sm'
+                  : 'bg-transparent text-white/80 hover:bg-white/10 hover:text-white'
+              }`}
+            >
+              <i className="fas fa-chart-line" /> Company Revenue
             </button>
 
             <button
@@ -946,6 +975,11 @@ export default function MasterPage() {
             <DemoRequests />
           )}
 
+          {/* TAB VIEW: COMPANY REVENUE */}
+          {activeTab === 'company-revenue' && (
+            <CompanyRevenue />
+          )}
+
         </main>
       </div>
 
@@ -1079,7 +1113,6 @@ export default function MasterPage() {
                     'Rejected Candidates',
                     'Create Interview',
                     'AI Calling Agent',
-                    'Conversational Flow',
                     'Jobs',
                     'Organizations',
                     'Recruiters',

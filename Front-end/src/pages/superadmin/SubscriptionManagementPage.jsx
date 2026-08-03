@@ -201,7 +201,6 @@ function RechargeModal({ company, onClose, onSuccess }) {
     }
     loadDynamicPlans();
   }, [company.plan_key]);
-  const [saving, setSaving]         = useState(false);
 
   const loadRazorpayScript = () => {
     return new Promise((resolve) => {

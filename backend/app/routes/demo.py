@@ -19,6 +19,7 @@ from typing import Any, Dict, List, Optional, Union
 import bcrypt, jwt, requests
 import cloudinary, cloudinary.uploader, cloudinary.api, cloudinary.utils
 import edge_tts
+# pyrefly: ignore [missing-import]
 import pypdf
 from bson import ObjectId
 from bson.errors import InvalidId
@@ -180,5 +181,124 @@ def delete_demo_request(request_id: str, current_admin: dict = Depends(get_curre
             raise HTTPException(status_code=404, detail='Request not found')
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
+
+@router.post('/master/demo-requests/{request_id}/send-email')
+def send_demo_request_email(
+    request_id: str,
+    payload: DemoRequestSendEmail,
+    current_admin: dict = Depends(get_current_admin_details)
+):
+    if current_admin.get('role') != 'master':
+        raise HTTPException(status_code=403, detail='Only master admin can send emails to demo leads')
+    
+    recipient_email = (payload.recipient_email or '').strip()
+    if not recipient_email:
+        raise HTTPException(status_code=400, detail='Recipient email is required')
+    
+    subject = (payload.subject or 'HireIQ Platform Demo & Next Steps').strip()
+    message_text = (payload.message or '').strip()
+    if not message_text:
+        raise HTTPException(status_code=400, detail='Message body cannot be empty')
+        
+    # Format message body to HTML preserving paragraphs and breaks
+    formatted_body = html.escape(message_text).replace('\n', '<br>')
+    
+    html_content = f"""<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <style>
+    body {{ font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif; background-color: #f1f5f9; margin: 0; padding: 24px; color: #0f172a; }}
+    .email-container {{ max-width: 600px; margin: 0 auto; background: #ffffff; border-radius: 16px; overflow: hidden; border: 1px solid #e2e8f0; box-shadow: 0 10px 25px -5px rgba(0,0,0,0.05); }}
+    .header {{ background: linear-gradient(135deg, #4f46e5 0%, #6366f1 100%); padding: 32px 28px; text-align: center; color: #ffffff; }}
+    .header h1 {{ margin: 0; font-size: 24px; font-weight: 800; letter-spacing: -0.5px; }}
+    .header p {{ margin: 8px 0 0; opacity: 0.9; font-size: 13px; font-weight: 500; }}
+    .content {{ padding: 32px 28px; font-size: 15px; line-height: 1.7; color: #334155; }}
+    .footer {{ padding: 20px 28px; background: #f8fafc; border-top: 1px solid #e2e8f0; text-align: center; font-size: 12px; color: #94a3b8; line-height: 1.5; }}
+  </style>
+</head>
+<body>
+  <div class="email-container">
+    <div class="header">
+      <h1>HireIQ AI Interview Platform</h1>
+      <p>Autonomous AI-Powered Candidate Assessment</p>
+    </div>
+    <div class="content">
+      {formatted_body}
+    </div>
+    <div class="footer">
+      <p style="margin: 0; font-weight: 600; color: #64748b;">HireIQ Operations & Client Success</p>
+      <p style="margin: 4px 0 0;">You received this email in response to your demo inquiry on HireIQ.</p>
+    </div>
+  </div>
+</body>
+</html>"""
+    
+    import dotenv
+    dotenv.load_dotenv(override=True)
+    brevo_key = os.getenv("BREVO_API_KEY")
+    sender_email = os.getenv("BREVO_SENDER_EMAIL", os.getenv("MASTER_EMAIL", "support@hireiq.com"))
+    sender_name = (os.getenv("BREVO_SENDER_NAME") or "Hire IQ").strip()
+    
+    email_sent = False
+    error_detail = None
+    
+    if brevo_key:
+        try:
+            res = requests.post(
+                "https://api.brevo.com/v3/smtp/email",
+                json={
+                    "sender": {"name": sender_name, "email": sender_email},
+                    "to": [{"email": recipient_email, "name": payload.recipient_name or recipient_email}],
+                    "subject": subject,
+                    "htmlContent": html_content
+                },
+                headers={"api-key": brevo_key, "content-type": "application/json"},
+                timeout=10
+            )
+            if res.status_code in (200, 201, 202):
+                email_sent = True
+            else:
+                logger.warning(f"Brevo send status {res.status_code}: {res.text}")
+                error_detail = res.text
+        except Exception as ex:
+            logger.error(f"Error calling Brevo API: {ex}")
+            error_detail = str(ex)
+    else:
+        logger.info(f"Simulated email send to {recipient_email} (BREVO_API_KEY not configured)")
+        email_sent = True
+
+    # Mark demo request as CONTACTED in MongoDB if valid ObjectId
+    try:
+        if request_id and request_id != "direct":
+            demo_requests_collection.update_one(
+                {'_id': ObjectId(request_id)},
+                {
+                    '$set': {
+                        'status': 'CONTACTED',
+                        'last_contacted_at': datetime.utcnow().isoformat()
+                    },
+                    '$push': {
+                        'email_history': {
+                            'subject': subject,
+                            'recipient': recipient_email,
+                            'sent_at': datetime.utcnow().isoformat(),
+                            'sent_by': current_admin.get('username', 'master')
+                        }
+                    }
+                }
+            )
+    except Exception as db_err:
+        logger.warning(f"Failed to update demo request history: {db_err}")
+
+    if not email_sent and error_detail:
+        raise HTTPException(status_code=500, detail=f"Failed to send email: {error_detail}")
+
+    return {
+        'status': 'success',
+        'message': f'Email sent successfully to {recipient_email}',
+        'simulated': not bool(brevo_key)
+    }
 
 

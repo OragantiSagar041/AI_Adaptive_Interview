@@ -833,7 +833,12 @@ export default function OverviewDashboardPage() {
               <p className="mt-1.5 text-sm opacity-90">
                 You have {topCandidates.length} high-scoring candidates waiting. Review them to speed up your conversion rates.
               </p>
-              <Button size="sm" variant="secondary" className="mt-4 bg-white text-primary hover:bg-white/90">
+              <Button 
+                size="sm" 
+                variant="secondary" 
+                className="mt-4 bg-white text-primary hover:bg-white/90"
+                onClick={() => handleOpenRecordsModal('high_scores', 'High-Scoring Candidates')}
+              >
                 Explore cohort
               </Button>
             </Card>

@@ -1,6 +1,6 @@
 import React, { useState, useRef, useEffect, lazy, Suspense } from 'react'
 import { useSearchParams, Link } from 'react-router-dom'
-import { Video, ArrowRight, ShieldAlert, Cpu, AlertTriangle, RefreshCw } from 'lucide-react'
+import { Video, ArrowRight, ShieldAlert, Cpu, AlertTriangle, RefreshCw, Sparkles, CheckCircle2, AlertCircle, Lightbulb, X, Award } from 'lucide-react'
 import { useInterviewSession } from './useInterviewSession'
 import DeviceCheckModal from '../../components/DeviceCheckModal'
 import ProctoringAlerts from '../../components/interview/ProctoringAlerts'
@@ -14,6 +14,11 @@ const MonacoEditor = lazy(() => import('@monaco-editor/react'))
 export const InterviewTechnical = () => {
   const interviewType = 'Technical';
   const codeAnswersRef = useRef({})
+  const [aiFeedbackCount, setAiFeedbackCount] = useState(0)
+  const [gettingAIFeedback, setGettingAIFeedback] = useState(false)
+  const [aiFeedbackModalOpen, setAiFeedbackModalOpen] = useState(false)
+  const [latestAIFeedback, setLatestAIFeedback] = useState(null)
+  const [limitExceededToast, setLimitExceededToast] = useState(false)
 
   const startRoundTwo = async ({
     verbalQuestionsLength,
@@ -320,6 +325,81 @@ export const InterviewTechnical = () => {
       }
     }
 
+    const aiFeedbackRemaining = Math.max(0, 2 - aiFeedbackCount);
+
+    const handleGetAIFeedback = async () => {
+      if (aiFeedbackRemaining <= 0) {
+        setLimitExceededToast(true);
+        setTimeout(() => setLimitExceededToast(false), 5000);
+        return;
+      }
+
+      if (gettingAIFeedback) return;
+
+      if (!codeAnswer || codeAnswer.trim().length < 5) {
+        alert("Please write your code solution first before requesting AI feedback.");
+        return;
+      }
+
+      setGettingAIFeedback(true);
+      const iid = interviewId || sessionDetail?.interview_id || sessionId;
+
+      try {
+        const res = await api.post('/coding-round/checkpoint', {
+          interview_id: iid,
+          code: codeAnswer,
+          language: selectedLanguage,
+          explanation: transcriptionText || ""
+        });
+
+        const data = res.data;
+        const fb = data?.feedback;
+        const newCount = data?.ai_feedback_count ?? (aiFeedbackCount + 1);
+        setAiFeedbackCount(newCount);
+        setLatestAIFeedback(fb);
+        setAiFeedbackModalOpen(true);
+
+        // Also populate Console tab with structured feedback
+        let formattedFeedback = `🤖 AI CODE FEEDBACK (Request ${newCount}/2):\n==================================================\n\n`;
+        if (fb && typeof fb === 'object') {
+          if (fb.coach_message) {
+            formattedFeedback += `💬 INTERVIEWER NOTE:\n${fb.coach_message}\n\n`;
+          }
+          if (fb.strengths && fb.strengths.length > 0) {
+            formattedFeedback += `✅ CODE STRENGTHS:\n${fb.strengths.map(s => `• ${s}`).join('\n')}\n\n`;
+          }
+          if (fb.risks && fb.risks.length > 0) {
+            formattedFeedback += `⚠️ POTENTIAL BUGS / RISKS:\n${fb.risks.map(r => `• ${r}`).join('\n')}\n\n`;
+          }
+          if (fb.next_steps && fb.next_steps.length > 0) {
+            formattedFeedback += `💡 SUGGESTED HINTS & NEXT STEPS:\n${fb.next_steps.map(n => `• ${n}`).join('\n')}\n\n`;
+          }
+          if (fb.scorecard) {
+            formattedFeedback += `📊 SCORECARD:\n`;
+            formattedFeedback += `• Problem Understanding: ${fb.scorecard.problem_understanding ?? '--'}/100\n`;
+            formattedFeedback += `• Implementation: ${fb.scorecard.implementation ?? '--'}/100\n`;
+            formattedFeedback += `• Communication: ${fb.scorecard.communication ?? '--'}/100\n`;
+            formattedFeedback += `• Overall: ${fb.scorecard.overall ?? '--'}/100\n`;
+          }
+        } else {
+          formattedFeedback += `${fb || 'No feedback details returned.'}\n`;
+        }
+        setConsoleOutput(formattedFeedback);
+        setActiveConsoleTab('console');
+      } catch (err) {
+        const errMsg = err?.response?.data?.detail || err?.message || "Failed to get AI feedback.";
+        if (errMsg.includes("limit is over") || errMsg.includes("2 times")) {
+          setAiFeedbackCount(2);
+          setLimitExceededToast(true);
+          setTimeout(() => setLimitExceededToast(false), 5000);
+        } else {
+          alert(errMsg);
+        }
+      } finally {
+        setGettingAIFeedback(false);
+      }
+    };
+
     const handleSubmitCodingAndInterview = async () => {
       const iid = interviewId || sessionDetail?.interview_id || sessionId
       try {
@@ -345,7 +425,38 @@ export const InterviewTechnical = () => {
             <p>Round 2 has {Math.floor(globalCountdown / 60).toString().padStart(2, '0')}:{(globalCountdown % 60).toString().padStart(2, '0')} remaining. Explain your logic to the AI while you code.</p>
           </div>
           <div className="coding-round-actions" style={{ display: 'flex', alignItems: 'center', gap: '16px' }}>
-            <button className="ip-btn-prev" onClick={handleRunCode} disabled={compiling}>Get AI Feedback</button>
+            <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: '3px' }}>
+              <button
+                className="ip-btn-prev"
+                onClick={handleGetAIFeedback}
+                disabled={gettingAIFeedback}
+                style={{
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: '6px',
+                  background: aiFeedbackRemaining <= 0 ? '#f8fafc' : '#ffffff',
+                  borderColor: aiFeedbackRemaining <= 0 ? '#e2e8f0' : '#818cf8',
+                  color: aiFeedbackRemaining <= 0 ? '#94a3b8' : '#4f46e5',
+                  boxShadow: aiFeedbackRemaining <= 0 ? 'none' : '0 1px 3px rgba(99, 102, 241, 0.15)',
+                  cursor: aiFeedbackRemaining <= 0 ? 'not-allowed' : 'pointer'
+                }}
+              >
+                {gettingAIFeedback ? (
+                  <>
+                    <span className="inline-block w-3.5 h-3.5 border-2 border-indigo-600 border-t-transparent rounded-full animate-spin" />
+                    <span>Analyzing Code...</span>
+                  </>
+                ) : (
+                  <>
+                    <Sparkles style={{ width: '15px', height: '15px', color: aiFeedbackRemaining <= 0 ? '#94a3b8' : '#6366f1' }} />
+                    <span>Get AI Feedback ({aiFeedbackRemaining}/2 left)</span>
+                  </>
+                )}
+              </button>
+              <span style={{ fontSize: '11px', color: aiFeedbackRemaining <= 0 ? '#ef4444' : '#64748b', fontWeight: '500' }}>
+                {aiFeedbackRemaining <= 0 ? "⚠️ Your limit is over (0/2 left)" : "Only 2 times you can get the feedback"}
+              </span>
+            </div>
             <button className="ip-btn-next" onClick={handleSubmitCodingAndInterview}>Submit Code</button>
           </div>
         </div>
@@ -672,6 +783,242 @@ export const InterviewTechnical = () => {
             </div>
           </div>
         </div>
+
+        {/* Limit Exceeded Toast Alert */}
+        {limitExceededToast && (
+          <div style={{
+            position: 'fixed',
+            top: '24px',
+            right: '24px',
+            zIndex: 99999,
+            background: '#fef2f2',
+            border: '1px solid #fecaca',
+            borderRadius: '10px',
+            padding: '14px 20px',
+            boxShadow: '0 10px 25px -5px rgba(239, 68, 68, 0.25)',
+            display: 'flex',
+            alignItems: 'center',
+            gap: '12px',
+            maxWidth: '420px',
+            animation: 'fadeIn 0.3s ease-in-out'
+          }}>
+            <AlertTriangle style={{ width: '22px', height: '22px', color: '#dc2626', flexShrink: 0 }} />
+            <div>
+              <h4 style={{ margin: 0, fontSize: '13.5px', fontWeight: '700', color: '#991b1b' }}>Your limit is over</h4>
+              <p style={{ margin: '2px 0 0 0', fontSize: '12px', color: '#b91c1c' }}>
+                You can only get AI feedback 2 times during the coding assessment. You have reached your limit.
+              </p>
+            </div>
+            <button 
+              onClick={() => setLimitExceededToast(false)}
+              style={{ background: 'none', border: 'none', cursor: 'pointer', color: '#991b1b', marginLeft: 'auto', padding: '2px' }}
+            >
+              <X style={{ width: '16px', height: '16px' }} />
+            </button>
+          </div>
+        )}
+
+        {/* Dedicated AI Feedback Modal */}
+        {aiFeedbackModalOpen && latestAIFeedback && (
+          <div style={{
+            position: 'fixed',
+            inset: 0,
+            backgroundColor: 'rgba(15, 23, 42, 0.65)',
+            backdropFilter: 'blur(4px)',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            zIndex: 99999,
+            padding: '20px'
+          }}>
+            <div style={{
+              backgroundColor: '#ffffff',
+              borderRadius: '16px',
+              width: '100%',
+              maxWidth: '680px',
+              maxHeight: '85vh',
+              display: 'flex',
+              flexDirection: 'column',
+              boxShadow: '0 25px 50px -12px rgba(0, 0, 0, 0.25)',
+              overflow: 'hidden',
+              border: '1px solid #e2e8f0'
+            }}>
+              {/* Modal Header */}
+              <div style={{
+                padding: '18px 24px',
+                borderBottom: '1px solid #f1f5f9',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'space-between',
+                background: 'linear-gradient(to right, #f8fafc, #eff6ff)'
+              }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+                  <div style={{
+                    width: '36px',
+                    height: '36px',
+                    borderRadius: '10px',
+                    background: '#e0e7ff',
+                    color: '#4f46e5',
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'center'
+                  }}>
+                    <Sparkles style={{ width: '20px', height: '20px' }} />
+                  </div>
+                  <div>
+                    <h3 style={{ margin: 0, fontSize: '17px', fontWeight: '700', color: '#1e293b' }}>
+                      AI Code Review & Feedback
+                    </h3>
+                    <span style={{ fontSize: '12px', color: '#64748b' }}>
+                      Used {aiFeedbackCount}/2 AI feedback requests • {aiFeedbackRemaining} left
+                    </span>
+                  </div>
+                </div>
+                <button
+                  onClick={() => setAiFeedbackModalOpen(false)}
+                  style={{
+                    width: '32px',
+                    height: '32px',
+                    borderRadius: '8px',
+                    border: 'none',
+                    background: '#f1f5f9',
+                    color: '#64748b',
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    cursor: 'pointer'
+                  }}
+                >
+                  <X style={{ width: '18px', height: '18px' }} />
+                </button>
+              </div>
+
+              {/* Modal Body */}
+              <div style={{ padding: '24px', overflowY: 'auto', display: 'flex', flexDirection: 'column', gap: '18px' }}>
+                {/* Coach summary message */}
+                {latestAIFeedback.coach_message && (
+                  <div style={{
+                    background: '#f8fafc',
+                    borderLeft: '4px solid #6366f1',
+                    borderRadius: '0 8px 8px 0',
+                    padding: '14px 16px'
+                  }}>
+                    <div style={{ fontSize: '12px', fontWeight: '700', color: '#4f46e5', textTransform: 'uppercase', letterSpacing: '0.05em', marginBottom: '4px' }}>
+                      Interviewer Note
+                    </div>
+                    <p style={{ margin: 0, fontSize: '13.5px', color: '#334155', lineHeight: '1.6' }}>
+                      {latestAIFeedback.coach_message}
+                    </p>
+                  </div>
+                )}
+
+                {/* Strengths */}
+                {latestAIFeedback.strengths && latestAIFeedback.strengths.length > 0 && (
+                  <div style={{ background: '#f0fdf4', border: '1px solid #bbf7d0', borderRadius: '10px', padding: '14px 18px' }}>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '8px' }}>
+                      <CheckCircle2 style={{ width: '16px', height: '16px', color: '#16a34a' }} />
+                      <span style={{ fontSize: '13.5px', fontWeight: '700', color: '#166534' }}>Code Strengths</span>
+                    </div>
+                    <ul style={{ margin: 0, paddingLeft: '20px', fontSize: '13px', color: '#15803d', lineHeight: '1.5' }}>
+                      {latestAIFeedback.strengths.map((s, idx) => (
+                        <li key={idx} style={{ marginBottom: '4px' }}>{s}</li>
+                      ))}
+                    </ul>
+                  </div>
+                )}
+
+                {/* Risks & Bugs */}
+                {latestAIFeedback.risks && latestAIFeedback.risks.length > 0 && (
+                  <div style={{ background: '#fff1f2', border: '1px solid #fecdd3', borderRadius: '10px', padding: '14px 18px' }}>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '8px' }}>
+                      <AlertCircle style={{ width: '16px', height: '16px', color: '#e11d48' }} />
+                      <span style={{ fontSize: '13.5px', fontWeight: '700', color: '#9f1239' }}>Potential Bugs & Edge Cases</span>
+                    </div>
+                    <ul style={{ margin: 0, paddingLeft: '20px', fontSize: '13px', color: '#be123c', lineHeight: '1.5' }}>
+                      {latestAIFeedback.risks.map((r, idx) => (
+                        <li key={idx} style={{ marginBottom: '4px' }}>{r}</li>
+                      ))}
+                    </ul>
+                  </div>
+                )}
+
+                {/* Next Steps & Hints */}
+                {latestAIFeedback.next_steps && latestAIFeedback.next_steps.length > 0 && (
+                  <div style={{ background: '#fefce8', border: '1px solid #fef08a', borderRadius: '10px', padding: '14px 18px' }}>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '8px' }}>
+                      <Lightbulb style={{ width: '16px', height: '16px', color: '#ca8a04' }} />
+                      <span style={{ fontSize: '13.5px', fontWeight: '700', color: '#854d0e' }}>Recommended Hints & Steps</span>
+                    </div>
+                    <ul style={{ margin: 0, paddingLeft: '20px', fontSize: '13px', color: '#a16207', lineHeight: '1.5' }}>
+                      {latestAIFeedback.next_steps.map((n, idx) => (
+                        <li key={idx} style={{ marginBottom: '4px' }}>{n}</li>
+                      ))}
+                    </ul>
+                  </div>
+                )}
+
+                {/* Scorecard */}
+                {latestAIFeedback.scorecard && (
+                  <div style={{ background: '#faf5ff', border: '1px solid #e9d5ff', borderRadius: '10px', padding: '14px 18px' }}>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '12px' }}>
+                      <Award style={{ width: '16px', height: '16px', color: '#9333ea' }} />
+                      <span style={{ fontSize: '13.5px', fontWeight: '700', color: '#6b21a8' }}>Code Scorecard</span>
+                    </div>
+                    <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '12px' }}>
+                      <div style={{ background: '#ffffff', borderRadius: '8px', padding: '10px', textAlign: 'center', border: '1px solid #f3e8ff' }}>
+                        <div style={{ fontSize: '11px', color: '#6b7280', fontWeight: '600' }}>Problem Understanding</div>
+                        <div style={{ fontSize: '18px', fontWeight: '800', color: '#7e22ce', marginTop: '2px' }}>
+                          {latestAIFeedback.scorecard.problem_understanding ?? '--'}%
+                        </div>
+                      </div>
+                      <div style={{ background: '#ffffff', borderRadius: '8px', padding: '10px', textAlign: 'center', border: '1px solid #f3e8ff' }}>
+                        <div style={{ fontSize: '11px', color: '#6b7280', fontWeight: '600' }}>Implementation</div>
+                        <div style={{ fontSize: '18px', fontWeight: '800', color: '#7e22ce', marginTop: '2px' }}>
+                          {latestAIFeedback.scorecard.implementation ?? '--'}%
+                        </div>
+                      </div>
+                      <div style={{ background: '#ffffff', borderRadius: '8px', padding: '10px', textAlign: 'center', border: '1px solid #f3e8ff' }}>
+                        <div style={{ fontSize: '11px', color: '#6b7280', fontWeight: '600' }}>Overall Score</div>
+                        <div style={{ fontSize: '18px', fontWeight: '800', color: '#7e22ce', marginTop: '2px' }}>
+                          {latestAIFeedback.scorecard.overall ?? '--'}%
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                )}
+              </div>
+
+              {/* Modal Footer */}
+              <div style={{
+                padding: '14px 24px',
+                borderTop: '1px solid #f1f5f9',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'space-between',
+                background: '#f8fafc'
+              }}>
+                <span style={{ fontSize: '12px', color: aiFeedbackRemaining <= 0 ? '#ef4444' : '#64748b', fontWeight: '600' }}>
+                  {aiFeedbackRemaining <= 0 ? "⚠️ You have used all 2 feedback requests." : `ℹ️ ${aiFeedbackRemaining} feedback request${aiFeedbackRemaining === 1 ? '' : 's'} remaining.`}
+                </span>
+                <button
+                  onClick={() => setAiFeedbackModalOpen(false)}
+                  style={{
+                    padding: '8px 20px',
+                    background: '#4f46e5',
+                    color: '#ffffff',
+                    borderRadius: '8px',
+                    border: 'none',
+                    fontSize: '13px',
+                    fontWeight: '600',
+                    cursor: 'pointer'
+                  }}
+                >
+                  Got It, Continue Coding
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
       </div>
     )
   }
@@ -733,6 +1080,13 @@ export const InterviewTechnical = () => {
     isSpeechRecordingRef,
     isOnline
   } = session
+
+  useEffect(() => {
+    const remoteCount = session?.codingRoundData?.coding_round?.ai_feedback_count;
+    if (typeof remoteCount === 'number') {
+      setAiFeedbackCount(remoteCount);
+    }
+  }, [session?.codingRoundData]);
 
   // ── Voice Cloning Setup State (UI only) ──────────────────────────────────
   const [vcStep, setVcStep] = useState('idle') // 'idle' | 'recording' | 'uploading' | 'done' | 'error'

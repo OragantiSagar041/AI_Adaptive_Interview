@@ -531,6 +531,26 @@ def get_interview_details(link_id: str, current_admin: dict = Depends(get_curren
         job_success_score = saved_job
         job_success_reasoning = saved_job_reason
         detected_accent = saved_accent or "Unknown"
+        if not detected_accent or detected_accent.strip().lower() in ["unknown", "none", ""]:
+            from app.services.language_accent_detector import detect_language_and_accent
+            lang_accent_res = detect_language_and_accent(
+                text_or_answers=results or session_data.get("answers", []),
+                candidate_profile=session_data,
+                interview_language=session_data.get("language") or "English"
+            )
+            detected_accent = lang_accent_res.get("detected_accent") or "English (Indian Accent)"
+            detected_language = lang_accent_res.get("language") or "English"
+            try:
+                interview_sessions_collection.update_one(
+                    {"link_id": link_id},
+                    {"$set": {
+                        "detected_accent": detected_accent,
+                        "detected_language": detected_language,
+                        "language": detected_language
+                    }}
+                )
+            except Exception as e:
+                print(f"Error updating detected accent: {e}")
     else:
         summary = generate_interview_summary(candidate_name or "Candidate", results)
         recommendation = summary.get("recommendation", "No Data")
@@ -552,6 +572,28 @@ def get_interview_details(link_id: str, current_admin: dict = Depends(get_curren
         detected_accent = summary.get("detected_accent")
         if not detected_accent or detected_accent == "Unknown":
             detected_accent = session_data.get("detected_accent") or "Unknown"
+
+        # Auto-detect language and accent if missing or Unknown
+        if not detected_accent or detected_accent.strip().lower() in ["unknown", "none", ""]:
+            from app.services.language_accent_detector import detect_language_and_accent
+            lang_accent_res = detect_language_and_accent(
+                text_or_answers=results or session_data.get("answers", []),
+                candidate_profile=session_data,
+                interview_language=session_data.get("language") or "English"
+            )
+            detected_accent = lang_accent_res.get("detected_accent") or "English (Indian Accent)"
+            detected_language = lang_accent_res.get("language") or "English"
+            try:
+                interview_sessions_collection.update_one(
+                    {"link_id": link_id},
+                    {"$set": {
+                        "detected_accent": detected_accent,
+                        "detected_language": detected_language,
+                        "language": detected_language
+                    }}
+                )
+            except Exception as e:
+                print(f"Error updating detected accent: {e}")
         
         # Only cache in DB if it's a real summary (not the fallback)
         if "Summary generation failed" not in strengths:
@@ -582,20 +624,102 @@ def get_interview_details(link_id: str, current_admin: dict = Depends(get_curren
                 print(f"Summary cache error: {e}")
             sync_session_to_application(link_id)
 
+    # ── Auto-enrich candidate profile via NLP from resume text if fields missing ──
+    resume_text_content = session_data.get("resume_text") or session_data.get("profile_text") or ""
+    if not resume_text_content and actual_interview_id:
+        iv_doc = interviews_collection.find_one({"id": actual_interview_id})
+        if iv_doc:
+            resume_text_content = iv_doc.get("profile_text", "")
+
+    phone_val = session_data.get("candidate_phone") or session_data.get("phone") or ""
+    exp_val = session_data.get("experience") or ""
+    comp_val = session_data.get("current_company") or ""
+    loc_val = session_data.get("location") or ""
+    np_val = session_data.get("notice_period") or ""
+    cctc_val = session_data.get("current_ctc") or ""
+    ectc_val = session_data.get("expected_ctc") or ""
+
+    if resume_text_content and (not phone_val or not exp_val or not comp_val or not loc_val or not np_val or not cctc_val or not ectc_val or not candidate_name or candidate_name == "Candidate"):
+        try:
+            from app.services.resume_nlp_extractor import extract_candidate_info_nlp, is_valid_company_name
+            nlp_profile = extract_candidate_info_nlp(resume_text_content)
+            db_updates = {}
+            if not phone_val and nlp_profile.get("phone"):
+                phone_val = nlp_profile["phone"]
+                db_updates["candidate_phone"] = phone_val
+                session_data["candidate_phone"] = phone_val
+            if not exp_val and nlp_profile.get("experience"):
+                exp_val = nlp_profile["experience"]
+                db_updates["experience"] = exp_val
+                session_data["experience"] = exp_val
+            if (not comp_val or comp_val in ("N/A", "Not specified") or not is_valid_company_name(comp_val)) and nlp_profile.get("current_company"):
+                comp_val = nlp_profile["current_company"]
+                db_updates["current_company"] = comp_val
+                session_data["current_company"] = comp_val
+            if not loc_val and nlp_profile.get("location"):
+                loc_val = nlp_profile["location"]
+                db_updates["location"] = loc_val
+                session_data["location"] = loc_val
+            if (not np_val or np_val in ("N/A", "Not specified")) and nlp_profile.get("notice_period"):
+                np_val = nlp_profile["notice_period"]
+                db_updates["notice_period"] = np_val
+                session_data["notice_period"] = np_val
+            if (not cctc_val or cctc_val in ("N/A", "Not specified")) and nlp_profile.get("current_ctc"):
+                cctc_val = nlp_profile["current_ctc"]
+                db_updates["current_ctc"] = cctc_val
+                session_data["current_ctc"] = cctc_val
+            if (not ectc_val or ectc_val in ("N/A", "Not specified")) and nlp_profile.get("expected_ctc"):
+                ectc_val = nlp_profile["expected_ctc"]
+                db_updates["expected_ctc"] = ectc_val
+                session_data["expected_ctc"] = ectc_val
+            if (not candidate_name or candidate_name == "Candidate") and nlp_profile.get("name"):
+                candidate_name = nlp_profile["name"]
+                db_updates["candidate_name"] = candidate_name
+                session_data["candidate_name"] = candidate_name
+
+            # If detected_accent is Unknown or generic, refine it with candidate location/phone/resume
+            if not detected_accent or detected_accent.strip().lower() in ["unknown", "none", "", "neutral english accent"]:
+                from app.services.language_accent_detector import detect_language_and_accent
+                l_res = detect_language_and_accent(
+                    text_or_answers=results or session_data.get("answers", []),
+                    candidate_profile={
+                        "candidate_phone": phone_val,
+                        "location": loc_val,
+                        "resume_text": resume_text_content
+                    },
+                    interview_language=session_data.get("language") or "English"
+                )
+                detected_accent = l_res.get("detected_accent") or "English (Indian Accent)"
+                det_lang = l_res.get("language") or "English"
+                db_updates["detected_accent"] = detected_accent
+                db_updates["detected_language"] = det_lang
+                db_updates["language"] = det_lang
+                session_data["detected_accent"] = detected_accent
+                session_data["detected_language"] = det_lang
+                session_data["language"] = det_lang
+
+            if db_updates:
+                interview_sessions_collection.update_one(
+                    {"link_id": link_id},
+                    {"$set": db_updates}
+                )
+        except Exception as nlp_err:
+            print(f"⚠️ Resume NLP extraction error in get_candidate_detail: {nlp_err}")
+
     response_payload = {
         "interview_id": link_id,
         "actual_interview_id": actual_interview_id,
         "candidate_id": session_data.get("candidate_id"),
         "candidate_name": candidate_name or "Candidate",
         "candidate_email": session_data.get("candidate_email") or session_data.get("email", ""),
-        "candidate_phone": session_data.get("candidate_phone") or session_data.get("phone", ""),
+        "candidate_phone": phone_val,
         "interview_title": session_data.get("interview_title") or session_data.get("job_title", ""),
-        "experience": session_data.get("experience", ""),
-        "location": session_data.get("location", ""),
-        "notice_period": session_data.get("notice_period", ""),
-        "current_ctc": session_data.get("current_ctc", ""),
-        "expected_ctc": session_data.get("expected_ctc", ""),
-        "current_company": session_data.get("current_company", ""),
+        "experience": exp_val,
+        "location": loc_val,
+        "notice_period": np_val,
+        "current_ctc": cctc_val,
+        "expected_ctc": ectc_val,
+        "current_company": comp_val,
         "status": sync_session_status(session_data),
         "decision": session_data.get("decision", ""),
         "resume_text": session_data.get("resume_text", ""),
@@ -619,6 +743,9 @@ def get_interview_details(link_id: str, current_admin: dict = Depends(get_curren
         "job_success_score": job_success_score,
         "job_success_reasoning": job_success_reasoning,
         "detected_accent": detected_accent,
+        "detected_language": session_data.get("detected_language") or (detected_accent.split("(")[0].strip() if "(" in detected_accent else detected_accent),
+        "language": session_data.get("language") or (detected_accent.split("(")[0].strip() if "(" in detected_accent else "English"),
+        "detected_language_accent": detected_accent,
         "recording_url": recording_url,
         "screen_recording_url": screen_recording_url,
         "completion_reason": session_data.get("completion_reason"),

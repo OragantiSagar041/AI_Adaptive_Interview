@@ -70,7 +70,6 @@ export const superAdminNavItems = [
   { id: 'rejected', label: 'Rejected Candidates', icon: XCircle, path: '/superadmin/rejected-candidates' },
   { id: 'create', label: 'Create Interview', icon: Plus, path: '/superadmin/create-interview' },
   { id: 'ai-calling', label: 'AI Calling Agent', icon: Radio, path: '/superadmin/ai-calling' },
-  { id: 'conversational-flow', label: 'Conversational Flow', icon: MessageSquare, path: '/superadmin/conversational-flow' },
   { id: 'jobs', label: 'Jobs', icon: Briefcase, path: '/superadmin/jobs' },
   { id: 'organizations', label: 'Organizations', icon: Building, path: '/superadmin/organizations' },
   { id: 'recruiters', label: 'Recruiters', icon: UserCheck, path: '/superadmin/recruiters' },

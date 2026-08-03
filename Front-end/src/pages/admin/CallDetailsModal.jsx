@@ -188,7 +188,7 @@ export default function CallDetailsModal({ isOpen, onClose, callId, API_BASE_URL
               <div className="flex flex-col gap-1">
                 <div className="text-[11px] font-bold text-slate-500 mb-1">Source</div>
                 <div className="font-bold text-sm text-slate-900">
-                  {details.bot_name || 'Arah InfoTech Screening Interviewer (Sarah)'}
+                  {details.bot_name || 'HireIQ Screening Interviewer (Sarah)'}
                 </div>
               </div>
               <div className="flex flex-col gap-1">
