@@ -124,15 +124,17 @@ function DetailPanel({ companyId }) {
   );
 }
 
+import { API_BASE_URL } from "@/apiConfig";
+
 // ─────────────────────────────────────────────────────────────────────────────
-// Static plan definitions (mirrors backend PLAN_DEFINITIONS)
+// Default plan definitions fallback
 // ─────────────────────────────────────────────────────────────────────────────
-const PLANS = [
+const DEFAULT_PLANS = [
   {
     key: "basic",
     label: "Basic",
-    price: 2500,
-    credits: 250,
+    price: 2499,
+    credits: 300,
     summary: "Adds richer review and control workflows for growing hiring teams.",
     features: ["Everything in Free Trial", "Detailed Analytics", "Session Export", "Deactivated Candidate Control", "Email Notifications"],
     popular: true,
@@ -157,13 +159,48 @@ const PLANS = [
 // ─────────────────────────────────────────────────────────────────────────────
 function RechargeModal({ company, onClose, onSuccess }) {
   const [step, setStep]             = useState("pick");   // "pick" | "form"
+  const [plans, setPlans]           = useState(DEFAULT_PLANS);
   const [selectedPlan, setSelectedPlan] = useState(
-    PLANS.find(p => p.key === company.plan_key) || PLANS[2]
+    DEFAULT_PLANS.find(p => p.key === company.plan_key) || DEFAULT_PLANS[0]
   );
   const [addCredits, setAddCredits] = useState(0);
   const [extendDays, setExtendDays] = useState(30);
   const [resetExpiry, setResetExpiry] = useState(false);
   const [saving, setSaving]         = useState(false);
+
+  useEffect(() => {
+    async function loadDynamicPlans() {
+      try {
+        const res = await fetch(`${API_BASE_URL}/api/plans`);
+        const json = await res.json();
+        if (res.ok && json.status === "success" && Array.isArray(json.data) && json.data.length > 0) {
+          const mapped = json.data
+            .filter(p => (p.plan_name || "").toLowerCase() !== "owner" && (p.plan_name || "").toLowerCase() !== "trial" && (p.plan_name || "").toLowerCase() !== "free trial")
+            .map((p, idx) => {
+              const key = (p.plan_name || "").toLowerCase().includes("adv") ? "advance" : "basic";
+              return {
+                key,
+                label: p.plan_name,
+                price: p.price,
+                credits: p.credits,
+                summary: p.summary || (key === "advance" ? "Unlocks the full hiring workflow." : "Core hiring features for growing teams."),
+                features: p.features || [],
+                popular: idx === 0 || key === "basic",
+                gradient: key === "advance" ? "from-violet-700 to-purple-800" : "from-indigo-600 to-blue-700",
+                accent: key === "advance" ? "#a78bfa" : "#818cf8",
+              };
+            });
+          if (mapped.length > 0) {
+            setPlans(mapped);
+            setSelectedPlan(mapped.find(p => p.key === company.plan_key) || mapped[0]);
+          }
+        }
+      } catch (err) {
+        console.warn("Using default plans for recharge modal:", err);
+      }
+    }
+    loadDynamicPlans();
+  }, [company.plan_key]);
 
   const loadRazorpayScript = () => {
     return new Promise((resolve) => {
@@ -295,8 +332,8 @@ function RechargeModal({ company, onClose, onSuccess }) {
         {step === "pick" && (
           <div className="px-8 py-8">
             <div className="grid grid-cols-1 md:grid-cols-2 gap-6 max-w-2xl mx-auto">
-              {PLANS.map(plan => {
-                const isSelected = selectedPlan.key === plan.key;
+              {plans.map(plan => {
+                const isSelected = (selectedPlan?.key || selectedPlan?.label) === (plan.key || plan.label);
                 const isCurrent  = company.plan_key === plan.key;
                 return (
                   <button

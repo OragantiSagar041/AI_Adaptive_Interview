@@ -101,26 +101,39 @@ export default function RecruitersPage() {
 
   const handleAddCreditsSubmit = async (e) => {
     e.preventDefault();
-    if (addCreditsAmount <= 0) return;
+    const amountNum = parseInt(addCreditsAmount);
+    if (!amountNum || amountNum <= 0) {
+      Swal.fire({
+        title: 'Invalid Amount',
+        text: 'Please enter a valid credit amount greater than 0.',
+        icon: 'warning',
+        background: '#161c2d',
+        color: '#fff'
+      });
+      return;
+    }
     try {
-      await api.post(`/api/superadmin/recruiters/${addingCreditsRecruiter.id}/add-credits`, { amount: parseInt(addCreditsAmount) }, {
+      await api.post(`/api/superadmin/recruiters/${addingCreditsRecruiter.id}/add-credits`, {
+        credits: amountNum,
+        amount: amountNum
+      }, {
         headers: { Authorization: `Bearer ${token}` }
       });
       Swal.fire({
         title: 'Credits Added',
-        text: `Successfully added ${addCreditsAmount} credits to ${addingCreditsRecruiter.name}!`,
+        text: `Successfully added ${amountNum} credits to ${addingCreditsRecruiter.name}!`,
         icon: 'success',
         background: '#161c2d',
         color: '#fff'
       });
       setAddingCreditsRecruiter(null);
       setAddCreditsAmount(0);
-      fetchStats();
+      await fetchStats();
     } catch (err) {
       console.error(err);
       Swal.fire({
         title: 'Error',
-        text: err.response?.data?.detail || err.message,
+        text: err.response?.data?.detail || err.message || 'Failed to add credits',
         icon: 'error',
         background: '#161c2d',
         color: '#fff'

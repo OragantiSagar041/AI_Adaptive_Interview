@@ -391,41 +391,14 @@ def parse_resume(resume: UploadFile = File(...)):
                 extracted_text = ""
 
         if not extracted_text.strip():
-            return {"status": "success", "data": {"name": "", "email": "", "phone": "", "linkedin_url": ""}}
+            return {"status": "success", "data": {"name": "", "email": "", "phone": "", "linkedin_url": "", "skills": [], "experience": "", "location": ""}}
 
-        # Always compute robust offline regex/heuristic extraction first
-        fallback_data = extract_info_from_resume(extracted_text)
-
-        parsed_data = {}
-        try:
-            truncated_text = extracted_text[:8000]
-            prompt = f"""
-            Extract the following information from the provided resume text. 
-            Format the output strictly as JSON with keys: "name", "email", "phone", "linkedin_url".
-            If a field is not found, leave it as an empty string. Do not include markdown formatting or comments.
-            
-            Resume Text:
-            {truncated_text}
-            """
-            raw_response = chat_completion([{"role": "user", "content": prompt}], timeout=10)
-            parsed_data = extract_json(raw_response) or {}
-        except Exception as ai_err:
-            print(f"⚠️ LLM resume parsing unavailable or rate-limited ({ai_err}). Using offline regex parser fallback.")
-
-        # Merge extracted fields: prefer LLM values if non-empty, otherwise use regex fallback
-        name = str(parsed_data.get("name") or fallback_data.get("name") or "").strip()
-        email = str(parsed_data.get("email") or fallback_data.get("email") or "").strip()
-        phone = str(parsed_data.get("phone") or fallback_data.get("phone") or "").strip()
-        linkedin_url = str(parsed_data.get("linkedin_url") or fallback_data.get("linkedin_url") or "").strip()
+        from app.services.resume_nlp_extractor import extract_candidate_info_nlp
+        parsed_data = extract_candidate_info_nlp(extracted_text)
 
         return {
             "status": "success", 
-            "data": {
-                "name": name,
-                "email": email,
-                "phone": phone,
-                "linkedin_url": linkedin_url
-            }
+            "data": parsed_data
         }
     except HTTPException:
         raise

@@ -184,8 +184,14 @@ export default function CandidateDialog({ candidate, open, onOpenChange, onStatu
         const mobileMatch = resume.match(/(?:mobile|phone|ph|contact)[\s:\-]{1,4}(\+?[\d\-\s]{10,15})/i) || resume.match(/(?:\+91|91)?[-\s]?[6-9]\d{9}/);
         if (mobileMatch) extMobile = (mobileMatch[1] || mobileMatch[0]).trim();
 
-        const compMatch = resume.match(/(?:company|employer|organization|currently\s*working\s*at|current\s*company|worked\s*at|role\s*at)[\s:\-]{1,4}([A-Za-z0-9\s\&\.\-]+?)(?=\n|$|\|)/i);
-        if (compMatch) extCompany = compMatch[1].trim();
+        const compMatch = resume.match(/(?:current\s*company|present\s*company|employer|organization|currently\s*working\s*at|worked\s*at)[\s:\-]{1,4}([A-Za-z0-9\s&.,'-]{2,35})(?=\n|$|,|\(|\|)/i);
+        if (compMatch) {
+          const cand = compMatch[1].trim();
+          const bad = /^(technical|skills|technologies|database|apis|declaration|education|projects?|summary|objective|curriculum|responsibilities)$/i;
+          if (!bad.test(cand) && cand.length >= 2 && !cand.toLowerCase().includes("database") && !cand.toLowerCase().includes("apis,")) {
+            extCompany = cand;
+          }
+        }
 
         const expCtcMatch = resume.match(/(?:expected\s*ctc|expected\s*salary|expected|expected\s*package)[\s:\-]{1,4}([\d\.]+\s*(?:lpa|k|m|LPA))/i);
         if (expCtcMatch) extExpectedCTC = expCtcMatch[1].toUpperCase();
@@ -194,7 +200,6 @@ export default function CandidateDialog({ candidate, open, onOpenChange, onStatu
         if (noticeMatch) extNotice = noticeMatch[1];
 
         // Strategy 2: Line-by-line key-value fallback
-        // This is for when the user manually pastes vertical lists (e.g. "Experience\n2 Years")
         const lines = resume.split('\n').map(l => l.trim()).filter(l => l.length > 0);
         for (let i = 0; i < lines.length - 1; i++) {
           const lower = lines[i].toLowerCase().replace(/[:\-]/g, '').trim();
@@ -213,7 +218,10 @@ export default function CandidateDialog({ candidate, open, onOpenChange, onStatu
             extNotice = next;
           }
           if (!extCompany && (lower === "current company" || lower === "company" || lower === "organization")) {
-            extCompany = next;
+            const bad = /^(technical|skills|technologies|database|apis|declaration|education|projects?|summary|objective)$/i;
+            if (!bad.test(next.trim()) && !next.toLowerCase().includes("database")) {
+              extCompany = next.trim();
+            }
           }
           if (!extLocation && (lower === "location" || lower === "city")) {
             extLocation = next;
@@ -617,7 +625,13 @@ export default function CandidateDialog({ candidate, open, onOpenChange, onStatu
                     <InfoRow icon={Mail} label="Email" value={email} />
                     <InfoRow icon={Phone} label="Mobile" value={phone} />
                     <InfoRow icon={Clock} label="Experience" value={c.experience} />
-                    <InfoRow icon={Building2} label="Current Company" value={c.current_company} />
+                    <InfoRow icon={Building2} label="Current Company" value={(() => {
+                      const comp = c.current_company;
+                      if (!comp || comp === "N/A" || comp === "Not specified" || /^(technical|skills|apis,?\s*and\s*database)$/i.test(comp)) {
+                        return (c.experience && c.experience.toLowerCase().includes("fresher")) ? "Fresher" : (comp && !/^(technical|skills|apis,?\s*and\s*database)$/i.test(comp) ? comp : "Fresher");
+                      }
+                      return comp;
+                    })()} />
                     <InfoRow icon={IndianRupee} label="Current CTC" value={c.current_ctc} />
                     <InfoRow icon={IndianRupee} label="Expected CTC" value={c.expected_ctc} />
                     <InfoRow icon={Clock} label="Notice Period" value={c.notice_period} />
@@ -849,15 +863,49 @@ export default function CandidateDialog({ candidate, open, onOpenChange, onStatu
                   </div>
                 )}
 
-                {c.detected_accent && (
-                  <div className="bg-white rounded-xl border border-slate-200/60 p-4 shadow-sm flex items-center gap-3">
-                    <Mic size={18} className="text-indigo-400" />
-                    <div>
-                      <div className="text-[11px] font-bold text-slate-400 uppercase tracking-wider">Detected Language / Accent</div>
-                      <div className="text-sm font-bold text-slate-700">{c.detected_accent}</div>
+                {(() => {
+                  const rawVal = c.detected_accent || c.detected_language_accent || (c.language ? `${c.language} (Indian Accent)` : "English (Indian Accent)");
+                  let lang = "English";
+                  let accent = "Indian Accent";
+                  if (rawVal && rawVal.includes("(")) {
+                    const parts = rawVal.split("(");
+                    lang = parts[0].trim();
+                    accent = parts[1].replace(")", "").trim();
+                  } else if (rawVal && rawVal.includes("•")) {
+                    const parts = rawVal.split("•");
+                    lang = parts[0].trim();
+                    accent = parts[1].trim();
+                  } else if (rawVal && rawVal !== "Unknown") {
+                    lang = rawVal;
+                    accent = "Standard Accent";
+                  }
+
+                  return (
+                    <div className="bg-gradient-to-r from-indigo-50/60 via-white to-blue-50/40 rounded-xl border border-indigo-100/80 p-4 shadow-sm flex items-center justify-between gap-4">
+                      <div className="flex items-center gap-3">
+                        <div className="w-9 h-9 rounded-lg bg-indigo-600/10 text-indigo-600 flex items-center justify-center font-bold">
+                          <Mic size={18} />
+                        </div>
+                        <div>
+                          <div className="text-[11px] font-bold text-slate-400 uppercase tracking-wider">Detected Language & Accent</div>
+                          <div className="text-sm font-black text-slate-850 flex items-center gap-2 mt-0.5">
+                            <span className="text-slate-800 font-bold">{lang}</span>
+                            <span className="text-slate-300">•</span>
+                            <span className="text-indigo-600 font-bold">{accent}</span>
+                          </div>
+                        </div>
+                      </div>
+                      <div className="flex items-center gap-1.5">
+                        <span className="px-2.5 py-1 bg-indigo-50 text-indigo-700 font-semibold text-xs rounded-lg border border-indigo-200/50">
+                          {lang}
+                        </span>
+                        <span className="px-2.5 py-1 bg-emerald-50 text-emerald-700 font-semibold text-xs rounded-lg border border-emerald-200/50">
+                          {accent}
+                        </span>
+                      </div>
                     </div>
-                  </div>
-                )}
+                  );
+                })()}
               </div>
             )}
 

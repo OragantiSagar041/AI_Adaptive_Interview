@@ -102,10 +102,25 @@ export default function Plans() {
    
   }, [token])
 
-  const featureOptions = [
-    ...superAdminNavItems.map(item => item.label),
+  // Exact authentic features present across this project
+  const PROJECT_FEATURES = [
+    'Super Admin Dashboard',
+    'Team Management',
+    'Dashboard',
+    'Interviews',
+    'Qualified Candidates',
+    'Rejected Candidates',
+    'Create Interview',
+    'AI Calling Agent',
+    'Jobs',
+    'Organizations',
+    'Recruiters',
+    'Credit Management',
+    'Subscription Management',
+    'Integrations',
+    'Security',
+    'Settings',
     'Live Results',
-    'Available Credits',
     'Analytics & Reports',
     'Bulk Email Invites',
     'Resume Parsing',
@@ -117,6 +132,11 @@ export default function Plans() {
     'Industry Type',
     'ATS Score'
   ]
+
+  const featureOptions = Array.from(new Set([
+    ...PROJECT_FEATURES,
+    ...(editPlanFeatures || [])
+  ]))
 
   return (
     <div className="space-y-6 max-w-6xl">
@@ -159,12 +179,19 @@ export default function Plans() {
                 </p>
 
                 <div className="mt-4 mb-4 pr-1">
-                  <ul className="space-y-1 text-slate-500 text-xs">
-                    {(p.features || []).map((f, i) => (
-                      <li key={i} className="flex gap-1.5 items-center">
-                        <span className="text-indigo-500 text-xs">✓</span> {f}
-                      </li>
-                    ))}
+                  <div className="text-[11px] font-semibold text-slate-400 uppercase tracking-wider mb-2">
+                    Active Features ({p.features?.length || 0})
+                  </div>
+                  <ul className="space-y-1.5 text-slate-600 text-xs">
+                    {(p.features && p.features.length > 0) ? (
+                      p.features.map((f, i) => (
+                        <li key={i} className="flex gap-1.5 items-center">
+                          <span className="text-indigo-500 text-xs font-bold">✓</span> {f}
+                        </li>
+                      ))
+                    ) : (
+                      <li className="text-slate-400 italic">No features configured</li>
+                    )}
                   </ul>
                 </div>
               </div>
@@ -223,8 +250,22 @@ export default function Plans() {
               </div>
 
               <div className="space-y-2">
-                <label className="text-xs font-semibold text-slate-500 block">Select Available Features</label>
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 max-h-[160px] overflow-y-auto border border-slate-200 rounded-xl p-3.5 bg-slate-50">
+                <div className="flex justify-between items-center">
+                  <label className="text-xs font-semibold text-slate-500">
+                    Select Available Features ({editPlanFeatures.length} chosen)
+                  </label>
+                  {editPlanFeatures.length > 0 && (
+                    <button
+                      type="button"
+                      onClick={() => setEditPlanFeatures([])}
+                      className="text-[11px] text-rose-500 hover:underline"
+                    >
+                      Clear All
+                    </button>
+                  )}
+                </div>
+
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 max-h-[180px] overflow-y-auto border border-slate-200 rounded-xl p-3.5 bg-slate-50">
                   {featureOptions.map(f => {
                     const isChecked = editPlanFeatures.includes(f)
                     return (

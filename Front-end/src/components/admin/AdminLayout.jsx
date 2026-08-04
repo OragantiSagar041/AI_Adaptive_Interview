@@ -253,7 +253,7 @@ export default function AdminLayout({
             className="flex items-center gap-3 w-full rounded-md px-3 py-2 text-sm font-medium transition-colors text-slate-500 hover:bg-slate-100 hover:text-slate-900 border-none bg-transparent cursor-pointer text-left"
           >
             <Coins size={16} />
-            Available Credits
+            Request Credits
           </button>
         </div>
       </aside>
@@ -281,14 +281,6 @@ export default function AdminLayout({
                 />
               ))}
             </div>
-
-            {/* Active Plan Badge (Only shown if defined) */}
-            {adminUser?.subscription_plan && (
-              <div className="flex items-center gap-1.5 px-3 py-1 bg-indigo-50/50 border border-indigo-200/60 text-indigo-700 rounded-full text-xs font-bold shadow-sm">
-                <span className="w-1.5 h-1.5 rounded-full bg-indigo-600"></span>
-                Active Plan: {adminUser.subscription_plan}
-              </div>
-            )}
 
             {/* Credits Badge */}
             <div className="flex items-center gap-1.5 px-3 py-1 bg-cyan-50 border border-cyan-100 text-cyan-600 rounded-full text-xs font-bold shadow-sm">

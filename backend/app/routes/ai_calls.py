@@ -188,8 +188,21 @@ async def initiate_manual_ai_call(
     """
     Initiates an outbound AI call via Omni Dimension manually, without requiring an existing session.
     """
-    if not phone_number:
-        raise HTTPException(status_code=400, detail="Phone number is required")
+    import re
+    raw_phone = (phone_number or "").strip()
+    digits_only = re.sub(r'\D', '', raw_phone)
+    if len(digits_only) == 12 and digits_only.startswith("91"):
+        digits_only = digits_only[2:]
+    elif len(digits_only) == 11 and digits_only.startswith("0"):
+        digits_only = digits_only[1:]
+
+    if not digits_only or len(digits_only) != 10 or not digits_only.isdigit():
+        raise HTTPException(
+            status_code=400,
+            detail="Invalid phone number. Phone number must be a valid 10-digit mobile number."
+        )
+
+    phone_number = digits_only
 
     try:
         from app.ai import omni_dimension_client

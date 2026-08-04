@@ -42,7 +42,8 @@ class CreditRequestUpdate(BaseModel):
     status: str  # 'approved' or 'rejected'
 
 class AddCreditsRequest(BaseModel):
-    credits: int = Field(gt=0, le=1_000_000)
+    credits: Optional[int] = None
+    amount: Optional[int] = None
 
 class TenantCreate(BaseModel):
     company_name: str
@@ -156,3 +157,9 @@ class DemoRequestCreate(BaseModel):
 
 class DemoRequestUpdate(BaseModel):
     status: str
+
+class DemoRequestSendEmail(BaseModel):
+    recipient_email: str
+    recipient_name: Optional[str] = ""
+    subject: str
+    message: str

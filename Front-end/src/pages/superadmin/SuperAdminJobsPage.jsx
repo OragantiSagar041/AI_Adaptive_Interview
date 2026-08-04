@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useCallback, useMemo } from 'react';
-import { Briefcase, Plus, MapPin, Clock, FileText, X, Target, Trash2, Pencil, Wallet, Users, LayoutGrid, LayoutList, ArrowRight, ChevronRight, Zap, Building2, BookOpen, CheckCircle2, Mail, Phone, ExternalLink, RefreshCw, ChevronDown } from 'lucide-react';
+import { Briefcase, Plus, MapPin, Clock, FileText, X, Target, Trash2, Pencil, Wallet, Users, LayoutGrid, LayoutList, ArrowRight, ChevronRight, Zap, Building2, BookOpen, CheckCircle2, Mail, Phone, ExternalLink, RefreshCw, ChevronDown, Copy } from 'lucide-react';
 import Card from '../../components/Card';
 import Button from '../../components/Button';
 import JobApplicationModal from '../../components/JobApplicationModal';
@@ -8,6 +8,7 @@ import { loadSuperAdminDashboard } from '../../store/slices/dashboardSlice';
 import { getComputedStatus } from '../../utils/adminFormatters';
 import axios from 'axios';
 import { API_BASE_URL } from '../../apiConfig';
+import Swal from 'sweetalert2';
 const WORK_MODE_STYLES = {
   Remote: 'bg-emerald-50 text-emerald-700 border-emerald-200',
   Hybrid: 'bg-blue-50 text-blue-700 border-blue-200',
@@ -815,9 +816,26 @@ export default function SuperAdminJobsPage() {
                     No one has applied for <span className="font-bold">{applicationData.job?.title}</span> yet.
                     Share the job link to start receiving applications.
                   </p>
-                  <div className="mt-6 px-4 py-2.5 bg-slate-50 border border-slate-200 rounded-xl flex items-center gap-2 text-sm text-slate-500 font-mono">
-                    <ExternalLink size={13} className="text-indigo-400" />
-                    /apply/{applicationData.job?.job_id}
+                  <div className="mt-6 flex items-center justify-center gap-2">
+                    <a
+                      href={`${window.location.origin}/apply/${applicationData.job?.job_id}`}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="px-4 py-2.5 bg-slate-50 hover:bg-indigo-50 border border-slate-200 hover:border-indigo-200 rounded-xl flex items-center gap-2 text-sm text-slate-600 hover:text-indigo-700 font-mono transition-colors cursor-pointer"
+                    >
+                      <ExternalLink size={14} className="text-indigo-400" />
+                      {window.location.origin}/apply/{applicationData.job?.job_id}
+                    </a>
+                    <button
+                      onClick={() => {
+                        navigator.clipboard.writeText(`${window.location.origin}/apply/${applicationData.job?.job_id}`);
+                        Swal.fire({ title: 'Copied!', text: 'Job link copied to clipboard.', icon: 'success', toast: true, position: 'top-end', showConfirmButton: false, timer: 2000 });
+                      }}
+                      className="p-2.5 bg-white border border-slate-200 hover:bg-slate-50 hover:border-indigo-200 text-slate-500 hover:text-indigo-600 rounded-xl cursor-pointer transition-colors"
+                      title="Copy Link"
+                    >
+                      <Copy size={16} />
+                    </button>
                   </div>
                 </div>
               ) : (
@@ -921,9 +939,30 @@ export default function SuperAdminJobsPage() {
 
             {/* Footer */}
             <div className="px-8 py-5 border-t border-slate-100 flex items-center justify-between bg-slate-50/40">
-              <p className="text-xs text-slate-400 font-medium">
-                Job ID: <span className="font-mono font-bold text-slate-500">{applicationData.job?.job_id}</span>
-              </p>
+              <div className="flex items-center gap-4">
+                <p className="text-xs text-slate-400 font-medium">
+                  Job ID: <span className="font-mono font-bold text-slate-500">{applicationData.job?.job_id}</span>
+                </p>
+                <div className="h-4 w-px bg-slate-200"></div>
+                <a
+                  href={`${window.location.origin}/apply/${applicationData.job?.job_id}`}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="flex items-center gap-1.5 text-xs text-indigo-500 hover:text-indigo-700 font-mono font-medium transition-colors"
+                >
+                  <ExternalLink size={12} /> {window.location.origin}/apply/{applicationData.job?.job_id}
+                </a>
+                <button
+                  onClick={() => {
+                    navigator.clipboard.writeText(`${window.location.origin}/apply/${applicationData.job?.job_id}`);
+                    Swal.fire({ title: 'Copied!', text: 'Job link copied to clipboard.', icon: 'success', toast: true, position: 'top-end', showConfirmButton: false, timer: 2000 });
+                  }}
+                  className="p-1.5 text-slate-400 hover:text-indigo-600 hover:bg-indigo-50 rounded-lg transition-colors cursor-pointer"
+                  title="Copy Link"
+                >
+                  <Copy size={14} />
+                </button>
+              </div>
               <button
                 onClick={closeApplications}
                 className="px-6 py-2.5 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-600 font-bold text-sm border-none cursor-pointer transition-colors"

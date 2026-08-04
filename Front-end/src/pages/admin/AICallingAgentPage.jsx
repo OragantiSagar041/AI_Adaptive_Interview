@@ -1344,6 +1344,7 @@ export default function AICallingAgentPage() {
 
   // Manual dialer state
   const [manualCall, setManualCall] = useState({ phone: '', name: '', jobDesc: '', resume: null })
+  const [phoneError, setPhoneError] = useState('')
   const [isCalling, setIsCalling] = useState(false)
   const [availableJobs, setAvailableJobs] = useState([])
   const [selectedJob, setSelectedJob] = useState(null)
@@ -1483,11 +1484,22 @@ export default function AICallingAgentPage() {
 
 
   const handleManualCall = async () => {
-    if (!manualCall.phone) { alert('Please enter a phone number'); return }
+    const cleanPhone = (manualCall.phone || '').replace(/\D/g, '')
+    if (!cleanPhone) {
+      setPhoneError('Phone number is required')
+      alert('Please enter a phone number')
+      return
+    }
+    if (cleanPhone.length !== 10) {
+      setPhoneError('Please enter a valid 10-digit mobile number')
+      alert('Please enter a valid 10-digit mobile number (e.g. 9876543210)')
+      return
+    }
+    setPhoneError('')
     setIsCalling(true)
     try {
       const formData = new FormData()
-      formData.append('phone_number', manualCall.phone)
+      formData.append('phone_number', cleanPhone)
       formData.append('candidate_name', manualCall.name || 'Candidate')
       formData.append('job_description', manualCall.jobDesc)
       if (selectedJobId) formData.append('job_id', selectedJobId)
@@ -1680,11 +1692,40 @@ export default function AICallingAgentPage() {
                       <div>
                         <label className="block text-[0.7rem] font-bold uppercase tracking-wider text-slate-500 mb-2">Phone Number *</label>
                         <input
-                          type="text" value={manualCall.phone}
-                          onChange={e => setManualCall({ ...manualCall, phone: e.target.value })}
-                          className="w-full px-4 py-3 bg-slate-50 border border-slate-200 rounded-xl text-sm text-slate-800 placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 transition-all font-semibold"
-                          placeholder="+91 99999 00000"
+                          type="text"
+                          inputMode="numeric"
+                          maxLength={10}
+                          value={manualCall.phone}
+                          onChange={e => {
+                            // Block non-digits (0-9 only)
+                            const val = e.target.value.replace(/\D/g, '').slice(0, 10);
+                            setManualCall({ ...manualCall, phone: val });
+                            if (val.length === 0) {
+                              setPhoneError('Phone number is required');
+                            } else if (val.length < 10) {
+                              setPhoneError('Please enter a valid 10-digit mobile number');
+                            } else {
+                              setPhoneError('');
+                            }
+                          }}
+                          onBlur={e => {
+                            const val = e.target.value.replace(/\D/g, '');
+                            if (val.length === 0) {
+                              setPhoneError('Phone number is required');
+                            } else if (val.length < 10) {
+                              setPhoneError('Please enter a valid 10-digit mobile number');
+                            } else {
+                              setPhoneError('');
+                            }
+                          }}
+                          className={`w-full px-4 py-3 bg-slate-50 border ${phoneError ? 'border-rose-500 focus:ring-rose-500/20 focus:border-rose-500' : 'border-slate-200 focus:ring-indigo-500/20 focus:border-indigo-500'} rounded-xl text-sm text-slate-800 placeholder-slate-400 focus:outline-none focus:ring-2 transition-all font-semibold`}
+                          placeholder="e.g. 9876543210"
                         />
+                        {phoneError && (
+                          <p className="text-xs text-rose-500 font-semibold mt-1.5 flex items-center gap-1">
+                            <AlertCircle size={13} /> {phoneError}
+                          </p>
+                        )}
                       </div>
                       <div>
                         <label className="block text-[0.7rem] font-bold uppercase tracking-wider text-slate-500 mb-2">Candidate Name</label>

@@ -14,7 +14,8 @@ import {
   Mail,
   Zap,
   ChevronDown,
-  User
+  User,
+  TrendingUp
 } from 'lucide-react'
 import { logout, loadSuperAdminProfile } from '../../store/slices/authSlice'
 import { persistor } from '../../store/store'
@@ -169,6 +170,7 @@ export default function MasterLayout() {
 
   const navItems = [
     { id: 'dashboard', label: 'Dashboard', icon: LayoutDashboard, path: '/master/dashboard' },
+    { id: 'company-revenue', label: 'Company Revenue', icon: TrendingUp, path: '/master/company-revenue' },
     { id: 'plans', label: 'Plans', icon: Tags, path: '/master/plans' },
     { id: 'subscribers', label: 'Subscribers', icon: Users, path: '/master/subscribers' },
     { id: 'create-tenant', label: 'Create Tenant', icon: UserPlus, path: '/master/create-tenant' },
@@ -178,6 +180,7 @@ export default function MasterLayout() {
   const getPageTitle = () => {
     const path = location.pathname
     if (path.includes('dashboard')) return 'Subscription Monitor'
+    if (path.includes('company-revenue')) return 'Company-Wise Revenue Analytics'
     if (path.includes('plans')) return 'Product Pricing & Plans'
     if (path.includes('subscribers')) return 'Subscribed Companies'
     if (path.includes('create-tenant')) return 'Provision Tenant Account'

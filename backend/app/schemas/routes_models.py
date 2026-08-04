@@ -1,11 +1,17 @@
+from datetime import datetime, timedelta, timezone
 from pydantic import BaseModel, Field, validator, root_validator
 from typing import List, Optional, Dict, Any, Union
 from app.schemas.models import *
+from app.services.live_monitoring_security import validate_snapshot_dataurl
+
+MAX_SNAPSHOT_BYTES = 250_000
+
 
 class RazorpayOrderRequest(BaseModel):
     plan_name: str
-    amount_inr: float
-    credits: int
+    signup_form: Optional[Dict[str, Any]] = None
+    amount_inr: Optional[float] = None
+    credits: Optional[int] = None
 
 
 # Startup functions (to be called by main.py lifespan)
@@ -153,8 +159,8 @@ class BulkCreateSession(BaseModel):
         if start and v:
             try:
                 # Basic ISO format validation check (will be parsed fully in logic)
-                start_dt = datetime.datetime.fromisoformat(start.replace("Z", "+00:00"))
-                end_dt = datetime.datetime.fromisoformat(v.replace("Z", "+00:00"))
+                start_dt = datetime.fromisoformat(start.replace("Z", "+00:00"))
+                end_dt = datetime.fromisoformat(v.replace("Z", "+00:00"))
                 if start_dt >= end_dt:
                     raise ValueError("scheduled_end must be after scheduled_start")
             except ValueError as e:
@@ -228,7 +234,7 @@ class LiveHeartbeatRequest(BaseModel):
         return value
 
     @validator("snapshot_dataurl")
-    def validate_snapshot_dataurl(cls, value):
+    def validate_snapshot_field(cls, value):
         if value is None:
             return value
         return validate_snapshot_dataurl(value, MAX_SNAPSHOT_BYTES)
@@ -279,7 +285,9 @@ class StripeCheckoutRequest(BaseModel):
 
 class RazorpayOrderRequest(BaseModel):
     plan_name: str
-    signup_form: dict
+    signup_form: Optional[Dict[str, Any]] = None
+    amount_inr: Optional[float] = None
+    credits: Optional[int] = None
 
 class RazorpayVerifyRequest(BaseModel):
     plan_name: str
