@@ -288,8 +288,8 @@ export default function VoiceCodingRound({
       const res = await candidateFetch(`${API_BASE_URL}/tts`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ 
-          text, 
+        body: JSON.stringify({
+          text,
           voice: 'shimmer',
           language: sessionLang,
           use_custom_voice: sessionDetail?.voice_clone || sessionDetail?.voice_cloning_enabled || false,
@@ -308,11 +308,11 @@ export default function VoiceCodingRound({
         activeAudioRef.current = null
         onEnd?.()
       }
-      audio.onerror = () => { 
+      audio.onerror = () => {
         setAiStatus('idle')
         setOrbLabel('Zara is watching')
         activeAudioRef.current = null
-        onEnd?.() 
+        onEnd?.()
       }
       audio.play()
     } catch (e) {
@@ -456,7 +456,7 @@ export default function VoiceCodingRound({
         })
       })
     }, 800)
-  }, [])  
+  }, [])
 
   // ── Code Sentinel ─────────────────────────────────────────────────────
   const handleCodeChange = useCallback((value) => {
@@ -560,7 +560,7 @@ export default function VoiceCodingRound({
     submittingRef.current = true
     setIsSubmitting(true)
     stopListening()
-    
+
     // Stop ongoing audio immediately
     if (window.speechSynthesis) window.speechSynthesis.cancel()
     if (activeAudioRef.current) {
@@ -570,7 +570,7 @@ export default function VoiceCodingRound({
     setAiStatus('idle')
 
     const timeoutFlag = typeof isTimeout === 'boolean' ? isTimeout : false;
-    const message = timeoutFlag 
+    const message = timeoutFlag
       ? "Thank you for the interview."
       : "We are saving your interview, please wait.";
 
@@ -598,14 +598,18 @@ export default function VoiceCodingRound({
     }
   }, [stopListening, interviewId, code, selectedLang, onComplete, aiSay])
 
+  // Store latest handleSubmit to avoid timer resets
+  const submitFnRef = useRef(handleSubmit);
+  useEffect(() => { submitFnRef.current = handleSubmit; }, [handleSubmit]);
+
   // Timer
   useEffect(() => {
     const t = setInterval(() => setTimeLeft(p => {
-      if (p <= 1) { handleSubmit(true); return 0 }
+      if (p <= 1) { submitFnRef.current(true); return 0 }
       return p - 1
     }), 1000)
     return () => clearInterval(t)
-  }, [handleSubmit])
+  }, [])
 
   // ── ESC + Fullscreen proctoring ────────────────────────────────────────────────
   useEffect(() => {
@@ -634,7 +638,7 @@ export default function VoiceCodingRound({
         }).then((result) => {
           if (result.isConfirmed) {
             if (document.documentElement.requestFullscreen) {
-              document.documentElement.requestFullscreen().catch(() => {})
+              document.documentElement.requestFullscreen().catch(() => { })
             }
           } else {
             window.location.href = '/dashboard'
@@ -776,8 +780,8 @@ export default function VoiceCodingRound({
                     <div>
                       <span className="text-slate-500 mr-1">Expected:</span>
                       <span className="text-amber-300">
-                        {typeof (tc.expected !== undefined ? tc.expected : tc.output) === 'object' 
-                          ? JSON.stringify(tc.expected !== undefined ? tc.expected : tc.output) 
+                        {typeof (tc.expected !== undefined ? tc.expected : tc.output) === 'object'
+                          ? JSON.stringify(tc.expected !== undefined ? tc.expected : tc.output)
                           : String(tc.expected !== undefined ? tc.expected : tc.output)}
                       </span>
                     </div>
@@ -829,7 +833,7 @@ export default function VoiceCodingRound({
               <Editor
                 height="100%"
                 language={selectedLang === 'cpp' ? 'cpp' : selectedLang}
-                value={code}
+                defaultValue={code}
                 onChange={handleCodeChange}
                 theme="vs-dark"
                 options={{
