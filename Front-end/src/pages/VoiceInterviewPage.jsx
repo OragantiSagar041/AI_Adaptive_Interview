@@ -5,7 +5,7 @@
  *   Round 2: Coding (Monaco Editor + live code sentinel)
  *   Round 3: Case Study (branching AI discussion)
  */
-import React, { useState, useEffect, useRef, useCallback, Suspense } from 'react'
+import React, { useState, useEffect, useRef, useCallback, useMemo, Suspense } from 'react'
 import { createPortal } from 'react-dom'
 import { useParams, useNavigate } from 'react-router-dom'
 import {

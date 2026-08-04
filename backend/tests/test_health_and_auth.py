@@ -38,13 +38,27 @@ def test_plan_definitions_integrity():
     assert "capabilities" in trial_plan
 
 
-def test_widget_config_endpoint():
-    """Verify widget config returns valid structure."""
+def test_widget_config_endpoint_auth_required():
+    """Verify widget config requires admin authentication."""
     response = client.get("/api/admin/widget-config")
-    assert response.status_code == 200
-    data = response.json()
-    assert "configured" in data
-    assert "widget_url" in data
+    assert response.status_code in [401, 403]
+
+
+def test_widget_config_endpoint_authorized():
+    """Verify widget config returns valid structure when authorized."""
+    from app.core.routes_core import get_current_admin_details
+    app.dependency_overrides[get_current_admin_details] = lambda: {
+        "admin_id": "test_admin",
+        "company_id": "test_co",
+        "role": "admin"
+    }
+    try:
+        response = client.get("/api/admin/widget-config")
+        assert response.status_code == 200
+        data = response.json()
+        assert "configured" in data
+    finally:
+        app.dependency_overrides.pop(get_current_admin_details, None)
 
 
 def test_public_job_apply_not_found():

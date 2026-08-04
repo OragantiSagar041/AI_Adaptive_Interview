@@ -96,7 +96,10 @@ router = APIRouter()
 
 @router.get("/admin/widget-config")
 @router.get("/api/admin/widget-config")
-def get_widget_config(omni_api_key: Optional[str] = Header(default=None, alias="X-Omni-Dimension-API-Key")):
+def get_widget_config(
+    omni_api_key: Optional[str] = Header(default=None, alias="X-Omni-Dimension-API-Key"),
+    current_admin: dict = Depends(get_current_admin_details)
+):
     from app.core.config import get_omni_dimension_api_key
     api_key = (omni_api_key or get_omni_dimension_api_key()).strip()
     if not api_key:

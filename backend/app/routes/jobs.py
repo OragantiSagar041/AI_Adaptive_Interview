@@ -256,11 +256,16 @@ async def apply_for_job(
     or as JSON. Validates the job exists, extracts text from uploaded resumes/cover letters,
     persists the application document, and increments application_count.
     """
-    job = jobs_collection.find_one({"job_id": job_id})
-    if not job:
-        from bson import ObjectId
-        if ObjectId.is_valid(job_id):
-            job = jobs_collection.find_one({"_id": ObjectId(job_id)})
+    try:
+        job = jobs_collection.find_one({"job_id": job_id})
+        if not job:
+            from bson import ObjectId
+            if ObjectId.is_valid(job_id):
+                job = jobs_collection.find_one({"_id": ObjectId(job_id)})
+    except Exception as db_err:
+        logger.error(f"[JobApply] Database error looking up job {job_id}: {db_err}")
+        raise HTTPException(status_code=503, detail="Database temporarily unavailable. Please try again later.")
+
     if not job:
         raise HTTPException(status_code=404, detail="Job not found")
 
