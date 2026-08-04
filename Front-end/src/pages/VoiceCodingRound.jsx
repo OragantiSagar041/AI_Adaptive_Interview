@@ -4,12 +4,11 @@
  * Left: Problem only | Center: Editor | Floating orb: voice indicator
  */
 import React, { useState, useRef, useCallback, useEffect, Suspense } from 'react'
+import { createPortal } from 'react-dom'
 
 const Editor = React.lazy(() => import('@monaco-editor/react'))
 import { API_BASE_URL } from '../apiConfig'
 import { candidateFetch } from '../utils/candidateAuth'
-import Swal from 'sweetalert2'
-import 'sweetalert2/dist/sweetalert2.min.css'
 import aiVideoUrl from '../assets/ai_avatar.mp4'
 import { useExitConfirmation } from '../hooks/useExitConfirmation'
 
@@ -268,6 +267,8 @@ export default function VoiceCodingRound({
   const [running, setRunning] = useState(false)
   const [isSubmitting, setIsSubmitting] = useState(false)
   const [orbLabel, setOrbLabel] = useState('Zara is watching')
+  const [fullscreenAlert, setFullscreenAlert] = useState(false)
+  const fullscreenAlertTimerRef = useRef(null)
 
   const recognitionRef = useRef(null)
   const silenceTimerRef = useRef(null)
@@ -640,14 +641,19 @@ export default function VoiceCodingRound({
     }
   }, [stopListening, interviewId, code, selectedLang, onComplete, aiSay])
 
+  const handleSubmitRef = useRef(handleSubmit)
+  useEffect(() => {
+    handleSubmitRef.current = handleSubmit
+  }, [handleSubmit])
+
   // Timer
   useEffect(() => {
     const t = setInterval(() => setTimeLeft(p => {
-      if (p <= 1) { handleSubmit(true); return 0 }
+      if (p <= 1) { handleSubmitRef.current(true); return 0 }
       return p - 1
     }), 1000)
     return () => clearInterval(t)
-  }, [handleSubmit])
+  }, [])
 
   // ── ESC + Fullscreen proctoring ────────────────────────────────────────────────
   useEffect(() => {
@@ -664,24 +670,17 @@ export default function VoiceCodingRound({
     }
     const handleFullscreenChange = async () => {
       if (!document.fullscreenElement) {
-        Swal.fire({
-          icon: 'warning',
-          title: '⚠️ Fullscreen Required',
-          text: 'Exiting fullscreen mode is not allowed during the interview.',
-          showCancelButton: true,
-          confirmButtonText: 'Enable full screen mode',
-          cancelButtonText: 'Exit interview',
-          allowOutsideClick: false,
-          allowEscapeKey: false
-        }).then((result) => {
-          if (result.isConfirmed) {
-            if (document.documentElement.requestFullscreen) {
-              document.documentElement.requestFullscreen().catch(() => {})
-            }
-          } else {
-            window.location.href = '/dashboard'
+        // Show custom non-blocking banner instead of Swal
+        clearTimeout(fullscreenAlertTimerRef.current)
+        setFullscreenAlert(true)
+        // Auto-try to re-enter fullscreen
+        setTimeout(() => {
+          if (document.documentElement.requestFullscreen) {
+            document.documentElement.requestFullscreen().catch(() => {})
           }
-        })
+        }, 300)
+        // Hide alert after 5s
+        fullscreenAlertTimerRef.current = setTimeout(() => setFullscreenAlert(false), 5000)
       }
     }
     document.addEventListener('keydown', handleKeyDown)
@@ -710,6 +709,10 @@ export default function VoiceCodingRound({
         }
         @keyframes fadeSlideIn {
           from { opacity: 0; transform: translateY(8px); }
+          to   { opacity: 1; transform: translateY(0); }
+        }
+        @keyframes alertSlideDown {
+          from { opacity: 0; transform: translateY(-16px); }
           to   { opacity: 1; transform: translateY(0); }
         }
         .orb-label { animation: fadeSlideIn 0.3s ease; }
@@ -1168,6 +1171,25 @@ export default function VoiceCodingRound({
           <p className="text-slate-400 font-medium">Please wait while we upload the session recording securely.</p>
         </div>
       )}
+
+      {/* ── Fullscreen Alert Banner (replaces Swal) ── */}
+      {fullscreenAlert && createPortal(
+        <div style={{
+          position: 'fixed', top: 0, left: 0, right: 0, zIndex: 99999,
+          background: 'linear-gradient(90deg, rgba(180,30,30,0.97), rgba(220,38,38,0.97))',
+          backdropFilter: 'blur(10px)',
+          color: '#fff', padding: '13px 24px',
+          display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 12,
+          fontSize: 14, fontWeight: 700,
+          boxShadow: '0 4px 20px rgba(0,0,0,0.5)',
+          animation: 'alertSlideDown 0.25s cubic-bezier(0.34,1.56,0.64,1) forwards',
+        }}>
+          <span style={{ fontSize: 20 }}>⚠️</span>
+          <span>Fullscreen required — re-entering automatically. Exiting fullscreen during the interview is not allowed.</span>
+        </div>,
+        document.body
+      )}
     </div>
+
   )
 }

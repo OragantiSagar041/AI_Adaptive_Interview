@@ -1148,10 +1148,19 @@ function RecruiterContact() {
 
 function AiRecruiterLandingPage() {
   useSEO({
-    title: "AI Voice Recruiter That Never Sleeps | HireIQ",
-    description: "Automate candidate screening with human-like AI voice interviews. Interview 10,000+ candidates automatically with rubric scoring and ATS sync. No humans needed.",
+    title: "AI Calling Agent for Recruitment & AI Voice Recruiter | HireIQ India",
+    description: "HireIQ's AI calling agent for recruitment automates candidate phone screening, AI candidate screening software, and bulk hiring across India with human-like AI agents.",
     path: "/voice-recruiter",
-    keywords: ["AI voice recruiter", "automated phone screening", "AI calling agent", "bulk candidate outreach", "voice interview bot"],
+    keywords: [
+      "AI calling agent for recruitment",
+      "AI candidate screening software",
+      "Bulk hiring software India",
+      "AI recruitment software India",
+      "Automated HR screening tool",
+      "AI voice recruiter",
+      "automated phone screening",
+      "Hire IQ"
+    ],
   });
 
   return (

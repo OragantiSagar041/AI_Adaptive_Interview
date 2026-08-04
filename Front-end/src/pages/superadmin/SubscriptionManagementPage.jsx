@@ -681,7 +681,7 @@ export default function SubscriptionManagementPage() {
         <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-8">
           <StatCard icon={Building2}   label="Total Orgs"      value={stats.total_organisations}  gradient="bg-gradient-to-br from-indigo-500 to-indigo-700" />
           <StatCard icon={CheckCircle} label="Active"          value={stats.active_subscriptions} gradient="bg-gradient-to-br from-emerald-500 to-emerald-700" />
-          <StatCard icon={TrendingUp}  label="Monthly Revenue" value={`₹${(stats.total_mrr || 0).toLocaleString()}`} gradient="bg-gradient-to-br from-violet-500 to-violet-700" />
+          <StatCard icon={TrendingUp}  label="Total Revenue" value={`₹${(stats.total_mrr || 0).toLocaleString()}`} gradient="bg-gradient-to-br from-violet-500 to-violet-700" />
           <StatCard icon={Zap}         label="Credits Issued"  value={(stats.total_credits_issued || 0).toLocaleString()} sub={`${(stats.total_credits_consumed || 0).toLocaleString()} consumed`} gradient="bg-gradient-to-br from-amber-500 to-orange-600" />
         </div>
       )}
