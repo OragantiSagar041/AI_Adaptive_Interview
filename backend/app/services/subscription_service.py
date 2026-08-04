@@ -223,9 +223,10 @@ def get_subscription_stats() -> SubscriptionStats:
         elif status == "trial":
             trial += 1
 
-        plan_def = get_plan_definition(plan_key)
-        total_credits_issued += plan_def.get("credits_granted", 0)
-        total_credits_consumed += get_total_credits_consumed(company_id)
+        credits_available = max(0, company.get("credits", 0))
+        credits_consumed = get_total_credits_consumed(company_id)
+        total_credits_issued += credits_available + credits_consumed
+        total_credits_consumed += credits_consumed
 
     total_revenue = get_total_revenue()
 

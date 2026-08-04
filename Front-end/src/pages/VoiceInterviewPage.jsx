@@ -2099,6 +2099,7 @@ export default function VoiceInterviewPage() {
 
     // Fullscreen change detection with interactive modal
     const handleFullscreenChange = async () => {
+      if (round === 'coding') return
       if (!document.fullscreenElement && round !== 'done' && round !== 'pre_checks' && round !== 'intro' && round !== 'submitting') {
         logProctoringAlert('fullscreen_exit', 'User exited fullscreen')
 
@@ -2311,7 +2312,7 @@ export default function VoiceInterviewPage() {
         </ErrorBoundary>
         {candidateVideoElement}
         {securityAlert && createPortal(
-          <div style={{
+          <div role="alert" style={{
             position: 'fixed', top: 16, left: '50%', transform: 'translateX(-50%)',
             zIndex: 99999, display: 'flex', alignItems: 'center', gap: 10,
             padding: '10px 18px', borderRadius: 999, fontSize: 13, fontWeight: 500,
@@ -2389,7 +2390,7 @@ export default function VoiceInterviewPage() {
     <div className="h-screen w-screen overflow-hidden bg-[#07091a] flex flex-col text-white" style={{ fontFamily: "'Inter',sans-serif" }}>
       {/* Security Alert Pill */}
       {securityAlert && createPortal(
-        <div style={{
+        <div role="alert" style={{
           position: 'fixed', top: 16, left: '50%', transform: 'translateX(-50%)',
           zIndex: 99999, display: 'flex', alignItems: 'center', gap: 10,
           padding: '10px 18px', borderRadius: 999, fontSize: 13, fontWeight: 500,
@@ -2894,7 +2895,7 @@ export default function VoiceInterviewPage() {
 
       {/* Security Alert Pill */}
       {securityAlert && createPortal(
-        <div style={{
+        <div role="alert" style={{
           position: 'fixed', top: 16, left: '50%', transform: 'translateX(-50%)',
           zIndex: 99999, display: 'flex', alignItems: 'center', gap: 10,
           padding: '10px 18px', borderRadius: 999, fontSize: 13, fontWeight: 500,
