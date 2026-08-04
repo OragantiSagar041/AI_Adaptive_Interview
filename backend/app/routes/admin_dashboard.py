@@ -2053,6 +2053,31 @@ def send_otp_email(email: str, name: str, otp: str):
     else:
         raise HTTPException(status_code=401, detail="Invalid credentials")
 
+@router.get("/api/admin/profile")
+@router.get("/admin/profile")
+def get_admin_profile(current_admin: dict = Depends(get_current_admin_details)):
+    admin_id = current_admin.get("admin_id")
+    try:
+        admin_doc = admins_collection.find_one({"_id": ObjectId(admin_id)}, {"password": 0})
+    except Exception:
+        admin_doc = admins_collection.find_one({"_id": admin_id}, {"password": 0})
+        
+    if not admin_doc:
+        raise HTTPException(status_code=404, detail="Admin not found")
+        
+    admin_doc["id"] = str(admin_doc["_id"])
+    admin_doc["_id"] = str(admin_doc["_id"])
+    
+    if current_admin.get("role") in ["super_admin", "superadmin"] and admin_doc.get("company_id"):
+        try:
+            company = companies_collection.find_one({"_id": ObjectId(admin_doc["company_id"])})
+            if company and "credits" in company:
+                admin_doc["credits"] = company["credits"]
+        except Exception:
+            pass
+            
+    return admin_doc
+
 @router.post("/admin/profile")
 def update_profile(data: UpdateProfileRequest, current_admin: str = Depends(get_current_admin)):
     try:

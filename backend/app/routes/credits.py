@@ -220,14 +220,16 @@ def update_credit_request(request_id: str, data: CreditRequestUpdate, current_ad
             extra={"status_change": "rejected"}
         )
         
-    # Send notification to the requesting admin
+    # Send notification specifically to the requesting recruiter/admin
     try:
         notifications_collection.insert_one({
             "title": f"Credits Request {data.status.capitalize()}",
             "message": f"Your request for {req['amount']} additional credits has been {data.status}.",
             "type": "credits",
             "recipient_role": "admin",
-            "company_id": company_id,
+            "recipient_id": str(req["admin_id"]),
+            "admin_id": str(req["admin_id"]),
+            "company_id": str(company_id or ""),
             "read": False,
             "created_at": datetime.now(timezone.utc).isoformat()
         })

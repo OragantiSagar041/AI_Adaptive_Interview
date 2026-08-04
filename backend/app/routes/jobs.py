@@ -103,11 +103,15 @@ def create_job(job: JobCreate, current_admin: dict = Depends(get_current_admin_d
     admin_id = current_admin["admin_id"]
     role = current_admin.get("role", "admin")
     
-    # Store isolation metadata
+    # Store isolation & creator metadata
     job_dict["company_id"] = current_admin.get("company_id")
     job_dict["admin_id"] = admin_id
+    job_dict["created_by_id"] = admin_id
     job_dict["created_by_role"] = role
-    job_dict["created_by_name"] = current_admin.get("name") or current_admin.get("username")
+    creator_name = current_admin.get("name") or current_admin.get("username") or "Admin"
+    job_dict["created_by_name"] = creator_name
+    job_dict["created_by_email"] = current_admin.get("email") or ""
+    job_dict["created_by"] = creator_name
     
     # Custom format: JOB-[custom_id]-[role]-[admin_id_suffix]
     safe_role = str(role).replace("_", "").lower()
@@ -497,13 +501,49 @@ def update_application_status(
     if app.get("job_id") != actual_job_id:
         raise HTTPException(status_code=400, detail="Application does not belong to this job")
 
+    now_iso = datetime.now(timezone.utc).isoformat()
+    action_by_name = current_admin.get("name") or current_admin.get("username") or "Admin"
+    action_by_email = current_admin.get("email") or ""
+    action_by_role = current_admin.get("role") or "admin"
+    action_by_id = current_admin.get("admin_id")
+
+    log_entry = {
+        "status": new_status,
+        "action": f"Status changed to {new_status}",
+        "action_by_id": action_by_id,
+        "action_by_name": action_by_name,
+        "action_by_email": action_by_email,
+        "action_by_role": action_by_role,
+        "timestamp": now_iso
+    }
+
     result = job_applications_collection.update_one(
         {"_id": oid},
-        {"$set": {"status": new_status, "updated_at": datetime.now(timezone.utc).isoformat()}}
+        {
+            "$set": {
+                "status": new_status,
+                "updated_at": now_iso,
+                "last_action_by_id": action_by_id,
+                "last_action_by_name": action_by_name,
+                "last_action_by_email": action_by_email,
+                "last_action_by_role": action_by_role,
+                "last_action_status": new_status,
+                "last_action_at": now_iso
+            },
+            "$push": {
+                "action_history": log_entry
+            }
+        }
     )
     if result.matched_count == 0:
         raise HTTPException(status_code=404, detail="Application not found")
-    return {"status": "success", "message": f"Status updated to '{new_status}'"}
+    return {
+        "status": "success",
+        "message": f"Status updated to '{new_status}'",
+        "last_action_by_name": action_by_name,
+        "last_action_by_role": action_by_role,
+        "last_action_at": now_iso
+    }
 
 # pyrefly: ignore [missing-import]
 import pypdf

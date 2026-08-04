@@ -1,0 +1,37 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100" width="100%" height="100%">
+  <defs>
+    <linearGradient id="bgGrad" x1="0%" y1="0%" x2="0%" y2="100%">
+      <stop offset="0%" stop-color="#F2EFFE"/>
+      <stop offset="100%" stop-color="#F7F4FF"/>
+    </linearGradient>
+    <linearGradient id="barGrad" x1="0%" y1="0%" x2="0%" y2="100%">
+      <stop offset="0%" stop-color="#3B82F6"/>
+      <stop offset="45%" stop-color="#6366F1"/>
+      <stop offset="100%" stop-color="#A855F7"/>
+    </linearGradient>
+    <filter id="softGlow" x="-20%" y="-20%" width="140%" height="140%">
+      <feDropShadow dx="0" dy="2.5" stdDeviation="2" flood-color="#6366F1" flood-opacity="0.22"/>
+    </filter>
+  </defs>
+
+  <!-- Container squircle -->
+  <rect x="2" y="2" width="96" height="96" rx="26" fill="url(#bgGrad)"/>
+
+  <!-- 5 Vertical Soundwave Bars -->
+  <g filter="url(#softGlow)">
+    <!-- Bar 1 (Outer Left) -->
+    <rect x="16" y="38" width="7" height="24" rx="3.5" fill="url(#barGrad)"/>
+    
+    <!-- Bar 2 (Mid Left) -->
+    <rect x="32" y="25" width="7" height="50" rx="3.5" fill="url(#barGrad)"/>
+    
+    <!-- Bar 3 (Center) -->
+    <rect x="48" y="10" width="7" height="80" rx="3.5" fill="url(#barGrad)"/>
+    
+    <!-- Bar 4 (Mid Right) -->
+    <rect x="64" y="25" width="7" height="50" rx="3.5" fill="url(#barGrad)"/>
+    
+    <!-- Bar 5 (Outer Right) -->
+    <rect x="80" y="38" width="7" height="24" rx="3.5" fill="url(#barGrad)"/>
+  </g>
+</svg>

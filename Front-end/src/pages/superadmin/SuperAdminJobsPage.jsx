@@ -4,7 +4,8 @@ import {
   Briefcase, Plus, MapPin, Clock, FileText, X, Target, Trash2, Pencil, 
   Wallet, Users, LayoutGrid, LayoutList, ArrowRight, ChevronRight, Zap, 
   Building2, BookOpen, CheckCircle2, Mail, Phone, ExternalLink, RefreshCw, 
-  ChevronDown, Copy, Calendar, Eye, Download, FileCheck, Check, Sparkles 
+  ChevronDown, Copy, Calendar, Eye, Download, FileCheck, Check, Sparkles,
+  User, UserCheck, History, ShieldCheck
 } from 'lucide-react';
 import Card from '../../components/Card';
 import Button from '../../components/Button';
@@ -99,12 +100,48 @@ export default function SuperAdminJobsPage() {
         }
       );
       if (res.ok) {
+        const data = await res.json().catch(() => ({}));
+        const lastActionName = data.last_action_by_name || 'Admin';
+        const lastActionRole = data.last_action_by_role || '';
+        const lastActionAt = data.last_action_at || new Date().toISOString();
+
+        const updatedAppMapper = (a) => {
+          if (a._id !== app._id) return a;
+          const newHistoryItem = {
+            status: newStatus,
+            action: `Status changed to ${newStatus}`,
+            action_by_name: lastActionName,
+            action_by_role: lastActionRole,
+            timestamp: lastActionAt,
+          };
+          return {
+            ...a,
+            status: newStatus,
+            last_action_by_name: lastActionName,
+            last_action_by_role: lastActionRole,
+            last_action_at: lastActionAt,
+            action_history: [...(a.action_history || []), newHistoryItem],
+          };
+        };
+
         setApplicationData(prev => ({
           ...prev,
-          list: prev.list.map(a =>
-            a._id === app._id ? { ...a, status: newStatus } : a
-          ),
+          list: prev.list.map(updatedAppMapper),
         }));
+
+        setSelectedResumeApp(prev =>
+          prev && prev._id === app._id ? updatedAppMapper(prev) : prev
+        );
+
+        Swal.fire({
+          title: 'Status Updated',
+          text: `Candidate marked as "${newStatus}" by ${lastActionName}`,
+          icon: 'success',
+          toast: true,
+          position: 'top-end',
+          showConfirmButton: false,
+          timer: 2200,
+        });
       }
     } catch (err) {
       console.error('Error updating status:', err);
@@ -435,9 +472,13 @@ export default function SuperAdminJobsPage() {
                         <h3 className="font-black text-slate-800 text-base leading-tight truncate">{job.title}</h3>
                         <span className="text-[9px] font-bold text-slate-400 uppercase tracking-wider bg-slate-100 px-1.5 py-0.5 rounded">{job.custom_id || job.job_id || 'JOB'}</span>
                       </div>
-                      <p className="text-xs text-slate-400 font-medium mt-0.5 flex items-center gap-1">
-                        <Building2 size={11} /> {job.location}
-                      </p>
+                      <div className="flex items-center gap-2 mt-0.5 text-xs text-slate-400 font-medium">
+                        <span className="flex items-center gap-1"><Building2 size={11} /> {job.location}</span>
+                        <span>•</span>
+                        <span className="flex items-center gap-1 text-slate-500 font-semibold" title={`Created by ${job.created_by_name || job.created_by || 'Admin'} (${job.created_by_role || 'Admin'})`}>
+                          <User size={11} className="text-indigo-500" /> {job.created_by_name || job.created_by || 'Admin'}
+                        </span>
+                      </div>
                     </div>
                   </div>
                   <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity shrink-0">
@@ -549,7 +590,12 @@ export default function SuperAdminJobsPage() {
                             <p className="font-black text-slate-800 text-sm">{job.title}</p>
                             <span className="text-[9px] font-bold text-slate-400 uppercase tracking-wider bg-slate-100 px-1.5 py-0.5 rounded">{job.custom_id || job.job_id || 'JOB'}</span>
                           </div>
-                          <p className="text-xs text-slate-400 mt-0.5 line-clamp-1 max-w-[200px]">{job.description}</p>
+                          <div className="flex items-center gap-2 mt-0.5">
+                            <p className="text-xs text-slate-400 line-clamp-1 max-w-[180px]">{job.description}</p>
+                            <span className="text-[0.65rem] text-slate-500 font-semibold flex items-center gap-1 bg-slate-100/80 px-1.5 py-0.5 rounded border border-slate-200/60" title={`Created by ${job.created_by_name || job.created_by || 'Admin'}`}>
+                              <User size={10} className="text-indigo-500" /> {job.created_by_name || job.created_by || 'Admin'}
+                            </span>
+                          </div>
                         </div>
                       </div>
                     </td>
@@ -812,15 +858,32 @@ export default function SuperAdminJobsPage() {
                   <Users size={24} />
                 </div>
                 <div>
-                  <h2 className="text-xl font-black text-slate-800 tracking-tight">Job Applications</h2>
-                  <p className="text-sm text-slate-500 font-semibold mt-0.5">
-                    {applicationData.job?.title}
+                  <div className="flex items-center gap-2">
+                    <h2 className="text-xl font-black text-slate-800 tracking-tight">{applicationData.job?.title}</h2>
                     {!applicationData.loading && (
-                      <span className="ml-2 px-2 py-0.5 bg-teal-100 text-teal-700 text-xs font-bold rounded-full">
+                      <span className="px-2.5 py-0.5 bg-teal-100 text-teal-800 text-xs font-bold rounded-full border border-teal-200">
                         {applicationData.list.length} applicant{applicationData.list.length !== 1 ? 's' : ''}
                       </span>
                     )}
-                  </p>
+                  </div>
+                  <div className="flex items-center gap-3 mt-1 text-xs text-slate-500 font-medium flex-wrap">
+                    <span className="flex items-center gap-1">
+                      <Building2 size={12} className="text-slate-400" /> {applicationData.job?.location || 'Remote'}
+                    </span>
+                    <span>•</span>
+                    <span className="flex items-center gap-1.5 bg-white/90 text-slate-700 font-bold px-2 py-0.5 rounded-lg border border-slate-200 shadow-xs">
+                      <User size={11} className="text-indigo-600" />
+                      Created by: <span className="text-indigo-600 font-extrabold">{applicationData.job?.created_by_name || applicationData.job?.created_by || 'Admin'}</span>
+                      {applicationData.job?.created_by_role && (
+                        <span className="text-[0.62rem] text-slate-400 uppercase font-bold">({applicationData.job?.created_by_role})</span>
+                      )}
+                    </span>
+                    {applicationData.job?.created_at && (
+                      <span className="text-slate-400 flex items-center gap-1">
+                        <Calendar size={11} /> Posted {new Date(applicationData.job.created_at).toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' })}
+                      </span>
+                    )}
+                  </div>
                 </div>
               </div>
               <div className="flex items-center gap-2">
@@ -951,9 +1014,29 @@ export default function SuperAdminJobsPage() {
                               </span>
                             </td>
                             <td className="py-4 px-5">
-                              <span className={`inline-flex items-center px-2.5 py-1 rounded-full text-[0.68rem] font-bold border ${statusStyles[st] || 'bg-slate-50 text-slate-600 border-slate-200'}`}>
-                                {st}
-                              </span>
+                              <div className="flex flex-col gap-1 items-start">
+                                <span className={`inline-flex items-center px-2.5 py-1 rounded-full text-[0.68rem] font-bold border ${statusStyles[st] || 'bg-slate-50 text-slate-600 border-slate-200'}`}>
+                                  {st}
+                                </span>
+                                {app.last_action_by_name ? (
+                                  <div className="flex flex-col text-[0.68rem] text-slate-500 bg-slate-50/80 px-2 py-0.5 rounded-md border border-slate-200/60 max-w-[170px]" title={`Action taken by ${app.last_action_by_name} (${app.last_action_by_role || 'Admin'})`}>
+                                    <span className="font-semibold text-slate-700 flex items-center gap-1 truncate">
+                                      <UserCheck size={11} className="text-indigo-600 shrink-0" />
+                                      <span>by {app.last_action_by_name}</span>
+                                      {app.last_action_by_role && (
+                                        <span className="text-[0.6rem] text-slate-400 uppercase font-bold">({app.last_action_by_role})</span>
+                                      )}
+                                    </span>
+                                    {app.last_action_at && (
+                                      <span className="text-[0.6rem] text-slate-400 font-mono">
+                                        {new Date(app.last_action_at).toLocaleDateString('en-IN', { day: '2-digit', month: 'short', hour: '2-digit', minute: '2-digit' })}
+                                      </span>
+                                    )}
+                                  </div>
+                                ) : (
+                                  <span className="text-[0.62rem] text-slate-400 italic">No action yet</span>
+                                )}
+                              </div>
                             </td>
                             <td className="py-4 px-5 text-right">
                               <div className="flex items-center justify-end gap-2">
@@ -1046,10 +1129,15 @@ export default function SuperAdminJobsPage() {
                 </div>
                 <div className="overflow-hidden">
                   <h2 className="text-xl font-black text-slate-800 tracking-tight truncate">{selectedJobDetails.title}</h2>
-                  <div className="flex items-center gap-3 mt-0.5">
+                  <div className="flex items-center gap-3 mt-0.5 flex-wrap">
                     <span className="text-xs text-slate-500 flex items-center gap-1"><MapPin size={11} /> {selectedJobDetails.location}</span>
                     <span className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[0.65rem] font-bold border ${WORK_MODE_STYLES[selectedJobDetails.workMode] || 'bg-slate-50 text-slate-600 border-slate-200'}`}>
                       <Clock size={10} /> {selectedJobDetails.workMode}
+                    </span>
+                    <span className="inline-flex items-center gap-1 text-xs font-semibold text-slate-500 bg-slate-100/80 px-2 py-0.5 rounded-lg border border-slate-200">
+                      <User size={11} className="text-indigo-500" />
+                      Created by <strong className="text-slate-700">{selectedJobDetails.created_by_name || selectedJobDetails.created_by || 'Admin'}</strong>
+                      {selectedJobDetails.created_by_role && <span className="text-[0.62rem] text-slate-400 uppercase">({selectedJobDetails.created_by_role})</span>}
                     </span>
                   </div>
                 </div>
@@ -1137,6 +1225,7 @@ export default function SuperAdminJobsPage() {
           application={selectedResumeApp}
           job={applicationData.job}
           onClose={() => setSelectedResumeApp(null)}
+          onStatusChange={(newStatus) => handleStatusChange(selectedResumeApp, newStatus)}
           onSchedule={() => {
             const app = selectedResumeApp;
             setSelectedResumeApp(null);
@@ -1150,7 +1239,7 @@ export default function SuperAdminJobsPage() {
 }
 
 // ─── Component: ResumeViewerModal ──────────────────────────────────────────
-function ResumeViewerModal({ application, job, onClose, onSchedule, API_BASE_URL }) {
+function ResumeViewerModal({ application, job, onClose, onSchedule, onStatusChange, API_BASE_URL }) {
   const [activeTab, setActiveTab] = useState(
     application.resume_url || application.resume_text ? 'resume' : 'coverLetter'
   );
@@ -1179,6 +1268,26 @@ function ResumeViewerModal({ application, job, onClose, onSchedule, API_BASE_URL
     setTimeout(() => setCopied(false), 2000);
   };
 
+  const statusStyles = {
+    'Pending Review': 'bg-amber-50 text-amber-700 border-amber-200',
+    'Shortlisted': 'bg-indigo-50 text-indigo-700 border-indigo-200',
+    'Interview Scheduled': 'bg-blue-50 text-blue-700 border-blue-200',
+    'Rejected': 'bg-rose-50 text-rose-600 border-rose-200',
+    'Hired': 'bg-emerald-50 text-emerald-700 border-emerald-200',
+  };
+
+  const historyList = application.action_history && application.action_history.length > 0
+    ? application.action_history
+    : application.last_action_by_name
+    ? [{
+        status: application.status || 'Updated',
+        action: `Status changed to ${application.status || 'Updated'}`,
+        action_by_name: application.last_action_by_name,
+        action_by_role: application.last_action_by_role || 'Admin',
+        timestamp: application.last_action_at,
+      }]
+    : [];
+
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-md animate-fadeIn">
       <div className="bg-white rounded-3xl shadow-2xl border border-slate-100 w-full max-w-4xl max-h-[90vh] flex flex-col overflow-hidden animate-scaleUp">
@@ -1189,13 +1298,20 @@ function ResumeViewerModal({ application, job, onClose, onSchedule, API_BASE_URL
               {(application.name || '?')[0].toUpperCase()}
             </div>
             <div>
-              <div className="flex items-center gap-2.5">
+              <div className="flex items-center gap-2.5 flex-wrap">
                 <h3 className="text-xl font-extrabold text-slate-800 tracking-tight">{application.name || 'Candidate'}</h3>
-                <span className="px-2.5 py-0.5 rounded-full text-[0.7rem] font-bold bg-indigo-50 text-indigo-700 border border-indigo-100">
+                <span className={`px-2.5 py-0.5 rounded-full text-[0.7rem] font-bold border ${statusStyles[application.status] || 'bg-indigo-50 text-indigo-700 border-indigo-100'}`}>
                   {application.status || 'Pending Review'}
                 </span>
+                {application.last_action_by_name && (
+                  <span className="inline-flex items-center gap-1 text-[0.68rem] bg-indigo-50/80 text-indigo-800 font-semibold px-2 py-0.5 rounded-md border border-indigo-100">
+                    <UserCheck size={11} className="text-indigo-600" />
+                    Last Action by <strong className="font-bold">{application.last_action_by_name}</strong>
+                    {application.last_action_by_role && <span className="text-[0.6rem] uppercase text-indigo-500">({application.last_action_by_role})</span>}
+                  </span>
+                )}
               </div>
-              <div className="flex items-center gap-4 mt-1 text-xs text-slate-500 font-medium">
+              <div className="flex items-center gap-4 mt-1 text-xs text-slate-500 font-medium flex-wrap">
                 <span className="flex items-center gap-1"><Mail size={12} className="text-indigo-400" /> {application.candidate_email || application.email || '—'}</span>
                 {application.phone && <span className="flex items-center gap-1"><Phone size={12} className="text-teal-400" /> {application.phone}</span>}
                 {job?.title && <span className="flex items-center gap-1 text-slate-400 font-semibold">• Applied for <span className="text-indigo-600">{job.title}</span></span>}
@@ -1212,7 +1328,7 @@ function ResumeViewerModal({ application, job, onClose, onSchedule, API_BASE_URL
         </div>
 
         {/* Tab Switcher & Actions */}
-        <div className="px-7 pt-3 border-b border-slate-100 flex items-center justify-between bg-slate-50/50">
+        <div className="px-7 pt-3 border-b border-slate-100 flex items-center justify-between bg-slate-50/50 flex-wrap gap-2">
           <div className="flex items-center gap-2">
             {(application.resume_url || application.resume_text) && (
               <button
@@ -1253,6 +1369,22 @@ function ResumeViewerModal({ application, job, onClose, onSchedule, API_BASE_URL
                 <BookOpen size={14} /> Cover Letter
               </button>
             )}
+            <button
+              type="button"
+              onClick={() => setActiveTab('history')}
+              className={`flex items-center gap-2 px-4 py-2.5 text-xs font-bold rounded-t-xl transition-all cursor-pointer border-b-2 ${
+                activeTab === 'history'
+                  ? 'border-indigo-600 text-indigo-700 bg-white shadow-sm'
+                  : 'border-transparent text-slate-500 hover:text-slate-800'
+              }`}
+            >
+              <History size={14} /> Action History
+              {historyList.length > 0 && (
+                <span className="px-1.5 py-0.2 bg-indigo-100 text-indigo-700 rounded-full text-[0.62rem] font-bold">
+                  {historyList.length}
+                </span>
+              )}
+            </button>
           </div>
 
           <div className="flex items-center gap-2 pb-2">
@@ -1390,24 +1522,116 @@ function ResumeViewerModal({ application, job, onClose, onSchedule, API_BASE_URL
               )}
             </div>
           )}
+
+          {activeTab === 'history' && (
+            <div className="space-y-6">
+              <div className="bg-white p-6 rounded-2xl border border-slate-200/80 shadow-sm">
+                <div className="flex items-center justify-between mb-4 border-b border-slate-100 pb-3">
+                  <div>
+                    <h4 className="text-sm font-black text-slate-800 flex items-center gap-2">
+                      <History size={16} className="text-indigo-600" />
+                      Candidate Audit Trail & Action History
+                    </h4>
+                    <p className="text-xs text-slate-400 mt-0.5">
+                      Log of all actions (shortlisting, scheduling, hiring, rejection) performed on this candidate.
+                    </p>
+                  </div>
+                  <span className="px-2.5 py-1 bg-indigo-50 text-indigo-700 text-xs font-bold rounded-lg border border-indigo-100">
+                    {historyList.length} Action{historyList.length !== 1 ? 's' : ''} Logged
+                  </span>
+                </div>
+
+                {historyList.length === 0 ? (
+                  <div className="text-center py-12 text-slate-400">
+                    <UserCheck size={32} className="mx-auto text-slate-300 mb-2" />
+                    <p className="text-xs font-semibold">No status changes or recruiter actions logged yet.</p>
+                    <p className="text-[0.7rem] text-slate-400 mt-1">Actions taken via the buttons below will appear here automatically.</p>
+                  </div>
+                ) : (
+                  <div className="relative pl-6 space-y-6 before:absolute before:left-2.5 before:top-2 before:bottom-2 before:w-0.5 before:bg-slate-200">
+                    {historyList.map((item, idx) => (
+                      <div key={idx} className="relative flex items-start gap-4">
+                        <div className="absolute -left-6 top-0.5 w-5 h-5 rounded-full bg-white border-2 border-indigo-600 flex items-center justify-center shadow-xs">
+                          <div className="w-2 h-2 rounded-full bg-indigo-600" />
+                        </div>
+                        <div className="flex-1 bg-slate-50 rounded-xl p-4 border border-slate-200/70">
+                          <div className="flex items-center justify-between gap-2 flex-wrap mb-1">
+                            <span className={`px-2 py-0.5 rounded-md text-xs font-extrabold border ${statusStyles[item.status] || 'bg-slate-100 text-slate-700 border-slate-200'}`}>
+                              {item.status || item.action || 'Action Taken'}
+                            </span>
+                            {item.timestamp && (
+                              <span className="text-[0.7rem] font-mono text-slate-400">
+                                {new Date(item.timestamp).toLocaleDateString('en-IN', {
+                                  day: '2-digit', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit'
+                                })}
+                              </span>
+                            )}
+                          </div>
+                          <div className="text-xs text-slate-600 mt-2 flex items-center gap-2 flex-wrap">
+                            <span className="flex items-center gap-1 font-bold text-slate-700">
+                              <UserCheck size={13} className="text-indigo-600" />
+                              {item.action_by_name || 'Admin'}
+                            </span>
+                            {item.action_by_role && (
+                              <span className="text-[0.65rem] bg-indigo-50 text-indigo-700 px-1.5 py-0.2 rounded font-bold uppercase border border-indigo-100">
+                                {item.action_by_role}
+                              </span>
+                            )}
+                            {item.action_by_email && (
+                              <span className="text-[0.7rem] text-slate-400">({item.action_by_email})</span>
+                            )}
+                          </div>
+                          {item.notes && (
+                            <p className="text-xs text-slate-500 mt-2 italic bg-white p-2 rounded-lg border border-slate-100">
+                              Note: {item.notes}
+                            </p>
+                          )}
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
+            </div>
+          )}
         </div>
 
-        {/* Footer */}
-        <div className="px-7 py-4 border-t border-slate-100 flex items-center justify-between bg-white">
-          <button
-            type="button"
-            onClick={onClose}
-            className="px-5 py-2.5 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-700 text-xs font-bold transition-all cursor-pointer border-none"
-          >
-            Close
-          </button>
-          <button
-            type="button"
-            onClick={onSchedule}
-            className="flex items-center gap-2 px-6 py-2.5 rounded-xl bg-gradient-to-r from-indigo-600 to-purple-600 hover:from-indigo-500 hover:to-purple-500 text-white text-xs font-extrabold shadow-lg shadow-indigo-500/25 transition-all hover:scale-[1.02] active:scale-95 cursor-pointer border-none"
-          >
-            <Calendar size={14} /> Schedule Interview for {application.name?.split(' ')[0] || 'Candidate'} <ArrowRight size={14} />
-          </button>
+        {/* Footer with Quick Action Controls */}
+        <div className="px-7 py-4 border-t border-slate-100 flex items-center justify-between bg-white flex-wrap gap-3">
+          <div className="flex items-center gap-2 flex-wrap">
+            <span className="text-xs font-bold text-slate-400 uppercase tracking-wider mr-1">Change Status:</span>
+            {['Shortlisted', 'Hired', 'Rejected'].map((s) => (
+              <button
+                key={s}
+                type="button"
+                onClick={() => onStatusChange && onStatusChange(s)}
+                className={`px-3 py-1.5 text-xs font-bold rounded-xl border transition-all cursor-pointer ${
+                  application.status === s
+                    ? 'bg-indigo-600 text-white border-indigo-600 shadow-sm'
+                    : 'bg-white text-slate-700 border-slate-200 hover:bg-slate-50'
+                }`}
+              >
+                {s}
+              </button>
+            ))}
+          </div>
+
+          <div className="flex items-center gap-3">
+            <button
+              type="button"
+              onClick={onClose}
+              className="px-5 py-2.5 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-700 text-xs font-bold transition-all cursor-pointer border-none"
+            >
+              Close
+            </button>
+            <button
+              type="button"
+              onClick={onSchedule}
+              className="flex items-center gap-2 px-6 py-2.5 rounded-xl bg-gradient-to-r from-indigo-600 to-purple-600 hover:from-indigo-500 hover:to-purple-500 text-white text-xs font-extrabold shadow-lg shadow-indigo-500/25 transition-all hover:scale-[1.02] active:scale-95 cursor-pointer border-none"
+            >
+              <Calendar size={14} /> Schedule Interview for {application.name?.split(' ')[0] || 'Candidate'} <ArrowRight size={14} />
+            </button>
+          </div>
         </div>
       </div>
     </div>

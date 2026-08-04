@@ -1746,8 +1746,8 @@ Congratulations! You have been selected for an AI-powered interview. Please revi
               <div className="bg-white/82 backdrop-blur-md border border-[#e5edf7] rounded-2xl p-5 text-slate-800 flex flex-col gap-4 shadow-[0_18px_40px_rgba(17,24,39,0.06)] hover:border-slate-300 transition-all duration-200">
                 <div className="flex justify-between items-center">
                   <div className="flex items-center gap-3.5">
-                    <div className="w-10 h-10 rounded-xl flex items-center justify-center bg-violet-50 border border-violet-100 text-violet-600 shadow-inner">
-                      <i className="fas fa-waveform-lines text-sm"></i>
+                    <div className="w-10 h-10 rounded-xl flex items-center justify-center bg-transparent border-none overflow-hidden shrink-0">
+                      <img src="/voice-cloning-logo.svg" alt="Voice Cloning Logo" className="w-full h-full object-contain" />
                     </div>
                     <div className="flex flex-col gap-0.5">
                       <label htmlFor="singleVoiceCloning" className="text-xs font-extrabold uppercase tracking-wider text-slate-700 cursor-pointer">
@@ -2353,8 +2353,8 @@ Congratulations! You have been selected for an AI-powered interview. Please revi
               <div className="bg-white/82 backdrop-blur-md border border-[#e5edf7] rounded-2xl p-5 text-slate-800 flex flex-col gap-4 shadow-[0_18px_40px_rgba(17,24,39,0.06)] hover:border-slate-300 transition-all duration-200">
                 <div className="flex justify-between items-center">
                   <div className="flex items-center gap-3.5">
-                    <div className="w-10 h-10 rounded-xl flex items-center justify-center bg-violet-50 border border-violet-100 text-violet-600 shadow-inner">
-                      <i className="fas fa-waveform-lines text-sm"></i>
+                    <div className="w-10 h-10 rounded-xl flex items-center justify-center bg-transparent border-none overflow-hidden shrink-0">
+                      <img src="/voice-cloning-logo.svg" alt="Voice Cloning Logo" className="w-full h-full object-contain" />
                     </div>
                     <div className="flex flex-col gap-0.5">
                       <label htmlFor="bulkVoiceCloning" className="text-xs font-extrabold uppercase tracking-wider text-slate-700 cursor-pointer">

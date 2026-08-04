@@ -2,7 +2,9 @@ import { createSlice, createAsyncThunk } from '@reduxjs/toolkit'
 import axios from 'axios'
 import { API_BASE_URL as fallbackBaseUrl } from '../../apiConfig'
 
-// ─── SuperAdmin Thunks ─────────────────────────────────
+import { loadDashboardData } from './dashboardSlice'
+
+// ─── Profile Thunks ─────────────────────────────────
 export const loadSuperAdminProfile = createAsyncThunk(
   'auth/loadSuperAdminProfile',
   async (_, { getState, rejectWithValue }) => {
@@ -14,6 +16,23 @@ export const loadSuperAdminProfile = createAsyncThunk(
       return res.data
     } catch (err) {
       const errorMsg = err.response?.data?.detail || err.response?.data?.message || err.message || 'Failed to load superadmin profile'
+      return rejectWithValue(typeof errorMsg === 'object' ? JSON.stringify(errorMsg) : errorMsg)
+    }
+  }
+)
+
+export const loadAdminProfile = createAsyncThunk(
+  'auth/loadAdminProfile',
+  async (_, { getState, rejectWithValue }) => {
+    try {
+      const { API_BASE_URL, token, role } = getState().auth
+      const endpoint = (role === 'superadmin' || role === 'master') ? '/superadmin/profile' : '/api/admin/profile'
+      const res = await axios.get(`${API_BASE_URL}${endpoint}`, {
+        headers: { Authorization: `Bearer ${token}` }
+      })
+      return res.data
+    } catch (err) {
+      const errorMsg = err.response?.data?.detail || err.response?.data?.message || err.message || 'Failed to load admin profile'
       return rejectWithValue(typeof errorMsg === 'object' ? JSON.stringify(errorMsg) : errorMsg)
     }
   }
@@ -68,7 +87,35 @@ const authSlice = createSlice({
   },
   extraReducers: (builder) => {
     builder.addCase(loadSuperAdminProfile.fulfilled, (state, action) => {
-      state.adminUser = action.payload
+      if (action.payload) {
+        state.adminUser = { ...state.adminUser, ...action.payload }
+      }
+    })
+    .addCase(loadAdminProfile.fulfilled, (state, action) => {
+      if (action.payload) {
+        state.adminUser = { ...state.adminUser, ...action.payload }
+        try {
+          const stored = JSON.parse(sessionStorage.getItem('adminUser')) || {}
+          const updated = { ...stored, ...action.payload }
+          sessionStorage.setItem('adminUser', JSON.stringify(updated))
+        } catch (e) {}
+      }
+    })
+    .addCase(loadDashboardData.fulfilled, (state, action) => {
+      const payload = typeof action.payload === 'object' && action.payload ? action.payload : {}
+      const dbStats = payload.dbStats || payload
+      const credits = dbStats.credits ?? payload.credits ?? payload.credits_available
+      if (credits !== undefined && credits !== null && state.adminUser) {
+        const numCredits = Number(credits)
+        if (!isNaN(numCredits)) {
+          state.adminUser.credits = numCredits
+          try {
+            const stored = JSON.parse(sessionStorage.getItem('adminUser')) || {}
+            stored.credits = numCredits
+            sessionStorage.setItem('adminUser', JSON.stringify(stored))
+          } catch (e) {}
+        }
+      }
     })
   }
 })

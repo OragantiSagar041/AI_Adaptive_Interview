@@ -328,13 +328,13 @@ export default function CreditManagementPage() {
 
       <Card><CardHeader className="pb-2"><CardTitle className="text-base">Recent ledger</CardTitle></CardHeader>
         <CardContent><Table>
-          <TableHeader><TableRow><TableHead>Time</TableHead><TableHead>Organization</TableHead><TableHead>Action</TableHead><TableHead className="text-right">Amount</TableHead><TableHead>Status</TableHead></TableRow></TableHeader>
+          <TableHeader><TableRow><TableHead className="text-left">Time</TableHead><TableHead className="text-left">Organization</TableHead><TableHead className="text-left">Action</TableHead><TableHead className="text-left">Amount</TableHead><TableHead className="text-left">Status</TableHead></TableRow></TableHeader>
           <TableBody>{ledger.map((l, i) => <TableRow key={i}>
-              <TableCell className="text-muted-foreground text-sm">{l.date ? new Date(l.date).toLocaleString() : ''}</TableCell>
-              <TableCell>{l.org}</TableCell>
-              <TableCell>{l.amount > 0 ? "Top-up" : "Usage"}</TableCell>
-              <TableCell className={`text-right tabular-nums ${l.amount > 0 ? "text-emerald-600" : "text-rose-600"}`}>{l.amount > 0 ? `+${l.amount.toLocaleString()}` : l.amount.toLocaleString()}</TableCell>
-              <TableCell className="text-muted-foreground">{l.status}</TableCell>
+              <TableCell className="text-muted-foreground text-sm text-left">{l.date ? new Date(l.date).toLocaleString() : ''}</TableCell>
+              <TableCell className="text-left font-medium">{l.org}</TableCell>
+              <TableCell className="text-left">{l.amount > 0 ? "Top-up" : "Usage"}</TableCell>
+              <TableCell className={`text-left font-semibold tabular-nums ${l.amount > 0 ? "text-emerald-600" : "text-rose-600"}`}>{l.amount > 0 ? `+${l.amount.toLocaleString()}` : l.amount.toLocaleString()}</TableCell>
+              <TableCell className="text-muted-foreground text-left">{l.status}</TableCell>
             </TableRow>)}</TableBody>
         </Table></CardContent>
       </Card>
