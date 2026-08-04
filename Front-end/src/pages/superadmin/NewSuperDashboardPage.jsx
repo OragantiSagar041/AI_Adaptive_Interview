@@ -46,29 +46,32 @@ export default function NewSuperDashboardPage() {
     return () => clearInterval(interval);
   }, [dispatch, selectedAdminFilter]);
 
-  // Construct chart data dynamically from backend stats — memoized so they
-  // only recalculate when dbStats actually changes, not on every poll tick.
+  // Construct chart data dynamically from backend stats — memoized cleanly
+  const chartLabels = dbStats?.chart_labels;
+  const chartData = dbStats?.chart_data;
   const lineData = useMemo(() => (
-    dbStats?.chart_labels?.map((label, idx) => ({
+    chartLabels?.map((label, idx) => ({
       date: label,
-      interviews: dbStats.chart_data?.[idx] || 0
+      interviews: chartData?.[idx] || 0
     })) || []
-  ), [dbStats?.chart_labels, dbStats?.chart_data])
+  ), [chartLabels, chartData]);
 
+  const adminLabels = dbStats?.admin_labels;
+  const adminData = dbStats?.admin_data;
   const barData = useMemo(() => (
-    dbStats?.admin_labels?.map((label, idx) => ({
+    adminLabels?.map((label, idx) => ({
       name: label,
-      value: dbStats.admin_data?.[idx] || 0
+      value: adminData?.[idx] || 0
     })) || []
-  ), [dbStats?.admin_labels, dbStats?.admin_data])
+  ), [adminLabels, adminData]);
 
   const creditsAvailable = Number(dbStats?.credits_available ?? dbStats?.credits ?? 0);
   const creditsUsed = Number(dbStats?.credits_used ?? 0);
 
   const pieData = useMemo(() => [
-    { name: "Credits Available", value: Number(dbStats?.credits_available ?? dbStats?.credits ?? 0) },
-    { name: "Credits Used", value: Number(dbStats?.credits_used ?? 0) }
-  ], [dbStats?.credits_available, dbStats?.credits, dbStats?.credits_used])
+    { name: "Credits Available", value: creditsAvailable },
+    { name: "Credits Used", value: creditsUsed }
+  ], [creditsAvailable, creditsUsed]);
 
   const PIE_COLORS = ["#10b981", "#ef4444"]; // Green for available, Red for used
 
