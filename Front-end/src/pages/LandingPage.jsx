@@ -9,7 +9,6 @@ import {
 import { Link } from "react-router-dom";
 import logoImg from "../assets/logo.png";
 import "../snake.css";
-import AntigravityParticles from "../components/common/AntigravityParticles";
 import useSEO from "../hooks/useSEO";
 
 function useCountUp(target, start, duration = 1400) {
@@ -206,16 +205,7 @@ function Logo() {
 /* ---------------- HERO ---------------- */
 function Hero() {
   return (
-    <section id="top" className="relative pt-32 pb-24 overflow-hidden bg-[radial-gradient(ellipse_at_top,_var(--tw-gradient-stops))] from-primary/10 via-background to-background">
-      {/* Interactive Google Antigravity-style Particle Canvas */}
-      <AntigravityParticles
-        density={220}
-        interactiveRadius={220}
-        pushStrength={15}
-        springK={0.045}
-        damping={0.88}
-        glowEffect={true}
-      />
+    <section id="top" className="relative pt-32 pb-24 bg-[radial-gradient(ellipse_at_top,_var(--tw-gradient-stops))] from-primary/10 via-background to-background">
 
       {/* grid + noise */}
       <div
