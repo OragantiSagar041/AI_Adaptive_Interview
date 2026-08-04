@@ -258,6 +258,7 @@ export default function VoiceCodingRound({
   const [transcript, setTranscript] = useState('')
   const [detectedPatterns, setDetectedPatterns] = useState(new Set())
   const [timeLeft, setTimeLeft] = useState(duration || 900)
+  const timeLeftRef = useRef(duration || 900)
   const [runOutput, setRunOutput] = useState('')
   const [runResultData, setRunResultData] = useState(null)
   const [evaluatedCount, setEvaluatedCount] = useState(0)
@@ -269,6 +270,7 @@ export default function VoiceCodingRound({
   const [orbLabel, setOrbLabel] = useState('Zara is watching')
   const [fullscreenAlert, setFullscreenAlert] = useState(false)
   const fullscreenAlertTimerRef = useRef(null)
+  const timerExpiredRef = useRef(false)
 
   const recognitionRef = useRef(null)
   const silenceTimerRef = useRef(null)
@@ -646,12 +648,24 @@ export default function VoiceCodingRound({
     handleSubmitRef.current = handleSubmit
   }, [handleSubmit])
 
+  useEffect(() => {
+    timeLeftRef.current = timeLeft
+  }, [timeLeft])
+
   // Timer
   useEffect(() => {
-    const t = setInterval(() => setTimeLeft(p => {
-      if (p <= 1) { handleSubmitRef.current(true); return 0 }
-      return p - 1
-    }), 1000)
+    timerExpiredRef.current = false
+    const t = setInterval(() => {
+      const nextValue = timeLeftRef.current <= 1 ? 0 : timeLeftRef.current - 1
+      timeLeftRef.current = nextValue
+      setTimeLeft(nextValue)
+
+      if (nextValue === 0 && !timerExpiredRef.current) {
+        timerExpiredRef.current = true
+        clearInterval(t)
+        handleSubmitRef.current(true)
+      }
+    }, 1000)
     return () => clearInterval(t)
   }, [])
 
@@ -670,16 +684,8 @@ export default function VoiceCodingRound({
     }
     const handleFullscreenChange = async () => {
       if (!document.fullscreenElement) {
-        // Show custom non-blocking banner instead of Swal
         clearTimeout(fullscreenAlertTimerRef.current)
         setFullscreenAlert(true)
-        // Auto-try to re-enter fullscreen
-        setTimeout(() => {
-          if (document.documentElement.requestFullscreen) {
-            document.documentElement.requestFullscreen().catch(() => {})
-          }
-        }, 300)
-        // Hide alert after 5s
         fullscreenAlertTimerRef.current = setTimeout(() => setFullscreenAlert(false), 5000)
       }
     }
@@ -1174,7 +1180,7 @@ export default function VoiceCodingRound({
 
       {/* ── Fullscreen Alert Banner (replaces Swal) ── */}
       {fullscreenAlert && createPortal(
-        <div style={{
+        <div role="alert" style={{
           position: 'fixed', top: 0, left: 0, right: 0, zIndex: 99999,
           background: 'linear-gradient(90deg, rgba(180,30,30,0.97), rgba(220,38,38,0.97))',
           backdropFilter: 'blur(10px)',
@@ -1185,7 +1191,30 @@ export default function VoiceCodingRound({
           animation: 'alertSlideDown 0.25s cubic-bezier(0.34,1.56,0.64,1) forwards',
         }}>
           <span style={{ fontSize: 20 }}>⚠️</span>
-          <span>Fullscreen required — re-entering automatically. Exiting fullscreen during the interview is not allowed.</span>
+          <span>Fullscreen required — exiting fullscreen during the interview is not allowed.</span>
+          <button
+            type="button"
+            onClick={() => {
+              clearTimeout(fullscreenAlertTimerRef.current)
+              setFullscreenAlert(false)
+              if (document.documentElement.requestFullscreen) {
+                void document.documentElement.requestFullscreen()
+              }
+            }}
+            style={{
+              marginLeft: 8,
+              border: '1px solid rgba(255,255,255,0.25)',
+              background: 'rgba(255,255,255,0.16)',
+              color: '#fff',
+              borderRadius: 999,
+              padding: '6px 12px',
+              fontSize: 13,
+              fontWeight: 700,
+              cursor: 'pointer',
+            }}
+          >
+            Re-enter fullscreen
+          </button>
         </div>,
         document.body
       )}
