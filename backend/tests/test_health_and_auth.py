@@ -3,6 +3,7 @@ backend/tests/test_health_and_auth.py — Automated backend verification suite.
 Tests API health, routing definitions, plans catalog, and auth boundaries.
 """
 
+# pyrefly: ignore [missing-import]
 import pytest
 from fastapi.testclient import TestClient
 from app.main import app
