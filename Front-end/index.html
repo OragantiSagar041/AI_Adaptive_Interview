@@ -1,19 +1,150 @@
 <!doctype html>
-<html lang="en">
+<html lang="en" prefix="og: https://ogp.me/ns#">
 
 <head>
   <meta charset="UTF-8" />
-  <link rel="icon" type="image" href="/hireiq.png" />
+  <!-- ── Viewport ───────────────────────────────────── -->
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>Hire IQ - AI Adaptive Interviews</title>
-  <!-- Google Fonts -->
-  <link rel="preconnect" href="https://fonts.googleapis.com">
-  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+
+  <!-- ── Favicon / App Icons ───────────────────────── -->
+  <link rel="icon" type="image/png" href="/hireiq.png" />
+  <link rel="apple-touch-icon" href="/hireiq.png" />
+  <meta name="theme-color" content="#0f172a" />
+
+  <!-- ── Primary SEO Meta ──────────────────────────── -->
+  <title>HireIQ — AI-Powered Interview & Recruitment Platform</title>
+  <meta name="description" content="HireIQ automates hiring with AI voice interviews, resume screening, and predictive candidate scoring. Hire top talent 10× faster with intelligent recruitment technology." />
+  <meta name="keywords" content="AI recruitment, AI interview, automated hiring, resume screening, candidate scoring, HR technology, voice interview AI, predictive hiring, talent acquisition, ATS, applicant tracking" />
+  <meta name="author" content="HireIQ" />
+  <meta name="robots" content="index, follow, max-snippet:-1, max-image-preview:large, max-video-preview:-1" />
+  <link rel="canonical" href="https://hireiq.co.in/" />
+
+  <!-- ── Open Graph (Facebook / LinkedIn) ──────────── -->
+  <meta property="og:type" content="website" />
+  <meta property="og:site_name" content="HireIQ" />
+  <meta property="og:url" content="https://hireiq.co.in/" />
+  <meta property="og:title" content="HireIQ — AI-Powered Interview & Recruitment Platform" />
+  <meta property="og:description" content="Automate hiring with AI voice interviews, resume screening, and predictive candidate scoring. Hire top talent 10× faster." />
+  <meta property="og:image" content="https://hireiq.co.in/og-image.png" />
+  <meta property="og:image:width" content="1200" />
+  <meta property="og:image:height" content="630" />
+  <meta property="og:image:alt" content="HireIQ AI Recruitment Platform Dashboard" />
+  <meta property="og:locale" content="en_IN" />
+  <meta property="og:locale:alternate" content="en_US" />
+
+  <!-- ── Twitter Card ──────────────────────────────── -->
+  <meta name="twitter:card" content="summary_large_image" />
+  <meta name="twitter:site" content="@HireIQ_AI" />
+  <meta name="twitter:creator" content="@HireIQ_AI" />
+  <meta name="twitter:title" content="HireIQ — AI-Powered Interview & Recruitment Platform" />
+  <meta name="twitter:description" content="Automate hiring with AI voice interviews, resume screening, and predictive candidate scoring. Hire top talent 10× faster." />
+  <meta name="twitter:image" content="https://hireiq.co.in/og-image.png" />
+  <meta name="twitter:image:alt" content="HireIQ AI Recruitment Platform Dashboard" />
+
+  <!-- ── Additional SEO ────────────────────────────── -->
+  <meta name="application-name" content="HireIQ" />
+  <meta name="generator" content="HireIQ Platform" />
+  <meta name="category" content="HR Technology, Recruitment, Artificial Intelligence" />
+  <meta name="classification" content="Business" />
+  <meta name="coverage" content="Worldwide" />
+  <meta name="distribution" content="Global" />
+  <meta name="rating" content="General" />
+  <meta name="revisit-after" content="7 days" />
+
+  <!-- ── Structured Data: Organization ────────────── -->
+  <script type="application/ld+json">
+  {
+    "@context": "https://schema.org",
+    "@type": "Organization",
+    "name": "HireIQ",
+    "alternateName": "HireIQ AI",
+    "url": "https://hireiq.co.in",
+    "logo": "https://hireiq.co.in/hireiq.png",
+    "description": "HireIQ is an AI-powered recruitment and interview automation platform that helps companies hire top talent 10× faster using voice AI, predictive scoring, and intelligent screening.",
+    "foundingDate": "2024",
+    "email": "hello@hireiq.co.in",
+    "sameAs": [
+      "https://www.linkedin.com/company/hireiq-ai",
+      "https://twitter.com/HireIQ_AI"
+    ],
+    "contactPoint": {
+      "@type": "ContactPoint",
+      "contactType": "sales",
+      "email": "hello@hireiq.co.in",
+      "availableLanguage": ["English"]
+    }
+  }
+  </script>
+
+  <!-- ── Structured Data: SoftwareApplication ─────── -->
+  <script type="application/ld+json">
+  {
+    "@context": "https://schema.org",
+    "@type": "SoftwareApplication",
+    "name": "HireIQ",
+    "operatingSystem": "Web",
+    "applicationCategory": "BusinessApplication",
+    "applicationSubCategory": "HRSoftware",
+    "description": "AI-powered recruitment platform with voice interviews, automated resume screening, and predictive candidate scoring.",
+    "url": "https://hireiq.co.in",
+    "screenshot": "https://hireiq.co.in/og-image.png",
+    "featureList": [
+      "AI Voice Interviews",
+      "Automated Resume Screening",
+      "Predictive Candidate Scoring",
+      "Real-time Interview Analytics",
+      "ATS Integration",
+      "Video Interview Support",
+      "AI Calling Agent"
+    ],
+    "offers": {
+      "@type": "Offer",
+      "price": "0",
+      "priceCurrency": "INR",
+      "description": "Free trial available. Contact for enterprise pricing."
+    },
+    "aggregateRating": {
+      "@type": "AggregateRating",
+      "ratingValue": "4.8",
+      "reviewCount": "120",
+      "bestRating": "5"
+    }
+  }
+  </script>
+
+  <!-- ── Structured Data: WebSite + Search ─────────── -->
+  <script type="application/ld+json">
+  {
+    "@context": "https://schema.org",
+    "@type": "WebSite",
+    "name": "HireIQ",
+    "url": "https://hireiq.co.in",
+    "potentialAction": {
+      "@type": "SearchAction",
+      "target": {
+        "@type": "EntryPoint",
+        "urlTemplate": "https://hireiq.co.in/?q={search_term_string}"
+      },
+      "query-input": "required name=search_term_string"
+    }
+  }
+  </script>
+
+  <!-- ── Performance Hints ──────────────────────────── -->
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link rel="dns-prefetch" href="https://cdnjs.cloudflare.com" />
+  <link rel="dns-prefetch" href="https://checkout.razorpay.com" />
+
+  <!-- ── Google Fonts ───────────────────────────────── -->
   <link
     href="https://fonts.googleapis.com/css2?family=Geist:wght@400;500;600&family=Instrument+Serif:ital,wght@0,400;1,400&family=Inter:wght@300;400;500;600;700;800&family=Outfit:wght@400;500;600;700;800&display=swap"
-    rel="stylesheet">
-  <!-- FontAwesome Icons -->
-  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    rel="stylesheet" />
+
+  <!-- ── FontAwesome Icons ──────────────────────────── -->
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css" />
+
+  <!-- ── Third-party Scripts ───────────────────────── -->
   <!-- Razorpay Checkout -->
   <script defer src="https://checkout.razorpay.com/v1/checkout.js"></script>
   <!-- SheetJS for exporting Excel -->

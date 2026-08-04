@@ -9,6 +9,8 @@ import {
 import { Link } from "react-router-dom";
 import logoImg from "../assets/logo.png";
 import "../snake.css";
+import AntigravityParticles from "../components/common/AntigravityParticles";
+import useSEO from "../hooks/useSEO";
 
 function useCountUp(target, start, duration = 1400) {
   const [v, setV] = useState(0);
@@ -44,29 +46,90 @@ function useInView() {
   return { ref, seen };
 }
 
+const FAQ_SCHEMA = {
+  "@context": "https://schema.org",
+  "@type": "FAQPage",
+  "mainEntity": [
+    {
+      "@type": "Question",
+      "name": "What is HireIQ?",
+      "acceptedAnswer": {
+        "@type": "Answer",
+        "text": "HireIQ is an AI-powered recruitment platform that automates candidate outreach, resume screening, voice and video interviews, and evaluation — helping hiring teams make faster, more confident decisions."
+      }
+    },
+    {
+      "@type": "Question",
+      "name": "How does AI interview automation work?",
+      "acceptedAnswer": {
+        "@type": "Answer",
+        "text": "HireIQ's AI agents conduct structured voice or video interviews with candidates, evaluate responses in real-time, score competencies, and provide hiring managers with ranked candidate reports — all without any human involvement in the screening stage."
+      }
+    },
+    {
+      "@type": "Question",
+      "name": "Can HireIQ integrate with our existing ATS?",
+      "acceptedAnswer": {
+        "@type": "Answer",
+        "text": "Yes. HireIQ integrates with Greenhouse, Lever, and other leading ATS platforms, as well as HRIS systems like Workday, Slack, Microsoft Teams, and calendar tools like Google Calendar and Outlook."
+      }
+    },
+    {
+      "@type": "Question",
+      "name": "Is HireIQ suitable for bulk or volume hiring?",
+      "acceptedAnswer": {
+        "@type": "Answer",
+        "text": "Absolutely. HireIQ is designed for high-volume recruitment. The AI calling agent can contact hundreds of candidates simultaneously, conduct interviews 24/7, and surface only the top candidates to your recruiters."
+      }
+    },
+    {
+      "@type": "Question",
+      "name": "What security and privacy standards does HireIQ meet?",
+      "acceptedAnswer": {
+        "@type": "Answer",
+        "text": "HireIQ follows enterprise-grade security practices including end-to-end data encryption, role-based access controls, audit logging, and compliance with data privacy regulations applicable in India and internationally."
+      }
+    }
+  ]
+};
+
 export default function LandingPage() {
+  useSEO({
+    title: "HireIQ — AI-Powered Interview & Recruitment Platform",
+    description: "HireIQ automates hiring with AI voice interviews, resume screening, and predictive candidate scoring. Hire top talent 10× faster with intelligent recruitment technology.",
+    path: "/",
+    keywords: ["AI interview platform", "automated recruitment India", "HR automation", "bulk hiring solution", "AI voice interviewer"],
+  });
+
   return (
-    <div className="min-h-screen bg-background text-foreground font-sans overflow-x-hidden">
-      <Nav />
-      <Hero />
-      <LogoStrip />
-      <Problem />
-      <Platform />
-      <HowItWorks />
-      <WhyChoose />
-      <AiThinks />
-      <Reports />
-      <Industries />
-      <Results />
-      <Testimonial />
-      <PricingSection />
-      <ConnectWithUs />
-      <FAQ />
-      {/* <FinalCTA /> */}
-      <Footer />
-      <StickyDemo />
-      <DemoModal />
-    </div>
+    <>
+      {/* FAQ Structured Data */}
+      <script
+        type="application/ld+json"
+        dangerouslySetInnerHTML={{ __html: JSON.stringify(FAQ_SCHEMA) }}
+      />
+      <div className="min-h-screen bg-background text-foreground font-sans overflow-x-hidden">
+        <Nav />
+        <Hero />
+        <LogoStrip />
+        <Problem />
+        <Platform />
+        <HowItWorks />
+        <WhyChoose />
+        <AiThinks />
+        <Reports />
+        <Industries />
+        <Results />
+        <Testimonial />
+        <PricingSection />
+        <ConnectWithUs />
+        <FAQ />
+        {/* <FinalCTA /> */}
+        <Footer />
+        <StickyDemo />
+        <DemoModal />
+      </div>
+    </>
   );
 }
 
