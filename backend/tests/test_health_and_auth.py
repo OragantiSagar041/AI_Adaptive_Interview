@@ -44,3 +44,30 @@ def test_widget_config_endpoint():
     data = response.json()
     assert "configured" in data
     assert "widget_url" in data
+
+
+def test_public_job_apply_not_found():
+    """Verify applying to a non-existent job ID returns 404."""
+    response = client.post(
+        "/api/public/jobs/nonexistent-job-id-12345/apply",
+        data={
+            "name": "Test Candidate",
+            "email": "test@example.com",
+            "phone": "+1234567890",
+        }
+    )
+    assert response.status_code == 404
+    assert "Job not found" in response.json().get("detail", "")
+
+
+def test_manual_call_auth_required():
+    """Verify initiating a manual AI call requires authentication."""
+    response = client.post(
+        "/api/calls/initiate-manual",
+        data={
+            "phone_number": "+1234567890",
+            "candidate_name": "Test Candidate"
+        }
+    )
+    assert response.status_code in [401, 403]
+

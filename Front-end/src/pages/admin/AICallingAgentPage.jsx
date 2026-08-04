@@ -1344,6 +1344,7 @@ export default function AICallingAgentPage() {
 
   // Manual dialer state
   const [manualCall, setManualCall] = useState({ phone: '', name: '', jobDesc: '', resume: null })
+  const [candidateResumeInfo, setCandidateResumeInfo] = useState(null)
   const [isCalling, setIsCalling] = useState(false)
   const [availableJobs, setAvailableJobs] = useState([])
   const [selectedJob, setSelectedJob] = useState(null)
@@ -1747,7 +1748,10 @@ export default function AICallingAgentPage() {
                               onChange={(e) => {
                                 const appObjId = e.target.value;
                                 setSelectedApplicationId(appObjId);
-                                if (!appObjId) return;
+                                if (!appObjId) {
+                                  setCandidateResumeInfo(null);
+                                  return;
+                                }
                                 const candidate = availableCandidates.find(c => (c._id || c.id) === appObjId);
                                 if (candidate) {
                                   const jobTitle = selectedJob ? selectedJob.title : '';
@@ -1757,12 +1761,23 @@ export default function AICallingAgentPage() {
 
                                   const desc = `Role: ${jobTitle}\nExperience: ${jobExp || ''}\nSkills: ${jobSkills || ''}\n\nCandidate Name: ${candidate.name || ''}\nCandidate Email: ${candidate.email || ''}\nCandidate Phone: ${candidate.phone || ''}\nCandidate Resume: ${candidate.resume_text || candidate.resume_url || ''}\n\nJob Description:\n${jobDescription || ''}`;
 
-                                  setManualCall({
+                                  setManualCall(prev => ({
+                                    ...prev,
                                     phone: candidate.phone || '',
                                     name: candidate.name || '',
                                     jobDesc: desc,
                                     resume: null
-                                  });
+                                  }));
+
+                                  if (candidate.resume_url || candidate.resume_filename || candidate.resume_text) {
+                                    setCandidateResumeInfo({
+                                      name: candidate.resume_filename || (candidate.resume_url ? candidate.resume_url.split('/').pop() : 'Application Resume'),
+                                      url: candidate.resume_url,
+                                      hasText: !!candidate.resume_text
+                                    });
+                                  } else {
+                                    setCandidateResumeInfo(null);
+                                  }
                                 }
                                 e.target.value = "";
                               }}
@@ -1784,32 +1799,65 @@ export default function AICallingAgentPage() {
                     </div>
                     <div>
                       <div className="flex justify-between items-end mb-2">
-                        <label className="block text-[0.7rem] font-bold uppercase tracking-wider text-slate-500">Resume (PDF/DOCX)</label>
-                        {manualCall.resume && (
-                          <button onClick={() => setManualCall({...manualCall, resume: null})} className="text-xs text-red-500 hover:text-red-700 font-bold flex items-center gap-1 transition-colors"><X size={12}/> Remove</button>
+                        <label className="block text-[0.7rem] font-bold uppercase tracking-wider text-slate-500">
+                          Resume (PDF/DOCX)
+                        </label>
+                        {(manualCall.resume || candidateResumeInfo) && (
+                          <button 
+                            type="button"
+                            onClick={() => {
+                              setManualCall({ ...manualCall, resume: null });
+                              setCandidateResumeInfo(null);
+                            }} 
+                            className="text-xs text-red-500 hover:text-red-700 font-bold flex items-center gap-1 transition-colors"
+                          >
+                            <X size={12}/> Remove
+                          </button>
                         )}
                       </div>
-                      {!manualCall.resume ? (
-                        <input
-                          type="file" accept=".pdf,.doc,.docx"
-                          onChange={e => setManualCall({ ...manualCall, resume: e.target.files[0] })}
-                          className="w-full px-4 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-sm text-slate-500 file:mr-4 file:py-2 file:px-4 file:rounded-lg file:border-0 file:text-[0.7rem] file:font-bold file:uppercase file:tracking-wider file:bg-indigo-100 file:text-indigo-700 hover:file:bg-indigo-200 cursor-pointer transition-all focus:outline-none focus:ring-2 focus:ring-indigo-500/20"
-                        />
-                      ) : (
+
+                      {manualCall.resume ? (
                         <div className="w-full px-4 py-2.5 bg-indigo-50 border border-indigo-200 rounded-xl text-sm text-indigo-700 font-semibold flex items-center justify-between">
                           <div className="flex items-center gap-2 overflow-hidden">
-                            <FileText size={16} className="shrink-0" /> 
+                            <FileText size={16} className="shrink-0 text-indigo-600" /> 
                             <span className="truncate">{manualCall.resume.name}</span>
                           </div>
                           <label className="text-xs text-indigo-600 hover:text-indigo-800 cursor-pointer font-bold px-2 py-1 hover:bg-indigo-100 rounded-md transition-colors">
                             Replace
                             <input
-                              type="file" accept=".pdf,.doc,.docx"
+                              type="file" 
+                              accept=".pdf,.doc,.docx"
                               onChange={e => setManualCall({ ...manualCall, resume: e.target.files[0] })}
                               className="hidden"
                             />
                           </label>
                         </div>
+                      ) : candidateResumeInfo ? (
+                        <div className="w-full px-4 py-2.5 bg-teal-50 border border-teal-200 rounded-xl text-sm text-teal-800 font-semibold flex items-center justify-between">
+                          <div className="flex items-center gap-2 overflow-hidden">
+                            <FileText size={16} className="shrink-0 text-teal-600" /> 
+                            <span className="truncate">{candidateResumeInfo.name}</span>
+                            <span className="text-[0.65rem] font-bold uppercase px-2 py-0.5 bg-teal-100 text-teal-700 rounded-full shrink-0">
+                              Auto-attached from Candidate
+                            </span>
+                          </div>
+                          <label className="text-xs text-teal-700 hover:text-teal-900 cursor-pointer font-bold px-2 py-1 hover:bg-teal-100 rounded-md transition-colors">
+                            Upload Different
+                            <input
+                              type="file" 
+                              accept=".pdf,.doc,.docx"
+                              onChange={e => setManualCall({ ...manualCall, resume: e.target.files[0] })}
+                              className="hidden"
+                            />
+                          </label>
+                        </div>
+                      ) : (
+                        <input
+                          type="file" 
+                          accept=".pdf,.doc,.docx"
+                          onChange={e => setManualCall({ ...manualCall, resume: e.target.files[0] })}
+                          className="w-full px-4 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-sm text-slate-500 file:mr-4 file:py-2 file:px-4 file:rounded-lg file:border-0 file:text-[0.7rem] file:font-bold file:uppercase file:tracking-wider file:bg-indigo-100 file:text-indigo-700 hover:file:bg-indigo-200 cursor-pointer transition-all focus:outline-none focus:ring-2 focus:ring-indigo-500/20"
+                        />
                       )}
                     </div>
                     <div className="pt-4 flex justify-end">

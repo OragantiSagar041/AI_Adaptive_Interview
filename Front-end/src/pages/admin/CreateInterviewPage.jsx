@@ -82,14 +82,33 @@ export default function CreateInterviewPage() {
 
     // Override with incoming data from navigation if present
     if (location.state && location.state.candidateData) {
-      const { name, resumeText, jobDescription } = location.state.candidateData;
-      if (name) defaultState.name = name;
-      if (resumeText) defaultState.resumeText = resumeText;
-      if (jobDescription) defaultState.jobDescription = jobDescription;
+      const cd = location.state.candidateData;
+      if (cd.name) defaultState.name = cd.name;
+      if (cd.email) defaultState.email = cd.email;
+      if (cd.phone) defaultState.phone = cd.phone;
+      if (cd.resumeText) defaultState.resumeText = cd.resumeText;
+      if (cd.jobDescription) defaultState.jobDescription = cd.jobDescription;
+      if (cd.applicationId) defaultState.applicationId = cd.applicationId;
     }
 
     return defaultState;
   })
+
+  useEffect(() => {
+    if (location.state && location.state.candidateData) {
+      const cd = location.state.candidateData;
+      setSingleCandidate(prev => ({
+        ...prev,
+        name: cd.name || prev.name || '',
+        email: cd.email || prev.email || '',
+        phone: cd.phone || prev.phone || '',
+        resumeText: cd.resumeText || prev.resumeText || '',
+        jobDescription: cd.jobDescription || prev.jobDescription || '',
+        applicationId: cd.applicationId || prev.applicationId || ''
+      }));
+      setCreateTab('single');
+    }
+  }, [location.state]);
 
   useEffect(() => {
     sessionStorage.setItem('createInterview_singleCandidate', JSON.stringify(singleCandidate))

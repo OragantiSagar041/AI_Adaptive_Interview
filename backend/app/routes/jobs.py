@@ -213,14 +213,48 @@ def get_public_job(job_id: str):
     job["_id"] = str(job["_id"])
     return {"status": "success", "job": job}
 
-from fastapi import File, UploadFile, Form
+UPLOAD_RESUMES_DIR = os.path.join(os.getcwd(), "uploads", "resumes")
+UPLOAD_COVER_LETTERS_DIR = os.path.join(os.getcwd(), "uploads", "cover_letters")
+os.makedirs(UPLOAD_RESUMES_DIR, exist_ok=True)
+os.makedirs(UPLOAD_COVER_LETTERS_DIR, exist_ok=True)
+
+@router.get("/api/public/resumes/{filename}")
+def get_uploaded_resume_file(filename: str):
+    """Serve locally stored resumes if not using Cloudinary."""
+    safe_filename = os.path.basename(filename)
+    file_path = os.path.join(UPLOAD_RESUMES_DIR, safe_filename)
+    if not os.path.exists(file_path):
+        raise HTTPException(status_code=404, detail="Resume file not found")
+    media_type = "application/pdf" if safe_filename.lower().endswith(".pdf") else "application/octet-stream"
+    return FileResponse(file_path, media_type=media_type, filename=safe_filename)
+
+@router.get("/api/public/cover_letters/{filename}")
+def get_uploaded_cover_letter_file(filename: str):
+    """Serve locally stored cover letters."""
+    safe_filename = os.path.basename(filename)
+    file_path = os.path.join(UPLOAD_COVER_LETTERS_DIR, safe_filename)
+    if not os.path.exists(file_path):
+        raise HTTPException(status_code=404, detail="Cover letter file not found")
+    media_type = "application/pdf" if safe_filename.lower().endswith(".pdf") else "application/octet-stream"
+    return FileResponse(file_path, media_type=media_type, filename=safe_filename)
 
 @router.post("/api/public/jobs/{job_id}/apply")
-def apply_for_job(job_id: str, application: JobApplicationCreate):
+async def apply_for_job(
+    job_id: str,
+    request: Request,
+    name: Optional[str] = Form(None),
+    email: Optional[str] = Form(None),
+    phone: Optional[str] = Form(None),
+    resume_url: Optional[str] = Form(None),
+    linkedin_url: Optional[str] = Form(None),
+    cover_letter: Optional[str] = Form(None),
+    resume_file: Optional[UploadFile] = File(None),
+    cover_letter_file: Optional[UploadFile] = File(None),
+):
     """
-    Accept a job application submitted as JSON by the public-facing form.
-    Validates the job exists, persists the application, and increments
-    the job's application_count atomically.
+    Accept a job application submitted as multipart/form-data with file uploads
+    or as JSON. Validates the job exists, extracts text from uploaded resumes/cover letters,
+    persists the application document, and increments application_count.
     """
     job = jobs_collection.find_one({"job_id": job_id})
     if not job:
@@ -231,15 +265,114 @@ def apply_for_job(job_id: str, application: JobApplicationCreate):
         raise HTTPException(status_code=404, detail="Job not found")
 
     actual_job_id = job.get("job_id") or str(job["_id"])
+
+    # Fallback to JSON payload if request was application/json
+    content_type = request.headers.get("content-type", "").lower()
+    if "application/json" in content_type:
+        try:
+            body = await request.json()
+            name = body.get("name") or name
+            email = body.get("email") or email
+            phone = body.get("phone") or phone
+            resume_url = body.get("resume_url") or resume_url
+            linkedin_url = body.get("linkedin_url") or linkedin_url
+            cover_letter = body.get("cover_letter") or cover_letter
+        except Exception:
+            pass
+
+    if not name or not email:
+        raise HTTPException(status_code=422, detail="Name and email are required to apply")
+
+    from app.services.services import extract_text_from_file
+
+    resume_filename = None
+    resume_text = ""
+    saved_resume_url = (resume_url or "").strip()
+
+    # Process uploaded resume file
+    if resume_file and resume_file.filename:
+        resume_filename = resume_file.filename
+        try:
+            file_bytes = await resume_file.read()
+            if file_bytes:
+                # Extract text
+                extracted = extract_text_from_file(file_bytes, resume_filename)
+                if extracted:
+                    resume_text = extracted
+
+                # Upload to Cloudinary or save locally
+                cloud_uploaded = False
+                try:
+                    upload_res = cloudinary.uploader.upload(
+                        file_bytes,
+                        folder="job_resumes",
+                        resource_type="auto"
+                    )
+                    if upload_res and upload_res.get("secure_url"):
+                        saved_resume_url = upload_res.get("secure_url")
+                        cloud_uploaded = True
+                except Exception as cloud_err:
+                    logger.warning(f"Cloudinary resume upload skipped/failed: {cloud_err}")
+
+                if not cloud_uploaded:
+                    unique_id = uuid.uuid4().hex[:10]
+                    safe_name = f"{unique_id}_{os.path.basename(resume_filename)}"
+                    local_path = os.path.join(UPLOAD_RESUMES_DIR, safe_name)
+                    with open(local_path, "wb") as f:
+                        f.write(file_bytes)
+                    saved_resume_url = f"/api/public/resumes/{safe_name}"
+        except Exception as e:
+            logger.error(f"Error processing uploaded resume file: {e}")
+
+    # Process uploaded cover letter file
+    cover_letter_filename = None
+    cover_letter_url = ""
+    if cover_letter_file and cover_letter_file.filename:
+        cover_letter_filename = cover_letter_file.filename
+        try:
+            cl_bytes = await cover_letter_file.read()
+            if cl_bytes:
+                cl_extracted = extract_text_from_file(cl_bytes, cover_letter_filename)
+                if cl_extracted and not cover_letter:
+                    cover_letter = cl_extracted
+
+                cloud_uploaded = False
+                try:
+                    upload_res = cloudinary.uploader.upload(
+                        cl_bytes,
+                        folder="job_cover_letters",
+                        resource_type="auto"
+                    )
+                    if upload_res and upload_res.get("secure_url"):
+                        cover_letter_url = upload_res.get("secure_url")
+                        cloud_uploaded = True
+                except Exception as cloud_err:
+                    logger.warning(f"Cloudinary cover letter upload skipped/failed: {cloud_err}")
+
+                if not cloud_uploaded:
+                    unique_id = uuid.uuid4().hex[:10]
+                    safe_name = f"{unique_id}_{os.path.basename(cover_letter_filename)}"
+                    local_path = os.path.join(UPLOAD_COVER_LETTERS_DIR, safe_name)
+                    with open(local_path, "wb") as f:
+                        f.write(cl_bytes)
+                    cover_letter_url = f"/api/public/cover_letters/{safe_name}"
+        except Exception as e:
+            logger.error(f"Error processing uploaded cover letter file: {e}")
+
     app_dict = {
         "job_id": actual_job_id,
         "job_title": job.get("title"),
-        "name": application.name,
-        "email": application.email,
-        "phone": application.phone,
-        "resume_url": application.resume_url,
-        "linkedin_url": application.linkedin_url,
-        "cover_letter": application.cover_letter,
+        "name": name,
+        "email": email,
+        "candidate_email": email,
+        "phone": phone or "",
+        "resume_url": saved_resume_url,
+        "resume_filename": resume_filename,
+        "resume_text": resume_text,
+        "linkedin_url": linkedin_url or "",
+        "cover_letter": cover_letter or "",
+        "cover_letter_url": cover_letter_url,
+        "cover_letter_filename": cover_letter_filename,
         "status": "Pending Review",
         "applied_at": datetime.now(timezone.utc).isoformat(),
     }
@@ -250,8 +383,14 @@ def apply_for_job(job_id: str, application: JobApplicationCreate):
         {"_id": job["_id"]},
         {"$inc": {"application_count": 1}},
     )
-    print(f"[JobApply] New application for job_id={actual_job_id} by {application.email}, _id={result.inserted_id}")
-    return {"status": "success", "message": "Application submitted successfully", "application_id": str(result.inserted_id)}
+    logger.info(f"[JobApply] New application for job_id={actual_job_id} by {email}, _id={result.inserted_id}")
+    return {
+        "status": "success",
+        "message": "Application submitted successfully",
+        "application_id": str(result.inserted_id),
+        "resume_url": saved_resume_url,
+        "resume_filename": resume_filename,
+    }
 
 @router.get("/api/jobs/{job_id}/applications")
 def get_job_applications(job_id: str, current_admin: dict = Depends(get_current_admin_details)):
@@ -295,18 +434,23 @@ def get_job_applications(job_id: str, current_admin: dict = Depends(get_current_
         a["_id"] = str(a["_id"])
         if not a.get("resume_text") and a.get("resume_url"):
             r_url = a.get("resume_url")
-            if os.path.exists(r_url):
-                try:
+            try:
+                text = None
+                if os.path.exists(r_url):
                     with open(r_url, "rb") as f:
                         text = extract_text_from_file(f.read(), r_url)
-                        if text:
-                            a["resume_text"] = text
-                            job_applications_collection.update_one(
-                                {"_id": ObjectId(a["_id"])},
-                                {"$set": {"resume_text": text}}
-                            )
-                except Exception as parse_err:
-                    print(f"Failed to parse stored resume {r_url}: {parse_err}")
+                elif r_url.startswith("http://") or r_url.startswith("https://"):
+                    resp = requests.get(r_url, timeout=10)
+                    if resp.status_code == 200:
+                        text = extract_text_from_file(resp.content, r_url)
+                if text:
+                    a["resume_text"] = text
+                    job_applications_collection.update_one(
+                        {"_id": ObjectId(a["_id"])},
+                        {"$set": {"resume_text": text}}
+                    )
+            except Exception as parse_err:
+                print(f"Failed to parse stored resume {r_url}: {parse_err}")
                     
     return {"status": "success", "applications": applications, "total": len(applications)}
 

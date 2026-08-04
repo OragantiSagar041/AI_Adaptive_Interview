@@ -1,5 +1,11 @@
 import React, { useState, useEffect, useCallback, useMemo } from 'react';
-import { Briefcase, Plus, MapPin, Clock, FileText, X, Target, Trash2, Pencil, Wallet, Users, LayoutGrid, LayoutList, ArrowRight, ChevronRight, Zap, Building2, BookOpen, CheckCircle2, Mail, Phone, ExternalLink, RefreshCw, ChevronDown, Copy } from 'lucide-react';
+import { useNavigate } from 'react-router-dom';
+import { 
+  Briefcase, Plus, MapPin, Clock, FileText, X, Target, Trash2, Pencil, 
+  Wallet, Users, LayoutGrid, LayoutList, ArrowRight, ChevronRight, Zap, 
+  Building2, BookOpen, CheckCircle2, Mail, Phone, ExternalLink, RefreshCw, 
+  ChevronDown, Copy, Calendar, Eye, Download, FileCheck, Check, Sparkles 
+} from 'lucide-react';
 import Card from '../../components/Card';
 import Button from '../../components/Button';
 import JobApplicationModal from '../../components/JobApplicationModal';
@@ -26,6 +32,7 @@ const GRADIENT_ACCENTS = [
 
 export default function SuperAdminJobsPage() {
   const dispatch = useDispatch();
+  const navigate = useNavigate();
   // Read the JWT token from Redux state — exactly how every other page does it.
   // Login stores it in Redux (auth.token) + sessionStorage('adminToken').
   // sessionStorage is never written, so reading from there always returns null.
@@ -47,6 +54,7 @@ export default function SuperAdminJobsPage() {
 
   const [selectedJobForCandidates, setSelectedJobForCandidates] = useState(null);
   const [selectedJobDetails, setSelectedJobDetails] = useState(null);
+  const [selectedResumeApp, setSelectedResumeApp] = useState(null);
   const [viewMode, setViewMode] = useState('grid');
   const [jobsLoading, setJobsLoading] = useState(true);
 
@@ -101,6 +109,38 @@ export default function SuperAdminJobsPage() {
     } catch (err) {
       console.error('Error updating status:', err);
     }
+  };
+
+  const handleScheduleInterview = async (app) => {
+    if (app.status !== 'Interview Scheduled') {
+      try {
+        await handleStatusChange(app, 'Interview Scheduled');
+      } catch (e) {
+        console.error("Failed to update status before scheduling:", e);
+      }
+    }
+    const isSuperAdmin = window.location.pathname.startsWith('/superadmin');
+    const targetRoute = isSuperAdmin ? '/superadmin/create-interview' : '/admin/create-interview';
+    navigate(targetRoute, {
+      state: {
+        fromJobApplication: true,
+        candidateData: {
+          name: app.name || '',
+          email: app.candidate_email || app.email || '',
+          phone: app.phone || '',
+          resumeText: app.resume_text || '',
+          resumeUrl: app.resume_url || '',
+          resumeFilename: app.resume_filename || '',
+          coverLetter: app.cover_letter || '',
+          coverLetterUrl: app.cover_letter_url || '',
+          jobDescription: applicationData.job?.description || '',
+          jobTitle: applicationData.job?.title || '',
+          jobSkills: applicationData.job?.skills || '',
+          jobId: applicationData.job?.job_id || '',
+          applicationId: app._id
+        }
+      }
+    });
   };
 
   const [jobs, setJobs] = useState([]);
@@ -890,19 +930,17 @@ export default function SuperAdminJobsPage() {
                               </div>
                             </td>
                             <td className="py-4 px-5">
-                              {app.resume_url ? (
-                                app.resume_url.startsWith('http') ? (
-                                  <a href={app.resume_url} target="_blank" rel="noreferrer"
-                                    className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-indigo-50 hover:bg-indigo-100 text-indigo-600 text-xs font-bold rounded-lg transition-colors">
-                                    <FileText size={12} /> View
-                                  </a>
-                                ) : (
-                                  <span className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-slate-50 text-slate-500 text-xs font-medium rounded-lg border border-slate-200">
-                                    <FileText size={12} /> {app.resume_url}
-                                  </span>
-                                )
+                              {app.resume_url || app.resume_text ? (
+                                <button
+                                  type="button"
+                                  onClick={() => setSelectedResumeApp(app)}
+                                  className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-indigo-50 hover:bg-indigo-100 text-indigo-700 text-xs font-bold rounded-xl border border-indigo-100 transition-all cursor-pointer shadow-sm hover:scale-[1.02]"
+                                  title="View Candidate Resume"
+                                >
+                                  <FileText size={13} className="text-indigo-600" /> View Resume
+                                </button>
                               ) : (
-                                <span className="text-xs text-slate-400">Not provided</span>
+                                <span className="text-xs text-slate-400 font-medium">Not provided</span>
                               )}
                             </td>
                             <td className="py-4 px-5">
@@ -918,15 +956,33 @@ export default function SuperAdminJobsPage() {
                               </span>
                             </td>
                             <td className="py-4 px-5 text-right">
-                              <select
-                                value={st}
-                                onChange={e => handleStatusChange(app, e.target.value)}
-                                className="text-xs font-bold px-3 py-2 rounded-xl border border-slate-200 bg-white text-slate-700 cursor-pointer focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-400 transition-all hover:border-indigo-300"
-                              >
-                                {['Pending Review', 'Shortlisted', 'Interview Scheduled', 'Rejected', 'Hired'].map(s => (
-                                  <option key={s} value={s}>{s}</option>
-                                ))}
-                              </select>
+                              <div className="flex items-center justify-end gap-2">
+                                <button
+                                  type="button"
+                                  onClick={() => handleScheduleInterview(app)}
+                                  className="inline-flex items-center gap-1.5 px-3 py-2 bg-gradient-to-r from-indigo-600 to-purple-600 hover:from-indigo-500 hover:to-purple-500 text-white text-xs font-bold rounded-xl shadow-sm hover:shadow-indigo-500/25 transition-all cursor-pointer whitespace-nowrap active:scale-95"
+                                  title="Schedule interview for candidate"
+                                >
+                                  <Calendar size={13} /> Schedule
+                                </button>
+                                <select
+                                  value={st}
+                                  onChange={e => {
+                                    if (e.target.value === '__SCHEDULE__') {
+                                      handleScheduleInterview(app);
+                                    } else {
+                                      handleStatusChange(app, e.target.value);
+                                    }
+                                  }}
+                                  className="text-xs font-bold px-3 py-2 rounded-xl border border-slate-200 bg-white text-slate-700 cursor-pointer focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-400 transition-all hover:border-indigo-300"
+                                >
+                                  <option value="__SCHEDULE__">📅 Schedule Interview...</option>
+                                  <option disabled>──────────</option>
+                                  {['Pending Review', 'Shortlisted', 'Interview Scheduled', 'Rejected', 'Hired'].map(s => (
+                                    <option key={s} value={s}>{s}</option>
+                                  ))}
+                                </select>
+                              </div>
                             </td>
                           </tr>
                         );
@@ -1074,6 +1130,287 @@ export default function SuperAdminJobsPage() {
           onClose={() => setShowApplyModal(false)}
         />
       )}
+
+      {/* ── Resume & Application Viewer Modal ────────────── */}
+      {selectedResumeApp && (
+        <ResumeViewerModal
+          application={selectedResumeApp}
+          job={applicationData.job}
+          onClose={() => setSelectedResumeApp(null)}
+          onSchedule={() => {
+            const app = selectedResumeApp;
+            setSelectedResumeApp(null);
+            handleScheduleInterview(app);
+          }}
+          API_BASE_URL={API_BASE_URL}
+        />
+      )}
     </div>
   );
 }
+
+// ─── Component: ResumeViewerModal ──────────────────────────────────────────
+function ResumeViewerModal({ application, job, onClose, onSchedule, API_BASE_URL }) {
+  const [activeTab, setActiveTab] = useState(
+    application.resume_url || application.resume_text ? 'resume' : 'coverLetter'
+  );
+  const [copied, setCopied] = useState(false);
+
+  const getFullUrl = (rawUrl) => {
+    if (!rawUrl) return '';
+    if (rawUrl.startsWith('http://') || rawUrl.startsWith('https://') || rawUrl.startsWith('blob:')) {
+      return rawUrl;
+    }
+    const cleanPath = rawUrl.replace(/^\/+/, '');
+    return `${API_BASE_URL}/${cleanPath}`;
+  };
+
+  const resumeFullUrl = getFullUrl(application.resume_url);
+  const coverLetterFullUrl = getFullUrl(application.cover_letter_url);
+  const isPdf = application.resume_url && (
+    application.resume_url.toLowerCase().endsWith('.pdf') || 
+    application.resume_filename?.toLowerCase().endsWith('.pdf')
+  );
+
+  const handleCopy = (text) => {
+    if (!text) return;
+    navigator.clipboard.writeText(text);
+    setCopied(true);
+    setTimeout(() => setCopied(false), 2000);
+  };
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-md animate-fadeIn">
+      <div className="bg-white rounded-3xl shadow-2xl border border-slate-100 w-full max-w-4xl max-h-[90vh] flex flex-col overflow-hidden animate-scaleUp">
+        {/* Header */}
+        <div className="px-7 py-5 border-b border-slate-100 flex items-center justify-between bg-gradient-to-r from-slate-50 to-white">
+          <div className="flex items-center gap-4">
+            <div className="w-12 h-12 rounded-2xl bg-gradient-to-tr from-indigo-600 to-purple-600 flex items-center justify-center text-white font-extrabold text-lg shadow-md shadow-indigo-500/20">
+              {(application.name || '?')[0].toUpperCase()}
+            </div>
+            <div>
+              <div className="flex items-center gap-2.5">
+                <h3 className="text-xl font-extrabold text-slate-800 tracking-tight">{application.name || 'Candidate'}</h3>
+                <span className="px-2.5 py-0.5 rounded-full text-[0.7rem] font-bold bg-indigo-50 text-indigo-700 border border-indigo-100">
+                  {application.status || 'Pending Review'}
+                </span>
+              </div>
+              <div className="flex items-center gap-4 mt-1 text-xs text-slate-500 font-medium">
+                <span className="flex items-center gap-1"><Mail size={12} className="text-indigo-400" /> {application.candidate_email || application.email || '—'}</span>
+                {application.phone && <span className="flex items-center gap-1"><Phone size={12} className="text-teal-400" /> {application.phone}</span>}
+                {job?.title && <span className="flex items-center gap-1 text-slate-400 font-semibold">• Applied for <span className="text-indigo-600">{job.title}</span></span>}
+              </div>
+            </div>
+          </div>
+          <button
+            type="button"
+            onClick={onClose}
+            className="w-9 h-9 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-500 hover:text-slate-700 flex items-center justify-center transition-colors cursor-pointer border-none"
+          >
+            <X size={18} />
+          </button>
+        </div>
+
+        {/* Tab Switcher & Actions */}
+        <div className="px-7 pt-3 border-b border-slate-100 flex items-center justify-between bg-slate-50/50">
+          <div className="flex items-center gap-2">
+            {(application.resume_url || application.resume_text) && (
+              <button
+                type="button"
+                onClick={() => setActiveTab('resume')}
+                className={`flex items-center gap-2 px-4 py-2.5 text-xs font-bold rounded-t-xl transition-all cursor-pointer border-b-2 ${
+                  activeTab === 'resume'
+                    ? 'border-indigo-600 text-indigo-700 bg-white shadow-sm'
+                    : 'border-transparent text-slate-500 hover:text-slate-800'
+                }`}
+              >
+                <FileText size={14} /> Resume Document
+              </button>
+            )}
+            {application.resume_text && (
+              <button
+                type="button"
+                onClick={() => setActiveTab('parsedText')}
+                className={`flex items-center gap-2 px-4 py-2.5 text-xs font-bold rounded-t-xl transition-all cursor-pointer border-b-2 ${
+                  activeTab === 'parsedText'
+                    ? 'border-indigo-600 text-indigo-700 bg-white shadow-sm'
+                    : 'border-transparent text-slate-500 hover:text-slate-800'
+                }`}
+              >
+                <FileCheck size={14} /> Extracted Text
+              </button>
+            )}
+            {(application.cover_letter || application.cover_letter_url) && (
+              <button
+                type="button"
+                onClick={() => setActiveTab('coverLetter')}
+                className={`flex items-center gap-2 px-4 py-2.5 text-xs font-bold rounded-t-xl transition-all cursor-pointer border-b-2 ${
+                  activeTab === 'coverLetter'
+                    ? 'border-indigo-600 text-indigo-700 bg-white shadow-sm'
+                    : 'border-transparent text-slate-500 hover:text-slate-800'
+                }`}
+              >
+                <BookOpen size={14} /> Cover Letter
+              </button>
+            )}
+          </div>
+
+          <div className="flex items-center gap-2 pb-2">
+            {activeTab === 'parsedText' && application.resume_text && (
+              <button
+                type="button"
+                onClick={() => handleCopy(application.resume_text)}
+                className="flex items-center gap-1 px-3 py-1.5 bg-white border border-slate-200 hover:bg-slate-50 text-slate-700 text-xs font-bold rounded-lg shadow-sm transition-all cursor-pointer"
+              >
+                {copied ? <Check size={12} className="text-emerald-600" /> : <Copy size={12} />}
+                {copied ? 'Copied' : 'Copy Text'}
+              </button>
+            )}
+            {application.resume_url && (
+              <a
+                href={resumeFullUrl}
+                target="_blank"
+                rel="noreferrer"
+                download
+                className="flex items-center gap-1 px-3 py-1.5 bg-indigo-50 hover:bg-indigo-100 text-indigo-700 text-xs font-bold rounded-lg transition-all"
+              >
+                <Download size={12} /> Download Original
+              </a>
+            )}
+          </div>
+        </div>
+
+        {/* Modal Body */}
+        <div className="flex-1 overflow-y-auto p-6 bg-slate-50/30">
+          {activeTab === 'resume' && (
+            <div>
+              {resumeFullUrl && isPdf ? (
+                <div className="w-full rounded-2xl overflow-hidden border border-slate-200 shadow-inner bg-white">
+                  <iframe
+                    src={resumeFullUrl}
+                    title="Candidate Resume"
+                    className="w-full h-[540px] border-none"
+                  />
+                </div>
+              ) : resumeFullUrl ? (
+                <div className="p-8 text-center bg-white rounded-2xl border border-slate-200 shadow-sm space-y-4">
+                  <div className="w-16 h-16 rounded-2xl bg-indigo-50 text-indigo-600 flex items-center justify-center mx-auto shadow-inner">
+                    <FileText size={32} />
+                  </div>
+                  <div>
+                    <h4 className="font-extrabold text-slate-800 text-base">Resume File Attached</h4>
+                    <p className="text-xs text-slate-500 mt-1 font-mono">{application.resume_filename || application.resume_url}</p>
+                  </div>
+                  <div className="flex justify-center gap-3 pt-2">
+                    <a
+                      href={resumeFullUrl}
+                      target="_blank"
+                      rel="noreferrer"
+                      className="px-5 py-2.5 bg-indigo-600 hover:bg-indigo-700 text-white text-xs font-bold rounded-xl shadow-md transition-all flex items-center gap-2"
+                    >
+                      <ExternalLink size={14} /> Open in New Tab
+                    </a>
+                    <a
+                      href={resumeFullUrl}
+                      download
+                      className="px-5 py-2.5 bg-slate-100 hover:bg-slate-200 text-slate-700 text-xs font-bold rounded-xl transition-all flex items-center gap-2"
+                    >
+                      <Download size={14} /> Download Document
+                    </a>
+                  </div>
+                  {application.resume_text && (
+                    <div className="mt-6 text-left border-t border-slate-100 pt-5">
+                      <div className="text-xs font-bold uppercase tracking-wider text-slate-400 mb-2 flex items-center gap-1.5">
+                        <FileCheck size={13} className="text-indigo-500" /> Extracted Resume Content
+                      </div>
+                      <pre className="whitespace-pre-wrap font-sans text-xs text-slate-700 bg-slate-50 p-4 rounded-xl border border-slate-200 max-h-[250px] overflow-y-auto leading-relaxed">
+                        {application.resume_text}
+                      </pre>
+                    </div>
+                  )}
+                </div>
+              ) : application.resume_text ? (
+                <div className="bg-white p-6 rounded-2xl border border-slate-200 shadow-sm">
+                  <div className="text-xs font-bold uppercase tracking-wider text-slate-400 mb-3 flex items-center gap-1.5">
+                    <FileText size={14} className="text-indigo-500" /> Candidate Resume Content
+                  </div>
+                  <pre className="whitespace-pre-wrap font-sans text-xs text-slate-800 bg-slate-50 p-5 rounded-xl border border-slate-100 max-h-[500px] overflow-y-auto leading-relaxed shadow-inner font-medium">
+                    {application.resume_text}
+                  </pre>
+                </div>
+              ) : (
+                <div className="text-center py-16 text-slate-400 text-sm">
+                  No resume file or text available for this candidate.
+                </div>
+              )}
+            </div>
+          )}
+
+          {activeTab === 'parsedText' && (
+            <div className="bg-white p-6 rounded-2xl border border-slate-200 shadow-sm">
+              <div className="flex items-center justify-between mb-3">
+                <span className="text-xs font-bold uppercase tracking-wider text-slate-400 flex items-center gap-1.5">
+                  <Sparkles size={14} className="text-indigo-500" /> AI Parsed Text
+                </span>
+                <span className="text-[0.7rem] text-slate-400 font-mono font-semibold">
+                  {application.resume_text?.length || 0} characters
+                </span>
+              </div>
+              <pre className="whitespace-pre-wrap font-sans text-xs text-slate-800 bg-slate-50 p-5 rounded-xl border border-slate-100 max-h-[520px] overflow-y-auto leading-relaxed shadow-inner font-medium">
+                {application.resume_text}
+              </pre>
+            </div>
+          )}
+
+          {activeTab === 'coverLetter' && (
+            <div className="bg-white p-6 rounded-2xl border border-slate-200 shadow-sm space-y-4">
+              <div className="text-xs font-bold uppercase tracking-wider text-slate-400 flex items-center gap-1.5">
+                <BookOpen size={14} className="text-indigo-500" /> Cover Letter
+              </div>
+              {application.cover_letter ? (
+                <div className="text-sm text-slate-700 bg-slate-50 p-5 rounded-xl border border-slate-100 leading-relaxed whitespace-pre-wrap">
+                  {application.cover_letter}
+                </div>
+              ) : coverLetterFullUrl ? (
+                <div className="p-6 text-center space-y-3">
+                  <p className="text-sm font-semibold text-slate-700">Cover letter file attached.</p>
+                  <a
+                    href={coverLetterFullUrl}
+                    target="_blank"
+                    rel="noreferrer"
+                    className="inline-flex items-center gap-2 px-5 py-2.5 bg-indigo-600 text-white text-xs font-bold rounded-xl"
+                  >
+                    <Download size={14} /> Download Cover Letter
+                  </a>
+                </div>
+              ) : (
+                <div className="text-center py-12 text-slate-400 text-sm">
+                  No cover letter provided.
+                </div>
+              )}
+            </div>
+          )}
+        </div>
+
+        {/* Footer */}
+        <div className="px-7 py-4 border-t border-slate-100 flex items-center justify-between bg-white">
+          <button
+            type="button"
+            onClick={onClose}
+            className="px-5 py-2.5 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-700 text-xs font-bold transition-all cursor-pointer border-none"
+          >
+            Close
+          </button>
+          <button
+            type="button"
+            onClick={onSchedule}
+            className="flex items-center gap-2 px-6 py-2.5 rounded-xl bg-gradient-to-r from-indigo-600 to-purple-600 hover:from-indigo-500 hover:to-purple-500 text-white text-xs font-extrabold shadow-lg shadow-indigo-500/25 transition-all hover:scale-[1.02] active:scale-95 cursor-pointer border-none"
+          >
+            <Calendar size={14} /> Schedule Interview for {application.name?.split(' ')[0] || 'Candidate'} <ArrowRight size={14} />
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
