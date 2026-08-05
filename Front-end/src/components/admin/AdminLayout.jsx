@@ -17,13 +17,24 @@ import {
   CreditCard,
   UserCheck,
   AlertCircle,
-  ClipboardList
+  ClipboardList,
+  Palette,
+  ChevronDown
 } from 'lucide-react'
 import logoImage from '../../assets/logo.png'
 import AdminCopilot from './copilot/AdminCopilot'
 import { getNotifications, markNotificationAsRead, markAllNotificationsAsRead } from '../../utils/api'
 import { setLiveResultsModalOpen } from '../../store/slices/interviewSlice'
 import { updateAdminUser } from '../../store/slices/authSlice'
+
+function hexToRgba(hex, alpha) {
+  const h = hex.replace('#', '')
+  const bigint = parseInt(h, 16)
+  const r = (bigint >> 16) & 255
+  const g = (bigint >> 8) & 255
+  const b = bigint & 255
+  return `rgba(${r}, ${g}, ${b}, ${alpha})`
+}
 
 export default function AdminLayout({
   children,
@@ -48,7 +59,20 @@ export default function AdminLayout({
 
   const [notifications, setNotifications] = useState([])
   const [notifDropdownOpen, setNotifDropdownOpen] = useState(false)
+  const [themeOpen, setThemeOpen] = useState(false)
   const notifRef = useRef(null)
+  const themeRef = useRef(null)
+
+  // Close theme popover on outside click
+  useEffect(() => {
+    function handleClickOutside(event) {
+      if (themeRef.current && !themeRef.current.contains(event.target)) {
+        setThemeOpen(false)
+      }
+    }
+    document.addEventListener('mousedown', handleClickOutside)
+    return () => document.removeEventListener('mousedown', handleClickOutside)
+  }, [])
 
   const fetchNotifications = async () => {
     try {
@@ -193,64 +217,139 @@ export default function AdminLayout({
     : baseNavItems
   const navItems = (!filteredNavItems || filteredNavItems.length === 0) ? baseNavItems : filteredNavItems
 
+  const accentBg = hexToRgba(currentAccent.primary, 0.07)
+  const accentBgEnd = hexToRgba(currentAccent.primary, 0.04)
+
   return (
-    <div className="h-screen bg-slate-50 text-slate-900 flex font-sans overflow-hidden">
+    <div
+      className="h-screen text-slate-900 flex font-sans overflow-hidden relative"
+      style={{ background: '#f8fafc' }}
+    >
+      {/* Dynamic accent color wash — changes smoothly with theme selection */}
+      <div
+        className="absolute inset-0 z-0 pointer-events-none transition-all duration-700"
+        style={{
+          background: `linear-gradient(135deg, ${hexToRgba(currentAccent.primary, 0.25)} 0%, transparent 50%, ${hexToRgba(currentAccent.primary, 0.15)} 100%)`
+        }}
+      />
+
       {/* Sidebar */}
-      <aside className="hidden w-64 shrink-0 border-r border-slate-200 bg-white md:flex flex-col h-screen">
+      <aside
+        className="hidden w-64 shrink-0 border-r border-slate-200/50 md:flex flex-col h-screen relative z-10 transition-all duration-700 overflow-hidden"
+        style={{
+          background: `linear-gradient(180deg, ${hexToRgba(currentAccent.primary, 0.22)} 0%, white 30%, ${hexToRgba(currentAccent.primary, 0.12)} 100%)`
+        }}
+      >
+        {/* Accent top strip */}
+        <div
+          className="absolute top-0 left-0 right-0 h-0.5 transition-all duration-700"
+          style={{ background: `linear-gradient(90deg, ${currentAccent.primary}, ${currentAccent.hover})` }}
+        />
+
         {/* Brand / Logo */}
-        <div className="flex items-center gap-3 px-6 h-16 border-b border-slate-200 shrink-0">
-          <div className="grid h-8 w-8 place-items-center rounded-lg bg-indigo-600 text-white shadow-sm">
+        <div
+          className="flex items-center gap-3 px-6 h-16 border-b shrink-0 transition-all duration-700"
+          style={{ borderColor: hexToRgba(currentAccent.primary, 0.25) }}
+        >
+          <div
+            className="grid h-8 w-8 place-items-center rounded-lg text-white shadow-sm transition-all duration-500"
+            style={{ background: `linear-gradient(135deg, ${currentAccent.primary}, ${currentAccent.hover})` }}
+          >
             <Zap className="h-4 w-4" />
           </div>
           <div className="leading-tight">
-            <div className="text-sm font-semibold">HireIQ</div>
-            <div className="text-[11px] text-slate-500">Recruiter</div>
+            <div className="text-sm font-semibold text-slate-800">HireIQ</div>
+            <div
+              className="text-[11px] font-medium transition-colors duration-500"
+              style={{ color: currentAccent.primary }}
+            >
+              Recruiter
+            </div>
           </div>
         </div>
 
         {/* Navigation Items */}
-        <div className="space-y-1 p-3 overflow-y-auto flex-1">
+        <div className="space-y-0.5 p-3 overflow-y-auto flex-1">
           {navItems.map((item) => (
             <NavLink
               key={item.id}
               to={item.path}
               className={({ isActive }) =>
-                `flex items-center gap-3 rounded-md px-3 py-2 text-sm font-medium transition-colors ${
+                `flex items-center gap-3 rounded-xl px-3 py-2.5 text-sm font-medium transition-all duration-200 ${
                   isActive
-                    ? `text-white`
-                    : 'text-slate-500 hover:bg-slate-100 hover:text-slate-900'
+                    ? `!text-white text-white font-semibold shadow-md`
+                    : 'text-slate-600 hover:text-slate-900'
                 }`
               }
               style={({ isActive }) => ({
-                background: isActive ? `linear-gradient(135deg, ${currentAccent.primary} 0%, ${currentAccent.hover} 100%)` : 'transparent'
+                background: isActive
+                  ? `linear-gradient(135deg, ${currentAccent.primary} 0%, ${currentAccent.hover} 100%)`
+                  : 'transparent',
+                boxShadow: isActive ? `0 4px 14px ${hexToRgba(currentAccent.primary, 0.35)}` : 'none',
+                color: isActive ? '#ffffff' : undefined,
               })}
+              onMouseEnter={(e) => {
+                if (!e.currentTarget.classList.contains('text-white') && !e.currentTarget.classList.contains('!text-white')) {
+                  e.currentTarget.style.background = hexToRgba(currentAccent.primary, 0.10)
+                  e.currentTarget.style.color = currentAccent.primary
+                } else {
+                  e.currentTarget.style.color = '#ffffff'
+                }
+              }}
+              onMouseLeave={(e) => {
+                if (!e.currentTarget.classList.contains('text-white') && !e.currentTarget.classList.contains('!text-white')) {
+                  e.currentTarget.style.background = 'transparent'
+                  e.currentTarget.style.color = ''
+                } else {
+                  e.currentTarget.style.color = '#ffffff'
+                }
+              }}
             >
               {({ isActive }) => (
                 <>
                   {item.icon ? (
-                    <item.icon size={16} className="shrink-0" />
+                    <item.icon size={16} className={`shrink-0 ${isActive ? '!text-white text-white' : ''}`} />
                   ) : (
-                    <span className="h-1.5 w-1.5 rounded-full bg-current opacity-60 shrink-0" />
+                    <span className={`h-1.5 w-1.5 rounded-full ${isActive ? 'bg-white' : 'bg-current opacity-60'} shrink-0`} />
                   )}
-                  {item.label}
+                  <span className={isActive ? '!text-white text-white font-semibold' : ''}>{item.label}</span>
                 </>
               )}
             </NavLink>
           ))}
         </div>
-        
+
         {/* Bottom Sidebar Actions */}
-        <div className="p-3 border-t border-slate-200 space-y-1 shrink-0">
+        <div
+          className="p-3 border-t space-y-0.5 shrink-0 transition-all duration-700"
+          style={{ borderColor: hexToRgba(currentAccent.primary, 0.15) }}
+        >
           <button
             onClick={() => dispatch(setLiveResultsModalOpen(true))}
-            className="flex items-center gap-3 w-full rounded-md px-3 py-2 text-sm font-medium transition-colors text-slate-500 hover:bg-slate-100 hover:text-slate-900 border-none bg-transparent cursor-pointer text-left"
+            className="flex items-center gap-3 w-full rounded-xl px-3 py-2.5 text-sm font-medium transition-all duration-200 text-slate-500 border-none bg-transparent cursor-pointer text-left"
+            onMouseEnter={(e) => {
+              e.currentTarget.style.background = hexToRgba(currentAccent.primary, 0.10)
+              e.currentTarget.style.color = currentAccent.primary
+            }}
+            onMouseLeave={(e) => {
+              e.currentTarget.style.background = 'transparent'
+              e.currentTarget.style.color = ''
+            }}
           >
             <Radio size={16} />
             Live Results
           </button>
           <button
             onClick={onAddCredits}
-            className="flex items-center gap-3 w-full rounded-md px-3 py-2 text-sm font-medium transition-colors text-slate-500 hover:bg-slate-100 hover:text-slate-900 border-none bg-transparent cursor-pointer text-left"
+            className="flex items-center gap-3 w-full rounded-xl px-3 py-2.5 text-sm font-medium transition-all duration-200 text-slate-500 border-none bg-transparent cursor-pointer text-left"
+            onMouseEnter={(e) => {
+              e.currentTarget.style.background = hexToRgba(currentAccent.primary, 0.10)
+              e.currentTarget.style.color = currentAccent.primary
+            }}
+            onMouseLeave={(e) => {
+              e.currentTarget.style.background = 'transparent'
+              e.currentTarget.style.color = ''
+            }}
           >
             <Coins size={16} />
             Request Credits
@@ -259,27 +358,80 @@ export default function AdminLayout({
       </aside>
 
       {/* Main Content Wrapper */}
-      <div className="flex-1 flex flex-col min-w-0 h-screen">
+      <div className="flex-1 flex flex-col min-w-0 h-screen relative z-10">
         {/* Top bar */}
-        <header className="sticky top-0 z-30 border-b border-slate-200 bg-white flex items-center justify-between px-6 h-16 shadow-sm shrink-0">
+        <header className="sticky top-0 z-30 border-b border-slate-200/60 bg-white/70 backdrop-blur-xl flex items-center justify-between px-6 h-16 shadow-sm shrink-0">
           {/* Left Side: Brand & Toggles */}
           <div className="flex items-center gap-6">
             <h2 className="text-[17px] font-bold text-slate-800">Recruiter Management</h2>
 
-            {/* Theme Toggle Dots */}
-            <div className="flex items-center gap-2 bg-slate-100 rounded-full px-2.5 py-1.5 border border-slate-200">
-              {Object.keys(accentColors).map(color => (
-                <button
-                  key={color}
-                  onClick={() => onAccentChange(color)}
-                  className="w-3.5 h-3.5 rounded-full border-2 border-white cursor-pointer p-0 transition-all hover:scale-110"
-                  style={{
-                    background: accentColors[color].primary,
-                    boxShadow: accentName === color ? `0 0 0 2px ${accentColors[color].primary}` : 'none',
-                  }}
-                  title={color}
+            {/* Theme Toggle — single button that opens color picker */}
+            <div ref={themeRef} className="relative">
+              <button
+                onClick={() => setThemeOpen(prev => !prev)}
+                className="flex items-center gap-1.5 px-3 py-1.5 rounded-full border cursor-pointer transition-all duration-200 text-sm font-semibold"
+                style={{
+                  background: hexToRgba(currentAccent.primary, 0.08),
+                  borderColor: hexToRgba(currentAccent.primary, 0.25),
+                  color: currentAccent.primary,
+                }}
+                title="Change theme color"
+              >
+                <span
+                  className="w-3 h-3 rounded-full border-2 border-white shadow-sm flex-shrink-0 transition-all duration-500"
+                  style={{ background: currentAccent.primary }}
                 />
-              ))}
+                <ChevronDown
+                  size={13}
+                  className="transition-transform duration-200"
+                  style={{ transform: themeOpen ? 'rotate(180deg)' : 'rotate(0deg)' }}
+                />
+              </button>
+
+              {/* Color Picker Popover */}
+              {themeOpen && (
+                <div
+                  className="absolute top-full left-0 mt-2 z-50 rounded-2xl shadow-xl border border-slate-200/60 p-3"
+                  style={{
+                    background: 'rgba(255,255,255,0.95)',
+                    backdropFilter: 'blur(12px)',
+                    minWidth: '160px',
+                  }}
+                >
+                  <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-2 px-1">Theme Color</p>
+                  <div className="flex flex-wrap gap-2">
+                    {Object.entries(accentColors).map(([color, val]) => (
+                      <button
+                        key={color}
+                        onClick={() => { onAccentChange(color); setThemeOpen(false); }}
+                        className="group flex items-center gap-2 w-full px-2 py-1.5 rounded-xl cursor-pointer border-none text-left transition-all duration-150"
+                        style={{
+                          background: accentName === color ? hexToRgba(val.primary, 0.12) : 'transparent',
+                        }}
+                        onMouseEnter={e => e.currentTarget.style.background = hexToRgba(val.primary, 0.10)}
+                        onMouseLeave={e => e.currentTarget.style.background = accentName === color ? hexToRgba(val.primary, 0.12) : 'transparent'}
+                      >
+                        <span
+                          className="w-4 h-4 rounded-full border-2 border-white shadow flex-shrink-0 transition-transform duration-150 group-hover:scale-110"
+                          style={{
+                            background: `linear-gradient(135deg, ${val.primary}, ${val.hover})`,
+                            boxShadow: accentName === color ? `0 0 0 2px ${val.primary}` : '0 1px 3px rgba(0,0,0,0.15)',
+                          }}
+                        />
+                        <span
+                          className="text-xs font-semibold capitalize"
+                          style={{ color: accentName === color ? val.primary : '#64748b' }}
+                        >
+                          {color}
+                        </span>
+                        {accentName === color && (
+                          <span className="ml-auto text-[10px] font-bold" style={{ color: val.primary }}>✓</span>
+                        )}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+              )}
             </div>
 
             {/* Credits Badge */}

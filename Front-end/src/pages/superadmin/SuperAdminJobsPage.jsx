@@ -352,7 +352,9 @@ export default function SuperAdminJobsPage() {
         headers: { ...authHeaders },
       });
       if (res.ok) {
-        if (selectedJobDetails?.job_id === job_id) setSelectedJobDetails(null);
+        if (selectedJobDetails?.job_id === job_id || selectedJobDetails?._id === job_id) {
+          setSelectedJobDetails(null);
+        }
         // Refetch: if this was the last job on the page, go back one page
         const newPage = jobs.length === 1 && currentPage > 1 ? currentPage - 1 : currentPage;
         setCurrentPage(newPage);
@@ -363,6 +365,52 @@ export default function SuperAdminJobsPage() {
     } catch (err) {
       console.error('Error deleting job:', err);
     }
+  };
+
+  const confirmDeleteJob = (job, e) => {
+    if (e) e.stopPropagation();
+    const jobId = job.job_id || job._id;
+    Swal.fire({
+      title: 'Delete Job Opening?',
+      text: `Are you sure you want to delete "${job.title}"? This cannot be undone.`,
+      icon: 'warning',
+      showCancelButton: true,
+      confirmButtonColor: '#ef4444',
+      cancelButtonColor: '#64748b',
+      confirmButtonText: 'Yes, Delete',
+      cancelButtonText: 'Cancel',
+      customClass: {
+        popup: 'rounded-3xl shadow-2xl',
+        confirmButton: 'rounded-xl px-5 py-2.5 font-bold',
+        cancelButton: 'rounded-xl px-5 py-2.5 font-bold'
+      }
+    }).then(async (result) => {
+      if (result.isConfirmed) {
+        await removeJob(jobId);
+        Swal.fire({
+          title: 'Deleted!',
+          text: 'Job posting has been removed.',
+          icon: 'success',
+          timer: 1800,
+          showConfirmButton: false,
+        });
+      }
+    });
+  };
+
+  const handleCopyJobLink = (job, e) => {
+    if (e) e.stopPropagation();
+    const link = `${window.location.origin}/apply/${job.job_id || job._id}`;
+    navigator.clipboard.writeText(link);
+    Swal.fire({
+      title: 'Link Copied!',
+      text: 'Public job application link copied to clipboard.',
+      icon: 'success',
+      toast: true,
+      position: 'top-end',
+      showConfirmButton: false,
+      timer: 2000,
+    });
   };
 
   const handleApplyJob = (job) => {
@@ -460,46 +508,48 @@ export default function SuperAdminJobsPage() {
               {/* Accent gradient bar */}
               <div className={`h-1.5 w-full bg-gradient-to-r ${GRADIENT_ACCENTS[idx % GRADIENT_ACCENTS.length]}`} />
 
-              <div className="p-6 flex flex-col gap-4 flex-1">
+              <div className="p-5 sm:p-6 flex flex-col gap-4 flex-1">
                 {/* Top row: title + action icons */}
-                <div className="flex items-start justify-between gap-3">
-                  <div className="flex items-center gap-3 overflow-hidden">
+                <div className="flex items-start justify-between gap-2">
+                  <div className="flex items-center gap-3 overflow-hidden flex-1 min-w-0">
                     <div className={`w-11 h-11 rounded-xl flex items-center justify-center bg-gradient-to-br ${GRADIENT_ACCENTS[idx % GRADIENT_ACCENTS.length]} text-white shrink-0 shadow-md`}>
                       <Briefcase size={20} />
                     </div>
-                    <div className="overflow-hidden">
+                    <div className="overflow-hidden flex-1 min-w-0">
                       <div className="flex items-center gap-2">
-                        <h3 className="font-black text-slate-800 text-base leading-tight truncate">{job.title}</h3>
-                        <span className="text-[9px] font-bold text-slate-400 uppercase tracking-wider bg-slate-100 px-1.5 py-0.5 rounded">{job.custom_id || job.job_id || 'JOB'}</span>
+                        <h3 className="font-black text-slate-800 text-base leading-tight truncate" title={job.title}>{job.title}</h3>
+                        <span className="text-[9px] font-bold text-slate-400 uppercase tracking-wider bg-slate-100 px-1.5 py-0.5 rounded shrink-0">{job.custom_id || job.job_id || 'JOB'}</span>
                       </div>
-                      <div className="flex items-center gap-2 mt-0.5 text-xs text-slate-400 font-medium">
-                        <span className="flex items-center gap-1"><Building2 size={11} /> {job.location}</span>
+                      <div className="flex items-center gap-2 mt-1 text-xs text-slate-400 font-medium truncate">
+                        <span className="flex items-center gap-1 shrink-0"><Building2 size={11} /> {job.location}</span>
                         <span>•</span>
-                        <span className="flex items-center gap-1 text-slate-500 font-semibold" title={`Created by ${job.created_by_name || job.created_by || 'Admin'} (${job.created_by_role || 'Admin'})`}>
-                          <User size={11} className="text-indigo-500" /> {job.created_by_name || job.created_by || 'Admin'}
+                        <span className="flex items-center gap-1 text-slate-500 font-semibold truncate" title={`Created by ${job.created_by_name || job.created_by || 'Admin'} (${job.created_by_role || 'Admin'})`}>
+                          <User size={11} className="text-indigo-500 shrink-0" /> {job.created_by_name || job.created_by || 'Admin'}
                         </span>
                       </div>
                     </div>
                   </div>
-                  <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity shrink-0">
+
+                  {/* Top Action Icons - ALWAYS VISIBLE */}
+                  <div className="flex items-center gap-1.5 shrink-0 ml-1">
                     <button
-                      onClick={(e) => { e.stopPropagation(); openApplications(job); }}
-                      className="p-1.5 bg-teal-50 text-teal-600 hover:bg-teal-100 rounded-lg border-none cursor-pointer transition-colors"
-                      title="View Applications"
+                      onClick={(e) => handleCopyJobLink(job, e)}
+                      className="p-2 bg-slate-50 hover:bg-indigo-50 text-slate-500 hover:text-indigo-600 rounded-xl border border-slate-200/80 hover:border-indigo-200 cursor-pointer transition-all shadow-xs"
+                      title="Copy Public Apply Link"
                     >
-                      <Users size={14} />
+                      <Copy size={14} />
                     </button>
                     <button
                       onClick={(e) => { e.stopPropagation(); handleEditJob(job); }}
-                      className="p-1.5 bg-indigo-50 text-indigo-600 hover:bg-indigo-100 rounded-lg border-none cursor-pointer transition-colors"
-                      title="Edit Job"
+                      className="p-2 bg-indigo-50 text-indigo-600 hover:bg-indigo-600 hover:text-white rounded-xl border border-indigo-100 cursor-pointer transition-all shadow-xs"
+                      title="Edit Job Details"
                     >
                       <Pencil size={14} />
                     </button>
                     <button
-                      onClick={(e) => { e.stopPropagation(); removeJob(job.job_id || job._id); }}
-                      className="p-1.5 bg-rose-50 text-rose-500 hover:bg-rose-100 rounded-lg border-none cursor-pointer transition-colors"
-                      title="Delete Job"
+                      onClick={(e) => confirmDeleteJob(job, e)}
+                      className="p-2 bg-rose-50 text-rose-500 hover:bg-rose-600 hover:text-white rounded-xl border border-rose-100 cursor-pointer transition-all shadow-xs"
+                      title="Delete Job Opening"
                     >
                       <Trash2 size={14} />
                     </button>
@@ -545,13 +595,29 @@ export default function SuperAdminJobsPage() {
                   )}
                 </div>
 
-                {/* Apply CTA */}
-                <button
-                  onClick={(e) => { e.stopPropagation(); handleApplyJob(job); }}
-                  className="w-full mt-auto flex items-center justify-center gap-2 py-2.5 rounded-xl bg-gradient-to-r from-indigo-600 to-indigo-700 hover:from-indigo-500 hover:to-indigo-600 text-white font-bold text-sm border-none cursor-pointer shadow-md shadow-indigo-400/25 transition-all hover:-translate-y-0.5 active:translate-y-0"
-                >
-                  <Zap size={15} /> Apply for Job <ArrowRight size={14} />
-                </button>
+                {/* Card Action Buttons (View Applications + Preview/Apply) */}
+                <div className="mt-auto pt-2 flex flex-col gap-2">
+                  <button
+                    onClick={(e) => { e.stopPropagation(); openApplications(job); }}
+                    className="w-full flex items-center justify-center gap-2 py-2.5 px-4 rounded-xl bg-gradient-to-r from-teal-600 to-cyan-600 hover:from-teal-500 hover:to-cyan-500 text-white font-bold text-sm border-none cursor-pointer shadow-md shadow-teal-500/20 transition-all hover:-translate-y-0.5 active:translate-y-0"
+                  >
+                    <Users size={16} /> View Applications <ArrowRight size={14} />
+                  </button>
+                  <div className="flex items-center gap-2">
+                    <button
+                      onClick={(e) => { e.stopPropagation(); setSelectedJobDetails(job); }}
+                      className="flex-1 flex items-center justify-center gap-1.5 py-2 px-3 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-700 font-semibold text-xs border border-slate-200/60 cursor-pointer transition-colors"
+                    >
+                      <Eye size={13} /> Details
+                    </button>
+                    <button
+                      onClick={(e) => { e.stopPropagation(); handleApplyJob(job); }}
+                      className="flex-1 flex items-center justify-center gap-1.5 py-2 px-3 rounded-xl bg-indigo-50 hover:bg-indigo-100 text-indigo-700 font-semibold text-xs border border-indigo-100 cursor-pointer transition-colors"
+                    >
+                      <Zap size={13} /> Apply <ExternalLink size={11} className="opacity-70" />
+                    </button>
+                  </div>
+                </div>
               </div>
             </div>
           ))}
@@ -630,33 +696,42 @@ export default function SuperAdminJobsPage() {
                       </div>
                     </td>
                     <td className="p-4 text-right">
-                      <div className="flex items-center justify-end gap-2">
-                        <button
-                          onClick={(e) => { e.stopPropagation(); handleApplyJob(job); }}
-                          className="flex items-center gap-1.5 px-4 py-2 rounded-xl bg-gradient-to-r from-indigo-600 to-indigo-700 hover:from-indigo-500 hover:to-indigo-600 text-white font-bold text-xs border-none cursor-pointer shadow-md shadow-indigo-400/20 transition-all hover:-translate-y-0.5"
-                        >
-                          <Zap size={13} /> Apply
-                        </button>
+                      <div className="flex items-center justify-end gap-1.5">
                         <button
                           onClick={(e) => { e.stopPropagation(); openApplications(job); }}
-                          className="p-2 bg-teal-50 text-teal-600 hover:bg-teal-100 rounded-xl border-none cursor-pointer transition-colors"
+                          className="flex items-center gap-1.5 px-3 py-1.5 bg-teal-50 text-teal-700 hover:bg-teal-600 hover:text-white rounded-xl border border-teal-200 font-bold text-xs cursor-pointer transition-all shadow-xs"
                           title="View Applications"
                         >
-                          <Users size={15} />
+                          <Users size={14} />
+                          <span>Applications</span>
+                        </button>
+                        <button
+                          onClick={(e) => handleCopyJobLink(job, e)}
+                          className="p-2 bg-slate-50 text-slate-600 hover:bg-indigo-50 hover:text-indigo-600 rounded-xl border border-slate-200 cursor-pointer transition-all shadow-xs"
+                          title="Copy Public Apply Link"
+                        >
+                          <Copy size={14} />
                         </button>
                         <button
                           onClick={(e) => { e.stopPropagation(); handleEditJob(job); }}
-                          className="p-2 bg-indigo-50 text-indigo-600 hover:bg-indigo-100 rounded-xl border-none cursor-pointer transition-colors"
-                          title="Edit"
+                          className="p-2 bg-indigo-50 text-indigo-600 hover:bg-indigo-600 hover:text-white rounded-xl border border-indigo-100 cursor-pointer transition-all shadow-xs"
+                          title="Edit Job"
                         >
-                          <Pencil size={15} />
+                          <Pencil size={14} />
                         </button>
                         <button
-                          onClick={(e) => { e.stopPropagation(); removeJob(job.job_id || job._id); }}
-                          className="p-2 bg-rose-50 text-rose-500 hover:bg-rose-100 rounded-xl border-none cursor-pointer transition-colors"
-                          title="Delete"
+                          onClick={(e) => confirmDeleteJob(job, e)}
+                          className="p-2 bg-rose-50 text-rose-500 hover:bg-rose-600 hover:text-white rounded-xl border border-rose-100 cursor-pointer transition-all shadow-xs"
+                          title="Delete Job"
                         >
-                          <Trash2 size={15} />
+                          <Trash2 size={14} />
+                        </button>
+                        <button
+                          onClick={(e) => { e.stopPropagation(); handleApplyJob(job); }}
+                          className="p-2 bg-purple-50 text-purple-600 hover:bg-purple-600 hover:text-white rounded-xl border border-purple-100 cursor-pointer transition-all shadow-xs"
+                          title="Apply / Preview"
+                        >
+                          <Zap size={14} />
                         </button>
                       </div>
                     </td>
@@ -1187,24 +1262,50 @@ export default function SuperAdminJobsPage() {
               </div>
             </div>
 
-            <div className="p-7 border-t border-slate-100 flex gap-3 relative z-10">
+            <div className="p-6 sm:p-7 border-t border-slate-100 flex flex-wrap items-center gap-3 relative z-10">
               <button
-                onClick={() => { setSelectedJobDetails(null); handleEditJob(selectedJobDetails); }}
-                className="flex items-center gap-2 px-5 py-3 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold text-sm border-none cursor-pointer transition-colors"
+                onClick={() => {
+                  const job = selectedJobDetails;
+                  setSelectedJobDetails(null);
+                  openApplications(job);
+                }}
+                className="flex items-center gap-2 px-5 py-3 rounded-xl bg-teal-600 hover:bg-teal-500 text-white font-bold text-sm border-none cursor-pointer shadow-md shadow-teal-500/25 transition-all hover:-translate-y-0.5 active:translate-y-0"
+              >
+                <Users size={16} /> View Applications
+              </button>
+              <button
+                onClick={() => handleCopyJobLink(selectedJobDetails)}
+                className="flex items-center gap-2 px-4 py-3 rounded-xl bg-slate-100 hover:bg-indigo-50 text-slate-700 hover:text-indigo-600 font-bold text-sm border-none cursor-pointer transition-colors"
+                title="Copy Public Apply Link"
+              >
+                <Copy size={15} /> Copy Link
+              </button>
+              <button
+                onClick={() => {
+                  const job = selectedJobDetails;
+                  setSelectedJobDetails(null);
+                  handleEditJob(job);
+                }}
+                className="flex items-center gap-2 px-4 py-3 rounded-xl bg-indigo-50 hover:bg-indigo-100 text-indigo-700 font-bold text-sm border-none cursor-pointer transition-colors"
               >
                 <Pencil size={15} /> Edit
               </button>
               <button
-                onClick={() => setSelectedJobDetails(null)}
-                className="px-5 py-3 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-600 font-bold text-sm border-none cursor-pointer transition-colors"
+                onClick={(e) => {
+                  const job = selectedJobDetails;
+                  confirmDeleteJob(job, e);
+                }}
+                className="p-3 rounded-xl bg-rose-50 hover:bg-rose-100 text-rose-600 font-bold text-sm border-none cursor-pointer transition-colors"
+                title="Delete Job"
               >
-                Close
+                <Trash2 size={16} />
               </button>
+
               <button
                 onClick={() => setShowApplyModal(true)}
-                className="ml-auto flex items-center gap-2 px-8 py-3 rounded-xl bg-gradient-to-r from-indigo-600 to-purple-600 hover:from-indigo-500 hover:to-purple-500 text-white font-bold text-sm border-none cursor-pointer shadow-lg shadow-indigo-500/30 transition-all hover:-translate-y-0.5 active:translate-y-0"
+                className="ml-auto flex items-center gap-2 px-6 py-3 rounded-xl bg-gradient-to-r from-indigo-600 to-purple-600 hover:from-indigo-500 hover:to-purple-500 text-white font-bold text-sm border-none cursor-pointer shadow-lg shadow-indigo-500/30 transition-all hover:-translate-y-0.5 active:translate-y-0"
               >
-                <Zap size={16} /> Apply for this Job <ChevronRight size={15} />
+                <Zap size={16} /> Apply for Job <ChevronRight size={15} />
               </button>
             </div>
           </div>
