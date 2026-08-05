@@ -403,6 +403,9 @@ console.log("\\n" + JSON.stringify(results));
         return _evaluate_code_with_llm(code, tests, function_name, "javascript")
 
 def _evaluate_code_with_llm(code: str, tests: list, function_name: str, language: str) -> Dict[str, Any]:
+    if function_name not in code:
+        return _runner_error(f"NameError: name '{function_name}' is not defined. Make sure your function is named exactly '{function_name}'.", tests)
+
     system_prompt = (
         f"You are a strict {language} compiler and code evaluator. You must evaluate the user's code against the provided test cases. "
         "Return ONLY a valid JSON object matching this schema. NO markdown, NO explanations.\n"

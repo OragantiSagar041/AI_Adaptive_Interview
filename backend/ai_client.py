@@ -341,15 +341,42 @@ def get_status() -> Dict:
 # ─── Helper for JSON extraction (used by callers) ────────────────────────────
 
 def extract_json(text: str) -> Optional[Dict]:
-    """Extract the first JSON object from a text string."""
-    try:
-        start = text.find("{")
-        end = text.rfind("}") + 1
-        if start == -1 or end <= start:
-            return None
-        return json.loads(text[start:end])
-    except (json.JSONDecodeError, ValueError):
+    """Extract the first valid JSON object from a text string."""
+    if not text:
         return None
+    
+    # 1. Try parsing the raw text directly
+    try:
+        return json.loads(text.strip())
+    except (json.JSONDecodeError, ValueError):
+        pass
+
+    import re
+    # 2. Try to extract from a markdown JSON block
+    match = re.search(r"```(?:json)?\s*(\{.*?\})\s*```", text, re.DOTALL)
+    if match:
+        try:
+            return json.loads(match.group(1))
+        except (json.JSONDecodeError, ValueError):
+            pass
+
+    # 3. Try finding the first balanced { ... } object
+    start = text.find("{")
+    if start == -1:
+        return None
+        
+    brace_count = 0
+    for i, char in enumerate(text[start:]):
+        if char == "{":
+            brace_count += 1
+        elif char == "}":
+            brace_count -= 1
+            if brace_count == 0:
+                try:
+                    return json.loads(text[start:start+i+1])
+                except (json.JSONDecodeError, ValueError):
+                    break
+    return None
 
 
 print(f"[OK] ai_client.py loaded | Provider: {get_active_provider()}, HF model: {_active_hf_model}")

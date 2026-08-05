@@ -505,29 +505,32 @@ export const InterviewTechnical = () => {
               </div>
 
               {activeRightTab === 'code' && (
-                <Suspense fallback={<div style={{ padding: 16, color: '#64748b', fontSize: 13 }}>Loading editor...</div>}>
-                  <MonacoEditor
-                    height="320px"
-                    language={selectedLanguage === 'cpp' ? 'cpp' : selectedLanguage === 'javascript' ? 'javascript' : 'python'}
-                    value={codeAnswer}
-                    onChange={(val) => setCodeAnswer(val || '')}
-                    theme="vs-light"
-                    options={{
-                      fontSize: 14,
-                      minimap: { enabled: false },
-                      scrollBeyondLastLine: false,
-                      wordWrap: 'on',
-                      lineNumbers: 'on',
-                      folding: true,
-                      automaticLayout: true,
-                      tabSize: 4,
-                      insertSpaces: true,
-                      fontFamily: 'Consolas, "Courier New", monospace',
-                      padding: { top: 12, bottom: 12 },
-                      scrollbar: { vertical: 'auto' },
-                    }}
-                  />
-                </Suspense>
+                <div style={{ flex: 1, width: '100%', position: 'relative', minHeight: '320px' }}>
+                  <Suspense fallback={<div style={{ padding: 16, color: '#64748b', fontSize: 13 }}>Loading editor...</div>}>
+                    <MonacoEditor
+                      height="100%"
+                      width="100%"
+                      language={selectedLanguage === 'cpp' ? 'cpp' : selectedLanguage === 'javascript' ? 'javascript' : 'python'}
+                      value={codeAnswer}
+                      onChange={(val) => setCodeAnswer(val || '')}
+                      theme="vs-light"
+                      options={{
+                        fontSize: 14,
+                        minimap: { enabled: false },
+                        scrollBeyondLastLine: false,
+                        wordWrap: 'on',
+                        lineNumbers: 'on',
+                        folding: true,
+                        automaticLayout: true,
+                        tabSize: 4,
+                        insertSpaces: true,
+                        fontFamily: 'Consolas, "Courier New", monospace',
+                        padding: { top: 12, bottom: 12 },
+                        scrollbar: { vertical: 'auto', horizontal: 'auto' },
+                      }}
+                    />
+                  </Suspense>
+                </div>
               )}
 
               <div className="coding-console-shell" style={{ borderTop: activeRightTab === 'code' ? '1px solid #e2e8f0' : 'none', background: '#f8fafc', display: 'flex', flexDirection: 'column', maxHeight: activeRightTab === 'code' ? '40%' : '100%', minHeight: activeRightTab === 'code' ? '160px' : '0', flexGrow: activeRightTab === 'code' ? 0 : 1 }}>

@@ -205,18 +205,13 @@ export const useInterviewSession = (sessionId, interviewType, startRoundTwo) => 
   useEffect(() => {
     if (currentQuestion?.type === 'coding' && currentQuestion?.codingTask) {
       const task = currentQuestion.codingTask
+      const pythonSig = task.starter_function_signature || `def ${task.function_name || 'solution'}(*args, **kwargs):`;
+      const finalPythonTemplate = pythonSig.includes('#') ? pythonSig : `${pythonSig}\n    # Write your code here\n    pass`;
+      
       const templates = {
-        python: task.starter_function_signature || `def ${task.function_name || 'winner'}(donuts, starter):\n    # Write your code here\n    pass`,
-        javascript: task.function_name === 'winner'
-          ? `function winner(donuts, starter) {\n    // Write your code here\n    \n}`
-          : task.function_name === 'find_duplicates'
-            ? `function find_duplicates(records) {\n    // Write your code here\n    \n}`
-            : `function debounceSimulation(calls, delay) {\n    // Write your code here\n    \n}`,
-        cpp: task.function_name === 'winner'
-          ? `#include <vector>\n#include <string>\n\nstd::vector<std::string> winner(std::vector<int> donuts, std::vector<std::string> starter) {\n    // Write your code here\n    \n}`
-          : task.function_name === 'find_duplicates'
-            ? `#include <vector>\n#include <string>\n\nstd::vector<std::string> findDuplicates(std::vector<std::string> records) {\n    // Write your code here\n    \n}`
-            : `#include <vector>\n\nint debounceSimulation(std::vector<int> calls, int delay) {\n    // Write your code here\n    \n}`
+        python: finalPythonTemplate,
+        javascript: `function ${task.function_name || 'solution'}() {\n    // Write your code here\n    \n}`,
+        cpp: `#include <vector>\n#include <string>\n#include <iostream>\n\nusing namespace std;\n\nvoid ${task.function_name || 'solution'}() {\n    // Write your code here\n    \n}`
       }
 
       const isDefault = !codeAnswer || Object.values(templates).some(tmpl => codeAnswer.trim() === tmpl.trim())
