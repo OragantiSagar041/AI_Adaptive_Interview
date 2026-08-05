@@ -573,52 +573,166 @@ def create_tenant(data: TenantCreate, master_id: str = Depends(get_current_admin
 
     return {"status": "success", "message": "Tenant created successfully"}
 
-@router.put("/master/companies/{company_id}")
-def update_company(company_id: str, data: TenantUpdate, master_id: str = Depends(get_current_admin)):
+async def _process_company_subscription_update(company_id: str, payload_data: dict, master_id: str):
     require_master_user(master_id)
         
-    company = companies_collection.find_one({"_id": ObjectId(company_id)})
+    company = None
+    try:
+        company = companies_collection.find_one({"_id": ObjectId(company_id)})
+    except Exception:
+        pass
+    if not company:
+        company = companies_collection.find_one({"_id": company_id}) or companies_collection.find_one({"company_id": company_id})
     if not company:
         raise HTTPException(status_code=404, detail="Company not found")
         
-    update_fields = {}
+    comp_id = str(company["_id"])
     now = datetime.now(timezone.utc)
+    
+    raw_plan = payload_data.get("subscription_plan") or payload_data.get("plan_key") or payload_data.get("plan_name")
+    add_days = payload_data.get("add_days") or payload_data.get("days_to_add") or payload_data.get("extend_days") or 0
+    raw_credits = payload_data.get("credits")
+    add_credits = payload_data.get("add_credits") or 0
+    
+    update_fields = {}
     old_plan = company.get("subscription_plan", "trial")
     
-    if data.subscription_plan and data.subscription_plan != old_plan:
-        update_fields["subscription_plan"] = data.subscription_plan
-        history_entry = {
-            "plan_name": old_plan,
-            "replaced_by": data.subscription_plan,
-            "changed_at": now.isoformat(),
-            "changed_by": "master"
-        }
-        companies_collection.update_one(
-            {"_id": ObjectId(company_id)},
-            {"$push": {"plan_history": history_entry}}
-        )
-    elif data.subscription_plan:
-        update_fields["subscription_plan"] = data.subscription_plan
+    if raw_plan:
+        new_plan = str(raw_plan).strip().lower()
+        if new_plan in ["free trial", "15 days free trial"]:
+            new_plan = "trial"
+        elif new_plan in ["basic plan"]:
+            new_plan = "basic"
+        elif new_plan in ["advance plan"]:
+            new_plan = "advance"
+            
+        update_fields["subscription_plan"] = new_plan
+        
+        plan_def = get_plan_definition(new_plan)
+        if plan_def and "features" in plan_def:
+            update_fields["plan_features"] = plan_def["features"]
+            
+        if new_plan != old_plan:
+            history_entry = {
+                "plan_name": old_plan,
+                "replaced_by": new_plan,
+                "changed_at": now.isoformat(),
+                "changed_by": "master"
+            }
+            try:
+                companies_collection.update_one(
+                    {"_id": company["_id"]},
+                    {"$push": {"plan_history": history_entry}}
+                )
+            except Exception:
+                pass
     
-    if data.add_days > 0:
+    if add_days and int(add_days) > 0:
+        days = int(add_days)
         current_expiry = company.get("subscription_expiry")
         try:
             exp_dt = datetime.fromisoformat(current_expiry) if current_expiry else now
             if exp_dt < now:
-                exp_dt = now # If already expired, start from today
-            
-            new_expiry = exp_dt + timedelta(days=data.add_days)
+                exp_dt = now
+            new_expiry = exp_dt + timedelta(days=days)
             update_fields["subscription_expiry"] = new_expiry.isoformat()
         except Exception:
-            update_fields["subscription_expiry"] = (now + timedelta(days=data.add_days)).isoformat()
+            update_fields["subscription_expiry"] = (now + timedelta(days=days)).isoformat()
             
-    if data.add_credits > 0:
-        current_credits = company.get("credits", 0)
-        update_fields["credits"] = current_credits + data.add_credits
+    if raw_credits is not None and str(raw_credits).strip() != "":
+        update_fields["credits"] = int(raw_credits)
+    elif add_credits and int(add_credits) > 0:
+        update_fields["credits"] = company.get("credits", 0) + int(add_credits)
             
     if update_fields:
-        companies_collection.update_one({"_id": ObjectId(company_id)}, {"$set": update_fields})
-    return {"status": "success", "message": "Company updated successfully"}
+        companies_collection.update_one({"_id": company["_id"]}, {"$set": update_fields})
+        
+        # Sync immediately to linked Super Admin accounts (plan, features, and credits).
+        # Standard Admin accounts get updated plan & features ONLY so their credit balances remain unchanged.
+        raw_company_id = company.get("company_id")
+        comp_ids = [comp_id]
+        if raw_company_id and raw_company_id not in comp_ids:
+            comp_ids.append(raw_company_id)
+
+        # 1. Update Super Admin accounts (includes credits)
+        sa_query = {
+            "company_id": {"$in": comp_ids},
+            "role": {"$in": ["super_admin", "superadmin"]}
+        }
+        sa_update_fields = {}
+        if "subscription_plan" in update_fields:
+            sa_update_fields["subscription_plan"] = update_fields["subscription_plan"]
+        if "plan_features" in update_fields:
+            sa_update_fields["plan_features"] = update_fields["plan_features"]
+        if "credits" in update_fields:
+            sa_update_fields["credits"] = update_fields["credits"]
+
+        if sa_update_fields:
+            admins_collection.update_many(sa_query, {"$set": sa_update_fields})
+            try:
+                super_admins = list(admins_collection.find(sa_query, {"_id": 1}))
+                for sa in super_admins:
+                    sa_id = str(sa["_id"])
+                    broadcast_profile_update(
+                        admin_id=sa_id,
+                        company_id=comp_id,
+                        credits=update_fields.get("credits"),
+                        extra=sa_update_fields
+                    )
+            except Exception as e:
+                print(f"Error broadcasting super admin updates: {e}")
+
+        # 2. Update Standard Admin accounts (EXCLUDES credits)
+        recruiter_query = {
+            "company_id": {"$in": comp_ids},
+            "role": {"$nin": ["super_admin", "superadmin"]}
+        }
+        recruiter_update_fields = {}
+        if "subscription_plan" in update_fields:
+            recruiter_update_fields["subscription_plan"] = update_fields["subscription_plan"]
+        if "plan_features" in update_fields:
+            recruiter_update_fields["plan_features"] = update_fields["plan_features"]
+
+        if recruiter_update_fields:
+            admins_collection.update_many(recruiter_query, {"$set": recruiter_update_fields})
+            try:
+                recruiters = list(admins_collection.find(recruiter_query, {"_id": 1}))
+                for rec in recruiters:
+                    rec_id = str(rec["_id"])
+                    broadcast_profile_update(
+                        admin_id=rec_id,
+                        company_id=comp_id,
+                        extra=recruiter_update_fields
+                    )
+            except Exception as e:
+                print(f"Error broadcasting recruiter updates: {e}")
+
+        # Clear Redis cache keys
+        try:
+            if manager.redis:
+                keys = await manager.redis.keys("dashboard_stats:*")
+                if keys:
+                    await manager.redis.delete(*keys)
+        except Exception:
+            pass
+
+    return {"status": "success", "message": "Company subscription updated successfully"}
+
+@router.put("/master/companies/{company_id}")
+@router.post("/master/companies/{company_id}")
+@router.patch("/master/companies/{company_id}/subscription")
+@router.put("/master/companies/{company_id}/subscription")
+@router.post("/master/companies/{company_id}/subscription")
+async def update_company_subscription_endpoint(
+    company_id: str,
+    request: Request,
+    master_id: str = Depends(get_current_admin)
+):
+    try:
+        body = await request.json()
+    except Exception:
+        body = {}
+    return await _process_company_subscription_update(company_id, body, master_id)
 
 @router.get("/master/company-revenue")
 def get_company_revenue(

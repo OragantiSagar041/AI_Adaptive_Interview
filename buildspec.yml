@@ -14,13 +14,13 @@ phases:
       - docker build -t $REPO_URI:$IMAGE_TAG .
       - docker tag $REPO_URI:$IMAGE_TAG $REPO_URI:latest
 
-  post_build:
-    commands:
-      - echo Pushing image to ECR...
-      - docker push $REPO_URI:$IMAGE_TAG
-      - docker push $REPO_URI:latest
-      - echo Writing imagedefinitions.json...
-      - printf '[{"name":"Main","imageUri":"%s"}]' $REPO_URI:$IMAGE_TAG > imagedefinitions.json
+post_build:
+  commands:
+    - echo Pushing image to ECR...
+    - docker push $REPO_URI:$IMAGE_TAG
+    - docker push $REPO_URI:latest
+    - printf '[{"name":"Main","imageUri":"%s"}]' $REPO_URI:$IMAGE_TAG > imagedefinitions.json
+    - aws ecs update-service --cluster YOUR_CLUSTER_NAME --service YOUR_SERVICE_NAME --force-new-deployment --region us-east-1
 
 artifacts:
   files:

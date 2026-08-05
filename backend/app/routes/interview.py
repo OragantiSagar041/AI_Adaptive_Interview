@@ -1507,14 +1507,14 @@ detected_accent (short string)."""
         if res:
             if not res.get("detected_accent") or str(res.get("detected_accent")).strip().lower() in ["unknown", "none", ""]:
                 from app.services.language_accent_detector import detect_language_and_accent
-                l_res = detect_language_and_accent(results)
+                l_res = detect_language_and_accent(answers_data)
                 res["detected_accent"] = l_res.get("detected_accent", "English (Indian Accent)")
             return res
         raise Exception("Invalid JSON returned")
     except Exception as e:
         print(f"Summary generation error: {e}")
         from app.services.language_accent_detector import detect_language_and_accent
-        l_res = detect_language_and_accent(results)
+        l_res = detect_language_and_accent(answers_data)
         # Fallback from score
         if avg >= 75:
             rec = "Strong Hire"

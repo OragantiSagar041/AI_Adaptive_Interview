@@ -2299,6 +2299,7 @@ def get_current_admin_details(credentials: HTTPAuthorizationCredentials = Depend
             "role": actual_role,
             "name": admin_name,
             "username": admin_doc.get("username") or admin_name,
+            "email": admin_doc.get("email") or "",
             "company_name": admin_doc.get("company_name") or "",
             "is_master": is_master
         }

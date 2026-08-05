@@ -91,32 +91,32 @@ const authSlice = createSlice({
         state.adminUser = { ...state.adminUser, ...action.payload }
       }
     })
-    .addCase(loadAdminProfile.fulfilled, (state, action) => {
-      if (action.payload) {
-        state.adminUser = { ...state.adminUser, ...action.payload }
-        try {
-          const stored = JSON.parse(sessionStorage.getItem('adminUser')) || {}
-          const updated = { ...stored, ...action.payload }
-          sessionStorage.setItem('adminUser', JSON.stringify(updated))
-        } catch (e) {}
-      }
-    })
-    .addCase(loadDashboardData.fulfilled, (state, action) => {
-      const payload = typeof action.payload === 'object' && action.payload ? action.payload : {}
-      const dbStats = payload.dbStats || payload
-      const credits = dbStats.credits ?? payload.credits ?? payload.credits_available
-      if (credits !== undefined && credits !== null && state.adminUser) {
-        const numCredits = Number(credits)
-        if (!isNaN(numCredits)) {
-          state.adminUser.credits = numCredits
+      .addCase(loadAdminProfile.fulfilled, (state, action) => {
+        if (action.payload) {
+          state.adminUser = { ...state.adminUser, ...action.payload }
           try {
             const stored = JSON.parse(sessionStorage.getItem('adminUser')) || {}
-            stored.credits = numCredits
-            sessionStorage.setItem('adminUser', JSON.stringify(stored))
-          } catch (e) {}
+            const updated = { ...stored, ...action.payload }
+            sessionStorage.setItem('adminUser', JSON.stringify(updated))
+          } catch (e) { }
         }
-      }
-    })
+      })
+      .addCase(loadDashboardData.fulfilled, (state, action) => {
+        const payload = typeof action.payload === 'object' && action.payload ? action.payload : {}
+        const dbStats = payload.dbStats || payload
+        const credits = dbStats.credits ?? payload.credits ?? payload.credits_available
+        if (credits !== undefined && credits !== null && state.adminUser) {
+          const numCredits = Number(credits)
+          if (!isNaN(numCredits)) {
+            state.adminUser.credits = numCredits
+            try {
+              const stored = JSON.parse(sessionStorage.getItem('adminUser')) || {}
+              stored.credits = numCredits
+              sessionStorage.setItem('adminUser', JSON.stringify(stored))
+            } catch (e) { }
+          }
+        }
+      })
   }
 })
 

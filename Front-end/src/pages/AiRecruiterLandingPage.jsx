@@ -1,5 +1,6 @@
 import React, { useEffect, useRef, useState } from "react";
 import { Link } from "react-router-dom";
+import useSEO from "../hooks/useSEO";
 import {
   Mic,
   Sparkles,
@@ -1146,17 +1147,21 @@ function RecruiterContact() {
 // ==========================================
 
 function AiRecruiterLandingPage() {
-  useEffect(() => {
-    document.title = "Hire IQ — AI Voice Recruiter that Never Sleeps";
-    
-    let metaDesc = document.querySelector('meta[name="description"]');
-    if (!metaDesc) {
-      metaDesc = document.createElement("meta");
-      metaDesc.name = "description";
-      document.head.appendChild(metaDesc);
-    }
-    metaDesc.content = "Automate candidate screening with human-like AI voice interviews. Interview 10,000+ candidates automatically with rubric scoring and ATS sync.";
-  }, []);
+  useSEO({
+    title: "AI Calling Agent for Recruitment & AI Voice Recruiter | HireIQ India",
+    description: "HireIQ's AI calling agent for recruitment automates candidate phone screening, AI candidate screening software, and bulk hiring across India with human-like AI agents.",
+    path: "/voice-recruiter",
+    keywords: [
+      "AI calling agent for recruitment",
+      "AI candidate screening software",
+      "Bulk hiring software India",
+      "AI recruitment software India",
+      "Automated HR screening tool",
+      "AI voice recruiter",
+      "automated phone screening",
+      "Hire IQ"
+    ],
+  });
 
   return (
     <div className="relative min-h-screen overflow-hidden bg-[#020204] text-foreground">

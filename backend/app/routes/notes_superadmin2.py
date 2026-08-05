@@ -19,6 +19,7 @@ from typing import Any, Dict, List, Optional, Union
 import bcrypt, jwt, requests
 import cloudinary, cloudinary.uploader, cloudinary.api, cloudinary.utils
 import edge_tts
+# pyrefly: ignore [missing-import]
 import pypdf
 from bson import ObjectId
 from bson.errors import InvalidId
@@ -162,39 +163,89 @@ def get_superadmin_org_stats(current_admin: dict = Depends(get_current_admin_det
     }
 
 @router.get("/api/superadmin/recruiters/stats")
+@router.get("/superadmin/recruiters/stats")
 def get_superadmin_recruiter_stats(current_admin: dict = Depends(get_current_admin_details)):
-    if current_admin.get("role") not in ["master", "super_admin"]:
+    if current_admin.get("role") not in ["master", "super_admin", "superadmin"]:
         raise HTTPException(status_code=403, detail="Not authorized")
     
-    company_id = current_admin.get("company_id")
-    query = {"company_id": company_id} if company_id else {}
+    from app.routes.master_admins import get_tenant_recruiters_query
+    query = get_tenant_recruiters_query(current_admin)
+
     admins = list(admins_collection.find(query, {"password": 0}))
     recruiters = []
     total_interviews = 0
-    for a in admins:
-        interviews_count = interview_sessions_collection.count_documents({"admin_id": str(a.get("_id"))})
-        total_interviews += interviews_count
-        
-        last_interview = interview_sessions_collection.find_one(
-            {"admin_id": str(a.get("_id"))},
-            sort=[("created_at", -1)]
-        )
-        last_active = last_interview.get("created_at") if last_interview else a.get("created_at", datetime.now(timezone.utc).isoformat())
-        
-        recruiters.append({
-            "id": str(a.get("_id")),
-            "name": a.get("name") or a.get("username"),
-            "email": a.get("email", "N/A"),
-            "role": a.get("role", "admin"),
-            "status": "Active" if a.get("is_active", True) else "Inactive",
-            "credits": a.get("credits", 0),
-            "interviews_conducted": interviews_count,
-            "last_active": last_active
-        })
-    
     now = datetime.now(timezone.utc)
-    weekly_activity = []
+
+    for a in admins:
+        try:
+            admin_obj_id = a.get("_id")
+            admin_str_id = str(admin_obj_id) if admin_obj_id else ""
+            email = a.get("email")
+            username = a.get("username")
+            
+            identifiers = [x for x in [admin_str_id, admin_obj_id, email, username] if x]
+            
+            created_interviews = list(interviews_collection.find({
+                "$or": [
+                    {"admin_id": {"$in": identifiers}},
+                    {"created_by": {"$in": identifiers}},
+                    {"user_id": {"$in": identifiers}}
+                ]
+            }, {"_id": 1, "id": 1}))
+            
+            interview_keys = []
+            for it in created_interviews:
+                if "_id" in it:
+                    interview_keys.append(str(it["_id"]))
+                    interview_keys.append(it["_id"])
+                if "id" in it:
+                    interview_keys.append(str(it["id"]))
+                    
+            session_query = {
+                "$or": [
+                    {"admin_id": {"$in": identifiers}},
+                    {"created_by": {"$in": identifiers}},
+                    {"interviewer_id": {"$in": identifiers}}
+                ]
+            }
+            if interview_keys:
+                session_query["$or"].append({"interview_id": {"$in": interview_keys}})
+                
+            interviews_count = interview_sessions_collection.count_documents(session_query)
+            total_interviews += interviews_count
+            
+            last_interview = interview_sessions_collection.find_one(
+                session_query,
+                sort=[("created_at", -1)]
+            )
+            last_active = last_interview.get("created_at") if last_interview and last_interview.get("created_at") else a.get("created_at", now.isoformat())
+            
+            email_str = a.get("email") or ""
+            username_str = a.get("username") or ""
+            name_str = a.get("name") or username_str or email_str or "Recruiter"
+            
+            status_val = "Active" if (a.get("is_active") != False and a.get("login_enabled") != False) else "Inactive"
+            raw_role = (a.get("role") or "admin").lower()
+            role_val = "super_admin" if raw_role in ["super_admin", "superadmin", "master"] else "admin"
+
+            recruiters.append({
+                "id": str(a.get("_id")),
+                "name": name_str,
+                "username": username_str or name_str,
+                "email": email_str or "N/A",
+                "role": role_val,
+                "status": status_val,
+                "credits": a.get("credits", 0),
+                "total_allocated_credits": a.get("total_allocated_credits", a.get("credits", 0)),
+                "interviews_conducted": interviews_count,
+                "last_active": last_active
+            })
+        except Exception as item_err:
+            logger.warning(f"Error processing recruiter item in stats: {item_err}")
+            continue
     
+    company_id = current_admin.get("company_id")
+    weekly_activity = []
     for i in range(8, 0, -1):
         start_date = now - timedelta(days=7*i)
         end_date = now - timedelta(days=7*(i-1))
@@ -213,13 +264,13 @@ def get_superadmin_recruiter_stats(current_admin: dict = Depends(get_current_adm
             "name": f"Week {9-i}",
             "interviews": count
         })
-    
+
     return {
         "status": "success",
         "kpis": {
             "total_recruiters": len(recruiters),
             "active_now": len([r for r in recruiters if r["status"] == "Active"]),
-            "avg_interviews": round(total_interviews / len(recruiters)) if recruiters else 0
+            "avg_interviews": round(total_interviews / max(len(recruiters), 1), 1)
         },
         "recruiters": recruiters,
         "weekly_activity": weekly_activity
@@ -230,36 +281,95 @@ def get_superadmin_credit_stats(current_admin: dict = Depends(get_current_admin_
     if current_admin.get("role") not in ["master", "super_admin"]:
         raise HTTPException(status_code=403, detail="Not authorized")
         
-    days = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"]
-    usage_data = [{"day": d, "used": random.randint(100, 1000), "purchased": random.randint(0, 500)} for d in days]
+    company_id = current_admin.get("company_id")
+    comp_obj_id = None
+    try:
+        if company_id:
+            comp_obj_id = ObjectId(company_id)
+    except Exception:
+        pass
+
+    now = datetime.now(timezone.utc)
+    seven_days_ago = now - timedelta(days=7)
+    thirty_days_ago = now - timedelta(days=30)
     
-    thirty_days_ago = (datetime.now(timezone.utc) - timedelta(days=30)).isoformat()
-    
-    query = {"company_id": current_admin.get("company_id")} if current_admin.get("company_id") else {}
-    history_docs = list(credit_ledger_collection.find(query).sort("date", -1).limit(10))
+    ledger_query = {}
+    if company_id:
+        ledger_query["$or"] = [{"company_id": company_id}]
+        if comp_obj_id:
+            ledger_query["$or"].append({"company_id": comp_obj_id})
+    else:
+        sa_id = current_admin.get("admin_id") or str(current_admin.get("_id") or "")
+        ledger_query = {"super_admin_id": sa_id}
+            
+    history_docs = list(credit_ledger_collection.find(ledger_query).sort("date", -1).limit(20))
     history = [
-        {"id": str(d.get("_id")), "org": d.get("org", "Unknown"), "amount": d.get("amount", 0), 
-         "date": d.get("date"), "status": d.get("status", "Completed")} 
+        {
+            "id": str(d.get("_id")),
+            "org": d.get("org") or d.get("sub_admin_name") or "Recruiter",
+            "amount": d.get("amount", 0), 
+            "date": d.get("date"),
+            "status": d.get("status", "Completed")
+        } 
         for d in history_docs
     ]
     
-    total_company_credits = 0
-    for c in companies_collection.find({}, {"credits": 1}):
-        total_company_credits += int(c.get("credits") or 0)
-        
-    total_admin_credits = 0
-    for a in admins_collection.find({"company_id": {"$exists": False}}, {"credits": 1}):
-        total_admin_credits += int(a.get("credits") or 0)
-        
-    total_credits = total_company_credits + total_admin_credits
-    consumed_credits = interview_sessions_collection.count_documents({"created_at": {"$gte": thirty_days_ago}})
+    admin_id = current_admin.get("admin_id") or str(current_admin.get("_id") or "")
+    company_id = current_admin.get("company_id")
+    
+    from app.routes.superadmin import get_live_super_admin_credits
+    total_company_credits = get_live_super_admin_credits(admin_id, company_id)
+
+    session_query = {}
+    if company_id:
+        session_query["company_id"] = company_id
+    session_query["created_at"] = {"$gte": thirty_days_ago.isoformat()}
+    
+    consumed_credits = interview_sessions_collection.count_documents(session_query)
+    active_topups = credit_ledger_collection.count_documents(ledger_query)
+
+    days_labels = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"]
+    usage_map = {i: {"used": 0, "purchased": 0} for i in range(7)}
+
+    recent_sessions = list(interview_sessions_collection.find(
+        {"created_at": {"$gte": seven_days_ago.isoformat()}, **({"company_id": company_id} if company_id else {})},
+        {"created_at": 1}
+    ))
+    for s in recent_sessions:
+        try:
+            dt = datetime.fromisoformat(s["created_at"])
+            day_idx = dt.weekday()
+            usage_map[day_idx]["used"] += 1
+        except Exception:
+            pass
+
+    recent_topups = list(credit_ledger_collection.find(
+        {"date": {"$gte": seven_days_ago.isoformat()}, **ledger_query},
+        {"date": 1, "amount": 1}
+    ))
+    for t in recent_topups:
+        try:
+            dt = datetime.fromisoformat(t["date"])
+            day_idx = dt.weekday()
+            usage_map[day_idx]["purchased"] += int(t.get("amount") or 0)
+        except Exception:
+            pass
+
+    usage_data = [
+        {
+            "day": days_labels[idx],
+            "used": usage_map[idx]["used"],
+            "purchased": usage_map[idx]["purchased"]
+        }
+        for idx in range(7)
+    ]
     
     return {
         "status": "success",
         "kpis": {
-            "total_credits_system": total_credits,
+            "total_credits_system": total_company_credits,
             "credits_consumed_month": consumed_credits,
-            "active_topups": 12
+            "active_topups": active_topups
         },
         "usage_chart": usage_data,
         "history": history
@@ -648,6 +758,21 @@ def send_recruiter_message(admin_id: str, data: RecruiterMessage, current_admin:
         "body": data.body,
         "timestamp": datetime.now(timezone.utc).isoformat()
     })
+
+    try:
+        notifications_collection.insert_one({
+            "title": f"Message: {data.subject}",
+            "message": data.body[:200] if data.body else "You have received a new direct message.",
+            "type": "message",
+            "recipient_role": "admin",
+            "recipient_id": str(obj_id),
+            "admin_id": str(obj_id),
+            "company_id": str(current_admin.get("company_id") or ""),
+            "read": False,
+            "created_at": datetime.now(timezone.utc).isoformat()
+        })
+    except Exception as notif_err:
+        logger.warning(f"Failed to create recruiter message notification: {notif_err}")
     
     return {"status": "success", "message": "Message sent successfully"}
 

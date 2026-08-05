@@ -140,20 +140,36 @@ export default function Subscribers() {
     }
   }
 
+  const DEFAULT_PLAN_CREDITS = {
+    trial: 10,
+    basic: 250,
+    advance: 400
+  }
+
   const handleOpenUpdateModal = (c) => {
     setUpdateTenantId(c.id)
-    setUpdateTenantPlan(c.subscription_plan || 'trial')
+    const initialPlan = c.subscription_plan || 'trial'
+    setUpdateTenantPlan(initialPlan)
     setUpdateTenantDays(c.days_remaining || 0)
-    setUpdateTenantCredits(c.credits || 0)
+    setUpdateTenantCredits(c.credits ?? DEFAULT_PLAN_CREDITS[initialPlan] ?? 10)
     setIsUpdateModalOpen(true)
+  }
+
+  const handlePlanSelectChange = (newPlan) => {
+    setUpdateTenantPlan(newPlan)
+    if (DEFAULT_PLAN_CREDITS[newPlan] !== undefined) {
+      setUpdateTenantCredits(DEFAULT_PLAN_CREDITS[newPlan])
+    }
   }
 
   const handleSaveSubscriptionUpdate = async () => {
     setUpdateLoading(true)
     try {
       const payload = {
+        subscription_plan: updateTenantPlan,
         plan_key: updateTenantPlan,
         days_to_add: parseInt(updateTenantDays) || 0,
+        add_days: parseInt(updateTenantDays) || 0,
         credits: parseInt(updateTenantCredits) || 0
       }
       const res = await axios.patch(
@@ -181,13 +197,28 @@ export default function Subscribers() {
       console.error(e)
       Swal.fire({
         title: 'Error',
-        text: e.response?.data?.detail || 'Failed to update subscription.',
+        text: e.response?.data?.detail || e.response?.data?.message || 'Failed to update subscription.',
         icon: 'error',
         background: '#161c2d',
         color: '#fff',
       })
     } finally {
       setUpdateLoading(false)
+    }
+  }
+
+  const handleStartDateChange = (val) => {
+    setStartDate(val)
+    if (endDate && val > endDate) {
+      setEndDate(val)
+    }
+  }
+
+  const handleEndDateChange = (val) => {
+    if (startDate && val < startDate) {
+      setEndDate(startDate)
+    } else {
+      setEndDate(val)
     }
   }
 
@@ -288,7 +319,7 @@ export default function Subscribers() {
           <input
             type="date"
             value={startDate}
-            onChange={(e) => setStartDate(e.target.value)}
+            onChange={(e) => handleStartDateChange(e.target.value)}
             className="w-full sm:w-auto py-2 px-3 rounded-xl border border-slate-200 bg-slate-50 text-xs font-medium text-slate-700 outline-none focus:border-indigo-500 cursor-pointer"
           />
         </div>
@@ -298,7 +329,8 @@ export default function Subscribers() {
           <input
             type="date"
             value={endDate}
-            onChange={(e) => setEndDate(e.target.value)}
+            min={startDate || undefined}
+            onChange={(e) => handleEndDateChange(e.target.value)}
             className="w-full sm:w-auto py-2 px-3 rounded-xl border border-slate-200 bg-slate-50 text-xs font-medium text-slate-700 outline-none focus:border-indigo-500 cursor-pointer"
           />
         </div>
@@ -448,7 +480,7 @@ export default function Subscribers() {
                 <label className="text-xs font-semibold text-slate-500">Subscription Plan</label>
                 <select
                   value={updateTenantPlan}
-                  onChange={(e) => setUpdateTenantPlan(e.target.value)}
+                  onChange={(e) => handlePlanSelectChange(e.target.value)}
                   className="w-full rounded-xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm text-slate-800 outline-none cursor-pointer"
                 >
                   <option value="trial">15 Days Free Trial</option>

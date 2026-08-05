@@ -169,7 +169,7 @@ function usePrepTimer(currentQuestion, currentQuestionIndex, recognitionRef, isS
     return () => clearInterval(timer)
   }, [isPrepMode, prepTimeLeft, recognitionRef, isSpeechRecordingRef])
 
-  return { isPrepMode, prepTimeLeft }
+  return { isPrepMode, setIsPrepMode, prepTimeLeft }
 }
 
 export const InterviewNormal = () => {
@@ -243,7 +243,7 @@ export const InterviewNormal = () => {
   // Only the session-scoped IDs remain here.
 
   // ── Case Study Prep Mode — delegated to hook ──────────────────────────────
-  const { isPrepMode, prepTimeLeft } = usePrepTimer(
+  const { isPrepMode, setIsPrepMode, prepTimeLeft } = usePrepTimer(
     currentQuestion, currentQuestionIndex, recognitionRef, isSpeechRecordingRef
   )
 

@@ -1448,7 +1448,25 @@ def update_decision(data: DecisionRequest, current_admin: dict = Depends(require
             if current_admin.get("role") == "admin" and str(job.get("admin_id") or "") != str(current_admin.get("admin_id") or ""):
                 raise HTTPException(status_code=403, detail="Access denied to another recruiter's candidate")
                 
-            job_applications_collection.update_one({"_id": app["_id"]}, {"$set": {"decision": data.decision}})
+            admin_name = current_admin.get("name") or current_admin.get("username") or "Admin"
+            admin_role = current_admin.get("role") or "admin"
+            admin_id = current_admin.get("admin_id")
+            now_iso = datetime.now(timezone.utc).isoformat()
+            
+            job_applications_collection.update_one(
+                {"_id": app["_id"]},
+                {"$set": {
+                    "decision": data.decision,
+                    "last_action_by_name": admin_name,
+                    "last_action_by_role": admin_role,
+                    "last_action_by_id": admin_id,
+                    "last_action_status": data.decision,
+                    "last_action_at": now_iso,
+                    "decision_by_name": admin_name,
+                    "decision_by_role": admin_role,
+                    "decision_at": now_iso
+                }}
+            )
             
             name = app.get("name") or "Candidate"
             email = app.get("email")
@@ -1476,8 +1494,22 @@ def update_decision(data: DecisionRequest, current_admin: dict = Depends(require
         jd = row.get("job_description")
         print(f" Candidate: {name}, Email: {email}")
         
+        admin_name = current_admin.get("name") or current_admin.get("username") or "Admin"
+        admin_role = current_admin.get("role") or "admin"
+        admin_id = current_admin.get("admin_id")
+        now_iso = datetime.now(timezone.utc).isoformat()
+        
         # 2. Update DB
-        interview_sessions_collection.update_one({"link_id": data.link_id}, {"$set": {"decision": data.decision}})
+        interview_sessions_collection.update_one(
+            {"link_id": data.link_id},
+            {"$set": {
+                "decision": data.decision,
+                "decision_by_name": admin_name,
+                "decision_by_role": admin_role,
+                "decision_by_id": admin_id,
+                "decision_at": now_iso
+            }}
+        )
         print(f" DB Updated for {data.link_id}")
         from app.routes.interview import sync_session_to_application
         sync_session_to_application(data.link_id)

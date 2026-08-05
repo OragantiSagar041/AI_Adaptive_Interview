@@ -318,9 +318,16 @@ export default function MasterPage() {
   }
 
   // Update Plan Modal Handlers
+  const DEFAULT_PLAN_CREDITS = {
+    trial: 10,
+    basic: 250,
+    advance: 400
+  }
+
   const handleOpenUpdateModal = (c) => {
     setUpdateTenantId(c.company_id || c.id)
-    setUpdateTenantPlan(c.plan_name === 'Free Trial' ? 'trial' : c.plan_name.toLowerCase())
+    const initialPlan = (c.plan_name === 'Free Trial' || c.subscription_plan === 'trial') ? 'trial' : (c.subscription_plan || (c.plan_name ? c.plan_name.toLowerCase() : 'trial'))
+    setUpdateTenantPlan(initialPlan)
     setUpdateTenantDays(0)
     setIsUpdateModalOpen(true)
   }
@@ -329,15 +336,19 @@ export default function MasterPage() {
     e.preventDefault()
     setUpdateLoading(true)
     try {
-      const res = await fetch(`${API_BASE_URL}/master/companies/${encodeURIComponent(updateTenantId)}?master_id=${encodeURIComponent(adminId)}`, {
+      const res = await fetch(`${API_BASE_URL}/master/companies/${encodeURIComponent(updateTenantId)}/subscription?master_id=${encodeURIComponent(adminId)}`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
-          'Authorization': `Bearer ${sessionStorage.getItem('adminToken')}`
+          'Authorization': `Bearer ${sessionStorage.getItem('adminToken') || token}`
         },
         body: JSON.stringify({
+          subscription_plan: updateTenantPlan,
+          plan_key: updateTenantPlan,
           plan_name: updateTenantPlan,
-          extend_days: parseInt(updateTenantDays)
+          extend_days: parseInt(updateTenantDays) || 0,
+          add_days: parseInt(updateTenantDays) || 0,
+          credits: DEFAULT_PLAN_CREDITS[updateTenantPlan] ?? 10
         })
       })
       if (res.ok) {
@@ -345,7 +356,8 @@ export default function MasterPage() {
         setIsUpdateModalOpen(false)
         fetchCompanies()
       } else {
-        throw new Error('Failed to update subscription')
+        const errData = await res.json().catch(() => ({}))
+        throw new Error(errData.detail || errData.message || 'Failed to update subscription')
       }
     } catch (e) {
       Swal.fire('Error', e.message, 'error')

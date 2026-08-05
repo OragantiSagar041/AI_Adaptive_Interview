@@ -1,7 +1,11 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import axios from 'axios';
-import { Briefcase, MapPin, Clock, CheckCircle2, User, Mail, Phone, Link as LinkIcon, FileText, ArrowRight, Wallet, Target, Building2, BookOpen, X } from 'lucide-react';
+import { 
+  Briefcase, MapPin, Clock, CheckCircle2, User, Mail, Phone, 
+  Link as LinkIcon, FileText, ArrowRight, Wallet, Target, Building2, 
+  BookOpen, X, UploadCloud, Paperclip, Trash2, FileCheck, Check, AlertCircle
+} from 'lucide-react';
 
 import { API_BASE_URL } from "../apiConfig";
 
@@ -19,6 +23,17 @@ export default function JobApplicationPage() {
   const [submitting, setSubmitting] = useState(false);
   const [submitted, setSubmitted] = useState(false);
   const [error, setError] = useState('');
+
+  // Resume state
+  const [resumeMode, setResumeMode] = useState('upload'); // 'upload' | 'link'
+  const [resumeFile, setResumeFile] = useState(null);
+  const [isDraggingResume, setIsDraggingResume] = useState(false);
+  const resumeInputRef = useRef(null);
+
+  // Cover Letter state
+  const [coverLetterMode, setCoverLetterMode] = useState('text'); // 'text' | 'upload'
+  const [coverLetterFile, setCoverLetterFile] = useState(null);
+  const coverLetterInputRef = useRef(null);
 
   const [formData, setFormData] = useState({
     name: '',
@@ -53,13 +68,67 @@ export default function JobApplicationPage() {
     setFormData(prev => ({ ...prev, [name]: value }));
   };
 
+  const handleResumeFileSelect = (file) => {
+    if (!file) return;
+    const allowed = ['.pdf', '.doc', '.docx', '.txt'];
+    const ext = '.' + file.name.split('.').pop().toLowerCase();
+    if (!allowed.includes(ext)) {
+      setError('Please upload a valid PDF, DOCX, or DOC file.');
+      return;
+    }
+    if (file.size > 10 * 1024 * 1024) {
+      setError('Resume file size must be less than 10MB.');
+      return;
+    }
+    setError('');
+    setResumeFile(file);
+  };
+
+  const handleCoverLetterFileSelect = (file) => {
+    if (!file) return;
+    if (file.size > 10 * 1024 * 1024) {
+      setError('Cover letter file size must be less than 10MB.');
+      return;
+    }
+    setError('');
+    setCoverLetterFile(file);
+  };
+
   const handleSubmit = async (e) => {
     e.preventDefault();
+    if (resumeMode === 'upload' && !resumeFile && !formData.resume_url) {
+      setError('Please upload your resume file or provide a resume link.');
+      return;
+    }
+    if (resumeMode === 'link' && !formData.resume_url) {
+      setError('Please provide a valid resume link.');
+      return;
+    }
+
     setSubmitting(true);
     setError('');
     
     try {
-      await axios.post(`${API_BASE_URL}/api/public/jobs/${jobId}/apply`, formData);
+      const data = new FormData();
+      data.append('name', formData.name);
+      data.append('email', formData.email);
+      data.append('phone', formData.phone || '');
+      data.append('linkedin_url', formData.linkedin_url || '');
+      data.append('resume_url', formData.resume_url || '');
+      data.append('cover_letter', formData.cover_letter || '');
+
+      if (resumeMode === 'upload' && resumeFile) {
+        data.append('resume_file', resumeFile);
+      }
+      if (coverLetterMode === 'upload' && coverLetterFile) {
+        data.append('cover_letter_file', coverLetterFile);
+      }
+
+      await axios.post(`${API_BASE_URL}/api/public/jobs/${jobId}/apply`, data, {
+        headers: {
+          'Content-Type': 'multipart/form-data',
+        }
+      });
       setSubmitted(true);
     } catch (err) {
       console.error("Application error:", err);
@@ -67,6 +136,14 @@ export default function JobApplicationPage() {
     } finally {
       setSubmitting(false);
     }
+  };
+
+  const formatFileSize = (bytes) => {
+    if (!bytes) return '';
+    const k = 1024;
+    const sizes = ['Bytes', 'KB', 'MB'];
+    const i = Math.floor(Math.log(bytes) / Math.log(k));
+    return parseFloat((bytes / Math.pow(k, i)).toFixed(1)) + ' ' + sizes[i];
   };
 
   if (loading) {
@@ -93,8 +170,8 @@ export default function JobApplicationPage() {
             <h2 className="text-2xl font-black text-slate-800 mb-2">Job Not Found</h2>
             <p className="text-slate-500 mb-8">{error}</p>
             <button 
-              onClick={() => navigate('/')}
-              className="w-full py-3 px-6 bg-indigo-600 hover:bg-indigo-700 text-white font-bold rounded-xl transition-all"
+              onClick={() => { window.location.href = 'https://www.google.com'; }}
+              className="w-full py-3 px-6 bg-indigo-600 hover:bg-indigo-700 text-white font-bold rounded-xl transition-all cursor-pointer"
             >
               Return Home
             </button>
@@ -117,11 +194,11 @@ export default function JobApplicationPage() {
               </div>
               <h2 className="text-4xl font-black text-slate-800 mb-4 tracking-tight">Application Submitted!</h2>
               <p className="text-lg text-slate-500 mb-8 leading-relaxed max-w-lg mx-auto">
-                Thank you for applying to the <span className="font-bold text-slate-700">{job.title}</span> position. Our team will review your profile and get back to you soon.
+                Thank you for applying to the <span className="font-bold text-slate-700">{job.title}</span> position. Our recruiting team will review your resume and contact you soon.
               </p>
               <button 
-                onClick={() => navigate('/')}
-                className="inline-flex items-center gap-2 px-8 py-4 bg-slate-900 hover:bg-slate-800 text-white font-bold rounded-xl transition-all shadow-xl shadow-slate-200 hover:-translate-y-0.5"
+                onClick={() => { window.location.href = 'https://www.google.com'; }}
+                className="inline-flex items-center gap-2 px-8 py-4 bg-slate-900 hover:bg-slate-800 text-white font-bold rounded-xl transition-all shadow-xl shadow-slate-200 hover:-translate-y-0.5 cursor-pointer"
               >
                 Return to Home <ArrowRight size={18} />
               </button>
@@ -178,16 +255,18 @@ export default function JobApplicationPage() {
                     </div>
                   )}
 
-                  <div>
-                    <h3 className="text-sm font-bold text-slate-800 uppercase tracking-wider mb-3">Required Skills</h3>
-                    <div className="flex flex-wrap gap-2">
-                      {job.skills?.split(',').map((skill, i) => (
-                        <span key={i} className="px-3 py-1.5 bg-slate-50 text-slate-600 text-xs font-bold rounded-lg border border-slate-200">
-                          {skill.trim()}
-                        </span>
-                      ))}
+                  {job.skills && (
+                    <div>
+                      <h3 className="text-sm font-bold text-slate-800 uppercase tracking-wider mb-3">Required Skills</h3>
+                      <div className="flex flex-wrap gap-2">
+                        {job.skills?.split(',').map((skill, i) => (
+                          <span key={i} className="px-3 py-1.5 bg-slate-50 text-slate-600 text-xs font-bold rounded-lg border border-slate-200">
+                            {skill.trim()}
+                          </span>
+                        ))}
+                      </div>
                     </div>
-                  </div>
+                  )}
                 </div>
               </div>
             </div>
@@ -197,12 +276,12 @@ export default function JobApplicationPage() {
               <div className="bg-white rounded-[2rem] p-8 md:p-10 shadow-2xl shadow-slate-200/50 border border-slate-100">
                 <div className="mb-8">
                   <h2 className="text-3xl font-black text-slate-800 tracking-tight">Apply for this position</h2>
-                  <p className="text-slate-500 mt-2 font-medium">Please fill out the form below to submit your application.</p>
+                  <p className="text-slate-500 mt-2 font-medium">Please upload your resume and details to submit your application.</p>
                 </div>
 
                 {error && (
                   <div className="mb-8 p-4 bg-rose-50 border border-rose-200 text-rose-600 rounded-xl font-semibold text-sm flex items-start gap-3">
-                    <X className="shrink-0 mt-0.5" size={16} /> {error}
+                    <AlertCircle className="shrink-0 mt-0.5 text-rose-500" size={16} /> {error}
                   </div>
                 )}
 
@@ -239,38 +318,23 @@ export default function JobApplicationPage() {
                     </div>
                   </div>
 
-                  {/* Phone */}
-                  <div>
-                    <label className="block text-xs font-bold text-slate-500 uppercase tracking-wider mb-2 ml-1">Phone Number *</label>
-                    <div className="relative">
-                      <div className="absolute inset-y-0 left-0 pl-4 flex items-center pointer-events-none">
-                        <Phone size={16} className="text-slate-400" />
-                      </div>
-                      <input
-                        type="tel" name="phone" required
-                        value={formData.phone} onChange={handleInputChange}
-                        className="w-full pl-11 pr-4 py-3.5 rounded-xl border border-slate-200 bg-slate-50/50 focus:outline-none focus:bg-white focus:ring-4 focus:ring-indigo-500/10 focus:border-indigo-500 transition-all text-slate-800 font-medium placeholder:text-slate-400"
-                        placeholder="+1 (555) 000-0000"
-                      />
-                    </div>
-                  </div>
-
-                  {/* Links */}
+                  {/* Phone & LinkedIn */}
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                     <div>
-                      <label className="block text-xs font-bold text-slate-500 uppercase tracking-wider mb-2 ml-1">Resume / CV Link</label>
+                      <label className="block text-xs font-bold text-slate-500 uppercase tracking-wider mb-2 ml-1">Phone Number *</label>
                       <div className="relative">
                         <div className="absolute inset-y-0 left-0 pl-4 flex items-center pointer-events-none">
-                          <LinkIcon size={16} className="text-slate-400" />
+                          <Phone size={16} className="text-slate-400" />
                         </div>
                         <input
-                          type="url" name="resume_url"
-                          value={formData.resume_url} onChange={handleInputChange}
+                          type="tel" name="phone" required
+                          value={formData.phone} onChange={handleInputChange}
                           className="w-full pl-11 pr-4 py-3.5 rounded-xl border border-slate-200 bg-slate-50/50 focus:outline-none focus:bg-white focus:ring-4 focus:ring-indigo-500/10 focus:border-indigo-500 transition-all text-slate-800 font-medium placeholder:text-slate-400"
-                          placeholder="https://drive.google.com/..."
+                          placeholder="+1 (555) 000-0000"
                         />
                       </div>
                     </div>
+
                     <div>
                       <label className="block text-xs font-bold text-slate-500 uppercase tracking-wider mb-2 ml-1">LinkedIn Profile</label>
                       <div className="relative">
@@ -287,19 +351,204 @@ export default function JobApplicationPage() {
                     </div>
                   </div>
 
-                  {/* Cover Letter */}
-                  <div>
-                    <label className="block text-xs font-bold text-slate-500 uppercase tracking-wider mb-2 ml-1">Cover Letter (Optional)</label>
-                    <textarea
-                      name="cover_letter" rows="5"
-                      value={formData.cover_letter} onChange={handleInputChange}
-                      className="w-full px-4 py-3.5 rounded-xl border border-slate-200 bg-slate-50/50 focus:outline-none focus:bg-white focus:ring-4 focus:ring-indigo-500/10 focus:border-indigo-500 transition-all text-slate-800 font-medium placeholder:text-slate-400 resize-none"
-                      placeholder="Tell us why you are a great fit for this role..."
-                    />
+                  {/* Resume Section with File Upload & Link Switcher */}
+                  <div className="bg-slate-50/70 border border-slate-200/80 rounded-2xl p-5">
+                    <div className="flex items-center justify-between mb-3">
+                      <label className="text-xs font-extrabold text-slate-700 uppercase tracking-wider flex items-center gap-1.5">
+                        <FileText size={15} className="text-indigo-600" /> Resume / CV *
+                      </label>
+                      <div className="inline-flex p-0.5 bg-slate-200/70 rounded-lg text-xs font-bold">
+                        <button
+                          type="button"
+                          onClick={() => setResumeMode('upload')}
+                          className={`px-3 py-1 rounded-md transition-all cursor-pointer ${
+                            resumeMode === 'upload' ? 'bg-white text-indigo-600 shadow-sm' : 'text-slate-500 hover:text-slate-800'
+                          }`}
+                        >
+                          Upload File
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => setResumeMode('link')}
+                          className={`px-3 py-1 rounded-md transition-all cursor-pointer ${
+                            resumeMode === 'link' ? 'bg-white text-indigo-600 shadow-sm' : 'text-slate-500 hover:text-slate-800'
+                          }`}
+                        >
+                          Paste Link
+                        </button>
+                      </div>
+                    </div>
+
+                    {resumeMode === 'upload' ? (
+                      <div>
+                        <input
+                          ref={resumeInputRef}
+                          type="file"
+                          accept=".pdf,.doc,.docx,.txt"
+                          className="hidden"
+                          onChange={(e) => handleResumeFileSelect(e.target.files?.[0])}
+                        />
+
+                        {resumeFile ? (
+                          <div className="flex items-center justify-between p-4 bg-white border-2 border-indigo-100 rounded-xl shadow-sm">
+                            <div className="flex items-center gap-3 min-w-0">
+                              <div className="w-10 h-10 rounded-lg bg-indigo-50 text-indigo-600 flex items-center justify-center shrink-0 border border-indigo-100">
+                                <FileCheck size={20} />
+                              </div>
+                              <div className="truncate">
+                                <p className="text-sm font-bold text-slate-800 truncate">{resumeFile.name}</p>
+                                <p className="text-xs font-semibold text-slate-400">{formatFileSize(resumeFile.size)} • Ready to upload</p>
+                              </div>
+                            </div>
+                            <div className="flex items-center gap-2 shrink-0">
+                              <button
+                                type="button"
+                                onClick={() => resumeInputRef.current?.click()}
+                                className="px-2.5 py-1.5 text-xs font-bold text-indigo-600 hover:bg-indigo-50 rounded-lg transition-colors cursor-pointer"
+                              >
+                                Replace
+                              </button>
+                              <button
+                                type="button"
+                                onClick={() => setResumeFile(null)}
+                                className="p-1.5 text-slate-400 hover:text-rose-500 hover:bg-rose-50 rounded-lg transition-colors cursor-pointer"
+                              >
+                                <Trash2 size={16} />
+                              </button>
+                            </div>
+                          </div>
+                        ) : (
+                          <div
+                            onDragOver={(e) => { e.preventDefault(); setIsDraggingResume(true); }}
+                            onDragLeave={() => setIsDraggingResume(false)}
+                            onDrop={(e) => {
+                              e.preventDefault();
+                              setIsDraggingResume(false);
+                              handleResumeFileSelect(e.dataTransfer.files?.[0]);
+                            }}
+                            onClick={() => resumeInputRef.current?.click()}
+                            className={`border-2 border-dashed rounded-xl p-6 text-center cursor-pointer transition-all bg-white ${
+                              isDraggingResume
+                                ? 'border-indigo-500 bg-indigo-50/50 scale-[0.99]'
+                                : 'border-slate-300 hover:border-indigo-400 hover:bg-indigo-50/20'
+                            }`}
+                          >
+                            <div className="w-12 h-12 rounded-full bg-indigo-50 text-indigo-600 flex items-center justify-center mx-auto mb-3 shadow-inner">
+                              <UploadCloud size={24} />
+                            </div>
+                            <p className="text-sm font-bold text-slate-700 mb-1">
+                              Click to upload or drag & drop your resume
+                            </p>
+                            <p className="text-xs font-medium text-slate-400">
+                              Supports PDF, DOCX, DOC (Max 10MB)
+                            </p>
+                          </div>
+                        )}
+                      </div>
+                    ) : (
+                      <div className="relative">
+                        <div className="absolute inset-y-0 left-0 pl-4 flex items-center pointer-events-none">
+                          <LinkIcon size={16} className="text-slate-400" />
+                        </div>
+                        <input
+                          type="url" name="resume_url"
+                          value={formData.resume_url} onChange={handleInputChange}
+                          className="w-full pl-11 pr-4 py-3.5 rounded-xl border border-slate-200 bg-white focus:outline-none focus:ring-4 focus:ring-indigo-500/10 focus:border-indigo-500 transition-all text-slate-800 font-medium placeholder:text-slate-400"
+                          placeholder="https://drive.google.com/file/d/..."
+                        />
+                      </div>
+                    )}
+                  </div>
+
+                  {/* Cover Letter Section with Text & Document Upload Switcher */}
+                  <div className="bg-slate-50/70 border border-slate-200/80 rounded-2xl p-5">
+                    <div className="flex items-center justify-between mb-3">
+                      <label className="text-xs font-extrabold text-slate-700 uppercase tracking-wider flex items-center gap-1.5">
+                        <Paperclip size={15} className="text-indigo-600" /> Cover Letter (Optional)
+                      </label>
+                      <div className="inline-flex p-0.5 bg-slate-200/70 rounded-lg text-xs font-bold">
+                        <button
+                          type="button"
+                          onClick={() => setCoverLetterMode('text')}
+                          className={`px-3 py-1 rounded-md transition-all cursor-pointer ${
+                            coverLetterMode === 'text' ? 'bg-white text-indigo-600 shadow-sm' : 'text-slate-500 hover:text-slate-800'
+                          }`}
+                        >
+                          Write Text
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => setCoverLetterMode('upload')}
+                          className={`px-3 py-1 rounded-md transition-all cursor-pointer ${
+                            coverLetterMode === 'upload' ? 'bg-white text-indigo-600 shadow-sm' : 'text-slate-500 hover:text-slate-800'
+                          }`}
+                        >
+                          Upload Doc
+                        </button>
+                      </div>
+                    </div>
+
+                    {coverLetterMode === 'text' ? (
+                      <textarea
+                        name="cover_letter" rows="4"
+                        value={formData.cover_letter} onChange={handleInputChange}
+                        className="w-full px-4 py-3 rounded-xl border border-slate-200 bg-white focus:outline-none focus:ring-4 focus:ring-indigo-500/10 focus:border-indigo-500 transition-all text-slate-800 font-medium placeholder:text-slate-400 resize-none text-sm leading-relaxed"
+                        placeholder="Tell us about yourself, your accomplishments, and why you are a great fit for this role..."
+                      />
+                    ) : (
+                      <div>
+                        <input
+                          ref={coverLetterInputRef}
+                          type="file"
+                          accept=".pdf,.doc,.docx,.txt"
+                          className="hidden"
+                          onChange={(e) => handleCoverLetterFileSelect(e.target.files?.[0])}
+                        />
+
+                        {coverLetterFile ? (
+                          <div className="flex items-center justify-between p-4 bg-white border border-indigo-100 rounded-xl shadow-sm">
+                            <div className="flex items-center gap-3 min-w-0">
+                              <div className="w-10 h-10 rounded-lg bg-indigo-50 text-indigo-600 flex items-center justify-center shrink-0 border border-indigo-100">
+                                <FileCheck size={20} />
+                              </div>
+                              <div className="truncate">
+                                <p className="text-sm font-bold text-slate-800 truncate">{coverLetterFile.name}</p>
+                                <p className="text-xs font-semibold text-slate-400">{formatFileSize(coverLetterFile.size)} • Ready to upload</p>
+                              </div>
+                            </div>
+                            <div className="flex items-center gap-2 shrink-0">
+                              <button
+                                type="button"
+                                onClick={() => coverLetterInputRef.current?.click()}
+                                className="px-2.5 py-1.5 text-xs font-bold text-indigo-600 hover:bg-indigo-50 rounded-lg transition-colors cursor-pointer"
+                              >
+                                Replace
+                              </button>
+                              <button
+                                type="button"
+                                onClick={() => setCoverLetterFile(null)}
+                                className="p-1.5 text-slate-400 hover:text-rose-500 hover:bg-rose-50 rounded-lg transition-colors cursor-pointer"
+                              >
+                                <Trash2 size={16} />
+                              </button>
+                            </div>
+                          </div>
+                        ) : (
+                          <div
+                            onClick={() => coverLetterInputRef.current?.click()}
+                            className="border-2 border-dashed border-slate-300 hover:border-indigo-400 hover:bg-indigo-50/20 rounded-xl p-5 text-center cursor-pointer transition-all bg-white"
+                          >
+                            <Paperclip size={22} className="mx-auto text-indigo-500 mb-2" />
+                            <p className="text-sm font-bold text-slate-700 mb-0.5">Upload Cover Letter Document</p>
+                            <p className="text-xs text-slate-400">PDF, DOCX, DOC, or TXT (Max 10MB)</p>
+                          </div>
+                        )}
+                      </div>
+                    )}
                   </div>
 
                   {/* Submit */}
-                  <div className="pt-4">
+                  <div className="pt-2">
                     <button
                       type="submit"
                       disabled={submitting}

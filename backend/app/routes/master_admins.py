@@ -19,6 +19,7 @@ from typing import Any, Dict, List, Optional, Union
 import bcrypt, jwt, requests
 import cloudinary, cloudinary.uploader, cloudinary.api, cloudinary.utils
 import edge_tts
+# pyrefly: ignore [missing-import]
 import pypdf
 from bson import ObjectId
 from bson.errors import InvalidId
@@ -170,19 +171,55 @@ def toggle_admin_login(admin_id: str, master_id: str = Depends(get_current_admin
 # SUPER ADMIN APIs
 # --------------------------------------------------------------------------------
 
+def get_tenant_recruiters_query(current_admin: dict) -> dict:
+    """Builds the exact tenant recruiter query used consistently across Credit Management and Recruiters Page."""
+    role = current_admin.get("role", "")
+    if role == "master":
+        return {}
+        
+    company_id = current_admin.get("company_id")
+    admin_id = current_admin.get("admin_id") or str(current_admin.get("_id") or "")
+    
+    or_conditions = []
+    
+    if admin_id:
+        or_conditions.append({"created_by": admin_id})
+        or_conditions.append({"super_admin_id": admin_id})
+        try:
+            or_conditions.append({"created_by": ObjectId(admin_id)})
+        except Exception:
+            pass
+
+    if company_id:
+        or_conditions.append({"company_id": company_id})
+        or_conditions.append({"company_id": str(company_id)})
+        try:
+            or_conditions.append({"company_id": ObjectId(company_id)})
+        except Exception:
+            pass
+
+    if not or_conditions:
+        return {"_id": None}
+
+    sa_oids = []
+    if admin_id:
+        sa_oids.append(admin_id)
+        try:
+            sa_oids.append(ObjectId(admin_id))
+        except Exception:
+            pass
+
+    return {
+        "$or": or_conditions,
+        "_id": {"$nin": sa_oids}
+    }
+
 @router.get("/super-admin/admins")
 def get_sub_admins(current_admin: dict = Depends(get_current_admin_details)):
-    if current_admin.get("role") != "super_admin":
+    if current_admin.get("role") not in ["super_admin", "master"]:
         raise HTTPException(status_code=403, detail="Super Admin access required")
-    company_id = current_admin.get("company_id")
-    if not company_id:
-        raise HTTPException(status_code=400, detail="Super Admin is not associated with a company")
         
-    query = {
-        "company_id": company_id, 
-        "role": "admin",
-        "$or": [{"created_by": current_admin["admin_id"]}, {"created_by": {"$exists": False}}]
-    }
+    query = get_tenant_recruiters_query(current_admin)
     admins = list(admins_collection.find(query, {"password": 0}))
     
     # Enrich with session count created by each admin
@@ -190,6 +227,7 @@ def get_sub_admins(current_admin: dict = Depends(get_current_admin_details)):
         admin["id"] = str(admin["_id"])
         admin["_id"] = str(admin["_id"])
         admin["credits"] = admin.get("credits", 0)
+        admin["total_allocated_credits"] = admin.get("total_allocated_credits", admin["credits"])
         admin["sessions_created"] = interview_sessions_collection.count_documents({
             "$or": [
                 {"admin_id": str(admin["id"])},
@@ -220,6 +258,7 @@ def create_sub_admin(data: SubAdminCreate, current_admin: dict = Depends(get_cur
         "company_id": company_id,
         "created_by": current_admin["admin_id"],
         "credits": data.credits,
+        "total_allocated_credits": data.credits,
         "login_enabled": True,
         "created_at": datetime.now(timezone.utc).isoformat()
     }
@@ -404,6 +443,21 @@ def add_sub_admin_credits(admin_id: str, data: AddCreditsRequest, current_admin:
             )
     except Exception as e:
         logger.warning(f"Failed to broadcast profile update: {e}")
+
+    try:
+        notifications_collection.insert_one({
+            "title": "Credits Allocated",
+            "message": f"You have been allocated {add_amount} interview credits by your administrator.",
+            "type": "credits",
+            "recipient_role": "admin",
+            "recipient_id": str(admin_id),
+            "admin_id": str(admin_id),
+            "company_id": str(company_id or ""),
+            "read": False,
+            "created_at": datetime.now(timezone.utc).isoformat()
+        })
+    except Exception as notif_err:
+        logger.warning(f"Failed to create credit allocation notification: {notif_err}")
 
     return {
         "status": "success",

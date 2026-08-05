@@ -425,12 +425,13 @@ export default function MasterProfile() {
                       value={oldPassword}
                       onChange={(e) => setOldPassword(e.target.value)}
                       style={inputStyle}
-                      className="text-sm text-slate-800 placeholder-slate-400"
+                      className="text-sm text-slate-800 placeholder-slate-400 flex-1 min-w-0"
                     />
                     <button
                       type="button"
                       onClick={() => setShowOldPassword(!showOldPassword)}
-                      className="absolute inset-y-0 right-0 pr-3.5 flex items-center text-slate-400 hover:text-slate-600 cursor-pointer"
+                      className="text-slate-400 hover:text-slate-600 cursor-pointer bg-transparent border-none p-0 flex items-center shrink-0 transition-colors"
+                      title={showOldPassword ? "Hide password" : "Show password"}
                     >
                       {showOldPassword ? <EyeOff size={16} /> : <Eye size={16} />}
                     </button>
@@ -450,12 +451,13 @@ export default function MasterProfile() {
                         value={newPassword}
                         onChange={(e) => setNewPassword(e.target.value)}
                         style={inputStyle}
-                        className="text-sm text-slate-800 placeholder-slate-400"
+                        className="text-sm text-slate-800 placeholder-slate-400 flex-1 min-w-0"
                       />
                       <button
                         type="button"
                         onClick={() => setShowNewPassword(!showNewPassword)}
-                        className="absolute inset-y-0 right-0 pr-3.5 flex items-center text-slate-400 hover:text-slate-600 cursor-pointer"
+                        className="text-slate-400 hover:text-slate-600 cursor-pointer bg-transparent border-none p-0 flex items-center shrink-0 transition-colors"
+                        title={showNewPassword ? "Hide password" : "Show password"}
                       >
                         {showNewPassword ? <EyeOff size={16} /> : <Eye size={16} />}
                       </button>
@@ -474,12 +476,13 @@ export default function MasterProfile() {
                         value={confirmPassword}
                         onChange={(e) => setConfirmPassword(e.target.value)}
                         style={inputStyle}
-                        className="text-sm text-slate-800 placeholder-slate-400"
+                        className="text-sm text-slate-800 placeholder-slate-400 flex-1 min-w-0"
                       />
                       <button
                         type="button"
                         onClick={() => setShowConfirmPassword(!showConfirmPassword)}
-                        className="absolute inset-y-0 right-0 pr-3.5 flex items-center text-slate-400 hover:text-slate-600 cursor-pointer"
+                        className="text-slate-400 hover:text-slate-600 cursor-pointer bg-transparent border-none p-0 flex items-center shrink-0 transition-colors"
+                        title={showConfirmPassword ? "Hide password" : "Show password"}
                       >
                         {showConfirmPassword ? <EyeOff size={16} /> : <Eye size={16} />}
                       </button>

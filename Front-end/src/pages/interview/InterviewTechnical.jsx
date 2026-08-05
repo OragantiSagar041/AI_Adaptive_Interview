@@ -205,6 +205,7 @@ export const InterviewTechnical = () => {
 
       const iid = interviewId || sessionDetail?.interview_id || sessionId
       const userStdout = extractStdout(codeAnswer, selectedLanguage)
+      let errorText = ''
 
       try {
         const payload = await api.post(`/coding-round/run`, {

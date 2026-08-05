@@ -168,13 +168,15 @@ def superadmin_subscription_stats(admin_details: dict = Depends(get_current_admi
     # Calculate stats for just this one company
     company_id = str(admin_details["company_id"])
     try:
+        from app.repositories.subscription_repository import get_total_revenue
+        total_revenue = get_total_revenue(company_id)
         detail = get_subscription_detail(company_id)
         return SubscriptionStats(
             total_organisations=1,
             active_subscriptions=1 if detail.status == "active" else 0,
             expired_subscriptions=1 if detail.status == "expired" else 0,
             trial_subscriptions=1 if detail.status == "trial" else 0,
-            total_mrr=detail.mrr,
+            total_mrr=round(total_revenue, 2),
             total_credits_issued=detail.total_credits,
             total_credits_consumed=detail.total_sessions,
         )

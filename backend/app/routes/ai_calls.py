@@ -221,14 +221,26 @@ async def initiate_manual_ai_call(
                     resume_text = app_doc.get("resume_text") or ""
                     if not resume_text and app_doc.get("resume_url"):
                         r_url = app_doc.get("resume_url")
+                        text = None
                         if os.path.exists(r_url):
                             with open(r_url, "rb") as f:
-                                resume_text = extract_text_from_file(f.read(), r_url)
-                                if resume_text:
-                                    job_applications_collection.update_one(
-                                        {"_id": ObjectId(application_id)},
-                                        {"$set": {"resume_text": resume_text}}
-                                    )
+                                text = extract_text_from_file(f.read(), r_url)
+                        elif r_url.startswith("http://") or r_url.startswith("https://"):
+                            resp = requests.get(r_url, timeout=10)
+                            if resp.status_code == 200:
+                                text = extract_text_from_file(resp.content, r_url)
+                        elif r_url.startswith("/api/public/resumes/"):
+                            local_fname = os.path.basename(r_url)
+                            local_fpath = os.path.join(os.getcwd(), "uploads", "resumes", local_fname)
+                            if os.path.exists(local_fpath):
+                                with open(local_fpath, "rb") as f:
+                                    text = extract_text_from_file(f.read(), local_fpath)
+                        if text:
+                            resume_text = text
+                            job_applications_collection.update_one(
+                                {"_id": ObjectId(application_id)},
+                                {"$set": {"resume_text": text}}
+                            )
             except Exception as e:
                 print(f"Error loading resume in manual AI call: {e}")
             

@@ -138,6 +138,23 @@ export default function CompanyRevenue() {
     setEndDate(end)
   }
 
+  const handleStartDateChange = (val) => {
+    setStartDate(val)
+    setDatePreset('custom')
+    if (endDate && val > endDate) {
+      setEndDate(val)
+    }
+  }
+
+  const handleEndDateChange = (val) => {
+    setDatePreset('custom')
+    if (startDate && val < startDate) {
+      setEndDate(startDate)
+    } else {
+      setEndDate(val)
+    }
+  }
+
   // Filter companies in memory for instant search responsiveness
   const filteredCompanies = useMemo(() => {
     if (!search.trim()) return revenueData.companies
@@ -451,10 +468,7 @@ export default function CompanyRevenue() {
               <input
                 type="date"
                 value={startDate}
-                onChange={(e) => {
-                  setStartDate(e.target.value)
-                  setDatePreset('custom')
-                }}
+                onChange={(e) => handleStartDateChange(e.target.value)}
                 className="px-2.5 py-1 text-xs border border-slate-200 rounded-lg focus:outline-none focus:ring-1 focus:ring-indigo-500 bg-slate-50 text-slate-700"
               />
             </div>
@@ -463,10 +477,8 @@ export default function CompanyRevenue() {
               <input
                 type="date"
                 value={endDate}
-                onChange={(e) => {
-                  setEndDate(e.target.value)
-                  setDatePreset('custom')
-                }}
+                min={startDate || undefined}
+                onChange={(e) => handleEndDateChange(e.target.value)}
                 className="px-2.5 py-1 text-xs border border-slate-200 rounded-lg focus:outline-none focus:ring-1 focus:ring-indigo-500 bg-slate-50 text-slate-700"
               />
             </div>

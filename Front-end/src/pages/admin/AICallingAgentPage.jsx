@@ -7,7 +7,7 @@ import {
   BookOpen, Plug, Cog, MailCheck, Clock, Volume2, Globe, Zap, FileText,
   Mic, MessageSquare, RefreshCw, ChevronDown, ChevronUp, Timer,
   AlertCircle, User, Calendar, TrendingUp, Play, Plus, Trash2, Copy,
-  ArrowUpRight, ArrowDownLeft, Upload, Search, Filter, Users, Settings, 
+  ArrowUpRight, ArrowDownLeft, Upload, Search, Filter, Users, Settings,
   CheckCircle, Eye, Brain, X, ExternalLink, Info
 } from 'lucide-react'
 import Card from '../../components/Card'
@@ -75,20 +75,20 @@ function EmptyState({ message }) {
 // ─── Tab Components ─────────────────────────────────────────────────────────────
 
 function AssistantDetailsTab({ agentSettings, loading }) {
-  if (loading) return <SectionLoader />
-  if (!agentSettings) return <EmptyState message="No agent settings found. Check your Omni Dimension API key." />
-
   const defaultGreeting = "Hello {{candidate_name}}, this is Sarah, the AI Recruitment Assistant from HireIQ, calling on behalf of {{HIRE IQ}} regarding your application for the {{job_role}} position. I'd like to conduct a brief screening interview that will take about {{duration}} minutes. Would you like me to continue?"
 
   const [isDynamic, setIsDynamic] = useState(true)
   const [isInterruptible, setIsInterruptible] = useState(false)
-  const [greetingText, setGreetingText] = useState(agentSettings.greeting_message || defaultGreeting)
+  const [greetingText, setGreetingText] = useState(agentSettings?.greeting_message || defaultGreeting)
 
   useEffect(() => {
     if (agentSettings?.greeting_message) {
       setGreetingText(agentSettings.greeting_message)
     }
   }, [agentSettings])
+
+  if (loading) return <SectionLoader />
+  if (!agentSettings) return <EmptyState message="No agent settings found. Check your Omni Dimension API key." />
 
   return (
     <div className="space-y-6">
@@ -220,9 +220,8 @@ function ModeSwitch({ isDynamic, onChange }) {
       <button
         type="button"
         onClick={() => onChange(!isDynamic)}
-        className={`w-9 h-4.5 rounded-full p-0.5 transition-colors flex items-center cursor-pointer ${
-          isDynamic ? "bg-indigo-600 justify-end" : "bg-slate-300 justify-start"
-        }`}
+        className={`w-9 h-4.5 rounded-full p-0.5 transition-colors flex items-center cursor-pointer ${isDynamic ? "bg-indigo-600 justify-end" : "bg-slate-300 justify-start"
+          }`}
       >
         <div className="w-3.5 h-3.5 bg-white rounded-full shadow-md" />
       </button>
@@ -235,9 +234,8 @@ function CyanToggleSwitch({ checked, onChange, label = "" }) {
   return (
     <div className="flex items-center gap-2.5 select-none cursor-pointer" onClick={() => onChange(!checked)}>
       {label && <span className={`text-xs font-bold ${checked ? "text-slate-800" : "text-slate-400"}`}>{label}</span>}
-      <div className={`w-9 h-4.5 rounded-full p-0.5 transition-colors flex items-center ${
-        checked ? "bg-indigo-600 justify-end" : "bg-slate-300 justify-start"
-      }`}>
+      <div className={`w-9 h-4.5 rounded-full p-0.5 transition-colors flex items-center ${checked ? "bg-indigo-600 justify-end" : "bg-slate-300 justify-start"
+        }`}>
         <div className="w-3.5 h-3.5 bg-white rounded-full shadow-md" />
       </div>
     </div>
@@ -378,7 +376,7 @@ function CallConfigTab({ config, loading, onRefresh }) {
 
       {/* SECTION 1: Silence Handling */}
       <div className="bg-white border border-slate-200 rounded-2xl overflow-hidden shadow-sm">
-        <div 
+        <div
           onClick={() => setOpenSilence(!openSilence)}
           className="flex items-center justify-between px-6 py-4 bg-slate-50/80 border-b border-slate-200 cursor-pointer select-none hover:bg-slate-100/60 transition-colors"
         >
@@ -418,14 +416,14 @@ function CallConfigTab({ config, loading, onRefresh }) {
             {/* Idle messages heading */}
             <div>
               <div className="text-xs font-bold tracking-wide uppercase text-slate-500 mb-4">Idle messages (what the agent says)</div>
-              
+
               {/* First Idle Message */}
               <div className="space-y-2 mb-5">
                 <div className="flex items-center justify-between">
                   <span className="text-xs font-bold text-slate-800">First idle message</span>
-                  <ModeSwitch 
-                    isDynamic={formData.first_idle_dynamic} 
-                    onChange={val => handleChange('first_idle_dynamic', val)} 
+                  <ModeSwitch
+                    isDynamic={formData.first_idle_dynamic}
+                    onChange={val => handleChange('first_idle_dynamic', val)}
                   />
                 </div>
                 <p className="text-[0.7rem] text-slate-500">Generated live in the ongoing language if the caller is silent for {formData.user_idle_threshold_sec} seconds.</p>
@@ -443,9 +441,9 @@ function CallConfigTab({ config, loading, onRefresh }) {
               <div className="space-y-2 mb-5">
                 <div className="flex items-center justify-between">
                   <span className="text-xs font-bold text-slate-800">Second idle message</span>
-                  <ModeSwitch 
-                    isDynamic={formData.second_idle_dynamic} 
-                    onChange={val => handleChange('second_idle_dynamic', val)} 
+                  <ModeSwitch
+                    isDynamic={formData.second_idle_dynamic}
+                    onChange={val => handleChange('second_idle_dynamic', val)}
                   />
                 </div>
                 <p className="text-[0.7rem] text-slate-500">Generated live in the ongoing language if the caller stays silent another {formData.user_idle_threshold_sec} seconds.</p>
@@ -478,7 +476,7 @@ function CallConfigTab({ config, loading, onRefresh }) {
 
       {/* SECTION 2: End Call Rules */}
       <div className="bg-white border border-slate-200 rounded-2xl overflow-hidden shadow-sm">
-        <div 
+        <div
           onClick={() => setOpenEndCall(!openEndCall)}
           className="flex items-center justify-between px-6 py-4 bg-slate-50/80 border-b border-slate-200 cursor-pointer select-none hover:bg-slate-100/60 transition-colors"
         >
@@ -523,9 +521,9 @@ function CallConfigTab({ config, loading, onRefresh }) {
                 <label className="block text-xs font-bold text-slate-800 mb-0.5">Enable Automatic Call Ending</label>
                 <p className="text-[0.72rem] text-slate-500">Allow your agent to automatically end calls based on specific conditions</p>
               </div>
-              <CyanToggleSwitch 
-                checked={formData.is_end_call_enabled} 
-                onChange={val => handleChange('is_end_call_enabled', val)} 
+              <CyanToggleSwitch
+                checked={formData.is_end_call_enabled}
+                onChange={val => handleChange('is_end_call_enabled', val)}
                 label={formData.is_end_call_enabled ? "Enabled" : "Disabled"}
               />
             </div>
@@ -533,7 +531,7 @@ function CallConfigTab({ config, loading, onRefresh }) {
             {/* End Call Settings */}
             <div className="space-y-4">
               <div className="text-xs font-bold text-slate-500 uppercase">End Call Settings</div>
-              
+
               <div>
                 <label className="block text-xs font-bold text-slate-800 mb-1">End Call Condition *</label>
                 <input
@@ -562,7 +560,7 @@ function CallConfigTab({ config, loading, onRefresh }) {
 
       {/* SECTION 3: Response & Ambient Noise */}
       <div className="bg-white border border-slate-200 rounded-2xl overflow-hidden shadow-sm">
-        <div 
+        <div
           onClick={() => setOpenResponse(!openResponse)}
           className="flex items-center justify-between px-6 py-4 bg-slate-50/80 border-b border-slate-200 cursor-pointer select-none hover:bg-slate-100/60 transition-colors"
         >
@@ -597,9 +595,9 @@ function CallConfigTab({ config, loading, onRefresh }) {
                   <label className="block text-xs font-bold text-slate-800 mb-0.5">Initial Ringing Sound</label>
                   <p className="text-[0.72rem] text-slate-500">Play ring tone before agent speaks first word</p>
                 </div>
-                <CyanToggleSwitch 
-                  checked={formData.initial_ringing_sound_enabled} 
-                  onChange={val => handleChange('initial_ringing_sound_enabled', val)} 
+                <CyanToggleSwitch
+                  checked={formData.initial_ringing_sound_enabled}
+                  onChange={val => handleChange('initial_ringing_sound_enabled', val)}
                 />
               </div>
             </div>
@@ -608,9 +606,9 @@ function CallConfigTab({ config, loading, onRefresh }) {
               <div className="space-y-3">
                 <div className="flex items-center justify-between">
                   <label className="block text-xs font-bold text-slate-800">Background Ambient Noise</label>
-                  <CyanToggleSwitch 
-                    checked={formData.background_noise_enabled} 
-                    onChange={val => handleChange('background_noise_enabled', val)} 
+                  <CyanToggleSwitch
+                    checked={formData.background_noise_enabled}
+                    onChange={val => handleChange('background_noise_enabled', val)}
                   />
                 </div>
                 {formData.background_noise_enabled && (
@@ -641,9 +639,9 @@ function CallConfigTab({ config, loading, onRefresh }) {
               <div className="space-y-3">
                 <div className="flex items-center justify-between">
                   <label className="block text-xs font-bold text-slate-800">Voicemail Detection</label>
-                  <CyanToggleSwitch 
-                    checked={formData.voicemail_enabled} 
-                    onChange={val => handleChange('voicemail_enabled', val)} 
+                  <CyanToggleSwitch
+                    checked={formData.voicemail_enabled}
+                    onChange={val => handleChange('voicemail_enabled', val)}
                   />
                 </div>
                 {formData.voicemail_enabled && (
@@ -845,7 +843,7 @@ function PostCallTab({ configs, loading, onRefresh }) {
 
   const [deliveryMethod, setDeliveryMethod] = useState(() => initialConfig.delivery_method || 'webhook')
   const [destination, setDestination] = useState(() => initialConfig.destination || initialConfig.webhook_url || '')
-  
+
   const [selectedStatuses, setSelectedStatuses] = useState(() => {
     const list = initialConfig.trigger_call_statuses || initialConfig.trigger_statuses || initialConfig.call_statuses
     return Array.isArray(list) && list.length > 0 ? list.map(s => String(s).toLowerCase()) : ['completed']
@@ -1047,11 +1045,10 @@ function PostCallTab({ configs, loading, onRefresh }) {
                     type="button"
                     key={id}
                     onClick={() => toggleStatus(id)}
-                    className={`rounded-full border px-4 py-1.5 text-xs font-semibold tracking-wide transition-all cursor-pointer ${
-                      isSelected
+                    className={`rounded-full border px-4 py-1.5 text-xs font-semibold tracking-wide transition-all cursor-pointer ${isSelected
                         ? 'border-indigo-600 bg-indigo-600 text-white font-bold shadow-md shadow-indigo-600/20'
                         : 'border-slate-200 bg-slate-50 text-slate-600 hover:border-slate-300 hover:text-indigo-600'
-                    }`}
+                      }`}
                   >
                     {label}
                   </button>
@@ -1072,15 +1069,13 @@ function PostCallTab({ configs, loading, onRefresh }) {
                   <div
                     key={field}
                     onClick={() => toggleInclude(field)}
-                    className={`rounded-xl border p-4 flex items-start gap-3.5 transition-all cursor-pointer ${
-                      checked
+                    className={`rounded-xl border p-4 flex items-start gap-3.5 transition-all cursor-pointer ${checked
                         ? 'border-indigo-400 bg-indigo-50/50 shadow-sm'
                         : 'border-slate-200 bg-slate-50/60 hover:border-slate-300'
-                    }`}
+                      }`}
                   >
-                    <div className={`mt-0.5 h-4 w-4 rounded border flex items-center justify-center shrink-0 transition-colors ${
-                      checked ? 'border-indigo-600 bg-indigo-600 text-white' : 'border-slate-300 bg-white'
-                    }`}>
+                    <div className={`mt-0.5 h-4 w-4 rounded border flex items-center justify-center shrink-0 transition-colors ${checked ? 'border-indigo-600 bg-indigo-600 text-white' : 'border-slate-300 bg-white'
+                      }`}>
                       {checked && <CheckCircle2 size={12} strokeWidth={3} />}
                     </div>
                     <div>
@@ -1268,52 +1263,52 @@ function RecentCallsTab({ calls, loading, onViewDetails }) {
             const isOutbound = dirStr.includes('outbound') || dirStr.includes('outgoing');
             const badgeColor = isCompleted ? 'border-emerald-200 bg-emerald-50 text-emerald-600' : 'border-rose-200 bg-rose-50 text-rose-600';
 
-          return (
-            <motion.div
-              initial={{ opacity: 0, y: 10 }}
-              animate={{ opacity: 1, y: 0 }}
-              transition={{ delay: idx * 0.05 }}
-              key={call.id || idx}
-              onClick={() => onViewDetails && onViewDetails(call.id)}
-              className="bg-white border border-slate-200 rounded-2xl p-4 flex items-center gap-4 text-sm text-slate-600 hover:border-indigo-300 hover:shadow-md transition-all cursor-pointer group"
-            >
-              {/* Icon */}
-              <div className="flex-shrink-0 w-10 h-10 rounded-full bg-indigo-50 border border-indigo-100 flex items-center justify-center group-hover:scale-110 transition-transform">
-                <Phone size={16} className="text-indigo-500" />
-              </div>
+            return (
+              <motion.div
+                initial={{ opacity: 0, y: 10 }}
+                animate={{ opacity: 1, y: 0 }}
+                transition={{ delay: idx * 0.05 }}
+                key={call.id || idx}
+                onClick={() => onViewDetails && onViewDetails(call.id)}
+                className="bg-white border border-slate-200 rounded-2xl p-4 flex items-center gap-4 text-sm text-slate-600 hover:border-indigo-300 hover:shadow-md transition-all cursor-pointer group"
+              >
+                {/* Icon */}
+                <div className="flex-shrink-0 w-10 h-10 rounded-full bg-indigo-50 border border-indigo-100 flex items-center justify-center group-hover:scale-110 transition-transform">
+                  <Phone size={16} className="text-indigo-500" />
+                </div>
 
-              {/* Info Column */}
-              <div className="flex flex-col flex-1 gap-1">
-                <div className="flex items-center gap-3">
-                  <span className={`text-[0.6rem] uppercase font-bold px-2 py-0.5 rounded-full flex items-center gap-1 ${isOutbound ? 'bg-orange-50 text-orange-600 border border-orange-200' : 'bg-blue-50 text-blue-600 border border-blue-200'}`}>
-                    {isOutbound ? <ArrowUpRight size={10} strokeWidth={3} /> : <ArrowDownLeft size={10} strokeWidth={3} />}
-                    {isOutbound ? 'Outbound' : 'Inbound'}
-                  </span>
-                  <span className="text-slate-800 font-bold tracking-wide text-[15px] flex items-center gap-2">
-                    {call.candidate_id && <span className="bg-slate-100 text-slate-500 px-1.5 py-0.5 rounded text-[0.65rem] border border-slate-200">{call.candidate_id}</span>}
-                    {call.candidate_name || call.user_name || call.name || call.from_number || '+Unknown'} <span className="text-slate-400 mx-1 font-normal">→</span> {call.to_number || '+Unknown'}
-                  </span>
+                {/* Info Column */}
+                <div className="flex flex-col flex-1 gap-1">
+                  <div className="flex items-center gap-3">
+                    <span className={`text-[0.6rem] uppercase font-bold px-2 py-0.5 rounded-full flex items-center gap-1 ${isOutbound ? 'bg-orange-50 text-orange-600 border border-orange-200' : 'bg-blue-50 text-blue-600 border border-blue-200'}`}>
+                      {isOutbound ? <ArrowUpRight size={10} strokeWidth={3} /> : <ArrowDownLeft size={10} strokeWidth={3} />}
+                      {isOutbound ? 'Outbound' : 'Inbound'}
+                    </span>
+                    <span className="text-slate-800 font-bold tracking-wide text-[15px] flex items-center gap-2">
+                      {call.candidate_id && <span className="bg-slate-100 text-slate-500 px-1.5 py-0.5 rounded text-[0.65rem] border border-slate-200">{call.candidate_id}</span>}
+                      {call.candidate_name || call.user_name || call.name || call.from_number || '+Unknown'} <span className="text-slate-400 mx-1 font-normal">→</span> {call.to_number || '+Unknown'}
+                    </span>
+                  </div>
+                  <div className="flex items-center gap-2 text-slate-500 text-xs font-medium">
+                    <span>{formatDate(call.time_of_call)}</span>
+                    <span className="text-slate-300">•</span>
+                    <span className="font-mono bg-slate-100 px-1.5 rounded text-slate-600">{formatDuration(call.call_duration)}</span>
+                  </div>
                 </div>
-                <div className="flex items-center gap-2 text-slate-500 text-xs font-medium">
-                  <span>{formatDate(call.time_of_call)}</span>
-                  <span className="text-slate-300">•</span>
-                  <span className="font-mono bg-slate-100 px-1.5 rounded text-slate-600">{formatDuration(call.call_duration)}</span>
-                </div>
-              </div>
 
-              {/* Right Column */}
-              <div className="flex flex-col items-end gap-2 ml-auto">
-                <div className="flex items-center gap-2 bg-slate-50 border border-slate-200 px-2.5 py-1 rounded-md text-[0.7rem] text-slate-500 font-bold font-mono">
-                  ID: #{call.id}
-                  <Copy size={12} className="cursor-pointer hover:text-indigo-600 transition-colors" />
+                {/* Right Column */}
+                <div className="flex flex-col items-end gap-2 ml-auto">
+                  <div className="flex items-center gap-2 bg-slate-50 border border-slate-200 px-2.5 py-1 rounded-md text-[0.7rem] text-slate-500 font-bold font-mono">
+                    ID: #{call.id}
+                    <Copy size={12} className="cursor-pointer hover:text-indigo-600 transition-colors" />
+                  </div>
+                  <div className={`px-2 py-0.5 rounded border text-[0.65rem] uppercase font-bold tracking-widest ${badgeColor}`}>
+                    {call.call_status || 'unknown'}
+                  </div>
                 </div>
-                <div className={`px-2 py-0.5 rounded border text-[0.65rem] uppercase font-bold tracking-widest ${badgeColor}`}>
-                  {call.call_status || 'unknown'}
-                </div>
-              </div>
-            </motion.div>
-          )
-        }))}
+              </motion.div>
+            )
+          }))}
       </div>
     </div>
   )
@@ -1344,7 +1339,7 @@ export default function AICallingAgentPage() {
 
   // Manual dialer state
   const [manualCall, setManualCall] = useState({ phone: '', name: '', jobDesc: '', resume: null })
-  const [phoneError, setPhoneError] = useState('')
+  const [candidateResumeInfo, setCandidateResumeInfo] = useState(null)
   const [isCalling, setIsCalling] = useState(false)
   const [availableJobs, setAvailableJobs] = useState([])
   const [selectedJob, setSelectedJob] = useState(null)
@@ -1528,14 +1523,14 @@ export default function AICallingAgentPage() {
   return (
     <div className="w-full max-w-[1400px] mx-auto p-4 sm:p-6 lg:p-8 pb-24 relative">
       {/* Header */}
-      <motion.div 
+      <motion.div
         initial={{ opacity: 0, y: -20 }}
         animate={{ opacity: 1, y: 0 }}
         transition={{ duration: 0.6, ease: "easeOut" }}
         className="flex flex-col sm:flex-row sm:items-end justify-between gap-4 mb-8 relative z-10"
       >
         <div>
-          <motion.div 
+          <motion.div
             initial={{ opacity: 0, scale: 0.9 }}
             animate={{ opacity: 1, scale: 1 }}
             transition={{ delay: 0.2 }}
@@ -1543,7 +1538,7 @@ export default function AICallingAgentPage() {
           >
             <Radio size={14} className="animate-pulse" /> Omni Dimension Integration
           </motion.div>
-          <motion.h1 
+          <motion.h1
             initial={{ opacity: 0, x: -20 }}
             animate={{ opacity: 1, x: 0 }}
             transition={{ delay: 0.3 }}
@@ -1551,7 +1546,7 @@ export default function AICallingAgentPage() {
           >
             AI Calling Agent
           </motion.h1>
-          <motion.p 
+          <motion.p
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
             transition={{ delay: 0.4 }}
@@ -1572,7 +1567,7 @@ export default function AICallingAgentPage() {
       </motion.div>
 
       {/* Light card wrapping tabs + content */}
-      <motion.div 
+      <motion.div
         initial={{ opacity: 0, y: 40 }}
         animate={{ opacity: 1, y: 0 }}
         transition={{ delay: 0.5, duration: 0.7, ease: [0.22, 1, 0.36, 1] }}
@@ -1584,11 +1579,10 @@ export default function AICallingAgentPage() {
             <button
               key={id}
               onClick={() => setActiveTab(id)}
-              className={`relative flex items-center gap-2 px-5 py-3 text-sm font-bold rounded-t-xl transition-colors whitespace-nowrap outline-none ${
-                activeTab === id
+              className={`relative flex items-center gap-2 px-5 py-3 text-sm font-bold rounded-t-xl transition-colors whitespace-nowrap outline-none ${activeTab === id
                   ? 'text-indigo-700'
                   : 'text-slate-500 hover:text-slate-800 hover:bg-slate-50'
-              }`}
+                }`}
             >
               <span className="relative z-10 flex items-center gap-2">{icon} {label}</span>
               {activeTab === id && (
@@ -1741,7 +1735,7 @@ export default function AICallingAgentPage() {
                       <div className="flex items-center justify-between mb-2">
                         <label className="block text-[0.7rem] font-bold uppercase tracking-wider text-slate-500">Job Description</label>
                         <div className="flex gap-2">
-                           {availableJobs && availableJobs.length > 0 && (
+                          {availableJobs && availableJobs.length > 0 && (
                             <select
                               className="bg-indigo-50 border border-indigo-100 text-[0.7rem] font-bold text-indigo-700 rounded-lg px-2 py-1 outline-none focus:border-indigo-500 cursor-pointer"
                               onChange={async (e) => {
@@ -1788,7 +1782,10 @@ export default function AICallingAgentPage() {
                               onChange={(e) => {
                                 const appObjId = e.target.value;
                                 setSelectedApplicationId(appObjId);
-                                if (!appObjId) return;
+                                if (!appObjId) {
+                                  setCandidateResumeInfo(null);
+                                  return;
+                                }
                                 const candidate = availableCandidates.find(c => (c._id || c.id) === appObjId);
                                 if (candidate) {
                                   const jobTitle = selectedJob ? selectedJob.title : '';
@@ -1798,12 +1795,23 @@ export default function AICallingAgentPage() {
 
                                   const desc = `Role: ${jobTitle}\nExperience: ${jobExp || ''}\nSkills: ${jobSkills || ''}\n\nCandidate Name: ${candidate.name || ''}\nCandidate Email: ${candidate.email || ''}\nCandidate Phone: ${candidate.phone || ''}\nCandidate Resume: ${candidate.resume_text || candidate.resume_url || ''}\n\nJob Description:\n${jobDescription || ''}`;
 
-                                  setManualCall({
+                                  setManualCall(prev => ({
+                                    ...prev,
                                     phone: candidate.phone || '',
                                     name: candidate.name || '',
                                     jobDesc: desc,
                                     resume: null
-                                  });
+                                  }));
+
+                                  if (candidate.resume_url || candidate.resume_filename || candidate.resume_text) {
+                                    setCandidateResumeInfo({
+                                      name: candidate.resume_filename || (candidate.resume_url ? candidate.resume_url.split('/').pop() : 'Application Resume'),
+                                      url: candidate.resume_url,
+                                      hasText: !!candidate.resume_text
+                                    });
+                                  } else {
+                                    setCandidateResumeInfo(null);
+                                  }
                                 }
                                 e.target.value = "";
                               }}
@@ -1825,32 +1833,65 @@ export default function AICallingAgentPage() {
                     </div>
                     <div>
                       <div className="flex justify-between items-end mb-2">
-                        <label className="block text-[0.7rem] font-bold uppercase tracking-wider text-slate-500">Resume (PDF/DOCX)</label>
-                        {manualCall.resume && (
-                          <button onClick={() => setManualCall({...manualCall, resume: null})} className="text-xs text-red-500 hover:text-red-700 font-bold flex items-center gap-1 transition-colors"><X size={12}/> Remove</button>
+                        <label className="block text-[0.7rem] font-bold uppercase tracking-wider text-slate-500">
+                          Resume (PDF/DOCX)
+                        </label>
+                        {(manualCall.resume || candidateResumeInfo) && (
+                          <button
+                            type="button"
+                            onClick={() => {
+                              setManualCall({ ...manualCall, resume: null });
+                              setCandidateResumeInfo(null);
+                            }}
+                            className="text-xs text-red-500 hover:text-red-700 font-bold flex items-center gap-1 transition-colors"
+                          >
+                            <X size={12} /> Remove
+                          </button>
                         )}
                       </div>
-                      {!manualCall.resume ? (
-                        <input
-                          type="file" accept=".pdf,.doc,.docx"
-                          onChange={e => setManualCall({ ...manualCall, resume: e.target.files[0] })}
-                          className="w-full px-4 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-sm text-slate-500 file:mr-4 file:py-2 file:px-4 file:rounded-lg file:border-0 file:text-[0.7rem] file:font-bold file:uppercase file:tracking-wider file:bg-indigo-100 file:text-indigo-700 hover:file:bg-indigo-200 cursor-pointer transition-all focus:outline-none focus:ring-2 focus:ring-indigo-500/20"
-                        />
-                      ) : (
+
+                      {manualCall.resume ? (
                         <div className="w-full px-4 py-2.5 bg-indigo-50 border border-indigo-200 rounded-xl text-sm text-indigo-700 font-semibold flex items-center justify-between">
                           <div className="flex items-center gap-2 overflow-hidden">
-                            <FileText size={16} className="shrink-0" /> 
+                            <FileText size={16} className="shrink-0 text-indigo-600" />
                             <span className="truncate">{manualCall.resume.name}</span>
                           </div>
                           <label className="text-xs text-indigo-600 hover:text-indigo-800 cursor-pointer font-bold px-2 py-1 hover:bg-indigo-100 rounded-md transition-colors">
                             Replace
                             <input
-                              type="file" accept=".pdf,.doc,.docx"
+                              type="file"
+                              accept=".pdf,.doc,.docx"
                               onChange={e => setManualCall({ ...manualCall, resume: e.target.files[0] })}
                               className="hidden"
                             />
                           </label>
                         </div>
+                      ) : candidateResumeInfo ? (
+                        <div className="w-full px-4 py-2.5 bg-teal-50 border border-teal-200 rounded-xl text-sm text-teal-800 font-semibold flex items-center justify-between">
+                          <div className="flex items-center gap-2 overflow-hidden">
+                            <FileText size={16} className="shrink-0 text-teal-600" />
+                            <span className="truncate">{candidateResumeInfo.name}</span>
+                            <span className="text-[0.65rem] font-bold uppercase px-2 py-0.5 bg-teal-100 text-teal-700 rounded-full shrink-0">
+                              Auto-attached from Candidate
+                            </span>
+                          </div>
+                          <label className="text-xs text-teal-700 hover:text-teal-900 cursor-pointer font-bold px-2 py-1 hover:bg-teal-100 rounded-md transition-colors">
+                            Upload Different
+                            <input
+                              type="file"
+                              accept=".pdf,.doc,.docx"
+                              onChange={e => setManualCall({ ...manualCall, resume: e.target.files[0] })}
+                              className="hidden"
+                            />
+                          </label>
+                        </div>
+                      ) : (
+                        <input
+                          type="file"
+                          accept=".pdf,.doc,.docx"
+                          onChange={e => setManualCall({ ...manualCall, resume: e.target.files[0] })}
+                          className="w-full px-4 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-sm text-slate-500 file:mr-4 file:py-2 file:px-4 file:rounded-lg file:border-0 file:text-[0.7rem] file:font-bold file:uppercase file:tracking-wider file:bg-indigo-100 file:text-indigo-700 hover:file:bg-indigo-200 cursor-pointer transition-all focus:outline-none focus:ring-2 focus:ring-indigo-500/20"
+                        />
                       )}
                     </div>
                     <div className="pt-4 flex justify-end">

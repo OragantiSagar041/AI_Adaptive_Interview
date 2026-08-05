@@ -110,6 +110,8 @@ export default function LiveMonitorStreamModal({ isOpen, onClose, session }) {
    *  (b) by the user clicking "Force Retry Connection"
    *  (c) automatically after STREAM_TIMEOUT_MS if no track has arrived
    */
+  const sendOfferRef = useRef(null)
+
   const sendOffer = useCallback(async (ws) => {
     // Tear down any existing peer connection
     clearTimeout(streamTimeoutRef.current)
@@ -157,13 +159,12 @@ export default function LiveMonitorStreamModal({ isOpen, onClose, session }) {
       if (mountedRef.current) setStatus('negotiating')
 
       // If no video track arrives within 8 s, retry the offer automatically.
-      // Use statusRef instead of `status` state to avoid stale-closure misfires:
-      // the closure here captures statusRef.current at the time the timeout fires,
-      // not at the time sendOffer was called.
       streamTimeoutRef.current = setTimeout(() => {
         if (mountedRef.current && statusRef.current !== 'streaming') {
           console.warn('[AdminWebRTC] No stream in 8 s — retrying offer...')
-          sendOffer(ws)
+          if (sendOfferRef.current) {
+            sendOfferRef.current(ws)
+          }
         }
       }, 8000)
 
@@ -171,7 +172,11 @@ export default function LiveMonitorStreamModal({ isOpen, onClose, session }) {
       console.error('[AdminWebRTC] sendOffer error:', err)
       if (mountedRef.current) setStatus('error')
     }
-  }, [])  // no `status` dep — reads via statusRef to avoid stale closures
+  }, [])
+
+  useEffect(() => {
+    sendOfferRef.current = sendOffer
+  }, [sendOffer])
 
   useEffect(() => {
     if (!isOpen || !session) return

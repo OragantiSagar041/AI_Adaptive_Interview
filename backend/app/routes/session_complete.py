@@ -243,17 +243,23 @@ def complete_session(
                                 admin = admins_collection.find_one({"_id": ObjectId(admin_id)})
                                 if admin: 
                                     admin_email = admin.get("email", "")
-                                    admin_company_id = admin.get("company_id")
+                                    admin_company_id = str(admin.get("company_id") or "")
+                                    admin_role = admin.get("role", "admin")
+                                    is_super = admin_role in ["super_admin", "superadmin"]
                                     notifications_collection.insert_one({
                                         "title": "Interview Complete",
                                         "message": f"Candidate '{candidate_name}' has completed their interview. Avg score: {round(avg_score, 1)}/10.",
                                         "type": "candidate",
-                                        "recipient_role": "admin",
+                                        "recipient_role": "superadmin" if is_super else "admin",
+                                        "recipient_id": str(admin_id),
+                                        "admin_id": str(admin_id),
+                                        "interview_id": str(interview_id),
                                         "company_id": admin_company_id,
                                         "read": False,
                                         "created_at": datetime.now(timezone.utc).isoformat()
                                     })
-                            except: pass
+                            except Exception as notif_e:
+                                logger.warning(f"Failed to insert completion notification: {notif_e}")
                             
                         if candidate_email:
                             send_submission_notification(

@@ -49,7 +49,7 @@ import { Badge } from '../ui/badge'
 import { Button } from '../ui/button'
 import logoImage from '../../assets/logo.png'
 import finalLogo from '../../assets/final.png'
-import { logout, loadSuperAdminProfile } from '../../store/slices/authSlice'
+import { logout, loadSuperAdminProfile, updateAdminUser } from '../../store/slices/authSlice'
 import { persistor } from '../../store/store'
 import AdminCopilot from '../admin/copilot/AdminCopilot'
 import {
@@ -137,11 +137,45 @@ export default function SuperAdminLayout() {
 
   useEffect(() => {
     if (token) {
+      dispatch(loadSuperAdminProfile())
       fetchNotifications()
       const interval = setInterval(fetchNotifications, 30000)
       return () => clearInterval(interval)
     }
-  }, [token])
+  }, [token, dispatch])
+
+  // Real-time WebSocket profile synchronization for Super Admin
+  useEffect(() => {
+    if (!token || !API_BASE_URL) return
+
+    const wsUrl = API_BASE_URL.replace(/^http/, 'ws') + `/ws/dashboard?token=${encodeURIComponent(token)}`
+    const ws = new WebSocket(wsUrl)
+
+    ws.onmessage = (event) => {
+      try {
+        const data = JSON.parse(event.data)
+        if (data.type === 'profile_update') {
+          const currentAdminId = adminUser?.admin_id || adminUser?.id || adminUser?._id
+          const currentCompanyId = adminUser?.company_id
+
+          const isMatchingAdmin = data.admin_id && String(data.admin_id) === String(currentAdminId)
+          const isMatchingTenant = data.company_id && currentCompanyId && String(data.company_id) === String(currentCompanyId)
+
+          if (isMatchingAdmin || isMatchingTenant) {
+            const { admin_id, company_id, type, ...fieldsToUpdate } = data
+            dispatch(updateAdminUser(fieldsToUpdate))
+          }
+          window.dispatchEvent(new CustomEvent('superadmin_profile_updated', { detail: data }))
+        }
+      } catch (err) {
+        console.error('Error parsing superadmin ws message:', err)
+      }
+    }
+
+    return () => {
+      ws.close()
+    }
+  }, [dispatch, token, API_BASE_URL, adminUser, role])
 
   // Lock document-level scroll so only the inner <main> scrolls, not the page
   useEffect(() => {

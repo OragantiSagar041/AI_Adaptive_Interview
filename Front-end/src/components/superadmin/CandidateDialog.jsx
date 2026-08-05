@@ -9,7 +9,7 @@ import {
   Mail, Phone, MapPin, Building2, IndianRupee, Clock, Download,
   Play, FileText, Sparkles, Star, Check, X, Calendar, Send,
   MessageSquare, Video, Scale, Loader2, AlertCircle, Monitor,
-  Mic, ShieldAlert, Eye, ChevronRight, Code
+  Mic, ShieldAlert, Eye, ChevronRight, Code, UserCheck, User
 } from "lucide-react"
 import { jsPDF } from 'jspdf'
 
@@ -583,6 +583,15 @@ export default function CandidateDialog({ candidate, open, onOpenChange, onStatu
                       {isQualified ? 'Qualified' : 'Rejected'}
                     </span>
                     <span className="text-xs font-medium text-slate-400">ID: {candidate.link_id || candidate.id}</span>
+                    {(c.decision_by_name || c.last_action_by_name) && (
+                      <span className="flex items-center gap-1.5 text-xs font-semibold text-slate-700 bg-white px-2.5 py-1 rounded-md border border-slate-200 shadow-xs" title={`Action taken by ${c.decision_by_name || c.last_action_by_name} (${c.decision_by_role || c.last_action_by_role || 'Admin'})`}>
+                        <UserCheck size={13} className="text-indigo-600" />
+                        Decision by: <strong className="text-indigo-700">{c.decision_by_name || c.last_action_by_name}</strong>
+                        {(c.decision_by_role || c.last_action_by_role) && (
+                          <span className="text-[10px] text-slate-400 font-bold uppercase">({c.decision_by_role || c.last_action_by_role})</span>
+                        )}
+                      </span>
+                    )}
                     {c.started_at && (
                       <span className="flex items-center gap-1 text-xs font-medium text-slate-500 bg-slate-100/50 px-2.5 py-1 rounded-md border border-slate-200/50">
                         <Calendar size={13} className="text-slate-400" /> Attended: {new Date(c.started_at).toLocaleString('en-US', { month: 'short', day: 'numeric', year: 'numeric', hour: 'numeric', minute: '2-digit', hour12: true })}

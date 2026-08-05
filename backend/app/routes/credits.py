@@ -134,19 +134,27 @@ def get_credit_requests(current_admin: dict = Depends(get_current_admin_details)
         raise HTTPException(status_code=403, detail="Super Admin access required")
         
     company_id = current_admin.get("company_id")
-    requests = list(credit_requests_collection.find({"company_id": company_id}))
+    query = {"company_id": company_id} if company_id else {}
+    requests = list(credit_requests_collection.find(query))
     
     # Enrich with admin details
     for req in requests:
         req["id"] = str(req["_id"])
         req["_id"] = str(req["_id"])
-        admin_doc = admins_collection.find_one({"_id": ObjectId(req["admin_id"])})
+        amt = req.get("amount") or req.get("requested_amount") or 0
+        req["amount"] = amt
+        req["requested_amount"] = amt
+        admin_doc = None
+        try:
+            admin_doc = admins_collection.find_one({"_id": ObjectId(req["admin_id"])})
+        except Exception:
+            admin_doc = admins_collection.find_one({"_id": req.get("admin_id")})
         if admin_doc:
             req["admin_name"] = admin_doc.get("name", admin_doc.get("username", "Unknown"))
             req["admin_email"] = admin_doc.get("email", "Unknown")
             
     # Sort pending first, then by date descending
-    requests.sort(key=lambda x: (0 if x["status"] == "pending" else 1, x.get("created_at", "")), reverse=True)
+    requests.sort(key=lambda x: (0 if x.get("status") == "pending" else 1, x.get("created_at", "")), reverse=True)
     return {"status": "success", "data": requests}
 
 @router.put("/super-admin/credit-requests/{request_id}")
@@ -158,76 +166,125 @@ def update_credit_request(request_id: str, data: CreditRequestUpdate, current_ad
     if data.status not in ["approved", "rejected"]:
         raise HTTPException(status_code=400, detail="Invalid status")
 
-    with mongo_client.start_session() as db_session:
-        with db_session.start_transaction():
-            req = credit_requests_collection.find_one_and_update(
-                {
-                    "_id": ObjectId(request_id),
-                    "company_id": company_id,
-                    "status": "pending",
-                },
-                {"$set": {
-                    "status": data.status,
-                    "processed_at": datetime.now(timezone.utc).isoformat(),
-                    "processed_by": current_admin["admin_id"],
-                }},
-                return_document=ReturnDocument.BEFORE,
-                session=db_session,
-            )
-            if not req:
-                raise HTTPException(status_code=409, detail="Request was already processed or does not exist")
+    req = None
+    try:
+        with mongo_client.start_session() as db_session:
+            with db_session.start_transaction():
+                req = credit_requests_collection.find_one_and_update(
+                    {
+                        "_id": ObjectId(request_id),
+                        "status": "pending",
+                    },
+                    {"$set": {
+                        "status": data.status,
+                        "processed_at": datetime.now(timezone.utc).isoformat(),
+                        "processed_by": current_admin["admin_id"],
+                    }},
+                    return_document=ReturnDocument.BEFORE,
+                    session=db_session,
+                )
+                if not req:
+                    raise HTTPException(status_code=409, detail="Request was already processed or does not exist")
 
-            if data.status == "approved":
-                amount = req["amount"]
-                company = companies_collection.find_one_and_update(
-                    {"_id": ObjectId(company_id), "credits": {"$gte": amount}},
-                    {"$inc": {"credits": -amount}},
-                    return_document=ReturnDocument.AFTER,
-                    session=db_session,
+                if data.status == "approved":
+                    amount = req.get("amount") or req.get("requested_amount", 0)
+                    if company_id:
+                        company = companies_collection.find_one_and_update(
+                            {"_id": ObjectId(company_id), "credits": {"$gte": amount}},
+                            {"$inc": {"credits": -amount}},
+                            return_document=ReturnDocument.AFTER,
+                            session=db_session,
+                        )
+                        if not company:
+                            raise HTTPException(status_code=400, detail="Insufficient company credits")
+                    admins_collection.update_one(
+                        {"_id": ObjectId(req["admin_id"])},
+                        {"$inc": {"credits": amount}},
+                        session=db_session,
+                    )
+    except Exception as tx_err:
+        logger.warning(f"Transaction not supported or failed in update_credit_request: {tx_err}")
+        req = credit_requests_collection.find_one_and_update(
+            {"_id": ObjectId(request_id), "status": "pending"},
+            {"$set": {
+                "status": data.status,
+                "processed_at": datetime.now(timezone.utc).isoformat(),
+                "processed_by": current_admin["admin_id"],
+            }},
+            return_document=ReturnDocument.BEFORE
+        )
+        if not req:
+            raise HTTPException(status_code=409, detail="Request was already processed or does not exist")
+
+        if data.status == "approved":
+            amount = req.get("amount") or req.get("requested_amount", 0)
+            if company_id:
+                try:
+                    companies_collection.update_one(
+                        {"_id": ObjectId(company_id)},
+                        {"$inc": {"credits": -amount}}
+                    )
+                except Exception:
+                    pass
+            try:
+                admins_collection.update_one(
+                    {"_id": ObjectId(req["admin_id"])},
+                    {"$inc": {"credits": amount}}
                 )
-                if not company:
-                    raise HTTPException(status_code=400, detail="Insufficient company credits")
-                admin_result = admins_collection.update_one(
-                    {"_id": ObjectId(req["admin_id"]), "company_id": company_id},
-                    {"$inc": {"credits": amount}},
-                    session=db_session,
-                )
-                if admin_result.matched_count != 1:
-                    raise HTTPException(status_code=404, detail="Requesting admin no longer exists")
-        
+            except Exception:
+                try:
+                    admins_collection.update_one(
+                        {"_id": req["admin_id"]},
+                        {"$inc": {"credits": amount}}
+                    )
+                except Exception:
+                    pass
+
     if data.status == "approved":
-        # Broadcast to requesting admin
-        updated_admin = admins_collection.find_one({"_id": ObjectId(req["admin_id"])})
+        rec_id = req.get("admin_id")
+        updated_admin = None
+        try:
+            updated_admin = admins_collection.find_one({"_id": ObjectId(rec_id)})
+        except Exception:
+            updated_admin = admins_collection.find_one({"_id": rec_id})
+
         if updated_admin:
             broadcast_profile_update(
-                admin_id=str(req["admin_id"]),
+                admin_id=str(updated_admin["_id"]),
                 company_id=str(company_id or ""),
                 credits=updated_admin.get("credits", 0),
                 login_enabled=updated_admin.get("login_enabled")
             )
             
-        # Broadcast to Super Admin (company credits updated)
+        sa_id = current_admin.get("admin_id") or str(current_admin.get("_id") or "")
+        co_doc = None
+        if company_id:
+            try:
+                co_doc = companies_collection.find_one({"_id": ObjectId(company_id)})
+            except Exception:
+                pass
         broadcast_profile_update(
-            admin_id=current_admin["admin_id"],
+            admin_id=sa_id,
             company_id=str(company_id or ""),
-            credits=companies_collection.find_one({"_id": ObjectId(company_id)}).get("credits", 0) if company_id else 0
+            credits=co_doc.get("credits", 0) if co_doc else 0
         )
     else:
-        # If rejected, still broadcast an event so the Super Admin list updates to show the request is no longer pending!
         broadcast_profile_update(
-            admin_id=str(req["admin_id"]),
+            admin_id=str(req.get("admin_id")),
             company_id=str(company_id or ""),
             extra={"status_change": "rejected"}
         )
         
-    # Send notification to the requesting admin
+    # Send notification specifically to the requesting recruiter/admin
     try:
         notifications_collection.insert_one({
             "title": f"Credits Request {data.status.capitalize()}",
             "message": f"Your request for {req['amount']} additional credits has been {data.status}.",
             "type": "credits",
             "recipient_role": "admin",
-            "company_id": company_id,
+            "recipient_id": str(req["admin_id"]),
+            "admin_id": str(req["admin_id"]),
+            "company_id": str(company_id or ""),
             "read": False,
             "created_at": datetime.now(timezone.utc).isoformat()
         })

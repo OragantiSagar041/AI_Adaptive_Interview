@@ -287,12 +287,57 @@ def update_credit_request_alias(request_id: str, data: UpdateCreditRequestSchema
         if data.status == "approved":
             amount = req.get("requested_amount", 0)
             admin_id = req.get("admin_id")
-            admin_doc = admins_collection.find_one({"_id": ObjectId(admin_id)}) if admin_id else None
+            admin_doc = None
+            try:
+                admin_doc = admins_collection.find_one({"_id": ObjectId(admin_id)})
+            except Exception:
+                admin_doc = admins_collection.find_one({"_id": admin_id})
+
             if admin_doc:
                 company_id = admin_doc.get("company_id")
+                updated_co = None
                 if company_id:
-                    companies_collection.update_one({"_id": ObjectId(company_id)}, {"$inc": {"credits": -amount}})
-                admins_collection.update_one({"_id": ObjectId(admin_id)}, {"$inc": {"credits": amount}})
+                    try:
+                        updated_co = companies_collection.find_one_and_update(
+                            {"_id": ObjectId(company_id)},
+                            {"$inc": {"credits": -amount}},
+                            return_document=ReturnDocument.AFTER
+                        )
+                    except Exception:
+                        pass
+                
+                updated_rec = None
+                try:
+                    updated_rec = admins_collection.find_one_and_update(
+                        {"_id": admin_doc["_id"]},
+                        {"$inc": {"credits": amount}},
+                        return_document=ReturnDocument.AFTER
+                    )
+                except Exception:
+                    pass
+
+                # Real-time WebSocket broadcast to Recruiter
+                if updated_rec:
+                    try:
+                        broadcast_profile_update(
+                            admin_id=str(admin_doc["_id"]),
+                            company_id=str(company_id or ""),
+                            credits=updated_rec.get("credits", 0)
+                        )
+                    except Exception as b_err:
+                        print(f"Failed to broadcast recruiter credit update: {b_err}")
+
+                # Real-time WebSocket broadcast to Super Admin
+                if updated_co:
+                    try:
+                        sa_id = current_admin.get("admin_id") or str(current_admin.get("_id") or "")
+                        broadcast_profile_update(
+                            admin_id=sa_id,
+                            company_id=str(company_id or ""),
+                            credits=updated_co.get("credits", 0)
+                        )
+                    except Exception as b_err:
+                        print(f"Failed to broadcast super admin credit update: {b_err}")
                 
         return {"status": "success", "message": f"Request {data.status} successfully"}
     except Exception as e:
@@ -777,6 +822,54 @@ def get_crash_logs(current_admin: dict = Depends(get_current_admin_details)):
         log["_id"] = str(log["_id"])
     return {"status": "success", "logs": logs}
 
+def get_live_super_admin_credits(admin_id: str, company_id: Optional[str] = None) -> int:
+    """Returns the single source of truth credit balance for a Super Admin across companies and admins collections."""
+    if company_id:
+        try:
+            c = companies_collection.find_one({"_id": ObjectId(company_id)}, {"credits": 1})
+            if c and "credits" in c and c["credits"] is not None:
+                return int(c["credits"])
+        except Exception:
+            pass
+        
+        c = companies_collection.find_one({"_id": str(company_id)}, {"credits": 1})
+        if c and "credits" in c and c["credits"] is not None:
+            return int(c["credits"])
+            
+        c = companies_collection.find_one({"company_id": str(company_id)}, {"credits": 1})
+        if c and "credits" in c and c["credits"] is not None:
+            return int(c["credits"])
+
+    a_doc = None
+    if admin_id:
+        try:
+            a_doc = admins_collection.find_one({"_id": ObjectId(admin_id)})
+        except Exception:
+            a_doc = admins_collection.find_one({"_id": str(admin_id)})
+
+    if a_doc:
+        doc_co_id = a_doc.get("company_id")
+        if doc_co_id and str(doc_co_id) != str(company_id):
+            try:
+                c = companies_collection.find_one({"_id": ObjectId(doc_co_id)}, {"credits": 1})
+                if c and "credits" in c and c["credits"] is not None:
+                    return int(c["credits"])
+            except Exception:
+                pass
+            c = companies_collection.find_one({"_id": str(doc_co_id)}, {"credits": 1})
+            if c and "credits" in c and c["credits"] is not None:
+                return int(c["credits"])
+
+        if "credits" in a_doc and a_doc["credits"] is not None:
+            return int(a_doc["credits"])
+
+    if admin_id:
+        c = companies_collection.find_one({"super_admin_id": str(admin_id)}, {"credits": 1})
+        if c and "credits" in c and c["credits"] is not None:
+            return int(c["credits"])
+
+    return 0
+
 @router.get("/api/superadmin/profile")
 @router.get("/superadmin/profile")
 def get_superadmin_profile(current_admin: dict = Depends(get_current_admin_details)):
@@ -787,16 +880,23 @@ def get_superadmin_profile(current_admin: dict = Depends(get_current_admin_detai
         raise HTTPException(status_code=404, detail="Super Admin not found")
     admin_doc["id"] = str(admin_doc["_id"])
     admin_doc["_id"] = str(admin_doc["_id"])
-    if admin_doc.get("company_id"):
-        company = companies_collection.find_one({"_id": ObjectId(admin_doc["company_id"])})
+    
+    company_id = admin_doc.get("company_id") or current_admin.get("company_id")
+    admin_doc["credits"] = get_live_super_admin_credits(current_admin["admin_id"], company_id)
+
+    if company_id:
+        company = None
+        try:
+            company = companies_collection.find_one({"_id": ObjectId(company_id)})
+        except Exception:
+            company = companies_collection.find_one({"_id": str(company_id)})
         if company:
             admin_doc["company_name"] = company.get("name", "")
-            if "credits" in company:
-                admin_doc["credits"] = company["credits"]
+
     plan_context = get_admin_plan_context(admin_doc)
     admin_doc["is_expired"] = plan_context["is_expired"]
     admin_doc["subscription_plan_key"] = plan_context["plan_key"]
-    admin_doc["subscription_plan"] = plan_context["plan_label"]
+    admin_doc["subscription_plan"] = plan_label = plan_context["plan_label"]
     admin_doc["plan_features"] = plan_context["features"]
     return admin_doc
 

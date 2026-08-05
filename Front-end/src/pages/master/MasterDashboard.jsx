@@ -128,19 +128,20 @@ export default function MasterDashboard() {
   const handleCustomDateChange = (type, value) => {
     setActivePreset('custom')
     if (type === 'start') {
+      let newEnd = endDate
+      if (endDate && value > endDate) {
+        newEnd = value
+        setEndDate(value)
+      }
       setStartDate(value)
-      if (endDate && value <= endDate) {
-        fetchDashboardData(value, endDate)
-      } else if (!endDate) {
-        fetchDashboardData(value, '')
-      }
+      fetchDashboardData(value, newEnd)
     } else {
-      setEndDate(value)
-      if (startDate && startDate <= value) {
-        fetchDashboardData(startDate, value)
-      } else if (!startDate) {
-        fetchDashboardData('', value)
+      let newEnd = value
+      if (startDate && value < startDate) {
+        newEnd = startDate
       }
+      setEndDate(newEnd)
+      fetchDashboardData(startDate, newEnd)
     }
   }
 
@@ -338,6 +339,7 @@ export default function MasterDashboard() {
               <input
                 type="date"
                 value={endDate}
+                min={startDate || undefined}
                 onChange={(e) => handleCustomDateChange('end', e.target.value)}
                 className="bg-transparent text-xs font-medium text-slate-700 focus:outline-none cursor-pointer"
               />
