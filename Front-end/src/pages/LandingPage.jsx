@@ -945,6 +945,57 @@ function FAQ() {
 
 /* ---------------- CONNECT WITH US ---------------- */
 function ConnectWithUs() {
+  const [formData, setFormData] = useState({
+    first_name: '',
+    last_name: '',
+    company_email: '',
+    company_name: '',
+    message: ''
+  });
+  const [loading, setLoading] = useState(false);
+  const [submitted, setSubmitted] = useState(false);
+  const [errorMessage, setErrorMessage] = useState('');
+
+  const handleChange = (e) => {
+    setFormData({ ...formData, [e.target.name]: e.target.value });
+    if (errorMessage) setErrorMessage('');
+  };
+
+  const handleSubmit = async (e) => {
+    e.preventDefault();
+    if (!formData.first_name.trim() || !formData.last_name.trim() || !formData.company_email.trim() || !formData.company_name.trim() || !formData.message.trim()) {
+      setErrorMessage('Please fill in all required fields.');
+      return;
+    }
+
+    setLoading(true);
+    setErrorMessage('');
+    try {
+      const response = await fetch(`${API_BASE_URL}/contact-request`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(formData)
+      });
+      if (response.ok) {
+        setSubmitted(true);
+        setFormData({
+          first_name: '',
+          last_name: '',
+          company_email: '',
+          company_name: '',
+          message: ''
+        });
+      } else {
+        const data = await response.json().catch(() => ({}));
+        setErrorMessage(data.detail || 'Failed to send message. Please try again.');
+      }
+    } catch (err) {
+      setErrorMessage('Network error. Please check your connection and try again.');
+    } finally {
+      setLoading(false);
+    }
+  };
+
   return (
     <section id="about" className="py-24 relative overflow-hidden">
       <div className="mx-auto max-w-7xl px-6">
@@ -962,71 +1013,123 @@ function ConnectWithUs() {
             <div className="mt-10 space-y-6">
               <div>
                 <h4 className="text-sm font-semibold tracking-wider uppercase text-cyan-500">Email</h4>
-                <p className="mt-1 text-foreground">hello@hireiq.co.in</p>
+                <p className="mt-1 text-foreground font-medium">hello@hireiq.co.in</p>
               </div>
               <div>
                 <h4 className="text-sm font-semibold tracking-wider uppercase text-cyan-500">Support</h4>
-                <p className="mt-1 text-foreground">support@hireiq.co.in</p>
+                <p className="mt-1 text-foreground font-medium">support@hireiq.co.in</p>
               </div>
               <div>
                 <h4 className="text-sm font-semibold tracking-wider uppercase text-cyan-500">Location</h4>
-                <p className="mt-1 text-foreground">India (Serving Pan-India & Global Enterprise Hiring)</p>
+                <p className="mt-1 text-foreground font-medium">India (Serving Pan-India & Global Enterprise Hiring)</p>
               </div>
             </div>
           </div>
 
           {/* Right Side - Form */}
-          <div className="bg-background rounded-2xl p-6 lg:p-8 border border-border">
-            <form className="space-y-4" onSubmit={(e) => e.preventDefault()}>
-              <div className="grid sm:grid-cols-2 gap-4">
-                <div className="space-y-2">
-                  <label className="text-sm font-medium">First Name *</label>
+          <div className="bg-background rounded-2xl p-6 lg:p-8 border border-border flex flex-col justify-center">
+            {submitted ? (
+              <div className="text-center py-8 animate-in fade-in zoom-in-95 duration-300">
+                <div className="w-16 h-16 bg-cyan-500/20 text-cyan-400 rounded-full flex items-center justify-center mx-auto mb-5 border border-cyan-500/30 shadow-[0_0_20px_rgba(6,182,212,0.2)]">
+                  <Check className="w-8 h-8" />
+                </div>
+                <h3 className="text-2xl font-bold text-foreground mb-2">Message Received!</h3>
+                <p className="text-muted-foreground text-sm max-w-sm mx-auto mb-6">
+                  Thank you for reaching out to HireIQ. Our team will review your inquiry and get back to you shortly.
+                </p>
+                <button
+                  type="button"
+                  onClick={() => setSubmitted(false)}
+                  className="px-6 py-2.5 rounded-full bg-cyan-500/10 text-cyan-400 hover:bg-cyan-500/20 font-medium text-sm border border-cyan-500/30 transition duration-200"
+                >
+                  Send another message
+                </button>
+              </div>
+            ) : (
+              <form className="space-y-4" onSubmit={handleSubmit}>
+                {errorMessage && (
+                  <div className="p-3 rounded-lg bg-red-500/10 border border-red-500/30 text-red-400 text-xs font-medium animate-in fade-in">
+                    {errorMessage}
+                  </div>
+                )}
+                <div className="grid sm:grid-cols-2 gap-4">
+                  <div className="space-y-1.5 text-left">
+                    <label className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">First Name *</label>
+                    <input
+                      required
+                      type="text"
+                      name="first_name"
+                      value={formData.first_name}
+                      onChange={handleChange}
+                      placeholder="Enter your first name"
+                      className="w-full bg-muted/50 border border-border rounded-lg px-4 py-3 text-sm focus:outline-none focus:ring-2 focus:ring-cyan-500/50 transition"
+                    />
+                  </div>
+                  <div className="space-y-1.5 text-left">
+                    <label className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">Last Name *</label>
+                    <input
+                      required
+                      type="text"
+                      name="last_name"
+                      value={formData.last_name}
+                      onChange={handleChange}
+                      placeholder="Enter your last name"
+                      className="w-full bg-muted/50 border border-border rounded-lg px-4 py-3 text-sm focus:outline-none focus:ring-2 focus:ring-cyan-500/50 transition"
+                    />
+                  </div>
+                </div>
+                <div className="space-y-1.5 text-left">
+                  <label className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">Company Email *</label>
                   <input
-                    type="text"
-                    placeholder="Enter your first name"
-                    className="w-full bg-muted/50 border border-border rounded-lg px-4 py-3 text-sm focus:outline-none focus:ring-2 focus:ring-cyan-500/50"
+                    required
+                    type="email"
+                    name="company_email"
+                    value={formData.company_email}
+                    onChange={handleChange}
+                    placeholder="email@company.com"
+                    className="w-full bg-muted/50 border border-border rounded-lg px-4 py-3 text-sm focus:outline-none focus:ring-2 focus:ring-cyan-500/50 transition"
                   />
                 </div>
-                <div className="space-y-2">
-                  <label className="text-sm font-medium">Last Name *</label>
+                <div className="space-y-1.5 text-left">
+                  <label className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">Company Name *</label>
                   <input
+                    required
                     type="text"
-                    placeholder="Enter your last name"
-                    className="w-full bg-muted/50 border border-border rounded-lg px-4 py-3 text-sm focus:outline-none focus:ring-2 focus:ring-cyan-500/50"
+                    name="company_name"
+                    value={formData.company_name}
+                    onChange={handleChange}
+                    placeholder="Enter your company name"
+                    className="w-full bg-muted/50 border border-border rounded-lg px-4 py-3 text-sm focus:outline-none focus:ring-2 focus:ring-cyan-500/50 transition"
                   />
                 </div>
-              </div>
-              <div className="space-y-2">
-                <label className="text-sm font-medium">Company Email *</label>
-                <input
-                  type="email"
-                  placeholder="email@company.com"
-                  className="w-full bg-muted/50 border border-border rounded-lg px-4 py-3 text-sm focus:outline-none focus:ring-2 focus:ring-cyan-500/50"
-                />
-              </div>
-              <div className="space-y-2">
-                <label className="text-sm font-medium">Company Name *</label>
-                <input
-                  type="text"
-                  placeholder="Enter your company name"
-                  className="w-full bg-muted/50 border border-border rounded-lg px-4 py-3 text-sm focus:outline-none focus:ring-2 focus:ring-cyan-500/50"
-                />
-              </div>
-              <div className="space-y-2">
-                <label className="text-sm font-medium">Message</label>
-                <textarea
-                  rows={4}
-                  placeholder="How can we help you?"
-                  className="w-full bg-muted/50 border border-border rounded-lg px-4 py-3 text-sm focus:outline-none focus:ring-2 focus:ring-cyan-500/50 resize-none"
-                />
-              </div>
-              <button
-                type="submit"
-                className="w-full bg-cyan-500 hover:bg-cyan-600 text-white font-semibold py-3.5 rounded-lg transition-colors duration-200 mt-4"
-              >
-                Send Message
-              </button>
-            </form>
+                <div className="space-y-1.5 text-left">
+                  <label className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">Message *</label>
+                  <textarea
+                    required
+                    rows={4}
+                    name="message"
+                    value={formData.message}
+                    onChange={handleChange}
+                    placeholder="How can we help you?"
+                    className="w-full bg-muted/50 border border-border rounded-lg px-4 py-3 text-sm focus:outline-none focus:ring-2 focus:ring-cyan-500/50 resize-none transition"
+                  />
+                </div>
+                <button
+                  type="submit"
+                  disabled={loading}
+                  className="w-full bg-cyan-500 hover:bg-cyan-600 disabled:opacity-50 text-white font-semibold py-3.5 rounded-lg transition-colors duration-200 mt-4 flex items-center justify-center gap-2"
+                >
+                  {loading ? (
+                    <>
+                      <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin"></div>
+                      <span>Sending Message...</span>
+                    </>
+                  ) : (
+                    <span>Send Message</span>
+                  )}
+                </button>
+              </form>
+            )}
           </div>
         </div>
       </div>

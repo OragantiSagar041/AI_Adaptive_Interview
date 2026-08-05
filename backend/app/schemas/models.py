@@ -163,3 +163,13 @@ class DemoRequestSendEmail(BaseModel):
     recipient_name: Optional[str] = ""
     subject: str
     message: str
+
+class ContactRequestCreate(BaseModel):
+    first_name: str
+    last_name: str
+    company_email: str
+    company_name: str
+    message: str
+
+class ContactRequestUpdate(BaseModel):
+    status: str
