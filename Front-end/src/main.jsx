@@ -3,11 +3,19 @@ import { createRoot } from 'react-dom/client'
 import { Provider } from 'react-redux'
 import { PersistGate } from 'redux-persist/integration/react'
 import { persistor, store } from './store/store'
+import { loader } from '@monaco-editor/react'
 import './index.css'
 import App from './App.jsx'
 import axios from 'axios'
 import { logout } from './store/slices/authSlice'
 import Swal from 'sweetalert2'
+
+// Configure Monaco Editor loader to use high-availability CDN with worker support
+loader.config({
+  paths: {
+    vs: 'https://cdnjs.cloudflare.com/ajax/libs/monaco-editor/0.45.0/min/vs',
+  },
+})
 
 // Global Axios Interceptor for handling deactivated accounts
 axios.interceptors.response.use(

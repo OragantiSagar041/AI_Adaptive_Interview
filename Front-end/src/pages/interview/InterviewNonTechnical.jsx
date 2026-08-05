@@ -9,6 +9,7 @@ import { candidateFetch } from '../../utils/candidateAuth'
 import api from '../../utils/api'
 import '../../Interview.css'
 import { motion } from 'framer-motion'
+import AccessDeniedScreen from '../../components/interview/AccessDeniedScreen'
 
 export const InterviewNonTechnical = () => {
   const interviewType = 'Non-Technical';
@@ -68,6 +69,7 @@ export const InterviewNonTechnical = () => {
     loading,
     showAllSet,
     error,
+    scheduledStart,
     isCompleted,
     isDisclaimerAccepted,
     agreeChecked,
@@ -216,14 +218,7 @@ export const InterviewNonTechnical = () => {
   }
 
   if (error) {
-    return (
-      <div className="flex justify-center items-center h-screen flex-col p-6 text-center">
-        <AlertTriangle className="text-danger mb-4" size={48} />
-        <h2 className="text-2xl font-bold text-slate-900 tracking-tight">Access Denied</h2>
-        <p className="text-slate-600 mt-2 max-w-md text-sm">{error}</p>
-        <Link to="/" className="inline-flex items-center justify-center gap-2 px-6 py-3 rounded-full font-semibold text-sm bg-primary hover:bg-primary-hover text-white transition-all shadow-[0_4px_14px_rgba(99,102,241,0.15)] mt-6 no-underline">Go to Platform Page</Link>
-      </div>
-    )
+    return <AccessDeniedScreen error={error} scheduledStart={scheduledStart || sessionDetail?.scheduled_start} />
   }
 
   if (isCompleted) {

@@ -808,17 +808,20 @@ def get_interview_details(link_id: str, current_admin: dict = Depends(get_curren
         if max_answered_id > 0:
             response_payload["all_questions"] = [q for q in all_questions if _safe_int(q.get("id")) <= max_answered_id]
 
+    coding_round_data = session_data.get("coding_round")
+    case_study_data = session_data.get("case_study_round")
 
     if actual_interview_id:
         interview_record = interviews_collection.find_one({"id": actual_interview_id})
         if interview_record:
-            if interview_record.get("coding_round"):
-                response_payload["coding_round"] = interview_record.get("coding_round")
-            if interview_record.get("case_study_round"):
-                response_payload["case_study_round"] = interview_record.get("case_study_round")
+            if not coding_round_data and interview_record.get("coding_round"):
+                coding_round_data = interview_record.get("coding_round")
+            if not case_study_data and interview_record.get("case_study_round"):
+                case_study_data = interview_record.get("case_study_round")
             # Add profile/resume text and job description for ATS analysis
             response_payload["profile_text"] = interview_record.get("profile_text", "")
             response_payload["job_description"] = interview_record.get("job_description", "")
+            response_payload["source"] = interview_record.get("source", response_payload["source"])
             # Fill interview_title from interview record if not already set from session
             if not response_payload.get("interview_title"):
                 response_payload["interview_title"] = (
@@ -826,7 +829,11 @@ def get_interview_details(link_id: str, current_admin: dict = Depends(get_curren
                     interview_record.get("interview_title") or
                     interview_record.get("job_title", "")
                 )
-                
+
+    # ── Include coding/case-study round data so the admin transcript shows submitted code ──
+    response_payload["coding_round"] = coding_round_data
+    response_payload["case_study_round"] = case_study_data
+
     return response_payload
 
 class AnalyzeRequest(BaseModel):

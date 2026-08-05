@@ -9,6 +9,8 @@ import { candidateFetch } from '../../utils/candidateAuth'
 import api from '../../utils/api'
 import '../../Interview.css'
 import { motion } from 'framer-motion'
+import AccessDeniedScreen from '../../components/interview/AccessDeniedScreen'
+import { setupMonacoIntelliSense, MONACO_EDITOR_OPTIONS } from '../../utils/monacoConfig'
 const MonacoEditor = lazy(() => import('@monaco-editor/react'))
 
 export const InterviewTechnical = () => {
@@ -591,33 +593,22 @@ export const InterviewTechnical = () => {
               }>
                 <MonacoEditor
                   height="400px"
+                  loading={
+                    <div style={{ height: '400px', width: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#64748b', fontSize: '13px', background: '#f8fafc', fontWeight: '500' }}>
+                      Loading IDE Editor...
+                    </div>
+                  }
                   language={selectedLanguage === 'cpp' ? 'cpp' : selectedLanguage === 'java' ? 'java' : selectedLanguage === 'javascript' ? 'javascript' : 'python'}
                   value={codeAnswer}
                   onChange={(val) => setCodeAnswer(val || '')}
-                  onMount={(editor) => {
+                  onMount={(editor, monaco) => {
+                    setupMonacoIntelliSense(monaco)
                     try {
                       editor.focus();
                     } catch (e) {}
                   }}
                   theme="vs-light"
-                  options={{
-                    readOnly: false,
-                    domReadOnly: false,
-                    cursorBlinking: 'blink',
-                    cursorStyle: 'line',
-                    fontSize: 14,
-                    minimap: { enabled: false },
-                    scrollBeyondLastLine: false,
-                    wordWrap: 'on',
-                    lineNumbers: 'on',
-                    folding: true,
-                    automaticLayout: true,
-                    tabSize: 4,
-                    insertSpaces: true,
-                    fontFamily: 'Consolas, "Courier New", monospace',
-                    padding: { top: 12, bottom: 12 },
-                    scrollbar: { vertical: 'auto' },
-                  }}
+                  options={MONACO_EDITOR_OPTIONS}
                 />
               </Suspense>
 
@@ -1033,6 +1024,7 @@ export const InterviewTechnical = () => {
     loading,
     showAllSet,
     error,
+    scheduledStart,
     isCompleted,
     isDisclaimerAccepted,
     agreeChecked,
@@ -1185,14 +1177,7 @@ export const InterviewTechnical = () => {
   }
 
   if (error) {
-    return (
-      <div className="flex justify-center items-center h-screen flex-col p-6 text-center">
-        <AlertTriangle className="text-danger mb-4" size={48} />
-        <h2 className="text-2xl font-bold text-slate-900 tracking-tight">Access Denied</h2>
-        <p className="text-slate-600 mt-2 max-w-md text-sm">{error}</p>
-        <Link to="/" className="inline-flex items-center justify-center gap-2 px-6 py-3 rounded-full font-semibold text-sm bg-primary hover:bg-primary-hover text-white transition-all shadow-[0_4px_14px_rgba(99,102,241,0.15)] mt-6 no-underline">Go to Platform Page</Link>
-      </div>
-    )
+    return <AccessDeniedScreen error={error} scheduledStart={scheduledStart || sessionDetail?.scheduled_start} />
   }
 
   if (isCompleted) {

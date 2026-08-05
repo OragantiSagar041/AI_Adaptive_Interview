@@ -497,15 +497,28 @@ def build_answer_summary(answers_data: List[Dict[str, Any]]) -> str:
 
 
 def persist_coding_round(interview_id: str, coding_round: Dict[str, Any]) -> None:
+    from app.db.mongo_db import interviews_collection, interview_sessions_collection
     interview = get_session(interview_id)
     if interview:
         interview["coding_round"] = coding_round
         set_session(interview_id, interview)
-    interviews_collection.update_one(
-        {"id": interview_id},
-        {"$set": {"coding_round": coding_round}},
-        upsert=False,
-    )
+    try:
+        interviews_collection.update_one(
+            {"id": interview_id},
+            {"$set": {"coding_round": coding_round}},
+            upsert=False,
+        )
+    except Exception as e:
+        print(f"[persist_coding_round] Error updating interviews_collection: {e}")
+
+    try:
+        interview_sessions_collection.update_one(
+            {"$or": [{"link_id": interview_id}, {"id": interview_id}, {"candidate_id": interview_id}]},
+            {"$set": {"coding_round": coding_round}},
+            upsert=False,
+        )
+    except Exception as e:
+        print(f"[persist_coding_round] Error updating interview_sessions_collection: {e}")
 
 
 def build_coding_test_payload(coding_round: Dict[str, Any]) -> Dict[str, Any]:

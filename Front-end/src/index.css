@@ -106,6 +106,26 @@ html, body {
   color: inherit !important;
 }
 
+/* Master Theme Utility Classes */
+.theme-bg-primary {
+  background-color: var(--primary-color, #6366f1) !important;
+}
+.theme-bg-primary:hover {
+  background-color: var(--primary-hover, #4f46e5) !important;
+}
+.theme-text-primary {
+  color: var(--primary-color, #6366f1) !important;
+}
+.theme-border-primary {
+  border-color: var(--primary-color, #6366f1) !important;
+}
+.theme-shadow-primary {
+  box-shadow: 0 4px 14px 0 var(--primary-glow, rgba(99,102,241,0.39)) !important;
+}
+.theme-stroke-primary {
+  stroke: var(--primary-color, #6366f1) !important;
+}
+
 .superadmin-theme {
   --radius: 0.625rem;
   --background: oklch(0.985 0.005 240);
@@ -381,4 +401,61 @@ html, body {
   .animate-fade-up-delay-2 { animation: fade-up 0.8s ease-out 0.4s forwards; opacity: 0; }
   .animate-fade-up-delay-3 { animation: fade-up 0.8s ease-out 0.6s forwards; opacity: 0; }
   .animate-fade-up-delay-4 { animation: fade-up 0.8s ease-out 0.8s forwards; opacity: 0; }
+}
+
+/* ─── Monaco Editor Isolation & Tailwind CSS Reset Defense ────────────────── */
+.monaco-editor {
+  font-family: Consolas, 'Courier New', monospace !important;
+  user-select: text !important;
+  -webkit-user-select: text !important;
+  overflow: hidden !important;
+}
+
+.monaco-editor,
+.monaco-editor-background {
+  background-color: #ffffff;
+}
+
+/* Never allow Tailwind base reset to display Monaco's hidden typing textarea */
+.monaco-editor .inputarea.ime-input,
+.monaco-editor textarea.inputarea,
+.monaco-editor .inputarea {
+  position: absolute !important;
+  top: 0 !important;
+  left: 0 !important;
+  width: 1px !important;
+  height: 1px !important;
+  padding: 0 !important;
+  margin: 0 !important;
+  border: 0 !important;
+  outline: 0 !important;
+  opacity: 0 !important;
+  background: transparent !important;
+  color: transparent !important;
+  resize: none !important;
+  box-shadow: none !important;
+  pointer-events: none !important;
+  overflow: hidden !important;
+  min-height: 0 !important;
+  max-height: 0 !important;
+}
+
+.monaco-editor .overflow-guard {
+  position: relative !important;
+  overflow: hidden !important;
+}
+
+.monaco-editor .monaco-scrollable-element {
+  position: absolute !important;
+  overflow: hidden !important;
+}
+
+.monaco-editor .lines-content {
+  user-select: text !important;
+}
+
+.monaco-editor .monaco-inputbox,
+.monaco-editor .find-widget,
+.monaco-editor .find-widget input {
+  box-sizing: border-box !important;
 }

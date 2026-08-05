@@ -1344,6 +1344,7 @@ export default function AICallingAgentPage() {
 
   // Manual dialer state
   const [manualCall, setManualCall] = useState({ phone: '', name: '', jobDesc: '', resume: null })
+  const [phoneError, setPhoneError] = useState('')
   const [candidateResumeInfo, setCandidateResumeInfo] = useState(null)
   const [isCalling, setIsCalling] = useState(false)
   const [availableJobs, setAvailableJobs] = useState([])
