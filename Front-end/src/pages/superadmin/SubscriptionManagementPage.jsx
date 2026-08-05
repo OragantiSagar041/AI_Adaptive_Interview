@@ -296,8 +296,8 @@ function RechargeModal({ company, onClose, onSuccess }) {
   }
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 backdrop-blur-sm p-4">
-      <div className="bg-[#0f0f1a] rounded-2xl shadow-2xl w-full max-w-4xl max-h-[90vh] overflow-y-auto relative">
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 backdrop-blur-sm p-4 mt-8 md:mt-12">
+      <div className="bg-[#0f0f1a] rounded-2xl shadow-2xl w-full max-w-3xl max-h-[80vh] overflow-y-auto relative">
 
         {/* Close */}
         <button onClick={onClose} className="absolute top-4 right-4 z-10 text-slate-400 hover:text-white transition-colors">
@@ -305,8 +305,8 @@ function RechargeModal({ company, onClose, onSuccess }) {
         </button>
 
         {/* Header */}
-        <div className="px-8 pt-8 pb-6 text-center border-b border-white/10">
-          <p className="text-slate-400 text-sm mb-1">Recharging for</p>
+        <div className="px-6 pt-6 pb-4 text-center border-b border-white/10">
+          <p className="text-slate-400 text-xs mb-1">Recharging for</p>
           <h2 className="text-white text-2xl font-bold">{company.company_name || company.owner_name}</h2>
           <p className="text-slate-400 text-sm mt-1">Currently on <span className="text-indigo-400 font-semibold">{company.plan_label}</span></p>
 
@@ -330,10 +330,10 @@ function RechargeModal({ company, onClose, onSuccess }) {
 
         {/* ── STEP 1: Plan cards ────────────────────────────────────────── */}
         {step === "pick" && (
-          <div className="px-8 py-8">
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-6 max-w-2xl mx-auto">
+          <div className="px-6 py-6">
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-5 max-w-2xl mx-auto">
               {plans.map(plan => {
-                const isSelected = (selectedPlan?.key || selectedPlan?.label) === (plan.key || plan.label);
+                const isSelected = selectedPlan.key === plan.key;
                 const isCurrent  = company.plan_key === plan.key;
                 return (
                   <button
