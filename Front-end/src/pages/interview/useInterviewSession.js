@@ -232,9 +232,11 @@ export const useInterviewSession = (sessionId, interviewType, startRoundTwo) => 
     const task = currentQuestion?.codingTask || currentQuestion || codingRoundData || {}
     const fn = task.function_name || 'solution'
     const sig = task.starter_function_signature
+    const pythonSig = sig || task.starter_code || `def ${fn}(*args, **kwargs):`
+    const finalPythonTemplate = pythonSig.includes('#') ? pythonSig : `${pythonSig}\n    # Write your solution here\n    pass`
 
     const templates = {
-      python: sig || task.starter_code || `def ${fn}(*args):\n    # Write your solution here\n    pass`,
+      python: finalPythonTemplate,
       javascript: `function ${fn}(...args) {\n    // Write your solution here\n    \n}`,
       java: `public class Solution {\n    public static void ${fn}(String[] args) {\n        // Write your solution here\n    }\n}`,
       cpp: `#include <iostream>\n#include <vector>\n#include <string>\nusing namespace std;\n\nvoid ${fn}() {\n    // Write your solution here\n}\n\nint main() {\n    ${fn}();\n    return 0;\n}`

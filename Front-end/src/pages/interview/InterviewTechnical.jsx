@@ -591,25 +591,29 @@ export const InterviewTechnical = () => {
                   Loading IDE Editor...
                 </div>
               }>
-                <MonacoEditor
-                  height="400px"
-                  loading={
-                    <div style={{ height: '400px', width: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#64748b', fontSize: '13px', background: '#f8fafc', fontWeight: '500' }}>
-                      Loading IDE Editor...
-                    </div>
-                  }
-                  language={selectedLanguage === 'cpp' ? 'cpp' : selectedLanguage === 'java' ? 'java' : selectedLanguage === 'javascript' ? 'javascript' : 'python'}
-                  value={codeAnswer}
-                  onChange={(val) => setCodeAnswer(val || '')}
-                  onMount={(editor, monaco) => {
-                    setupMonacoIntelliSense(monaco)
-                    try {
-                      editor.focus();
-                    } catch (e) {}
-                  }}
-                  theme="vs-light"
-                  options={MONACO_EDITOR_OPTIONS}
-                />
+                {activeRightTab === 'code' && (
+                  <div style={{ flex: 1, width: '100%', position: 'relative', minHeight: '320px' }}>
+                    <MonacoEditor
+                      height="400px"
+                      loading={
+                        <div style={{ height: '400px', width: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#64748b', fontSize: '13px', background: '#f8fafc', fontWeight: '500' }}>
+                          Loading IDE Editor...
+                        </div>
+                      }
+                      language={selectedLanguage === 'cpp' ? 'cpp' : selectedLanguage === 'java' ? 'java' : selectedLanguage === 'javascript' ? 'javascript' : 'python'}
+                      value={codeAnswer}
+                      onChange={(val) => setCodeAnswer(val || '')}
+                      onMount={(editor, monaco) => {
+                        setupMonacoIntelliSense(monaco)
+                        try {
+                          editor.focus();
+                        } catch (e) {}
+                      }}
+                      theme="vs-light"
+                      options={MONACO_EDITOR_OPTIONS}
+                    />
+                  </div>
+                )}
               </Suspense>
 
               <div className="coding-console-shell" style={{ borderTop: activeRightTab === 'code' ? '1px solid #e2e8f0' : 'none', background: '#f8fafc', display: 'flex', flexDirection: 'column', maxHeight: activeRightTab === 'code' ? '40%' : '100%', minHeight: activeRightTab === 'code' ? '160px' : '0', flexGrow: activeRightTab === 'code' ? 0 : 1 }}>
