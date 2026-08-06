@@ -188,8 +188,21 @@ async def initiate_manual_ai_call(
     """
     Initiates an outbound AI call via Omni Dimension manually, without requiring an existing session.
     """
-    if not phone_number:
-        raise HTTPException(status_code=400, detail="Phone number is required")
+    import re
+    raw_phone = (phone_number or "").strip()
+    digits_only = re.sub(r'\D', '', raw_phone)
+    if len(digits_only) == 12 and digits_only.startswith("91"):
+        digits_only = digits_only[2:]
+    elif len(digits_only) == 11 and digits_only.startswith("0"):
+        digits_only = digits_only[1:]
+
+    if not digits_only or len(digits_only) != 10 or not digits_only.isdigit():
+        raise HTTPException(
+            status_code=400,
+            detail="Invalid phone number. Phone number must be a valid 10-digit mobile number."
+        )
+
+    phone_number = digits_only
 
     try:
         from app.ai import omni_dimension_client
@@ -208,14 +221,26 @@ async def initiate_manual_ai_call(
                     resume_text = app_doc.get("resume_text") or ""
                     if not resume_text and app_doc.get("resume_url"):
                         r_url = app_doc.get("resume_url")
+                        text = None
                         if os.path.exists(r_url):
                             with open(r_url, "rb") as f:
-                                resume_text = extract_text_from_file(f.read(), r_url)
-                                if resume_text:
-                                    job_applications_collection.update_one(
-                                        {"_id": ObjectId(application_id)},
-                                        {"$set": {"resume_text": resume_text}}
-                                    )
+                                text = extract_text_from_file(f.read(), r_url)
+                        elif r_url.startswith("http://") or r_url.startswith("https://"):
+                            resp = requests.get(r_url, timeout=10)
+                            if resp.status_code == 200:
+                                text = extract_text_from_file(resp.content, r_url)
+                        elif r_url.startswith("/api/public/resumes/"):
+                            local_fname = os.path.basename(r_url)
+                            local_fpath = os.path.join(os.getcwd(), "uploads", "resumes", local_fname)
+                            if os.path.exists(local_fpath):
+                                with open(local_fpath, "rb") as f:
+                                    text = extract_text_from_file(f.read(), local_fpath)
+                        if text:
+                            resume_text = text
+                            job_applications_collection.update_one(
+                                {"_id": ObjectId(application_id)},
+                                {"$set": {"resume_text": text}}
+                            )
             except Exception as e:
                 print(f"Error loading resume in manual AI call: {e}")
             

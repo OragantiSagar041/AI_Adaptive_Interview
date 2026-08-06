@@ -1,18 +1,26 @@
 import React, { useState, useRef, useEffect, lazy, Suspense } from 'react'
 import { useSearchParams, Link } from 'react-router-dom'
-import { Video, Volume2, ArrowRight, ShieldAlert, Cpu, AlertTriangle, RefreshCw } from 'lucide-react'
+import { Video, ArrowRight, ShieldAlert, Cpu, AlertTriangle, RefreshCw, Sparkles, CheckCircle2, AlertCircle, Lightbulb, X, Award } from 'lucide-react'
 import { useInterviewSession } from './useInterviewSession'
 import DeviceCheckModal from '../../components/DeviceCheckModal'
+import ProctoringAlerts from '../../components/interview/ProctoringAlerts'
 import { API_BASE_URL } from '../../apiConfig'
 import { candidateFetch } from '../../utils/candidateAuth'
 import api from '../../utils/api'
 import '../../Interview.css'
 import { motion } from 'framer-motion'
+import AccessDeniedScreen from '../../components/interview/AccessDeniedScreen'
+import { setupMonacoIntelliSense, MONACO_EDITOR_OPTIONS } from '../../utils/monacoConfig'
 const MonacoEditor = lazy(() => import('@monaco-editor/react'))
 
 export const InterviewTechnical = () => {
   const interviewType = 'Technical';
   const codeAnswersRef = useRef({})
+  const [aiFeedbackCount, setAiFeedbackCount] = useState(0)
+  const [gettingAIFeedback, setGettingAIFeedback] = useState(false)
+  const [aiFeedbackModalOpen, setAiFeedbackModalOpen] = useState(false)
+  const [latestAIFeedback, setLatestAIFeedback] = useState(null)
+  const [limitExceededToast, setLimitExceededToast] = useState(false)
 
   const startRoundTwo = async ({
     verbalQuestionsLength,
@@ -63,7 +71,7 @@ export const InterviewTechnical = () => {
         codingTests: payload.tests || []
       }
       setQuestions(prev => [...prev, codingQ])
-      
+
       const targetIndex = (savedIndex !== null && savedIndex >= verbalQuestionsLength) ? savedIndex : verbalQuestionsLength
       setCurrentQuestionIndex(targetIndex)
     } catch (err) {
@@ -198,37 +206,8 @@ export const InterviewTechnical = () => {
       }
 
       const iid = interviewId || sessionDetail?.interview_id || sessionId
-      let errorText = null
-
-      if (selectedLanguage === 'javascript') {
-        try {
-          new Function(codeAnswer)
-        } catch (err) {
-          errorText = `SyntaxError: ${err.message}`
-        }
-      } else if (selectedLanguage === 'python') {
-        let count = 0
-        for (let i = 0; i < codeAnswer.length; i++) {
-          if (codeAnswer[i] === '(') count++
-          if (codeAnswer[i] === ')') count--
-          if (count < 0) {
-            errorText = `SyntaxError: Unmatched closing parenthesis ')' at index ${i}`
-            break
-          }
-        }
-        if (count > 0 && !errorText) {
-          errorText = "SyntaxError: Unmatched opening parenthesis '(' (parenthesis was never closed)"
-        }
-      }
-
       const userStdout = extractStdout(codeAnswer, selectedLanguage)
-
-      if (errorText) {
-        setCodeOutputState(`Code Execution Result:\n❌ Execution Failed / Syntax Error\n\nError:\n${errorText}`)
-        setConsoleOutput(`Current Output:\n\nError:\n${errorText}`)
-        setCompiling(false)
-        return
-      }
+      let errorText = ''
 
       try {
         const payload = await api.post(`/coding-round/run`, {
@@ -349,6 +328,81 @@ export const InterviewTechnical = () => {
       }
     }
 
+    const aiFeedbackRemaining = Math.max(0, 2 - aiFeedbackCount);
+
+    const handleGetAIFeedback = async () => {
+      if (aiFeedbackRemaining <= 0) {
+        setLimitExceededToast(true);
+        setTimeout(() => setLimitExceededToast(false), 5000);
+        return;
+      }
+
+      if (gettingAIFeedback) return;
+
+      if (!codeAnswer || codeAnswer.trim().length < 5) {
+        alert("Please write your code solution first before requesting AI feedback.");
+        return;
+      }
+
+      setGettingAIFeedback(true);
+      const iid = interviewId || sessionDetail?.interview_id || sessionId;
+
+      try {
+        const res = await api.post('/coding-round/checkpoint', {
+          interview_id: iid,
+          code: codeAnswer,
+          language: selectedLanguage,
+          explanation: transcriptionText || ""
+        });
+
+        const data = res.data;
+        const fb = data?.feedback;
+        const newCount = data?.ai_feedback_count ?? (aiFeedbackCount + 1);
+        setAiFeedbackCount(newCount);
+        setLatestAIFeedback(fb);
+        setAiFeedbackModalOpen(true);
+
+        // Also populate Console tab with structured feedback
+        let formattedFeedback = `🤖 AI CODE FEEDBACK (Request ${newCount}/2):\n==================================================\n\n`;
+        if (fb && typeof fb === 'object') {
+          if (fb.coach_message) {
+            formattedFeedback += `💬 INTERVIEWER NOTE:\n${fb.coach_message}\n\n`;
+          }
+          if (fb.strengths && fb.strengths.length > 0) {
+            formattedFeedback += `✅ CODE STRENGTHS:\n${fb.strengths.map(s => `• ${s}`).join('\n')}\n\n`;
+          }
+          if (fb.risks && fb.risks.length > 0) {
+            formattedFeedback += `⚠️ POTENTIAL BUGS / RISKS:\n${fb.risks.map(r => `• ${r}`).join('\n')}\n\n`;
+          }
+          if (fb.next_steps && fb.next_steps.length > 0) {
+            formattedFeedback += `💡 SUGGESTED HINTS & NEXT STEPS:\n${fb.next_steps.map(n => `• ${n}`).join('\n')}\n\n`;
+          }
+          if (fb.scorecard) {
+            formattedFeedback += `📊 SCORECARD:\n`;
+            formattedFeedback += `• Problem Understanding: ${fb.scorecard.problem_understanding ?? '--'}/100\n`;
+            formattedFeedback += `• Implementation: ${fb.scorecard.implementation ?? '--'}/100\n`;
+            formattedFeedback += `• Communication: ${fb.scorecard.communication ?? '--'}/100\n`;
+            formattedFeedback += `• Overall: ${fb.scorecard.overall ?? '--'}/100\n`;
+          }
+        } else {
+          formattedFeedback += `${fb || 'No feedback details returned.'}\n`;
+        }
+        setConsoleOutput(formattedFeedback);
+        setActiveConsoleTab('console');
+      } catch (err) {
+        const errMsg = err?.response?.data?.detail || err?.message || "Failed to get AI feedback.";
+        if (errMsg.includes("limit is over") || errMsg.includes("2 times")) {
+          setAiFeedbackCount(2);
+          setLimitExceededToast(true);
+          setTimeout(() => setLimitExceededToast(false), 5000);
+        } else {
+          alert(errMsg);
+        }
+      } finally {
+        setGettingAIFeedback(false);
+      }
+    };
+
     const handleSubmitCodingAndInterview = async () => {
       const iid = interviewId || sessionDetail?.interview_id || sessionId
       try {
@@ -374,7 +428,38 @@ export const InterviewTechnical = () => {
             <p>Round 2 has {Math.floor(globalCountdown / 60).toString().padStart(2, '0')}:{(globalCountdown % 60).toString().padStart(2, '0')} remaining. Explain your logic to the AI while you code.</p>
           </div>
           <div className="coding-round-actions" style={{ display: 'flex', alignItems: 'center', gap: '16px' }}>
-            <button className="ip-btn-prev" onClick={handleRunCode} disabled={compiling}>Get AI Feedback</button>
+            <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: '3px' }}>
+              <button
+                className="ip-btn-prev"
+                onClick={handleGetAIFeedback}
+                disabled={gettingAIFeedback}
+                style={{
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: '6px',
+                  background: aiFeedbackRemaining <= 0 ? '#f8fafc' : '#ffffff',
+                  borderColor: aiFeedbackRemaining <= 0 ? '#e2e8f0' : '#818cf8',
+                  color: aiFeedbackRemaining <= 0 ? '#94a3b8' : '#4f46e5',
+                  boxShadow: aiFeedbackRemaining <= 0 ? 'none' : '0 1px 3px rgba(99, 102, 241, 0.15)',
+                  cursor: aiFeedbackRemaining <= 0 ? 'not-allowed' : 'pointer'
+                }}
+              >
+                {gettingAIFeedback ? (
+                  <>
+                    <span className="inline-block w-3.5 h-3.5 border-2 border-indigo-600 border-t-transparent rounded-full animate-spin" />
+                    <span>Analyzing Code...</span>
+                  </>
+                ) : (
+                  <>
+                    <Sparkles style={{ width: '15px', height: '15px', color: aiFeedbackRemaining <= 0 ? '#94a3b8' : '#6366f1' }} />
+                    <span>Get AI Feedback ({aiFeedbackRemaining}/2 left)</span>
+                  </>
+                )}
+              </button>
+              <span style={{ fontSize: '11px', color: aiFeedbackRemaining <= 0 ? '#ef4444' : '#64748b', fontWeight: '500' }}>
+                {aiFeedbackRemaining <= 0 ? "⚠️ Your limit is over (0/2 left)" : "Only 2 times you can get the feedback"}
+              </span>
+            </div>
             <button className="ip-btn-next" onClick={handleSubmitCodingAndInterview}>Submit Code</button>
           </div>
         </div>
@@ -466,17 +551,9 @@ export const InterviewTechnical = () => {
             </div>
           </div>
 
-          <div className="coding-editor-card" style={{ display: 'flex', flexDirection: 'column', height: '100%', overflow: 'hidden' }}>
-            <div className="coding-editor-topbar" style={{ display: 'flex', justifyContent: 'space-between', borderBottom: '1px solid #e2e8f0', padding: '0 16px', flexShrink: 0 }}>
-              <div className="coding-right-tabs" style={{ display: 'flex', gap: '24px' }}>
-                <button onClick={() => setActiveRightTab('code')} className={`coding-right-tab ${activeRightTab === 'code' ? 'active' : ''}`} style={activeRightTab === 'code' ? { borderBottom: '2px solid var(--primary-color)', color: 'var(--text-main)', fontWeight: '600', padding: '16px 0', background: 'transparent', borderTop: 'none', borderLeft: 'none', borderRight: 'none', cursor: 'pointer' } : { color: 'var(--text-muted)', fontWeight: '500', padding: '16px 0', background: 'transparent', border: 'none', cursor: 'pointer' }}>Code</button>
-                <button onClick={() => { setActiveRightTab('testcase'); setActiveConsoleTab('results'); }} className={`coding-right-tab ${activeRightTab === 'testcase' ? 'active' : ''}`} style={activeRightTab === 'testcase' ? { borderBottom: '2px solid var(--primary-color)', color: 'var(--text-main)', fontWeight: '600', padding: '16px 0', background: 'transparent', borderTop: 'none', borderLeft: 'none', borderRight: 'none', cursor: 'pointer' } : { color: 'var(--text-muted)', fontWeight: '500', padding: '16px 0', background: 'transparent', border: 'none', cursor: 'pointer' }}>Testcase</button>
-                <button onClick={() => { setActiveRightTab('result'); setActiveConsoleTab('results'); }} className={`coding-right-tab ${activeRightTab === 'result' ? 'active' : ''}`} style={activeRightTab === 'result' ? { borderBottom: '2px solid var(--primary-color)', color: 'var(--text-main)', fontWeight: '600', padding: '16px 0', background: 'transparent', borderTop: 'none', borderLeft: 'none', borderRight: 'none', cursor: 'pointer' } : { color: 'var(--text-muted)', fontWeight: '500', padding: '16px 0', background: 'transparent', border: 'none', cursor: 'pointer' }}>Result</button>
-              </div>
-            </div>
-
-            <div className="coding-toolbar" style={{ padding: '12px 16px', display: 'flex', gap: '16px', alignItems: 'center', background: 'var(--card-bg)', backdropFilter: 'blur(8px)', borderBottom: '1px solid var(--card-border)', flexShrink: 0 }}>
-              <label style={{ fontSize: '14px', color: 'var(--text-muted)', fontWeight: '600' }}>Language</label>
+          <div className="coding-editor-card" style={{ display: 'flex', flexDirection: 'column', height: '100%', overflow: 'hidden', background: '#fff', borderRadius: '12px', border: '1px solid #e2e8f0' }}>
+            <div className="coding-toolbar" style={{ padding: '12px 16px', display: 'flex', gap: '16px', alignItems: 'center', background: '#f8fafc', borderBottom: '1px solid #e2e8f0', flexShrink: 0 }}>
+              <label style={{ fontSize: '13px', color: '#475569', fontWeight: '700', textTransform: 'uppercase', letterSpacing: '0.5px' }}>Language</label>
               <select
                 value={selectedLanguage}
                 onChange={(e) => {
@@ -486,52 +563,58 @@ export const InterviewTechnical = () => {
                   if (codeAnswersRef.current[newLang] !== undefined) {
                     setCodeAnswer(codeAnswersRef.current[newLang]);
                   } else {
-                    setCodeAnswer(''); // Trigger useInterviewSession to load default template
+                    const task = codingTask || {};
+                    const fn = task.function_name || 'solution';
+                    const sig = task.starter_function_signature;
+                    const tmpls = {
+                      python: sig || task.starter_code || `def ${fn}(*args):\n    # Write your solution here\n    pass`,
+                      javascript: `function ${fn}(...args) {\n    // Write your solution here\n    \n}`,
+                      java: `public class Solution {\n    public static void ${fn}(String[] args) {\n        // Write your solution here\n    }\n}`,
+                      cpp: `#include <iostream>\n#include <vector>\n#include <string>\nusing namespace std;\n\nvoid ${fn}() {\n    // Write your solution here\n}\n\nint main() {\n    ${fn}();\n    return 0;\n}`
+                    };
+                    setCodeAnswer(tmpls[newLang] || tmpls.python);
                   }
                 }}
-                style={{ padding: '8px 16px', borderRadius: 'var(--radius-md)', border: '1px solid #cbd5e1', outline: 'none', background: '#fff', fontWeight: '500', color: 'var(--text-main)' }}
+                style={{ padding: '8px 16px', borderRadius: '8px', border: '1px solid #cbd5e1', outline: 'none', background: '#fff', fontWeight: '600', color: '#0f172a', fontSize: '13px' }}
               >
                 <option value="python">Python</option>
                 <option value="javascript">JavaScript</option>
+                <option value="java">Java</option>
                 <option value="cpp">C++</option>
               </select>
-              <button className="ip-btn-next" style={{ padding: '8px 20px', marginLeft: 'auto' }} onClick={handleRunCode}>Run & Evaluate</button>
+              <button className="ip-btn-next" style={{ padding: '8px 20px', marginLeft: 'auto', background: '#10b981', color: '#fff', fontWeight: '700', borderRadius: '8px', border: 'none', cursor: 'pointer' }} onClick={handleRunCode}>Run & Evaluate</button>
             </div>
 
-            <div className="coding-editor-wrap" style={{ flexGrow: 1, display: 'flex', flexDirection: 'column', minHeight: '0', overflow: 'hidden' }}>
-              <div className="coding-editor-header" style={{ display: 'flex', justifyContent: 'space-between', padding: '12px 16px', background: '#fff', borderBottom: '1px solid #e2e8f0', flexShrink: 0 }}>
-                <div>
-                  <h4 style={{ margin: 0, fontSize: '14px', fontWeight: 'bold', color: '#1e293b' }}>Editor</h4>
-                  <div style={{ fontSize: '12px', color: '#94a3b8' }}>Write your solution in the IDE below.</div>
+            <div className="coding-editor-wrap" style={{ flexGrow: 1, display: 'flex', flexDirection: 'column', minHeight: '400px', overflow: 'hidden', position: 'relative' }}>
+              <Suspense fallback={
+                <div style={{ height: '400px', width: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#64748b', fontSize: '13px', background: '#f8fafc', fontWeight: '500' }}>
+                  Loading IDE Editor...
                 </div>
-                <div style={{ fontSize: '12px', color: '#94a3b8', fontStyle: 'italic' }}>Autosave by language</div>
-              </div>
-
-              {activeRightTab === 'code' && (
-                <Suspense fallback={<div style={{ padding: 16, color: '#64748b', fontSize: 13 }}>Loading editor...</div>}>
-                  <MonacoEditor
-                    height="320px"
-                    language={selectedLanguage === 'cpp' ? 'cpp' : selectedLanguage === 'javascript' ? 'javascript' : 'python'}
-                    value={codeAnswer}
-                    onChange={(val) => setCodeAnswer(val || '')}
-                    theme="vs-light"
-                    options={{
-                      fontSize: 14,
-                      minimap: { enabled: false },
-                      scrollBeyondLastLine: false,
-                      wordWrap: 'on',
-                      lineNumbers: 'on',
-                      folding: true,
-                      automaticLayout: true,
-                      tabSize: 4,
-                      insertSpaces: true,
-                      fontFamily: 'Consolas, "Courier New", monospace',
-                      padding: { top: 12, bottom: 12 },
-                      scrollbar: { vertical: 'auto' },
-                    }}
-                  />
-                </Suspense>
-              )}
+              }>
+                {activeRightTab === 'code' && (
+                  <div style={{ flex: 1, width: '100%', position: 'relative', minHeight: '320px' }}>
+                    <MonacoEditor
+                      height="400px"
+                      loading={
+                        <div style={{ height: '400px', width: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#64748b', fontSize: '13px', background: '#f8fafc', fontWeight: '500' }}>
+                          Loading IDE Editor...
+                        </div>
+                      }
+                      language={selectedLanguage === 'cpp' ? 'cpp' : selectedLanguage === 'java' ? 'java' : selectedLanguage === 'javascript' ? 'javascript' : 'python'}
+                      value={codeAnswer}
+                      onChange={(val) => setCodeAnswer(val || '')}
+                      onMount={(editor, monaco) => {
+                        setupMonacoIntelliSense(monaco)
+                        try {
+                          editor.focus();
+                        } catch (e) {}
+                      }}
+                      theme="vs-light"
+                      options={MONACO_EDITOR_OPTIONS}
+                    />
+                  </div>
+                )}
+              </Suspense>
 
               <div className="coding-console-shell" style={{ borderTop: activeRightTab === 'code' ? '1px solid #e2e8f0' : 'none', background: '#f8fafc', display: 'flex', flexDirection: 'column', maxHeight: activeRightTab === 'code' ? '40%' : '100%', minHeight: activeRightTab === 'code' ? '160px' : '0', flexGrow: activeRightTab === 'code' ? 0 : 1 }}>
                 <div className="coding-console-tabs" style={{ display: 'flex', gap: '2px', background: '#e2e8f0', padding: '8px 8px 0 8px', flexShrink: 0 }}>
@@ -696,6 +779,242 @@ export const InterviewTechnical = () => {
             </div>
           </div>
         </div>
+
+        {/* Limit Exceeded Toast Alert */}
+        {limitExceededToast && (
+          <div style={{
+            position: 'fixed',
+            top: '24px',
+            right: '24px',
+            zIndex: 99999,
+            background: '#fef2f2',
+            border: '1px solid #fecaca',
+            borderRadius: '10px',
+            padding: '14px 20px',
+            boxShadow: '0 10px 25px -5px rgba(239, 68, 68, 0.25)',
+            display: 'flex',
+            alignItems: 'center',
+            gap: '12px',
+            maxWidth: '420px',
+            animation: 'fadeIn 0.3s ease-in-out'
+          }}>
+            <AlertTriangle style={{ width: '22px', height: '22px', color: '#dc2626', flexShrink: 0 }} />
+            <div>
+              <h4 style={{ margin: 0, fontSize: '13.5px', fontWeight: '700', color: '#991b1b' }}>Your limit is over</h4>
+              <p style={{ margin: '2px 0 0 0', fontSize: '12px', color: '#b91c1c' }}>
+                You can only get AI feedback 2 times during the coding assessment. You have reached your limit.
+              </p>
+            </div>
+            <button 
+              onClick={() => setLimitExceededToast(false)}
+              style={{ background: 'none', border: 'none', cursor: 'pointer', color: '#991b1b', marginLeft: 'auto', padding: '2px' }}
+            >
+              <X style={{ width: '16px', height: '16px' }} />
+            </button>
+          </div>
+        )}
+
+        {/* Dedicated AI Feedback Modal */}
+        {aiFeedbackModalOpen && latestAIFeedback && (
+          <div style={{
+            position: 'fixed',
+            inset: 0,
+            backgroundColor: 'rgba(15, 23, 42, 0.65)',
+            backdropFilter: 'blur(4px)',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            zIndex: 99999,
+            padding: '20px'
+          }}>
+            <div style={{
+              backgroundColor: '#ffffff',
+              borderRadius: '16px',
+              width: '100%',
+              maxWidth: '680px',
+              maxHeight: '85vh',
+              display: 'flex',
+              flexDirection: 'column',
+              boxShadow: '0 25px 50px -12px rgba(0, 0, 0, 0.25)',
+              overflow: 'hidden',
+              border: '1px solid #e2e8f0'
+            }}>
+              {/* Modal Header */}
+              <div style={{
+                padding: '18px 24px',
+                borderBottom: '1px solid #f1f5f9',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'space-between',
+                background: 'linear-gradient(to right, #f8fafc, #eff6ff)'
+              }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+                  <div style={{
+                    width: '36px',
+                    height: '36px',
+                    borderRadius: '10px',
+                    background: '#e0e7ff',
+                    color: '#4f46e5',
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'center'
+                  }}>
+                    <Sparkles style={{ width: '20px', height: '20px' }} />
+                  </div>
+                  <div>
+                    <h3 style={{ margin: 0, fontSize: '17px', fontWeight: '700', color: '#1e293b' }}>
+                      AI Code Review & Feedback
+                    </h3>
+                    <span style={{ fontSize: '12px', color: '#64748b' }}>
+                      Used {aiFeedbackCount}/2 AI feedback requests • {aiFeedbackRemaining} left
+                    </span>
+                  </div>
+                </div>
+                <button
+                  onClick={() => setAiFeedbackModalOpen(false)}
+                  style={{
+                    width: '32px',
+                    height: '32px',
+                    borderRadius: '8px',
+                    border: 'none',
+                    background: '#f1f5f9',
+                    color: '#64748b',
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    cursor: 'pointer'
+                  }}
+                >
+                  <X style={{ width: '18px', height: '18px' }} />
+                </button>
+              </div>
+
+              {/* Modal Body */}
+              <div style={{ padding: '24px', overflowY: 'auto', display: 'flex', flexDirection: 'column', gap: '18px' }}>
+                {/* Coach summary message */}
+                {latestAIFeedback.coach_message && (
+                  <div style={{
+                    background: '#f8fafc',
+                    borderLeft: '4px solid #6366f1',
+                    borderRadius: '0 8px 8px 0',
+                    padding: '14px 16px'
+                  }}>
+                    <div style={{ fontSize: '12px', fontWeight: '700', color: '#4f46e5', textTransform: 'uppercase', letterSpacing: '0.05em', marginBottom: '4px' }}>
+                      Interviewer Note
+                    </div>
+                    <p style={{ margin: 0, fontSize: '13.5px', color: '#334155', lineHeight: '1.6' }}>
+                      {latestAIFeedback.coach_message}
+                    </p>
+                  </div>
+                )}
+
+                {/* Strengths */}
+                {latestAIFeedback.strengths && latestAIFeedback.strengths.length > 0 && (
+                  <div style={{ background: '#f0fdf4', border: '1px solid #bbf7d0', borderRadius: '10px', padding: '14px 18px' }}>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '8px' }}>
+                      <CheckCircle2 style={{ width: '16px', height: '16px', color: '#16a34a' }} />
+                      <span style={{ fontSize: '13.5px', fontWeight: '700', color: '#166534' }}>Code Strengths</span>
+                    </div>
+                    <ul style={{ margin: 0, paddingLeft: '20px', fontSize: '13px', color: '#15803d', lineHeight: '1.5' }}>
+                      {latestAIFeedback.strengths.map((s, idx) => (
+                        <li key={idx} style={{ marginBottom: '4px' }}>{s}</li>
+                      ))}
+                    </ul>
+                  </div>
+                )}
+
+                {/* Risks & Bugs */}
+                {latestAIFeedback.risks && latestAIFeedback.risks.length > 0 && (
+                  <div style={{ background: '#fff1f2', border: '1px solid #fecdd3', borderRadius: '10px', padding: '14px 18px' }}>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '8px' }}>
+                      <AlertCircle style={{ width: '16px', height: '16px', color: '#e11d48' }} />
+                      <span style={{ fontSize: '13.5px', fontWeight: '700', color: '#9f1239' }}>Potential Bugs & Edge Cases</span>
+                    </div>
+                    <ul style={{ margin: 0, paddingLeft: '20px', fontSize: '13px', color: '#be123c', lineHeight: '1.5' }}>
+                      {latestAIFeedback.risks.map((r, idx) => (
+                        <li key={idx} style={{ marginBottom: '4px' }}>{r}</li>
+                      ))}
+                    </ul>
+                  </div>
+                )}
+
+                {/* Next Steps & Hints */}
+                {latestAIFeedback.next_steps && latestAIFeedback.next_steps.length > 0 && (
+                  <div style={{ background: '#fefce8', border: '1px solid #fef08a', borderRadius: '10px', padding: '14px 18px' }}>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '8px' }}>
+                      <Lightbulb style={{ width: '16px', height: '16px', color: '#ca8a04' }} />
+                      <span style={{ fontSize: '13.5px', fontWeight: '700', color: '#854d0e' }}>Recommended Hints & Steps</span>
+                    </div>
+                    <ul style={{ margin: 0, paddingLeft: '20px', fontSize: '13px', color: '#a16207', lineHeight: '1.5' }}>
+                      {latestAIFeedback.next_steps.map((n, idx) => (
+                        <li key={idx} style={{ marginBottom: '4px' }}>{n}</li>
+                      ))}
+                    </ul>
+                  </div>
+                )}
+
+                {/* Scorecard */}
+                {latestAIFeedback.scorecard && (
+                  <div style={{ background: '#faf5ff', border: '1px solid #e9d5ff', borderRadius: '10px', padding: '14px 18px' }}>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '12px' }}>
+                      <Award style={{ width: '16px', height: '16px', color: '#9333ea' }} />
+                      <span style={{ fontSize: '13.5px', fontWeight: '700', color: '#6b21a8' }}>Code Scorecard</span>
+                    </div>
+                    <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '12px' }}>
+                      <div style={{ background: '#ffffff', borderRadius: '8px', padding: '10px', textAlign: 'center', border: '1px solid #f3e8ff' }}>
+                        <div style={{ fontSize: '11px', color: '#6b7280', fontWeight: '600' }}>Problem Understanding</div>
+                        <div style={{ fontSize: '18px', fontWeight: '800', color: '#7e22ce', marginTop: '2px' }}>
+                          {latestAIFeedback.scorecard.problem_understanding ?? '--'}%
+                        </div>
+                      </div>
+                      <div style={{ background: '#ffffff', borderRadius: '8px', padding: '10px', textAlign: 'center', border: '1px solid #f3e8ff' }}>
+                        <div style={{ fontSize: '11px', color: '#6b7280', fontWeight: '600' }}>Implementation</div>
+                        <div style={{ fontSize: '18px', fontWeight: '800', color: '#7e22ce', marginTop: '2px' }}>
+                          {latestAIFeedback.scorecard.implementation ?? '--'}%
+                        </div>
+                      </div>
+                      <div style={{ background: '#ffffff', borderRadius: '8px', padding: '10px', textAlign: 'center', border: '1px solid #f3e8ff' }}>
+                        <div style={{ fontSize: '11px', color: '#6b7280', fontWeight: '600' }}>Overall Score</div>
+                        <div style={{ fontSize: '18px', fontWeight: '800', color: '#7e22ce', marginTop: '2px' }}>
+                          {latestAIFeedback.scorecard.overall ?? '--'}%
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                )}
+              </div>
+
+              {/* Modal Footer */}
+              <div style={{
+                padding: '14px 24px',
+                borderTop: '1px solid #f1f5f9',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'space-between',
+                background: '#f8fafc'
+              }}>
+                <span style={{ fontSize: '12px', color: aiFeedbackRemaining <= 0 ? '#ef4444' : '#64748b', fontWeight: '600' }}>
+                  {aiFeedbackRemaining <= 0 ? "⚠️ You have used all 2 feedback requests." : `ℹ️ ${aiFeedbackRemaining} feedback request${aiFeedbackRemaining === 1 ? '' : 's'} remaining.`}
+                </span>
+                <button
+                  onClick={() => setAiFeedbackModalOpen(false)}
+                  style={{
+                    padding: '8px 20px',
+                    background: '#4f46e5',
+                    color: '#ffffff',
+                    borderRadius: '8px',
+                    border: 'none',
+                    fontSize: '13px',
+                    fontWeight: '600',
+                    cursor: 'pointer'
+                  }}
+                >
+                  Got It, Continue Coding
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
       </div>
     )
   }
@@ -709,6 +1028,7 @@ export const InterviewTechnical = () => {
     loading,
     showAllSet,
     error,
+    scheduledStart,
     isCompleted,
     isDisclaimerAccepted,
     agreeChecked,
@@ -722,6 +1042,8 @@ export const InterviewTechnical = () => {
     faceAlertCount,
     noiseAlertCount,
     showNoiseBanner,
+    securityMessage,
+    modelsFailed,
     fullscreenWarning,
     screenShareWarning,
     screenShareViolations,
@@ -755,6 +1077,13 @@ export const InterviewTechnical = () => {
     isSpeechRecordingRef,
     isOnline
   } = session
+
+  useEffect(() => {
+    const remoteCount = session?.codingRoundData?.coding_round?.ai_feedback_count;
+    if (typeof remoteCount === 'number') {
+      setAiFeedbackCount(remoteCount);
+    }
+  }, [session?.codingRoundData]);
 
   // ── Voice Cloning Setup State (UI only) ──────────────────────────────────
   const [vcStep, setVcStep] = useState('idle') // 'idle' | 'recording' | 'uploading' | 'done' | 'error'
@@ -809,14 +1138,14 @@ export const InterviewTechnical = () => {
       // Stop mic if running
       if (recognitionRef?.current) {
         if (isSpeechRecordingRef) isSpeechRecordingRef.current = false
-        try { recognitionRef.current.stop() } catch (e) {}
+        try { recognitionRef.current.stop() } catch (e) { }
       }
     } else {
       setIsPrepMode(false)
       // Ensure mic is running for non-prep modes
       if (recognitionRef?.current) {
         if (isSpeechRecordingRef) isSpeechRecordingRef.current = true
-        try { recognitionRef.current.start() } catch (e) {}
+        try { recognitionRef.current.start() } catch (e) { }
       }
     }
   }, [currentQuestionIndex, currentQuestion?.type, recognitionRef, isSpeechRecordingRef])
@@ -832,7 +1161,7 @@ export const InterviewTechnical = () => {
       // Restart mic when prep time finishes
       if (recognitionRef?.current) {
         if (isSpeechRecordingRef) isSpeechRecordingRef.current = true
-        try { recognitionRef.current.start() } catch (e) {}
+        try { recognitionRef.current.start() } catch (e) { }
       }
     }
     return () => clearInterval(timer)
@@ -852,14 +1181,7 @@ export const InterviewTechnical = () => {
   }
 
   if (error) {
-    return (
-      <div className="flex justify-center items-center h-screen flex-col p-6 text-center">
-        <AlertTriangle className="text-danger mb-4" size={48} />
-        <h2 className="text-2xl font-bold text-slate-900 tracking-tight">Access Denied</h2>
-        <p className="text-slate-600 mt-2 max-w-md text-sm">{error}</p>
-        <Link to="/" className="inline-flex items-center justify-center gap-2 px-6 py-3 rounded-full font-semibold text-sm bg-primary hover:bg-primary-hover text-white transition-all shadow-[0_4px_14px_rgba(99,102,241,0.15)] mt-6 no-underline">Go to Platform Page</Link>
-      </div>
-    )
+    return <AccessDeniedScreen error={error} scheduledStart={scheduledStart || sessionDetail?.scheduled_start} />
   }
 
   if (isCompleted) {
@@ -923,12 +1245,12 @@ export const InterviewTechnical = () => {
 
         {/* Device Check Modal */}
         {session.showDeviceCheck && (
-          <DeviceCheckModal 
+          <DeviceCheckModal
             onSuccess={() => {
               session.setShowDeviceCheck(false);
               session.promptScreenShare();
-            }} 
-            onCancel={() => session.setShowDeviceCheck(false)} 
+            }}
+            onCancel={() => session.setShowDeviceCheck(false)}
           />
         )}
       </div>
@@ -957,7 +1279,7 @@ export const InterviewTechnical = () => {
         {vcStep === 'recording' && (
           <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '16px', marginBottom: '20px' }}>
             <div style={{ display: 'flex', alignItems: 'flex-end', gap: '4px', height: '40px' }}>
-              {Array.from({length: 9}).map((_,i) => <div key={i} className="vc-bar" style={{animationDelay:`${i*0.1}s`}} />)}
+              {Array.from({ length: 9 }).map((_, i) => <div key={i} className="vc-bar" style={{ animationDelay: `${i * 0.1}s` }} />)}
             </div>
             <p style={{ color: '#c4b5fd', fontSize: '14px', fontWeight: '600' }}>🔴 Recording... speak now</p>
             <button onClick={stopVcRecording} style={{ padding: '10px 24px', background: '#dc2626', color: 'white', borderRadius: '8px', border: 'none', cursor: 'pointer', fontWeight: '700', fontSize: '14px' }}>
@@ -1070,8 +1392,8 @@ export const InterviewTechnical = () => {
 
   const currentQuestionText = currentQuestion?.text || currentQuestion?.question || currentQuestion?.prompt || ''
 
-  const displayQuestionNum = currentQuestion?.caseStudyIndex !== undefined 
-    ? currentQuestion.caseStudyIndex + 1 
+  const displayQuestionNum = currentQuestion?.caseStudyIndex !== undefined
+    ? currentQuestion.caseStudyIndex + 1
     : currentQuestionIndex + 1
 
   const totalDisplayQuestions = currentQuestion?.type === 'case_study'
@@ -1088,27 +1410,15 @@ export const InterviewTechnical = () => {
         </div>
       )}
 
-      {/* Alerts */}
-      {showNoiseBanner && (
-        <div style={{ position: 'fixed', top: '20px', right: '20px', zIndex: 99999, padding: '16px', borderRadius: '12px', background: 'rgba(245, 158, 11, 0.1)', border: '1px solid #f59e0b', color: '#f59e0b', display: 'flex', alignItems: 'center', gap: '12px', boxShadow: '0 4px 6px rgba(0,0,0,0.1)', maxWidth: '380px' }}>
-          <Volume2 size={20} style={{ animation: 'bounce 1s infinite' }} />
-          <div>
-            <strong style={{ fontSize: '14px', display: 'block' }}>Background Noise Alert</strong>
-            <p style={{ fontSize: '12px', opacity: 0.9, margin: '2px 0 0 0' }}>Please maintain silence. Alerts: {noiseAlertCount}/10</p>
-          </div>
-        </div>
-      )}
-
-      {/* Face / Proctoring Alert Banner */}
-      {faceAlertCount > 0 && (
-        <div style={{ position: 'fixed', top: showNoiseBanner ? '100px' : '20px', right: '20px', zIndex: 99998, padding: '14px 16px', borderRadius: '12px', background: 'rgba(239, 68, 68, 0.1)', border: '1px solid #ef4444', color: '#ef4444', display: 'flex', alignItems: 'center', gap: '12px', boxShadow: '0 4px 6px rgba(0,0,0,0.15)', maxWidth: '380px', transition: 'top 0.3s ease' }}>
-          <span style={{ fontSize: '18px' }}>👁️</span>
-          <div>
-            <strong style={{ fontSize: '14px', display: 'block' }}>Face Alert</strong>
-            <p style={{ fontSize: '12px', opacity: 0.9, margin: '2px 0 0 0' }}>{proctoringAlert || 'Proctoring violation detected'}. Alerts: {faceAlertCount}/20</p>
-          </div>
-        </div>
-      )}
+      {/* ── Proctoring Alert Pills (portal-mounted, never overlaps page content) ── */}
+      <ProctoringAlerts
+        faceAlertCount={faceAlertCount}
+        noiseAlertCount={noiseAlertCount}
+        showNoiseBanner={showNoiseBanner}
+        securityMessage={securityMessage}
+        proctoringAlert={proctoringAlert}
+        modelsFailed={modelsFailed}
+      />
 
       {fullscreenWarning && (
         <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.95)', zIndex: 99999, display: 'flex', flexDirection: 'column', justifyContent: 'center', alignItems: 'center', gap: '20px', textAlign: 'center', padding: '24px' }}>
@@ -1189,7 +1499,7 @@ export const InterviewTechnical = () => {
                 </button>
               )}
 
-              <button 
+              <button
                 className="w-full py-3 px-4 rounded-xl font-bold text-xs transition-all border-none shadow-md flex items-center justify-center gap-2 bg-slate-800 hover:bg-slate-700 text-white cursor-pointer hover:-translate-y-0.5"
                 onClick={(e) => handleFinishEarly(e)}
                 title="Finish Interview"
@@ -1201,7 +1511,7 @@ export const InterviewTechnical = () => {
             {/* AI insights Card */}
             <div className="bg-white/60 backdrop-blur-2xl border border-white shadow-[0_8px_30px_rgb(0,0,0,0.04)] rounded-[24px] p-6 transition-all duration-300 hover:shadow-lg">
               <h4 className="m-0 mb-4 text-[13px] font-bold text-slate-800 tracking-wide uppercase">AI Live Evaluation</h4>
-              
+
               <div className="mb-4">
                 <div className="flex justify-between items-center mb-1">
                   <span className="text-[11px] font-extrabold text-slate-500 tracking-wider">CLARITY & COMMUNICATION</span>
@@ -1270,7 +1580,7 @@ export const InterviewTechnical = () => {
 
                 <div className="flex flex-col gap-2">
                   <h3 className="text-sm font-bold text-indigo-600 uppercase tracking-widest flex items-center gap-2 m-0">
-                    <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"></path></svg> 
+                    <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"></path></svg>
                     Scenario
                   </h3>
                   <div className="text-slate-700 leading-relaxed text-[15px] font-medium bg-slate-50 border-l-4 border-indigo-600 px-5 py-4 rounded-r-xl">
@@ -1310,7 +1620,7 @@ export const InterviewTechnical = () => {
                       setIsPrepMode(false)
                       if (recognitionRef?.current) {
                         if (isSpeechRecordingRef) isSpeechRecordingRef.current = true
-                        try { recognitionRef.current.start() } catch (e) {}
+                        try { recognitionRef.current.start() } catch (e) { }
                       }
                     }}
                     className="px-8 py-3.5 rounded-xl font-bold text-sm text-white bg-indigo-600 hover:bg-indigo-700 border-none cursor-pointer transition-all shadow-md flex items-center gap-2"
@@ -1330,21 +1640,20 @@ export const InterviewTechnical = () => {
                     <span className="px-3 py-1 rounded-full text-[10px] font-bold tracking-wide uppercase bg-indigo-50 text-indigo-600 border border-indigo-100">
                       {currentQuestion?.category || currentQuestion?.type || 'Case Analysis'}
                     </span>
-                    <span className={`px-3 py-1 rounded-full text-[10px] font-bold tracking-wide uppercase border ${
-                      String(currentQuestion?.difficulty || 'Easy').toLowerCase() === 'easy'
+                    <span className={`px-3 py-1 rounded-full text-[10px] font-bold tracking-wide uppercase border ${String(currentQuestion?.difficulty || 'Easy').toLowerCase() === 'easy'
                         ? 'bg-emerald-50 text-emerald-600 border-emerald-100'
                         : String(currentQuestion?.difficulty || 'Easy').toLowerCase() === 'medium'
-                        ? 'bg-amber-50 text-amber-600 border-amber-100'
-                        : 'bg-red-50 text-red-600 border-red-100'
-                    }`}>
+                          ? 'bg-amber-50 text-amber-600 border-amber-100'
+                          : 'bg-red-50 text-red-600 border-red-100'
+                      }`}>
                       {currentQuestion?.difficulty || 'Easy'}
                     </span>
                   </div>
                   <div className="flex gap-4 items-start">
                     <div className="w-1.5 bg-indigo-600 self-stretch rounded-full shrink-0 min-h-[60px]" />
                     <p className="flex-1 text-slate-800 text-base md:text-lg font-semibold leading-relaxed m-0">{currentQuestionText || 'Question is loading...'}</p>
-                    <button 
-                      className="bg-slate-50 hover:bg-slate-100 text-slate-500 hover:text-indigo-600 border border-slate-200 hover:border-indigo-100 cursor-pointer p-2.5 rounded-full transition-all duration-200 shrink-0" 
+                    <button
+                      className="bg-slate-50 hover:bg-slate-100 text-slate-500 hover:text-indigo-600 border border-slate-200 hover:border-indigo-100 cursor-pointer p-2.5 rounded-full transition-all duration-200 shrink-0"
                       onClick={() => speakAIQuestion(currentQuestionText)}
                     >
                       <svg xmlns="http://www.w3.org/2000/svg" className="w-5 h-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
@@ -1366,12 +1675,15 @@ export const InterviewTechnical = () => {
                       RECORDING
                     </div>
                   </div>
-                  <textarea
-                    className="bg-slate-50/50 border border-slate-200 p-5 text-[0.95rem] font-medium leading-relaxed text-slate-800 placeholder:text-slate-400 outline-none shadow-inner resize-none w-full flex-1 overflow-y-auto transition-all rounded-[24px] custom-scrollbar"
-                    placeholder="Your speech will appear here automatically..."
-                    readOnly
-                    value={transcriptionText + (interimTranscriptText ? interimTranscriptText : '')}
-                  />
+                  <div
+                    className="bg-slate-50/50 border border-slate-200 p-5 text-[0.95rem] font-medium leading-relaxed text-slate-800 shadow-inner resize-none w-full flex-1 overflow-y-auto transition-all rounded-[24px] custom-scrollbar"
+                    tabIndex={-1}
+                    aria-live="polite"
+                    aria-label="Live transcript"
+                    style={{ pointerEvents: 'none', userSelect: 'none', cursor: 'default', whiteSpace: 'pre-wrap', wordBreak: 'break-word' }}
+                  >
+                    {transcriptionText + (interimTranscriptText ? interimTranscriptText : '') || <span style={{ color: '#94a3b8' }}>Your speech will appear here automatically...</span>}
+                  </div>
                 </div>
 
                 {/* Navigation buttons */}
@@ -1384,7 +1696,7 @@ export const InterviewTechnical = () => {
                         </span>
                       </div>
                     ) : (
-                      <button 
+                      <button
                         className="px-8 py-3.5 rounded-xl font-bold text-sm text-white transition-all duration-200 border-none bg-red-500 hover:bg-red-600 shadow-lg shadow-red-500/20 hover:shadow-red-500/30 cursor-pointer"
                         onClick={(e) => handleFinishEarly(e)}
                         title="Finish Interview"
@@ -1393,7 +1705,7 @@ export const InterviewTechnical = () => {
                       </button>
                     )
                   ) : (
-                    <button 
+                    <button
                       className="px-8 py-3.5 rounded-xl font-bold text-sm text-white bg-emerald-500 hover:bg-emerald-600 shadow-lg shadow-emerald-500/20 hover:shadow-emerald-500/30 transition-all duration-200 cursor-pointer border-none"
                       onClick={handleNextQuestion}
                     >
@@ -1409,8 +1721,8 @@ export const InterviewTechnical = () => {
 
       {/* Floating Camera Preview Widget */}
       {isDisclaimerAccepted && !showAllSet && !loading && (
-        <motion.div 
-          drag 
+        <motion.div
+          drag
           dragMomentum={false}
           className="fixed bottom-6 right-6 w-56 h-36 rounded-xl overflow-hidden shadow-2xl border-2 border-indigo-600 z-[9999] bg-black transition-colors duration-300 hover:shadow-[0_15px_30px_rgba(99,102,241,0.25)] hover:border-violet-500 cursor-move"
         >

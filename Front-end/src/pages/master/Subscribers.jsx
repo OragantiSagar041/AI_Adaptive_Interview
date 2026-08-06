@@ -20,6 +20,8 @@ export default function Subscribers() {
   const [planFilter, setPlanFilter] = useState('all')
   const [statusFilter, setStatusFilter] = useState('all')
   const [sortBy, setSortBy] = useState('name')
+  const [startDate, setStartDate] = useState('')
+  const [endDate, setEndDate] = useState('')
 
   // Update Modal state
   const [isUpdateModalOpen, setIsUpdateModalOpen] = useState(false)
@@ -139,31 +141,35 @@ export default function Subscribers() {
   }
 
   const handleOpenUpdateModal = (c) => {
-    setUpdateTenantId(c.id || c.company_id)
+    setUpdateTenantId(c.id)
     setUpdateTenantPlan(c.subscription_plan || 'trial')
-    setUpdateTenantDays(0)
-    setUpdateTenantCredits(0)
+    setUpdateTenantDays(c.days_remaining || 0)
+    setUpdateTenantCredits(c.credits || 0)
     setIsUpdateModalOpen(true)
   }
 
-  const handleUpdateTenantSubmit = async (e) => {
-    e.preventDefault()
+  const handleSaveSubscriptionUpdate = async () => {
     setUpdateLoading(true)
     try {
-      const res = await axios.put(`${API_BASE_URL}/master/companies/${encodeURIComponent(updateTenantId)}?master_id=${encodeURIComponent(adminId)}`, {
-        subscription_plan: updateTenantPlan,
-        add_days: parseInt(updateTenantDays || 0),
-        add_credits: parseInt(updateTenantCredits || 0)
-      }, {
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${token}`
+      const payload = {
+        plan_key: updateTenantPlan,
+        days_to_add: parseInt(updateTenantDays) || 0,
+        credits: parseInt(updateTenantCredits) || 0
+      }
+      const res = await axios.patch(
+        `${API_BASE_URL}/master/companies/${encodeURIComponent(updateTenantId)}/subscription?master_id=${encodeURIComponent(adminId)}`,
+        payload,
+        {
+          headers: {
+            'Content-Type': 'application/json',
+            'Authorization': `Bearer ${token}`
+          }
         }
-      })
+      )
       if (res.data && res.data.status === 'success') {
         Swal.fire({
-          title: 'Success',
-          text: 'Subscription successfully updated!',
+          title: 'Updated!',
+          text: 'Tenant subscription modified successfully.',
           icon: 'success',
           background: '#161c2d',
           color: '#fff',
@@ -175,7 +181,7 @@ export default function Subscribers() {
       console.error(e)
       Swal.fire({
         title: 'Error',
-        text: e.response?.data?.detail || 'Failed to update subscription parameters.',
+        text: e.response?.data?.detail || 'Failed to update subscription.',
         icon: 'error',
         background: '#161c2d',
         color: '#fff',
@@ -189,10 +195,8 @@ export default function Subscribers() {
     if (token) {
       fetchCompanies()
     }
-   
   }, [token])
 
-  // Filters logic
   const filteredCompanies = companies.filter(c => {
     const query = search.toLowerCase()
     const matchesSearch =
@@ -206,10 +210,21 @@ export default function Subscribers() {
 
     const matchesStatus =
       statusFilter === 'all' ||
-      (statusFilter === 'expired' && c.is_expired) ||
-      (statusFilter === 'active' && !c.is_expired)
+      (statusFilter === 'expired' && c.status === 'expired') ||
+      (statusFilter === 'active' && c.status === 'active') ||
+      (statusFilter === 'blocked' && c.status === 'blocked')
 
-    return matchesSearch && matchesPlan && matchesStatus
+    let matchesDate = true
+    const cDateStr = c.created_at || c.subscription_start
+    if (startDate || endDate) {
+      if (cDateStr) {
+        const cDate = cDateStr.substring(0, 10)
+        if (startDate && cDate < startDate) matchesDate = false
+        if (endDate && cDate > endDate) matchesDate = false
+      }
+    }
+
+    return matchesSearch && matchesPlan && matchesStatus && matchesDate
   }).sort((a, b) => {
     if (sortBy === 'name') {
       return a.company_name?.localeCompare(b.company_name || '')
@@ -222,7 +237,7 @@ export default function Subscribers() {
     <div className="space-y-6 max-w-6xl">
       {/* Filters bar */}
       <div className="bg-white border border-slate-200/60 p-4 sm:p-6 rounded-2xl shadow-[0_4px_20px_rgba(0,0,0,0.04)] grid grid-cols-2 sm:flex sm:flex-wrap gap-4 items-end">
-        <div className="col-span-2 sm:flex-1 sm:min-w-[220px]">
+        <div className="col-span-2 sm:flex-1 sm:min-w-[200px]">
           <label className="text-[0.62rem] font-bold text-slate-400 uppercase tracking-widest block mb-2">Search Subscribers</label>
           <div className="relative">
             <span className="absolute left-3.5 top-1/2 -translate-y-1/2 text-slate-400">
@@ -244,7 +259,7 @@ export default function Subscribers() {
           <select
             value={planFilter}
             onChange={(e) => setPlanFilter(e.target.value)}
-            className=" w-full sm:min-w-[140px] py-2.5 px-4 rounded-xl border border-slate-200 bg-slate-50 text-sm text-slate-800 outline-none focus:border-indigo-500 cursor-pointer"
+            className=" w-full sm:min-w-[130px] py-2.5 px-3.5 rounded-xl border border-slate-200 bg-slate-50 text-sm text-slate-800 outline-none focus:border-indigo-500 cursor-pointer"
           >
             <option value="all">All Plans</option>
             <option value="trial">Free Trial</option>
@@ -258,12 +273,34 @@ export default function Subscribers() {
           <select
             value={statusFilter}
             onChange={(e) => setStatusFilter(e.target.value)}
-            className="w-full sm:min-w-[140px] py-2.5 px-4 rounded-xl border border-slate-200 bg-slate-50 text-sm text-slate-800 outline-none focus:border-indigo-500 cursor-pointer"
+            className="w-full sm:min-w-[130px] py-2.5 px-3.5 rounded-xl border border-slate-200 bg-slate-50 text-sm text-slate-800 outline-none focus:border-indigo-500 cursor-pointer"
           >
             <option value="all">All Statuses</option>
             <option value="active">Active</option>
             <option value="expired">Expired</option>
+            <option value="blocked">Deactivated</option>
           </select>
+        </div>
+
+        {/* Date Filter Inputs */}
+        <div className="col-span-1 sm:w-auto">
+          <label className="text-[0.62rem] font-bold text-slate-400 uppercase tracking-widest block mb-2">From Date</label>
+          <input
+            type="date"
+            value={startDate}
+            onChange={(e) => setStartDate(e.target.value)}
+            className="w-full sm:w-auto py-2 px-3 rounded-xl border border-slate-200 bg-slate-50 text-xs font-medium text-slate-700 outline-none focus:border-indigo-500 cursor-pointer"
+          />
+        </div>
+
+        <div className="col-span-1 sm:w-auto">
+          <label className="text-[0.62rem] font-bold text-slate-400 uppercase tracking-widest block mb-2">To Date</label>
+          <input
+            type="date"
+            value={endDate}
+            onChange={(e) => setEndDate(e.target.value)}
+            className="w-full sm:w-auto py-2 px-3 rounded-xl border border-slate-200 bg-slate-50 text-xs font-medium text-slate-700 outline-none focus:border-indigo-500 cursor-pointer"
+          />
         </div>
 
         <div className="col-span-2 sm:col-span-1 sm:w-auto">
@@ -271,7 +308,7 @@ export default function Subscribers() {
           <select
             value={sortBy}
             onChange={(e) => setSortBy(e.target.value)}
-            className="w-full sm:min-w-[140px] py-2.5 px-4 rounded-xl border border-slate-200 bg-slate-50 text-sm text-slate-800 outline-none focus:border-indigo-500 cursor-pointer"
+            className="w-full sm:min-w-[130px] py-2.5 px-3.5 rounded-xl border border-slate-200 bg-slate-50 text-sm text-slate-800 outline-none focus:border-indigo-500 cursor-pointer"
           >
             <option value="name">Company Name</option>
             <option value="date">Date Registered</option>
@@ -283,13 +320,15 @@ export default function Subscribers() {
             setSearch('')
             setPlanFilter('all')
             setStatusFilter('all')
+            setStartDate('')
+            setEndDate('')
             setSortBy('name')
           }}
           className="col-span-2 sm:w-auto py-2.5 px-4 rounded-xl border border-rose-200 bg-rose-50/50 hover:bg-rose-100/70 text-rose-600 hover:text-rose-700 cursor-pointer font-semibold text-sm transition-all flex items-center justify-center gap-2"
           title="Reset Filters"
         >
           <X size={16} strokeWidth={2.5} />
-          <span>Reset Filters</span>
+          <span>Reset</span>
         </button>
       </div>
 
@@ -334,11 +373,13 @@ export default function Subscribers() {
                       </td>
                       <td className="p-4">
                         <span className={`px-2.5 py-0.5 rounded-full text-[0.65rem] font-bold uppercase tracking-wider ${
-                          c.is_expired
-                            ? 'bg-red-500/10 text-red-500 border border-red-500/20'
-                            : 'bg-emerald-500/10 text-emerald-500 border border-emerald-500/20'
+                          c.status === 'blocked'
+                            ? 'bg-amber-500/10 text-amber-500 border border-amber-500/20'
+                            : c.status === 'expired'
+                              ? 'bg-red-500/10 text-red-500 border border-red-500/20'
+                              : 'bg-emerald-500/10 text-emerald-500 border border-emerald-500/20'
                         }`}>
-                          {c.is_expired ? 'Expired' : 'Active'}
+                          {c.status === 'blocked' ? 'Deactivated' : c.status === 'expired' ? 'Expired' : 'Active'}
                         </span>
                       </td>
                       <td className="p-4 text-xs text-slate-500">
@@ -390,7 +431,7 @@ export default function Subscribers() {
       {/* MODAL: UPDATE SUBSCRIPTION */}
       {isUpdateModalOpen && (
         <div className="fixed inset-0 z-[9999] flex items-center justify-center bg-black/60 backdrop-blur-sm p-4">
-          <form onSubmit={handleUpdateTenantSubmit} className="w-full max-w-md bg-white border border-slate-200 rounded-2xl p-6 shadow-2xl space-y-4 text-slate-800">
+          <form onSubmit={(e) => { e.preventDefault(); handleSaveSubscriptionUpdate(); }} className="w-full max-w-md bg-white border border-slate-200 rounded-2xl p-6 shadow-2xl space-y-4 text-slate-800">
             <div className="flex justify-between items-center border-b border-slate-200 pb-3">
               <h3 className="font-bold text-slate-800">Update Tenant Subscription</h3>
               <button

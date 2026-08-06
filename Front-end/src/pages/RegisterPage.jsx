@@ -46,9 +46,16 @@ function RegisterPage() {
         })
         setPlans(sortedPlans)
 
-        const preferredPlanName = searchParams.get("plan")
-        const match = sortedPlans.find(p => p.plan_name.toLowerCase() === (preferredPlanName || "").toLowerCase())
-        setSelectedPlan(match || sortedPlans[0])
+        const preferredPlanName = searchParams.get("plan") || ""
+        const match = sortedPlans.find(p => p.plan_name.toLowerCase() === preferredPlanName.toLowerCase())
+        
+        if (match) {
+          setSelectedPlan(match)
+        } else {
+          // Fallback to the trial plan, or the first plan if no trial plan is found
+          const trialPlan = sortedPlans.find(p => p.plan_name.toLowerCase().includes("trial"))
+          setSelectedPlan(trialPlan || sortedPlans[0])
+        }
       } catch (err) {
         setStatus({ message: err.message || "Failed to load plans.", type: 'error' })
       } finally {

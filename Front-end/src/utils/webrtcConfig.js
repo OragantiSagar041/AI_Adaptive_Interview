@@ -4,7 +4,8 @@ const DEFAULT_STUN_SERVERS = [
 ]
 
 export function getIceServers() {
-  const turnUrls = String(import.meta.env.VITE_TURN_URLS || '')
+  const env = typeof import.meta !== 'undefined' && import.meta.env ? import.meta.env : {};
+  const turnUrls = String(env.VITE_TURN_URLS || '')
     .split(',')
     .map(value => value.trim())
     .filter(Boolean)
@@ -15,12 +16,13 @@ export function getIceServers() {
     ...DEFAULT_STUN_SERVERS,
     {
       urls: turnUrls,
-      username: import.meta.env.VITE_TURN_USERNAME || '',
-      credential: import.meta.env.VITE_TURN_CREDENTIAL || '',
+      username: env.VITE_TURN_USERNAME || '',
+      credential: env.VITE_TURN_CREDENTIAL || '',
     },
   ]
 }
 
 export function hasTurnServer() {
-  return String(import.meta.env.VITE_TURN_URLS || '').trim().length > 0
+  const env = typeof import.meta !== 'undefined' && import.meta.env ? import.meta.env : {};
+  return String(env.VITE_TURN_URLS || '').trim().length > 0
 }

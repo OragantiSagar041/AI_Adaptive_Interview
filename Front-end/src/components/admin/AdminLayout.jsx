@@ -17,7 +17,9 @@ import {
   CreditCard,
   UserCheck,
   AlertCircle,
-  ClipboardList
+  ClipboardList,
+  Palette,
+  ChevronDown
 } from 'lucide-react'
 import logoImage from '../../assets/logo.png'
 import AdminCopilot from './copilot/AdminCopilot'
@@ -25,6 +27,15 @@ import ThemeToggle from '../ThemeToggle'
 import { getNotifications, markNotificationAsRead, markAllNotificationsAsRead } from '../../utils/api'
 import { setLiveResultsModalOpen } from '../../store/slices/interviewSlice'
 import { updateAdminUser } from '../../store/slices/authSlice'
+
+function hexToRgba(hex, alpha) {
+  const h = hex.replace('#', '')
+  const bigint = parseInt(h, 16)
+  const r = (bigint >> 16) & 255
+  const g = (bigint >> 8) & 255
+  const b = bigint & 255
+  return `rgba(${r}, ${g}, ${b}, ${alpha})`
+}
 
 export default function AdminLayout({
   children,
@@ -49,7 +60,20 @@ export default function AdminLayout({
 
   const [notifications, setNotifications] = useState([])
   const [notifDropdownOpen, setNotifDropdownOpen] = useState(false)
+  const [themeOpen, setThemeOpen] = useState(false)
   const notifRef = useRef(null)
+  const themeRef = useRef(null)
+
+  // Close theme popover on outside click
+  useEffect(() => {
+    function handleClickOutside(event) {
+      if (themeRef.current && !themeRef.current.contains(event.target)) {
+        setThemeOpen(false)
+      }
+    }
+    document.addEventListener('mousedown', handleClickOutside)
+    return () => document.removeEventListener('mousedown', handleClickOutside)
+  }, [])
 
   const fetchNotifications = async () => {
     try {
@@ -177,8 +201,8 @@ export default function AdminLayout({
     }
   }
 
-  const navItems = [
-    { id: 'dashboard', label: 'Overview Dashboard', icon: LayoutDashboard, path: '/admin/dashboard' },
+  const baseNavItems = [
+    { id: 'dashboard', label: 'Dashboard', icon: LayoutDashboard, path: '/admin/dashboard' },
     { id: 'interviews', label: 'Interviews', icon: ClipboardList, path: '/admin/interviews' },
     { id: 'qualified', label: 'Qualified Candidates', icon: CheckCircle, path: '/admin/qualified-candidates' },
     { id: 'rejected', label: 'Rejected Candidates', icon: XCircle, path: '/admin/rejected-candidates' },
@@ -186,11 +210,19 @@ export default function AdminLayout({
     { id: 'ai-calling', label: 'AI Calling Agent', icon: Radio, path: '/admin/ai-calling' },
 
     { id: 'jobs', label: 'Jobs', icon: Briefcase, path: '/admin/jobs' },
-    { id: 'settings', label: 'Profile Settings', icon: Settings, path: '/admin/profile-settings' },
+    { id: 'settings', label: 'Settings', icon: Settings, path: '/admin/profile-settings' },
   ]
+  const userFeatures = adminUser?.plan_features
+  const filteredNavItems = (userFeatures && userFeatures.length > 0)
+    ? baseNavItems.filter(item => userFeatures.includes(item.label))
+    : baseNavItems
+  const navItems = (!filteredNavItems || filteredNavItems.length === 0) ? baseNavItems : filteredNavItems
+
+  const accentBg = hexToRgba(currentAccent.primary, 0.07)
+  const accentBgEnd = hexToRgba(currentAccent.primary, 0.04)
 
   return (
-    <div className="h-screen bg-background text-foreground flex font-sans overflow-hidden">
+<div className="h-screen bg-background text-foreground flex font-sans overflow-hidden">
       {/* Sidebar */}
       <aside className="hidden w-64 shrink-0 border-r border-border bg-white/95 md:flex flex-col h-screen">
         {/* Brand / Logo */}
@@ -205,64 +237,100 @@ export default function AdminLayout({
         </div>
 
         {/* Navigation Items */}
-        <div className="space-y-1 p-3 overflow-y-auto flex-1">
+        <div className="space-y-0.5 p-3 overflow-y-auto flex-1">
           {navItems.map((item) => (
             <NavLink
               key={item.id}
               to={item.path}
               className={({ isActive }) =>
-                `flex items-center gap-3 rounded-md px-3 py-2 text-sm font-medium transition-colors ${
+                `flex items-center gap-3 rounded-xl px-3 py-2.5 text-sm font-medium transition-all duration-200 ${
                   isActive
-                    ? `text-white`
+? `text-white`
                     : 'text-muted-foreground hover:bg-muted hover:text-foreground'
                 }`
               }
               style={({ isActive }) => ({
-                background: isActive ? `linear-gradient(135deg, ${currentAccent.primary} 0%, ${currentAccent.hover} 100%)` : 'transparent'
+                background: isActive
+                  ? `linear-gradient(135deg, ${currentAccent.primary} 0%, ${currentAccent.hover} 100%)`
+                  : 'transparent',
+                boxShadow: isActive ? `0 4px 14px ${hexToRgba(currentAccent.primary, 0.35)}` : 'none',
+                color: isActive ? '#ffffff' : undefined,
               })}
+              onMouseEnter={(e) => {
+                if (!e.currentTarget.classList.contains('text-white') && !e.currentTarget.classList.contains('!text-white')) {
+                  e.currentTarget.style.background = hexToRgba(currentAccent.primary, 0.10)
+                  e.currentTarget.style.color = currentAccent.primary
+                } else {
+                  e.currentTarget.style.color = '#ffffff'
+                }
+              }}
+              onMouseLeave={(e) => {
+                if (!e.currentTarget.classList.contains('text-white') && !e.currentTarget.classList.contains('!text-white')) {
+                  e.currentTarget.style.background = 'transparent'
+                  e.currentTarget.style.color = ''
+                } else {
+                  e.currentTarget.style.color = '#ffffff'
+                }
+              }}
             >
               {({ isActive }) => (
                 <>
                   {item.icon ? (
-                    <item.icon size={16} className="shrink-0" />
+                    <item.icon size={16} className={`shrink-0 ${isActive ? '!text-white text-white' : ''}`} />
                   ) : (
-                    <span className="h-1.5 w-1.5 rounded-full bg-current opacity-60 shrink-0" />
+                    <span className={`h-1.5 w-1.5 rounded-full ${isActive ? 'bg-white' : 'bg-current opacity-60'} shrink-0`} />
                   )}
-                  {item.label}
+                  <span className={isActive ? '!text-white text-white font-semibold' : ''}>{item.label}</span>
                 </>
               )}
             </NavLink>
           ))}
         </div>
-        
+
         {/* Bottom Sidebar Actions */}
-        <div className="p-3 border-t border-border space-y-1 shrink-0">
+<div className="p-3 border-t border-border space-y-1 shrink-0">
           <button
             onClick={() => dispatch(setLiveResultsModalOpen(true))}
-            className="flex items-center gap-3 w-full rounded-md px-3 py-2 text-sm font-medium transition-colors text-slate-500 hover:bg-slate-100 hover:text-slate-900 border-none bg-transparent cursor-pointer text-left"
+            className="flex items-center gap-3 w-full rounded-xl px-3 py-2.5 text-sm font-medium transition-all duration-200 text-slate-500 border-none bg-transparent cursor-pointer text-left"
+            onMouseEnter={(e) => {
+              e.currentTarget.style.background = hexToRgba(currentAccent.primary, 0.10)
+              e.currentTarget.style.color = currentAccent.primary
+            }}
+            onMouseLeave={(e) => {
+              e.currentTarget.style.background = 'transparent'
+              e.currentTarget.style.color = ''
+            }}
           >
             <Radio size={16} />
             Live Results
           </button>
           <button
             onClick={onAddCredits}
-            className="flex items-center gap-3 w-full rounded-md px-3 py-2 text-sm font-medium transition-colors text-slate-500 hover:bg-slate-100 hover:text-slate-900 border-none bg-transparent cursor-pointer text-left"
+            className="flex items-center gap-3 w-full rounded-xl px-3 py-2.5 text-sm font-medium transition-all duration-200 text-slate-500 border-none bg-transparent cursor-pointer text-left"
+            onMouseEnter={(e) => {
+              e.currentTarget.style.background = hexToRgba(currentAccent.primary, 0.10)
+              e.currentTarget.style.color = currentAccent.primary
+            }}
+            onMouseLeave={(e) => {
+              e.currentTarget.style.background = 'transparent'
+              e.currentTarget.style.color = ''
+            }}
           >
             <Coins size={16} />
-            Available Credits
+            Request Credits
           </button>
         </div>
       </aside>
 
       {/* Main Content Wrapper */}
-      <div className="flex-1 flex flex-col min-w-0 h-screen">
+      <div className="flex-1 flex flex-col min-w-0 h-screen relative z-10">
         {/* Top bar */}
-        <header className="sticky top-0 z-30 border-b border-border bg-white flex items-center justify-between gap-10 px-6 h-16 shadow-sm shrink-0">
+<header className="sticky top-0 z-30 border-b border-border bg-white flex items-center justify-between gap-10 px-6 h-16 shadow-sm shrink-0">
           {/* Left Side: Brand & Toggles */}
           <div className="flex items-center gap-6">
             <h2 className="text-[17px] font-bold text-foreground">Recruiter Management</h2>
 
-            {/* Theme Toggle Dots */}
+{/* Theme Toggle Dots */}
             <div className="flex items-center gap-2 bg-muted/70 rounded-full px-2.5 py-1.5 border border-border">
               {Object.keys(accentColors).map(color => (
                 <button
@@ -276,10 +344,14 @@ export default function AdminLayout({
                   }}
                   title={color}
                 />
-              ))}
-            </div>
+                <ChevronDown
+                  size={13}
+                  className="transition-transform duration-200"
+                  style={{ transform: themeOpen ? 'rotate(180deg)' : 'rotate(0deg)' }}
+                />
+              </button>
 
-            {/* Stacked Active Plan & Credits Badge */}
+{/* Stacked Active Plan & Credits Badge */}
             <div className="flex flex-col justify-center px-3.5 py-1 bg-muted/80 border border-border text-foreground rounded-xl text-xs font-semibold shadow-xs shrink-0 leading-tight">
               <div className="flex items-center gap-1.5 font-bold">
                 <span className="w-1.5 h-1.5 rounded-full bg-indigo-500"></span>

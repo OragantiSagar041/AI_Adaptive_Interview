@@ -10,6 +10,7 @@ import { Link } from "react-router-dom";
 import logoImg from "../assets/logo.png";
 import ThemeToggle from '../components/ThemeToggle'
 import "../snake.css";
+import useSEO from "../hooks/useSEO";
 
 function useCountUp(target, start, duration = 1400) {
   const [v, setV] = useState(0);
@@ -45,29 +46,109 @@ function useInView() {
   return { ref, seen };
 }
 
+const FAQ_SCHEMA = {
+  "@context": "https://schema.org",
+  "@type": "FAQPage",
+  "mainEntity": [
+    {
+      "@type": "Question",
+      "name": "Why is HireIQ the top AI interview platform in India?",
+      "acceptedAnswer": {
+        "@type": "Answer",
+        "text": "HireIQ is India's leading AI interview platform, designed for modern talent acquisition teams. It combines conversational AI voice agents, video proctoring, resume parsing, and adaptive technical & HR questioning to screen candidates 10× faster with objective, unbiased scoring."
+      }
+    },
+    {
+      "@type": "Question",
+      "name": "How does HireIQ AI recruitment software automate bulk hiring in India?",
+      "acceptedAnswer": {
+        "@type": "Answer",
+        "text": "HireIQ's AI recruitment software and bulk hiring solution allows recruiters to upload candidate lists or sync with ATS. The AI calling agent calls hundreds of applicants simultaneously, conducts structured initial phone screening, evaluates answers in real-time, and surfaces top-tier shortlists automatically."
+      }
+    },
+    {
+      "@type": "Question",
+      "name": "What is HireIQ's automated HR screening tool and AI candidate screening software?",
+      "acceptedAnswer": {
+        "@type": "Answer",
+        "text": "HireIQ acts as an automated HR screening tool that scores resumes, assesses domain skills, evaluates communication fluency, and filters out unqualified applicants before hiring managers invest time in interviews."
+      }
+    },
+    {
+      "@type": "Question",
+      "name": "Can candidates practice with HireIQ AI mock interview platform?",
+      "acceptedAnswer": {
+        "@type": "Answer",
+        "text": "Yes. HireIQ features an AI mock interview platform that simulates realistic technical, behavioral, and system design interviews with instant feedback, scoring rubrics, and detailed improvement roadmaps."
+      }
+    },
+    {
+      "@type": "Question",
+      "name": "How does HireIQ's AI calling agent for recruitment work?",
+      "acceptedAnswer": {
+        "@type": "Answer",
+        "text": "HireIQ's AI calling agent conducts human-like phone calls with candidates, verifies availability and salary expectations, checks essential qualifications, answers candidate questions, and schedules follow-up technical rounds."
+      }
+    },
+    {
+      "@type": "Question",
+      "name": "Why choose HireIQ as your online interview platform in India?",
+      "acceptedAnswer": {
+        "@type": "Answer",
+        "text": "HireIQ offers a complete online interview platform with anti-cheat protection, automated transcription, rubric-based competency ratings, ATS integrations, and multi-language capabilities built specifically for Indian and international hiring."
+      }
+    }
+  ]
+};
+
 export default function LandingPage() {
+  useSEO({
+    title: "HireIQ — #1 AI Interview Platform & AI Recruitment Software India",
+    description: "HireIQ is India's leading AI interview platform & AI recruitment software. Features AI mock interviews, automated HR screening tool, AI calling agent for recruitment, and bulk hiring software.",
+    path: "/",
+    keywords: [
+      "AI interview platform India",
+      "AI recruitment software India",
+      "Automated HR screening tool",
+      "AI mock interview platform",
+      "Bulk hiring software India",
+      "AI calling agent for recruitment",
+      "Online interview platform India",
+      "AI candidate screening software",
+      "Hire IQ",
+      "HireIQ"
+    ],
+  });
+
   return (
-    <div className="min-h-screen bg-background text-foreground font-sans overflow-x-hidden">
-      <Nav />
-      <Hero />
-      <LogoStrip />
-      <Problem />
-      <Platform />
-      <HowItWorks />
-      <WhyChoose />
-      <AiThinks />
-      <Reports />
-      <Industries />
-      <Results />
-      <Testimonial />
-      <PricingSection />
-      <ConnectWithUs />
-      <FAQ />
-      {/* <FinalCTA /> */}
-      <Footer />
-      <StickyDemo />
-      <DemoModal />
-    </div>
+    <>
+      {/* FAQ Structured Data */}
+      <script
+        type="application/ld+json"
+        dangerouslySetInnerHTML={{ __html: JSON.stringify(FAQ_SCHEMA) }}
+      />
+      <div className="min-h-screen bg-background text-foreground font-sans overflow-x-hidden">
+        <Nav />
+        <Hero />
+        <LogoStrip />
+        <Problem />
+        <Platform />
+        <HowItWorks />
+        <WhyChoose />
+        <AiThinks />
+        <Reports />
+        <Industries />
+        <Results />
+        <Testimonial />
+        <PricingSection />
+        <ConnectWithUs />
+        <FAQ />
+        {/* <FinalCTA /> */}
+        <Footer />
+        <StickyDemo />
+        <DemoModal />
+      </div>
+    </>
   );
 }
 
@@ -126,7 +207,7 @@ function Logo() {
 /* ---------------- HERO ---------------- */
 function Hero() {
   return (
-    <section
+<section
       id="top"
       className="relative pt-32 pb-24 overflow-hidden"
       style={{
@@ -139,7 +220,7 @@ function Hero() {
       {/* grid + noise */}
       <div
         aria-hidden="true"
-        className="absolute inset-0 opacity-[0.06]"
+        className="absolute inset-0 opacity-[0.06] pointer-events-none"
         style={{
           backgroundImage:
             "linear-gradient(oklch(1 0 0 / 0.6) 1px, transparent 1px), linear-gradient(90deg, oklch(1 0 0 / 0.6) 1px, transparent 1px)",
@@ -148,21 +229,17 @@ function Hero() {
           WebkitMaskImage: "radial-gradient(ellipse at top, black 40%, transparent 75%)"
         }}
       />
-      <div className="relative mx-auto max-w-7xl px-6 grid lg:grid-cols-12 gap-12 items-center">
+      <div className="relative mx-auto max-w-7xl px-6 grid lg:grid-cols-12 gap-12 items-center z-10">
         <div className="lg:col-span-7">
           <div className="inline-flex items-center gap-2 rounded-full glass px-3 py-1 text-xs text-muted-foreground">
             <span className="h-1.5 w-1.5 rounded-full bg-cyan-400 animate-pulse-glow" />
-            AI Recruitment Intelligence Platform
+            #1 AI Recruitment & Interview Intelligence Platform India
           </div>
           <h1 className="mt-6 text-5xl sm:text-6xl lg:text-7xl font-extrabold tracking-tighter leading-[1.02]">
-            The Future of Hiring
-            <br />
-            Starts with <span className="text-gradient">AI</span>.
+            India’s #1 <span className="text-gradient">AI Interview Platform</span> & Recruitment Software.
           </h1>
           <p className="mt-6 text-lg text-muted-foreground max-w-2xl leading-relaxed">
-            AI agents that call, interview and identify your best candidates—automatically.
-            HireIQ automates outreach, resume screening, interviews and evaluation so hiring
-            teams make faster decisions and hire top talent with confidence.
+            HireIQ is the leading <strong>AI mock interview platform</strong>, <strong>automated HR screening tool</strong>, and <strong>AI calling agent for recruitment</strong>. Automate candidate outreach, resume screening, live technical assessments, and <strong>bulk hiring in India</strong> 10× faster with predictive AI scoring.
           </p>
           <div className="mt-8 flex flex-wrap gap-3">
             <a
@@ -814,28 +891,28 @@ function Testimonial() {
 function FAQ() {
   const faqs = [
     {
-      q: "How does HireIQ's AI voice screening work?",
-      a: "Our AI voice agents call every qualified candidate, ask structured, role-specific questions, capture and transcribe responses, and update the candidate profile in real time. Recruiters review only the top scoring shortlists.",
+      q: "Why is HireIQ the best AI interview platform in India?",
+      a: "HireIQ is built specifically to address high-volume talent challenges in India and globally. It combines AI voice calling agents, automated technical assessments, AI mock interviews, and ATS integrations to deliver 10× faster recruitment cycles with unbiased candidate scoring.",
     },
     {
-      q: "Will HireIQ integrate with our existing ATS?",
-      a: "Yes. HireIQ integrates with leading ATS and HRIS platforms via secure APIs, so screening, interview data and scores flow directly into your existing hiring workflow.",
+      q: "How does the AI calling agent for recruitment work?",
+      a: "Our AI calling agent calls qualified applicants automatically, conducts interactive phone screening interviews, asks role-specific questions, transcribes conversations in real time, and provides recruiters with prioritized candidate scores.",
     },
     {
-      q: "How does HireIQ ensure fair and unbiased evaluation?",
-      a: "Every candidate goes through the same structured interview and scoring rubric. Evaluation is based on measurable signals—communication, technical accuracy, behavioral responses—not subjective notes.",
+      q: "How does HireIQ AI recruitment software accelerate bulk hiring in India?",
+      a: "For high-volume hiring (BPO, campus drives, IT services, retail), HireIQ can interview thousands of candidates simultaneously 24/7, reducing screening turnaround from weeks to minutes.",
     },
     {
-      q: "Is HireIQ secure and enterprise-ready?",
-      a: "HireIQ is built with enterprise-grade security: encryption in transit and at rest, SSO, role-based access, audit logs, and support for regional data residency.",
+      q: "Can job seekers use HireIQ as an AI mock interview platform?",
+      a: "Yes. HireIQ offers comprehensive AI mock interview practice modules covering software engineering, data science, product management, and HR rounds with instant performance analytics.",
     },
     {
-      q: "How quickly can we get started?",
-      a: "Most teams go live within days. We help you configure job templates, evaluation rubrics and integrations during onboarding, with dedicated support throughout.",
+      q: "What makes HireIQ an effective automated HR screening tool?",
+      a: "HireIQ automatically parses resumes against job criteria, verifies core qualifications, checks communication ability, and flags top matches so HR teams only interview pre-vetted, high-potential talent.",
     },
     {
-      q: "Can HireIQ handle high-volume hiring?",
-      a: "Yes. HireIQ can screen and interview thousands of candidates in parallel, making it ideal for BPO, retail, campus, and enterprise-scale hiring.",
+      q: "Will HireIQ integrate with our existing ATS and HRIS?",
+      a: "Yes. HireIQ offers seamless API integrations with Greenhouse, Lever, Workday, BambooHR, Slack, and other enterprise HR tools.",
     },
   ];
   const [open, setOpen] = useState(0);
@@ -895,7 +972,7 @@ function ConnectWithUs() {
             <div className="mt-10 space-y-6">
               <div>
                 <h4 className="text-sm font-semibold tracking-wider uppercase text-cyan-500">Email</h4>
-                <p className="mt-1 text-slate-100">hello@hireiq.ai</p>
+<p className="mt-1 text-slate-100">hello@hireiq.ai</p>
               </div>
               <div>
                 <h4 className="text-sm font-semibold tracking-wider uppercase text-cyan-500">Phone</h4>

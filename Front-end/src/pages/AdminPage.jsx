@@ -16,7 +16,7 @@ import QualifiedCandidatesPage from './admin/QualifiedCandidatesPage'
 import RejectedCandidatesPage from './admin/RejectedCandidatesPage'
 import CreateInterviewPage from './admin/CreateInterviewPage'
 
-import { logout, updateCredits } from '../store/slices/authSlice'
+import { logout, updateCredits, loadAdminProfile } from '../store/slices/authSlice'
 import { persistor } from '../store/store'
 import { loadDashboardData } from '../store/slices/dashboardSlice'
 import {
@@ -172,7 +172,7 @@ export default function AdminPage({ role: initialRole = 'admin' }) {
     }
   }, [tabParam, dispatch])
 
-  useEffect(() => {
+useEffect(() => {
     if (!liveResultsModalOpen || !token) return
 
     dispatch(loadDashboardData(selectedAdminId))
@@ -315,6 +315,8 @@ export default function AdminPage({ role: initialRole = 'admin' }) {
   useEffect(() => {
     if (!token) return
 
+    dispatch(loadAdminProfile())
+
     const poll = () => {
       if (document.visibilityState === 'visible') {
         dispatch(loadDashboardData(selectedAdminId))
@@ -322,7 +324,7 @@ export default function AdminPage({ role: initialRole = 'admin' }) {
     }
 
     poll() // immediate first fetch
-    const statsInterval = setInterval(poll, 60000) // was 12 000ms
+    const statsInterval = setInterval(poll, 60000)
 
     return () => clearInterval(statsInterval)
   }, [dispatch, token, selectedAdminId])

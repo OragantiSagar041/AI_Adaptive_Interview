@@ -6,7 +6,8 @@ import logo from '../assets/logo.png'
 import Swal from 'sweetalert2'
 import 'sweetalert2/dist/sweetalert2.min.css'
 import { RefreshCw } from 'lucide-react'
-import DemoRequests from './DemoRequests'
+import DemoRequests from './master/DemoRequests'
+import CompanyRevenue from './master/CompanyRevenue'
 
 
 
@@ -179,7 +180,7 @@ export default function MasterPage() {
         data: {
           labels: ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun'],
           datasets: [{
-            label: 'MRR ($)',
+label: 'MRR ($)',
             data: [5000, 6500, 8200, 9500, 11000, companies.length * 150],
             borderColor: getThemeColor('--primary-color', currentAccent.primary),
             backgroundColor: rgbaFromCssVar('--primary-color', 0.12, `${currentAccent.primary}33`),
@@ -191,9 +192,18 @@ export default function MasterPage() {
         options: {
           responsive: true,
           maintainAspectRatio: false,
-          plugins: { legend: { display: false } },
+          plugins: {
+            legend: { display: false },
+            tooltip: {
+              callbacks: {
+                label: function (context) {
+                  return ` MRR: ₹${(context.parsed.y || 0).toLocaleString('en-IN')}`
+                }
+              }
+            }
+          },
           scales: {
-            y: { beginAtZero: true, grid: { color: rgbaFromCssVar('--muted', 0.06, 'rgba(0,0,0,0.05)') } },
+y: { beginAtZero: true, grid: { color: rgbaFromCssVar('--muted', 0.06, 'rgba(0,0,0,0.05)') } },
             x: { grid: { display: false } }
           }
         }
@@ -503,6 +513,17 @@ export default function MasterPage() {
               }`}
             >
               <i className="fas fa-gauge-high" /> Dashboard
+            </button>
+
+            <button
+              onClick={() => setActiveTab('company-revenue')}
+              className={`w-full text-left px-4 py-2.5 rounded-lg text-sm font-semibold flex items-center gap-3 transition-colors border-none outline-none cursor-pointer ${
+                activeTab === 'company-revenue'
+                  ? 'bg-white text-indigo-700 shadow-sm'
+                  : 'bg-transparent text-white/80 hover:bg-white/10 hover:text-white'
+              }`}
+            >
+              <i className="fas fa-chart-line" /> Company Revenue
             </button>
 
             <button
@@ -953,6 +974,11 @@ export default function MasterPage() {
             <DemoRequests />
           )}
 
+          {/* TAB VIEW: COMPANY REVENUE */}
+          {activeTab === 'company-revenue' && (
+            <CompanyRevenue />
+          )}
+
         </main>
       </div>
 
@@ -1062,16 +1088,39 @@ export default function MasterPage() {
               </div>
 
               <div className="space-y-2">
-                <label className="text-xs font-semibold text-slate-500 block">Select Available Features</label>
-                <div className="grid grid-cols-2 gap-2 max-h-[160px] overflow-y-auto border border-slate-200 rounded-xl p-3.5 bg-slate-50">
-                  {[
-                    'Overview Dashboard',
-                    'Create Interview',
+                <div className="flex justify-between items-center">
+                  <label className="text-xs font-semibold text-slate-500">
+                    Select Available Features ({editPlanFeatures.length} chosen)
+                  </label>
+                  {editPlanFeatures.length > 0 && (
+                    <button
+                      type="button"
+                      onClick={() => setEditPlanFeatures([])}
+                      className="text-[11px] text-rose-500 hover:underline"
+                    >
+                      Clear All
+                    </button>
+                  )}
+                </div>
+                <div className="grid grid-cols-2 gap-2 max-h-[180px] overflow-y-auto border border-slate-200 rounded-xl p-3.5 bg-slate-50">
+                  {Array.from(new Set([
+                    'Super Admin Dashboard',
+                    'Team Management',
+                    'Dashboard',
+                    'Interviews',
                     'Qualified Candidates',
                     'Rejected Candidates',
-                    'Deactivated Candidates',
-                    'Profile Settings',
-                    'Live Monitor',
+                    'Create Interview',
+                    'AI Calling Agent',
+                    'Jobs',
+                    'Organizations',
+                    'Recruiters',
+                    'Credit Management',
+                    'Subscription Management',
+                    'Integrations',
+                    'Security',
+                    'Settings',
+                    'Live Results',
                     'Analytics & Reports',
                     'Bulk Email Invites',
                     'Resume Parsing',
@@ -1079,13 +1128,11 @@ export default function MasterPage() {
                     'Priority Support',
                     'API Access',
                     'Export Data',
-                    'User Management',
                     'Role-Based Access',
-                    'Integration Webhooks',
                     'Industry Type',
                     'ATS Score',
-                    'Interview Type'
-                  ].map(f => {
+                    ...(editPlanFeatures || [])
+                  ])).map(f => {
                     const isChecked = editPlanFeatures.includes(f)
                     return (
                       <label key={f} className="flex items-center gap-2.5 text-xs text-slate-600 hover:text-slate-800 cursor-pointer select-none">

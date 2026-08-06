@@ -19,6 +19,7 @@ from typing import Any, Dict, List, Optional, Union
 import bcrypt, jwt, requests
 import cloudinary, cloudinary.uploader, cloudinary.api, cloudinary.utils
 import edge_tts
+# pyrefly: ignore [missing-import]
 import pypdf
 from bson import ObjectId
 from bson.errors import InvalidId
@@ -157,6 +158,7 @@ def firebase_auth(data: FirebaseAuthRequest):
         "subscription_warning": plan_context["warning"],
         "subscription_warning_message": plan_context["warning_message"],
         "plan_capabilities": plan_context["capabilities"],
+        "plan_features": plan_context["features"],
     }
 
 @router.post("/admin/login")
@@ -230,6 +232,7 @@ def admin_login(data: AdminLogin, request: Request):
         "subscription_warning": plan_context["warning"],
         "subscription_warning_message": plan_context["warning_message"],
         "plan_capabilities": plan_context["capabilities"],
+        "plan_features": plan_context["features"],
         "credits": plan_context.get("credits", 0),
     }
 
@@ -257,7 +260,9 @@ class StripeCheckoutRequest(BaseModel):
 
 class RazorpayOrderRequest(BaseModel):
     plan_name: str
-    signup_form: dict
+    signup_form: Optional[dict] = None
+    amount_inr: Optional[float] = None
+    credits: Optional[int] = None
 
 class RazorpayVerifyRequest(BaseModel):
     plan_name: str
@@ -299,8 +304,6 @@ def upsert_plan(data: PlanUpdate, master_id: str = Depends(get_current_admin), c
     if not master:
         raise HTTPException(status_code=401, detail="Unauthorized")
     
-    existing = plans_collection.find_one({"plan_name": data.plan_name})
-    
     plans_collection.update_one(
         {"plan_name": data.plan_name},
         {"$set": {
@@ -311,6 +314,15 @@ def upsert_plan(data: PlanUpdate, master_id: str = Depends(get_current_admin), c
         }},
         upsert=True
     )
+
+    try:
+        admins_collection.update_many(
+            {"plan": data.plan_name, "role": {"$ne": "master"}},
+            {"$set": {"plan_features": data.features}}
+        )
+    except Exception as e:
+        logger.warning(f"Failed to sync plan_features to existing admins: {e}")
+
     return {"status": "success", "message": f"Plan '{data.plan_name}' saved"}
 
 @router.delete("/master/plans/{plan_id}")

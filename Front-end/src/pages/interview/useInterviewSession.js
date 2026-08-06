@@ -25,6 +25,7 @@ export const useInterviewSession = (sessionId, interviewType, startRoundTwo) => 
   const [loading, setLoading] = useState(true)
   const [showAllSet, setShowAllSet] = useState(false)
   const [error, setError] = useState(null)
+  const [scheduledStart, setScheduledStart] = useState(null)
   const [isCompleted, setIsCompleted] = useState(false)
   const _sessionKey = sessionId ? `interview_session_${sessionId}` : null
   const _savedSession = _sessionKey ? (() => { try { return JSON.parse(sessionStorage.getItem(_sessionKey) || 'null') } catch { return null } })() : null
@@ -90,6 +91,17 @@ export const useInterviewSession = (sessionId, interviewType, startRoundTwo) => 
   // Proctoring/Recording states
   const [isMediaReady, setIsMediaReady] = useState(false)
   const [proctoringAlert, setProctoringAlert] = useState('')
+  const [securityMessage, setSecurityMessage] = useState('')
+  const proctoringAlertTimeoutRef = useRef(null)
+  const securityMessageTimeoutRef = useRef(null)
+
+  useEffect(() => {
+    return () => {
+      if (proctoringAlertTimeoutRef.current) clearTimeout(proctoringAlertTimeoutRef.current)
+      if (securityMessageTimeoutRef.current) clearTimeout(securityMessageTimeoutRef.current)
+    }
+  }, [])
+
   const [noiseAlertCount, setNoiseAlertCount] = useState(0)
   const noiseAlertCountRef = useRef(0)
   const isSubmittingRef = useRef(false)
@@ -217,28 +229,25 @@ export const useInterviewSession = (sessionId, interviewType, startRoundTwo) => 
   }, [runResultData]);
 
   useEffect(() => {
-    if (currentQuestion?.type === 'coding' && currentQuestion?.codingTask) {
-      const task = currentQuestion.codingTask
-      const templates = {
-        python: task.starter_function_signature || `def ${task.function_name || 'winner'}(donuts, starter):\n    # Write your code here\n    pass`,
-        javascript: task.function_name === 'winner'
-          ? `function winner(donuts, starter) {\n    // Write your code here\n    \n}`
-          : task.function_name === 'find_duplicates'
-            ? `function find_duplicates(records) {\n    // Write your code here\n    \n}`
-            : `function debounceSimulation(calls, delay) {\n    // Write your code here\n    \n}`,
-        cpp: task.function_name === 'winner'
-          ? `#include <vector>\n#include <string>\n\nstd::vector<std::string> winner(std::vector<int> donuts, std::vector<std::string> starter) {\n    // Write your code here\n    \n}`
-          : task.function_name === 'find_duplicates'
-            ? `#include <vector>\n#include <string>\n\nstd::vector<std::string> findDuplicates(std::vector<std::string> records) {\n    // Write your code here\n    \n}`
-            : `#include <vector>\n\nint debounceSimulation(std::vector<int> calls, int delay) {\n    // Write your code here\n    \n}`
-      }
+    const task = currentQuestion?.codingTask || currentQuestion || codingRoundData || {}
+    const fn = task.function_name || 'solution'
+    const sig = task.starter_function_signature
+    const pythonSig = sig || task.starter_code || `def ${fn}(*args, **kwargs):`
+    const finalPythonTemplate = pythonSig.includes('#') ? pythonSig : `${pythonSig}\n    # Write your solution here\n    pass`
 
-      const isDefault = !codeAnswer || Object.values(templates).some(tmpl => codeAnswer.trim() === tmpl.trim())
-      if (isDefault) {
-        setCodeAnswer(templates[selectedLanguage] || '')
-      }
+    const templates = {
+      python: finalPythonTemplate,
+      javascript: `function ${fn}(...args) {\n    // Write your solution here\n    \n}`,
+      java: `public class Solution {\n    public static void ${fn}(String[] args) {\n        // Write your solution here\n    }\n}`,
+      cpp: `#include <iostream>\n#include <vector>\n#include <string>\nusing namespace std;\n\nvoid ${fn}() {\n    // Write your solution here\n}\n\nint main() {\n    ${fn}();\n    return 0;\n}`
     }
-  }, [currentQuestion, selectedLanguage])
+
+    const currentTmpl = templates[selectedLanguage] || templates.python
+    const isDefault = !codeAnswer || !codeAnswer.trim() || Object.values(templates).some(tmpl => codeAnswer.trim() === tmpl.trim())
+    if (isDefault) {
+      setCodeAnswer(currentTmpl)
+    }
+  }, [currentQuestion, selectedLanguage, codingRoundData])
 
   // Recording Ref elements
   const videoPreviewRef = useRef(null)
@@ -250,6 +259,7 @@ export const useInterviewSession = (sessionId, interviewType, startRoundTwo) => 
   const screenChunksRef = useRef([])
   const mediaStreamRef = useRef(null)
   const screenStreamRef = useRef(null)
+  const recordedMimeTypeRef = useRef('video/webm')
 
   // Speech Recognition Reference
   const recognitionRef = useRef(null)
@@ -312,7 +322,7 @@ export const useInterviewSession = (sessionId, interviewType, startRoundTwo) => 
       if (document.hidden && isDisclaimerAccepted && !showAllSet && !isSubmittingRef.current) {
         behavioralStatsRef.current.tabSwitches += 1
         globalTabSwitchesRef.current += 1
-        
+
         recordAlertMetric('tab_switch')
 
         if (globalTabSwitchesRef.current >= 3) {
@@ -451,12 +461,12 @@ export const useInterviewSession = (sessionId, interviewType, startRoundTwo) => 
 
     // Capture-phase listeners so they fire before any child handler
     document.addEventListener('keydown', handleKeyDown, true)
-    document.addEventListener('keyup',   handleKeyUp,   true)
+    document.addEventListener('keyup', handleKeyUp, true)
     document.addEventListener('keypress', handleKeyPress, true)
 
     return () => {
       document.removeEventListener('keydown', handleKeyDown, true)
-      document.removeEventListener('keyup',   handleKeyUp,   true)
+      document.removeEventListener('keyup', handleKeyUp, true)
       document.removeEventListener('keypress', handleKeyPress, true)
       document.getElementById('interview-screenshot-guard')?.remove()
     }
@@ -468,7 +478,7 @@ export const useInterviewSession = (sessionId, interviewType, startRoundTwo) => 
     const handleUnload = (e) => {
       const isUploading = uploadingText && uploadPercentage < 100;
       const isActiveSession = sessionId && isDisclaimerAccepted && !isCompleted;
-      
+
       // Prevent exiting during active interview or during video upload
       if (isActiveSession || isUploading) {
         e.preventDefault();
@@ -497,21 +507,21 @@ export const useInterviewSession = (sessionId, interviewType, startRoundTwo) => 
   const visualizeAudio = (stream) => {
     const canvas = visualizerCanvasRef.current
     if (!canvas) return
-    
+
     if (visualizerAudioCtxRef.current) {
-      visualizerAudioCtxRef.current.close().catch(()=>{})
+      visualizerAudioCtxRef.current.close().catch(() => { })
       visualizerAudioCtxRef.current = null
     }
 
     const ctx = canvas.getContext("2d")
-    
+
     try {
       const audioCtx = new (window.AudioContext || window.webkitAudioContext)()
       visualizerAudioCtxRef.current = audioCtx
       if (audioCtx.state === 'suspended') {
         audioCtx.resume().catch(e => console.log("AudioContext resume failed:", e))
       }
-      
+
       const source = audioCtx.createMediaStreamSource(stream)
       const analyser = audioCtx.createAnalyser()
       analyser.fftSize = 256
@@ -528,48 +538,48 @@ export const useInterviewSession = (sessionId, interviewType, startRoundTwo) => 
           return
         }
 
-      requestAnimationFrame(draw)
-      analyser.getByteFrequencyData(dataArray)
+        requestAnimationFrame(draw)
+        analyser.getByteFrequencyData(dataArray)
 
-      // Ensure canvas dimensions match actual size to prevent distortion
-      if (canvas.width !== canvas.clientWidth) canvas.width = canvas.clientWidth
-      if (canvas.height !== canvas.clientHeight) canvas.height = canvas.clientHeight
+        // Ensure canvas dimensions match actual size to prevent distortion
+        if (canvas.width !== canvas.clientWidth) canvas.width = canvas.clientWidth
+        if (canvas.height !== canvas.clientHeight) canvas.height = canvas.clientHeight
 
-      const width = canvas.width
-      const height = canvas.height
-      
-      ctx.clearRect(0, 0, width, height)
-      
-      // Draw frequency bars
-      const numBars = 32 // limit bars for aesthetics
-      const barWidth = width / numBars
-      const step = Math.floor(analyser.frequencyBinCount / numBars)
-      
-      let x = 0
-      for (let i = 0; i < numBars; i++) {
-        // Average the frequencies in this step range for smoother bars
-        let sum = 0
-        for(let j = 0; j < step; j++) {
-           sum += dataArray[i * step + j] || 0
+        const width = canvas.width
+        const height = canvas.height
+
+        ctx.clearRect(0, 0, width, height)
+
+        // Draw frequency bars
+        const numBars = 32 // limit bars for aesthetics
+        const barWidth = width / numBars
+        const step = Math.floor(analyser.frequencyBinCount / numBars)
+
+        let x = 0
+        for (let i = 0; i < numBars; i++) {
+          // Average the frequencies in this step range for smoother bars
+          let sum = 0
+          for (let j = 0; j < step; j++) {
+            sum += dataArray[i * step + j] || 0
+          }
+          const avg = sum / step
+
+          // Map 0-255 to 10%-90% height
+          const barHeight = Math.max(height * 0.1, (avg / 255) * height * 0.9)
+
+          const gradient = ctx.createLinearGradient(0, height, 0, 0)
+          gradient.addColorStop(0, '#6366f1') // Indigo
+          gradient.addColorStop(1, '#a855f7') // Purple
+
+          ctx.fillStyle = gradient
+          ctx.beginPath()
+          ctx.roundRect(x + 2, height - barHeight, barWidth - 4, barHeight, [4, 4, 0, 0])
+          ctx.fill()
+
+          x += barWidth
         }
-        const avg = sum / step
-        
-        // Map 0-255 to 10%-90% height
-        const barHeight = Math.max(height * 0.1, (avg / 255) * height * 0.9)
-        
-        const gradient = ctx.createLinearGradient(0, height, 0, 0)
-        gradient.addColorStop(0, '#6366f1') // Indigo
-        gradient.addColorStop(1, '#a855f7') // Purple
-        
-        ctx.fillStyle = gradient
-        ctx.beginPath()
-        ctx.roundRect(x + 2, height - barHeight, barWidth - 4, barHeight, [4, 4, 0, 0])
-        ctx.fill()
-        
-        x += barWidth
       }
-    }
-    draw()
+      draw()
     } catch (err) {
       console.error("Audio visualizer failed to start:", err)
     }
@@ -590,7 +600,7 @@ export const useInterviewSession = (sessionId, interviewType, startRoundTwo) => 
     return () => {
       visualizerActiveRef.current = false
       if (visualizerAudioCtxRef.current) {
-        visualizerAudioCtxRef.current.close().catch(()=>{})
+        visualizerAudioCtxRef.current.close().catch(() => { })
         visualizerAudioCtxRef.current = null
       }
       if (timeout) clearTimeout(timeout)
@@ -685,7 +695,7 @@ export const useInterviewSession = (sessionId, interviewType, startRoundTwo) => 
           setLoading(false)
           return
         }
-      } catch (e) {}
+      } catch (e) { }
 
       try {
         const payload = await api.get(`/session/${sessionId}`).then(r => r.data)
@@ -694,7 +704,7 @@ export const useInterviewSession = (sessionId, interviewType, startRoundTwo) => 
         }
 
         setSessionDetail(payload)
-        
+
         // Ensure Voice Cloning works for Standard interviews
         if (payload.voice_clone && payload.custom_voice_id) {
           clonedVoiceIdRef.current = payload.custom_voice_id
@@ -707,7 +717,11 @@ export const useInterviewSession = (sessionId, interviewType, startRoundTwo) => 
         if (payload.is_expired) {
           throw new Error("This interview link has expired. Please contact the recruiter for a new link.")
         }
+        if (payload.scheduled_start) {
+          setScheduledStart(payload.scheduled_start)
+        }
         if (payload.is_before_schedule && payload.scheduled_start) {
+          setScheduledStart(payload.scheduled_start)
           const startTime = new Date(payload.scheduled_start.endsWith('Z') || payload.scheduled_start.includes('+') ? payload.scheduled_start : payload.scheduled_start + 'Z')
           throw new Error(`This interview is scheduled to start on ${startTime.toLocaleString('en-IN', { timeZone: 'Asia/Kolkata', dateStyle: 'short', timeStyle: 'short' })}. Please try again at the scheduled time.`)
         }
@@ -755,16 +769,16 @@ export const useInterviewSession = (sessionId, interviewType, startRoundTwo) => 
         if (startPayload.monitoring_token) {
           setCandidateSessionAuth(startPayload.monitoring_token, sessionId, startPayload.interview_id)
         }
-        
+
         // ── Drain pending requests now that we are authenticated ──────
         try {
           const pendingKey = `complete_session_pending_${sessionId}`
           if (sessionStorage.getItem(pendingKey) === '1') {
             api.post(`/complete-session/${sessionId}`)
               .then(() => sessionStorage.removeItem(pendingKey))
-              .catch(() => {})
+              .catch(() => { })
           }
-        } catch (e) {}
+        } catch (e) { }
 
         try {
           const keys = Object.keys(sessionStorage)
@@ -782,11 +796,11 @@ export const useInterviewSession = (sessionId, interviewType, startRoundTwo) => 
 
               api.post(`/save-answer`, answerForm, {
                 headers: { 'Content-Type': 'multipart/form-data' }
-              }).then(() => sessionStorage.removeItem(key)).catch(() => {})
+              }).then(() => sessionStorage.removeItem(key)).catch(() => { })
             }
           }
-        } catch (e) {}
-        
+        } catch (e) { }
+
         // Snapshot candidate details into refs NOW (synchronously) so that the
         // async Whisper MediaRecorder onstop callback always has correct values.
         // Using refs avoids the race condition where sessionDetail state hasn't
@@ -942,123 +956,43 @@ export const useInterviewSession = (sessionId, interviewType, startRoundTwo) => 
     const rec = new SpeechRecognition()
     rec.continuous = true  // Keep listening continuously without restarting
     rec.interimResults = true
-    rec.maxAlternatives = 3  // Consider top 3 alternatives for better accuracy
-    const targetLang = langMap[sessionDetail?.language] || 'en-IN'
+    rec.maxAlternatives = 3  // Consider top 3 alternatives for best accuracy
+    const currentLangName = sessionDetail?.language || interviewLanguageRef.current || 'English'
+    const targetLang = langMap[currentLangName] || 'en-IN'
     rec.lang = targetLang
 
-    // Helper to (re)start the Whisper MediaRecorder cleanly
-    const ensureWhisperRunning = () => {
-      if (!mediaStreamRef.current) return
-      if (whisperMediaRecorderRef.current && whisperMediaRecorderRef.current.state === 'recording') return
-
-      const audioTracks = mediaStreamRef.current.getAudioTracks()
-      if (!audioTracks || audioTracks.length === 0) {
-        console.warn('No audio tracks available for Whisper recorder')
-        return
-      }
-
-      try {
-        const audioStream = new MediaStream(audioTracks)
-
-        // Detect supported MIME type at runtime
-        const mimeTypes = [
-          'audio/webm;codecs=opus',
-          'audio/webm',
-          'audio/ogg;codecs=opus',
-          'audio/ogg',
-          'audio/mp4',
-          ''  // browser default
-        ]
-        const supportedMime = mimeTypes.find(m => {
-          try { return !m || MediaRecorder.isTypeSupported(m) } catch { return false }
-        }) || ''
-
-        const mrOptions = supportedMime ? { mimeType: supportedMime } : {}
-        const mr = new MediaRecorder(audioStream, mrOptions)
-        whisperAudioChunksRef.current = []
-
-        mr.ondataavailable = (e) => {
-          if (e.data.size > 0) whisperAudioChunksRef.current.push(e.data)
-        }
-        mr.onstop = async () => {
-          const chunks = [...whisperAudioChunksRef.current]
-          whisperAudioChunksRef.current = []
-          const actualMime = mr.mimeType || supportedMime || 'audio/webm'
-          const blob = new Blob(chunks, { type: actualMime })
-
-          // VAD handles restarting; we no longer automatically restart here.
-
-          if (blob.size > 1000) {
-            // Only send to Whisper for English interviews.
-            // For regional languages (Telugu, Hindi, etc.) the browser Web Speech API
-            // (Google) handles transcription directly in onresult — it's far more
-            // accurate than Whisper for Indian languages. Sending audio to Whisper
-            // for Telugu causes heavy hallucination.
-            const currentLang = interviewLanguageRef.current || 'English'
-            if (currentLang === 'English') {
-              const ext = actualMime.includes('ogg') ? 'ogg' : actualMime.includes('mp4') ? 'mp4' : 'webm'
-              const formData = new FormData()
-              formData.append('audio', blob, `audio.${ext}`)
-              formData.append('candidate_name', candidateNameRef.current)
-              formData.append('language', currentLang)
-              transcribeInFlightRef.current = true
-              try {
-                const res = await api.post('/transcribe', formData, {
-                  headers: { 'Content-Type': 'multipart/form-data' },
-                  timeout: 10000
-                })
-                if (res.data && res.data.text && res.data.text.trim()) {
-                  setTranscriptionText(prev => prev + res.data.text.trim() + ' ')
-                }
-              } catch (err) {
-                console.error('Whisper transcription failed:', err)
-              } finally {
-                transcribeInFlightRef.current = false
-              }
-            }
-          }
-        }
-        whisperMediaRecorderRef.current = mr
-        // Do NOT start automatically. The VAD logic in tick() will start it on speech.
-      } catch(e) {
-        console.error('Failed to start Whisper MediaRecorder:', e)
-        whisperMediaRecorderRef.current = null
-      }
-    }
+    recognitionRef.current = rec
 
     rec.onstart = () => {
-      // Intentionally left blank. We now set isSpeechRecordingRef.current = true 
-      // immediately before calling start(), to avoid async race conditions.
-      // Note: Whisper path is disabled — Web Speech API is used as the sole
-      // transcript source for all languages. It is real-time, accurate, and
-      // avoids Whisper hallucination + latency issues.
+      // Speech recognition active
     }
 
     rec.onend = () => {
-      // Commit any leftover interim text so we don't lose the last few words if it stopped abruptly
+      // Flush leftover interim text to transcriptionText
       if (interimTextRef.current) {
-        const leftover = interimTextRef.current
+        const leftover = interimTextRef.current.trim()
         interimTextRef.current = ''
         setInterimTranscriptText('')
-        setTranscriptionText(prev => prev + leftover + ' ')
+        if (leftover) {
+          setTranscriptionText(prev => {
+            const p = prev.trim()
+            if (p.endsWith(leftover)) return prev
+            return (p ? p + ' ' : '') + leftover
+          })
+        }
       }
 
-      // With continuous=true this fires only on error/abort — restart with a small delay
-      // to avoid rapid restart storms and InvalidStateError exceptions in Chrome.
-      // IMPORTANT: Do NOT restart during TTS playback (isTTSPlayingRef guards this).
+      // Continuous auto-restart when listening is active and AI is not speaking
       if (isSpeechRecordingRef.current && !isTTSPlayingRef.current) {
         setTimeout(() => {
           if (!isSpeechRecordingRef.current || isTTSPlayingRef.current) return
           try {
             rec.start()
-          } catch (e) {
-            // InvalidStateError or similar — start a fresh recognition instance
-            if (isSpeechRecordingRef.current) {
-              initSpeechRecognition()
-              try { recognitionRef.current?.start() } catch (_) {}
-            }
+          } catch (_) {
+            initSpeechRecognition()
+            try { recognitionRef.current?.start() } catch (__) { }
           }
-        }, 150)
+        }, 100)
       }
     }
 
@@ -1066,34 +1000,53 @@ export const useInterviewSession = (sessionId, interviewType, startRoundTwo) => 
       let interimText = ''
       let finalText = ''
       for (let i = event.resultIndex; i < event.results.length; i++) {
-        if (event.results[i].isFinal) {
-          // Pick the highest-confidence alternative for best accuracy
-          let bestTranscript = event.results[i][0].transcript
-          let bestConfidence = event.results[i][0].confidence || 0
-          for (let j = 1; j < event.results[i].length; j++) {
-            const alt = event.results[i][j]
-            if ((alt.confidence || 0) > bestConfidence) {
-              bestConfidence = alt.confidence
-              bestTranscript = alt.transcript
+        const res = event.results[i]
+        if (res.isFinal) {
+          // Select highest confidence alternative
+          let bestTranscript = res[0].transcript
+          let bestConfidence = res[0].confidence || 0
+          for (let j = 1; j < res.length; j++) {
+            if ((res[j].confidence || 0) > bestConfidence) {
+              bestConfidence = res[j].confidence
+              bestTranscript = res[j].transcript
             }
           }
-          finalText += bestTranscript + ' '
+          finalText += (bestTranscript || '').trim() + ' '
         } else {
-          interimText += event.results[i][0].transcript
+          interimText += res[0].transcript
         }
       }
-      // Show interim text in real time (visible while speaking)
+
+      // Render interim text in real-time
       interimTextRef.current = interimText
       setInterimTranscriptText(interimText)
-      if (finalText) {
+
+      if (finalText.trim()) {
         interimTextRef.current = ''
         setInterimTranscriptText('')
-        // Use Web Speech API final results for ALL languages (English + regional).
-        // The browser's Google speech engine is real-time, zero-latency, and highly
-        // accurate — far superior to Whisper for live transcription. Whisper's
-        // batch approach (fires after 2.5s silence) caused mismatches, duplications,
-        // and hallucinations that made transcription appear inaccurate.
-        setTranscriptionText(prev => prev + finalText)
+        setTranscriptionText(prev => {
+          const p = prev.trim()
+          const f = finalText.trim()
+          if (!f) return prev
+          if (!p) return f
+          if (p.endsWith(f)) return prev
+
+          // Overlap deduplication: if last words of p match start words of f
+          const pWords = p.split(/\s+/)
+          const fWords = f.split(/\s+/)
+          let overlap = 0
+          const maxCheck = Math.min(pWords.length, fWords.length, 4)
+          for (let len = maxCheck; len >= 1; len--) {
+            const pTail = pWords.slice(-len).join(' ').toLowerCase()
+            const fHead = fWords.slice(0, len).join(' ').toLowerCase()
+            if (pTail === fHead) {
+              overlap = len
+              break
+            }
+          }
+          const addition = overlap > 0 ? fWords.slice(overlap).join(' ') : f
+          return addition ? p + ' ' + addition : prev
+        })
       }
     }
 
@@ -1102,24 +1055,19 @@ export const useInterviewSession = (sessionId, interviewType, startRoundTwo) => 
         console.error("Microphone permission denied:", e.error)
         return
       }
-      if (e.error === 'no-speech') {
-        // Not a failure — browser detected silence. Do NOT immediately restart;
-        // the onend handler will fire and handle the restart with a delay.
+      if (e.error === 'no-speech' || e.error === 'aborted') {
         return
       }
       if (e.error === 'network') {
-        // Network blip — restart after a longer pause
         if (isSpeechRecordingRef.current) {
-          setTimeout(() => { 
-            if (isSpeechRecordingRef.current) {
+          setTimeout(() => {
+            if (isSpeechRecordingRef.current && !isTTSPlayingRef.current) {
               initSpeechRecognition()
-              try { recognitionRef.current?.start() } catch (_) {}
+              try { recognitionRef.current?.start() } catch (_) { }
             }
-          }, 1000)
+          }, 800)
         }
-        return
       }
-      // Other transient errors — restart via onend (which fires after onerror)
     }
 
     recognitionRef.current = rec
@@ -1158,11 +1106,11 @@ export const useInterviewSession = (sessionId, interviewType, startRoundTwo) => 
           sumSquares += normalized * normalized
         }
         const rms = Math.sqrt(sumSquares / dataArray.length)
-        
+
         audioRmsRef.current = rms
 
         const now = Date.now()
-        
+
         // Treat RMS > 0.03 as speech and bump the silence timer
         if (rms > 0.03) {
           lastSpeechTimeRef.current = now
@@ -1267,11 +1215,11 @@ export const useInterviewSession = (sessionId, interviewType, startRoundTwo) => 
     } else if (
       // Advisory-only types: logged to backend but do NOT count toward
       // the face-alert termination cap (not security-critical enough).
-      type === 'window_blur'       ||
-      type === 'devtools_open'     ||
-      type === 'multi_monitor'     ||
+      type === 'window_blur' ||
+      type === 'devtools_open' ||
+      type === 'multi_monitor' ||
       type === 'clipboard_attempt' ||
-      type === 'print_attempt'     ||
+      type === 'print_attempt' ||
       type === 'save_attempt'
     ) {
       // Logged via POST above — no UI counter increment
@@ -1281,7 +1229,7 @@ export const useInterviewSession = (sessionId, interviewType, startRoundTwo) => 
       behavioralStatsRef.current.faceAlerts += 1
       globalFaceAlertsRef.current += 1
       setFaceAlertCount(globalFaceAlertsRef.current)
-      
+
       if (globalFaceAlertsRef.current >= 20) {
         Swal.fire({
           title: 'Interview Terminated',
@@ -1315,26 +1263,10 @@ export const useInterviewSession = (sessionId, interviewType, startRoundTwo) => 
       if (!recorded) return // skip UI popups if throttled
 
       setProctoringAlert(v.message)
-      setTimeout(() => setProctoringAlert(''), 3000)
-      if (v.type !== 'noise_alert') {
-        Swal.fire({
-          icon: 'warning',
-          title: '⚠️ Proctoring Alert',
-          text: v.message,
-          toast: true,
-          position: 'top-end',
-          showConfirmButton: false,
-          timer: 3000,
-          background: '#161c2d',
-          color: '#fff',
-          customClass: {
-            popup: 'z-[99999]'
-          }
-        })
-      }
+      if (proctoringAlertTimeoutRef.current) clearTimeout(proctoringAlertTimeoutRef.current)
+      proctoringAlertTimeoutRef.current = setTimeout(() => setProctoringAlert(''), 3000)
     }
-  });
-
+  })
   const telemetryRoundType = currentQuestion?.type === 'case_study'
     ? 'case_study'
     : (startRoundTwo || currentQuestion?.type === 'coding' ? 'coding' : 'verbal')
@@ -1399,7 +1331,7 @@ export const useInterviewSession = (sessionId, interviewType, startRoundTwo) => 
         round_type: liveData.round_type,
       }, {
         headers: { Authorization: `Bearer ${monitoringToken}` },
-      }).catch(() => {})
+      }).catch(() => { })
     }
 
     sendHeartbeat()
@@ -1407,7 +1339,7 @@ export const useInterviewSession = (sessionId, interviewType, startRoundTwo) => 
     return () => clearInterval(intervalId)
   }, [sessionId, monitoringToken, videoPreviewRef])
 
-// Screenshot / capture-attempt deterrence & logging.
+  // Screenshot / capture-attempt deterrence & logging.
   // NOTE: this can only catch in-browser vectors (shortcuts, right-click,
   // DevTools) — OS-level screenshot tools cannot be blocked from the page.
   // Every attempt is routed through recordAlertMetric so it is throttled,
@@ -1424,20 +1356,9 @@ export const useInterviewSession = (sessionId, interviewType, startRoundTwo) => 
       if (!recorded) return // throttled — skip duplicate popups
 
       const message = SCREENSHOT_ALERT_MESSAGES[v.type] || 'Screenshots are not allowed during this interview.'
-      setProctoringAlert(message)
-      setTimeout(() => setProctoringAlert(''), 4000)
-      Swal.fire({
-        icon: 'warning',
-        title: '📸 Screenshots Not Allowed',
-        text: message,
-        toast: true,
-        position: 'top-end',
-        showConfirmButton: false,
-        timer: 4000,
-        background: '#161c2d',
-        color: '#fff',
-        customClass: { popup: 'z-[99999]' }
-      })
+      setSecurityMessage(message)
+      if (securityMessageTimeoutRef.current) clearTimeout(securityMessageTimeoutRef.current)
+      securityMessageTimeoutRef.current = setTimeout(() => setSecurityMessage(''), 4000)
     }
   })
   // Track lip sync anomaly (audio is active but mouth isn't moving — suggests a
@@ -1458,17 +1379,9 @@ export const useInterviewSession = (sessionId, interviewType, startRoundTwo) => 
       lipSyncCooldownRef.current = now + 8000
       lipSyncStreakRef.current = 0
       recordAlertMetric('lip_sync')
-      Swal.fire({
-        icon: 'warning',
-        title: '⚠️ Proctoring Alert',
-        text: 'Audio detected without matching lip movement',
-        toast: true,
-        position: 'top-end',
-        showConfirmButton: false,
-        timer: 3000,
-        background: '#161c2d',
-        color: '#fff',
-      })
+      setSecurityMessage('Audio detected without matching lip movement')
+      if (securityMessageTimeoutRef.current) clearTimeout(securityMessageTimeoutRef.current)
+      securityMessageTimeoutRef.current = setTimeout(() => setSecurityMessage(''), 3000)
     }
   }, [proctoring.jawOpenScore, proctoring.checkLipSync])
 
@@ -1479,20 +1392,9 @@ export const useInterviewSession = (sessionId, interviewType, startRoundTwo) => 
       const recorded = await recordAlertMetric(type)
       if (!recorded) return  // throttled by recordAlertMetric's 5-second per-type gate
 
-      setProctoringAlert(message)
-      setTimeout(() => setProctoringAlert(''), 4000)
-      Swal.fire({
-        icon: 'warning',
-        title: '⚠️ Security Alert',
-        text: message,
-        toast: true,
-        position: 'top-end',
-        showConfirmButton: false,
-        timer: 4000,
-        background: '#161c2d',
-        color: '#fff',
-        customClass: { popup: 'z-[99999]' }
-      })
+      setSecurityMessage(message)
+      if (securityMessageTimeoutRef.current) clearTimeout(securityMessageTimeoutRef.current)
+      securityMessageTimeoutRef.current = setTimeout(() => setSecurityMessage(''), 4000)
     },
   })
 
@@ -1583,21 +1485,73 @@ export const useInterviewSession = (sessionId, interviewType, startRoundTwo) => 
         screenStream.addTrack(mixedTrack)
       }
 
-      let options = { videoBitsPerSecond: 800000, audioBitsPerSecond: 64000 }
-      cameraRecorderRef.current = new MediaRecorder(stream, options)
-      cameraChunksRef.current = []
-      cameraRecorderRef.current.ondataavailable = e => {
-        if (e.data.size > 0) cameraChunksRef.current.push(e.data)
+      // Resume AudioContext if suspended (browser autoplay policy)
+      if (audioMixerCtxRef.current && audioMixerCtxRef.current.state === 'suspended') {
+        try { await audioMixerCtxRef.current.resume() } catch (_) { }
       }
 
-      screenRecorderRef.current = new MediaRecorder(screenStream, options)
-      screenChunksRef.current = []
-      screenRecorderRef.current.ondataavailable = e => {
-        if (e.data.size > 0) screenChunksRef.current.push(e.data)
+      // Determine cross-browser supported video MIME type
+      const getSupportedMimeType = () => {
+        if (typeof MediaRecorder === 'undefined') return 'video/webm'
+        const candidates = [
+          'video/webm;codecs=vp9,opus',
+          'video/webm;codecs=vp8,opus',
+          'video/webm',
+          'video/mp4;codecs=avc1,mp4a',
+          'video/mp4'
+        ]
+        for (const c of candidates) {
+          try {
+            if (MediaRecorder.isTypeSupported(c)) return c
+          } catch (_) { }
+        }
+        return 'video/webm'
       }
 
-      cameraRecorderRef.current.start(2000)
-      screenRecorderRef.current.start(2000)
+      const mimeType = getSupportedMimeType()
+      recordedMimeTypeRef.current = mimeType
+      console.log(`[REC_TRACE] Stream initialized. Video tracks: ${stream.getVideoTracks().length}, Audio tracks: ${stream.getAudioTracks().length}. Screen video tracks: ${screenStream.getVideoTracks().length}. Selected mimeType: ${mimeType}`)
+
+      const shouldRecordVideo = sessionDetailRef.current?.record_video !== false;
+
+      if (shouldRecordVideo) {
+        let options = { mimeType, videoBitsPerSecond: 800000, audioBitsPerSecond: 64000 }
+        try {
+          cameraRecorderRef.current = new MediaRecorder(stream, options)
+        } catch (err) {
+          console.warn("[REC_TRACE] Camera MediaRecorder options init failed, falling back to default:", err)
+          cameraRecorderRef.current = new MediaRecorder(stream)
+        }
+        cameraChunksRef.current = []
+        cameraRecorderRef.current.ondataavailable = e => {
+          if (e.data && e.data.size > 0) {
+            cameraChunksRef.current.push(e.data)
+            console.log(`[REC_TRACE] Camera chunk received: ${e.data.size} bytes. Total chunks: ${cameraChunksRef.current.length}`)
+          }
+        }
+        cameraRecorderRef.current.onerror = e => console.error("[REC_TRACE] Camera recorder error:", e)
+
+        try {
+          screenRecorderRef.current = new MediaRecorder(screenStream, options)
+        } catch (err) {
+          console.warn("[REC_TRACE] Screen MediaRecorder options init failed, falling back to default:", err)
+          screenRecorderRef.current = new MediaRecorder(screenStream)
+        }
+        screenChunksRef.current = []
+        screenRecorderRef.current.ondataavailable = e => {
+          if (e.data && e.data.size > 0) {
+            screenChunksRef.current.push(e.data)
+            console.log(`[REC_TRACE] Screen chunk received: ${e.data.size} bytes. Total chunks: ${screenChunksRef.current.length}`)
+          }
+        }
+        screenRecorderRef.current.onerror = e => console.error("[REC_TRACE] Screen recorder error:", e)
+
+        cameraRecorderRef.current.start(1000)
+        screenRecorderRef.current.start(1000)
+        console.log(`[REC_TRACE] Recorders started. Camera state: ${cameraRecorderRef.current.state}, Screen state: ${screenRecorderRef.current.state}`)
+      } else {
+        console.log(`[REC_TRACE] Video recording is disabled for this session. Skipping MediaRecorder initialization.`)
+      }
 
       const elem = document.documentElement;
       if (elem.requestFullscreen) {
@@ -1613,7 +1567,7 @@ export const useInterviewSession = (sessionId, interviewType, startRoundTwo) => 
       startBackgroundNoiseMonitor(stream)
 
       const savedSess = _sessionKey ? (() => { try { return JSON.parse(sessionStorage.getItem(_sessionKey) || 'null') } catch { return null } })() : null
-      
+
       // Voice cloning setup is now handled server-side via CARTESIA_VOICE_ID env var.
       // Skip the setup screen and go directly to the first question.
       if (!savedSess?.accepted && questions.length > 0) {
@@ -1731,13 +1685,24 @@ export const useInterviewSession = (sessionId, interviewType, startRoundTwo) => 
         }
       }
 
-      let options = { videoBitsPerSecond: 800000, audioBitsPerSecond: 64000 }
-      screenRecorderRef.current = new MediaRecorder(screenStream, options)
-      screenChunksRef.current = []
-      screenRecorderRef.current.ondataavailable = e => {
-        if (e.data.size > 0) screenChunksRef.current.push(e.data)
+      const shouldRecordVideo = sessionDetailRef.current?.record_video !== false;
+      if (shouldRecordVideo) {
+        const mimeType = recordedMimeTypeRef.current || 'video/webm'
+        let options = { mimeType, videoBitsPerSecond: 800000, audioBitsPerSecond: 64000 }
+        try {
+          screenRecorderRef.current = new MediaRecorder(screenStream, options)
+        } catch (_) {
+          screenRecorderRef.current = new MediaRecorder(screenStream)
+        }
+        if (!screenChunksRef.current) screenChunksRef.current = []
+        screenRecorderRef.current.ondataavailable = e => {
+          if (e.data && e.data.size > 0) screenChunksRef.current.push(e.data)
+        }
+        screenRecorderRef.current.onerror = e => console.error("Screen recorder error on restart:", e)
+        screenRecorderRef.current.start(1000)
+      } else {
+        console.log(`[REC_TRACE] Video recording is disabled for this session. Skipping Screen MediaRecorder restart.`)
       }
-      screenRecorderRef.current.start(2000)
     } catch (e) {
       Swal.fire({
         title: 'Screen Share Required',
@@ -1790,7 +1755,7 @@ export const useInterviewSession = (sessionId, interviewType, startRoundTwo) => 
       try {
         currentAudioRef.current.pause()
         currentAudioRef.current.currentTime = 0
-      } catch (e) {}
+      } catch (e) { }
       currentAudioRef.current = null
     }
 
@@ -1800,7 +1765,7 @@ export const useInterviewSession = (sessionId, interviewType, startRoundTwo) => 
     // restart the mic 150ms later right in the middle of TTS audio.
     isTTSPlayingRef.current = true
     if (recognitionRef.current) {
-      try { recognitionRef.current.stop() } catch (_) {}
+      try { recognitionRef.current.stop() } catch (_) { }
     }
     // Clear any gibberish that got captured while recognition was still on
     setTranscriptionText('')
@@ -1809,9 +1774,9 @@ export const useInterviewSession = (sessionId, interviewType, startRoundTwo) => 
     // --- High-Quality TTS (Backend: Cartesia or Edge TTS) ---
     try {
       if (window.speechSynthesis) window.speechSynthesis.cancel()
-      const bodyPayload = { 
-        text, 
-        voice: 'shimmer', 
+      const bodyPayload = {
+        text,
+        voice: 'shimmer',
         language: sessionDetail?.language || 'English',
         use_custom_voice: !!sessionDetail?.voice_clone
 
@@ -1845,7 +1810,7 @@ export const useInterviewSession = (sessionId, interviewType, startRoundTwo) => 
 
       const audio = new Audio(url)
       currentAudioRef.current = audio
-      
+
       // --- Web Audio Mixer Routing ---
       if (audioMixerCtxRef.current && audioMixerDestRef.current) {
         audio.crossOrigin = "anonymous"
@@ -1856,19 +1821,24 @@ export const useInterviewSession = (sessionId, interviewType, startRoundTwo) => 
 
       audio.onended = () => {
         // Revoke object URL after playback to free browser memory.
-        // Only revoke if not in the cache (cached URLs must stay valid for replay).
         if (!ttsCacheRef.current.has(ttsCacheKey)) {
           URL.revokeObjectURL(url)
         }
-        // ── RESTART speech recognition now that the AI has finished speaking ──
-        // Clear the TTS flag first so rec.onend won't block the restart.
+        // ── RESTART speech recognition cleanly after AI finishes speaking ──
         isTTSPlayingRef.current = false
         isSpeechRecordingRef.current = true
-        initSpeechRecognition()
-        try { recognitionRef.current?.start() } catch (_) {}
+        if (!recognitionRef.current) {
+          initSpeechRecognition()
+        }
+        try {
+          recognitionRef.current?.start()
+        } catch (_) {
+          initSpeechRecognition()
+          try { recognitionRef.current?.start() } catch (__) { }
+        }
         startSilenceTimer(10000)
       }
-      
+
       // Double check reqId before playing just in case
       if (speakRequestIdRef.current === reqId) {
         audio.play()
@@ -1885,7 +1855,7 @@ export const useInterviewSession = (sessionId, interviewType, startRoundTwo) => 
       startSilenceTimer(15000)
       return
     }
-    
+
     // If a new request came in, abort browser fallback setup
     if (speakRequestIdRef.current !== reqId) return
 
@@ -1910,8 +1880,15 @@ export const useInterviewSession = (sessionId, interviewType, startRoundTwo) => 
         // ── RESTART recognition after browser TTS fallback finishes ──
         isTTSPlayingRef.current = false
         isSpeechRecordingRef.current = true
-        initSpeechRecognition()
-        try { recognitionRef.current?.start() } catch (_) {}
+        if (!recognitionRef.current) {
+          initSpeechRecognition()
+        }
+        try {
+          recognitionRef.current?.start()
+        } catch (_) {
+          initSpeechRecognition()
+          try { recognitionRef.current?.start() } catch (__) { }
+        }
         startSilenceTimer(10000)
       }
 
@@ -2044,13 +2021,27 @@ export const useInterviewSession = (sessionId, interviewType, startRoundTwo) => 
     if (currentQuestionIndex >= questions.length) return
     if (isNextingRef.current) return  // prevent rapid-click double submit
     isNextingRef.current = true
-    const currentQuestion = questions[currentQuestionIndex]
-    stopSilenceTimer()
-
-    const timeSpent = Math.round((Date.now() - questionStartTimeRef.current) / 1000)
-    const words = transcriptionText.trim().split(/\s+/).filter(w => w.length > 0).length
-    const wpm = timeSpent > 0 ? Math.round((words / timeSpent) * 60) : 0
     try {
+      // Immediately stop any playing question TTS audio so Next works instantly without waiting for playback
+      if (currentAudioRef.current) {
+        try {
+          currentAudioRef.current.pause()
+          currentAudioRef.current.currentTime = 0
+        } catch (_) { }
+        currentAudioRef.current = null
+      }
+      if (window.speechSynthesis) {
+        try { window.speechSynthesis.cancel() } catch (_) { }
+      }
+      isTTSPlayingRef.current = false
+
+      const currentQuestion = questions[currentQuestionIndex]
+      stopSilenceTimer()
+
+      const timeSpent = Math.round((Date.now() - (questionStartTimeRef.current || Date.now())) / 1000)
+      const safeTranscript = (transcriptionText || '').trim()
+      const words = safeTranscript ? safeTranscript.split(/\s+/).filter(w => w.length > 0).length : 0
+      const wpm = timeSpent > 0 ? Math.round((words / timeSpent) * 60) : 0
       const iid = interviewId || sessionDetail?.interview_id || sessionId
       if (currentQuestion.type === 'case_study') {
         const response = await api.post(`/case-study/submit-answer`, {
@@ -2074,7 +2065,7 @@ export const useInterviewSession = (sessionId, interviewType, startRoundTwo) => 
         })
       }
 
-      // Save behavioral data AFTER save-answer, so the record exists to be updated
+      // Fire behavioral data save in background so question transition is instant
       const payload = {
         interview_id: iid,
         question_id: (currentQuestion.id || (currentQuestionIndex + 1)).toString(),
@@ -2086,9 +2077,7 @@ export const useInterviewSession = (sessionId, interviewType, startRoundTwo) => 
         face_alerts: behavioralStatsRef.current.faceAlerts,
         noise_alerts: behavioralStatsRef.current.noiseAlerts
       }
-      try {
-        await api.post(`/save-behavioral-data`, payload)
-      } catch (e) { }
+      api.post(`/save-behavioral-data`, payload).catch(() => {})
 
       if (currentQuestionIndex === questions.length - 1) {
         const isCodingQ = currentQuestion.type === 'coding'
@@ -2173,7 +2162,7 @@ export const useInterviewSession = (sessionId, interviewType, startRoundTwo) => 
                 prefetchedQuestionsRef.current = data.questions
               }
             })
-            .catch(() => {})
+            .catch(() => { })
             .finally(() => { isPrefetchingRef.current = false })
         }
 
@@ -2241,77 +2230,130 @@ export const useInterviewSession = (sessionId, interviewType, startRoundTwo) => 
     if (recognitionRef.current) {
       try { recognitionRef.current.stop() } catch (e) { }
     }
-    
+
     if (whisperMediaRecorderRef.current && whisperMediaRecorderRef.current.state !== 'inactive') {
       try { whisperMediaRecorderRef.current.stop() } catch (e) { }
       whisperMediaRecorderRef.current = null
     }
     if (whisperPauseTimeoutRef.current) clearTimeout(whisperPauseTimeoutRef.current)
 
+    // Async helper to cleanly request data and wait for onstop before killing stream tracks
+    const stopRecorderAsync = (recorderRef, name) => {
+      return new Promise(resolve => {
+        const recorder = recorderRef.current
+        if (!recorder || recorder.state === 'inactive') {
+          console.log(`[REC_TRACE] ${name} recorder already inactive`)
+          return resolve()
+        }
+        let resolved = false
+        const finish = () => {
+          if (!resolved) {
+            resolved = true
+            console.log(`[REC_TRACE] ${name} recorder stopped cleanly. Final state: ${recorder.state}`)
+            resolve()
+          }
+        }
+        recorder.onstop = finish
+        try { recorder.requestData() } catch (e) { console.warn(`[REC_TRACE] ${name} requestData warn:`, e) }
+        try { recorder.stop() } catch (e) { console.warn(`[REC_TRACE] ${name} stop warn:`, e); finish() }
+        setTimeout(finish, 400) // Fallback timeout if onstop event doesn't fire
+      })
+    }
+
+    console.log("[REC_TRACE] Stopping camera and screen recorders asynchronously...")
+    await Promise.all([
+      stopRecorderAsync(cameraRecorderRef, 'Camera'),
+      stopRecorderAsync(screenRecorderRef, 'Screen')
+    ])
+
     try {
       if (mediaStreamRef.current) {
-        mediaStreamRef.current.getTracks().forEach(track => { try { track.stop() } catch(e){} })
+        mediaStreamRef.current.getTracks().forEach(track => { try { track.stop() } catch (e) { } })
+        console.log("[REC_TRACE] Camera stream tracks stopped.")
       }
-    } catch(e) { console.error("Error stopping media tracks:", e) }
+    } catch (e) { console.error("[REC_TRACE] Error stopping media tracks:", e) }
 
     try {
       if (screenStreamRef.current) {
-        screenStreamRef.current.getTracks().forEach(track => { try { track.stop() } catch(e){} })
+        screenStreamRef.current.getTracks().forEach(track => { try { track.stop() } catch (e) { } })
+        console.log("[REC_TRACE] Screen stream tracks stopped.")
       }
-    } catch(e) { console.error("Error stopping screen tracks:", e) }
+    } catch (e) { console.error("[REC_TRACE] Error stopping screen tracks:", e) }
 
     try {
       if (audioMixerDestRef.current && audioMixerDestRef.current.stream) {
-        audioMixerDestRef.current.stream.getTracks().forEach(track => { try { track.stop() } catch(e){} })
+        audioMixerDestRef.current.stream.getTracks().forEach(track => { try { track.stop() } catch (e) { } })
       }
       if (audioMixerCtxRef.current && audioMixerCtxRef.current.state !== 'closed') {
         audioMixerCtxRef.current.close().catch(e => console.error("Error closing audio mixer:", e))
       }
-    } catch(e) { console.error("Error stopping audio mixer:", e) }
-
-    if (cameraRecorderRef.current && cameraRecorderRef.current.state !== 'inactive') {
-      cameraRecorderRef.current.stop()
-    }
-    if (screenRecorderRef.current && screenRecorderRef.current.state !== 'inactive') {
-      screenRecorderRef.current.stop()
-    }
+    } catch (e) { console.error("[REC_TRACE] Error stopping audio mixer:", e) }
 
     let uploadPromiseChain = Promise.resolve()
 
-    if (cameraChunksRef.current.length > 0 || screenChunksRef.current.length > 0) {
+    const cameraChunksCount = cameraChunksRef.current ? cameraChunksRef.current.length : 0
+    const screenChunksCount = screenChunksRef.current ? screenChunksRef.current.length : 0
+    console.log(`[REC_TRACE] Recording summary before upload: Camera chunks = ${cameraChunksCount}, Screen chunks = ${screenChunksCount}`)
+
+    if (cameraChunksCount > 0 || screenChunksCount > 0) {
       setUploadingText("Uploading video recordings...")
       setUploadPercentage(10)
       setShowSkipButton(true)
 
       const uploadPromise = (chunks, type) => {
         return new Promise((resolve, reject) => {
-          if (chunks.length === 0) return resolve()
-          const blob = new Blob(chunks, { type: 'video/webm' })
+          if (!chunks || chunks.length === 0) {
+            console.log(`[REC_TRACE] No chunks for ${type}, skipping upload.`)
+            return resolve()
+          }
+          const mime = recordedMimeTypeRef.current || 'video/webm'
+          const cleanMime = mime.split(';')[0].trim() || 'video/webm'
+          const ext = cleanMime.includes('mp4') ? 'mp4' : 'webm'
+          const blob = new Blob(chunks, { type: cleanMime })
+          console.log(`[REC_TRACE] Assembled ${type} Blob. Size: ${blob.size} bytes, Type: ${cleanMime}, File: interview_${type}.${ext}`)
+
           const formData = new FormData()
-          formData.append('file', blob, `interview_${type}.webm`)
-          formData.append('interview_id', sessionDetail.interview_id)
+          const iid = interviewIdRef.current || sessionDetail?.interview_id || sessionId || ''
+          formData.append('file', blob, `interview_${type}.${ext}`)
+          formData.append('interview_id', iid)
           formData.append('recording_type', type)
-          formData.append('link_id', sessionId)
+          formData.append('link_id', sessionId || '')
 
           const xhr = new XMLHttpRequest()
-          xhr.open('POST', `${api.defaults.baseURL || ''}/upload-full-recording`, true)
+          const uploadBase = (api.defaults.baseURL || '').replace(/\/api\/?$/, '')
+          const uploadUrl = `${uploadBase}/upload-full-recording`
+          console.log(`[REC_TRACE] Initiating XHR POST ${uploadUrl} for ${type} (interview_id: ${iid}, link_id: ${sessionId})`)
+          xhr.open('POST', uploadUrl, true)
           const token = getCandidateSessionToken()
           if (token) {
             xhr.setRequestHeader('Authorization', `Bearer ${token}`)
+            console.log(`[REC_TRACE] Attached Bearer token for ${type} upload.`)
+          } else {
+            console.warn(`[REC_TRACE] No candidate session token found for ${type} upload!`)
           }
 
           xhr.upload.onprogress = (e) => {
             if (e.lengthComputable && type === 'camera') {
               const percent = Math.floor((e.loaded / e.total) * 100)
+              console.log(`[REC_TRACE] Upload progress (${type}): ${percent}% (${e.loaded}/${e.total} bytes)`)
               setUploadPercentage(percent)
             }
           }
 
           xhr.onload = () => {
-            if (xhr.status === 200) resolve()
-            else reject(new Error("Upload failed"))
+            console.log(`[REC_TRACE] XHR response (${type}): status = ${xhr.status}, body = ${xhr.responseText}`)
+            if (xhr.status === 200) {
+              console.log(`[REC_TRACE] ${type} upload successful.`)
+              resolve()
+            } else {
+              console.error(`[REC_TRACE] ${type} upload HTTP failure: status ${xhr.status}, text: ${xhr.responseText}`)
+              reject(new Error(`Upload failed with status ${xhr.status}: ${xhr.responseText}`))
+            }
           }
-          xhr.onerror = () => reject(new Error("Network error"))
+          xhr.onerror = (e) => {
+            console.error(`[REC_TRACE] ${type} upload network error:`, e)
+            reject(new Error("Network error during recording upload"))
+          }
           xhr.send(formData)
         })
       }
@@ -2328,7 +2370,7 @@ export const useInterviewSession = (sessionId, interviewType, startRoundTwo) => 
       const words = transcriptionText.trim().split(/\s+/).filter(w => w.length > 0).length
       const wpm = timeSpent > 0 ? Math.round((words / timeSpent) * 60) : 0
       const currentQuestion = questions[currentQuestionIndex] || {}
-      
+
       // If forced termination (e.g., proctoring alert), save the answer first!
       if (forceClose && currentQuestion) {
         const iid = interviewIdRef.current || sessionId
@@ -2356,7 +2398,7 @@ export const useInterviewSession = (sessionId, interviewType, startRoundTwo) => 
               time_spent_seconds: timeSpent
             }
             sessionStorage.setItem(failedKey, JSON.stringify(answerData))
-          } catch (_) {}
+          } catch (_) { }
         }
       }
 
@@ -2379,7 +2421,7 @@ export const useInterviewSession = (sessionId, interviewType, startRoundTwo) => 
       const queryParams = terminationReason ? `?reason=${encodeURIComponent(terminationReason)}` : ''
       await api.post(`/complete-session/${sessionId}${queryParams}`)
       if (sessionId) {
-        try { sessionStorage.setItem(`interview_done_${sessionId}`, '1') } catch (e) {}
+        try { sessionStorage.setItem(`interview_done_${sessionId}`, '1') } catch (e) { }
       }
     } catch (completionError) {
       console.error('Failed to complete interview session:', completionError)
@@ -2442,7 +2484,7 @@ export const useInterviewSession = (sessionId, interviewType, startRoundTwo) => 
               interview_id: iid,
               question_index: currentQuestion.caseStudyIndex,
               answer_text: transcriptionText || ' '
-            }).catch(()=>{})
+            }).catch(() => { })
           } else {
             const answerForm = new FormData()
             answerForm.append('interview_id', iid)
@@ -2452,7 +2494,7 @@ export const useInterviewSession = (sessionId, interviewType, startRoundTwo) => 
             answerForm.append('candidate_name', sessionDetail?.candidate_name || 'Candidate')
             answerForm.append('time_spent_seconds', timeSpent.toString())
             answerForm.append('time_limit_seconds', '120')
-            await api.post(`/save-answer`, answerForm).catch(()=>{})
+            await api.post(`/save-answer`, answerForm).catch(() => { })
           }
         }
         handleSubmitInterview(false, 'early_exit')
@@ -2482,12 +2524,12 @@ export const useInterviewSession = (sessionId, interviewType, startRoundTwo) => 
     currentQuestion,
     codingTask,
     isMediaReady,
-    proctoringAlert: proctoring.modelsFailed
-      ? 'Proctoring AI models failed to load. Face and object monitoring is unavailable.'
-      : proctoringAlert,
+    proctoringAlert,
+    modelsFailed: proctoring.modelsFailed,
     faceAlertCount,
     noiseAlertCount,
     showNoiseBanner,
+    securityMessage,
     fullscreenWarning,
     screenShareWarning,
     screenShareViolations,
@@ -2548,6 +2590,7 @@ export const useInterviewSession = (sessionId, interviewType, startRoundTwo) => 
     isSpeechRecordingRef,
     interimTranscriptText,
     isCompleted,
+    scheduledStart,
     isOnline
   }
 }

@@ -5,7 +5,8 @@
  *   Round 2: Coding (Monaco Editor + live code sentinel)
  *   Round 3: Case Study (branching AI discussion)
  */
-import React, { useState, useEffect, useRef, useCallback, Suspense } from 'react'
+import React, { useState, useEffect, useRef, useCallback, useMemo, Suspense } from 'react'
+import { createPortal } from 'react-dom'
 import { useParams, useNavigate } from 'react-router-dom'
 import {
   Mic, MicOff,
@@ -210,7 +211,8 @@ export default function VoiceInterviewPage() {
   const [currentQIdx, setCurrentQIdx] = useState(_savedSession?.currentQIdx || 0)
   const [aiStatus, setAiStatus] = useState('idle')
   const [transcript, setTranscript] = useState('')
-  const [proctoringBanner, setProctoringBanner] = useState(null)
+  const [securityAlert, setSecurityAlert] = useState('')
+  const securityAlertTimerRef = useRef(null)
   const [interimText, setInterimText] = useState('')
   const [countdown, setCountdown] = useState(0)
   const countdownRef = useRef(0)
@@ -269,8 +271,10 @@ export default function VoiceInterviewPage() {
 
 
 
-  // Initialize WebRTC
-  const telemetryData = {
+  // Initialize WebRTC — memoize telemetryData so useCandidateWebRTC only sees
+  // a new reference when the values actually change, preventing hook re-runs on
+  // every render cycle (e.g. during animation frames or state updates).
+  const telemetryData = useMemo(() => ({
     round_type: ['verbal', 'coding', 'case_study'].includes(round) ? round : 'verbal',
     status: aiStatus === 'idle' ? 'online' : aiStatus,
     proctoring_alerts: warningsCount,
@@ -278,7 +282,7 @@ export default function VoiceInterviewPage() {
     current_question: currentQIdx + 1,
     total_questions: questions.length || 0,
     question_text: questions[currentQIdx] ? questions[currentQIdx].question_text : ''
-  }
+}
   useCandidateWebRTC(linkId, cameraStreamRef, telemetryData, monitoringToken, mediaStreamRef)
 
   // Refs
@@ -1963,8 +1967,9 @@ export default function VoiceInterviewPage() {
       'multi_monitor': '🖥️ Multiple monitors detected — please use a single display.',
     }
     const displayMsg = alertMessages[alertType] || `⚠️ Proctoring alert: ${alertType}`
-    setProctoringBanner({ type: alertType, message: displayMsg })
-    setTimeout(() => setProctoringBanner(null), 4000)
+    clearTimeout(securityAlertTimerRef.current)
+    setSecurityAlert(displayMsg)
+    securityAlertTimerRef.current = setTimeout(() => setSecurityAlert(''), 4500)
 
     if (['multi_person', 'no_face', 'phone', 'eye_contact'].includes(alertType)) {
       integrityMetricsRef.current.faceAlerts += 1
@@ -2094,6 +2099,7 @@ export default function VoiceInterviewPage() {
 
     // Fullscreen change detection with interactive modal
     const handleFullscreenChange = async () => {
+      if (round === 'coding') return
       if (!document.fullscreenElement && round !== 'done' && round !== 'pre_checks' && round !== 'intro' && round !== 'submitting') {
         logProctoringAlert('fullscreen_exit', 'User exited fullscreen')
 
@@ -2139,17 +2145,6 @@ export default function VoiceInterviewPage() {
     maxAlerts: 10,
     onViolation: (v) => {
       logProctoringAlert(v.type, v.message)
-      Swal.fire({
-        icon: 'warning',
-        title: '⚠️ Proctoring Alert',
-        text: v.message,
-        toast: true,
-        position: 'top-end',
-        showConfirmButton: false,
-        timer: 3000,
-        background: '#161c2d',
-        color: '#fff',
-      })
     },
     onTerminate: () => completeInterview({ isTimeout: true, reason: 'Terminated due to multiple AI proctoring alerts (Face/Camera violations).' })
   })
@@ -2174,17 +2169,6 @@ export default function VoiceInterviewPage() {
     onAttempt: (v) => {
       const message = 'Screenshots are not allowed during this interview.'
       logProctoringAlert(v.type, message)
-      Swal.fire({
-        icon: 'warning',
-        title: '📸 Screenshots Not Allowed',
-        text: message,
-        toast: true,
-        position: 'top-end',
-        showConfirmButton: false,
-        timer: 4000,
-        background: '#161c2d',
-        color: '#fff',
-      })
     },
   })
 
@@ -2193,17 +2177,6 @@ export default function VoiceInterviewPage() {
     enabled: round !== 'done' && round !== 'pre_checks' && round !== 'intro' && round !== 'submitting',
     onViolation: ({ type, message }) => {
       logProctoringAlert(type, message)
-      Swal.fire({
-        icon: 'warning',
-        title: '⚠️ Security Alert',
-        text: message,
-        toast: true,
-        position: 'top-end',
-        showConfirmButton: false,
-        timer: 4000,
-        background: '#161c2d',
-        color: '#fff',
-      })
     },
   })
 
@@ -2338,6 +2311,25 @@ export default function VoiceInterviewPage() {
           </React.Suspense>
         </ErrorBoundary>
         {candidateVideoElement}
+        {securityAlert && createPortal(
+          <div role="alert" style={{
+            position: 'fixed', top: 16, left: '50%', transform: 'translateX(-50%)',
+            zIndex: 99999, display: 'flex', alignItems: 'center', gap: 10,
+            padding: '10px 18px', borderRadius: 999, fontSize: 13, fontWeight: 500,
+            whiteSpace: 'nowrap', pointerEvents: 'none',
+            background: 'rgba(22,10,10,0.88)', backdropFilter: 'blur(14px)',
+            border: '1px solid rgba(239,68,68,0.35)', color: '#fca5a5',
+            boxShadow: '0 4px 24px rgba(0,0,0,0.25)',
+            animation: 'alertSlideDown 0.25s cubic-bezier(0.34,1.56,0.64,1) forwards',
+          }}>
+            <span style={{ display:'flex', alignItems:'center', justifyContent:'center', width:22, height:22, borderRadius:'50%', background:'rgba(239,68,68,0.2)', color:'#ef4444', flexShrink:0 }}>
+              <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/></svg>
+            </span>
+            <span style={{ fontWeight:700, fontSize:12, textTransform:'uppercase', letterSpacing:'0.05em', opacity:0.75, marginRight:2 }}>Security</span>
+            {securityAlert}
+          </div>,
+          document.body
+        )}
       </>
     )
   }
@@ -2396,19 +2388,25 @@ export default function VoiceInterviewPage() {
   // The countdown above continues ticking and triggers submission when it hits zero.
   if (round === 'waiting') return (
     <div className="h-screen w-screen overflow-hidden bg-[#07091a] flex flex-col text-white" style={{ fontFamily: "'Inter',sans-serif" }}>
-      {/* Proctoring Banner */}
-      {proctoringBanner && (
-        <div style={{
-          position: 'fixed', top: 0, left: 0, right: 0, zIndex: 9999,
-          background: proctoringBanner.type === 'tab_switch' ? 'linear-gradient(90deg,#b91c1c,#dc2626)' : 'linear-gradient(90deg,#7c3aed,#6d28d9)',
-          color: 'white', padding: '12px 24px',
-          display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '12px',
-          fontSize: '15px', fontWeight: '700',
-          boxShadow: '0 4px 20px rgba(0,0,0,0.4)',
+      {/* Security Alert Pill */}
+      {securityAlert && createPortal(
+        <div role="alert" style={{
+          position: 'fixed', top: 16, left: '50%', transform: 'translateX(-50%)',
+          zIndex: 99999, display: 'flex', alignItems: 'center', gap: 10,
+          padding: '10px 18px', borderRadius: 999, fontSize: 13, fontWeight: 500,
+          whiteSpace: 'nowrap', pointerEvents: 'none',
+          background: 'rgba(22,10,10,0.88)', backdropFilter: 'blur(14px)',
+          border: '1px solid rgba(239,68,68,0.35)', color: '#fca5a5',
+          boxShadow: '0 4px 24px rgba(0,0,0,0.25)',
+          animation: 'alertSlideDown 0.25s cubic-bezier(0.34,1.56,0.64,1) forwards',
         }}>
-          <span style={{ fontSize: '20px' }}>{proctoringBanner.type === 'tab_switch' ? '🚨' : '⚠️'}</span>
-          <span>{proctoringBanner.message}</span>
-        </div>
+          <span style={{ display:'flex', alignItems:'center', justifyContent:'center', width:22, height:22, borderRadius:'50%', background:'rgba(239,68,68,0.2)', color:'#ef4444', flexShrink:0 }}>
+            <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/></svg>
+          </span>
+          <span style={{ fontWeight:700, fontSize:12, textTransform:'uppercase', letterSpacing:'0.05em', opacity:0.75, marginRight:2 }}>Security</span>
+          {securityAlert}
+        </div>,
+        document.body
       )}
 
       {/* Header with live timer */}
@@ -2895,22 +2893,25 @@ export default function VoiceInterviewPage() {
         </div>
       )}
 
-      {/* Proctoring Banner */}
-      {proctoringBanner && (
-
-        <div style={{
-          position: 'fixed', top: 0, left: 0, right: 0, zIndex: 9999,
-          background: proctoringBanner.type === 'tab_switch' ? 'linear-gradient(90deg,#b91c1c,#dc2626)' : 'linear-gradient(90deg,#7c3aed,#6d28d9)',
-          color: 'white', padding: '12px 24px',
-          display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '12px',
-          fontSize: '15px', fontWeight: '700', letterSpacing: '0.01em',
-          boxShadow: '0 4px 20px rgba(0,0,0,0.4)',
-          animation: 'fadeIn 0.2s ease'
+      {/* Security Alert Pill */}
+      {securityAlert && createPortal(
+        <div role="alert" style={{
+          position: 'fixed', top: 16, left: '50%', transform: 'translateX(-50%)',
+          zIndex: 99999, display: 'flex', alignItems: 'center', gap: 10,
+          padding: '10px 18px', borderRadius: 999, fontSize: 13, fontWeight: 500,
+          whiteSpace: 'nowrap', pointerEvents: 'none',
+          background: 'rgba(22,10,10,0.88)', backdropFilter: 'blur(14px)',
+          border: '1px solid rgba(239,68,68,0.35)', color: '#fca5a5',
+          boxShadow: '0 4px 24px rgba(0,0,0,0.25)',
+          animation: 'alertSlideDown 0.25s cubic-bezier(0.34,1.56,0.64,1) forwards',
         }}>
-          <span style={{ fontSize: '20px' }}>{proctoringBanner.type === 'tab_switch' ? '🚨' : proctoringBanner.type === 'multi_person' ? '👥' : proctoringBanner.type === 'no_face' ? '👤' : '⚠️'}</span>
-          <span>{proctoringBanner.message}</span>
-          <span style={{ fontSize: '12px', opacity: 0.8, fontWeight: 500 }}>- Recorded &amp; logged</span>
-        </div>
+          <span style={{ display:'flex', alignItems:'center', justifyContent:'center', width:22, height:22, borderRadius:'50%', background:'rgba(239,68,68,0.2)', color:'#ef4444', flexShrink:0 }}>
+            <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/></svg>
+          </span>
+          <span style={{ fontWeight:700, fontSize:12, textTransform:'uppercase', letterSpacing:'0.05em', opacity:0.75, marginRight:2 }}>Security</span>
+          {securityAlert}
+        </div>,
+        document.body
       )}
 
       {/* Header */}

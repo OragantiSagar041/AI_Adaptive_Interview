@@ -1,13 +1,15 @@
 import React, { useState, useRef, useEffect } from 'react'
 import { useSearchParams, Link } from 'react-router-dom'
-import { Video, Volume2, ArrowRight, ShieldAlert, Cpu, AlertTriangle, RefreshCw } from 'lucide-react'
+import { Video, ArrowRight, ShieldAlert, Cpu, AlertTriangle, RefreshCw } from 'lucide-react'
 import { useInterviewSession } from './useInterviewSession'
 import DeviceCheckModal from '../../components/DeviceCheckModal'
+import ProctoringAlerts from '../../components/interview/ProctoringAlerts'
 import { API_BASE_URL } from '../../apiConfig'
 import { candidateFetch } from '../../utils/candidateAuth'
 import api from '../../utils/api'
 import '../../Interview.css'
 import { motion } from 'framer-motion'
+import AccessDeniedScreen from '../../components/interview/AccessDeniedScreen'
 
 export const InterviewNonTechnical = () => {
   const interviewType = 'Non-Technical';
@@ -67,6 +69,7 @@ export const InterviewNonTechnical = () => {
     loading,
     showAllSet,
     error,
+    scheduledStart,
     isCompleted,
     isDisclaimerAccepted,
     agreeChecked,
@@ -80,6 +83,8 @@ export const InterviewNonTechnical = () => {
     faceAlertCount,
     noiseAlertCount,
     showNoiseBanner,
+    securityMessage,
+    modelsFailed,
     fullscreenWarning,
     screenShareWarning,
     screenShareViolations,
@@ -213,14 +218,7 @@ export const InterviewNonTechnical = () => {
   }
 
   if (error) {
-    return (
-      <div className="flex justify-center items-center h-screen flex-col p-6 text-center">
-        <AlertTriangle className="text-danger mb-4" size={48} />
-        <h2 className="text-2xl font-bold text-slate-900 tracking-tight">Access Denied</h2>
-        <p className="text-slate-600 mt-2 max-w-md text-sm">{error}</p>
-        <Link to="/" className="inline-flex items-center justify-center gap-2 px-6 py-3 rounded-full font-semibold text-sm bg-primary hover:bg-primary-hover text-white transition-all shadow-[0_4px_14px_rgba(99,102,241,0.15)] mt-6 no-underline">Go to Platform Page</Link>
-      </div>
-    )
+    return <AccessDeniedScreen error={error} scheduledStart={scheduledStart || sessionDetail?.scheduled_start} />
   }
 
   if (isCompleted) {
@@ -448,27 +446,15 @@ export const InterviewNonTechnical = () => {
         </div>
       )}
 
-      {/* Alerts */}
-      {showNoiseBanner && (
-        <div style={{ position: 'fixed', top: '20px', right: '20px', zIndex: 99999, padding: '16px', borderRadius: '12px', background: 'rgba(245, 158, 11, 0.1)', border: '1px solid #f59e0b', color: '#f59e0b', display: 'flex', alignItems: 'center', gap: '12px', boxShadow: '0 4px 6px rgba(0,0,0,0.1)', maxWidth: '380px' }}>
-          <Volume2 size={20} style={{ animation: 'bounce 1s infinite' }} />
-          <div>
-            <strong style={{ fontSize: '14px', display: 'block' }}>Background Noise Alert</strong>
-            <p style={{ fontSize: '12px', opacity: 0.9, margin: '2px 0 0 0' }}>Please maintain silence. Alerts: {noiseAlertCount}/10</p>
-          </div>
-        </div>
-      )}
-
-      {/* Face / Proctoring Alert Banner */}
-      {faceAlertCount > 0 && (
-        <div style={{ position: 'fixed', top: showNoiseBanner ? '100px' : '20px', right: '20px', zIndex: 99998, padding: '14px 16px', borderRadius: '12px', background: 'rgba(239, 68, 68, 0.1)', border: '1px solid #ef4444', color: '#ef4444', display: 'flex', alignItems: 'center', gap: '12px', boxShadow: '0 4px 6px rgba(0,0,0,0.15)', maxWidth: '380px', transition: 'top 0.3s ease' }}>
-          <span style={{ fontSize: '18px' }}>👁️</span>
-          <div>
-            <strong style={{ fontSize: '14px', display: 'block' }}>Face Alert</strong>
-            <p style={{ fontSize: '12px', opacity: 0.9, margin: '2px 0 0 0' }}>{proctoringAlert || 'Proctoring violation detected'}. Alerts: {faceAlertCount}/20</p>
-          </div>
-        </div>
-      )}
+      {/* ── Proctoring Alert Pills (portal-mounted, never overlaps page content) ── */}
+      <ProctoringAlerts
+        faceAlertCount={faceAlertCount}
+        noiseAlertCount={noiseAlertCount}
+        showNoiseBanner={showNoiseBanner}
+        securityMessage={securityMessage}
+        proctoringAlert={proctoringAlert}
+        modelsFailed={modelsFailed}
+      />
 
       {fullscreenWarning && (
         <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.95)', zIndex: 99999, display: 'flex', flexDirection: 'column', justifyContent: 'center', alignItems: 'center', gap: '20px', textAlign: 'center', padding: '24px' }}>
@@ -747,12 +733,15 @@ export const InterviewNonTechnical = () => {
                       RECORDING
                     </div>
                   </div>
-                  <textarea
-                    className="bg-slate-50/50 border border-slate-200 p-5 text-[0.95rem] font-medium leading-relaxed text-slate-800 placeholder:text-slate-400 outline-none shadow-inner resize-none w-full flex-1 overflow-y-auto transition-all rounded-[24px] custom-scrollbar"
-                    placeholder="Your speech will appear here automatically..."
-                    readOnly
-                    value={transcriptionText + (interimTranscriptText ? interimTranscriptText : '')}
-                  />
+                  <div
+                    className="bg-slate-50/50 border border-slate-200 p-5 text-[0.95rem] font-medium leading-relaxed text-slate-800 shadow-inner resize-none w-full flex-1 overflow-y-auto transition-all rounded-[24px] custom-scrollbar"
+                    tabIndex={-1}
+                    aria-live="polite"
+                    aria-label="Live transcript"
+                    style={{ pointerEvents: 'none', userSelect: 'none', cursor: 'default', whiteSpace: 'pre-wrap', wordBreak: 'break-word' }}
+                  >
+                    {transcriptionText + (interimTranscriptText ? interimTranscriptText : '') || <span style={{ color: '#94a3b8' }}>Your speech will appear here automatically...</span>}
+                  </div>
                 </div>
 
                 {/* Navigation buttons */}

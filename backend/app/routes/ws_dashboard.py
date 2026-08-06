@@ -173,8 +173,8 @@ async def get_dashboard_aggregated_data(
                 jobs_query["company_id"] = current_admin.get("company_id")
             if current_admin.get("role") == "admin":
                 jobs_query["admin_id"] = current_admin["admin_id"]
-            elif admin_id:
-                jobs_query["admin_id"] = admin_id
+            elif current_admin.get("role") in ["super_admin", "superadmin"]:
+                jobs_query["admin_id"] = {"$in": _get_authorized_creator_ids(current_admin)}
             jobs = [] if summary_only else await asyncio.to_thread(lambda: list(jobs_collection.find(jobs_query)))
             job_ids = [j.get("job_id") for j in jobs if j.get("job_id")]
             

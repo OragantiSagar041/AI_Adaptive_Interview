@@ -19,6 +19,7 @@ from typing import Any, Dict, List, Optional, Union
 import bcrypt, jwt, requests
 import cloudinary, cloudinary.uploader, cloudinary.api, cloudinary.utils
 import edge_tts
+# pyrefly: ignore [missing-import]
 import pypdf
 from bson import ObjectId
 from bson.errors import InvalidId
@@ -94,110 +95,73 @@ router = APIRouter()
 @router.get("/api/notifications")
 def get_notifications(current_admin: dict = Depends(get_current_admin_details)):
     try:
-        role = current_admin["role"]
-        company_id = current_admin["company_id"]
+        role = current_admin.get("role", "tenant")
+        company_id = str(current_admin.get("company_id") or "")
+        admin_id = str(current_admin.get("admin_id") or current_admin.get("_id") or "")
         
-        # Filter based on role
+        admin_ids = [admin_id]
+        try:
+            if admin_id:
+                admin_ids.append(ObjectId(admin_id))
+        except Exception:
+            pass
+            
+        company_ids = [company_id]
+        try:
+            if company_id:
+                company_ids.append(ObjectId(company_id))
+        except Exception:
+            pass
+
+        # Strict Role & Recipient Isolation:
         if role == "master":
-            query = {"recipient_role": "master"}
+            query = {
+                "$or": [
+                    {"recipient_role": "master"},
+                    {"recipient_id": {"$in": admin_ids}}
+                ]
+            }
         elif role in ["super_admin", "superadmin"]:
-            query = {"recipient_role": "superadmin", "company_id": company_id}
+            # Super Admin sees tenant-level superadmin notifications (credits requests from recruiters, system alerts)
+            # OR notifications specifically targeted to this super admin
+            query = {
+                "company_id": {"$in": company_ids} if company_id else {"$exists": True},
+                "$or": [
+                    {"recipient_role": {"$in": ["superadmin", "super_admin"]}},
+                    {"recipient_id": {"$in": admin_ids}},
+                    {"admin_id": {"$in": admin_ids}}
+                ]
+            }
         else:
-            query = {"recipient_role": "admin", "company_id": company_id}
+            # Recruiter / Admin:
+            # MUST ONLY see notifications specifically addressed to this recruiter account
+            query = {
+                "recipient_role": {"$nin": ["superadmin", "super_admin", "master"]},
+                "$or": [
+                    {"recipient_id": {"$in": admin_ids}},
+                    {"admin_id": {"$in": admin_ids}}
+                ]
+            }
+            if company_id:
+                query["company_id"] = {"$in": company_ids}
             
         notifications = list(notifications_collection.find(query).sort("created_at", -1))
         
-        # Seed mock data if empty
-        if not notifications:
+        # Seed initial mock data only if completely empty for this user/role
+        if not notifications and role == "master":
             import datetime
             now = datetime.datetime.now(datetime.timezone.utc)
-            if role == "master":
-                mock_data = [
-                    {
-                        "title": "Welcome to Master Console",
-                        "message": "Welcome to the Hire IQ Master Control Panel. Here you can monitor system status, subscription plans, and manage tenants.",
-                        "type": "system",
-                        "recipient_role": "master",
-                        "read": False,
-                        "created_at": (now - datetime.timedelta(hours=2)).isoformat()
-                    },
-                    {
-                        "title": "Subscription Renewed",
-                        "message": "Tenant 'Google Cloud Partner' renewed their Advanced plan successfully.",
-                        "type": "payment",
-                        "recipient_role": "master",
-                        "read": False,
-                        "created_at": (now - datetime.timedelta(hours=6)).isoformat()
-                    },
-                    {
-                        "title": "System Check Completed",
-                        "message": "Automatic daily backup and database indexes health check succeeded.",
-                        "type": "system",
-                        "recipient_role": "master",
-                        "read": True,
-                        "created_at": (now - datetime.timedelta(days=1)).isoformat()
-                    }
-                ]
-            elif role in ["super_admin", "superadmin"]:
-                mock_data = [
-                    {
-                        "title": "Welcome to Hire IQ",
-                        "message": "Welcome to your Admin Management. You can manage your team, check candidate results, and provision interviews.",
-                        "type": "system",
-                        "recipient_role": "superadmin",
-                        "company_id": company_id,
-                        "read": False,
-                        "created_at": (now - datetime.timedelta(hours=1)).isoformat()
-                    },
-                    {
-                        "title": "Interview Created",
-                        "message": "A new interview template 'Senior React Developer' has been created successfully.",
-                        "type": "activity",
-                        "recipient_role": "superadmin",
-                        "company_id": company_id,
-                        "read": False,
-                        "created_at": (now - datetime.timedelta(hours=4)).isoformat()
-                    },
-                    {
-                        "title": "Credits Request Approved",
-                        "message": "Your request for additional interview credits was approved by the master administrator.",
-                        "type": "credits",
-                        "recipient_role": "superadmin",
-                        "company_id": company_id,
-                        "read": True,
-                        "created_at": (now - datetime.timedelta(days=1)).isoformat()
-                    }
-                ]
-            else: # admin / tenant
-                mock_data = [
-                    {
-                        "title": "Welcome to Hire IQ",
-                        "message": "Welcome to the Admin console. Create, run, and review candidate coding and voice interviews.",
-                        "type": "system",
-                        "recipient_role": "admin",
-                        "company_id": company_id,
-                        "read": False,
-                        "created_at": (now - datetime.timedelta(hours=3)).isoformat()
-                    },
-                    {
-                        "title": "New Interview Complete",
-                        "message": "Candidate 'John Doe' has completed Python Technical Interview. Avg score: 8.5/10.",
-                        "type": "candidate",
-                        "recipient_role": "admin",
-                        "company_id": company_id,
-                        "read": False,
-                        "created_at": (now - datetime.timedelta(hours=5)).isoformat()
-                    },
-                    {
-                        "title": "Credits Assigned",
-                        "message": "Your team leader has assigned 20 credits to your admin account.",
-                        "type": "credits",
-                        "recipient_role": "admin",
-                        "company_id": company_id,
-                        "read": True,
-                        "created_at": (now - datetime.timedelta(days=2)).isoformat()
-                    }
-                ]
+            mock_data = [
+                {
+                    "title": "Welcome to Master Console",
+                    "message": "Welcome to the Hire IQ Master Control Panel. Here you can monitor system status, subscription plans, and manage tenants.",
+                    "type": "system",
+                    "recipient_role": "master",
+                    "recipient_id": admin_id,
+                    "read": False,
+                    "created_at": (now - datetime.timedelta(hours=2)).isoformat()
+                }
+            ]
             notifications_collection.insert_many(mock_data)
             notifications = list(notifications_collection.find(query).sort("created_at", -1))
             
@@ -215,20 +179,37 @@ def get_notifications(current_admin: dict = Depends(get_current_admin_details)):
 
 @router.put("/api/notifications/{notification_id}/read")
 def mark_notification_read(notification_id: str, current_admin: dict = Depends(get_current_admin_details)):
-    role = current_admin["role"]
-    company_id = current_admin["company_id"]
+    role = current_admin.get("role", "tenant")
+    company_id = str(current_admin.get("company_id") or "")
+    admin_id = str(current_admin.get("admin_id") or current_admin.get("_id") or "")
     
-    # Security filter: ensure notification matches user's role and company
-    notif = notifications_collection.find_one({"_id": ObjectId(notification_id)})
+    try:
+        notif = notifications_collection.find_one({"_id": ObjectId(notification_id)})
+    except Exception:
+        raise HTTPException(status_code=400, detail="Invalid notification ID format")
+
     if not notif:
         raise HTTPException(status_code=404, detail="Notification not found")
         
-    if role == "master" and notif.get("recipient_role") != "master":
-        raise HTTPException(status_code=403, detail="Forbidden")
-    elif role in ["super_admin", "superadmin"] and (notif.get("recipient_role") != "superadmin" or notif.get("company_id") != company_id):
-        raise HTTPException(status_code=403, detail="Forbidden")
-    elif role == "tenant" and (notif.get("recipient_role") != "admin" or notif.get("company_id") != company_id):
-        raise HTTPException(status_code=403, detail="Forbidden")
+    # Security authorization check
+    notif_recip = str(notif.get("recipient_id") or "")
+    notif_admin = str(notif.get("admin_id") or "")
+    notif_comp = str(notif.get("company_id") or "")
+    notif_role = str(notif.get("recipient_role") or "")
+
+    if role == "master":
+        if notif_role != "master" and notif_recip != admin_id:
+            raise HTTPException(status_code=403, detail="Forbidden")
+    elif role in ["super_admin", "superadmin"]:
+        if company_id and notif_comp and notif_comp != company_id:
+            raise HTTPException(status_code=403, detail="Forbidden")
+        if notif_role not in ["superadmin", "super_admin"] and notif_recip != admin_id and notif_admin != admin_id:
+            raise HTTPException(status_code=403, detail="Forbidden")
+    else:
+        if company_id and notif_comp and notif_comp != company_id:
+            raise HTTPException(status_code=403, detail="Forbidden")
+        if notif_recip != admin_id and notif_admin != admin_id:
+            raise HTTPException(status_code=403, detail="Forbidden")
         
     notifications_collection.update_one(
         {"_id": ObjectId(notification_id)},
@@ -238,34 +219,89 @@ def mark_notification_read(notification_id: str, current_admin: dict = Depends(g
 
 @router.post("/api/notifications/read-all")
 def mark_all_notifications_read(current_admin: dict = Depends(get_current_admin_details)):
-    role = current_admin["role"]
-    company_id = current_admin["company_id"]
+    role = current_admin.get("role", "tenant")
+    company_id = str(current_admin.get("company_id") or "")
+    admin_id = str(current_admin.get("admin_id") or current_admin.get("_id") or "")
     
+    admin_ids = [admin_id]
+    try:
+        if admin_id:
+            admin_ids.append(ObjectId(admin_id))
+    except Exception:
+        pass
+        
+    company_ids = [company_id]
+    try:
+        if company_id:
+            company_ids.append(ObjectId(company_id))
+    except Exception:
+        pass
+
     if role == "master":
-        query = {"recipient_role": "master", "read": False}
+        query = {
+            "read": False,
+            "$or": [
+                {"recipient_role": "master"},
+                {"recipient_id": {"$in": admin_ids}}
+            ]
+        }
     elif role in ["super_admin", "superadmin"]:
-        query = {"recipient_role": "superadmin", "company_id": company_id, "read": False}
+        query = {
+            "company_id": {"$in": company_ids} if company_id else {"$exists": True},
+            "read": False,
+            "$or": [
+                {"recipient_role": {"$in": ["superadmin", "super_admin"]}},
+                {"recipient_id": {"$in": admin_ids}},
+                {"admin_id": {"$in": admin_ids}}
+            ]
+        }
     else:
-        query = {"recipient_role": "admin", "company_id": company_id, "read": False}
+        query = {
+            "recipient_role": {"$nin": ["superadmin", "super_admin", "master"]},
+            "read": False,
+            "$or": [
+                {"recipient_id": {"$in": admin_ids}},
+                {"admin_id": {"$in": admin_ids}}
+            ]
+        }
+        if company_id:
+            query["company_id"] = {"$in": company_ids}
         
     notifications_collection.update_many(query, {"$set": {"read": True}})
     return {"status": "success", "message": "All notifications marked as read"}
 
 @router.delete("/api/notifications/{notification_id}")
-def delete_master_notification(notification_id: str, current_admin: dict = Depends(get_current_admin_details)):
-    role = current_admin["role"]
-    company_id = current_admin["company_id"]
+def delete_notification_item(notification_id: str, current_admin: dict = Depends(get_current_admin_details)):
+    role = current_admin.get("role", "tenant")
+    company_id = str(current_admin.get("company_id") or "")
+    admin_id = str(current_admin.get("admin_id") or current_admin.get("_id") or "")
     
-    notif = notifications_collection.find_one({"_id": ObjectId(notification_id)})
+    try:
+        notif = notifications_collection.find_one({"_id": ObjectId(notification_id)})
+    except Exception:
+        raise HTTPException(status_code=400, detail="Invalid notification ID format")
+
     if not notif:
         raise HTTPException(status_code=404, detail="Notification not found")
         
-    if role == "master" and notif.get("recipient_role") != "master":
-        raise HTTPException(status_code=403, detail="Forbidden")
-    elif role in ["super_admin", "superadmin"] and (notif.get("recipient_role") != "superadmin" or notif.get("company_id") != company_id):
-        raise HTTPException(status_code=403, detail="Forbidden")
-    elif role == "tenant" and (notif.get("recipient_role") != "admin" or notif.get("company_id") != company_id):
-        raise HTTPException(status_code=403, detail="Forbidden")
+    notif_recip = str(notif.get("recipient_id") or "")
+    notif_admin = str(notif.get("admin_id") or "")
+    notif_comp = str(notif.get("company_id") or "")
+    notif_role = str(notif.get("recipient_role") or "")
+
+    if role == "master":
+        if notif_role != "master" and notif_recip != admin_id:
+            raise HTTPException(status_code=403, detail="Forbidden")
+    elif role in ["super_admin", "superadmin"]:
+        if company_id and notif_comp and notif_comp != company_id:
+            raise HTTPException(status_code=403, detail="Forbidden")
+        if notif_role not in ["superadmin", "super_admin"] and notif_recip != admin_id and notif_admin != admin_id:
+            raise HTTPException(status_code=403, detail="Forbidden")
+    else:
+        if company_id and notif_comp and notif_comp != company_id:
+            raise HTTPException(status_code=403, detail="Forbidden")
+        if notif_recip != admin_id and notif_admin != admin_id:
+            raise HTTPException(status_code=403, detail="Forbidden")
         
     notifications_collection.delete_one({"_id": ObjectId(notification_id)})
     return {"status": "success", "message": "Notification deleted"}

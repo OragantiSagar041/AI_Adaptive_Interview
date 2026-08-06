@@ -124,15 +124,17 @@ function DetailPanel({ companyId }) {
   );
 }
 
+import { API_BASE_URL } from "@/apiConfig";
+
 // ─────────────────────────────────────────────────────────────────────────────
-// Static plan definitions (mirrors backend PLAN_DEFINITIONS)
+// Default plan definitions fallback
 // ─────────────────────────────────────────────────────────────────────────────
-const PLANS = [
+const DEFAULT_PLANS = [
   {
     key: "basic",
     label: "Basic",
-    price: 2500,
-    credits: 250,
+    price: 2499,
+    credits: 300,
     summary: "Adds richer review and control workflows for growing hiring teams.",
     features: ["Everything in Free Trial", "Detailed Analytics", "Session Export", "Deactivated Candidate Control", "Email Notifications"],
     popular: true,
@@ -157,13 +159,48 @@ const PLANS = [
 // ─────────────────────────────────────────────────────────────────────────────
 function RechargeModal({ company, onClose, onSuccess }) {
   const [step, setStep]             = useState("pick");   // "pick" | "form"
+  const [plans, setPlans]           = useState(DEFAULT_PLANS);
   const [selectedPlan, setSelectedPlan] = useState(
-    PLANS.find(p => p.key === company.plan_key) || PLANS[2]
+    DEFAULT_PLANS.find(p => p.key === company.plan_key) || DEFAULT_PLANS[0]
   );
   const [addCredits, setAddCredits] = useState(0);
   const [extendDays, setExtendDays] = useState(30);
   const [resetExpiry, setResetExpiry] = useState(false);
   const [saving, setSaving]         = useState(false);
+
+  useEffect(() => {
+    async function loadDynamicPlans() {
+      try {
+        const res = await fetch(`${API_BASE_URL}/api/plans`);
+        const json = await res.json();
+        if (res.ok && json.status === "success" && Array.isArray(json.data) && json.data.length > 0) {
+          const mapped = json.data
+            .filter(p => (p.plan_name || "").toLowerCase() !== "owner" && (p.plan_name || "").toLowerCase() !== "trial" && (p.plan_name || "").toLowerCase() !== "free trial")
+            .map((p, idx) => {
+              const key = (p.plan_name || "").toLowerCase().includes("adv") ? "advance" : "basic";
+              return {
+                key,
+                label: p.plan_name,
+                price: p.price,
+                credits: p.credits,
+                summary: p.summary || (key === "advance" ? "Unlocks the full hiring workflow." : "Core hiring features for growing teams."),
+                features: p.features || [],
+                popular: idx === 0 || key === "basic",
+                gradient: key === "advance" ? "from-violet-700 to-purple-800" : "from-indigo-600 to-blue-700",
+                accent: key === "advance" ? "#a78bfa" : "#818cf8",
+              };
+            });
+          if (mapped.length > 0) {
+            setPlans(mapped);
+            setSelectedPlan(mapped.find(p => p.key === company.plan_key) || mapped[0]);
+          }
+        }
+      } catch (err) {
+        console.warn("Using default plans for recharge modal:", err);
+      }
+    }
+    loadDynamicPlans();
+  }, [company.plan_key]);
 
   const loadRazorpayScript = () => {
     return new Promise((resolve) => {
@@ -259,8 +296,8 @@ function RechargeModal({ company, onClose, onSuccess }) {
   }
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 backdrop-blur-sm p-4">
-      <div className="bg-[#0f0f1a] rounded-2xl shadow-2xl w-full max-w-4xl max-h-[90vh] overflow-y-auto relative">
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 backdrop-blur-sm p-4 mt-8 md:mt-12">
+      <div className="bg-[#0f0f1a] rounded-2xl shadow-2xl w-full max-w-3xl max-h-[80vh] overflow-y-auto relative">
 
         {/* Close */}
         <button onClick={onClose} className="absolute top-4 right-4 z-10 text-slate-400 hover:text-white transition-colors">
@@ -268,8 +305,8 @@ function RechargeModal({ company, onClose, onSuccess }) {
         </button>
 
         {/* Header */}
-        <div className="px-8 pt-8 pb-6 text-center border-b border-white/10">
-          <p className="text-slate-400 text-sm mb-1">Recharging for</p>
+        <div className="px-6 pt-6 pb-4 text-center border-b border-white/10">
+          <p className="text-slate-400 text-xs mb-1">Recharging for</p>
           <h2 className="text-white text-2xl font-bold">{company.company_name || company.owner_name}</h2>
           <p className="text-slate-400 text-sm mt-1">Currently on <span className="text-indigo-400 font-semibold">{company.plan_label}</span></p>
 
@@ -293,9 +330,9 @@ function RechargeModal({ company, onClose, onSuccess }) {
 
         {/* ── STEP 1: Plan cards ────────────────────────────────────────── */}
         {step === "pick" && (
-          <div className="px-8 py-8">
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-6 max-w-2xl mx-auto">
-              {PLANS.map(plan => {
+          <div className="px-6 py-6">
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-5 max-w-2xl mx-auto">
+              {plans.map(plan => {
                 const isSelected = selectedPlan.key === plan.key;
                 const isCurrent  = company.plan_key === plan.key;
                 return (
@@ -644,7 +681,7 @@ export default function SubscriptionManagementPage() {
         <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-8">
           <StatCard icon={Building2}   label="Total Orgs"      value={stats.total_organisations}  gradient="bg-gradient-to-br from-indigo-500 to-indigo-700" />
           <StatCard icon={CheckCircle} label="Active"          value={stats.active_subscriptions} gradient="bg-gradient-to-br from-emerald-500 to-emerald-700" />
-          <StatCard icon={TrendingUp}  label="Monthly Revenue" value={`₹${(stats.total_mrr || 0).toLocaleString()}`} gradient="bg-gradient-to-br from-violet-500 to-violet-700" />
+          <StatCard icon={TrendingUp}  label="Total Revenue" value={`₹${(stats.total_mrr || 0).toLocaleString()}`} gradient="bg-gradient-to-br from-violet-500 to-violet-700" />
           <StatCard icon={Zap}         label="Credits Issued"  value={(stats.total_credits_issued || 0).toLocaleString()} sub={`${(stats.total_credits_consumed || 0).toLocaleString()} consumed`} gradient="bg-gradient-to-br from-amber-500 to-orange-600" />
         </div>
       )}

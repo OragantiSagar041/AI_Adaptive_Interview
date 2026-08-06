@@ -33,7 +33,6 @@ import {
   TrendingUp,
   TrendingDown,
   Users,
-  MoreVertical,
   ArrowRight,
   Eye
 } from "lucide-react";
@@ -237,47 +236,7 @@ export default function SuperDashboardPage() {
                 </div>
                 <span className="text-xs font-semibold text-foreground">Total AI Interviews</span>
               </div>
-              <MoreVertical className="w-4 h-4 text-muted-foreground cursor-pointer hover:text-foreground transition-colors" />
-            </div>
-            <div className="mt-4 flex items-end justify-between">
-              <div className="text-3xl font-bold text-foreground tracking-tight">{formatNum(dbStats?.total) || "0"}</div>
-              <div className="text-right">
-                {dbStats?.this_week != null && dbStats?.total ? (
-                  <div className="flex items-center justify-end text-emerald-500 text-[10px] font-bold">
-                    <TrendingUp className="w-3 h-3 mr-0.5" /> {dbStats.this_week} this week
-                  </div>
-                ) : (
-                  <div className="text-[10px] text-muted-foreground">Loading…</div>
-                )}
-                <div className="text-[10px] text-muted-foreground">last 7 days</div>
-              </div>
-            </div>
-            <div className="h-12 w-full mt-2">
-              <ResponsiveContainer width="100%" height="100%">
-                <LineChart data={sparklineData}>
-                  <Line type="monotone" dataKey="v" stroke={getThemeColor('--color-purple', '#8b5cf6')} strokeWidth={2} dot={true} />
-                </LineChart>
-              </ResponsiveContainer>
-            </div>
-            <div className="mt-3 flex items-center justify-end text-[11px]">
-              <span className="text-indigo-400 font-medium cursor-pointer flex items-center hover:underline" onClick={() => navigate('/superadmin/interviews')}>
-                View trend <ArrowRight className="w-3 h-3 ml-0.5" />
-              </span>
-            </div>
-          </CardContent>
-        </Card>
-
-        {/* 2 — Active Today */}
-        <Card className="bg-card border border-border/80 shadow-sm rounded-2xl relative overflow-hidden flex flex-col justify-between hover:shadow-md transition-all">
-          <CardContent className="p-4 flex flex-col h-full">
-            <div className="flex items-start justify-between">
-              <div className="flex items-center gap-2.5">
-                <div className="w-8 h-8 rounded-xl bg-blue-500/10 border border-blue-500/20 flex items-center justify-center">
-                  <Activity className="w-4 h-4 text-blue-500" />
-                </div>
-                <span className="text-xs font-semibold text-foreground">Active Today</span>
-              </div>
-              <MoreVertical className="w-4 h-4 text-muted-foreground cursor-pointer hover:text-foreground transition-colors" />
+<MoreVertical className="w-4 h-4 text-muted-foreground cursor-pointer hover:text-foreground transition-colors" />
             </div>
             <div className="mt-4 flex items-end justify-between">
               <div className="text-3xl font-bold text-foreground tracking-tight">{formatNum(dbStats?.today) || "0"}</div>
@@ -388,42 +347,7 @@ export default function SuperDashboardPage() {
                 </div>
                 <span className="text-xs font-semibold text-foreground">Completed Interviews</span>
               </div>
-              <MoreVertical className="w-4 h-4 text-muted-foreground cursor-pointer hover:text-foreground transition-colors" />
-            </div>
-            <div className="mt-4 flex items-end justify-between">
-              <div className="text-3xl font-bold text-foreground tracking-tight">{formatNum(dbStats?.completed) || "0"}</div>
-              <div className="text-right">
-                {renderTrend(dbStats?.completed_trend, true)}
-                <div className="text-[10px] text-muted-foreground">vs yesterday</div>
-              </div>
-            </div>
-            <div className="mt-3 flex-1">
-              <div className="text-[10px] font-semibold text-muted-foreground mb-1.5">Completion Rate</div>
-              <Progress value={Number(completionRate)} className="h-2 bg-muted/40" />
-              <div className="text-[10px] text-muted-foreground mt-1.5">{formatNum(dbStats?.completed) || 0} / {formatNum(dbStats?.total) || 0} completed</div>
-            </div>
-            <div className="mt-3 flex items-center justify-end text-[11px]">
-              <span className="text-emerald-500 font-medium cursor-pointer flex items-center hover:underline" onClick={() => {
-                dispatch(setStatusFilter('completed'));
-                navigate('/superadmin/interviews');
-              }}>
-                View details <ArrowRight className="w-3 h-3 ml-0.5" />
-              </span>
-            </div>
-          </CardContent>
-        </Card>
-
-        {/* 4 — Pending Interviews */}
-        <Card className="bg-card border border-border/80 shadow-sm rounded-2xl relative overflow-hidden flex flex-col justify-between hover:shadow-md transition-all">
-          <CardContent className="p-4 flex flex-col h-full">
-            <div className="flex items-start justify-between">
-              <div className="flex items-center gap-2.5">
-                <div className="w-8 h-8 rounded-xl bg-amber-500/10 border border-amber-500/20 flex items-center justify-center">
-                  <Clock className="w-4 h-4 text-amber-500" />
-                </div>
-                <span className="text-xs font-semibold text-foreground">Pending Interviews</span>
-              </div>
-              <MoreVertical className="w-4 h-4 text-muted-foreground cursor-pointer hover:text-foreground transition-colors" />
+<MoreVertical className="w-4 h-4 text-muted-foreground cursor-pointer hover:text-foreground transition-colors" />
             </div>
             <div className="mt-4 flex items-end justify-between">
               <div className="text-3xl font-bold text-foreground tracking-tight">{formatNum(dbStats?.pending) || "0"}</div>
@@ -471,50 +395,7 @@ export default function SuperDashboardPage() {
                 </div>
                 <span className="text-xs font-semibold text-foreground">Avg AI Score</span>
               </div>
-              <MoreVertical className="w-4 h-4 text-muted-foreground cursor-pointer hover:text-foreground transition-colors" />
-            </div>
-            <div className="mt-4 flex items-end justify-between">
-              <div className="flex items-baseline gap-1">
-                <div className="text-3xl font-bold text-foreground tracking-tight">{avgScore > 0 ? starRating.toFixed(1) : '--'}</div>
-                <div className="text-sm font-medium text-muted-foreground">/ 5.0</div>
-              </div>
-              <div className="text-right">
-                <div className="text-[10px] text-muted-foreground">
-                  {avgScore > 0 ? `${avgScore.toFixed(1)} / 100` : 'No scored sessions'}
-                </div>
-                <div className="text-[10px] text-muted-foreground">raw score</div>
-              </div>
-            </div>
-            <div className="mt-3 flex-1">
-              <div className="flex gap-1">
-                {[1, 2, 3, 4, 5].map(i => (
-                  <Star key={i} className={`w-5 h-5 ${i <= Math.floor(starRating) ? 'fill-indigo-500 text-indigo-500' : (i - 0.5 <= starRating ? 'fill-indigo-300 text-indigo-300' : 'text-muted/40')}`} />
-                ))}
-              </div>
-              {avgScore > 0 && (
-                <div className="text-[10px] font-semibold text-indigo-400 mt-2">
-                  {avgScore >= 70 ? 'Good Performance' : avgScore >= 50 ? 'Average Performance' : 'Needs Improvement'}
-                </div>
-              )}
-            </div>
-            <div className="mt-3 flex items-center gap-2 text-[10px]">
-              <div className="bg-muted/40 border border-border px-2 py-1 rounded-lg text-muted-foreground font-medium flex-1 text-center">Avg Score: {avgScore > 0 ? `${avgScore.toFixed(1)}/100` : '--'}</div>
-              <div className="bg-muted/40 border border-border px-2 py-1 rounded-lg text-muted-foreground font-medium flex-1 text-center">Total Rated: {formatNum(dbStats?.completed) || 0}</div>
-            </div>
-          </CardContent>
-        </Card>
-
-        {/* 6 — Candidates Hired */}
-        <Card className="bg-card border border-border/80 shadow-sm rounded-2xl relative overflow-hidden flex flex-col justify-between hover:shadow-md transition-all">
-          <CardContent className="p-4 flex flex-col h-full">
-            <div className="flex items-start justify-between">
-              <div className="flex items-center gap-2.5">
-                <div className="w-8 h-8 rounded-xl bg-teal-500/10 border border-teal-500/20 flex items-center justify-center">
-                  <Target className="w-4 h-4 text-teal-500" />
-                </div>
-                <span className="text-xs font-semibold text-foreground">Candidates Hired</span>
-              </div>
-              <MoreVertical className="w-4 h-4 text-muted-foreground cursor-pointer hover:text-foreground transition-colors" />
+<MoreVertical className="w-4 h-4 text-muted-foreground cursor-pointer hover:text-foreground transition-colors" />
             </div>
             <div className="mt-4 flex items-end justify-between">
               <div className="text-3xl font-bold text-foreground tracking-tight">{formatNum(dbStats?.selected) || "0"}</div>
@@ -558,51 +439,7 @@ export default function SuperDashboardPage() {
                 </div>
                 <span className="text-xs font-semibold text-foreground">Candidates Rejected</span>
               </div>
-              <MoreVertical className="w-4 h-4 text-muted-foreground cursor-pointer hover:text-foreground transition-colors" />
-            </div>
-            <div className="mt-4 flex items-end justify-between">
-              <div className="text-3xl font-bold text-foreground tracking-tight">{formatNum(dbStats?.rejected) || "0"}</div>
-              <div className="text-right">
-                {renderTrend(dbStats?.rejected_trend, false)}
-                <div className="text-[10px] text-muted-foreground">vs yesterday</div>
-              </div>
-            </div>
-            <div className="mt-3 flex-1 flex items-center gap-4">
-              <div className="relative w-12 h-12">
-                <PieChart width={48} height={48}>
-                  <Pie data={[{ value: Number(rejectionRate) || 0.9 }, { value: 100 - (Number(rejectionRate) || 0.9) }]} innerRadius={18} outerRadius={24} dataKey="value" startAngle={90} endAngle={-270} stroke="none">
-                    <Cell fill={getThemeColor('--color-destructive', '#f43f5e')} />
-                    <Cell fill={getThemeColor('--border', '#1e293b')} />
-                  </Pie>
-                </PieChart>
-                <div className="absolute inset-0 flex items-center justify-center text-[10px] font-bold text-foreground">
-                  {rejectionRate}%
-                </div>
-              </div>
-              <div>
-                <div className="text-[10px] font-medium text-muted-foreground mb-0.5">Rejection Rate</div>
-                <div className="text-[11px] font-semibold text-foreground">{formatNum(dbStats?.rejected) || 0} / {formatNum(dbStats?.completed) || 0} completed</div>
-              </div>
-            </div>
-            <div className="mt-3 flex items-center justify-end text-[11px]">
-              <span className="text-rose-400 font-medium cursor-pointer flex items-center hover:underline" onClick={() => navigate('/superadmin/rejected-candidates')}>
-                View details <ArrowRight className="w-3 h-3 ml-0.5" />
-              </span>
-            </div>
-          </CardContent>
-        </Card>
-
-        {/* 8 — Expired Links */}
-        <Card className="bg-card border border-border/80 shadow-sm rounded-2xl relative overflow-hidden flex flex-col justify-between hover:shadow-md transition-all">
-          <CardContent className="p-4 flex flex-col h-full">
-            <div className="flex items-start justify-between">
-              <div className="flex items-center gap-2.5">
-                <div className="w-8 h-8 rounded-xl bg-red-500/10 border border-red-500/20 flex items-center justify-center">
-                  <AlertTriangle className="w-4 h-4 text-red-500" />
-                </div>
-                <span className="text-xs font-semibold text-foreground">Expired Links</span>
-              </div>
-              <MoreVertical className="w-4 h-4 text-muted-foreground cursor-pointer hover:text-foreground transition-colors" />
+<MoreVertical className="w-4 h-4 text-muted-foreground cursor-pointer hover:text-foreground transition-colors" />
             </div>
             <div className="mt-4 flex items-end justify-between">
               <div className="text-3xl font-bold text-foreground tracking-tight">{formatNum(dbStats?.expired) || "0"}</div>

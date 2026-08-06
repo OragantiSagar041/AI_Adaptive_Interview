@@ -1,0 +1,53 @@
+# HireIQ Robots.txt
+# https://hireiq.ai/robots.txt
+
+User-agent: *
+Allow: /
+Allow: /voice-recruiter
+Allow: /case-study
+Allow: /login
+Allow: /register
+
+# Block all private admin and dashboard routes
+Disallow: /admin/
+Disallow: /superadmin/
+Disallow: /master/
+Disallow: /interview/
+Disallow: /voice-interview/
+Disallow: /apply/
+Disallow: /customer-story/
+
+# Block API routes
+Disallow: /api/
+
+# Allow major search engine crawlers
+User-agent: Googlebot
+Allow: /
+Crawl-delay: 1
+
+User-agent: Bingbot
+Allow: /
+Crawl-delay: 2
+
+User-agent: Slurp
+Allow: /
+Crawl-delay: 2
+
+User-agent: DuckDuckBot
+Allow: /
+
+User-agent: LinkedInBot
+Allow: /
+
+# Block harmful crawlers
+User-agent: AhrefsBot
+Disallow: /
+
+User-agent: SemrushBot
+Disallow: /
+
+User-agent: MJ12bot
+Disallow: /
+
+# Sitemap location
+Sitemap: https://hireiq.co.in/sitemap.xml

@@ -110,6 +110,26 @@ body {
   color: inherit !important;
 }
 
+/* Master Theme Utility Classes */
+.theme-bg-primary {
+  background-color: var(--primary-color, #6366f1) !important;
+}
+.theme-bg-primary:hover {
+  background-color: var(--primary-hover, #4f46e5) !important;
+}
+.theme-text-primary {
+  color: var(--primary-color, #6366f1) !important;
+}
+.theme-border-primary {
+  border-color: var(--primary-color, #6366f1) !important;
+}
+.theme-shadow-primary {
+  box-shadow: 0 4px 14px 0 var(--primary-glow, rgba(99,102,241,0.39)) !important;
+}
+.theme-stroke-primary {
+  stroke: var(--primary-color, #6366f1) !important;
+}
+
 .superadmin-theme {
   --radius: 0.625rem;
   --background: #f8fafc;
@@ -697,7 +717,7 @@ html.admin-layout[data-theme="dark"] .superadmin-jobs-page h1 {
 }
 
 @layer utilities {
-  .animate-fade-up {
+.animate-fade-up {
     animation: fade-up 0.8s ease-out forwards;
     opacity: 0;
   }

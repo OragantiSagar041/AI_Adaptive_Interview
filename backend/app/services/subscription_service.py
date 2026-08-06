@@ -26,6 +26,7 @@ from app.repositories.subscription_repository import (
     get_recharge_history,
     get_session_counts,
     get_total_credits_consumed,
+    get_total_revenue,
     list_companies_with_subscription,
 )
 from app.schemas.subscription import (
@@ -112,10 +113,10 @@ def _build_row(company: Dict[str, Any]) -> SubscriptionRow:
 
     # ── Credits ────────────────────────────────────────────────────────────
     credits_available: int = max(0, company.get("credits", 0))
-    plan_default_credits: int = plan_def.get("credits_granted", 0)
-    # total_credits is the high-water mark: the larger of plan default and
-    # what the company currently holds (extra top-ups can exceed plan default)
-    total_credits: int = max(plan_default_credits, credits_available)
+    credits_consumed: int = get_total_credits_consumed(company_id)
+    
+    # Total credits issued ever = currently available + whatever was consumed
+    total_credits: int = credits_available + credits_consumed
 
     # ── Status ─────────────────────────────────────────────────────────────
     is_expired: bool = ctx.get("is_expired", False)
@@ -222,16 +223,19 @@ def get_subscription_stats() -> SubscriptionStats:
         elif status == "trial":
             trial += 1
 
-        plan_def = get_plan_definition(plan_key)
-        total_credits_issued += plan_def.get("credits_granted", 0)
-        total_credits_consumed += get_total_credits_consumed(company_id)
+        credits_available = max(0, company.get("credits", 0))
+        credits_consumed = get_total_credits_consumed(company_id)
+        total_credits_issued += credits_available + credits_consumed
+        total_credits_consumed += credits_consumed
+
+    total_revenue = get_total_revenue()
 
     return SubscriptionStats(
         total_organisations=total,
         active_subscriptions=active,
         expired_subscriptions=expired,
         trial_subscriptions=trial,
-        total_mrr=round(total_mrr, 2),
+        total_mrr=round(total_revenue, 2),
         total_credits_issued=total_credits_issued,
         total_credits_consumed=total_credits_consumed,
     )

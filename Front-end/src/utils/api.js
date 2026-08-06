@@ -61,12 +61,16 @@ api.interceptors.response.use(
     if (error.response?.status === 401) {
       const requestPath = String(error.config?.url || "")
       const candidateRequest = CANDIDATE_ROUTE_RE.test(requestPath)
+
+      // Never auto-redirect on login/auth endpoints
+      const isLoginRoute = /\/(master|admin)\/(login|forgot-password|verify-otp|reset-password)/i.test(requestPath)
+
       if (candidateRequest) {
         window.__candidateAuthFailCount = (window.__candidateAuthFailCount || 0) + 1
         if (window.__candidateAuthFailCount >= 3) {
           clearCandidateSessionAuth()
         }
-      } else if (!window.__hireIqAuthRedirecting) {
+      } else if (!isLoginRoute && !window.__hireIqAuthRedirecting) {
         window.__hireIqAuthRedirecting = true
         sessionStorage.removeItem("auth")
         sessionStorage.removeItem("masterToken")
@@ -846,6 +850,15 @@ export const getCompanies = async () => {
     return response.data;
   } catch (error) {
     throw error.response?.data?.detail || error.response?.data?.message || "Failed to fetch companies list";
+  }
+};
+
+export const getCompanyRevenueMaster = async (params = {}) => {
+  try {
+    const response = await api.get("/master/company-revenue", { params });
+    return response.data;
+  } catch (error) {
+    throw error.response?.data?.detail || error.response?.data?.message || "Failed to fetch company revenue analytics";
   }
 };
 

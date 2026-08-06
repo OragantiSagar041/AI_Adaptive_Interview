@@ -4,7 +4,9 @@ import traceback
 from collections import defaultdict
 from datetime import timedelta, timezone
 
+# pyrefly: ignore [missing-import]
 from dotenv import load_dotenv
+# pyrefly: ignore [missing-import]
 import cloudinary
 import cloudinary.uploader
 import cloudinary.api
@@ -68,11 +70,11 @@ PLAN_DEFINITIONS = {
         "price": 0,
         "summary": "Core single-interview setup for evaluating the platform before rollout.",
         "features": [
-            "Admin Dashboard",
-            "Single Interview Creation",
-            "Resume Parsing",
-            "Email Invitation Sending",
-            "Basic Analytics",
+            "Dashboard",
+            "Interviews",
+            "Create Interview",
+            "Jobs",
+            "Settings"
         ],
         "capabilities": {
             "single_interview": True,
@@ -90,11 +92,13 @@ PLAN_DEFINITIONS = {
         "price": 2500,
         "summary": "Adds richer review and control workflows for growing hiring teams.",
         "features": [
-            "Everything in Free Trial",
-            "Detailed Analytics",
-            "Session Export",
-            "Deactivated Candidate Control",
-            "Email Notifications",
+            "Dashboard",
+            "Interviews",
+            "Qualified Candidates",
+            "Rejected Candidates",
+            "Create Interview",
+            "Jobs",
+            "Settings"
         ],
         "capabilities": {
             "single_interview": True,
@@ -112,11 +116,23 @@ PLAN_DEFINITIONS = {
         "price": 3999,
         "summary": "Unlocks the full hiring workflow including bulk send and live monitoring.",
         "features": [
-            "Everything in Basic",
-            "Bulk Candidate Upload",
-            "Live Monitoring",
-            "Live Results Dashboard",
-            "Priority Support",
+            "Super Admin Dashboard",
+            "Team Management",
+            "Dashboard",
+            "Interviews",
+            "Qualified Candidates",
+            "Rejected Candidates",
+            "Create Interview",
+            "AI Calling Agent",
+            "Conversational Flow",
+            "Jobs",
+            "Organizations",
+            "Recruiters",
+            "Credit Management",
+            "Subscription Management",
+            "Integrations",
+            "Security",
+            "Settings"
         ],
         "capabilities": {
             "single_interview": True,
@@ -134,11 +150,23 @@ PLAN_DEFINITIONS = {
         "price": 0,
         "summary": "Internal owner access.",
         "features": [
-            "All Features",
-            "Master Dashboard",
-            "Tenant Management",
-            "Plan Management",
-            "Billing Overview",
+            "Super Admin Dashboard",
+            "Team Management",
+            "Dashboard",
+            "Interviews",
+            "Qualified Candidates",
+            "Rejected Candidates",
+            "Create Interview",
+            "AI Calling Agent",
+            "Conversational Flow",
+            "Jobs",
+            "Organizations",
+            "Recruiters",
+            "Credit Management",
+            "Subscription Management",
+            "Integrations",
+            "Security",
+            "Settings"
         ],
         "capabilities": {
             "single_interview": True,

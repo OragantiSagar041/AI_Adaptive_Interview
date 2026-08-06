@@ -18,6 +18,7 @@ import {
   Coins,
   ChevronLeft,
   ChevronRight,
+  ChevronDown,
   Menu,
   X,
   Bell,
@@ -61,6 +62,25 @@ import {
 import LiveMonitorStreamModal from '../admin/modals/LiveMonitorStreamModal'
 import axios from 'axios'
 import { getNotifications, markNotificationAsRead, markAllNotificationsAsRead } from '../../utils/api'
+
+export const superAdminNavItems = [
+  { id: 'super-dashboard', label: 'Super Admin Dashboard', icon: BarChart2, path: '/superadmin/new-dashboard' },
+  { id: 'dashboard', label: 'Dashboard', icon: LayoutDashboard, path: '/superadmin/dashboard' },
+  { id: 'interviews', label: 'Interviews', icon: ClipboardList, path: '/superadmin/interviews' },
+  { id: 'qualified', label: 'Qualified Candidates', icon: CheckCircle, path: '/superadmin/qualified-candidates' },
+  { id: 'rejected', label: 'Rejected Candidates', icon: XCircle, path: '/superadmin/rejected-candidates' },
+  { id: 'create', label: 'Create Interview', icon: Plus, path: '/superadmin/create-interview' },
+  { id: 'ai-calling', label: 'AI Calling Agent', icon: Radio, path: '/superadmin/ai-calling' },
+  { id: 'jobs', label: 'Jobs', icon: Briefcase, path: '/superadmin/jobs' },
+  { id: 'recruiters', label: 'Recruiters', icon: UserCheck, path: '/superadmin/recruiters' },
+  { id: 'credit', label: 'Credit Management', icon: Coins, path: '/superadmin/credit' },
+  { id: 'subscription', label: 'Subscription Management', icon: CreditCard, path: '/superadmin/subscription' },
+  { id: 'integrations', label: 'Integrations', icon: Link, path: '/superadmin/integrations' },
+  // { id: 'audit', label: 'Audit Logs', path: '/superadmin/audit' },
+  { id: 'security', label: 'Security', icon: Shield, path: '/superadmin/security' },
+  { id: 'settings', label: 'Settings', icon: Settings, path: '/superadmin/profile-settings' },
+]
+
 import { setSelectedCandidate, setLiveResultsModalOpen, handleUpdateDecision } from '../../store/slices/interviewSlice'
 import { loadSuperAdminDashboard, loadLiveSessions, setSelectedAdminFilter, updateLiveSnapshot } from '../../store/slices/dashboardSlice'
 
@@ -99,11 +119,39 @@ export default function SuperAdminLayout() {
   const superAdminStats = useSelector(state => state.dashboard.superAdminStats)
 
   // Local theme states
-  const [accentName, setAccentName] = useState('indigo')
+  const [accentName, setAccentNameState] = useState(() => {
+    try {
+      return localStorage.getItem('theme_accent') || 'indigo'
+    } catch {
+      return 'indigo'
+    }
+  })
+
+  const setAccentName = (color) => {
+    setAccentNameState(color)
+    try {
+      localStorage.setItem('theme_accent', color)
+    } catch (e) {
+      console.error(e)
+    }
+  }
+
   const [notifications, setNotifications] = useState([])
   const [notifDropdownOpen, setNotifDropdownOpen] = useState(false)
-  const [hoveredPath, setHoveredPath] = useState(null)
+const [hoveredPath, setHoveredPath] = useState(null)
   const notifRef = useRef(null)
+  const themeRef = useRef(null)
+
+  // Close theme popover when clicking outside
+  useEffect(() => {
+    function handleClickOutside(event) {
+      if (themeRef.current && !themeRef.current.contains(event.target)) {
+        setThemeOpen(false)
+      }
+    }
+    document.addEventListener('mousedown', handleClickOutside)
+    return () => document.removeEventListener('mousedown', handleClickOutside)
+  }, [])
 
   const fetchNotifications = async () => {
     try {
@@ -465,26 +513,13 @@ export default function SuperAdminLayout() {
   const accentPage = hexToRgba(currentAccent.primary, 0.12)
   const accentPageStrong = hexToRgba(currentAccent.primary, 0.20)
 
-  const navItems = [
-    { id: 'super-dashboard', label: 'Super Admin Dashboard', icon: BarChart2, path: '/superadmin/new-dashboard' },
-    { id: 'team', label: 'Team Management', icon: Users, path: '/superadmin/team' },
-    { id: 'dashboard', label: 'Dashboard', icon: LayoutDashboard, path: '/superadmin/dashboard' },
-    { id: 'interviews', label: 'Interviews', icon: ClipboardList, path: '/superadmin/interviews' },
-    { id: 'qualified', label: 'Qualified Candidates', icon: CheckCircle, path: '/superadmin/qualified-candidates' },
-    { id: 'rejected', label: 'Rejected Candidates', icon: XCircle, path: '/superadmin/rejected-candidates' },
-    { id: 'create', label: 'Create Interview', icon: Plus, path: '/superadmin/create-interview' },
-    { id: 'ai-calling', label: 'AI Calling Agent', icon: Radio, path: '/superadmin/ai-calling' },
-    { id: 'conversational-flow', label: 'Conversational Flow', icon: MessageSquare, path: '/superadmin/conversational-flow' },
-    { id: 'jobs', label: 'Jobs', icon: Briefcase, path: '/superadmin/jobs' },
-    { id: 'organizations', label: 'Organizations', icon: Building, path: '/superadmin/organizations' },
-    { id: 'recruiters', label: 'Recruiters', icon: UserCheck, path: '/superadmin/recruiters' },
-    { id: 'credit', label: 'Credit Management', icon: Coins, path: '/superadmin/credit' },
-    { id: 'subscription', label: 'Subscription Management', icon: CreditCard, path: '/superadmin/subscription' },
-    { id: 'integrations', label: 'Integrations', icon: Link, path: '/superadmin/integrations' },
-    // { id: 'audit', label: 'Audit Logs', path: '/superadmin/audit' },
-    { id: 'security', label: 'Security', icon: Shield, path: '/superadmin/security' },
-    { id: 'settings', label: 'Settings', icon: Settings, path: '/superadmin/profile-settings' },
-  ]
+  const userRole = (role || adminUser?.role || '').toLowerCase()
+  const isMaster = userRole === 'master'
+  const userFeatures = adminUser?.plan_features || []
+  const filteredNavItems = (userFeatures && userFeatures.length > 0 && !isMaster)
+    ? superAdminNavItems.filter(item => userFeatures.includes(item.label))
+    : superAdminNavItems
+  const navItems = isMaster ? superAdminNavItems : (filteredNavItems.length > 0 ? filteredNavItems : superAdminNavItems)
 
   return (
     <SidebarProvider>
@@ -495,7 +530,7 @@ export default function SuperAdminLayout() {
           <div
             className="absolute inset-0 transition-colors duration-700"
             style={{
-              background: `linear-gradient(135deg, ${currentAccent.primary}15 0%, transparent 50%, ${currentAccent.primary}10 100%)`
+background: `linear-gradient(135deg, ${currentAccent.primary}15 0%, transparent 50%, ${currentAccent.primary}10 100%)`
             }}
           />
           {/* Grid overlay */}
@@ -503,14 +538,17 @@ export default function SuperAdminLayout() {
         </div>
 
         {/* NEW SHADCN SIDEBAR */}
-        <Sidebar className="border-r border-border/70 bg-[rgba(7,18,37,0.85)] backdrop-blur-xl z-20" collapsible="icon">
+<Sidebar className="border-r border-border/70 bg-[rgba(7,18,37,0.85)] backdrop-blur-xl z-20" collapsible="icon">
           <SidebarHeader className="h-16 border-b border-border/70 px-6 py-0 flex items-center justify-center shrink-0">
             <div className="flex items-center gap-3 w-full overflow-hidden">
-              <div className="grid h-8 w-8 shrink-0 place-items-center rounded-lg bg-indigo-600 text-white shadow-sm">
+              <div
+                className="grid h-8 w-8 shrink-0 place-items-center rounded-lg text-white shadow-sm transition-all duration-500"
+                style={{ background: `linear-gradient(135deg, ${currentAccent.primary}, ${currentAccent.hover})` }}
+              >
                 <Zap className="h-4 w-4" />
               </div>
               <div className="leading-tight group-data-[collapsible=icon]:hidden truncate">
-                <div className="text-sm font-semibold truncate text-foreground">HireIQ</div>
+<div className="text-sm font-semibold truncate text-foreground">HireIQ</div>
                 <div className="text-[11px] text-muted-foreground truncate">Super Admin</div>
               </div>
             </div>
@@ -528,7 +566,7 @@ export default function SuperAdminLayout() {
                           asChild
                           isActive={isActive}
                           tooltip={item.label}
-                          className={`flex items-center gap-3 rounded-md px-3 py-2 text-sm font-medium transition-colors duration-200 ${isActive
+className={`flex items-center gap-3 rounded-md px-3 py-2 text-sm font-medium transition-colors duration-200 ${isActive
                               ? 'text-white shadow-sm'
                               : 'text-muted-foreground hover:text-foreground'
                             } ${isActive ? 'border border-white/20' : 'border border-transparent hover:border-sidebar-accent/40'}`}
@@ -543,13 +581,17 @@ export default function SuperAdminLayout() {
                           onMouseEnter={() => setHoveredPath(item.path)}
                           onMouseLeave={() => setHoveredPath(null)}
                         >
-                          <NavLink to={item.path} className="flex items-center w-full min-w-0">
+                          <NavLink
+                            to={item.path}
+                            className={`flex items-center w-full min-w-0 ${isActive ? '!text-white' : ''}`}
+                            style={{ color: isActive ? '#ffffff' : undefined }}
+                          >
                             {item.icon ? (
-                              <item.icon size={16} className="shrink-0 group-data-[collapsible=icon]:mr-0 mr-3" />
+                              <item.icon size={16} className={`shrink-0 group-data-[collapsible=icon]:mr-0 mr-3 ${isActive ? '!text-white text-white' : ''}`} />
                             ) : (
-                              <span className="h-1.5 w-1.5 rounded-full bg-current opacity-60 shrink-0 group-data-[collapsible=icon]:mr-0 mr-3" />
+                              <span className={`h-1.5 w-1.5 rounded-full ${isActive ? 'bg-white' : 'bg-current opacity-60'} shrink-0 group-data-[collapsible=icon]:mr-0 mr-3`} />
                             )}
-                            <span className="truncate group-data-[collapsible=icon]:hidden">{item.label}</span>
+                            <span className={`truncate group-data-[collapsible=icon]:hidden ${isActive ? '!text-white text-white font-semibold' : ''}`}>{item.label}</span>
                           </NavLink>
                         </SidebarMenuButton>
                       </SidebarMenuItem>
@@ -560,19 +602,35 @@ export default function SuperAdminLayout() {
             </SidebarGroup>
           </SidebarContent>
 
-          <SidebarFooter className="p-3 border-t border-border space-y-1 shrink-0">
+<SidebarFooter className="p-3 border-t border-border space-y-1 shrink-0">
             <button
               onClick={() => dispatch(setLiveResultsModalOpen(true))}
               className="flex items-center justify-center md:justify-start gap-3 w-full rounded-md px-3 py-2 text-sm font-medium transition-colors text-muted-foreground hover:bg-muted hover:text-foreground border-none bg-transparent cursor-pointer text-left overflow-hidden"
               title="Live Results"
+              onMouseEnter={(e) => {
+                e.currentTarget.style.background = hexToRgba(currentAccent.primary, 0.10)
+                e.currentTarget.style.color = currentAccent.primary
+              }}
+              onMouseLeave={(e) => {
+                e.currentTarget.style.background = 'transparent'
+                e.currentTarget.style.color = ''
+              }}
             >
               <Radio size={16} className="shrink-0" />
               <span className="group-data-[collapsible=icon]:hidden truncate">Live Results</span>
             </button>
             <button
               onClick={() => setShowCreditsModal(true)}
-              className="flex items-center justify-center md:justify-start gap-3 w-full rounded-md px-3 py-2 text-sm font-medium transition-colors text-slate-500 hover:bg-slate-100 hover:text-slate-900 border-none bg-transparent cursor-pointer text-left overflow-hidden"
+              className="flex items-center justify-center md:justify-start gap-3 w-full rounded-xl px-3 py-2.5 text-sm font-medium transition-all duration-200 text-slate-500 border-none bg-transparent cursor-pointer text-left overflow-hidden"
               title="Available Credits"
+              onMouseEnter={(e) => {
+                e.currentTarget.style.background = hexToRgba(currentAccent.primary, 0.10)
+                e.currentTarget.style.color = currentAccent.primary
+              }}
+              onMouseLeave={(e) => {
+                e.currentTarget.style.background = 'transparent'
+                e.currentTarget.style.color = ''
+              }}
             >
               <Coins size={16} className="shrink-0" />
               <span className="group-data-[collapsible=icon]:hidden truncate">Available Credits</span>
@@ -583,7 +641,7 @@ export default function SuperAdminLayout() {
         {/* Main Content Wrapper */}
         <div className="flex-1 flex flex-col min-w-0 h-screen overflow-hidden relative z-10">
           {/* Top bar */}
-          <header className="sticky top-0 z-30 border-b border-border/70 bg-background/90 backdrop-blur-xl flex items-center justify-between gap-4 px-6 h-16 shadow-sm shrink-0">
+<header className="sticky top-0 z-30 border-b border-border/70 bg-background/90 backdrop-blur-xl flex items-center justify-between gap-4 px-6 h-16 shadow-sm shrink-0">
             {/* Left Side: Brand & Toggles */}
             <div className="flex items-center gap-4 lg:gap-6">
               <SidebarTrigger className="-ml-2 text-muted-foreground hover:text-foreground transition-colors" />
@@ -636,7 +694,7 @@ export default function SuperAdminLayout() {
               </button>
 
               {/* User Profile */}
-              <div className="flex items-center gap-3 border-l border-border/70 pl-4">
+<div className="flex items-center gap-3 border-l border-border/70 pl-4">
                 <span className="text-xs text-muted-foreground font-medium hidden sm:block leading-tight text-right">
                   Welcome back,<br />
                   <span className="font-bold text-foreground text-sm">{userName}</span>
@@ -665,7 +723,7 @@ export default function SuperAdminLayout() {
 
             <div className="relative z-10">
               {notifDropdownOpen && (
-                <div className="absolute right-4 top-4 w-80 bg-card border border-border rounded-2xl shadow-xl py-2 z-50">
+<div className="absolute right-4 top-4 w-80 bg-card border border-border rounded-2xl shadow-xl py-2 z-50">
                   <div className="flex items-center justify-between px-4 py-2 border-b border-border">
                     <span className="text-xs font-bold text-foreground font-sans">Recent Notifications</span>
                     {unreadCount > 0 && (
@@ -678,7 +736,7 @@ export default function SuperAdminLayout() {
                     )}
                   </div>
 
-                  <div className="max-h-64 overflow-y-auto divide-y divide-border">
+<div className="max-h-64 overflow-y-auto divide-y divide-border">
                     {notifications.length === 0 ? (
                       <div className="py-8 text-center text-xs text-muted-foreground font-sans">No notifications</div>
                     ) : (
@@ -692,7 +750,7 @@ export default function SuperAdminLayout() {
                             else if (n.type === 'activity') navigate('/superadmin/new-dashboard')
                             else navigate('/superadmin/new-dashboard')
                           }}
-                          className={`p-3 text-left hover:bg-muted cursor-pointer transition-colors flex gap-2.5 items-start ${!n.read ? 'bg-primary/10' : ''
+className={`p-3 text-left hover:bg-muted cursor-pointer transition-colors flex gap-2.5 items-start ${!n.read ? 'bg-primary/10' : ''
                             }`}
                         >
                           <div className="p-1.5 rounded-lg bg-muted flex-shrink-0 mt-0.5">
@@ -700,7 +758,7 @@ export default function SuperAdminLayout() {
                           </div>
                           <div className="space-y-0.5 min-w-0">
                             <div className="flex items-center gap-1.5 justify-between">
-                              <span className={`text-xs font-bold truncate block ${!n.read ? 'text-foreground' : 'text-muted-foreground'}`}>{n.title}</span>
+<span className={`text-xs font-bold truncate block ${!n.read ? 'text-foreground' : 'text-muted-foreground'}`}>{n.title}</span>
                               {!n.read && <span className="w-1.5 h-1.5 rounded-full bg-indigo-600 shrink-0" />}
                             </div>
                             <p className="text-[11px] text-muted-foreground leading-normal line-clamp-2 font-sans">{n.message}</p>
@@ -711,7 +769,7 @@ export default function SuperAdminLayout() {
                     )}
                   </div>
 
-                  <div className="border-t border-border px-4 pt-2 pb-1 text-center">
+<div className="border-t border-border px-4 pt-2 pb-1 text-center">
                     <NavLink
                       to="/superadmin/notifications"
                       onClick={() => setNotifDropdownOpen(false)}

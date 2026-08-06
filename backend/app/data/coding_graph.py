@@ -162,9 +162,14 @@ def _normalize_task(task: Dict[str, Any]) -> Dict[str, Any]:
     if not isinstance(examples, list):
         normalized["examples"] = fallback["examples"]
         
-    signature = normalized.get("starter_function_signature") or fallback["starter_function_signature"]
+    fn_name = normalized.get("function_name") or (
+        _extract_function_name(normalized.get("starter_function_signature", ""))
+        if normalized.get("starter_function_signature")
+        else "solution"
+    )
+    signature = normalized.get("starter_function_signature") or f"def {fn_name}(*args):"
     normalized["starter_function_signature"] = signature
-    normalized["function_name"] = normalized.get("function_name") or _extract_function_name(signature)
+    normalized["function_name"] = fn_name
     normalized["recommended_language"] = normalized.get("recommended_language") or "python"
     test_cases = normalized.get("test_cases") or fallback["test_cases"]
     normalized["test_cases"] = [_normalize_test_case(case, idx + 1) for idx, case in enumerate(test_cases[:14])]
@@ -225,27 +230,22 @@ def _llm_json(system_prompt: str, user_prompt: str, fallback: Dict[str, Any]) ->
         return fallback
 
 
+import random
+
 def _offline_coding_fallback(profile_text: str) -> Dict[str, Any]:
     profile_lower = (profile_text or "").lower()
     
-    if "sql" in profile_lower or "database" in profile_lower:
-        signature = "def find_duplicates(records):"
-        return {
-            "title": "Find Duplicate Records",
-            "description": "Write a function that identifies duplicate email addresses from a list of user records.",
-            "input_format": "A list of strings representing emails.",
-            "output_format": "A list of strings containing only the duplicate emails.",
-            "constraints": ["O(N) time complexity", "O(N) space complexity"],
-            "examples": [
-                {
-                    "input": '["a@x.com", "b@x.com", "a@x.com"]',
-                    "output": '["a@x.com"]',
-                    "explanation": "a@x.com appears twice in the input list, making it a duplicate."
-                }
-            ],
-            "evaluation_focus": ["Correctness", "Performance"],
-            "starter_function_signature": signature,
-            "function_name": _extract_function_name(signature),
+    tasks_pool = [
+        {
+            "title": "Find Duplicate Emails",
+            "description": "Write a function that receives a list of email strings and returns a list containing only the unique duplicate email addresses.",
+            "input_format": "A list of strings.",
+            "output_format": "A list of strings containing unique duplicate emails.",
+            "constraints": ["1 <= records.length <= 10^4"],
+            "examples": [{"input": '["a@x.com", "b@x.com", "a@x.com"]', "output": '["a@x.com"]', "explanation": "a@x.com appears twice."}],
+            "evaluation_focus": ["Hash Set / Data Structures", "O(N) Complexity"],
+            "starter_function_signature": "def find_duplicates(records):",
+            "function_name": "find_duplicates",
             "difficulty": "Easy",
             "recommended_language": "python",
             "timebox_minutes": 20,
@@ -265,271 +265,70 @@ def _offline_coding_fallback(profile_text: str) -> Dict[str, Any]:
                 {"id": 13, "input": [["a", "b", "c", "d", "a", "b", "c"]], "expected": ["a", "b", "c"], "visible": False},
                 {"id": 14, "input": [["one", "two", "three"]], "expected": [], "visible": False},
             ],
-        }
-    elif "react" in profile_lower or "frontend" in profile_lower:
-        signature = "def debounce_simulation(calls, delay):"
-        return {
-            "title": "Debounce Simulation",
-            "description": "Write a function that takes an array of timestamps (integers) and a delay. Return the number of times a debounced function would actually execute.",
-            "input_format": "A list of integers (timestamps) and an integer delay.",
-            "output_format": "An integer representing the execution count.",
-            "constraints": ["Assume timestamps are sorted in ascending order."],
-            "examples": [
-                {
-                    "input": "[10, 20, 100], 50",
-                    "output": "2",
-                    "explanation": "Calls at 10 and 20 are grouped together since they fall within the 50ms delay window. The call at 100 is processed separately."
-                }
-            ],
-            "evaluation_focus": ["Correctness", "Understanding of Debounce"],
-            "starter_function_signature": signature,
-            "function_name": _extract_function_name(signature),
-            "difficulty": "Medium",
-            "recommended_language": "javascript",
-            "timebox_minutes": 25,
-            "test_cases": [
-                {"id": 1, "input": [[10, 20, 100], 50], "expected": 2, "visible": True},
-                {"id": 2, "input": [[10, 20, 30], 50], "expected": 1, "visible": True},
-                {"id": 3, "input": [[], 50], "expected": 0, "visible": True},
-                {"id": 4, "input": [[10, 60, 110], 50], "expected": 3, "visible": False},
-                {"id": 5, "input": [[10, 10, 10], 5], "expected": 1, "visible": False},
-                {"id": 6, "input": [[0, 5, 10, 15, 20], 100], "expected": 1, "visible": False},
-                {"id": 7, "input": [[100, 200, 300], 10], "expected": 3, "visible": False},
-                {"id": 8, "input": [[1, 2, 3, 4], 10], "expected": 1, "visible": False},
-                {"id": 9, "input": [[10, 50, 100], 30], "expected": 3, "visible": False},
-                {"id": 10, "input": [[10, 15, 20, 80, 85, 90], 20], "expected": 2, "visible": False},
-                {"id": 11, "input": [[10, 20, 30, 40], 5], "expected": 4, "visible": False},
-                {"id": 12, "input": [[0, 100], 50], "expected": 2, "visible": False},
-                {"id": 13, "input": [[0, 10, 20, 30, 40, 50, 60, 70, 80], 15], "expected": 6, "visible": False},
-                {"id": 14, "input": [[0, 50, 100, 150, 200], 1000], "expected": 1, "visible": False},
-            ],
-        }
-    elif "java" in profile_lower:
-        signature = "def valid_parentheses(s):"
-        return {
-            "title": "Valid Parentheses",
-            "description": "Given a string s containing just the characters '(', ')', '{', '}', '[' and ']', determine if the input string is valid.",
-            "input_format": "A string s.",
-            "output_format": "A boolean indicating if the string is valid.",
-            "constraints": ["1 <= s.length <= 10^4", "s consists of parentheses only '()[]{}'."],
-            "examples": [{"input": '"()"', "output": "True", "explanation": "Matching parenthesis."}],
-            "evaluation_focus": ["Correctness", "Stack Data Structure"],
-            "starter_function_signature": signature,
-            "function_name": _extract_function_name(signature),
+        },
+        {
+            "title": "Two Sum Target Pair",
+            "description": "Write a function that finds indices of two numbers in an array that add up to a target integer.",
+            "input_format": "An array of integers `nums` and an integer `target`.",
+            "output_format": "An array of two indices [i, j].",
+            "constraints": ["2 <= nums.length <= 10^4"],
+            "examples": [{"input": "[2, 7, 11, 15], 9", "output": "[0, 1]", "explanation": "nums[0] + nums[1] == 9."}],
+            "evaluation_focus": ["Array Indexing", "Hash Map Optimization"],
+            "starter_function_signature": "def two_sum(nums, target):",
+            "function_name": "two_sum",
             "difficulty": "Easy",
-            "recommended_language": "java",
+            "recommended_language": "python",
             "timebox_minutes": 20,
-            "test_cases": [
-                {"id": 1, "input": ["()"], "expected": True, "visible": True},
-                {"id": 2, "input": ["()[]{}"], "expected": True, "visible": True},
-                {"id": 3, "input": ["(]"], "expected": False, "visible": True},
-                {"id": 4, "input": ["([)]"], "expected": False, "visible": False},
-                {"id": 5, "input": ["{[]}"], "expected": True, "visible": False},
-                {"id": 6, "input": ["["], "expected": False, "visible": False},
-                {"id": 7, "input": ["]"], "expected": False, "visible": False},
-                {"id": 8, "input": ["((()))"], "expected": True, "visible": False},
-                {"id": 9, "input": ["((())"], "expected": False, "visible": False},
-                {"id": 10, "input": ["()()()"], "expected": True, "visible": False},
-                {"id": 11, "input": ["{}[][]()"], "expected": True, "visible": False},
-                {"id": 12, "input": ["{[}]"], "expected": False, "visible": False},
-                {"id": 13, "input": [""], "expected": True, "visible": False},
-                {"id": 14, "input": ["([{()}])"], "expected": True, "visible": False},
-            ],
-        }
-    elif "c++" in profile_lower or "cpp" in profile_lower:
-        signature = "def reverse_array(arr):"
-        return {
-            "title": "Reverse Array",
-            "description": "Write a function that reverses an array in-place and returns it.",
-            "input_format": "An array of integers.",
-            "output_format": "The reversed array of integers.",
-            "constraints": ["Do it in O(N) time and O(1) extra space."],
-            "examples": [{"input": "[1, 2, 3]", "output": "[3, 2, 1]", "explanation": "Array reversed."}],
-            "evaluation_focus": ["Correctness", "Two Pointers"],
-            "starter_function_signature": signature,
-            "function_name": _extract_function_name(signature),
-            "difficulty": "Easy",
-            "recommended_language": "cpp",
-            "timebox_minutes": 15,
-            "test_cases": [
-                {"id": 1, "input": [[1, 2, 3]], "expected": [3, 2, 1], "visible": True},
-                {"id": 2, "input": [[1]], "expected": [1], "visible": True},
-                {"id": 3, "input": [[]], "expected": [], "visible": True},
-                {"id": 4, "input": [[1, 2, 3, 4]], "expected": [4, 3, 2, 1], "visible": False},
-                {"id": 5, "input": [[1, 1, 1]], "expected": [1, 1, 1], "visible": False},
-                {"id": 6, "input": [[-1, -2, -3]], "expected": [-3, -2, -1], "visible": False},
-                {"id": 7, "input": [[1, 0]], "expected": [0, 1], "visible": False},
-                {"id": 8, "input": [[5, 4, 3, 2, 1]], "expected": [1, 2, 3, 4, 5], "visible": False},
-                {"id": 9, "input": [[9, 9]], "expected": [9, 9], "visible": False},
-                {"id": 10, "input": [[0, 0, 0, 0]], "expected": [0, 0, 0, 0], "visible": False},
-                {"id": 11, "input": [[2, 1]], "expected": [1, 2], "visible": False},
-                {"id": 12, "input": [[10, 20, 30, 40, 50]], "expected": [50, 40, 30, 20, 10], "visible": False},
-                {"id": 13, "input": [[-5, 5]], "expected": [5, -5], "visible": False},
-                {"id": 14, "input": [[1, 2, 3, 4, 5, 6, 7]], "expected": [7, 6, 5, 4, 3, 2, 1], "visible": False},
-            ],
-        }
-    elif "go" in profile_lower or "golang" in profile_lower:
-        signature = "def max_profit(prices):"
-        return {
-            "title": "Best Time to Buy and Sell Stock",
-            "description": "You are given an array prices where prices[i] is the price of a given stock on the ith day. You want to maximize your profit by choosing a single day to buy one stock and choosing a different day in the future to sell that stock.",
-            "input_format": "An array of integers representing stock prices.",
-            "output_format": "An integer representing max profit.",
-            "constraints": ["1 <= prices.length <= 10^5", "0 <= prices[i] <= 10^4"],
-            "examples": [{"input": "[7,1,5,3,6,4]", "output": "5", "explanation": "Buy on day 2 (price = 1) and sell on day 5 (price = 6), profit = 6-1 = 5."}],
-            "evaluation_focus": ["Correctness", "Dynamic Programming / Greedy"],
-            "starter_function_signature": signature,
-            "function_name": _extract_function_name(signature),
-            "difficulty": "Easy",
-            "recommended_language": "go",
-            "timebox_minutes": 20,
-            "test_cases": [
-                {"id": 1, "input": [[7, 1, 5, 3, 6, 4]], "expected": 5, "visible": True},
-                {"id": 2, "input": [[7, 6, 4, 3, 1]], "expected": 0, "visible": True},
-                {"id": 3, "input": [[1, 2]], "expected": 1, "visible": True},
-                {"id": 4, "input": [[2, 1]], "expected": 0, "visible": False},
-                {"id": 5, "input": [[2, 4, 1]], "expected": 2, "visible": False},
-                {"id": 6, "input": [[3, 2, 6, 5, 0, 3]], "expected": 4, "visible": False},
-                {"id": 7, "input": [[1, 2, 3, 4, 5]], "expected": 4, "visible": False},
-                {"id": 8, "input": [[5, 4, 3, 2, 1]], "expected": 0, "visible": False},
-                {"id": 9, "input": [[100]], "expected": 0, "visible": False},
-                {"id": 10, "input": [[10, 20, 5, 25]], "expected": 20, "visible": False},
-                {"id": 11, "input": [[1, 1, 1, 1]], "expected": 0, "visible": False},
-                {"id": 12, "input": [[1, 100]], "expected": 99, "visible": False},
-                {"id": 13, "input": [[100, 1]], "expected": 0, "visible": False},
-                {"id": 14, "input": [[1, 5, 1, 5]], "expected": 4, "visible": False},
-            ],
-        }
-    elif "node" in profile_lower or "express" in profile_lower:
-        signature = "def two_sum(nums, target):"
-        return {
-            "title": "Two Sum",
-            "description": "Given an array of integers nums and an integer target, return indices of the two numbers such that they add up to target.",
-            "input_format": "Array of integers and a target integer.",
-            "output_format": "Array of 2 integers (indices).",
-            "constraints": ["Assume exactly one solution exists."],
-            "examples": [{"input": "[2,7,11,15], 9", "output": "[0, 1]", "explanation": "nums[0] + nums[1] == 9"}],
-            "evaluation_focus": ["Correctness", "Hash Map"],
-            "starter_function_signature": signature,
-            "function_name": _extract_function_name(signature),
-            "difficulty": "Easy",
-            "recommended_language": "javascript",
-            "timebox_minutes": 15,
             "test_cases": [
                 {"id": 1, "input": [[2, 7, 11, 15], 9], "expected": [0, 1], "visible": True},
                 {"id": 2, "input": [[3, 2, 4], 6], "expected": [1, 2], "visible": True},
                 {"id": 3, "input": [[3, 3], 6], "expected": [0, 1], "visible": True},
-                {"id": 4, "input": [[1, 5, 9], 10], "expected": [0, 2], "visible": False},
-                {"id": 5, "input": [[1, -1], 0], "expected": [0, 1], "visible": False},
-                {"id": 6, "input": [[0, 4, 3, 0], 0], "expected": [0, 3], "visible": False},
-                {"id": 7, "input": [[-3, 4, 3, 90], 0], "expected": [0, 2], "visible": False},
-                {"id": 8, "input": [[10, 20, 30, 40], 70], "expected": [2, 3], "visible": False},
-                {"id": 9, "input": [[1, 2, 3, 4, 5], 9], "expected": [3, 4], "visible": False},
-                {"id": 10, "input": [[5, 10, 15, 20], 35], "expected": [2, 3], "visible": False},
-                {"id": 11, "input": [[2, 4, 6, 8], 10], "expected": [1, 2], "visible": False},
-                {"id": 12, "input": [[-5, -2, -1, 0], -7], "expected": [0, 1], "visible": False},
-                {"id": 13, "input": [[1, 2, 3, 4, 5], 3], "expected": [0, 1], "visible": False},
-                {"id": 14, "input": [[100, 200, 300], 400], "expected": [0, 2], "visible": False},
+                {"id": 4, "input": [[1, 5, 2, 7], 8], "expected": [0, 3], "visible": False},
+                {"id": 5, "input": [[-1, -2, -3, -4, -5], -8], "expected": [2, 4], "visible": False},
+                {"id": 6, "input": [[10, 25, 35, 40], 50], "expected": [0, 3], "visible": False},
+                {"id": 7, "input": [[0, 4, 3, 0], 0], "expected": [0, 3], "visible": False},
+                {"id": 8, "input": [[-3, 4, 3, 90], 0], "expected": [0, 2], "visible": False},
+                {"id": 9, "input": [[1, 2], 3], "expected": [0, 1], "visible": False},
+                {"id": 10, "input": [[5, 75, 25], 100], "expected": [1, 2], "visible": False},
+                {"id": 11, "input": [[1, 9, 4, 8], 10], "expected": [0, 1], "visible": False},
+                {"id": 12, "input": [[2, 5, 7, 8], 10], "expected": [0, 3], "visible": False},
+                {"id": 13, "input": [[100, 200, 300], 500], "expected": [1, 2], "visible": False},
+                {"id": 14, "input": [[4, 4], 8], "expected": [0, 1], "visible": False},
             ],
-        }
-    elif "ruby" in profile_lower or "rails" in profile_lower:
-        signature = "def is_palindrome(s):"
-        return {
-            "title": "Valid Palindrome",
-            "description": "A phrase is a palindrome if, after converting all uppercase letters into lowercase letters and removing all non-alphanumeric characters, it reads the same forward and backward. Given a string s, return true if it is a palindrome, or false otherwise.",
-            "input_format": "A string s.",
-            "output_format": "Boolean",
-            "constraints": ["1 <= s.length <= 2 * 10^5"],
-            "examples": [{"input": '"A man, a plan, a canal: Panama"', "output": "True", "explanation": "Reads 'amanaplanacanalpanama'."}],
-            "evaluation_focus": ["Correctness", "String Manipulation", "Two Pointers"],
-            "starter_function_signature": signature,
-            "function_name": _extract_function_name(signature),
-            "difficulty": "Easy",
-            "recommended_language": "ruby",
-            "timebox_minutes": 15,
-            "test_cases": [
-                {"id": 1, "input": ["A man, a plan, a canal: Panama"], "expected": True, "visible": True},
-                {"id": 2, "input": ["race a car"], "expected": False, "visible": True},
-                {"id": 3, "input": [" "], "expected": True, "visible": True},
-                {"id": 4, "input": ["a."], "expected": True, "visible": False},
-                {"id": 5, "input": ["ab"], "expected": False, "visible": False},
-                {"id": 6, "input": ["0P"], "expected": False, "visible": False},
-                {"id": 7, "input": ["aA"], "expected": True, "visible": False},
-                {"id": 8, "input": ["1a1"], "expected": True, "visible": False},
-                {"id": 9, "input": ["madam"], "expected": True, "visible": False},
-                {"id": 10, "input": ["step on no pets"], "expected": True, "visible": False},
-                {"id": 11, "input": ["1234321"], "expected": True, "visible": False},
-                {"id": 12, "input": ["123456"], "expected": False, "visible": False},
-                {"id": 13, "input": ["No 'x' in Nixon"], "expected": True, "visible": False},
-                {"id": 14, "input": ["Was it a car or a cat I saw?"], "expected": True, "visible": False},
-            ],
-        }
-    elif "c#" in profile_lower or "dotnet" in profile_lower:
-        signature = "def contains_duplicate(nums):"
-        return {
-            "title": "Contains Duplicate",
-            "description": "Given an integer array nums, return true if any value appears at least twice in the array, and return false if every element is distinct.",
-            "input_format": "An array of integers.",
-            "output_format": "Boolean",
+        },
+        {
+            "title": "Max Subarray Sum",
+            "description": "Given an integer array `nums`, find the contiguous subarray with the largest sum and return its sum.",
+            "input_format": "An array of integers `nums`.",
+            "output_format": "An integer representing max sum.",
             "constraints": ["1 <= nums.length <= 10^5"],
-            "examples": [{"input": "[1,2,3,1]", "output": "True", "explanation": "1 appears twice."}],
-            "evaluation_focus": ["Correctness", "Hash Set"],
-            "starter_function_signature": signature,
-            "function_name": _extract_function_name(signature),
-            "difficulty": "Easy",
-            "recommended_language": "csharp",
-            "timebox_minutes": 15,
+            "examples": [{"input": "[-2,1,-3,4,-1,2,1,-5,4]", "output": "6", "explanation": "[4,-1,2,1] has largest sum 6."}],
+            "evaluation_focus": ["Kadane's Algorithm", "Dynamic Programming"],
+            "starter_function_signature": "def max_sub_array(nums):",
+            "function_name": "max_sub_array",
+            "difficulty": "Medium",
+            "recommended_language": "python",
+            "timebox_minutes": 25,
             "test_cases": [
-                {"id": 1, "input": [[1, 2, 3, 1]], "expected": True, "visible": True},
-                {"id": 2, "input": [[1, 2, 3, 4]], "expected": False, "visible": True},
-                {"id": 3, "input": [[1, 1, 1, 3, 3, 4, 3, 2, 4, 2]], "expected": True, "visible": True},
-                {"id": 4, "input": [[0]], "expected": False, "visible": False},
-                {"id": 5, "input": [[3, 3]], "expected": True, "visible": False},
-                {"id": 6, "input": [[-1, -2, -3, -1]], "expected": True, "visible": False},
-                {"id": 7, "input": [[10, 20, 30]], "expected": False, "visible": False},
-                {"id": 8, "input": [[0, 0]], "expected": True, "visible": False},
-                {"id": 9, "input": [[100, 200, 300, 400, 500, 600, 100]], "expected": True, "visible": False},
-                {"id": 10, "input": [[1, 2, 3, 4, 5, 6, 7, 8, 9, 10]], "expected": False, "visible": False},
-                {"id": 11, "input": [[-1, 1]], "expected": False, "visible": False},
-                {"id": 12, "input": [[5, 4, 3, 2, 1, 5]], "expected": True, "visible": False},
-                {"id": 13, "input": [[9, 8, 7, 6, 5]], "expected": False, "visible": False},
-                {"id": 14, "input": [[1, 1]], "expected": True, "visible": False},
+                {"id": 1, "input": [[-2, 1, -3, 4, -1, 2, 1, -5, 4]], "expected": 6, "visible": True},
+                {"id": 2, "input": [[1]], "expected": 1, "visible": True},
+                {"id": 3, "input": [[5, 4, -1, 7, 8]], "expected": 23, "visible": True},
+                {"id": 4, "input": [[-1]], "expected": -1, "visible": False},
+                {"id": 5, "input": [[-2, -1]], "expected": -1, "visible": False},
+                {"id": 6, "input": [[1, 2, 3, 4, 5]], "expected": 15, "visible": False},
+                {"id": 7, "input": [[-1, -2, -3]], "expected": -1, "visible": False},
+                {"id": 8, "input": [[0, 0, 0]], "expected": 0, "visible": False},
+                {"id": 9, "input": [[2, -1, 2]], "expected": 3, "visible": False},
+                {"id": 10, "input": [[-2, 3, 2, -1]], "expected": 5, "visible": False},
+                {"id": 11, "input": [[10, -5, 10]], "expected": 15, "visible": False},
+                {"id": 12, "input": [[-5, 10, -2, 4]], "expected": 12, "visible": False},
+                {"id": 13, "input": [[1, -1, 1, -1, 1]], "expected": 1, "visible": False},
+                {"id": 14, "input": [[100, -100, 200]], "expected": 200, "visible": False},
             ],
         }
-    elif "rust" in profile_lower or "systems" in profile_lower:
-        signature = "def missing_number(nums):"
-        return {
-            "title": "Missing Number",
-            "description": "Given an array nums containing n distinct numbers in the range [0, n], return the only number in the range that is missing from the array.",
-            "input_format": "An array of integers.",
-            "output_format": "An integer.",
-            "constraints": ["n == nums.length", "0 <= nums[i] <= n", "All the numbers of nums are unique."],
-            "examples": [{"input": "[3,0,1]", "output": "2", "explanation": "n = 3, since there are 3 numbers, so all numbers are in the range [0,3]. 2 is the missing number."}],
-            "evaluation_focus": ["Correctness", "Math / Bit Manipulation"],
-            "starter_function_signature": signature,
-            "function_name": _extract_function_name(signature),
-            "difficulty": "Easy",
-            "recommended_language": "rust",
-            "timebox_minutes": 15,
-            "test_cases": [
-                {"id": 1, "input": [[3, 0, 1]], "expected": 2, "visible": True},
-                {"id": 2, "input": [[0, 1]], "expected": 2, "visible": True},
-                {"id": 3, "input": [[9, 6, 4, 2, 3, 5, 7, 0, 1]], "expected": 8, "visible": True},
-                {"id": 4, "input": [[0]], "expected": 1, "visible": False},
-                {"id": 5, "input": [[1]], "expected": 0, "visible": False},
-                {"id": 6, "input": [[1, 2]], "expected": 0, "visible": False},
-                {"id": 7, "input": [[0, 2]], "expected": 1, "visible": False},
-                {"id": 8, "input": [[0, 1, 2, 3, 5]], "expected": 4, "visible": False},
-                {"id": 9, "input": [[5, 4, 3, 1, 0]], "expected": 2, "visible": False},
-                {"id": 10, "input": [[0, 1, 2, 3, 4, 5, 6, 7, 8]], "expected": 9, "visible": False},
-                {"id": 11, "input": [[1, 2, 3, 4, 5, 6]], "expected": 0, "visible": False},
-                {"id": 12, "input": [[0, 1, 2, 3, 4, 6]], "expected": 5, "visible": False},
-                {"id": 13, "input": [[2, 0]], "expected": 1, "visible": False},
-                {"id": 14, "input": [[3, 1, 0]], "expected": 2, "visible": False},
-            ],
-        }
-    else:
-        return _default_task()
+    ]
+    return random.choice(tasks_pool)
+
 
 def generate_coding_task(profile_text: str, answers_data: List[Dict[str, Any]], interview_type: str = "Technical", industry: str = "General") -> Dict[str, Any]:
     answers_summary = "\n".join(
@@ -613,21 +412,26 @@ def _prepare_context(state: CodingRoundState) -> CodingRoundState:
 
 def _coach_candidate(state: CodingRoundState) -> CodingRoundState:
     fallback = {
-        "coach_message": "Keep your explanation tightly aligned with the code you just wrote.",
-        "strengths": ["You are making progress."],
-        "risks": ["The draft could not be analyzed fully."],
-        "next_steps": ["Run through one example manually and explain the data flow."],
+        "coach_message": "Keep your implementation focused on solving the problem step-by-step and handling boundary conditions.",
+        "strengths": ["Good attempt at structuring the core logic."],
+        "risks": ["Check potential edge cases and input boundary conditions."],
+        "next_steps": ["Walk through the algorithm with sample inputs to verify edge cases."],
         "scorecard": {
-            "problem_understanding": 50,
-            "implementation": 50,
-            "communication": 50,
-            "overall": 50,
+            "problem_understanding": 65,
+            "implementation": 60,
+            "communication": 60,
+            "overall": 62,
         },
     }
     system_prompt = """
-You are an expert live-coding interviewer.
-Give concise, practical coaching based only on the compact context packet.
-Do not reveal a full solution unless the candidate is completely blocked.
+You are an expert technical interviewer and coding coach.
+Review the candidate's currently written code for the given problem.
+Analyze:
+1. Logic correctness & approach.
+2. Potential bugs, syntax/runtime issues, or missed edge cases.
+3. Time & space complexity.
+4. Suggestions to improve without giving away the full solution code.
+
 Return strict JSON only.
 """.strip()
     final_mode = state.get("feedback_mode") == "final"
@@ -636,15 +440,13 @@ Compact context packet:
 {state.get("context_packet", "")}
 
 Return JSON with:
-- coach_message: short paragraph
-- strengths: array of 2-3 short bullets
-- risks: array of 2-3 short bullets
-- next_steps: array of 2-4 concrete actions
-- scorecard: object with problem_understanding, implementation, communication, overall (0-100)
+- coach_message: A clear, encouraging, and direct code review paragraph (max 120 words) analyzing what the candidate wrote so far.
+- strengths: array of 2-3 specific positive observations about their written code or logic.
+- risks: array of 2-3 specific bugs, edge cases missed, or performance bottlenecks in their code.
+- next_steps: array of 2-3 actionable hints or steps they should take to fix/complete their code.
+- scorecard: object with problem_understanding (0-100), implementation (0-100), communication (0-100), overall (0-100)
 {"- hiring_signal: short assessment" if final_mode else ""}
 {"- final_recommendation: one of Strong Hire, Hire, Borderline, No Hire" if final_mode else ""}
-
-Keep checkpoint feedback under 120 words in coach_message.
 """
     state["response"] = _llm_json(system_prompt, user_prompt, fallback)
     return state

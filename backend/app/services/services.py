@@ -191,6 +191,22 @@ def normalize_plan_key(plan_name: Optional[str]) -> str:
 def get_plan_definition(plan_name: Optional[str]) -> Dict[str, Any]:
     plan_key = normalize_plan_key(plan_name)
     base = PLAN_DEFINITIONS.get(plan_key, PLAN_DEFINITIONS["trial"])
+    
+    db_plan = plans_collection.find_one({"plan_name": plan_name})
+    if not db_plan:
+        db_plan = plans_collection.find_one({"plan_key": plan_key})
+        
+    if db_plan:
+        return {
+            "plan_key": plan_key,
+            "label": db_plan.get("plan_name", base["label"]),
+            "credits_granted": db_plan.get("credits_granted", base["credits_granted"]),
+            "price": db_plan.get("price", base["price"]),
+            "summary": db_plan.get("summary", base["summary"]),
+            "features": list(db_plan.get("features", base["features"])),
+            "capabilities": dict(db_plan.get("capabilities", base["capabilities"])),
+        }
+
     return {
         "plan_key": plan_key,
         "label": base["label"],
@@ -327,123 +343,133 @@ def run_code_against_tests(code: str, task: Dict[str, Any], language: str) -> Di
         return _run_compiled_mock(code, tests, function_name, language)
 
 def _run_js_locally(code: str, tests: list, function_name: str, language: str) -> Dict[str, Any]:
-    import tempfile
-    import os
     import subprocess
     import json
 
     tests_json = json.dumps(json.dumps(tests))
     
     # Strip type annotations if it's typescript to run natively in node
-    # Since we can't reliably strip all TS natively without tsc, we'll try to run it as JS.
-    # Note: For simple types, it might fail in node, but this is the best effort local run.
+    cleaned_code = code.replace(": string[]", "").replace(": number", "").replace(": any", "").replace(": boolean", "").replace(": string", "").replace(": number[]", "")
+    
     harness = f"""
 const tests = JSON.parse({tests_json});
 const results = [];
 
-// Fallback to strip basic TS types if it's selected as TS but run in Node
-{code.replace(": string[]", "").replace(": number", "").replace(": any", "")}
+{cleaned_code}
 
-for (const test of tests) {{
-    try {{
-        let inputArgs = test.input;
-        if (!Array.isArray(inputArgs)) {{
-            inputArgs = [inputArgs];
-        }}
-        
-        let output;
-        if (typeof {function_name} === 'function') {{
-            output = {function_name}(...inputArgs);
-        }} else {{
-            throw new Error("Function '" + "{function_name}" + "' not found.");
-        }}
-        
-        const expected = test.expected !== undefined ? test.expected : test.output;
-        const passed = JSON.stringify(output) === JSON.stringify(expected);
-        
-        results.push({{
-            id: test.id,
-            visible: test.visible !== false,
-            passed: passed,
-            input: inputArgs,
-            output: output,
-            expected: expected
-        }});
-    }} catch (e) {{
-        results.push({{
-            id: test.id,
-            visible: test.visible !== false,
-            passed: false,
-            input: test.input,
-            output: "Runtime Error: " + e.message,
-            expected: test.expected !== undefined ? test.expected : test.output
-        }});
+let func = null;
+if (typeof {function_name} === 'function') {{
+    func = {function_name};
+}} else {{
+    const altNames = [
+        "{function_name}",
+        "{function_name}".toLowerCase(),
+        "{function_name}".replace(/_([a-z])/g, (_, l) => l.toUpperCase()),
+        "{function_name}".replace(/[A-Z]/g, letter => `_${{letter.toLowerCase()}}`).replace(/^_/, '')
+    ];
+    for (const name of altNames) {{
+        try {{
+            if (eval("typeof " + name + " === 'function'")) {{
+                func = eval(name);
+                break;
+            }}
+        }} catch(e) {{}}
     }}
 }}
-console.log("\\n" + JSON.stringify(results));
+
+if (func) {{
+    for (const test of tests) {{
+        try {{
+            let inputArgs = test.input;
+            if (!Array.isArray(inputArgs)) {{
+                inputArgs = [inputArgs];
+            }}
+            
+            let output = func(...inputArgs);
+            const expected = test.expected !== undefined ? test.expected : test.output;
+            const passed = JSON.stringify(output) === JSON.stringify(expected);
+            
+            results.push({{
+                id: test.id,
+                visible: test.visible !== false,
+                passed: passed,
+                input: inputArgs,
+                output: output,
+                expected: expected
+            }});
+        }} catch (e) {{
+            results.push({{
+                id: test.id,
+                visible: test.visible !== false,
+                passed: false,
+                input: test.input,
+                output: "Runtime Error: " + e.message,
+                expected: test.expected !== undefined ? test.expected : test.output
+            }});
+        }}
+    }}
+    console.log("\\n" + JSON.stringify(results));
+}} else {{
+    process.stderr.write("Execution Error: Function '" + "{function_name}" + "' not found. Please ensure your function is named correctly.\\n");
+    process.exit(1);
+}}
 """
 
-    import requests
-    
-    payload = {
-        "language": "javascript",
-        "version": "18.15.0",
-        "files": [
-            {
-                "name": "main.js",
-                "content": harness
-            }
-        ]
-    }
-    
-    import requests
-    
+    # 1. Primary: Run directly on host machine via Node.js subprocess
     try:
-        response = requests.post("https://emkc.org/api/v2/piston/execute", json=payload, timeout=10)
-        
-        if response.status_code != 200:
-            if response.status_code >= 500 or response.status_code == 429:
-                print(f"[Piston JS] HTTP {response.status_code} — falling back to LLM evaluation")
-                return _evaluate_code_with_llm(code, tests, function_name, "javascript")
-            else:
-                # E.g. 400 Bad Request, do not fall back to LLM
-                print(f"[Piston JS] HTTP {response.status_code} — returning failure")
-                return _runner_error(f"API Error {response.status_code}: {response.text}", tests)
-        
-        data = response.json()
-        
-        if "run" in data:
-            run_result = data["run"]
-            stdout = run_result.get("stdout", "").strip()
-            stderr = run_result.get("stderr", "").strip()
-            
-            if stdout:
-                try:
-                    lines = stdout.split("\\n")
-                    for line in reversed(lines):
-                        if line.startswith("[") and line.endswith("]"):
-                            results_obj = json.loads(line)
-                            class MockResult:
-                                pass
-                            mock_res = MockResult()
-                            mock_res.stdout = line
-                            mock_res.stderr = stderr
-                            return _collect_runner_output(mock_res, tests)
-                except Exception:
-                    pass
-            
-            if stderr:
-                return _runner_error(f"Execution Error: {stderr}", tests)
-            else:
-                return _runner_error(f"Execution failed or produced invalid output.\\nOutput: {stdout}", tests)
-        else:
-            return _runner_error(f"Invalid response from Piston API: {data}", tests)
-            
-    except requests.RequestException as e:
-        print(f"[Piston JS] Request failed ({e}) — falling back to LLM evaluation")
-        return _evaluate_code_with_llm(code, tests, function_name, "javascript")
+        res = subprocess.run(
+            ["node", "-e", harness],
+            capture_output=True,
+            text=True,
+            timeout=5
+        )
+        return _collect_runner_output(res, tests)
+    except subprocess.TimeoutExpired:
+        return _runner_error("Execution Error: Time Limit Exceeded (5.0s)", tests)
+    except (FileNotFoundError, Exception) as e:
+        print(f"[Local Node] Native node execution unavailable ({e}) — trying Piston API")
+
+    # 2. Fallback: External Piston API
+    try:
+        import requests
+        payload = {
+            "language": "javascript",
+            "version": "18.15.0",
+            "files": [{"name": "main.js", "content": harness}]
+        }
+        response = requests.post("https://emkc.org/api/v2/piston/execute", json=payload, timeout=8)
+        if response.status_code == 200:
+            data = response.json()
+            if "run" in data:
+                run_result = data["run"]
+                stdout = run_result.get("stdout", "").strip()
+                stderr = run_result.get("stderr", "").strip()
+                if stdout:
+                    try:
+                        lines = [l.strip() for l in stdout.split("\n") if l.strip()]
+                        for line in reversed(lines):
+                            if line.startswith("[") and line.endswith("]"):
+                                class MockResult:
+                                    pass
+                                mock_res = MockResult()
+                                mock_res.returncode = 0
+                                mock_res.stdout = line
+                                mock_res.stderr = stderr
+                                return _collect_runner_output(mock_res, tests)
+                    except Exception:
+                        pass
+                if stderr:
+                    return _runner_error(f"Execution Error: {stderr}", tests)
+    except Exception as e:
+        print(f"[Piston JS API] Failed: {e}")
+
+    # 3. Last-ditch Fallback: LLM Evaluation
+    return _evaluate_code_with_llm(code, tests, function_name, "javascript")
 
 def _evaluate_code_with_llm(code: str, tests: list, function_name: str, language: str) -> Dict[str, Any]:
+    if function_name not in code:
+        return _runner_error(f"NameError: name '{function_name}' is not defined. Make sure your function is named exactly '{function_name}'.", tests)
+
     system_prompt = (
         f"You are a strict {language} compiler and code evaluator. You must evaluate the user's code against the provided test cases. "
         "Return ONLY a valid JSON object matching this schema. NO markdown, NO explanations.\n"
@@ -580,6 +606,7 @@ def _run_jdoodle_api(code: str, tests: list, function_name: str, language: str) 
     
     # Map the output lines back to tests
     visible_results = []
+    hidden_results = []
     hidden_passed = 0
     hidden_total = 0
     
@@ -599,6 +626,14 @@ def _run_jdoodle_api(code: str, tests: list, function_name: str, language: str) 
                 "expected": test.get("expected")
             })
         else:
+            hidden_results.append({
+                "id": test.get("id"),
+                "visible": False,
+                "passed": passed,
+                "input": test.get("input"),
+                "output": out_val,
+                "expected": test.get("expected")
+            })
             if passed: hidden_passed += 1
             hidden_total += 1
             
@@ -607,6 +642,7 @@ def _run_jdoodle_api(code: str, tests: list, function_name: str, language: str) 
         "runtime_error": None,
         "output": data.get("output", ""),
         "visible_results": visible_results,
+        "hidden_results": hidden_results,
         "hidden_summary": {"passed": hidden_passed, "total": hidden_total},
         "all_passed": (hidden_passed == hidden_total) and all(r["passed"] for r in visible_results)
     }
@@ -669,19 +705,35 @@ def _runner_error(message: str, tests: List[Dict[str, Any]] = None) -> Dict[str,
 
 
 def _collect_runner_output(result: subprocess.CompletedProcess, tests: List[Dict[str, Any]] = None) -> Dict[str, Any]:
-    if result.returncode != 0:
-        return _runner_error((result.stderr or result.stdout or "Unknown execution error").strip(), tests)
+    if getattr(result, "returncode", 0) != 0:
+        return _runner_error((getattr(result, "stderr", None) or getattr(result, "stdout", None) or "Unknown execution error").strip(), tests)
 
-    stdout = result.stdout.strip()
+    stdout = getattr(result, "stdout", "").strip()
     try:
-        # User code might print to stdout. The test harness prints JSON on the last line.
-        lines = stdout.split('\n')
-        json_str = lines[-1] if lines else "[]"
+        # Candidate code might print to stdout. Scan backward for the test results JSON array.
+        lines = [l.strip() for l in stdout.split('\n') if l.strip()]
+        json_str = "[]"
+        console_lines = []
+        for i in range(len(lines) - 1, -1, -1):
+            line = lines[i]
+            if line.startswith("[") and line.endswith("]"):
+                try:
+                    parsed = json.loads(line)
+                    if isinstance(parsed, list):
+                        json_str = line
+                        console_lines = lines[:i]
+                        break
+                except Exception:
+                    pass
+        if json_str == "[]" and lines:
+            json_str = lines[-1]
+            console_lines = lines[:-1]
+
         all_results = json.loads(json_str)
-        console_out = '\n'.join(lines[:-1]).strip()
+        console_out = '\n'.join(console_lines).strip()
     except Exception:
         # If no valid JSON, it's either a script or a crash
-        return _runner_error(stdout or result.stderr or "The runner returned an invalid response.", tests)
+        return _runner_error(stdout or getattr(result, "stderr", "") or "The runner returned an invalid response.", tests)
 
     visible_results = [row for row in all_results if row.get("visible")]
     hidden_results = [row for row in all_results if not row.get("visible")]
@@ -847,13 +899,26 @@ import sys
 tests = json.loads({tests_json})
 results = []
 function_name = "{function_name}"
+func = None
 
-if function_name in dir():
-    func = eval(function_name)
-elif function_name in locals():
-    func = locals()[function_name]
+if function_name and function_name in globals() and callable(globals()[function_name]):
+    func = globals()[function_name]
 else:
-    func = None
+    alt_names = [
+        function_name,
+        function_name.lower(),
+        ''.join(['_' + c.lower() if c.isupper() else c for c in function_name]).lstrip('_'),
+        ''.join(word.capitalize() if i > 0 else word.lower() for i, word in enumerate(function_name.split('_')))
+    ]
+    for alt in alt_names:
+        if alt in globals() and callable(globals()[alt]):
+            func = globals()[alt]
+            break
+    if func is None:
+        for name, obj in list(globals().items()):
+            if callable(obj) and not name.startswith("__") and name not in ["json", "sys", "eval"]:
+                func = obj
+                break
 
 if func is not None:
     for test in tests:
@@ -865,7 +930,21 @@ if func is not None:
             output = func(*input_args)
             expected = test.get("expected") if test.get("expected") is not None else test.get("output")
             
-            passed = (output == expected)
+            if isinstance(output, set):
+                output = list(output)
+            if isinstance(expected, set):
+                expected = list(expected)
+                
+            passed = False
+            if output == expected:
+                passed = True
+            elif isinstance(output, list) and isinstance(expected, list):
+                try:
+                    passed = (sorted([str(x) for x in output]) == sorted([str(x) for x in expected]))
+                except Exception:
+                    passed = False
+            elif str(output).strip() == str(expected).strip():
+                passed = True
             
             results.append({{
                 "id": test.get("id"),
@@ -890,63 +969,56 @@ else:
     sys.exit(1)
 """
 
-    import requests
-    
-    payload = {
-        "language": "python",
-        "version": "3.10.0",
-        "files": [
-            {
-                "name": "main.py",
-                "content": harness
-            }
-        ]
-    }
-    
+    # 1. Primary: Run directly on host machine via native Python subprocess
     try:
-        response = requests.post("https://emkc.org/api/v2/piston/execute", json=payload, timeout=10)
-        if response.status_code != 200:
-            print(f"[Piston Python] HTTP {response.status_code} — falling back to LLM evaluation")
-            return _evaluate_code_with_llm(code, tests, function_name, "python")
-        data = response.json()
-        
-        if "run" in data:
-            run_result = data["run"]
-            # Try to parse the stdout as our JSON results array
-            stdout = run_result.get("stdout", "").strip()
-            stderr = run_result.get("stderr", "").strip()
-            
-            if stdout:
-                try:
-                    # Look for the last JSON array in the output (since candidate might have print statements)
-                    lines = stdout.split("\\n")
-                    for line in reversed(lines):
-                        if line.startswith("[") and line.endswith("]"):
-                            results_obj = json.loads(line)
-                            # Mock the result object to pass to _collect_runner_output
-                            class MockResult:
-                                pass
-                            mock_res = MockResult()
-                            mock_res.stdout = line
-                            mock_res.stderr = stderr
-                            return _collect_runner_output(mock_res, tests)
-                except Exception:
-                    pass
-            
-            # If we couldn't parse the JSON or it crashed
-            if stderr:
-                return _runner_error(f"Execution Error: {stderr}", tests)
-            else:
-                return _runner_error(f"Execution failed or produced invalid output.\\nOutput: {stdout}", tests)
-        else:
-            return _runner_error(f"Invalid response from Piston API: {data}", tests)
-            
-    except requests.exceptions.Timeout:
-        print("[Piston Python] Timeout — falling back to LLM evaluation")
-        return _evaluate_code_with_llm(code, tests, function_name, "python")
+        res = subprocess.run(
+            [sys.executable, "-c", harness],
+            capture_output=True,
+            text=True,
+            timeout=5
+        )
+        return _collect_runner_output(res, tests)
+    except subprocess.TimeoutExpired:
+        return _runner_error("Execution Error: Time Limit Exceeded (5.0s)", tests)
     except Exception as e:
-        print(f"[Piston Python] Error: {e} — falling back to LLM evaluation")
-        return _evaluate_code_with_llm(code, tests, function_name, "python")
+        print(f"[Local Python Execution] Subprocess error ({e}) — trying Piston API fallback")
+
+    # 2. Fallback: External Piston API
+    try:
+        import requests
+        payload = {
+            "language": "python",
+            "version": "3.10.0",
+            "files": [{"name": "main.py", "content": harness}]
+        }
+        response = requests.post("https://emkc.org/api/v2/piston/execute", json=payload, timeout=8)
+        if response.status_code == 200:
+            data = response.json()
+            if "run" in data:
+                run_result = data["run"]
+                stdout = run_result.get("stdout", "").strip()
+                stderr = run_result.get("stderr", "").strip()
+                if stdout:
+                    try:
+                        lines = [l.strip() for l in stdout.split("\n") if l.strip()]
+                        for line in reversed(lines):
+                            if line.startswith("[") and line.endswith("]"):
+                                class MockResult:
+                                    pass
+                                mock_res = MockResult()
+                                mock_res.returncode = 0
+                                mock_res.stdout = line
+                                mock_res.stderr = stderr
+                                return _collect_runner_output(mock_res, tests)
+                    except Exception:
+                        pass
+                if stderr:
+                    return _runner_error(f"Execution Error: {stderr}", tests)
+    except Exception as e:
+        print(f"[Piston Python API] Failed: {e}")
+
+    # 3. Last-ditch Fallback: LLM Evaluation
+    return _evaluate_code_with_llm(code, tests, function_name, "python")
 def extract_skills(text: str) -> List[str]:
     """Extract skills from resume text."""
     skills = []
@@ -2259,7 +2331,20 @@ def get_current_admin_details(credentials: HTTPAuthorizationCredentials = Depend
         if not company_id:
             company_id = str(admin_doc.get("company_id") or "")
             
-        return {"admin_id": admin_id, "company_id": company_id, "role": role}
+        actual_role = admin_doc.get("role") or role
+        is_master = bool(admin_doc.get("is_master") or actual_role == "master" or role == "master")
+        admin_name = admin_doc.get("name") or admin_doc.get("username") or ("master" if is_master else "Admin")
+
+        return {
+            "admin_id": admin_id,
+            "company_id": company_id,
+            "role": actual_role,
+            "name": admin_name,
+            "username": admin_doc.get("username") or admin_name,
+            "email": admin_doc.get("email") or "",
+            "company_name": admin_doc.get("company_name") or "",
+            "is_master": is_master
+        }
     except jwt.PyJWTError:
         raise HTTPException(status_code=401, detail="Invalid or expired token")
 

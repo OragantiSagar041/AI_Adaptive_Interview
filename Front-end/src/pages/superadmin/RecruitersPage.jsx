@@ -15,6 +15,8 @@ export default function RecruitersPage() {
   const [data, setData] = useState(null);
   const [loading, setLoading] = useState(true);
   const [searchTerm, setSearchTerm] = useState('');
+  const [roleFilter, setRoleFilter] = useState('all');
+  const [statusFilter, setStatusFilter] = useState('all');
   const [openDropdownId, setOpenDropdownId] = useState(null);
   
   // Modals state
@@ -102,26 +104,39 @@ export default function RecruitersPage() {
 
   const handleAddCreditsSubmit = async (e) => {
     e.preventDefault();
-    if (addCreditsAmount <= 0) return;
+    const amountNum = parseInt(addCreditsAmount);
+    if (!amountNum || amountNum <= 0) {
+      Swal.fire({
+        title: 'Invalid Amount',
+        text: 'Please enter a valid credit amount greater than 0.',
+        icon: 'warning',
+        background: '#161c2d',
+        color: '#fff'
+      });
+      return;
+    }
     try {
-      await api.post(`/api/superadmin/recruiters/${addingCreditsRecruiter.id}/add-credits`, { amount: parseInt(addCreditsAmount) }, {
+      await api.post(`/api/superadmin/recruiters/${addingCreditsRecruiter.id}/add-credits`, {
+        credits: amountNum,
+        amount: amountNum
+      }, {
         headers: { Authorization: `Bearer ${token}` }
       });
       Swal.fire({
         title: 'Credits Added',
-        text: `Successfully added ${addCreditsAmount} credits to ${addingCreditsRecruiter.name}!`,
+        text: `Successfully added ${amountNum} credits to ${addingCreditsRecruiter.name}!`,
         icon: 'success',
         background: '#161c2d',
         color: '#fff'
       });
       setAddingCreditsRecruiter(null);
       setAddCreditsAmount(0);
-      fetchStats();
+      await fetchStats();
     } catch (err) {
       console.error(err);
       Swal.fire({
         title: 'Error',
-        text: err.response?.data?.detail || err.message,
+        text: err.response?.data?.detail || err.message || 'Failed to add credits',
         icon: 'error',
         background: '#161c2d',
         color: '#fff'
@@ -183,10 +198,17 @@ export default function RecruitersPage() {
   const recruiters = data?.recruiters || [];
   const weeklyActivity = data?.weekly_activity || [];
 
-  const filteredRecruiters = recruiters.filter(r => 
-    r.name?.toLowerCase().includes(searchTerm.toLowerCase()) ||
-    r.email?.toLowerCase().includes(searchTerm.toLowerCase())
-  );
+  const filteredRecruiters = recruiters.filter(r => {
+    const matchesSearch = !searchTerm || 
+      r.name?.toLowerCase().includes(searchTerm.toLowerCase()) ||
+      r.email?.toLowerCase().includes(searchTerm.toLowerCase()) ||
+      r.username?.toLowerCase().includes(searchTerm.toLowerCase());
+      
+    const matchesRole = roleFilter === 'all' || r.role === roleFilter;
+    const matchesStatus = statusFilter === 'all' || r.status === statusFilter;
+    
+    return matchesSearch && matchesRole && matchesStatus;
+  });
 
   const handleDownloadCSV = () => {
     if (!filteredRecruiters || filteredRecruiters.length === 0) return;
@@ -219,52 +241,73 @@ export default function RecruitersPage() {
   };
 
   return (
-    <div
-      className="p-8 max-w-7xl mx-auto space-y-8"
-    >
-      <div className="flex justify-between items-center">
+    <div className="p-6 lg:p-8 w-full max-w-7xl mx-auto space-y-8">
+      {/* ── Page Header ── */}
+      <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 bg-white p-6 rounded-2xl shadow-xs border border-slate-100">
         <div>
-          <h1 className="text-3xl font-bold text-slate-900">Recruiters</h1>
-          <p className="text-slate-500 mt-1">Manage platform recruiters and monitor their activity.</p>
+          <div className="flex items-center gap-3">
+            <div className="w-11 h-11 rounded-2xl bg-indigo-50 flex items-center justify-center text-indigo-600 shadow-xs">
+              <Users className="w-6 h-6" />
+            </div>
+            <div>
+              <h1 className="text-2xl lg:text-3xl font-bold text-slate-900 tracking-tight">Recruiters Management</h1>
+              <p className="text-sm font-medium text-slate-500 mt-0.5">Manage platform recruiters, allocate interview credits, and monitor activity.</p>
+            </div>
+          </div>
         </div>
-        <button onClick={() => setIsAddAdminOpen(true)} className="flex items-center gap-2 px-4 py-2 bg-indigo-600 text-white font-semibold rounded-xl hover:bg-indigo-700 shadow-sm transition-colors">
-          <UserPlus className="w-5 h-5" />
+        <button 
+          onClick={() => setIsAddAdminOpen(true)} 
+          className="flex items-center gap-2 px-5 py-2.5 bg-indigo-600 hover:bg-indigo-700 text-white font-bold text-sm rounded-xl shadow-sm transition-all hover:shadow-indigo-500/20 active:translate-y-0"
+        >
+          <UserPlus className="w-4 h-4" />
           Add Recruiter
         </button>
       </div>
 
-      {/* KPI Cards */}
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-        <KPICard 
-          title="Total Recruiters" 
-          value={kpis.total_recruiters} 
-          icon={<Users className="w-6 h-6 text-indigo-500" />} 
-          delay={0.1}
-        />
-        <KPICard 
-          title="Active Now" 
-          value={kpis.active_now} 
-          icon={<UserCheck className="w-6 h-6 text-emerald-500" />} 
-          delay={0.2}
-        />
-        <KPICard 
-          title="Avg Interviews / Recruiter" 
-          value={kpis.avg_interviews} 
-          icon={<Video className="w-6 h-6 text-amber-500" />} 
-          delay={0.3}
-        />
-      </div>
+      {/* ── Top Analytics Grid (KPIs & Activity Chart) ── */}
+      <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 items-stretch">
+        {/* KPI Cards (5 columns) */}
+        <div className="lg:col-span-5 grid grid-cols-1 sm:grid-cols-3 lg:grid-cols-1 gap-4">
+          <KPICard 
+            title="Total Recruiters" 
+            value={kpis.total_recruiters ?? recruiters.length} 
+            subtitle="Registered platform accounts"
+            icon={<Users className="w-5 h-5 text-indigo-600" />} 
+            badge="Platform Total"
+            badgeColor="bg-indigo-50 text-indigo-700 border-indigo-100"
+          />
+          <KPICard 
+            title="Active Now" 
+            value={kpis.active_now ?? recruiters.filter(r => r.status === 'Active').length} 
+            subtitle="Enabled recruiter accounts"
+            icon={<UserCheck className="w-5 h-5 text-emerald-600" />} 
+            badge="Active"
+            badgeColor="bg-emerald-50 text-emerald-700 border-emerald-100"
+          />
+          <KPICard 
+            title="Avg Interviews / Recruiter" 
+            value={kpis.avg_interviews ?? 0} 
+            subtitle="Platform interview throughput"
+            icon={<Video className="w-5 h-5 text-amber-600" />} 
+            badge="Throughput"
+            badgeColor="bg-amber-50 text-amber-700 border-amber-100"
+          />
+        </div>
 
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
-        
-        {/* Recruiter Activity Chart */}
-        <div
-          className="lg:col-span-1 bg-white p-6 rounded-2xl shadow-sm border border-slate-100"
-        >
-          <h2 className="text-lg font-semibold text-slate-800 mb-6">Weekly Activity (Interviews)</h2>
-          <div className="h-64 w-full">
+        {/* Weekly Activity Chart (7 columns) */}
+        <div className="lg:col-span-7 bg-white p-6 rounded-2xl shadow-xs border border-slate-100 flex flex-col justify-between">
+          <div className="flex items-center justify-between mb-4">
+            <div>
+              <h2 className="text-base font-bold text-slate-800">Weekly Activity (Interviews)</h2>
+              <p className="text-xs text-slate-400 font-medium">Interview sessions completed across recent weeks</p>
+            </div>
+            <span className="px-2.5 py-1 bg-slate-50 border border-slate-200/80 rounded-lg text-xs font-semibold text-slate-600">
+              Last 8 Weeks
+            </span>
+          </div>
+          <div className="h-56 w-full">
             <ResponsiveContainer width="100%" height="100%">
-              <BarChart data={weeklyActivity}>
+<BarChart data={weeklyActivity}>
                 <CartesianGrid strokeDasharray="3 3" vertical={false} stroke={getThemeColor('--muted', '#e2e8f0')} />
                 <XAxis dataKey="name" axisLine={false} tickLine={false} tick={{ fill: getThemeColor('--muted-foreground', '#64748b'), fontSize: 12 }} dy={10} />
                 <Tooltip 
@@ -276,8 +319,9 @@ export default function RecruitersPage() {
             </ResponsiveContainer>
           </div>
         </div>
+      </div>
 
-        {/* Recruiters List */}
+{/* Recruiters List */}
         <div
           className="lg:col-span-2 bg-card rounded-2xl shadow-sm border border-border flex flex-col overflow-hidden text-card-foreground"
         >
@@ -322,8 +366,9 @@ export default function RecruitersPage() {
                     key={recruiter.id} 
                     className="hover:bg-muted/40 transition-colors"
                   >
+                    {/* Recruiter Avatar & Info */}
                     <td className="px-6 py-4 whitespace-nowrap">
-                      <div className="flex items-center gap-3">
+<div className="flex items-center gap-3">
                         <div className="w-10 h-10 rounded-full bg-indigo-500/15 border border-indigo-500/20 flex items-center justify-center text-indigo-500 dark:text-indigo-400 font-bold">
                           {recruiter.name.charAt(0).toUpperCase()}
                         </div>
@@ -340,22 +385,73 @@ export default function RecruitersPage() {
                           ? 'bg-emerald-50 dark:bg-emerald-500/15 text-emerald-700 dark:text-emerald-300 border border-emerald-200 dark:border-emerald-500/30'
                           : 'bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300 border border-slate-200 dark:border-slate-700'
                       }`}>
+                        {isSuperAdmin && <Shield className="w-3 h-3" />}
+                        {isSuperAdmin ? 'Super Admin' : 'Admin'}
+                      </span>
+                    </td>
+
+                    {/* Status */}
+                    <td className="px-6 py-4 whitespace-nowrap">
+                      <span className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-semibold ${
+                        recruiter.status === 'Active' 
+                          ? 'bg-emerald-50 text-emerald-700 border border-emerald-200' 
+                          : 'bg-slate-100 text-slate-600 border border-slate-200'
+                      }`}>
+                        <span className={`w-1.5 h-1.5 rounded-full ${recruiter.status === 'Active' ? 'bg-emerald-500 animate-pulse' : 'bg-slate-400'}`}></span>
                         {recruiter.status}
                       </span>
                     </td>
-                    <td className="px-6 py-4 whitespace-nowrap text-center font-medium text-foreground">
+<td className="px-6 py-4 whitespace-nowrap text-center font-medium text-foreground">
                       {recruiter.interviews_conducted}
                     </td>
                     <td className="px-6 py-4 whitespace-nowrap text-center font-bold text-indigo-600 dark:text-indigo-400">
                       {recruiter.credits || 0}
                     </td>
+
+                    {/* Last Active */}
+                    <td className="px-6 py-4 whitespace-nowrap text-center text-xs font-medium text-slate-500">
+                      {recruiter.last_active ? (
+                        <span className="inline-flex items-center gap-1">
+                          <Clock className="w-3 h-3 text-slate-400" />
+                          {new Date(recruiter.last_active).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}
+                        </span>
+                      ) : (
+                        <span className="text-slate-400 italic">Never</span>
+                      )}
+                    </td>
+
+                    {/* Actions */}
                     <td className="px-6 py-4 whitespace-nowrap text-right relative">
-                      <button 
-                        onClick={() => setOpenDropdownId(openDropdownId === recruiter.id ? null : recruiter.id)}
-                        className="text-slate-400 hover:text-indigo-600 transition-colors p-2 rounded-lg hover:bg-indigo-50"
-                      >
-                        <MoreHorizontal className="w-5 h-5" />
-                      </button>
+                      <div className="flex items-center justify-end gap-1">
+                        <button
+                          onClick={() => setAddingCreditsRecruiter(recruiter)}
+                          className="p-2 text-slate-400 hover:text-indigo-600 hover:bg-indigo-50 rounded-lg transition-colors"
+                          title="Add Credits"
+                        >
+                          <Coins className="w-4 h-4" />
+                        </button>
+                        <button
+                          onClick={() => { setMessagingRecruiter(recruiter); setMessageForm({ subject: '', body: '' }); }}
+                          className="p-2 text-slate-400 hover:text-indigo-600 hover:bg-indigo-50 rounded-lg transition-colors"
+                          title="Send Message"
+                        >
+                          <Mail className="w-4 h-4" />
+                        </button>
+                        <button
+                          onClick={() => setEditingRecruiter(recruiter)}
+                          className="p-2 text-slate-400 hover:text-indigo-600 hover:bg-indigo-50 rounded-lg transition-colors"
+                          title="Edit Recruiter"
+                        >
+                          <Edit className="w-4 h-4" />
+                        </button>
+                        <button 
+                          onClick={() => setOpenDropdownId(openDropdownId === recruiter.id ? null : recruiter.id)}
+                          className="p-2 text-slate-400 hover:text-indigo-600 hover:bg-indigo-50 rounded-lg transition-colors"
+                          title="More Actions"
+                        >
+                          <MoreHorizontal className="w-4 h-4" />
+                        </button>
+                      </div>
                       
                       {openDropdownId === recruiter.id && (
                         <>
@@ -363,29 +459,29 @@ export default function RecruitersPage() {
                             className="fixed inset-0 z-10" 
                             onClick={() => setOpenDropdownId(null)}
                           ></div>
-                          <div className="absolute right-8 top-12 w-48 bg-white rounded-xl shadow-lg border border-slate-100 py-2 z-20 animate-in fade-in slide-in-from-top-2 duration-200 text-left">
+                          <div className="absolute right-6 top-12 w-48 bg-white rounded-xl shadow-lg border border-slate-100 py-1.5 z-20 animate-in fade-in slide-in-from-top-2 duration-150 text-left">
                             <button 
                               onClick={() => { setEditingRecruiter(recruiter); setOpenDropdownId(null); }}
-                              className="w-full px-4 py-2 text-sm text-slate-700 hover:bg-slate-50 hover:text-indigo-600 flex items-center gap-3 transition-colors"
+                              className="w-full px-4 py-2 text-sm text-slate-700 hover:bg-slate-50 hover:text-indigo-600 flex items-center gap-2.5 transition-colors font-medium"
                             >
-                              <Edit className="w-4 h-4" /> Edit Recruiter
+                              <Edit className="w-4 h-4 text-slate-400" /> Edit Recruiter
                             </button>
                             <button 
                               onClick={() => { setAddingCreditsRecruiter(recruiter); setOpenDropdownId(null); }}
-                              className="w-full px-4 py-2 text-sm text-slate-700 hover:bg-slate-50 hover:text-indigo-600 flex items-center gap-3 transition-colors"
+                              className="w-full px-4 py-2 text-sm text-slate-700 hover:bg-slate-50 hover:text-indigo-600 flex items-center gap-2.5 transition-colors font-medium"
                             >
-                              <Coins className="w-4 h-4" /> Add Credits
+                              <Coins className="w-4 h-4 text-amber-500" /> Add Credits
                             </button>
                             <button 
                               onClick={() => { setMessagingRecruiter(recruiter); setOpenDropdownId(null); }}
-                              className="w-full px-4 py-2 text-sm text-slate-700 hover:bg-slate-50 hover:text-indigo-600 flex items-center gap-3 transition-colors"
+                              className="w-full px-4 py-2 text-sm text-slate-700 hover:bg-slate-50 hover:text-indigo-600 flex items-center gap-2.5 transition-colors font-medium"
                             >
-                              <Mail className="w-4 h-4" /> Send Message
+                              <Mail className="w-4 h-4 text-indigo-500" /> Send Message
                             </button>
                             <div className="h-px bg-slate-100 my-1"></div>
                             <button 
                               onClick={() => { setDeactivatingRecruiter(recruiter); setOpenDropdownId(null); }}
-                              className={`w-full px-4 py-2 text-sm ${recruiter.status === 'Active' ? 'text-rose-600 hover:bg-rose-50' : 'text-emerald-600 hover:bg-emerald-50'} flex items-center gap-3 transition-colors`}
+                              className={`w-full px-4 py-2 text-sm ${recruiter.status === 'Active' ? 'text-rose-600 hover:bg-rose-50' : 'text-emerald-600 hover:bg-emerald-50'} flex items-center gap-2.5 transition-colors font-medium`}
                             >
                               <Trash2 className="w-4 h-4" /> {recruiter.status === 'Active' ? 'Deactivate Account' : 'Activate Account'}
                             </button>
@@ -394,17 +490,25 @@ export default function RecruitersPage() {
                       )}
                     </td>
                   </tr>
-                ))}
-                {filteredRecruiters.length === 0 && (
-                  <tr>
-                    <td colSpan="5" className="px-6 py-12 text-center text-slate-500">
-                      No recruiters found matching "{searchTerm}"
-                    </td>
-                  </tr>
-                )}
-              </tbody>
-            </table>
-          </div>
+                );
+              })}
+              {filteredRecruiters.length === 0 && (
+                <tr>
+                  <td colSpan="7" className="px-6 py-16 text-center text-slate-500">
+                    <div className="flex flex-col items-center justify-center max-w-xs mx-auto">
+                      <div className="w-12 h-12 rounded-2xl bg-slate-100 flex items-center justify-center text-slate-400 mb-3">
+                        <Users className="w-6 h-6" />
+                      </div>
+                      <p className="font-bold text-slate-700">No recruiters found</p>
+                      <p className="text-xs text-slate-400 mt-1">
+                        {searchTerm ? `No results match "${searchTerm}"` : 'No recruiters match the selected filter criteria'}
+                      </p>
+                    </div>
+                  </td>
+                </tr>
+              )}
+            </tbody>
+          </table>
         </div>
       </div>
 
@@ -667,18 +771,24 @@ export default function RecruitersPage() {
   );
 }
 
-function KPICard({ title, value, icon, delay }) {
+function KPICard({ title, value, subtitle, icon, badge, badgeColor }) {
   return (
-    <div
-      className="bg-white p-6 rounded-2xl shadow-sm border border-slate-100 hover:shadow-md transition-shadow flex items-center gap-4"
-    >
-      <div className="p-4 rounded-2xl bg-slate-50">
-        {icon}
+    <div className="bg-white p-5 rounded-2xl shadow-xs border border-slate-100 hover:shadow-sm transition-all flex items-center justify-between gap-4">
+      <div className="flex items-center gap-4 min-w-0">
+        <div className="p-3.5 rounded-2xl bg-slate-50 border border-slate-100 shrink-0">
+          {icon}
+        </div>
+        <div className="min-w-0">
+          <p className="text-xs font-semibold text-slate-500 uppercase tracking-wider">{title}</p>
+          <h3 className="text-2xl lg:text-3xl font-black text-slate-900 tracking-tight mt-0.5">{value ?? 0}</h3>
+          {subtitle && <p className="text-xs text-slate-400 font-medium mt-0.5 truncate">{subtitle}</p>}
+        </div>
       </div>
-      <div>
-        <p className="text-sm font-medium text-slate-500 mb-1">{title}</p>
-        <h3 className="text-3xl font-bold text-slate-900">{value}</h3>
-      </div>
+      {badge && (
+        <span className={`text-[10px] font-bold px-2.5 py-1 rounded-full border shrink-0 hidden sm:inline-block ${badgeColor || 'bg-slate-100 text-slate-600 border-slate-200'}`}>
+          {badge}
+        </span>
+      )}
     </div>
   );
 }

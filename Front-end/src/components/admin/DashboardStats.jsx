@@ -1,7 +1,7 @@
-import React from 'react'
+import React, { memo } from 'react'
 import { ChevronRight, Activity, Users, Clock, CheckCircle, Award, ShieldAlert, Monitor, Mic } from 'lucide-react'
 
-export default function DashboardStats({
+export default memo(function DashboardStats({
   dbStats,
   ongoingLiveCount,
   ongoingAlertCount,
@@ -153,4 +153,4 @@ export default function DashboardStats({
 
     </div>
   )
-}
+})

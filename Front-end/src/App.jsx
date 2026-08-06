@@ -25,6 +25,7 @@ const JobApplicationPage = React.lazy(() => import('./pages/JobApplicationPage')
 // Admin / master routes (were already lazy — keep them)
 const MasterLayout = React.lazy(() => import('./components/master/MasterLayout'))
 const MasterDashboard = React.lazy(() => import('./pages/master/MasterDashboard'))
+const CompanyRevenue = React.lazy(() => import('./pages/master/CompanyRevenue'))
 const Plans = React.lazy(() => import('./pages/master/Plans'))
 const Subscribers = React.lazy(() => import('./pages/master/Subscribers'))
 const CreateTenant = React.lazy(() => import('./pages/master/CreateTenant'))
@@ -100,6 +101,7 @@ function App() {
           >
             <Route index element={<Navigate to="dashboard" replace />} />
             <Route path="dashboard" element={<MasterDashboard />} />
+            <Route path="company-revenue" element={<CompanyRevenue />} />
             <Route path="plans" element={<Plans />} />
             <Route path="subscribers" element={<Subscribers />} />
             <Route path="create-tenant" element={<CreateTenant />} />

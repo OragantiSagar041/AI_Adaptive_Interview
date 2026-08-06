@@ -118,12 +118,30 @@ def get_recharge_history(company_id: str, limit: int = 10) -> List[Dict[str, Any
             "order_id": r.get("order_id"),
             "payment_id": r.get("payment_id"),
             "plan_name": r.get("plan_name"),
-            "amount": r.get("amount", 0),
+            "amount": r.get("amount", 0) / 100 if r.get("amount") else 0,
             "created_at": r.get("created_at"),
         }
         for r in cursor
     ]
 
+
+def get_total_revenue(company_id: Optional[str] = None) -> float:
+    """
+    Return the sum of all verified payment amounts (converted to rupees).
+    If company_id is provided, sum only for that company.
+    """
+    query = {"status": "verified"}
+    if company_id:
+        query["company_id"] = company_id
+    
+    pipeline = [
+        {"$match": query},
+        {"$group": {"_id": None, "total": {"$sum": "$amount"}}}
+    ]
+    result = list(payment_orders_collection.aggregate(pipeline))
+    if result:
+        return result[0]["total"] / 100
+    return 0.0
 
 # ---------------------------------------------------------------------------
 # Write: recharge / renew

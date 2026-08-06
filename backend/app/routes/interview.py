@@ -1230,6 +1230,15 @@ def _run_coding_feedback(req: CodingRoundCheckpointRequest, feedback_mode: str) 
     if not coding_round or not coding_round.get("task"):
         raise HTTPException(status_code=400, detail="Coding round not started")
 
+    if feedback_mode == "checkpoint":
+        feedback_count = coding_round.get("ai_feedback_count", 0)
+        if feedback_count >= 2:
+            raise HTTPException(
+                status_code=400,
+                detail="Your AI feedback limit is over! You can only get AI feedback 2 times."
+            )
+        coding_round["ai_feedback_count"] = feedback_count + 1
+
     latest_code = req.code or ""
     latest_explanation = req.explanation or ""
     unchanged = (
@@ -1243,6 +1252,8 @@ def _run_coding_feedback(req: CodingRoundCheckpointRequest, feedback_mode: str) 
             "interview_id": req.interview_id,
             "coding_round": coding_round,
             "feedback": coding_round.get("latest_feedback"),
+            "ai_feedback_count": coding_round.get("ai_feedback_count", 0),
+            "ai_feedback_remaining": max(0, 2 - coding_round.get("ai_feedback_count", 0)),
             "cached": True,
         }
 
@@ -1293,6 +1304,8 @@ def _run_coding_feedback(req: CodingRoundCheckpointRequest, feedback_mode: str) 
         "interview_id": req.interview_id,
         "coding_round": coding_round,
         "feedback": feedback,
+        "ai_feedback_count": coding_round.get("ai_feedback_count", 0),
+        "ai_feedback_remaining": max(0, 2 - coding_round.get("ai_feedback_count", 0)),
         "cached": False,
     }
 
@@ -1491,10 +1504,17 @@ detected_accent (short string)."""
             temperature=0.1,
         )
         res = extract_json(raw)
-        if res: return res
+        if res:
+            if not res.get("detected_accent") or str(res.get("detected_accent")).strip().lower() in ["unknown", "none", ""]:
+                from app.services.language_accent_detector import detect_language_and_accent
+                l_res = detect_language_and_accent(answers_data)
+                res["detected_accent"] = l_res.get("detected_accent", "English (Indian Accent)")
+            return res
         raise Exception("Invalid JSON returned")
     except Exception as e:
         print(f"Summary generation error: {e}")
+        from app.services.language_accent_detector import detect_language_and_accent
+        l_res = detect_language_and_accent(answers_data)
         # Fallback from score
         if avg >= 75:
             rec = "Strong Hire"
@@ -1520,7 +1540,7 @@ detected_accent (short string)."""
             "culture_fit_reasoning": "N/A",
             "job_success_score": int(avg),
             "job_success_reasoning": "N/A",
-            "detected_accent": "Unknown"
+            "detected_accent": l_res.get("detected_accent", "English (Indian Accent)")
         }
 
 

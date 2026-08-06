@@ -4,14 +4,14 @@
  * Left: Problem only | Center: Editor | Floating orb: voice indicator
  */
 import React, { useState, useRef, useCallback, useEffect, Suspense } from 'react'
+import { createPortal } from 'react-dom'
 
 const Editor = React.lazy(() => import('@monaco-editor/react'))
 import { API_BASE_URL } from '../apiConfig'
 import { candidateFetch } from '../utils/candidateAuth'
-import Swal from 'sweetalert2'
-import 'sweetalert2/dist/sweetalert2.min.css'
 import aiVideoUrl from '../assets/ai_avatar.mp4'
 import { useExitConfirmation } from '../hooks/useExitConfirmation'
+import { setupMonacoIntelliSense, MONACO_EDITOR_OPTIONS } from '../utils/monacoConfig'
 
 // ── Language config with brand colors ─────────────────────────────────────
 const LANGUAGES = [
@@ -211,12 +211,55 @@ export default function VoiceCodingRound({
   duration,
   onComplete
 }) {
-  const [code, setCode] = useState(question?.codingTask?.starter_code || '# Write your solution here\n\n')
+  const getBoilerplateCode = (lang, task) => {
+    const funcName = task?.function_name || 'solution';
+    const sig = task?.starter_function_signature;
+    
+    if (lang === 'python') {
+      return sig || task?.starter_code || `def ${funcName}(*args):\n    # Write your Python solution here\n    pass`;
+    }
+    if (lang === 'javascript') {
+      return `function ${funcName}(...args) {\n    // Write your JavaScript solution here\n    \n}`;
+    }
+    if (lang === 'java') {
+      return `public class Solution {\n    public static void ${funcName}(String[] args) {\n        // Write your Java solution here\n    }\n}`;
+    }
+    if (lang === 'cpp') {
+      return `#include <iostream>\n#include <vector>\n#include <string>\nusing namespace std;\n\nvoid ${funcName}() {\n    // Write your C++ solution here\n}\n\nint main() {\n    ${funcName}();\n    return 0;\n}`;
+    }
+    if (lang === 'typescript') {
+      return `function ${funcName}(...args: any[]): any {\n    // Write your TypeScript solution here\n    \n}`;
+    }
+    if (lang === 'go') {
+      return `package main\n\nimport "fmt"\n\nfunc main() {\n    // Write your Go solution here\n}`;
+    }
+    if (lang === 'rust') {
+      return `fn main() {\n    // Write your Rust solution here\n}`;
+    }
+    return `# Write your solution here\n`;
+  };
+
   const [selectedLang, setSelectedLang] = useState('python')
+  const codeByLangRef = useRef({})
+  const [code, setCode] = useState(() => getBoilerplateCode('python', question?.codingTask))
+
+  useEffect(() => {
+    if (!codeByLangRef.current[selectedLang]) {
+      const tmpl = getBoilerplateCode(selectedLang, question?.codingTask)
+      codeByLangRef.current[selectedLang] = tmpl
+      setCode(tmpl)
+    } else {
+      setCode(codeByLangRef.current[selectedLang])
+    }
+  }, [selectedLang, question])
+
+
+
   const [aiStatus, setAiStatus] = useState('idle')  // idle | speaking | listening
   const [transcript, setTranscript] = useState('')
   const [detectedPatterns, setDetectedPatterns] = useState(new Set())
   const [timeLeft, setTimeLeft] = useState(duration || 900)
+  const timeLeftRef = useRef(duration || 900)
   const [runOutput, setRunOutput] = useState('')
   const [runResultData, setRunResultData] = useState(null)
   const [evaluatedCount, setEvaluatedCount] = useState(0)
@@ -226,6 +269,9 @@ export default function VoiceCodingRound({
   const [running, setRunning] = useState(false)
   const [isSubmitting, setIsSubmitting] = useState(false)
   const [orbLabel, setOrbLabel] = useState('Zara is watching')
+  const [fullscreenAlert, setFullscreenAlert] = useState(false)
+  const fullscreenAlertTimerRef = useRef(null)
+  const timerExpiredRef = useRef(false)
 
   const recognitionRef = useRef(null)
   const silenceTimerRef = useRef(null)
@@ -598,14 +644,31 @@ export default function VoiceCodingRound({
     }
   }, [stopListening, interviewId, code, selectedLang, onComplete, aiSay])
 
+  const handleSubmitRef = useRef(handleSubmit)
+  useEffect(() => {
+    handleSubmitRef.current = handleSubmit
+  }, [handleSubmit])
+
+  useEffect(() => {
+    timeLeftRef.current = timeLeft
+  }, [timeLeft])
+
   // Timer
   useEffect(() => {
-    const t = setInterval(() => setTimeLeft(p => {
-      if (p <= 1) { handleSubmit(true); return 0 }
-      return p - 1
-    }), 1000)
+    timerExpiredRef.current = false
+    const t = setInterval(() => {
+      const nextValue = timeLeftRef.current <= 1 ? 0 : timeLeftRef.current - 1
+      timeLeftRef.current = nextValue
+      setTimeLeft(nextValue)
+
+      if (nextValue === 0 && !timerExpiredRef.current) {
+        timerExpiredRef.current = true
+        clearInterval(t)
+        handleSubmitRef.current(true)
+      }
+    }, 1000)
     return () => clearInterval(t)
-  }, [handleSubmit])
+  }, [])
 
   // ── ESC + Fullscreen proctoring ────────────────────────────────────────────────
   useEffect(() => {
@@ -622,24 +685,9 @@ export default function VoiceCodingRound({
     }
     const handleFullscreenChange = async () => {
       if (!document.fullscreenElement) {
-        Swal.fire({
-          icon: 'warning',
-          title: '⚠️ Fullscreen Required',
-          text: 'Exiting fullscreen mode is not allowed during the interview.',
-          showCancelButton: true,
-          confirmButtonText: 'Enable full screen mode',
-          cancelButtonText: 'Exit interview',
-          allowOutsideClick: false,
-          allowEscapeKey: false
-        }).then((result) => {
-          if (result.isConfirmed) {
-            if (document.documentElement.requestFullscreen) {
-              document.documentElement.requestFullscreen().catch(() => {})
-            }
-          } else {
-            window.location.href = '/dashboard'
-          }
-        })
+        clearTimeout(fullscreenAlertTimerRef.current)
+        setFullscreenAlert(true)
+        fullscreenAlertTimerRef.current = setTimeout(() => setFullscreenAlert(false), 5000)
       }
     }
     document.addEventListener('keydown', handleKeyDown)
@@ -668,6 +716,10 @@ export default function VoiceCodingRound({
         }
         @keyframes fadeSlideIn {
           from { opacity: 0; transform: translateY(8px); }
+          to   { opacity: 1; transform: translateY(0); }
+        }
+        @keyframes alertSlideDown {
+          from { opacity: 0; transform: translateY(-16px); }
           to   { opacity: 1; transform: translateY(0); }
         }
         .orb-label { animation: fadeSlideIn 0.3s ease; }
@@ -824,25 +876,25 @@ export default function VoiceCodingRound({
           </div>
 
           {/* Monaco */}
-          <div className="flex-1 overflow-hidden">
-            <Suspense fallback={<div className="flex h-full items-center justify-center text-white/50 text-sm">Loading Editor...</div>}>
+          <div className="flex-1 overflow-hidden min-h-[380px] relative z-10">
+            <Suspense fallback={
+              <div className="flex h-[380px] w-full items-center justify-center text-white/50 text-sm bg-[#0d1117]">
+                Loading IDE Editor...
+              </div>
+            }>
               <Editor
                 height="100%"
                 language={selectedLang === 'cpp' ? 'cpp' : selectedLang}
                 value={code}
                 onChange={handleCodeChange}
-                theme="vs-dark"
-                options={{
-                  fontSize: 14,
-                  fontFamily: "'JetBrains Mono', 'Fira Code', monospace",
-                  minimap: { enabled: false },
-                  scrollBeyondLastLine: false,
-                  lineNumbers: 'on',
-                  wordWrap: 'on',
-                  padding: { top: 16, bottom: 16 },
-                  suggestOnTriggerCharacters: true,
-                  quickSuggestions: true,
+                onMount={(editor, monaco) => {
+                  setupMonacoIntelliSense(monaco)
+                  try {
+                    editor.focus();
+                  } catch (e) {}
                 }}
+                theme="vs-dark"
+                options={MONACO_EDITOR_OPTIONS}
               />
             </Suspense>
           </div>
@@ -1113,6 +1165,48 @@ export default function VoiceCodingRound({
           <p className="text-slate-400 font-medium">Please wait while we upload the session recording securely.</p>
         </div>
       )}
+
+      {/* ── Fullscreen Alert Banner (replaces Swal) ── */}
+      {fullscreenAlert && createPortal(
+        <div role="alert" style={{
+          position: 'fixed', top: 0, left: 0, right: 0, zIndex: 99999,
+          background: 'linear-gradient(90deg, rgba(180,30,30,0.97), rgba(220,38,38,0.97))',
+          backdropFilter: 'blur(10px)',
+          color: '#fff', padding: '13px 24px',
+          display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 12,
+          fontSize: 14, fontWeight: 700,
+          boxShadow: '0 4px 20px rgba(0,0,0,0.5)',
+          animation: 'alertSlideDown 0.25s cubic-bezier(0.34,1.56,0.64,1) forwards',
+        }}>
+          <span style={{ fontSize: 20 }}>⚠️</span>
+          <span>Fullscreen required — exiting fullscreen during the interview is not allowed.</span>
+          <button
+            type="button"
+            onClick={() => {
+              clearTimeout(fullscreenAlertTimerRef.current)
+              setFullscreenAlert(false)
+              if (document.documentElement.requestFullscreen) {
+                void document.documentElement.requestFullscreen()
+              }
+            }}
+            style={{
+              marginLeft: 8,
+              border: '1px solid rgba(255,255,255,0.25)',
+              background: 'rgba(255,255,255,0.16)',
+              color: '#fff',
+              borderRadius: 999,
+              padding: '6px 12px',
+              fontSize: 13,
+              fontWeight: 700,
+              cursor: 'pointer',
+            }}
+          >
+            Re-enter fullscreen
+          </button>
+        </div>,
+        document.body
+      )}
     </div>
+
   )
 }

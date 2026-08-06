@@ -36,8 +36,14 @@ export default function NewSuperDashboardPage() {
   const dbStats = useSelector((state) => state.dashboard.dbStats);
   const selectedAdminFilter = useSelector((state) => state.dashboard.selectedAdminFilter);
 
+  // Initial load on mount
   useEffect(() => {
     dispatch(loadSuperAdminDashboard({ adminFilter: selectedAdminFilter }));
+  }, [dispatch, selectedAdminFilter]);
+
+  // Separate polling interval — only restarts when filter changes, not on every render
+  useEffect(() => {
+dispatch(loadSuperAdminDashboard({ adminFilter: selectedAdminFilter }));
     const interval = setInterval(() => {
       dispatch(loadSuperAdminDashboard({ adminFilter: selectedAdminFilter }));
     }, 15000);
@@ -76,10 +82,10 @@ export default function NewSuperDashboardPage() {
   const creditsAvailable = Number(dbStats?.credits_available ?? dbStats?.credits ?? 1242);
   const creditsUsed = Number(dbStats?.credits_used ?? 180);
 
-  const pieData = [
+  const pieData = useMemo(() => [
     { name: "Credits Available", value: creditsAvailable },
     { name: "Credits Used", value: creditsUsed }
-  ];
+  ], [creditsAvailable, creditsUsed]);
 
   const BAR_COLORS = ["#818cf8", "#34d399", "#fbbf24", "#f472b6", "#38bdf8"];
 

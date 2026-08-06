@@ -116,29 +116,39 @@ def score_answer_task(
             language=language,
         )
 
-        # Spoken language detection using existing AI/LLM - runs only once per interview
+        # Spoken language and accent detection - runs with full NLP / LLM multi-tier engine
         try:
             session_doc = interview_sessions_collection.find_one(
                 {"$or": [{"link_id": interview_id}, {"interview_id": interview_id}]},
-                {"detected_accent": 1, "link_id": 1}
+                {"detected_accent": 1, "detected_language": 1, "language": 1, "candidate_phone": 1, "location": 1, "link_id": 1}
             )
             current_accent = session_doc.get("detected_accent") if session_doc else None
-            # If the user selected a non-English language but we currently have "English" or "Unknown" (e.g. from a short initial greeting),
-            # we should continue running language detection on subsequent answers to get the correct spoken language.
-            interview_lang = language or "English"
+            interview_lang = language or (session_doc.get("language") if session_doc else "English") or "English"
             should_detect = False
-            if not current_accent or current_accent == "Unknown":
+            if not current_accent or current_accent.strip().lower() in ["unknown", "none", ""]:
                 should_detect = True
-            elif current_accent.lower() == "english" and interview_lang.lower() != "english":
+            elif "(" not in current_accent and len(answer_text.strip()) >= 15:
+                should_detect = True
+            elif current_accent.lower().startswith("english") and interview_lang.lower() != "english":
                 should_detect = True
 
-            if should_detect:
-                from app.ai.typed_ai_layer import detect_spoken_language
-                detected = detect_spoken_language(answer_text)
+            if should_detect and answer_text.strip():
+                from app.services.language_accent_detector import detect_language_and_accent
+                l_res = detect_language_and_accent(
+                    answer_text,
+                    candidate_profile=session_doc,
+                    interview_language=interview_lang
+                )
+                detected = l_res.get("detected_accent")
+                det_lang = l_res.get("language")
                 if detected and detected != "Unknown":
                     update_res = interview_sessions_collection.update_one(
                         {"$or": [{"link_id": interview_id}, {"interview_id": interview_id}]},
-                        {"$set": {"detected_accent": detected}}
+                        {"$set": {
+                            "detected_accent": detected,
+                            "detected_language": det_lang,
+                            "language": det_lang
+                        }}
                     )
                     # Sync to application immediately so the details card is updated in real-time
                     if session_doc:

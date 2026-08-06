@@ -816,6 +816,8 @@ def get_superadmin_profile(current_admin: dict = Depends(get_current_admin_detai
     plan_context = get_admin_plan_context(admin_doc)
     admin_doc["is_expired"] = plan_context["is_expired"]
     admin_doc["subscription_plan_key"] = plan_context["plan_key"]
+    admin_doc["subscription_plan"] = plan_context["plan_label"]
+    admin_doc["plan_features"] = plan_context["features"]
     return admin_doc
 
 class SuperAdminPlanUpdate(BaseModel):

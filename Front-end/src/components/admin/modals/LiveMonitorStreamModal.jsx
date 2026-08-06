@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef, useCallback } from 'react'
+import React, { useState, useEffect, useRef, useCallback, memo } from 'react'
 import { API_BASE_URL } from '../../../apiConfig'
 import { getIceServers } from '../../../utils/webrtcConfig'
 import Modal from '../../Modal'
@@ -80,6 +80,12 @@ export default function LiveMonitorStreamModal({ isOpen, onClose, session }) {
   const pcRef = useRef(null)
   const streamTimeoutRef = useRef(null)  // fire if no video track arrives in time
   const mountedRef = useRef(false)
+  // Keep a ref to the latest status so the setTimeout inside sendOffer always
+  // reads the current value without needing `status` in its dependency array.
+  // Without this the useCallback recreates on every status transition, which
+  // causes ws.onopen to capture a stale sendOffer reference.
+  const statusRef = useRef(status)
+  useEffect(() => { statusRef.current = status }, [status])
   const token = useSelector(state => state.auth.token)
 
   // ── Violations polling ──────────────────────────────────────────────────────
@@ -151,6 +157,8 @@ export default function LiveMonitorStreamModal({ isOpen, onClose, session }) {
    *  (b) by the user clicking "Force Retry Connection"
    *  (c) automatically after STREAM_TIMEOUT_MS if no track has arrived
    */
+  const sendOfferRef = useRef(null)
+
   const sendOffer = useCallback(async (ws) => {
     // Tear down any existing peer connection
     clearTimeout(streamTimeoutRef.current)
@@ -210,11 +218,13 @@ export default function LiveMonitorStreamModal({ isOpen, onClose, session }) {
 
       if (mountedRef.current) setStatus('negotiating')
 
-      // If no video track arrives within 8 s, retry the offer automatically
+      // If no video track arrives within 8 s, retry the offer automatically.
       streamTimeoutRef.current = setTimeout(() => {
-        if (mountedRef.current && status !== 'streaming') {
+        if (mountedRef.current && statusRef.current !== 'streaming') {
           console.warn('[AdminWebRTC] No stream in 8 s — retrying offer...')
-          sendOffer(ws)
+          if (sendOfferRef.current) {
+            sendOfferRef.current(ws)
+          }
         }
       }, 8000)
 
@@ -222,7 +232,11 @@ export default function LiveMonitorStreamModal({ isOpen, onClose, session }) {
       console.error('[AdminWebRTC] sendOffer error:', err)
       if (mountedRef.current) setStatus('error')
     }
-  }, [status])
+  }, [])
+
+  useEffect(() => {
+    sendOfferRef.current = sendOffer
+  }, [sendOffer])
 
   useEffect(() => {
     if (!isOpen || !session) return

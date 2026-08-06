@@ -15,6 +15,71 @@ const AdminCopilot = () => {
   const user = useSelector(state => state.auth.adminUser);
   const authRole = useSelector(state => state.auth.role);
   
+  const sessionUser = (() => {
+    try {
+      return JSON.parse(sessionStorage.getItem('adminUser') || '{}');
+    } catch {
+      return {};
+    }
+  })();
+
+  const pathname = typeof window !== 'undefined' ? window.location.pathname : '';
+  const isMaster = authRole === 'master' || sessionUser?.role === 'master' || sessionUser?.is_master || pathname.startsWith('/master');
+  const isSuperAdmin = !isMaster && (authRole === 'super_admin' || authRole === 'tenant' || sessionUser?.role === 'tenant' || sessionUser?.role === 'super_admin' || pathname.startsWith('/superadmin'));
+  const isRecruiter = !isMaster && !isSuperAdmin;
+
+  const roleType = isMaster ? 'master' : (isSuperAdmin ? 'super_admin' : 'recruiter');
+
+  const displayName = 
+    user?.name || 
+    sessionUser?.name || 
+    user?.username || 
+    sessionUser?.username || 
+    sessionStorage.getItem('adminName') || 
+    sessionStorage.getItem('adminUsername') || 
+    (isMaster ? 'master' : (isSuperAdmin ? 'Super Admin' : 'Recruiter'));
+
+  const copilotTitle = isMaster 
+    ? 'Hire IQ Master Copilot' 
+    : (isSuperAdmin ? 'Hire IQ Super Admin Copilot' : 'Hire IQ Recruiter Copilot');
+
+  const copilotSubtitle = isMaster 
+    ? 'Master Platform Assistant' 
+    : (isSuperAdmin ? 'Super Admin Assistant' : 'Recruiter Assistant');
+
+  const getGreeting = (name, type) => {
+    if (type === 'master') {
+      return `Hello ${name || 'master'}! I'm the Hire IQ Master Copilot. How can I help you manage the platform, plans, and tenants today?`;
+    } else if (type === 'super_admin') {
+      return `Hello ${name || 'Super Admin'}! I'm the Hire IQ Super Admin Copilot. How can I assist you with your company's team, interviews, and credits today?`;
+    } else {
+      return `Hello ${name || 'Recruiter'}! I'm the Hire IQ Recruiter Copilot. How can I help you with candidate evaluations and interviews today?`;
+    }
+  };
+
+  const sanitizeSessionMessages = (msgs) => {
+    if (!msgs || msgs.length === 0) {
+      return [{ role: 'assistant', content: getGreeting(displayName, roleType) }];
+    }
+    return msgs.map((msg, idx) => {
+      if (idx === 0 && msg.role === 'assistant') {
+        const c = typeof msg.content === 'string' ? msg.content : '';
+        if (
+          c.includes("Hello Admin!") || 
+          c.includes("I'm the Hire IQ Copilot") || 
+          c.includes("How can I help you today?") ||
+          c.startsWith("Hello ")
+        ) {
+          return {
+            ...msg,
+            content: getGreeting(displayName, roleType)
+          };
+        }
+      }
+      return msg;
+    });
+  };
+
   const [isOpen, setIsOpen] = useState(false);
   const [isExpanded, setIsExpanded] = useState(false);
   const [showSidebar, setShowSidebar] = useState(false);
@@ -26,7 +91,7 @@ const AdminCopilot = () => {
   const [messages, setMessages] = useState([
     {
       role: 'assistant',
-      content: `Hello ${user?.name || 'Admin'}! I'm the Hire IQ Copilot. How can I help you today?`
+      content: getGreeting(displayName, roleType)
     }
   ]);
   
@@ -39,7 +104,7 @@ const AdminCopilot = () => {
   const messagesEndRef = useRef(null);
   const fileInputRef = useRef(null);
 
-  const role = authRole || 'admin';
+  const role = roleType;
 
   const scrollToBottom = () => {
     messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
@@ -50,6 +115,10 @@ const AdminCopilot = () => {
       scrollToBottom();
     }
   }, [messages, isOpen]);
+
+  useEffect(() => {
+    setMessages(prev => sanitizeSessionMessages(prev));
+  }, [displayName, roleType]);
 
   // Fetch MongoDB Sessions on copilot open
   useEffect(() => {
@@ -84,7 +153,7 @@ const AdminCopilot = () => {
     try {
       const detail = await getCopilotSessionDetail(sessionId);
       if (detail.session && detail.session.messages) {
-        setMessages(detail.session.messages);
+        setMessages(sanitizeSessionMessages(detail.session.messages));
       }
     } catch (err) {
       console.error("Failed to fetch session detail:", err);
@@ -100,7 +169,7 @@ const AdminCopilot = () => {
       if (res.session) {
         setSessions(prev => [res.session, ...prev]);
         setCurrentSessionId(res.session.session_id);
-        setMessages(res.session.messages || []);
+        setMessages(sanitizeSessionMessages(res.session.messages || []));
         setShowSidebar(false);
       }
     } catch (err) {
@@ -244,25 +313,28 @@ const AdminCopilot = () => {
   };
 
   const getSuggestions = () => {
-    if (role === 'super_admin') {
-      return [
-        "Buy credits",
-        "Transfer 50 credits to admin user123",
-        "How many sub-admins do I have?",
-      ];
-    }
-    if (role === 'master') {
+    if (isMaster) {
       return [
         "Show me total platform revenue",
         "How many total interviews are completed?",
-        "How many active super admins?"
+        "How many active super admins?",
+        "Show all subscription plans and pricing"
       ];
     }
-    // Default admin
+    if (isSuperAdmin) {
+      return [
+        "Check company credit balance",
+        "How many sub-admins do I have?",
+        "Show recent completed interviews in our company",
+        "Transfer 50 credits to a recruiter"
+      ];
+    }
+    // Default recruiter
     return [
-      "Request credits from super admin",
+      "Show my recent candidate interviews",
       "Draft feedback email for top candidate",
-      "How does ATS scoring work?"
+      "How does ATS & AI scoring work?",
+      "Request credits from super admin"
     ];
   };
 
@@ -274,7 +346,7 @@ const AdminCopilot = () => {
       >
         <Sparkles className="w-6 h-6 animate-pulse" />
         <span className="max-w-0 overflow-hidden group-hover:max-w-xs transition-all duration-500 ease-in-out whitespace-nowrap pl-0 group-hover:pl-2 font-medium">
-          Hire IQ Copilot
+          {copilotTitle}
         </span>
       </button>
     );
@@ -298,8 +370,8 @@ const AdminCopilot = () => {
             <Bot className="w-4 h-4 text-white" />
           </div>
           <div>
-            <h3 className="font-semibold text-slate-800 text-xs leading-tight">Hire IQ Copilot</h3>
-            <p className="text-[10px] text-slate-500 capitalize">{role} Assistant</p>
+            <h3 className="font-semibold text-slate-800 text-xs leading-tight">{copilotTitle}</h3>
+            <p className="text-[10px] text-slate-500 capitalize">{copilotSubtitle}</p>
           </div>
         </div>
 

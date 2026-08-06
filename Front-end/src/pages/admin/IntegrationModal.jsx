@@ -240,7 +240,7 @@ export default function IntegrationModal({ isOpen, onClose, onRefresh, initialCo
 
   return createPortal(
     <div 
-      className="fixed inset-0 z-[9999] flex items-center justify-center p-4 sm:p-6 overflow-y-auto bg-slate-900/50 backdrop-blur-sm animate-in fade-in"
+className="fixed inset-0 z-[9999] flex items-center justify-center p-4 sm:p-6 overflow-y-auto bg-slate-900/50 backdrop-blur-sm animate-in fade-in"
       onClick={(e) => {
         if (e.target === e.currentTarget) handleClose()
       }}
@@ -258,7 +258,7 @@ export default function IntegrationModal({ isOpen, onClose, onRefresh, initialCo
             <X size={18} />
           </button>
 
-          {/* Alert notifications */}
+{/* Alert notifications */}
           {error && <div className="mb-4 p-3 rounded-xl bg-rose-50 border border-rose-200 text-rose-600 text-xs font-semibold">{error}</div>}
           {success && <div className="mb-4 p-3 rounded-xl bg-emerald-50 border border-emerald-200 text-emerald-600 text-xs font-semibold">{success}</div>}
 
@@ -281,7 +281,7 @@ export default function IntegrationModal({ isOpen, onClose, onRefresh, initialCo
                 />
               </div>
 
-              <div>
+<div>
                 <label className="block text-xs font-bold text-slate-800 mb-1.5">API Key (Cal.com)</label>
                 <input
                   type="text" required
