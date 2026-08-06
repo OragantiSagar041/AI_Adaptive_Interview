@@ -96,18 +96,6 @@ function AssistantDetailsTab({ agentSettings, loading }) {
   if (loading) return <SectionLoader />
   if (!agentSettings) return <EmptyState message="No agent settings found. Check your Omni Dimension API key." />
 
-  const defaultGreeting = "Hello {{candidate_name}}, this is Sarah, the AI Recruitment Assistant from HireIQ, calling on behalf of {{HIRE IQ}} regarding your application for the {{job_role}} position. I'd like to conduct a brief screening interview that will take about {{duration}} minutes. Would you like me to continue?"
-
-  const [isDynamic, setIsDynamic] = useState(true)
-  const [isInterruptible, setIsInterruptible] = useState(false)
-  const [greetingText, setGreetingText] = useState(agentSettings.greeting_message || defaultGreeting)
-
-  useEffect(() => {
-    if (agentSettings?.greeting_message) {
-      setGreetingText(agentSettings.greeting_message)
-    }
-  }, [agentSettings])
-
   return (
     <div className="space-y-6">
       {/* Assistant Settings Section */}

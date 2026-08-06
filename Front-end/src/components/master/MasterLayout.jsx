@@ -291,10 +291,10 @@ teal: { primary: '#2dd4bf', hover: '#14b8a6', glow: 'rgba(45, 212, 191, 0.30)' }
           </div>
 
           {/* Right Side: Toggles, Notifications & User Profile */}
-<div className="flex items-center gap-6">
+          <div className="flex items-center gap-6">
             <ThemeToggle className="bg-card border-border text-muted-foreground hover:text-foreground hover:bg-muted shadow-sm" />
             {/* Theme Toggle Dots */}
-            <div className="flex items-center gap-1.5 bg-white rounded-full px-2 py-1 shadow-sm border border-slate-100">
+            <div className="flex items-center gap-1.5 bg-white rounded-full px-2 py-1 shadow-sm border border-slate-100 relative">
               {Object.keys(accentColors).map(color => (
                 <button
                   key={color}
@@ -307,12 +307,8 @@ teal: { primary: '#2dd4bf', hover: '#14b8a6', glow: 'rgba(45, 212, 191, 0.30)' }
                   }}
                   title={color}
                 />
-                <ChevronDown
-                  size={13}
-                  className="transition-transform duration-200"
-                  style={{ transform: themeOpen ? 'rotate(180deg)' : 'rotate(0deg)' }}
-                />
-              </button>
+              ))}
+            </div>
 
               {/* Color Picker Popover */}
               {themeOpen && (

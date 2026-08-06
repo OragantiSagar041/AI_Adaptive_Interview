@@ -34,7 +34,8 @@ import {
   TrendingDown,
   Users,
   ArrowRight,
-  Eye
+  Eye,
+  MoreVertical
 } from "lucide-react";
 import {
   ResponsiveContainer,

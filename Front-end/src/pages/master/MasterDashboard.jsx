@@ -2,7 +2,7 @@ import React, { useState, useEffect, useRef } from 'react'
 import { useSelector } from 'react-redux'
 import { useNavigate } from 'react-router-dom'
 import { getThemeColor, rgbaFromCssVar } from '../../utils/themeUtils'
-import { RefreshCw, Play, Plus, Building, Video, Server, ArrowUp, DollarSign } from 'lucide-react'
+import { RefreshCw, Play, Plus, Building, Video, Server, ArrowUp, DollarSign, RotateCcw, CheckCircle2, IndianRupee, Filter } from 'lucide-react'
 import axios from 'axios'
 
 export default function MasterDashboard() {

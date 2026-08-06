@@ -282,7 +282,8 @@ export default function VoiceInterviewPage() {
     current_question: currentQIdx + 1,
     total_questions: questions.length || 0,
     question_text: questions[currentQIdx] ? questions[currentQIdx].question_text : ''
-}
+  }), [round, aiStatus, warningsCount, proctoringState, currentQIdx, questions])
+
   useCandidateWebRTC(linkId, cameraStreamRef, telemetryData, monitoringToken, mediaStreamRef)
 
   // Refs

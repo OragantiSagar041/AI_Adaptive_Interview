@@ -344,12 +344,8 @@ export default function AdminLayout({
                   }}
                   title={color}
                 />
-                <ChevronDown
-                  size={13}
-                  className="transition-transform duration-200"
-                  style={{ transform: themeOpen ? 'rotate(180deg)' : 'rotate(0deg)' }}
-                />
-              </button>
+              ))}
+            </div>
 
 {/* Stacked Active Plan & Credits Badge */}
             <div className="flex flex-col justify-center px-3.5 py-1 bg-muted/80 border border-border text-foreground rounded-xl text-xs font-semibold shadow-xs shrink-0 leading-tight">

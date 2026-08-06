@@ -2,7 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { useSelector } from 'react-redux';
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from 'recharts';
 import { getThemeColor } from '../../utils/themeUtils';
-import { Users, UserCheck, Video, MoreHorizontal, Search, Edit, Mail, Trash2, X, UserPlus, Coins, Download, Eye, EyeOff } from 'lucide-react';
+import { Users, UserCheck, Video, MoreHorizontal, Search, Edit, Mail, Trash2, X, UserPlus, Coins, Download, Eye, EyeOff, Clock, Shield } from 'lucide-react';
 import Swal from 'sweetalert2';
 import 'sweetalert2/dist/sweetalert2.min.css';
 import axios from 'axios';
@@ -385,8 +385,8 @@ export default function RecruitersPage() {
                           ? 'bg-emerald-50 dark:bg-emerald-500/15 text-emerald-700 dark:text-emerald-300 border border-emerald-200 dark:border-emerald-500/30'
                           : 'bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300 border border-slate-200 dark:border-slate-700'
                       }`}>
-                        {isSuperAdmin && <Shield className="w-3 h-3" />}
-                        {isSuperAdmin ? 'Super Admin' : 'Admin'}
+                        {recruiter.role === 'super_admin' && <Shield className="w-3 h-3" />}
+                        {recruiter.role === 'super_admin' ? 'Super Admin' : 'Admin'}
                       </span>
                     </td>
 
@@ -490,8 +490,7 @@ export default function RecruitersPage() {
                       )}
                     </td>
                   </tr>
-                );
-              })}
+                ))}
               {filteredRecruiters.length === 0 && (
                 <tr>
                   <td colSpan="7" className="px-6 py-16 text-center text-slate-500">
