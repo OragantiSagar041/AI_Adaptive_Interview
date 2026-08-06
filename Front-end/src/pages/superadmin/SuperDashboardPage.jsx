@@ -51,6 +51,7 @@ import {
   LabelList,
   Tooltip as RTooltip
 } from "recharts";
+import { getThemeColor } from "../../utils/themeUtils";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Progress } from "@/components/ui/progress";
@@ -62,11 +63,11 @@ function formatNum(n) {
 }
 
 function renderTrend(trend, goodIsUp = true) {
-  if (trend == null) return <div className="text-[10px] text-slate-400">Loading...</div>;
+  if (trend == null) return <div className="text-[10px] text-muted-foreground">Loading...</div>;
   const isPositive = trend > 0;
   const isZero = trend === 0;
   
-  let color = "text-slate-400";
+  let color = "text-muted-foreground";
   let Icon = TrendingUp;
   
   if (!isZero) {
@@ -189,10 +190,10 @@ export default function SuperDashboardPage() {
   ];
 
   const funnelData = (rawFunnelData?.length ? [...rawFunnelData] : [
-    { name: "Total Interviews", value: dbStats?.total || 0, fill: "oklch(0.62 0.18 265)" },
-    { name: "Pending", value: dbStats?.pending || 0, fill: "oklch(0.58 0.16 232)" },
-    { name: "Completed", value: dbStats?.completed || 0, fill: "oklch(0.62 0.15 175)" },
-    { name: "Hired", value: dbStats?.selected || 0, fill: "oklch(0.72 0.18 70)" }
+    { name: "Total Interviews", value: dbStats?.total || 0, fill: getThemeColor('--color-violet', '#8b5cf6') },
+    { name: "Pending", value: dbStats?.pending || 0, fill: getThemeColor('--color-blue', '#3b82f6') },
+    { name: "Completed", value: dbStats?.completed || 0, fill: getThemeColor('--color-emerald', '#10b981') },
+    { name: "Hired", value: dbStats?.selected || 0, fill: getThemeColor('--color-amber', '#f59e0b') }
   ]).sort((a, b) => b.value - a.value);
 
   const maxFunnelValue = Math.max(...funnelData.map(d => Number(d.value) || 0));
@@ -215,10 +216,10 @@ export default function SuperDashboardPage() {
   const starRating = avgScore / 20;
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-6 superadmin-dashboard-page">
       <div>
         <h1 className="text-2xl font-semibold tracking-tight">Dashboard</h1>
-        <p className="text-sm text-slate-500">
+        <p className="text-sm text-muted-foreground">
           Monitor AI interviews, platform activity and system performance in real-time.
         </p>
       </div>
@@ -227,39 +228,39 @@ export default function SuperDashboardPage() {
       <section className="grid grid-cols-2 md:grid-cols-4 gap-4">
 
         {/* 1 — Total AI Interviews */}
-        <Card className="bg-white border border-slate-100 shadow-[0_2px_10px_rgba(0,0,0,0.04)] rounded-xl relative overflow-hidden flex flex-col justify-between">
+        <Card className="bg-card border border-border/80 shadow-sm rounded-2xl relative overflow-hidden flex flex-col justify-between hover:shadow-md transition-all">
           <CardContent className="p-4 flex flex-col h-full">
             <div className="flex items-start justify-between">
-              <div className="flex items-center gap-2">
-                <div className="w-8 h-8 rounded bg-violet-50 flex items-center justify-center">
+              <div className="flex items-center gap-2.5">
+                <div className="w-8 h-8 rounded-xl bg-violet-500/10 border border-violet-500/20 flex items-center justify-center">
                   <Mic className="w-4 h-4 text-violet-500" />
                 </div>
-                <span className="text-xs font-semibold text-slate-700">Total AI Interviews</span>
+                <span className="text-xs font-semibold text-foreground">Total AI Interviews</span>
               </div>
-              <MoreVertical className="w-4 h-4 text-slate-400 cursor-pointer" />
+              <MoreVertical className="w-4 h-4 text-muted-foreground cursor-pointer hover:text-foreground transition-colors" />
             </div>
             <div className="mt-4 flex items-end justify-between">
-              <div className="text-3xl font-bold text-slate-900">{formatNum(dbStats?.total) || "0"}</div>
+              <div className="text-3xl font-bold text-foreground tracking-tight">{formatNum(dbStats?.total) || "0"}</div>
               <div className="text-right">
                 {dbStats?.this_week != null && dbStats?.total ? (
                   <div className="flex items-center justify-end text-emerald-500 text-[10px] font-bold">
                     <TrendingUp className="w-3 h-3 mr-0.5" /> {dbStats.this_week} this week
                   </div>
                 ) : (
-                  <div className="text-[10px] text-slate-400">Loading…</div>
+                  <div className="text-[10px] text-muted-foreground">Loading…</div>
                 )}
-                <div className="text-[10px] text-slate-400">last 7 days</div>
+                <div className="text-[10px] text-muted-foreground">last 7 days</div>
               </div>
             </div>
             <div className="h-12 w-full mt-2">
               <ResponsiveContainer width="100%" height="100%">
                 <LineChart data={sparklineData}>
-                  <Line type="monotone" dataKey="v" stroke="#8b5cf6" strokeWidth={2} dot={true} />
+                  <Line type="monotone" dataKey="v" stroke={getThemeColor('--color-purple', '#8b5cf6')} strokeWidth={2} dot={true} />
                 </LineChart>
               </ResponsiveContainer>
             </div>
             <div className="mt-3 flex items-center justify-end text-[11px]">
-              <span className="text-indigo-500 font-medium cursor-pointer flex items-center hover:underline" onClick={() => navigate('/superadmin/interviews')}>
+              <span className="text-indigo-400 font-medium cursor-pointer flex items-center hover:underline" onClick={() => navigate('/superadmin/interviews')}>
                 View trend <ArrowRight className="w-3 h-3 ml-0.5" />
               </span>
             </div>
@@ -267,36 +268,36 @@ export default function SuperDashboardPage() {
         </Card>
 
         {/* 2 — Active Today */}
-        <Card className="bg-white border border-slate-100 shadow-[0_2px_10px_rgba(0,0,0,0.04)] rounded-xl relative overflow-hidden flex flex-col justify-between">
+        <Card className="bg-card border border-border/80 shadow-sm rounded-2xl relative overflow-hidden flex flex-col justify-between hover:shadow-md transition-all">
           <CardContent className="p-4 flex flex-col h-full">
             <div className="flex items-start justify-between">
-              <div className="flex items-center gap-2">
-                <div className="w-8 h-8 rounded bg-blue-50 flex items-center justify-center">
+              <div className="flex items-center gap-2.5">
+                <div className="w-8 h-8 rounded-xl bg-blue-500/10 border border-blue-500/20 flex items-center justify-center">
                   <Activity className="w-4 h-4 text-blue-500" />
                 </div>
-                <span className="text-xs font-semibold text-slate-700">Active Today</span>
+                <span className="text-xs font-semibold text-foreground">Active Today</span>
               </div>
-              <MoreVertical className="w-4 h-4 text-slate-400 cursor-pointer" />
+              <MoreVertical className="w-4 h-4 text-muted-foreground cursor-pointer hover:text-foreground transition-colors" />
             </div>
             <div className="mt-4 flex items-end justify-between">
-              <div className="text-3xl font-bold text-slate-900">{formatNum(dbStats?.today) || "0"}</div>
+              <div className="text-3xl font-bold text-foreground tracking-tight">{formatNum(dbStats?.today) || "0"}</div>
               <div className="text-right">
                 <div className="flex items-center justify-end text-emerald-500 text-[10px] font-bold">
                   <div className="w-1.5 h-1.5 rounded-full bg-emerald-500 mr-1 animate-pulse" /> Live
                 </div>
-                <div className="text-[10px] text-slate-400 mt-0.5">Last updated: 5s ago</div>
+                <div className="text-[10px] text-muted-foreground mt-0.5">Last updated: 5s ago</div>
               </div>
             </div>
             <div className="mt-4 flex-1 flex items-center">
-              <div className="w-full rounded-md bg-blue-50 p-2.5 flex items-center gap-2 text-xs text-blue-600 font-medium">
-                <Users className="w-4 h-4" /> {ongoingLiveCount || 0} candidates in active interviews
+              <div className="w-full rounded-xl bg-blue-500/10 border border-blue-500/20 p-2.5 flex items-center gap-2 text-xs text-blue-400 font-medium">
+                <Users className="w-4 h-4 shrink-0" /> {ongoingLiveCount || 0} candidates in active interviews
               </div>
             </div>
             {/* Live Sessions Picker */}
             <div className="mt-3 relative">
               <div className="flex items-center justify-end text-[11px]">
                 <span
-                  className="text-blue-500 font-medium cursor-pointer flex items-center hover:underline"
+                  className="text-blue-400 font-medium cursor-pointer flex items-center hover:underline"
                   onClick={async () => {
                     if (showLivePicker) {
                       setShowLivePicker(false);
@@ -315,30 +316,30 @@ export default function SuperDashboardPage() {
                 </span>
               </div>
               {showLivePicker && (
-                <div className="absolute bottom-6 right-0 z-50 w-72 bg-white border border-slate-200 rounded-xl shadow-2xl overflow-hidden">
-                  <div className="flex items-center justify-between px-3 py-2 border-b border-slate-100 bg-slate-50">
-                    <span className="text-xs font-bold text-slate-700 uppercase tracking-wider">Live Sessions</span>
+                <div className="absolute bottom-6 right-0 z-50 w-72 bg-card border border-border rounded-xl shadow-2xl overflow-hidden text-card-foreground">
+                  <div className="flex items-center justify-between px-3 py-2 border-b border-border bg-muted/40">
+                    <span className="text-xs font-bold text-foreground uppercase tracking-wider">Live Sessions</span>
                     <button
-                      className="text-slate-400 hover:text-slate-600 text-xs cursor-pointer bg-transparent border-none"
+                      className="text-muted-foreground hover:text-foreground text-xs cursor-pointer bg-transparent border-none"
                       onClick={() => setShowLivePicker(false)}
                     >✕</button>
                   </div>
                   {livePickerLoading ? (
-                    <div className="px-4 py-6 text-center text-xs text-slate-400">
+                    <div className="px-4 py-6 text-center text-xs text-muted-foreground">
                       <div className="w-5 h-5 border-2 border-blue-300 border-t-blue-600 rounded-full animate-spin mx-auto mb-2" />
                       Fetching live sessions...
                     </div>
                   ) : (!liveSessions || liveSessions.length === 0) ? (
-                    <div className="px-4 py-6 text-center text-xs text-slate-400">
+                    <div className="px-4 py-6 text-center text-xs text-muted-foreground">
                       <div className="text-2xl mb-1">📡</div>
                       No active live sessions right now.
                     </div>
                   ) : (
-                    <div className="max-h-56 overflow-y-auto divide-y divide-slate-50">
+                    <div className="max-h-56 overflow-y-auto divide-y divide-border">
                       {liveSessions.filter(session => session.online).map((session, i) => (
                         <button
                           key={session.link_id || i}
-                          className="w-full text-left px-3 py-2.5 hover:bg-blue-50 transition-colors cursor-pointer flex items-center justify-between gap-2 bg-transparent border-none"
+                          className="w-full text-left px-3 py-2.5 hover:bg-muted/50 transition-colors cursor-pointer flex items-center justify-between gap-2 bg-transparent border-none"
                           onClick={() => {
                             setShowLivePicker(false);
                             if (handleOpenLiveStreamAction) {
@@ -349,21 +350,21 @@ export default function SuperDashboardPage() {
                           <div className="flex items-center gap-2 min-w-0">
                             <div className={`w-2 h-2 rounded-full shrink-0 ${session.online ? 'bg-emerald-500 animate-pulse' : 'bg-slate-300'}`} />
                             <div className="min-w-0">
-                              <div className="text-xs font-semibold text-slate-800 truncate">
+                              <div className="text-xs font-semibold text-foreground truncate">
                                 {session.candidate_name || 'Unknown Candidate'}
                               </div>
-                              <div className="text-[10px] text-slate-400 truncate">
+                              <div className="text-[10px] text-muted-foreground truncate">
                                 {session.interview_title || session.link_id}
                               </div>
                             </div>
                           </div>
                           <div className="flex items-center gap-1.5 shrink-0">
                             {(session.proctoring_alerts || 0) > 0 && (
-                              <span className="bg-rose-100 text-rose-600 text-[10px] font-bold px-1.5 py-0.5 rounded">
+                              <span className="bg-rose-500/10 text-rose-400 border border-rose-500/20 text-[10px] font-bold px-1.5 py-0.5 rounded">
                                 {session.proctoring_alerts} ⚠️
                               </span>
                             )}
-                            <span className={`text-[10px] font-semibold ${session.online ? 'text-emerald-600' : 'text-slate-400'}`}>
+                            <span className={`text-[10px] font-semibold ${session.online ? 'text-emerald-500' : 'text-muted-foreground'}`}>
                               {session.online ? 'Online' : 'Offline'}
                             </span>
                           </div>
@@ -378,28 +379,28 @@ export default function SuperDashboardPage() {
         </Card>
 
         {/* 3 — Completed Interviews */}
-        <Card className="bg-white border border-slate-100 shadow-[0_2px_10px_rgba(0,0,0,0.04)] rounded-xl relative overflow-hidden flex flex-col justify-between">
+        <Card className="bg-card border border-border/80 shadow-sm rounded-2xl relative overflow-hidden flex flex-col justify-between hover:shadow-md transition-all">
           <CardContent className="p-4 flex flex-col h-full">
             <div className="flex items-start justify-between">
-              <div className="flex items-center gap-2">
-                <div className="w-8 h-8 rounded bg-emerald-50 flex items-center justify-center">
+              <div className="flex items-center gap-2.5">
+                <div className="w-8 h-8 rounded-xl bg-emerald-500/10 border border-emerald-500/20 flex items-center justify-center">
                   <CheckCircle2 className="w-4 h-4 text-emerald-500" />
                 </div>
-                <span className="text-xs font-semibold text-slate-700">Completed Interviews</span>
+                <span className="text-xs font-semibold text-foreground">Completed Interviews</span>
               </div>
-              <MoreVertical className="w-4 h-4 text-slate-400 cursor-pointer" />
+              <MoreVertical className="w-4 h-4 text-muted-foreground cursor-pointer hover:text-foreground transition-colors" />
             </div>
             <div className="mt-4 flex items-end justify-between">
-              <div className="text-3xl font-bold text-slate-900">{formatNum(dbStats?.completed) || "0"}</div>
+              <div className="text-3xl font-bold text-foreground tracking-tight">{formatNum(dbStats?.completed) || "0"}</div>
               <div className="text-right">
                 {renderTrend(dbStats?.completed_trend, true)}
-                <div className="text-[10px] text-slate-400">vs yesterday</div>
+                <div className="text-[10px] text-muted-foreground">vs yesterday</div>
               </div>
             </div>
             <div className="mt-3 flex-1">
-              <div className="text-[10px] font-semibold text-slate-500 mb-1.5">Completion Rate</div>
-              <Progress value={Number(completionRate)} className="h-2 bg-slate-100" />
-              <div className="text-[10px] text-slate-400 mt-1.5">{formatNum(dbStats?.completed) || 0} / {formatNum(dbStats?.total) || 0} completed</div>
+              <div className="text-[10px] font-semibold text-muted-foreground mb-1.5">Completion Rate</div>
+              <Progress value={Number(completionRate)} className="h-2 bg-muted/40" />
+              <div className="text-[10px] text-muted-foreground mt-1.5">{formatNum(dbStats?.completed) || 0} / {formatNum(dbStats?.total) || 0} completed</div>
             </div>
             <div className="mt-3 flex items-center justify-end text-[11px]">
               <span className="text-emerald-500 font-medium cursor-pointer flex items-center hover:underline" onClick={() => {
@@ -412,46 +413,46 @@ export default function SuperDashboardPage() {
           </CardContent>
         </Card>
 
-        {/* 4 — Pending Interviews (dynamic) */}
-        <Card className="bg-white border border-slate-100 shadow-[0_2px_10px_rgba(0,0,0,0.04)] rounded-xl relative overflow-hidden flex flex-col justify-between">
+        {/* 4 — Pending Interviews */}
+        <Card className="bg-card border border-border/80 shadow-sm rounded-2xl relative overflow-hidden flex flex-col justify-between hover:shadow-md transition-all">
           <CardContent className="p-4 flex flex-col h-full">
             <div className="flex items-start justify-between">
-              <div className="flex items-center gap-2">
-                <div className="w-8 h-8 rounded bg-amber-50 flex items-center justify-center">
+              <div className="flex items-center gap-2.5">
+                <div className="w-8 h-8 rounded-xl bg-amber-500/10 border border-amber-500/20 flex items-center justify-center">
                   <Clock className="w-4 h-4 text-amber-500" />
                 </div>
-                <span className="text-xs font-semibold text-slate-700">Pending Interviews</span>
+                <span className="text-xs font-semibold text-foreground">Pending Interviews</span>
               </div>
-              <MoreVertical className="w-4 h-4 text-slate-400 cursor-pointer" />
+              <MoreVertical className="w-4 h-4 text-muted-foreground cursor-pointer hover:text-foreground transition-colors" />
             </div>
             <div className="mt-4 flex items-end justify-between">
-              <div className="text-3xl font-bold text-slate-900">{formatNum(dbStats?.pending) || "0"}</div>
+              <div className="text-3xl font-bold text-foreground tracking-tight">{formatNum(dbStats?.pending) || "0"}</div>
               <div className="text-right">
                 {(!dbStats?.pending || dbStats?.pending === 0) ? (
                   <>
                     <div className="flex items-center justify-end text-emerald-500 text-[10px] font-bold">
                       <CheckCircle2 className="w-3 h-3 mr-1" /> No Pending
                     </div>
-                    <div className="text-[10px] text-slate-400 mt-0.5">Great job!</div>
+                    <div className="text-[10px] text-muted-foreground mt-0.5">Great job!</div>
                   </>
                 ) : (
                   <>
                     <div className="flex items-center justify-end text-amber-500 text-[10px] font-bold">
                       <Clock className="w-3 h-3 mr-1" /> Action Needed
                     </div>
-                    <div className="text-[10px] text-slate-400 mt-0.5">Review pending</div>
+                    <div className="text-[10px] text-muted-foreground mt-0.5">Review pending</div>
                   </>
                 )}
               </div>
             </div>
             <div className="mt-4 flex-1 flex items-center">
               {(!dbStats?.pending || dbStats?.pending === 0) ? (
-                <div className="w-full rounded-md bg-emerald-50/50 border border-emerald-100/50 p-2.5 flex items-center gap-2 text-xs text-emerald-600 font-medium">
+                <div className="w-full rounded-xl bg-emerald-500/10 border border-emerald-500/20 p-2.5 flex items-center gap-2 text-xs text-emerald-400 font-medium">
                   🎉 All interviews are up to date!
                 </div>
               ) : (
-                <div className="w-full rounded-md bg-amber-50/50 border border-amber-100/50 p-2.5 flex items-center gap-2 text-xs text-amber-600 font-medium">
-                  <Clock className="w-3 h-3" /> {dbStats.pending} pending to be completed
+                <div className="w-full rounded-xl bg-amber-500/10 border border-amber-500/20 p-2.5 flex items-center gap-2 text-xs text-amber-400 font-medium">
+                  <Clock className="w-3 h-3 shrink-0" /> {dbStats.pending} pending to be completed
                 </div>
               )}
             </div>
@@ -461,86 +462,86 @@ export default function SuperDashboardPage() {
         </Card>
 
         {/* 5 — Avg AI Score */}
-        <Card className="bg-white border border-slate-100 shadow-[0_2px_10px_rgba(0,0,0,0.04)] rounded-xl relative overflow-hidden flex flex-col justify-between">
+        <Card className="bg-card border border-border/80 shadow-sm rounded-2xl relative overflow-hidden flex flex-col justify-between hover:shadow-md transition-all">
           <CardContent className="p-4 flex flex-col h-full">
             <div className="flex items-start justify-between">
-              <div className="flex items-center gap-2">
-                <div className="w-8 h-8 rounded bg-fuchsia-50 flex items-center justify-center">
+              <div className="flex items-center gap-2.5">
+                <div className="w-8 h-8 rounded-xl bg-fuchsia-500/10 border border-fuchsia-500/20 flex items-center justify-center">
                   <Star className="w-4 h-4 text-fuchsia-500" />
                 </div>
-                <span className="text-xs font-semibold text-slate-700">Avg AI Score</span>
+                <span className="text-xs font-semibold text-foreground">Avg AI Score</span>
               </div>
-              <MoreVertical className="w-4 h-4 text-slate-400 cursor-pointer" />
+              <MoreVertical className="w-4 h-4 text-muted-foreground cursor-pointer hover:text-foreground transition-colors" />
             </div>
             <div className="mt-4 flex items-end justify-between">
               <div className="flex items-baseline gap-1">
-                <div className="text-3xl font-bold text-slate-900">{avgScore > 0 ? starRating.toFixed(1) : '--'}</div>
-                <div className="text-sm font-medium text-slate-400">/ 5.0</div>
+                <div className="text-3xl font-bold text-foreground tracking-tight">{avgScore > 0 ? starRating.toFixed(1) : '--'}</div>
+                <div className="text-sm font-medium text-muted-foreground">/ 5.0</div>
               </div>
               <div className="text-right">
-                <div className="text-[10px] text-slate-400">
+                <div className="text-[10px] text-muted-foreground">
                   {avgScore > 0 ? `${avgScore.toFixed(1)} / 100` : 'No scored sessions'}
                 </div>
-                <div className="text-[10px] text-slate-400">raw score</div>
+                <div className="text-[10px] text-muted-foreground">raw score</div>
               </div>
             </div>
             <div className="mt-3 flex-1">
               <div className="flex gap-1">
                 {[1, 2, 3, 4, 5].map(i => (
-                  <Star key={i} className={`w-5 h-5 ${i <= Math.floor(starRating) ? 'fill-indigo-500 text-indigo-500' : (i - 0.5 <= starRating ? 'fill-indigo-300 text-indigo-300' : 'text-slate-200')}`} />
+                  <Star key={i} className={`w-5 h-5 ${i <= Math.floor(starRating) ? 'fill-indigo-500 text-indigo-500' : (i - 0.5 <= starRating ? 'fill-indigo-300 text-indigo-300' : 'text-muted/40')}`} />
                 ))}
               </div>
               {avgScore > 0 && (
-                <div className="text-[10px] font-semibold text-indigo-500 mt-2">
+                <div className="text-[10px] font-semibold text-indigo-400 mt-2">
                   {avgScore >= 70 ? 'Good Performance' : avgScore >= 50 ? 'Average Performance' : 'Needs Improvement'}
                 </div>
               )}
             </div>
             <div className="mt-3 flex items-center gap-2 text-[10px]">
-              <div className="bg-slate-50 px-2 py-1 rounded text-slate-500 font-medium flex-1 text-center">Avg Score: {avgScore > 0 ? `${avgScore.toFixed(1)}/100` : '--'}</div>
-              <div className="bg-slate-50 px-2 py-1 rounded text-slate-500 font-medium flex-1 text-center">Total Rated: {formatNum(dbStats?.completed) || 0}</div>
+              <div className="bg-muted/40 border border-border px-2 py-1 rounded-lg text-muted-foreground font-medium flex-1 text-center">Avg Score: {avgScore > 0 ? `${avgScore.toFixed(1)}/100` : '--'}</div>
+              <div className="bg-muted/40 border border-border px-2 py-1 rounded-lg text-muted-foreground font-medium flex-1 text-center">Total Rated: {formatNum(dbStats?.completed) || 0}</div>
             </div>
           </CardContent>
         </Card>
 
         {/* 6 — Candidates Hired */}
-        <Card className="bg-white border border-slate-100 shadow-[0_2px_10px_rgba(0,0,0,0.04)] rounded-xl relative overflow-hidden flex flex-col justify-between">
+        <Card className="bg-card border border-border/80 shadow-sm rounded-2xl relative overflow-hidden flex flex-col justify-between hover:shadow-md transition-all">
           <CardContent className="p-4 flex flex-col h-full">
             <div className="flex items-start justify-between">
-              <div className="flex items-center gap-2">
-                <div className="w-8 h-8 rounded bg-teal-50 flex items-center justify-center">
+              <div className="flex items-center gap-2.5">
+                <div className="w-8 h-8 rounded-xl bg-teal-500/10 border border-teal-500/20 flex items-center justify-center">
                   <Target className="w-4 h-4 text-teal-500" />
                 </div>
-                <span className="text-xs font-semibold text-slate-700">Candidates Hired</span>
+                <span className="text-xs font-semibold text-foreground">Candidates Hired</span>
               </div>
-              <MoreVertical className="w-4 h-4 text-slate-400 cursor-pointer" />
+              <MoreVertical className="w-4 h-4 text-muted-foreground cursor-pointer hover:text-foreground transition-colors" />
             </div>
             <div className="mt-4 flex items-end justify-between">
-              <div className="text-3xl font-bold text-slate-900">{formatNum(dbStats?.selected) || "0"}</div>
+              <div className="text-3xl font-bold text-foreground tracking-tight">{formatNum(dbStats?.selected) || "0"}</div>
               <div className="text-right">
                 {renderTrend(dbStats?.selected_trend, true)}
-                <div className="text-[10px] text-slate-400">vs yesterday</div>
+                <div className="text-[10px] text-muted-foreground">vs yesterday</div>
               </div>
             </div>
             <div className="mt-3 flex-1 flex items-center gap-4">
               <div className="relative w-12 h-12">
                 <PieChart width={48} height={48}>
                   <Pie data={[{ value: Number(hireRate) || 3.7 }, { value: 100 - (Number(hireRate) || 3.7) }]} innerRadius={18} outerRadius={24} dataKey="value" startAngle={90} endAngle={-270} stroke="none">
-                    <Cell fill="#14b8a6" />
-                    <Cell fill="#f1f5f9" />
+                    <Cell fill={getThemeColor('--color-emerald', '#14b8a6')} />
+                    <Cell fill={getThemeColor('--border', '#1e293b')} />
                   </Pie>
                 </PieChart>
-                <div className="absolute inset-0 flex items-center justify-center text-[10px] font-bold text-slate-700">
+                <div className="absolute inset-0 flex items-center justify-center text-[10px] font-bold text-foreground">
                   {hireRate}%
                 </div>
               </div>
               <div>
-                <div className="text-[10px] font-medium text-slate-500 mb-0.5">Hire Rate</div>
-                <div className="text-[11px] font-semibold text-slate-700">{formatNum(dbStats?.selected) || 0} / {formatNum(dbStats?.completed) || 0} completed</div>
+                <div className="text-[10px] font-medium text-muted-foreground mb-0.5">Hire Rate</div>
+                <div className="text-[11px] font-semibold text-foreground">{formatNum(dbStats?.selected) || 0} / {formatNum(dbStats?.completed) || 0} completed</div>
               </div>
             </div>
             <div className="mt-3 flex items-center justify-end text-[11px]">
-              <span className="text-teal-500 font-medium cursor-pointer flex items-center hover:underline" onClick={() => navigate('/superadmin/qualified-candidates')}>
+              <span className="text-teal-400 font-medium cursor-pointer flex items-center hover:underline" onClick={() => navigate('/superadmin/qualified-candidates')}>
                 View details <ArrowRight className="w-3 h-3 ml-0.5" />
               </span>
             </div>
@@ -548,43 +549,43 @@ export default function SuperDashboardPage() {
         </Card>
 
         {/* 7 — Candidates Rejected */}
-        <Card className="bg-white border border-slate-100 shadow-[0_2px_10px_rgba(0,0,0,0.04)] rounded-xl relative overflow-hidden flex flex-col justify-between">
+        <Card className="bg-card border border-border/80 shadow-sm rounded-2xl relative overflow-hidden flex flex-col justify-between hover:shadow-md transition-all">
           <CardContent className="p-4 flex flex-col h-full">
             <div className="flex items-start justify-between">
-              <div className="flex items-center gap-2">
-                <div className="w-8 h-8 rounded bg-rose-50 flex items-center justify-center">
+              <div className="flex items-center gap-2.5">
+                <div className="w-8 h-8 rounded-xl bg-rose-500/10 border border-rose-500/20 flex items-center justify-center">
                   <XCircle className="w-4 h-4 text-rose-500" />
                 </div>
-                <span className="text-xs font-semibold text-slate-700">Candidates Rejected</span>
+                <span className="text-xs font-semibold text-foreground">Candidates Rejected</span>
               </div>
-              <MoreVertical className="w-4 h-4 text-slate-400 cursor-pointer" />
+              <MoreVertical className="w-4 h-4 text-muted-foreground cursor-pointer hover:text-foreground transition-colors" />
             </div>
             <div className="mt-4 flex items-end justify-between">
-              <div className="text-3xl font-bold text-slate-900">{formatNum(dbStats?.rejected) || "0"}</div>
+              <div className="text-3xl font-bold text-foreground tracking-tight">{formatNum(dbStats?.rejected) || "0"}</div>
               <div className="text-right">
                 {renderTrend(dbStats?.rejected_trend, false)}
-                <div className="text-[10px] text-slate-400">vs yesterday</div>
+                <div className="text-[10px] text-muted-foreground">vs yesterday</div>
               </div>
             </div>
             <div className="mt-3 flex-1 flex items-center gap-4">
               <div className="relative w-12 h-12">
                 <PieChart width={48} height={48}>
                   <Pie data={[{ value: Number(rejectionRate) || 0.9 }, { value: 100 - (Number(rejectionRate) || 0.9) }]} innerRadius={18} outerRadius={24} dataKey="value" startAngle={90} endAngle={-270} stroke="none">
-                    <Cell fill="#f43f5e" />
-                    <Cell fill="#f1f5f9" />
+                    <Cell fill={getThemeColor('--color-destructive', '#f43f5e')} />
+                    <Cell fill={getThemeColor('--border', '#1e293b')} />
                   </Pie>
                 </PieChart>
-                <div className="absolute inset-0 flex items-center justify-center text-[10px] font-bold text-slate-700">
+                <div className="absolute inset-0 flex items-center justify-center text-[10px] font-bold text-foreground">
                   {rejectionRate}%
                 </div>
               </div>
               <div>
-                <div className="text-[10px] font-medium text-slate-500 mb-0.5">Rejection Rate</div>
-                <div className="text-[11px] font-semibold text-slate-700">{formatNum(dbStats?.rejected) || 0} / {formatNum(dbStats?.completed) || 0} completed</div>
+                <div className="text-[10px] font-medium text-muted-foreground mb-0.5">Rejection Rate</div>
+                <div className="text-[11px] font-semibold text-foreground">{formatNum(dbStats?.rejected) || 0} / {formatNum(dbStats?.completed) || 0} completed</div>
               </div>
             </div>
             <div className="mt-3 flex items-center justify-end text-[11px]">
-              <span className="text-rose-500 font-medium cursor-pointer flex items-center hover:underline" onClick={() => navigate('/superadmin/rejected-candidates')}>
+              <span className="text-rose-400 font-medium cursor-pointer flex items-center hover:underline" onClick={() => navigate('/superadmin/rejected-candidates')}>
                 View details <ArrowRight className="w-3 h-3 ml-0.5" />
               </span>
             </div>
@@ -592,33 +593,33 @@ export default function SuperDashboardPage() {
         </Card>
 
         {/* 8 — Expired Links */}
-        <Card className="bg-white border border-slate-100 shadow-[0_2px_10px_rgba(0,0,0,0.04)] rounded-xl relative overflow-hidden flex flex-col justify-between">
+        <Card className="bg-card border border-border/80 shadow-sm rounded-2xl relative overflow-hidden flex flex-col justify-between hover:shadow-md transition-all">
           <CardContent className="p-4 flex flex-col h-full">
             <div className="flex items-start justify-between">
-              <div className="flex items-center gap-2">
-                <div className="w-8 h-8 rounded bg-red-50 flex items-center justify-center">
+              <div className="flex items-center gap-2.5">
+                <div className="w-8 h-8 rounded-xl bg-red-500/10 border border-red-500/20 flex items-center justify-center">
                   <AlertTriangle className="w-4 h-4 text-red-500" />
                 </div>
-                <span className="text-xs font-semibold text-slate-700">Expired Links</span>
+                <span className="text-xs font-semibold text-foreground">Expired Links</span>
               </div>
-              <MoreVertical className="w-4 h-4 text-slate-400 cursor-pointer" />
+              <MoreVertical className="w-4 h-4 text-muted-foreground cursor-pointer hover:text-foreground transition-colors" />
             </div>
             <div className="mt-4 flex items-end justify-between">
-              <div className="text-3xl font-bold text-slate-900">{formatNum(dbStats?.expired) || "0"}</div>
+              <div className="text-3xl font-bold text-foreground tracking-tight">{formatNum(dbStats?.expired) || "0"}</div>
               <div className="text-right">
                 {renderTrend(dbStats?.expired_trend, false)}
-                <div className="text-[10px] text-slate-400">vs yesterday</div>
+                <div className="text-[10px] text-muted-foreground">vs yesterday</div>
               </div>
             </div>
             <div className="mt-3 flex-1 h-12">
               <ResponsiveContainer width="100%" height="100%">
                 <BarChart data={sparklineData} barSize={4} margin={{ top: 0, right: 0, left: 0, bottom: 0 }}>
-                  <Bar dataKey="v" fill="#fca5a5" radius={[2, 2, 0, 0]} />
+                  <Bar dataKey="v" fill={getThemeColor('--color-rose', '#fca5a5')} radius={[2, 2, 0, 0]} />
                 </BarChart>
               </ResponsiveContainer>
             </div>
             <div className="mt-4 flex items-center justify-end text-[11px]">
-              <span className="text-rose-500 font-medium cursor-pointer flex items-center hover:underline" onClick={() => {
+              <span className="text-rose-400 font-medium cursor-pointer flex items-center hover:underline" onClick={() => {
                 dispatch(setStatusFilter('expired'));
                 navigate('/superadmin/interviews');
               }}>
@@ -630,7 +631,7 @@ export default function SuperDashboardPage() {
       </section>
 
       {/* Platform Activity */}
-      <Card className="bg-white text-slate-900 border-slate-200 shadow-sm">
+      <Card className="bg-card text-foreground border-border shadow-sm">
         <CardHeader className="pb-3">
           <CardTitle className="text-base">Platform Activity</CardTitle>
           <CardDescription>Real-time candidate engagement across the platform.</CardDescription>
@@ -638,8 +639,8 @@ export default function SuperDashboardPage() {
         <div className="px-6 pb-6">
           <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-6">
             {platformActivity.map((a) => (
-              <div key={a.metric} className="rounded-lg border bg-white text-slate-900 border-slate-200 p-3">
-                <div className="text-xs text-slate-500">{a.metric}</div>
+              <div key={a.metric} className="rounded-lg border bg-card text-foreground border-border p-3">
+                <div className="text-xs text-muted-foreground">{a.metric}</div>
                 <div className="mt-1 text-xl font-semibold">{formatNum(a.value)}</div>
               </div>
             ))}
@@ -649,44 +650,96 @@ export default function SuperDashboardPage() {
 
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
         {/* Funnel */}
-        <Card className="lg:col-span-2 bg-white text-slate-900 border-slate-200 shadow-sm">
+        <Card className="lg:col-span-2 bg-card text-foreground border-border shadow-sm">
           <CardHeader className="pb-2">
             <CardTitle className="text-base">AI Recruitment Funnel</CardTitle>
             <CardDescription>Stage-by-stage conversion tracking.</CardDescription>
           </CardHeader>
           <div className="px-6 pb-6">
-            <div className="h-[320px]">
-              <ResponsiveContainer width="100%" height="100%">
-                {maxFunnelValue > 0 ? (
-                  <FunnelChart>
-                    <RTooltip
-                      formatter={(v) => formatNum(v)}
-                      contentStyle={{
-                        background: "#ffffff",
-                        border: "1px solid #e2e8f0",
-                        borderRadius: 8,
-                        fontSize: 12
-                      }}
-                    />
-                    <Funnel dataKey="value" data={funnelData} isAnimationActive>
-                      <LabelList position="right" fill="#0f172a" stroke="none" dataKey="name" fontSize={12} />
-                      <LabelList position="center" fill="#fff" stroke="none" dataKey="value" fontSize={12} formatter={(v) => formatNum(v)} />
-                    </Funnel>
-                  </FunnelChart>
-                ) : (
-                  <div className="flex flex-col items-center justify-center h-full text-slate-400">
-                    <div className="text-3xl mb-2">📊</div>
-                    <div className="text-sm font-medium">No candidate data yet</div>
+            {maxFunnelValue > 0 ? (
+              <div className="grid grid-cols-1 md:grid-cols-12 gap-6 items-center">
+                {/* Visual Funnel Chart */}
+                <div className="md:col-span-7 h-[300px]">
+                  <ResponsiveContainer width="100%" height="100%">
+                    <FunnelChart>
+                      <RTooltip
+                        content={({ active, payload }) => {
+                          if (active && payload && payload.length) {
+                            const data = payload[0].payload;
+                            return (
+                              <div className="bg-slate-900 text-white border border-slate-700/80 px-3.5 py-2.5 rounded-xl shadow-2xl text-xs space-y-1">
+                                <div className="font-extrabold text-slate-200">
+                                  {data.name}
+                                </div>
+                                <div className="flex items-center gap-1.5 text-sky-400 font-bold text-sm">
+                                  <span>{formatNum(data.value)}</span>
+                                  <span className="text-[11px] font-medium text-slate-400">Candidates</span>
+                                </div>
+                              </div>
+                            );
+                          }
+                          return null;
+                        }}
+                      />
+                      <Funnel dataKey="value" data={funnelData} isAnimationActive>
+                        <LabelList
+                          position="center"
+                          fill="#ffffff"
+                          stroke="none"
+                          dataKey="value"
+                          fontSize={12}
+                          fontWeight={800}
+                          formatter={(v) => formatNum(v)}
+                        />
+                      </Funnel>
+                    </FunnelChart>
+                  </ResponsiveContainer>
+                </div>
+
+                {/* Stage Breakdown Legend */}
+                <div className="md:col-span-5 flex flex-col gap-2.5 bg-slate-50 p-4 rounded-2xl border border-slate-200 shadow-xs">
+                  <div className="text-[11px] font-extrabold uppercase tracking-wider text-slate-500 mb-1">
+                    Stage Breakdown
                   </div>
-                )}
-              </ResponsiveContainer>
-            </div>
+                  {funnelData.map((item, idx) => {
+                    const topValue = funnelData[0]?.value || 1;
+                    const pct = Math.round((item.value / topValue) * 100);
+                    return (
+                      <div key={idx} className="flex items-center justify-between gap-3 text-xs">
+                        <div className="flex items-center gap-2 min-w-0">
+                          <span
+                            className="w-3 h-3 rounded-md shrink-0 shadow-xs"
+                            style={{ backgroundColor: item.fill || '#3b82f6' }}
+                          />
+                          <span className="font-bold text-slate-800 truncate">
+                            {item.name}
+                          </span>
+                        </div>
+                        <div className="flex items-center gap-2 shrink-0">
+                          <span className="font-mono text-[11px] font-medium text-slate-500">
+                            {pct}%
+                          </span>
+                          <span className="px-2.5 py-0.5 rounded-lg bg-white text-slate-900 font-extrabold text-xs border border-slate-200 shadow-xs">
+                            {formatNum(item.value)}
+                          </span>
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+              </div>
+            ) : (
+              <div className="flex flex-col items-center justify-center h-[300px] text-slate-400">
+                <div className="text-3xl mb-2">📊</div>
+                <div className="text-sm font-medium">No candidate data yet</div>
+              </div>
+            )}
           </div>
         </Card>
 
         {/* Platform Analytics */}
         {analyticsData && analyticsData.length > 0 && (
-          <Card className="lg:col-span-1 bg-white text-slate-900 border-slate-200 shadow-sm flex flex-col">
+          <Card className="lg:col-span-1 bg-card text-foreground border-border shadow-sm flex flex-col">
             <CardHeader className="pb-2">
               <div className="flex items-center justify-between">
                 <div>
@@ -719,7 +772,7 @@ export default function SuperDashboardPage() {
       </div>
 
       {/* Live Interview Sessions */}
-      <Card className="bg-white text-slate-900 border-slate-200 shadow-sm">
+      <Card className="bg-card text-foreground border-border shadow-sm">
         <CardHeader className="pb-2">
           <div className="flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
             <div>
@@ -730,20 +783,20 @@ export default function SuperDashboardPage() {
         </CardHeader>
         <div className="px-6 pb-6 overflow-x-auto">
           {(!liveSessions || liveSessions.length === 0) ? (
-            <div className="text-center py-8 text-sm text-slate-500">
+            <div className="text-center py-8 text-sm text-muted-foreground">
               No live interview sessions currently active.
             </div>
           ) : (
             (() => {
               const onlineLiveSessions = liveSessions.filter(session => session.online)
               return onlineLiveSessions.length === 0 ? (
-                <div className="text-center py-8 text-sm text-slate-500">
+                <div className="text-center py-8 text-sm text-muted-foreground">
                   No live interview sessions currently active.
                 </div>
               ) : (
                 <table className="w-full text-sm text-left">
                   <thead>
-                    <tr className="border-b border-slate-200 text-slate-500">
+                    <tr className="border-b border-border text-muted-foreground">
                       <th className="py-3 font-medium whitespace-nowrap">Candidate</th>
                       <th className="py-3 font-medium whitespace-nowrap">Interview</th>
                       <th className="py-3 font-medium text-center whitespace-nowrap">Status</th>
@@ -755,25 +808,25 @@ export default function SuperDashboardPage() {
                   </thead>
                   <tbody>
                     {onlineLiveSessions.map((session, i) => (
-                      <tr key={session.link_id || i} className="border-b border-slate-100 last:border-0 hover:bg-slate-50">
-                        <td className="py-3 font-medium text-slate-900 whitespace-nowrap">{session.candidate_name || 'Unknown Candidate'}</td>
-                        <td className="py-3 text-slate-500 whitespace-nowrap">{session.interview_title || session.link_id}</td>
+                      <tr key={session.link_id || i} className="border-b border-border last:border-0 hover:bg-muted/60">
+                        <td className="py-3 font-medium text-foreground whitespace-nowrap">{session.candidate_name || 'Unknown Candidate'}</td>
+                        <td className="py-3 text-muted-foreground whitespace-nowrap">{session.interview_title || session.link_id}</td>
                         <td className="py-3 text-center whitespace-nowrap">
-                          <span className="inline-flex px-2 py-0.5 rounded text-[10px] font-bold bg-slate-900 text-white">
+                          <span className="inline-flex px-2 py-0.5 rounded text-[10px] font-bold bg-foreground text-background">
                             Online
                           </span>
                         </td>
-                        <td className="py-3 text-center text-slate-400 text-xs font-medium whitespace-nowrap">N/A</td>
-                        <td className="py-3 text-center text-slate-700 font-medium whitespace-nowrap">{session.proctoring_alerts || 0}</td>
+                        <td className="py-3 text-center text-muted-foreground text-xs font-medium whitespace-nowrap">N/A</td>
+                        <td className="py-3 text-center text-foreground font-medium whitespace-nowrap">{session.proctoring_alerts || 0}</td>
                         <td className="py-3 text-center whitespace-nowrap">
-                          <div className="w-12 h-1.5 bg-blue-50 rounded-full mx-auto overflow-hidden">
-                            <div className="h-full bg-blue-300 rounded-full" style={{ width: `${Math.min(100, (session.audio_level || 0) * 10)}%` }} />
+                          <div className="w-12 h-1.5 bg-muted rounded-full mx-auto overflow-hidden">
+                            <div className="h-full bg-primary rounded-full" style={{ width: `${Math.min(100, (session.audio_level || 0) * 10)}%` }} />
                           </div>
                         </td>
                         <td className="py-3 text-right whitespace-nowrap">
                           <button 
                             onClick={() => handleOpenLiveStreamAction && handleOpenLiveStreamAction(session)}
-                            className="inline-flex items-center justify-center gap-1.5 px-3 py-1.5 text-xs font-semibold bg-white border border-slate-200 rounded hover:bg-slate-50 text-slate-700 cursor-pointer"
+                            className="inline-flex items-center justify-center gap-1.5 px-3 py-1.5 text-xs font-semibold bg-card border border-border rounded hover:bg-muted text-foreground cursor-pointer"
                           >
                             <Eye className="w-3.5 h-3.5" /> Monitor
                           </button>
@@ -789,7 +842,7 @@ export default function SuperDashboardPage() {
       </Card>
 
       {/* Candidates Table */}
-      <Card className="bg-white text-slate-900 border-slate-200 shadow-sm">
+      <Card className="bg-card text-foreground border-border shadow-sm">
         <CardHeader className="pb-2">
           <CardTitle className="text-base">Candidates</CardTitle>
           <CardDescription>Latest candidates evaluated by the AI.</CardDescription>

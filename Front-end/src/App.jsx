@@ -74,7 +74,7 @@ import ErrorBoundary from './components/ErrorBoundary'
 function App() {
   return (
     <BrowserRouter>
-      <React.Suspense fallback={<div className="flex h-screen items-center justify-center bg-gray-900 text-white font-semibold text-lg tracking-wide">Loading Interface...</div>}>
+      <React.Suspense fallback={<div className="flex h-screen items-center justify-center bg-slate-50 text-slate-900 font-semibold text-lg tracking-wide">Loading Interface...</div>}>
         <ErrorBoundary>
           <Routes>
           <Route path="/" element={<LandingPage />} />

@@ -33,8 +33,8 @@ const normalizeFlowItem = (item, id) => ({
 });
 
 export default function ConversationalFlowPage() {
-  const [flowData, setFlowData] = useState([]);
-  const [loading, setLoading] = useState(true);
+  const [flowData, setFlowData] = useState(DEFAULT_SECTIONS);
+  const [loading, setLoading] = useState(false);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState(null);
   const [success, setSuccess] = useState(false);
@@ -49,7 +49,6 @@ export default function ConversationalFlowPage() {
 
   async function fetchFlowData() {
     try {
-      setLoading(true);
       setError(null);
       const res = await axios.get(`${API_BASE_URL}/admin/agent-flow`, {
         headers: {},
@@ -153,15 +152,6 @@ export default function ConversationalFlowPage() {
     setFlowData([...flowData, newSection]);
     setExpandedSections(prev => ({ ...prev, [newSection.id]: true }));
   };
-
-  if (loading) {
-    return (
-      <div className="flex items-center justify-center min-h-[400px]">
-        <RefreshCw className="w-8 h-8 text-indigo-500 animate-spin" />
-        <span className="ml-3 text-slate-500 font-semibold text-sm">Loading Conversational Flow...</span>
-      </div>
-    );
-  }
 
   return (
     <ErrorBoundary>

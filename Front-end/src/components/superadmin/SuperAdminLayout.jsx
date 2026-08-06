@@ -3,6 +3,7 @@ import { useSelector, useDispatch } from 'react-redux'
 import { useNavigate, useLocation, NavLink, Outlet } from 'react-router-dom'
 import Swal from 'sweetalert2'
 import 'sweetalert2/dist/sweetalert2.min.css'
+import ThemeToggle from '../ThemeToggle'
 import {
   LayoutDashboard,
   CheckCircle,
@@ -32,18 +33,18 @@ import {
   Link,
   ClipboardList
 } from 'lucide-react'
-import { 
-  SidebarProvider, 
-  Sidebar, 
-  SidebarContent, 
-  SidebarHeader, 
+import {
+  SidebarProvider,
+  Sidebar,
+  SidebarContent,
+  SidebarHeader,
   SidebarFooter,
   SidebarGroup,
   SidebarGroupContent,
   SidebarMenu,
   SidebarMenuItem,
   SidebarMenuButton,
-  SidebarTrigger 
+  SidebarTrigger
 } from '../ui/sidebar'
 import { Badge } from '../ui/badge'
 import { Button } from '../ui/button'
@@ -101,6 +102,7 @@ export default function SuperAdminLayout() {
   const [accentName, setAccentName] = useState('indigo')
   const [notifications, setNotifications] = useState([])
   const [notifDropdownOpen, setNotifDropdownOpen] = useState(false)
+  const [hoveredPath, setHoveredPath] = useState(null)
   const notifRef = useRef(null)
 
   const fetchNotifications = async () => {
@@ -252,19 +254,49 @@ export default function SuperAdminLayout() {
     }).then((result) => {
       if (result.isConfirmed) {
         dispatch(handleUpdateDecision({ linkId, decision })).then(() => {
-          if (token) dispatch(loadSuperAdminDashboard({ adminFilter: selectedAdminFilter,  }))
+          if (token) dispatch(loadSuperAdminDashboard({ adminFilter: selectedAdminFilter, }))
         })
       }
     })
   }
 
   const accentColors = {
-    teal: { primary: '#0d9488', hover: '#0f766e', glow: 'rgba(13, 148, 136, 0.15)' },
-    indigo: { primary: '#6366f1', hover: '#4f46e5', glow: 'rgba(99, 102, 241, 0.15)' },
-    purple: { primary: '#9333ea', hover: '#7e22ce', glow: 'rgba(147, 51, 234, 0.15)' },
-    red: { primary: '#e11d48', hover: '#be123c', glow: 'rgba(225, 29, 72, 0.15)' },
-    green: { primary: '#16a34a', hover: '#15803d', glow: 'rgba(22, 163, 74, 0.15)' },
-    blue: { primary: '#2563eb', hover: '#1d4ed8', glow: 'rgba(37, 99, 237, 0.15)' }
+    teal: {
+      primary: '#2dd4bf',
+      hover: '#14b8a6',
+      glow: 'rgba(45, 212, 191, 0.30)',
+      gradient: 'linear-gradient(135deg, #5eead4 0%, #14b8a6 100%)'
+    },
+    indigo: {
+      primary: '#818cf8',
+      hover: '#6366f1',
+      glow: 'rgba(129, 140, 248, 0.30)',
+      gradient: 'linear-gradient(135deg, #a5b4fc 0%, #6366f1 100%)'
+    },
+    purple: {
+      primary: '#c084fc',
+      hover: '#a855f7',
+      glow: 'rgba(192, 132, 252, 0.30)',
+      gradient: 'linear-gradient(135deg, #d8b4fe 0%, #a855f7 100%)'
+    },
+    red: {
+      primary: '#fb7185',
+      hover: '#f43f5e',
+      glow: 'rgba(251, 113, 133, 0.30)',
+      gradient: 'linear-gradient(135deg, #fda4af 0%, #f43f5e 100%)'
+    },
+    green: {
+      primary: '#86efac',
+      hover: '#4ade80',
+      glow: 'rgba(134, 239, 172, 0.30)',
+      gradient: 'linear-gradient(135deg, #a7f3d0 0%, #4ade80 100%)'
+    },
+    blue: {
+      primary: '#60a5fa',
+      hover: '#3b82f6',
+      glow: 'rgba(96, 165, 250, 0.30)',
+      gradient: 'linear-gradient(135deg, #93c5fd 0%, #3b82f6 100%)'
+    }
   }
 
   const currentAccent = accentColors[accentName] || accentColors.indigo
@@ -279,7 +311,7 @@ export default function SuperAdminLayout() {
   // Initial load and WebSocket setup
   useEffect(() => {
     if (!token) return
-    dispatch(loadSuperAdminDashboard({ adminFilter: selectedAdminFilter,  }))
+    dispatch(loadSuperAdminDashboard({ adminFilter: selectedAdminFilter, }))
     dispatch(loadSuperAdminProfile())
 
     const wsUrl = API_BASE_URL.replace(/^http/, 'ws') + `/ws/dashboard?token=${encodeURIComponent(token)}`
@@ -404,7 +436,7 @@ export default function SuperAdminLayout() {
                 dispatch({ type: 'auth/updateCredits', payload: (adminUser?.credits || 0) + verifyRes.data.credits_added })
               }
               dispatch(loadSuperAdminProfile())
-              dispatch(loadSuperAdminDashboard({  }))
+              dispatch(loadSuperAdminDashboard({}))
             }
           } catch (e) {
             alert("Payment verification failed")
@@ -456,30 +488,30 @@ export default function SuperAdminLayout() {
 
   return (
     <SidebarProvider>
-      <div className="superadmin-theme h-screen bg-slate-50 text-slate-900 flex font-sans w-full overflow-hidden relative">
+      <div className="superadmin-theme h-screen bg-background text-foreground flex font-sans w-full overflow-hidden relative">
         {/* Global Premium Background Grid & Dynamic Accent Gradient */}
         <div className="absolute inset-0 z-0 pointer-events-none">
           {/* Full-page soft color wash that changes with the theme */}
-          <div 
-            className="absolute inset-0 transition-colors duration-700" 
-            style={{ 
-              background: `linear-gradient(135deg, ${currentAccent.primary}15 0%, transparent 50%, ${currentAccent.primary}10 100%)` 
-            }} 
+          <div
+            className="absolute inset-0 transition-colors duration-700"
+            style={{
+              background: `linear-gradient(135deg, ${currentAccent.primary}15 0%, transparent 50%, ${currentAccent.primary}10 100%)`
+            }}
           />
           {/* Grid overlay */}
           <div className="absolute inset-0 bg-grid-fine opacity-60" />
         </div>
 
         {/* NEW SHADCN SIDEBAR */}
-        <Sidebar className="border-r border-slate-200/60 bg-white/60 backdrop-blur-xl z-20" collapsible="icon">
-          <SidebarHeader className="h-16 border-b border-slate-200/60 px-6 py-0 flex items-center justify-center shrink-0">
+        <Sidebar className="border-r border-border/70 bg-[rgba(7,18,37,0.85)] backdrop-blur-xl z-20" collapsible="icon">
+          <SidebarHeader className="h-16 border-b border-border/70 px-6 py-0 flex items-center justify-center shrink-0">
             <div className="flex items-center gap-3 w-full overflow-hidden">
               <div className="grid h-8 w-8 shrink-0 place-items-center rounded-lg bg-indigo-600 text-white shadow-sm">
                 <Zap className="h-4 w-4" />
               </div>
               <div className="leading-tight group-data-[collapsible=icon]:hidden truncate">
-                <div className="text-sm font-semibold truncate">HireIQ</div>
-                <div className="text-[11px] text-slate-500 truncate">Super Admin</div>
+                <div className="text-sm font-semibold truncate text-foreground">HireIQ</div>
+                <div className="text-[11px] text-muted-foreground truncate">Super Admin</div>
               </div>
             </div>
           </SidebarHeader>
@@ -492,19 +524,24 @@ export default function SuperAdminLayout() {
                     const isActive = location.pathname.startsWith(item.path);
                     return (
                       <SidebarMenuItem key={item.id}>
-                        <SidebarMenuButton 
+                        <SidebarMenuButton
                           asChild
                           isActive={isActive}
                           tooltip={item.label}
-                          className={`flex items-center gap-3 rounded-md px-3 py-2 text-sm font-medium transition-colors ${
-                            isActive
-                              ? 'text-white'
-                              : 'text-slate-500 hover:bg-slate-100 hover:text-slate-900'
-                          }`}
+                          className={`flex items-center gap-3 rounded-md px-3 py-2 text-sm font-medium transition-colors duration-200 ${isActive
+                              ? 'text-white shadow-sm'
+                              : 'text-muted-foreground hover:text-foreground'
+                            } ${isActive ? 'border border-white/20' : 'border border-transparent hover:border-sidebar-accent/40'}`}
                           style={{
-                            background: isActive ? `linear-gradient(135deg, ${currentAccent.primary} 0%, ${currentAccent.hover} 100%)` : 'transparent',
+                            background: isActive
+                              ? `linear-gradient(135deg, ${currentAccent.primary} 0%, ${currentAccent.hover} 100%)`
+                              : hoveredPath === item.path
+                                ? `linear-gradient(135deg, ${hexToRgba(currentAccent.primary, 0.18)} 0%, ${hexToRgba(currentAccent.hover, 0.18)} 100%)`
+                                : 'transparent',
                             height: 'auto'
                           }}
+                          onMouseEnter={() => setHoveredPath(item.path)}
+                          onMouseLeave={() => setHoveredPath(null)}
                         >
                           <NavLink to={item.path} className="flex items-center w-full min-w-0">
                             {item.icon ? (
@@ -523,10 +560,10 @@ export default function SuperAdminLayout() {
             </SidebarGroup>
           </SidebarContent>
 
-          <SidebarFooter className="p-3 border-t border-slate-200 space-y-1 shrink-0">
+          <SidebarFooter className="p-3 border-t border-border space-y-1 shrink-0">
             <button
               onClick={() => dispatch(setLiveResultsModalOpen(true))}
-              className="flex items-center justify-center md:justify-start gap-3 w-full rounded-md px-3 py-2 text-sm font-medium transition-colors text-slate-500 hover:bg-slate-100 hover:text-slate-900 border-none bg-transparent cursor-pointer text-left overflow-hidden"
+              className="flex items-center justify-center md:justify-start gap-3 w-full rounded-md px-3 py-2 text-sm font-medium transition-colors text-muted-foreground hover:bg-muted hover:text-foreground border-none bg-transparent cursor-pointer text-left overflow-hidden"
               title="Live Results"
             >
               <Radio size={16} className="shrink-0" />
@@ -546,276 +583,287 @@ export default function SuperAdminLayout() {
         {/* Main Content Wrapper */}
         <div className="flex-1 flex flex-col min-w-0 h-screen overflow-hidden relative z-10">
           {/* Top bar */}
-          <header className="sticky top-0 z-30 border-b border-slate-200/60 bg-white/60 backdrop-blur-xl flex items-center justify-between px-6 h-16 shadow-sm shrink-0">
-          {/* Left Side: Brand & Toggles */}
-          <div className="flex items-center gap-6">
-            <SidebarTrigger className="-ml-2 md:mr-2 text-slate-500 hover:text-slate-800 transition-colors" />
-            <h2 className="text-[17px] font-bold text-slate-800 hidden sm:block">SuperAdmin Management</h2>
+          <header className="sticky top-0 z-30 border-b border-border/70 bg-background/90 backdrop-blur-xl flex items-center justify-between gap-4 px-6 h-16 shadow-sm shrink-0">
+            {/* Left Side: Brand & Toggles */}
+            <div className="flex items-center gap-4 lg:gap-6">
+              <SidebarTrigger className="-ml-2 text-muted-foreground hover:text-foreground transition-colors" />
+              <h2 className="text-[16px] font-bold text-foreground hidden sm:block">SuperAdmin Management</h2>
 
-            {/* Theme Toggle Dots */}
-            <div className="flex items-center gap-2 bg-slate-100 rounded-full px-2.5 py-1.5 border border-slate-200">
-              {Object.keys(accentColors).map(color => (
-                <button
-                  key={color}
-                  onClick={() => setAccentName(color)}
-                  className="w-3.5 h-3.5 rounded-full border-2 border-white cursor-pointer p-0 transition-all hover:scale-110"
-                  style={{
-                    background: accentColors[color].primary,
-                    boxShadow: accentName === color ? `0 0 0 2px ${accentColors[color].primary}` : 'none',
-                  }}
-                  title={color}
-                />
-              ))}
-            </div>
-
-            {/* Active Plan Badge */}
-            <div className="flex items-center gap-1.5 px-3 py-1 bg-indigo-50/50 border border-indigo-200/60 text-indigo-700 rounded-full text-xs font-bold shadow-sm">
-              <span className="w-1.5 h-1.5 rounded-full bg-indigo-600"></span>
-              Active Plan: {adminUser?.subscription_plan || 'Advance'}
-            </div>
-
-            {/* Credits Badge */}
-            <div className="flex items-center gap-1.5 px-3 py-1 bg-cyan-50 border border-cyan-100 text-cyan-600 rounded-full text-xs font-bold shadow-sm">
-              <span className="text-[10px]">🔗</span>
-              {adminUser?.credits ?? 0} credits left
-            </div>
-          </div>
-
-          {/* Right Side: Notifications & User Profile */}
-          <div className="flex items-center gap-5">
-            {/* Notification Bell */}
-            <button
-              onClick={() => setNotifDropdownOpen(!notifDropdownOpen)}
-              className="relative p-2 text-slate-400 hover:text-slate-600 bg-white border border-slate-100 hover:bg-slate-50 rounded-full transition-all cursor-pointer flex items-center justify-center shadow-sm"
-              title="Notifications"
-            >
-              <Bell size={18} />
-              {unreadCount > 0 && (
-                <span className="absolute -top-1 -right-1 bg-sky-500 text-white font-extrabold text-[9px] min-w-[18px] h-[18px] px-1 rounded-full flex items-center justify-center shadow-sm border-2 border-white">
-                  {unreadCount}
-                </span>
-              )}
-            </button>
-
-            {/* User Profile */}
-            <div className="flex items-center gap-4 border-l border-slate-200 pl-5">
-              <span className="text-sm text-slate-500 font-medium hidden sm:block">
-                Welcome back, <span className="font-bold text-slate-800">{userName}</span>
-              </span>
-              <button
-                onClick={handleLogout}
-                className="flex items-center gap-1.5 text-sm font-semibold text-slate-500 hover:text-slate-800 transition-colors cursor-pointer bg-transparent border-none"
-              >
-                <LogOut size={15} /> Logout
-              </button>
-            </div>
-          </div>
-        </header>
-
-        {/* Main Content */}
-        <main className="flex-1 overflow-y-auto bg-transparent relative">
-          
-          <div className="relative z-10">
-          {notifDropdownOpen && (
-            <div className="absolute right-4 top-4 w-80 bg-white border border-slate-200 rounded-2xl shadow-xl py-2 z-50">
-              <div className="flex items-center justify-between px-4 py-2 border-b border-slate-100">
-                <span className="text-xs font-bold text-slate-800 font-sans">Recent Notifications</span>
-                {unreadCount > 0 && (
+              {/* Theme Toggle Dots */}
+              <div className="flex items-center gap-2 bg-card rounded-full px-3 py-1.5 border border-border shadow-xs">
+                {Object.keys(accentColors).map(color => (
                   <button
-                    onClick={handleMarkAllRead}
-                    className="text-[10px] font-bold text-indigo-600 hover:underline cursor-pointer border-none bg-transparent"
-                  >
-                    Mark all read
-                  </button>
-                )}
+                    key={color}
+                    onClick={() => setAccentName(color)}
+                    className="accent-selector-button w-3.5 h-3.5 rounded-full border-2 border-white/50 cursor-pointer p-0 transition-all hover:scale-110 shadow-xs"
+                    style={{
+                      background: accentColors[color].primary,
+                      borderColor: accentName === color ? 'white' : 'rgba(255,255,255,0.65)',
+                      boxShadow: accentName === color ? '0 0 0 2px rgba(255,255,255,0.9)' : 'none',
+                    }}
+                  />
+                ))}
               </div>
 
-              <div className="max-h-64 overflow-y-auto divide-y divide-slate-50">
-                {notifications.length === 0 ? (
-                  <div className="py-8 text-center text-xs text-slate-400 font-sans">No notifications</div>
-                ) : (
-                  notifications.slice(0, 5).map(n => (
-                    <div
-                      key={n.id}
-                      onClick={() => {
-                        if (!n.read) handleMarkRead(n.id)
-                        setNotifDropdownOpen(false)
-                        if (n.type === 'credits') navigate('/superadmin/team')
-                        else if (n.type === 'activity') navigate('/superadmin/new-dashboard')
-                        else navigate('/superadmin/new-dashboard')
-                      }}
-                      className={`p-3 text-left hover:bg-slate-50 cursor-pointer transition-colors flex gap-2.5 items-start ${!n.read ? 'bg-indigo-50/30' : ''
-                        }`}
-                    >
-                      <div className="p-1.5 rounded-lg bg-slate-50 flex-shrink-0 mt-0.5">
-                        {getNotifIcon(n.type)}
-                      </div>
-                      <div className="space-y-0.5 min-w-0">
-                        <div className="flex items-center gap-1.5 justify-between">
-                          <span className={`text-xs font-bold truncate block ${!n.read ? 'text-slate-800' : 'text-slate-600'}`}>{n.title}</span>
-                          {!n.read && <span className="w-1.5 h-1.5 rounded-full bg-indigo-600 shrink-0" />}
-                        </div>
-                        <p className="text-[11px] text-slate-500 leading-normal line-clamp-2 font-sans">{n.message}</p>
-                        <span className="text-[9px] text-slate-400 block pt-0.5 font-sans">{formatRelativeTime(n.created_at)}</span>
-                      </div>
-                    </div>
-                  ))
-                )}
-              </div>
-
-              <div className="border-t border-slate-100 px-4 pt-2 pb-1 text-center">
-                <NavLink
-                  to="/superadmin/notifications"
-                  onClick={() => setNotifDropdownOpen(false)}
-                  className="text-[11px] font-bold text-indigo-600 hover:underline no-underline block py-1 font-sans"
-                >
-                  View All Notifications
-                </NavLink>
+              {/* Single Stacked Active Plan & Credits Badge */}
+              <div className="flex flex-col justify-center px-4 py-1.5 bg-muted/80 border border-border text-foreground rounded-2xl text-xs shadow-xs shrink-0 leading-tight">
+                <div className="flex items-center gap-1.5 font-bold text-foreground">
+                  <span className="w-1.5 h-1.5 rounded-full bg-indigo-600 dark:bg-indigo-400"></span>
+                  <span>Active Plan: <span className="capitalize">{adminUser?.subscription_plan || 'Advance'}</span></span>
+                </div>
+                <div className="text-[11px] text-muted-foreground font-medium pl-3 pt-0.5">
+                  {adminUser?.credits ?? 1224} credits left
+                </div>
               </div>
             </div>
-          )}
 
-          <div className="p-4 lg:p-8">
-            <Outlet context={{ handleOpenLiveStreamAction }} />
-          </div>
-          </div>
-        </main>
-      </div>
+            {/* Right Side: Theme Toggle, Notifications & User Profile */}
+            <div className="flex items-center gap-3 sm:gap-4">
+              <ThemeToggle className="w-9 h-9 p-0 rounded-full border border-border bg-card text-muted-foreground hover:text-foreground hover:bg-muted shadow-xs flex items-center justify-center cursor-pointer transition-all shrink-0" />
 
-      <UpgradePlansModal
-        isOpen={showUpgradePlansModal}
-        onClose={() => setShowUpgradePlansModal(false)}
-        handleSelectPlan={handleSelectPlan}
-        isProcessing={processingPlanId}
-        plans={subscriptionPlans}
-      />
-
-      {/* MODAL: AVAILABLE CREDITS & SUBSCRIPTION DETAILS */}
-      {showCreditsModal && (
-        <div className="fixed inset-0 z-[9999] flex items-center justify-center bg-black/60 backdrop-blur-sm p-4">
-          <div className="w-full max-w-md bg-white border border-slate-100 rounded-3xl p-8 shadow-2xl relative overflow-hidden text-slate-800 animate-in fade-in zoom-in duration-200">
-            {/* Design accents */}
-            <div className="absolute -right-16 -top-16 h-36 w-36 rounded-full bg-indigo-500/10 pointer-events-none" />
-            <div className="absolute -left-16 -bottom-16 h-36 w-36 rounded-full bg-primary/10 pointer-events-none" />
-
-            <div className="flex justify-between items-start mb-6">
-              <div>
-                <h3 className="text-xl font-extrabold tracking-tight text-slate-900 flex items-center gap-2">
-                  <Coins className="text-primary w-5 h-5" /> Subscription &amp; Credits
-                </h3>
-                <p className="text-slate-500 text-xs mt-1">Real-time status of your workspace subscription.</p>
-              </div>
+              {/* Notification Bell */}
               <button
-                type="button"
-                onClick={() => setShowCreditsModal(false)}
-                className="text-slate-400 hover:text-slate-700 bg-transparent border-none cursor-pointer outline-none p-1 rounded-lg hover:bg-slate-50"
+                onClick={() => setNotifDropdownOpen(!notifDropdownOpen)}
+                className="relative w-9 h-9 text-muted-foreground hover:text-foreground bg-card border border-border hover:bg-muted rounded-full transition-all cursor-pointer flex items-center justify-center shadow-xs"
+                title="Notifications"
               >
-                <XCircle size={20} />
+                <Bell size={17} />
+                {unreadCount > 0 && (
+                  <span className="absolute -top-1 -right-1 bg-sky-500 text-white font-extrabold text-[9px] min-w-[17px] h-[17px] px-1 rounded-full flex items-center justify-center shadow-xs border-2 border-white">
+                    {unreadCount}
+                  </span>
+                )}
               </button>
-            </div>
 
-            <div className="space-y-4 relative z-10">
-              {/* Active Plan Card */}
-              <div className="bg-gradient-to-br from-indigo-900 to-indigo-800 text-white rounded-2xl p-5 shadow-md">
-                <span className="text-[0.62rem] font-bold text-indigo-200 uppercase tracking-widest block">Current Active Plan</span>
-                <span className="text-2xl font-black block mt-1 tracking-tight">
-                  {adminUser?.subscription_plan || 'Free Trial'}
+              {/* User Profile */}
+              <div className="flex items-center gap-3 border-l border-border/70 pl-4">
+                <span className="text-xs text-muted-foreground font-medium hidden sm:block leading-tight text-right">
+                  Welcome back,<br />
+                  <span className="font-bold text-foreground text-sm">{userName}</span>
                 </span>
-                <div className="mt-3 flex items-center gap-1.5 text-xs text-indigo-100">
-                  <span className="h-1.5 w-1.5 bg-emerald-400 rounded-full animate-pulse" />
-                  Active Status
-                </div>
-              </div>
 
-              {/* Stats Grid */}
-              <div className="grid grid-cols-2 gap-3.5">
-                <div className="bg-slate-50 border border-slate-150 rounded-xl p-4">
-                  <span className="text-[0.62rem] font-bold text-slate-400 uppercase tracking-wider block">Available Credits</span>
-                  <span className="text-2xl font-black text-slate-800 block mt-1">
-                    {adminUser?.credits ?? 0}
-                  </span>
+                {/* Avatar with online dot */}
+                <div className="w-9 h-9 rounded-full bg-indigo-600 text-white font-extrabold text-sm flex items-center justify-center relative shadow-xs shrink-0">
+                  {userName.charAt(0).toUpperCase()}
+                  <span className="w-2.5 h-2.5 rounded-full bg-emerald-500 border-2 border-white absolute bottom-0 right-0" />
                 </div>
-                <div className="bg-slate-50 border border-slate-150 rounded-xl p-4">
-                  <span className="text-[0.62rem] font-bold text-slate-400 uppercase tracking-wider block">Total Credits Used</span>
-                  <span className="text-2xl font-black text-slate-800 block mt-1">
-                    {superAdminStats?.total !== '--' && superAdminStats?.total !== undefined ? superAdminStats.total : 0}
-                  </span>
-                </div>
-              </div>
 
-              {/* Expiry Date */}
-              <div className="bg-slate-50 border border-slate-150 rounded-xl p-4 flex justify-between items-center">
-                <div>
-                  <span className="text-[0.62rem] font-bold text-slate-400 uppercase tracking-wider block">Plan Expiry Date</span>
-                  <span className="text-sm font-bold text-slate-800 mt-1 block">
-                    {adminUser?.subscription_expiry
-                      ? new Date(adminUser.subscription_expiry).toLocaleDateString('en-US', {
-                        month: 'long',
-                        day: 'numeric',
-                        year: 'numeric'
-                      })
-                      : 'Lifetime Access / No Expiry'}
-                  </span>
-                </div>
-                <span className="text-slate-400 text-lg">📅</span>
+                {/* Circular Logout Button */}
+                <button
+                  onClick={handleLogout}
+                  title="Logout"
+                  className="w-9 h-9 rounded-full border border-border bg-card text-muted-foreground hover:text-rose-600 hover:border-rose-300 dark:hover:border-rose-500/40 transition-colors cursor-pointer flex items-center justify-center shadow-xs shrink-0"
+                >
+                  <LogOut size={16} />
+                </button>
               </div>
             </div>
+          </header>
 
-            <div className="flex flex-col gap-2.5 mt-8 border-t border-slate-100 pt-6">
-              <button
-                type="button"
-                onClick={() => {
-                  setShowCreditsModal(false)
-                  setShowUpgradePlansModal(true)
-                }}
-                className="w-full py-3.5 rounded-xl bg-indigo-600 hover:bg-indigo-500 border-none text-white font-bold text-sm cursor-pointer shadow-md shadow-indigo-100 hover:shadow-lg transition-all text-center"
-              >
-                Upgrade or Manage Plan
-              </button>
-              <button
-                type="button"
-                onClick={() => setShowCreditsModal(false)}
-                className="w-full py-3 rounded-xl bg-slate-50 border border-slate-200 text-slate-500 hover:bg-slate-100 hover:text-slate-700 font-semibold text-xs cursor-pointer transition-all"
-              >
-                Close Details
-              </button>
+          {/* Main Content */}
+          <main className="flex-1 overflow-y-auto bg-transparent relative">
+
+            <div className="relative z-10">
+              {notifDropdownOpen && (
+                <div className="absolute right-4 top-4 w-80 bg-card border border-border rounded-2xl shadow-xl py-2 z-50">
+                  <div className="flex items-center justify-between px-4 py-2 border-b border-border">
+                    <span className="text-xs font-bold text-foreground font-sans">Recent Notifications</span>
+                    {unreadCount > 0 && (
+                      <button
+                        onClick={handleMarkAllRead}
+                        className="text-[10px] font-bold text-indigo-600 hover:underline cursor-pointer border-none bg-transparent"
+                      >
+                        Mark all read
+                      </button>
+                    )}
+                  </div>
+
+                  <div className="max-h-64 overflow-y-auto divide-y divide-border">
+                    {notifications.length === 0 ? (
+                      <div className="py-8 text-center text-xs text-muted-foreground font-sans">No notifications</div>
+                    ) : (
+                      notifications.slice(0, 5).map(n => (
+                        <div
+                          key={n.id}
+                          onClick={() => {
+                            if (!n.read) handleMarkRead(n.id)
+                            setNotifDropdownOpen(false)
+                            if (n.type === 'credits') navigate('/superadmin/team')
+                            else if (n.type === 'activity') navigate('/superadmin/new-dashboard')
+                            else navigate('/superadmin/new-dashboard')
+                          }}
+                          className={`p-3 text-left hover:bg-muted cursor-pointer transition-colors flex gap-2.5 items-start ${!n.read ? 'bg-primary/10' : ''
+                            }`}
+                        >
+                          <div className="p-1.5 rounded-lg bg-muted flex-shrink-0 mt-0.5">
+                            {getNotifIcon(n.type)}
+                          </div>
+                          <div className="space-y-0.5 min-w-0">
+                            <div className="flex items-center gap-1.5 justify-between">
+                              <span className={`text-xs font-bold truncate block ${!n.read ? 'text-foreground' : 'text-muted-foreground'}`}>{n.title}</span>
+                              {!n.read && <span className="w-1.5 h-1.5 rounded-full bg-indigo-600 shrink-0" />}
+                            </div>
+                            <p className="text-[11px] text-muted-foreground leading-normal line-clamp-2 font-sans">{n.message}</p>
+                            <span className="text-[9px] text-muted-foreground/80 block pt-0.5 font-sans">{formatRelativeTime(n.created_at)}</span>
+                          </div>
+                        </div>
+                      ))
+                    )}
+                  </div>
+
+                  <div className="border-t border-border px-4 pt-2 pb-1 text-center">
+                    <NavLink
+                      to="/superadmin/notifications"
+                      onClick={() => setNotifDropdownOpen(false)}
+                      className="text-[11px] font-bold text-indigo-600 hover:underline no-underline block py-1 font-sans"
+                    >
+                      View All Notifications
+                    </NavLink>
+                  </div>
+                </div>
+              )}
+
+              <div className="p-4 lg:p-8">
+                <Outlet context={{ handleOpenLiveStreamAction }} />
+              </div>
+            </div>
+          </main>
+        </div>
+
+        <UpgradePlansModal
+          isOpen={showUpgradePlansModal}
+          onClose={() => setShowUpgradePlansModal(false)}
+          handleSelectPlan={handleSelectPlan}
+          isProcessing={processingPlanId}
+          plans={subscriptionPlans}
+        />
+
+        {/* MODAL: AVAILABLE CREDITS & SUBSCRIPTION DETAILS */}
+        {showCreditsModal && (
+          <div className="fixed inset-0 z-[9999] flex items-center justify-center bg-black/60 backdrop-blur-sm p-4">
+            <div className="w-full max-w-md bg-white border border-slate-100 rounded-3xl p-8 shadow-2xl relative overflow-hidden text-slate-800 animate-in fade-in zoom-in duration-200">
+              {/* Design accents */}
+              <div className="absolute -right-16 -top-16 h-36 w-36 rounded-full bg-indigo-500/10 pointer-events-none" />
+              <div className="absolute -left-16 -bottom-16 h-36 w-36 rounded-full bg-primary/10 pointer-events-none" />
+
+              <div className="flex justify-between items-start mb-6">
+                <div>
+                  <h3 className="text-xl font-extrabold tracking-tight text-slate-900 flex items-center gap-2">
+                    <Coins className="text-primary w-5 h-5" /> Subscription &amp; Credits
+                  </h3>
+                  <p className="text-slate-500 text-xs mt-1">Real-time status of your workspace subscription.</p>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => setShowCreditsModal(false)}
+                  className="text-slate-400 hover:text-slate-700 bg-transparent border-none cursor-pointer outline-none p-1 rounded-lg hover:bg-slate-50"
+                >
+                  <XCircle size={20} />
+                </button>
+              </div>
+
+              <div className="space-y-4 relative z-10">
+                {/* Active Plan Card */}
+                <div className="bg-gradient-to-br from-indigo-900 to-indigo-800 text-white rounded-2xl p-5 shadow-md">
+                  <span className="text-[0.62rem] font-bold text-indigo-200 uppercase tracking-widest block">Current Active Plan</span>
+                  <span className="text-2xl font-black block mt-1 tracking-tight">
+                    {adminUser?.subscription_plan || 'Free Trial'}
+                  </span>
+                  <div className="mt-3 flex items-center gap-1.5 text-xs text-indigo-100">
+                    <span className="h-1.5 w-1.5 bg-emerald-400 rounded-full animate-pulse" />
+                    Active Status
+                  </div>
+                </div>
+
+                {/* Stats Grid */}
+                <div className="grid grid-cols-2 gap-3.5">
+                  <div className="bg-slate-50 border border-slate-150 rounded-xl p-4">
+                    <span className="text-[0.62rem] font-bold text-slate-400 uppercase tracking-wider block">Available Credits</span>
+                    <span className="text-2xl font-black text-slate-800 block mt-1">
+                      {adminUser?.credits ?? 0}
+                    </span>
+                  </div>
+                  <div className="bg-slate-50 border border-slate-150 rounded-xl p-4">
+                    <span className="text-[0.62rem] font-bold text-slate-400 uppercase tracking-wider block">Total Credits Used</span>
+                    <span className="text-2xl font-black text-slate-800 block mt-1">
+                      {superAdminStats?.total !== '--' && superAdminStats?.total !== undefined ? superAdminStats.total : 0}
+                    </span>
+                  </div>
+                </div>
+
+                {/* Expiry Date */}
+                <div className="bg-slate-50 border border-slate-150 rounded-xl p-4 flex justify-between items-center">
+                  <div>
+                    <span className="text-[0.62rem] font-bold text-slate-400 uppercase tracking-wider block">Plan Expiry Date</span>
+                    <span className="text-sm font-bold text-slate-800 mt-1 block">
+                      {adminUser?.subscription_expiry
+                        ? new Date(adminUser.subscription_expiry).toLocaleDateString('en-US', {
+                          month: 'long',
+                          day: 'numeric',
+                          year: 'numeric'
+                        })
+                        : 'Lifetime Access / No Expiry'}
+                    </span>
+                  </div>
+                  <span className="text-slate-400 text-lg">📅</span>
+                </div>
+              </div>
+
+              <div className="flex flex-col gap-2.5 mt-8 border-t border-slate-100 pt-6">
+                <button
+                  type="button"
+                  onClick={() => {
+                    setShowCreditsModal(false)
+                    setShowUpgradePlansModal(true)
+                  }}
+                  className="w-full py-3.5 rounded-xl bg-indigo-600 hover:bg-indigo-500 border-none text-white font-bold text-sm cursor-pointer shadow-md shadow-indigo-100 hover:shadow-lg transition-all text-center"
+                >
+                  Upgrade or Manage Plan
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setShowCreditsModal(false)}
+                  className="w-full py-3 rounded-xl bg-slate-50 border border-slate-200 text-slate-500 hover:bg-slate-100 hover:text-slate-700 font-semibold text-xs cursor-pointer transition-all"
+                >
+                  Close Details
+                </button>
+              </div>
             </div>
           </div>
-        </div>
-      )}
+        )}
 
-      <CandidateScorecardModal
-        isOpen={!!selectedCandidate}
-        onClose={() => dispatch(setSelectedCandidate(null))}
-        selectedCandidate={selectedCandidate}
-        loadingDetail={loadingDetail}
-        candidateDetail={candidateDetail}
-        handleUpdateDecision={handleUpdateDecisionAction}
-      />
+        <CandidateScorecardModal
+          isOpen={!!selectedCandidate}
+          onClose={() => dispatch(setSelectedCandidate(null))}
+          selectedCandidate={selectedCandidate}
+          loadingDetail={loadingDetail}
+          candidateDetail={candidateDetail}
+          handleUpdateDecision={handleUpdateDecisionAction}
+        />
 
-      <LiveResultsModal
-        isOpen={liveResultsModalOpen}
-        onClose={() => dispatch(setLiveResultsModalOpen(false))}
-        ongoingLiveCount={ongoingLiveCount}
-        ongoingAlertCount={ongoingAlertCount}
-        ongoingSpeakingCount={ongoingSpeakingCount}
-        ongoingCodingCount={ongoingCodingCount}
-        liveSessions={liveSessions}
-        handleOpenScorecard={() => { }}
-        handleOpenLiveStream={handleOpenLiveStreamAction}
-      />
+        <LiveResultsModal
+          isOpen={liveResultsModalOpen}
+          onClose={() => dispatch(setLiveResultsModalOpen(false))}
+          ongoingLiveCount={ongoingLiveCount}
+          ongoingAlertCount={ongoingAlertCount}
+          ongoingSpeakingCount={ongoingSpeakingCount}
+          ongoingCodingCount={ongoingCodingCount}
+          liveSessions={liveSessions}
+          handleOpenScorecard={() => { }}
+          handleOpenLiveStream={handleOpenLiveStreamAction}
+        />
 
-      <LiveMonitorStreamModal
-        isOpen={isLiveStreamOpen}
-        onClose={() => {
-          setIsLiveStreamOpen(false)
-          setLiveStreamSession(null)
-        }}
-        session={liveStreamSession}
-      />
+        <LiveMonitorStreamModal
+          isOpen={isLiveStreamOpen}
+          onClose={() => {
+            setIsLiveStreamOpen(false)
+            setLiveStreamSession(null)
+          }}
+          session={liveStreamSession}
+        />
 
-      {/* Global Copilot */}
-      <AdminCopilot />
+        {/* Global Copilot */}
+        <AdminCopilot />
       </div>
     </SidebarProvider>
   )

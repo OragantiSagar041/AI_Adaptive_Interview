@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useRef } from 'react'
 import { useSelector } from 'react-redux'
 import { useNavigate } from 'react-router-dom'
+import { getThemeColor, rgbaFromCssVar } from '../../utils/themeUtils'
 import { RefreshCw, Play, Plus, Building, Video, Server, ArrowUp, DollarSign } from 'lucide-react'
 import axios from 'axios'
 
@@ -59,7 +60,7 @@ export default function MasterDashboard() {
       planCounts[p] = (planCounts[p] || 0) + 1
     })
 
-    const primaryColor = getComputedStyle(document.documentElement).getPropertyValue('--primary-color').trim() || '#6366f1'
+    const primaryColor = getThemeColor('--primary-color', '#6366f1')
 
     const ctxMrr = mrrChartRef.current
     if (ctxMrr && window.Chart) {
@@ -71,7 +72,7 @@ export default function MasterDashboard() {
             label: 'MRR ($)',
             data: [5000, 6500, 8200, 9500, 11000, Math.max(12450, companies.length * 150)],
             borderColor: primaryColor,
-            backgroundColor: `${primaryColor}1A`,
+            backgroundColor: rgbaFromCssVar('--primary-color', 0.1, 'rgba(99,102,241,0.1)'),
             borderWidth: 3,
             fill: true,
             tension: 0.4
@@ -82,7 +83,7 @@ export default function MasterDashboard() {
           maintainAspectRatio: false,
           plugins: { legend: { display: false } },
           scales: {
-            y: { beginAtZero: true, grid: { color: 'rgba(0,0,0,0.05)' } },
+            y: { beginAtZero: true, grid: { color: rgbaFromCssVar('--muted', 0.08, 'rgba(0,0,0,0.05)') } },
             x: { grid: { display: false } }
           }
         }
@@ -99,7 +100,13 @@ export default function MasterDashboard() {
           labels: labels,
           datasets: [{
             data: dataVals,
-            backgroundColor: ['#6366f1', '#10b981', '#f59e0b', '#3b82f6', '#ec4899'],
+            backgroundColor: [
+              getThemeColor('--color-purple', '#6366f1'),
+              getThemeColor('--color-emerald', '#10b981'),
+              getThemeColor('--color-amber', '#f59e0b'),
+              getThemeColor('--color-blue', '#3b82f6'),
+              getThemeColor('--color-pink', '#ec4899')
+            ],
             borderWidth: 0,
             hoverOffset: 4
           }]

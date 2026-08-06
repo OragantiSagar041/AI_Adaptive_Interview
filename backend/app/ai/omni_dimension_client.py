@@ -1,8 +1,59 @@
 import json
+import hashlib
+import os
 import re
 from typing import Optional, Tuple
 from omnidimension import Client
+import redis
 from app.core.config import get_omni_dimension_api_key, get_omni_voice_id, get_omni_agent_id
+
+_OMNI_CACHE_TTL = int(os.getenv("OMNI_CACHE_TTL_SECONDS", "15"))
+_omni_cache = None
+
+
+def _get_omni_cache():
+    global _omni_cache
+    if _omni_cache is not None:
+        return _omni_cache
+    try:
+        _omni_cache = redis.Redis.from_url(
+            os.getenv("REDIS_URL", "redis://localhost:6379/0"),
+            decode_responses=True,
+            socket_connect_timeout=0.25,
+            socket_timeout=0.25,
+            protocol=2,
+        )
+        _omni_cache.ping()
+    except Exception:
+        _omni_cache = False
+    return _omni_cache
+
+
+def _omni_cache_key(api_key: Optional[str], resource: str) -> str:
+    account = api_key or get_omni_dimension_api_key() or "default"
+    digest = hashlib.sha256(account.encode("utf-8")).hexdigest()[:20]
+    return f"omni:{resource}:{digest}"
+
+
+def get_cached_omni_json(api_key: Optional[str], resource: str):
+    cache = _get_omni_cache()
+    if not cache:
+        return None
+    try:
+        raw = cache.get(_omni_cache_key(api_key, resource))
+        return json.loads(raw) if raw else None
+    except Exception:
+        return None
+
+
+def set_cached_omni_json(api_key: Optional[str], resource: str, value):
+    cache = _get_omni_cache()
+    if not cache:
+        return
+    try:
+        cache.setex(_omni_cache_key(api_key, resource), _OMNI_CACHE_TTL, json.dumps(value))
+    except Exception:
+        pass
 
 
 
@@ -59,6 +110,10 @@ def get_omni_account(api_key: Optional[str] = None) -> Tuple[Client, dict, str]:
     Returns: (client, agent_dict, agent_id_str)
     """
     client = get_omni_client(api_key)
+
+    cached = get_cached_omni_json(api_key, "account")
+    if cached and isinstance(cached, dict) and cached.get("agent"):
+        return client, cached["agent"], str(cached.get("agent_id") or cached["agent"].get("id"))
     
     agent_id = str(get_omni_agent_id() or "1")
     agent_data = {}
@@ -94,6 +149,7 @@ def get_omni_account(api_key: Optional[str] = None) -> Tuple[Client, dict, str]:
     except Exception as e:
         print(f"[get_omni_account note] Unable to get agent {agent_id} via SDK: {e}")
 
+    set_cached_omni_json(api_key, "account", {"agent": agent_data, "agent_id": agent_id})
     return client, agent_data, agent_id
 
 

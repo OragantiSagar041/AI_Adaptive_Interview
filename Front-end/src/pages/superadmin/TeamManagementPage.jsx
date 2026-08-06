@@ -270,19 +270,17 @@ export default function TeamManagementPage() {
   return (
     <div className="space-y-8 w-full max-w-7xl text-slate-800 relative z-10">
       {/* Admins Table List Card */}
-      <div className="bg-white/80 backdrop-blur-2xl border border-white/60 p-0 shadow-[0_8px_30px_rgb(0,0,0,0.04)] rounded-3xl overflow-hidden relative">
-        <div className="absolute top-0 left-0 w-full h-32 bg-gradient-to-b from-indigo-50/50 to-transparent pointer-events-none" />
-
-        <div className="p-6 sm:p-8 border-b border-slate-100/50 flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 relative z-10">
+      <div className="bg-card border border-border p-0 shadow-sm rounded-3xl overflow-hidden relative">
+        <div className="p-6 sm:p-8 border-b border-border/50 flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 relative z-10">
           <div className="flex gap-4 items-center">
-            <div className="w-14 h-14 rounded-2xl flex items-center justify-center bg-gradient-to-br from-indigo-600 via-indigo-700 to-purple-800 text-white shadow-[0_8px_16px_rgba(79,70,229,0.25)] border border-white/20 ring-4 ring-indigo-50 shrink-0">
+            <div className="w-14 h-14 rounded-2xl flex items-center justify-center bg-gradient-to-br from-indigo-600 via-indigo-700 to-purple-800 text-white shadow-[0_8px_16px_rgba(79,70,229,0.25)] border border-white/10 ring-4 ring-indigo-50/10 shrink-0">
               <Users size={26} strokeWidth={2.5} />
             </div>
             <div className="flex flex-col">
-              <h3 className="text-2xl font-black text-transparent bg-clip-text bg-gradient-to-r from-slate-900 to-indigo-900 tracking-tight leading-tight">
+              <h3 className="text-2xl font-black text-foreground tracking-tight leading-tight">
                 Admin Management
               </h3>
-              <p className="text-sm text-slate-500 font-semibold tracking-wide mt-0.5">
+              <p className="text-sm text-muted-foreground font-semibold tracking-wide mt-0.5">
                 Manage sub-admins and their allocated credits
               </p>
             </div>
@@ -296,79 +294,79 @@ export default function TeamManagementPage() {
           </button>
         </div>
 
-        <div className="overflow-x-auto p-4 sm:p-6 bg-slate-50/30">
+        <div className="overflow-x-auto p-4 sm:p-6 bg-background/5">
           <table className="w-full border-collapse text-left">
             <thead>
-              <tr className="border-b-2 border-slate-200">
-                <th className="p-4 text-[0.75rem] font-extrabold uppercase text-slate-400 tracking-wider">Profile</th>
-                <th className="p-4 text-[0.75rem] font-extrabold uppercase text-slate-400 tracking-wider">Mail</th>
-                <th className="p-4 text-[0.75rem] font-extrabold uppercase text-slate-400 tracking-wider">Role</th>
-                <th className="p-4 text-[0.75rem] font-extrabold uppercase text-slate-400 tracking-wider text-center">Credits</th>
-                <th className="p-4 text-[0.75rem] font-extrabold uppercase text-slate-400 tracking-wider text-center">Status</th>
-                <th className="p-4 text-[0.75rem] font-extrabold uppercase text-slate-400 tracking-wider text-right">Actions</th>
+              <tr className="border-b-2 border-border/50">
+                <th className="p-4 text-[0.75rem] font-extrabold uppercase text-muted-foreground tracking-wider">Profile</th>
+                <th className="p-4 text-[0.75rem] font-extrabold uppercase text-muted-foreground tracking-wider">Mail</th>
+                <th className="p-4 text-[0.75rem] font-extrabold uppercase text-muted-foreground tracking-wider">Role</th>
+                <th className="p-4 text-[0.75rem] font-extrabold uppercase text-muted-foreground tracking-wider text-center">Credits</th>
+                <th className="p-4 text-[0.75rem] font-extrabold uppercase text-muted-foreground tracking-wider text-center">Status</th>
+                <th className="p-4 text-[0.75rem] font-extrabold uppercase text-muted-foreground tracking-wider text-right">Actions</th>
               </tr>
             </thead>
-            <tbody className="divide-y divide-slate-100">
+            <tbody className="divide-y divide-border/40">
               {loadingAdmins ? (
                 <tr>
-                  <td colSpan="6" className="p-16 text-center text-slate-500 font-semibold">
-                    <RefreshCw className="animate-spin text-indigo-600 inline mr-2 w-6 h-6" /> Syncing team members...
+                  <td colSpan="6" className="p-16 text-center text-muted-foreground font-semibold">
+                    <RefreshCw className="animate-spin text-indigo-500 inline mr-2 w-6 h-6" /> Syncing team members...
                   </td>
                 </tr>
               ) : admins.length === 0 ? (
                 <tr>
                   <td colSpan="6" className="p-16 text-center">
                     <div className="flex flex-col items-center justify-center">
-                      <div className="w-16 h-16 rounded-full bg-slate-100 flex items-center justify-center mb-4">
-                        <Users size={32} className="text-slate-400" />
+                      <div className="w-16 h-16 rounded-full bg-muted/20 flex items-center justify-center mb-4">
+                        <Users size={32} className="text-muted-foreground" />
                       </div>
-                      <p className="text-slate-500 font-medium text-base">No additional sub-admins provisioned.</p>
-                      <p className="text-slate-400 text-sm mt-1">Click 'Provision Admin' to invite team members.</p>
+                      <p className="text-muted-foreground font-medium text-base">No additional sub-admins provisioned.</p>
+                      <p className="text-muted-foreground text-sm mt-1">Click 'Provision Admin' to invite team members.</p>
                     </div>
                   </td>
                 </tr>
               ) : (
                 admins.map(admin => (
-                  <tr key={admin.id || admin.username} className="hover:bg-indigo-50/30 transition-colors group">
+                  <tr key={admin.id || admin.username} className="hover:bg-muted/40 transition-colors group">
                     <td className="p-4">
                       <div className="flex items-center gap-3">
-                        <div className="w-10 h-10 rounded-full bg-gradient-to-tr from-indigo-100 to-purple-100 flex items-center justify-center text-indigo-700 font-bold uppercase border border-indigo-200 shadow-sm shrink-0">
+                        <div className="w-10 h-10 rounded-full bg-gradient-to-tr from-indigo-500 to-purple-500 flex items-center justify-center text-white font-bold uppercase border border-indigo-500/20 shadow-sm shrink-0">
                           {(admin.name || admin.username || 'A')[0]}
                         </div>
                         <div className="flex flex-col">
-                          <span className="font-bold text-slate-800 text-sm">{admin.name || admin.username}</span>
-                          <span className="text-[10px] text-slate-400 font-medium uppercase tracking-wider">{admin.custom_id || admin.id}</span>
+                          <span className="font-bold text-foreground text-sm">{admin.name || admin.username}</span>
+                          <span className="text-[10px] text-muted-foreground font-medium uppercase tracking-wider">{admin.custom_id || admin.id}</span>
                         </div>
                       </div>
                     </td>
-                    <td className="p-4 text-sm text-slate-500 font-medium">{admin.email}</td>
+                    <td className="p-4 text-sm text-muted-foreground font-medium">{admin.email}</td>
                     <td className="p-4">
-                      <div className="flex items-center gap-1.5 text-xs font-semibold text-slate-600 bg-slate-100 w-fit px-3 py-1 rounded-full border border-slate-200">
-                        <Shield size={12} className="text-indigo-500" />
+                      <div className="flex items-center gap-1.5 text-xs font-bold text-slate-800 bg-slate-100 w-fit px-3 py-1 rounded-full border border-slate-300 shadow-xs">
+                        <Shield size={12} className="text-indigo-600" />
                         <span className="capitalize">{admin.role || 'Admin'}</span>
                       </div>
                     </td>
                     <td className="p-4 text-center">
-                      <div className="inline-flex items-center gap-1.5 text-sm font-bold text-indigo-700 bg-indigo-50 px-3 py-1 rounded-full">
-                        <Coins size={14} />
+                      <div className="inline-flex items-center gap-1.5 text-sm font-black text-sky-700 bg-sky-50 px-3.5 py-1 rounded-full border border-sky-300 shadow-xs">
+                        <Coins size={14} className="text-sky-600" />
                         {admin.credits || 0}
                       </div>
                     </td>
                     <td className="p-4 text-center">
-                      <span className={`inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-[0.7rem] font-bold uppercase tracking-wider ${admin.login_enabled === false ? 'bg-rose-50 text-rose-600 border border-rose-200 shadow-sm shadow-rose-100' : 'bg-emerald-50 text-emerald-600 border border-emerald-200 shadow-sm shadow-emerald-100'}`}>
+                      <span className={`inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-[0.7rem] font-black uppercase tracking-wider ${admin.login_enabled === false ? 'bg-rose-50 text-rose-700 border border-rose-300 shadow-xs' : 'bg-emerald-50 text-emerald-700 border border-emerald-300 shadow-xs'}`}>
                         {admin.login_enabled === false ? <ShieldOff size={12} /> : <ShieldCheck size={12} />}
                         {admin.login_enabled === false ? 'Deactivated' : 'Active'}
                       </span>
                     </td>
                     <td className="p-4 text-right">
                       <div className="flex items-center justify-end gap-2 opacity-0 group-hover:opacity-100 transition-opacity">
-                        <button onClick={() => handleToggleStatus(admin)} title={admin.login_enabled === false ? 'Activate' : 'Deactivate'} className={`p-2 rounded-xl border-none cursor-pointer transition-all ${admin.login_enabled === false ? 'bg-emerald-100 text-emerald-700 hover:bg-emerald-200' : 'bg-rose-100 text-rose-700 hover:bg-rose-200'}`}>
+                        <button onClick={() => handleToggleStatus(admin)} title={admin.login_enabled === false ? 'Activate' : 'Deactivate'} className={`p-2 rounded-xl border-none cursor-pointer transition-all ${admin.login_enabled === false ? 'bg-emerald-50 text-emerald-700 hover:bg-emerald-100' : 'bg-rose-50 text-rose-700 hover:bg-rose-100'}`}>
                           {admin.login_enabled === false ? <Check size={16} /> : <X size={16} />}
                         </button>
-                        <button onClick={() => handleAddCreditsToAdmin(admin.id)} title="Add Credits" className="p-2 rounded-xl border-none cursor-pointer transition-all bg-indigo-100 text-indigo-700 hover:bg-indigo-200">
+                        <button onClick={() => handleAddCreditsToAdmin(admin.id)} title="Add Credits" className="p-2 rounded-xl border-none cursor-pointer transition-all bg-indigo-50 text-indigo-700 hover:bg-indigo-100">
                           <Plus size={16} />
                         </button>
-                        <button onClick={() => handleDeleteAdmin(admin.id)} title="Remove Admin" className="p-2 rounded-xl border-none cursor-pointer transition-all bg-slate-100 text-slate-600 hover:bg-slate-200 hover:text-rose-600">
+                        <button onClick={() => handleDeleteAdmin(admin.id)} title="Remove Admin" className="p-2 rounded-xl border-none cursor-pointer transition-all bg-slate-100 text-slate-700 hover:bg-rose-100 hover:text-rose-700">
                           <Trash2 size={16} />
                         </button>
                       </div>
@@ -382,37 +380,37 @@ export default function TeamManagementPage() {
       </div>
 
       {/* Credit Requests Card */}
-      <div className="bg-white/80 backdrop-blur-2xl border border-white/60 p-0 shadow-[0_8px_30px_rgb(0,0,0,0.04)] rounded-3xl overflow-hidden relative mt-10">
-        <div className="p-6 sm:p-8 border-b border-slate-100/50 flex items-center gap-4">
-          <div className="w-14 h-14 rounded-2xl flex items-center justify-center bg-gradient-to-br from-amber-400 to-orange-500 text-white shadow-[0_8px_16px_rgba(245,158,11,0.25)] border border-white/20 ring-4 ring-amber-50 shrink-0">
+      <div className="bg-card border border-border p-0 shadow-sm rounded-3xl overflow-hidden relative mt-10">
+        <div className="p-6 sm:p-8 border-b border-border/50 flex items-center gap-4">
+          <div className="w-14 h-14 rounded-2xl flex items-center justify-center bg-gradient-to-br from-amber-500 to-orange-500 text-white shadow-[0_8px_16px_rgba(245,158,11,0.18)] border border-white/10 ring-4 ring-amber-50/10 shrink-0">
             <CreditCard size={26} strokeWidth={2.5} />
           </div>
           <div className="flex flex-col">
-            <h3 className="text-2xl font-black text-transparent bg-clip-text bg-gradient-to-r from-slate-900 to-amber-900 tracking-tight leading-tight">
+            <h3 className="text-2xl font-black text-foreground tracking-tight leading-tight">
               Pending Credit Requests
             </h3>
-            <p className="text-sm text-slate-500 font-semibold tracking-wide mt-0.5">
+            <p className="text-sm text-muted-foreground font-semibold tracking-wide mt-0.5">
               Approve or reject credit request notifications from sub-admins
             </p>
           </div>
         </div>
 
-        <div className="overflow-x-auto p-4 sm:p-6 bg-slate-50/30">
+        <div className="overflow-x-auto p-4 sm:p-6 bg-card">
           <table className="w-full border-collapse text-left">
             <thead>
-              <tr className="border-b-2 border-slate-200">
-                <th className="p-4 text-[0.75rem] font-extrabold uppercase text-slate-400 tracking-wider">Date</th>
-                <th className="p-4 text-[0.75rem] font-extrabold uppercase text-slate-400 tracking-wider">Admin</th>
-                <th className="p-4 text-[0.75rem] font-extrabold uppercase text-slate-400 tracking-wider">Requested</th>
-                <th className="p-4 text-[0.75rem] font-extrabold uppercase text-slate-400 tracking-wider">Reason</th>
-                <th className="p-4 text-[0.75rem] font-extrabold uppercase text-slate-400 tracking-wider text-center">Status</th>
-                <th className="p-4 text-[0.75rem] font-extrabold uppercase text-slate-400 tracking-wider text-right">Actions</th>
+              <tr className="border-b-2 border-border/60">
+                <th className="p-4 text-[0.75rem] font-extrabold uppercase text-muted-foreground tracking-wider">Date</th>
+                <th className="p-4 text-[0.75rem] font-extrabold uppercase text-muted-foreground tracking-wider">Admin</th>
+                <th className="p-4 text-[0.75rem] font-extrabold uppercase text-muted-foreground tracking-wider">Requested</th>
+                <th className="p-4 text-[0.75rem] font-extrabold uppercase text-muted-foreground tracking-wider">Reason</th>
+                <th className="p-4 text-[0.75rem] font-extrabold uppercase text-muted-foreground tracking-wider text-center">Status</th>
+                <th className="p-4 text-[0.75rem] font-extrabold uppercase text-muted-foreground tracking-wider text-right">Actions</th>
               </tr>
             </thead>
-            <tbody className="divide-y divide-slate-100">
+            <tbody className="divide-y divide-border/40">
               {loadingRequests ? (
                 <tr>
-                  <td colSpan="6" className="p-16 text-center text-slate-500 font-semibold">
+                  <td colSpan="6" className="p-16 text-center text-muted-foreground font-semibold">
                     <RefreshCw className="animate-spin text-amber-500 inline mr-2 w-6 h-6" /> Syncing requests...
                   </td>
                 </tr>
@@ -420,39 +418,39 @@ export default function TeamManagementPage() {
                 <tr>
                   <td colSpan="6" className="p-16 text-center">
                     <div className="flex flex-col items-center justify-center">
-                      <div className="w-16 h-16 rounded-full bg-slate-100 flex items-center justify-center mb-4">
-                        <Activity size={32} className="text-slate-400" />
+                      <div className="w-16 h-16 rounded-full bg-muted/20 flex items-center justify-center mb-4">
+                        <Activity size={32} className="text-muted-foreground" />
                       </div>
-                      <p className="text-slate-500 font-medium text-base">No pending credit requests.</p>
-                      <p className="text-slate-400 text-sm mt-1">You're all caught up!</p>
+                      <p className="text-muted-foreground font-medium text-base">No pending credit requests.</p>
+                      <p className="text-muted-foreground text-sm mt-1">You're all caught up!</p>
                     </div>
                   </td>
                 </tr>
               ) : (
                 creditRequests.map(r => (
-                  <tr key={r.id || r._id} className="hover:bg-amber-50/30 transition-colors">
-                    <td className="p-4 text-sm text-slate-500 font-medium">
+                  <tr key={r.id || r._id} className="hover:bg-muted/30 transition-colors">
+                    <td className="p-4 text-sm text-muted-foreground font-medium">
                       {r.created_at ? new Date(r.created_at).toLocaleDateString(undefined, { month: 'short', day: 'numeric', year: 'numeric' }) : '-'}
                     </td>
                     <td className="p-4">
                       <div className="flex items-center gap-3">
-                        <div className="w-8 h-8 rounded-full bg-slate-200 flex items-center justify-center text-slate-600 font-bold uppercase text-xs">
+                        <div className="w-8 h-8 rounded-full bg-muted/40 flex items-center justify-center text-foreground font-bold uppercase text-xs">
                           {(r.admin_name || r.admin_username || 'U')[0]}
                         </div>
-                        <span className="font-bold text-slate-800 text-sm">{r.admin_name || r.admin_username}</span>
+                        <span className="font-bold text-foreground text-sm">{r.admin_name || r.admin_username}</span>
                       </div>
                     </td>
                     <td className="p-4">
-                      <div className="inline-flex items-center gap-1.5 text-sm font-black text-amber-600 bg-amber-50 px-3 py-1 rounded-lg border border-amber-200/50">
+                      <div className="inline-flex items-center gap-1.5 text-sm font-black text-amber-700 bg-amber-50 px-3 py-1 rounded-lg border border-amber-300">
                         <Coins size={14} />
                         {r.amount || r.amount_requested}
                       </div>
                     </td>
-                    <td className="p-4 text-sm text-slate-600 max-w-xs truncate" title={r.reason}>
-                      {r.reason || <span className="italic text-slate-400">No reason provided</span>}
+                    <td className="p-4 text-sm text-muted-foreground max-w-xs truncate" title={r.reason}>
+                      {r.reason || <span className="italic text-muted-foreground">No reason provided</span>}
                     </td>
                     <td className="p-4 text-center">
-                      <span className={`inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-[0.7rem] font-bold uppercase tracking-wider ${r.status === 'approved' ? 'bg-emerald-50 text-emerald-600 border border-emerald-200 shadow-sm shadow-emerald-100' : r.status === 'rejected' ? 'bg-rose-50 text-rose-600 border border-rose-200 shadow-sm shadow-rose-100' : 'bg-amber-50 text-amber-600 border border-amber-200 shadow-sm shadow-amber-100'}`}>
+                      <span className={`inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-[0.7rem] font-bold uppercase tracking-wider ${r.status === 'approved' ? 'bg-emerald-50 text-emerald-700 border border-emerald-300 shadow-xs' : r.status === 'rejected' ? 'bg-rose-50 text-rose-700 border border-rose-300 shadow-xs' : 'bg-amber-50 text-amber-700 border border-amber-300 shadow-xs'}`}>
                         {r.status || 'pending'}
                       </span>
                     </td>
@@ -467,13 +465,13 @@ export default function TeamManagementPage() {
                           </button>
                           <button
                             onClick={() => handleDecideCreditRequest(r.id || r._id, 'rejected')}
-                            className="flex items-center gap-1.5 px-4 py-2 rounded-xl bg-slate-100 hover:bg-rose-100 text-slate-600 hover:text-rose-600 font-bold text-xs cursor-pointer border-none transition-all"
+                            className="flex items-center gap-1.5 px-4 py-2 rounded-xl bg-muted/40 hover:bg-rose-500/20 text-muted-foreground hover:text-rose-400 font-bold text-xs cursor-pointer border-none transition-all"
                           >
                             <X size={14} /> Reject
                           </button>
                         </div>
                       ) : (
-                        <span className="text-xs text-slate-400 font-semibold uppercase tracking-wider bg-slate-50 px-3 py-1.5 rounded-lg border border-slate-100">Processed</span>
+                        <span className="text-xs text-muted-foreground font-semibold uppercase tracking-wider bg-muted/30 px-3 py-1.5 rounded-lg border border-border">Processed</span>
                       )}
                     </td>
                   </tr>

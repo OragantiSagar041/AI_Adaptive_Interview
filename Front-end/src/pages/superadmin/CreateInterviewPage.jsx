@@ -963,26 +963,26 @@ Congratulations! You have been selected for an AI-powered interview. Please revi
     <>
       <div className="flex flex-col gap-8">
         {/* Page Header */}
-        <div className="flex flex-col gap-1.5 md:flex-row md:justify-between md:items-center bg-white/40 p-6 rounded-2xl border border-slate-200/60 backdrop-blur-md shadow-[0_8px_30px_rgb(0,0,0,0.02)]">
+        <div className="flex flex-col gap-1.5 md:flex-row md:justify-between md:items-center bg-card/40 p-6 rounded-2xl border border-border/60 backdrop-blur-md shadow-[0_8px_30px_rgb(0,0,0,0.02)]">
           <div className="flex items-center gap-4">
-            <div className="w-12 h-12 rounded-2xl bg-indigo-50 border border-indigo-100 flex items-center justify-center text-primary shadow-sm">
+            <div className="w-12 h-12 rounded-2xl bg-indigo-500/10 border border-indigo-500/20 flex items-center justify-center text-primary shadow-sm">
               <i className="fas fa-file-signature text-xl"></i>
             </div>
             <div>
-              <h2 className="text-xl font-extrabold text-slate-800 tracking-tight">Create Interview Session</h2>
-              <p className="text-xs text-slate-500 font-medium">Configure settings, parse resumes, and invite candidates to AI-conducted adaptive interviews.</p>
+              <h2 className="text-xl font-extrabold text-foreground tracking-tight">Create Interview Session</h2>
+              <p className="text-xs text-muted-foreground font-medium">Configure settings, parse resumes, and invite candidates to AI-conducted adaptive interviews.</p>
             </div>
           </div>
         </div>
 
         {/* Tab Switcher Capsule */}
-        <div className="flex bg-slate-100/80 p-1.5 rounded-2xl gap-1.5 max-w-md mx-auto w-full border border-slate-200/50 shadow-sm relative overflow-hidden">
+        <div className="flex bg-muted/60 p-1.5 rounded-2xl gap-1.5 max-w-md mx-auto w-full border border-border/50 shadow-sm relative overflow-hidden">
           <button
             type="button"
             onClick={() => setCreateTab('single')}
             className={`flex-1 py-2.5 px-4 rounded-xl font-extrabold text-xs cursor-pointer transition-all duration-300 outline-none flex items-center justify-center gap-2 z-10 ${createTab === 'single'
                 ? 'bg-primary text-white shadow-[0_4px_12px_rgba(99,102,241,0.25)]'
-                : 'text-slate-500 hover:text-slate-800 hover:bg-slate-200/50'
+                : 'text-muted-foreground hover:text-foreground hover:bg-muted/30'
               }`}
           >
             <i className="fas fa-user text-xs"></i> Single Candidate
@@ -992,7 +992,7 @@ Congratulations! You have been selected for an AI-powered interview. Please revi
             onClick={() => setCreateTab('bulk')}
             className={`flex-1 py-2.5 px-4 rounded-xl font-extrabold text-xs cursor-pointer transition-all duration-300 outline-none flex items-center justify-center gap-2 z-10 ${createTab === 'bulk'
                 ? 'bg-primary text-white shadow-[0_4px_12px_rgba(99,102,241,0.25)]'
-                : 'text-slate-500 hover:text-slate-800 hover:bg-slate-200/50'
+                : 'text-muted-foreground hover:text-foreground hover:bg-muted/30'
               }`}
           >
             <i className="fas fa-users text-xs"></i> Bulk Send
@@ -1005,21 +1005,21 @@ Congratulations! You have been selected for an AI-powered interview. Please revi
             {/* Left Column: Candidate & Material Details (Col Span 7) */}
             <div className="lg:col-span-7 flex flex-col gap-6">
               {/* Card 1: Candidate Basic Info */}
-              <Card className="bg-white/82 backdrop-blur-md border border-[#e5edf7] text-slate-800 flex flex-col gap-5">
-                <div className="flex gap-3.5 items-center border-b border-slate-100/80 pb-4">
-                  <div className="w-10 h-10 rounded-xl flex items-center justify-center bg-indigo-50 border border-indigo-100 text-primary shadow-inner">
+              <Card className="bg-card/80 backdrop-blur-md border border-border/30 text-foreground flex flex-col gap-5">
+                <div className="flex gap-3.5 items-center border-b border-border/40 pb-4">
+                  <div className="w-10 h-10 rounded-xl flex items-center justify-center bg-indigo-500/10 border border-indigo-500/20 text-primary shadow-inner">
                     <i className="fas fa-user-tie text-base"></i>
                   </div>
                   <div>
-                    <h3 className="text-sm font-extrabold text-slate-800 tracking-tight">Candidate Information</h3>
-                    <p className="text-[0.7rem] text-slate-400 font-medium">Provide basic contact and login credentials</p>
+                    <h3 className="text-sm font-extrabold text-foreground tracking-tight">Candidate Information</h3>
+                    <p className="text-[0.7rem] text-muted-foreground font-medium">Provide basic contact and login credentials</p>
                   </div>
                 </div>
 
-                <div className="bg-indigo-50/50 border border-indigo-100 rounded-xl p-4 flex flex-col gap-2">
-                  <label className="text-xs font-bold text-indigo-800 uppercase tracking-wider">Select Interested Candidate (From AI Calls)</label>
+                <div className="bg-indigo-500/10 border border-indigo-500/20 rounded-xl p-4 flex flex-col gap-2">
+                  <label className="text-xs font-bold text-indigo-300 uppercase tracking-wider">Select Interested Candidate (From AI Calls)</label>
                   <select
-                    className="w-full px-4 py-2.5 bg-white border border-indigo-200 rounded-lg text-sm text-slate-700 focus:outline-none focus:border-primary focus:ring-2 focus:ring-primary/20 transition-all cursor-pointer shadow-sm disabled:bg-slate-50 disabled:text-slate-400 disabled:cursor-not-allowed"
+                    className="w-full px-4 py-2.5 bg-card border border-indigo-500/20 rounded-lg text-sm text-foreground focus:outline-none focus:border-primary focus:ring-2 focus:ring-primary/20 transition-all cursor-pointer shadow-sm disabled:bg-muted disabled:text-muted-foreground disabled:cursor-not-allowed"
                     disabled={callLogs.length === 0}
                     onChange={(e) => {
                       const selectedId = e.target.value;
@@ -1056,7 +1056,7 @@ Congratulations! You have been selected for an AI-powered interview. Please revi
                       </>
                     )}
                   </select>
-                  <p className="text-[0.65rem] text-indigo-500 font-medium mt-1">
+<p className="text-[0.65rem] text-muted-foreground font-medium mt-1">
                     {callLogs.length === 0 
                       ? "Ensure candidates are marked as 'Interested' in the AI Calling Agent to see them here." 
                       : "Selecting a candidate will automatically fill their name, email, phone, resume, and job description!"}
@@ -1084,23 +1084,23 @@ Congratulations! You have been selected for an AI-powered interview. Please revi
 
               {/* Card 2: Resume & Job Requirements */}
               <Card className="bg-white/82 backdrop-blur-md border border-[#e5edf7] text-slate-800 flex flex-col gap-5">
-                <div className="flex gap-3.5 items-center border-b border-slate-100/80 pb-4">
-                  <div className="w-10 h-10 rounded-xl flex items-center justify-center bg-indigo-50 border border-indigo-100 text-primary shadow-inner">
+                <div className="flex gap-3.5 items-center border-b border-border/40 pb-4">
+                  <div className="w-10 h-10 rounded-xl flex items-center justify-center bg-indigo-500/10 border border-indigo-500/20 text-primary shadow-inner">
                     <i className="fas fa-file-invoice text-base"></i>
                   </div>
                   <div>
-                    <h3 className="text-sm font-extrabold text-slate-800 tracking-tight">Resume & Job Profile</h3>
-                    <p className="text-[0.7rem] text-slate-400 font-medium">Input documents for automated AI assessment</p>
+                    <h3 className="text-sm font-extrabold text-foreground tracking-tight">Resume & Job Profile</h3>
+                    <p className="text-[0.7rem] text-muted-foreground font-medium">Input documents for automated AI assessment</p>
                   </div>
                 </div>
 
                 {/* Upload Resume */}
                 <div className="flex flex-col gap-2">
-                  <label className="text-xs font-bold uppercase tracking-wider text-slate-500">Upload Resume (PDF / DOCX / TXT)</label>
+                  <label className="text-xs font-bold uppercase tracking-wider text-muted-foreground">Upload Resume (PDF / DOCX / TXT)</label>
                   <div
                     className={`border-2 border-dashed rounded-2xl p-6 text-center cursor-pointer transition-all duration-300 flex flex-col items-center justify-center gap-2.5 group relative overflow-hidden ${singleCandidate.resumeText
-                        ? 'border-emerald-200 bg-emerald-50/20 hover:bg-emerald-50/40 shadow-sm shadow-emerald-500/5'
-                        : 'border-slate-200 bg-slate-50/40 hover:bg-white hover:border-primary/80 hover:shadow-md hover:shadow-indigo-500/5 hover:-translate-y-0.5'
+                        ? 'border-emerald-500/20 bg-emerald-500/10 hover:bg-emerald-500/15 shadow-sm shadow-emerald-500/10'
+                        : 'border-border/50 bg-card/40 hover:bg-card hover:border-primary/80 hover:shadow-md hover:shadow-indigo-500/5 hover:-translate-y-0.5'
                       }`}
                     onClick={() => document.getElementById('singleResumeInput').click()}
                   >
@@ -1111,10 +1111,10 @@ Congratulations! You have been selected for an AI-powered interview. Please revi
                       <i className={`text-xl ${singleCandidate.resumeText ? 'fas fa-file-circle-check' : 'fas fa-file-arrow-up'}`}></i>
                     </div>
                     <div>
-                      <p className="font-bold text-slate-700 text-sm">
+                      <p className="font-bold text-foreground text-sm">
                         {singleCandidate.resumeText ? "Resume Loaded & Parsed" : "Click to upload or drag & drop"}
                       </p>
-                      <p className="text-xs text-slate-400 font-medium mt-0.5">PDF, DOCX, TXT - Max 5MB</p>
+                      <p className="text-xs text-muted-foreground font-medium mt-0.5">PDF, DOCX, TXT - Max 5MB</p>
                     </div>
                   </div>
                   <input
@@ -1334,19 +1334,19 @@ Congratulations! You have been selected for an AI-powered interview. Please revi
               {/* Card 3: Advanced AI Customizations (Accordions) */}
               <div className="flex flex-col gap-4">
                 {/* Custom Questions Section */}
-                <div className="border border-slate-200/80 rounded-2xl overflow-hidden bg-white/82 backdrop-blur-md shadow-sm transition-all duration-200 hover:border-slate-300">
-                  <div className="w-full px-5 py-4 bg-slate-50/50 border-b border-slate-100 flex items-center justify-between">
-                    <span className="text-xs font-bold text-slate-700 uppercase tracking-wider flex items-center gap-2">
+                <div className="border border-border/40 rounded-2xl overflow-hidden bg-card/80 backdrop-blur-md shadow-sm transition-all duration-200 hover:border-border/60">
+                  <div className="w-full px-5 py-4 bg-muted/30 border-b border-border/50 flex items-center justify-between">
+                    <span className="text-xs font-bold text-foreground uppercase tracking-wider flex items-center gap-2">
                       <i className="fas fa-question-circle text-primary"></i> Custom Screening Questions (Optional)
                     </span>
                   </div>
-                  <div className="p-5 flex flex-col gap-3 bg-white">
+                  <div className="p-5 flex flex-col gap-3 bg-card">
                     <div className="flex justify-between items-center">
-                      <span className="text-[0.7rem] text-slate-500">Provide pre-defined questions that the AI will ask first</span>
+                      <span className="text-[0.7rem] text-muted-foreground">Provide pre-defined questions that the AI will ask first</span>
                       <button
                         type="button"
                         onClick={() => document.getElementById('singleCustomInput').click()}
-                        className="inline-flex items-center gap-1 text-[0.7rem] font-extrabold text-primary bg-indigo-50 hover:bg-indigo-100 border border-primary/15 rounded-lg px-2.5 py-1 cursor-pointer transition-all"
+                        className="inline-flex items-center gap-1 text-[0.7rem] font-extrabold text-primary bg-indigo-500/10 hover:bg-indigo-500/20 border border-primary/15 rounded-lg px-2.5 py-1 cursor-pointer transition-all"
                       >
                         <i className="fas fa-paperclip"></i> Upload questions
                       </button>
@@ -1387,7 +1387,7 @@ Congratulations! You have been selected for an AI-powered interview. Please revi
                       <input
                         type="text"
                         placeholder="Add a custom screening question..."
-                        className="flex-1 bg-slate-50/95 border border-slate-200 rounded-[5px] px-4 py-2.5 text-slate-900 text-[0.95rem] outline-none transition-all duration-200 focus:border-primary focus:bg-white focus:shadow-[0_0_0_3px_rgba(99,102,241,0.12)] placeholder:text-slate-400"
+                        className="flex-1 bg-card border border-border rounded-[5px] px-4 py-2.5 text-foreground text-[0.95rem] outline-none transition-all duration-200 focus:border-primary focus:bg-card focus:shadow-[0_0_0_3px_rgba(99,102,241,0.12)] placeholder:text-muted-foreground"
                         value={newSingleQuestion}
                         onChange={(e) => setNewSingleQuestion(e.target.value)}
                         onKeyDown={(e) => {
@@ -1400,8 +1400,7 @@ Congratulations! You have been selected for an AI-powered interview. Please revi
                       <button
                         type="button"
                         onClick={addSingleQuestion}
-                        className="bg-indigo-650 hover:bg-indigo-700 text-white text-xs font-bold px-4 py-2.5 rounded-[5px] transition-colors cursor-pointer"
-                        style={{ backgroundColor: '#6366f1' }}
+                        className="bg-primary text-white text-xs font-bold px-4 py-2.5 rounded-[5px] transition-colors cursor-pointer"
                       >
                         Add
                       </button>
@@ -1428,19 +1427,19 @@ Congratulations! You have been selected for an AI-powered interview. Please revi
                 </div>
 
                 {/* AI Instructions Section */}
-                <div className="border border-slate-200/80 rounded-2xl overflow-hidden bg-white/82 backdrop-blur-md shadow-sm transition-all duration-200 hover:border-slate-300">
-                  <div className="w-full px-5 py-4 bg-slate-50/50 border-b border-slate-100 flex items-center justify-between">
-                    <span className="text-xs font-bold text-slate-700 uppercase tracking-wider flex items-center gap-2">
+                <div className="border border-border/40 rounded-2xl overflow-hidden bg-card/80 backdrop-blur-md shadow-sm transition-all duration-200 hover:border-border/60">
+                  <div className="w-full px-5 py-4 bg-muted/30 border-b border-border/50 flex items-center justify-between">
+                    <span className="text-xs font-bold text-foreground uppercase tracking-wider flex items-center gap-2">
                       <i className="fas fa-robot text-primary"></i> Custom AI Interviewer Instructions (Optional)
                     </span>
                   </div>
-                  <div className="p-5 flex flex-col gap-3 bg-white">
+                  <div className="p-5 flex flex-col gap-3 bg-card">
                     <div className="flex justify-between items-center">
-                      <span className="text-[0.7rem] text-slate-500">Provide behavioral rules or focus topics to guide the AI</span>
+                      <span className="text-[0.7rem] text-muted-foreground">Provide behavioral rules or focus topics to guide the AI</span>
                       <button
                         type="button"
                         onClick={() => document.getElementById('singleAiInstructionsInput').click()}
-                        className="inline-flex items-center gap-1 text-[0.7rem] font-extrabold text-primary bg-indigo-50 hover:bg-indigo-100 border border-primary/15 rounded-lg px-2.5 py-1 cursor-pointer transition-all"
+                        className="inline-flex items-center gap-1 text-[0.7rem] font-extrabold text-primary bg-indigo-500/10 hover:bg-indigo-500/20 border border-primary/15 rounded-lg px-2.5 py-1 cursor-pointer transition-all"
                       >
                         <i className="fas fa-paperclip"></i> Upload instructions
                       </button>
@@ -1481,7 +1480,7 @@ Congratulations! You have been selected for an AI-powered interview. Please revi
                       <input
                         type="text"
                         placeholder="Add a custom interviewer instruction..."
-                        className="flex-1 bg-slate-50/95 border border-slate-200 rounded-[5px] px-4 py-2.5 text-slate-900 text-[0.95rem] outline-none transition-all duration-200 focus:border-primary focus:bg-white focus:shadow-[0_0_0_3px_rgba(99,102,241,0.12)] placeholder:text-slate-400"
+                        className="flex-1 bg-card border border-border rounded-[5px] px-4 py-2.5 text-foreground text-[0.95rem] outline-none transition-all duration-200 focus:border-primary focus:bg-card focus:shadow-[0_0_0_3px_rgba(99,102,241,0.12)] placeholder:text-muted-foreground"
                         value={newSingleInstruction}
                         onChange={(e) => setNewSingleInstruction(e.target.value)}
                         onKeyDown={(e) => {
@@ -1494,8 +1493,7 @@ Congratulations! You have been selected for an AI-powered interview. Please revi
                       <button
                         type="button"
                         onClick={addSingleInstruction}
-                        className="bg-indigo-650 hover:bg-indigo-700 text-white text-xs font-bold px-4 py-2.5 rounded-[5px] transition-colors cursor-pointer"
-                        style={{ backgroundColor: '#6366f1' }}
+                        className="bg-primary text-white text-xs font-bold px-4 py-2.5 rounded-[5px] transition-colors cursor-pointer"
                       >
                         Add
                       </button>
@@ -1526,14 +1524,14 @@ Congratulations! You have been selected for an AI-powered interview. Please revi
             {/* Right Column: Settings, Customization & Actions (Col Span 5) */}
             <div className="lg:col-span-5 flex flex-col gap-6">
               {/* Card 1: Configuration Parameters */}
-              <Card className="bg-white/82 backdrop-blur-md border border-[#e5edf7] text-slate-800 flex flex-col gap-5">
-                <div className="flex gap-3.5 items-center border-b border-slate-100/80 pb-4">
-                  <div className="w-10 h-10 rounded-xl flex items-center justify-center bg-indigo-50 border border-indigo-100 text-primary shadow-inner">
+              <Card className="bg-card/80 backdrop-blur-md border border-border/30 text-foreground flex flex-col gap-5">
+                <div className="flex gap-3.5 items-center border-b border-border/40 pb-4">
+                  <div className="w-10 h-10 rounded-xl flex items-center justify-center bg-indigo-500/10 border border-indigo-500/20 text-primary shadow-inner">
                     <i className="fas fa-sliders text-base"></i>
                   </div>
                   <div>
-                    <h3 className="text-sm font-extrabold text-slate-800 tracking-tight">Interview Settings</h3>
-                    <p className="text-[0.7rem] text-slate-400 font-medium">Configure parameters, timing, and languages</p>
+                    <h3 className="text-sm font-extrabold text-foreground tracking-tight">Interview Settings</h3>
+                    <p className="text-[0.7rem] text-muted-foreground font-medium">Configure parameters, timing, and languages</p>
                   </div>
                 </div>
 

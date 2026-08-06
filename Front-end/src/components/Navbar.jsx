@@ -1,5 +1,6 @@
 
 import React, { useState, useEffect, useRef } from 'react'
+import ThemeToggle from './ThemeToggle'
 import { useSelector } from 'react-redux'
 import { NavLink, useNavigate } from 'react-router-dom'
 import { LogOut, Bell, CreditCard, AlertCircle, UserCheck } from 'lucide-react'
@@ -88,6 +89,7 @@ export default function Navbar({
 
   const unreadCount = notifications.filter(n => !n.read).length
 
+
   const getNotifIcon = (type) => {
     switch (type) {
       case 'credits':
@@ -129,15 +131,17 @@ export default function Navbar({
       </div>
 
       <div className="flex items-center gap-6">
+        <ThemeToggle />
         <div className="flex items-center gap-2 bg-slate-100 rounded-full px-2.5 py-1.5 border border-slate-200">
           {Object.keys(accentColors).map(color => (
             <button
               key={color}
               onClick={() => onAccentChange(color)}
-              className="w-3.5 h-3.5 rounded-full border-2 border-white cursor-pointer p-0 transition-all"
+              className="w-3.5 h-3.5 rounded-full border-2 border-white/50 cursor-pointer p-0 transition-all hover:scale-110"
               style={{
                 background: accentColors[color].primary,
-                boxShadow: accentName === color ? `0 0 0 2px ${accentColors[color].primary}` : 'none',
+                borderColor: accentName === color ? 'white' : 'rgba(255,255,255,0.65)',
+                boxShadow: accentName === color ? `0 0 12px ${accentColors[color].primary}55, inset 0 0 0 1px ${accentColors[color].primary}` : 'none',
               }}
               title={color}
             />

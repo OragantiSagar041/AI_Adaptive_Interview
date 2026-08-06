@@ -9,9 +9,15 @@ const ToggleSwitch = ({ checked, onChange }) => (
   </div>
 );
 import api, { dedupedGet } from '../../lib/api';
+import { getThemeColor } from '../../utils/themeUtils';
 import { API_BASE_URL } from '../../apiConfig';
 
-const COLORS = ['#6366f1', '#10b981', '#f43f5e'];
+// derive colors from theme variables when available
+const COLORS = [
+  getThemeColor('--color-purple', '#6366f1'),
+  getThemeColor('--color-emerald', '#10b981'),
+  getThemeColor('--color-destructive', '#f43f5e')
+];
 
 export default function SecurityPage() {
   const { token } = useSelector(state => state.auth);

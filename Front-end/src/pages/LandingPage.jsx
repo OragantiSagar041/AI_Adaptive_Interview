@@ -8,6 +8,7 @@ import {
 } from "lucide-react";
 import { Link } from "react-router-dom";
 import logoImg from "../assets/logo.png";
+import ThemeToggle from '../components/ThemeToggle'
 import "../snake.css";
 
 function useCountUp(target, start, duration = 1400) {
@@ -102,6 +103,7 @@ function Nav() {
           >
             Sign in
           </Link>
+          <ThemeToggle />
           <a
             href="#demo"
             onClick={(e) => { e.preventDefault(); window.dispatchEvent(new Event('openDemoModal')); }}
@@ -117,14 +119,23 @@ function Nav() {
 
 function Logo() {
   return (
-    <img src={logoImg} alt="Logo" className="h-30 w-auto object-contain" />
+    <img src={logoImg} alt="HireIQ logo" className="h-12 w-auto object-contain sm:h-14" />
   );
 }
 
 /* ---------------- HERO ---------------- */
 function Hero() {
   return (
-    <section id="top" className="relative pt-32 pb-24 bg-[radial-gradient(ellipse_at_top,_var(--tw-gradient-stops))] from-primary/10 via-background to-background">
+    <section
+      id="top"
+      className="relative pt-32 pb-24 overflow-hidden"
+      style={{
+        backgroundImage:
+          "radial-gradient(ellipse at top, rgba(124,58,237,0.12), rgba(255,255,255,0) 30%), radial-gradient(circle at 20% 20%, rgba(79,70,229,0.14), transparent 45%), radial-gradient(circle at 80% 15%, rgba(56,189,248,0.08), transparent 42%)",
+        backgroundColor: "#f8fafc",
+      }}
+    >
+      <div id="tour" className="absolute inset-x-0 top-0 h-0 pointer-events-none" />
       {/* grid + noise */}
       <div
         aria-hidden="true"
@@ -162,8 +173,8 @@ function Hero() {
               Book a Live Demo <ArrowRight className="h-4 w-4" />
             </a>
             <a
-              href="#tour"
-              className="inline-flex items-center gap-2 px-6 py-3.5 rounded-full glass-strong font-semibold hover:bg-white/10 transition"
+              href="#how"
+              className="inline-flex items-center gap-2 px-6 py-3.5 rounded-full bg-white/10 text-foreground font-semibold hover:bg-white/20 transition"
             >
               <Play className="h-4 w-4" /> Watch Product Tour
             </a>
@@ -267,7 +278,7 @@ function HeroDashboard() {
           <div className="text-[10px] text-muted-foreground">In parallel · 4 languages</div>
         </div>
       </div>
-      <div className="absolute -right-4 -top-6 glass-strong rounded-2xl p-3 hidden sm:block">
+      <div className="absolute -right-4 -top-10 glass-strong rounded-2xl p-3 hidden sm:block">
         <div className="text-[10px] text-muted-foreground">Time to shortlist</div>
         <div className="text-lg font-bold">
           <span className="text-gradient">18 min</span>
@@ -393,7 +404,7 @@ function Platform() {
           {items.map((it) => (
             <div
               key={it.title}
-              className="group relative glass rounded-2xl p-6 hover:bg-white/[0.08] transition"
+              className="group relative rounded-3xl p-6 bg-white/85 border border-slate-200/40 shadow-lg shadow-slate-200/50 transition hover:border-primary/40 hover:shadow-xl"
             >
               <div className="h-11 w-11 rounded-xl bg-gradient-to-br from-primary to-purple-500 grid place-items-center shadow-[0_0_15px_rgba(124,58,237,0.5)]">
                 <it.icon className="h-5 w-5 text-primary-foreground" />
@@ -873,26 +884,26 @@ function ConnectWithUs() {
         <div className="grid lg:grid-cols-2 gap-16 lg:gap-8 bg-gradient-to-br from-zinc-800/90 to-zinc-900/90 backdrop-blur-2xl border border-white/10 rounded-3xl p-8 lg:p-12 shadow-[0_8px_30px_rgb(0,0,0,0.5)]">
           {/* Left Side */}
           <div>
-            <SectionEyebrow>Connect</SectionEyebrow>
-            <h2 className="mt-4 text-4xl sm:text-5xl font-extrabold tracking-tighter text-foreground">
+            <SectionEyebrow className="text-white/70">Connect</SectionEyebrow>
+            <h2 className="mt-4 text-4xl sm:text-5xl font-extrabold tracking-tighter text-white">
               Connect with Us
             </h2>
-            <p className="mt-6 text-lg text-muted-foreground leading-relaxed max-w-md">
+            <p className="mt-6 text-lg text-slate-300 leading-relaxed max-w-md">
               Ready to streamline your recruitment process? Our experts are here to help you
               leverage AI for smarter hiring.
             </p>
             <div className="mt-10 space-y-6">
               <div>
                 <h4 className="text-sm font-semibold tracking-wider uppercase text-cyan-500">Email</h4>
-                <p className="mt-1 text-foreground">hello@hireiq.ai</p>
+                <p className="mt-1 text-slate-100">hello@hireiq.ai</p>
               </div>
               <div>
                 <h4 className="text-sm font-semibold tracking-wider uppercase text-cyan-500">Phone</h4>
-                <p className="mt-1 text-foreground">+1 (555) 012-3456</p>
+                <p className="mt-1 text-slate-100">+1 (555) 012-3456</p>
               </div>
               <div>
                 <h4 className="text-sm font-semibold tracking-wider uppercase text-cyan-500">Location</h4>
-                <p className="mt-1 text-foreground">San Francisco, CA</p>
+                <p className="mt-1 text-slate-100">San Francisco, CA</p>
               </div>
             </div>
           </div>
@@ -998,25 +1009,25 @@ function PricingSection() {
               const isPopular = plan.plan_name?.toLowerCase() === "basic" || plan.plan_name?.toLowerCase() === "pro";
               return (
                 <div key={plan.id} className="relative group">
-                  <div className={`h-full bg-zinc-800/80 backdrop-blur-xl border ${isPopular ? "border-primary/50 shadow-[0_0_30px_rgba(124,58,237,0.3)]" : "border-white/10 shadow-[0_8px_30px_rgb(0,0,0,0.5)]"} rounded-3xl p-8 flex flex-col hover:border-primary/50 transition-colors duration-300`}>
+                  <div className={`h-full bg-zinc-800/80 backdrop-blur-xl border text-slate-100 ${isPopular ? "border-primary/50 shadow-[0_0_30px_rgba(124,58,237,0.3)]" : "border-white/10 shadow-[0_8px_30px_rgb(0,0,0,0.5)]"} rounded-3xl p-8 flex flex-col hover:border-primary/50 transition-colors duration-300`}>
                     {isPopular && (
                       <div className="absolute -top-4 left-1/2 -translate-x-1/2 px-4 py-1 bg-gradient-to-r from-primary to-purple-500 rounded-full text-xs font-bold uppercase tracking-widest shadow-lg">
                         Most Popular
                       </div>
                     )}
                     <h3 className="text-2xl font-bold">{plan.plan_name}</h3>
-                    <p className="text-muted-foreground mt-2 text-sm h-10">{plan.summary || "All the essential features you need to get started."}</p>
+                    <p className="text-slate-300 mt-2 text-sm h-10">{plan.summary || "All the essential features you need to get started."}</p>
 
                     <div className="mt-6 mb-8 flex items-baseline gap-1">
                       <span className="text-4xl font-extrabold">₹{plan.price || 0}</span>
-                      <span className="text-muted-foreground">/mo</span>
+                      <span className="text-slate-300">/mo</span>
                     </div>
 
                     <div className="mb-8 flex-1">
                       <p className="text-sm font-semibold text-primary mb-4 border-b border-white/10 pb-4">Includes {plan.credits || 0} AI interview credits</p>
                       <ul className="space-y-3">
                         {(plan.features && plan.features.length > 0 ? plan.features : ["AI Resume Screening", "Automated Voice Calls", "Comprehensive Evaluation Reports"]).map((feature, idx) => (
-                          <li key={idx} className="flex items-start gap-3 text-sm text-muted-foreground">
+                          <li key={idx} className="flex items-start gap-3 text-sm text-slate-300">
                             <Check className="w-5 h-5 text-emerald-400 shrink-0" />
                             <span>{feature}</span>
                           </li>
@@ -1202,10 +1213,10 @@ function DemoModal() {
 
   return (
     <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 sm:p-6 backdrop-blur-md bg-black/60 animate-in fade-in duration-300">
-      <div className="bg-zinc-900/90 w-full max-w-lg rounded-3xl border border-white/10 p-8 shadow-2xl relative animate-in zoom-in-95 duration-300">
+      <div className="bg-white/95 w-full max-w-lg rounded-3xl border border-slate-200/80 p-8 shadow-2xl relative animate-in zoom-in-95 duration-300 text-slate-950">
         <button
           onClick={() => setIsOpen(false)}
-          className="absolute top-4 right-4 p-2 rounded-full hover:bg-white/10 text-muted-foreground hover:text-white transition"
+          className="absolute top-4 right-4 p-2 rounded-full hover:bg-slate-100 text-slate-500 hover:text-slate-900 transition"
         >
           <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M6 18L18 6M6 6l12 12"></path></svg>
         </button>
@@ -1215,52 +1226,52 @@ function DemoModal() {
             <div className="w-16 h-16 bg-emerald-500/20 text-emerald-400 rounded-full flex items-center justify-center mx-auto mb-6">
               <Check className="w-8 h-8" />
             </div>
-            <h3 className="text-2xl font-bold text-white mb-2">Request Received!</h3>
-            <p className="text-muted-foreground">Thank you for your interest. Our team will reach out to schedule your personalized demo shortly.</p>
+            <h3 className="text-2xl font-bold text-slate-950 mb-2">Request Received!</h3>
+            <p className="text-slate-600">Thank you for your interest. Our team will reach out to schedule your personalized demo shortly.</p>
             <button
               onClick={() => setIsOpen(false)}
-              className="mt-8 px-6 py-3 rounded-full glass font-semibold hover:bg-white/10 transition w-full"
+              className="mt-8 px-6 py-3 rounded-full bg-slate-100 text-slate-950 font-semibold hover:bg-slate-200 transition w-full"
             >
               Close
             </button>
           </div>
         ) : (
           <>
-            <SectionEyebrow center={false}>Book Demo</SectionEyebrow>
-            <h3 className="text-3xl font-extrabold text-white mt-4 mb-2">See HireIQ in Action</h3>
-            <p className="text-muted-foreground mb-8">Fill out the form below and we'll be in touch to schedule a personalized walkthrough.</p>
+            <SectionEyebrow center={false} className="bg-slate-100 text-slate-700">Book Demo</SectionEyebrow>
+            <h3 className="text-3xl font-extrabold text-slate-950 mt-4 mb-2">See HireIQ in Action</h3>
+            <p className="text-slate-600 mb-8">Fill out the form below and we'll be in touch to schedule a personalized walkthrough.</p>
 
             <form className="space-y-4" onSubmit={handleSubmit}>
               <div className="grid grid-cols-2 gap-4">
                 <div className="space-y-1.5 text-left">
-                  <label className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">First Name</label>
-                  <input required name="first_name" value={formData.first_name} onChange={handleChange} type="text" className="w-full bg-black/40 border border-white/10 rounded-xl px-4 py-3 text-white placeholder-muted-foreground/50 focus:outline-none focus:border-primary/50 focus:ring-1 focus:ring-primary/50 transition" placeholder="John" />
+                  <label className="text-xs font-semibold uppercase tracking-wider text-slate-600">First Name</label>
+                  <input required name="first_name" value={formData.first_name} onChange={handleChange} type="text" className="w-full bg-slate-50 border border-slate-200 rounded-xl px-4 py-3 text-slate-950 placeholder-slate-500 focus:outline-none focus:border-primary/50 focus:ring-1 focus:ring-primary/50 transition" placeholder="John" />
                 </div>
                 <div className="space-y-1.5 text-left">
-                  <label className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">Last Name</label>
-                  <input required name="last_name" value={formData.last_name} onChange={handleChange} type="text" className="w-full bg-black/40 border border-white/10 rounded-xl px-4 py-3 text-white placeholder-muted-foreground/50 focus:outline-none focus:border-primary/50 focus:ring-1 focus:ring-primary/50 transition" placeholder="Doe" />
+                  <label className="text-xs font-semibold uppercase tracking-wider text-slate-600">Last Name</label>
+                  <input required name="last_name" value={formData.last_name} onChange={handleChange} type="text" className="w-full bg-slate-50 border border-slate-200 rounded-xl px-4 py-3 text-slate-950 placeholder-slate-500 focus:outline-none focus:border-primary/50 focus:ring-1 focus:ring-primary/50 transition" placeholder="Doe" />
                 </div>
               </div>
 
               <div className="grid grid-cols-2 gap-4">
                 <div className="space-y-1.5 text-left">
-                  <label className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">Work Email</label>
-                  <input required name="work_email" value={formData.work_email} onChange={handleChange} type="email" className="w-full bg-black/40 border border-white/10 rounded-xl px-4 py-3 text-white placeholder-muted-foreground/50 focus:outline-none focus:border-primary/50 focus:ring-1 focus:ring-primary/50 transition" placeholder="john@company.com" />
+                  <label className="text-xs font-semibold uppercase tracking-wider text-slate-600">Work Email</label>
+                  <input required name="work_email" value={formData.work_email} onChange={handleChange} type="email" className="w-full bg-slate-50 border border-slate-200 rounded-xl px-4 py-3 text-slate-950 placeholder-slate-500 focus:outline-none focus:border-primary/50 focus:ring-1 focus:ring-primary/50 transition" placeholder="john@company.com" />
                 </div>
                 <div className="space-y-1.5 text-left">
-                  <label className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">Mobile Number</label>
-                  <input required name="mobile_number" value={formData.mobile_number} onChange={handleChange} type="tel" className="w-full bg-black/40 border border-white/10 rounded-xl px-4 py-3 text-white placeholder-muted-foreground/50 focus:outline-none focus:border-primary/50 focus:ring-1 focus:ring-primary/50 transition" placeholder="+1 (555) 000-0000" />
+                  <label className="text-xs font-semibold uppercase tracking-wider text-slate-600">Mobile Number</label>
+                  <input required name="mobile_number" value={formData.mobile_number} onChange={handleChange} type="tel" className="w-full bg-slate-50 border border-slate-200 rounded-xl px-4 py-3 text-slate-950 placeholder-slate-500 focus:outline-none focus:border-primary/50 focus:ring-1 focus:ring-primary/50 transition" placeholder="+1 (555) 000-0000" />
                 </div>
               </div>
 
               <div className="space-y-1.5 text-left">
-                <label className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">Company Name</label>
-                <input required name="company_name" value={formData.company_name} onChange={handleChange} type="text" className="w-full bg-black/40 border border-white/10 rounded-xl px-4 py-3 text-white placeholder-muted-foreground/50 focus:outline-none focus:border-primary/50 focus:ring-1 focus:ring-primary/50 transition" placeholder="Acme Corp" />
+                <label className="text-xs font-semibold uppercase tracking-wider text-slate-600">Company Name</label>
+                <input required name="company_name" value={formData.company_name} onChange={handleChange} type="text" className="w-full bg-slate-50 border border-slate-200 rounded-xl px-4 py-3 text-slate-950 placeholder-slate-500 focus:outline-none focus:border-primary/50 focus:ring-1 focus:ring-primary/50 transition" placeholder="Acme Corp" />
               </div>
 
               <div className="space-y-1.5 text-left">
-                <label className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">How can we help?</label>
-                <textarea required name="help_text" value={formData.help_text} onChange={handleChange} rows="3" className="w-full bg-black/40 border border-white/10 rounded-xl px-4 py-3 text-white placeholder-muted-foreground/50 focus:outline-none focus:border-primary/50 focus:ring-1 focus:ring-primary/50 transition resize-none" placeholder="Tell us about your hiring needs..."></textarea>
+                <label className="text-xs font-semibold uppercase tracking-wider text-slate-600">How can we help?</label>
+                <textarea required name="help_text" value={formData.help_text} onChange={handleChange} rows="3" className="w-full bg-slate-50 border border-slate-200 rounded-xl px-4 py-3 text-slate-950 placeholder-slate-500 focus:outline-none focus:border-primary/50 focus:ring-1 focus:ring-primary/50 transition resize-none" placeholder="Tell us about your hiring needs..."></textarea>
               </div>
 
               <button
@@ -1279,9 +1290,9 @@ function DemoModal() {
 }
 
 /* ---------------- primitives ---------------- */
-function SectionEyebrow({ children, center }) {
+function SectionEyebrow({ children, center, className = "" }) {
   return (
-    <div className={`inline-flex items-center gap-2 rounded-full glass px-3 py-1 text-xs uppercase tracking-[0.18em] text-muted-foreground ${center ? "" : ""}`}>
+    <div className={`inline-flex items-center gap-2 rounded-full glass px-3 py-1 text-xs uppercase tracking-[0.18em] text-muted-foreground ${className} ${center ? "" : ""}`}>
       <span className="h-1.5 w-1.5 rounded-full bg-gradient-to-br from-primary to-purple-500" />
       {children}
     </div>
@@ -1293,7 +1304,7 @@ function BgGlow({ variant = "left" }) {
     <div aria-hidden className="pointer-events-none absolute inset-0 overflow-hidden">
       <div
         className={`absolute ${variant === "left" ? "-left-40 top-20" : "-right-40 top-40"} h-[500px] w-[500px] rounded-full blur-3xl opacity-20`}
-        style={{ background: "var(--gradient-primary)" }}
+        style={{ background: "radial-gradient(circle at center, rgba(124,58,237,0.7), rgba(79,70,229,0.35) 45%, transparent 75%)" }}
       />
     </div>
   );

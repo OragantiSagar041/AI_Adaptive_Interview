@@ -290,12 +290,12 @@ export default function AdminPage({ role: initialRole = 'admin' }) {
   const [bulkResultsData, setBulkResultsData] = useState(null)
 
   const accentColors = {
-    teal: { primary: '#0d9488', hover: '#0f766e', glow: 'rgba(13, 148, 136, 0.15)' },
-    indigo: { primary: '#6366f1', hover: '#4f46e5', glow: 'rgba(99, 102, 241, 0.15)' },
-    purple: { primary: '#9333ea', hover: '#7e22ce', glow: 'rgba(147, 51, 234, 0.15)' },
-    red: { primary: '#e11d48', hover: '#be123c', glow: 'rgba(225, 29, 72, 0.15)' },
-    green: { primary: '#16a34a', hover: '#15803d', glow: 'rgba(22, 163, 74, 0.15)' },
-    blue: { primary: '#2563eb', hover: '#1d4ed8', glow: 'rgba(37, 99, 237, 0.15)' }
+    teal: { primary: '#2dd4bf', hover: '#14b8a6', glow: 'rgba(45, 212, 191, 0.30)' },
+    indigo: { primary: '#818cf8', hover: '#6366f1', glow: 'rgba(129, 140, 248, 0.30)' },
+    purple: { primary: '#c084fc', hover: '#a855f7', glow: 'rgba(192, 132, 252, 0.30)' },
+    red: { primary: '#fb7185', hover: '#f43f5e', glow: 'rgba(251, 113, 133, 0.30)' },
+    green: { primary: '#86efac', hover: '#4ade80', glow: 'rgba(134, 239, 172, 0.30)' },
+    blue: { primary: '#60a5fa', hover: '#3b82f6', glow: 'rgba(96, 165, 250, 0.30)' }
   }
 
   const currentAccent = accentColors[accentName] || accentColors.indigo

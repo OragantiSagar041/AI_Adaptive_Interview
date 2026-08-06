@@ -325,9 +325,13 @@ async def initiate_manual_ai_call(
 @router.get("/api/calls/agent-settings")
 def get_omni_agent_settings(omni_api_key: Optional[str] = Header(default=None, alias="X-Omni-Dimension-API-Key")):
     """Fetch the Omni Dimension Agent settings."""
-    from app.ai.omni_dimension_client import get_omni_account
+    from app.ai.omni_dimension_client import get_cached_omni_json, get_omni_account, set_cached_omni_json
     try:
+        cached = get_cached_omni_json(omni_api_key, "agent-settings")
+        if cached is not None:
+            return {"settings": cached}
         _, agent, _ = get_omni_account(omni_api_key)
+        set_cached_omni_json(omni_api_key, "agent-settings", agent)
         return {"settings": agent}
     except Exception as e:
         return JSONResponse(status_code=500, content={"detail": f"Failed to fetch agent settings: {str(e)}"})
@@ -336,12 +340,17 @@ def get_omni_agent_settings(omni_api_key: Optional[str] = Header(default=None, a
 @router.get("/api/calls/knowledge-base")
 def get_omni_knowledge_base(omni_api_key: Optional[str] = Header(default=None, alias="X-Omni-Dimension-API-Key")):
     """Fetch the Knowledge Base files from Omni Dimension."""
-    from app.ai.omni_dimension_client import get_omni_client
+    from app.ai.omni_dimension_client import get_cached_omni_json, get_omni_client, set_cached_omni_json
     try:
+        cached = get_cached_omni_json(omni_api_key, "knowledge-base")
+        if cached is not None:
+            return {"files": cached, "success": True}
         client = get_omni_client(omni_api_key)
         res = client.knowledge_base.list()
         data = res.get('json', res)
-        return {"files": data.get("files", []), "success": True}
+        files = data.get("files", [])
+        set_cached_omni_json(omni_api_key, "knowledge-base", files)
+        return {"files": files, "success": True}
     except Exception as e:
         return JSONResponse(status_code=500, content={"detail": str(e)})
 
@@ -349,12 +358,17 @@ def get_omni_knowledge_base(omni_api_key: Optional[str] = Header(default=None, a
 @router.get("/api/calls/integrations")
 def get_omni_integrations(omni_api_key: Optional[str] = Header(default=None, alias="X-Omni-Dimension-API-Key")):
     """Fetch integrations for the agent from Omni Dimension."""
-    from app.ai.omni_dimension_client import get_omni_account
+    from app.ai.omni_dimension_client import get_cached_omni_json, get_omni_account, set_cached_omni_json
     try:
+        cached = get_cached_omni_json(omni_api_key, "integrations")
+        if cached is not None:
+            return {"integrations": cached, "success": True}
         client, _, agent_id = get_omni_account(omni_api_key)
         res = client.integrations.get_agent_integrations(agent_id=agent_id)
         data = res.get('json', res)
-        return {"integrations": data.get("integrations", []), "success": True}
+        integrations = data.get("integrations", [])
+        set_cached_omni_json(omni_api_key, "integrations", integrations)
+        return {"integrations": integrations, "success": True}
     except Exception as e:
         return JSONResponse(status_code=500, content={"detail": str(e)})
 

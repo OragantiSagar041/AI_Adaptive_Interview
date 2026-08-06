@@ -48,6 +48,7 @@ class RedisConnectionManager:
                 REDIS_URL,
                 decode_responses=True,
                 socket_connect_timeout=3,  # fail fast instead of hanging
+                protocol=2,
             )
             await temp_redis.ping()
             self.redis = temp_redis

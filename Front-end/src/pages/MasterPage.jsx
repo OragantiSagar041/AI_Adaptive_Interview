@@ -1,5 +1,6 @@
 import React, { useState, useEffect, useRef } from 'react'
 import { useNavigate } from 'react-router-dom'
+import { getThemeColor, rgbaFromCssVar } from '../utils/themeUtils'
 import { API_BASE_URL } from '../apiConfig'
 import logo from '../assets/logo.png'
 import Swal from 'sweetalert2'
@@ -89,7 +90,7 @@ export default function MasterPage() {
   const currentAccent = colors[accentColor] || colors.indigo
 
   useEffect(() => {
-    document.documentElement.setAttribute('data-theme', 'light')
+    // Respect global theme; only sync accent color variables here.
     document.documentElement.style.setProperty('--accent-theme-color', currentAccent.primary)
     document.documentElement.style.setProperty('--primary-color', currentAccent.primary)
     document.documentElement.style.setProperty('--primary-hover', currentAccent.hover)
@@ -172,7 +173,7 @@ export default function MasterPage() {
     })
 
     const ctxMrr = mrrChartRef.current
-    if (ctxMrr) {
+      if (ctxMrr) {
       mrrChartInstance.current = new window.Chart(ctxMrr, {
         type: 'line',
         data: {
@@ -180,8 +181,8 @@ export default function MasterPage() {
           datasets: [{
             label: 'MRR ($)',
             data: [5000, 6500, 8200, 9500, 11000, companies.length * 150],
-            borderColor: currentAccent.primary,
-            backgroundColor: `${currentAccent.primary}33`,
+            borderColor: getThemeColor('--primary-color', currentAccent.primary),
+            backgroundColor: rgbaFromCssVar('--primary-color', 0.12, `${currentAccent.primary}33`),
             borderWidth: 3,
             fill: true,
             tension: 0.4
@@ -192,7 +193,7 @@ export default function MasterPage() {
           maintainAspectRatio: false,
           plugins: { legend: { display: false } },
           scales: {
-            y: { beginAtZero: true, grid: { color: 'rgba(0,0,0,0.05)' } },
+            y: { beginAtZero: true, grid: { color: rgbaFromCssVar('--muted', 0.06, 'rgba(0,0,0,0.05)') } },
             x: { grid: { display: false } }
           }
         }
@@ -209,7 +210,13 @@ export default function MasterPage() {
           labels: labels,
           datasets: [{
             data: dataVals,
-            backgroundColor: ['#6366f1', '#10b981', '#f59e0b', '#3b82f6', '#ec4899'],
+            backgroundColor: [
+              getThemeColor('--color-purple', '#6366f1'),
+              getThemeColor('--color-emerald', '#10b981'),
+              getThemeColor('--color-amber', '#f59e0b'),
+              getThemeColor('--color-blue', '#3b82f6'),
+              getThemeColor('--color-pink', '#ec4899')
+            ],
             borderWidth: 0,
             hoverOffset: 4
           }]

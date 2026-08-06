@@ -27,6 +27,22 @@ export default function SuperAdminSidebar({
   setIsCollapsed,
 }) {
   const location = useLocation()
+  const accent = currentAccent || { primary: '#818cf8', hover: '#6366f1', glow: 'rgba(129, 140, 248, 0.30)' }
+  const [hoveredNav, setHoveredNav] = React.useState(null)
+
+  const activeLinkStyle = {
+    background: `linear-gradient(135deg, ${accent.primary}20, ${accent.primary}40, ${accent.hover})`,
+    boxShadow: `0 0 24px ${accent.primary}40`,
+    borderColor: 'transparent',
+    color: '#ffffff',
+  }
+
+  const hoverLinkStyle = {
+    background: `linear-gradient(135deg, ${accent.primary}12, ${accent.primary}08, ${accent.hover}15)`,
+    boxShadow: `0 0 18px ${accent.primary}30`,
+    borderColor: 'transparent',
+    color: '#ffffff',
+  }
 
   const superNavItems = [
     { id: 'super-dashboard', label: 'Super Admin Dashboard', icon: BarChart2 },
@@ -83,16 +99,20 @@ export default function SuperAdminSidebar({
         )}
         {superNavItems.map(({ id, label, icon: Icon }) => {
           const isActive = activeTab === id
+          const isHovered = hoveredNav === id
 
           return (
             <button
               key={id}
               onClick={() => handleTabClick(id)}
               title={isCollapsed ? label : ""}
+              style={isActive ? activeLinkStyle : isHovered ? hoverLinkStyle : undefined}
+              onMouseEnter={() => setHoveredNav(id)}
+              onMouseLeave={() => setHoveredNav(null)}
               className={`w-full text-left flex items-center rounded-lg text-sm font-semibold transition-all border-none outline-none cursor-pointer ${isCollapsed ? 'justify-center p-2' : 'px-3.5 py-2 gap-3'
                 } ${isActive
-                  ? 'bg-white text-indigo-700 shadow-sm'
-                  : 'bg-transparent text-white/80 hover:bg-white/10 hover:text-white'
+                  ? 'text-white'
+                  : 'bg-transparent text-white/80 hover:text-white'
                 }`}
             >
               <Icon size={16} className="shrink-0" />
@@ -106,10 +126,13 @@ export default function SuperAdminSidebar({
         <button
           onClick={() => handleTabClick('live')}
           title={isCollapsed ? "Live Results" : ""}
+          style={activeTab === 'live' ? activeLinkStyle : hoveredNav === 'live' ? hoverLinkStyle : undefined}
+          onMouseEnter={() => setHoveredNav('live')}
+          onMouseLeave={() => setHoveredNav(null)}
           className={`text-left flex items-center rounded-lg text-sm font-semibold transition-all border-none outline-none cursor-pointer ${isCollapsed ? 'justify-center p-2' : 'px-3.5 py-2 gap-3 w-full'
             } ${activeTab === 'live'
-              ? 'bg-white text-indigo-700 shadow-sm'
-              : 'bg-transparent text-white/80 hover:bg-white/10 hover:text-white'
+              ? 'text-white'
+              : 'bg-transparent text-white/80 hover:text-white'
             }`}
         >
           <Radio size={16} className="shrink-0" />

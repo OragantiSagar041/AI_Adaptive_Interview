@@ -5,6 +5,7 @@ import { useDispatch } from 'react-redux'
 import { setCredentials } from '../store/slices/authSlice'
 import { API_BASE_URL } from '../apiConfig'
 import logo from '../assets/logo.png'
+import ThemeToggle from '../components/ThemeToggle'
 import loginHero from '../assets/login_hero.png'
 import Swal from 'sweetalert2'
 import 'sweetalert2/dist/sweetalert2.min.css'
@@ -16,56 +17,96 @@ const CSS = `
 
   .lp-root {
     min-height: 100vh; width: 100%;
-    background: #080c14;
-    background-image:
-      radial-gradient(circle at 1px 1px, rgba(255,255,255,0.022) 1px, transparent 0);
-    background-size: 36px 36px;
-    overflow: hidden; position: relative;
+    background: var(--background); /* use global background variable so theme is consistent */
+    overflow: visible; position: relative;
     display: flex; flex-direction: column;
     font-family: 'Inter', -apple-system, sans-serif;
   }
 
-  /* ── Waves: ambient background layer elevated up the page ── */
+  /* Dark theme overrides when html[data-theme="dark"] is active */
+  html[data-theme="dark"] .lp-root {
+    background: linear-gradient(180deg, rgba(6,8,15,1) 0%, rgba(8,10,18,1) 100%);
+    color: var(--foreground);
+  }
+  html[data-theme="dark"] .lp-card {
+    background: var(--card);
+    border: 1px solid rgba(255,255,255,0.03);
+    box-shadow: 0 20px 60px -20px rgba(0,0,0,0.7);
+    color: var(--card-foreground);
+  }
+  html[data-theme="dark"] .lp-headline { color: var(--foreground); }
+  html[data-theme="dark"] .lp-sub { color: rgba(230,238,248,0.7); }
+  html[data-theme="dark"] .lp-input {
+    background: var(--input) !important;
+    color: var(--foreground) !important;
+    border: 1px solid rgba(255,255,255,0.04);
+    box-shadow: 0 6px 18px rgba(0,0,0,0.6), inset 0 1px 0 rgba(255,255,255,0.02);
+  }
+  html[data-theme="dark"] .lp-input::placeholder { color: rgba(230,238,248,0.35); }
+  html[data-theme="dark"] .lp-btn { box-shadow: 0 8px 30px rgba(109,40,217,0.18); }
+  html[data-theme="dark"] .lp-footer { background: linear-gradient(180deg, rgba(6,8,15,0.95), rgba(8,10,18,0.95)); }
+
+  /* Toggle placement */
+  .lp-toggle { position: fixed; top: 18px; right: 18px; z-index: 1200; }
+  html[data-theme="dark"] .lp-toggle button { background: rgba(255,255,255,0.03); border: 1px solid rgba(255,255,255,0.06); color: var(--foreground); }
+
+  /* ── Waves: liquid glass ambient background ── */
   .lp-waves-bg {
     position: absolute; bottom: 0; left: 0; right: 0;
-    height: 55vh; pointer-events: none; z-index: 1; overflow: hidden;
+    height: 55vh; pointer-events: none; z-index: 2; overflow: visible; mix-blend-mode: overlay;
+  }
+  .lp-waves-bg::before {
+    content: '';
+    position: absolute; inset: 0;
+    background: radial-gradient(circle at 40% 20%, rgba(255,255,255,0.42), transparent 34%);
+    pointer-events: none;
+  }
+  .lp-waves-bg::after {
+    content: '';
+    position: absolute; inset: 0;
+    background: linear-gradient(180deg, rgba(255,255,255,0.22), rgba(255,255,255,0) 55%);
+    filter: blur(8px);
+    pointer-events: none;
   }
   .lp-wave {
-    position: absolute; bottom: 0; left: 0; width: 220%; line-height: 0;
+    position: absolute; bottom: 0; left: 0; width: 210%; line-height: 0;
+    transform-origin: center bottom;
   }
-  .lp-wave svg { display: block; width: 100%; }
-  .lp-w1 { animation: wS1 18s linear infinite; opacity: 0.55; }
-  .lp-w2 { animation: wS2 24s linear infinite; opacity: 0.38; }
-  .lp-w3 { animation: wS3 30s linear infinite; opacity: 0.22; }
+  .lp-wave svg { display: block; width: 100%; height: 100%; }
+  .lp-w1 { animation: wS1 24s linear infinite; opacity: 0.38; bottom: -1px; }
+  .lp-w2 { animation: wS2 18s linear infinite reverse; opacity: 0.55; bottom: -1px; }
+  .lp-w3 { animation: wS3 14s linear infinite; opacity: 0.78; bottom: -1px; }
   @keyframes wS1 { from { transform: translateX(0); } to { transform: translateX(-50%); } }
-  @keyframes wS2 { from { transform: translateX(-50%); } to { transform: translateX(0); } }
+  @keyframes wS2 { from { transform: translateX(0); } to { transform: translateX(-50%); } }
   @keyframes wS3 { from { transform: translateX(0); } to { transform: translateX(-50%); } }
 
   /* ── Page layout ── */
   .lp-content {
     position: relative; z-index: 10; flex: 1;
     display: flex; align-items: center; justify-content: center;
-    padding: 48px 24px 80px;
+    padding: 120px 24px; /* even top/bottom spacing */
   }
   .lp-grid {
     width: 100%; max-width: 1080px;
     display: grid; grid-template-columns: 1fr 1fr;
-    gap: 72px; align-items: center;
+    gap: 72px; align-items: stretch;
   }
 
   /* ── Left panel ── */
-  .lp-left { animation: fadeUp 0.65s cubic-bezier(0.16,1,0.3,1) both; }
+  .lp-left { animation: fadeUp 0.65s cubic-bezier(0.16,1,0.3,1) both; display:flex; flex-direction:column; justify-content:center; }
   @keyframes fadeUp {
     from { opacity: 0; transform: translateY(24px); }
     to   { opacity: 1; transform: translateY(0); }
   }
-  .lp-brand { margin-bottom: 36px; }
+  .lp-brand { margin-bottom: 36px; position: relative; }
+  .lp-brand img { height: 96px; width: auto; max-width: 220px; display: block; }
+  @media (max-width: 768px) { .lp-brand img { height: 68px; } }
   .lp-headline {
-    font-size: clamp(2rem, 3.5vw, 2.65rem); font-weight: 800; color: #ffffff;
+    font-size: clamp(2rem, 3.5vw, 2.65rem); font-weight: 800; color: #0f172a;
     line-height: 1.12; letter-spacing: -0.035em; margin: 0 0 12px;
   }
   .lp-sub {
-    font-size: 0.95rem; color: rgba(203,213,225,0.58);
+    font-size: 0.95rem; color: rgba(15,23,42,0.65);
     line-height: 1.65; margin: 0; font-weight: 400;
   }
 
@@ -73,17 +114,16 @@ const CSS = `
   .lp-card {
     width: 100%;
     max-width: 420px;
-    background: linear-gradient(145deg, rgba(22, 22, 32, 0.45) 0%, rgba(10, 10, 15, 0.6) 100%);
-    border: 1px solid rgba(255, 255, 255, 0.06);
-    border-top: 1px solid rgba(255, 255, 255, 0.12);
+    background: rgba(255,255,255,0.95);
+    border: 1px solid rgba(15,23,42,0.08);
+    border-top: 1px solid rgba(15,23,42,0.1);
     border-radius: 20px; 
     padding: 48px;
-    backdrop-filter: blur(40px); 
-    -webkit-backdrop-filter: blur(40px);
+    backdrop-filter: blur(24px); 
+    -webkit-backdrop-filter: blur(24px);
     box-shadow:
-      0 4px 6px -1px rgba(0, 0, 0, 0.1),
-      0 24px 48px -12px rgba(0, 0, 0, 0.6),
-      inset 0 1px 0 rgba(255, 255, 255, 0.05);
+      0 18px 45px rgba(15,23,42,0.08),
+      inset 0 1px 0 rgba(255, 255, 255, 0.9);
     position: relative;
     overflow: hidden;
   }
@@ -106,34 +146,36 @@ const CSS = `
   .lp-field { display: flex; flex-direction: column; gap: 7px; }
   .lp-label {
     font-size: 0.72rem; font-weight: 700;
-    color: rgba(148,163,184,0.75);
+    color: rgba(71,85,105,0.85);
     text-transform: uppercase; letter-spacing: 0.09em;
   }
   .lp-input-wrap { position: relative; }
   .lp-input-icon {
     position: absolute; left: 15px; top: 50%; transform: translateY(-50%);
-    color: #a78bfa; font-size: 0.88rem; pointer-events: none; line-height: 1;
+    color: #7c3aed; font-size: 0.88rem; pointer-events: none; line-height: 1;
     z-index: 1;
   }
   .lp-input {
     width: 100%;
     padding: 14px 18px 14px 44px;
     font-size: 0.92rem; font-family: inherit; color: #f1f5f9;
-    background: rgba(255,255,255,0.06);
-    border: 1px solid rgba(255,255,255,0.14);
+    background: rgba(255,255,255,0.97);
+    border: 1px solid rgba(15,23,42,0.06);
     border-radius: 12px; outline: none;
     transition: border-color 0.22s ease, background 0.22s ease, box-shadow 0.22s ease;
-    box-shadow: 0 2px 8px rgba(0,0,0,0.25), inset 0 1px 0 rgba(255,255,255,0.06);
+    box-shadow: 0 6px 18px rgba(15,23,42,0.06), inset 0 1px 0 rgba(255,255,255,0.6);
+    color: #0f172a;
   }
-  .lp-input::placeholder { color: rgba(148,163,184,0.5); font-size: 0.88rem; }
+  .lp-input::placeholder { color: rgba(15,23,42,0.45); font-size: 0.88rem; }
   .lp-input:hover {
     border-color: rgba(167,139,250,0.35);
-    background: rgba(255,255,255,0.07);
+    background: rgba(255,255,255,0.9);
   }
   .lp-input:focus {
     border-color: #7c3aed;
-    background: rgba(124,58,237,0.08);
-    box-shadow: 0 0 0 3px rgba(124,58,237,0.22), 0 2px 12px rgba(0,0,0,0.3), inset 0 1px 0 rgba(255,255,255,0.08);
+    background: rgba(124,58,237,0.06);
+    color: #0f172a;
+    box-shadow: 0 0 0 4px rgba(124,58,237,0.12), 0 6px 18px rgba(15,23,42,0.08), inset 0 1px 0 rgba(255,255,255,0.06);
   }
   .lp-input-pr { padding-right: 48px; }
   input:-webkit-autofill, input:-webkit-autofill:focus {
@@ -218,16 +260,16 @@ const CSS = `
     backdrop-filter: blur(18px); -webkit-backdrop-filter: blur(18px);
     box-shadow: 0 12px 32px rgba(0,0,0,0.4); z-index: 3;
   }
+  .lp-chip span { font-size: 0.78rem; font-weight: 600; color: #e2e8f0; white-space: nowrap; }
   .lp-chip-dot {
     width: 8px; height: 8px; border-radius: 50%; background: #a78bfa; flex-shrink: 0;
     box-shadow: 0 0 10px #a78bfa, 0 0 20px rgba(167,139,250,0.4);
   }
-  .lp-chip span { font-size: 0.78rem; font-weight: 600; color: #e2e8f0; white-space: nowrap; }
 
   /* ── Footer ── */
   .lp-footer {
-    position: relative; z-index: 10; height: 48px;
-    background: rgba(4,4,10,0.7); border-top: 1px solid rgba(255,255,255,0.04);
+    position: relative; z-index: 1200; height: 48px;
+    background: rgba(4,4,10,0.9); border-top: 1px solid rgba(255,255,255,0.06);
     backdrop-filter: blur(16px); display: flex; align-items: center; justify-content: center;
   }
   .lp-footer span { font-size: 0.72rem; color: rgba(203,213,225,0.3); letter-spacing: 0.04em; }
@@ -311,10 +353,10 @@ const CSS = `
   }
 `
 
-// Wave paths — higher amplitude, starts higher up the page
-const W1 = 'M0,40 C200,120 400,-20 600,60 C800,140 1000,0 1200,80 C1300,115 1370,60 1440,80 L1440,160 L0,160 Z'
-const W2 = 'M0,80 C150,20 350,140 550,70 C750,0 950,120 1150,60 C1280,30 1380,90 1440,70 L1440,160 L0,160 Z'
-const W3 = 'M0,100 C180,50 380,150 580,90 C780,30 980,130 1180,75 C1310,45 1390,100 1440,90 L1440,160 L0,160 Z'
+// Wave paths — liquid glass waves with gentle edge transitions
+const W1 = 'M0,160 C0,160 80,130 160,130 C240,130 320,155 440,150 C560,145 680,110 780,120 C900,130 980,160 1080,150 C1180,140 1280,110 1360,110 C1420,110 1440,130 1440,160 L1440,160 L0,160 Z'
+const W2 = 'M0,160 C0,160 90,140 180,140 C280,140 340,165 460,155 C580,145 700,105 800,120 C920,135 1000,160 1100,145 C1200,130 1300,115 1380,120 C1430,125 1440,145 1440,160 L1440,160 L0,160 Z'
+const W3 = 'M0,160 C0,160 60,145 150,145 C230,145 310,160 430,155 C550,150 680,120 760,130 C870,140 960,155 1060,150 C1160,145 1260,130 1340,130 C1410,130 1440,150 1440,160 L1440,160 L0,160 Z'
 
 export default function LoginPage() {
   const navigate = useNavigate()
@@ -334,7 +376,7 @@ export default function LoginPage() {
   const [resetLoading, setResetLoading] = useState(false)
   const [resetError, setResetError] = useState('')
 
-  useEffect(() => { document.documentElement.setAttribute('data-theme', 'dark') }, [])
+  // Theme is now controlled globally by the Navbar (data-theme on <html>)
 
   const handleLogin = async (e) => {
     e.preventDefault()
@@ -415,6 +457,11 @@ export default function LoginPage() {
 
       <div className="lp-root">
 
+        {/* Theme toggle fixed to viewport top-right */}
+        <div className="lp-toggle">
+          <ThemeToggle className="p-2 rounded-xl" />
+        </div>
+
         {/* Waves — elevated ambient background layer */}
         <div className="lp-waves-bg">
           <div className="lp-wave lp-w3">
@@ -444,7 +491,7 @@ export default function LoginPage() {
             {/* LEFT: Login Form */}
             <div className="lp-left">
               <div className="lp-brand">
-                <img src={logo} alt="Hire IQ" style={{ height: '44px', objectFit: 'contain', display: 'block', marginBottom: '28px', filter: 'brightness(8) saturate(0.2)' }} />
+                <img src={logo} alt="Hire IQ" className="h-11 w-auto object-contain mb-7" />
                 <h1 className="lp-headline">Welcome back</h1>
                 <p className="lp-sub">
                   Sign in to your Hire IQ admin workspace and<br />
@@ -527,15 +574,15 @@ export default function LoginPage() {
               <div className="lp-hero-glow" />
               <img src={loginHero} alt="AI Interview Platform" className="lp-hero-img" />
 
-              <div className="lp-chip" style={{ top: '6%', right: '-10px' }}>
+              <div className="lp-chip" style={{ bottom: '20%', left: '-70px' }}>
                 <div className="lp-chip-dot" />
                 <span>AI Proctoring Live</span>
               </div>
-              <div className="lp-chip" style={{ bottom: '10%', left: '-14px' }}>
+              <div className="lp-chip" style={{ top: '20%', left: '-70px' }}>
                 <i className="fas fa-brain" style={{ color: '#c4b5fd', fontSize: '13px', flexShrink: 0 }} />
                 <span>Smart Evaluation Engine</span>
               </div>
-              <div className="lp-chip" style={{ top: '40%', right: '-22px' }}>
+              <div className="lp-chip" style={{ top: '30%', right: '-70px' }}>
                 <i className="fas fa-chart-line" style={{ color: '#34d399', fontSize: '13px', flexShrink: 0 }} />
                 <span style={{ color: '#e2e8f0' }}>Real-time Scoring</span>
               </div>

@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { useSelector } from 'react-redux';
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from 'recharts';
+import { getThemeColor } from '../../utils/themeUtils';
 import { Users, UserCheck, Video, MoreHorizontal, Search, Edit, Mail, Trash2, X, UserPlus, Coins, Download, Eye, EyeOff } from 'lucide-react';
 import Swal from 'sweetalert2';
 import 'sweetalert2/dist/sweetalert2.min.css';
@@ -264,13 +265,13 @@ export default function RecruitersPage() {
           <div className="h-64 w-full">
             <ResponsiveContainer width="100%" height="100%">
               <BarChart data={weeklyActivity}>
-                <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#e2e8f0" />
-                <XAxis dataKey="name" axisLine={false} tickLine={false} tick={{ fill: '#64748b', fontSize: 12 }} dy={10} />
+                <CartesianGrid strokeDasharray="3 3" vertical={false} stroke={getThemeColor('--muted', '#e2e8f0')} />
+                <XAxis dataKey="name" axisLine={false} tickLine={false} tick={{ fill: getThemeColor('--muted-foreground', '#64748b'), fontSize: 12 }} dy={10} />
                 <Tooltip 
-                  cursor={{ fill: 'rgba(99, 102, 241, 0.05)' }}
+                  cursor={{ fill: getThemeColor('--primary', 'rgba(99, 102, 241, 0.05)') }}
                   contentStyle={{ borderRadius: '12px', border: 'none', boxShadow: '0 10px 15px -3px rgb(0 0 0 / 0.1)' }}
                 />
-                <Bar dataKey="interviews" fill="#6366f1" radius={[4, 4, 0, 0]} barSize={30} />
+                <Bar dataKey="interviews" fill={getThemeColor('--color-purple', '#6366f1')} radius={[4, 4, 0, 0]} barSize={30} />
               </BarChart>
             </ResponsiveContainer>
           </div>
@@ -278,24 +279,24 @@ export default function RecruitersPage() {
 
         {/* Recruiters List */}
         <div
-          className="lg:col-span-2 bg-white rounded-2xl shadow-sm border border-slate-100 flex flex-col overflow-hidden"
+          className="lg:col-span-2 bg-card rounded-2xl shadow-sm border border-border flex flex-col overflow-hidden text-card-foreground"
         >
-          <div className="p-6 border-b border-slate-100 flex justify-between items-center bg-slate-50">
-            <h2 className="text-lg font-semibold text-slate-800">Directory</h2>
+          <div className="p-6 border-b border-border flex justify-between items-center bg-muted/30">
+            <h2 className="text-lg font-semibold text-foreground">Directory</h2>
             <div className="flex items-center gap-3">
               <div className="relative">
-                <Search className="w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
+                <Search className="w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground" />
                 <input 
                   type="text"
                   placeholder="Search recruiters..."
                   value={searchTerm}
                   onChange={e => setSearchTerm(e.target.value)}
-                  className="pl-9 pr-4 py-2 text-sm bg-white border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500 w-64 transition-all"
+                  className="pl-9 pr-4 py-2 text-sm bg-card text-foreground border border-border rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500 w-64 transition-all"
                 />
               </div>
               <button 
                 onClick={handleDownloadCSV}
-                className="flex items-center gap-2 px-4 py-2 bg-white border border-slate-200 text-slate-700 font-semibold rounded-lg hover:bg-slate-50 shadow-sm transition-colors text-sm"
+                className="flex items-center gap-2 px-4 py-2 bg-card border border-border text-foreground font-semibold rounded-lg hover:bg-muted/40 shadow-sm transition-colors text-sm"
               >
                 <Download className="w-4 h-4" />
                 Export
@@ -306,7 +307,7 @@ export default function RecruitersPage() {
           <div className="flex-1 overflow-visible">
             <table className="w-full text-left border-collapse">
               <thead>
-                <tr className="bg-white text-slate-500 text-xs uppercase tracking-wider">
+                <tr className="bg-card text-muted-foreground text-xs uppercase tracking-wider border-b border-border">
                   <th className="px-6 py-4 font-medium">Recruiter</th>
                   <th className="px-6 py-4 font-medium">Role</th>
                   <th className="px-6 py-4 font-medium">Status</th>
@@ -315,37 +316,37 @@ export default function RecruitersPage() {
                   <th className="w-12 px-2 py-4 font-medium"></th>
                 </tr>
               </thead>
-              <tbody className="divide-y divide-slate-100 text-sm">
+              <tbody className="divide-y divide-border/60 text-sm">
                 {filteredRecruiters.map((recruiter, idx) => (
                   <tr
                     key={recruiter.id} 
-                    className="hover:bg-slate-50:bg-slate-700/30 transition-colors"
+                    className="hover:bg-muted/40 transition-colors"
                   >
                     <td className="px-6 py-4 whitespace-nowrap">
                       <div className="flex items-center gap-3">
-                        <div className="w-10 h-10 rounded-full bg-indigo-100 flex items-center justify-center text-indigo-600 font-bold">
+                        <div className="w-10 h-10 rounded-full bg-indigo-500/15 border border-indigo-500/20 flex items-center justify-center text-indigo-500 dark:text-indigo-400 font-bold">
                           {recruiter.name.charAt(0).toUpperCase()}
                         </div>
                         <div>
-                          <p className="font-semibold text-slate-900">{recruiter.name}</p>
-                          <p className="text-xs text-slate-500">{recruiter.email}</p>
+                          <p className="font-semibold text-foreground">{recruiter.name}</p>
+                          <p className="text-xs text-muted-foreground">{recruiter.email}</p>
                         </div>
                       </div>
                     </td>
-                    <td className="px-6 py-4 whitespace-nowrap text-slate-600 capitalize">{recruiter.role}</td>
+                    <td className="px-6 py-4 whitespace-nowrap text-muted-foreground capitalize font-medium">{recruiter.role}</td>
                     <td className="px-6 py-4 whitespace-nowrap">
-                      <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${
+                      <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-bold ${
                         recruiter.status === 'Active' 
-                          ? 'bg-emerald-100 text-emerald-800'
-                          : 'bg-slate-100 text-slate-800'
+                          ? 'bg-emerald-50 dark:bg-emerald-500/15 text-emerald-700 dark:text-emerald-300 border border-emerald-200 dark:border-emerald-500/30'
+                          : 'bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300 border border-slate-200 dark:border-slate-700'
                       }`}>
                         {recruiter.status}
                       </span>
                     </td>
-                    <td className="px-6 py-4 whitespace-nowrap text-center font-medium text-slate-700">
+                    <td className="px-6 py-4 whitespace-nowrap text-center font-medium text-foreground">
                       {recruiter.interviews_conducted}
                     </td>
-                    <td className="px-6 py-4 whitespace-nowrap text-center font-bold text-indigo-600">
+                    <td className="px-6 py-4 whitespace-nowrap text-center font-bold text-indigo-600 dark:text-indigo-400">
                       {recruiter.credits || 0}
                     </td>
                     <td className="px-6 py-4 whitespace-nowrap text-right relative">

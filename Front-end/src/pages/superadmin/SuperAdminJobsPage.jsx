@@ -296,14 +296,13 @@ export default function SuperAdminJobsPage() {
 
       {/* ── Header ─────────────────────────────────────── */}
       <div className="bg-white/80 backdrop-blur-2xl border border-white/60 rounded-3xl shadow-[0_8px_30px_rgb(0,0,0,0.04)] p-6 sm:p-8 mb-8 relative overflow-hidden">
-        <div className="absolute top-0 left-0 w-full h-32 bg-gradient-to-b from-indigo-50/50 to-transparent pointer-events-none" />
         <div className="relative z-10 flex flex-col sm:flex-row sm:items-center justify-between gap-5">
           <div className="flex gap-4 items-center">
             <div className="w-16 h-16 rounded-2xl flex items-center justify-center bg-gradient-to-br from-indigo-600 via-indigo-700 to-purple-800 text-white shadow-[0_8px_20px_rgba(79,70,229,0.3)] border border-white/20 ring-4 ring-indigo-50 shrink-0">
               <Briefcase size={30} strokeWidth={2.5} />
             </div>
             <div>
-              <h1 className="text-3xl font-black text-transparent bg-clip-text bg-gradient-to-r from-slate-900 to-indigo-900 tracking-tight">
+              <h1 className="text-3xl font-black text-slate-900 tracking-tight">
                 Jobs Management
               </h1>
               <p className="text-slate-500 mt-0.5 text-sm font-semibold">
@@ -495,7 +494,7 @@ export default function SuperAdminJobsPage() {
                 {jobs.map((job, idx) => (
                   <tr
                     key={job.job_id || job._id}
-                    className="hover:bg-indigo-50/30 transition-colors group cursor-pointer"
+                    className="transition-colors group cursor-pointer"
                     onClick={() => setSelectedJobDetails(job)}
                   >
                     <td className="p-4">

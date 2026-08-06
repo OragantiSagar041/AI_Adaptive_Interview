@@ -180,42 +180,68 @@ export default function CreditManagementPage() {
         {rows.length > 0 && <AllocateForm rows={rows} onAllocate={allocate} />}
       </Dialog>
     }>
-      <div className="grid gap-3 md:grid-cols-3">
-        <Card><CardContent className="p-4"><div className="text-xs text-muted-foreground">Total system credits</div><div className="mt-1 text-2xl font-semibold">{kpis.total_credits_system.toLocaleString()}</div></CardContent></Card>
-        <Card><CardContent className="p-4"><div className="text-xs text-muted-foreground">Consumed this month</div><div className="mt-1 text-2xl font-semibold">{kpis.credits_consumed_month.toLocaleString()}</div></CardContent></Card>
-        <Card><CardContent className="p-4"><div className="text-xs text-muted-foreground">Active top-ups</div><div className="mt-1 text-2xl font-semibold text-emerald-600">{kpis.active_topups}</div></CardContent></Card>
+      <div className="grid gap-4 md:grid-cols-3">
+        <Card className="border-none shadow-sm bg-card rounded-2xl"><CardContent className="p-5"><div className="text-xs text-muted-foreground font-medium">Total system credits</div><div className="mt-1 text-2xl font-black text-foreground">{kpis.total_credits_system.toLocaleString()}</div></CardContent></Card>
+        <Card className="border-none shadow-sm bg-card rounded-2xl"><CardContent className="p-5"><div className="text-xs text-muted-foreground font-medium">Consumed this month</div><div className="mt-1 text-2xl font-black text-foreground">{kpis.credits_consumed_month.toLocaleString()}</div></CardContent></Card>
+        <Card className="border-none shadow-sm bg-card rounded-2xl"><CardContent className="p-5"><div className="text-xs text-muted-foreground font-medium">Active top-ups</div><div className="mt-1 text-2xl font-black text-emerald-600">{kpis.active_topups}</div></CardContent></Card>
       </div>
 
-      <Card><CardHeader className="pb-2"><CardTitle className="text-base">Per-recruiter usage</CardTitle></CardHeader>
-        <CardContent><Table>
-          <TableHeader><TableRow>
-            <TableHead>Recruiter</TableHead>
-            <TableHead className="text-right">Allocated</TableHead>
-            <TableHead className="text-right">Used</TableHead>
-            <TableHead className="text-right">Remaining</TableHead>
-            <TableHead className="w-[220px]">Utilization</TableHead>
-            <TableHead className="text-right">Actions</TableHead>
+      <Card className="border-none shadow-sm bg-card rounded-3xl mt-6 overflow-hidden"><CardHeader className="pb-2 pt-6 px-6"><CardTitle className="text-lg font-black text-foreground">Per-recruiter usage</CardTitle></CardHeader>
+        <CardContent className="px-6 pb-6"><Table>
+          <TableHeader><TableRow className="border-b border-border/50 hover:bg-transparent">
+            <TableHead className="font-bold text-muted-foreground">Recruiter</TableHead>
+            <TableHead className="text-right font-bold text-muted-foreground">Allocated</TableHead>
+            <TableHead className="text-right font-bold text-muted-foreground">Used</TableHead>
+            <TableHead className="text-right font-bold text-muted-foreground">Remaining</TableHead>
+            <TableHead className="w-[220px] font-bold text-muted-foreground">Utilization</TableHead>
+            <TableHead className="text-right font-bold text-muted-foreground">Actions</TableHead>
           </TableRow></TableHeader>
           <TableBody>
             {rows.map((r) => {
-              const pct = r.allocated > 0 ? Math.round((r.used / r.allocated) * 100) : 0;
-              const low = pct >= 90 || r.remaining < 1000;
-              return <TableRow key={r.id}>
-                  <TableCell className="font-medium">{r.org}</TableCell>
-                  <TableCell className="text-right tabular-nums">{r.allocated.toLocaleString()}</TableCell>
-                  <TableCell className="text-right tabular-nums">{r.used.toLocaleString()}</TableCell>
-                  <TableCell className={`text-right tabular-nums font-medium ${low ? "text-rose-600" : "text-emerald-600"}`}>{r.remaining.toLocaleString()}</TableCell>
-                  <TableCell><div className="flex items-center gap-2"><Progress value={pct} className="h-1.5" /><span className="w-9 text-right text-xs tabular-nums">{pct}%</span></div></TableCell>
+              const pct = r.allocated > 0 ? Math.min(100, Math.max(0, Math.round((r.used / r.allocated) * 100))) : 0;
+              const low = pct >= 95 || r.remaining <= 0;
+              return <TableRow key={r.id} className="border-b border-border/30 hover:bg-muted/40 transition-colors">
+                  <TableCell className="font-bold text-foreground">{r.org}</TableCell>
+                  <TableCell className="text-right tabular-nums font-semibold">{r.allocated.toLocaleString()}</TableCell>
+                  <TableCell className="text-right tabular-nums font-semibold">{r.used.toLocaleString()}</TableCell>
+                  <TableCell className={`text-right tabular-nums font-extrabold ${low ? "text-rose-600" : "text-emerald-600"}`}>{r.remaining.toLocaleString()}</TableCell>
+                  <TableCell>
+                    <div className="flex items-center gap-2.5">
+                      <div className="relative h-2 w-full overflow-hidden rounded-full bg-slate-200/70 border border-slate-200">
+                        <div
+                          className={`h-full transition-all duration-300 rounded-full ${
+                            pct === 0 
+                              ? 'bg-transparent' 
+                              : pct >= 90 
+                              ? 'bg-rose-500' 
+                              : pct >= 75 
+                              ? 'bg-amber-500' 
+                              : 'bg-emerald-500'
+                          }`}
+                          style={{ width: `${pct}%` }}
+                        />
+                      </div>
+                      <span className={`w-10 text-right text-xs tabular-nums font-bold ${
+                        pct >= 90 ? 'text-rose-600' : pct > 0 ? 'text-emerald-600' : 'text-slate-400'
+                      }`}>
+                        {pct}%
+                      </span>
+                    </div>
+                  </TableCell>
                   <TableCell className="text-right">
-                    <Button size="sm" variant="outline" onClick={() => handleGiftClick(r.id, r.org)}>
-                      <Gift className="h-4 w-4" /> Transfer
-                    </Button>
+                    <button
+                      type="button"
+                      onClick={() => handleGiftClick(r.id, r.org)}
+                      className="inline-flex items-center gap-1.5 px-4 py-1.5 rounded-full border border-slate-200 bg-white text-slate-800 font-extrabold text-xs shadow-xs hover:bg-indigo-50 hover:text-indigo-600 hover:border-indigo-300 transition-all cursor-pointer"
+                    >
+                      <Gift className="h-3.5 w-3.5 text-indigo-600" /> Transfer
+                    </button>
                   </TableCell>
                 </TableRow>;
             })}
             {rows.length === 0 && (
               <TableRow>
-                <TableCell colSpan={4} className="h-24 text-center text-muted-foreground">
+                <TableCell colSpan={6} className="h-24 text-center text-muted-foreground font-medium">
                   No recruiters found.
                 </TableCell>
               </TableRow>
@@ -224,7 +250,7 @@ export default function CreditManagementPage() {
         </Table></CardContent>
       </Card>
 
-      <div className="bg-white/80 backdrop-blur-2xl border border-white/60 p-0 shadow-[0_8px_30px_rgb(0,0,0,0.04)] rounded-3xl overflow-hidden relative mb-6">
+      <div className="bg-card border-none shadow-sm p-0 rounded-3xl overflow-hidden relative mt-6 mb-6">
         <div className="p-6 sm:p-8 border-b border-slate-100/50 flex items-center gap-4">
           <div className="w-14 h-14 rounded-2xl flex items-center justify-center bg-gradient-to-br from-amber-400 to-orange-500 text-white shadow-[0_8px_16px_rgba(245,158,11,0.25)] border border-white/20 ring-4 ring-amber-50 shrink-0">
             <CreditCard size={26} strokeWidth={2.5} />
@@ -326,15 +352,22 @@ export default function CreditManagementPage() {
         </div>
       </div>
 
-      <Card><CardHeader className="pb-2"><CardTitle className="text-base">Recent ledger</CardTitle></CardHeader>
-        <CardContent><Table>
-          <TableHeader><TableRow><TableHead>Time</TableHead><TableHead>Organization</TableHead><TableHead>Action</TableHead><TableHead className="text-right">Amount</TableHead><TableHead>Status</TableHead></TableRow></TableHeader>
-          <TableBody>{ledger.map((l, i) => <TableRow key={i}>
-              <TableCell className="text-muted-foreground text-sm">{l.date ? new Date(l.date).toLocaleString() : ''}</TableCell>
-              <TableCell>{l.org}</TableCell>
-              <TableCell>{l.amount > 0 ? "Top-up" : "Usage"}</TableCell>
-              <TableCell className={`text-right tabular-nums ${l.amount > 0 ? "text-emerald-600" : "text-rose-600"}`}>{l.amount > 0 ? `+${l.amount.toLocaleString()}` : l.amount.toLocaleString()}</TableCell>
-              <TableCell className="text-muted-foreground">{l.status}</TableCell>
+      <Card className="border-none shadow-sm bg-card rounded-3xl mt-6 overflow-hidden">
+        <CardHeader className="pb-2 pt-6 px-6"><CardTitle className="text-lg font-black text-foreground">Recent ledger</CardTitle></CardHeader>
+        <CardContent className="px-6 pb-6"><Table>
+          <TableHeader><TableRow className="border-b border-border/50 hover:bg-transparent">
+            <TableHead className="font-bold text-muted-foreground">Time</TableHead>
+            <TableHead className="font-bold text-muted-foreground">Organization</TableHead>
+            <TableHead className="font-bold text-muted-foreground">Action</TableHead>
+            <TableHead className="text-right font-bold text-muted-foreground">Amount</TableHead>
+            <TableHead className="font-bold text-muted-foreground">Status</TableHead>
+          </TableRow></TableHeader>
+          <TableBody>{ledger.map((l, i) => <TableRow key={i} className="border-b border-border/30 hover:bg-muted/40 transition-colors">
+              <TableCell className="text-muted-foreground text-sm font-medium">{l.date ? new Date(l.date).toLocaleString() : ''}</TableCell>
+              <TableCell className="font-bold text-foreground">{l.org}</TableCell>
+              <TableCell className="font-semibold text-foreground">{l.amount > 0 ? "Top-up" : "Usage"}</TableCell>
+              <TableCell className={`text-right tabular-nums font-extrabold ${l.amount > 0 ? "text-emerald-600" : "text-rose-600"}`}>{l.amount > 0 ? `+${l.amount.toLocaleString()}` : l.amount.toLocaleString()}</TableCell>
+              <TableCell className="text-muted-foreground font-medium">{l.status}</TableCell>
             </TableRow>)}</TableBody>
         </Table></CardContent>
       </Card>

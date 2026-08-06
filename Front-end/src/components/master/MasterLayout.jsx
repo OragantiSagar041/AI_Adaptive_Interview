@@ -19,6 +19,7 @@ import {
 import { logout, loadSuperAdminProfile } from '../../store/slices/authSlice'
 import { persistor } from '../../store/store'
 import AdminCopilot from '../admin/copilot/AdminCopilot'
+import ThemeToggle from '../ThemeToggle'
 import { getMasterNotifications, markNotificationAsRead, markAllNotificationsAsRead } from '../../utils/api'
 
 export default function MasterLayout() {
@@ -37,6 +38,13 @@ export default function MasterLayout() {
       dispatch(loadSuperAdminProfile())
     }
   }, [dispatch, token])
+
+  useEffect(() => {
+    document.documentElement.classList.add('admin-layout')
+    return () => {
+      document.documentElement.classList.remove('admin-layout')
+    }
+  }, [])
 
   // Local theme states
   const [accentName, setAccentName] = useState('indigo')
@@ -135,12 +143,12 @@ export default function MasterLayout() {
   }, [])
 
   const accentColors = {
-    teal: { primary: '#0d9488', hover: '#0f766e', glow: 'rgba(13, 148, 136, 0.15)' },
-    indigo: { primary: '#6366f1', hover: '#4f46e5', glow: 'rgba(99, 102, 241, 0.15)' },
-    purple: { primary: '#9333ea', hover: '#7e22ce', glow: 'rgba(147, 51, 234, 0.15)' },
-    red: { primary: '#e11d48', hover: '#be123c', glow: 'rgba(225, 29, 72, 0.15)' },
-    green: { primary: '#16a34a', hover: '#15803d', glow: 'rgba(22, 163, 74, 0.15)' },
-    blue: { primary: '#2563eb', hover: '#1d4ed8', glow: 'rgba(37, 99, 237, 0.15)' }
+    teal: { primary: '#2dd4bf', hover: '#14b8a6', glow: 'rgba(45, 212, 191, 0.30)' },
+    indigo: { primary: '#818cf8', hover: '#6366f1', glow: 'rgba(129, 140, 248, 0.30)' },
+    purple: { primary: '#c084fc', hover: '#a855f7', glow: 'rgba(192, 132, 252, 0.30)' },
+    red: { primary: '#fb7185', hover: '#f43f5e', glow: 'rgba(251, 113, 133, 0.30)' },
+    green: { primary: '#86efac', hover: '#4ade80', glow: 'rgba(134, 239, 172, 0.30)' },
+    blue: { primary: '#60a5fa', hover: '#3b82f6', glow: 'rgba(96, 165, 250, 0.30)' }
   }
 
   const currentAccent = accentColors[accentName] || accentColors.indigo
@@ -226,30 +234,26 @@ export default function MasterLayout() {
       {/* Main Content Wrapper */}
       <div className="flex-1 flex flex-col min-w-0 h-screen">
         {/* Top bar */}
-        <header
-          className="relative z-30 border-b px-4 sm:px-8 py-4 flex justify-between items-center text-[#1e293b] shadow-sm backdrop-blur-md shrink-0"
-          style={{
-            background: `linear-gradient(90deg, rgba(255,255,255,0.92), ${currentAccent ? `rgba(${parseInt(currentAccent.primary.slice(1,3),16)}, ${parseInt(currentAccent.primary.slice(3,5),16)}, ${parseInt(currentAccent.primary.slice(5,7),16)}, 0.14)` : 'rgba(99,102,241,0.14)'})`,
-            borderColor: currentAccent ? `rgba(${parseInt(currentAccent.primary.slice(1,3),16)}, ${parseInt(currentAccent.primary.slice(3,5),16)}, ${parseInt(currentAccent.primary.slice(5,7),16)}, 0.22)` : 'rgba(99,102,241,0.22)'
-          }}
-        >
+        <header className="relative z-30 border-b border-slate-200 bg-white px-4 sm:px-8 py-4 flex justify-between items-center text-foreground shadow-sm backdrop-blur-md shrink-0">
           {/* Left Side: Brand & Toggles */}
-          <div className="flex items-center gap-6">
+          <div className="flex items-center gap-8">
             <h2 className="text-[17px] font-bold text-slate-800">{getPageTitle()}</h2>
           </div>
 
           {/* Right Side: Toggles, Notifications & User Profile */}
-          <div className="flex items-center gap-5">
+          <div className="flex items-center gap-6">
+            <ThemeToggle className="bg-card border-border text-muted-foreground hover:text-foreground hover:bg-muted shadow-sm" />
             {/* Theme Toggle Dots */}
             <div className="flex items-center gap-1.5 bg-white rounded-full px-2 py-1 shadow-sm border border-slate-100">
               {Object.keys(accentColors).map(color => (
                 <button
                   key={color}
                   onClick={() => setAccentName(color)}
-                  className="w-4 h-4 rounded-full border border-white/50 cursor-pointer p-0 transition-all hover:scale-110"
+                  className="w-4 h-4 rounded-full border-2 border-white/50 cursor-pointer p-0 transition-all hover:scale-110"
                   style={{
                     background: accentColors[color].primary,
-                    boxShadow: accentName === color ? `0 0 0 2px white, 0 0 0 4px ${accentColors[color].primary}` : 'none',
+                    borderColor: accentName === color ? 'white' : 'rgba(255,255,255,0.65)',
+                    boxShadow: accentName === color ? '0 0 0 2px rgba(255,255,255,0.9)' : 'none',
                   }}
                   title={color}
                 />

@@ -95,7 +95,12 @@ async def init_db_indexes():
     if name_index and name_index.get("unique"):
         # Candidate names are not identities. The legacy unique index merged or
         # rejected different people who happened to share the same name.
-        candidates_collection.drop_index("name_1")
+        try:
+            candidates_collection.drop_index("name_1")
+        except OperationFailure as exc:
+            # Another startup process may have removed the legacy index first.
+            if getattr(exc, "code", None) != 27:
+                raise
     
     safe_create_index(candidates_collection, "name")
     safe_create_index(admins_collection, "username", unique=True)

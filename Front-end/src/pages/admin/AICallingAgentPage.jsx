@@ -1328,9 +1328,54 @@ function RecentCallsTab({ calls, loading, onViewDetails }) {
     }
   };
 
+  const [yesNoFilter, setYesNoFilter] = useState('all')
+  const [statusFilter, setStatusFilter] = useState('all')
+  const [directionFilter, setDirectionFilter] = useState('all')
+  const [durationFilter, setDurationFilter] = useState('all')
+
   const displayCalls = calls.filter(call => {
     const st = (call.call_status || call.status || '').toLowerCase();
-    return st !== 'initiated';
+    if (st === 'initiated') return false;
+
+    // Status filter matching dropdown options
+    if (statusFilter !== 'all') {
+      if (statusFilter === 'answered' && !['completed', 'answered', 'ended', 'success'].includes(st)) return false;
+      if (statusFilter === 'missed' && !['no-answer', 'missed', 'unanswered', 'no_answer'].includes(st)) return false;
+      if (statusFilter === 'voicemail' && !['voicemail', 'machine', 'answering_machine'].includes(st)) return false;
+      if (statusFilter === 'busy' && !['busy', 'user_busy'].includes(st)) return false;
+      if (statusFilter === 'failed' && !['failed', 'error', 'rejected'].includes(st)) return false;
+    }
+
+    // Direction filter
+    const dirStr = (call.call_direction || call.call_type || call.direction || 'outbound').toLowerCase();
+    if (directionFilter === 'inbound' && !dirStr.includes('inbound')) return false;
+    if (directionFilter === 'outbound' && (!dirStr.includes('outbound') && !dirStr.includes('outgoing'))) return false;
+
+    // Duration filter
+    if (durationFilter !== 'all') {
+      const durSec = typeof call.call_duration === 'number' 
+        ? call.call_duration 
+        : parseInt(call.call_duration || '0', 10);
+      if (durationFilter === '>5' && durSec <= 300) return false;
+      if (durationFilter === '<5' && durSec > 300) return false;
+    }
+
+    // yesNoFilter: 'all' | 'yes' | 'no'
+    if (yesNoFilter === 'all') return true;
+
+    // Determine if a call has any recording/transcript/post-call artifacts
+    const hasRecording = !!(
+      call.recording_url || call.recordings || call.has_recording || call.recording
+    );
+    const hasTranscript = !!(
+      call.transcript || call.transcriptions || call.has_transcript || call.stt_transcript
+    );
+    const hasPostCall = hasRecording || hasTranscript || !!call.post_call
+
+    if (yesNoFilter === 'yes') return hasPostCall;
+    if (yesNoFilter === 'no') return !hasPostCall;
+
+    return true;
   });
 
   return (
@@ -1339,20 +1384,44 @@ function RecentCallsTab({ calls, loading, onViewDetails }) {
       <div className="flex items-center gap-3 mb-6 bg-white p-3 rounded-2xl border border-slate-200 shadow-sm flex-wrap">
         <span className="text-slate-800 font-extrabold mr-2 ml-2">Recent Calls ({displayCalls.length})</span>
         <span className="text-slate-400 text-xs font-bold uppercase tracking-wider ml-auto mr-2">Filters <AlertCircle size={14} className="inline opacity-50" /></span>
-        <select className="bg-slate-50 border border-slate-200 text-slate-700 text-sm font-semibold rounded-lg px-3 py-1.5 outline-none focus:border-indigo-500">
-          <option>All directions</option>
-          <option>Inbound</option>
-          <option>Outbound</option>
+        <select 
+          value={directionFilter}
+          onChange={e => setDirectionFilter(e.target.value)}
+          className="bg-slate-50 border border-slate-200 text-slate-700 text-sm font-semibold rounded-lg px-3 py-1.5 outline-none focus:border-indigo-500 cursor-pointer"
+        >
+          <option value="all">All directions</option>
+          <option value="inbound">Incoming</option>
+          <option value="outbound">Outgoing</option>
         </select>
-        <select className="bg-slate-50 border border-slate-200 text-slate-700 text-sm font-semibold rounded-lg px-3 py-1.5 outline-none focus:border-indigo-500">
-          <option>All statuses</option>
-          <option>Completed</option>
-          <option>No Answer</option>
+        <select 
+          value={statusFilter}
+          onChange={e => setStatusFilter(e.target.value)}
+          className="bg-slate-50 border border-slate-200 text-slate-700 text-sm font-semibold rounded-lg px-3 py-1.5 outline-none focus:border-indigo-500 cursor-pointer"
+        >
+          <option value="all">All statuses</option>
+          <option value="answered">Answered</option>
+          <option value="missed">Missed</option>
+          <option value="voicemail">Voicemail</option>
+          <option value="busy">Busy</option>
+          <option value="failed">Failed</option>
         </select>
-        <select className="bg-slate-50 border border-slate-200 text-slate-700 text-sm font-semibold rounded-lg px-3 py-1.5 outline-none focus:border-indigo-500">
-          <option>All durations</option>
-          <option>&gt; 5 min</option>
-          <option>&lt; 5 min</option>
+        <select 
+          value={durationFilter}
+          onChange={e => setDurationFilter(e.target.value)}
+          className="bg-slate-50 border border-slate-200 text-slate-700 text-sm font-semibold rounded-lg px-3 py-1.5 outline-none focus:border-indigo-500 cursor-pointer"
+        >
+          <option value="all">All durations</option>
+          <option value=">5">&gt; 5 min</option>
+          <option value="<5">&lt; 5 min</option>
+        </select>
+        <select
+          value={yesNoFilter}
+          onChange={e => setYesNoFilter(e.target.value)}
+          className="bg-slate-50 border border-slate-200 text-slate-700 text-sm font-semibold rounded-lg px-3 py-1.5 outline-none focus:border-indigo-500 cursor-pointer"
+        >
+          <option value="all">All</option>
+          <option value="yes">Yes</option>
+          <option value="no">No</option>
         </select>
         <button className="bg-slate-50 border border-slate-200 text-slate-600 hover:text-indigo-600 hover:bg-indigo-50 text-sm font-bold rounded-lg px-3 py-1.5 transition-colors flex items-center gap-2">
           <RefreshCw size={14} /> Refresh
@@ -1365,10 +1434,29 @@ function RecentCallsTab({ calls, loading, onViewDetails }) {
           <EmptyState message="No completed or logged calls found." />
         ) : (
           displayCalls.map((call, idx) => {
-            const isCompleted = call.call_status === 'completed';
+            const st = (call.call_status || call.status || 'completed').toLowerCase();
+            const isCompleted = st === 'completed' || st === 'answered' || st === 'ended';
             const dirStr = (call.call_direction || call.call_type || call.direction || 'outbound').toLowerCase();
             const isOutbound = dirStr.includes('outbound') || dirStr.includes('outgoing');
-            const badgeColor = isCompleted ? 'border-emerald-200 bg-emerald-50 text-emerald-600' : 'border-rose-200 bg-rose-50 text-rose-600';
+            
+            let badgeColor = 'border-emerald-200 bg-emerald-50 text-emerald-600';
+            let badgeLabel = call.call_status || 'Answered';
+            if (st === 'missed' || st === 'no-answer') {
+              badgeColor = 'border-amber-200 bg-amber-50 text-amber-600';
+              badgeLabel = 'Missed';
+            } else if (st === 'voicemail') {
+              badgeColor = 'border-purple-200 bg-purple-50 text-purple-600';
+              badgeLabel = 'Voicemail';
+            } else if (st === 'busy') {
+              badgeColor = 'border-orange-200 bg-orange-50 text-orange-600';
+              badgeLabel = 'Busy';
+            } else if (st === 'failed') {
+              badgeColor = 'border-rose-200 bg-rose-50 text-rose-600';
+              badgeLabel = 'Failed';
+            } else if (isCompleted) {
+              badgeColor = 'border-emerald-200 bg-emerald-50 text-emerald-600';
+              badgeLabel = 'Answered';
+            }
 
           return (
             <motion.div
@@ -1389,7 +1477,7 @@ function RecentCallsTab({ calls, loading, onViewDetails }) {
                 <div className="flex items-center gap-3">
                   <span className={`text-[0.6rem] uppercase font-bold px-2 py-0.5 rounded-full flex items-center gap-1 ${isOutbound ? 'bg-orange-50 text-orange-600 border border-orange-200' : 'bg-blue-50 text-blue-600 border border-blue-200'}`}>
                     {isOutbound ? <ArrowUpRight size={10} strokeWidth={3} /> : <ArrowDownLeft size={10} strokeWidth={3} />}
-                    {isOutbound ? 'Outbound' : 'Inbound'}
+                    {isOutbound ? 'Outgoing' : 'Incoming'}
                   </span>
                   <span className="text-slate-800 font-bold tracking-wide text-[15px] flex items-center gap-2">
                     {call.candidate_id && <span className="bg-slate-100 text-slate-500 px-1.5 py-0.5 rounded text-[0.65rem] border border-slate-200">{call.candidate_id}</span>}
@@ -1410,7 +1498,7 @@ function RecentCallsTab({ calls, loading, onViewDetails }) {
                   <Copy size={12} className="cursor-pointer hover:text-indigo-600 transition-colors" />
                 </div>
                 <div className={`px-2 py-0.5 rounded border text-[0.65rem] uppercase font-bold tracking-widest ${badgeColor}`}>
-                  {call.call_status || 'unknown'}
+                  {badgeLabel}
                 </div>
               </div>
             </motion.div>
@@ -1622,22 +1710,22 @@ export default function AICallingAgentPage() {
         initial={{ opacity: 0, y: -20 }}
         animate={{ opacity: 1, y: 0 }}
         transition={{ duration: 0.6, ease: "easeOut" }}
-        className="flex flex-col sm:flex-row sm:items-end justify-between gap-4 mb-8 relative z-10"
+        className="flex flex-col sm:flex-row sm:items-end justify-between gap-4 mb-10 relative z-10"
       >
         <div>
           <motion.div 
             initial={{ opacity: 0, scale: 0.9 }}
             animate={{ opacity: 1, scale: 1 }}
             transition={{ delay: 0.2 }}
-            className="inline-flex items-center gap-2 px-3 py-1.5 rounded-full bg-white border border-indigo-100 text-indigo-600 text-[0.7rem] font-bold tracking-widest uppercase mb-4 shadow-sm"
+            className="inline-flex items-center gap-2 px-3.5 py-1.5 rounded-full bg-indigo-50 dark:bg-indigo-500/10 border border-indigo-200 dark:border-indigo-500/20 text-indigo-700 dark:text-indigo-300 text-[0.7rem] font-bold tracking-widest uppercase mb-4 shadow-xs"
           >
-            <Radio size={14} className="animate-pulse" /> Omni Dimension Integration
+            <Radio size={14} className="animate-pulse text-indigo-600 dark:text-indigo-400" /> Omni Dimension Integration
           </motion.div>
           <motion.h1 
             initial={{ opacity: 0, x: -20 }}
             animate={{ opacity: 1, x: 0 }}
             transition={{ delay: 0.3 }}
-            className="text-4xl sm:text-5xl font-extrabold text-transparent bg-clip-text bg-gradient-to-r from-slate-800 to-indigo-900 tracking-tight mb-2"
+            className="text-4xl sm:text-5xl font-black leading-[1.05] text-foreground tracking-tight mb-2"
           >
             AI Calling Agent
           </motion.h1>
@@ -1645,7 +1733,7 @@ export default function AICallingAgentPage() {
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
             transition={{ delay: 0.4 }}
-            className="text-slate-600 mt-3 max-w-2xl text-sm leading-relaxed font-medium"
+            className="text-muted-foreground mt-3 max-w-2xl text-sm leading-relaxed font-medium"
           >
             Live sync of your Omni Dimension AI Voice Agent — knowledge base, integrations, call configuration, post-call settings, and recent calls.
           </motion.p>
@@ -1654,9 +1742,9 @@ export default function AICallingAgentPage() {
           <button
             type="button"
             onClick={fetchAllOmniValues}
-            className="rounded-lg bg-white border border-slate-200 px-4 py-2.5 text-xs font-bold text-slate-700 hover:bg-slate-50 transition-colors shadow-sm flex items-center gap-2 cursor-pointer"
+            className="rounded-xl bg-card border border-border px-4 py-2.5 text-xs font-bold text-foreground hover:bg-muted/40 transition-colors shadow-sm flex items-center gap-2 cursor-pointer"
           >
-            <RefreshCw size={14} className="text-indigo-600 animate-spin-hover" /> Sync Agent Settings
+            <RefreshCw size={14} className="text-indigo-500 animate-spin-hover" /> Sync Agent Settings
           </button>
         </div>
       </motion.div>
@@ -1666,7 +1754,7 @@ export default function AICallingAgentPage() {
         initial={{ opacity: 0, y: 40 }}
         animate={{ opacity: 1, y: 0 }}
         transition={{ delay: 0.5, duration: 0.7, ease: [0.22, 1, 0.36, 1] }}
-        className="bg-white/80 backdrop-blur-xl rounded-[30px] border border-white/60 overflow-hidden shadow-[0_8px_30px_rgb(0,0,0,0.04)] relative z-10"
+        className="mt-6 bg-white/80 backdrop-blur-xl rounded-[30px] border border-white/60 overflow-hidden shadow-[0_8px_30px_rgb(0,0,0,0.04)] relative z-10"
       >
         {/* Tab Bar */}
         <div className="flex items-center flex-wrap gap-2 px-4 pt-4 border-b border-slate-200 bg-white/50 relative z-10">
