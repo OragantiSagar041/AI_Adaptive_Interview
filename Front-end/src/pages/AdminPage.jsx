@@ -172,8 +172,34 @@ export default function AdminPage({ role: initialRole = 'admin' }) {
     }
   }, [tabParam, dispatch])
 
-  // Accent color state
-  const [accentName, setAccentName] = useState('indigo')
+  // Accent color state & definition
+  const accentColors = {
+    teal: { primary: '#0d9488', hover: '#0f766e', glow: 'rgba(13, 148, 136, 0.15)' },
+    indigo: { primary: '#6366f1', hover: '#4f46e5', glow: 'rgba(99, 102, 241, 0.15)' },
+    purple: { primary: '#9333ea', hover: '#7e22ce', glow: 'rgba(147, 51, 234, 0.15)' },
+    red: { primary: '#e11d48', hover: '#be123c', glow: 'rgba(225, 29, 72, 0.15)' },
+    green: { primary: '#16a34a', hover: '#15803d', glow: 'rgba(22, 163, 74, 0.15)' },
+    blue: { primary: '#2563eb', hover: '#1d4ed8', glow: 'rgba(37, 99, 237, 0.15)' }
+  }
+
+  const [accentName, setAccentNameState] = useState(() => {
+    try {
+      return localStorage.getItem('theme_accent') || 'indigo'
+    } catch {
+      return 'indigo'
+    }
+  })
+
+  const setAccentName = (color) => {
+    setAccentNameState(color)
+    try {
+      localStorage.setItem('theme_accent', color)
+    } catch (e) {
+      console.error(e)
+    }
+  }
+
+  const currentAccent = accentColors[accentName] || accentColors.indigo
 
   // Live Stream WebRTC State
   const [isLiveStreamOpen, setIsLiveStreamOpen] = useState(false)
@@ -277,17 +303,6 @@ export default function AdminPage({ role: initialRole = 'admin' }) {
   // Bulk submission results
   const [bulkResultsModalOpen, setBulkResultsModalOpen] = useState(false)
   const [bulkResultsData, setBulkResultsData] = useState(null)
-
-  const accentColors = {
-    teal: { primary: '#0d9488', hover: '#0f766e', glow: 'rgba(13, 148, 136, 0.15)' },
-    indigo: { primary: '#6366f1', hover: '#4f46e5', glow: 'rgba(99, 102, 241, 0.15)' },
-    purple: { primary: '#9333ea', hover: '#7e22ce', glow: 'rgba(147, 51, 234, 0.15)' },
-    red: { primary: '#e11d48', hover: '#be123c', glow: 'rgba(225, 29, 72, 0.15)' },
-    green: { primary: '#16a34a', hover: '#15803d', glow: 'rgba(22, 163, 74, 0.15)' },
-    blue: { primary: '#2563eb', hover: '#1d4ed8', glow: 'rgba(37, 99, 237, 0.15)' }
-  }
-
-  const currentAccent = accentColors[accentName] || accentColors.indigo
 
   // Inject CSS override variables
   useEffect(() => {

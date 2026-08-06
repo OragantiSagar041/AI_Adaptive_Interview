@@ -8,6 +8,7 @@ import { API_BASE_URL } from '../../apiConfig'
 import { candidateFetch } from '../../utils/candidateAuth'
 import '../../Interview.css'
 import { motion } from 'framer-motion'
+import AccessDeniedScreen from '../../components/interview/AccessDeniedScreen'
 
 // ── VoiceCloneSetup — extracted to module level so it is never re-created
 // on parent re-renders. Inline style objects are stable because this component
@@ -186,6 +187,7 @@ export const InterviewNormal = () => {
     loading,
     showAllSet,
     error,
+    scheduledStart,
     isCompleted,
     isDisclaimerAccepted,
     agreeChecked,
@@ -259,14 +261,7 @@ export const InterviewNormal = () => {
   }
 
   if (error) {
-    return (
-      <div className="flex justify-center items-center h-screen flex-col p-6 text-center">
-        <AlertTriangle className="text-danger mb-4" size={48} />
-        <h2 className="text-2xl font-bold text-slate-900 tracking-tight">Access Denied</h2>
-        <p className="text-slate-600 mt-2 max-w-md text-sm">{error}</p>
-        <Link to="/" className="inline-flex items-center justify-center gap-2 px-6 py-3 rounded-full font-semibold text-sm bg-primary hover:bg-primary-hover text-white transition-all shadow-[0_4px_14px_rgba(99,102,241,0.15)] mt-6 no-underline">Go to Platform Page</Link>
-      </div>
-    )
+    return <AccessDeniedScreen error={error} scheduledStart={scheduledStart || sessionDetail?.scheduled_start} />
   }
 
   // Show upload progress / Thank-You screen FIRST — takes priority so the

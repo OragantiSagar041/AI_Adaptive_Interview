@@ -25,6 +25,7 @@ export const useInterviewSession = (sessionId, interviewType, startRoundTwo) => 
   const [loading, setLoading] = useState(true)
   const [showAllSet, setShowAllSet] = useState(false)
   const [error, setError] = useState(null)
+  const [scheduledStart, setScheduledStart] = useState(null)
   const [isCompleted, setIsCompleted] = useState(false)
   const _sessionKey = sessionId ? `interview_session_${sessionId}` : null
   const _savedSession = _sessionKey ? (() => { try { return JSON.parse(sessionStorage.getItem(_sessionKey) || 'null') } catch { return null } })() : null
@@ -231,9 +232,11 @@ export const useInterviewSession = (sessionId, interviewType, startRoundTwo) => 
     const task = currentQuestion?.codingTask || currentQuestion || codingRoundData || {}
     const fn = task.function_name || 'solution'
     const sig = task.starter_function_signature
+    const pythonSig = sig || task.starter_code || `def ${fn}(*args, **kwargs):`
+    const finalPythonTemplate = pythonSig.includes('#') ? pythonSig : `${pythonSig}\n    # Write your solution here\n    pass`
 
     const templates = {
-      python: sig || task.starter_code || `def ${fn}(*args):\n    # Write your solution here\n    pass`,
+      python: finalPythonTemplate,
       javascript: `function ${fn}(...args) {\n    // Write your solution here\n    \n}`,
       java: `public class Solution {\n    public static void ${fn}(String[] args) {\n        // Write your solution here\n    }\n}`,
       cpp: `#include <iostream>\n#include <vector>\n#include <string>\nusing namespace std;\n\nvoid ${fn}() {\n    // Write your solution here\n}\n\nint main() {\n    ${fn}();\n    return 0;\n}`
@@ -714,7 +717,11 @@ export const useInterviewSession = (sessionId, interviewType, startRoundTwo) => 
         if (payload.is_expired) {
           throw new Error("This interview link has expired. Please contact the recruiter for a new link.")
         }
+        if (payload.scheduled_start) {
+          setScheduledStart(payload.scheduled_start)
+        }
         if (payload.is_before_schedule && payload.scheduled_start) {
+          setScheduledStart(payload.scheduled_start)
           const startTime = new Date(payload.scheduled_start.endsWith('Z') || payload.scheduled_start.includes('+') ? payload.scheduled_start : payload.scheduled_start + 'Z')
           throw new Error(`This interview is scheduled to start on ${startTime.toLocaleString('en-IN', { timeZone: 'Asia/Kolkata', dateStyle: 'short', timeStyle: 'short' })}. Please try again at the scheduled time.`)
         }
@@ -1505,40 +1512,46 @@ export const useInterviewSession = (sessionId, interviewType, startRoundTwo) => 
       recordedMimeTypeRef.current = mimeType
       console.log(`[REC_TRACE] Stream initialized. Video tracks: ${stream.getVideoTracks().length}, Audio tracks: ${stream.getAudioTracks().length}. Screen video tracks: ${screenStream.getVideoTracks().length}. Selected mimeType: ${mimeType}`)
 
-      let options = { mimeType, videoBitsPerSecond: 800000, audioBitsPerSecond: 64000 }
-      try {
-        cameraRecorderRef.current = new MediaRecorder(stream, options)
-      } catch (err) {
-        console.warn("[REC_TRACE] Camera MediaRecorder options init failed, falling back to default:", err)
-        cameraRecorderRef.current = new MediaRecorder(stream)
-      }
-      cameraChunksRef.current = []
-      cameraRecorderRef.current.ondataavailable = e => {
-        if (e.data && e.data.size > 0) {
-          cameraChunksRef.current.push(e.data)
-          console.log(`[REC_TRACE] Camera chunk received: ${e.data.size} bytes. Total chunks: ${cameraChunksRef.current.length}`)
-        }
-      }
-      cameraRecorderRef.current.onerror = e => console.error("[REC_TRACE] Camera recorder error:", e)
+      const shouldRecordVideo = sessionDetailRef.current?.record_video !== false;
 
-      try {
-        screenRecorderRef.current = new MediaRecorder(screenStream, options)
-      } catch (err) {
-        console.warn("[REC_TRACE] Screen MediaRecorder options init failed, falling back to default:", err)
-        screenRecorderRef.current = new MediaRecorder(screenStream)
-      }
-      screenChunksRef.current = []
-      screenRecorderRef.current.ondataavailable = e => {
-        if (e.data && e.data.size > 0) {
-          screenChunksRef.current.push(e.data)
-          console.log(`[REC_TRACE] Screen chunk received: ${e.data.size} bytes. Total chunks: ${screenChunksRef.current.length}`)
+      if (shouldRecordVideo) {
+        let options = { mimeType, videoBitsPerSecond: 800000, audioBitsPerSecond: 64000 }
+        try {
+          cameraRecorderRef.current = new MediaRecorder(stream, options)
+        } catch (err) {
+          console.warn("[REC_TRACE] Camera MediaRecorder options init failed, falling back to default:", err)
+          cameraRecorderRef.current = new MediaRecorder(stream)
         }
-      }
-      screenRecorderRef.current.onerror = e => console.error("[REC_TRACE] Screen recorder error:", e)
+        cameraChunksRef.current = []
+        cameraRecorderRef.current.ondataavailable = e => {
+          if (e.data && e.data.size > 0) {
+            cameraChunksRef.current.push(e.data)
+            console.log(`[REC_TRACE] Camera chunk received: ${e.data.size} bytes. Total chunks: ${cameraChunksRef.current.length}`)
+          }
+        }
+        cameraRecorderRef.current.onerror = e => console.error("[REC_TRACE] Camera recorder error:", e)
 
-      cameraRecorderRef.current.start(1000)
-      screenRecorderRef.current.start(1000)
-      console.log(`[REC_TRACE] Recorders started. Camera state: ${cameraRecorderRef.current.state}, Screen state: ${screenRecorderRef.current.state}`)
+        try {
+          screenRecorderRef.current = new MediaRecorder(screenStream, options)
+        } catch (err) {
+          console.warn("[REC_TRACE] Screen MediaRecorder options init failed, falling back to default:", err)
+          screenRecorderRef.current = new MediaRecorder(screenStream)
+        }
+        screenChunksRef.current = []
+        screenRecorderRef.current.ondataavailable = e => {
+          if (e.data && e.data.size > 0) {
+            screenChunksRef.current.push(e.data)
+            console.log(`[REC_TRACE] Screen chunk received: ${e.data.size} bytes. Total chunks: ${screenChunksRef.current.length}`)
+          }
+        }
+        screenRecorderRef.current.onerror = e => console.error("[REC_TRACE] Screen recorder error:", e)
+
+        cameraRecorderRef.current.start(1000)
+        screenRecorderRef.current.start(1000)
+        console.log(`[REC_TRACE] Recorders started. Camera state: ${cameraRecorderRef.current.state}, Screen state: ${screenRecorderRef.current.state}`)
+      } else {
+        console.log(`[REC_TRACE] Video recording is disabled for this session. Skipping MediaRecorder initialization.`)
+      }
 
       const elem = document.documentElement;
       if (elem.requestFullscreen) {
@@ -1672,19 +1685,24 @@ export const useInterviewSession = (sessionId, interviewType, startRoundTwo) => 
         }
       }
 
-      const mimeType = recordedMimeTypeRef.current || 'video/webm'
-      let options = { mimeType, videoBitsPerSecond: 800000, audioBitsPerSecond: 64000 }
-      try {
-        screenRecorderRef.current = new MediaRecorder(screenStream, options)
-      } catch (_) {
-        screenRecorderRef.current = new MediaRecorder(screenStream)
+      const shouldRecordVideo = sessionDetailRef.current?.record_video !== false;
+      if (shouldRecordVideo) {
+        const mimeType = recordedMimeTypeRef.current || 'video/webm'
+        let options = { mimeType, videoBitsPerSecond: 800000, audioBitsPerSecond: 64000 }
+        try {
+          screenRecorderRef.current = new MediaRecorder(screenStream, options)
+        } catch (_) {
+          screenRecorderRef.current = new MediaRecorder(screenStream)
+        }
+        if (!screenChunksRef.current) screenChunksRef.current = []
+        screenRecorderRef.current.ondataavailable = e => {
+          if (e.data && e.data.size > 0) screenChunksRef.current.push(e.data)
+        }
+        screenRecorderRef.current.onerror = e => console.error("Screen recorder error on restart:", e)
+        screenRecorderRef.current.start(1000)
+      } else {
+        console.log(`[REC_TRACE] Video recording is disabled for this session. Skipping Screen MediaRecorder restart.`)
       }
-      if (!screenChunksRef.current) screenChunksRef.current = []
-      screenRecorderRef.current.ondataavailable = e => {
-        if (e.data && e.data.size > 0) screenChunksRef.current.push(e.data)
-      }
-      screenRecorderRef.current.onerror = e => console.error("Screen recorder error on restart:", e)
-      screenRecorderRef.current.start(1000)
     } catch (e) {
       Swal.fire({
         title: 'Screen Share Required',
@@ -2572,6 +2590,7 @@ export const useInterviewSession = (sessionId, interviewType, startRoundTwo) => 
     isSpeechRecordingRef,
     interimTranscriptText,
     isCompleted,
+    scheduledStart,
     isOnline
   }
 }

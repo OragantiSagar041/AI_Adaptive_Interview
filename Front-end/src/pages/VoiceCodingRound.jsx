@@ -11,6 +11,7 @@ import { API_BASE_URL } from '../apiConfig'
 import { candidateFetch } from '../utils/candidateAuth'
 import aiVideoUrl from '../assets/ai_avatar.mp4'
 import { useExitConfirmation } from '../hooks/useExitConfirmation'
+import { setupMonacoIntelliSense, MONACO_EDITOR_OPTIONS } from '../utils/monacoConfig'
 
 // ── Language config with brand colors ─────────────────────────────────────
 const LANGUAGES = [
@@ -886,27 +887,14 @@ export default function VoiceCodingRound({
                 language={selectedLang === 'cpp' ? 'cpp' : selectedLang}
                 value={code}
                 onChange={handleCodeChange}
-                onMount={(editor) => {
+                onMount={(editor, monaco) => {
+                  setupMonacoIntelliSense(monaco)
                   try {
                     editor.focus();
                   } catch (e) {}
                 }}
                 theme="vs-dark"
-                options={{
-                  readOnly: false,
-                  domReadOnly: false,
-                  cursorBlinking: 'blink',
-                  cursorStyle: 'line',
-                  fontSize: 14,
-                  fontFamily: "'JetBrains Mono', 'Fira Code', monospace",
-                  minimap: { enabled: false },
-                  scrollBeyondLastLine: false,
-                  lineNumbers: 'on',
-                  wordWrap: 'on',
-                  padding: { top: 16, bottom: 16 },
-                  suggestOnTriggerCharacters: true,
-                  quickSuggestions: true,
-                }}
+                options={MONACO_EDITOR_OPTIONS}
               />
             </Suspense>
           </div>
