@@ -56,6 +56,9 @@ export default function LiveMonitorStreamModal({ isOpen, onClose, session }) {
   const streamTimeoutRef = useRef(null)
   const mountedRef = useRef(false)
   const offerAttemptsRef = useRef(0)
+  const connectionIdRef = useRef(0)
+  const offerIdRef = useRef(null)
+  const sessionIdRef = useRef(null)
   // Unique ID for this admin viewer — ensures ICE/answer routing only goes to this viewer
   const viewerIdRef = useRef(Math.random().toString(36).substring(2, 10))
   // Keep a stable ref to the current WS so sendOffer can always access it without stale closure
@@ -138,31 +141,61 @@ export default function LiveMonitorStreamModal({ isOpen, onClose, session }) {
   // ── sendOffer ────────────────────────────────────────────────────────────────
   // Uses wsRef.current directly (no closure over ws param) to avoid stale refs.
   // Called when: WS opens, user force-retries, or 12s timeout fires.
-  const sendOffer = useCallback(async () => {
-    closePc()
-
-    const ws = wsRef.current
+  const sendOffer = useCallback(async (ws, connectionId) => {
     if (!ws || ws.readyState !== WebSocket.OPEN) {
       console.warn('[AdminWebRTC] sendOffer: WS not open, skipping')
       return
     }
+    if (connectionIdRef.current !== connectionId || wsRef.current !== ws) {
+      console.warn('[AdminWebRTC] sendOffer: stale socket, skipping')
+      return
+    }
+
+    closePc()
 
     try {
+      const nextOfferAttempt = offerAttemptsRef.current + 1
+      if (nextOfferAttempt > MAX_OFFER_ATTEMPTS) {
+        if (mountedRef.current) setStatus('disconnected')
+        return
+      }
+      offerAttemptsRef.current = nextOfferAttempt
+
       const pc = new RTCPeerConnection({ iceServers: ICE_SERVERS })
       pcRef.current = pc
       iceCandidateQueue.current = []
+      const offerId = `offer-${connectionId}-${nextOfferAttempt}`
+      offerIdRef.current = offerId
 
-      pc.onicecandidate = (e) => {
-        if (e.candidate && wsRef.current?.readyState === WebSocket.OPEN) {
-          wsRef.current.send(JSON.stringify({
-            type: 'webrtc_ice_candidate',
-            candidate: e.candidate,
-            viewer_id: viewerIdRef.current,
-          }))
+      const isCurrentPc = () => pcRef.current === pc
+      const closeOfferPc = () => {
+        if (pcRef.current === pc) {
+          closePc()
+        } else {
+          try { pc.close() } catch (_) {}
         }
       }
 
+      pc.onicecandidate = (e) => {
+        if (
+          !isCurrentPc() ||
+          !e.candidate ||
+          ws.readyState !== WebSocket.OPEN ||
+          connectionIdRef.current !== connectionId ||
+          wsRef.current !== ws
+        ) {
+          return
+        }
+        ws.send(JSON.stringify({
+          type: 'webrtc_ice_candidate',
+          candidate: e.candidate,
+          viewer_id: viewerIdRef.current,
+          offer_id: offerId,
+        }))
+      }
+
       pc.ontrack = (e) => {
+        if (!isCurrentPc()) return
         console.log('[AdminWebRTC] Track received:', e.track.kind)
         if (videoRef.current && e.streams[0]) {
           videoRef.current.srcObject = e.streams[0]
@@ -173,6 +206,7 @@ export default function LiveMonitorStreamModal({ isOpen, onClose, session }) {
       }
 
       pc.onconnectionstatechange = () => {
+        if (!isCurrentPc()) return
         console.log('[AdminWebRTC] PC state:', pc.connectionState)
         if (!mountedRef.current) return
         if (pc.connectionState === 'connected') {
@@ -193,40 +227,44 @@ export default function LiveMonitorStreamModal({ isOpen, onClose, session }) {
       pc.addTransceiver('video', { direction: 'recvonly' })
       pc.addTransceiver('audio', { direction: 'recvonly' })
 
-      offerAttemptsRef.current += 1
-      if (offerAttemptsRef.current > MAX_OFFER_ATTEMPTS) {
-        if (mountedRef.current) setStatus('disconnected')
-        return
-      }
-
       const offer = await pc.createOffer()
       await pc.setLocalDescription(offer)
 
-      if (wsRef.current?.readyState !== WebSocket.OPEN) {
+      if (connectionIdRef.current !== connectionId || wsRef.current !== ws || ws.readyState !== WebSocket.OPEN) {
         console.warn('[AdminWebRTC] WS closed before offer could be sent')
-        closePc()
+        closeOfferPc()
         return
       }
 
-      wsRef.current.send(JSON.stringify({
+      ws.send(JSON.stringify({
         type: 'webrtc_offer',
         sdp: offer,
         viewer_id: viewerIdRef.current,
+        offer_id: offerId,
       }))
 
       if (mountedRef.current) setStatus('negotiating')
       console.log('[AdminWebRTC] Offer sent, waiting for answer...')
 
       // If no track arrives in STREAM_TIMEOUT_MS, retry until limit reached
+      const currentOfferId = offerId
       streamTimeoutRef.current = setTimeout(() => {
-        if (mountedRef.current && pcRef.current?.connectionState !== 'connected') {
-          if (offerAttemptsRef.current >= MAX_OFFER_ATTEMPTS) {
-            if (mountedRef.current) setStatus('disconnected')
-            return
-          }
-          console.warn('[AdminWebRTC] No stream arrived — auto-retrying offer')
-          sendOffer()
+        if (
+          !mountedRef.current ||
+          connectionIdRef.current !== connectionId ||
+          wsRef.current !== ws ||
+          pcRef.current !== pc ||
+          offerIdRef.current !== currentOfferId ||
+          pc.connectionState === 'connected'
+        ) {
+          return
         }
+        if (offerAttemptsRef.current >= MAX_OFFER_ATTEMPTS) {
+          if (mountedRef.current) setStatus('disconnected')
+          return
+        }
+        console.warn('[AdminWebRTC] No stream arrived — auto-retrying offer')
+        sendOffer(ws, connectionId)
       }, STREAM_TIMEOUT_MS)
 
     } catch (err) {
@@ -251,13 +289,20 @@ export default function LiveMonitorStreamModal({ isOpen, onClose, session }) {
     const ws = new WebSocket(wsUrl)
     wsRef.current = ws
 
+    const connectionId = connectionIdRef.current + 1
+    connectionIdRef.current = connectionId
+    sessionIdRef.current = sessionId
+    offerAttemptsRef.current = 0
+
     ws.onopen = () => {
+      if (connectionIdRef.current !== connectionId || wsRef.current !== ws) return
       console.log('[AdminWebRTC] WS open')
       wsReadyRef.current = true
-      sendOffer()
+      sendOffer(ws, connectionId)
     }
 
     ws.onmessage = async (event) => {
+      if (connectionIdRef.current !== connectionId || wsRef.current !== ws) return
       try {
         const msg = JSON.parse(event.data)
 
@@ -272,8 +317,9 @@ export default function LiveMonitorStreamModal({ isOpen, onClose, session }) {
         }
 
         if (msg.type === 'webrtc_answer') {
-          // Discard answers not addressed to this viewer
-          if (msg.viewer_id && msg.viewer_id !== viewerIdRef.current) return
+          // Require exact viewer and offer identifiers for current attempt
+          if (!msg.viewer_id || msg.viewer_id !== viewerIdRef.current) return
+          if (!msg.offer_id || msg.offer_id !== offerIdRef.current) return
 
           const pc = pcRef.current
           if (!pc) return
@@ -283,9 +329,16 @@ export default function LiveMonitorStreamModal({ isOpen, onClose, session }) {
           }
           try {
             await pc.setRemoteDescription(new RTCSessionDescription(msg.sdp))
+            if (connectionIdRef.current !== connectionId || wsRef.current !== ws || offerIdRef.current !== msg.offer_id) {
+              console.warn('[AdminWebRTC] Stale answer after await, ignoring')
+              return
+            }
             console.log('[AdminWebRTC] Remote description set. Draining ICE queue:', iceCandidateQueue.current.length)
             // Drain any ICE candidates that arrived before the answer
             for (const candidate of iceCandidateQueue.current) {
+              if (connectionIdRef.current !== connectionId || wsRef.current !== ws || offerIdRef.current !== msg.offer_id) {
+                break
+              }
               try { await pc.addIceCandidate(new RTCIceCandidate(candidate)) } catch (_) {}
             }
             iceCandidateQueue.current = []
@@ -296,8 +349,9 @@ export default function LiveMonitorStreamModal({ isOpen, onClose, session }) {
         }
 
         if (msg.type === 'webrtc_ice_candidate') {
-          // Discard ICE not addressed to this viewer
-          if (msg.viewer_id && msg.viewer_id !== viewerIdRef.current) return
+          // Require exact viewer and offer identifiers for current attempt
+          if (!msg.viewer_id || msg.viewer_id !== viewerIdRef.current) return
+          if (!msg.offer_id || msg.offer_id !== offerIdRef.current) return
 
           const pc = pcRef.current
           if (!pc) return
@@ -321,11 +375,14 @@ export default function LiveMonitorStreamModal({ isOpen, onClose, session }) {
     }
 
     ws.onerror = (e) => {
+      if (connectionIdRef.current !== connectionId || wsRef.current !== ws) return
       console.error('[AdminWebRTC] WS error:', e)
+      wsReadyRef.current = false
       if (mountedRef.current) setStatus('error')
     }
 
     ws.onclose = (e) => {
+      if (connectionIdRef.current !== connectionId || wsRef.current !== ws) return
       console.log(`[AdminWebRTC] WS closed (code=${e.code})`)
       wsReadyRef.current = false
       if (mountedRef.current) setStatus('disconnected')
@@ -515,7 +572,7 @@ export default function LiveMonitorStreamModal({ isOpen, onClose, session }) {
                   </p>
                   <p className="text-xs text-slate-500">Candidate must be on the interview page for this to connect</p>
                   <button
-                    onClick={sendOffer}
+                    onClick={handleManualRetry}
                     className="mt-2 px-4 py-1.5 bg-indigo-600 hover:bg-indigo-500 transition-colors text-white text-xs font-bold rounded shadow-md"
                   >
                     Force Retry Connection

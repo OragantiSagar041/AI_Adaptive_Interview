@@ -730,6 +730,10 @@ async def webrtc_endpoint(websocket: WebSocket, role: str, link_id: str, token: 
             return
         spectator_id = str(uuid.uuid4())
         await manager.connect_spectator(websocket, link_id)
+        try:
+            await websocket.send_json({"type": "spectator_connected", "spectator_id": spectator_id})
+        except Exception:
+            pass
     else:
         await websocket.close()
         return

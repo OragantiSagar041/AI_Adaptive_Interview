@@ -37,7 +37,8 @@ export default function SpectatorPage() {
   const [token, setToken] = useState(() => {
     if (typeof window === 'undefined') return null
     const hashParams = new URLSearchParams(window.location.hash.slice(1))
-    return hashParams.get('token') || new URLSearchParams(window.location.search).get('token')
+    const queryParams = new URLSearchParams(window.location.search)
+    return hashParams.get('token') || queryParams.get('token')
   })
 
   const [status, setStatus] = useState('connecting')
@@ -50,16 +51,31 @@ export default function SpectatorPage() {
   const pcRef = useRef(null)
   const streamTimeoutRef = useRef(null)
   const mountedRef = useRef(false)
-  const viewerIdRef = useRef(Math.random().toString(36).substring(2, 10))
+  const spectatorIdRef = useRef(null)
   const iceCandidateQueueRef = useRef([])
   const statusRef = useRef(status)
   const violationsRef = useRef([])
 
   useEffect(() => {
-    if (!token) return
+    if (typeof window === 'undefined' || !token) return
     const hashParams = new URLSearchParams(window.location.hash.slice(1))
-    if (hashParams.get('token')) {
-      window.history.replaceState(null, '', window.location.pathname + window.location.search)
+    const queryParams = new URLSearchParams(window.location.search)
+    let cleaned = false
+
+    if (hashParams.has('token')) {
+      hashParams.delete('token')
+      cleaned = true
+    }
+    if (queryParams.has('token')) {
+      queryParams.delete('token')
+      cleaned = true
+    }
+
+    if (cleaned) {
+      const cleanedHash = hashParams.toString()
+      const cleanedSearch = queryParams.toString()
+      const newUrl = `${window.location.pathname}${cleanedSearch ? `?${cleanedSearch}` : ''}${cleanedHash ? `#${cleanedHash}` : ''}`
+      window.history.replaceState(null, '', newUrl)
     }
   }, [token])
 
@@ -79,10 +95,15 @@ export default function SpectatorPage() {
       wsRef.current = null
     }
     if (videoRef.current) videoRef.current.srcObject = null
+    spectatorIdRef.current = null
   }, [])
 
   const sendOffer = useCallback(async (ws) => {
     clearTimeout(streamTimeoutRef.current)
+    if (!spectatorIdRef.current) {
+      console.warn('[SpectatorWebRTC] No spectator_id yet, waiting for identity before sending offer')
+      return
+    }
     if (pcRef.current) {
       pcRef.current.close()
       pcRef.current = null
@@ -100,7 +121,6 @@ export default function SpectatorPage() {
           ws.send(JSON.stringify({ 
             type: 'webrtc_ice_candidate', 
             candidate: e.candidate,
-            viewer_id: viewerIdRef.current
           }))
         }
       }
@@ -129,7 +149,6 @@ export default function SpectatorPage() {
       ws.send(JSON.stringify({ 
         type: 'webrtc_offer', 
         sdp: offer,
-        viewer_id: viewerIdRef.current
       }))
 
       if (mountedRef.current) setStatus('negotiating')
@@ -166,6 +185,15 @@ export default function SpectatorPage() {
     ws.onmessage = async (event) => {
       try {
         const msg = JSON.parse(event.data)
+        if (msg.type === 'spectator_connected') {
+          if (!spectatorIdRef.current && msg.spectator_id) {
+            spectatorIdRef.current = msg.spectator_id
+            if (wsRef.current?.readyState === WebSocket.OPEN) {
+              await sendOffer(wsRef.current)
+            }
+          }
+          return
+        }
         if (msg.type === 'telemetry') {
           if (mountedRef.current) {
             const data = msg.data || {}
@@ -186,7 +214,10 @@ export default function SpectatorPage() {
             }
           }
         } else if (msg.type === 'webrtc_answer') {
-          if (msg.viewer_id && msg.viewer_id !== viewerIdRef.current) return;
+          if (msg.viewer_id) {
+            if (!spectatorIdRef.current) spectatorIdRef.current = msg.viewer_id
+            else if (msg.viewer_id !== spectatorIdRef.current) return;
+          }
           if (mountedRef.current) setStatus('negotiating')
           if (pcRef.current && pcRef.current.signalingState !== 'stable') {
             await pcRef.current.setRemoteDescription(new RTCSessionDescription(msg.sdp))
@@ -197,7 +228,10 @@ export default function SpectatorPage() {
             iceCandidateQueueRef.current = []
           }
         } else if (msg.type === 'webrtc_ice_candidate') {
-          if (msg.viewer_id && msg.viewer_id !== viewerIdRef.current) return;
+          if (msg.viewer_id) {
+            if (!spectatorIdRef.current) spectatorIdRef.current = msg.viewer_id
+            else if (msg.viewer_id !== spectatorIdRef.current) return;
+          }
           if (pcRef.current && pcRef.current.remoteDescription) {
             await pcRef.current.addIceCandidate(new RTCIceCandidate(msg.candidate))
           } else {

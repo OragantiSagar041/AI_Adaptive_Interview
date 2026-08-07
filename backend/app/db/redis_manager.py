@@ -25,6 +25,7 @@ class RedisConnectionManager:
         self.local_connections: Dict[str, Dict[str, any]] = {}
         self.dashboard_connections: List[Dict[str, Any]] = []
         self.listener_task: Optional[asyncio.Task] = None
+        self.spectator_count_renewal_tasks: Dict[str, asyncio.Task] = {}
         self._redis_failed = False
         self._redis_last_attempt: float = 0.0
         # Only retry Redis once per 60 seconds after a failure
@@ -63,6 +64,8 @@ class RedisConnectionManager:
     async def disconnect_redis(self):
         if self.listener_task:
             self.listener_task.cancel()
+        for task in list(self.spectator_count_renewal_tasks.values()):
+            task.cancel()
         if self.pubsub:
             try:
                 await self.pubsub.close()
@@ -221,6 +224,7 @@ class RedisConnectionManager:
                 key = self.SPECTATOR_COUNT_KEY_TEMPLATE.format(link_id=link_id)
                 await self.redis.incr(key)
                 await self.redis.expire(key, self.SPECTATOR_COUNT_TTL)
+                self._start_spectator_count_ttl_renewal(link_id)
             except Exception as e:
                 logger.warning(f"Redis spectator count update failed for {link_id}: {e}")
 
@@ -239,6 +243,8 @@ class RedisConnectionManager:
                 value = await self.redis.decr(key)
                 if value <= 0:
                     await self.redis.delete(key)
+                else:
+                    await self.redis.expire(key, self.SPECTATOR_COUNT_TTL)
             except Exception as e:
                 logger.warning(f"Redis spectator count decrement failed for {link_id}: {e}")
         # Clean up the group only if all roles are empty
@@ -275,6 +281,32 @@ class RedisConnectionManager:
                 await self.pubsub.unsubscribe(*channels)
         except Exception as e:
             logger.warning(f"Error unsubscribing from Redis channels: {e}")
+
+    def _start_spectator_count_ttl_renewal(self, link_id: str) -> None:
+        if link_id in self.spectator_count_renewal_tasks or not self.redis:
+            return
+
+        async def _refresh_ttl() -> None:
+            key = self.SPECTATOR_COUNT_KEY_TEMPLATE.format(link_id=link_id)
+            try:
+                while True:
+                    await asyncio.sleep(max(60, self.SPECTATOR_COUNT_TTL // 2))
+                    if not self.redis:
+                        return
+                    await self.redis.expire(key, self.SPECTATOR_COUNT_TTL)
+            except asyncio.CancelledError:
+                pass
+            except Exception as e:
+                logger.warning(f"Redis spectator count TTL renewal failed for {link_id}: {e}")
+            finally:
+                self.spectator_count_renewal_tasks.pop(link_id, None)
+
+        self.spectator_count_renewal_tasks[link_id] = asyncio.create_task(_refresh_ttl())
+
+    def _cancel_spectator_count_ttl_renewal(self, link_id: str) -> None:
+        task = self.spectator_count_renewal_tasks.pop(link_id, None)
+        if task:
+            task.cancel()
 
     # ─── Dashboard connection ────────────────────────────────────────────────────
 
