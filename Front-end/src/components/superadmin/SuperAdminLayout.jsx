@@ -271,7 +271,11 @@ export default function SuperAdminLayout() {
     }
 
     return () => {
-      ws.close()
+      if (ws.readyState === 1) {
+        ws.close()
+      } else if (ws.readyState === 0) {
+        ws.onopen = () => ws.close()
+      }
     }
   }, [dispatch, token, selectedAdminFilter])
 
@@ -428,13 +432,13 @@ export default function SuperAdminLayout() {
     { id: 'team', label: 'Team Management', path: '/superadmin/team' },
     { id: 'dashboard', label: 'Dashboard', path: '/superadmin/dashboard' },
     { id: 'qualified', label: 'Qualified Candidates', path: '/superadmin/qualified-candidates' },
-     { id: 'rejected', label: 'Rejected Candidates', path: '/superadmin/rejected-candidates' },
-     { id: 'create', label: 'Create Interview', icon: Plus, path: '/superadmin/create-interview' },
-     { id: 'ai-calling', label: 'AI Calling Agent', icon: Radio, path: '/superadmin/ai-calling' },
-     { id: 'conversational-flow', label: 'Conversational Flow', icon: MessageSquare, path: '/superadmin/conversational-flow' },
-     { id: 'jobs', label: 'Jobs', path: '/superadmin/jobs' },
-     { id: 'settings', label: 'Settings', path: '/superadmin/profile-settings' },
-     // { id: 'organizations', label: 'Organizations', path: '/superadmin/organizations' },
+    { id: 'rejected', label: 'Rejected Candidates', path: '/superadmin/rejected-candidates' },
+    { id: 'create', label: 'Create Interview', icon: Plus, path: '/superadmin/create-interview' },
+    { id: 'ai-calling', label: 'AI Calling Agent', icon: Radio, path: '/superadmin/ai-calling' },
+    { id: 'conversational-flow', label: 'Conversational Flow', icon: MessageSquare, path: '/superadmin/conversational-flow' },
+    { id: 'jobs', label: 'Jobs', path: '/superadmin/jobs' },
+    { id: 'settings', label: 'Settings', path: '/superadmin/profile-settings' },
+    // { id: 'organizations', label: 'Organizations', path: '/superadmin/organizations' },
     // { id: 'administrators', label: 'Administrators', path: '/superadmin/team' },
     // { id: 'recruiters', label: 'Recruiters', path: '/superadmin/recruiters' },
     // { id: 'reports', label: 'Reports & Analytics', path: '/superadmin/dashboard' },
@@ -468,10 +472,9 @@ export default function SuperAdminLayout() {
               key={item.id}
               to={item.path}
               className={({ isActive }) =>
-                `flex items-center gap-3 rounded-md px-3 py-2 text-sm font-medium transition-colors ${
-                  isActive
-                    ? `text-white`
-                    : 'text-slate-500 hover:bg-slate-100 hover:text-slate-900'
+                `flex items-center gap-3 rounded-md px-3 py-2 text-sm font-medium transition-colors ${isActive
+                  ? `text-white`
+                  : 'text-slate-500 hover:bg-slate-100 hover:text-slate-900'
                 }`
               }
               style={({ isActive }) => ({
@@ -487,7 +490,7 @@ export default function SuperAdminLayout() {
             </NavLink>
           ))}
         </div>
-        
+
         {/* Bottom Sidebar Actions */}
         <div className="p-3 border-t border-slate-200 space-y-1 shrink-0">
           <button
@@ -511,72 +514,72 @@ export default function SuperAdminLayout() {
       <div className="flex-1 flex flex-col min-w-0 h-screen">
         {/* Top bar */}
         <header className="sticky top-0 z-30 border-b border-slate-200 bg-white flex items-center justify-between px-6 h-16 shadow-sm shrink-0">
-        {/* Left Side: Brand & Toggles */}
-        <div className="flex items-center gap-6">
-          <h2 className="text-[17px] font-bold text-slate-800">SuperAdmin Management</h2>
+          {/* Left Side: Brand & Toggles */}
+          <div className="flex items-center gap-6">
+            <h2 className="text-[17px] font-bold text-slate-800">SuperAdmin Management</h2>
 
-          {/* Theme Toggle Dots */}
-          <div className="flex items-center gap-2 bg-slate-100 rounded-full px-2.5 py-1.5 border border-slate-200">
-            {Object.keys(accentColors).map(color => (
-              <button
-                key={color}
-                onClick={() => setAccentName(color)}
-                className="w-3.5 h-3.5 rounded-full border-2 border-white cursor-pointer p-0 transition-all hover:scale-110"
-                style={{
-                  background: accentColors[color].primary,
-                  boxShadow: accentName === color ? `0 0 0 2px ${accentColors[color].primary}` : 'none',
-                }}
-                title={color}
-              />
-            ))}
+            {/* Theme Toggle Dots */}
+            <div className="flex items-center gap-2 bg-slate-100 rounded-full px-2.5 py-1.5 border border-slate-200">
+              {Object.keys(accentColors).map(color => (
+                <button
+                  key={color}
+                  onClick={() => setAccentName(color)}
+                  className="w-3.5 h-3.5 rounded-full border-2 border-white cursor-pointer p-0 transition-all hover:scale-110"
+                  style={{
+                    background: accentColors[color].primary,
+                    boxShadow: accentName === color ? `0 0 0 2px ${accentColors[color].primary}` : 'none',
+                  }}
+                  title={color}
+                />
+              ))}
+            </div>
+
+            {/* Active Plan Badge */}
+            <div className="flex items-center gap-1.5 px-3 py-1 bg-indigo-50/50 border border-indigo-200/60 text-indigo-700 rounded-full text-xs font-bold shadow-sm">
+              <span className="w-1.5 h-1.5 rounded-full bg-indigo-600"></span>
+              Active Plan: {adminUser?.subscription_plan || 'Advance'}
+            </div>
+
+            {/* Credits Badge */}
+            <div className="flex items-center gap-1.5 px-3 py-1 bg-cyan-50 border border-cyan-100 text-cyan-600 rounded-full text-xs font-bold shadow-sm">
+              <span className="text-[10px]">🔗</span>
+              {adminUser?.credits ?? 0} credits left
+            </div>
           </div>
 
-          {/* Active Plan Badge */}
-          <div className="flex items-center gap-1.5 px-3 py-1 bg-indigo-50/50 border border-indigo-200/60 text-indigo-700 rounded-full text-xs font-bold shadow-sm">
-            <span className="w-1.5 h-1.5 rounded-full bg-indigo-600"></span>
-            Active Plan: {adminUser?.subscription_plan || 'Advance'}
-          </div>
-
-          {/* Credits Badge */}
-          <div className="flex items-center gap-1.5 px-3 py-1 bg-cyan-50 border border-cyan-100 text-cyan-600 rounded-full text-xs font-bold shadow-sm">
-            <span className="text-[10px]">🔗</span>
-            {adminUser?.credits ?? 0} credits left
-          </div>
-        </div>
-
-        {/* Right Side: Notifications & User Profile */}
-        <div className="flex items-center gap-5">
-          {/* Notification Bell */}
-          <button
-            onClick={() => setNotifDropdownOpen(!notifDropdownOpen)}
-            className="relative p-2 text-slate-400 hover:text-slate-600 bg-white border border-slate-100 hover:bg-slate-50 rounded-full transition-all cursor-pointer flex items-center justify-center shadow-sm"
-            title="Notifications"
-          >
-            <Bell size={18} />
-            {unreadCount > 0 && (
-              <span className="absolute -top-1 -right-1 bg-sky-500 text-white font-extrabold text-[9px] min-w-[18px] h-[18px] px-1 rounded-full flex items-center justify-center shadow-sm border-2 border-white">
-                {unreadCount}
-              </span>
-            )}
-          </button>
-
-          {/* User Profile */}
-          <div className="flex items-center gap-4 border-l border-slate-200 pl-5">
-            <span className="text-sm text-slate-500 font-medium">
-              Welcome back, <span className="font-bold text-slate-800">{userName}</span>
-            </span>
+          {/* Right Side: Notifications & User Profile */}
+          <div className="flex items-center gap-5">
+            {/* Notification Bell */}
             <button
-              onClick={handleLogout}
-              className="flex items-center gap-1.5 text-sm font-semibold text-slate-500 hover:text-slate-800 transition-colors cursor-pointer bg-transparent border-none"
+              onClick={() => setNotifDropdownOpen(!notifDropdownOpen)}
+              className="relative p-2 text-slate-400 hover:text-slate-600 bg-white border border-slate-100 hover:bg-slate-50 rounded-full transition-all cursor-pointer flex items-center justify-center shadow-sm"
+              title="Notifications"
             >
-              <LogOut size={15} /> Logout
+              <Bell size={18} />
+              {unreadCount > 0 && (
+                <span className="absolute -top-1 -right-1 bg-sky-500 text-white font-extrabold text-[9px] min-w-[18px] h-[18px] px-1 rounded-full flex items-center justify-center shadow-sm border-2 border-white">
+                  {unreadCount}
+                </span>
+              )}
             </button>
-          </div>
-        </div>
-      </header>
 
-      {/* Main Content */}
-      <main className="flex-1 overflow-y-auto bg-slate-50/50 relative">
+            {/* User Profile */}
+            <div className="flex items-center gap-4 border-l border-slate-200 pl-5">
+              <span className="text-sm text-slate-500 font-medium">
+                Welcome back, <span className="font-bold text-slate-800">{userName}</span>
+              </span>
+              <button
+                onClick={handleLogout}
+                className="flex items-center gap-1.5 text-sm font-semibold text-slate-500 hover:text-slate-800 transition-colors cursor-pointer bg-transparent border-none"
+              >
+                <LogOut size={15} /> Logout
+              </button>
+            </div>
+          </div>
+        </header>
+
+        {/* Main Content */}
+        <main className="flex-1 overflow-y-auto bg-slate-50/50 relative">
           {notifDropdownOpen && (
             <div className="absolute right-4 top-4 w-80 bg-white border border-slate-200 rounded-2xl shadow-xl py-2 z-50">
               <div className="flex items-center justify-between px-4 py-2 border-b border-slate-100">

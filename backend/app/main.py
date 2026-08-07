@@ -67,6 +67,8 @@ except Exception:
     _redis_client = None
 
 from app.routes import startup_event_cloudinary, startup_event_db_and_email
+from core_infra import task_queue
+from routes.voice_routes import answers_batch_writer
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
@@ -81,7 +83,16 @@ async def lifespan(app: FastAPI):
         
     startup_event_cloudinary()
     await startup_event_db_and_email()
+    
+    # Start background infra workers
+    await answers_batch_writer.start()
+    await task_queue.start()
+    
     yield
+    
+    # Graceful shutdown of infra workers
+    await answers_batch_writer.stop()
+    await task_queue.stop()
 
 app = FastAPI(
     title="HireIQ AI Interview Platform",

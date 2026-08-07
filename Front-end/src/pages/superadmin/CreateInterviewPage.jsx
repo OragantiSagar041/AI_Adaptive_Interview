@@ -947,7 +947,7 @@ Congratulations! You have been selected for an AI-powered interview. Please revi
       console.error(e)
       Swal.fire({
         title: 'Bulk Invitations Failed',
-        text: e.detail || e.message || "Error sending bulk interviews.",
+        text: typeof e === 'string' ? e : (e?.detail || e?.message || "Error sending bulk interviews."),
         icon: 'error',
         confirmButtonColor: '#ef4444'
       })
@@ -978,8 +978,8 @@ Congratulations! You have been selected for an AI-powered interview. Please revi
             type="button"
             onClick={() => setCreateTab('single')}
             className={`flex-1 py-2.5 px-4 rounded-xl font-extrabold text-xs cursor-pointer transition-all duration-300 outline-none flex items-center justify-center gap-2 z-10 ${createTab === 'single'
-                ? 'bg-primary text-white shadow-[0_4px_12px_rgba(99,102,241,0.25)]'
-                : 'text-slate-500 hover:text-slate-800 hover:bg-slate-200/50'
+              ? 'bg-primary text-white shadow-[0_4px_12px_rgba(99,102,241,0.25)]'
+              : 'text-slate-500 hover:text-slate-800 hover:bg-slate-200/50'
               }`}
           >
             <i className="fas fa-user text-xs"></i> Single Candidate
@@ -988,8 +988,8 @@ Congratulations! You have been selected for an AI-powered interview. Please revi
             type="button"
             onClick={() => setCreateTab('bulk')}
             className={`flex-1 py-2.5 px-4 rounded-xl font-extrabold text-xs cursor-pointer transition-all duration-300 outline-none flex items-center justify-center gap-2 z-10 ${createTab === 'bulk'
-                ? 'bg-primary text-white shadow-[0_4px_12px_rgba(99,102,241,0.25)]'
-                : 'text-slate-500 hover:text-slate-800 hover:bg-slate-200/50'
+              ? 'bg-primary text-white shadow-[0_4px_12px_rgba(99,102,241,0.25)]'
+              : 'text-slate-500 hover:text-slate-800 hover:bg-slate-200/50'
               }`}
           >
             <i className="fas fa-users text-xs"></i> Bulk Send
@@ -1054,8 +1054,8 @@ Congratulations! You have been selected for an AI-powered interview. Please revi
                     )}
                   </select>
                   <p className="text-[0.65rem] text-indigo-500 font-medium mt-1">
-                    {callLogs.length === 0 
-                      ? "Ensure candidates are marked as 'Interested' in the AI Calling Agent to see them here." 
+                    {callLogs.length === 0
+                      ? "Ensure candidates are marked as 'Interested' in the AI Calling Agent to see them here."
                       : "Selecting a candidate will automatically fill their name, email, phone, resume, and job description!"}
                   </p>
                 </div>
@@ -1096,14 +1096,14 @@ Congratulations! You have been selected for an AI-powered interview. Please revi
                   <label className="text-xs font-bold uppercase tracking-wider text-slate-500">Upload Resume (PDF / DOCX / TXT)</label>
                   <div
                     className={`border-2 border-dashed rounded-2xl p-6 text-center cursor-pointer transition-all duration-300 flex flex-col items-center justify-center gap-2.5 group relative overflow-hidden ${singleCandidate.resumeText
-                        ? 'border-emerald-200 bg-emerald-50/20 hover:bg-emerald-50/40 shadow-sm shadow-emerald-500/5'
-                        : 'border-slate-200 bg-slate-50/40 hover:bg-white hover:border-primary/80 hover:shadow-md hover:shadow-indigo-500/5 hover:-translate-y-0.5'
+                      ? 'border-emerald-200 bg-emerald-50/20 hover:bg-emerald-50/40 shadow-sm shadow-emerald-500/5'
+                      : 'border-slate-200 bg-slate-50/40 hover:bg-white hover:border-primary/80 hover:shadow-md hover:shadow-indigo-500/5 hover:-translate-y-0.5'
                       }`}
                     onClick={() => document.getElementById('singleResumeInput').click()}
                   >
                     <div className={`w-12 h-12 rounded-xl flex items-center justify-center transition-all duration-300 ${singleCandidate.resumeText
-                        ? 'bg-emerald-100 text-emerald-650 animate-[pulse_2s_infinite]'
-                        : 'bg-indigo-50 text-indigo-600 group-hover:bg-indigo-100 group-hover:scale-110'
+                      ? 'bg-emerald-100 text-emerald-650 animate-[pulse_2s_infinite]'
+                      : 'bg-indigo-50 text-indigo-600 group-hover:bg-indigo-100 group-hover:scale-110'
                       }`}>
                       <i className={`text-xl ${singleCandidate.resumeText ? 'fas fa-file-circle-check' : 'fas fa-file-arrow-up'}`}></i>
                     </div>
@@ -1745,7 +1745,7 @@ Congratulations! You have been selected for an AI-powered interview. Please revi
                     <div className="w-11 h-6 bg-slate-200 rounded-full peer peer-focus:outline-none peer-checked:after:translate-x-full after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-slate-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-violet-600"></div>
                   </label>
                 </div>
-                
+
                 {singleCandidate.voiceCloning && (
                   <div className="mt-2 pt-4 border-t border-slate-100">
                     <label className="text-xs font-semibold text-slate-500 mb-2 block">Select Voice</label>
@@ -1803,8 +1803,8 @@ Congratulations! You have been selected for an AI-powered interview. Please revi
                             type="button"
                             onClick={() => handleSingleHrChange('workModeType', mode)}
                             className={`px-3 py-1 rounded-full text-[0.7rem] font-bold transition-all cursor-pointer ${singleCandidate.hrScreening.workModeType === mode
-                                ? 'bg-primary text-white shadow-sm'
-                                : 'bg-white text-slate-600 border border-slate-200 hover:bg-slate-50'
+                              ? 'bg-primary text-white shadow-sm'
+                              : 'bg-white text-slate-600 border border-slate-200 hover:bg-slate-50'
                               }`}
                           >
                             {mode}
@@ -1839,8 +1839,8 @@ Congratulations! You have been selected for an AI-powered interview. Please revi
                             type="button"
                             onClick={() => handleSingleHrChange('locationType', loc)}
                             className={`px-3 py-1 rounded-full text-[0.7rem] font-bold transition-all cursor-pointer ${singleCandidate.hrScreening.locationType === loc
-                                ? 'bg-primary text-white shadow-sm'
-                                : 'bg-white text-slate-600 border border-slate-200 hover:bg-slate-50'
+                              ? 'bg-primary text-white shadow-sm'
+                              : 'bg-white text-slate-600 border border-slate-200 hover:bg-slate-50'
                               }`}
                           >
                             {loc === 'Current' ? 'Current Location' : 'Preferred Location'}
@@ -2352,7 +2352,7 @@ Congratulations! You have been selected for an AI-powered interview. Please revi
                     <div className="w-11 h-6 bg-slate-200 rounded-full peer peer-focus:outline-none peer-checked:after:translate-x-full after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-slate-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-violet-600"></div>
                   </label>
                 </div>
-                
+
                 {bulkConfig.voiceCloning && (
                   <div className="mt-2 pt-4 border-t border-slate-100">
                     <label className="text-xs font-semibold text-slate-500 mb-2 block">Select Voice</label>
@@ -2410,8 +2410,8 @@ Congratulations! You have been selected for an AI-powered interview. Please revi
                             type="button"
                             onClick={() => handleBulkHrChange('workModeType', mode)}
                             className={`px-3 py-1 rounded-full text-[0.7rem] font-bold transition-all cursor-pointer ${bulkConfig.hrScreening.workModeType === mode
-                                ? 'bg-primary text-white shadow-sm'
-                                : 'bg-white text-slate-600 border border-slate-200 hover:bg-slate-50'
+                              ? 'bg-primary text-white shadow-sm'
+                              : 'bg-white text-slate-600 border border-slate-200 hover:bg-slate-50'
                               }`}
                           >
                             {mode}
@@ -2446,8 +2446,8 @@ Congratulations! You have been selected for an AI-powered interview. Please revi
                             type="button"
                             onClick={() => handleBulkHrChange('locationType', loc)}
                             className={`px-3 py-1 rounded-full text-[0.7rem] font-bold transition-all cursor-pointer ${bulkConfig.hrScreening.locationType === loc
-                                ? 'bg-primary text-white shadow-sm'
-                                : 'bg-white text-slate-600 border border-slate-200 hover:bg-slate-50'
+                              ? 'bg-primary text-white shadow-sm'
+                              : 'bg-white text-slate-600 border border-slate-200 hover:bg-slate-50'
                               }`}
                           >
                             {loc === 'Current' ? 'Current Location' : 'Preferred Location'}

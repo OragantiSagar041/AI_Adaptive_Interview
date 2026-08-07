@@ -14,15 +14,6 @@ router = APIRouter()
 # Initialize the batch writer for answers
 answers_batch_writer = MongoBatchWriter(answers_collection, flush_interval=3.0, batch_size=20)
 
-@router.on_event("startup")
-async def startup_event():
-    await answers_batch_writer.start()
-    await task_queue.start()
-
-@router.on_event("shutdown")
-async def shutdown_event():
-    await answers_batch_writer.stop()
-    await task_queue.stop()
 
 @router.websocket("/ws/interview/{link_id}")
 async def interview_websocket(websocket: WebSocket, link_id: str):

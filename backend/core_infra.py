@@ -156,9 +156,10 @@ ws_manager = WebSocketManager()
 # ============================================================================
 class ProducerConsumerQueue:
     """Background task queue for heavy LLM generations."""
-    def __init__(self, max_workers=3):
+    def __init__(self, max_workers=5):
+        import os
         self.queue = asyncio.Queue()
-        self.max_workers = max_workers
+        self.max_workers = int(os.environ.get("INFRA_WORKERS", max_workers))
         self.workers = []
         
     async def start(self):

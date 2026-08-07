@@ -63,8 +63,13 @@ export default function LiveMonitorStreamModal({ isOpen, onClose, session }) {
         })
         if (!res.ok) return
         const data = await res.json()
-        // violations[] lives on the session document
-        const raw = data?.violations ?? data?.proctoring_alerts ?? []
+        
+        if (data?.status === 'completed') {
+          setStatus('disconnected')
+        }
+
+        // violations[] lives on the session document (mapped to 'alerts' in the response payload)
+        const raw = data?.alerts ?? data?.violations ?? data?.proctoring_alerts ?? []
         if (Array.isArray(raw)) {
           // Normalise: backend stores {type, violation_type, details, timestamp, ...}
           const normalised = raw.map(v => ({
@@ -114,6 +119,10 @@ export default function LiveMonitorStreamModal({ isOpen, onClose, session }) {
         pc.ontrack = (e) => {
           if (videoRef.current && e.streams[0]) {
             videoRef.current.srcObject = e.streams[0]
+            videoRef.current.play().catch(err => {
+              console.warn('Autoplay prevented, user interaction required:', err)
+              // If it fails, maybe it's because it needs to be muted first in some browsers
+            })
             setStatus('streaming')
           }
         }
@@ -205,6 +214,7 @@ export default function LiveMonitorStreamModal({ isOpen, onClose, session }) {
             <div className="flex items-center gap-1.5 font-bold text-sm">
               {status === 'streaming' ? <span className="text-emerald-600">LIVE</span> : 
                status === 'connecting' ? <span className="text-amber-500">Connecting...</span> : 
+               status === 'connected' ? <span className="text-blue-500">Connected to Server...</span> : 
                status === 'negotiating' ? <span className="text-indigo-500">Establishing...</span> : 
                <span className="text-red-500 uppercase">{status}</span>}
             </div>
@@ -218,7 +228,7 @@ export default function LiveMonitorStreamModal({ isOpen, onClose, session }) {
                   <span className="text-indigo-600">{getRoundIcon(telemetry.round_type)}</span>
                   Q{telemetry.current_question} of {telemetry.total_questions}
                 </>
-              ) : '--'}
+              ) : <span className="text-slate-400 font-normal italic">Offline</span>}
             </div>
           </div>
 
@@ -226,17 +236,24 @@ export default function LiveMonitorStreamModal({ isOpen, onClose, session }) {
             <span className="text-[0.65rem] font-bold text-slate-500 uppercase tracking-wider mb-1">Audio Level</span>
             <div className="flex items-center gap-2 font-bold text-sm text-slate-800">
               {telemetry?.audio_level > 5 ? <Mic size={16} className="text-emerald-500" /> : <MicOff size={16} className="text-slate-400" />}
-              {telemetry ? Math.round(telemetry.audio_level) + '%' : '--'}
+              {telemetry ? Math.round(telemetry.audio_level) + '%' : <span className="text-slate-400 font-normal italic">Offline</span>}
             </div>
           </div>
 
           <div className="bg-slate-50 border border-slate-200 rounded-lg p-3 flex flex-col justify-center">
             <span className="text-[0.65rem] font-bold text-slate-500 uppercase tracking-wider mb-1">Proctoring Alerts</span>
             <div className="flex items-center gap-1.5 font-bold text-sm">
-              <ShieldAlert size={16} className={telemetry?.proctoring_alerts > 0 ? "text-rose-500" : "text-emerald-500"} />
-              <span className={telemetry?.proctoring_alerts > 0 ? "text-rose-600" : "text-emerald-600"}>
-                {telemetry?.proctoring_alerts ?? violations.length} Alerts
-              </span>
+              {(() => {
+                const alertsCount = telemetry?.proctoring_alerts ?? violations.length;
+                return (
+                  <>
+                    <ShieldAlert size={16} className={alertsCount > 0 ? "text-rose-500" : "text-emerald-500"} />
+                    <span className={alertsCount > 0 ? "text-rose-600" : "text-emerald-600"}>
+                      {alertsCount} Alerts
+                    </span>
+                  </>
+                );
+              })()}
             </div>
           </div>
         </div>
@@ -254,7 +271,7 @@ export default function LiveMonitorStreamModal({ isOpen, onClose, session }) {
 
           {status !== 'streaming' && (
             <div className="absolute inset-0 flex flex-col items-center justify-center text-slate-400 bg-slate-900/90 z-10">
-              {status === 'connecting' || status === 'negotiating' ? (
+              {status === 'connecting' || status === 'connected' || status === 'negotiating' ? (
                 <div className="flex flex-col items-center gap-3">
                   <Activity size={40} className="animate-pulse text-indigo-500" />
                   <p className="text-sm font-semibold tracking-wide">Connecting to Candidate's Stream...</p>

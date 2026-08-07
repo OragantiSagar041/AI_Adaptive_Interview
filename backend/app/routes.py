@@ -3754,6 +3754,38 @@ def check_candidate(email: str, current_admin: dict = Depends(get_current_admin_
     except Exception as e:
         return {"exists": False, "error": str(e)}
 
+def process_temp_cloudinary_upload(temp_url: str, collection_name: str, field_name: str):
+    if not temp_url or not temp_url.startswith("temp://"):
+        return
+    import os
+    import cloudinary.uploader
+    filename = temp_url.replace("temp://", "")
+    temp_path = os.path.join(os.getcwd(), "temp_uploads", filename)
+    
+    if os.path.exists(temp_path):
+        try:
+            with open(temp_path, "rb") as f:
+                content_bytes = f.read()
+            upload_res = cloudinary.uploader.upload(
+                content_bytes,
+                resource_type="raw",
+                folder="jds" if "jd" in field_name.lower() else "resumes",
+                public_id=filename
+            )
+            secure_url = upload_res.get("secure_url")
+            
+            if collection_name == "interviews":
+                interviews_collection.update_many({field_name: temp_url}, {"$set": {field_name: secure_url}})
+            elif collection_name == "interview_sessions":
+                interview_sessions_collection.update_many({field_name: temp_url}, {"$set": {field_name: secure_url}})
+        except Exception as e:
+            print(f"Background upload failed: {e}")
+        finally:
+            try:
+                os.remove(temp_path)
+            except:
+                pass
+
 @router.post("/admin/create-session")
 def create_session(data: CreateSession, current_admin: dict = Depends(get_current_admin_details)):
     company_id = current_admin.get("company_id")
@@ -5728,7 +5760,7 @@ def complete_session(
 _live_snapshots: Dict[str, Dict] = {}
 _heartbeat_request_times: Dict[str, List[float]] = {}
 
-LIVE_SNAPSHOT_TTL_SECONDS = 90
+LIVE_SNAPSHOT_TTL_SECONDS = 120
 MAX_SNAPSHOT_BYTES = 250_000
 
 
@@ -5927,7 +5959,7 @@ async def get_live_snapshot(
     try:
         ts = datetime.fromisoformat(snap["ts"].replace("Z", "+00:00"))
         age_secs = (datetime.now(timezone.utc) - ts).total_seconds()
-        online = age_secs < 15          # considered online if seen within last 15 s
+        online = age_secs < 90          # considered online if seen within last 90 s (tolerates 60s background tab throttling)
     except Exception:
         age_secs = 0
         online = True
@@ -6003,7 +6035,7 @@ async def get_ongoing_interviews(admin_id: Optional[str] = None, current_admin: 
                 # 'ts' is stored as ISO string ending with Z
                 ts_dt = datetime.fromisoformat(snap["ts"].replace("Z", "+00:00"))
                 age_secs = (datetime.now(timezone.utc) - ts_dt).total_seconds()
-                online = age_secs < 60  # 60 seconds for "Live" status
+                online = age_secs < 90  # 90 seconds for "Live" status to tolerate background tab throttling
             except Exception:
                 online = False
                 
@@ -7965,7 +7997,7 @@ async def get_dashboard_aggregated_data(
                     try:
                         ts_dt = datetime.fromisoformat(snap["ts"].replace("Z", "+00:00"))
                         age_secs = (datetime.now(timezone.utc) - ts_dt).total_seconds()
-                        online = age_secs < 60
+                        online = age_secs < 90
                     except Exception:
                         pass
                 
