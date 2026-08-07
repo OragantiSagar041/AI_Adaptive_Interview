@@ -205,8 +205,19 @@ export default function AdminPage({ role: initialRole = 'admin' }) {
   const [isLiveStreamOpen, setIsLiveStreamOpen] = useState(false)
   const [liveStreamSession, setLiveStreamSession] = useState(null)
 
-  const handleOpenLiveStreamAction = (session) => {
-    setLiveStreamSession(session)
+  const handleOpenLiveStreamAction = (sessionData) => {
+    if (!sessionData) return
+    let resolvedSession = sessionData
+    if (typeof sessionData === 'string') {
+      const found = liveSessions?.find(s => s.link_id === sessionData || s.session_id === sessionData || s.id === sessionData || s._id === sessionData)
+      resolvedSession = found || {
+        link_id: sessionData,
+        session_id: sessionData,
+        candidate_name: 'Live Candidate',
+        candidate_email: 'Active Session'
+      }
+    }
+    setLiveStreamSession(resolvedSession)
     setIsLiveStreamOpen(true)
   }
 

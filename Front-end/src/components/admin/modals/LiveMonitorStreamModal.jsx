@@ -63,8 +63,8 @@ export default function LiveMonitorStreamModal({ isOpen, onClose, session }) {
   // ── Violations polling ──────────────────────────────────────────────────────
   useEffect(() => {
     if (!isOpen || !session) return
-    const linkId = session.link_id || session.session_id || session.id
-    if (!linkId) return
+    const linkId = typeof session === 'string' ? session : (session?.link_id || session?.session_id || session?.id || session?._id || session?.interview_id)
+    if (!linkId || linkId === 'undefined') return
 
     const fetchViolations = async () => {
       try {
@@ -194,7 +194,13 @@ export default function LiveMonitorStreamModal({ isOpen, onClose, session }) {
     if (!isOpen || !session) return
     mountedRef.current = true
 
-    const sessionId = session.link_id || session.session_id || session.id
+    const sessionId = typeof session === 'string' ? session : (session?.link_id || session?.session_id || session?.id || session?._id || session?.interview_id)
+    if (!sessionId || sessionId === 'undefined') {
+      console.warn('[AdminWebRTC] No valid session ID provided to LiveMonitorStreamModal:', session)
+      setStatus('error')
+      return
+    }
+
     const wsUrl =
       API_BASE_URL.replace(/^https/, 'wss').replace(/^http/, 'ws') +
       `/ws/webrtc/admin/${sessionId}?token=${token}&admin_id=${encodeURIComponent(adminIdRef.current)}`
@@ -263,7 +269,7 @@ export default function LiveMonitorStreamModal({ isOpen, onClose, session }) {
       console.log(`[AdminWebRTC] WS closed (${e.code})`)
       clearInterval(heartbeatTimerRef.current)
       if (mountedRef.current) {
-        if (e.code === 1006 || e.code === 1001) {
+        if ((e.code === 1006 || e.code === 1001) && sessionId && sessionId !== 'undefined') {
           // Auto-reconnect on abnormal / server restart drop with backoff
           const delay = Math.min(2000 * Math.pow(1.5, retryCount), 15000)
           console.log(`[AdminWebRTC] Auto-reconnecting in ${delay}ms...`)
@@ -296,6 +302,10 @@ export default function LiveMonitorStreamModal({ isOpen, onClose, session }) {
     return <MessageSquare size={16} />
   }
 
+  const candidateName = (typeof session === 'object' && session?.candidate_name) ? session.candidate_name : 'Live Candidate'
+  const candidateEmail = (typeof session === 'object' && session?.candidate_email) ? session.candidate_email : 'Active Stream'
+  const displaySessionId = (typeof session === 'object' && (session?.session_id || session?.link_id)) ? (session.session_id || session.link_id) : (typeof session === 'string' ? session : 'N/A')
+
   return (
     <Modal
       isOpen={isOpen}
@@ -303,10 +313,10 @@ export default function LiveMonitorStreamModal({ isOpen, onClose, session }) {
       title={
         <div className="flex items-center gap-2">
           <span className={`w-2.5 h-2.5 rounded-full ${status === 'streaming' ? 'bg-success animate-pulse' : 'bg-amber-500'}`} />
-          Live Stream: <span className="font-bold">{session?.candidate_name}</span>
+          Live Stream: <span className="font-bold">{candidateName}</span>
         </div>
       }
-      subtitle={`Email: ${session?.candidate_email} | Session: ${session?.session_id}`}
+      subtitle={`Email: ${candidateEmail} | Session: ${displaySessionId}`}
       maxWidth="max-w-4xl"
     >
       <div className="flex flex-col gap-4 text-slate-800 bg-white">

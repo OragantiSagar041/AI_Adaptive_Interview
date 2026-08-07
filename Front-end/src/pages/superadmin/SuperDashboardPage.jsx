@@ -339,7 +339,7 @@ export default function SuperDashboardPage() {
                           onClick={() => {
                             setShowLivePicker(false);
                             if (handleOpenLiveStreamAction) {
-                              handleOpenLiveStreamAction(session.link_id || session.id);
+                              handleOpenLiveStreamAction(session);
                             }
                           }}
                         >
@@ -752,7 +752,7 @@ export default function SuperDashboardPage() {
                     </td>
                     <td className="py-3 text-right whitespace-nowrap">
                       <button 
-                        onClick={() => handleOpenLiveStreamAction && handleOpenLiveStreamAction(session.link_id || session.id)}
+                        onClick={() => handleOpenLiveStreamAction && handleOpenLiveStreamAction(session)}
                         className="inline-flex items-center justify-center gap-1.5 px-3 py-1.5 text-xs font-semibold bg-white border border-slate-200 rounded hover:bg-slate-50 text-slate-700 cursor-pointer"
                       >
                         <Eye className="w-3.5 h-3.5" /> Monitor
