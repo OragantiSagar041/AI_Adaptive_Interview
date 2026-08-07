@@ -84,6 +84,7 @@ try:
         _REDIS_URL,
         socket_connect_timeout=2,
         socket_timeout=2,
+        protocol=2,
     )
     _redis_client.ping()  # verify Redis is reachable at startup
 except _redis_module.exceptions.RedisError:

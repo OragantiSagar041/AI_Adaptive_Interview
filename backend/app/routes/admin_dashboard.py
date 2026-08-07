@@ -13,6 +13,9 @@ from collections import defaultdict
 from datetime import datetime, timedelta, timezone
 from typing import Any, Dict, List, Optional, Union
 
+_LOCAL_DASHBOARD_CACHE: Dict[str, tuple[float, Dict[str, Any]]] = {}
+_LOCAL_DASHBOARD_CACHE_TTL = 10.0
+
 # ---------------------------------------------------------------------------
 # Third-party
 # ---------------------------------------------------------------------------
@@ -119,7 +122,10 @@ def get_agent_flow(omni_api_key: Optional[str] = Header(default=None, alias="X-O
         raise HTTPException(status_code=500, detail="OMNI_DIMENSION_API_KEY is not set.")
     headers = {"Authorization": f"Bearer {api_key}"}
     try:
-        from app.ai.omni_dimension_client import get_omni_account
+        from app.ai.omni_dimension_client import get_cached_omni_json, get_omni_account, set_cached_omni_json
+        cached_flow = get_cached_omni_json(api_key, "agent-flow")
+        if cached_flow is not None:
+            return {"success": True, "flow": cached_flow, "cached": True}
         _, _, resolved_agent_id = get_omni_account(api_key)
         agent_id = str(resolved_agent_id)
         res = requests.get(f"https://backend.omnidim.io/api/v1/agents/{agent_id}", headers=headers, timeout=10)
@@ -134,6 +140,7 @@ def get_agent_flow(omni_api_key: Optional[str] = Header(default=None, alias="X-O
             else:
                 flow_data = []
             normalized_flow = [normalize_agent_flow_read_item(item) for item in flow_data]
+            set_cached_omni_json(api_key, "agent-flow", normalized_flow)
             return {"success": True, "flow": normalized_flow}
         else:
             print(f"[Omnidimension] GET agent flow failed [status={res.status_code}]")
@@ -163,7 +170,7 @@ def update_agent_flow(req: UpdateAgentFlowRequest, omni_api_key: Optional[str] =
         return {"success": True, "message": "Local flow saved; Omnidimension sync skipped because OMNI_DIMENSION_API_KEY is not configured."}
 
     headers = {"Authorization": f"Bearer {api_key}", "Content-Type": "application/json"}
-    from app.ai.omni_dimension_client import get_omni_account
+    from app.ai.omni_dimension_client import get_omni_account, set_cached_omni_json
     _, _, resolved_agent_id = get_omni_account(api_key)
     agent_id = str(resolved_agent_id)
 
@@ -178,6 +185,7 @@ def update_agent_flow(req: UpdateAgentFlowRequest, omni_api_key: Optional[str] =
         logger.info("[agent-flow] OmniDimension response status: %s", res.status_code)
         logger.info("[agent-flow] OmniDimension response body: %s", res.text)
         if res.status_code == 200:
+            set_cached_omni_json(api_key, "agent-flow", payload.get('context_breakdown', []))
             # persist locally as well
             try:
                 local_path = Path(__file__).resolve().parents[1] / 'agent_flow.json'
@@ -191,6 +199,7 @@ def update_agent_flow(req: UpdateAgentFlowRequest, omni_api_key: Optional[str] =
             try:
                 local_path = Path(__file__).resolve().parents[1] / 'agent_flow.json'
                 local_path.write_text(json.dumps(payload.get('context_breakdown', []), indent=2, ensure_ascii=False), encoding='utf-8')
+                set_cached_omni_json(api_key, "agent-flow", payload.get('context_breakdown', []))
                 return {"success": True, "message": "Upstream failed but local flow updated."}
             except Exception:
                 raise HTTPException(status_code=res.status_code, detail="Failed to update agent flow on upstream API and failed to save locally.")
@@ -201,6 +210,7 @@ def update_agent_flow(req: UpdateAgentFlowRequest, omni_api_key: Optional[str] =
         try:
             local_path = Path(__file__).resolve().parents[1] / 'agent_flow.json'
             local_path.write_text(json.dumps(payload.get('context_breakdown', []), indent=2, ensure_ascii=False), encoding='utf-8')
+            set_cached_omni_json(api_key, "agent-flow", payload.get('context_breakdown', []))
             return {"success": True, "message": "Local flow updated (upstream error)."}
         except Exception:
             raise HTTPException(status_code=500, detail=str(e))
@@ -1435,6 +1445,10 @@ async def get_dashboard_stats(admin_id: Optional[str] = None, current_admin: dic
         cached = await manager.redis.get(cache_key)
         if cached:
             return json.loads(cached)
+    else:
+        cached = _LOCAL_DASHBOARD_CACHE.get(cache_key)
+        if cached and time.monotonic() - cached[0] < _LOCAL_DASHBOARD_CACHE_TTL:
+            return cached[1]
 
     try:
         comp_id = current_admin.get("company_id")
@@ -1710,6 +1724,11 @@ async def get_dashboard_stats(admin_id: Optional[str] = None, current_admin: dic
         
         if manager.redis:
             await manager.redis.setex(cache_key, 30, json.dumps(stats))
+        else:
+            _LOCAL_DASHBOARD_CACHE[cache_key] = (time.monotonic(), stats)
+            if len(_LOCAL_DASHBOARD_CACHE) > 100:
+                oldest_key = min(_LOCAL_DASHBOARD_CACHE, key=lambda key: _LOCAL_DASHBOARD_CACHE[key][0])
+                _LOCAL_DASHBOARD_CACHE.pop(oldest_key, None)
             
         return stats
     except Exception as e:

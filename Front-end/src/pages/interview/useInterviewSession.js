@@ -1324,7 +1324,7 @@ export const useInterviewSession = (sessionId, interviewType, startRoundTwo) => 
       lastAlertType: proctoring.lastAlertType,
     },
   }
-  useCandidateWebRTC(sessionId, mediaStreamRef, telemetryData, monitoringToken)
+  useCandidateWebRTC(sessionId, mediaStreamRef, telemetryData, monitoringToken, screenStreamRef)
 
   const liveHeartbeatDataRef = useRef(null)
   useEffect(() => {

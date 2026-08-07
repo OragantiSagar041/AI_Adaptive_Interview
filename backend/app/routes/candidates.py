@@ -51,7 +51,7 @@ from app.data.coding_graph import generate_coding_task, observe_coding_intent, r
 from app.data.industry_fallback_data import INDUSTRY_TECHNICAL_QUESTIONS, INDUSTRY_CASE_STUDIES
 from app.db.redis_manager import manager
 import app.services.transcription as transcription
-from app.db.mongo_db import client as mongo_client
+from app.db.mongo_db import client as mongo_client, omni_call_logs_collection
 from app.services.services import *
 from app.services.services import require_role
 from app.core.session_store import get_session, set_session, delete_session as delete_cached_session
@@ -1495,57 +1495,109 @@ def log_proctoring_violation(
 def update_decision(data: DecisionRequest, current_admin: dict = Depends(require_role("admin", "super_admin"))):
     print(f" Decision Update Request: link_id={data.link_id}, decision={data.decision}")
     try:
+        admin_name = current_admin.get("name") or current_admin.get("username") or "Admin"
+        admin_role = current_admin.get("role") or "admin"
+        admin_id = current_admin.get("admin_id")
+        now_iso = datetime.now(timezone.utc).isoformat()
+        
         if data.link_id.startswith("ai_call_"):
-            app_id = data.link_id.replace("ai_call_", "")
+            raw_id = data.link_id.replace("ai_call_", "")
+            omni_call_id = raw_id.replace("omni_", "").strip()
+            
+            # 1. Search job_applications_collection
+            app = None
             from bson import ObjectId
             try:
-                app = job_applications_collection.find_one({"_id": ObjectId(app_id)})
+                app = job_applications_collection.find_one({"_id": ObjectId(raw_id)})
             except Exception:
                 app = None
-            if not app:
-                app = job_applications_collection.find_one({"omni_call_id": app_id})
-            if not app:
-                raise HTTPException(status_code=404, detail="AI Call candidate not found")
 
-            job = jobs_collection.find_one({"job_id": app.get("job_id")})
-            if not job:
-                raise HTTPException(status_code=403, detail="Unable to verify candidate ownership")
-            if current_admin.get("role") != "master" and job.get("company_id") != current_admin.get("company_id"):
-                raise HTTPException(status_code=403, detail="Access denied")
-            if current_admin.get("role") == "admin" and str(job.get("admin_id") or "") != str(current_admin.get("admin_id") or ""):
-                raise HTTPException(status_code=403, detail="Access denied to another recruiter's candidate")
-                
-            admin_name = current_admin.get("name") or current_admin.get("username") or "Admin"
-            admin_role = current_admin.get("role") or "admin"
-            admin_id = current_admin.get("admin_id")
-            now_iso = datetime.now(timezone.utc).isoformat()
-            
-            job_applications_collection.update_one(
-                {"_id": app["_id"]},
-                {"$set": {
-                    "decision": data.decision,
-                    "last_action_by_name": admin_name,
-                    "last_action_by_role": admin_role,
-                    "last_action_by_id": admin_id,
-                    "last_action_status": data.decision,
-                    "last_action_at": now_iso,
-                    "decision_by_name": admin_name,
-                    "decision_by_role": admin_role,
-                    "decision_at": now_iso
-                }}
+            if not app:
+                call_ids_to_try = [omni_call_id]
+                if omni_call_id.isdigit():
+                    call_ids_to_try.append(int(omni_call_id))
+                app = job_applications_collection.find_one({"omni_call_id": {"$in": call_ids_to_try}})
+
+            log = None
+            session = None
+            call_ids_to_try = [omni_call_id]
+            if omni_call_id.isdigit():
+                call_ids_to_try.append(int(omni_call_id))
+
+            log = omni_call_logs_collection.find_one({"call_id": {"$in": call_ids_to_try}})
+            session = interview_sessions_collection.find_one({"omni_call_id": {"$in": call_ids_to_try}})
+
+            if app and not log and not session:
+                linked_app_id = str(app["_id"])
+            elif log and not app:
+                linked_app_id = log.get("application_id")
+                if linked_app_id:
+                    try:
+                        app = job_applications_collection.find_one({"_id": ObjectId(linked_app_id)})
+                    except Exception:
+                        app = job_applications_collection.find_one({"application_id": linked_app_id})
+
+            # Update job_applications_collection if app exists
+            if app:
+                job_applications_collection.update_one(
+                    {"_id": app["_id"]},
+                    {"$set": {
+                        "decision": data.decision,
+                        "last_action_by_name": admin_name,
+                        "last_action_by_role": admin_role,
+                        "last_action_by_id": admin_id,
+                        "last_action_status": data.decision,
+                        "last_action_at": now_iso,
+                        "decision_by_name": admin_name,
+                        "decision_by_role": admin_role,
+                        "decision_at": now_iso
+                    }}
+                )
+
+            # Always update or upsert omni_call_logs_collection
+            company_id = current_admin.get("company_id")
+            omni_update = {
+                "call_id": omni_call_id,
+                "decision": data.decision,
+                "last_action_status": data.decision,
+                "decision_by_name": admin_name,
+                "decision_by_role": admin_role,
+                "decision_at": now_iso
+            }
+            if company_id:
+                omni_update["company_id"] = company_id
+            if admin_id:
+                omni_update["admin_id"] = admin_id
+
+            omni_call_logs_collection.update_one(
+                {"call_id": {"$in": call_ids_to_try}},
+                {"$set": omni_update},
+                upsert=True
             )
-            
-            name = app.get("name") or "Candidate"
-            email = app.get("email")
-            jd = app.get("job_description") or ""
-            
+
+            # Update interview_sessions_collection if present
+            if session:
+                interview_sessions_collection.update_one(
+                    {"_id": session["_id"]},
+                    {"$set": {
+                        "decision": data.decision,
+                        "decision_by_name": admin_name,
+                        "decision_by_role": admin_role,
+                        "decision_at": now_iso
+                    }}
+                )
+
+            name = (app.get("name") if app else None) or (log.get("candidate_name") if log else None) or (session.get("candidate_name") if session else None) or "Candidate"
+            email = (app.get("email") if app else None) or (log.get("email") if log else None) or (session.get("candidate_email") if session else None)
+            jd = (app.get("job_description") if app else None) or (session.get("job_description") if session else None) or ""
+
             load_dotenv(override=False)
             email_sent = False
             email_reason = "No candidate email found"
             if email:
                 email_sent = send_decision_email(email, name, data.decision, jd)
                 email_reason = "Success" if email_sent else "Email service error (Brevo API failed)"
-            
+
             return {"status": "success", "decision": data.decision, "email_sent": email_sent, "email_reason": email_reason}
 
         # 1. Fetch candidate details for email

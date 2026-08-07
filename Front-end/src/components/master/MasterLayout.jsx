@@ -21,6 +21,7 @@ import {
 import { logout, loadSuperAdminProfile } from '../../store/slices/authSlice'
 import { persistor } from '../../store/store'
 import AdminCopilot from '../admin/copilot/AdminCopilot'
+import ThemeToggle from '../ThemeToggle'
 import { getMasterNotifications, markNotificationAsRead, markAllNotificationsAsRead } from '../../utils/api'
 
 export default function MasterLayout() {
@@ -39,6 +40,13 @@ export default function MasterLayout() {
       dispatch(loadSuperAdminProfile())
     }
   }, [dispatch, token])
+
+  useEffect(() => {
+    document.documentElement.classList.add('admin-layout')
+    return () => {
+      document.documentElement.classList.remove('admin-layout')
+    }
+  }, [])
 
   // Local theme states
   const [accentName, setAccentName] = useState('indigo')
@@ -160,30 +168,12 @@ export default function MasterLayout() {
   }, [])
 
   const accentColors = {
-    teal: { 
-        c50: '#f0fdfa', c100: '#ccfbf1', c200: '#99f6e4', c500: '#14b8a6', 
-        primary: '#0d9488', hover: '#0f766e', glow: 'rgba(13, 148, 136, 0.15)' 
-    },
-    indigo: { 
-        c50: '#eef2ff', c100: '#e0e7ff', c200: '#c7d2fe', c500: '#6366f1', 
-        primary: '#4f46e5', hover: '#4338ca', glow: 'rgba(99, 102, 241, 0.15)' 
-    },
-    purple: { 
-        c50: '#faf5ff', c100: '#f3e8ff', c200: '#e9d5ff', c500: '#a855f7', 
-        primary: '#9333ea', hover: '#7e22ce', glow: 'rgba(147, 51, 234, 0.15)' 
-    },
-    red: { 
-        c50: '#fff1f2', c100: '#ffe4e6', c200: '#fecdd3', c500: '#f43f5e', 
-        primary: '#e11d48', hover: '#be123c', glow: 'rgba(225, 29, 72, 0.15)' 
-    },
-    green: { 
-        c50: '#f0fdf4', c100: '#dcfce7', c200: '#bbf7d0', c500: '#22c55e', 
-        primary: '#16a34a', hover: '#15803d', glow: 'rgba(22, 163, 74, 0.15)' 
-    },
-    blue: { 
-        c50: '#eff6ff', c100: '#dbeafe', c200: '#bfdbfe', c500: '#3b82f6', 
-        primary: '#2563eb', hover: '#1d4ed8', glow: 'rgba(37, 99, 237, 0.15)' 
-    }
+teal: { primary: '#2dd4bf', hover: '#14b8a6', glow: 'rgba(45, 212, 191, 0.30)' },
+    indigo: { primary: '#818cf8', hover: '#6366f1', glow: 'rgba(129, 140, 248, 0.30)' },
+    purple: { primary: '#c084fc', hover: '#a855f7', glow: 'rgba(192, 132, 252, 0.30)' },
+    red: { primary: '#fb7185', hover: '#f43f5e', glow: 'rgba(251, 113, 133, 0.30)' },
+    green: { primary: '#86efac', hover: '#4ade80', glow: 'rgba(134, 239, 172, 0.30)' },
+    blue: { primary: '#60a5fa', hover: '#3b82f6', glow: 'rgba(96, 165, 250, 0.30)' }
   }
 
   const currentAccent = accentColors[accentName] || accentColors.indigo
@@ -294,42 +284,31 @@ export default function MasterLayout() {
       {/* Main Content Wrapper */}
       <div className="flex-1 flex flex-col min-w-0 h-screen relative z-10">
         {/* Top bar */}
-        <header
-          className="relative z-30 border-b px-4 sm:px-8 py-4 flex justify-between items-center text-[#1e293b] shadow-sm backdrop-blur-md shrink-0"
-          style={{
-            background: `linear-gradient(90deg, rgba(255,255,255,0.92), ${currentAccent ? `rgba(${parseInt(currentAccent.primary.slice(1,3),16)}, ${parseInt(currentAccent.primary.slice(3,5),16)}, ${parseInt(currentAccent.primary.slice(5,7),16)}, 0.14)` : 'rgba(99,102,241,0.14)'})`,
-            borderColor: currentAccent ? `rgba(${parseInt(currentAccent.primary.slice(1,3),16)}, ${parseInt(currentAccent.primary.slice(3,5),16)}, ${parseInt(currentAccent.primary.slice(5,7),16)}, 0.22)` : 'rgba(99,102,241,0.22)'
-          }}
-        >
+        <header className="relative z-30 border-b border-slate-200 bg-white px-4 sm:px-8 py-4 flex justify-between items-center text-foreground shadow-sm backdrop-blur-md shrink-0">
           {/* Left Side: Brand & Toggles */}
-          <div className="flex items-center gap-6">
+          <div className="flex items-center gap-8">
             <h2 className="text-[17px] font-bold text-slate-800">{getPageTitle()}</h2>
           </div>
 
           {/* Right Side: Toggles, Notifications & User Profile */}
-          <div className="flex items-center gap-5">
-            {/* Theme Dropdown Toggle */}
-            <div className="relative">
-              <button
-                onClick={() => setThemeOpen(prev => !prev)}
-                className="flex items-center gap-1.5 px-3 py-1.5 rounded-full border cursor-pointer transition-all duration-200 text-sm font-semibold"
-                style={{
-                  background: hexToRgba(currentAccent.primary, 0.08),
-                  borderColor: hexToRgba(currentAccent.primary, 0.25),
-                  color: currentAccent.primary,
-                }}
-                title="Change theme color"
-              >
-                <span
-                  className="w-3 h-3 rounded-full border-2 border-white shadow-sm flex-shrink-0 transition-all duration-500"
-                  style={{ background: currentAccent.primary }}
+          <div className="flex items-center gap-6">
+            <ThemeToggle className="bg-card border-border text-muted-foreground hover:text-foreground hover:bg-muted shadow-sm" />
+            {/* Theme Toggle Dots */}
+            <div className="flex items-center gap-1.5 bg-white rounded-full px-2 py-1 shadow-sm border border-slate-100 relative">
+              {Object.keys(accentColors).map(color => (
+                <button
+                  key={color}
+                  onClick={() => setAccentName(color)}
+                  className="w-4 h-4 rounded-full border-2 border-white/50 cursor-pointer p-0 transition-all hover:scale-110"
+                  style={{
+                    background: accentColors[color].primary,
+                    borderColor: accentName === color ? 'white' : 'rgba(255,255,255,0.65)',
+                    boxShadow: accentName === color ? '0 0 0 2px rgba(255,255,255,0.9)' : 'none',
+                  }}
+                  title={color}
                 />
-                <ChevronDown
-                  size={13}
-                  className="transition-transform duration-200"
-                  style={{ transform: themeOpen ? 'rotate(180deg)' : 'rotate(0deg)' }}
-                />
-              </button>
+              ))}
+            </div>
 
               {/* Color Picker Popover */}
               {themeOpen && (
@@ -375,7 +354,6 @@ export default function MasterLayout() {
                   </div>
                 </div>
               )}
-            </div>
 
             <span className="text-sm text-slate-600 max-lg:hidden block ml-2">
               Welcome back, <strong className="text-slate-800">{userName}</strong>

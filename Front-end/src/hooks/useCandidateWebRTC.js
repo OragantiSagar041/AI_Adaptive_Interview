@@ -13,7 +13,7 @@ import { getIceServers } from '../utils/webrtcConfig'
  *  - Handles the race condition where the admin connects before the candidate's
  *    WS is fully open by flushing a queued answer once the socket re-opens
  */
-export default function useCandidateWebRTC(linkId, mediaStreamRef, telemetryData, monitoringToken) {
+export default function useCandidateWebRTC(linkId, mediaStreamRef, telemetryData, monitoringToken, secondaryMediaStreamRef = null) {
   const wsRef = useRef(null)
   const pcsRef = useRef({})                 // adminId → RTCPeerConnection
   const latestTelemetryRef = useRef(telemetryData)
@@ -93,8 +93,9 @@ export default function useCandidateWebRTC(linkId, mediaStreamRef, telemetryData
           if (msg.type === 'webrtc_offer') {
             console.log(`[CandidateWebRTC] Received offer from admin: ${adminId}`)
 
-            const stream = mediaStreamRef.current
-            if (!stream) {
+            const streams = [mediaStreamRef.current, secondaryMediaStreamRef?.current].filter(Boolean)
+            const tracks = streams.flatMap(stream => stream.getTracks())
+            if (tracks.length === 0) {
               console.warn('[CandidateWebRTC] No media stream yet — cannot answer offer.')
               return
             }
@@ -110,9 +111,9 @@ export default function useCandidateWebRTC(linkId, mediaStreamRef, telemetryData
             pcsRef.current[adminId] = pc
 
             // Add all live tracks to the peer connection
-            stream.getTracks().forEach(track => {
+            tracks.forEach(track => {
               console.log(`[CandidateWebRTC] Adding track: ${track.kind}`)
-              pc.addTrack(track, stream)
+              pc.addTrack(track, streams.find(stream => stream.getTracks().includes(track)) || streams[0])
             })
 
             pc.onicecandidate = (e) => {
@@ -184,7 +185,7 @@ export default function useCandidateWebRTC(linkId, mediaStreamRef, telemetryData
         try { pc.close() } catch (_) {}
       })
     }
-  }, [linkId, mediaStreamRef, monitoringToken])
+  }, [linkId, mediaStreamRef, monitoringToken, secondaryMediaStreamRef])
 
   // ─── Telemetry heartbeat ────────────────────────────────────────────────────
   useEffect(() => {
