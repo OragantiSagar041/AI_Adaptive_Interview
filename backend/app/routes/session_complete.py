@@ -629,6 +629,8 @@ async def webrtc_endpoint(websocket: WebSocket, role: str, link_id: str, token: 
     with open(webrtc_log_path, "a") as f:
         f.write(f"\n--- New Connection ---\nRole: {role}, Link ID: {link_id}\nToken supplied: {bool(token)}\n")
     
+    admin_id: Optional[str] = None
+
     if role == "candidate":
         if not token:
             await websocket.close(code=1008)
@@ -648,9 +650,16 @@ async def webrtc_endpoint(websocket: WebSocket, role: str, link_id: str, token: 
         try:
             auth_context = _decode_dashboard_websocket_admin(token)
             _get_authorized_live_session(link_id, auth_context)
-            await manager.connect_admin(websocket, link_id)
+            # Use client-provided admin_id or derive from auth context / socket
+            admin_id = (
+                websocket.query_params.get("admin_id")
+                or auth_context.get("email")
+                or auth_context.get("user_id")
+                or f"admin_{id(websocket)}"
+            )
+            await manager.connect_admin(websocket, link_id, admin_id=admin_id)
             with open(webrtc_log_path, "a") as f:
-                f.write("Admin connected successfully.\n")
+                f.write(f"Admin ({admin_id}) connected successfully.\n")
         except HTTPException as e:
             with open(webrtc_log_path, "a") as f:
                 f.write(f"Admin authorization error: {e.detail}\n")
@@ -672,11 +681,10 @@ async def webrtc_endpoint(websocket: WebSocket, role: str, link_id: str, token: 
 
     last_telemetry_at = 0.0
     try:
-        # Notify admin immediately that they are connected so the frontend
-        # can start the WebRTC offer right away without waiting for a message.
+        # Notify admin immediately that they are connected with their assigned admin_id
         if role == "admin":
             try:
-                await websocket.send_json({"type": "admin_connected"})
+                await websocket.send_json({"type": "admin_connected", "admin_id": admin_id})
             except Exception:
                 pass
 
@@ -684,15 +692,17 @@ async def webrtc_endpoint(websocket: WebSocket, role: str, link_id: str, token: 
             data = await websocket.receive_json()
             msg_type = data.get("type", "")
 
-            if role == "candidate":
-                # Heartbeat ping — just pong back, never relay to admins
-                if msg_type == "ping":
-                    try:
-                        await websocket.send_json({"type": "pong"})
-                    except Exception:
-                        pass
-                    continue
+            # Heartbeat ping/pong from either role to keep load balancer alive
+            if msg_type == "ping":
+                try:
+                    await websocket.send_json({"type": "pong"})
+                except Exception:
+                    pass
+                continue
+            if msg_type == "pong":
+                continue
 
+            if role == "candidate":
                 # Throttle telemetry: at most one per second
                 if msg_type == "telemetry":
                     now_monotonic = time.monotonic()
@@ -700,11 +710,10 @@ async def webrtc_endpoint(websocket: WebSocket, role: str, link_id: str, token: 
                         continue
                     last_telemetry_at = now_monotonic
 
-                # Relay all signaling messages (offer/answer/ICE) to admins
-                await manager.send_to_admins(link_id, data)
+                    # Broadcast telemetry to all watching admins
+                    await manager.send_to_admins(link_id, data)
 
-                # Persist telemetry snapshot to MongoDB / Redis for the dashboard
-                if msg_type == "telemetry":
+                    # Persist telemetry snapshot to MongoDB / Redis for the dashboard
                     telemetry_payload = data.get("data", {}) or {}
                     proctoring_status = telemetry_payload.get("proctoring_status", {}) or {}
                     updates = {
@@ -722,9 +731,19 @@ async def webrtc_endpoint(websocket: WebSocket, role: str, link_id: str, token: 
                         "eye_contact_lost": _optional_bool(proctoring_status.get("eyeContactLost")),
                     }
                     await _store_live_snapshot(link_id, updates, candidate_session)
+                else:
+                    # WebRTC signaling (answer, ice candidate) - target specific admin if specified
+                    target_admin = data.get("target_admin_id")
+                    if target_admin:
+                        await manager.send_to_specific_admin(link_id, target_admin, data)
+                    else:
+                        await manager.send_to_admins(link_id, data)
 
             elif role == "admin":
-                # Forward all admin signaling (offer/answer/ICE) directly to the candidate
+                # Ensure admin_id is tagged on outgoing offers and ICE candidates
+                if "admin_id" not in data and admin_id:
+                    data["admin_id"] = admin_id
+                # Forward all admin signaling (offer/ICE) directly to the candidate
                 await manager.send_to_candidate(link_id, data)
     except WebSocketDisconnect:
         webrtc_log_path = os.path.join(tempfile.gettempdir(), "webrtc_debug.log")
@@ -734,11 +753,12 @@ async def webrtc_endpoint(websocket: WebSocket, role: str, link_id: str, token: 
             manager.disconnect_candidate(link_id)
             await manager.send_to_admins(link_id, {"type": "candidate_disconnected"})
         elif role == "admin":
-            manager.disconnect_admin(websocket, link_id)
+            manager.disconnect_admin(websocket, link_id, admin_id=admin_id)
     except Exception as e:
         webrtc_log_path = os.path.join(tempfile.gettempdir(), "webrtc_debug.log")
         with open(webrtc_log_path, "a") as f:
             f.write(f"Exception in while loop: {str(e)}\n{traceback.format_exc()}\n")
+
 
 
 # --------------------------------------------------------------------------------

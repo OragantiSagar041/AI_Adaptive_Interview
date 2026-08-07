@@ -56,6 +56,9 @@ export default function LiveMonitorStreamModal({ isOpen, onClose, session }) {
   const statusRef = useRef(status)
   useEffect(() => { statusRef.current = status }, [status])
   const token = useSelector(state => state.auth.token)
+  const user = useSelector(state => state.auth.user)
+  const adminIdRef = useRef(user?.email || user?._id || user?.id || 'admin_' + Math.random().toString(36).substring(2, 9))
+  const heartbeatTimerRef = useRef(null)
 
   // ── Violations polling ──────────────────────────────────────────────────────
   useEffect(() => {
@@ -92,6 +95,7 @@ export default function LiveMonitorStreamModal({ isOpen, onClose, session }) {
   // ── WebRTC / Signaling ──────────────────────────────────────────────────────
   const cleanup = useCallback(() => {
     clearTimeout(streamTimeoutRef.current)
+    clearInterval(heartbeatTimerRef.current)
     if (pcRef.current) {
       pcRef.current.close()
       pcRef.current = null
@@ -129,7 +133,11 @@ export default function LiveMonitorStreamModal({ isOpen, onClose, session }) {
 
       pc.onicecandidate = (e) => {
         if (e.candidate && ws.readyState === WebSocket.OPEN) {
-          ws.send(JSON.stringify({ type: 'webrtc_ice_candidate', candidate: e.candidate }))
+          ws.send(JSON.stringify({
+            type: 'webrtc_ice_candidate',
+            candidate: e.candidate,
+            admin_id: adminIdRef.current
+          }))
         }
       }
 
@@ -154,7 +162,11 @@ export default function LiveMonitorStreamModal({ isOpen, onClose, session }) {
 
       const offer = await pc.createOffer()
       await pc.setLocalDescription(offer)
-      ws.send(JSON.stringify({ type: 'webrtc_offer', sdp: offer }))
+      ws.send(JSON.stringify({
+        type: 'webrtc_offer',
+        sdp: offer,
+        admin_id: adminIdRef.current
+      }))
 
       if (mountedRef.current) setStatus('negotiating')
 
@@ -185,17 +197,23 @@ export default function LiveMonitorStreamModal({ isOpen, onClose, session }) {
     const sessionId = session.link_id || session.session_id || session.id
     const wsUrl =
       API_BASE_URL.replace(/^https/, 'wss').replace(/^http/, 'ws') +
-      `/ws/webrtc/admin/${sessionId}?token=${token}`
+      `/ws/webrtc/admin/${sessionId}?token=${token}&admin_id=${encodeURIComponent(adminIdRef.current)}`
 
     console.log('[AdminWebRTC] Connecting to:', wsUrl)
     setStatus('connecting')
-    setRetryCount(0)
 
     const ws = new WebSocket(wsUrl)
     wsRef.current = ws
 
     ws.onopen = async () => {
-      console.log('[AdminWebRTC] WS open — sending initial offer')
+      console.log('[AdminWebRTC] WS open — starting heartbeat & sending initial offer')
+      clearInterval(heartbeatTimerRef.current)
+      heartbeatTimerRef.current = setInterval(() => {
+        if (ws.readyState === WebSocket.OPEN) {
+          ws.send(JSON.stringify({ type: 'ping' }))
+        }
+      }, 15_000)
+
       await sendOffer(ws)
     }
 
@@ -203,8 +221,14 @@ export default function LiveMonitorStreamModal({ isOpen, onClose, session }) {
       try {
         const msg = JSON.parse(event.data)
 
+        if (msg.type === 'pong' || msg.type === 'ping') {
+          return // Heartbeat response
+        }
+
         if (msg.type === 'admin_connected') {
-          // Server confirmed our connection — offer already sent from onopen, nothing extra needed
+          if (msg.admin_id) {
+            adminIdRef.current = msg.admin_id
+          }
           return
         }
 
@@ -237,19 +261,33 @@ export default function LiveMonitorStreamModal({ isOpen, onClose, session }) {
 
     ws.onclose = (e) => {
       console.log(`[AdminWebRTC] WS closed (${e.code})`)
-      if (mountedRef.current) setStatus('disconnected')
+      clearInterval(heartbeatTimerRef.current)
+      if (mountedRef.current) {
+        if (e.code === 1006 || e.code === 1001) {
+          // Auto-reconnect on abnormal / server restart drop with backoff
+          const delay = Math.min(2000 * Math.pow(1.5, retryCount), 15000)
+          console.log(`[AdminWebRTC] Auto-reconnecting in ${delay}ms...`)
+          setTimeout(() => {
+            if (mountedRef.current) {
+              setRetryCount(c => c + 1)
+            }
+          }, delay)
+        } else {
+          setStatus('disconnected')
+        }
+      }
     }
 
     return () => {
       mountedRef.current = false
       cleanup()
     }
-  }, [isOpen, session, token, retryCount])  // retryCount forces full reconnect on manual retry
+  }, [isOpen, session, token, retryCount])  // retryCount forces full reconnect
 
   const handleManualRetry = () => {
     cleanup()
     setStatus('connecting')
-    setRetryCount(c => c + 1)  // triggers the useEffect to rebuild everything
+    setRetryCount(c => c + 1)
   }
 
   const getRoundIcon = (type) => {

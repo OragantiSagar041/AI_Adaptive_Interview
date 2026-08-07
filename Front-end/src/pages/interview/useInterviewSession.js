@@ -265,6 +265,8 @@ export const useInterviewSession = (sessionId, interviewType, startRoundTwo) => 
   const recognitionRef = useRef(null)
   const isSpeechRecordingRef = useRef(false)
   const isTTSPlayingRef = useRef(false) // blocks rec.onend auto-restart during TTS playback
+  const lastSpeechActivityRef = useRef(Date.now())
+  const speechWatchdogRef = useRef(null)
   const whisperMediaRecorderRef = useRef(null)
   const interimTextRef = useRef('')
   const currentAudioRef = useRef(null)
@@ -950,8 +952,21 @@ export const useInterviewSession = (sessionId, interviewType, startRoundTwo) => 
   const initSpeechRecognition = () => {
     if (!('webkitSpeechRecognition' in window || 'SpeechRecognition' in window)) {
       console.warn("Speech recognition not supported in this browser.")
-      return
+      return null
     }
+
+    // Clean up previous instance before creating a new one
+    if (recognitionRef.current) {
+      try {
+        recognitionRef.current.onstart = null
+        recognitionRef.current.onend = null
+        recognitionRef.current.onerror = null
+        recognitionRef.current.onresult = null
+        recognitionRef.current.abort()
+      } catch (_) { }
+      recognitionRef.current = null
+    }
+
     const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition
     const rec = new SpeechRecognition()
     rec.continuous = true  // Keep listening continuously without restarting
@@ -961,10 +976,8 @@ export const useInterviewSession = (sessionId, interviewType, startRoundTwo) => 
     const targetLang = langMap[currentLangName] || 'en-IN'
     rec.lang = targetLang
 
-    recognitionRef.current = rec
-
     rec.onstart = () => {
-      // Speech recognition active
+      lastSpeechActivityRef.current = Date.now()
     }
 
     rec.onend = () => {
@@ -986,17 +999,19 @@ export const useInterviewSession = (sessionId, interviewType, startRoundTwo) => 
       if (isSpeechRecordingRef.current && !isTTSPlayingRef.current) {
         setTimeout(() => {
           if (!isSpeechRecordingRef.current || isTTSPlayingRef.current) return
+          // ALWAYS instantiate fresh SpeechRecognition instance on onend to overcome Chrome session limit
+          const freshRec = initSpeechRecognition()
           try {
-            rec.start()
-          } catch (_) {
-            initSpeechRecognition()
-            try { recognitionRef.current?.start() } catch (__) { }
+            freshRec?.start()
+          } catch (e) {
+            console.warn('[Speech] auto-restart start failed:', e)
           }
-        }, 100)
+        }, 120)
       }
     }
 
     rec.onresult = (event) => {
+      lastSpeechActivityRef.current = Date.now()
       let interimText = ''
       let finalText = ''
       for (let i = event.resultIndex; i < event.results.length; i++) {
@@ -1031,12 +1046,12 @@ export const useInterviewSession = (sessionId, interviewType, startRoundTwo) => 
           if (!p) return f
           if (p.endsWith(f)) return prev
 
-          // Overlap deduplication: if last words of p match start words of f
+          // Overlap deduplication: match 2 or more trailing words to avoid dropping single common words
           const pWords = p.split(/\s+/)
           const fWords = f.split(/\s+/)
           let overlap = 0
           const maxCheck = Math.min(pWords.length, fWords.length, 4)
-          for (let len = maxCheck; len >= 1; len--) {
+          for (let len = maxCheck; len >= 2; len--) {
             const pTail = pWords.slice(-len).join(' ').toLowerCase()
             const fHead = fWords.slice(0, len).join(' ').toLowerCase()
             if (pTail === fHead) {
@@ -1059,11 +1074,11 @@ export const useInterviewSession = (sessionId, interviewType, startRoundTwo) => 
         return
       }
       if (e.error === 'network') {
-        if (isSpeechRecordingRef.current) {
+        if (isSpeechRecordingRef.current && !isTTSPlayingRef.current) {
           setTimeout(() => {
             if (isSpeechRecordingRef.current && !isTTSPlayingRef.current) {
-              initSpeechRecognition()
-              try { recognitionRef.current?.start() } catch (_) { }
+              const freshRec = initSpeechRecognition()
+              try { freshRec?.start() } catch (_) { }
             }
           }, 800)
         }
@@ -1071,7 +1086,29 @@ export const useInterviewSession = (sessionId, interviewType, startRoundTwo) => 
     }
 
     recognitionRef.current = rec
+    return rec
   }
+
+  // Speech Recognition Watchdog — ensures recognition never stays dead during questions
+  useEffect(() => {
+    speechWatchdogRef.current = setInterval(() => {
+      if (isSpeechRecordingRef.current && !isTTSPlayingRef.current) {
+        const timeSinceActivity = Date.now() - lastSpeechActivityRef.current
+        // If inactive for > 20 seconds while active recording, gently refresh instance
+        if (timeSinceActivity > 20_000) {
+          lastSpeechActivityRef.current = Date.now()
+          const freshRec = initSpeechRecognition()
+          try {
+            freshRec?.start()
+          } catch (_) { }
+        }
+      }
+    }, 10_000)
+
+    return () => {
+      clearInterval(speechWatchdogRef.current)
+    }
+  }, [])
 
   useEffect(() => {
     if (!isDisclaimerAccepted || !mediaStreamRef.current || !videoPreviewRef.current) return
@@ -1767,8 +1804,9 @@ export const useInterviewSession = (sessionId, interviewType, startRoundTwo) => 
     if (recognitionRef.current) {
       try { recognitionRef.current.stop() } catch (_) { }
     }
-    // Clear any gibberish that got captured while recognition was still on
-    setTranscriptionText('')
+    // NOTE: We intentionally do NOT clear transcriptionText here.
+    // The answer save (in handleNextQuestion) already ran before speakAIQuestion was called.
+    // Clearing here would wipe the new answer box before the candidate starts speaking.
     setInterimTranscriptText('')
 
     // --- High-Quality TTS (Backend: Cartesia or Edge TTS) ---
@@ -1824,18 +1862,14 @@ export const useInterviewSession = (sessionId, interviewType, startRoundTwo) => 
         if (!ttsCacheRef.current.has(ttsCacheKey)) {
           URL.revokeObjectURL(url)
         }
-        // ── RESTART speech recognition cleanly after AI finishes speaking ──
+        // ── RESTART speech recognition cleanly with fresh instance after AI finishes speaking ──
         isTTSPlayingRef.current = false
         isSpeechRecordingRef.current = true
-        if (!recognitionRef.current) {
-          initSpeechRecognition()
-        }
+        lastSpeechActivityRef.current = Date.now()
+        const freshRec = initSpeechRecognition()
         try {
-          recognitionRef.current?.start()
-        } catch (_) {
-          initSpeechRecognition()
-          try { recognitionRef.current?.start() } catch (__) { }
-        }
+          freshRec?.start()
+        } catch (_) { }
         startSilenceTimer(10000)
       }
 
@@ -1880,15 +1914,11 @@ export const useInterviewSession = (sessionId, interviewType, startRoundTwo) => 
         // ── RESTART recognition after browser TTS fallback finishes ──
         isTTSPlayingRef.current = false
         isSpeechRecordingRef.current = true
-        if (!recognitionRef.current) {
-          initSpeechRecognition()
-        }
+        lastSpeechActivityRef.current = Date.now()
+        const freshRec = initSpeechRecognition()
         try {
-          recognitionRef.current?.start()
-        } catch (_) {
-          initSpeechRecognition()
-          try { recognitionRef.current?.start() } catch (__) { }
-        }
+          freshRec?.start()
+        } catch (_) { }
         startSilenceTimer(10000)
       }
 

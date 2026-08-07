@@ -98,11 +98,19 @@ class RedisConnectionManager:
                                 except Exception as e:
                                     logger.error(f"Error sending to local candidate: {e}")
                             elif role == "admins":
-                                for admin_ws in list(local_group["admins"]):
+                                target_admin = data.get("target_admin_id")
+                                admins_map = local_group.get("admins_map", {})
+                                if target_admin and target_admin in admins_map:
                                     try:
-                                        await admin_ws.send_json(data)
+                                        await admins_map[target_admin].send_json(data)
                                     except Exception as e:
-                                        logger.error(f"Error sending to local admin: {e}")
+                                        logger.error(f"Error sending to local admin {target_admin}: {e}")
+                                else:
+                                    for admin_ws in list(local_group["admins"]):
+                                        try:
+                                            await admin_ws.send_json(data)
+                                        except Exception as e:
+                                            logger.error(f"Error sending to local admin: {e}")
                     elif channel == "dashboard:updates":
                         await self.broadcast_dashboard(data)
         except asyncio.CancelledError:
@@ -119,7 +127,7 @@ class RedisConnectionManager:
     async def connect_candidate(self, websocket: WebSocket, link_id: str):
         await websocket.accept()
         if link_id not in self.local_connections:
-            self.local_connections[link_id] = {"candidate": None, "admins": []}
+            self.local_connections[link_id] = {"candidate": None, "admins": [], "admins_map": {}}
         self.local_connections[link_id]["candidate"] = websocket
 
         # Attempt Redis subscription — failure is non-fatal, we fall back to in-memory
@@ -150,11 +158,16 @@ class RedisConnectionManager:
 
     # ─── Admin connection ────────────────────────────────────────────────────────
 
-    async def connect_admin(self, websocket: WebSocket, link_id: str):
+    async def connect_admin(self, websocket: WebSocket, link_id: str, admin_id: Optional[str] = None):
         await websocket.accept()
         if link_id not in self.local_connections:
-            self.local_connections[link_id] = {"candidate": None, "admins": []}
+            self.local_connections[link_id] = {"candidate": None, "admins": [], "admins_map": {}}
+        elif "admins_map" not in self.local_connections[link_id]:
+            self.local_connections[link_id]["admins_map"] = {}
+
         self.local_connections[link_id]["admins"].append(websocket)
+        if admin_id:
+            self.local_connections[link_id]["admins_map"][admin_id] = websocket
 
         # Attempt Redis subscription — failure is non-fatal, we fall back to in-memory
         await self.connect_redis()
@@ -169,10 +182,18 @@ class RedisConnectionManager:
                 self.pubsub = None
                 self._redis_failed = True
 
-    def disconnect_admin(self, websocket: WebSocket, link_id: str):
+    def disconnect_admin(self, websocket: WebSocket, link_id: str, admin_id: Optional[str] = None):
         if link_id in self.local_connections:
             if websocket in self.local_connections[link_id]["admins"]:
                 self.local_connections[link_id]["admins"].remove(websocket)
+            admins_map = self.local_connections[link_id].get("admins_map", {})
+            if admin_id and admin_id in admins_map:
+                del admins_map[admin_id]
+            else:
+                keys_to_del = [k for k, v in admins_map.items() if v is websocket]
+                for k in keys_to_del:
+                    del admins_map[k]
+
             if (
                 not self.local_connections[link_id]["admins"]
                 and not self.local_connections[link_id]["candidate"]
@@ -270,5 +291,40 @@ class RedisConnectionManager:
                 except Exception:
                     pass
 
+    async def send_to_specific_admin(self, link_id: str, admin_id: str, message: dict):
+        """Send a message specifically to one admin (via Redis with target_admin_id or local admins_map)."""
+        if "target_admin_id" not in message:
+            message["target_admin_id"] = admin_id
+
+        await self.connect_redis()
+        if self.redis:
+            try:
+                await self.redis.publish(f"session:{link_id}:admins", json.dumps(message))
+                return
+            except Exception as e:
+                logger.warning(f"Redis publish failed: {e}. Falling back to in-memory.")
+                self.redis = None
+                self.pubsub = None
+                self._redis_failed = True
+
+        # In-memory fallback
+        local_group = self.local_connections.get(link_id)
+        if local_group:
+            admins_map = local_group.get("admins_map", {})
+            admin_ws = admins_map.get(admin_id)
+            if admin_ws:
+                try:
+                    await admin_ws.send_json(message)
+                    return
+                except Exception:
+                    pass
+            # Fallback to all admins if specific admin not found in local map
+            for admin_ws in list(local_group["admins"]):
+                try:
+                    await admin_ws.send_json(message)
+                except Exception:
+                    pass
+
 
 manager = RedisConnectionManager()
+

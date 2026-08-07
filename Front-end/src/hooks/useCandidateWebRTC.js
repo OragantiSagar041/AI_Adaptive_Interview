@@ -45,7 +45,7 @@ export default function useCandidateWebRTC(linkId, mediaStreamRef, telemetryData
           // Send a lightweight ping so the server-side idle timeout never fires
           ws.send(JSON.stringify({ type: 'ping' }))
         }
-      }, 20_000)
+      }, 15_000)
     }
 
     function connect() {
