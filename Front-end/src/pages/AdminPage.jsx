@@ -202,6 +202,14 @@ export default function AdminPage({ role: initialRole = 'admin' }) {
 
   const currentAccent = accentColors[accentName] || accentColors.indigo
 
+  // Inject CSS variables so the entire Recruiter layout reflects the chosen accent color
+  useEffect(() => {
+    document.documentElement.style.setProperty('--accent-theme-color', currentAccent.primary)
+    document.documentElement.style.setProperty('--primary-color', currentAccent.primary)
+    document.documentElement.style.setProperty('--primary-hover', currentAccent.hover)
+    document.documentElement.style.setProperty('--primary-glow', currentAccent.glow)
+  }, [accentName])
+
   // Live Stream WebRTC State
   const [isLiveStreamOpen, setIsLiveStreamOpen] = useState(false)
   const [liveStreamSession, setLiveStreamSession] = useState(null)

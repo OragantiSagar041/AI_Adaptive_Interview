@@ -72,8 +72,19 @@ export default function MasterLayout() {
     }
   }
   const [themeOpen, setThemeOpen] = useState(false)
+  const themeRef = useRef(null)
   const [dropdownOpen, setDropdownOpen] = useState(false)
   
+  // Close theme popover when clicking outside
+  useEffect(() => {
+    function handleClickOutside(event) {
+      if (themeRef.current && !themeRef.current.contains(event.target)) {
+        setThemeOpen(false)
+      }
+    }
+    document.addEventListener('mousedown', handleClickOutside)
+    return () => document.removeEventListener('mousedown', handleClickOutside)
+  }, [])
   const hexToRgba = (hex, alpha = 1) => {
     let r = 0, g = 0, b = 0;
     if (hex.length === 4) {
@@ -313,67 +324,74 @@ teal: { primary: '#2dd4bf', hover: '#14b8a6', glow: 'rgba(45, 212, 191, 0.30)' }
 
           {/* Right Side: Toggles, Notifications & User Profile */}
           <div className="flex items-center gap-6">
-            {/* Theme Toggle Dots */}
-            <div className="flex items-center gap-1.5 bg-white rounded-full px-2 py-1 shadow-sm border border-slate-100 relative">
-              {Object.keys(accentColors).map(color => (
+              {/* Theme Toggle — single button + popover */}
+              <div ref={themeRef} className="relative">
                 <button
-                  key={color}
-                  onClick={() => setAccentName(color)}
-                  className="w-4 h-4 rounded-full border-2 border-white/50 cursor-pointer p-0 transition-all hover:scale-110"
+                  onClick={() => setThemeOpen(prev => !prev)}
+                  className="flex items-center gap-1.5 px-3 py-1.5 rounded-full border cursor-pointer transition-all duration-200 text-sm font-semibold"
                   style={{
-                    background: accentColors[color].primary,
-                    borderColor: accentName === color ? 'white' : 'rgba(255,255,255,0.65)',
-                    boxShadow: accentName === color ? '0 0 0 2px rgba(255,255,255,0.9)' : 'none',
+                    background: hexToRgba(currentAccent.primary, 0.08),
+                    borderColor: hexToRgba(currentAccent.primary, 0.25),
+                    color: currentAccent.primary,
                   }}
-                  title={color}
-                />
-              ))}
-            </div>
-
-              {/* Color Picker Popover */}
-              {themeOpen && (
-                <div
-                  className="absolute top-full left-0 sm:-left-10 mt-2 z-50 rounded-2xl shadow-xl border border-slate-200/60 p-3"
-                  style={{
-                    background: 'rgba(255,255,255,0.97)',
-                    backdropFilter: 'blur(12px)',
-                    minWidth: '160px',
-                  }}
+                  title="Change theme color"
                 >
-                  <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-2 px-1">Theme Color</p>
-                  <div className="flex flex-col gap-0.5">
-                    {Object.entries(accentColors).map(([color, val]) => (
-                      <button
-                        key={color}
-                        onClick={() => { setAccentName(color); setThemeOpen(false); }}
-                        className="group flex items-center gap-2 w-full px-2 py-1.5 rounded-xl cursor-pointer border-none text-left transition-all duration-150"
-                        style={{
-                          background: accentName === color ? hexToRgba(val.primary, 0.12) : 'transparent',
-                        }}
-                        onMouseEnter={e => e.currentTarget.style.background = hexToRgba(val.primary, 0.10)}
-                        onMouseLeave={e => e.currentTarget.style.background = accentName === color ? hexToRgba(val.primary, 0.12) : 'transparent'}
-                      >
-                        <span
-                          className="w-4 h-4 rounded-full border-2 border-white shadow flex-shrink-0 transition-transform duration-150 group-hover:scale-110"
+                  <span
+                    className="w-3 h-3 rounded-full border-2 border-white shadow-sm flex-shrink-0 transition-all duration-500"
+                    style={{ background: currentAccent.primary }}
+                  />
+                  <ChevronDown
+                    size={13}
+                    className="transition-transform duration-200"
+                    style={{ transform: themeOpen ? 'rotate(180deg)' : 'rotate(0deg)' }}
+                  />
+                </button>
+
+                {/* Color Picker Popover */}
+                {themeOpen && (
+                  <div
+                    className="absolute top-full left-0 mt-2 z-50 rounded-2xl shadow-xl border border-slate-200/60 p-3"
+                    style={{
+                      background: 'rgba(255,255,255,0.97)',
+                      backdropFilter: 'blur(12px)',
+                      minWidth: '160px',
+                    }}
+                  >
+                    <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-2 px-1">Theme Color</p>
+                    <div className="flex flex-col gap-0.5">
+                      {Object.entries(accentColors).map(([color, val]) => (
+                        <button
+                          key={color}
+                          onClick={() => { setAccentName(color); setThemeOpen(false); }}
+                          className="group flex items-center gap-2 w-full px-2 py-1.5 rounded-xl cursor-pointer border-none text-left transition-all duration-150"
                           style={{
-                            background: `linear-gradient(135deg, ${val.primary}, ${val.hover})`,
-                            boxShadow: accentName === color ? `0 0 0 2px ${val.primary}` : '0 1px 3px rgba(0,0,0,0.15)',
+                            background: accentName === color ? hexToRgba(val.primary, 0.12) : 'transparent',
                           }}
-                        />
-                        <span
-                          className="text-sm font-semibold flex-1 capitalize"
-                          style={{ color: accentName === color ? val.primary : '#64748b' }}
+                          onMouseEnter={e => e.currentTarget.style.background = hexToRgba(val.primary, 0.10)}
+                          onMouseLeave={e => e.currentTarget.style.background = accentName === color ? hexToRgba(val.primary, 0.12) : 'transparent'}
                         >
-                          {color}
-                        </span>
-                        {accentName === color && (
-                          <Check size={14} style={{ color: val.primary }} />
-                        )}
-                      </button>
-                    ))}
+                          <span
+                            className="w-4 h-4 rounded-full border-2 border-white shadow flex-shrink-0 transition-transform duration-150 group-hover:scale-110"
+                            style={{
+                              background: `linear-gradient(135deg, ${val.primary}, ${val.hover})`,
+                              boxShadow: accentName === color ? `0 0 0 2px ${val.primary}` : '0 1px 3px rgba(0,0,0,0.15)',
+                            }}
+                          />
+                          <span
+                            className="text-xs font-semibold capitalize"
+                            style={{ color: accentName === color ? val.primary : '#64748b' }}
+                          >
+                            {color}
+                          </span>
+                          {accentName === color && (
+                            <span className="ml-auto text-[10px] font-bold" style={{ color: val.primary }}>✓</span>
+                          )}
+                        </button>
+                      ))}
+                    </div>
                   </div>
-                </div>
-              )}
+                )}
+              </div>
 
             <span className="text-sm text-slate-600 max-lg:hidden block ml-2">
               Welcome back, <strong className="text-slate-800">{userName}</strong>
