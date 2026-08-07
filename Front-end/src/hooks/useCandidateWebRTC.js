@@ -145,6 +145,13 @@ export default function useCandidateWebRTC(linkId, mediaStreamRef, telemetryData
             if (pc && pc.remoteDescription) {
               await pc.addIceCandidate(new RTCIceCandidate(msg.candidate))
             }
+          } else if (msg.type === 'admin_disconnected') {
+            const disconnectedAdminId = msg.admin_id
+            if (disconnectedAdminId && pcsRef.current[disconnectedAdminId]) {
+              console.log(`[CandidateWebRTC] Admin disconnected: ${disconnectedAdminId}, closing PC`)
+              try { pcsRef.current[disconnectedAdminId].close() } catch (_) {}
+              delete pcsRef.current[disconnectedAdminId]
+            }
           }
         } catch (err) {
           console.error('[CandidateWebRTC] Error handling message:', err)

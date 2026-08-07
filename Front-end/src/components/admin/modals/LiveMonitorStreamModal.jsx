@@ -57,7 +57,12 @@ export default function LiveMonitorStreamModal({ isOpen, onClose, session }) {
   useEffect(() => { statusRef.current = status }, [status])
   const token = useSelector(state => state.auth.token)
   const user = useSelector(state => state.auth.user)
-  const adminIdRef = useRef(user?.email || user?._id || user?.id || 'admin_' + Math.random().toString(36).substring(2, 9))
+  // Generate a distinct tab/session-unique ID so multiple tabs/windows logged into the same admin do not conflict
+  const adminIdRef = useRef(null)
+  if (!adminIdRef.current) {
+    const base = (user?.email || user?._id || user?.id || 'admin').replace(/[^a-zA-Z0-9_]/g, '_')
+    adminIdRef.current = `${base}_tab_${Math.random().toString(36).substring(2, 9)}_${Date.now().toString(36)}`
+  }
   const heartbeatTimerRef = useRef(null)
 
   // ── Violations polling ──────────────────────────────────────────────────────
@@ -222,11 +227,14 @@ export default function LiveMonitorStreamModal({ isOpen, onClose, session }) {
       return
     }
 
+    const base = (user?.email || user?._id || user?.id || 'admin').replace(/[^a-zA-Z0-9_]/g, '_')
+    adminIdRef.current = `${base}_tab_${Math.random().toString(36).substring(2, 9)}_${Date.now().toString(36)}`
+
     const wsUrl =
       API_BASE_URL.replace(/^https/, 'wss').replace(/^http/, 'ws') +
       `/ws/webrtc/admin/${sessionId}?token=${token}&admin_id=${encodeURIComponent(adminIdRef.current)}`
 
-    console.log('[AdminWebRTC] Connecting to:', wsUrl)
+    console.log('[AdminWebRTC] Connecting with admin_id:', adminIdRef.current)
     setStatus('connecting')
 
     const ws = new WebSocket(wsUrl)
@@ -271,12 +279,20 @@ export default function LiveMonitorStreamModal({ isOpen, onClose, session }) {
           if (mountedRef.current) setTelemetry(msg.data)
 
         } else if (msg.type === 'webrtc_answer') {
+          // Strictly ignore SDP answers meant for other admin instances / tabs
+          if (msg.target_admin_id && msg.target_admin_id !== adminIdRef.current) {
+            return
+          }
           if (mountedRef.current) setStatus('negotiating')
           if (pcRef.current && pcRef.current.signalingState !== 'stable') {
             await pcRef.current.setRemoteDescription(new RTCSessionDescription(msg.sdp))
           }
 
         } else if (msg.type === 'webrtc_ice_candidate') {
+          // Strictly ignore ICE candidates meant for other admin instances / tabs
+          if (msg.target_admin_id && msg.target_admin_id !== adminIdRef.current) {
+            return
+          }
           if (pcRef.current && pcRef.current.remoteDescription) {
             await pcRef.current.addIceCandidate(new RTCIceCandidate(msg.candidate))
           }

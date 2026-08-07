@@ -100,11 +100,12 @@ class RedisConnectionManager:
                             elif role == "admins":
                                 target_admin = data.get("target_admin_id")
                                 admins_map = local_group.get("admins_map", {})
-                                if target_admin and target_admin in admins_map:
-                                    try:
-                                        await admins_map[target_admin].send_json(data)
-                                    except Exception as e:
-                                        logger.error(f"Error sending to local admin {target_admin}: {e}")
+                                if target_admin:
+                                    if target_admin in admins_map:
+                                        try:
+                                            await admins_map[target_admin].send_json(data)
+                                        except Exception as e:
+                                            logger.error(f"Error sending to local admin {target_admin}: {e}")
                                 else:
                                     for admin_ws in list(local_group["admins"]):
                                         try:
@@ -313,13 +314,6 @@ class RedisConnectionManager:
             admins_map = local_group.get("admins_map", {})
             admin_ws = admins_map.get(admin_id)
             if admin_ws:
-                try:
-                    await admin_ws.send_json(message)
-                    return
-                except Exception:
-                    pass
-            # Fallback to all admins if specific admin not found in local map
-            for admin_ws in list(local_group["admins"]):
                 try:
                     await admin_ws.send_json(message)
                 except Exception:

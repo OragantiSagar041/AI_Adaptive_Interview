@@ -19,6 +19,7 @@ from typing import Any, Dict, List, Optional, Union
 import bcrypt, jwt, requests
 import cloudinary, cloudinary.uploader, cloudinary.api, cloudinary.utils
 import edge_tts
+# pyrefly: ignore [missing-import]
 import pypdf
 from bson import ObjectId
 from bson.errors import InvalidId
@@ -655,13 +656,14 @@ async def webrtc_endpoint(websocket: WebSocket, role: str, link_id: str, token: 
         try:
             auth_context = _decode_dashboard_websocket_admin(token)
             _get_authorized_live_session(link_id, auth_context)
-            # Use client-provided admin_id or derive from auth context / socket
-            admin_id = (
-                websocket.query_params.get("admin_id")
-                or auth_context.get("email")
-                or auth_context.get("user_id")
-                or f"admin_{id(websocket)}"
-            )
+            # Use client-provided unique admin_id or generate unique instance identifier
+            client_admin_id = websocket.query_params.get("admin_id")
+            if client_admin_id and client_admin_id != "undefined":
+                admin_id = client_admin_id
+            else:
+                base = auth_context.get("email") or auth_context.get("user_id") or "admin"
+                admin_id = f"{base}_{uuid.uuid4().hex[:8]}"
+
             await manager.connect_admin(websocket, link_id, admin_id=admin_id)
             with open(webrtc_log_path, "a") as f:
                 f.write(f"Admin ({admin_id}) connected successfully.\n")
@@ -754,15 +756,23 @@ async def webrtc_endpoint(websocket: WebSocket, role: str, link_id: str, token: 
         webrtc_log_path = os.path.join(tempfile.gettempdir(), "webrtc_debug.log")
         with open(webrtc_log_path, "a") as f:
             f.write(f"WebSocketDisconnect for role {role}, link_id {link_id}\n")
-        if role == "candidate":
-            manager.disconnect_candidate(link_id)
-            await manager.send_to_admins(link_id, {"type": "candidate_disconnected"})
-        elif role == "admin":
-            manager.disconnect_admin(websocket, link_id, admin_id=admin_id)
     except Exception as e:
         webrtc_log_path = os.path.join(tempfile.gettempdir(), "webrtc_debug.log")
         with open(webrtc_log_path, "a") as f:
             f.write(f"Exception in while loop: {str(e)}\n{traceback.format_exc()}\n")
+    finally:
+        if role == "candidate":
+            manager.disconnect_candidate(link_id)
+            try:
+                await manager.send_to_admins(link_id, {"type": "candidate_disconnected"})
+            except Exception:
+                pass
+        elif role == "admin":
+            manager.disconnect_admin(websocket, link_id, admin_id=admin_id)
+            try:
+                await manager.send_to_candidate(link_id, {"type": "admin_disconnected", "admin_id": admin_id})
+            except Exception:
+                pass
 
 
 
