@@ -23,7 +23,6 @@ import {
 } from 'lucide-react'
 import logoImage from '../../assets/logo.png'
 import AdminCopilot from './copilot/AdminCopilot'
-import ThemeToggle from '../ThemeToggle'
 import { getNotifications, markNotificationAsRead, markAllNotificationsAsRead } from '../../utils/api'
 import { setLiveResultsModalOpen } from '../../store/slices/interviewSlice'
 import { updateAdminUser } from '../../store/slices/authSlice'
@@ -85,6 +84,12 @@ export default function AdminLayout({
       console.error(err)
     }
   }
+
+  // Enforce Light Theme for Admin
+  useEffect(() => {
+    document.documentElement.setAttribute('data-theme', 'light')
+    document.documentElement.classList.remove('dark')
+  }, [])
 
   useEffect(() => {
     if (token) {
@@ -359,17 +364,16 @@ export default function AdminLayout({
             </div>
           </div>
 
-          {/* Right Side: Notifications, Theme Toggle & User Profile */}
+          {/* Right Side: Notifications & User Profile */}
           <div className="flex items-center gap-6">
-            <ThemeToggle className="bg-card border-border text-muted-foreground hover:text-foreground hover:bg-muted shadow-sm" />
             {/* Notification Bell */}
             <div ref={notifRef} className="relative">
               <button
                 onClick={() => setNotifDropdownOpen(!notifDropdownOpen)}
-                className="relative p-2 text-muted-foreground hover:text-foreground bg-card border border-border hover:bg-muted rounded-full transition-all cursor-pointer flex items-center justify-center shadow-sm"
+                className="relative p-2.5 text-slate-600 hover:text-slate-900 bg-white hover:bg-slate-50 border border-slate-200 rounded-full transition-all cursor-pointer flex items-center justify-center shadow-xs"
                 title="Notifications"
               >
-                <Bell size={18} />
+                <Bell size={18} className="text-slate-600" />
                 {unreadCount > 0 && (
                   <span className="absolute -top-1 -right-1 bg-sky-500 text-white font-extrabold text-[9px] min-w-[18px] h-[18px] px-1 rounded-full flex items-center justify-center shadow-sm border-2 border-white">
                     {unreadCount}
@@ -402,9 +406,7 @@ export default function AdminLayout({
                           onClick={() => {
                             if (!n.read) handleMarkRead(n.id)
                             setNotifDropdownOpen(false)
-                            if (n.type === 'candidate') navigate('/admin/dashboard')
-                            else if (n.type === 'credits') navigate('/admin/profile-settings')
-                            else navigate('/admin/dashboard')
+                            navigate('/admin/notifications')
                           }}
                           className={`p-3 text-left hover:bg-muted cursor-pointer transition-colors flex gap-2.5 items-start ${!n.read ? 'bg-primary/10' : ''}`}
                         >

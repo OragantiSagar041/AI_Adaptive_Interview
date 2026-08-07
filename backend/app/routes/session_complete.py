@@ -667,6 +667,11 @@ async def webrtc_endpoint(websocket: WebSocket, role: str, link_id: str, token: 
             await manager.connect_admin(websocket, link_id, admin_id=admin_id)
             with open(webrtc_log_path, "a") as f:
                 f.write(f"Admin ({admin_id}) connected successfully.\n")
+            # Also notify candidate that a new admin connected
+            try:
+                await manager.send_to_candidate(link_id, {"type": "admin_connected", "admin_id": admin_id})
+            except Exception:
+                pass
         except HTTPException as e:
             with open(webrtc_log_path, "a") as f:
                 f.write(f"Admin authorization error: {e.detail}\n")

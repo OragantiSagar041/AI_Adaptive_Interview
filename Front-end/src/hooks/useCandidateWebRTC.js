@@ -15,16 +15,27 @@ import { getIceServers } from '../utils/webrtcConfig'
  */
 export default function useCandidateWebRTC(linkId, mediaStreamRef, telemetryData, monitoringToken, secondaryMediaStreamRef = null) {
   const wsRef = useRef(null)
-  const pcsRef = useRef({})                 // adminId → RTCPeerConnection
+  const pcsRef = useRef({})                         // adminId → RTCPeerConnection
+  const pendingIceCandidatesRef = useRef({})        // adminId → Array of RTCIceCandidateInit
   const latestTelemetryRef = useRef(telemetryData)
   const reconnectTimerRef = useRef(null)
-  const reconnectDelayRef = useRef(2000)    // starts at 2 s, doubles up to 30 s
-  const destroyedRef = useRef(false)        // set true on hook unmount → stop reconnecting
+  const reconnectDelayRef = useRef(2000)            // starts at 2 s, doubles up to 30 s
+  const destroyedRef = useRef(false)                // set true on hook unmount → stop reconnecting
   const heartbeatTimerRef = useRef(null)
 
   useEffect(() => {
     latestTelemetryRef.current = telemetryData
   }, [telemetryData])
+
+  // Broadcast streams update when screen stream changes so all watching admins renegotiate
+  useEffect(() => {
+    if (wsRef.current && wsRef.current.readyState === WebSocket.OPEN && secondaryMediaStreamRef?.current) {
+      console.log('[CandidateWebRTC] Screen stream active/updated — notifying watching admins')
+      try {
+        wsRef.current.send(JSON.stringify({ type: 'candidate_connected' }))
+      } catch (_) {}
+    }
+  }, [secondaryMediaStreamRef?.current])
 
   // ─── WebSocket factory with auto-reconnect ──────────────────────────────────
   useEffect(() => {
@@ -74,6 +85,7 @@ export default function useCandidateWebRTC(linkId, mediaStreamRef, telemetryData
           try { pc.close() } catch (_) {}
         })
         pcsRef.current = {}
+        pendingIceCandidatesRef.current = {}
 
         if (!destroyedRef.current) {
           const delay = reconnectDelayRef.current
@@ -90,13 +102,24 @@ export default function useCandidateWebRTC(linkId, mediaStreamRef, telemetryData
 
           if (msg.type === 'pong' || msg.type === 'ping') return  // heartbeat reply — ignore
 
+          if (msg.type === 'admin_connected') {
+            console.log(`[CandidateWebRTC] Admin connected: ${adminId}`)
+            return
+          }
+
           if (msg.type === 'webrtc_offer') {
             console.log(`[CandidateWebRTC] Received offer from admin: ${adminId}`)
 
-            const streams = [mediaStreamRef.current, secondaryMediaStreamRef?.current].filter(Boolean)
-            const tracks = streams.flatMap(stream => stream.getTracks())
-            if (tracks.length === 0) {
-              console.warn('[CandidateWebRTC] No media stream yet — cannot answer offer.')
+            const cameraStream = mediaStreamRef.current
+            const screenStream = secondaryMediaStreamRef?.current
+
+            const cameraVideoTrack = cameraStream?.getVideoTracks()?.find(t => t.readyState === 'live')
+            const screenVideoTrack = screenStream?.getVideoTracks()?.find(t => t.readyState === 'live')
+            const audioTrack = (screenStream?.getAudioTracks()?.find(t => t.readyState === 'live')) ||
+                               (cameraStream?.getAudioTracks()?.find(t => t.readyState === 'live'))
+
+            if (!cameraVideoTrack && !screenVideoTrack) {
+              console.warn('[CandidateWebRTC] No live video tracks available — cannot answer offer yet.')
               return
             }
 
@@ -110,11 +133,22 @@ export default function useCandidateWebRTC(linkId, mediaStreamRef, telemetryData
             })
             pcsRef.current[adminId] = pc
 
-            // Add all live tracks to the peer connection
-            tracks.forEach(track => {
-              console.log(`[CandidateWebRTC] Adding track: ${track.kind}`)
-              pc.addTrack(track, streams.find(stream => stream.getTracks().includes(track)) || streams[0])
-            })
+            // Deterministic track mapping:
+            // Transceiver 0 (video) -> Camera
+            // Transceiver 1 (video) -> Screen
+            // Transceiver 2 (audio) -> Mic / Mixed audio
+            if (cameraVideoTrack) {
+              console.log('[CandidateWebRTC] Adding camera track to PC')
+              pc.addTrack(cameraVideoTrack, cameraStream || new MediaStream([cameraVideoTrack]))
+            }
+            if (screenVideoTrack) {
+              console.log('[CandidateWebRTC] Adding screen track to PC')
+              pc.addTrack(screenVideoTrack, screenStream || new MediaStream([screenVideoTrack]))
+            }
+            if (audioTrack) {
+              console.log('[CandidateWebRTC] Adding audio track to PC')
+              pc.addTrack(audioTrack, new MediaStream([audioTrack]))
+            }
 
             pc.onicecandidate = (e) => {
               if (e.candidate && ws.readyState === WebSocket.OPEN) {
@@ -131,6 +165,18 @@ export default function useCandidateWebRTC(linkId, mediaStreamRef, telemetryData
             }
 
             await pc.setRemoteDescription(new RTCSessionDescription(msg.sdp))
+
+            // Flush any ICE candidates queued before remoteDescription was set
+            const queued = pendingIceCandidatesRef.current[adminId] || []
+            delete pendingIceCandidatesRef.current[adminId]
+            for (const cand of queued) {
+              try {
+                await pc.addIceCandidate(new RTCIceCandidate(cand))
+              } catch (iceErr) {
+                console.warn('[CandidateWebRTC] Error adding queued ICE candidate:', iceErr)
+              }
+            }
+
             const answer = await pc.createAnswer()
             await pc.setLocalDescription(answer)
 
@@ -143,15 +189,27 @@ export default function useCandidateWebRTC(linkId, mediaStreamRef, telemetryData
 
           } else if (msg.type === 'webrtc_ice_candidate') {
             const pc = pcsRef.current[adminId]
-            if (pc && pc.remoteDescription) {
-              await pc.addIceCandidate(new RTCIceCandidate(msg.candidate))
+            if (pc && pc.remoteDescription && pc.remoteDescription.type) {
+              try {
+                await pc.addIceCandidate(new RTCIceCandidate(msg.candidate))
+              } catch (iceErr) {
+                console.warn('[CandidateWebRTC] addIceCandidate error:', iceErr)
+              }
+            } else {
+              // Queue candidate until remoteDescription is ready
+              if (!pendingIceCandidatesRef.current[adminId]) {
+                pendingIceCandidatesRef.current[adminId] = []
+              }
+              pendingIceCandidatesRef.current[adminId].push(msg.candidate)
             }
+
           } else if (msg.type === 'admin_disconnected') {
             const disconnectedAdminId = msg.admin_id
             if (disconnectedAdminId && pcsRef.current[disconnectedAdminId]) {
               console.log(`[CandidateWebRTC] Admin disconnected: ${disconnectedAdminId}, closing PC`)
               try { pcsRef.current[disconnectedAdminId].close() } catch (_) {}
               delete pcsRef.current[disconnectedAdminId]
+              delete pendingIceCandidatesRef.current[disconnectedAdminId]
             }
           }
         } catch (err) {
@@ -184,6 +242,7 @@ export default function useCandidateWebRTC(linkId, mediaStreamRef, telemetryData
       Object.values(pcsRef.current).forEach(pc => {
         try { pc.close() } catch (_) {}
       })
+      pendingIceCandidatesRef.current = {}
     }
   }, [linkId, mediaStreamRef, monitoringToken, secondaryMediaStreamRef])
 

@@ -101,6 +101,11 @@ const FAQ_SCHEMA = {
 };
 
 export default function LandingPage() {
+  useEffect(() => {
+    document.documentElement.setAttribute('data-theme', 'dark');
+    document.documentElement.classList.add('dark');
+  }, []);
+
   useSEO({
     title: "HireIQ — #1 AI Interview Platform & AI Recruitment Software India",
     description: "HireIQ is India's leading AI interview platform & AI recruitment software. Features AI mock interviews, automated HR screening tool, AI calling agent for recruitment, and bulk hiring software.",
@@ -999,7 +1004,7 @@ function ConnectWithUs() {
   return (
     <section id="about" className="py-24 relative overflow-hidden">
       <div className="mx-auto max-w-7xl px-6">
-        <div className="grid lg:grid-cols-2 gap-16 lg:gap-8 bg-gradient-to-br from-zinc-800/90 to-zinc-900/90 backdrop-blur-2xl border border-white/10 rounded-3xl p-8 lg:p-12 shadow-[0_8px_30px_rgb(0,0,0,0.5)]">
+        <div className="grid lg:grid-cols-2 gap-16 lg:gap-8 bg-card border border-border backdrop-blur-2xl rounded-3xl p-8 lg:p-12 shadow-xl">
           {/* Left Side */}
           <div>
             <SectionEyebrow>Connect</SectionEyebrow>
@@ -1179,26 +1184,26 @@ function PricingSection() {
               const isPopular = plan.plan_name?.toLowerCase() === "basic" || plan.plan_name?.toLowerCase() === "pro";
               return (
                 <div key={plan.id} className="relative group">
-                  <div className={`h-full bg-zinc-800/80 backdrop-blur-xl border ${isPopular ? "border-primary/50 shadow-[0_0_30px_rgba(124,58,237,0.3)]" : "border-white/10 shadow-[0_8px_30px_rgb(0,0,0,0.5)]"} rounded-3xl p-8 flex flex-col hover:border-primary/50 transition-colors duration-300`}>
+                  <div className={`h-full bg-card text-card-foreground backdrop-blur-xl border ${isPopular ? "border-primary/60 shadow-[0_0_35px_rgba(124,58,237,0.18)] ring-2 ring-primary/40" : "border-border shadow-lg"} rounded-3xl p-8 flex flex-col hover:border-primary/50 transition-all duration-300`}>
                     {isPopular && (
-                      <div className="absolute -top-4 left-1/2 -translate-x-1/2 px-4 py-1 bg-gradient-to-r from-primary to-purple-500 rounded-full text-xs font-bold uppercase tracking-widest shadow-lg">
+                      <div className="absolute -top-4 left-1/2 -translate-x-1/2 px-4 py-1 bg-gradient-to-r from-primary to-purple-600 text-white rounded-full text-xs font-bold uppercase tracking-widest shadow-lg">
                         Most Popular
                       </div>
                     )}
-                    <h3 className="text-2xl font-bold">{plan.plan_name}</h3>
+                    <h3 className="text-2xl font-bold text-foreground">{plan.plan_name}</h3>
                     <p className="text-muted-foreground mt-2 text-sm h-10">{plan.summary || "All the essential features you need to get started."}</p>
 
                     <div className="mt-6 mb-8 flex items-baseline gap-1">
-                      <span className="text-4xl font-extrabold">₹{plan.price || 0}</span>
-                      <span className="text-muted-foreground">/mo</span>
+                      <span className="text-4xl font-extrabold text-foreground">₹{plan.price || 0}</span>
+                      <span className="text-muted-foreground font-medium">/mo</span>
                     </div>
 
                     <div className="mb-8 flex-1">
-                      <p className="text-sm font-semibold text-primary mb-4 border-b border-white/10 pb-4">Includes {plan.credits || 0} AI interview credits</p>
+                      <p className="text-sm font-semibold text-primary mb-4 border-b border-border pb-4">Includes {plan.credits || 0} AI interview credits</p>
                       <ul className="space-y-3">
                         {(plan.features && plan.features.length > 0 ? plan.features : ["AI Resume Screening", "Automated Voice Calls", "Comprehensive Evaluation Reports"]).map((feature, idx) => (
-                          <li key={idx} className="flex items-start gap-3 text-sm text-muted-foreground">
-                            <Check className="w-5 h-5 text-emerald-400 shrink-0" />
+                          <li key={idx} className="flex items-start gap-3 text-sm text-foreground/80">
+                            <Check className="w-5 h-5 text-emerald-500 shrink-0 mt-0.5" />
                             <span>{feature}</span>
                           </li>
                         ))}
@@ -1206,7 +1211,7 @@ function PricingSection() {
                     </div>
 
                     <div className="mt-auto pt-6">
-                      <Link to="/register" className={`flex items-center justify-center w-full py-3 rounded-full transition font-medium ${isPopular ? "bg-gradient-to-r from-primary to-purple-600 hover:opacity-90 shadow-lg" : "bg-white/5 hover:bg-white/10 border border-white/10"}`}>
+                      <Link to="/register" className={`flex items-center justify-center w-full py-3 rounded-full transition font-semibold text-sm ${isPopular ? "bg-gradient-to-r from-primary to-purple-600 text-white hover:opacity-95 shadow-lg shadow-primary/25" : "bg-primary/10 text-primary hover:bg-primary/20 border border-primary/20"}`}>
                         Get Started
                       </Link>
                     </div>
@@ -1383,24 +1388,24 @@ function DemoModal() {
 
   return (
     <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 sm:p-6 backdrop-blur-md bg-black/60 animate-in fade-in duration-300">
-      <div className="bg-zinc-900/90 w-full max-w-lg rounded-3xl border border-white/10 p-8 shadow-2xl relative animate-in zoom-in-95 duration-300">
+      <div className="bg-card text-card-foreground w-full max-w-lg rounded-3xl border border-border p-8 shadow-2xl relative animate-in zoom-in-95 duration-300">
         <button
           onClick={() => setIsOpen(false)}
-          className="absolute top-4 right-4 p-2 rounded-full hover:bg-white/10 text-muted-foreground hover:text-white transition"
+          className="absolute top-4 right-4 p-2 rounded-full hover:bg-muted text-muted-foreground hover:text-foreground transition"
         >
           <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M6 18L18 6M6 6l12 12"></path></svg>
         </button>
 
         {submitted ? (
           <div className="text-center py-10">
-            <div className="w-16 h-16 bg-emerald-500/20 text-emerald-400 rounded-full flex items-center justify-center mx-auto mb-6">
+            <div className="w-16 h-16 bg-emerald-500/20 text-emerald-500 rounded-full flex items-center justify-center mx-auto mb-6">
               <Check className="w-8 h-8" />
             </div>
-            <h3 className="text-2xl font-bold text-white mb-2">Request Received!</h3>
+            <h3 className="text-2xl font-bold text-foreground mb-2">Request Received!</h3>
             <p className="text-muted-foreground">Thank you for your interest. Our team will reach out to schedule your personalized demo shortly.</p>
             <button
               onClick={() => setIsOpen(false)}
-              className="mt-8 px-6 py-3 rounded-full glass font-semibold hover:bg-white/10 transition w-full"
+              className="mt-8 px-6 py-3 rounded-full bg-secondary text-secondary-foreground hover:bg-secondary/80 border border-border font-semibold transition w-full"
             >
               Close
             </button>
@@ -1408,40 +1413,40 @@ function DemoModal() {
         ) : (
           <>
             <SectionEyebrow center={false}>Book Demo</SectionEyebrow>
-            <h3 className="text-3xl font-extrabold text-white mt-4 mb-2">See HireIQ in Action</h3>
+            <h3 className="text-3xl font-extrabold text-foreground mt-4 mb-2">See HireIQ in Action</h3>
             <p className="text-muted-foreground mb-8">Fill out the form below and we'll be in touch to schedule a personalized walkthrough.</p>
 
             <form className="space-y-4" onSubmit={handleSubmit}>
               <div className="grid grid-cols-2 gap-4">
                 <div className="space-y-1.5 text-left">
                   <label className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">First Name</label>
-                  <input required name="first_name" value={formData.first_name} onChange={handleChange} type="text" className="w-full bg-black/40 border border-white/10 rounded-xl px-4 py-3 text-white placeholder-muted-foreground/50 focus:outline-none focus:border-primary/50 focus:ring-1 focus:ring-primary/50 transition" placeholder="John" />
+                  <input required name="first_name" value={formData.first_name} onChange={handleChange} type="text" className="w-full bg-muted/50 border border-border rounded-xl px-4 py-3 text-foreground placeholder:text-muted-foreground/50 focus:outline-none focus:border-primary focus:ring-1 focus:ring-primary transition" placeholder="John" />
                 </div>
                 <div className="space-y-1.5 text-left">
                   <label className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">Last Name</label>
-                  <input required name="last_name" value={formData.last_name} onChange={handleChange} type="text" className="w-full bg-black/40 border border-white/10 rounded-xl px-4 py-3 text-white placeholder-muted-foreground/50 focus:outline-none focus:border-primary/50 focus:ring-1 focus:ring-primary/50 transition" placeholder="Doe" />
+                  <input required name="last_name" value={formData.last_name} onChange={handleChange} type="text" className="w-full bg-muted/50 border border-border rounded-xl px-4 py-3 text-foreground placeholder:text-muted-foreground/50 focus:outline-none focus:border-primary focus:ring-1 focus:ring-primary transition" placeholder="Doe" />
                 </div>
               </div>
 
               <div className="grid grid-cols-2 gap-4">
                 <div className="space-y-1.5 text-left">
                   <label className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">Work Email</label>
-                  <input required name="work_email" value={formData.work_email} onChange={handleChange} type="email" className="w-full bg-black/40 border border-white/10 rounded-xl px-4 py-3 text-white placeholder-muted-foreground/50 focus:outline-none focus:border-primary/50 focus:ring-1 focus:ring-primary/50 transition" placeholder="john@company.com" />
+                  <input required name="work_email" value={formData.work_email} onChange={handleChange} type="email" className="w-full bg-muted/50 border border-border rounded-xl px-4 py-3 text-foreground placeholder:text-muted-foreground/50 focus:outline-none focus:border-primary focus:ring-1 focus:ring-primary transition" placeholder="john@company.com" />
                 </div>
                 <div className="space-y-1.5 text-left">
                   <label className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">Mobile Number</label>
-                  <input required name="mobile_number" value={formData.mobile_number} onChange={handleChange} type="tel" className="w-full bg-black/40 border border-white/10 rounded-xl px-4 py-3 text-white placeholder-muted-foreground/50 focus:outline-none focus:border-primary/50 focus:ring-1 focus:ring-primary/50 transition" placeholder="+1 (555) 000-0000" />
+                  <input required name="mobile_number" value={formData.mobile_number} onChange={handleChange} type="tel" className="w-full bg-muted/50 border border-border rounded-xl px-4 py-3 text-foreground placeholder:text-muted-foreground/50 focus:outline-none focus:border-primary focus:ring-1 focus:ring-primary transition" placeholder="+1 (555) 000-0000" />
                 </div>
               </div>
 
               <div className="space-y-1.5 text-left">
                 <label className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">Company Name</label>
-                <input required name="company_name" value={formData.company_name} onChange={handleChange} type="text" className="w-full bg-black/40 border border-white/10 rounded-xl px-4 py-3 text-white placeholder-muted-foreground/50 focus:outline-none focus:border-primary/50 focus:ring-1 focus:ring-primary/50 transition" placeholder="Acme Corp" />
+                <input required name="company_name" value={formData.company_name} onChange={handleChange} type="text" className="w-full bg-muted/50 border border-border rounded-xl px-4 py-3 text-foreground placeholder:text-muted-foreground/50 focus:outline-none focus:border-primary focus:ring-1 focus:ring-primary transition" placeholder="Acme Corp" />
               </div>
 
               <div className="space-y-1.5 text-left">
                 <label className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">How can we help?</label>
-                <textarea required name="help_text" value={formData.help_text} onChange={handleChange} rows="3" className="w-full bg-black/40 border border-white/10 rounded-xl px-4 py-3 text-white placeholder-muted-foreground/50 focus:outline-none focus:border-primary/50 focus:ring-1 focus:ring-primary/50 transition resize-none" placeholder="Tell us about your hiring needs..."></textarea>
+                <textarea required name="help_text" value={formData.help_text} onChange={handleChange} rows="3" className="w-full bg-muted/50 border border-border rounded-xl px-4 py-3 text-foreground placeholder:text-muted-foreground/50 focus:outline-none focus:border-primary focus:ring-1 focus:ring-primary transition resize-none" placeholder="Tell us about your hiring needs..."></textarea>
               </div>
 
               <button

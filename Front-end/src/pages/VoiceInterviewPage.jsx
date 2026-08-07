@@ -177,6 +177,12 @@ export default function VoiceInterviewPage() {
     ? _savedRound
     : 'pre_checks'
 
+  // Enforce Light Theme for Voice Interview
+  useEffect(() => {
+    document.documentElement.setAttribute('data-theme', 'light')
+    document.documentElement.classList.remove('dark')
+  }, [])
+
   // Session
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState(null)
@@ -385,7 +391,8 @@ export default function VoiceInterviewPage() {
 
     function connectWs() {
       if (!monitoringToken) return
-      const wsUrl = API_BASE_URL.replace('http', 'ws') + `/ws/interview/${linkId}?token=${encodeURIComponent(monitoringToken)}`
+      const wsBase = API_BASE_URL.replace(/^http/, 'ws')
+      const wsUrl = `${wsBase}/ws/interview/${linkId}?token=${encodeURIComponent(monitoringToken)}`
       const ws = new WebSocket(wsUrl)
 
       ws.onmessage = (event) => {
@@ -407,9 +414,11 @@ export default function VoiceInterviewPage() {
       }
 
       ws.onclose = (evt) => {
-        // Don't reconnect if interview is done/submitting/waiting, or intentional close (code 1000)
-        const round = roundRef.current
-        if (round === 'done' || round === 'submitting' || round === 'waiting' || evt.code === 1000) return
+        // Don't reconnect or alert if interview is in pre_checks, intro, done, submitting, waiting, or intentional close (code 1000)
+        const currentRound = roundRef.current
+        if (['done', 'submitting', 'waiting', 'pre_checks', 'intro', 'voice_clone_setup'].includes(currentRound) || evt.code === 1000) {
+          return
+        }
 
         const attempt = wsReconnectAttemptsRef.current
         if (attempt < MAX_WS_RETRIES) {
@@ -831,30 +840,46 @@ export default function VoiceInterviewPage() {
   }, [])
 
   const startScreenRecording = useCallback(async () => {
-    if (!sessionDetailRef.current?.record_video) return true
-
     try {
       // Force fullscreen mode
-      if (document.documentElement.requestFullscreen) {
+      if (document.documentElement.requestFullscreen && !document.fullscreenElement) {
         await document.documentElement.requestFullscreen().catch(() => { })
       }
 
-      // 1. Get Screen Stream
-      const screenStream = await navigator.mediaDevices.getDisplayMedia({
-        video: { displaySurface: 'monitor', frameRate: 15, width: { ideal: 1280 }, height: { ideal: 720 } },
-        audio: true
-      })
+      // 1. Get Screen Stream - Always prompt candidate to share their screen
+      let screenStream
+      try {
+        screenStream = await navigator.mediaDevices.getDisplayMedia({
+          video: { displaySurface: 'monitor', frameRate: 15, width: { ideal: 1280 }, height: { ideal: 720 } },
+          audio: true
+        })
+      } catch (err) {
+        // Fallback for browsers with strict getDisplayMedia constraints
+        screenStream = await navigator.mediaDevices.getDisplayMedia({
+          video: true,
+          audio: false
+        })
+      }
 
       // Re-request fullscreen after the picker closes, as browsers typically exit fullscreen to show the dialog
       if (document.documentElement.requestFullscreen && !document.fullscreenElement) {
         await document.documentElement.requestFullscreen().catch(() => { })
       }
 
-      const videoTrack = screenStream.getVideoTracks()[0];
-      const settings = videoTrack.getSettings();
+      const videoTrack = screenStream?.getVideoTracks()?.[0]
+      if (!videoTrack) {
+        throw new Error("Screen sharing is required to proceed.")
+      }
+
+      const settings = videoTrack.getSettings ? videoTrack.getSettings() : {}
       if (settings.displaySurface && settings.displaySurface !== 'monitor') {
-        screenStream.getTracks().forEach(t => t.stop());
-        throw new Error("Please select 'Entire Screen' when sharing. Window or Tab sharing is not allowed.");
+        screenStream.getTracks().forEach(t => t.stop())
+        throw new Error("Please select 'Entire Screen' when sharing. Window or Tab sharing is not allowed.")
+      }
+
+      // Detect if user stops screen sharing during the interview
+      videoTrack.onended = () => {
+        logProctoringAlert('screenshare_stopped', 'Candidate stopped screen sharing')
       }
 
       // 2. Get Camera & Mic Stream

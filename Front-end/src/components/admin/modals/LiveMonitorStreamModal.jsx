@@ -48,14 +48,16 @@ const buildRemoteViewStream = (stream, mode) => {
   if (!stream) return null
   const videoTracks = [...stream.getVideoTracks()]
   const audioTracks = [...stream.getAudioTracks()]
+  if (videoTracks.length === 0) return stream
+
   let selectedVideoTrack = null
 
   if (mode === 'camera') {
-    selectedVideoTrack = videoTracks.find(track => getTrackType(track) === 'camera') || videoTracks[0] || videoTracks[1]
+    selectedVideoTrack = videoTracks.find(track => getTrackType(track) === 'camera') || videoTracks[0]
   } else {
-    // Candidate publishers add camera first and screen second. Browser track
-    // labels are inconsistent across devices, so preserve that order fallback.
-    selectedVideoTrack = videoTracks.find(track => getTrackType(track) === 'screen') || videoTracks[1] || videoTracks[0]
+    // Candidate publishers add camera to transceiver 0 and screen to transceiver 1.
+    // If track labels are obfuscated by the browser, fallback to the expected transceiver index order.
+    selectedVideoTrack = videoTracks.find(track => getTrackType(track) === 'screen') || (videoTracks.length > 1 ? videoTracks[1] : videoTracks[0])
   }
 
   if (!selectedVideoTrack) {
@@ -78,6 +80,7 @@ export default function LiveMonitorStreamModal({ isOpen, onClose, session }) {
   const videoRef = useRef(null)
   const wsRef = useRef(null)
   const pcRef = useRef(null)
+  const pendingIceCandidatesRef = useRef([])
   const streamTimeoutRef = useRef(null)  // fire if no video track arrives in time
   const mountedRef = useRef(false)
   // Keep a ref to the latest status so the setTimeout inside sendOffer always
@@ -171,6 +174,7 @@ export default function LiveMonitorStreamModal({ isOpen, onClose, session }) {
   const sendOffer = useCallback(async (ws) => {
     // Tear down any existing peer connection
     clearTimeout(streamTimeoutRef.current)
+    pendingIceCandidatesRef.current = []
     if (pcRef.current) {
       pcRef.current.close()
       pcRef.current = null
@@ -194,21 +198,15 @@ export default function LiveMonitorStreamModal({ isOpen, onClose, session }) {
       }
 
       pc.ontrack = (e) => {
-        // Camera and screen are published from separate MediaStreams. Using
-        // e.streams[0] would keep only the first stream and hide the other one.
+        console.log(`[AdminWebRTC] Remote track received: ${e.track.kind}`)
+        // Listen for track unmuting, which fires when media packets begin flowing
+        e.track.onunmute = () => {
+          console.log(`[AdminWebRTC] Remote track unmuted: ${e.track.kind}`)
+          updateRemoteStreamFromReceivers()
+        }
         updateRemoteStreamFromReceivers()
         clearTimeout(streamTimeoutRef.current)
         if (mountedRef.current) setStatus('streaming')
-      }
-
-      pc.onaddstream = (e) => {
-        if (e.stream) {
-          setRemoteStream(e.stream)
-          clearTimeout(streamTimeoutRef.current)
-          if (mountedRef.current) setStatus('streaming')
-        } else {
-          updateRemoteStreamFromReceivers()
-        }
       }
 
       pc.onconnectionstatechange = () => {
@@ -348,6 +346,14 @@ export default function LiveMonitorStreamModal({ isOpen, onClose, session }) {
           if (pcRef.current && pcRef.current.signalingState !== 'stable') {
             await pcRef.current.setRemoteDescription(new RTCSessionDescription(msg.sdp))
           }
+          
+          // Flush any pending ICE candidates received before the remote description was set
+          const queued = pendingIceCandidatesRef.current || []
+          pendingIceCandidatesRef.current = []
+          for (const cand of queued) {
+            try { await pcRef.current.addIceCandidate(new RTCIceCandidate(cand)) } catch (_) {}
+          }
+          
           // Try extracting tracks from receivers after applying remote description
           updateRemoteStreamFromReceivers()
 
@@ -356,8 +362,11 @@ export default function LiveMonitorStreamModal({ isOpen, onClose, session }) {
           if (msg.target_admin_id && msg.target_admin_id !== adminIdRef.current) {
             return
           }
-          if (pcRef.current && pcRef.current.remoteDescription) {
-            await pcRef.current.addIceCandidate(new RTCIceCandidate(msg.candidate))
+          if (pcRef.current && pcRef.current.remoteDescription && pcRef.current.remoteDescription.type) {
+            try { await pcRef.current.addIceCandidate(new RTCIceCandidate(msg.candidate)) } catch (_) {}
+          } else {
+            // Remote description not set yet, queue the candidate
+            pendingIceCandidatesRef.current.push(msg.candidate)
           }
 
         } else if (msg.type === 'candidate_disconnected') {

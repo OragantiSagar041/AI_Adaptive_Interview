@@ -21,13 +21,18 @@ import {
 import { logout, loadSuperAdminProfile } from '../../store/slices/authSlice'
 import { persistor } from '../../store/store'
 import AdminCopilot from '../admin/copilot/AdminCopilot'
-import ThemeToggle from '../ThemeToggle'
 import { getMasterNotifications, markNotificationAsRead, markAllNotificationsAsRead } from '../../utils/api'
 
 export default function MasterLayout() {
   const navigate = useNavigate()
   const dispatch = useDispatch()
   const location = useLocation()
+
+  // Enforce Light Theme for Master
+  useEffect(() => {
+    document.documentElement.setAttribute('data-theme', 'light')
+    document.documentElement.classList.remove('dark')
+  }, [])
 
   // Selectors
   const token = useSelector(state => state.auth.token)
@@ -49,7 +54,23 @@ export default function MasterLayout() {
   }, [])
 
   // Local theme states
-  const [accentName, setAccentName] = useState('indigo')
+  const [accentName, setAccentNameState] = useState(() => {
+    try {
+      return localStorage.getItem('theme_accent') || 'indigo'
+    } catch {
+      return 'indigo'
+    }
+  })
+
+  const setAccentName = (color) => {
+    setAccentNameState(color)
+    try {
+      localStorage.setItem('theme_accent', color)
+      window.dispatchEvent(new CustomEvent('accent_changed', { detail: color }))
+    } catch (e) {
+      console.error(e)
+    }
+  }
   const [themeOpen, setThemeOpen] = useState(false)
   const [dropdownOpen, setDropdownOpen] = useState(false)
   
@@ -292,7 +313,6 @@ teal: { primary: '#2dd4bf', hover: '#14b8a6', glow: 'rgba(45, 212, 191, 0.30)' }
 
           {/* Right Side: Toggles, Notifications & User Profile */}
           <div className="flex items-center gap-6">
-            <ThemeToggle className="bg-card border-border text-muted-foreground hover:text-foreground hover:bg-muted shadow-sm" />
             {/* Theme Toggle Dots */}
             <div className="flex items-center gap-1.5 bg-white rounded-full px-2 py-1 shadow-sm border border-slate-100 relative">
               {Object.keys(accentColors).map(color => (
@@ -363,10 +383,10 @@ teal: { primary: '#2dd4bf', hover: '#14b8a6', glow: 'rgba(45, 212, 191, 0.30)' }
             <div ref={notifRef} className="relative">
               <button
                 onClick={() => setNotifDropdownOpen(!notifDropdownOpen)}
-                className="relative p-2.5 text-slate-500 hover:text-slate-700 hover:bg-slate-50 bg-white rounded-xl shadow-sm border border-slate-100 transition-all cursor-pointer flex items-center justify-center"
+                className="relative p-2.5 text-slate-600 hover:text-slate-900 bg-white hover:bg-slate-50 border border-slate-200 rounded-full transition-all cursor-pointer flex items-center justify-center shadow-xs"
                 title="Notifications"
               >
-                <Bell size={18} />
+                <Bell size={18} className="text-slate-600" />
                 {unreadCount > 0 && (
                   <span className="absolute -top-1 -right-1 bg-sky-500 text-white font-extrabold text-[9px] min-w-[18px] h-[18px] px-1 rounded-full flex items-center justify-center shadow-sm border-2 border-white">
                     {unreadCount}
@@ -398,8 +418,7 @@ teal: { primary: '#2dd4bf', hover: '#14b8a6', glow: 'rgba(45, 212, 191, 0.30)' }
                           onClick={() => {
                             if (!n.read) handleMarkRead(n.id)
                             setNotifDropdownOpen(false)
-                            if (n.type === 'tenant_created' || n.type === 'payment') navigate('/master/subscribers')
-                            else navigate('/master/dashboard')
+                            navigate('/master/notifications')
                           }}
                           className={`p-3 text-left hover:bg-slate-50 cursor-pointer transition-colors flex gap-2.5 items-start ${!n.read ? 'bg-indigo-50/30' : ''}`}
                         >

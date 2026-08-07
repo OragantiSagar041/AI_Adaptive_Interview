@@ -34,6 +34,12 @@ export const useInterviewSession = (sessionId, interviewType, startRoundTwo) => 
   const audioMixerCtxRef = useRef(null)
   const audioMixerDestRef = useRef(null)
 
+  // Enforce Light Theme for Interview Sessions
+  useEffect(() => {
+    document.documentElement.setAttribute('data-theme', 'light')
+    document.documentElement.classList.remove('dark')
+  }, [])
+
   // WebRTC Global Cleanup
   useEffect(() => {
     return () => {

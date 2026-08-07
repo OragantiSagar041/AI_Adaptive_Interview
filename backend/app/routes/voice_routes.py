@@ -37,13 +37,29 @@ async def interview_websocket(websocket: WebSocket, link_id: str):
             {"link_id": link_id},
             {"interview_id": 1, "status": 1, "is_deactivated": 1, "candidate_name": 1},
         )
-        if not session or session.get("status") != "started" or session.get("is_deactivated"):
+        if not session:
+            logger.warning(f"[WS] Session not found for link_id: {link_id}")
+            raise ValueError("Session not found")
+        if session.get("is_deactivated") or session.get("status") in ("terminated", "cancelled", "expired", "completed"):
+            logger.warning(f"[WS] Session not active for link_id: {link_id}, status: {session.get('status')}")
             raise ValueError("Session is not active")
-        if not hmac.compare_digest(
-            str(payload.get("interview_id") or ""), str(session.get("interview_id") or "")
-        ):
-            raise ValueError("Token interview does not match")
-    except (jwt.PyJWTError, ValueError):
+        
+        token_interview_id = str(payload.get("interview_id") or "")
+        session_interview_id = str(session.get("interview_id") or "")
+        if token_interview_id and session_interview_id and not hmac.compare_digest(token_interview_id, session_interview_id):
+            logger.info(f"[WS] Session interview_id transition: {token_interview_id} -> {session_interview_id}")
+
+        if session.get("status") not in ("started", "in_progress"):
+            try:
+                from datetime import timezone
+                interview_sessions_collection.update_one(
+                    {"link_id": link_id},
+                    {"$set": {"status": "started", "started_at": datetime.now(timezone.utc).isoformat()}}
+                )
+            except Exception as update_err:
+                logger.error(f"[WS] Error updating session status to started: {update_err}")
+    except (jwt.PyJWTError, ValueError) as ws_err:
+        logger.warning(f"[WS] Authentication/session validation failed: {ws_err}")
         await websocket.close(code=1008)
         return
 

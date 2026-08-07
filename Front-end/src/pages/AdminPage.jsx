@@ -194,6 +194,7 @@ export default function AdminPage({ role: initialRole = 'admin' }) {
     setAccentNameState(color)
     try {
       localStorage.setItem('theme_accent', color)
+      window.dispatchEvent(new CustomEvent('accent_changed', { detail: color }))
     } catch (e) {
       console.error(e)
     }
