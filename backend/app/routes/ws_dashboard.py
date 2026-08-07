@@ -426,7 +426,7 @@ async def get_dashboard_aggregated_data(
         
         if has_live or current_admin.get("role") in ["master", "super_admin"]:
             query_filter = {
-                "status": "started",
+                "status": {"$in": ["started", "pending"]},
                 "$or": [{"is_deactivated": False}, {"is_deactivated": {"$exists": False}}]
             }
             if current_admin.get("role") != "master":
@@ -442,7 +442,7 @@ async def get_dashboard_aggregated_data(
                     {"link_id": 1, "candidate_name": 1, "candidate_email": 1, "created_at": 1, "interview_id": 1, "interview_title": 1, "started_at": 1, "interview_duration": 1, "status": 1},
                 ).sort("created_at", -1))
             )
-            rows = [row for row in rows if sync_session_status(row) == "started"]
+            rows = [row for row in rows if sync_session_status(row) in ("started", "pending")]
             
             ongoing_monitored_count = len(rows)
             snapshots = await _load_live_snapshots([row.get("link_id", "") for row in rows])
@@ -450,6 +450,7 @@ async def get_dashboard_aggregated_data(
                 link_id = row.get("link_id", "")
                 snap = snapshots.get(link_id, {})
                 online = False
+                age_secs = float('inf')
                 if snap.get("ts"):
                     try:
                         ts_dt = datetime.fromisoformat(snap["ts"].replace("Z", "+00:00"))
@@ -457,6 +458,28 @@ async def get_dashboard_aggregated_data(
                         online = age_secs < 60
                     except Exception:
                         pass
+                        
+                # GHOST FILTERING LOGIC — only hide truly abandoned sessions
+                if not online:
+                    base_time_str = row.get("started_at") or row.get("created_at")
+                    session_age = 0
+                    if base_time_str:
+                        try:
+                            dt = datetime.fromisoformat(base_time_str.replace("Z", "+00:00"))
+                            if dt.tzinfo is None:
+                                dt = dt.replace(tzinfo=timezone.utc)
+                            session_age = (datetime.now(timezone.utc) - dt).total_seconds()
+                        except: pass
+
+                    if not snap.get("ts"):
+                        # Never received a heartbeat — show for up to 2 hours (link may not have been opened yet)
+                        if session_age > 7200:
+                            continue
+                    else:
+                        # Had heartbeats before but now silent for > 5 minutes
+                        if age_secs > 300:
+                            continue
+
                 
                 audio_level = snap.get("audio_level", 0)
                 current_question = snap.get("current_question", "")

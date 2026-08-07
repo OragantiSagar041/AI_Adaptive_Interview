@@ -62,6 +62,7 @@ from app.services.live_monitoring_security import (
     MONITORING_SCOPE, admin_can_access_session,
     create_monitoring_token, decode_monitoring_token,
     validate_snapshot_dataurl,
+    create_spectator_token, decode_spectator_token,
 )
 from app.services.candidate_auth import require_active_candidate
 from pymongo import ReturnDocument
@@ -522,7 +523,7 @@ async def get_ongoing_interviews(admin_id: Optional[str] = None, current_admin: 
             "Live monitoring is available on the Advance plan only.",
         )
     query_filter = {
-        "status": "started",
+        "status": {"$in": ["started", "pending"]},
         "$or": [{"is_deactivated": False}, {"is_deactivated": {"$exists": False}}]
     }
     if current_admin.get("role") != "master":
@@ -563,29 +564,26 @@ async def get_ongoing_interviews(admin_id: Optional[str] = None, current_admin: 
             except Exception:
                 online = False
                 
-        # GHOST FILTERING LOGIC
+        # GHOST FILTERING LOGIC — only for sessions that haven't sent a heartbeat
         if not online:
-            # 1. Use started_at for sessions that have officially begun
             base_time_str = row.get("started_at") or row.get("created_at")
             session_age = 0
             if base_time_str:
                 try:
                     dt = datetime.fromisoformat(base_time_str.replace("Z", "+00:00"))
+                    if dt.tzinfo is None:
+                        dt = dt.replace(tzinfo=timezone.utc)
                     session_age = (datetime.now(timezone.utc) - dt).total_seconds()
                 except: pass
 
-            # 2. If no heartbeat has EVER been received
             if not snap.get("ts"):
-                # If they haven't sent a heartbeat within 10 mins of starting/creating, hide them
-                if session_age > 600: 
+                # Never received a heartbeat — include for up to 2 hours (link may not have been opened yet)
+                if session_age > 7200:
                     continue
-            
-            # 3. If they HAVE sent heartbeats before, but are now silent
             else:
-                # If they've been silent for more than 5 minutes, remove from "Ongoing" entirely
-                if age_secs > 300: 
+                # Had heartbeats before but now silent for > 5 minutes
+                if age_secs > 300:
                     continue
-                # Note: The UI will show them as "AWAY" if age_secs > 60
 
         sessions.append({
             "link_id": link_id,
@@ -614,6 +612,55 @@ async def get_ongoing_interviews(admin_id: Optional[str] = None, current_admin: 
         })
 
     return {"sessions": sessions, "count": len(sessions)}
+
+# ─────────────────────────────────────────────────────────────────────────────
+# SPECTATOR TOKEN ENDPOINT  —  Admin generates a shareable read-only invite
+# ─────────────────────────────────────────────────────────────────────────────
+
+@router.post("/admin/interview/{link_id}/spectator-token")
+async def generate_spectator_token(
+    link_id: str,
+    current_admin: dict = Depends(get_current_admin_details),
+):
+    """Generate a short-lived spectator token for a specific live interview session.
+    
+    The token is valid for 4 hours and grants read-only WebRTC access.
+    Spectators can watch the live video feed but cannot interact in any way.
+    """
+    # Only admins with live_monitoring access can create spectator links
+    if current_admin.get("role") != "master":
+        require_admin_capability(
+            current_admin["admin_id"],
+            "live_monitoring",
+            "Live monitoring is required to create spectator links.",
+        )
+    
+    # Verify the session exists and belongs to this admin's company
+    _get_authorized_live_session(link_id, current_admin)
+    
+    token = create_spectator_token(
+        secret=JWT_SECRET_KEY,
+        algorithm=ALGORITHM,
+        link_id=link_id,
+        issued_by_admin_id=str(current_admin.get("admin_id") or ""),
+        ttl_hours=4,
+    )
+    return {
+        "token": token,
+        "expires_in_hours": 4,
+        "link_id": link_id,
+    }
+
+
+@router.get("/admin/interview/{link_id}/spectator-count")
+async def get_spectator_count(
+    link_id: str,
+    current_admin: dict = Depends(get_current_admin_details),
+):
+    """Return the current number of active spectators watching this session."""
+    _get_authorized_live_session(link_id, current_admin)
+    count = manager.get_spectator_count(link_id)
+    return {"link_id": link_id, "spectator_count": count}
 
 
 @router.websocket("/ws/webrtc/{role}/{link_id}")
@@ -660,6 +707,26 @@ async def webrtc_endpoint(websocket: WebSocket, role: str, link_id: str, token: 
                 f.write(f"Other Error: {str(e)}\n{traceback.format_exc()}\n")
             await websocket.close(code=1011)
             return
+    elif role == "spectator":
+        if not token:
+            await websocket.close(code=1008)
+            return
+        try:
+            decode_spectator_token(JWT_SECRET_KEY, ALGORITHM, token, link_id)
+        except (jwt.PyJWTError, ValueError) as e:
+            with open(webrtc_log_path, "a") as f:
+                f.write(f"Spectator auth error: {str(e)}\n")
+            await websocket.close(code=1008)
+            return
+        # Verify session is still active before allowing spectator in
+        session_check = interview_sessions_collection.find_one(
+            {"link_id": link_id},
+            {"status": 1, "is_deactivated": 1}
+        )
+        if not session_check or session_check.get("status") != "started" or session_check.get("is_deactivated"):
+            await websocket.close(code=1008)
+            return
+        await manager.connect_spectator(websocket, link_id)
     else:
         await websocket.close()
         return
@@ -720,6 +787,25 @@ async def webrtc_endpoint(websocket: WebSocket, role: str, link_id: str, token: 
             elif role == "admin":
                 # Forward all admin signaling (offer/answer/ICE) directly to the candidate
                 await manager.send_to_candidate(link_id, data)
+
+            elif role == "spectator":
+                # Spectators are strictly receive-only.
+                # They can send WebRTC offers/ICE to the candidate for their OWN stream,
+                # but they CANNOT send any action messages.
+                allowed_spectator_types = {"webrtc_offer", "webrtc_ice_candidate", "ping"}
+                if msg_type == "ping":
+                    try:
+                        await websocket.send_json({"type": "pong"})
+                    except Exception:
+                        pass
+                elif msg_type in allowed_spectator_types:
+                    # Route spectator's WebRTC signaling to candidate so candidate
+                    # can set up a separate P2P connection for the spectator.
+                    # We tag the sender as a spectator so candidate can handle it.
+                    data["spectator_id"] = data.get("admin_id") or id(websocket)
+                    data["role"] = "spectator"
+                    await manager.send_to_candidate(link_id, data)
+                # All other message types from spectators are silently dropped.
     except WebSocketDisconnect:
         webrtc_log_path = os.path.join(tempfile.gettempdir(), "webrtc_debug.log")
         with open(webrtc_log_path, "a") as f:
@@ -729,6 +815,8 @@ async def webrtc_endpoint(websocket: WebSocket, role: str, link_id: str, token: 
             await manager.send_to_admins(link_id, {"type": "candidate_disconnected"})
         elif role == "admin":
             manager.disconnect_admin(websocket, link_id)
+        elif role == "spectator":
+            manager.disconnect_spectator(websocket, link_id)
     except Exception as e:
         webrtc_log_path = os.path.join(tempfile.gettempdir(), "webrtc_debug.log")
         with open(webrtc_log_path, "a") as f:

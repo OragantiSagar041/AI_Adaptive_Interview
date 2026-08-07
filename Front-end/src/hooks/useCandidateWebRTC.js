@@ -3,147 +3,174 @@ import { API_BASE_URL } from '../apiConfig'
 import { getIceServers } from '../utils/webrtcConfig'
 
 /**
- * useCandidateWebRTC
+ * Custom hook to handle WebRTC connections (WebSockets + WebRTC API) 
+ * for the candidate to broadcast their stream to admins/spectators.
  *
- * Manages the candidate-side WebRTC signaling channel.
- *
- * Key fixes (v2):
- *  - Auto-reconnects the WebSocket when it drops (with exponential back-off)
- *  - Sends a "heartbeat" ping every 20 s so Render/Uvicorn won't kill the idle socket
- *  - Handles the race condition where the admin connects before the candidate's
- *    WS is fully open by flushing a queued answer once the socket re-opens
+ * @param {string} linkId - The interview session ID
+ * @param {object} mediaStreamRef - React ref containing the candidate's MediaStream
+ * @param {object} telemetryData - React state object containing latest metrics (Q number, round type, etc.)
+ * @param {string} monitoringToken - The JWT token used for WebSocket auth
+ * @returns {object} The WebSocket reference
  */
 export default function useCandidateWebRTC(linkId, mediaStreamRef, telemetryData, monitoringToken) {
   const wsRef = useRef(null)
-  const pcsRef = useRef({})                 // adminId → RTCPeerConnection
+  const pcsRef = useRef({})                 // viewerId → RTCPeerConnection
+  const iceQueuesRef = useRef({})           // viewerId → pending ICE candidates (before remote desc)
+  const pendingOffersRef = useRef([])       // offers queued before media stream was ready
   const latestTelemetryRef = useRef(telemetryData)
   const reconnectTimerRef = useRef(null)
   const reconnectDelayRef = useRef(2000)    // starts at 2 s, doubles up to 30 s
   const destroyedRef = useRef(false)        // set true on hook unmount → stop reconnecting
   const heartbeatTimerRef = useRef(null)
 
+  // Keep telemetry data ref fresh without re-triggering the main effect
   useEffect(() => {
     latestTelemetryRef.current = telemetryData
   }, [telemetryData])
 
-  // ─── WebSocket factory with auto-reconnect ──────────────────────────────────
+  // ─── Process Pending Offers when Stream becomes Available ──────────────────
+  useEffect(() => {
+    if (!mediaStreamRef.current || pendingOffersRef.current.length === 0 || !wsRef.current) return
+    if (wsRef.current.readyState !== WebSocket.OPEN) return
+
+    const processOffers = async () => {
+      const offers = [...pendingOffersRef.current]
+      pendingOffersRef.current = [] // clear queue
+      for (const msg of offers) {
+        try {
+          await handleOffer(msg)
+        } catch (err) {
+          console.error('[CandidateWebRTC] Error processing queued offer:', err)
+        }
+      }
+    }
+    processOffers()
+  }, [mediaStreamRef.current]) // trigger when mediaStream changes
+
+  const handleOffer = async (msg) => {
+    const adminId = msg.viewer_id || msg.admin_id || msg.spectator_id || 'admin'
+    console.log(`[CandidateWebRTC] Processing offer from viewer: ${adminId}`)
+
+    const stream = mediaStreamRef.current
+    if (!stream) {
+      console.warn(`[CandidateWebRTC] Still no media stream — re-queueing offer from ${adminId}`)
+      pendingOffersRef.current.push(msg)
+      return
+    }
+
+    // Close any stale peer connection for this viewer
+    if (pcsRef.current[adminId]) {
+      try { pcsRef.current[adminId].close() } catch (_) {}
+    }
+    
+    // Reset ICE queue for this viewer
+    iceQueuesRef.current[adminId] = []
+
+    const pc = new RTCPeerConnection({
+      iceServers: getIceServers(),
+    })
+    pcsRef.current[adminId] = pc
+
+    // Add all live tracks to the peer connection
+    stream.getTracks().forEach(track => {
+      console.log(`[CandidateWebRTC] Adding track to ${adminId}: ${track.kind}`)
+      pc.addTrack(track, stream)
+    })
+
+    pc.onicecandidate = (e) => {
+      if (e.candidate && wsRef.current?.readyState === WebSocket.OPEN) {
+        wsRef.current.send(JSON.stringify({
+          type: 'webrtc_ice_candidate',
+          candidate: e.candidate,
+          target_admin_id: msg.admin_id || 'admin',
+          viewer_id: adminId,
+        }))
+      }
+    }
+
+    pc.onconnectionstatechange = () => {
+      console.log(`[CandidateWebRTC] PC state [${adminId}]: ${pc.connectionState}`)
+    }
+
+    await pc.setRemoteDescription(new RTCSessionDescription(msg.sdp))
+    const answer = await pc.createAnswer()
+    await pc.setLocalDescription(answer)
+
+    console.log(`[CandidateWebRTC] Sending answer to viewer: ${adminId}`)
+    if (wsRef.current?.readyState === WebSocket.OPEN) {
+      wsRef.current.send(JSON.stringify({
+        type: 'webrtc_answer',
+        sdp: pc.localDescription,
+        target_admin_id: msg.admin_id || 'admin',
+        viewer_id: adminId,
+      }))
+    }
+    
+    // Drain ICE queue that arrived while we were processing the offer
+    const queue = iceQueuesRef.current[adminId] || []
+    for (const candidate of queue) {
+      try { await pc.addIceCandidate(new RTCIceCandidate(candidate)) } catch (_) {}
+    }
+    iceQueuesRef.current[adminId] = []
+  }
+
+  // ─── Main WebSocket Connection Logic ────────────────────────────────────────
   useEffect(() => {
     if (!linkId || !monitoringToken) return
     destroyedRef.current = false
 
-    function buildWsUrl() {
-      return (
-        API_BASE_URL.replace(/^https/, 'wss').replace(/^http/, 'ws') +
-        `/ws/webrtc/candidate/${linkId}?token=${encodeURIComponent(monitoringToken)}`
-      )
-    }
-
-    function startHeartbeat(ws) {
-      clearInterval(heartbeatTimerRef.current)
-      heartbeatTimerRef.current = setInterval(() => {
-        if (ws.readyState === WebSocket.OPEN) {
-          // Send a lightweight ping so the server-side idle timeout never fires
-          ws.send(JSON.stringify({ type: 'ping' }))
-        }
-      }, 20_000)
-    }
-
-    function connect() {
+    const connect = () => {
       if (destroyedRef.current) return
 
-      const ws = new WebSocket(buildWsUrl())
+      const wsUrl =
+        API_BASE_URL.replace(/^https/, 'wss').replace(/^http/, 'ws') +
+        `/ws/webrtc/candidate/${linkId}?token=${monitoringToken}`
+
+      console.log('[CandidateWebRTC] Connecting to signaling server...')
+      const ws = new WebSocket(wsUrl)
       wsRef.current = ws
-      console.log('[CandidateWebRTC] Connecting signaling socket...')
 
       ws.onopen = () => {
-        console.log('[CandidateWebRTC] Signaling connected.')
-        reconnectDelayRef.current = 2000  // reset back-off on successful connect
-        startHeartbeat(ws)
+        console.log('[CandidateWebRTC] WS Connected')
+        reconnectDelayRef.current = 2000 // reset delay on success
       }
 
-      ws.onerror = (e) => {
-        console.warn('[CandidateWebRTC] WS error:', e)
-      }
-
-      ws.onclose = (e) => {
-        console.log(`[CandidateWebRTC] WS closed (${e.code}). Will reconnect...`)
-        clearInterval(heartbeatTimerRef.current)
-
-        // Close all peer connections — they're all dead without the signaling channel
-        Object.values(pcsRef.current).forEach(pc => {
-          try { pc.close() } catch (_) {}
-        })
-        pcsRef.current = {}
-
+      ws.onclose = () => {
+        console.warn('[CandidateWebRTC] WS Disconnected')
         if (!destroyedRef.current) {
           const delay = reconnectDelayRef.current
-          reconnectDelayRef.current = Math.min(delay * 2, 30_000)  // exponential back-off capped at 30 s
           console.log(`[CandidateWebRTC] Reconnecting in ${delay}ms...`)
           reconnectTimerRef.current = setTimeout(connect, delay)
+          reconnectDelayRef.current = Math.min(delay * 1.5, 30000)
         }
+      }
+
+      ws.onerror = (err) => {
+        console.error('[CandidateWebRTC] WS Error', err)
       }
 
       ws.onmessage = async (event) => {
         try {
           const msg = JSON.parse(event.data)
-          const adminId = msg.admin_id || 'admin'
+          const adminId = msg.viewer_id || msg.admin_id || msg.spectator_id || 'admin'
 
-          if (msg.type === 'pong' || msg.type === 'ping') return  // heartbeat reply — ignore
+          if (msg.type === 'pong' || msg.type === 'ping') return
 
           if (msg.type === 'webrtc_offer') {
-            console.log(`[CandidateWebRTC] Received offer from admin: ${adminId}`)
-
             const stream = mediaStreamRef.current
             if (!stream) {
-              console.warn('[CandidateWebRTC] No media stream yet — cannot answer offer.')
+              console.warn(`[CandidateWebRTC] No media stream yet. Queueing offer from ${adminId}`)
+              pendingOffersRef.current.push(msg)
               return
             }
-
-            // Close any stale peer connection for this admin
-            if (pcsRef.current[adminId]) {
-              try { pcsRef.current[adminId].close() } catch (_) {}
-            }
-
-            const pc = new RTCPeerConnection({
-              iceServers: getIceServers(),
-            })
-            pcsRef.current[adminId] = pc
-
-            // Add all live tracks to the peer connection
-            stream.getTracks().forEach(track => {
-              console.log(`[CandidateWebRTC] Adding track: ${track.kind}`)
-              pc.addTrack(track, stream)
-            })
-
-            pc.onicecandidate = (e) => {
-              if (e.candidate && ws.readyState === WebSocket.OPEN) {
-                ws.send(JSON.stringify({
-                  type: 'webrtc_ice_candidate',
-                  candidate: e.candidate,
-                  target_admin_id: adminId,
-                }))
-              }
-            }
-
-            pc.onconnectionstatechange = () => {
-              console.log(`[CandidateWebRTC] PC state [${adminId}]: ${pc.connectionState}`)
-            }
-
-            await pc.setRemoteDescription(new RTCSessionDescription(msg.sdp))
-            const answer = await pc.createAnswer()
-            await pc.setLocalDescription(answer)
-
-            console.log(`[CandidateWebRTC] Sending answer to admin: ${adminId}`)
-            ws.send(JSON.stringify({
-              type: 'webrtc_answer',
-              sdp: pc.localDescription,
-              target_admin_id: adminId,
-            }))
-
+            await handleOffer(msg)
           } else if (msg.type === 'webrtc_ice_candidate') {
             const pc = pcsRef.current[adminId]
             if (pc && pc.remoteDescription) {
               await pc.addIceCandidate(new RTCIceCandidate(msg.candidate))
+            } else {
+              if (!iceQueuesRef.current[adminId]) iceQueuesRef.current[adminId] = []
+              iceQueuesRef.current[adminId].push(msg.candidate)
             }
           }
         } catch (err) {
@@ -163,7 +190,7 @@ export default function useCandidateWebRTC(linkId, mediaStreamRef, telemetryData
         try { pc.close() } catch (_) {}
       })
     }
-  }, [linkId, mediaStreamRef, monitoringToken])
+  }, [linkId, monitoringToken])
 
   // ─── Telemetry heartbeat ────────────────────────────────────────────────────
   useEffect(() => {
@@ -218,7 +245,7 @@ export default function useCandidateWebRTC(linkId, mediaStreamRef, telemetryData
       clearInterval(intervalId)
       audioContext?.close().catch(() => {})
     }
-  }, [linkId, mediaStreamRef, monitoringToken])
+  }, [linkId, monitoringToken])
 
   return wsRef
 }

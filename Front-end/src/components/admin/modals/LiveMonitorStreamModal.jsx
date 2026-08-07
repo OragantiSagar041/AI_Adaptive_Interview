@@ -3,7 +3,7 @@ import { API_BASE_URL } from '../../../apiConfig'
 import { getIceServers } from '../../../utils/webrtcConfig'
 import Modal from '../../Modal'
 import { useSelector } from 'react-redux'
-import { Video, Mic, MicOff, MonitorOff, Activity, ShieldAlert, Code, MessageSquare, Briefcase, AlertTriangle, RefreshCw } from 'lucide-react'
+import { Video, Mic, MicOff, MonitorOff, Activity, ShieldAlert, Code, MessageSquare, Briefcase, AlertTriangle, RefreshCw, Share2, Copy, CheckCircle2, Eye } from 'lucide-react'
 
 // Maps violation_type values to a human-readable label + colour class
 const VIOLATION_META = {
@@ -36,22 +36,34 @@ function formatTs(ts) {
 }
 
 const ICE_SERVERS = getIceServers()
+// How long to wait before deciding the candidate hasn't answered and retrying
+const STREAM_TIMEOUT_MS = 12000
 
 export default function LiveMonitorStreamModal({ isOpen, onClose, session }) {
   const [status, setStatus] = useState('connecting')
   const [telemetry, setTelemetry] = useState(null)
   const [violations, setViolations] = useState([])
   const [retryCount, setRetryCount] = useState(0)
+  const [spectatorCount, setSpectatorCount] = useState(0)
+  const [shareLink, setShareLink] = useState('')
+  const [copied, setCopied] = useState(false)
 
   const violationsPollRef = useRef(null)
   const videoRef = useRef(null)
   const wsRef = useRef(null)
   const pcRef = useRef(null)
-  const streamTimeoutRef = useRef(null)  // fire if no video track arrives in time
+  const streamTimeoutRef = useRef(null)
   const mountedRef = useRef(false)
+  // Unique ID for this admin viewer — ensures ICE/answer routing only goes to this viewer
+  const viewerIdRef = useRef(Math.random().toString(36).substring(2, 10))
+  // Keep a stable ref to the current WS so sendOffer can always access it without stale closure
+  const wsReadyRef = useRef(false)
+  // Queue ICE candidates that arrive before remoteDescription is set
+  const iceCandidateQueue = useRef([])
+
   const token = useSelector(state => state.auth.token)
 
-  // ── Violations polling ──────────────────────────────────────────────────────
+  // ── Violations + spectator count polling ────────────────────────────────────
   useEffect(() => {
     if (!isOpen || !session) return
     const linkId = session.link_id || session.session_id || session.id
@@ -75,57 +87,81 @@ export default function LiveMonitorStreamModal({ isOpen, onClose, session }) {
       } catch { /* non-fatal */ }
     }
 
+    const fetchSpectatorCount = async () => {
+      try {
+        const res = await fetch(`${API_BASE_URL}/admin/interview/${linkId}/spectator-count`, {
+          headers: { Authorization: `Bearer ${token}` },
+        })
+        if (!res.ok) return
+        const data = await res.json()
+        setSpectatorCount(data.spectator_count || 0)
+      } catch {}
+    }
+
     fetchViolations()
-    violationsPollRef.current = setInterval(fetchViolations, 5000)
+    fetchSpectatorCount()
+    violationsPollRef.current = setInterval(() => {
+      fetchViolations()
+      fetchSpectatorCount()
+    }, 5000)
+    
     return () => {
       clearInterval(violationsPollRef.current)
       setViolations([])
+      setSpectatorCount(0)
     }
   }, [isOpen, session, token])
 
-  // ── WebRTC / Signaling ──────────────────────────────────────────────────────
-  const cleanup = useCallback(() => {
+  // ── Peer Connection teardown helper ─────────────────────────────────────────
+  const closePc = useCallback(() => {
     clearTimeout(streamTimeoutRef.current)
+    iceCandidateQueue.current = []
     if (pcRef.current) {
-      pcRef.current.close()
+      try { pcRef.current.close() } catch (_) {}
       pcRef.current = null
-    }
-    if (wsRef.current) {
-      wsRef.current.close()
-      wsRef.current = null
     }
     if (videoRef.current) videoRef.current.srcObject = null
   }, [])
 
-  /**
-   * sendOffer — creates a fresh RTCPeerConnection and sends an SDP offer to the candidate.
-   * Called:
-   *  (a) right after the admin WebSocket opens (ws.onopen)
-   *  (b) by the user clicking "Force Retry Connection"
-   *  (c) automatically after STREAM_TIMEOUT_MS if no track has arrived
-   */
-  const sendOffer = useCallback(async (ws) => {
-    // Tear down any existing peer connection
-    clearTimeout(streamTimeoutRef.current)
-    if (pcRef.current) {
-      pcRef.current.close()
-      pcRef.current = null
+  // ── Full cleanup (PC + WS) ───────────────────────────────────────────────────
+  const cleanup = useCallback(() => {
+    closePc()
+    wsReadyRef.current = false
+    if (wsRef.current) {
+      try { wsRef.current.close() } catch (_) {}
+      wsRef.current = null
     }
-    if (videoRef.current) videoRef.current.srcObject = null
+  }, [closePc])
 
-    if (!ws || ws.readyState !== WebSocket.OPEN) return
+  // ── sendOffer ────────────────────────────────────────────────────────────────
+  // Uses wsRef.current directly (no closure over ws param) to avoid stale refs.
+  // Called when: WS opens, user force-retries, or 12s timeout fires.
+  const sendOffer = useCallback(async () => {
+    closePc()
+
+    const ws = wsRef.current
+    if (!ws || ws.readyState !== WebSocket.OPEN) {
+      console.warn('[AdminWebRTC] sendOffer: WS not open, skipping')
+      return
+    }
 
     try {
       const pc = new RTCPeerConnection({ iceServers: ICE_SERVERS })
       pcRef.current = pc
+      iceCandidateQueue.current = []
 
       pc.onicecandidate = (e) => {
-        if (e.candidate && ws.readyState === WebSocket.OPEN) {
-          ws.send(JSON.stringify({ type: 'webrtc_ice_candidate', candidate: e.candidate }))
+        if (e.candidate && wsRef.current?.readyState === WebSocket.OPEN) {
+          wsRef.current.send(JSON.stringify({
+            type: 'webrtc_ice_candidate',
+            candidate: e.candidate,
+            viewer_id: viewerIdRef.current,
+          }))
         }
       }
 
       pc.ontrack = (e) => {
+        console.log('[AdminWebRTC] Track received:', e.track.kind)
         if (videoRef.current && e.streams[0]) {
           videoRef.current.srcObject = e.streams[0]
           clearTimeout(streamTimeoutRef.current)
@@ -135,35 +171,58 @@ export default function LiveMonitorStreamModal({ isOpen, onClose, session }) {
 
       pc.onconnectionstatechange = () => {
         console.log('[AdminWebRTC] PC state:', pc.connectionState)
-        if ((pc.connectionState === 'failed' || pc.connectionState === 'disconnected') && mountedRef.current) {
+        if (!mountedRef.current) return
+        if (pc.connectionState === 'connected') {
+          // Don't override 'streaming' if we already have a track
+        } else if (pc.connectionState === 'failed') {
           setStatus('disconnected')
+        } else if (pc.connectionState === 'disconnected') {
+          // Give it 5s to reconnect before declaring dead
+          streamTimeoutRef.current = setTimeout(() => {
+            if (mountedRef.current && pcRef.current?.connectionState !== 'connected') {
+              setStatus('disconnected')
+            }
+          }, 5000)
         }
       }
 
-      // We only receive — candidate pushes the tracks
+      // Admin only receives — candidate pushes video/audio tracks
       pc.addTransceiver('video', { direction: 'recvonly' })
       pc.addTransceiver('audio', { direction: 'recvonly' })
 
       const offer = await pc.createOffer()
       await pc.setLocalDescription(offer)
-      ws.send(JSON.stringify({ type: 'webrtc_offer', sdp: offer }))
+
+      if (wsRef.current?.readyState !== WebSocket.OPEN) {
+        console.warn('[AdminWebRTC] WS closed before offer could be sent')
+        closePc()
+        return
+      }
+
+      wsRef.current.send(JSON.stringify({
+        type: 'webrtc_offer',
+        sdp: offer,
+        viewer_id: viewerIdRef.current,
+      }))
 
       if (mountedRef.current) setStatus('negotiating')
+      console.log('[AdminWebRTC] Offer sent, waiting for answer...')
 
-      // If no video track arrives within 8 s, retry the offer automatically
+      // If no track arrives in STREAM_TIMEOUT_MS, retry
       streamTimeoutRef.current = setTimeout(() => {
-        if (mountedRef.current && status !== 'streaming') {
-          console.warn('[AdminWebRTC] No stream in 8 s — retrying offer...')
-          sendOffer(ws)
+        if (mountedRef.current && pcRef.current?.connectionState !== 'connected') {
+          console.warn('[AdminWebRTC] No stream arrived — auto-retrying offer')
+          sendOffer()
         }
-      }, 8000)
+      }, STREAM_TIMEOUT_MS)
 
     } catch (err) {
       console.error('[AdminWebRTC] sendOffer error:', err)
       if (mountedRef.current) setStatus('error')
     }
-  }, [status])
+  }, [closePc])  // note: NO 'status' dep — avoids stale closure on the retry timer
 
+  // ── Main WebSocket Effect ────────────────────────────────────────────────────
   useEffect(() => {
     if (!isOpen || !session) return
     mountedRef.current = true
@@ -173,16 +232,16 @@ export default function LiveMonitorStreamModal({ isOpen, onClose, session }) {
       API_BASE_URL.replace(/^https/, 'wss').replace(/^http/, 'ws') +
       `/ws/webrtc/admin/${sessionId}?token=${token}`
 
-    console.log('[AdminWebRTC] Connecting to:', wsUrl)
+    console.log('[AdminWebRTC] Opening WS:', wsUrl)
     setStatus('connecting')
-    setRetryCount(0)
 
     const ws = new WebSocket(wsUrl)
     wsRef.current = ws
 
-    ws.onopen = async () => {
-      console.log('[AdminWebRTC] WS open — sending initial offer')
-      await sendOffer(ws)
+    ws.onopen = () => {
+      console.log('[AdminWebRTC] WS open')
+      wsReadyRef.current = true
+      sendOffer()
     }
 
     ws.onmessage = async (event) => {
@@ -190,27 +249,59 @@ export default function LiveMonitorStreamModal({ isOpen, onClose, session }) {
         const msg = JSON.parse(event.data)
 
         if (msg.type === 'admin_connected') {
-          // Server confirmed our connection — offer already sent from onopen, nothing extra needed
+          // Server ack — offer already sent in ws.onopen
           return
         }
 
         if (msg.type === 'telemetry') {
           if (mountedRef.current) setTelemetry(msg.data)
-
-        } else if (msg.type === 'webrtc_answer') {
-          if (mountedRef.current) setStatus('negotiating')
-          if (pcRef.current && pcRef.current.signalingState !== 'stable') {
-            await pcRef.current.setRemoteDescription(new RTCSessionDescription(msg.sdp))
-          }
-
-        } else if (msg.type === 'webrtc_ice_candidate') {
-          if (pcRef.current && pcRef.current.remoteDescription) {
-            await pcRef.current.addIceCandidate(new RTCIceCandidate(msg.candidate))
-          }
-
-        } else if (msg.type === 'candidate_disconnected') {
-          if (mountedRef.current) setStatus('disconnected')
+          return
         }
+
+        if (msg.type === 'webrtc_answer') {
+          // Discard answers not addressed to this viewer
+          if (msg.viewer_id && msg.viewer_id !== viewerIdRef.current) return
+
+          const pc = pcRef.current
+          if (!pc) return
+          if (pc.signalingState === 'stable') {
+            console.warn('[AdminWebRTC] Got answer but already stable — ignoring')
+            return
+          }
+          try {
+            await pc.setRemoteDescription(new RTCSessionDescription(msg.sdp))
+            console.log('[AdminWebRTC] Remote description set. Draining ICE queue:', iceCandidateQueue.current.length)
+            // Drain any ICE candidates that arrived before the answer
+            for (const candidate of iceCandidateQueue.current) {
+              try { await pc.addIceCandidate(new RTCIceCandidate(candidate)) } catch (_) {}
+            }
+            iceCandidateQueue.current = []
+          } catch (err) {
+            console.error('[AdminWebRTC] setRemoteDescription failed:', err)
+          }
+          return
+        }
+
+        if (msg.type === 'webrtc_ice_candidate') {
+          // Discard ICE not addressed to this viewer
+          if (msg.viewer_id && msg.viewer_id !== viewerIdRef.current) return
+
+          const pc = pcRef.current
+          if (!pc) return
+          if (pc.remoteDescription) {
+            try { await pc.addIceCandidate(new RTCIceCandidate(msg.candidate)) } catch (_) {}
+          } else {
+            // Queue ICE candidates until remote description is set
+            iceCandidateQueue.current.push(msg.candidate)
+          }
+          return
+        }
+
+        if (msg.type === 'candidate_disconnected') {
+          if (mountedRef.current) setStatus('disconnected')
+          return
+        }
+
       } catch (err) {
         console.error('[AdminWebRTC] onmessage error:', err)
       }
@@ -222,7 +313,8 @@ export default function LiveMonitorStreamModal({ isOpen, onClose, session }) {
     }
 
     ws.onclose = (e) => {
-      console.log(`[AdminWebRTC] WS closed (${e.code})`)
+      console.log(`[AdminWebRTC] WS closed (code=${e.code})`)
+      wsReadyRef.current = false
       if (mountedRef.current) setStatus('disconnected')
     }
 
@@ -230,12 +322,36 @@ export default function LiveMonitorStreamModal({ isOpen, onClose, session }) {
       mountedRef.current = false
       cleanup()
     }
-  }, [isOpen, session, token, retryCount])  // retryCount forces full reconnect on manual retry
+  }, [isOpen, session, token, retryCount])
 
   const handleManualRetry = () => {
     cleanup()
     setStatus('connecting')
-    setRetryCount(c => c + 1)  // triggers the useEffect to rebuild everything
+    setRetryCount(c => c + 1)
+  }
+
+  const handleGenerateShareLink = async () => {
+    const linkId = session?.link_id || session?.session_id || session?.id
+    if (!linkId) return
+    try {
+      const res = await fetch(`${API_BASE_URL}/admin/interview/${linkId}/spectator-token`, {
+        method: 'POST',
+        headers: { Authorization: `Bearer ${token}` }
+      })
+      if (!res.ok) throw new Error('Failed to generate token')
+      const data = await res.json()
+      const spectatorUrl = `${window.location.origin}/spectate/${linkId}?token=${data.token}`
+      setShareLink(spectatorUrl)
+    } catch (err) {
+      console.error('Failed to generate spectator link', err)
+    }
+  }
+
+  const handleCopyLink = () => {
+    if (!shareLink) return
+    navigator.clipboard.writeText(shareLink)
+    setCopied(true)
+    setTimeout(() => setCopied(false), 2000)
   }
 
   const getRoundIcon = (type) => {
@@ -249,15 +365,77 @@ export default function LiveMonitorStreamModal({ isOpen, onClose, session }) {
       isOpen={isOpen}
       onClose={onClose}
       title={
-        <div className="flex items-center gap-2">
-          <span className={`w-2.5 h-2.5 rounded-full ${status === 'streaming' ? 'bg-success animate-pulse' : 'bg-amber-500'}`} />
-          Live Stream: <span className="font-bold">{session?.candidate_name}</span>
+        <div className="flex items-center justify-between w-full pr-8">
+          <div className="flex items-center gap-2">
+            <span className={`w-2.5 h-2.5 rounded-full ${status === 'streaming' ? 'bg-success animate-pulse' : 'bg-amber-500'}`} />
+            Live Stream: <span className="font-bold">{session?.candidate_name}</span>
+          </div>
+          {spectatorCount > 0 && (
+            <div className="flex items-center gap-1.5 px-2.5 py-1 bg-indigo-50 text-indigo-600 rounded-full text-xs font-semibold border border-indigo-100">
+              <Eye size={14} />
+              {spectatorCount} Spectator{spectatorCount !== 1 ? 's' : ''}
+            </div>
+          )}
         </div>
       }
       subtitle={`Email: ${session?.candidate_email} | Session: ${session?.session_id}`}
       maxWidth="max-w-4xl"
     >
       <div className="flex flex-col gap-4 text-slate-800 bg-white">
+
+        {/* Controls Bar */}
+        <div className="flex items-center justify-between border border-slate-200 rounded-lg p-3 bg-slate-50">
+          <div className="flex items-center gap-4">
+            <div className="flex items-center gap-2">
+              <Mic size={16} className={telemetry?.audio_level > 0.05 ? 'text-indigo-500' : 'text-slate-400'} />
+              <div className="w-16 h-1.5 bg-slate-200 rounded-full overflow-hidden">
+                <div 
+                  className="h-full bg-indigo-500 transition-all duration-100 ease-linear"
+                  style={{ width: `${Math.min(100, (telemetry?.audio_level || 0) * 100)}%` }}
+                />
+              </div>
+            </div>
+
+            <div className="h-6 w-px bg-slate-300" />
+
+            <button 
+              onClick={handleManualRetry}
+              className="flex items-center gap-2 px-3 py-1.5 text-sm font-medium text-slate-700 hover:text-slate-900 bg-white border border-slate-300 rounded hover:bg-slate-50 transition-colors"
+            >
+              <RefreshCw size={14} className={status === 'connecting' || status === 'negotiating' ? 'animate-spin' : ''} />
+              Refresh Connection
+            </button>
+          </div>
+          
+          <div className="flex items-center gap-2">
+            {!shareLink ? (
+              <button
+                onClick={handleGenerateShareLink}
+                className="flex items-center gap-1.5 px-3 py-1.5 text-sm font-medium text-indigo-700 bg-indigo-50 border border-indigo-200 rounded hover:bg-indigo-100 transition-colors"
+              >
+                <Share2 size={14} />
+                Share Spectator Link
+              </button>
+            ) : (
+              <div className="flex items-center gap-2">
+                <input
+                  type="text"
+                  readOnly
+                  value={shareLink}
+                  className="text-xs text-slate-500 bg-white border border-slate-300 rounded px-2 py-1 w-48 truncate outline-none"
+                  onFocus={e => e.target.select()}
+                />
+                <button
+                  onClick={handleCopyLink}
+                  className="flex items-center justify-center p-1.5 text-slate-700 bg-white border border-slate-300 rounded hover:bg-slate-50 transition-colors"
+                  title="Copy Link"
+                >
+                  {copied ? <CheckCircle2 size={14} className="text-success" /> : <Copy size={14} />}
+                </button>
+              </div>
+            )}
+          </div>
+        </div>
 
         {/* Top Telemetry Bar */}
         <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
@@ -321,8 +499,9 @@ export default function LiveMonitorStreamModal({ isOpen, onClose, session }) {
                   <p className="text-sm font-semibold tracking-wide">
                     {status === 'connecting' ? 'Connecting to Candidate Stream...' : 'Negotiating WebRTC connection...'}
                   </p>
+                  <p className="text-xs text-slate-500">Candidate must be on the interview page for this to connect</p>
                   <button
-                    onClick={() => sendOffer(wsRef.current)}
+                    onClick={sendOffer}
                     className="mt-2 px-4 py-1.5 bg-indigo-600 hover:bg-indigo-500 transition-colors text-white text-xs font-bold rounded shadow-md"
                   >
                     Force Retry Connection

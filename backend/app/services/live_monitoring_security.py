@@ -86,3 +86,33 @@ def admin_can_receive_dashboard_event(current_admin: Dict[str, Any], event: Dict
             return str(current_admin.get("admin_id") or "") == str(event.get("admin_id") or "")
         return str(current_admin.get("admin_id") or "") == str(event.get("created_by") or "")
     return True
+
+SPECTATOR_SCOPE = "interview_spectator"
+
+def create_spectator_token(
+    secret: str,
+    algorithm: str,
+    link_id: str,
+    issued_by_admin_id: str,
+    ttl_hours: int = 4,
+) -> str:
+    """Create a short-lived, read-only spectator token for a specific interview session."""
+    return jwt.encode(
+        {
+            "scope": SPECTATOR_SCOPE,
+            "link_id": link_id,
+            "issued_by": issued_by_admin_id,
+            "exp": datetime.now(timezone.utc) + timedelta(hours=ttl_hours),
+        },
+        secret,
+        algorithm=algorithm,
+    )
+
+def decode_spectator_token(secret: str, algorithm: str, token: str, expected_link_id: str) -> dict:
+    """Validate and decode a spectator token. Raises jwt.PyJWTError or ValueError on failure."""
+    payload = jwt.decode(token, secret, algorithms=[algorithm])
+    if payload.get("scope") != SPECTATOR_SCOPE:
+        raise ValueError("Token is not a spectator token")
+    if not hmac.compare_digest(str(payload.get("link_id") or ""), expected_link_id):
+        raise ValueError("Spectator token does not match this session")
+    return payload
