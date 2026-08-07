@@ -297,6 +297,8 @@ export default function VoiceInterviewPage() {
   const silenceTimerRef = useRef(null)
   const isListeningRef = useRef(false)
   const currentTxRef = useRef('')
+  const accumulatedTranscriptRef = useRef('')
+  const currentSessionFinalRef = useRef('')
   const submittingRef = useRef(false)
   const currentQIdxRef = useRef(0)
   const questionsRef = useRef([])
@@ -1218,8 +1220,17 @@ export default function VoiceInterviewPage() {
   const stopListening = useCallback(() => {
     isListeningRef.current = false
     clearTimeout(silenceTimerRef.current)
-    try { recognitionRef.current?.stop() } catch (_) { }
-    recognitionRef.current = null
+    if (recognitionRef.current) {
+      const oldRec = recognitionRef.current
+      recognitionRef.current = null
+      try {
+        oldRec.onstart = null
+        oldRec.onend = null
+        oldRec.onerror = null
+        oldRec.onresult = null
+        oldRec.abort()
+      } catch (_) { }
+    }
 
     if (whisperRecorderRef.current && whisperRecorderRef.current.state !== 'inactive') {
       try { whisperRecorderRef.current.stop() } catch (_) {}
@@ -1228,14 +1239,22 @@ export default function VoiceInterviewPage() {
 
     stopAudio()   // ← kill any in-flight TTS
 
-    // Merge any active interim text before clearing
+    // Commit any active interim text before clearing
+    if (currentSessionFinalRef.current.trim()) {
+      const finalChunk = currentSessionFinalRef.current.trim()
+      if (!accumulatedTranscriptRef.current.endsWith(finalChunk)) {
+        accumulatedTranscriptRef.current = [accumulatedTranscriptRef.current, finalChunk].filter(Boolean).join(' ').trim()
+      }
+      currentSessionFinalRef.current = ''
+    }
     if (interimTextRef.current.trim()) {
       const interimStr = interimTextRef.current.trim()
-      if (!currentTxRef.current.trim().endsWith(interimStr)) {
-        currentTxRef.current = (currentTxRef.current.trim() + ' ' + interimStr).trim()
+      if (!accumulatedTranscriptRef.current.endsWith(interimStr)) {
+        accumulatedTranscriptRef.current = [accumulatedTranscriptRef.current, interimStr].filter(Boolean).join(' ').trim()
       }
-      setTranscript(currentTxRef.current)
     }
+    currentTxRef.current = accumulatedTranscriptRef.current
+    setTranscript(accumulatedTranscriptRef.current)
     interimTextRef.current = ''
     setInterimText('')   // clear cursor indicator
     setAiStatus('idle')
@@ -1247,18 +1266,35 @@ export default function VoiceInterviewPage() {
     isListeningRef.current = false
     clearTimeout(silenceTimerRef.current)
 
+    if (currentSessionFinalRef.current.trim()) {
+      const finalChunk = currentSessionFinalRef.current.trim()
+      if (!accumulatedTranscriptRef.current.endsWith(finalChunk)) {
+        accumulatedTranscriptRef.current = [accumulatedTranscriptRef.current, finalChunk].filter(Boolean).join(' ').trim()
+      }
+      currentSessionFinalRef.current = ''
+    }
     if (interimTextRef.current.trim()) {
       const interimStr = interimTextRef.current.trim()
-      if (!currentTxRef.current.trim().endsWith(interimStr)) {
-        currentTxRef.current = `${currentTxRef.current.trim()} ${interimStr}`.trim()
+      if (!accumulatedTranscriptRef.current.endsWith(interimStr)) {
+        accumulatedTranscriptRef.current = [accumulatedTranscriptRef.current, interimStr].filter(Boolean).join(' ').trim()
       }
-      setTranscript(currentTxRef.current)
     }
+    currentTxRef.current = accumulatedTranscriptRef.current
+    setTranscript(accumulatedTranscriptRef.current)
     interimTextRef.current = ''
     setInterimText('')
 
-    try { recognitionRef.current?.stop() } catch (_) { }
-    recognitionRef.current = null
+    if (recognitionRef.current) {
+      const oldRec = recognitionRef.current
+      recognitionRef.current = null
+      try {
+        oldRec.onstart = null
+        oldRec.onend = null
+        oldRec.onerror = null
+        oldRec.onresult = null
+        oldRec.abort()
+      } catch (_) { }
+    }
 
     const recorder = whisperRecorderRef.current
     if (recorder && recorder.state !== 'inactive') {
@@ -1278,9 +1314,36 @@ export default function VoiceInterviewPage() {
   const startListening = useCallback((onFinish, preserveTranscript = false) => {
     const SR = window.SpeechRecognition || window.webkitSpeechRecognition
 
+    // Commit any captured session speech before cleaning up if preserving transcript
+    if (preserveTranscript) {
+      if (currentSessionFinalRef.current.trim()) {
+        const finalChunk = currentSessionFinalRef.current.trim()
+        if (!accumulatedTranscriptRef.current.endsWith(finalChunk)) {
+          accumulatedTranscriptRef.current = [accumulatedTranscriptRef.current, finalChunk].filter(Boolean).join(' ').trim()
+        }
+        currentSessionFinalRef.current = ''
+      }
+      if (interimTextRef.current.trim()) {
+        const interimStr = interimTextRef.current.trim()
+        if (!accumulatedTranscriptRef.current.endsWith(interimStr)) {
+          accumulatedTranscriptRef.current = [accumulatedTranscriptRef.current, interimStr].filter(Boolean).join(' ').trim()
+        }
+        interimTextRef.current = ''
+      }
+    }
+
     // Clean up previous instances first
-    try { recognitionRef.current?.stop() } catch (_) { }
-    recognitionRef.current = null
+    if (recognitionRef.current) {
+      const oldRec = recognitionRef.current
+      recognitionRef.current = null
+      try {
+        oldRec.onstart = null
+        oldRec.onend = null
+        oldRec.onerror = null
+        oldRec.onresult = null
+        oldRec.abort()
+      } catch (_) { }
+    }
     if (!preserveTranscript && whisperRecorderRef.current && whisperRecorderRef.current.state !== 'inactive') {
       try { whisperRecorderRef.current.stop() } catch (_) {}
       whisperRecorderRef.current = null
@@ -1296,6 +1359,8 @@ export default function VoiceInterviewPage() {
     }
     isListeningRef.current = true
     if (!preserveTranscript) {
+      accumulatedTranscriptRef.current = ''
+      currentSessionFinalRef.current = ''
       currentTxRef.current = ''
       interimTextRef.current = ''
       whisperTxRef.current = ''
@@ -1354,7 +1419,7 @@ export default function VoiceInterviewPage() {
             resolveWhisperStopRef.current = null
           }
         }
-        mr.start()
+        mr.start(1000)
       } catch (err) {
         console.warn('Failed to start Whisper chunk recorder:', err)
         resolveWhisperStopRef.current?.()
@@ -1374,15 +1439,17 @@ export default function VoiceInterviewPage() {
       let finalStr = '', interimStr = ''
       for (let i = 0; i < ev.results.length; i++) {
         if (ev.results[i].isFinal) {
-          finalStr += ev.results[i][0].transcript + ' '
+          finalStr += (ev.results[i][0].transcript || '').trim() + ' '
         } else {
-          interimStr += ev.results[i][0].transcript
+          interimStr += ev.results[i][0].transcript || ''
         }
       }
-      currentTxRef.current = finalStr.trim()
+      currentSessionFinalRef.current = finalStr.trim()
       interimTextRef.current = interimStr.trim()
 
-      setTranscript(currentTxRef.current)
+      const fullCommitted = [accumulatedTranscriptRef.current, currentSessionFinalRef.current].filter(Boolean).join(' ').trim()
+      currentTxRef.current = fullCommitted
+      setTranscript([fullCommitted, interimTextRef.current].filter(Boolean).join(' ').trim())
       setInterimText(interimTextRef.current)
 
       // Reset silence timer whenever speech is heard
@@ -1397,95 +1464,66 @@ export default function VoiceInterviewPage() {
     // ── Smart error handler ────────────────────────────────────────────────
     if (rec) rec.onerror = (e) => {
       const err = e.error
-      if (err === 'no-speech') {
-        // Not truly a failure — silence detected. Reset timer so we keep waiting.
-        clearTimeout(silenceTimerRef.current)
-        silenceTimerRef.current = setTimeout(() => {
-          if (isListeningRef.current) {
-            finishListening().then(fullAns => onFinish?.(fullAns))
-          }
-        }, 10000)
+      if (err === 'no-speech' || err === 'aborted') {
         return
       }
-      if (err === 'aborted') return  // intentional stop — do nothing
 
       if (err === 'network') {
-        // Browser speech services commonly fail behind corporate networks.
-        // Keep the MediaRecorder running and let server transcription finish.
         console.warn('SR: network error — continuing with server transcription')
-        try { rec.stop() } catch (_) { }
-        recognitionRef.current = null
-        clearTimeout(silenceTimerRef.current)
-        silenceTimerRef.current = setTimeout(() => {
-          if (isListeningRef.current) {
-            finishListening().then(fullAns => onFinish?.(fullAns))
-          }
-        }, 30000)
+        if (isListeningRef.current) {
+          setTimeout(() => {
+            if (isListeningRef.current) {
+              startListening(onFinish, true)
+            }
+          }, 1000)
+        }
         return
       }
 
-      // Speech-service permission failures do not affect the already-authorized
-      // microphone stream, so continue with the server transcription fallback.
       console.warn('SR:', err)
-      try { rec.stop() } catch (_) { }
-      recognitionRef.current = null
-      clearTimeout(silenceTimerRef.current)
-      silenceTimerRef.current = setTimeout(() => {
-        if (isListeningRef.current) {
-          finishListening().then(fullAns => onFinish?.(fullAns))
-        }
-      }, 30000)
-      Swal.fire({
-        title: 'Backup Voice Recognition Enabled',
-        text: 'The browser speech service is unavailable, so secure server transcription will process your answer.',
-        icon: 'info',
-        background: '#161c2d',
-        color: '#fff',
-        timer: 3500,
-        showConfirmButton: false,
-      })
+      if (isListeningRef.current) {
+        setTimeout(() => {
+          if (isListeningRef.current) {
+            startListening(onFinish, true)
+          }
+        }, 1000)
+      }
     }
 
-    // ── onend: only restart if still intentionally listening ──────────────
+    // ── onend: commit session text and restart fresh instance if still listening ──────────────
     if (rec) rec.onend = () => {
+      if (currentSessionFinalRef.current.trim()) {
+        const finalChunk = currentSessionFinalRef.current.trim()
+        if (!accumulatedTranscriptRef.current.endsWith(finalChunk)) {
+          accumulatedTranscriptRef.current = [accumulatedTranscriptRef.current, finalChunk].filter(Boolean).join(' ').trim()
+        }
+        currentSessionFinalRef.current = ''
+      }
+      if (interimTextRef.current.trim()) {
+        const interimChunk = interimTextRef.current.trim()
+        if (!accumulatedTranscriptRef.current.endsWith(interimChunk)) {
+          accumulatedTranscriptRef.current = [accumulatedTranscriptRef.current, interimChunk].filter(Boolean).join(' ').trim()
+        }
+        interimTextRef.current = ''
+      }
+      currentTxRef.current = accumulatedTranscriptRef.current
+      setTranscript(accumulatedTranscriptRef.current)
+      setInterimText('')
+
       if (!isListeningRef.current) return  // we stopped on purpose — don't restart
-      // Recognition stopped by itself (common in Chrome) — restart after a short delay
-      // to prevent rapid restart storms and InvalidStateError exceptions.
+
       setTimeout(() => {
         if (!isListeningRef.current) return
-        try {
-          if (recognitionRef.current === rec) {  // guard: ensure this is still the active instance
-            rec.start()
-          }
-        } catch (e) {
-          // InvalidStateError or similar — start a fresh instance
-          if (isListeningRef.current) startListening(onFinish, true)
-        }
+        startListening(onFinish, true)
       }, 150)
     }
 
     if (rec) {
       try { rec.start() } catch (e) {
         console.warn('SR start error:', e)
-        recognitionRef.current = null
-        clearTimeout(silenceTimerRef.current)
-        silenceTimerRef.current = setTimeout(() => {
-          if (isListeningRef.current) {
-            finishListening().then(fullAns => onFinish?.(fullAns))
-          }
-        }, 30000)
-        Swal.fire({
-          title: 'Backup Voice Recognition Enabled',
-          text: 'The browser speech service could not start, so secure server transcription will process your answer.',
-          icon: 'info',
-          background: '#161c2d',
-          color: '#fff',
-          timer: 3500,
-          showConfirmButton: false,
-        })
       }
     }
-  }, [finishListening, sendSttRequestWithRetry, stopListening])
+  }, [finishListening, languageRef, cameraStreamRef, sendSttRequestWithRetry])
 
   // ── Handle one verbal answer ──────────────────────────────────────────────
   const handleAnswer = useCallback(async (answer, qIdx, fupCount) => {
