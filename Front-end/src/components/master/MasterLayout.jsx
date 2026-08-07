@@ -354,7 +354,6 @@ teal: { primary: '#2dd4bf', hover: '#14b8a6', glow: 'rgba(45, 212, 191, 0.30)' }
                   </div>
                 </div>
               )}
-            </div>
 
             <span className="text-sm text-slate-600 max-lg:hidden block ml-2">
               Welcome back, <strong className="text-slate-800">{userName}</strong>

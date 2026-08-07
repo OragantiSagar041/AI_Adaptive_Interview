@@ -334,26 +334,142 @@ className={`py-3 text-[11px] font-bold transition-colors border-b-2 ${activeTab 
 
               {activeTab === 'analysis' && (
                 <div className="max-w-4xl mx-auto space-y-6 p-6">
-                  {details.sentiment_score !== undefined && (
-<div className="bg-white border border-slate-200 rounded-xl p-6 shadow-sm">
-                      <h4 className="font-bold text-slate-500 mb-2 uppercase text-xs tracking-wider">Sentiment Score</h4>
-                      <div className="text-4xl font-black text-teal-500">{details.sentiment_score}</div>
+                  {/* Top Scores Overview */}
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    {/* Sentiment Score */}
+                    {details.sentiment_score && (
+                      <div className="bg-white border border-slate-200 rounded-xl p-5 shadow-sm">
+                        <h4 className="font-bold text-slate-500 mb-2 uppercase text-xs tracking-wider">Sentiment Score</h4>
+                        <div className="flex items-center gap-3">
+                          <span className={`text-2xl font-black ${
+                            String(details.sentiment_score).toLowerCase().includes('pos') ? 'text-emerald-600' :
+                            String(details.sentiment_score).toLowerCase().includes('neg') ? 'text-rose-600' : 'text-amber-600'
+                          }`}>
+                            {details.sentiment_score}
+                          </span>
+                        </div>
+                      </div>
+                    )}
+
+                    {/* CQS Score */}
+                    {(details.cqs_score !== undefined && details.cqs_score !== null) && (
+                      <div className="bg-white border border-slate-200 rounded-xl p-5 shadow-sm">
+                        <h4 className="font-bold text-slate-500 mb-2 uppercase text-xs tracking-wider">Call Quality Score (CQS)</h4>
+                        <div className="flex items-baseline gap-2">
+                          <span className="text-3xl font-black text-indigo-600">{Number(details.cqs_score).toFixed(1)}</span>
+                          <span className="text-xs font-semibold text-slate-400">/ 10</span>
+                        </div>
+                        {details.cqs_score_message && (
+                          <p className="mt-1 text-xs text-slate-500 font-medium">{details.cqs_score_message}</p>
+                        )}
+                      </div>
+                    )}
+                  </div>
+
+                  {/* Evaluation Metrics Breakdown */}
+                  {(details.metric_score_intent || details.metric_score_relevance || details.metric_score_coherence || details.metric_score_latency) && (
+                    <div className="bg-white border border-slate-200 rounded-xl p-5 shadow-sm">
+                      <h4 className="font-bold text-slate-500 mb-3 uppercase text-xs tracking-wider">Evaluation Metrics</h4>
+                      <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+                        {details.metric_score_intent !== undefined && (
+                          <div className="bg-slate-50 border border-slate-200 rounded-lg p-3">
+                            <span className="text-[10px] font-bold text-slate-500 block uppercase">Intent Score</span>
+                            <span className="text-lg font-extrabold text-slate-900">{Number(details.metric_score_intent || 0).toFixed(2)}</span>
+                          </div>
+                        )}
+                        {details.metric_score_relevance !== undefined && (
+                          <div className="bg-slate-50 border border-slate-200 rounded-lg p-3">
+                            <span className="text-[10px] font-bold text-slate-500 block uppercase">Relevance Score</span>
+                            <span className="text-lg font-extrabold text-slate-900">{Number(details.metric_score_relevance || 0).toFixed(2)}</span>
+                          </div>
+                        )}
+                        {details.metric_score_coherence !== undefined && (
+                          <div className="bg-slate-50 border border-slate-200 rounded-lg p-3">
+                            <span className="text-[10px] font-bold text-slate-500 block uppercase">Coherence Score</span>
+                            <span className="text-lg font-extrabold text-slate-900">{Number(details.metric_score_coherence || 0).toFixed(2)}</span>
+                          </div>
+                        )}
+                        {details.metric_score_latency !== undefined && (
+                          <div className="bg-slate-50 border border-slate-200 rounded-lg p-3">
+                            <span className="text-[10px] font-bold text-slate-500 block uppercase">Latency Score</span>
+                            <span className="text-lg font-extrabold text-slate-900">{Number(details.metric_score_latency || 0).toFixed(2)}</span>
+                          </div>
+                        )}
+                      </div>
                     </div>
                   )}
+
+                  {/* Extracted Candidate Information */}
+                  {(details.extracted_role || details.extracted_experience || details.extracted_city || details.extracted_qualification || details.extracted_company || details.extracted_salary) && (
+                    <div className="bg-white border border-slate-200 rounded-xl p-5 shadow-sm">
+                      <h4 className="font-bold text-slate-500 mb-3 uppercase text-xs tracking-wider">Extracted Candidate Details</h4>
+                      <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
+                        {details.extracted_role && (
+                          <div className="bg-slate-50 border border-slate-200 rounded-lg p-2.5">
+                            <span className="text-[10px] font-bold text-slate-500 block uppercase">Current Role</span>
+                            <span className="text-xs font-bold text-slate-900">{details.extracted_role}</span>
+                          </div>
+                        )}
+                        {details.extracted_experience && (
+                          <div className="bg-slate-50 border border-slate-200 rounded-lg p-2.5">
+                            <span className="text-[10px] font-bold text-slate-500 block uppercase">Experience</span>
+                            <span className="text-xs font-bold text-slate-900">{details.extracted_experience}</span>
+                          </div>
+                        )}
+                        {details.extracted_city && (
+                          <div className="bg-slate-50 border border-slate-200 rounded-lg p-2.5">
+                            <span className="text-[10px] font-bold text-slate-500 block uppercase">City</span>
+                            <span className="text-xs font-bold text-slate-900">{details.extracted_city}</span>
+                          </div>
+                        )}
+                        {details.extracted_qualification && (
+                          <div className="bg-slate-50 border border-slate-200 rounded-lg p-2.5">
+                            <span className="text-[10px] font-bold text-slate-500 block uppercase">Qualification</span>
+                            <span className="text-xs font-bold text-slate-900">{details.extracted_qualification}</span>
+                          </div>
+                        )}
+                        {details.extracted_company && (
+                          <div className="bg-slate-50 border border-slate-200 rounded-lg p-2.5">
+                            <span className="text-[10px] font-bold text-slate-500 block uppercase">Company</span>
+                            <span className="text-xs font-bold text-slate-900">{details.extracted_company}</span>
+                          </div>
+                        )}
+                        {details.extracted_salary && (
+                          <div className="bg-slate-50 border border-slate-200 rounded-lg p-2.5">
+                            <span className="text-[10px] font-bold text-slate-500 block uppercase">Salary</span>
+                            <span className="text-xs font-bold text-slate-900">{details.extracted_salary}</span>
+                          </div>
+                        )}
+                      </div>
+                    </div>
+                  )}
+
+                  {/* Sentiment Analysis Details */}
+                  {details.sentiment_analysis_details && (
+                    <div className="bg-white border border-slate-200 rounded-xl p-5 shadow-sm">
+                      <h4 className="font-bold text-slate-500 mb-2 uppercase text-xs tracking-wider">Sentiment Analysis Details</h4>
+                      <p className="text-slate-700 text-sm whitespace-pre-wrap leading-relaxed">{details.sentiment_analysis_details}</p>
+                    </div>
+                  )}
+
+                  {/* Evaluation Remarks */}
                   {details.evaluation_remarks && (
-<div className="bg-white border border-slate-200 rounded-xl p-6 shadow-sm">
-                      <h4 className="font-bold text-slate-500 mb-3 uppercase text-xs tracking-wider">Evaluation Remarks</h4>
-                      <p className="text-slate-700 whitespace-pre-wrap leading-relaxed">{details.evaluation_remarks}</p>
+                    <div className="bg-white border border-slate-200 rounded-xl p-5 shadow-sm">
+                      <h4 className="font-bold text-slate-500 mb-2 uppercase text-xs tracking-wider">Evaluation Remarks</h4>
+                      <p className="text-slate-700 text-sm whitespace-pre-wrap leading-relaxed">{details.evaluation_remarks}</p>
                     </div>
                   )}
+
+                  {/* Summary */}
                   {details.summary && (
-<div className="bg-white border border-slate-200 rounded-xl p-6 shadow-sm">
-                      <h4 className="font-bold text-slate-500 mb-3 uppercase text-xs tracking-wider">Summary</h4>
-                      <p className="text-slate-700 whitespace-pre-wrap leading-relaxed">{details.summary}</p>
+                    <div className="bg-white border border-slate-200 rounded-xl p-5 shadow-sm">
+                      <h4 className="font-bold text-slate-500 mb-2 uppercase text-xs tracking-wider">Call Summary</h4>
+                      <p className="text-slate-700 text-sm whitespace-pre-wrap leading-relaxed">{details.summary}</p>
                     </div>
                   )}
-                  {(!details.sentiment_score && !details.evaluation_remarks && !details.summary) && (
-<div className="text-center text-slate-500 py-10">
+
+                  {(!details.sentiment_score && !details.cqs_score && !details.evaluation_remarks && !details.summary && !details.sentiment_analysis_details) && (
+                    <div className="text-center text-slate-500 py-10">
                       No advanced analysis available for this call.
                     </div>
                   )}

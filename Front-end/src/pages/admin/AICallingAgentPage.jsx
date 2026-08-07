@@ -1274,6 +1274,52 @@ function ScoreBar({ label, value, max = 10, color = 'indigo' }) {
   )
 }
 
+function getAICallLinkId(call) {
+  const callId = call?.id || call?.call_id || (call?.call_request_id?.id) || ''
+  if (!callId) return null
+
+  if (String(callId).startsWith('ai_call_')) {
+    return String(callId)
+  }
+  return `ai_call_omni_${callId}`
+}
+
+function formatDuration(str) {
+  if (!str) return '00:00';
+  if (str.includes(':')) {
+    const parts = str.split(':');
+    if (parts.length >= 3) {
+      const m = parseInt(parts[1] || '0', 10).toString().padStart(2, '0');
+      const s = parseInt(parts[2] || '0', 10).toString().padStart(2, '0');
+      return `${m}:${s}`;
+    } else if (parts.length === 2) {
+      const m = parseInt(parts[0] || '0', 10).toString().padStart(2, '0');
+      const s = parseInt(parts[1] || '0', 10).toString().padStart(2, '0');
+      return `${m}:${s}`;
+    }
+  }
+  return str;
+}
+
+function formatDate(dateString) {
+  if (!dateString) return 'Unknown Date';
+  try {
+    const date = parseDateStringToUtc(dateString)
+    if (!date || Number.isNaN(date.getTime())) return dateString
+    return date.toLocaleString('en-IN', {
+      timeZone: 'Asia/Kolkata',
+      month: 'long',
+      day: '2-digit',
+      year: 'numeric',
+      hour: '2-digit',
+      minute: '2-digit',
+      hour12: true,
+    })
+  } catch (e) {
+    return dateString
+  }
+};
+
 function RecentCallsTab({ calls, loading, onViewDetails }) {
   if (loading) return <SectionLoader />
   if (!calls || calls.length === 0) {
@@ -1292,41 +1338,7 @@ function RecentCallsTab({ calls, loading, onViewDetails }) {
     )
   }
 
-  const formatDuration = (str) => {
-    if (!str) return '00:00';
-    if (str.includes(':')) {
-      const parts = str.split(':');
-      if (parts.length >= 3) {
-        const m = parseInt(parts[1] || '0', 10).toString().padStart(2, '0');
-        const s = parseInt(parts[2] || '0', 10).toString().padStart(2, '0');
-        return `${m}:${s}`;
-      } else if (parts.length === 2) {
-        const m = parseInt(parts[0] || '0', 10).toString().padStart(2, '0');
-        const s = parseInt(parts[1] || '0', 10).toString().padStart(2, '0');
-        return `${m}:${s}`;
-      }
-    }
-    return str;
-  }
 
-  const formatDate = (dateString) => {
-    if (!dateString) return 'Unknown Date';
-    try {
-      const date = parseDateStringToUtc(dateString)
-      if (!date || Number.isNaN(date.getTime())) return dateString
-      return date.toLocaleString('en-IN', {
-        timeZone: 'Asia/Kolkata',
-        month: 'long',
-        day: '2-digit',
-        year: 'numeric',
-        hour: '2-digit',
-        minute: '2-digit',
-        hour12: true,
-      })
-    } catch (e) {
-      return dateString
-    }
-  };
 
   const [yesNoFilter, setYesNoFilter] = useState('all')
   const [statusFilter, setStatusFilter] = useState('all')
@@ -1509,6 +1521,191 @@ function RecentCallsTab({ calls, loading, onViewDetails }) {
   )
 }
 
+function ApprovalCallsTab({ calls, loading, onViewDetails, onDecision, actionLoadingMap }) {
+  const [searchFilter, setSearchFilter] = useState('')
+  const [filterTab, setFilterTab] = useState('pending') // 'pending', 'approved', 'rejected', 'all'
+
+  const completedCalls = calls.filter(call => {
+    const st = (call.call_status || call.status || '').toLowerCase()
+    return ['completed', 'answered', 'ended', 'success'].includes(st)
+  })
+
+  const pendingCount = completedCalls.filter(c => !c.decision || c.decision === 'pending' || c.decision === 'none').length
+  const approvedCount = completedCalls.filter(c => c.decision === 'selected' || c.decision === 'approved').length
+  const rejectedCount = completedCalls.filter(c => c.decision === 'rejected').length
+
+  const filteredCalls = completedCalls.filter(call => {
+    const dec = (call.decision || 'pending').toLowerCase()
+    if (filterTab === 'pending' && dec !== 'pending' && dec !== 'none' && dec !== '') return false
+    if (filterTab === 'approved' && dec !== 'selected' && dec !== 'approved') return false
+    if (filterTab === 'rejected' && dec !== 'rejected') return false
+
+    const name = (call.candidate_name || call.user_name || call.name || call.to_number || '').toString().toLowerCase()
+    const id = (call.id || call.call_id || '').toString().toLowerCase()
+    return name.includes(searchFilter.toLowerCase()) || id.includes(searchFilter.toLowerCase())
+  })
+
+  return (
+    <div className="max-w-[1200px] mx-auto min-h-[500px]">
+      <div className="flex flex-col gap-4 mb-6">
+        <div className="flex flex-wrap items-center gap-3 bg-white p-4 rounded-2xl border border-slate-200 shadow-sm">
+          <div>
+            <p className="text-slate-900 font-extrabold text-lg">Approval Queue</p>
+            <p className="text-slate-500 text-sm">Review completed AI calls and approve or reject candidates for the Hire IQ interview stage.</p>
+          </div>
+          <div className="flex items-center gap-2 ml-auto">
+            <input
+              value={searchFilter}
+              onChange={e => setSearchFilter(e.target.value)}
+              placeholder="Search by candidate or call ID"
+              className="min-w-[220px] bg-slate-50 border border-slate-200 rounded-xl px-3 py-2 text-sm text-slate-700 outline-none focus:border-indigo-500 focus:ring-2 focus:ring-indigo-200"
+            />
+            {searchFilter && (
+              <button
+                type="button"
+                onClick={() => setSearchFilter('')}
+                className="text-slate-500 hover:text-indigo-700 text-sm font-bold"
+              >Clear</button>
+            )}
+          </div>
+        </div>
+
+        {/* Filter Pills */}
+        <div className="flex flex-wrap items-center gap-2">
+          <button
+            type="button"
+            onClick={() => setFilterTab('pending')}
+            className={`px-4 py-2 rounded-xl text-xs font-bold transition-all cursor-pointer ${
+              filterTab === 'pending'
+                ? 'bg-emerald-600 text-white shadow-sm'
+                : 'bg-white text-slate-600 border border-slate-200 hover:bg-slate-50'
+            }`}
+          >
+            Pending Approval ({pendingCount})
+          </button>
+          <button
+            type="button"
+            onClick={() => setFilterTab('approved')}
+            className={`px-4 py-2 rounded-xl text-xs font-bold transition-all cursor-pointer ${
+              filterTab === 'approved'
+                ? 'bg-emerald-700 text-white shadow-sm'
+                : 'bg-white text-slate-600 border border-slate-200 hover:bg-slate-50'
+            }`}
+          >
+            Approved ({approvedCount})
+          </button>
+          <button
+            type="button"
+            onClick={() => setFilterTab('rejected')}
+            className={`px-4 py-2 rounded-xl text-xs font-bold transition-all cursor-pointer ${
+              filterTab === 'rejected'
+                ? 'bg-rose-600 text-white shadow-sm'
+                : 'bg-white text-slate-600 border border-slate-200 hover:bg-slate-50'
+            }`}
+          >
+            Rejected ({rejectedCount})
+          </button>
+          <button
+            type="button"
+            onClick={() => setFilterTab('all')}
+            className={`px-4 py-2 rounded-xl text-xs font-bold transition-all cursor-pointer ${
+              filterTab === 'all'
+                ? 'bg-slate-800 text-white shadow-sm'
+                : 'bg-white text-slate-600 border border-slate-200 hover:bg-slate-50'
+            }`}
+          >
+            All Calls ({completedCalls.length})
+          </button>
+        </div>
+      </div>
+
+      {loading ? (
+        <SectionLoader />
+      ) : filteredCalls.length === 0 ? (
+        <EmptyState message={`No ${filterTab === 'all' ? 'completed' : filterTab} candidates found.`} />
+      ) : (
+        <div className="grid gap-4">
+          {filteredCalls.map((call, idx) => {
+            const status = (call.call_status || call.status || 'completed').toLowerCase()
+            const isCompleted = ['completed', 'answered', 'ended', 'success'].includes(status)
+            const linkId = getAICallLinkId(call)
+            const loadingAction = !!actionLoadingMap[linkId]
+            const currentDecision = (call.decision || '').toLowerCase()
+            const isApproved = currentDecision === 'selected' || currentDecision === 'approved'
+            const isRejected = currentDecision === 'rejected'
+
+            return (
+              <div key={call.id || idx} className="bg-white border border-slate-200 rounded-3xl p-5 shadow-sm">
+                <div className="flex flex-col gap-4 md:flex-row md:items-start md:justify-between">
+                  <div className="space-y-3">
+                    <div className="flex flex-wrap items-center gap-2">
+                      <span className="text-xs uppercase tracking-widest text-slate-500">Candidate</span>
+                      <span className="px-2 py-1 rounded-full bg-indigo-50 text-indigo-600 text-[11px] font-semibold border border-indigo-100">{isCompleted ? 'Completed' : 'Pending'}</span>
+                      {isApproved && (
+                        <span className="px-2.5 py-1 rounded-full bg-emerald-100 text-emerald-800 text-[11px] font-extrabold border border-emerald-200">
+                          ✓ APPROVED
+                        </span>
+                      )}
+                      {isRejected && (
+                        <span className="px-2.5 py-1 rounded-full bg-rose-100 text-rose-800 text-[11px] font-extrabold border border-rose-200">
+                          ✕ REJECTED
+                        </span>
+                      )}
+                    </div>
+                    <p className="text-xl font-bold text-slate-900">{call.candidate_name || call.user_name || call.name || 'Unknown Candidate'}</p>
+                    <p className="text-sm text-slate-500">Call ID: {call.id || call.call_id || 'N/A'}</p>
+                    <p className="text-sm text-slate-500">Status: {status.toUpperCase()}</p>
+                  </div>
+                  <div className="flex flex-wrap gap-2 items-center">
+                    <button
+                      type="button"
+                      onClick={() => onDecision(call, 'selected')}
+                      disabled={!isCompleted || loadingAction}
+                      className={`inline-flex items-center justify-center gap-2 rounded-xl px-4 py-2 text-sm font-semibold shadow-sm transition disabled:opacity-50 disabled:cursor-not-allowed ${
+                        isApproved
+                          ? 'bg-emerald-700 text-white ring-2 ring-emerald-400'
+                          : 'bg-emerald-600 text-white hover:bg-emerald-700'
+                      }`}
+                    >
+                      {loadingAction ? 'Saving...' : isApproved ? '✓ Approved' : 'Approve'}
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => onDecision(call, 'rejected')}
+                      disabled={!isCompleted || loadingAction}
+                      className={`inline-flex items-center justify-center gap-2 rounded-xl px-4 py-2 text-sm font-semibold transition disabled:opacity-50 disabled:cursor-not-allowed ${
+                        isRejected
+                          ? 'bg-rose-700 text-white ring-2 ring-rose-400'
+                          : 'bg-rose-50 text-rose-700 border border-rose-200 hover:bg-rose-100'
+                      }`}
+                    >
+                      {loadingAction ? 'Saving...' : isRejected ? '✕ Rejected' : 'Reject'}
+                    </button>
+                  </div>
+                </div>
+                <div className="mt-5 grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
+                  <div className="rounded-2xl bg-slate-50 border border-slate-200 p-3">
+                    <p className="text-[0.65rem] uppercase tracking-widest text-slate-500">Call time</p>
+                    <p className="mt-2 text-sm font-semibold text-slate-900">{formatDate(call.time_of_call)}</p>
+                  </div>
+                  <div className="rounded-2xl bg-slate-50 border border-slate-200 p-3">
+                    <p className="text-[0.65rem] uppercase tracking-widest text-slate-500">Duration</p>
+                    <p className="mt-2 text-sm font-semibold text-slate-900">{formatDuration(call.call_duration)}</p>
+                  </div>
+                  <div className="rounded-2xl bg-slate-50 border border-slate-200 p-3">
+                    <p className="text-[0.65rem] uppercase tracking-widest text-slate-500">Call Rating</p>
+                    <p className="mt-2 text-sm font-semibold text-slate-900">{call.cqs_score || call.metric_score_intent || 'N/A'}</p>
+                  </div>
+                </div>
+              </div>
+            )
+          })}
+        </div>
+      )}
+    </div>
+  )
+}
+
 // ─── Main Page ──────────────────────────────────────────────────────────────────
 
 export default function AICallingAgentPage() {
@@ -1542,6 +1739,7 @@ export default function AICallingAgentPage() {
   const [availableCandidates, setAvailableCandidates] = useState([])
   const [selectedApplicationId, setSelectedApplicationId] = useState('')
   const [selectedJobId, setSelectedJobId] = useState('')
+  const [actionLoadingMap, setActionLoadingMap] = useState({})
 
   useEffect(() => {
     if (!token) return
@@ -1656,6 +1854,71 @@ export default function AICallingAgentPage() {
     }
   }
 
+  const handleCallDecision = async (call, decision) => {
+    const linkId = getAICallLinkId(call)
+    if (!linkId) {
+      if (typeof Swal !== 'undefined') {
+        Swal.fire('Error', 'Unable to determine call candidate mapping for approval.', 'error')
+      } else {
+        alert('Unable to determine call candidate mapping for approval.')
+      }
+      return
+    }
+
+    setActionLoadingMap(prev => ({ ...prev, [linkId]: true }))
+    try {
+      const res = await fetch(`${API_BASE_URL}/admin/update-decision`, {
+        method: 'POST',
+        headers: {
+          Authorization: `Bearer ${token}`,
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({ link_id: linkId, decision })
+      })
+      const data = await res.json()
+      if (!res.ok) {
+        throw new Error(data.detail || data.message || 'Unable to update decision')
+      }
+
+      // Dynamically update candidate decision in local state
+      setRecentCalls(prev => prev.map(c => {
+        const cLinkId = getAICallLinkId(c)
+        if (cLinkId === linkId) {
+          return { ...c, decision }
+        }
+        return c
+      }))
+
+      const actionText = decision === 'selected' ? 'Approved' : 'Rejected'
+      const msg = data.email_sent 
+        ? `Candidate ${actionText.toLowerCase()}! Notification email sent successfully.`
+        : `Candidate ${actionText.toLowerCase()} successfully.`
+
+      if (typeof Swal !== 'undefined') {
+        Swal.fire({
+          title: `Candidate ${actionText}!`,
+          text: msg,
+          icon: decision === 'selected' ? 'success' : 'info',
+          timer: 2500,
+          showConfirmButton: false
+        })
+      } else {
+        alert(msg)
+      }
+      fetchRecentCalls()
+    } catch (err) {
+      console.error(err)
+      const errAlert = `Failed to update decision: ${err.message || err}`
+      if (typeof Swal !== 'undefined') {
+        Swal.fire('Error', errAlert, 'error')
+      } else {
+        alert(errAlert)
+      }
+    } finally {
+      setActionLoadingMap(prev => ({ ...prev, [linkId]: false }))
+    }
+  }
+
   useEffect(() => {
     if (!token) return
     fetchAllOmniValues()
@@ -1713,6 +1976,7 @@ export default function AICallingAgentPage() {
     { id: 'integrations', label: 'Integrations', icon: <Plug size={15} /> },
     { id: 'postcall', label: 'Post-Call', icon: <MailCheck size={15} /> },
     { id: 'recentcalls', label: 'Recent Calls', icon: <Clock size={15} /> },
+    { id: 'approval', label: 'Approval', icon: <CheckCircle2 size={15} /> },
     { id: 'dialer', label: 'Manual Dialer', icon: <Phone size={15} /> },
   ]
 
@@ -1866,6 +2130,15 @@ export default function AICallingAgentPage() {
                   calls={recentCalls}
                   loading={loadingMap.recentcalls}
                   onViewDetails={setSelectedCallId}
+                />
+              )}
+              {activeTab === 'approval' && (
+                <ApprovalCallsTab
+                  calls={recentCalls}
+                  loading={loadingMap.recentcalls}
+                  onViewDetails={setSelectedCallId}
+                  onDecision={handleCallDecision}
+                  actionLoadingMap={actionLoadingMap}
                 />
               )}
               {activeTab === 'dialer' && (
