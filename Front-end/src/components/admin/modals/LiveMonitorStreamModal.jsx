@@ -73,11 +73,11 @@ export default function LiveMonitorStreamModal({ isOpen, onClose, session }) {
         })
         if (!res.ok) return
         const data = await res.json()
-        const raw = data?.violations ?? data?.proctoring_alerts ?? []
+        const raw = data?.violations ?? data?.alerts ?? data?.proctoring_alerts ?? []
         if (Array.isArray(raw)) {
           setViolations(raw.map(v => ({
-            type: v.violation_type || v.type || v.alert_type || 'unknown',
-            details: v.details || v.message || '',
+            type: v.violation_type || v.type || v.alert_type || 'warning',
+            details: v.details || v.message || (typeof v === 'string' ? v : ''),
             timestamp: v.timestamp || v.ts || '',
           })))
         }
@@ -85,7 +85,7 @@ export default function LiveMonitorStreamModal({ isOpen, onClose, session }) {
     }
 
     fetchViolations()
-    violationsPollRef.current = setInterval(fetchViolations, 5000)
+    violationsPollRef.current = setInterval(fetchViolations, 3000)
     return () => {
       clearInterval(violationsPollRef.current)
       setViolations([])
@@ -108,11 +108,11 @@ export default function LiveMonitorStreamModal({ isOpen, onClose, session }) {
   }, [])
 
   /**
-   * sendOffer — creates a fresh RTCPeerConnection and sends an SDP offer to the candidate.
-   * Called:
-   *  (a) right after the admin WebSocket opens (ws.onopen)
-   *  (b) by the user clicking "Force Retry Connection"
-   *  (c) automatically after STREAM_TIMEOUT_MS if no track has arrived
+   * sendOffer:
+   * (Re-)creates the RTCPeerConnection, attaches track listeners, creates an SDP offer,
+   * sets localDescription, and sends it over the WebSocket.
+   *
+   * Called once on socket open, and re-invoked on-demand if the stream doesn't arrive in time.
    */
   const sendOfferRef = useRef(null)
 
@@ -151,8 +151,29 @@ export default function LiveMonitorStreamModal({ isOpen, onClose, session }) {
 
       pc.onconnectionstatechange = () => {
         console.log('[AdminWebRTC] PC state:', pc.connectionState)
-        if ((pc.connectionState === 'failed' || pc.connectionState === 'disconnected') && mountedRef.current) {
-          setStatus('disconnected')
+        if (pc.connectionState === 'connected') {
+          if (mountedRef.current) setStatus('streaming')
+        } else if (pc.connectionState === 'failed') {
+          if (mountedRef.current) {
+            console.warn('[AdminWebRTC] PC state failed. Retrying offer...')
+            if (wsRef.current && wsRef.current.readyState === WebSocket.OPEN) {
+              sendOfferRef.current?.(wsRef.current)
+            } else {
+              setStatus('disconnected')
+            }
+          }
+        } else if (pc.connectionState === 'disconnected') {
+          // Grace period for transient disconnects (window switch / background throttling)
+          setTimeout(() => {
+            if (mountedRef.current && pcRef.current?.connectionState === 'disconnected') {
+              console.warn('[AdminWebRTC] PC still disconnected. Retrying offer...')
+              if (wsRef.current && wsRef.current.readyState === WebSocket.OPEN) {
+                sendOfferRef.current?.(wsRef.current)
+              } else {
+                setStatus('disconnected')
+              }
+            }
+          }, 4000)
         }
       }
 
@@ -174,8 +195,8 @@ export default function LiveMonitorStreamModal({ isOpen, onClose, session }) {
       streamTimeoutRef.current = setTimeout(() => {
         if (mountedRef.current && statusRef.current !== 'streaming') {
           console.warn('[AdminWebRTC] No stream in 8 s — retrying offer...')
-          if (sendOfferRef.current) {
-            sendOfferRef.current(ws)
+          if (sendOfferRef.current && wsRef.current?.readyState === WebSocket.OPEN) {
+            sendOfferRef.current(wsRef.current)
           }
         }
       }, 8000)
@@ -238,6 +259,14 @@ export default function LiveMonitorStreamModal({ isOpen, onClose, session }) {
           return
         }
 
+        if (msg.type === 'candidate_connected') {
+          console.log('[AdminWebRTC] Candidate reconnected/ready. Sending fresh offer...')
+          if (mountedRef.current && wsRef.current?.readyState === WebSocket.OPEN) {
+            sendOffer(wsRef.current)
+          }
+          return
+        }
+
         if (msg.type === 'telemetry') {
           if (mountedRef.current) setTelemetry(msg.data)
 
@@ -269,8 +298,8 @@ export default function LiveMonitorStreamModal({ isOpen, onClose, session }) {
       console.log(`[AdminWebRTC] WS closed (${e.code})`)
       clearInterval(heartbeatTimerRef.current)
       if (mountedRef.current) {
-        if ((e.code === 1006 || e.code === 1001) && sessionId && sessionId !== 'undefined') {
-          // Auto-reconnect on abnormal / server restart drop with backoff
+        if (sessionId && sessionId !== 'undefined') {
+          // Auto-reconnect on drop with exponential backoff
           const delay = Math.min(2000 * Math.pow(1.5, retryCount), 15000)
           console.log(`[AdminWebRTC] Auto-reconnecting in ${delay}ms...`)
           setTimeout(() => {
@@ -284,7 +313,26 @@ export default function LiveMonitorStreamModal({ isOpen, onClose, session }) {
       }
     }
 
+    // Auto-recover stream when admin switches back to the tab/window
+    const handleVisibilityChange = () => {
+      if (document.visibilityState === 'visible' && mountedRef.current) {
+        if (wsRef.current?.readyState !== WebSocket.OPEN) {
+          console.log('[AdminWebRTC] Tab focused: socket closed. Reconnecting...')
+          setRetryCount(c => c + 1)
+        } else if (statusRef.current !== 'streaming') {
+          console.log('[AdminWebRTC] Tab focused: stream inactive. Retrying offer...')
+          if (sendOfferRef.current && wsRef.current) {
+            sendOfferRef.current(wsRef.current)
+          }
+        }
+      }
+    }
+    document.addEventListener('visibilitychange', handleVisibilityChange)
+    window.addEventListener('focus', handleVisibilityChange)
+
     return () => {
+      document.removeEventListener('visibilitychange', handleVisibilityChange)
+      window.removeEventListener('focus', handleVisibilityChange)
       mountedRef.current = false
       cleanup()
     }
@@ -356,9 +404,9 @@ export default function LiveMonitorStreamModal({ isOpen, onClose, session }) {
           <div className="bg-slate-50 border border-slate-200 rounded-lg p-3 flex flex-col justify-center">
             <span className="text-[0.65rem] font-bold text-slate-500 uppercase tracking-wider mb-1">Proctoring Alerts</span>
             <div className="flex items-center gap-1.5 font-bold text-sm">
-              <ShieldAlert size={16} className={telemetry?.proctoring_alerts > 0 ? "text-rose-500" : "text-emerald-500"} />
-              <span className={telemetry?.proctoring_alerts > 0 ? "text-rose-600" : "text-emerald-600"}>
-                {telemetry?.proctoring_alerts ?? violations.length} Alerts
+              <ShieldAlert size={16} className={(telemetry?.proctoring_alerts || violations.length) > 0 ? "text-rose-500" : "text-emerald-500"} />
+              <span className={(telemetry?.proctoring_alerts || violations.length) > 0 ? "text-rose-600" : "text-emerald-600"}>
+                {Math.max(telemetry?.proctoring_alerts || 0, violations.length)} Alerts
               </span>
             </div>
           </div>

@@ -154,8 +154,22 @@ export default function useCandidateWebRTC(linkId, mediaStreamRef, telemetryData
 
     connect()
 
+    const handleVisibilityChange = () => {
+      if (document.visibilityState === 'visible' && !destroyedRef.current) {
+        if (!wsRef.current || wsRef.current.readyState === WebSocket.CLOSED || wsRef.current.readyState === WebSocket.CLOSING) {
+          console.log('[CandidateWebRTC] Candidate tab focused: socket closed. Reconnecting immediately...')
+          clearTimeout(reconnectTimerRef.current)
+          connect()
+        }
+      }
+    }
+    document.addEventListener('visibilitychange', handleVisibilityChange)
+    window.addEventListener('focus', handleVisibilityChange)
+
     return () => {
       destroyedRef.current = true
+      document.removeEventListener('visibilitychange', handleVisibilityChange)
+      window.removeEventListener('focus', handleVisibilityChange)
       clearTimeout(reconnectTimerRef.current)
       clearInterval(heartbeatTimerRef.current)
       if (wsRef.current) wsRef.current.close()

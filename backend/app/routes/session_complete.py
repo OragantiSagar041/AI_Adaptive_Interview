@@ -641,6 +641,11 @@ async def webrtc_endpoint(websocket: WebSocket, role: str, link_id: str, token: 
             await websocket.close(code=1008)
             return
         await manager.connect_candidate(websocket, link_id)
+        # Notify watching admins immediately that candidate stream is active/ready
+        try:
+            await manager.send_to_admins(link_id, {"type": "candidate_connected"})
+        except Exception:
+            pass
     elif role == "admin":
         if not token:
             with open(webrtc_log_path, "a") as f:

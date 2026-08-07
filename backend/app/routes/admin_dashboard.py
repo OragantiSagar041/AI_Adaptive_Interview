@@ -771,6 +771,8 @@ def get_interview_details(link_id: str, current_admin: dict = Depends(get_curren
             "total_noise_alerts": total_noise_alerts,
             "total_time_minutes": round(total_time / 60, 1)
         },
+        "violations": session_data.get("violations", session_data.get("alerts", [])),
+        "proctoring_alerts": session_data.get("violations", session_data.get("alerts", [])),
         "alerts": session_data.get("violations", session_data.get("alerts", [])),
         "answers": results,
         "candidate_feedback": session_data.get("candidate_feedback", ""),
