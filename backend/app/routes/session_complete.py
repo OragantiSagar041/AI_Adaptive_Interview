@@ -636,7 +636,9 @@ async def generate_spectator_token(
         )
     
     # Verify the session exists and belongs to this admin's company
-    _get_authorized_live_session(link_id, current_admin)
+    session = _get_authorized_live_session(link_id, current_admin)
+    if session.get("status") != "started":
+        raise HTTPException(status_code=403, detail="Spectator access is only allowed for started sessions")
     
     token = create_spectator_token(
         secret=JWT_SECRET_KEY,
@@ -659,7 +661,7 @@ async def get_spectator_count(
 ):
     """Return the current number of active spectators watching this session."""
     _get_authorized_live_session(link_id, current_admin)
-    count = manager.get_spectator_count(link_id)
+    count = await manager.get_spectator_count(link_id)
     return {"link_id": link_id, "spectator_count": count}
 
 
@@ -726,6 +728,7 @@ async def webrtc_endpoint(websocket: WebSocket, role: str, link_id: str, token: 
         if not session_check or session_check.get("status") != "started" or session_check.get("is_deactivated"):
             await websocket.close(code=1008)
             return
+        spectator_id = str(uuid.uuid4())
         await manager.connect_spectator(websocket, link_id)
     else:
         await websocket.close()
@@ -802,7 +805,7 @@ async def webrtc_endpoint(websocket: WebSocket, role: str, link_id: str, token: 
                     # Route spectator's WebRTC signaling to candidate so candidate
                     # can set up a separate P2P connection for the spectator.
                     # We tag the sender as a spectator so candidate can handle it.
-                    data["spectator_id"] = data.get("admin_id") or id(websocket)
+                    data["spectator_id"] = spectator_id
                     data["role"] = "spectator"
                     await manager.send_to_candidate(link_id, data)
                 # All other message types from spectators are silently dropped.
@@ -816,7 +819,7 @@ async def webrtc_endpoint(websocket: WebSocket, role: str, link_id: str, token: 
         elif role == "admin":
             manager.disconnect_admin(websocket, link_id)
         elif role == "spectator":
-            manager.disconnect_spectator(websocket, link_id)
+            await manager.disconnect_spectator(websocket, link_id)
     except Exception as e:
         webrtc_log_path = os.path.join(tempfile.gettempdir(), "webrtc_debug.log")
         with open(webrtc_log_path, "a") as f:

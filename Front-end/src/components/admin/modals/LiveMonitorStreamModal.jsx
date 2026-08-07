@@ -38,6 +38,7 @@ function formatTs(ts) {
 const ICE_SERVERS = getIceServers()
 // How long to wait before deciding the candidate hasn't answered and retrying
 const STREAM_TIMEOUT_MS = 12000
+const MAX_OFFER_ATTEMPTS = 3
 
 export default function LiveMonitorStreamModal({ isOpen, onClose, session }) {
   const [status, setStatus] = useState('connecting')
@@ -54,6 +55,7 @@ export default function LiveMonitorStreamModal({ isOpen, onClose, session }) {
   const pcRef = useRef(null)
   const streamTimeoutRef = useRef(null)
   const mountedRef = useRef(false)
+  const offerAttemptsRef = useRef(0)
   // Unique ID for this admin viewer — ensures ICE/answer routing only goes to this viewer
   const viewerIdRef = useRef(Math.random().toString(36).substring(2, 10))
   // Keep a stable ref to the current WS so sendOffer can always access it without stale closure
@@ -164,6 +166,7 @@ export default function LiveMonitorStreamModal({ isOpen, onClose, session }) {
         console.log('[AdminWebRTC] Track received:', e.track.kind)
         if (videoRef.current && e.streams[0]) {
           videoRef.current.srcObject = e.streams[0]
+          offerAttemptsRef.current = 0
           clearTimeout(streamTimeoutRef.current)
           if (mountedRef.current) setStatus('streaming')
         }
@@ -190,6 +193,12 @@ export default function LiveMonitorStreamModal({ isOpen, onClose, session }) {
       pc.addTransceiver('video', { direction: 'recvonly' })
       pc.addTransceiver('audio', { direction: 'recvonly' })
 
+      offerAttemptsRef.current += 1
+      if (offerAttemptsRef.current > MAX_OFFER_ATTEMPTS) {
+        if (mountedRef.current) setStatus('disconnected')
+        return
+      }
+
       const offer = await pc.createOffer()
       await pc.setLocalDescription(offer)
 
@@ -208,9 +217,13 @@ export default function LiveMonitorStreamModal({ isOpen, onClose, session }) {
       if (mountedRef.current) setStatus('negotiating')
       console.log('[AdminWebRTC] Offer sent, waiting for answer...')
 
-      // If no track arrives in STREAM_TIMEOUT_MS, retry
+      // If no track arrives in STREAM_TIMEOUT_MS, retry until limit reached
       streamTimeoutRef.current = setTimeout(() => {
         if (mountedRef.current && pcRef.current?.connectionState !== 'connected') {
+          if (offerAttemptsRef.current >= MAX_OFFER_ATTEMPTS) {
+            if (mountedRef.current) setStatus('disconnected')
+            return
+          }
           console.warn('[AdminWebRTC] No stream arrived — auto-retrying offer')
           sendOffer()
         }
@@ -325,6 +338,7 @@ export default function LiveMonitorStreamModal({ isOpen, onClose, session }) {
   }, [isOpen, session, token, retryCount])
 
   const handleManualRetry = () => {
+    offerAttemptsRef.current = 0
     cleanup()
     setStatus('connecting')
     setRetryCount(c => c + 1)
@@ -340,7 +354,7 @@ export default function LiveMonitorStreamModal({ isOpen, onClose, session }) {
       })
       if (!res.ok) throw new Error('Failed to generate token')
       const data = await res.json()
-      const spectatorUrl = `${window.location.origin}/spectate/${linkId}?token=${data.token}`
+      const spectatorUrl = `${window.location.origin}/spectate/${linkId}#token=${encodeURIComponent(data.token)}`
       setShareLink(spectatorUrl)
     } catch (err) {
       console.error('Failed to generate spectator link', err)
@@ -387,11 +401,11 @@ export default function LiveMonitorStreamModal({ isOpen, onClose, session }) {
         <div className="flex items-center justify-between border border-slate-200 rounded-lg p-3 bg-slate-50">
           <div className="flex items-center gap-4">
             <div className="flex items-center gap-2">
-              <Mic size={16} className={telemetry?.audio_level > 0.05 ? 'text-indigo-500' : 'text-slate-400'} />
+              <Mic size={16} className={telemetry?.audio_level > 5 ? 'text-indigo-500' : 'text-slate-400'} />
               <div className="w-16 h-1.5 bg-slate-200 rounded-full overflow-hidden">
                 <div 
                   className="h-full bg-indigo-500 transition-all duration-100 ease-linear"
-                  style={{ width: `${Math.min(100, (telemetry?.audio_level || 0) * 100)}%` }}
+                  style={{ width: `${Math.min(100, Math.max(0, telemetry?.audio_level || 0))}%` }}
                 />
               </div>
             </div>

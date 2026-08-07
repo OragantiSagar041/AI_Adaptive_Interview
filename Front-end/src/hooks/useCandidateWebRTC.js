@@ -30,12 +30,15 @@ export default function useCandidateWebRTC(linkId, mediaStreamRef, telemetryData
 
   // ─── Process Pending Offers when Stream becomes Available ──────────────────
   useEffect(() => {
-    if (!mediaStreamRef.current || pendingOffersRef.current.length === 0 || !wsRef.current) return
-    if (wsRef.current.readyState !== WebSocket.OPEN) return
+    if (!wsRef.current) return
 
-    const processOffers = async () => {
+    const intervalId = setInterval(async () => {
+      if (!wsRef.current || wsRef.current.readyState !== WebSocket.OPEN) return
+      if (!mediaStreamRef.current) return
+      if (pendingOffersRef.current.length === 0) return
+
       const offers = [...pendingOffersRef.current]
-      pendingOffersRef.current = [] // clear queue
+      pendingOffersRef.current = []
       for (const msg of offers) {
         try {
           await handleOffer(msg)
@@ -43,9 +46,10 @@ export default function useCandidateWebRTC(linkId, mediaStreamRef, telemetryData
           console.error('[CandidateWebRTC] Error processing queued offer:', err)
         }
       }
-    }
-    processOffers()
-  }, [mediaStreamRef.current]) // trigger when mediaStream changes
+    }, 500)
+
+    return () => clearInterval(intervalId)
+  }, [mediaStreamRef, wsRef.current])
 
   const handleOffer = async (msg) => {
     const adminId = msg.viewer_id || msg.admin_id || msg.spectator_id || 'admin'
@@ -61,6 +65,7 @@ export default function useCandidateWebRTC(linkId, mediaStreamRef, telemetryData
     // Close any stale peer connection for this viewer
     if (pcsRef.current[adminId]) {
       try { pcsRef.current[adminId].close() } catch (_) {}
+      delete pcsRef.current[adminId]
     }
     
     // Reset ICE queue for this viewer
@@ -90,6 +95,12 @@ export default function useCandidateWebRTC(linkId, mediaStreamRef, telemetryData
 
     pc.onconnectionstatechange = () => {
       console.log(`[CandidateWebRTC] PC state [${adminId}]: ${pc.connectionState}`)
+      if (['closed', 'failed', 'disconnected'].includes(pc.connectionState)) {
+        if (pcsRef.current[adminId] === pc) {
+          delete pcsRef.current[adminId]
+        }
+        iceQueuesRef.current[adminId] = []
+      }
     }
 
     await pc.setRemoteDescription(new RTCSessionDescription(msg.sdp))

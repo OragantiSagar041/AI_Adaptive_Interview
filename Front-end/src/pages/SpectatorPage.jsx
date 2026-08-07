@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef, useCallback } from 'react'
-import { useParams, useSearchParams } from 'react-router-dom'
+import { useParams } from 'react-router-dom'
 import { API_BASE_URL } from '../apiConfig'
 import { getIceServers } from '../utils/webrtcConfig'
 import { Video, MicOff, MonitorOff, Code, MessageSquare, Briefcase, RefreshCw, Eye } from 'lucide-react'
@@ -34,8 +34,11 @@ const ICE_SERVERS = getIceServers()
 
 export default function SpectatorPage() {
   const { linkId } = useParams()
-  const [searchParams] = useSearchParams()
-  const token = searchParams.get('token')
+  const [token, setToken] = useState(() => {
+    if (typeof window === 'undefined') return null
+    const hashParams = new URLSearchParams(window.location.hash.slice(1))
+    return hashParams.get('token') || new URLSearchParams(window.location.search).get('token')
+  })
 
   const [status, setStatus] = useState('connecting')
   const [telemetry, setTelemetry] = useState(null)
@@ -48,33 +51,21 @@ export default function SpectatorPage() {
   const streamTimeoutRef = useRef(null)
   const mountedRef = useRef(false)
   const viewerIdRef = useRef(Math.random().toString(36).substring(2, 10))
-  const violationsPollRef = useRef(null)
+  const iceCandidateQueueRef = useRef([])
+  const statusRef = useRef(status)
+  const violationsRef = useRef([])
 
-  // ── Violations polling (read-only) ─────────────────────────────────────────
   useEffect(() => {
-    if (!linkId || !token) return
-    const fetchViolations = async () => {
-      try {
-        const res = await fetch(`${API_BASE_URL}/admin/interview/${linkId}`, {
-          headers: { Authorization: `Bearer ${token}` }, // will be rejected since spectator token isn't admin JWT, but we fetch from telemetry too
-        })
-        if (!res.ok) return
-        const data = await res.json()
-        const raw = data?.violations ?? data?.proctoring_alerts ?? []
-        if (Array.isArray(raw)) {
-          setViolations(raw.map(v => ({
-            type: v.violation_type || v.type || v.alert_type || 'unknown',
-            details: v.details || v.message || '',
-            timestamp: v.timestamp || v.ts || '',
-          })))
-        }
-      } catch {}
+    if (!token) return
+    const hashParams = new URLSearchParams(window.location.hash.slice(1))
+    if (hashParams.get('token')) {
+      window.history.replaceState(null, '', window.location.pathname + window.location.search)
     }
-    fetchViolations()
-    violationsPollRef.current = setInterval(fetchViolations, 10000)
-    return () => clearInterval(violationsPollRef.current)
-  }, [linkId, token])
+  }, [token])
 
+  useEffect(() => {
+    statusRef.current = status
+  }, [status])
 
   // ── WebRTC / Signaling ──────────────────────────────────────────────────────
   const cleanup = useCallback(() => {
@@ -102,6 +93,7 @@ export default function SpectatorPage() {
     try {
       const pc = new RTCPeerConnection({ iceServers: ICE_SERVERS })
       pcRef.current = pc
+      iceCandidateQueueRef.current = []
 
       pc.onicecandidate = (e) => {
         if (e.candidate && ws.readyState === WebSocket.OPEN) {
@@ -116,6 +108,7 @@ export default function SpectatorPage() {
       pc.ontrack = (e) => {
         if (videoRef.current && e.streams[0]) {
           videoRef.current.srcObject = e.streams[0]
+          videoRef.current.play().catch(() => {})
           clearTimeout(streamTimeoutRef.current)
           if (mountedRef.current) setStatus('streaming')
         }
@@ -142,14 +135,14 @@ export default function SpectatorPage() {
       if (mountedRef.current) setStatus('negotiating')
 
       streamTimeoutRef.current = setTimeout(() => {
-        if (mountedRef.current && status !== 'streaming') {
+        if (mountedRef.current && statusRef.current !== 'streaming') {
           sendOffer(ws)
         }
       }, 8000)
     } catch (err) {
       if (mountedRef.current) setStatus('error')
     }
-  }, [status])
+  }, [])
 
   useEffect(() => {
     if (!linkId || !token) {
@@ -174,17 +167,41 @@ export default function SpectatorPage() {
       try {
         const msg = JSON.parse(event.data)
         if (msg.type === 'telemetry') {
-          if (mountedRef.current) setTelemetry(msg.data)
+          if (mountedRef.current) {
+            const data = msg.data || {}
+            setTelemetry(data)
+
+            const alertType = data?.proctoring_status?.lastAlertType || data?.last_alert_type
+            if (alertType) {
+              const label = alertType.toString()
+              const entry = {
+                type: label.replace(/\s+/g, '_').toLowerCase(),
+                details: label,
+                timestamp: new Date().toISOString(),
+              }
+              if (!violationsRef.current.length || violationsRef.current[0].details !== entry.details) {
+                violationsRef.current = [entry, ...violationsRef.current].slice(0, 20)
+                setViolations(violationsRef.current)
+              }
+            }
+          }
         } else if (msg.type === 'webrtc_answer') {
           if (msg.viewer_id && msg.viewer_id !== viewerIdRef.current) return;
           if (mountedRef.current) setStatus('negotiating')
           if (pcRef.current && pcRef.current.signalingState !== 'stable') {
             await pcRef.current.setRemoteDescription(new RTCSessionDescription(msg.sdp))
+            const queue = iceCandidateQueueRef.current || []
+            for (const candidate of queue) {
+              try { await pcRef.current.addIceCandidate(new RTCIceCandidate(candidate)) } catch (_) {}
+            }
+            iceCandidateQueueRef.current = []
           }
         } else if (msg.type === 'webrtc_ice_candidate') {
           if (msg.viewer_id && msg.viewer_id !== viewerIdRef.current) return;
           if (pcRef.current && pcRef.current.remoteDescription) {
             await pcRef.current.addIceCandidate(new RTCIceCandidate(msg.candidate))
+          } else {
+            iceCandidateQueueRef.current.push(msg.candidate)
           }
         } else if (msg.type === 'candidate_disconnected') {
           if (mountedRef.current) setStatus('disconnected')
@@ -281,6 +298,7 @@ export default function SpectatorPage() {
 
             <video
               ref={videoRef}
+              controls
               autoPlay
               playsInline
               className="w-full h-full object-cover"

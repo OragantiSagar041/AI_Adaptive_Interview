@@ -190,9 +190,25 @@ class RedisConnectionManager:
 
     # ─── Spectator connection ────────────────────────────────────────────────────
 
+    SPECTATOR_COUNT_KEY_TEMPLATE = "session:{link_id}:spectator_count"
+    SPECTATOR_COUNT_TTL = 3600
+
     async def connect_spectator(self, websocket: WebSocket, link_id: str):
         """Register a read-only spectator WebSocket for this interview session."""
         await websocket.accept()
+
+        await self.connect_redis()
+        if self.pubsub:
+            try:
+                await self.pubsub.subscribe(f"session:{link_id}:admins")
+            except Exception as e:
+                logger.warning(
+                    f"Redis subscribe failed for spectator {link_id}: {e}. Using in-memory fallback."
+                )
+                self.redis = None
+                self.pubsub = None
+                self._redis_failed = True
+
         if link_id not in self.local_connections:
             self.local_connections[link_id] = {"candidate": None, "admins": [], "spectators": []}
         elif "spectators" not in self.local_connections[link_id]:
@@ -200,7 +216,15 @@ class RedisConnectionManager:
         self.local_connections[link_id]["spectators"].append(websocket)
         logger.info(f"[Spectator] Connected to session {link_id}. Total spectators: {len(self.local_connections[link_id]['spectators'])}")
 
-    def disconnect_spectator(self, websocket: WebSocket, link_id: str):
+        if self.redis:
+            try:
+                key = self.SPECTATOR_COUNT_KEY_TEMPLATE.format(link_id=link_id)
+                await self.redis.incr(key)
+                await self.redis.expire(key, self.SPECTATOR_COUNT_TTL)
+            except Exception as e:
+                logger.warning(f"Redis spectator count update failed for {link_id}: {e}")
+
+    async def disconnect_spectator(self, websocket: WebSocket, link_id: str):
         """Remove a spectator from the session. Cleans up the group if fully empty."""
         group = self.local_connections.get(link_id)
         if not group:
@@ -209,12 +233,38 @@ class RedisConnectionManager:
         if websocket in spectators:
             spectators.remove(websocket)
         logger.info(f"[Spectator] Disconnected from session {link_id}. Remaining: {len(spectators)}")
+        if self.redis:
+            try:
+                key = self.SPECTATOR_COUNT_KEY_TEMPLATE.format(link_id=link_id)
+                value = await self.redis.decr(key)
+                if value <= 0:
+                    await self.redis.delete(key)
+            except Exception as e:
+                logger.warning(f"Redis spectator count decrement failed for {link_id}: {e}")
         # Clean up the group only if all roles are empty
         if not group.get("admins") and not group.get("candidate") and not spectators:
             self.local_connections.pop(link_id, None)
+            if self.pubsub:
+                asyncio.create_task(
+                    self._safe_unsubscribe(
+                        f"session:{link_id}:candidate",
+                        f"session:{link_id}:admins",
+                    )
+                )
 
-    def get_spectator_count(self, link_id: str) -> int:
+    async def get_spectator_count(self, link_id: str) -> int:
         """Return the number of active spectators for a session."""
+        if self.redis:
+            try:
+                key = self.SPECTATOR_COUNT_KEY_TEMPLATE.format(link_id=link_id)
+                value = await self.redis.get(key)
+                if value is not None:
+                    try:
+                        return int(value)
+                    except ValueError:
+                        pass
+            except Exception as e:
+                logger.warning(f"Redis spectator count read failed for {link_id}: {e}")
         group = self.local_connections.get(link_id, {})
         return len(group.get("spectators", []))
 
