@@ -6,7 +6,7 @@ Auto-split from routes.py lines 4010–6464.
 # ---------------------------------------------------------------------------
 # Standard library
 # ---------------------------------------------------------------------------
-import os, sys, io, json, hmac, math, uuid, html, time, random
+import os, sys, io, json, hmac, math, uuid, html, time, random, re
 import base64, shutil, hashlib, textwrap, asyncio, subprocess, tempfile
 import threading, traceback, logging
 from collections import defaultdict
@@ -264,21 +264,88 @@ Return a pure JSON object with these keys. If not found, return empty string for
 @router.get("/admin/candidate/check")
 def check_candidate(email: str, current_admin: dict = Depends(get_current_admin_details)):
     try:
-        # Check if candidate exists for this company (or globally if super admin)
-        query = {"candidate_email": email}
+        clean_email = (email or "").strip().lower()
+        if not clean_email or "@" not in clean_email:
+            return {"exists": False}
+
+        # 1. Search in interview_sessions_collection (with case-insensitive match)
+        query = {
+            "candidate_email": {"$regex": f"^{re.escape(clean_email)}$", "$options": "i"}
+        }
         if current_admin.get("role") not in ["super_admin", "master"]:
             query["company_id"] = current_admin.get("company_id")
             
-        session = interview_sessions_collection.find_one(
-            query,
-            sort=[("created_at", -1)]
+        sessions = list(interview_sessions_collection.find(query).sort("created_at", -1).limit(5))
+        for s in sessions:
+            resume_text = (s.get("resume_text") or "").strip()
+            cand_name = (s.get("candidate_name") or "").strip()
+            if resume_text:
+                return {
+                    "exists": True,
+                    "resume_text": resume_text,
+                    "candidate_name": cand_name,
+                    "job_description": s.get("job_description", "")
+                }
+
+        # 2. Search in job_applications_collection
+        app_doc = job_applications_collection.find_one(
+            {
+                "email": {"$regex": f"^{re.escape(clean_email)}$", "$options": "i"},
+                "resume_text": {"$exists": True, "$ne": ""}
+            },
+            sort=[("applied_at", -1)]
         )
-        if session:
+        if app_doc and (app_doc.get("resume_text") or "").strip():
             return {
                 "exists": True,
-                "resume_text": session.get("resume_text", ""),
-                "candidate_name": session.get("candidate_name", "")
+                "resume_text": app_doc.get("resume_text", "").strip(),
+                "candidate_name": app_doc.get("name", "") or app_doc.get("candidate_name", ""),
+                "candidate_phone": app_doc.get("phone", ""),
+                "job_description": app_doc.get("job_description", "")
             }
+
+        # 3. Search in omni_call_logs_collection
+        call_doc = omni_call_logs_collection.find_one(
+            {
+                "$or": [
+                    {"email": {"$regex": f"^{re.escape(clean_email)}$", "$options": "i"}},
+                    {"candidate_email": {"$regex": f"^{re.escape(clean_email)}$", "$options": "i"}}
+                ]
+            },
+            sort=[("created_at", -1)]
+        )
+        if call_doc:
+            r_text = (call_doc.get("resume_text") or call_doc.get("parsed_resume") or "").strip()
+            if r_text:
+                return {
+                    "exists": True,
+                    "resume_text": r_text,
+                    "candidate_name": call_doc.get("candidate_name") or call_doc.get("name", ""),
+                    "candidate_phone": call_doc.get("phone_number") or call_doc.get("phone", "")
+                }
+
+        # 4. Search candidates_collection
+        cand_doc = candidates_collection.find_one(
+            {"email": {"$regex": f"^{re.escape(clean_email)}$", "$options": "i"}},
+            sort=[("created_at", -1)]
+        )
+        if cand_doc and (cand_doc.get("resume_text") or "").strip():
+            return {
+                "exists": True,
+                "resume_text": cand_doc.get("resume_text", "").strip(),
+                "candidate_name": cand_doc.get("name", "") or cand_doc.get("candidate_name", "")
+            }
+
+        # 5. If sessions found with candidate name even if resume_text is blank
+        if sessions:
+            first_s = sessions[0]
+            return {
+                "exists": True,
+                "resume_text": first_s.get("resume_text", ""),
+                "candidate_name": first_s.get("candidate_name", ""),
+                "job_description": first_s.get("job_description", "")
+            }
+
         return {"exists": False}
     except Exception as e:
         return {"exists": False, "error": str(e)}
