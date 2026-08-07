@@ -1312,7 +1312,11 @@ export const useInterviewSession = (sessionId, interviewType, startRoundTwo) => 
   })
   const telemetryRoundType = currentQuestion?.type === 'case_study'
     ? 'case_study'
-    : (startRoundTwo || currentQuestion?.type === 'coding' ? 'coding' : 'verbal')
+    : (currentQuestion?.type === 'coding'
+      ? 'coding'
+      : (isRoundTwo
+        ? (interviewType === 'Non-Technical' ? 'case_study' : 'coding')
+        : 'verbal'))
   const telemetryData = {
     round_type: telemetryRoundType,
     current_question: currentQuestionIndex + 1,

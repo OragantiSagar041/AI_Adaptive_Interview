@@ -108,11 +108,12 @@ class RedisConnectionManager:
                                         except Exception as e:
                                             logger.error(f"Error sending to local admin {target_admin}: {e}")
                                 else:
-                                    for admin_ws in list(local_group["admins"]):
+                                    recipients = list(local_group["admins"]) + list(local_group.get("spectators", []))
+                                    for ws in recipients:
                                         try:
-                                            await admin_ws.send_json(data)
+                                            await ws.send_json(data)
                                         except Exception as e:
-                                            logger.error(f"Error sending to local admin: {e}")
+                                            logger.error(f"Error sending to local admin/spectator: {e}")
                     elif channel == "dashboard:updates":
                         await self.broadcast_dashboard(data)
         except asyncio.CancelledError:
@@ -199,6 +200,7 @@ class RedisConnectionManager:
             if (
                 not self.local_connections[link_id]["admins"]
                 and not self.local_connections[link_id]["candidate"]
+                and not self.local_connections[link_id].get("spectators")
             ):
                 del self.local_connections[link_id]
                 if self.pubsub:
@@ -215,6 +217,98 @@ class RedisConnectionManager:
                 await self.pubsub.unsubscribe(*channels)
         except Exception as e:
             logger.warning(f"Error unsubscribing from Redis channels: {e}")
+
+    # ─── Spectator connection ────────────────────────────────────────────────────
+
+    SPECTATOR_COUNT_KEY_TEMPLATE = "session:{link_id}:spectator_count"
+    SPECTATOR_COUNT_TTL = 3600
+
+    async def connect_spectator(self, websocket: WebSocket, link_id: str, spectator_id: Optional[str] = None):
+        """Register a read-only spectator WebSocket for this interview session."""
+        await websocket.accept()
+
+        await self.connect_redis()
+        if self.pubsub:
+            try:
+                await self.pubsub.subscribe(f"session:{link_id}:admins")
+            except Exception as e:
+                logger.warning(
+                    f"Redis subscribe failed for spectator {link_id}: {e}. Using in-memory fallback."
+                )
+                self.redis = None
+                self.pubsub = None
+                self._redis_failed = True
+
+        if link_id not in self.local_connections:
+            self.local_connections[link_id] = {"candidate": None, "admins": [], "admins_map": {}, "spectators": []}
+        elif "spectators" not in self.local_connections[link_id]:
+            self.local_connections[link_id]["spectators"] = []
+        if "admins_map" not in self.local_connections[link_id]:
+            self.local_connections[link_id]["admins_map"] = {}
+
+        self.local_connections[link_id]["spectators"].append(websocket)
+        if spectator_id:
+            self.local_connections[link_id]["admins_map"][spectator_id] = websocket
+        logger.info(f"[Spectator] Connected to session {link_id}. Total spectators: {len(self.local_connections[link_id]['spectators'])}")
+
+        if self.redis:
+            try:
+                key = self.SPECTATOR_COUNT_KEY_TEMPLATE.format(link_id=link_id)
+                await self.redis.incr(key)
+                await self.redis.expire(key, self.SPECTATOR_COUNT_TTL)
+            except Exception as e:
+                logger.warning(f"Redis spectator count update failed for {link_id}: {e}")
+
+    async def disconnect_spectator(self, websocket: WebSocket, link_id: str, spectator_id: Optional[str] = None):
+        """Remove a spectator from the session. Cleans up the group if fully empty."""
+        group = self.local_connections.get(link_id)
+        if not group:
+            return
+        spectators = group.get("spectators", [])
+        if websocket in spectators:
+            spectators.remove(websocket)
+        admins_map = group.get("admins_map", {})
+        if spectator_id and spectator_id in admins_map:
+            del admins_map[spectator_id]
+        else:
+            keys_to_del = [k for k, v in admins_map.items() if v is websocket]
+            for k in keys_to_del:
+                del admins_map[k]
+        logger.info(f"[Spectator] Disconnected from session {link_id}. Remaining: {len(spectators)}")
+        if self.redis:
+            try:
+                key = self.SPECTATOR_COUNT_KEY_TEMPLATE.format(link_id=link_id)
+                value = await self.redis.decr(key)
+                if value <= 0:
+                    await self.redis.delete(key)
+            except Exception as e:
+                logger.warning(f"Redis spectator count decrement failed for {link_id}: {e}")
+        # Clean up the group only if all roles are empty
+        if not group.get("admins") and not group.get("candidate") and not spectators:
+            self.local_connections.pop(link_id, None)
+            if self.pubsub:
+                asyncio.create_task(
+                    self._safe_unsubscribe(
+                        f"session:{link_id}:candidate",
+                        f"session:{link_id}:admins",
+                    )
+                )
+
+    async def get_spectator_count(self, link_id: str) -> int:
+        """Return the number of active spectators for a session."""
+        if self.redis:
+            try:
+                key = self.SPECTATOR_COUNT_KEY_TEMPLATE.format(link_id=link_id)
+                value = await self.redis.get(key)
+                if value is not None:
+                    try:
+                        return int(value)
+                    except ValueError:
+                        pass
+            except Exception as e:
+                logger.warning(f"Redis spectator count read failed for {link_id}: {e}")
+        group = self.local_connections.get(link_id, {})
+        return len(group.get("spectators", []))
 
     # ─── Dashboard connection ────────────────────────────────────────────────────
 
@@ -284,12 +378,13 @@ class RedisConnectionManager:
                 self.redis = None
                 self.pubsub = None
                 self._redis_failed = True
-        # In-memory fallback
+        # In-memory fallback — fans out to both admins and spectators
         local_group = self.local_connections.get(link_id)
         if local_group:
-            for admin_ws in list(local_group["admins"]):
+            recipients = list(local_group.get("admins", [])) + list(local_group.get("spectators", []))
+            for ws in recipients:
                 try:
-                    await admin_ws.send_json(message)
+                    await ws.send_json(message)
                 except Exception:
                     pass
 

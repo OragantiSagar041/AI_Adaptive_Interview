@@ -3,7 +3,7 @@ import { API_BASE_URL } from '../../../apiConfig'
 import { getIceServers } from '../../../utils/webrtcConfig'
 import Modal from '../../Modal'
 import { useSelector } from 'react-redux'
-import { Video, Mic, MicOff, MonitorOff, Monitor, Camera, Activity, ShieldAlert, Code, MessageSquare, Briefcase, AlertTriangle, RefreshCw } from 'lucide-react'
+import { Video, Mic, MicOff, MonitorOff, Monitor, Camera, Activity, ShieldAlert, Code, MessageSquare, Briefcase, AlertTriangle, RefreshCw, Share2, Copy, CheckCircle2, Users } from 'lucide-react'
 
 // Maps violation_type values to a human-readable label + colour class
 const VIOLATION_META = {
@@ -75,6 +75,10 @@ export default function LiveMonitorStreamModal({ isOpen, onClose, session }) {
   const [viewMode, setViewMode] = useState('screen')
   const [remoteStream, setRemoteStream] = useState(null)
   const [trackAvailability, setTrackAvailability] = useState({ camera: false, screen: false })
+  const [shareLink, setShareLink] = useState('')
+  const [generatingLink, setGeneratingLink] = useState(false)
+  const [copied, setCopied] = useState(false)
+  const [spectatorCount, setSpectatorCount] = useState(0)
 
   const violationsPollRef = useRef(null)
   const videoRef = useRef(null)
@@ -99,7 +103,7 @@ export default function LiveMonitorStreamModal({ isOpen, onClose, session }) {
   }
   const heartbeatTimerRef = useRef(null)
 
-  // ── Violations polling ──────────────────────────────────────────────────────
+  // ── Violations & Spectator Count polling ───────────────────────────────────
   useEffect(() => {
     if (!isOpen || !session) return
     const linkId = typeof session === 'string' ? session : (session?.link_id || session?.session_id || session?.id || session?._id || session?.interview_id)
@@ -123,13 +127,66 @@ export default function LiveMonitorStreamModal({ isOpen, onClose, session }) {
       } catch { /* non-fatal */ }
     }
 
+    const fetchSpectatorCount = async () => {
+      try {
+        const res = await fetch(`${API_BASE_URL}/admin/interview/${linkId}/spectator-count`, {
+          headers: { Authorization: `Bearer ${token}` },
+        })
+        if (res.ok) {
+          const data = await res.json()
+          setSpectatorCount(data.spectator_count || 0)
+        }
+      } catch { /* non-fatal */ }
+    }
+
     fetchViolations()
-    violationsPollRef.current = setInterval(fetchViolations, 3000)
+    fetchSpectatorCount()
+    violationsPollRef.current = setInterval(() => {
+      fetchViolations()
+      fetchSpectatorCount()
+    }, 3000)
+
     return () => {
       clearInterval(violationsPollRef.current)
       setViolations([])
+      setSpectatorCount(0)
+      setShareLink('')
+      setCopied(false)
     }
   }, [isOpen, session, token])
+
+  const handleGenerateShareLink = async () => {
+    try {
+      setGeneratingLink(true)
+      const linkId = typeof session === 'string' ? session : (session?.link_id || session?.session_id || session?.id || session?._id || session?.interview_id)
+      const res = await fetch(`${API_BASE_URL}/admin/interview/${linkId}/spectator-token`, {
+        method: 'POST',
+        headers: {
+          Authorization: `Bearer ${token}`,
+          'Content-Type': 'application/json',
+        },
+      })
+      if (!res.ok) {
+        const errorData = await res.json().catch(() => ({}))
+        throw new Error(errorData.detail || 'Failed to generate token')
+      }
+      const data = await res.json()
+      const spectatorUrl = `${window.location.origin}/spectate/${linkId}#token=${encodeURIComponent(data.token)}`
+      setShareLink(spectatorUrl)
+    } catch (err) {
+      console.error('Failed to generate spectator link', err)
+      alert(err.message || 'Failed to generate spectator link')
+    } finally {
+      setGeneratingLink(false)
+    }
+  }
+
+  const handleCopyLink = () => {
+    if (!shareLink) return
+    navigator.clipboard.writeText(shareLink)
+    setCopied(true)
+    setTimeout(() => setCopied(false), 2500)
+  }
 
   // ── WebRTC / Signaling ──────────────────────────────────────────────────────
   const cleanup = useCallback(() => {
@@ -499,12 +556,78 @@ export default function LiveMonitorStreamModal({ isOpen, onClose, session }) {
         <div className="flex items-center gap-2">
           <span className={`w-2.5 h-2.5 rounded-full ${status === 'streaming' ? 'bg-success animate-pulse' : 'bg-amber-500'}`} />
           Live Stream: <span className="font-bold">{candidateName}</span>
+          {spectatorCount > 0 && (
+            <span className="ml-2 inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-xs font-semibold bg-indigo-50 text-indigo-700 border border-indigo-200">
+              <Users size={12} />
+              {spectatorCount} Spectator{spectatorCount !== 1 ? 's' : ''}
+            </span>
+          )}
         </div>
       }
       subtitle={`Email: ${candidateEmail} | Session: ${displaySessionId}`}
       maxWidth="max-w-4xl"
     >
       <div className="flex flex-col gap-4 text-slate-800 bg-white">
+
+        {/* Action bar: Refresh & Share Spectator Link */}
+        <div className="flex flex-wrap items-center justify-between gap-3 p-3 bg-slate-50 border border-slate-200 rounded-lg">
+          <div className="flex items-center gap-2">
+            <button
+              type="button"
+              onClick={handleManualRetry}
+              className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold rounded-md border border-slate-300 bg-white text-slate-700 hover:bg-slate-50 transition-colors shadow-sm"
+            >
+              <RefreshCw size={13} className={status === 'connecting' || status === 'negotiating' ? 'animate-spin' : ''} />
+              Refresh Stream
+            </button>
+          </div>
+
+          <div className="flex items-center gap-2">
+            {!shareLink ? (
+              <button
+                type="button"
+                onClick={handleGenerateShareLink}
+                disabled={generatingLink}
+                className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold rounded-md border border-indigo-300 bg-indigo-50 text-indigo-700 hover:bg-indigo-100 transition-colors shadow-sm disabled:opacity-50"
+              >
+                <Share2 size={13} />
+                {generatingLink ? 'Generating...' : 'Share Spectator Link'}
+              </button>
+            ) : (
+              <div className="flex items-center gap-1.5">
+                <input
+                  type="text"
+                  readOnly
+                  value={shareLink}
+                  className="text-xs text-slate-600 bg-white border border-slate-300 rounded px-2.5 py-1 w-56 truncate outline-none select-all"
+                  onFocus={e => e.target.select()}
+                />
+                <button
+                  type="button"
+                  onClick={handleCopyLink}
+                  className={`inline-flex items-center gap-1 px-2.5 py-1 text-xs font-semibold rounded border transition-colors shadow-sm ${
+                    copied
+                      ? 'bg-emerald-50 border-emerald-300 text-emerald-700'
+                      : 'bg-white border-slate-300 text-slate-700 hover:bg-slate-50'
+                  }`}
+                  title="Copy Link"
+                >
+                  {copied ? (
+                    <>
+                      <CheckCircle2 size={13} className="text-emerald-600" />
+                      Copied
+                    </>
+                  ) : (
+                    <>
+                      <Copy size={13} />
+                      Copy
+                    </>
+                  )}
+                </button>
+              </div>
+            )}
+          </div>
+        </div>
 
         {/* Top Telemetry Bar */}
         <div className="grid grid-cols-2 md:grid-cols-4 gap-3">

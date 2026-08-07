@@ -98,7 +98,7 @@ export default function useCandidateWebRTC(linkId, mediaStreamRef, telemetryData
       ws.onmessage = async (event) => {
         try {
           const msg = JSON.parse(event.data)
-          const adminId = msg.admin_id || 'admin'
+          const adminId = msg.admin_id || msg.spectator_id || msg.viewer_id || 'admin'
 
           if (msg.type === 'pong' || msg.type === 'ping') return  // heartbeat reply — ignore
 
@@ -108,7 +108,7 @@ export default function useCandidateWebRTC(linkId, mediaStreamRef, telemetryData
           }
 
           if (msg.type === 'webrtc_offer') {
-            console.log(`[CandidateWebRTC] Received offer from admin: ${adminId}`)
+            console.log(`[CandidateWebRTC] Received offer from ${msg.role === 'spectator' ? 'spectator' : 'admin'}: ${adminId}`)
 
             const cameraStream = mediaStreamRef.current
             const screenStream = secondaryMediaStreamRef?.current
@@ -156,6 +156,9 @@ export default function useCandidateWebRTC(linkId, mediaStreamRef, telemetryData
                   type: 'webrtc_ice_candidate',
                   candidate: e.candidate,
                   target_admin_id: adminId,
+                  viewer_id: adminId,
+                  spectator_id: adminId,
+                  offer_id: msg.offer_id,
                 }))
               }
             }
@@ -180,11 +183,14 @@ export default function useCandidateWebRTC(linkId, mediaStreamRef, telemetryData
             const answer = await pc.createAnswer()
             await pc.setLocalDescription(answer)
 
-            console.log(`[CandidateWebRTC] Sending answer to admin: ${adminId}`)
+            console.log(`[CandidateWebRTC] Sending answer to viewer: ${adminId}`)
             ws.send(JSON.stringify({
               type: 'webrtc_answer',
               sdp: pc.localDescription,
               target_admin_id: adminId,
+              viewer_id: adminId,
+              spectator_id: adminId,
+              offer_id: msg.offer_id,
             }))
 
           } else if (msg.type === 'webrtc_ice_candidate') {
