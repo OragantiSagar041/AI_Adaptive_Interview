@@ -292,6 +292,15 @@ async def apply_for_job(
     if not name or not email:
         raise HTTPException(status_code=422, detail="Name and email are required to apply")
 
+    import re
+    name_clean = str(name or "").strip()
+    if not name_clean or not re.match(r'^[A-Za-z\s]+$', name_clean):
+        raise HTTPException(status_code=400, detail="Full Name must contain only alphabets and spaces.")
+
+    phone_clean = str(phone or "").strip()
+    if phone_clean and not re.match(r'^\d+$', phone_clean):
+        raise HTTPException(status_code=400, detail="Phone Number must contain only numeric digits.")
+
     from app.services.services import extract_text_from_file
 
     resume_filename = None

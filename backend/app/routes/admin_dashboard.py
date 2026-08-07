@@ -345,6 +345,8 @@ def get_interview_details(link_id: str, current_admin: dict = Depends(get_curren
                 "total_time_minutes": total_mins
             },
             "admin_notes": app.get("admin_notes", ""),
+            "notes": app.get("notes") or app.get("notes_history") or [],
+            "notes_history": app.get("notes_history") or app.get("notes") or [],
             "alerts": [],
             "answers": answers,
             "started_at": app.get("applied_at") or app.get("updated_at") or app.get("created_at")
@@ -774,6 +776,8 @@ def get_interview_details(link_id: str, current_admin: dict = Depends(get_curren
         "alerts": session_data.get("violations", session_data.get("alerts", [])),
         "answers": results,
         "candidate_feedback": session_data.get("candidate_feedback", ""),
+        "notes": session_data.get("notes") or session_data.get("notes_history") or [],
+        "notes_history": session_data.get("notes_history") or session_data.get("notes") or [],
         "ats_score": session_data.get("ats_score")
     }
     
@@ -1916,42 +1920,76 @@ async def startup_event_db_and_email():
         EMAIL_SCHEDULER_STARTED = True
 
 @router.get("/api/interview/{interview_id}/insights")
-def get_interview_insights(
-    interview_id: str,
-    current_admin: dict = Depends(get_current_admin_details),
-):
-    session = interview_sessions_collection.find_one({"interview_id": interview_id})
-    if not session:
-        raise HTTPException(status_code=404, detail="Interview session not found")
-    _require_admin_session_access(session, current_admin)
-    answers = list(answers_collection.find({"interview_id": interview_id}))
+def get_interview_insights(interview_id: str):
+    from bson import ObjectId
+    clean_id = interview_id.replace("ai_call_", "")
+    try:
+        oid = ObjectId(clean_id) if ObjectId.is_valid(clean_id) else None
+    except Exception:
+        oid = None
+
+    session_or_cond = [{"interview_id": interview_id}, {"link_id": interview_id}, {"id": interview_id}]
+    if oid:
+        session_or_cond.append({"_id": oid})
+
+    session = interview_sessions_collection.find_one({"$or": session_or_cond})
+    
+    ans_or_cond = [{"interview_id": interview_id}, {"link_id": interview_id}, {"session_id": interview_id}]
+    if session:
+        if session.get("interview_id"):
+            ans_or_cond.append({"interview_id": session.get("interview_id")})
+        if session.get("link_id"):
+            ans_or_cond.append({"interview_id": session.get("link_id")})
+
+    answers = list(answers_collection.find({"$or": ans_or_cond}))
     
     if not answers:
         return {
-            "clarity": 50,
-            "technicalDepth": 50,
-            "confidence": 50
+            "clarity": 0,
+            "technicalDepth": 0,
+            "confidence": 0
         }
         
-    scored_answers = [a for a in answers if a.get("scoring_status") == "complete"]
-    
-    if not scored_answers:
-         return {
-            "clarity": 50,
-            "technicalDepth": 50,
-            "confidence": 50
-        }
-        
-    total_clarity = sum(a.get("clarity_score", 50) for a in scored_answers)
-    total_technical = sum(a.get("technical_depth_score", 50) for a in scored_answers)
-    total_confidence = sum(a.get("confidence_score", 50) for a in scored_answers)
-    
-    count = len(scored_answers)
-    
+    clarity_list = []
+    technical_list = []
+    confidence_list = []
+
+    for a in answers:
+        c_val = a.get("clarity_score")
+        if c_val is None:
+            c_val = a.get("content_score") if a.get("content_score") is not None else a.get("ai_score")
+        if c_val is not None:
+            try:
+                clarity_list.append(float(c_val))
+            except (ValueError, TypeError):
+                pass
+
+        t_val = a.get("technical_depth_score")
+        if t_val is None:
+            t_val = a.get("relevance_score") if a.get("relevance_score") is not None else a.get("ai_score")
+        if t_val is not None:
+            try:
+                technical_list.append(float(t_val))
+            except (ValueError, TypeError):
+                pass
+
+        conf_val = a.get("confidence_score")
+        if conf_val is None:
+            conf_val = a.get("ai_score")
+        if conf_val is not None:
+            try:
+                confidence_list.append(float(conf_val))
+            except (ValueError, TypeError):
+                pass
+
+    avg_clarity = round(sum(clarity_list) / len(clarity_list)) if clarity_list else 0
+    avg_technical = round(sum(technical_list) / len(technical_list)) if technical_list else 0
+    avg_confidence = round(sum(confidence_list) / len(confidence_list)) if confidence_list else 0
+
     return {
-        "clarity": round(total_clarity / count),
-        "technicalDepth": round(total_technical / count),
-        "confidence": round(total_confidence / count)
+        "clarity": max(0, min(100, avg_clarity)),
+        "technicalDepth": max(0, min(100, avg_technical)),
+        "confidence": max(0, min(100, avg_confidence))
     }
 
 @router.post("/admin/forgot-password")

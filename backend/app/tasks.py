@@ -162,7 +162,11 @@ def score_answer_task(
         keywords = ai_result.get("keywords", [])
         keywords_str = ",".join(keywords) if isinstance(keywords, list) else str(keywords)
 
-        answer_filter = {"interview_id": interview_id, "question_id": str(question_id)}
+        q_id_str = str(question_id)
+        q_id_int = int(q_id_str) if q_id_str.isdigit() else question_id
+        q_match = list(set([question_id, q_id_str, q_id_int]))
+
+        answer_filter = {"interview_id": interview_id, "question_id": {"$in": q_match}}
         if answer_version:
             answer_filter["answer_version"] = answer_version
         update_result = answers_collection.update_one(

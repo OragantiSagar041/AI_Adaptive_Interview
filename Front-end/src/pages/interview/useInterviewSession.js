@@ -174,41 +174,32 @@ export const useInterviewSession = (sessionId, interviewType, startRoundTwo) => 
   const codingRoundStartedRef = useRef(false)
   const [codingRoundLoading, setCodingRoundLoading] = useState(false)
   const [codingRoundData, setCodingRoundData] = useState(null)
-  const [aiInsights, setAiInsights] = useState({ clarity: 50, technicalDepth: 50, confidence: 50 })
+  const [aiInsights, setAiInsights] = useState({ clarity: 0, technicalDepth: 0, confidence: 0 })
   const [showDeviceCheck, setShowDeviceCheck] = useState(false)
   const [isSaving, setIsSaving] = useState(false)
   const prefetchedQuestionsRef = useRef([])  // background-fetched next batch
   const isPrefetchingRef = useRef(false)     // prevent duplicate fetches
 
-  // Fetch AI Insights dynamically — only after candidate session is authenticated
+  // Fetch AI Insights dynamically throughout the candidate session
   useEffect(() => {
     const iid = interviewId || sessionDetail?.interview_id || sessionId
-    // Don't attempt until we have both an interview ID and a candidate session token
-    if (!iid || !monitoringToken) return
-
-    let stopped = false
+    if (!iid) return
 
     const fetchInsights = async () => {
       try {
         const response = await api.get(`/api/interview/${iid}/insights`)
-        setAiInsights(response.data)
-      } catch (err) {
-        // Stop polling immediately on auth errors — retrying is pointless
-        // until the candidate session token is available.
-        if (err?.response?.status === 401 || err?.response?.status === 403) {
-          stopped = true
-          return
+        if (response.data && typeof response.data.clarity === 'number') {
+          setAiInsights(response.data)
         }
+      } catch (err) {
         console.error("Failed to fetch AI insights", err)
       }
     }
 
     fetchInsights()
-    const interval = setInterval(() => {
-      if (!stopped) fetchInsights()
-    }, 15000)
+    const interval = setInterval(fetchInsights, 5000)
     return () => clearInterval(interval)
-  }, [interviewId, sessionDetail?.interview_id, sessionId, monitoringToken])
+  }, [interviewId, sessionDetail?.interview_id, sessionId])
 
 
   // Test case animation
@@ -968,6 +959,13 @@ export const useInterviewSession = (sessionId, interviewType, startRoundTwo) => 
     }
 
     rec.onend = () => {
+      // Never flush leftover text that may have been captured while the AI
+      // was speaking (see the onresult guard above for why this can happen).
+      if (isTTSPlayingRef.current) {
+        interimTextRef.current = ''
+        setInterimTranscriptText('')
+        return
+      }
       // Flush leftover interim text to transcriptionText
       if (interimTextRef.current) {
         const leftover = interimTextRef.current.trim()
@@ -997,6 +995,13 @@ export const useInterviewSession = (sessionId, interviewType, startRoundTwo) => 
     }
 
     rec.onresult = (event) => {
+      // ── HARD GUARD: never accept recognition results while the AI is speaking ──
+      // rec.stop() is asynchronous, so a browser can still deliver a few queued
+      // onresult events after TTS playback has already started. Dropping every
+      // result while isTTSPlayingRef is true guarantees the AI's own voice can
+      // never reach the transcript, regardless of any stop/start timing race.
+      if (isTTSPlayingRef.current) return
+
       let interimText = ''
       let finalText = ''
       for (let i = event.resultIndex; i < event.results.length; i++) {
@@ -1558,11 +1563,16 @@ export const useInterviewSession = (sessionId, interviewType, startRoundTwo) => 
         elem.requestFullscreen().catch(err => console.log(err));
       }
 
+      // ── Prepare (but do NOT start) speech recognition here ──
+      // Starting the mic immediately and then having speakAIQuestion() stop it
+      // a moment later created a race window where recognition could be live
+      // while the very first TTS question begins fetching/playing, letting the
+      // AI's own voice leak into the transcript. Recognition is only started
+      // once we know TTS is NOT about to play right away (see below); if TTS
+      // IS about to play, speakAIQuestion() itself starts recognition only
+      // after playback finishes (in audio.onended).
       initSpeechRecognition()
-      if (recognitionRef.current) {
-        isSpeechRecordingRef.current = true
-        recognitionRef.current.start()
-      }
+      isSpeechRecordingRef.current = true
 
       startBackgroundNoiseMonitor(stream)
 
@@ -1571,7 +1581,13 @@ export const useInterviewSession = (sessionId, interviewType, startRoundTwo) => 
       // Voice cloning setup is now handled server-side via CARTESIA_VOICE_ID env var.
       // Skip the setup screen and go directly to the first question.
       if (!savedSess?.accepted && questions.length > 0) {
+        // A question is about to be spoken — leave the mic OFF. speakAIQuestion()
+        // will turn it on automatically the moment TTS playback ends.
         speakAIQuestion(questions[0].text || questions[0].question || questions[0].prompt || '')
+      } else if (recognitionRef.current) {
+        // Resuming a session where the first question was already asked earlier —
+        // there's no TTS about to play right now, so it's safe to start listening.
+        try { recognitionRef.current.start() } catch (_) { }
       }
 
       setIsDisclaimerAccepted(true)
@@ -2077,7 +2093,7 @@ export const useInterviewSession = (sessionId, interviewType, startRoundTwo) => 
         face_alerts: behavioralStatsRef.current.faceAlerts,
         noise_alerts: behavioralStatsRef.current.noiseAlerts
       }
-      api.post(`/save-behavioral-data`, payload).catch(() => {})
+      api.post(`/save-behavioral-data`, payload).catch(() => { })
 
       if (currentQuestionIndex === questions.length - 1) {
         const isCodingQ = currentQuestion.type === 'coding'

@@ -876,13 +876,15 @@ export default function MasterPage() {
                                   >
                                     <i className="fas fa-sign-in-alt" />
                                   </button>
-                                  <button
-                                    onClick={() => handleOpenUpdateModal(c)}
-                                    className="p-2 rounded-lg bg-slate-50 text-slate-500 hover:bg-slate-100 border border-slate-200 cursor-pointer transition-all"
-                                    title="Extend / Update Subscription"
-                                  >
-                                    <i className="fas fa-calendar-plus" />
-                                  </button>
+                                  {(c.login_enabled !== false && c.status !== 'blocked' && c.is_active !== false) && (
+                                    <button
+                                      onClick={() => handleOpenUpdateModal(c)}
+                                      className="p-2 rounded-lg bg-slate-50 text-slate-500 hover:bg-slate-100 border border-slate-200 cursor-pointer transition-all"
+                                      title="Extend / Update Subscription"
+                                    >
+                                      <i className="fas fa-calendar-plus" />
+                                    </button>
+                                  )}
                                   <button
                                     onClick={() => handleDeleteTenant(c.company_id || c.id)}
                                     className="p-2 rounded-lg bg-red-50 text-red-500 hover:bg-red-600 hover:text-white border-none cursor-pointer transition-all"

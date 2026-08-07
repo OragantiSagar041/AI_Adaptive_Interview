@@ -42,9 +42,9 @@ class AnswerScore(BaseModel):
     relevance_score: int = Field(default=0, ge=0, le=30)
     time_score: int = Field(default=0, ge=0, le=20)
     overall_score: int = Field(default=0, ge=0, le=100)
-    clarity_score: int = Field(default=50, ge=0, le=100)
-    technical_depth_score: int = Field(default=50, ge=0, le=100)
-    confidence_score: int = Field(default=50, ge=0, le=100)
+    clarity_score: int = Field(default=0, ge=0, le=100)
+    technical_depth_score: int = Field(default=0, ge=0, le=100)
+    confidence_score: int = Field(default=0, ge=0, le=100)
     feedback: str = "No feedback available."
     keywords: List[str] = Field(default_factory=list)
 

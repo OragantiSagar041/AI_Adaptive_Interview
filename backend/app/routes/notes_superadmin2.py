@@ -92,43 +92,82 @@ logger = logging.getLogger(__name__)
 
 router = APIRouter()
 
+@router.post("/admin/interview/{link_id}/notes")
 @router.put("/admin/interview/{link_id}/notes")
 def update_interview_notes(link_id: str, payload: dict, current_admin: dict = Depends(get_current_admin_details)):
-    if current_admin.get("role") not in ["master", "superadmin", "admin", "tenant"]:
-        raise HTTPException(status_code=403, detail="Not authorized")
-    note_text = payload.get("notes", "").strip()
-    if not note_text:
-        return {"status": "success", "message": "No note to add"}
+    if not current_admin:
+        raise HTTPException(status_code=401, detail="Authentication required")
         
-    new_note = {
-        "text": note_text,
-        "author_id": current_admin.get("admin_id"),
-        "role": current_admin.get("role"),
-        "timestamp": datetime.now(timezone.utc).isoformat()
-    }
+    raw_notes = payload.get("notes") if payload.get("notes") is not None else (payload.get("note") or payload.get("text") or "")
     
+    notes_list = []
+    
+    if isinstance(raw_notes, list):
+        for item in raw_notes:
+            if isinstance(item, dict):
+                text_val = str(item.get("text") or "").strip()
+                if text_val:
+                    notes_list.append({
+                        "text": text_val,
+                        "added_by": item.get("added_by") or item.get("author") or current_admin.get("name") or "Admin",
+                        "added_at": item.get("added_at") or item.get("timestamp") or datetime.now(timezone.utc).isoformat(),
+                        "author_id": item.get("author_id") or current_admin.get("admin_id") or str(current_admin.get("_id") or ""),
+                        "role": current_admin.get("role", "admin")
+                    })
+            elif isinstance(item, str) and item.strip():
+                notes_list.append({
+                    "text": item.strip(),
+                    "added_by": current_admin.get("name") or "Admin",
+                    "added_at": datetime.now(timezone.utc).isoformat(),
+                    "author_id": current_admin.get("admin_id") or str(current_admin.get("_id") or ""),
+                    "role": current_admin.get("role", "admin")
+                })
+    elif isinstance(raw_notes, str) and raw_notes.strip():
+        notes_list.append({
+            "text": raw_notes.strip(),
+            "added_by": current_admin.get("name") or "Admin",
+            "added_at": datetime.now(timezone.utc).isoformat(),
+            "author_id": current_admin.get("admin_id") or str(current_admin.get("_id") or ""),
+            "role": current_admin.get("role", "admin")
+        })
+
+    if not notes_list:
+        return {"status": "success", "message": "No valid note to add", "notes": []}
+
     from bson import ObjectId
+    clean_id = link_id.replace("ai_call_", "")
+    try:
+        oid = ObjectId(clean_id) if ObjectId.is_valid(clean_id) else None
+    except Exception:
+        oid = None
+
+    session_or_cond = [{"link_id": link_id}, {"id": link_id}, {"interview_id": link_id}]
+    if oid:
+        session_or_cond.append({"_id": oid})
+
+    # Update in interview_sessions_collection
     result = interview_sessions_collection.update_one(
-        {"link_id": link_id},
-        {"$push": {"notes_history": new_note}}
+        {"$or": session_or_cond},
+        {"$set": {"notes": notes_list, "notes_history": notes_list}}
     )
+
     if result.matched_count == 0:
-        # Also check job_applications for AI calls
-        try:
-            oid = ObjectId(link_id.replace("ai_call_", "")) if link_id.startswith("ai_call_") else None
-        except Exception:
-            oid = None
-        or_cond = [{"omni_call_id": link_id}]
+        # Check job_applications_collection
+        job_or_cond = [{"omni_call_id": link_id}, {"id": link_id}]
         if oid:
-            or_cond.append({"_id": oid})
+            job_or_cond.append({"_id": oid})
         result2 = job_applications_collection.update_one(
-            {"$or": or_cond},
-            {"$push": {"notes_history": new_note}}
+            {"$or": job_or_cond},
+            {"$set": {"notes": notes_list, "notes_history": notes_list, "admin_notes": notes_list[-1]["text"] if notes_list else ""}}
         )
         if result2.matched_count == 0:
-            raise HTTPException(status_code=404, detail="Session not found")
-            
-    return {"status": "success", "message": "Note added successfully", "note": new_note}
+            # Fallback to interviews_collection
+            interviews_collection.update_one(
+                {"$or": session_or_cond},
+                {"$set": {"notes": notes_list, "notes_history": notes_list}}
+            )
+
+    return {"status": "success", "message": "Notes saved successfully", "notes": notes_list}
 
 # ==========================================
 # SUPERADMIN ANALYTICS & MANAGEMENT ENDPOINTS

@@ -21,6 +21,12 @@ export default function JobApplicationModal({ job, onClose }) {
 
   const handleInputChange = (e) => {
     const { name, value } = e.target;
+    if (name === 'name') {
+      if (value && !/^[A-Za-z\s]*$/.test(value)) return;
+    }
+    if (name === 'phone') {
+      if (value && !/^\d*$/.test(value)) return;
+    }
     setFormData(prev => ({ ...prev, [name]: value }));
   };
 
@@ -40,17 +46,18 @@ export default function JobApplicationModal({ job, onClose }) {
         });
         
         if (res.data?.status === 'success' && res.data?.data) {
+          const parsedName = (res.data.data.name || '').replace(/[^A-Za-z\s]/g, '');
+          const parsedPhone = (res.data.data.phone || '').replace(/\D/g, '');
           setFormData(prev => ({
             ...prev,
-            name: res.data.data.name || prev.name,
+            name: parsedName || prev.name,
             email: res.data.data.email || prev.email,
-            phone: res.data.data.phone || prev.phone,
+            phone: parsedPhone || prev.phone,
             linkedin_url: res.data.data.linkedin_url || prev.linkedin_url
           }));
         }
       } catch (err) {
         console.error("Error parsing resume:", err);
-        // We do not block the user if parsing fails, just log it.
       } finally {
         setIsParsing(false);
       }
@@ -59,6 +66,19 @@ export default function JobApplicationModal({ job, onClose }) {
 
   const handleSubmit = async (e) => {
     e.preventDefault();
+
+    const nameTrimmed = (formData.name || '').trim();
+    if (!nameTrimmed || !/^[A-Za-z\s]+$/.test(nameTrimmed)) {
+      setError('Full Name must contain only alphabets and spaces.');
+      return;
+    }
+
+    const phoneTrimmed = (formData.phone || '').trim();
+    if (phoneTrimmed && !/^\d+$/.test(phoneTrimmed)) {
+      setError('Phone Number must contain only numeric digits.');
+      return;
+    }
+
     setSubmitting(true);
     setError('');
 

@@ -405,13 +405,13 @@ export default function Subscribers() {
                       </td>
                       <td className="p-4">
                         <span className={`px-2.5 py-0.5 rounded-full text-[0.65rem] font-bold uppercase tracking-wider ${
-                          c.status === 'blocked'
+                          c.status === 'blocked' || c.login_enabled === false || c.is_active === false
                             ? 'bg-amber-500/10 text-amber-500 border border-amber-500/20'
                             : c.status === 'expired'
                               ? 'bg-red-500/10 text-red-500 border border-red-500/20'
                               : 'bg-emerald-500/10 text-emerald-500 border border-emerald-500/20'
                         }`}>
-                          {c.status === 'blocked' ? 'Deactivated' : c.status === 'expired' ? 'Expired' : 'Active'}
+                          {(c.status === 'blocked' || c.login_enabled === false || c.is_active === false) ? 'Deactivated' : c.status === 'expired' ? 'Expired' : 'Active'}
                         </span>
                       </td>
                       <td className="p-4 text-xs text-slate-500">
@@ -424,23 +424,25 @@ export default function Subscribers() {
                       <td className="p-4 text-xs font-extrabold text-slate-800">{c.credits || 0}</td>
                       <td className="p-4">
                         <div className="flex gap-2">
-                          <button
-                            onClick={() => handleOpenUpdateModal(c)}
-                            className="p-2 rounded-lg bg-slate-50 text-slate-500 hover:bg-slate-100 border border-slate-200 cursor-pointer transition-all"
-                            title="Extend / Update Subscription"
-                          >
-                            <Calendar size={14} />
-                          </button>
+                          {(c.login_enabled !== false && c.status !== 'blocked' && c.is_active !== false) && (
+                            <button
+                              onClick={() => handleOpenUpdateModal(c)}
+                              className="p-2 rounded-lg bg-slate-50 text-slate-500 hover:bg-slate-100 border border-slate-200 cursor-pointer transition-all"
+                              title="Extend / Update Subscription"
+                            >
+                              <Calendar size={14} />
+                            </button>
+                          )}
                           <button
                             onClick={() => handleToggleLogin(c.id || c.company_id, c.login_enabled)}
                             className={`p-2 rounded-lg cursor-pointer transition-all border-none ${
-                              c.login_enabled
+                              c.login_enabled !== false && c.status !== 'blocked' && c.is_active !== false
                                 ? 'bg-amber-50 text-amber-600 hover:bg-amber-600 hover:text-white'
                                 : 'bg-emerald-50 text-emerald-600 hover:bg-emerald-600 hover:text-white'
                             }`}
-                            title={c.login_enabled ? 'Deactivate Login' : 'Reactivate Login'}
+                            title={c.login_enabled !== false && c.status !== 'blocked' && c.is_active !== false ? 'Deactivate Login' : 'Reactivate Login'}
                           >
-                            {c.login_enabled ? <PowerOff size={14} /> : <Power size={14} />}
+                            {c.login_enabled !== false && c.status !== 'blocked' && c.is_active !== false ? <PowerOff size={14} /> : <Power size={14} />}
                           </button>
                           <button
                             onClick={() => handleDeleteTenant(c.id || c.company_id, c.company_name)}

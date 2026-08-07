@@ -523,30 +523,33 @@ export default function CandidateDialog({ candidate, open, onOpenChange, onStatu
   const handleAddNote = async () => {
     if (!newNote.trim()) return
     setNotesSaving(true)
-    const linkId = c.link_id || candidate.link_id || c.interview_id || candidate.interview_id || c.id || candidate.id || c._id || candidate._id
+    const linkId = c.link_id || candidate?.link_id || c.interview_id || candidate?.interview_id || c.id || candidate?.id || c._id || candidate?._id
 
     try {
       const noteObj = {
-        text: newNote,
+        text: newNote.trim(),
         added_by: "Admin",
         added_at: new Date().toISOString()
       };
 
-      const updatedNotes = [...(c.notes || []), noteObj]
+      const updatedNotes = [...(c.notes || c.notes_history || []), noteObj]
 
       // Save to backend database
-      await axios.post(`${API_BASE_URL}/admin/interview/${linkId}/notes`, { notes: updatedNotes }, {
+      const res = await axios.post(`${API_BASE_URL}/admin/interview/${linkId}/notes`, { notes: updatedNotes }, {
         headers: { Authorization: `Bearer ${token}` }
       })
 
+      const returnedNotes = res.data?.notes || updatedNotes
+
       setDetail(prev => ({
-        ...prev,
-        notes: updatedNotes
+        ...(prev || candidate || {}),
+        notes: returnedNotes,
+        notes_history: returnedNotes
       }));
       setNewNote("");
     } catch (e) {
       console.error("Error adding note", e)
-      Swal.fire('Error', 'Failed to save note to database', 'error')
+      Swal.fire('Error', e.response?.data?.detail || 'Failed to save note to database', 'error')
     } finally {
       setNotesSaving(false)
     }

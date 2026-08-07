@@ -62,7 +62,11 @@ def as_evaluate_answer(state: AnswerScoringState) -> AnswerScoringState:
         overall_score=res.get("overall_score", 0),
         content_score=res.get("content_score", 0),
         relevance_score=res.get("relevance_score", 0),
-        corrected_answer=res.get("ideal_answer", "")
+        time_score=res.get("time_score", 0),
+        clarity_score=res.get("clarity_score", res.get("clarity", 0)),
+        technical_depth_score=res.get("technical_depth_score", res.get("technical_depth", res.get("technicalDepth", 0))),
+        confidence_score=res.get("confidence_score", res.get("confidence", 0)),
+        corrected_answer=res.get("ideal_answer", res.get("corrected_answer", ""))
     ).to_dict()
     
     result["key_facts_required"] = res.get("key_facts_required", [])

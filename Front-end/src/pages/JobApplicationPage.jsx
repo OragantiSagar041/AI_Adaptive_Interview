@@ -65,6 +65,12 @@ export default function JobApplicationPage() {
 
   const handleInputChange = (e) => {
     const { name, value } = e.target;
+    if (name === 'name') {
+      if (value && !/^[A-Za-z\s]*$/.test(value)) return;
+    }
+    if (name === 'phone') {
+      if (value && !/^\d*$/.test(value)) return;
+    }
     setFormData(prev => ({ ...prev, [name]: value }));
   };
 
@@ -96,6 +102,19 @@ export default function JobApplicationPage() {
 
   const handleSubmit = async (e) => {
     e.preventDefault();
+
+    const nameTrimmed = (formData.name || '').trim();
+    if (!nameTrimmed || !/^[A-Za-z\s]+$/.test(nameTrimmed)) {
+      setError('Full Name must contain only alphabets and spaces.');
+      return;
+    }
+
+    const phoneTrimmed = (formData.phone || '').trim();
+    if (phoneTrimmed && !/^\d+$/.test(phoneTrimmed)) {
+      setError('Phone Number must contain only numeric digits.');
+      return;
+    }
+
     if (resumeMode === 'upload' && !resumeFile && !formData.resume_url) {
       setError('Please upload your resume file or provide a resume link.');
       return;
