@@ -2412,7 +2412,7 @@ export const useInterviewSession = (sessionId, interviewType, startRoundTwo) => 
             answerForm.append('candidate_name', sessionDetail?.candidate_name || 'Candidate')
             answerForm.append('time_spent_seconds', timeSpent.toString())
             answerForm.append('time_limit_seconds', '120')
-            await api.post(`/save-answer`, answerForm).catch(() => { })
+            await api.post(`/save-answer`, answerForm, { headers: { 'Content-Type': 'multipart/form-data' } }).catch(() => { })
           }
         }
         handleSubmitInterview(false, 'early_exit')

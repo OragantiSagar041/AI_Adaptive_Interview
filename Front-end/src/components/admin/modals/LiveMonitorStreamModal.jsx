@@ -296,9 +296,15 @@ export default function LiveMonitorStreamModal({ isOpen, onClose, session }) {
 
     ws.onopen = () => {
       if (connectionIdRef.current !== connectionId || wsRef.current !== ws) return
-      console.log('[AdminWebRTC] WS open')
+      console.log('[AdminWebRTC] WS open — waiting 500ms for candidate to register...')
       wsReadyRef.current = true
-      sendOffer(ws, connectionId)
+      // Small delay ensures backend has time to deliver admin_joined to candidate
+      // before we send the offer, preventing the offer from arriving before candidate is ready
+      setTimeout(() => {
+        if (connectionIdRef.current === connectionId && wsRef.current === ws) {
+          sendOffer(ws, connectionId)
+        }
+      }, 500)
     }
 
     ws.onmessage = async (event) => {

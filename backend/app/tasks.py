@@ -144,7 +144,7 @@ def score_answer_task(
                     if session_doc:
                         link_id = session_doc.get("link_id")
                         if link_id:
-                            from app.routes import sync_session_to_application
+                            from app.routes.interview import sync_session_to_application
                             sync_session_to_application(link_id)
         except Exception as lang_err:
             logger.warning(f"Language detection background update failed: {lang_err}")
@@ -221,7 +221,7 @@ def score_answer_task(
                     {"_id": session["_id"]},
                     {"$set": {"avg_score": round(avg_score, 1)}}
                 )
-                from app.routes import sync_session_to_application
+                from app.routes.interview import sync_session_to_application
                 sync_session_to_application(session.get("link_id"))
                 
                 # If session is completed, check if all answers are now scored
@@ -417,7 +417,7 @@ def generate_report_task(self, interview_id: str):
     logger.info(f"Generating PDF report for {interview_id} (Attempt {self.request.retries + 1})")
 
     # Import here to avoid circular imports at module load time
-    from app.routes import generate_report
+    from app.routes.admin_dashboard import generate_report
 
     try:
         file_path = generate_report(interview_id)

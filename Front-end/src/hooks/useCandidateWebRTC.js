@@ -30,15 +30,12 @@ export default function useCandidateWebRTC(linkId, mediaStreamRef, telemetryData
 
   // ─── Process Pending Offers when Stream becomes Available ──────────────────
   useEffect(() => {
-    if (!wsRef.current) return
-
-    const intervalId = setInterval(async () => {
-      if (!wsRef.current || wsRef.current.readyState !== WebSocket.OPEN) return
-      if (!mediaStreamRef.current) return
-      if (pendingOffersRef.current.length === 0) return
+    const processOffers = async () => {
+      if (!mediaStreamRef.current || pendingOffersRef.current.length === 0 || !wsRef.current) return
+      if (wsRef.current.readyState !== WebSocket.OPEN) return
 
       const offers = [...pendingOffersRef.current]
-      pendingOffersRef.current = []
+      pendingOffersRef.current = [] // clear queue
       for (const msg of offers) {
         try {
           await handleOffer(msg)
@@ -46,14 +43,23 @@ export default function useCandidateWebRTC(linkId, mediaStreamRef, telemetryData
           console.error('[CandidateWebRTC] Error processing queued offer:', err)
         }
       }
+    }
+
+    // Check immediately in case it's ready, otherwise poll rapidly while there are pending offers
+    processOffers()
+    const interval = setInterval(() => {
+      if (pendingOffersRef.current.length > 0) {
+        processOffers()
+      }
     }, 500)
 
-    return () => clearInterval(intervalId)
-  }, [mediaStreamRef, wsRef.current])
+    return () => clearInterval(interval)
+  }, []) // empty dep array, runs on mount and sets up the polling
 
   const handleOffer = async (msg) => {
     const adminId = msg.viewer_id || msg.admin_id || msg.spectator_id || 'admin'
-    console.log(`[CandidateWebRTC] Processing offer from viewer: ${adminId}`)
+    const offerId = msg.offer_id
+    console.log(`[CandidateWebRTC] Processing offer from viewer: ${adminId}, offer_id: ${offerId}`)
 
     const stream = mediaStreamRef.current
     if (!stream) {
@@ -89,6 +95,7 @@ export default function useCandidateWebRTC(linkId, mediaStreamRef, telemetryData
           candidate: e.candidate,
           target_admin_id: msg.admin_id || 'admin',
           viewer_id: adminId,
+          offer_id: offerId,
         }))
       }
     }
@@ -107,13 +114,14 @@ export default function useCandidateWebRTC(linkId, mediaStreamRef, telemetryData
     const answer = await pc.createAnswer()
     await pc.setLocalDescription(answer)
 
-    console.log(`[CandidateWebRTC] Sending answer to viewer: ${adminId}`)
+    console.log(`[CandidateWebRTC] Sending answer to viewer: ${adminId}, offer_id: ${offerId}`)
     if (wsRef.current?.readyState === WebSocket.OPEN) {
       wsRef.current.send(JSON.stringify({
         type: 'webrtc_answer',
         sdp: pc.localDescription,
         target_admin_id: msg.admin_id || 'admin',
         viewer_id: adminId,
+        offer_id: offerId,
       }))
     }
     
@@ -166,6 +174,13 @@ export default function useCandidateWebRTC(linkId, mediaStreamRef, telemetryData
           const adminId = msg.viewer_id || msg.admin_id || msg.spectator_id || 'admin'
 
           if (msg.type === 'pong' || msg.type === 'ping') return
+
+          // Backend notifies candidate when an admin/viewer connects — 
+          // candidate logs this so we know the signaling path is clear
+          if (msg.type === 'admin_joined') {
+            console.log(`[CandidateWebRTC] Admin joined the room: ${msg.admin_id}. Ready to answer offers.`)
+            return
+          }
 
           if (msg.type === 'webrtc_offer') {
             const stream = mediaStreamRef.current

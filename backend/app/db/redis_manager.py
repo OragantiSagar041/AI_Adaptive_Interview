@@ -78,7 +78,11 @@ class RedisConnectionManager:
                 pass
 
     async def _listen_to_redis(self):
-        """Background task: listen on subscribed Redis channels and route messages to local websockets."""
+        """Background task: listen on subscribed Redis channels and route messages to local websockets.
+        NOTE: Since send_to_candidate / send_to_admins now always deliver in-memory first,
+        this listener only needs to handle cross-instance messages (multi-server deployments).
+        Single-instance deployments get zero-latency delivery via in-memory path.
+        """
         try:
             async for message in self.pubsub.listen():
                 if message["type"] == "message":
@@ -87,33 +91,24 @@ class RedisConnectionManager:
                         data = json.loads(message["data"])
                     except Exception:
                         continue
-
-                    # Channel format: session:{link_id}:{role}
+                    if channel == "dashboard:updates":
+                        await self.broadcast_dashboard(data)
+                    # For session channels in multi-server deployments, route to local sockets.
+                    # In single-server deployments, in-memory already delivered these — this is a no-op.
                     parts = channel.split(":")
                     if len(parts) == 3 and parts[0] == "session":
                         link_id = parts[1]
                         role = parts[2]
                         local_group = self.local_connections.get(link_id)
                         if local_group:
-                            if role == "candidate" and local_group["candidate"]:
-                                try:
-                                    await local_group["candidate"].send_json(data)
-                                except Exception as e:
-                                    logger.error(f"Error sending to local candidate: {e}")
+                            if role == "candidate" and local_group.get("candidate"):
+                                pass  # already delivered in-memory by send_to_candidate
                             elif role == "admins":
-                                recipients = list(local_group.get("admins", [])) + list(local_group.get("spectators", []))
-                                for ws in recipients:
-                                    try:
-                                        await ws.send_json(data)
-                                    except Exception as e:
-                                        logger.error(f"Error sending to local admin/spectator: {e}")
-                    elif channel == "dashboard:updates":
-                        await self.broadcast_dashboard(data)
+                                pass  # already delivered in-memory by send_to_admins
         except asyncio.CancelledError:
             pass
         except Exception as e:
             logger.error(f"Redis listener failed: {e}")
-            # Mark as failed so next connect_redis call can retry after cooldown
             self.redis = None
             self.pubsub = None
             self._redis_failed = True
@@ -343,48 +338,52 @@ class RedisConnectionManager:
     # ─── Message routing ─────────────────────────────────────────────────────────
 
     async def send_to_candidate(self, link_id: str, message: dict):
-        """Publish a message to the candidate's channel (Redis if available, in-memory otherwise)."""
+        """Deliver a message to the candidate — always try in-memory AND Redis."""
+        # Always try in-memory delivery first (fastest, zero-latency)
+        local_group = self.local_connections.get(link_id)
+        delivered_local = False
+        if local_group:
+            cand_ws = local_group.get("candidate")
+            if cand_ws:
+                try:
+                    await cand_ws.send_json(message)
+                    delivered_local = True
+                except Exception as e:
+                    logger.warning(f"In-memory send_to_candidate failed for {link_id}: {e}")
+
+        # Also publish via Redis so other server instances get it
         await self.connect_redis()
         if self.redis:
             try:
                 await self.redis.publish(f"session:{link_id}:candidate", json.dumps(message))
-                return
             except Exception as e:
-                logger.warning(f"Redis publish failed: {e}. Falling back to in-memory.")
+                logger.warning(f"Redis publish to candidate failed: {e}.")
                 self.redis = None
                 self.pubsub = None
                 self._redis_failed = True
-        # In-memory fallback
-        local_group = self.local_connections.get(link_id)
-        if local_group:
-            cand_ws = local_group["candidate"]
-            if cand_ws:
-                try:
-                    await cand_ws.send_json(message)
-                except Exception:
-                    pass
 
     async def send_to_admins(self, link_id: str, message: dict):
-        """Publish a message to the admins' channel (Redis if available, in-memory otherwise)."""
-        await self.connect_redis()
-        if self.redis:
-            try:
-                await self.redis.publish(f"session:{link_id}:admins", json.dumps(message))
-                return
-            except Exception as e:
-                logger.warning(f"Redis publish failed: {e}. Falling back to in-memory.")
-                self.redis = None
-                self.pubsub = None
-                self._redis_failed = True
-        # In-memory fallback — fans out to both admins and spectators
+        """Deliver a message to all admins and spectators — always try in-memory AND Redis."""
+        # Always try in-memory delivery first (fastest, zero-latency)
         local_group = self.local_connections.get(link_id)
         if local_group:
             recipients = list(local_group.get("admins", [])) + list(local_group.get("spectators", []))
             for ws in recipients:
                 try:
                     await ws.send_json(message)
-                except Exception:
-                    pass
+                except Exception as e:
+                    logger.warning(f"In-memory send_to_admins failed for {link_id}: {e}")
+
+        # Also publish via Redis so other server instances get it
+        await self.connect_redis()
+        if self.redis:
+            try:
+                await self.redis.publish(f"session:{link_id}:admins", json.dumps(message))
+            except Exception as e:
+                logger.warning(f"Redis publish to admins failed: {e}.")
+                self.redis = None
+                self.pubsub = None
+                self._redis_failed = True
 
 
 manager = RedisConnectionManager()
