@@ -2,7 +2,7 @@ import { useState } from 'react';
 import { Mail, DollarSign, Send, CheckCircle, XCircle, UserPlus, RefreshCw, FileText, ExternalLink, Briefcase, Settings } from 'lucide-react';
 import { adminCopilotExecute } from '../../../utils/api';
 
-const CopilotActionCard = ({ actionRequired, onComplete }) => {
+const CopilotActionCard = ({ actionRequired, onComplete, currentTheme }) => {
   const [loading, setLoading] = useState(false);
   const [result, setResult] = useState(null);
   const [error, setError] = useState(null);
@@ -147,7 +147,8 @@ const CopilotActionCard = ({ actionRequired, onComplete }) => {
                 href={linkUrl} 
                 target="_blank" 
                 rel="noreferrer"
-                className="flex justify-center items-center gap-1 w-full py-1.5 bg-white border border-slate-200 hover:bg-slate-50 text-indigo-600 rounded-md text-xs font-semibold transition-colors shadow-sm"
+                style={{ color: currentTheme?.primary || '#4f46e5' }}
+                className="flex justify-center items-center gap-1 w-full py-1.5 bg-white border border-slate-200 hover:bg-slate-50 rounded-md text-xs font-semibold transition-colors shadow-xs"
               >
                 Open Interview Link <ExternalLink className="w-3 h-3" />
               </a>
@@ -157,8 +158,9 @@ const CopilotActionCard = ({ actionRequired, onComplete }) => {
           <button
             onClick={handleExecute}
             disabled={loading}
-            className={`w-full py-2 text-white rounded-md text-xs font-semibold transition-colors disabled:opacity-50 shadow-sm ${
-              actionRequired.action === 'disconnect_app' ? 'bg-red-600 hover:bg-red-500' : 'bg-indigo-600 hover:bg-indigo-500'
+            style={actionRequired.action === 'disconnect_app' ? {} : { background: currentTheme?.primary || '#4f46e5' }}
+            className={`w-full py-2 text-white rounded-md text-xs font-semibold transition-opacity hover:opacity-90 disabled:opacity-50 shadow-xs cursor-pointer border-none ${
+              actionRequired.action === 'disconnect_app' ? 'bg-red-600 hover:bg-red-500' : ''
             }`}
           >
             {loading ? "Executing..." : actionRequired.action === 'disconnect_app' ? `Disconnect ${platformName}` : actionRequired.action === 'connect_app' || actionRequired.action === 'integrate_platform' ? `Connect ${platformName}` : "Confirm & Execute"}

@@ -130,6 +130,7 @@ export default function SuperAdminLayout() {
     setAccentNameState(color)
     try {
       localStorage.setItem('theme_accent', color)
+      window.dispatchEvent(new CustomEvent('accent_changed', { detail: color }))
     } catch (e) {
       console.error(e)
     }
@@ -170,6 +171,12 @@ export default function SuperAdminLayout() {
       return () => clearInterval(interval)
     }
   }, [token])
+
+  // Enforce Light Theme for SuperAdmin
+  useEffect(() => {
+    document.documentElement.setAttribute('data-theme', 'light')
+    document.documentElement.classList.remove('dark')
+  }, [])
 
   // Lock document-level scroll so only the inner <main> scrolls, not the page
   useEffect(() => {
@@ -284,8 +291,19 @@ export default function SuperAdminLayout() {
     }
   }, [isMobile, sidebarOpen])
 
-  const handleOpenLiveStreamAction = (sessionId) => {
-    setLiveStreamSession(sessionId)
+  const handleOpenLiveStreamAction = (sessionData) => {
+    if (!sessionData) return
+    let resolvedSession = sessionData
+    if (typeof sessionData === 'string') {
+      const found = liveSessions?.find(s => s.link_id === sessionData || s.session_id === sessionData || s.id === sessionData || s._id === sessionData)
+      resolvedSession = found || {
+        link_id: sessionData,
+        session_id: sessionData,
+        candidate_name: 'Live Candidate',
+        candidate_email: 'Active Session'
+      }
+    }
+    setLiveStreamSession(resolvedSession)
     setIsLiveStreamOpen(true)
   }
 
@@ -775,10 +793,10 @@ export default function SuperAdminLayout() {
               {/* Notification Bell */}
               <button
                 onClick={() => setNotifDropdownOpen(!notifDropdownOpen)}
-                className="relative p-2 text-slate-400 hover:text-slate-600 bg-white border border-slate-100 hover:bg-slate-50 rounded-full transition-all cursor-pointer flex items-center justify-center shadow-sm"
+                className="relative p-2.5 text-slate-600 hover:text-slate-900 bg-white hover:bg-slate-50 border border-slate-200 rounded-full transition-all cursor-pointer flex items-center justify-center shadow-xs"
                 title="Notifications"
               >
-                <Bell size={18} />
+                <Bell size={18} className="text-slate-600" />
                 {unreadCount > 0 && (
                   <span className="absolute -top-1 -right-1 bg-sky-500 text-white font-extrabold text-[9px] min-w-[18px] h-[18px] px-1 rounded-full flex items-center justify-center shadow-sm border-2 border-white">
                     {unreadCount}
@@ -890,9 +908,7 @@ export default function SuperAdminLayout() {
                           onClick={() => {
                             if (!n.read) handleMarkRead(n.id)
                             setNotifDropdownOpen(false)
-                            if (n.type === 'credits') navigate('/superadmin/team')
-                            else if (n.type === 'activity') navigate('/superadmin/new-dashboard')
-                            else navigate('/superadmin/new-dashboard')
+                            navigate('/superadmin/notifications')
                           }}
                           className={`p-3 text-left hover:bg-slate-50 cursor-pointer transition-colors flex gap-2.5 items-start ${!n.read ? 'bg-indigo-50/30' : ''
                             }`}

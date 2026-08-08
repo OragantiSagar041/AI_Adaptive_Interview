@@ -18,6 +18,12 @@ export const loadDashboardData = createAsyncThunk(
       const errorMsg = err.response?.data?.detail || err.response?.data?.message || err.message || 'Failed to load dashboard'
       return rejectWithValue(typeof errorMsg === 'object' ? JSON.stringify(errorMsg) : errorMsg)
     }
+  },
+  {
+    condition: (selectedAdminId, { getState }) => {
+      const { dashboard } = getState()
+      return dashboard?.status !== 'loading'
+    }
   }
 )
 
@@ -40,6 +46,9 @@ export const loadSuperAdminDashboard = createAsyncThunk(
       const errorMsg = err.response?.data?.detail || err.response?.data?.message || err.message || 'Failed to load superadmin dashboard'
       return rejectWithValue(typeof errorMsg === 'object' ? JSON.stringify(errorMsg) : errorMsg)
     }
+  },
+  {
+    condition: (_, { getState }) => getState().dashboard?.status !== 'loading'
   }
 )
 

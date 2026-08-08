@@ -1122,6 +1122,10 @@ export function LiveResultsModal({
   handleOpenScorecard,
   handleOpenLiveStream
 }) {
+  const onlineLiveSessions = Array.isArray(liveSessions)
+    ? liveSessions.filter(session => session.online)
+    : []
+
   return (
     <Modal
       isOpen={isOpen}
@@ -1173,7 +1177,7 @@ export function LiveResultsModal({
               </tr>
             </thead>
             <tbody className="divide-y divide-[#eef2f7]">
-              {liveSessions.map((session, i) => (
+              {onlineLiveSessions.map((session, i) => (
                 <tr key={session.session_id || session.id || i} className="hover:bg-slate-50/50">
                   <td className="px-4 py-3 text-xs">
                     <div className="font-bold text-slate-800">{session.candidate_name}</div>
@@ -1181,33 +1185,25 @@ export function LiveResultsModal({
                     <div className="text-primary font-medium mt-0.5">{session.interview_title}</div>
                   </td>
                   <td className="px-4 py-3 text-xs">
-                    {session.online ? (
-                      <span className="inline-flex items-center gap-1.5 text-emerald-600 font-bold">
-                        <span className="w-1.5 h-1.5 bg-emerald-500 rounded-full animate-ping" />
-                        CONNECTED
-                      </span>
-                    ) : (
-                      <span className="text-slate-400 font-medium">OFFLINE</span>
-                    )}
+                    <span className="inline-flex items-center gap-1.5 text-emerald-600 font-bold">
+                      <span className="w-1.5 h-1.5 bg-emerald-500 rounded-full animate-ping" />
+                      CONNECTED
+                    </span>
                   </td>
                   <td className="px-4 py-3 text-xs">
-                    {session.online ? (
-                      <div className="flex items-center gap-2">
-                        <div className="w-12 h-1.5 bg-slate-200 rounded-full overflow-hidden">
-                          <div className="h-full bg-primary" style={{ width: `${Math.min(100, (session.audio_level || 0) * 10)}%` }} />
-                        </div>
-                        <span className={`font-semibold ${(session.audio_level || 0) > 5 ? 'text-primary' : 'text-slate-400'}`}>
-                          {(session.audio_level || 0) > 5 ? 'Speaking' : 'Silent'}
-                        </span>
+                    <div className="flex items-center gap-2">
+                      <div className="w-12 h-1.5 bg-slate-200 rounded-full overflow-hidden">
+                        <div className="h-full bg-primary" style={{ width: `${Math.min(100, (session.audio_level || 0) * 10)}%` }} />
                       </div>
-                    ) : '-'}
+                      <span className={`font-semibold ${(session.audio_level || 0) > 5 ? 'text-primary' : 'text-slate-400'}`}>
+                        {(session.audio_level || 0) > 5 ? 'Speaking' : 'Silent'}
+                      </span>
+                    </div>
                   </td>
                   <td className="px-4 py-3 text-xs text-slate-600 leading-normal">
-                    {session.online ? (
-                      <div>
-                        <strong>Q{session.current_question_index || 1}</strong>: {session.current_question || 'Intro / Setup'}
-                      </div>
-                    ) : 'Session paused/not started'}
+                    <div>
+                      <strong>Q{session.current_question_index || 1}</strong>: {session.current_question || 'Intro / Setup'}
+                    </div>
                   </td>
                   <td className="px-4 py-3 text-xs">
                     <Badge variant={(session.proctoring_alerts || 0) > 0 ? 'danger' : 'success'} text={`${session.proctoring_alerts || 0} Alerts`} />
@@ -1230,7 +1226,7 @@ export function LiveResultsModal({
                   </td>
                 </tr>
               ))}
-              {liveSessions.length === 0 && (
+              {onlineLiveSessions.length === 0 && (
                 <tr>
                   <td colSpan="6" className="text-center py-10 text-slate-400 text-sm">
                     <Monitor size={36} className="mx-auto opacity-30 mb-2 block" />

@@ -113,7 +113,7 @@ async def superadmin_live_sessions(
         ongoing_alert_count = 0
 
         query_filter = {
-            "status": "started",
+            "status": {"$in": ["started", "completed"]},
             "$or": [{"is_deactivated": False}, {"is_deactivated": {"$exists": False}}]
         }
         if current_admin.get("role") != "master":
@@ -125,8 +125,28 @@ async def superadmin_live_sessions(
 
         rows = list(interview_sessions_collection.find(
             query_filter,
-            {"link_id": 1, "candidate_name": 1, "candidate_email": 1, "created_at": 1, "interview_title": 1, "started_at": 1}
+            {"link_id": 1, "candidate_name": 1, "candidate_email": 1, "created_at": 1, "interview_title": 1, "started_at": 1, "status": 1, "completed_at": 1, "interview_duration": 1}
         ).sort("created_at", -1).limit(50))
+
+        rows = [
+            row for row in rows
+            if not row.get("completed_at") and sync_session_status(row) == "started"
+        ]
+        unique_rows = {}
+        for row in rows:
+            link_id = row.get("link_id")
+            if link_id and link_id not in unique_rows:
+                unique_rows[link_id] = row
+        rows = list(unique_rows.values())
+
+        # A candidate can have duplicate started records after refreshing or
+        # reopening the same invitation. Keep only the newest record per email.
+        unique_candidates = {}
+        for row in rows:
+            candidate_key = (row.get("candidate_email") or row.get("candidate_name") or "").strip().lower()
+            if candidate_key and candidate_key not in unique_candidates:
+                unique_candidates[candidate_key] = row
+        rows = list(unique_candidates.values()) if unique_candidates else rows
 
         snapshots = await _load_live_snapshots([row.get("link_id", "") for row in rows])
         now = datetime.now(timezone.utc)

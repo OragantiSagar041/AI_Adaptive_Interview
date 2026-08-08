@@ -6,7 +6,7 @@ Auto-split from routes.py lines 4010–6464.
 # ---------------------------------------------------------------------------
 # Standard library
 # ---------------------------------------------------------------------------
-import os, sys, io, json, hmac, math, uuid, html, time, random
+import os, sys, io, json, hmac, math, uuid, html, time, random, re
 import base64, shutil, hashlib, textwrap, asyncio, subprocess, tempfile
 import threading, traceback, logging
 from collections import defaultdict
@@ -51,7 +51,7 @@ from app.data.coding_graph import generate_coding_task, observe_coding_intent, r
 from app.data.industry_fallback_data import INDUSTRY_TECHNICAL_QUESTIONS, INDUSTRY_CASE_STUDIES
 from app.db.redis_manager import manager
 import app.services.transcription as transcription
-from app.db.mongo_db import client as mongo_client
+from app.db.mongo_db import client as mongo_client, omni_call_logs_collection
 from app.services.services import *
 from app.services.services import require_role
 from app.core.session_store import get_session, set_session, delete_session as delete_cached_session
@@ -264,21 +264,88 @@ Return a pure JSON object with these keys. If not found, return empty string for
 @router.get("/admin/candidate/check")
 def check_candidate(email: str, current_admin: dict = Depends(get_current_admin_details)):
     try:
-        # Check if candidate exists for this company (or globally if super admin)
-        query = {"candidate_email": email}
+        clean_email = (email or "").strip().lower()
+        if not clean_email or "@" not in clean_email:
+            return {"exists": False}
+
+        # 1. Search in interview_sessions_collection (with case-insensitive match)
+        query = {
+            "candidate_email": {"$regex": f"^{re.escape(clean_email)}$", "$options": "i"}
+        }
         if current_admin.get("role") not in ["super_admin", "master"]:
             query["company_id"] = current_admin.get("company_id")
             
-        session = interview_sessions_collection.find_one(
-            query,
-            sort=[("created_at", -1)]
+        sessions = list(interview_sessions_collection.find(query).sort("created_at", -1).limit(5))
+        for s in sessions:
+            resume_text = (s.get("resume_text") or "").strip()
+            cand_name = (s.get("candidate_name") or "").strip()
+            if resume_text:
+                return {
+                    "exists": True,
+                    "resume_text": resume_text,
+                    "candidate_name": cand_name,
+                    "job_description": s.get("job_description", "")
+                }
+
+        # 2. Search in job_applications_collection
+        app_doc = job_applications_collection.find_one(
+            {
+                "email": {"$regex": f"^{re.escape(clean_email)}$", "$options": "i"},
+                "resume_text": {"$exists": True, "$ne": ""}
+            },
+            sort=[("applied_at", -1)]
         )
-        if session:
+        if app_doc and (app_doc.get("resume_text") or "").strip():
             return {
                 "exists": True,
-                "resume_text": session.get("resume_text", ""),
-                "candidate_name": session.get("candidate_name", "")
+                "resume_text": app_doc.get("resume_text", "").strip(),
+                "candidate_name": app_doc.get("name", "") or app_doc.get("candidate_name", ""),
+                "candidate_phone": app_doc.get("phone", ""),
+                "job_description": app_doc.get("job_description", "")
             }
+
+        # 3. Search in omni_call_logs_collection
+        call_doc = omni_call_logs_collection.find_one(
+            {
+                "$or": [
+                    {"email": {"$regex": f"^{re.escape(clean_email)}$", "$options": "i"}},
+                    {"candidate_email": {"$regex": f"^{re.escape(clean_email)}$", "$options": "i"}}
+                ]
+            },
+            sort=[("created_at", -1)]
+        )
+        if call_doc:
+            r_text = (call_doc.get("resume_text") or call_doc.get("parsed_resume") or "").strip()
+            if r_text:
+                return {
+                    "exists": True,
+                    "resume_text": r_text,
+                    "candidate_name": call_doc.get("candidate_name") or call_doc.get("name", ""),
+                    "candidate_phone": call_doc.get("phone_number") or call_doc.get("phone", "")
+                }
+
+        # 4. Search candidates_collection
+        cand_doc = candidates_collection.find_one(
+            {"email": {"$regex": f"^{re.escape(clean_email)}$", "$options": "i"}},
+            sort=[("created_at", -1)]
+        )
+        if cand_doc and (cand_doc.get("resume_text") or "").strip():
+            return {
+                "exists": True,
+                "resume_text": cand_doc.get("resume_text", "").strip(),
+                "candidate_name": cand_doc.get("name", "") or cand_doc.get("candidate_name", "")
+            }
+
+        # 5. If sessions found with candidate name even if resume_text is blank
+        if sessions:
+            first_s = sessions[0]
+            return {
+                "exists": True,
+                "resume_text": first_s.get("resume_text", ""),
+                "candidate_name": first_s.get("candidate_name", ""),
+                "job_description": first_s.get("job_description", "")
+            }
+
         return {"exists": False}
     except Exception as e:
         return {"exists": False, "error": str(e)}
@@ -1428,57 +1495,109 @@ def log_proctoring_violation(
 def update_decision(data: DecisionRequest, current_admin: dict = Depends(require_role("admin", "super_admin"))):
     print(f" Decision Update Request: link_id={data.link_id}, decision={data.decision}")
     try:
+        admin_name = current_admin.get("name") or current_admin.get("username") or "Admin"
+        admin_role = current_admin.get("role") or "admin"
+        admin_id = current_admin.get("admin_id")
+        now_iso = datetime.now(timezone.utc).isoformat()
+        
         if data.link_id.startswith("ai_call_"):
-            app_id = data.link_id.replace("ai_call_", "")
+            raw_id = data.link_id.replace("ai_call_", "")
+            omni_call_id = raw_id.replace("omni_", "").strip()
+            
+            # 1. Search job_applications_collection
+            app = None
             from bson import ObjectId
             try:
-                app = job_applications_collection.find_one({"_id": ObjectId(app_id)})
+                app = job_applications_collection.find_one({"_id": ObjectId(raw_id)})
             except Exception:
                 app = None
-            if not app:
-                app = job_applications_collection.find_one({"omni_call_id": app_id})
-            if not app:
-                raise HTTPException(status_code=404, detail="AI Call candidate not found")
 
-            job = jobs_collection.find_one({"job_id": app.get("job_id")})
-            if not job:
-                raise HTTPException(status_code=403, detail="Unable to verify candidate ownership")
-            if current_admin.get("role") != "master" and job.get("company_id") != current_admin.get("company_id"):
-                raise HTTPException(status_code=403, detail="Access denied")
-            if current_admin.get("role") == "admin" and str(job.get("admin_id") or "") != str(current_admin.get("admin_id") or ""):
-                raise HTTPException(status_code=403, detail="Access denied to another recruiter's candidate")
-                
-            admin_name = current_admin.get("name") or current_admin.get("username") or "Admin"
-            admin_role = current_admin.get("role") or "admin"
-            admin_id = current_admin.get("admin_id")
-            now_iso = datetime.now(timezone.utc).isoformat()
-            
-            job_applications_collection.update_one(
-                {"_id": app["_id"]},
-                {"$set": {
-                    "decision": data.decision,
-                    "last_action_by_name": admin_name,
-                    "last_action_by_role": admin_role,
-                    "last_action_by_id": admin_id,
-                    "last_action_status": data.decision,
-                    "last_action_at": now_iso,
-                    "decision_by_name": admin_name,
-                    "decision_by_role": admin_role,
-                    "decision_at": now_iso
-                }}
+            if not app:
+                call_ids_to_try = [omni_call_id]
+                if omni_call_id.isdigit():
+                    call_ids_to_try.append(int(omni_call_id))
+                app = job_applications_collection.find_one({"omni_call_id": {"$in": call_ids_to_try}})
+
+            log = None
+            session = None
+            call_ids_to_try = [omni_call_id]
+            if omni_call_id.isdigit():
+                call_ids_to_try.append(int(omni_call_id))
+
+            log = omni_call_logs_collection.find_one({"call_id": {"$in": call_ids_to_try}})
+            session = interview_sessions_collection.find_one({"omni_call_id": {"$in": call_ids_to_try}})
+
+            if app and not log and not session:
+                linked_app_id = str(app["_id"])
+            elif log and not app:
+                linked_app_id = log.get("application_id")
+                if linked_app_id:
+                    try:
+                        app = job_applications_collection.find_one({"_id": ObjectId(linked_app_id)})
+                    except Exception:
+                        app = job_applications_collection.find_one({"application_id": linked_app_id})
+
+            # Update job_applications_collection if app exists
+            if app:
+                job_applications_collection.update_one(
+                    {"_id": app["_id"]},
+                    {"$set": {
+                        "decision": data.decision,
+                        "last_action_by_name": admin_name,
+                        "last_action_by_role": admin_role,
+                        "last_action_by_id": admin_id,
+                        "last_action_status": data.decision,
+                        "last_action_at": now_iso,
+                        "decision_by_name": admin_name,
+                        "decision_by_role": admin_role,
+                        "decision_at": now_iso
+                    }}
+                )
+
+            # Always update or upsert omni_call_logs_collection
+            company_id = current_admin.get("company_id")
+            omni_update = {
+                "call_id": omni_call_id,
+                "decision": data.decision,
+                "last_action_status": data.decision,
+                "decision_by_name": admin_name,
+                "decision_by_role": admin_role,
+                "decision_at": now_iso
+            }
+            if company_id:
+                omni_update["company_id"] = company_id
+            if admin_id:
+                omni_update["admin_id"] = admin_id
+
+            omni_call_logs_collection.update_one(
+                {"call_id": {"$in": call_ids_to_try}},
+                {"$set": omni_update},
+                upsert=True
             )
-            
-            name = app.get("name") or "Candidate"
-            email = app.get("email")
-            jd = app.get("job_description") or ""
-            
+
+            # Update interview_sessions_collection if present
+            if session:
+                interview_sessions_collection.update_one(
+                    {"_id": session["_id"]},
+                    {"$set": {
+                        "decision": data.decision,
+                        "decision_by_name": admin_name,
+                        "decision_by_role": admin_role,
+                        "decision_at": now_iso
+                    }}
+                )
+
+            name = (app.get("name") if app else None) or (log.get("candidate_name") if log else None) or (session.get("candidate_name") if session else None) or "Candidate"
+            email = (app.get("email") if app else None) or (log.get("email") if log else None) or (session.get("candidate_email") if session else None)
+            jd = (app.get("job_description") if app else None) or (session.get("job_description") if session else None) or ""
+
             load_dotenv(override=False)
             email_sent = False
             email_reason = "No candidate email found"
             if email:
                 email_sent = send_decision_email(email, name, data.decision, jd)
                 email_reason = "Success" if email_sent else "Email service error (Brevo API failed)"
-            
+
             return {"status": "success", "decision": data.decision, "email_sent": email_sent, "email_reason": email_reason}
 
         # 1. Fetch candidate details for email

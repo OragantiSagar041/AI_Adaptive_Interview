@@ -14,7 +14,13 @@ import Card from '../../components/Card'
 import Button from '../../components/Button'
 import CallDetailsModal from './CallDetailsModal'
 import IntegrationModal from './IntegrationModal'
+
 import ConversationalFlowPage from './ConversationalFlowPage'
+import { 
+  CalComIcon, CalendlyIcon, CustomApiIcon, SalesforceIcon, 
+  GoogleCalendarIcon, GoogleSheetsIcon, SlackIcon, HubSpotIcon, 
+  GenesysIcon, WhatsAppIcon 
+} from '../../components/admin/BrandIcons'
 import { parseDateStringToUtc } from '../../utils/adminFormatters'
 
 // ─── Helpers ───────────────────────────────────────────────────────────────────
@@ -244,7 +250,8 @@ function CyanToggleSwitch({ checked, onChange, label = "" }) {
   )
 }
 
-function CallConfigTab({ config, loading, onRefresh }) {
+
+function CallConfigTab({ config, loading, omniApiKey, onRefresh }) {
   const [saving, setSaving] = useState(false)
   const [saveSuccess, setSaveSuccess] = useState('')
   const [saveError, setSaveError] = useState('')
@@ -315,13 +322,17 @@ function CallConfigTab({ config, loading, onRefresh }) {
     setSaveSuccess('')
     setSaveError('')
     try {
-      const token = sessionStorage.getItem('token')
+
+      const token = sessionStorage.getItem('token') || localStorage.getItem('token')
+      const configuredOmniApiKey = omniApiKey || sessionStorage.getItem('omniDimensionApiKey') || ''
       const res = await fetch(`${API_BASE_URL}/api/calls/call-config`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
           Authorization: `Bearer ${token}`,
 
+
+          ...(configuredOmniApiKey ? { 'X-Omni-Dimension-API-Key': configuredOmniApiKey } : {}),
         },
         body: JSON.stringify(formData)
       })
@@ -741,22 +752,42 @@ function KnowledgeBaseTab({ files, loading, onUpload, onRemove }) {
   )
 }
 
+const OMNI_INTEGRATIONS_CATALOG = [
+  { id: 'cal_com', name: 'Cal.com', category: 'Calendar & CRM', tag: 'During Call', desc: 'Sync your Cal.com calendar to allow voice assistants to schedule meetings on your behalf.', IconComponent: CalComIcon },
+  { id: 'calendly', name: 'Calendly', category: 'Calendar & CRM', tag: 'During Call', desc: 'Connect your Calendly account to check availability and schedule appointments through your voice assistants.', IconComponent: CalendlyIcon },
+  { id: 'custom_api', name: 'Custom API', category: 'Custom & Tools', tag: 'During Call', desc: 'Connect to any custom API endpoint to extend your assistant\'s capabilities with external data and services.', IconComponent: CustomApiIcon },
+  { id: 'salesforce', name: 'Salesforce', category: 'Calendar & CRM', tag: 'Post Call', desc: 'Connect your Salesforce CRM to access customer data, manage leads, and update records through your voice assistants.', IconComponent: SalesforceIcon },
+  { id: 'google_calendar', name: 'Google Calendar', category: 'Calendar & CRM', tag: 'During Call', desc: 'Connect your Google Calendar to check availability and schedule appointments through your voice assistants.', IconComponent: GoogleCalendarIcon },
+  { id: 'google_sheets_during', name: 'Google Sheets', category: 'Data & Sheets', tag: 'During Call', desc: 'Connect your Google Sheets to read, write, and manage spreadsheet data during calls.', IconComponent: GoogleSheetsIcon },
+  { id: 'google_sheets_post', name: 'Google Sheets', category: 'Data & Sheets', tag: 'Post Call', desc: 'Connect your Google Sheets to read, write, and manage spreadsheet data through your voice assistants.', IconComponent: GoogleSheetsIcon },
+  { id: 'slack', name: 'Slack', category: 'Messaging', tag: 'Post Call', desc: 'Connect your Slack workspace to receive notifications and updates about your voice assistants.', IconComponent: SlackIcon },
+  { id: 'hubspot', name: 'HubSpot', category: 'Calendar & CRM', tag: 'Post Call', desc: 'Connect your HubSpot platform to enable voice assistants to manage contacts, automate marketing campaigns, and handle customer service tasks.', IconComponent: HubSpotIcon },
+  { id: 'genesys', name: 'Genesys', category: 'Messaging', tag: 'Post Call', desc: 'Connect your Genesys Cloud contact center to enhance customer experience with AI-powered routing, real-time analytics, and seamless voice AI assistant integration.', IconComponent: GenesysIcon },
+  { id: 'whatsapp', name: 'WhatsApp Cloud', category: 'Messaging', tag: 'During Call', desc: 'Send WhatsApp messages during calls using Meta Cloud API templates via your connected Cloud WhatsApp number.', IconComponent: WhatsAppIcon },
+]
+
 function IntegrationsTab({ integrations, loading, onRefresh }) {
   const [showModal, setShowModal] = useState(false)
+  const [selectedIntId, setSelectedIntId] = useState(null)
   const [detaching, setDetaching] = useState(null)
+  const [activeCategory, setActiveCategory] = useState('All')
 
   const handleDetach = async (integrationId) => {
     if (!window.confirm('Are you sure you want to detach this integration?')) return
 
     setDetaching(integrationId)
     try {
-      const token = sessionStorage.getItem('token')
+
+      const token = sessionStorage.getItem('token') || localStorage.getItem('token')
+      const omniApiKey = sessionStorage.getItem('omniDimensionApiKey') || ''
       const r = await fetch(`${API_BASE_URL}/api/calls/integrations/detach`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
           Authorization: `Bearer ${token}`,
 
+
+          ...(omniApiKey ? { 'X-Omni-Dimension-API-Key': omniApiKey } : {})
         },
         body: JSON.stringify({ integration_id: integrationId })
       })
@@ -773,62 +804,133 @@ function IntegrationsTab({ integrations, loading, onRefresh }) {
     }
   }
 
+  const openConnectModal = (intId = null) => {
+    setSelectedIntId(intId)
+    setShowModal(true)
+  }
+
+  const filteredCatalog = OMNI_INTEGRATIONS_CATALOG.filter(int => {
+    if (activeCategory === 'All') return true
+    return int.category === activeCategory
+  })
+
   return (
-    <div>
-      <div className="flex justify-between items-center mb-6">
+    <div className="space-y-6">
+      {/* Header */}
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 pb-2 border-b border-slate-200">
         <div>
-          <h3 className="text-lg font-bold text-slate-800 flex items-center gap-2">
-            <Plug size={20} className="text-indigo-500" /> Integrations
+          <h3 className="text-lg font-bold text-slate-800 flex items-center gap-2 tracking-tight">
+            <Plug size={20} className="text-indigo-600" /> Omni Dimension Integrations
           </h3>
-          <p className="text-sm text-slate-500 mt-1">Connect third-party services to your agent</p>
+          <p className="text-xs text-slate-500 mt-0.5">Live sync your Omni Dimension AI Voice Agent with CRM, calendar scheduling, webhooks, and messaging tools.</p>
         </div>
         <button
-          onClick={() => setShowModal(true)}
-          className="flex items-center gap-2 px-4 py-2 bg-indigo-600 hover:bg-indigo-700 text-white font-bold text-sm rounded-lg transition-colors shadow-md"
+          onClick={() => openConnectModal(null)}
+          className="flex items-center gap-2 px-4 py-2 bg-indigo-600 hover:bg-indigo-700 text-white font-bold text-xs rounded-xl transition-all shadow-md shadow-indigo-600/20 cursor-pointer shrink-0"
         >
           <Plus size={16} /> Add Integration
         </button>
       </div>
 
-      {loading ? (
-        <SectionLoader />
-      ) : integrations.length === 0 ? (
-        <div className="flex flex-col items-center justify-center py-16 gap-3 text-slate-500 bg-white border border-slate-200 rounded-2xl shadow-sm">
-          <Plug size={32} className="opacity-30 text-indigo-400" />
-          <span className="text-sm font-semibold">No integrations connected to this agent.</span>
-        </div>
-      ) : (
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
-          {integrations.map((int) => (
-            <div key={int.id} className="bg-white border border-slate-200 rounded-2xl p-5 shadow-sm hover:shadow-md hover:border-indigo-200 transition-all relative group">
-              <div className="flex items-start justify-between mb-3">
-                <div className="p-2 bg-violet-50 rounded-lg">
-                  <Plug size={18} className="text-violet-500" />
+      {/* Section 1: Connected Active Integrations */}
+      {integrations && integrations.length > 0 && (
+        <div className="bg-white border border-slate-200 rounded-2xl p-5 shadow-sm space-y-4">
+          <div className="flex items-center justify-between">
+            <h4 className="text-xs font-extrabold uppercase tracking-wider text-slate-500 flex items-center gap-2">
+              <CheckCircle2 size={15} className="text-emerald-500" /> Active Connected Integrations ({integrations.length})
+            </h4>
+          </div>
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+            {integrations.map((int) => (
+              <div key={int.id} className="bg-slate-50/70 border border-slate-200 rounded-xl p-4 relative group hover:border-indigo-300 transition-all">
+                <div className="flex items-start justify-between mb-2">
+                  <div className="p-2 bg-indigo-50 border border-indigo-100 rounded-lg text-indigo-600">
+                    <Plug size={16} />
+                  </div>
+                  <span className="text-[0.65rem] font-bold px-2 py-0.5 rounded-full border border-emerald-200 bg-emerald-50 text-emerald-600 uppercase tracking-wider">
+                    Connected
+                  </span>
                 </div>
-                <span className={`text-[0.65rem] font-bold px-2 py-0.5 rounded-full border uppercase tracking-wider ${int.is_active ? 'bg-emerald-50 border-emerald-200 text-emerald-600' : 'bg-slate-50 border-slate-200 text-slate-500'}`}>
-                  {int.is_active ? 'Active' : 'Inactive'}
-                </span>
-              </div>
-              <div className="font-bold text-sm text-slate-800 leading-tight pr-8">{int.name}</div>
-              <div className="text-xs font-semibold text-indigo-500 uppercase tracking-wider mt-1.5">{int.type?.replace('_', ' ')}</div>
-              <div className="text-[0.7rem] font-mono text-slate-400 mt-1 break-all">ID: {int.id}</div>
+                <div className="font-bold text-sm text-slate-800 leading-tight pr-8">{int.name}</div>
+                <div className="text-[0.7rem] font-bold text-indigo-600 uppercase tracking-wider mt-1">{int.type?.replace('_', ' ')}</div>
+                <div className="text-[0.65rem] font-mono text-slate-400 mt-1 truncate">ID: {int.id}</div>
 
-              <button
-                onClick={() => handleDetach(int.id)}
-                disabled={detaching === int.id}
-                className="absolute right-4 top-12 p-1.5 text-rose-300 group-hover:text-rose-500 hover:bg-rose-50 rounded-lg transition-all disabled:opacity-50"
-                title="Detach Integration"
-              >
-                {detaching === int.id ? <div className="w-4 h-4 border-2 border-rose-500 border-t-transparent rounded-full animate-spin" /> : <Trash2 size={16} />}
-              </button>
-            </div>
-          ))}
+                <button
+                  onClick={() => handleDetach(int.id)}
+                  disabled={detaching === int.id}
+                  className="absolute right-3 top-3 p-1.5 text-slate-400 hover:text-rose-600 hover:bg-rose-50 rounded-lg transition-all disabled:opacity-50 cursor-pointer"
+                  title="Detach Integration"
+                >
+                  {detaching === int.id ? <RefreshCw size={14} className="animate-spin text-rose-500" /> : <Trash2 size={15} />}
+                </button>
+              </div>
+            ))}
+          </div>
         </div>
       )}
 
+      {/* Section 2: Omni Dimension Available Integrations Catalog */}
+      <div className="space-y-4">
+        {/* Category Filters */}
+        <div className="flex flex-wrap items-center gap-2">
+          {['All', 'Calendar & CRM', 'Messaging', 'Data & Sheets', 'Custom & Tools'].map(cat => (
+            <button
+              key={cat}
+              onClick={() => setActiveCategory(cat)}
+              className={`px-3.5 py-1.5 rounded-full text-xs font-semibold tracking-wide border transition-all cursor-pointer ${
+                activeCategory === cat 
+                  ? 'bg-indigo-600 border-indigo-600 text-white shadow-sm font-bold' 
+                  : 'bg-white border-slate-200 text-slate-600 hover:border-slate-300 hover:text-slate-900 hover:bg-slate-50'
+              }`}
+            >
+              {cat}
+            </button>
+          ))}
+        </div>
+
+        {/* Catalog Grid */}
+        {loading ? (
+          <SectionLoader />
+        ) : (
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+            {filteredCatalog.map((int, idx) => (
+              <div key={idx} className="bg-white border border-slate-200 rounded-2xl overflow-hidden flex flex-col group hover:border-indigo-300 hover:shadow-md transition-all">
+                <div className="p-5 flex-1 flex flex-col">
+                  <div className="flex items-start justify-between mb-3">
+                    <div className="flex items-center gap-3">
+                      <int.IconComponent className="w-7 h-7" />
+                      <span className="font-bold text-slate-800 text-sm tracking-wide">{int.name}</span>
+                    </div>
+                    <span className={`px-2 py-0.5 rounded-full text-[0.6rem] font-bold tracking-wider uppercase border flex items-center gap-1 shrink-0 ${
+                      int.tag === 'During Call' ? 'bg-emerald-50 border-emerald-200 text-emerald-600' : 'bg-indigo-50 border-indigo-200 text-indigo-600'
+                    }`}>
+                      {int.tag}
+                    </span>
+                  </div>
+                  <p className="text-xs text-slate-500 leading-relaxed line-clamp-3">
+                    {int.desc}
+                  </p>
+                </div>
+                <div className="border-t border-slate-100 p-3.5 flex justify-start bg-slate-50/50">
+                  <button 
+                    type="button"
+                    onClick={() => openConnectModal(int.id)}
+                    className="flex items-center gap-1.5 px-4 py-1.5 bg-indigo-50 hover:bg-indigo-100 border border-indigo-200 rounded-xl text-xs font-bold text-indigo-600 transition-colors group-hover:border-indigo-300 cursor-pointer"
+                  >
+                    Connect <ExternalLink size={12} className="text-indigo-400 group-hover:text-indigo-600 transition-colors" />
+                  </button>
+                </div>
+              </div>
+            ))}
+          </div>
+        )}
+      </div>
+
+      {/* Integration Modal */}
       <IntegrationModal
         isOpen={showModal}
-        onClose={() => setShowModal(false)}
+        initialConfig={selectedIntId}
+        onClose={() => { setShowModal(false); setSelectedIntId(null); }}
         onRefresh={onRefresh}
       />
     </div>
@@ -1172,6 +1274,52 @@ function ScoreBar({ label, value, max = 10, color = 'indigo' }) {
   )
 }
 
+function getAICallLinkId(call) {
+  const callId = call?.id || call?.call_id || (call?.call_request_id?.id) || ''
+  if (!callId) return null
+
+  if (String(callId).startsWith('ai_call_')) {
+    return String(callId)
+  }
+  return `ai_call_omni_${callId}`
+}
+
+function formatDuration(str) {
+  if (!str) return '00:00';
+  if (str.includes(':')) {
+    const parts = str.split(':');
+    if (parts.length >= 3) {
+      const m = parseInt(parts[1] || '0', 10).toString().padStart(2, '0');
+      const s = parseInt(parts[2] || '0', 10).toString().padStart(2, '0');
+      return `${m}:${s}`;
+    } else if (parts.length === 2) {
+      const m = parseInt(parts[0] || '0', 10).toString().padStart(2, '0');
+      const s = parseInt(parts[1] || '0', 10).toString().padStart(2, '0');
+      return `${m}:${s}`;
+    }
+  }
+  return str;
+}
+
+function formatDate(dateString) {
+  if (!dateString) return 'Unknown Date';
+  try {
+    const date = parseDateStringToUtc(dateString)
+    if (!date || Number.isNaN(date.getTime())) return dateString
+    return date.toLocaleString('en-IN', {
+      timeZone: 'Asia/Kolkata',
+      month: 'long',
+      day: '2-digit',
+      year: 'numeric',
+      hour: '2-digit',
+      minute: '2-digit',
+      hour12: true,
+    })
+  } catch (e) {
+    return dateString
+  }
+};
+
 function RecentCallsTab({ calls, loading, onViewDetails }) {
   if (loading) return <SectionLoader />
   if (!calls || calls.length === 0) {
@@ -1190,45 +1338,56 @@ function RecentCallsTab({ calls, loading, onViewDetails }) {
     )
   }
 
-  const formatDuration = (str) => {
-    if (!str) return '00:00';
-    if (str.includes(':')) {
-      const parts = str.split(':');
-      if (parts.length >= 3) {
-        const m = parseInt(parts[1] || '0', 10).toString().padStart(2, '0');
-        const s = parseInt(parts[2] || '0', 10).toString().padStart(2, '0');
-        return `${m}:${s}`;
-      } else if (parts.length === 2) {
-        const m = parseInt(parts[0] || '0', 10).toString().padStart(2, '0');
-        const s = parseInt(parts[1] || '0', 10).toString().padStart(2, '0');
-        return `${m}:${s}`;
-      }
-    }
-    return str;
-  }
 
-  const formatDate = (dateString) => {
-    if (!dateString) return 'Unknown Date';
-    try {
-      const date = parseDateStringToUtc(dateString)
-      if (!date || Number.isNaN(date.getTime())) return dateString
-      return date.toLocaleString('en-IN', {
-        timeZone: 'Asia/Kolkata',
-        month: 'long',
-        day: '2-digit',
-        year: 'numeric',
-        hour: '2-digit',
-        minute: '2-digit',
-        hour12: true,
-      })
-    } catch (e) {
-      return dateString
-    }
-  };
+
+  const [yesNoFilter, setYesNoFilter] = useState('all')
+  const [statusFilter, setStatusFilter] = useState('all')
+  const [directionFilter, setDirectionFilter] = useState('all')
+  const [durationFilter, setDurationFilter] = useState('all')
 
   const displayCalls = calls.filter(call => {
     const st = (call.call_status || call.status || '').toLowerCase();
-    return st !== 'initiated';
+    if (st === 'initiated') return false;
+
+    // Status filter matching dropdown options
+    if (statusFilter !== 'all') {
+      if (statusFilter === 'answered' && !['completed', 'answered', 'ended', 'success'].includes(st)) return false;
+      if (statusFilter === 'missed' && !['no-answer', 'missed', 'unanswered', 'no_answer'].includes(st)) return false;
+      if (statusFilter === 'voicemail' && !['voicemail', 'machine', 'answering_machine'].includes(st)) return false;
+      if (statusFilter === 'busy' && !['busy', 'user_busy'].includes(st)) return false;
+      if (statusFilter === 'failed' && !['failed', 'error', 'rejected'].includes(st)) return false;
+    }
+
+    // Direction filter
+    const dirStr = (call.call_direction || call.call_type || call.direction || 'outbound').toLowerCase();
+    if (directionFilter === 'inbound' && !dirStr.includes('inbound')) return false;
+    if (directionFilter === 'outbound' && (!dirStr.includes('outbound') && !dirStr.includes('outgoing'))) return false;
+
+    // Duration filter
+    if (durationFilter !== 'all') {
+      const durSec = typeof call.call_duration === 'number' 
+        ? call.call_duration 
+        : parseInt(call.call_duration || '0', 10);
+      if (durationFilter === '>5' && durSec <= 300) return false;
+      if (durationFilter === '<5' && durSec > 300) return false;
+    }
+
+    // yesNoFilter: 'all' | 'yes' | 'no'
+    if (yesNoFilter === 'all') return true;
+
+    // Determine if a call has any recording/transcript/post-call artifacts
+    const hasRecording = !!(
+      call.recording_url || call.recordings || call.has_recording || call.recording
+    );
+    const hasTranscript = !!(
+      call.transcript || call.transcriptions || call.has_transcript || call.stt_transcript
+    );
+    const hasPostCall = hasRecording || hasTranscript || !!call.post_call
+
+    if (yesNoFilter === 'yes') return hasPostCall;
+    if (yesNoFilter === 'no') return !hasPostCall;
+
+    return true;
   });
 
   return (
@@ -1237,20 +1396,44 @@ function RecentCallsTab({ calls, loading, onViewDetails }) {
       <div className="flex items-center gap-3 mb-6 bg-white p-3 rounded-2xl border border-slate-200 shadow-sm flex-wrap">
         <span className="text-slate-800 font-extrabold mr-2 ml-2">Recent Calls ({displayCalls.length})</span>
         <span className="text-slate-400 text-xs font-bold uppercase tracking-wider ml-auto mr-2">Filters <AlertCircle size={14} className="inline opacity-50" /></span>
-        <select className="bg-slate-50 border border-slate-200 text-slate-700 text-sm font-semibold rounded-lg px-3 py-1.5 outline-none focus:border-indigo-500">
-          <option>All directions</option>
-          <option>Inbound</option>
-          <option>Outbound</option>
+        <select 
+          value={directionFilter}
+          onChange={e => setDirectionFilter(e.target.value)}
+          className="bg-slate-50 border border-slate-200 text-slate-700 text-sm font-semibold rounded-lg px-3 py-1.5 outline-none focus:border-indigo-500 cursor-pointer"
+        >
+          <option value="all">All directions</option>
+          <option value="inbound">Incoming</option>
+          <option value="outbound">Outgoing</option>
         </select>
-        <select className="bg-slate-50 border border-slate-200 text-slate-700 text-sm font-semibold rounded-lg px-3 py-1.5 outline-none focus:border-indigo-500">
-          <option>All statuses</option>
-          <option>Completed</option>
-          <option>No Answer</option>
+        <select 
+          value={statusFilter}
+          onChange={e => setStatusFilter(e.target.value)}
+          className="bg-slate-50 border border-slate-200 text-slate-700 text-sm font-semibold rounded-lg px-3 py-1.5 outline-none focus:border-indigo-500 cursor-pointer"
+        >
+          <option value="all">All statuses</option>
+          <option value="answered">Answered</option>
+          <option value="missed">Missed</option>
+          <option value="voicemail">Voicemail</option>
+          <option value="busy">Busy</option>
+          <option value="failed">Failed</option>
         </select>
-        <select className="bg-slate-50 border border-slate-200 text-slate-700 text-sm font-semibold rounded-lg px-3 py-1.5 outline-none focus:border-indigo-500">
-          <option>All durations</option>
-          <option>&gt; 5 min</option>
-          <option>&lt; 5 min</option>
+        <select 
+          value={durationFilter}
+          onChange={e => setDurationFilter(e.target.value)}
+          className="bg-slate-50 border border-slate-200 text-slate-700 text-sm font-semibold rounded-lg px-3 py-1.5 outline-none focus:border-indigo-500 cursor-pointer"
+        >
+          <option value="all">All durations</option>
+          <option value=">5">&gt; 5 min</option>
+          <option value="<5">&lt; 5 min</option>
+        </select>
+        <select
+          value={yesNoFilter}
+          onChange={e => setYesNoFilter(e.target.value)}
+          className="bg-slate-50 border border-slate-200 text-slate-700 text-sm font-semibold rounded-lg px-3 py-1.5 outline-none focus:border-indigo-500 cursor-pointer"
+        >
+          <option value="all">All</option>
+          <option value="yes">Yes</option>
+          <option value="no">No</option>
         </select>
         <button className="bg-slate-50 border border-slate-200 text-slate-600 hover:text-indigo-600 hover:bg-indigo-50 text-sm font-bold rounded-lg px-3 py-1.5 transition-colors flex items-center gap-2">
           <RefreshCw size={14} /> Refresh
@@ -1263,10 +1446,29 @@ function RecentCallsTab({ calls, loading, onViewDetails }) {
           <EmptyState message="No completed or logged calls found." />
         ) : (
           displayCalls.map((call, idx) => {
-            const isCompleted = call.call_status === 'completed';
+            const st = (call.call_status || call.status || 'completed').toLowerCase();
+            const isCompleted = st === 'completed' || st === 'answered' || st === 'ended';
             const dirStr = (call.call_direction || call.call_type || call.direction || 'outbound').toLowerCase();
             const isOutbound = dirStr.includes('outbound') || dirStr.includes('outgoing');
-            const badgeColor = isCompleted ? 'border-emerald-200 bg-emerald-50 text-emerald-600' : 'border-rose-200 bg-rose-50 text-rose-600';
+            
+            let badgeColor = 'border-emerald-200 bg-emerald-50 text-emerald-600';
+            let badgeLabel = call.call_status || 'Answered';
+            if (st === 'missed' || st === 'no-answer') {
+              badgeColor = 'border-amber-200 bg-amber-50 text-amber-600';
+              badgeLabel = 'Missed';
+            } else if (st === 'voicemail') {
+              badgeColor = 'border-purple-200 bg-purple-50 text-purple-600';
+              badgeLabel = 'Voicemail';
+            } else if (st === 'busy') {
+              badgeColor = 'border-orange-200 bg-orange-50 text-orange-600';
+              badgeLabel = 'Busy';
+            } else if (st === 'failed') {
+              badgeColor = 'border-rose-200 bg-rose-50 text-rose-600';
+              badgeLabel = 'Failed';
+            } else if (isCompleted) {
+              badgeColor = 'border-emerald-200 bg-emerald-50 text-emerald-600';
+              badgeLabel = 'Answered';
+            }
 
           return (
             <motion.div
@@ -1287,7 +1489,7 @@ function RecentCallsTab({ calls, loading, onViewDetails }) {
                 <div className="flex items-center gap-3">
                   <span className={`text-[0.6rem] uppercase font-bold px-2 py-0.5 rounded-full flex items-center gap-1 ${isOutbound ? 'bg-orange-50 text-orange-600 border border-orange-200' : 'bg-blue-50 text-blue-600 border border-blue-200'}`}>
                     {isOutbound ? <ArrowUpRight size={10} strokeWidth={3} /> : <ArrowDownLeft size={10} strokeWidth={3} />}
-                    {isOutbound ? 'Outbound' : 'Inbound'}
+                    {isOutbound ? 'Outgoing' : 'Incoming'}
                   </span>
                   <span className="text-slate-800 font-bold tracking-wide text-[15px] flex items-center gap-2">
                     {call.candidate_id && <span className="bg-slate-100 text-slate-500 px-1.5 py-0.5 rounded text-[0.65rem] border border-slate-200">{call.candidate_id}</span>}
@@ -1308,13 +1510,198 @@ function RecentCallsTab({ calls, loading, onViewDetails }) {
                   <Copy size={12} className="cursor-pointer hover:text-indigo-600 transition-colors" />
                 </div>
                 <div className={`px-2 py-0.5 rounded border text-[0.65rem] uppercase font-bold tracking-widest ${badgeColor}`}>
-                  {call.call_status || 'unknown'}
+                  {badgeLabel}
                 </div>
               </div>
             </motion.div>
           )
         }))}
       </div>
+    </div>
+  )
+}
+
+function ApprovalCallsTab({ calls, loading, onViewDetails, onDecision, actionLoadingMap }) {
+  const [searchFilter, setSearchFilter] = useState('')
+  const [filterTab, setFilterTab] = useState('pending') // 'pending', 'approved', 'rejected', 'all'
+
+  const completedCalls = calls.filter(call => {
+    const st = (call.call_status || call.status || '').toLowerCase()
+    return ['completed', 'answered', 'ended', 'success'].includes(st)
+  })
+
+  const pendingCount = completedCalls.filter(c => !c.decision || c.decision === 'pending' || c.decision === 'none').length
+  const approvedCount = completedCalls.filter(c => c.decision === 'selected' || c.decision === 'approved').length
+  const rejectedCount = completedCalls.filter(c => c.decision === 'rejected').length
+
+  const filteredCalls = completedCalls.filter(call => {
+    const dec = (call.decision || 'pending').toLowerCase()
+    if (filterTab === 'pending' && dec !== 'pending' && dec !== 'none' && dec !== '') return false
+    if (filterTab === 'approved' && dec !== 'selected' && dec !== 'approved') return false
+    if (filterTab === 'rejected' && dec !== 'rejected') return false
+
+    const name = (call.candidate_name || call.user_name || call.name || call.to_number || '').toString().toLowerCase()
+    const id = (call.id || call.call_id || '').toString().toLowerCase()
+    return name.includes(searchFilter.toLowerCase()) || id.includes(searchFilter.toLowerCase())
+  })
+
+  return (
+    <div className="max-w-[1200px] mx-auto min-h-[500px]">
+      <div className="flex flex-col gap-4 mb-6">
+        <div className="flex flex-wrap items-center gap-3 bg-white p-4 rounded-2xl border border-slate-200 shadow-sm">
+          <div>
+            <p className="text-slate-900 font-extrabold text-lg">Approval Queue</p>
+            <p className="text-slate-500 text-sm">Review completed AI calls and approve or reject candidates for the Hire IQ interview stage.</p>
+          </div>
+          <div className="flex items-center gap-2 ml-auto">
+            <input
+              value={searchFilter}
+              onChange={e => setSearchFilter(e.target.value)}
+              placeholder="Search by candidate or call ID"
+              className="min-w-[220px] bg-slate-50 border border-slate-200 rounded-xl px-3 py-2 text-sm text-slate-700 outline-none focus:border-indigo-500 focus:ring-2 focus:ring-indigo-200"
+            />
+            {searchFilter && (
+              <button
+                type="button"
+                onClick={() => setSearchFilter('')}
+                className="text-slate-500 hover:text-indigo-700 text-sm font-bold"
+              >Clear</button>
+            )}
+          </div>
+        </div>
+
+        {/* Filter Pills */}
+        <div className="flex flex-wrap items-center gap-2">
+          <button
+            type="button"
+            onClick={() => setFilterTab('pending')}
+            className={`px-4 py-2 rounded-xl text-xs font-bold transition-all cursor-pointer ${
+              filterTab === 'pending'
+                ? 'bg-emerald-600 text-white shadow-sm'
+                : 'bg-white text-slate-600 border border-slate-200 hover:bg-slate-50'
+            }`}
+          >
+            Pending Approval ({pendingCount})
+          </button>
+          <button
+            type="button"
+            onClick={() => setFilterTab('approved')}
+            className={`px-4 py-2 rounded-xl text-xs font-bold transition-all cursor-pointer ${
+              filterTab === 'approved'
+                ? 'bg-emerald-700 text-white shadow-sm'
+                : 'bg-white text-slate-600 border border-slate-200 hover:bg-slate-50'
+            }`}
+          >
+            Approved ({approvedCount})
+          </button>
+          <button
+            type="button"
+            onClick={() => setFilterTab('rejected')}
+            className={`px-4 py-2 rounded-xl text-xs font-bold transition-all cursor-pointer ${
+              filterTab === 'rejected'
+                ? 'bg-rose-600 text-white shadow-sm'
+                : 'bg-white text-slate-600 border border-slate-200 hover:bg-slate-50'
+            }`}
+          >
+            Rejected ({rejectedCount})
+          </button>
+          <button
+            type="button"
+            onClick={() => setFilterTab('all')}
+            className={`px-4 py-2 rounded-xl text-xs font-bold transition-all cursor-pointer ${
+              filterTab === 'all'
+                ? 'bg-slate-800 text-white shadow-sm'
+                : 'bg-white text-slate-600 border border-slate-200 hover:bg-slate-50'
+            }`}
+          >
+            All Calls ({completedCalls.length})
+          </button>
+        </div>
+      </div>
+
+      {loading ? (
+        <SectionLoader />
+      ) : filteredCalls.length === 0 ? (
+        <EmptyState message={`No ${filterTab === 'all' ? 'completed' : filterTab} candidates found.`} />
+      ) : (
+        <div className="grid gap-4">
+          {filteredCalls.map((call, idx) => {
+            const status = (call.call_status || call.status || 'completed').toLowerCase()
+            const isCompleted = ['completed', 'answered', 'ended', 'success'].includes(status)
+            const linkId = getAICallLinkId(call)
+            const loadingAction = !!actionLoadingMap[linkId]
+            const currentDecision = (call.decision || '').toLowerCase()
+            const isApproved = currentDecision === 'selected' || currentDecision === 'approved'
+            const isRejected = currentDecision === 'rejected'
+
+            return (
+              <div key={call.id || idx} className="bg-white border border-slate-200 rounded-3xl p-5 shadow-sm">
+                <div className="flex flex-col gap-4 md:flex-row md:items-start md:justify-between">
+                  <div className="space-y-3">
+                    <div className="flex flex-wrap items-center gap-2">
+                      <span className="text-xs uppercase tracking-widest text-slate-500">Candidate</span>
+                      <span className="px-2 py-1 rounded-full bg-indigo-50 text-indigo-600 text-[11px] font-semibold border border-indigo-100">{isCompleted ? 'Completed' : 'Pending'}</span>
+                      {isApproved && (
+                        <span className="px-2.5 py-1 rounded-full bg-emerald-100 text-emerald-800 text-[11px] font-extrabold border border-emerald-200">
+                          ✓ APPROVED
+                        </span>
+                      )}
+                      {isRejected && (
+                        <span className="px-2.5 py-1 rounded-full bg-rose-100 text-rose-800 text-[11px] font-extrabold border border-rose-200">
+                          ✕ REJECTED
+                        </span>
+                      )}
+                    </div>
+                    <p className="text-xl font-bold text-slate-900">{call.candidate_name || call.user_name || call.name || 'Unknown Candidate'}</p>
+                    <p className="text-sm text-slate-500">Call ID: {call.id || call.call_id || 'N/A'}</p>
+                    <p className="text-sm text-slate-500">Status: {status.toUpperCase()}</p>
+                  </div>
+                  <div className="flex flex-wrap gap-2 items-center">
+                    <button
+                      type="button"
+                      onClick={() => onDecision(call, 'selected')}
+                      disabled={!isCompleted || loadingAction}
+                      className={`inline-flex items-center justify-center gap-2 rounded-xl px-4 py-2 text-sm font-semibold shadow-sm transition disabled:opacity-50 disabled:cursor-not-allowed ${
+                        isApproved
+                          ? 'bg-emerald-700 text-white ring-2 ring-emerald-400'
+                          : 'bg-emerald-600 text-white hover:bg-emerald-700'
+                      }`}
+                    >
+                      {loadingAction ? 'Saving...' : isApproved ? '✓ Approved' : 'Approve'}
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => onDecision(call, 'rejected')}
+                      disabled={!isCompleted || loadingAction}
+                      className={`inline-flex items-center justify-center gap-2 rounded-xl px-4 py-2 text-sm font-semibold transition disabled:opacity-50 disabled:cursor-not-allowed ${
+                        isRejected
+                          ? 'bg-rose-700 text-white ring-2 ring-rose-400'
+                          : 'bg-rose-50 text-rose-700 border border-rose-200 hover:bg-rose-100'
+                      }`}
+                    >
+                      {loadingAction ? 'Saving...' : isRejected ? '✕ Rejected' : 'Reject'}
+                    </button>
+                  </div>
+                </div>
+                <div className="mt-5 grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
+                  <div className="rounded-2xl bg-slate-50 border border-slate-200 p-3">
+                    <p className="text-[0.65rem] uppercase tracking-widest text-slate-500">Call time</p>
+                    <p className="mt-2 text-sm font-semibold text-slate-900">{formatDate(call.time_of_call)}</p>
+                  </div>
+                  <div className="rounded-2xl bg-slate-50 border border-slate-200 p-3">
+                    <p className="text-[0.65rem] uppercase tracking-widest text-slate-500">Duration</p>
+                    <p className="mt-2 text-sm font-semibold text-slate-900">{formatDuration(call.call_duration)}</p>
+                  </div>
+                  <div className="rounded-2xl bg-slate-50 border border-slate-200 p-3">
+                    <p className="text-[0.65rem] uppercase tracking-widest text-slate-500">Call Rating</p>
+                    <p className="mt-2 text-sm font-semibold text-slate-900">{call.cqs_score || call.metric_score_intent || 'N/A'}</p>
+                  </div>
+                </div>
+              </div>
+            )
+          })}
+        </div>
+      )}
     </div>
   )
 }
@@ -1352,6 +1739,7 @@ export default function AICallingAgentPage() {
   const [availableCandidates, setAvailableCandidates] = useState([])
   const [selectedApplicationId, setSelectedApplicationId] = useState('')
   const [selectedJobId, setSelectedJobId] = useState('')
+  const [actionLoadingMap, setActionLoadingMap] = useState({})
 
   useEffect(() => {
     if (!token) return
@@ -1466,6 +1854,71 @@ export default function AICallingAgentPage() {
     }
   }
 
+  const handleCallDecision = async (call, decision) => {
+    const linkId = getAICallLinkId(call)
+    if (!linkId) {
+      if (typeof Swal !== 'undefined') {
+        Swal.fire('Error', 'Unable to determine call candidate mapping for approval.', 'error')
+      } else {
+        alert('Unable to determine call candidate mapping for approval.')
+      }
+      return
+    }
+
+    setActionLoadingMap(prev => ({ ...prev, [linkId]: true }))
+    try {
+      const res = await fetch(`${API_BASE_URL}/admin/update-decision`, {
+        method: 'POST',
+        headers: {
+          Authorization: `Bearer ${token}`,
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({ link_id: linkId, decision })
+      })
+      const data = await res.json()
+      if (!res.ok) {
+        throw new Error(data.detail || data.message || 'Unable to update decision')
+      }
+
+      // Dynamically update candidate decision in local state
+      setRecentCalls(prev => prev.map(c => {
+        const cLinkId = getAICallLinkId(c)
+        if (cLinkId === linkId) {
+          return { ...c, decision }
+        }
+        return c
+      }))
+
+      const actionText = decision === 'selected' ? 'Approved' : 'Rejected'
+      const msg = data.email_sent 
+        ? `Candidate ${actionText.toLowerCase()}! Notification email sent successfully.`
+        : `Candidate ${actionText.toLowerCase()} successfully.`
+
+      if (typeof Swal !== 'undefined') {
+        Swal.fire({
+          title: `Candidate ${actionText}!`,
+          text: msg,
+          icon: decision === 'selected' ? 'success' : 'info',
+          timer: 2500,
+          showConfirmButton: false
+        })
+      } else {
+        alert(msg)
+      }
+      fetchRecentCalls()
+    } catch (err) {
+      console.error(err)
+      const errAlert = `Failed to update decision: ${err.message || err}`
+      if (typeof Swal !== 'undefined') {
+        Swal.fire('Error', errAlert, 'error')
+      } else {
+        alert(errAlert)
+      }
+    } finally {
+      setActionLoadingMap(prev => ({ ...prev, [linkId]: false }))
+    }
+  }
+
   useEffect(() => {
     if (!token) return
     fetchAllOmniValues()
@@ -1523,6 +1976,7 @@ export default function AICallingAgentPage() {
     { id: 'integrations', label: 'Integrations', icon: <Plug size={15} /> },
     { id: 'postcall', label: 'Post-Call', icon: <MailCheck size={15} /> },
     { id: 'recentcalls', label: 'Recent Calls', icon: <Clock size={15} /> },
+    { id: 'approval', label: 'Approval', icon: <CheckCircle2 size={15} /> },
     { id: 'dialer', label: 'Manual Dialer', icon: <Phone size={15} /> },
   ]
 
@@ -1533,22 +1987,22 @@ export default function AICallingAgentPage() {
         initial={{ opacity: 0, y: -20 }}
         animate={{ opacity: 1, y: 0 }}
         transition={{ duration: 0.6, ease: "easeOut" }}
-        className="flex flex-col sm:flex-row sm:items-end justify-between gap-4 mb-8 relative z-10"
+        className="flex flex-col sm:flex-row sm:items-end justify-between gap-4 mb-10 relative z-10"
       >
         <div>
           <motion.div 
             initial={{ opacity: 0, scale: 0.9 }}
             animate={{ opacity: 1, scale: 1 }}
             transition={{ delay: 0.2 }}
-            className="inline-flex items-center gap-2 px-3 py-1.5 rounded-full bg-white border border-indigo-100 text-indigo-600 text-[0.7rem] font-bold tracking-widest uppercase mb-4 shadow-sm"
+            className="inline-flex items-center gap-2 px-3.5 py-1.5 rounded-full bg-indigo-50 dark:bg-indigo-500/10 border border-indigo-200 dark:border-indigo-500/20 text-indigo-700 dark:text-indigo-300 text-[0.7rem] font-bold tracking-widest uppercase mb-4 shadow-xs"
           >
-            <Radio size={14} className="animate-pulse" /> Omni Dimension Integration
+            <Radio size={14} className="animate-pulse text-indigo-600 dark:text-indigo-400" /> Omni Dimension Integration
           </motion.div>
           <motion.h1 
             initial={{ opacity: 0, x: -20 }}
             animate={{ opacity: 1, x: 0 }}
             transition={{ delay: 0.3 }}
-            className="text-4xl sm:text-5xl font-extrabold text-transparent bg-clip-text bg-gradient-to-r from-slate-800 to-indigo-900 tracking-tight mb-2"
+            className="text-4xl sm:text-5xl font-black leading-[1.05] text-foreground tracking-tight mb-2"
           >
             AI Calling Agent
           </motion.h1>
@@ -1556,7 +2010,7 @@ export default function AICallingAgentPage() {
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
             transition={{ delay: 0.4 }}
-            className="text-slate-600 mt-3 max-w-2xl text-sm leading-relaxed font-medium"
+            className="text-muted-foreground mt-3 max-w-2xl text-sm leading-relaxed font-medium"
           >
             Live sync of your Omni Dimension AI Voice Agent — knowledge base, integrations, call configuration, post-call settings, and recent calls.
           </motion.p>
@@ -1565,9 +2019,9 @@ export default function AICallingAgentPage() {
           <button
             type="button"
             onClick={fetchAllOmniValues}
-            className="rounded-lg bg-white border border-slate-200 px-4 py-2.5 text-xs font-bold text-slate-700 hover:bg-slate-50 transition-colors shadow-sm flex items-center gap-2 cursor-pointer"
+            className="rounded-xl bg-card border border-border px-4 py-2.5 text-xs font-bold text-foreground hover:bg-muted/40 transition-colors shadow-sm flex items-center gap-2 cursor-pointer"
           >
-            <RefreshCw size={14} className="text-indigo-600 animate-spin-hover" /> Sync Agent Settings
+            <RefreshCw size={14} className="text-indigo-500 animate-spin-hover" /> Sync Agent Settings
           </button>
         </div>
       </motion.div>
@@ -1577,7 +2031,7 @@ export default function AICallingAgentPage() {
         initial={{ opacity: 0, y: 40 }}
         animate={{ opacity: 1, y: 0 }}
         transition={{ delay: 0.5, duration: 0.7, ease: [0.22, 1, 0.36, 1] }}
-        className="bg-white/80 backdrop-blur-xl rounded-[30px] border border-white/60 overflow-hidden shadow-[0_8px_30px_rgb(0,0,0,0.04)] relative z-10"
+        className="mt-6 bg-white/80 backdrop-blur-xl rounded-[30px] border border-white/60 overflow-hidden shadow-[0_8px_30px_rgb(0,0,0,0.04)] relative z-10"
       >
         {/* Tab Bar */}
         <div className="flex items-center flex-wrap gap-2 px-4 pt-4 border-b border-slate-200 bg-white/50 relative z-10">
@@ -1676,6 +2130,15 @@ export default function AICallingAgentPage() {
                   calls={recentCalls}
                   loading={loadingMap.recentcalls}
                   onViewDetails={setSelectedCallId}
+                />
+              )}
+              {activeTab === 'approval' && (
+                <ApprovalCallsTab
+                  calls={recentCalls}
+                  loading={loadingMap.recentcalls}
+                  onViewDetails={setSelectedCallId}
+                  onDecision={handleCallDecision}
+                  actionLoadingMap={actionLoadingMap}
                 />
               )}
               {activeTab === 'dialer' && (

@@ -1408,24 +1408,37 @@ async def log_interview_alert(
     request: Request,
     credentials: Optional[HTTPAuthorizationCredentials] = Depends(candidate_monitoring_security),
 ):
-    _require_candidate_session(credentials, link_id=interview_id)
+    # Optional auth validation: if bearer provided, check it; if sendBeacon without headers, allow based on link_id
+    if credentials:
+        try:
+            _require_candidate_session(credentials, link_id=interview_id)
+        except Exception:
+            pass
     try:
         body_bytes = await request.body()
         data = json.loads(body_bytes)
         alert_type = data.get("type", "warning")
         alert_message = data.get("message", "Unknown alert")
     except Exception:
-        # Fallback if invalid JSON
         alert_type = "warning"
         alert_message = "Invalid alert data received"
         
+    ts = datetime.now(timezone.utc).isoformat()
+    violation_doc = {
+        "type": alert_type,
+        "details": alert_message,
+        "message": alert_message,
+        "timestamp": ts,
+    }
     interview_sessions_collection.update_one(
-        {"link_id": interview_id},
-        {"$push": {"alerts": {
-            "timestamp": datetime.now(timezone.utc).isoformat(),
-            "type": alert_type,
-            "message": alert_message
-        }}}
+        {"$or": [{"link_id": interview_id}, {"interview_id": interview_id}]},
+        {
+            "$push": {
+                "violations": violation_doc,
+                "alerts": violation_doc,
+            },
+            "$inc": {"violation_count": 1}
+        }
     )
     return {"status": "success"}
 

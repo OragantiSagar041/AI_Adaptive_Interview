@@ -101,6 +101,7 @@ def cloudinary_cleanup_loop():
                     os.getenv("REDIS_URL", "redis://localhost:6379/0"),
                     socket_connect_timeout=2,
                     socket_timeout=2,
+                    protocol=2,
                 )
                 cleanup_lock = cleanup_redis.lock(
                     "maintenance:cloudinary-recording-cleanup",

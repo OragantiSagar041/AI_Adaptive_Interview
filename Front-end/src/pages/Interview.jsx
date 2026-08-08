@@ -13,6 +13,11 @@ export default function Interview() {
   const [loading, setLoading] = useState(true)
 
   useEffect(() => {
+    document.documentElement.setAttribute('data-theme', 'light')
+    document.documentElement.classList.remove('dark')
+  }, [])
+
+  useEffect(() => {
     if (!sessionId) {
       setError("Missing Session ID in URL parameters. Please check your secure interview invitation link.")
       setLoading(false)

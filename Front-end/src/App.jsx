@@ -21,6 +21,7 @@ const CaseStudyPage = React.lazy(() => import('./pages/CaseStudyPage'))
 const VoiceInterviewPage = React.lazy(() => import('./pages/VoiceInterviewPage'))
 const HireIQCaseStudyPage = React.lazy(() => import('./pages/HireIQCaseStudyPage'))
 const JobApplicationPage = React.lazy(() => import('./pages/JobApplicationPage'))
+const SpectatorPage = React.lazy(() => import('./pages/SpectatorPage'))
 
 // Admin / master routes (were already lazy — keep them)
 const MasterLayout = React.lazy(() => import('./components/master/MasterLayout'))
@@ -77,7 +78,7 @@ import ErrorBoundary from './components/ErrorBoundary'
 function App() {
   return (
     <BrowserRouter>
-      <React.Suspense fallback={<div className="flex h-screen items-center justify-center bg-gray-900 text-white font-semibold text-lg tracking-wide">Loading Interface...</div>}>
+      <React.Suspense fallback={<div className="flex h-screen items-center justify-center bg-slate-50 text-slate-900 font-semibold text-lg tracking-wide">Loading Interface...</div>}>
         <ErrorBoundary>
           <Routes>
           <Route path="/" element={<LandingPage />} />
@@ -92,6 +93,7 @@ function App() {
           <Route path="/customer-story/:id" element={<HireIQCaseStudyPage />} />
           <Route path="/voice-interview/:linkId" element={<VoiceInterviewPage />} />
           <Route path="/apply/:jobId" element={<JobApplicationPage />} />
+          <Route path="/spectate/:linkId" element={<SpectatorPage />} />
           {/* Master routes */}
           <Route
             path="/master"

@@ -42,10 +42,8 @@ async def transcribe_audio(
     if ext not in ('webm', 'ogg', 'mp4', 'wav', 'm4a', 'mp3'):
         ext = 'webm'
 
-    # Reject tiny audio blobs — they're almost always silence or background noise
-    # and are the #1 cause of Whisper hallucination. A valid utterance in any language
-    # takes at least ~0.8 seconds which at typical webm bitrates is > 10 KB.
-    MIN_AUDIO_BYTES = 12000
+    # Reject tiny audio blobs under 3KB (headers only, no actual speech data)
+    MIN_AUDIO_BYTES = 3000
     if len(data) < MIN_AUDIO_BYTES:
         return {"text": ""}
 
@@ -67,14 +65,14 @@ async def transcribe_audio(
         
         # Initial prompt strategy:
         native_prompts = {
-            "te": "నమస్కారం. నేను ఒక ఇంటర్వ్యూ ఇస్తున్నాను.",
+            "te": "నమస్కారం. నేను ఒక ఇంటర్వ್ಯೂ ఇస్తున్నాను.",
             "hi": "नमस्ते। मैं एक साक्षात्कार दे रहा हूँ।",
             "ta": "வணக்கம். நான் ஒரு நேர்காணலில் பங்கேற்கிறேன்.",
             "ml": "നമസ്കാരം. ഞാൻ ഒരു അഭിമുഖത്തിൽ പങ്കെടുക്കുകയാണ്.",
             "kn": "ನಮಸ್ಕಾರ. ನಾನು ಒಂದು ಸಂದರ್ಶನದಲ್ಲಿ ಭಾಗವಹಿಸುತ್ತಿದ್ದೇನೆ.",
         }
         if iso_lang == "en":
-            sys_prompt = f"The speaker has an Indian English accent. This is a highly technical software engineering job interview. The candidate's name is {candidate_name}. Transcribe technical terms, acronyms, and programming concepts accurately."
+            sys_prompt = f"The speaker has an Indian English accent. This is a technical software engineering job interview. The candidate's name is {candidate_name}. Transcribe technical terms, algorithms, frameworks, and programming concepts accurately."
         else:
             sys_prompt = native_prompts.get(iso_lang, "")
 
@@ -117,33 +115,28 @@ async def transcribe_audio(
 
         valid_texts = []
         segments = getattr(transcription, 'segments', [])
+        raw_text = str(getattr(transcription, "text", "") or "").strip()
         if segments:
             for seg in segments:
-                # Handle both dict and object access safely based on SDK version
                 no_speech_prob = seg.get('no_speech_prob', 0) if isinstance(seg, dict) else getattr(seg, 'no_speech_prob', 0)
                 avg_logprob = seg.get('avg_logprob', 0) if isinstance(seg, dict) else getattr(seg, 'avg_logprob', 0)
                 compression_ratio = seg.get('compression_ratio', 0) if isinstance(seg, dict) else getattr(seg, 'compression_ratio', 0)
                 seg_text = seg.get('text', '') if isinstance(seg, dict) else getattr(seg, 'text', '')
                 
-                # Filter thresholds are relaxed for non-English languages because:
-                # - Regional scripts (Telugu, Hindi, etc.) naturally have lower avg_logprob
-                # - Using English-tuned thresholds silently drops all valid segments
-                if iso_lang == "en":
-                    if no_speech_prob > 0.45 or avg_logprob < -1.0 or compression_ratio > 2.4:
-                        continue
-                else:
-                    # For regional languages: only discard definite silence or
-                    # severe repetition loops. avg_logprob is intentionally NOT
-                    # checked here — it's naturally lower for regional scripts.
-                    if no_speech_prob > 0.75 or compression_ratio > 2.4:
-                        continue
+                # Only drop definite silence or severe repetition loops
+                if no_speech_prob > 0.85 or compression_ratio > 2.5:
+                    continue
+                # If avg_logprob is extremely low (< -2.0) and no_speech > 0.5, skip unintelligible noise
+                if avg_logprob < -2.0 and no_speech_prob > 0.5:
+                    continue
                     
                 valid_texts.append(seg_text.strip())
-            # If every segment was filtered out, treat it as silence. Falling back
-            # to raw text here reintroduces Whisper's common silence hallucinations.
+
             text = " ".join(valid_texts).strip()
+            if not text and raw_text:
+                text = raw_text
         else:
-            text = transcription.text.strip()
+            text = raw_text
 
         # Only fix name for English – fix_name splits on spaces, which corrupts
         # native scripts (Telugu, Hindi, etc.) and injects the English name.

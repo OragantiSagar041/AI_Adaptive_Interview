@@ -107,22 +107,22 @@ export default function CallDetailsModal({ isOpen, onClose, callId, API_BASE_URL
   };
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/40 backdrop-blur-sm p-4 animate-fade-in">
+<div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 backdrop-blur-sm p-4 animate-fade-in">
       <div className="bg-white text-slate-900 w-full max-w-5xl h-[85vh] rounded-xl shadow-2xl flex flex-col border border-slate-200 overflow-hidden">
 
         {/* Header */}
         <div className="flex items-center justify-between p-4 border-b border-slate-200">
           <h2 className="text-lg font-bold text-slate-900">Call Details (ID: {callId})</h2>
           <div className="flex items-center gap-4">
-            <button onClick={fetchCallDetails} className="flex items-center gap-1.5 px-3 py-1.5 rounded border border-slate-300 hover:bg-slate-100 text-xs font-semibold text-slate-600 transition-colors">
+<button onClick={fetchCallDetails} className="flex items-center gap-1.5 px-3 py-1.5 rounded border border-slate-200 hover:bg-slate-100 text-xs font-semibold text-slate-700 transition-colors">
               <RefreshCw size={12} className={loading ? "animate-spin" : ""} /> Refresh
             </button>
-            <button className="flex items-center gap-1.5 px-3 py-1.5 rounded border border-teal-500/30 text-teal-500 hover:bg-teal-500/10 text-xs font-semibold transition-colors">
+            <button className="flex items-center gap-1.5 px-3 py-1.5 rounded border border-teal-500/30 text-teal-700 hover:bg-teal-500/10 text-xs font-semibold transition-colors">
               <Star size={12} /> Give Feedback
             </button>
             <div className="flex items-center gap-2 text-xs font-bold text-slate-500">
               Mode:
-              <div className="flex bg-slate-50 rounded overflow-hidden border border-slate-200">
+<div className="flex bg-slate-100 rounded overflow-hidden border border-slate-200">
                 <button
                   onClick={() => setViewMode('simple')}
                   className={`px-4 py-1.5 transition-colors ${viewMode === 'simple' ? 'bg-teal-500 text-black' : 'hover:text-slate-900'}`}
@@ -149,21 +149,21 @@ export default function CallDetailsModal({ isOpen, onClose, callId, API_BASE_URL
             <div className="animate-spin rounded-full h-8 w-8 border-2 border-teal-500 border-t-transparent"></div>
           </div>
         ) : !details ? (
-          <div className="flex-1 flex items-center justify-center text-slate-400">
+<div className="flex-1 flex items-center justify-center text-slate-500">
             Failed to load call details.
           </div>
         ) : (
-          <div className="flex-1 overflow-y-auto custom-scrollbar flex flex-col bg-white">
+          <div className="flex-1 overflow-y-auto custom-scrollbar flex flex-col bg-slate-50">
 
             {/* Audio Player Wrapper */}
-            <div className="p-4 bg-white">
-              <div className="flex items-center gap-4 bg-slate-50 p-3 rounded-lg border border-slate-200">
+            <div className="p-4 bg-slate-50">
+              <div className="flex items-center gap-4 bg-white p-3 rounded-lg border border-slate-200 shadow-sm">
                 <button onClick={togglePlay} className="text-slate-500 hover:text-slate-900">
                   {isPlaying ? <Pause size={16} className="fill-current" /> : <Play size={16} className="fill-current" />}
                 </button>
                 <div onClick={handleSeek} className="flex-1 relative flex items-center h-4 cursor-pointer">
                   <div className="absolute inset-0 flex items-center">
-                    <div className="w-full h-[2px] bg-slate-300 rounded-full"></div>
+<div className="w-full h-[2px] bg-slate-200 rounded-full"></div>
                   </div>
                   <div className="absolute left-0 flex items-center h-full" style={{ width: `${progress}%` }}>
                     <div className="absolute left-0 w-full h-[2px] bg-teal-500 rounded-full"></div>
@@ -184,11 +184,11 @@ export default function CallDetailsModal({ isOpen, onClose, callId, API_BASE_URL
             </div>
 
             {/* Info Section */}
-            <div className="grid grid-cols-4 gap-6 px-6 pb-4 border-b border-slate-200 bg-white">
+<div className="grid grid-cols-4 gap-6 px-6 pb-4 border-b border-slate-200 bg-slate-50">
               <div className="flex flex-col gap-1">
                 <div className="text-[11px] font-bold text-slate-500 mb-1">Source</div>
                 <div className="font-bold text-sm text-slate-900">
-                  {details.bot_name || 'HireIQ Screening Interviewer (Sarah)'}
+                  {details.bot_name || 'Arah InfoTech Screening Interviewer (Sarah)'}
                 </div>
               </div>
               <div className="flex flex-col gap-1">
@@ -200,9 +200,9 @@ export default function CallDetailsModal({ isOpen, onClose, callId, API_BASE_URL
               <div className="flex flex-col gap-1">
                 <div className="text-[11px] font-bold text-slate-500 mb-1">Call Info</div>
                 <div className="flex items-center gap-2">
-                  <span className="px-1.5 py-0.5 text-[10px] font-bold border border-slate-300 rounded text-slate-700 bg-slate-100">Call</span>
-                  <span className="px-1.5 py-0.5 text-[10px] font-bold rounded text-black bg-red-400">{details.call_status || 'completed'}</span>
-                  <span className="flex items-center gap-1 text-[11px] text-slate-600">
+<span className="px-1.5 py-0.5 text-[10px] font-bold border border-slate-200 rounded text-slate-700 bg-slate-100">Call</span>
+                  <span className="px-1.5 py-0.5 text-[10px] font-bold rounded text-rose-800 bg-rose-100">{details.call_status || 'completed'}</span>
+                  <span className="flex items-center gap-1 text-[11px] text-slate-500">
                     <Clock size={10} /> {details.call_duration || '00:00'}
                   </span>
                 </div>
@@ -212,19 +212,19 @@ export default function CallDetailsModal({ isOpen, onClose, callId, API_BASE_URL
                 <div className="font-bold text-sm text-slate-900">
                   {details.hangup_source || 'Timeout'}
                 </div>
-                <div className="text-[11px] text-slate-400">
+<div className="text-[11px] text-slate-500">
                   {details.hangup_reason || 'Session timeout'}
                 </div>
               </div>
             </div>
 
             {/* Tabs */}
-            <div className="px-6 flex gap-6 bg-white">
+<div className="px-6 flex gap-6 bg-slate-50">
               {['Chat', 'Replay', 'Analysis', 'Post Actions', 'Latency Profile'].map(tab => (
                 <button
                   key={tab}
                   onClick={() => setActiveTab(tab.toLowerCase())}
-                  className={`py-3 text-[11px] font-bold transition-colors border-b-2 ${activeTab === tab.toLowerCase() ? 'border-teal-500 text-slate-900' : 'border-transparent text-slate-400 hover:text-slate-600'
+className={`py-3 text-[11px] font-bold transition-colors border-b-2 ${activeTab === tab.toLowerCase() ? 'border-teal-500 text-slate-900' : 'border-transparent text-slate-500 hover:text-slate-700'
                     }`}
                 >
                   {tab}
@@ -232,7 +232,7 @@ export default function CallDetailsModal({ isOpen, onClose, callId, API_BASE_URL
               ))}
             </div>
 
-            <div className="flex-1 bg-white border-t border-slate-200">
+<div className="flex-1 bg-slate-50 border-t border-slate-200">
               {activeTab === 'chat' && (
                 <div className="p-6">
                   {details.interactions && details.interactions.length > 0 ? (
@@ -244,40 +244,40 @@ export default function CallDetailsModal({ isOpen, onClose, callId, API_BASE_URL
                             <>
                               {/* Assistant Bubble */}
                               {interaction.bot_response && (
-                                <div className="flex flex-col bg-teal-50 rounded-lg p-4 border border-teal-100">
+<div className="flex flex-col bg-slate-100 rounded-lg p-4 border border-slate-200">
                                   <div className="flex items-center gap-2 mb-2">
-                                    <div className="w-5 h-5 rounded-full bg-slate-50 border border-gray-700 flex items-center justify-center text-[10px] font-bold text-slate-600">
+                                    <div className="w-5 h-5 rounded-full bg-slate-300 border border-slate-200 flex items-center justify-center text-[10px] font-bold text-slate-700">
                                       A
                                     </div>
                                     <span className="font-bold text-xs text-slate-900">Assistant</span>
-                                    <span className="text-[10px] text-slate-400">{formatDate(interaction.time_of_call)}</span>
+                                    <span className="text-[10px] text-slate-500">{formatDate(interaction.time_of_call)}</span>
                                   </div>
-                                  <p className="text-sm text-slate-800 leading-relaxed ml-7 whitespace-pre-wrap">{interaction.bot_response}</p>
+                                  <p className="text-sm text-slate-700 leading-relaxed ml-7 whitespace-pre-wrap">{interaction.bot_response}</p>
                                 </div>
                               )}
 
                               {/* Caller Bubble */}
                               {interaction.user_query && (
-                                <div className="flex flex-col bg-slate-50 rounded-lg p-4 border border-slate-200">
+<div className="flex flex-col bg-white rounded-lg p-4 border border-slate-200 shadow-sm">
                                   <div className="flex items-center gap-2 mb-2">
                                     <div className="w-5 h-5 rounded-full bg-teal-500 flex items-center justify-center text-[10px] font-bold text-black">
                                       U
                                     </div>
                                     <span className="font-bold text-xs text-slate-900">Caller</span>
-                                    <span className="text-[10px] text-slate-400">{formatDate(interaction.time_of_call)}</span>
+<span className="text-[10px] text-slate-500">{formatDate(interaction.time_of_call)}</span>
                                   </div>
-                                  <p className="text-sm text-slate-800 leading-relaxed ml-7 whitespace-pre-wrap">{interaction.user_query}</p>
+                                  <p className="text-sm text-slate-700 leading-relaxed ml-7 whitespace-pre-wrap">{interaction.user_query}</p>
                                 </div>
                               )}
                             </>
                           )}
 
                           {viewMode === 'advanced' && (
-                            <div className="flex flex-col bg-white border border-slate-200 rounded-lg overflow-hidden mb-4">
+<div className="flex flex-col bg-slate-50 border border-slate-200 rounded-lg overflow-hidden mb-4">
                               <div className="flex items-center justify-between p-4 border-b border-slate-200">
                                 <div className="flex flex-col">
                                   <span className="font-bold text-sm text-slate-900">Interaction #{interaction.interaction_sequence || idx + 1}</span>
-                                  <span className="text-[11px] text-slate-400">{formatDate(interaction.time_of_call)}</span>
+                                  <span className="text-[11px] text-slate-500">{formatDate(interaction.time_of_call)}</span>
                                 </div>
                                 <div className="flex flex-col items-end text-[11px] text-slate-500">
                                   <span>Total Response Time: <strong className="text-slate-900">{(interaction.total_response_time || 0).toFixed(2)}s</strong></span>
@@ -288,32 +288,32 @@ export default function CallDetailsModal({ isOpen, onClose, callId, API_BASE_URL
                               <div className="p-4 flex flex-col gap-4">
                                 {/* Assistant Bubble inside Advanced */}
                                 {interaction.bot_response && (
-                                  <div className="flex flex-col bg-teal-50 rounded-lg p-4 border border-teal-100">
+<div className="flex flex-col bg-slate-100 rounded-lg p-4 border border-slate-200">
                                     <div className="flex items-center gap-2 mb-2">
                                       <span className="font-bold text-xs text-slate-900">Assistant</span>
                                     </div>
-                                    <p className="text-sm text-slate-800 leading-relaxed whitespace-pre-wrap">{interaction.bot_response}</p>
+                                    <p className="text-sm text-slate-700 leading-relaxed whitespace-pre-wrap">{interaction.bot_response}</p>
                                   </div>
                                 )}
 
                                 {/* Metric Grid */}
                                 <div className="grid grid-cols-4 gap-3">
                                   {['Intent Score', 'Relevance Score', 'Coherence Score', 'Latency Score'].map(metric => (
-                                    <div key={metric} className="border border-slate-200 bg-slate-50 rounded-lg p-3 flex flex-col justify-between h-20">
-                                      <span className="text-[10px] font-bold text-slate-900">{metric}</span>
+<div key={metric} className="border border-slate-200 bg-white rounded-lg p-3 flex flex-col justify-between h-20">
+                                      <span className="text-[10px] font-bold text-slate-500">{metric}</span>
                                       <span className="text-lg font-bold text-slate-900 self-end">{Number(interaction[`metric_score_${metric.split(' ')[0].toLowerCase()}`] || 0).toFixed(2)}</span>
                                     </div>
                                   ))}
-                                  <div className="border border-slate-200 bg-slate-50 rounded-lg p-3 flex flex-col justify-between h-20">
-                                    <span className="text-[10px] font-bold text-slate-900">LLM Latency Score</span>
+                                  <div className="border border-slate-200 bg-white rounded-lg p-3 flex flex-col justify-between h-20">
+                                    <span className="text-[10px] font-bold text-slate-500">LLM Latency Score</span>
                                     <span className="text-lg font-bold text-slate-900 self-end">{Number(interaction.llm2_time || 0).toFixed(2)}s</span>
                                   </div>
-                                  <div className="border border-slate-200 bg-slate-50 rounded-lg p-3 flex flex-col justify-between h-20">
-                                    <span className="text-[10px] font-bold text-slate-900">ASR Latency Score</span>
+                                  <div className="border border-slate-200 bg-white rounded-lg p-3 flex flex-col justify-between h-20">
+                                    <span className="text-[10px] font-bold text-slate-500">ASR Latency Score</span>
                                     <span className="text-lg font-bold text-slate-900 self-end">{Number(interaction.asr_time || 0).toFixed(2)}s</span>
                                   </div>
-                                  <div className="border border-slate-200 bg-slate-50 rounded-lg p-3 flex flex-col justify-between h-20">
-                                    <span className="text-[10px] font-bold text-slate-900">TTS Latency Score</span>
+                                  <div className="border border-slate-200 bg-white rounded-lg p-3 flex flex-col justify-between h-20">
+                                    <span className="text-[10px] font-bold text-slate-500">TTS Latency Score</span>
                                     <span className="text-lg font-bold text-slate-900 self-end">{Number(interaction.tts_time || 0).toFixed(2)}s</span>
                                   </div>
                                 </div>
@@ -334,26 +334,142 @@ export default function CallDetailsModal({ isOpen, onClose, callId, API_BASE_URL
 
               {activeTab === 'analysis' && (
                 <div className="max-w-4xl mx-auto space-y-6 p-6">
-                  {details.sentiment_score !== undefined && (
-                    <div className="bg-slate-50 border border-slate-200 rounded-xl p-6">
-                      <h4 className="font-bold text-slate-500 mb-2 uppercase text-xs tracking-wider">Sentiment Score</h4>
-                      <div className="text-4xl font-black text-teal-500">{details.sentiment_score}</div>
+                  {/* Top Scores Overview */}
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    {/* Sentiment Score */}
+                    {details.sentiment_score && (
+                      <div className="bg-white border border-slate-200 rounded-xl p-5 shadow-sm">
+                        <h4 className="font-bold text-slate-500 mb-2 uppercase text-xs tracking-wider">Sentiment Score</h4>
+                        <div className="flex items-center gap-3">
+                          <span className={`text-2xl font-black ${
+                            String(details.sentiment_score).toLowerCase().includes('pos') ? 'text-emerald-600' :
+                            String(details.sentiment_score).toLowerCase().includes('neg') ? 'text-rose-600' : 'text-amber-600'
+                          }`}>
+                            {details.sentiment_score}
+                          </span>
+                        </div>
+                      </div>
+                    )}
+
+                    {/* CQS Score */}
+                    {(details.cqs_score !== undefined && details.cqs_score !== null) && (
+                      <div className="bg-white border border-slate-200 rounded-xl p-5 shadow-sm">
+                        <h4 className="font-bold text-slate-500 mb-2 uppercase text-xs tracking-wider">Call Quality Score (CQS)</h4>
+                        <div className="flex items-baseline gap-2">
+                          <span className="text-3xl font-black text-indigo-600">{Number(details.cqs_score).toFixed(1)}</span>
+                          <span className="text-xs font-semibold text-slate-400">/ 10</span>
+                        </div>
+                        {details.cqs_score_message && (
+                          <p className="mt-1 text-xs text-slate-500 font-medium">{details.cqs_score_message}</p>
+                        )}
+                      </div>
+                    )}
+                  </div>
+
+                  {/* Evaluation Metrics Breakdown */}
+                  {(details.metric_score_intent || details.metric_score_relevance || details.metric_score_coherence || details.metric_score_latency) && (
+                    <div className="bg-white border border-slate-200 rounded-xl p-5 shadow-sm">
+                      <h4 className="font-bold text-slate-500 mb-3 uppercase text-xs tracking-wider">Evaluation Metrics</h4>
+                      <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+                        {details.metric_score_intent !== undefined && (
+                          <div className="bg-slate-50 border border-slate-200 rounded-lg p-3">
+                            <span className="text-[10px] font-bold text-slate-500 block uppercase">Intent Score</span>
+                            <span className="text-lg font-extrabold text-slate-900">{Number(details.metric_score_intent || 0).toFixed(2)}</span>
+                          </div>
+                        )}
+                        {details.metric_score_relevance !== undefined && (
+                          <div className="bg-slate-50 border border-slate-200 rounded-lg p-3">
+                            <span className="text-[10px] font-bold text-slate-500 block uppercase">Relevance Score</span>
+                            <span className="text-lg font-extrabold text-slate-900">{Number(details.metric_score_relevance || 0).toFixed(2)}</span>
+                          </div>
+                        )}
+                        {details.metric_score_coherence !== undefined && (
+                          <div className="bg-slate-50 border border-slate-200 rounded-lg p-3">
+                            <span className="text-[10px] font-bold text-slate-500 block uppercase">Coherence Score</span>
+                            <span className="text-lg font-extrabold text-slate-900">{Number(details.metric_score_coherence || 0).toFixed(2)}</span>
+                          </div>
+                        )}
+                        {details.metric_score_latency !== undefined && (
+                          <div className="bg-slate-50 border border-slate-200 rounded-lg p-3">
+                            <span className="text-[10px] font-bold text-slate-500 block uppercase">Latency Score</span>
+                            <span className="text-lg font-extrabold text-slate-900">{Number(details.metric_score_latency || 0).toFixed(2)}</span>
+                          </div>
+                        )}
+                      </div>
                     </div>
                   )}
+
+                  {/* Extracted Candidate Information */}
+                  {(details.extracted_role || details.extracted_experience || details.extracted_city || details.extracted_qualification || details.extracted_company || details.extracted_salary) && (
+                    <div className="bg-white border border-slate-200 rounded-xl p-5 shadow-sm">
+                      <h4 className="font-bold text-slate-500 mb-3 uppercase text-xs tracking-wider">Extracted Candidate Details</h4>
+                      <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
+                        {details.extracted_role && (
+                          <div className="bg-slate-50 border border-slate-200 rounded-lg p-2.5">
+                            <span className="text-[10px] font-bold text-slate-500 block uppercase">Current Role</span>
+                            <span className="text-xs font-bold text-slate-900">{details.extracted_role}</span>
+                          </div>
+                        )}
+                        {details.extracted_experience && (
+                          <div className="bg-slate-50 border border-slate-200 rounded-lg p-2.5">
+                            <span className="text-[10px] font-bold text-slate-500 block uppercase">Experience</span>
+                            <span className="text-xs font-bold text-slate-900">{details.extracted_experience}</span>
+                          </div>
+                        )}
+                        {details.extracted_city && (
+                          <div className="bg-slate-50 border border-slate-200 rounded-lg p-2.5">
+                            <span className="text-[10px] font-bold text-slate-500 block uppercase">City</span>
+                            <span className="text-xs font-bold text-slate-900">{details.extracted_city}</span>
+                          </div>
+                        )}
+                        {details.extracted_qualification && (
+                          <div className="bg-slate-50 border border-slate-200 rounded-lg p-2.5">
+                            <span className="text-[10px] font-bold text-slate-500 block uppercase">Qualification</span>
+                            <span className="text-xs font-bold text-slate-900">{details.extracted_qualification}</span>
+                          </div>
+                        )}
+                        {details.extracted_company && (
+                          <div className="bg-slate-50 border border-slate-200 rounded-lg p-2.5">
+                            <span className="text-[10px] font-bold text-slate-500 block uppercase">Company</span>
+                            <span className="text-xs font-bold text-slate-900">{details.extracted_company}</span>
+                          </div>
+                        )}
+                        {details.extracted_salary && (
+                          <div className="bg-slate-50 border border-slate-200 rounded-lg p-2.5">
+                            <span className="text-[10px] font-bold text-slate-500 block uppercase">Salary</span>
+                            <span className="text-xs font-bold text-slate-900">{details.extracted_salary}</span>
+                          </div>
+                        )}
+                      </div>
+                    </div>
+                  )}
+
+                  {/* Sentiment Analysis Details */}
+                  {details.sentiment_analysis_details && (
+                    <div className="bg-white border border-slate-200 rounded-xl p-5 shadow-sm">
+                      <h4 className="font-bold text-slate-500 mb-2 uppercase text-xs tracking-wider">Sentiment Analysis Details</h4>
+                      <p className="text-slate-700 text-sm whitespace-pre-wrap leading-relaxed">{details.sentiment_analysis_details}</p>
+                    </div>
+                  )}
+
+                  {/* Evaluation Remarks */}
                   {details.evaluation_remarks && (
-                    <div className="bg-slate-50 border border-slate-200 rounded-xl p-6">
-                      <h4 className="font-bold text-slate-500 mb-3 uppercase text-xs tracking-wider">Evaluation Remarks</h4>
-                      <p className="text-slate-700 whitespace-pre-wrap leading-relaxed">{details.evaluation_remarks}</p>
+                    <div className="bg-white border border-slate-200 rounded-xl p-5 shadow-sm">
+                      <h4 className="font-bold text-slate-500 mb-2 uppercase text-xs tracking-wider">Evaluation Remarks</h4>
+                      <p className="text-slate-700 text-sm whitespace-pre-wrap leading-relaxed">{details.evaluation_remarks}</p>
                     </div>
                   )}
+
+                  {/* Summary */}
                   {details.summary && (
-                    <div className="bg-slate-50 border border-slate-200 rounded-xl p-6">
-                      <h4 className="font-bold text-slate-500 mb-3 uppercase text-xs tracking-wider">Summary</h4>
-                      <p className="text-slate-700 whitespace-pre-wrap leading-relaxed">{details.summary}</p>
+                    <div className="bg-white border border-slate-200 rounded-xl p-5 shadow-sm">
+                      <h4 className="font-bold text-slate-500 mb-2 uppercase text-xs tracking-wider">Call Summary</h4>
+                      <p className="text-slate-700 text-sm whitespace-pre-wrap leading-relaxed">{details.summary}</p>
                     </div>
                   )}
-                  {(!details.sentiment_score && !details.evaluation_remarks && !details.summary) && (
-                    <div className="text-center text-slate-400 py-10">
+
+                  {(!details.sentiment_score && !details.cqs_score && !details.evaluation_remarks && !details.summary && !details.sentiment_analysis_details) && (
+                    <div className="text-center text-slate-500 py-10">
                       No advanced analysis available for this call.
                     </div>
                   )}

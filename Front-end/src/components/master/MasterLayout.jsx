@@ -29,6 +29,12 @@ export default function MasterLayout() {
   const dispatch = useDispatch()
   const location = useLocation()
 
+  // Enforce Light Theme for Master
+  useEffect(() => {
+    document.documentElement.setAttribute('data-theme', 'light')
+    document.documentElement.classList.remove('dark')
+  }, [])
+
   // Selectors
   const token = useSelector(state => state.auth.token)
   const role = useSelector(state => state.auth.role)
@@ -41,11 +47,45 @@ export default function MasterLayout() {
     }
   }, [dispatch, token])
 
+  useEffect(() => {
+    document.documentElement.classList.add('admin-layout')
+    return () => {
+      document.documentElement.classList.remove('admin-layout')
+    }
+  }, [])
+
   // Local theme states
-  const [accentName, setAccentName] = useState('indigo')
+  const [accentName, setAccentNameState] = useState(() => {
+    try {
+      return localStorage.getItem('theme_accent') || 'indigo'
+    } catch {
+      return 'indigo'
+    }
+  })
+
+  const setAccentName = (color) => {
+    setAccentNameState(color)
+    try {
+      localStorage.setItem('theme_accent', color)
+      window.dispatchEvent(new CustomEvent('accent_changed', { detail: color }))
+    } catch (e) {
+      console.error(e)
+    }
+  }
   const [themeOpen, setThemeOpen] = useState(false)
+  const themeRef = useRef(null)
   const [dropdownOpen, setDropdownOpen] = useState(false)
   
+  // Close theme popover when clicking outside
+  useEffect(() => {
+    function handleClickOutside(event) {
+      if (themeRef.current && !themeRef.current.contains(event.target)) {
+        setThemeOpen(false)
+      }
+    }
+    document.addEventListener('mousedown', handleClickOutside)
+    return () => document.removeEventListener('mousedown', handleClickOutside)
+  }, [])
   const hexToRgba = (hex, alpha = 1) => {
     let r = 0, g = 0, b = 0;
     if (hex.length === 4) {
@@ -161,30 +201,12 @@ export default function MasterLayout() {
   }, [])
 
   const accentColors = {
-    teal: { 
-        c50: '#f0fdfa', c100: '#ccfbf1', c200: '#99f6e4', c500: '#14b8a6', 
-        primary: '#0d9488', hover: '#0f766e', glow: 'rgba(13, 148, 136, 0.15)' 
-    },
-    indigo: { 
-        c50: '#eef2ff', c100: '#e0e7ff', c200: '#c7d2fe', c500: '#6366f1', 
-        primary: '#4f46e5', hover: '#4338ca', glow: 'rgba(99, 102, 241, 0.15)' 
-    },
-    purple: { 
-        c50: '#faf5ff', c100: '#f3e8ff', c200: '#e9d5ff', c500: '#a855f7', 
-        primary: '#9333ea', hover: '#7e22ce', glow: 'rgba(147, 51, 234, 0.15)' 
-    },
-    red: { 
-        c50: '#fff1f2', c100: '#ffe4e6', c200: '#fecdd3', c500: '#f43f5e', 
-        primary: '#e11d48', hover: '#be123c', glow: 'rgba(225, 29, 72, 0.15)' 
-    },
-    green: { 
-        c50: '#f0fdf4', c100: '#dcfce7', c200: '#bbf7d0', c500: '#22c55e', 
-        primary: '#16a34a', hover: '#15803d', glow: 'rgba(22, 163, 74, 0.15)' 
-    },
-    blue: { 
-        c50: '#eff6ff', c100: '#dbeafe', c200: '#bfdbfe', c500: '#3b82f6', 
-        primary: '#2563eb', hover: '#1d4ed8', glow: 'rgba(37, 99, 237, 0.15)' 
-    }
+teal: { primary: '#2dd4bf', hover: '#14b8a6', glow: 'rgba(45, 212, 191, 0.30)' },
+    indigo: { primary: '#818cf8', hover: '#6366f1', glow: 'rgba(129, 140, 248, 0.30)' },
+    purple: { primary: '#c084fc', hover: '#a855f7', glow: 'rgba(192, 132, 252, 0.30)' },
+    red: { primary: '#fb7185', hover: '#f43f5e', glow: 'rgba(251, 113, 133, 0.30)' },
+    green: { primary: '#86efac', hover: '#4ade80', glow: 'rgba(134, 239, 172, 0.30)' },
+    blue: { primary: '#60a5fa', hover: '#3b82f6', glow: 'rgba(96, 165, 250, 0.30)' }
   }
 
   const currentAccent = accentColors[accentName] || accentColors.indigo
@@ -296,88 +318,82 @@ export default function MasterLayout() {
       {/* Main Content Wrapper */}
       <div className="flex-1 flex flex-col min-w-0 h-screen relative z-10">
         {/* Top bar */}
-        <header
-          className="relative z-30 border-b px-4 sm:px-8 py-4 flex justify-between items-center text-[#1e293b] shadow-sm backdrop-blur-md shrink-0"
-          style={{
-            background: `linear-gradient(90deg, rgba(255,255,255,0.92), ${currentAccent ? `rgba(${parseInt(currentAccent.primary.slice(1,3),16)}, ${parseInt(currentAccent.primary.slice(3,5),16)}, ${parseInt(currentAccent.primary.slice(5,7),16)}, 0.14)` : 'rgba(99,102,241,0.14)'})`,
-            borderColor: currentAccent ? `rgba(${parseInt(currentAccent.primary.slice(1,3),16)}, ${parseInt(currentAccent.primary.slice(3,5),16)}, ${parseInt(currentAccent.primary.slice(5,7),16)}, 0.22)` : 'rgba(99,102,241,0.22)'
-          }}
-        >
+        <header className="relative z-30 border-b border-slate-200 bg-white px-4 sm:px-8 py-4 flex justify-between items-center text-foreground shadow-sm backdrop-blur-md shrink-0">
           {/* Left Side: Brand & Toggles */}
-          <div className="flex items-center gap-6">
+          <div className="flex items-center gap-8">
             <h2 className="text-[17px] font-bold text-slate-800">{getPageTitle()}</h2>
           </div>
 
           {/* Right Side: Toggles, Notifications & User Profile */}
-          <div className="flex items-center gap-5">
-            {/* Theme Dropdown Toggle */}
-            <div className="relative">
-              <button
-                onClick={() => setThemeOpen(prev => !prev)}
-                className="flex items-center gap-1.5 px-3 py-1.5 rounded-full border cursor-pointer transition-all duration-200 text-sm font-semibold"
-                style={{
-                  background: hexToRgba(currentAccent.primary, 0.08),
-                  borderColor: hexToRgba(currentAccent.primary, 0.25),
-                  color: currentAccent.primary,
-                }}
-                title="Change theme color"
-              >
-                <span
-                  className="w-3 h-3 rounded-full border-2 border-white shadow-sm flex-shrink-0 transition-all duration-500"
-                  style={{ background: currentAccent.primary }}
-                />
-                <ChevronDown
-                  size={13}
-                  className="transition-transform duration-200"
-                  style={{ transform: themeOpen ? 'rotate(180deg)' : 'rotate(0deg)' }}
-                />
-              </button>
-
-              {/* Color Picker Popover */}
-              {themeOpen && (
-                <div
-                  className="absolute top-full left-0 sm:-left-10 mt-2 z-50 rounded-2xl shadow-xl border border-slate-200/60 p-3"
+          <div className="flex items-center gap-6">
+              {/* Theme Toggle — single button + popover */}
+              <div ref={themeRef} className="relative">
+                <button
+                  onClick={() => setThemeOpen(prev => !prev)}
+                  className="flex items-center gap-1.5 px-3 py-1.5 rounded-full border cursor-pointer transition-all duration-200 text-sm font-semibold"
                   style={{
-                    background: 'rgba(255,255,255,0.97)',
-                    backdropFilter: 'blur(12px)',
-                    minWidth: '160px',
+                    background: hexToRgba(currentAccent.primary, 0.08),
+                    borderColor: hexToRgba(currentAccent.primary, 0.25),
+                    color: currentAccent.primary,
                   }}
+                  title="Change theme color"
                 >
-                  <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-2 px-1">Theme Color</p>
-                  <div className="flex flex-col gap-0.5">
-                    {Object.entries(accentColors).map(([color, val]) => (
-                      <button
-                        key={color}
-                        onClick={() => { setAccentName(color); setThemeOpen(false); }}
-                        className="group flex items-center gap-2 w-full px-2 py-1.5 rounded-xl cursor-pointer border-none text-left transition-all duration-150"
-                        style={{
-                          background: accentName === color ? hexToRgba(val.primary, 0.12) : 'transparent',
-                        }}
-                        onMouseEnter={e => e.currentTarget.style.background = hexToRgba(val.primary, 0.10)}
-                        onMouseLeave={e => e.currentTarget.style.background = accentName === color ? hexToRgba(val.primary, 0.12) : 'transparent'}
-                      >
-                        <span
-                          className="w-4 h-4 rounded-full border-2 border-white shadow flex-shrink-0 transition-transform duration-150 group-hover:scale-110"
+                  <span
+                    className="w-3 h-3 rounded-full border-2 border-white shadow-sm flex-shrink-0 transition-all duration-500"
+                    style={{ background: currentAccent.primary }}
+                  />
+                  <ChevronDown
+                    size={13}
+                    className="transition-transform duration-200"
+                    style={{ transform: themeOpen ? 'rotate(180deg)' : 'rotate(0deg)' }}
+                  />
+                </button>
+
+                {/* Color Picker Popover */}
+                {themeOpen && (
+                  <div
+                    className="absolute top-full left-0 mt-2 z-50 rounded-2xl shadow-xl border border-slate-200/60 p-3"
+                    style={{
+                      background: 'rgba(255,255,255,0.97)',
+                      backdropFilter: 'blur(12px)',
+                      minWidth: '160px',
+                    }}
+                  >
+                    <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-2 px-1">Theme Color</p>
+                    <div className="flex flex-col gap-0.5">
+                      {Object.entries(accentColors).map(([color, val]) => (
+                        <button
+                          key={color}
+                          onClick={() => { setAccentName(color); setThemeOpen(false); }}
+                          className="group flex items-center gap-2 w-full px-2 py-1.5 rounded-xl cursor-pointer border-none text-left transition-all duration-150"
                           style={{
-                            background: `linear-gradient(135deg, ${val.primary}, ${val.hover})`,
-                            boxShadow: accentName === color ? `0 0 0 2px ${val.primary}` : '0 1px 3px rgba(0,0,0,0.15)',
+                            background: accentName === color ? hexToRgba(val.primary, 0.12) : 'transparent',
                           }}
-                        />
-                        <span
-                          className="text-sm font-semibold flex-1 capitalize"
-                          style={{ color: accentName === color ? val.primary : '#64748b' }}
+                          onMouseEnter={e => e.currentTarget.style.background = hexToRgba(val.primary, 0.10)}
+                          onMouseLeave={e => e.currentTarget.style.background = accentName === color ? hexToRgba(val.primary, 0.12) : 'transparent'}
                         >
-                          {color}
-                        </span>
-                        {accentName === color && (
-                          <Check size={14} style={{ color: val.primary }} />
-                        )}
-                      </button>
-                    ))}
+                          <span
+                            className="w-4 h-4 rounded-full border-2 border-white shadow flex-shrink-0 transition-transform duration-150 group-hover:scale-110"
+                            style={{
+                              background: `linear-gradient(135deg, ${val.primary}, ${val.hover})`,
+                              boxShadow: accentName === color ? `0 0 0 2px ${val.primary}` : '0 1px 3px rgba(0,0,0,0.15)',
+                            }}
+                          />
+                          <span
+                            className="text-xs font-semibold capitalize"
+                            style={{ color: accentName === color ? val.primary : '#64748b' }}
+                          >
+                            {color}
+                          </span>
+                          {accentName === color && (
+                            <span className="ml-auto text-[10px] font-bold" style={{ color: val.primary }}>✓</span>
+                          )}
+                        </button>
+                      ))}
+                    </div>
                   </div>
-                </div>
-              )}
-            </div>
+                )}
+              </div>
 
             <span className="text-sm text-slate-600 max-lg:hidden block ml-2">
               Welcome back, <strong className="text-slate-800">{userName}</strong>
@@ -387,10 +403,10 @@ export default function MasterLayout() {
             <div ref={notifRef} className="relative">
               <button
                 onClick={() => setNotifDropdownOpen(!notifDropdownOpen)}
-                className="relative p-2.5 text-slate-500 hover:text-slate-700 hover:bg-slate-50 bg-white rounded-xl shadow-sm border border-slate-100 transition-all cursor-pointer flex items-center justify-center"
+                className="relative p-2.5 text-slate-600 hover:text-slate-900 bg-white hover:bg-slate-50 border border-slate-200 rounded-full transition-all cursor-pointer flex items-center justify-center shadow-xs"
                 title="Notifications"
               >
-                <Bell size={18} />
+                <Bell size={18} className="text-slate-600" />
                 {unreadCount > 0 && (
                   <span className="absolute -top-1 -right-1 bg-sky-500 text-white font-extrabold text-[9px] min-w-[18px] h-[18px] px-1 rounded-full flex items-center justify-center shadow-sm border-2 border-white">
                     {unreadCount}
@@ -422,8 +438,7 @@ export default function MasterLayout() {
                           onClick={() => {
                             if (!n.read) handleMarkRead(n.id)
                             setNotifDropdownOpen(false)
-                            if (n.type === 'tenant_created' || n.type === 'payment') navigate('/master/subscribers')
-                            else navigate('/master/dashboard')
+                            navigate('/master/notifications')
                           }}
                           className={`p-3 text-left hover:bg-slate-50 cursor-pointer transition-colors flex gap-2.5 items-start ${!n.read ? 'bg-indigo-50/30' : ''}`}
                         >

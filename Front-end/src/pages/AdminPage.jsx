@@ -194,6 +194,7 @@ export default function AdminPage({ role: initialRole = 'admin' }) {
     setAccentNameState(color)
     try {
       localStorage.setItem('theme_accent', color)
+      window.dispatchEvent(new CustomEvent('accent_changed', { detail: color }))
     } catch (e) {
       console.error(e)
     }
@@ -205,12 +206,31 @@ export default function AdminPage({ role: initialRole = 'admin' }) {
     ? { primary: layoutConfig.primary_color, hover: layoutConfig.primary_color, glow: 'rgba(0, 0, 0, 0.15)' } 
     : (accentColors[accentName] || accentColors.indigo);
 
+  // Inject CSS variables so the entire Recruiter layout reflects the chosen accent color
+  useEffect(() => {
+    document.documentElement.style.setProperty('--accent-theme-color', currentAccent.primary)
+    document.documentElement.style.setProperty('--primary-color', currentAccent.primary)
+    document.documentElement.style.setProperty('--primary-hover', currentAccent.hover)
+    document.documentElement.style.setProperty('--primary-glow', currentAccent.glow)
+  }, [accentName])
+
   // Live Stream WebRTC State
   const [isLiveStreamOpen, setIsLiveStreamOpen] = useState(false)
   const [liveStreamSession, setLiveStreamSession] = useState(null)
 
-  const handleOpenLiveStreamAction = (session) => {
-    setLiveStreamSession(session)
+  const handleOpenLiveStreamAction = (sessionData) => {
+    if (!sessionData) return
+    let resolvedSession = sessionData
+    if (typeof sessionData === 'string') {
+      const found = liveSessions?.find(s => s.link_id === sessionData || s.session_id === sessionData || s.id === sessionData || s._id === sessionData)
+      resolvedSession = found || {
+        link_id: sessionData,
+        session_id: sessionData,
+        candidate_name: 'Live Candidate',
+        candidate_email: 'Active Session'
+      }
+    }
+    setLiveStreamSession(resolvedSession)
     setIsLiveStreamOpen(true)
   }
 
