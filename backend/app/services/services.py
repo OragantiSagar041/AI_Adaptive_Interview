@@ -2659,8 +2659,15 @@ def build_default_interview_email_html(candidate_name: str, duration: int, job_d
                     {expiry_message}
                 </div>
                 
+                <!-- Recommended Browser Notice -->
+                <div style="background-color: #eff6ff; border: 1px solid #bfdbfe; border-left: 4px solid #3b82f6; border-radius: 8px; padding: 14px 18px; margin: 24px 0 20px 0; text-align: left;">
+                    <p style="margin: 0; color: #1e40af; font-size: 14px; line-height: 1.5;">
+                        🌐 <b>Recommended Browser:</b> Kindly use <b>Google Chrome</b> (on a laptop or desktop) for the best interview experience, smooth live speech transcription, and camera proctoring.
+                    </p>
+                </div>
+
                 <!-- CTA Button -->
-                <div style="text-align: center; margin: 40px 0;">
+                <div style="text-align: center; margin: 36px 0;">
                     <a href="{full_link}" style="background-color: #4f46e5; background-image: linear-gradient(135deg, #4f46e5 0%, #6366f1 100%); color: #ffffff; padding: 16px 40px; text-decoration: none; border-radius: 50px; font-weight: 700; font-size: 16px; display: inline-block; box-shadow: 0 4px 15px rgba(79, 70, 229, 0.3); text-transform: uppercase; letter-spacing: 0.02em;">
                         Start Interview
                     </a>
@@ -2670,6 +2677,7 @@ def build_default_interview_email_html(candidate_name: str, duration: int, job_d
                 <div style="background-color: #fff1f2; border-radius: 12px; padding: 24px; margin: 30px 0 0 0; border: 1px solid #fecaca; border-left: 5px solid #e11d48;">
                     <h3 style="margin: 0 0 16px; font-size: 15px; color: #9f1239; font-weight: 700; text-transform: uppercase; letter-spacing: 0.05em;">⚠️ Important Guidelines</h3>
                     <ul style="margin: 0; padding-left: 20px; color: #be123c; font-size: 14px; line-height: 1.6;">
+                        <li style="margin-bottom: 8px;"><b>Browser Requirement:</b> Kindly use <b>Google Chrome</b> (or Microsoft Edge) on a desktop/laptop with a working camera and microphone.</li>
                         <li style="margin-bottom: 8px;"><b>Full-Screen Mode:</b> Must be maintained at all times. Tab switching is recorded as a violation.</li>
                         <li style="margin-bottom: 8px;"><b>Video Proctoring:</b> Your camera remains active for face tracking and integrity checks.</li>
                         <li style="margin-bottom: 8px;"><b>Environment:</b> Join from a quiet, well-lit room. Background noise or voices may affect your evaluation.</li>

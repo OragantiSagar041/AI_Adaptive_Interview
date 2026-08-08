@@ -125,7 +125,7 @@ function VideoAvatar({ status, size = 220 }) {
 // ── Language map ─────────────────────────────────────────────────────────────
 const langMap = {
   'Hindi': 'hi-IN', 'Telugu': 'te-IN', 'Tamil': 'ta-IN',
-  'Malayalam': 'ml-IN', 'Kannada': 'kn-IN', 'English': 'en-US'
+  'Malayalam': 'ml-IN', 'Kannada': 'kn-IN', 'English': 'en-IN'
 }
 
 // Offline follow-ups removed; now utilizing the backend AI-generated follow-up pipeline.
@@ -1092,6 +1092,8 @@ export default function VoiceInterviewPage() {
   const whisperTxRef = useRef('')
   const whisperRecorderRef = useRef(null)
   const whisperChunksRef = useRef([])
+  const whisperFlushTimerRef = useRef(null)
+  const webSpeechWatchdogRef = useRef(null)
 
   // ── STT Concurrency, Queue & Sequence Control ─────────────────────────────
   const sttInFlightRef = useRef(false)
@@ -1102,6 +1104,70 @@ export default function VoiceInterviewPage() {
   const resolveWhisperStopRef = useRef(null)
   const lastSttHadAudioRef = useRef(false)
   const lastSttFailedRef = useRef(false)
+  // Monotonic counter — bumps every time a fresh Whisper MediaRecorder is created.
+  // Used to suppress stale `onstop` callbacks that would otherwise restart STT twice.
+  const whisperRecorderGenerationRef = useRef(0)
+  // Tracks the peak RMS seen during the current Whisper chunk so we can skip
+  // the /stt request entirely when the chunk is silent. Without this gate,
+  // Whisper hallucinates phrases like "Thank you for watching" on silence.
+  const chunkPeakRmsRef = useRef(0)
+  const CHUNK_SEND_RMS_THRESHOLD = 0.015
+
+  // ── Merge consecutive Whisper chunks (12-second slices) ──
+  // Whisper receives one ~12s audio slice every flush. The slices overlap at
+  // the boundary, so we detect the overlap and append only the new tail.
+  // Pure append with no overlap detection causes text to double up; pure
+  // replace (the old behavior) causes text to vanish. This helper sits in
+  // between and is robust to partial overlap.
+  const mergeWhisperChunks = (previous, fresh) => {
+    const prev = (previous || '').trim()
+    const next = (fresh || '').trim()
+    if (!prev) return next
+    if (!next) return prev
+
+    // 1. The new chunk fully contains the previous one (rare but possible when
+    // the previous chunk was a fragment)
+    if (next.toLowerCase().includes(prev.toLowerCase())) {
+      return next
+    }
+
+    // 2. Find the longest word-suffix of `prev` that matches a word-prefix of
+    //    `next`. We slide a window from min(prev, next) word count down to 1.
+    const prevWords = prev.split(/\s+/)
+    const nextWords = next.split(/\s+/)
+    const maxOverlap = Math.min(prevWords.length, nextWords.length, 25)
+
+    for (let len = maxOverlap; len > 0; len--) {
+      const suffix = prevWords.slice(-len).join(' ').toLowerCase()
+      const prefix = nextWords.slice(0, len).join(' ').toLowerCase()
+      if (suffix === prefix) {
+        const newTail = nextWords.slice(len).join(' ')
+        if (!newTail) return prev
+        return prev + ' ' + newTail
+      }
+    }
+
+    // 3. Fuzzy fallback — tolerate 1–2 word mismatches in the overlap window
+    //    (Whisper sometimes rephrases a single word across the boundary).
+    for (let len = maxOverlap; len >= 3; len--) {
+      const suffixWords = prevWords.slice(-len)
+      const prefixWords = nextWords.slice(0, len)
+      let matches = 0
+      for (let i = 0; i < len; i++) {
+        if (suffixWords[i].toLowerCase() === prefixWords[i].toLowerCase()) matches++
+      }
+      // 80% of words must match for us to call it an overlap
+      if (matches >= Math.max(2, Math.floor(len * 0.8))) {
+        const overlapLen = matches
+        const newTail = nextWords.slice(overlapLen).join(' ')
+        if (!newTail) return prev
+        return prev + ' ' + newTail
+      }
+    }
+
+    // 4. No overlap detected — fall back to plain append with a space
+    return prev + ' ' + next
+  }
 
   // Send /stt request with HTTP 429 exponential backoff retry
   const sendSttRequestWithRetry = useCallback(async (seq, validAudioBlob, langCode, retriesLeft = 1, backoffMs = 800) => {
@@ -1148,7 +1214,18 @@ export default function VoiceInterviewPage() {
         lastProcessedSeqRef.current = seq
 
         if (data && data.transcript && data.transcript.trim()) {
-          whisperTxRef.current = data.transcript.trim()
+          const freshWhisper = data.transcript.trim()
+          // Each Whisper chunk is a 12-second audio slice — consecutive slices
+          // OVERLAP at the boundary. We must APPEND only the new tail rather
+          // than replace the whole transcript, otherwise every chunk wipes out
+          // everything before it (the "stop printing" symptom).
+          const previous = whisperTxRef.current.trim()
+          const merged = mergeWhisperChunks(previous, freshWhisper)
+          whisperTxRef.current = merged
+          accumulatedTranscriptRef.current = merged
+          currentTxRef.current = merged
+          setTranscript(merged)
+          setInterimText('')
         }
         return data?.transcript?.trim() || ''
       }
@@ -1220,6 +1297,10 @@ export default function VoiceInterviewPage() {
   const stopListening = useCallback(() => {
     isListeningRef.current = false
     clearTimeout(silenceTimerRef.current)
+    clearInterval(whisperFlushTimerRef.current)
+    whisperFlushTimerRef.current = null
+    clearTimeout(webSpeechWatchdogRef.current)
+    webSpeechWatchdogRef.current = null
     if (recognitionRef.current) {
       const oldRec = recognitionRef.current
       recognitionRef.current = null
@@ -1239,7 +1320,8 @@ export default function VoiceInterviewPage() {
 
     stopAudio()   // ← kill any in-flight TTS
 
-    // Commit any active interim text before clearing
+    // Preserve the Whisper-committed transcript — Web Speech final/interim
+    // is merged into the accumulator but never replaces Whisper on the UI.
     if (currentSessionFinalRef.current.trim()) {
       const finalChunk = currentSessionFinalRef.current.trim()
       if (!accumulatedTranscriptRef.current.endsWith(finalChunk)) {
@@ -1253,8 +1335,11 @@ export default function VoiceInterviewPage() {
         accumulatedTranscriptRef.current = [accumulatedTranscriptRef.current, interimStr].filter(Boolean).join(' ').trim()
       }
     }
-    currentTxRef.current = accumulatedTranscriptRef.current
-    setTranscript(accumulatedTranscriptRef.current)
+    // Whisper is the source of truth — prefer it over the accumulator
+    const whisperVal = whisperTxRef.current.trim()
+    const displayText = whisperVal || accumulatedTranscriptRef.current.trim()
+    currentTxRef.current = displayText
+    setTranscript(displayText)
     interimTextRef.current = ''
     setInterimText('')   // clear cursor indicator
     setAiStatus('idle')
@@ -1279,8 +1364,11 @@ export default function VoiceInterviewPage() {
         accumulatedTranscriptRef.current = [accumulatedTranscriptRef.current, interimStr].filter(Boolean).join(' ').trim()
       }
     }
-    currentTxRef.current = accumulatedTranscriptRef.current
-    setTranscript(accumulatedTranscriptRef.current)
+    // Whisper is the source of truth — prefer it over the accumulator
+    const whisperVal = whisperTxRef.current.trim()
+    const displayText = whisperVal || accumulatedTranscriptRef.current.trim()
+    currentTxRef.current = displayText
+    setTranscript(displayText)
     interimTextRef.current = ''
     setInterimText('')
 
@@ -1313,6 +1401,10 @@ export default function VoiceInterviewPage() {
 
   const startListening = useCallback((onFinish, preserveTranscript = false) => {
     const SR = window.SpeechRecognition || window.webkitSpeechRecognition
+    clearInterval(whisperFlushTimerRef.current)
+    whisperFlushTimerRef.current = null
+    clearTimeout(webSpeechWatchdogRef.current)
+    webSpeechWatchdogRef.current = null
 
     // Commit any captured session speech before cleaning up if preserving transcript
     if (preserveTranscript) {
@@ -1387,11 +1479,43 @@ export default function VoiceInterviewPage() {
         const mimeCandidates = ['audio/webm;codecs=opus', 'audio/webm', 'audio/ogg;codecs=opus', 'audio/mp4']
         const mime = mimeCandidates.find(value => MediaRecorder.isTypeSupported(value)) || ''
         const mr = new MediaRecorder(audioStream, mime ? { mimeType: mime } : undefined)
+        whisperRecorderGenerationRef.current += 1
+        const myGeneration = whisperRecorderGenerationRef.current
         whisperRecorderRef.current = mr
         whisperChunksRef.current = []
+        chunkPeakRmsRef.current = 0
         whisperStopPromiseRef.current = new Promise(resolve => {
           resolveWhisperStopRef.current = resolve
         })
+
+        // ── RMS analyser: track peak loudness so we can skip /stt on silence ──
+        let rmsAnalyserCleanup = null
+        try {
+          const rmsCtx = new (window.AudioContext || window.webkitAudioContext)()
+          const src = rmsCtx.createMediaStreamSource(audioStream)
+          const analyser = rmsCtx.createAnalyser()
+          analyser.fftSize = 1024
+          src.connect(analyser)
+          const buf = new Float32Array(analyser.fftSize)
+          let rafId = 0
+          const tickRms = () => {
+            analyser.getFloatTimeDomainData(buf)
+            let sumSq = 0
+            for (let i = 0; i < buf.length; i++) sumSq += buf[i] * buf[i]
+            const rms = Math.sqrt(sumSq / buf.length)
+            if (rms > chunkPeakRmsRef.current) chunkPeakRmsRef.current = rms
+            rafId = requestAnimationFrame(tickRms)
+          }
+          tickRms()
+          rmsAnalyserCleanup = () => {
+            cancelAnimationFrame(rafId)
+            try { src.disconnect() } catch (_) { }
+            try { analyser.disconnect() } catch (_) { }
+            try { rmsCtx.close() } catch (_) { }
+          }
+        } catch (_) {
+          // If AudioContext fails, we'll fall back to size-based heuristic
+        }
 
         mr.ondataavailable = (e) => {
           if (e.data && e.data.size > 0) {
@@ -1399,11 +1523,20 @@ export default function VoiceInterviewPage() {
           }
         }
         mr.onstop = async () => {
+          // Drop the callback if a newer recorder has already taken over
+          if (myGeneration !== whisperRecorderGenerationRef.current) return
+          if (rmsAnalyserCleanup) rmsAnalyserCleanup()
           try {
             const validAudioBlob = new Blob(whisperChunksRef.current, {
               type: mr.mimeType || mime || 'audio/webm',
             })
-            if (validAudioBlob.size > 1000) {
+            whisperChunksRef.current = []
+            const peak = chunkPeakRmsRef.current
+            // Skip /stt entirely when the chunk was below the silence threshold.
+            // Whisper WILL hallucinate on silence no matter how we prompt it,
+            // so the only safe option is to not send at all.
+            const isSilent = peak < CHUNK_SEND_RMS_THRESHOLD
+            if (validAudioBlob.size > 1000 && !isSilent) {
               lastSttHadAudioRef.current = true
               sttSeqRef.current += 1
               const langCode = (langMap[languageRef.current] || 'en-US').split('-')[0]
@@ -1413,13 +1546,28 @@ export default function VoiceInterviewPage() {
                 lastSttFailedRef.current = true
                 console.warn('Final server transcription failed:', error)
               }
+            } else if (isSilent) {
+              console.debug(`[STT SILENCE GATE] Skipped /stt request — chunk peak RMS=${peak.toFixed(4)} below threshold`)
             }
           } finally {
-            resolveWhisperStopRef.current?.()
-            resolveWhisperStopRef.current = null
+            if (myGeneration === whisperRecorderGenerationRef.current) {
+              whisperRecorderRef.current = null
+              resolveWhisperStopRef.current?.()
+              resolveWhisperStopRef.current = null
+              if (isListeningRef.current && whisperRecorderRef.current === null) {
+                startListening(onFinish, true)
+              }
+            }
           }
         }
         mr.start(1000)
+        whisperFlushTimerRef.current = setInterval(() => {
+          if (whisperRecorderRef.current && whisperRecorderRef.current.state === 'recording') {
+            try {
+              whisperRecorderRef.current.stop()
+            } catch (_) { }
+          }
+        }, 12000)
       } catch (err) {
         console.warn('Failed to start Whisper chunk recorder:', err)
         resolveWhisperStopRef.current?.()
@@ -1434,6 +1582,69 @@ export default function VoiceInterviewPage() {
       }
     }, rec ? 12000 : 30000)
 
+    const mergeTranscripts = (accumulated, sessionFinal, sessionInterim) => {
+      const acc = (accumulated || '').trim()
+      const sFinal = (sessionFinal || '').trim()
+      const sInterim = (sessionInterim || '').trim()
+
+      let committed = acc
+
+      if (sFinal) {
+        if (!committed) {
+          committed = sFinal
+        } else if (sFinal.toLowerCase().startsWith(committed.toLowerCase())) {
+          committed = sFinal
+        } else if (committed.toLowerCase().endsWith(sFinal.toLowerCase())) {
+          // already included
+        } else {
+          const accWords = committed.split(/\s+/)
+          const finalWords = sFinal.split(/\s+/)
+          let overlap = 0
+          for (let len = Math.min(accWords.length, finalWords.length); len > 0; len--) {
+            const suffix = accWords.slice(-len).join(' ').toLowerCase()
+            const prefix = finalWords.slice(0, len).join(' ').toLowerCase()
+            if (suffix === prefix) {
+              overlap = len
+              break
+            }
+          }
+          if (overlap > 0) {
+            committed = [...accWords, ...finalWords.slice(overlap)].join(' ')
+          } else {
+            committed = `${committed} ${sFinal}`
+          }
+        }
+      }
+
+      let full = committed
+      if (sInterim) {
+        if (!full.toLowerCase().endsWith(sInterim.toLowerCase())) {
+          full = full ? `${full} ${sInterim}` : sInterim
+        }
+      }
+
+      return { committed: committed.trim(), full: full.trim() }
+    }
+
+    const formatCandidateName = (text, candidateName) => {
+      if (!text) return text
+      const cleanName = (candidateName || candidateNameRef.current || '').trim()
+      let formatted = text
+      if (cleanName && cleanName.toLowerCase() !== 'candidate') {
+        const escapedFull = cleanName.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
+        formatted = formatted.replace(new RegExp(`\\b${escapedFull}\\b`, 'gi'), cleanName)
+        const parts = cleanName.split(/\s+/).filter(p => p.length >= 2)
+        parts.forEach(p => {
+          const escaped = p.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
+          formatted = formatted.replace(new RegExp(`\\b${escaped}\\b`, 'gi'), p)
+        })
+      }
+      formatted = formatted.replace(/\bmyself\s+/gi, 'Myself ')
+      formatted = formatted.replace(/\bmy name is\s+/gi, 'My name is ')
+      formatted = formatted.replace(/\bi am\s+/gi, 'I am ')
+      return formatted
+    }
+
     if (rec) rec.onresult = ev => {
       if (!isListeningRef.current) return
       let finalStr = '', interimStr = ''
@@ -1447,75 +1658,111 @@ export default function VoiceInterviewPage() {
       currentSessionFinalRef.current = finalStr.trim()
       interimTextRef.current = interimStr.trim()
 
-      const fullCommitted = [accumulatedTranscriptRef.current, currentSessionFinalRef.current].filter(Boolean).join(' ').trim()
-      currentTxRef.current = fullCommitted
-      setTranscript([fullCommitted, interimTextRef.current].filter(Boolean).join(' ').trim())
-      setInterimText(interimTextRef.current)
+      // ── Web Speech is now a LIVE PREVIEW ONLY ──
+      // Whisper is the single source of truth for the committed transcript.
+      // Web Speech results are kept in `liveInterimPreview` and shown as a
+      // ghost text under the Whisper-committed text. This stops the two
+      // pipelines from fighting each other on the display.
+      const candidateName = candidateNameRef.current
+      const cleanName = (candidateName || '').trim()
+      const formattedFinal = formatCandidateName(finalStr.trim(), cleanName)
+      const formattedInterim = formatCandidateName(interimStr.trim(), cleanName)
 
-      // Reset silence timer whenever speech is heard
+      // Only update the display if Whisper hasn't yet committed anything for
+      // this session — otherwise Web Speech would clobber Whisper's text.
+      const whisperVal = whisperTxRef.current.trim()
+      if (!whisperVal) {
+        // Whisper is silent — let Web Speech be the live display
+        const combined = [formattedFinal, formattedInterim].filter(Boolean).join(' ').trim()
+        if (combined) {
+          currentTxRef.current = combined
+          setTranscript(combined)
+        }
+      }
+      // Always update the interim ghost text for live feedback
+      setInterimText(formattedInterim || '')
+
+      // Reset silence timer whenever speech is heard (45s of silence before auto-advance)
       clearTimeout(silenceTimerRef.current)
       silenceTimerRef.current = setTimeout(() => {
         if (isListeningRef.current) {
           finishListening().then(fullAns => onFinish?.(fullAns))
         }
-      }, 12000)
+      }, 45000)
+
+      clearTimeout(webSpeechWatchdogRef.current)
+      // Chrome's continuous-recognition timer is approximately 60 seconds —
+      // restart a fresh recognizer BEFORE that limit hits so the candidate
+      // never sees a pause.
+      webSpeechWatchdogRef.current = setTimeout(() => {
+        if (isListeningRef.current && recognitionRef.current === rec) {
+          try {
+            rec.abort()
+          } catch (_) { }
+          // Defer one tick so the abort completes before we restart
+          setTimeout(() => {
+            if (isListeningRef.current) startListening(onFinish, true)
+          }, 100)
+        }
+      }, 55000)
     }
 
-    // ── Smart error handler ────────────────────────────────────────────────
+    // ── Smart error handler ──
     if (rec) rec.onerror = (e) => {
       const err = e.error
-      if (err === 'no-speech' || err === 'aborted') {
+      if (err === 'not-allowed' || err === 'service-not-allowed') {
+        console.error('SR permission denied:', err)
         return
       }
 
-      if (err === 'network') {
-        console.warn('SR: network error — continuing with server transcription')
-        if (isListeningRef.current) {
-          setTimeout(() => {
-            if (isListeningRef.current) {
-              startListening(onFinish, true)
-            }
-          }, 1000)
-        }
-        return
-      }
+      // 'no-speech' / 'aborted' are normal on long pauses — let the
+      // watchdog/onend cycle handle restart. Don't double-restart here.
+      if (err === 'no-speech' || err === 'aborted') return
 
-      console.warn('SR:', err)
+      // 'network' or other transient errors — restart after a brief delay
       if (isListeningRef.current) {
         setTimeout(() => {
-          if (isListeningRef.current) {
+          if (isListeningRef.current && !recognitionRef.current) {
             startListening(onFinish, true)
           }
-        }, 1000)
+        }, 250)
       }
     }
 
-    // ── onend: commit session text and restart fresh instance if still listening ──────────────
+    // ── onend: restart fresh instance if still listening ──
+    // NOTE: we no longer overwrite the Whisper-committed transcript here.
+    // Web Speech results from this session are still kept in
+    // `accumulatedTranscriptRef` so they get fed to the next Whisper chunk
+    // via `mergeWhisperChunks`, but the displayed text is left alone.
     if (rec) rec.onend = () => {
-      if (currentSessionFinalRef.current.trim()) {
-        const finalChunk = currentSessionFinalRef.current.trim()
-        if (!accumulatedTranscriptRef.current.endsWith(finalChunk)) {
-          accumulatedTranscriptRef.current = [accumulatedTranscriptRef.current, finalChunk].filter(Boolean).join(' ').trim()
-        }
-        currentSessionFinalRef.current = ''
+      const { committed } = mergeTranscripts(
+        accumulatedTranscriptRef.current,
+        currentSessionFinalRef.current,
+        interimTextRef.current
+      )
+      accumulatedTranscriptRef.current = committed
+      currentSessionFinalRef.current = ''
+      interimTextRef.current = ''
+
+      // Only let Web Speech update the display when Whisper has not yet
+      // produced any text for this turn.
+      const whisperVal = whisperTxRef.current.trim()
+      if (!whisperVal && committed) {
+        const formatted = formatCandidateName(committed, candidateNameRef.current)
+        currentTxRef.current = formatted
+        setTranscript(formatted)
       }
-      if (interimTextRef.current.trim()) {
-        const interimChunk = interimTextRef.current.trim()
-        if (!accumulatedTranscriptRef.current.endsWith(interimChunk)) {
-          accumulatedTranscriptRef.current = [accumulatedTranscriptRef.current, interimChunk].filter(Boolean).join(' ').trim()
-        }
-        interimTextRef.current = ''
-      }
-      currentTxRef.current = accumulatedTranscriptRef.current
-      setTranscript(accumulatedTranscriptRef.current)
       setInterimText('')
 
       if (!isListeningRef.current) return  // we stopped on purpose — don't restart
 
+      // Defer the restart so we don't fight Chrome's own onend cycle
       setTimeout(() => {
         if (!isListeningRef.current) return
+        // If the watchdog has already restarted, skip
+        if (recognitionRef.current) return
         startListening(onFinish, true)
-      }, 150)
+      }, 250)
     }
 
     if (rec) {

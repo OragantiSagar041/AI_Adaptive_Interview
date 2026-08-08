@@ -3,6 +3,7 @@ import asyncio
 import tempfile
 from functools import lru_cache
 from difflib import SequenceMatcher
+from typing import Optional
 from fastapi import APIRouter, UploadFile, File, Form, HTTPException, Depends
 from groq import Groq, RateLimitError
 from app.services.candidate_auth import require_active_candidate
@@ -13,11 +14,39 @@ router = APIRouter()
 def similarity(a, b):
     return SequenceMatcher(None, a.lower(), b.lower()).ratio()
 
-def fix_name(text, name):
+def fix_candidate_name(text: str, candidate_name: str) -> str:
+    if not text or not candidate_name or candidate_name.lower() in {"candidate", "user", "unknown"}:
+        return text
+    
+    clean_name = candidate_name.strip()
+    name_parts = [p for p in clean_name.split() if len(p) >= 2]
+    if not name_parts:
+        return text
+    
     words = text.split()
-    for i, w in enumerate(words):
-        if similarity(w, name) > 0.75:
-            words[i] = name
+    n_words = len(words)
+    k = len(name_parts)
+    
+    # 1. Multi-word phrase window match
+    i = 0
+    while i <= n_words - k:
+        window = " ".join(words[i:i+k])
+        if similarity(window, clean_name) >= 0.75:
+            words[i:i+k] = [clean_name]
+            n_words = len(words)
+            i += 1
+            continue
+        i += 1
+
+    # 2. Match individual name tokens
+    for p in name_parts:
+        for idx, w in enumerate(words):
+            stripped_w = "".join(c for c in w if c.isalnum())
+            if len(stripped_w) >= 3 and similarity(stripped_w, p) >= 0.80:
+                prefix_punct = w[:len(w) - len(w.lstrip(".,!?;:\"'"))]
+                suffix_punct = w[len(w.rstrip(".,!?;:\"'")):]
+                words[idx] = f"{prefix_punct}{p}{suffix_punct}"
+
     return " ".join(words)
 
 @router.post("/transcribe")
@@ -25,6 +54,7 @@ async def transcribe_audio(
     audio: UploadFile = File(...),
     candidate_name: str = Form(...),
     language: str = Form("English"),
+    known_terms: Optional[str] = Form(None),
     candidate_session: dict = Depends(require_active_candidate),
 ):
     candidate_name = candidate_name.strip()[:200] or "Candidate"
@@ -65,14 +95,19 @@ async def transcribe_audio(
         
         # Initial prompt strategy:
         native_prompts = {
-            "te": "నమస్కారం. నేను ఒక ఇంటర్వ್ಯೂ ఇస్తున్నాను.",
+            "te": "నమస్కారం. నేను ఒక ఇంటర్వ్యూ ఇస్తున్నాను.",
             "hi": "नमस्ते। मैं एक साक्षात्कार दे रहा हूँ।",
             "ta": "வணக்கம். நான் ஒரு நேர்காணலில் பங்கேற்கிறேன்.",
             "ml": "നമസ്കാരം. ഞാൻ ഒരു അഭിമുഖത്തിൽ പങ്കെടുക്കുകയാണ്.",
             "kn": "ನಮಸ್ಕಾರ. ನಾನು ಒಂದು ಸಂದರ್ಶನದಲ್ಲಿ ಭಾಗವಹಿಸುತ್ತಿದ್ದೇನೆ.",
         }
         if iso_lang == "en":
-            sys_prompt = f"The speaker has an Indian English accent. This is a technical software engineering job interview. The candidate's name is {candidate_name}. Transcribe technical terms, algorithms, frameworks, and programming concepts accurately."
+            known_terms_hint = ""
+            if known_terms:
+                clean_terms = [t.strip() for t in (known_terms.split(",") if isinstance(known_terms, str) else known_terms) if t.strip()]
+                if clean_terms:
+                    known_terms_hint = f" The candidate may mention these specific proper nouns, companies, technologies, or terms: {', '.join(clean_terms)}."
+            sys_prompt = f"Technical software engineering job interview with Indian and international English accents. Candidate name is {candidate_name}.{known_terms_hint} Accurately transcribe all programming concepts (Python, Java, JavaScript, TypeScript, C++, SQL), frameworks (React, Node.js, FastAPI, Django), databases (MongoDB, PostgreSQL, Redis), cloud tools (AWS, Docker, Kubernetes), APIs, and system design terms verbatim."
         else:
             sys_prompt = native_prompts.get(iso_lang, "")
 
@@ -141,14 +176,16 @@ async def transcribe_audio(
         # Only fix name for English – fix_name splits on spaces, which corrupts
         # native scripts (Telugu, Hindi, etc.) and injects the English name.
         if iso_lang == "en":
-            text = fix_name(text, candidate_name)
+            text = fix_candidate_name(text, candidate_name)
         
         # Filter common Whisper hallucinations on silent/background noise
-        hallucinations = [
-            "thank you.", "thank you", "i am not spoken.", "am i not spoken?",
-            "i am not.", "bye.", "okay.", "okay", "you", "thanks.", "thanks", "tsh."
-        ]
-        if text.lower() in hallucinations:
+        hallucinations = {
+            "thank you", "i am not spoken", "am i not spoken",
+            "i am not", "bye", "okay", "you", "thanks", "tsh",
+            "go to next slide", "go to the next slide",
+            "thank you for watching", "subscribe", "next slide"
+        }
+        if text.lower().rstrip(".,!?") in hallucinations:
             text = ""
 
         import re
