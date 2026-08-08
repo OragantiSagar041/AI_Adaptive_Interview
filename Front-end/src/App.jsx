@@ -33,6 +33,8 @@ const CreateTenant = React.lazy(() => import('./pages/master/CreateTenant'))
 const DemoRequests = React.lazy(() => import('./pages/master/DemoRequests'))
 const MasterProfile = React.lazy(() => import('./pages/master/MasterProfile'))
 const MasterNotifications = React.lazy(() => import('./pages/master/MasterNotifications'))
+const Customize = React.lazy(() => import('./pages/master/Customize'))
+const CustomizingAdmin = React.lazy(() => import('./pages/master/CustomizingAdmin'))
 
 const AdminPage = React.lazy(() => import('./pages/AdminPage'))
 const OverviewDashboardPage = React.lazy(() => import('./pages/admin/OverviewDashboardPage'))
@@ -108,6 +110,8 @@ function App() {
             <Route path="subscribers" element={<Subscribers />} />
             <Route path="create-tenant" element={<CreateTenant />} />
             <Route path="demo-requests" element={<DemoRequests />} />
+            <Route path="customize" element={<Customize />} />
+            <Route path="customizing-admin/:id" element={<CustomizingAdmin />} />
             <Route path="profile" element={<MasterProfile />} />
             <Route path="notifications" element={<MasterNotifications />} />
           </Route>

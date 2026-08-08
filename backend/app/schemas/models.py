@@ -57,6 +57,8 @@ class TenantUpdate(BaseModel):
     subscription_plan: str
     add_days: int = 0
     add_credits: int = 0
+    features: Optional[List[str]] = None
+    layout_config: Optional[Dict[str, Any]] = None
 
 class HRScreening(BaseModel):
     model_config = ConfigDict(populate_by_name=True)

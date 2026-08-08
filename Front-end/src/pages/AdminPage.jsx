@@ -200,7 +200,11 @@ export default function AdminPage({ role: initialRole = 'admin' }) {
     }
   }
 
-  const currentAccent = accentColors[accentName] || accentColors.indigo
+  const layoutConfig = adminUser?.layout_config;
+
+  const currentAccent = layoutConfig?.primary_color 
+    ? { primary: layoutConfig.primary_color, hover: layoutConfig.primary_color, glow: 'rgba(0, 0, 0, 0.15)' } 
+    : (accentColors[accentName] || accentColors.indigo);
 
   // Inject CSS variables so the entire Recruiter layout reflects the chosen accent color
   useEffect(() => {
@@ -330,7 +334,20 @@ export default function AdminPage({ role: initialRole = 'admin' }) {
     document.documentElement.style.setProperty('--primary-color', currentAccent.primary)
     document.documentElement.style.setProperty('--primary-hover', currentAccent.hover)
     document.documentElement.style.setProperty('--primary-glow', currentAccent.glow)
-  }, [accentName, currentAccent])
+
+    let link = document.querySelector("link[rel~='icon']");
+    if (!link) {
+      link = document.createElement('link');
+      link.rel = 'icon';
+      document.head.appendChild(link);
+    }
+    
+    if (layoutConfig?.favicon) {
+      link.href = layoutConfig.favicon;
+    } else {
+      link.href = '/hireiq.png';
+    }
+  }, [accentName, currentAccent, layoutConfig])
 
   // Polling Effect for dashboard stats and ongoing interviews.
   // - Interval raised from 12s → 60s to reduce backend load.
