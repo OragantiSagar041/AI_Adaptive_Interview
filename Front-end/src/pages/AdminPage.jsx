@@ -199,7 +199,11 @@ export default function AdminPage({ role: initialRole = 'admin' }) {
     }
   }
 
-  const currentAccent = accentColors[accentName] || accentColors.indigo
+  const layoutConfig = adminUser?.layout_config;
+
+  const currentAccent = layoutConfig?.primary_color 
+    ? { primary: layoutConfig.primary_color, hover: layoutConfig.primary_color, glow: 'rgba(0, 0, 0, 0.15)' } 
+    : (accentColors[accentName] || accentColors.indigo);
 
   // Live Stream WebRTC State
   const [isLiveStreamOpen, setIsLiveStreamOpen] = useState(false)
@@ -310,7 +314,17 @@ export default function AdminPage({ role: initialRole = 'admin' }) {
     document.documentElement.style.setProperty('--primary-color', currentAccent.primary)
     document.documentElement.style.setProperty('--primary-hover', currentAccent.hover)
     document.documentElement.style.setProperty('--primary-glow', currentAccent.glow)
-  }, [accentName, currentAccent])
+
+    if (layoutConfig?.favicon) {
+      let link = document.querySelector("link[rel~='icon']");
+      if (!link) {
+        link = document.createElement('link');
+        link.rel = 'icon';
+        document.head.appendChild(link);
+      }
+      link.href = layoutConfig.favicon;
+    }
+  }, [accentName, currentAccent, layoutConfig])
 
   // Polling Effect for dashboard stats and ongoing interviews.
   // - Interval raised from 12s → 60s to reduce backend load.

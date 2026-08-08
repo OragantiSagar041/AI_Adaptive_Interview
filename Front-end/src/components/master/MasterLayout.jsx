@@ -16,7 +16,8 @@ import {
   ChevronDown,
   User,
   TrendingUp,
-  Check
+  Check,
+  Sliders
 } from 'lucide-react'
 import { logout, loadSuperAdminProfile } from '../../store/slices/authSlice'
 import { persistor } from '../../store/store'
@@ -218,6 +219,7 @@ export default function MasterLayout() {
     { id: 'plans', label: 'Plans', icon: Tags, path: '/master/plans' },
     { id: 'subscribers', label: 'Subscribers', icon: Users, path: '/master/subscribers' },
     { id: 'create-tenant', label: 'Create Tenant', icon: UserPlus, path: '/master/create-tenant' },
+    { id: 'customize', label: 'Customize', icon: Sliders, path: '/master/customize' },
     { id: 'demo-requests', label: 'Demo Requests', icon: Mail, path: '/master/demo-requests' },
   ]
 

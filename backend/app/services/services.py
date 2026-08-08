@@ -295,17 +295,20 @@ def get_admin_plan_context(user: Dict[str, Any]) -> Dict[str, Any]:
     warning = not is_expired and credits <= 5
     warning_message = "Your plan credits are running low (5 or fewer left). Please renew your subscription to avoid interruption." if warning else ""
 
+    custom_features = company.get("features") if company and company.get("features") is not None else definition["features"]
+
     return {
         "plan_key": definition["plan_key"],
         "plan_label": definition["label"],
         "capabilities": definition["capabilities"],
-        "features": definition["features"],
+        "features": custom_features,
         "summary": definition["summary"],
         "credits": credits,
         "is_expired": is_expired,
         "warning": warning,
         "warning_message": warning_message,
         "days_remaining": None,
+        "layout_config": company.get("layout_config") if company else None,
     }
 
 def require_admin_capability(admin_id: str, capability: str, detail: str):

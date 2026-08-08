@@ -159,6 +159,7 @@ def firebase_auth(data: FirebaseAuthRequest):
         "subscription_warning_message": plan_context["warning_message"],
         "plan_capabilities": plan_context["capabilities"],
         "plan_features": plan_context["features"],
+        "layout_config": plan_context.get("layout_config"),
     }
 
 @router.post("/admin/login")
@@ -233,6 +234,7 @@ def admin_login(data: AdminLogin, request: Request):
         "subscription_warning_message": plan_context["warning_message"],
         "plan_capabilities": plan_context["capabilities"],
         "plan_features": plan_context["features"],
+        "layout_config": plan_context.get("layout_config"),
         "credits": plan_context.get("credits", 0),
     }
 

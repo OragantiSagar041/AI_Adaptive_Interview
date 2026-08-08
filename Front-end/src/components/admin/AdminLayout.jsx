@@ -217,8 +217,10 @@ export default function AdminLayout({
     : baseNavItems
   const navItems = (!filteredNavItems || filteredNavItems.length === 0) ? baseNavItems : filteredNavItems
 
-  const accentBg = hexToRgba(currentAccent.primary, 0.07)
-  const accentBgEnd = hexToRgba(currentAccent.primary, 0.04)
+  const layoutConfig = adminUser?.layout_config;
+  const sidebarBg = layoutConfig?.sidebar_bg_color 
+    ? layoutConfig.sidebar_bg_color 
+    : `linear-gradient(180deg, ${hexToRgba(currentAccent.primary, 0.22)} 0%, white 30%, ${hexToRgba(currentAccent.primary, 0.12)} 100%)`;
 
   return (
     <div
@@ -233,139 +235,160 @@ export default function AdminLayout({
         }}
       />
 
-      {/* Sidebar */}
-      <aside
-        className="hidden w-64 shrink-0 border-r border-slate-200/50 md:flex flex-col h-screen relative z-10 transition-all duration-700 overflow-hidden"
-        style={{
-          background: `linear-gradient(180deg, ${hexToRgba(currentAccent.primary, 0.22)} 0%, white 30%, ${hexToRgba(currentAccent.primary, 0.12)} 100%)`
-        }}
-      >
-        {/* Accent top strip */}
-        <div
-          className="absolute top-0 left-0 right-0 h-0.5 transition-all duration-700"
-          style={{ background: `linear-gradient(90deg, ${currentAccent.primary}, ${currentAccent.hover})` }}
-        />
-
-        {/* Brand / Logo */}
-        <div
-          className="flex items-center gap-3 px-6 h-16 border-b shrink-0 transition-all duration-700"
-          style={{ borderColor: hexToRgba(currentAccent.primary, 0.25) }}
+      {/* Sidebar (Vertical Layout) */}
+      {layoutConfig?.layout_type !== "navbar" && (
+        <aside
+          className="hidden w-64 shrink-0 border-r border-slate-200/50 md:flex flex-col h-screen relative z-10 transition-all duration-700 overflow-hidden"
+          style={{
+            background: sidebarBg
+          }}
         >
+          {/* Accent top strip */}
           <div
-            className="grid h-8 w-8 place-items-center rounded-lg text-white shadow-sm transition-all duration-500"
-            style={{ background: `linear-gradient(135deg, ${currentAccent.primary}, ${currentAccent.hover})` }}
+            className="absolute top-0 left-0 right-0 h-0.5 transition-all duration-700"
+            style={{ background: `linear-gradient(90deg, ${currentAccent.primary}, ${currentAccent.hover})` }}
+          />
+
+          {/* Brand / Logo */}
+          <div
+            className="flex items-center gap-3 px-6 h-16 border-b shrink-0 transition-all duration-700"
+            style={{ borderColor: hexToRgba(currentAccent.primary, 0.25) }}
           >
-            <Zap className="h-4 w-4" />
-          </div>
-          <div className="leading-tight">
-            <div className="text-sm font-semibold text-slate-800">HireIQ</div>
             <div
-              className="text-[11px] font-medium transition-colors duration-500"
-              style={{ color: currentAccent.primary }}
+              className="grid h-8 w-8 place-items-center rounded-lg text-white shadow-sm transition-all duration-500"
+              style={{ background: `linear-gradient(135deg, ${currentAccent.primary}, ${currentAccent.hover})` }}
             >
-              Recruiter
+              <Zap className="h-4 w-4" />
+            </div>
+            <div className="leading-tight">
+              <div className="text-sm font-semibold text-slate-800">HireIQ</div>
+              <div
+                className="text-[11px] font-medium transition-colors duration-500"
+                style={{ color: currentAccent.primary }}
+              >
+                Recruiter
+              </div>
             </div>
           </div>
-        </div>
 
-        {/* Navigation Items */}
-        <div className="space-y-0.5 p-3 overflow-y-auto flex-1">
-          {navItems.map((item) => (
-            <NavLink
-              key={item.id}
-              to={item.path}
-              className={({ isActive }) =>
-                `flex items-center gap-3 rounded-xl px-3 py-2.5 text-sm font-medium transition-all duration-200 ${
-                  isActive
-                    ? `!text-white text-white font-semibold shadow-md`
-                    : 'text-slate-600 hover:text-slate-900'
-                }`
-              }
-              style={({ isActive }) => ({
-                background: isActive
-                  ? `linear-gradient(135deg, ${currentAccent.primary} 0%, ${currentAccent.hover} 100%)`
-                  : 'transparent',
-                boxShadow: isActive ? `0 4px 14px ${hexToRgba(currentAccent.primary, 0.35)}` : 'none',
-                color: isActive ? '#ffffff' : undefined,
-              })}
-              onMouseEnter={(e) => {
-                if (!e.currentTarget.classList.contains('text-white') && !e.currentTarget.classList.contains('!text-white')) {
-                  e.currentTarget.style.background = hexToRgba(currentAccent.primary, 0.10)
-                  e.currentTarget.style.color = currentAccent.primary
-                } else {
-                  e.currentTarget.style.color = '#ffffff'
+          {/* Navigation Items */}
+          <div className="space-y-0.5 p-3 overflow-y-auto flex-1">
+            {navItems.map((item) => (
+              <NavLink
+                key={item.id}
+                to={item.path}
+                className={({ isActive }) =>
+                  `flex items-center gap-3 rounded-xl px-3 py-2.5 text-sm font-medium transition-all duration-200 ${
+                    isActive
+                      ? `!text-white text-white font-semibold shadow-md`
+                      : 'text-slate-600 hover:text-slate-900'
+                  }`
                 }
+                style={({ isActive }) => ({
+                  background: isActive
+                    ? `linear-gradient(135deg, ${currentAccent.primary} 0%, ${currentAccent.hover} 100%)`
+                    : 'transparent',
+                  boxShadow: isActive ? `0 4px 14px ${hexToRgba(currentAccent.primary, 0.35)}` : 'none',
+                  color: isActive ? '#ffffff' : undefined,
+                })}
+                onMouseEnter={(e) => {
+                  if (!e.currentTarget.classList.contains('text-white') && !e.currentTarget.classList.contains('!text-white')) {
+                    e.currentTarget.style.background = hexToRgba(currentAccent.primary, 0.10)
+                    e.currentTarget.style.color = currentAccent.primary
+                  } else {
+                    e.currentTarget.style.color = '#ffffff'
+                  }
+                }}
+                onMouseLeave={(e) => {
+                  if (!e.currentTarget.classList.contains('text-white') && !e.currentTarget.classList.contains('!text-white')) {
+                    e.currentTarget.style.background = 'transparent'
+                    e.currentTarget.style.color = ''
+                  } else {
+                    e.currentTarget.style.color = '#ffffff'
+                  }
+                }}
+              >
+                {({ isActive }) => (
+                  <>
+                    {item.icon ? (
+                      <item.icon size={16} className={`shrink-0 ${isActive ? '!text-white text-white' : ''}`} />
+                    ) : (
+                      <span className={`h-1.5 w-1.5 rounded-full ${isActive ? 'bg-white' : 'bg-current opacity-60'} shrink-0`} />
+                    )}
+                    <span className={isActive ? '!text-white text-white font-semibold' : ''}>{item.label}</span>
+                  </>
+                )}
+              </NavLink>
+            ))}
+          </div>
+
+          {/* Bottom Sidebar Actions */}
+          <div
+            className="p-3 border-t space-y-0.5 shrink-0 transition-all duration-700"
+            style={{ borderColor: hexToRgba(currentAccent.primary, 0.15) }}
+          >
+            <button
+              onClick={() => dispatch(setLiveResultsModalOpen(true))}
+              className="flex items-center gap-3 w-full rounded-xl px-3 py-2.5 text-sm font-medium transition-all duration-200 text-slate-500 border-none bg-transparent cursor-pointer text-left"
+              onMouseEnter={(e) => {
+                e.currentTarget.style.background = hexToRgba(currentAccent.primary, 0.10)
+                e.currentTarget.style.color = currentAccent.primary
               }}
               onMouseLeave={(e) => {
-                if (!e.currentTarget.classList.contains('text-white') && !e.currentTarget.classList.contains('!text-white')) {
-                  e.currentTarget.style.background = 'transparent'
-                  e.currentTarget.style.color = ''
-                } else {
-                  e.currentTarget.style.color = '#ffffff'
-                }
+                e.currentTarget.style.background = 'transparent'
+                e.currentTarget.style.color = ''
               }}
             >
-              {({ isActive }) => (
-                <>
-                  {item.icon ? (
-                    <item.icon size={16} className={`shrink-0 ${isActive ? '!text-white text-white' : ''}`} />
-                  ) : (
-                    <span className={`h-1.5 w-1.5 rounded-full ${isActive ? 'bg-white' : 'bg-current opacity-60'} shrink-0`} />
-                  )}
-                  <span className={isActive ? '!text-white text-white font-semibold' : ''}>{item.label}</span>
-                </>
-              )}
-            </NavLink>
-          ))}
-        </div>
-
-        {/* Bottom Sidebar Actions */}
-        <div
-          className="p-3 border-t space-y-0.5 shrink-0 transition-all duration-700"
-          style={{ borderColor: hexToRgba(currentAccent.primary, 0.15) }}
-        >
-          <button
-            onClick={() => dispatch(setLiveResultsModalOpen(true))}
-            className="flex items-center gap-3 w-full rounded-xl px-3 py-2.5 text-sm font-medium transition-all duration-200 text-slate-500 border-none bg-transparent cursor-pointer text-left"
-            onMouseEnter={(e) => {
-              e.currentTarget.style.background = hexToRgba(currentAccent.primary, 0.10)
-              e.currentTarget.style.color = currentAccent.primary
-            }}
-            onMouseLeave={(e) => {
-              e.currentTarget.style.background = 'transparent'
-              e.currentTarget.style.color = ''
-            }}
-          >
-            <Radio size={16} />
-            Live Results
-          </button>
-          <button
-            onClick={onAddCredits}
-            className="flex items-center gap-3 w-full rounded-xl px-3 py-2.5 text-sm font-medium transition-all duration-200 text-slate-500 border-none bg-transparent cursor-pointer text-left"
-            onMouseEnter={(e) => {
-              e.currentTarget.style.background = hexToRgba(currentAccent.primary, 0.10)
-              e.currentTarget.style.color = currentAccent.primary
-            }}
-            onMouseLeave={(e) => {
-              e.currentTarget.style.background = 'transparent'
-              e.currentTarget.style.color = ''
-            }}
-          >
-            <Coins size={16} />
-            Request Credits
-          </button>
-        </div>
-      </aside>
+              <Radio size={16} />
+              Live Results
+            </button>
+            <button
+              onClick={onAddCredits}
+              className="flex items-center gap-3 w-full rounded-xl px-3 py-2.5 text-sm font-medium transition-all duration-200 text-slate-500 border-none bg-transparent cursor-pointer text-left"
+              onMouseEnter={(e) => {
+                e.currentTarget.style.background = hexToRgba(currentAccent.primary, 0.10)
+                e.currentTarget.style.color = currentAccent.primary
+              }}
+              onMouseLeave={(e) => {
+                e.currentTarget.style.background = 'transparent'
+                e.currentTarget.style.color = ''
+              }}
+            >
+              <Coins size={16} />
+              Request Credits
+            </button>
+          </div>
+        </aside>
+      )}
 
       {/* Main Content Wrapper */}
       <div className="flex-1 flex flex-col min-w-0 h-screen relative z-10">
-        {/* Top bar */}
-        <header className="sticky top-0 z-30 border-b border-slate-200/60 bg-white/70 backdrop-blur-xl flex items-center justify-between px-6 h-16 shadow-sm shrink-0">
-          {/* Left Side: Brand & Toggles */}
-          <div className="flex items-center gap-6">
-            <h2 className="text-[17px] font-bold text-slate-800">Recruiter Management</h2>
+        {/* Top Header Section */}
+        <div className="sticky top-0 z-30 flex flex-col bg-white/70 backdrop-blur-xl shadow-sm shrink-0 border-b border-slate-200/60">
+          
+          <header className="flex items-center justify-between px-6 h-16 w-full">
+            {/* Left Side: Brand & Toggles */}
+            <div className="flex items-center gap-6">
+              
+              {/* If Navbar mode, show logo in the top bar */}
+              {layoutConfig?.layout_type === "navbar" && (
+                <div className="flex items-center gap-3 border-r border-slate-200/60 pr-6 mr-2">
+                  <div
+                    className="grid h-8 w-8 place-items-center rounded-lg text-white shadow-sm transition-all duration-500"
+                    style={{ background: `linear-gradient(135deg, ${currentAccent.primary}, ${currentAccent.hover})` }}
+                  >
+                    <Zap className="h-4 w-4" />
+                  </div>
+                  <div className="leading-tight hidden sm:block">
+                    <div className="text-sm font-semibold text-slate-800">HireIQ</div>
+                    <div className="text-[11px] font-medium" style={{ color: currentAccent.primary }}>Recruiter</div>
+                  </div>
+                </div>
+              )}
 
-            {/* Theme Toggle — single button that opens color picker */}
+              <h2 className="text-[17px] font-bold text-slate-800 hidden md:block">Recruiter Management</h2>
+
+              {/* Theme Toggle — single button that opens color picker */}
             <div ref={themeRef} className="relative">
               <button
                 onClick={() => setThemeOpen(prev => !prev)}
@@ -531,7 +554,72 @@ export default function AdminLayout({
               </button>
             </div>
           </div>
-        </header>
+          </header>
+          
+          {/* Horizontal Navbar (Navbar Layout) */}
+          {layoutConfig?.layout_type === "navbar" && (
+            <div 
+              className="flex items-center gap-1 px-6 h-14 border-t border-slate-200/40 overflow-x-auto hide-scrollbar" 
+              style={{ background: sidebarBg }}
+            >
+              {navItems.map((item) => (
+                <NavLink
+                  key={item.id}
+                  to={item.path}
+                  className={({ isActive }) =>
+                    `flex items-center gap-2 rounded-lg px-3 py-2 text-sm font-medium transition-all duration-200 whitespace-nowrap shrink-0 ${
+                      isActive
+                        ? '!text-white text-white font-semibold shadow-md'
+                        : 'text-slate-600 hover:text-slate-900'
+                    }`
+                  }
+                  style={({ isActive }) => ({
+                    background: isActive
+                      ? `linear-gradient(135deg, ${currentAccent.primary} 0%, ${currentAccent.hover} 100%)`
+                      : 'transparent',
+                    boxShadow: isActive ? `0 4px 14px ${hexToRgba(currentAccent.primary, 0.35)}` : 'none',
+                    color: isActive ? '#ffffff' : undefined,
+                  })}
+                  onMouseEnter={(e) => {
+                    if (!e.currentTarget.classList.contains('text-white') && !e.currentTarget.classList.contains('!text-white')) {
+                      e.currentTarget.style.background = hexToRgba(currentAccent.primary, 0.10)
+                      e.currentTarget.style.color = currentAccent.primary
+                    }
+                  }}
+                  onMouseLeave={(e) => {
+                    if (!e.currentTarget.classList.contains('text-white') && !e.currentTarget.classList.contains('!text-white')) {
+                      e.currentTarget.style.background = 'transparent'
+                      e.currentTarget.style.color = ''
+                    }
+                  }}
+                >
+                  {({ isActive }) => (
+                    <>
+                      {item.icon && <item.icon size={15} className={`shrink-0 ${isActive ? '!text-white text-white' : ''}`} />}
+                      <span>{item.label}</span>
+                    </>
+                  )}
+                </NavLink>
+              ))}
+              <div className="ml-auto flex items-center gap-2 pl-4 border-l border-slate-200/50">
+                <button
+                  onClick={() => dispatch(setLiveResultsModalOpen(true))}
+                  className="flex items-center gap-2 rounded-lg px-3 py-2 text-sm font-medium transition-all duration-200 text-slate-500 hover:bg-slate-100 hover:text-slate-800 whitespace-nowrap shrink-0"
+                >
+                  <Radio size={15} />
+                  Live Results
+                </button>
+                <button
+                  onClick={onAddCredits}
+                  className="flex items-center gap-2 rounded-lg px-3 py-2 text-sm font-medium transition-all duration-200 text-slate-500 hover:bg-slate-100 hover:text-slate-800 whitespace-nowrap shrink-0"
+                >
+                  <Coins size={15} />
+                  Request Credits
+                </button>
+              </div>
+            </div>
+          )}
+        </div>
 
         {/* Main Content */}
         <main className="flex-1 overflow-y-auto bg-slate-50/50 relative p-4 lg:p-8">

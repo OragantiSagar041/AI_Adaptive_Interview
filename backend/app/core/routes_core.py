@@ -112,7 +112,6 @@ def broadcast_profile_update(admin_id: str, company_id: str, credits: int = None
         else:
             await manager.broadcast_dashboard(payload)
             
-    global MAIN_LOOP
     if MAIN_LOOP and MAIN_LOOP.is_running():
         asyncio.run_coroutine_threadsafe(_send(), MAIN_LOOP)
     else:
