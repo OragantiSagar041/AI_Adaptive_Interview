@@ -317,8 +317,16 @@ def _get_authorized_live_session(link_id: str, current_admin: Dict[str, Any]) ->
     if role not in {"admin", "super_admin", "master"}:
         raise HTTPException(status_code=403, detail="Live monitoring access is required")
 
+    query_conditions = [{"link_id": link_id}, {"interview_id": link_id}, {"session_id": link_id}]
+    if ObjectId.is_valid(link_id):
+        query_conditions.append({"_id": ObjectId(link_id)})
+    try:
+        query_conditions.append({"_id": link_id})
+    except Exception:
+        pass
+
     session = interview_sessions_collection.find_one(
-        {"link_id": link_id},
+        {"$or": query_conditions},
         {"link_id": 1, "company_id": 1, "created_by": 1, "status": 1},
     )
     if not session:
