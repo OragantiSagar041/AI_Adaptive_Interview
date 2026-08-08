@@ -1,36 +1,70 @@
-import React, { useEffect } from 'react';
+import React, { useEffect, useState } from 'react';
+import { API_BASE_URL } from '../../apiConfig';
 
 export default function AICallPage() {
+  const [configured, setConfigured] = useState(true);
+  const [loading, setLoading] = useState(true);
+
   useEffect(() => {
-    const container = document.getElementById('omni-widget-component');
-    
-    // Remove existing script if any to force re-execution on mount
-    const existingScript = document.getElementById('omnidimension-web-widget');
-    if (existingScript) {
-      existingScript.remove();
+    let timer = null;
+    let isMounted = true;
+
+    async function loadWidget() {
+      try {
+        const token = localStorage.getItem('token') || localStorage.getItem('access_token') || '';
+        const res = await fetch(`${API_BASE_URL}/api/admin/widget-config`, {
+          headers: token ? { Authorization: `Bearer ${token}` } : {}
+        });
+        const data = await res.json();
+        
+        if (!isMounted) return;
+
+        if (!data?.configured || !data?.secret_key) {
+          setConfigured(false);
+          setLoading(false);
+          return;
+        }
+
+        setConfigured(true);
+        setLoading(false);
+
+        const container = document.getElementById('omni-widget-component');
+        // Remove existing script if any to force re-execution on mount
+        const existingScript = document.getElementById('omnidimension-web-widget');
+        if (existingScript) {
+          existingScript.remove();
+        }
+        if (container) {
+          container.innerHTML = '';
+        }
+
+        timer = setTimeout(() => {
+          if (!isMounted) return;
+          const script = document.createElement('script');
+          script.id = 'omnidimension-web-widget';
+          script.async = true;
+          script.src = `https://omnidim.io/web_widget.js?secret_key=${encodeURIComponent(data.secret_key)}&t=${Date.now()}`;
+          document.body.appendChild(script);
+        }, 100);
+      } catch (err) {
+        console.error('Failed to load widget config:', err);
+        if (isMounted) {
+          setConfigured(false);
+          setLoading(false);
+        }
+      }
     }
-    
-    // Clean up container just in case
-    if (container) {
-      container.innerHTML = '';
-    }
-    
-    const timer = setTimeout(() => {
-      const script = document.createElement('script');
-      script.id = 'omnidimension-web-widget';
-      script.async = true;
-      const secretKey = import.meta.env.VITE_OMNIDIM_SECRET_KEY;
-      // Append timestamp to force the browser to execute the script again
-      script.src = `https://omnidim.io/web_widget.js?secret_key=${secretKey}&t=${Date.now()}`;
-      document.body.appendChild(script);
-    }, 100);
+
+    loadWidget();
 
     return () => {
-      clearTimeout(timer);
+      isMounted = false;
+      if (timer) clearTimeout(timer);
       const scriptToRemove = document.getElementById('omnidimension-web-widget');
       if (scriptToRemove) {
         scriptToRemove.remove();
       }
+      const container = document.getElementById('omni-widget-component');
       if (container) {
         container.innerHTML = '';
       }
@@ -45,6 +79,12 @@ export default function AICallPage() {
           Use the widget below to initiate and manage AI calls to candidates and record data.
         </p>
       </div>
+
+      {!loading && !configured && (
+        <div className="w-full max-w-md p-6 bg-amber-500/10 border border-amber-500/20 rounded-2xl text-center text-amber-300 text-sm">
+          Omnidimension AI calling key is not configured on the backend. Please check your backend environment settings.
+        </div>
+      )}
       
       <div 
         id="omni-widget-component" 

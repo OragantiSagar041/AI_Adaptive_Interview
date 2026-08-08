@@ -14,7 +14,9 @@ import {
   Mail,
   Zap,
   ChevronDown,
-  User
+  User,
+  TrendingUp,
+  Check
 } from 'lucide-react'
 import { logout, loadSuperAdminProfile } from '../../store/slices/authSlice'
 import { persistor } from '../../store/store'
@@ -25,6 +27,12 @@ export default function MasterLayout() {
   const navigate = useNavigate()
   const dispatch = useDispatch()
   const location = useLocation()
+
+  // Enforce Light Theme for Master
+  useEffect(() => {
+    document.documentElement.setAttribute('data-theme', 'light')
+    document.documentElement.classList.remove('dark')
+  }, [])
 
   // Selectors
   const token = useSelector(state => state.auth.token)
@@ -38,9 +46,58 @@ export default function MasterLayout() {
     }
   }, [dispatch, token])
 
+  useEffect(() => {
+    document.documentElement.classList.add('admin-layout')
+    return () => {
+      document.documentElement.classList.remove('admin-layout')
+    }
+  }, [])
+
   // Local theme states
-  const [accentName, setAccentName] = useState('indigo')
+  const [accentName, setAccentNameState] = useState(() => {
+    try {
+      return localStorage.getItem('theme_accent') || 'indigo'
+    } catch {
+      return 'indigo'
+    }
+  })
+
+  const setAccentName = (color) => {
+    setAccentNameState(color)
+    try {
+      localStorage.setItem('theme_accent', color)
+      window.dispatchEvent(new CustomEvent('accent_changed', { detail: color }))
+    } catch (e) {
+      console.error(e)
+    }
+  }
+  const [themeOpen, setThemeOpen] = useState(false)
+  const themeRef = useRef(null)
   const [dropdownOpen, setDropdownOpen] = useState(false)
+  
+  // Close theme popover when clicking outside
+  useEffect(() => {
+    function handleClickOutside(event) {
+      if (themeRef.current && !themeRef.current.contains(event.target)) {
+        setThemeOpen(false)
+      }
+    }
+    document.addEventListener('mousedown', handleClickOutside)
+    return () => document.removeEventListener('mousedown', handleClickOutside)
+  }, [])
+  const hexToRgba = (hex, alpha = 1) => {
+    let r = 0, g = 0, b = 0;
+    if (hex.length === 4) {
+      r = parseInt(hex[1] + hex[1], 16);
+      g = parseInt(hex[2] + hex[2], 16);
+      b = parseInt(hex[3] + hex[3], 16);
+    } else if (hex.length === 7) {
+      r = parseInt(hex.slice(1, 3), 16);
+      g = parseInt(hex.slice(3, 5), 16);
+      b = parseInt(hex.slice(5, 7), 16);
+    }
+    return `rgba(${r}, ${g}, ${b}, ${alpha})`;
+  }
   const [notifications, setNotifications] = useState([])
   const [notifDropdownOpen, setNotifDropdownOpen] = useState(false)
   const notifRef = useRef(null)
@@ -143,17 +200,27 @@ export default function MasterLayout() {
   }, [])
 
   const accentColors = {
-    teal: { primary: '#0d9488', hover: '#0f766e', glow: 'rgba(13, 148, 136, 0.15)' },
-    indigo: { primary: '#6366f1', hover: '#4f46e5', glow: 'rgba(99, 102, 241, 0.15)' },
-    purple: { primary: '#9333ea', hover: '#7e22ce', glow: 'rgba(147, 51, 234, 0.15)' },
-    red: { primary: '#e11d48', hover: '#be123c', glow: 'rgba(225, 29, 72, 0.15)' },
-    green: { primary: '#16a34a', hover: '#15803d', glow: 'rgba(22, 163, 74, 0.15)' },
-    blue: { primary: '#2563eb', hover: '#1d4ed8', glow: 'rgba(37, 99, 237, 0.15)' }
+teal: { primary: '#2dd4bf', hover: '#14b8a6', glow: 'rgba(45, 212, 191, 0.30)' },
+    indigo: { primary: '#818cf8', hover: '#6366f1', glow: 'rgba(129, 140, 248, 0.30)' },
+    purple: { primary: '#c084fc', hover: '#a855f7', glow: 'rgba(192, 132, 252, 0.30)' },
+    red: { primary: '#fb7185', hover: '#f43f5e', glow: 'rgba(251, 113, 133, 0.30)' },
+    green: { primary: '#86efac', hover: '#4ade80', glow: 'rgba(134, 239, 172, 0.30)' },
+    blue: { primary: '#60a5fa', hover: '#3b82f6', glow: 'rgba(96, 165, 250, 0.30)' }
   }
 
   const currentAccent = accentColors[accentName] || accentColors.indigo
 
   useEffect(() => {
+    // Hijack Tailwind v4's native indigo CSS variables so all hardcoded classes magically update!
+    document.documentElement.style.setProperty('--color-indigo-50', currentAccent.c50)
+    document.documentElement.style.setProperty('--color-indigo-100', currentAccent.c100)
+    document.documentElement.style.setProperty('--color-indigo-200', currentAccent.c200)
+    document.documentElement.style.setProperty('--color-indigo-400', currentAccent.c500) // map 400 closely if used
+    document.documentElement.style.setProperty('--color-indigo-500', currentAccent.c500)
+    document.documentElement.style.setProperty('--color-indigo-600', currentAccent.primary)
+    document.documentElement.style.setProperty('--color-indigo-700', currentAccent.hover)
+    
+    // Legacy variables just in case
     document.documentElement.style.setProperty('--accent-theme-color', currentAccent.primary)
     document.documentElement.style.setProperty('--primary-color', currentAccent.primary)
     document.documentElement.style.setProperty('--primary-hover', currentAccent.hover)
@@ -169,6 +236,7 @@ export default function MasterLayout() {
 
   const navItems = [
     { id: 'dashboard', label: 'Dashboard', icon: LayoutDashboard, path: '/master/dashboard' },
+    { id: 'company-revenue', label: 'Company Revenue', icon: TrendingUp, path: '/master/company-revenue' },
     { id: 'plans', label: 'Plans', icon: Tags, path: '/master/plans' },
     { id: 'subscribers', label: 'Subscribers', icon: Users, path: '/master/subscribers' },
     { id: 'create-tenant', label: 'Create Tenant', icon: UserPlus, path: '/master/create-tenant' },
@@ -178,6 +246,7 @@ export default function MasterLayout() {
   const getPageTitle = () => {
     const path = location.pathname
     if (path.includes('dashboard')) return 'Subscription Monitor'
+    if (path.includes('company-revenue')) return 'Company-Wise Revenue Analytics'
     if (path.includes('plans')) return 'Product Pricing & Plans'
     if (path.includes('subscribers')) return 'Subscribed Companies'
     if (path.includes('create-tenant')) return 'Provision Tenant Account'
@@ -186,9 +255,22 @@ export default function MasterLayout() {
   }
 
   return (
-    <div className="h-screen bg-slate-50 text-slate-900 flex font-sans overflow-hidden">
+    <div className="h-screen bg-slate-50 text-slate-900 flex font-sans w-full overflow-hidden relative">
+      {/* Global Premium Background Grid & Dynamic Accent Gradient */}
+      <div className="absolute inset-0 z-0 pointer-events-none">
+        {/* Full-page soft color wash that changes with the theme */}
+        <div
+          className="absolute inset-0 transition-colors duration-700"
+          style={{
+            background: `linear-gradient(135deg, ${currentAccent.primary}38 0%, transparent 50%, ${currentAccent.primary}28 100%)`
+          }}
+        />
+        {/* Grid overlay */}
+        <div className="absolute inset-0 bg-grid-fine opacity-60" />
+      </div>
+
       {/* Sidebar */}
-      <aside className="hidden w-64 shrink-0 border-r border-slate-200 bg-white md:flex flex-col h-screen">
+      <aside className="hidden w-64 shrink-0 border-r border-slate-200 bg-white/80 backdrop-blur-md md:flex flex-col h-screen relative z-10">
         {/* Brand / Logo */}
         <div className="flex items-center gap-3 px-6 h-16 border-b border-slate-200 shrink-0">
           <div className="grid h-8 w-8 place-items-center rounded-lg bg-indigo-600 text-white shadow-sm">
@@ -232,37 +314,84 @@ export default function MasterLayout() {
       </aside>
 
       {/* Main Content Wrapper */}
-      <div className="flex-1 flex flex-col min-w-0 h-screen">
+      <div className="flex-1 flex flex-col min-w-0 h-screen relative z-10">
         {/* Top bar */}
-        <header
-          className="relative z-30 border-b px-4 sm:px-8 py-4 flex justify-between items-center text-[#1e293b] shadow-sm backdrop-blur-md shrink-0"
-          style={{
-            background: `linear-gradient(90deg, rgba(255,255,255,0.92), ${currentAccent ? `rgba(${parseInt(currentAccent.primary.slice(1,3),16)}, ${parseInt(currentAccent.primary.slice(3,5),16)}, ${parseInt(currentAccent.primary.slice(5,7),16)}, 0.14)` : 'rgba(99,102,241,0.14)'})`,
-            borderColor: currentAccent ? `rgba(${parseInt(currentAccent.primary.slice(1,3),16)}, ${parseInt(currentAccent.primary.slice(3,5),16)}, ${parseInt(currentAccent.primary.slice(5,7),16)}, 0.22)` : 'rgba(99,102,241,0.22)'
-          }}
-        >
+        <header className="relative z-30 border-b border-slate-200 bg-white px-4 sm:px-8 py-4 flex justify-between items-center text-foreground shadow-sm backdrop-blur-md shrink-0">
           {/* Left Side: Brand & Toggles */}
-          <div className="flex items-center gap-6">
+          <div className="flex items-center gap-8">
             <h2 className="text-[17px] font-bold text-slate-800">{getPageTitle()}</h2>
           </div>
 
           {/* Right Side: Toggles, Notifications & User Profile */}
-          <div className="flex items-center gap-5">
-            {/* Theme Toggle Dots */}
-            <div className="flex items-center gap-1.5 bg-white rounded-full px-2 py-1 shadow-sm border border-slate-100">
-              {Object.keys(accentColors).map(color => (
+          <div className="flex items-center gap-6">
+              {/* Theme Toggle — single button + popover */}
+              <div ref={themeRef} className="relative">
                 <button
-                  key={color}
-                  onClick={() => setAccentName(color)}
-                  className="w-4 h-4 rounded-full border border-white/50 cursor-pointer p-0 transition-all hover:scale-110"
+                  onClick={() => setThemeOpen(prev => !prev)}
+                  className="flex items-center gap-1.5 px-3 py-1.5 rounded-full border cursor-pointer transition-all duration-200 text-sm font-semibold"
                   style={{
-                    background: accentColors[color].primary,
-                    boxShadow: accentName === color ? `0 0 0 2px white, 0 0 0 4px ${accentColors[color].primary}` : 'none',
+                    background: hexToRgba(currentAccent.primary, 0.08),
+                    borderColor: hexToRgba(currentAccent.primary, 0.25),
+                    color: currentAccent.primary,
                   }}
-                  title={color}
-                />
-              ))}
-            </div>
+                  title="Change theme color"
+                >
+                  <span
+                    className="w-3 h-3 rounded-full border-2 border-white shadow-sm flex-shrink-0 transition-all duration-500"
+                    style={{ background: currentAccent.primary }}
+                  />
+                  <ChevronDown
+                    size={13}
+                    className="transition-transform duration-200"
+                    style={{ transform: themeOpen ? 'rotate(180deg)' : 'rotate(0deg)' }}
+                  />
+                </button>
+
+                {/* Color Picker Popover */}
+                {themeOpen && (
+                  <div
+                    className="absolute top-full left-0 mt-2 z-50 rounded-2xl shadow-xl border border-slate-200/60 p-3"
+                    style={{
+                      background: 'rgba(255,255,255,0.97)',
+                      backdropFilter: 'blur(12px)',
+                      minWidth: '160px',
+                    }}
+                  >
+                    <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-2 px-1">Theme Color</p>
+                    <div className="flex flex-col gap-0.5">
+                      {Object.entries(accentColors).map(([color, val]) => (
+                        <button
+                          key={color}
+                          onClick={() => { setAccentName(color); setThemeOpen(false); }}
+                          className="group flex items-center gap-2 w-full px-2 py-1.5 rounded-xl cursor-pointer border-none text-left transition-all duration-150"
+                          style={{
+                            background: accentName === color ? hexToRgba(val.primary, 0.12) : 'transparent',
+                          }}
+                          onMouseEnter={e => e.currentTarget.style.background = hexToRgba(val.primary, 0.10)}
+                          onMouseLeave={e => e.currentTarget.style.background = accentName === color ? hexToRgba(val.primary, 0.12) : 'transparent'}
+                        >
+                          <span
+                            className="w-4 h-4 rounded-full border-2 border-white shadow flex-shrink-0 transition-transform duration-150 group-hover:scale-110"
+                            style={{
+                              background: `linear-gradient(135deg, ${val.primary}, ${val.hover})`,
+                              boxShadow: accentName === color ? `0 0 0 2px ${val.primary}` : '0 1px 3px rgba(0,0,0,0.15)',
+                            }}
+                          />
+                          <span
+                            className="text-xs font-semibold capitalize"
+                            style={{ color: accentName === color ? val.primary : '#64748b' }}
+                          >
+                            {color}
+                          </span>
+                          {accentName === color && (
+                            <span className="ml-auto text-[10px] font-bold" style={{ color: val.primary }}>✓</span>
+                          )}
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+                )}
+              </div>
 
             <span className="text-sm text-slate-600 max-lg:hidden block ml-2">
               Welcome back, <strong className="text-slate-800">{userName}</strong>
@@ -272,10 +401,10 @@ export default function MasterLayout() {
             <div ref={notifRef} className="relative">
               <button
                 onClick={() => setNotifDropdownOpen(!notifDropdownOpen)}
-                className="relative p-2.5 text-slate-500 hover:text-slate-700 hover:bg-slate-50 bg-white rounded-xl shadow-sm border border-slate-100 transition-all cursor-pointer flex items-center justify-center"
+                className="relative p-2.5 text-slate-600 hover:text-slate-900 bg-white hover:bg-slate-50 border border-slate-200 rounded-full transition-all cursor-pointer flex items-center justify-center shadow-xs"
                 title="Notifications"
               >
-                <Bell size={18} />
+                <Bell size={18} className="text-slate-600" />
                 {unreadCount > 0 && (
                   <span className="absolute -top-1 -right-1 bg-sky-500 text-white font-extrabold text-[9px] min-w-[18px] h-[18px] px-1 rounded-full flex items-center justify-center shadow-sm border-2 border-white">
                     {unreadCount}
@@ -307,8 +436,7 @@ export default function MasterLayout() {
                           onClick={() => {
                             if (!n.read) handleMarkRead(n.id)
                             setNotifDropdownOpen(false)
-                            if (n.type === 'tenant_created' || n.type === 'payment') navigate('/master/subscribers')
-                            else navigate('/master/dashboard')
+                            navigate('/master/notifications')
                           }}
                           className={`p-3 text-left hover:bg-slate-50 cursor-pointer transition-colors flex gap-2.5 items-start ${!n.read ? 'bg-indigo-50/30' : ''}`}
                         >
@@ -389,7 +517,7 @@ export default function MasterLayout() {
         </header>
 
         {/* Main Content Area */}
-        <main className="flex-1 overflow-y-auto bg-slate-50/50 p-4 lg:p-8 relative">
+        <main className="flex-1 overflow-y-auto bg-transparent p-4 lg:p-8 relative">
           <Outlet />
         </main>
       </div>

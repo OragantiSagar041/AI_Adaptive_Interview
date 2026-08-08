@@ -19,6 +19,7 @@ from typing import Any, Dict, List, Optional, Union
 import bcrypt, jwt, requests
 import cloudinary, cloudinary.uploader, cloudinary.api, cloudinary.utils
 import edge_tts
+# pyrefly: ignore [missing-import]
 import pypdf
 from bson import ObjectId
 from bson.errors import InvalidId
@@ -282,75 +283,150 @@ def delete_sub_admin(admin_id: str, current_admin: dict = Depends(get_current_ad
     return {"status": "success"}
 
 @router.post("/super-admin/admins/{admin_id}/add-credits")
+@router.post("/api/superadmin/recruiters/{admin_id}/add-credits")
 def add_sub_admin_credits(admin_id: str, data: AddCreditsRequest, current_admin: dict = Depends(get_current_admin_details)):
-    if current_admin.get("role") != "super_admin":
+    if current_admin.get("role") not in ["super_admin", "master"]:
         raise HTTPException(status_code=403, detail="Super Admin access required")
-    company_id = current_admin.get("company_id")
-    
-    admin_doc = admins_collection.find_one({"_id": ObjectId(admin_id), "company_id": company_id})
-    if not admin_doc:
-        raise HTTPException(status_code=404, detail="Sub-admin not found")
         
-    if admin_doc.get("login_enabled") == False:
-        raise HTTPException(status_code=400, detail="Cannot add credits to a deactivated admin account.")
+    company_id = current_admin.get("company_id")
+    add_amount = data.credits or data.amount or 0
+    if add_amount <= 0:
+        raise HTTPException(status_code=400, detail="Credit amount must be greater than 0")
+    
+    # Try finding admin doc by ObjectId or string id
+    admin_query = {}
+    try:
+        admin_query = {"_id": ObjectId(admin_id)}
+    except Exception:
+        admin_query = {"_id": admin_id}
+        
+    admin_doc = admins_collection.find_one(admin_query)
+    if not admin_doc:
+        raise HTTPException(status_code=404, detail="Recruiter / Sub-admin not found")
+        
+    if admin_doc.get("login_enabled") == False or admin_doc.get("is_active") == False:
+        raise HTTPException(status_code=400, detail="Cannot add credits to a deactivated recruiter account.")
 
-    super_admin_id = current_admin["admin_id"]
-    with mongo_client.start_session() as db_session:
-        with db_session.start_transaction():
-            if company_id:
+    super_admin_id = current_admin.get("admin_id") or str(current_admin.get("_id") or "")
+    
+    updated_admin = None
+    sa_doc = None
+    
+    try:
+        with mongo_client.start_session() as db_session:
+            with db_session.start_transaction():
+                if company_id:
+                    sa_doc = companies_collection.find_one_and_update(
+                        {"_id": ObjectId(company_id), "credits": {"$gte": add_amount}},
+                        {"$inc": {"credits": -add_amount}},
+                        return_document=ReturnDocument.AFTER,
+                        session=db_session,
+                    )
+                else:
+                    sa_doc = admins_collection.find_one_and_update(
+                        {"_id": ObjectId(super_admin_id), "credits": {"$gte": add_amount}},
+                        {"$inc": {"credits": -add_amount}},
+                        return_document=ReturnDocument.AFTER,
+                        session=db_session,
+                    )
+
+                updated_admin = admins_collection.find_one_and_update(
+                    admin_query,
+                    {"$inc": {"credits": add_amount, "total_allocated_credits": add_amount}},
+                    return_document=ReturnDocument.AFTER,
+                    session=db_session,
+                )
+                
+                credit_ledger_collection.insert_one({
+                    "company_id": company_id,
+                    "super_admin_id": super_admin_id,
+                    "sub_admin_id": str(admin_id),
+                    "org": updated_admin.get("name") or updated_admin.get("username"),
+                    "amount": add_amount,
+                    "status": "Completed",
+                    "date": datetime.now(timezone.utc).isoformat()
+                }, session=db_session)
+    except Exception as tx_err:
+        logger.warning(f"Transaction not supported or failed, falling back to direct atomic updates: {tx_err}")
+        if company_id:
+            try:
                 sa_doc = companies_collection.find_one_and_update(
-                    {"_id": ObjectId(company_id), "credits": {"$gte": data.credits}},
-                    {"$inc": {"credits": -data.credits}},
-                    return_document=ReturnDocument.AFTER,
-                    session=db_session,
+                    {"_id": ObjectId(company_id)},
+                    {"$inc": {"credits": -add_amount}},
+                    return_document=ReturnDocument.AFTER
                 )
-            else:
+            except Exception:
+                sa_doc = None
+        else:
+            try:
                 sa_doc = admins_collection.find_one_and_update(
-                    {"_id": ObjectId(super_admin_id), "credits": {"$gte": data.credits}},
-                    {"$inc": {"credits": -data.credits}},
-                    return_document=ReturnDocument.AFTER,
-                    session=db_session,
+                    {"_id": ObjectId(super_admin_id)},
+                    {"$inc": {"credits": -add_amount}},
+                    return_document=ReturnDocument.AFTER
                 )
-            
-            if not sa_doc:
-                raise HTTPException(status_code=400, detail="Insufficient credits in Super Admin account.")
+            except Exception:
+                sa_doc = None
 
-            updated_admin = admins_collection.find_one_and_update(
-                {"_id": ObjectId(admin_id), "company_id": company_id},
-                {"$inc": {"credits": data.credits, "total_allocated_credits": data.credits}},
-                return_document=ReturnDocument.AFTER,
-                session=db_session,
-            )
-            if not updated_admin:
-                raise HTTPException(status_code=404, detail="Sub-admin not found")
-            
-            # Record ledger transaction
+        updated_admin = admins_collection.find_one_and_update(
+            admin_query,
+            {"$inc": {"credits": add_amount, "total_allocated_credits": add_amount}},
+            return_document=ReturnDocument.AFTER
+        )
+        
+        try:
             credit_ledger_collection.insert_one({
                 "company_id": company_id,
                 "super_admin_id": super_admin_id,
                 "sub_admin_id": str(admin_id),
-                "org": updated_admin.get("name") or updated_admin.get("username"),
-                "amount": data.credits,
+                "org": updated_admin.get("name") or updated_admin.get("username") if updated_admin else "Recruiter",
+                "amount": add_amount,
                 "status": "Completed",
                 "date": datetime.now(timezone.utc).isoformat()
-            }, session=db_session)
+            })
+        except Exception:
+            pass
 
-    # Broadcast to requesting sub-admin
-    broadcast_profile_update(
-        admin_id=admin_id,
-        company_id=str(company_id or ""),
-        credits=updated_admin.get("credits", 0),
-        login_enabled=updated_admin.get("login_enabled")
-    )
-    # Broadcast to Super Admin (to update their layout header credits in real-time)
-    broadcast_profile_update(
-        admin_id=super_admin_id,
-        company_id=str(company_id or ""),
-        credits=sa_doc.get("credits", 0),
-        login_enabled=sa_doc.get("login_enabled")
-    )
-    
-    return {"status": "success", "credits": updated_admin.get("credits", 0), "super_admin_credits": sa_doc.get("credits", 0)}
+    if not updated_admin:
+        raise HTTPException(status_code=500, detail="Failed to update recruiter credit balance in database.")
+
+    try:
+        broadcast_profile_update(
+            admin_id=admin_id,
+            company_id=str(company_id or ""),
+            credits=updated_admin.get("credits", 0),
+            login_enabled=updated_admin.get("login_enabled")
+        )
+        if sa_doc:
+            broadcast_profile_update(
+                admin_id=super_admin_id,
+                company_id=str(company_id or ""),
+                credits=sa_doc.get("credits", 0),
+                login_enabled=sa_doc.get("login_enabled")
+            )
+    except Exception as e:
+        logger.warning(f"Failed to broadcast profile update: {e}")
+
+    try:
+        notifications_collection.insert_one({
+            "title": "Credits Allocated",
+            "message": f"You have been allocated {add_amount} interview credits by your administrator.",
+            "type": "credits",
+            "recipient_role": "admin",
+            "recipient_id": str(admin_id),
+            "admin_id": str(admin_id),
+            "company_id": str(company_id or ""),
+            "read": False,
+            "created_at": datetime.now(timezone.utc).isoformat()
+        })
+    except Exception as notif_err:
+        logger.warning(f"Failed to create credit allocation notification: {notif_err}")
+
+    return {
+        "status": "success",
+        "message": f"Successfully allocated {add_amount} credits.",
+        "credits": updated_admin.get("credits", 0),
+        "recruiter_id": str(admin_id)
+    }
 
 
 @router.get("/super-admin/dashboard-stats")

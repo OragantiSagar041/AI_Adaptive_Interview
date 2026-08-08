@@ -1,5 +1,6 @@
 import React, { useEffect, useRef, useState } from "react";
 import { Link } from "react-router-dom";
+import useSEO from "../hooks/useSEO";
 import {
   Mic,
   Sparkles,
@@ -796,7 +797,7 @@ function DashboardPreview() {
               <span className="h-2.5 w-2.5 rounded-full bg-destructive" />
               <span className="h-2.5 w-2.5 rounded-full bg-amber-500" />
               <span className="h-2.5 w-2.5 rounded-full bg-emerald" />
-              <span className="ml-3 text-xs text-muted-foreground font-mono">arah.app/dashboard</span>
+              <span className="ml-3 text-xs text-muted-foreground font-mono">hireiq.app/dashboard</span>
             </div>
             <span className="text-[11px] text-emerald inline-flex items-center gap-1.5 font-semibold">
               <span className="h-1.5 w-1.5 rounded-full bg-emerald animate-pulse" /> Live
@@ -1007,7 +1008,7 @@ function InterviewDemo() {
             {turns.map((t, i) => (
               <div key={i} className={`flex ${t.who === "AI" ? "justify-start" : "justify-end"}`}>
                 <div className={cn("max-w-[80%] rounded-2xl px-4 py-3 text-sm", t.who === "AI" ? "bg-primary/15 border border-primary/30" : "bg-card border border-white/10")}>
-                  <p className="text-[10px] uppercase tracking-widest text-muted-foreground mb-1 font-semibold">{t.who === "AI" ? "Arah AI" : "Candidate"}</p>
+                  <p className="text-[10px] uppercase tracking-widest text-muted-foreground mb-1 font-semibold">{t.who === "AI" ? "HireIQ AI" : "Candidate"}</p>
                   <p className="leading-relaxed">{t.text}</p>
                 </div>
               </div>
@@ -1065,7 +1066,7 @@ function Testimonials() {
 function RecruiterFAQ() {
   const faqs = [
     ["How human does the AI sound?", "We use natural-prosody TTS with adaptive turn-taking. Candidates can't tell it's AI in ~88% of post-call surveys."],
-    ["Does Arah integrate with our ATS?", "Yes — every completed interview is packaged and POSTed to your ATS as a candidate record. Greenhouse, Ashby, and Lever are supported natively."],
+    ["Does HireIQ integrate with our ATS?", "Yes — every completed interview is packaged and POSTed to your ATS as a candidate record. Greenhouse, Ashby, and Lever are supported natively."],
     ["What languages do you support?", "English, Spanish, Portuguese, German, French, Hindi, and Mandarin with localized scoring rubrics."],
     ["How do you prevent bias?", "Structured rubrics, blinded reviewer mode, demographic-parity dashboards, and a quarterly third-party audit."],
     ["Is candidate data secure?", "Yes — SOC 2 Type II, GDPR ready, configurable retention, and per-tenant encryption keys on Enterprise."],
@@ -1147,16 +1148,25 @@ function RecruiterContact() {
 
 function AiRecruiterLandingPage() {
   useEffect(() => {
-    document.title = "Hire IQ — AI Voice Recruiter that Never Sleeps";
-    
-    let metaDesc = document.querySelector('meta[name="description"]');
-    if (!metaDesc) {
-      metaDesc = document.createElement("meta");
-      metaDesc.name = "description";
-      document.head.appendChild(metaDesc);
-    }
-    metaDesc.content = "Automate candidate screening with human-like AI voice interviews. Interview 10,000+ candidates automatically with rubric scoring and ATS sync.";
+    document.documentElement.setAttribute('data-theme', 'dark');
+    document.documentElement.classList.add('dark');
   }, []);
+
+  useSEO({
+    title: "AI Calling Agent for Recruitment & AI Voice Recruiter | HireIQ India",
+    description: "HireIQ's AI calling agent for recruitment automates candidate phone screening, AI candidate screening software, and bulk hiring across India with human-like AI agents.",
+    path: "/voice-recruiter",
+    keywords: [
+      "AI calling agent for recruitment",
+      "AI candidate screening software",
+      "Bulk hiring software India",
+      "AI recruitment software India",
+      "Automated HR screening tool",
+      "AI voice recruiter",
+      "automated phone screening",
+      "Hire IQ"
+    ],
+  });
 
   return (
     <div className="relative min-h-screen overflow-hidden bg-[#020204] text-foreground">

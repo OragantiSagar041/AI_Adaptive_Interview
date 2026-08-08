@@ -49,6 +49,7 @@ class RedisConnectionManager:
                 REDIS_URL,
                 decode_responses=True,
                 socket_connect_timeout=3,  # fail fast instead of hanging
+                protocol=2,
             )
             await temp_redis.ping()
             self.redis = temp_redis
@@ -104,7 +105,23 @@ class RedisConnectionManager:
                             if role == "candidate" and local_group.get("candidate"):
                                 pass  # already delivered in-memory by send_to_candidate
                             elif role == "admins":
-                                pass  # already delivered in-memory by send_to_admins
+                                target_admin = data.get("target_admin_id")
+                                admins_map = local_group.get("admins_map", {})
+                                if target_admin:
+                                    if target_admin in admins_map:
+                                        try:
+                                            await admins_map[target_admin].send_json(data)
+                                        except Exception as e:
+                                            logger.error(f"Error sending to local admin {target_admin}: {e}")
+                                else:
+                                    recipients = list(local_group["admins"]) + list(local_group.get("spectators", []))
+                                    for ws in recipients:
+                                        try:
+                                            await ws.send_json(data)
+                                        except Exception as e:
+                                            logger.error(f"Error sending to local admin/spectator: {e}")
+                    elif channel == "dashboard:updates":
+                        await self.broadcast_dashboard(data)
         except asyncio.CancelledError:
             pass
         except Exception as e:
@@ -118,7 +135,7 @@ class RedisConnectionManager:
     async def connect_candidate(self, websocket: WebSocket, link_id: str):
         await websocket.accept()
         if link_id not in self.local_connections:
-            self.local_connections[link_id] = {"candidate": None, "admins": [], "spectators": []}
+            self.local_connections[link_id] = {"candidate": None, "admins": []}
         self.local_connections[link_id]["candidate"] = websocket
 
         # Attempt Redis subscription — failure is non-fatal, we fall back to in-memory
@@ -149,11 +166,13 @@ class RedisConnectionManager:
 
     # ─── Admin connection ────────────────────────────────────────────────────────
 
-    async def connect_admin(self, websocket: WebSocket, link_id: str):
+    async def connect_admin(self, websocket: WebSocket, link_id: str, admin_id: Optional[str] = None):
         await websocket.accept()
         if link_id not in self.local_connections:
-            self.local_connections[link_id] = {"candidate": None, "admins": [], "spectators": []}
+            self.local_connections[link_id] = {"candidate": None, "admins": []}
         self.local_connections[link_id]["admins"].append(websocket)
+        if admin_id:
+            self.local_connections[link_id]["admins_map"][admin_id] = websocket
 
         # Attempt Redis subscription — failure is non-fatal, we fall back to in-memory
         await self.connect_redis()
@@ -168,14 +187,21 @@ class RedisConnectionManager:
                 self.pubsub = None
                 self._redis_failed = True
 
-    def disconnect_admin(self, websocket: WebSocket, link_id: str):
+    def disconnect_admin(self, websocket: WebSocket, link_id: str, admin_id: Optional[str] = None):
         if link_id in self.local_connections:
             if websocket in self.local_connections[link_id]["admins"]:
                 self.local_connections[link_id]["admins"].remove(websocket)
+            admins_map = self.local_connections[link_id].get("admins_map", {})
+            if admin_id and admin_id in admins_map:
+                del admins_map[admin_id]
+            else:
+                keys_to_del = [k for k, v in admins_map.items() if v is websocket]
+                for k in keys_to_del:
+                    del admins_map[k]
+
             if (
-                not self.local_connections[link_id].get("admins")
-                and not self.local_connections[link_id].get("candidate")
-                and not self.local_connections[link_id].get("spectators")
+                not self.local_connections[link_id]["admins"]
+                and not self.local_connections[link_id]["candidate"]
             ):
                 del self.local_connections[link_id]
                 if self.pubsub:
@@ -277,32 +303,6 @@ class RedisConnectionManager:
         except Exception as e:
             logger.warning(f"Error unsubscribing from Redis channels: {e}")
 
-    def _start_spectator_count_ttl_renewal(self, link_id: str) -> None:
-        if link_id in self.spectator_count_renewal_tasks or not self.redis:
-            return
-
-        async def _refresh_ttl() -> None:
-            key = self.SPECTATOR_COUNT_KEY_TEMPLATE.format(link_id=link_id)
-            try:
-                while True:
-                    await asyncio.sleep(max(60, self.SPECTATOR_COUNT_TTL // 2))
-                    if not self.redis:
-                        return
-                    await self.redis.expire(key, self.SPECTATOR_COUNT_TTL)
-            except asyncio.CancelledError:
-                pass
-            except Exception as e:
-                logger.warning(f"Redis spectator count TTL renewal failed for {link_id}: {e}")
-            finally:
-                self.spectator_count_renewal_tasks.pop(link_id, None)
-
-        self.spectator_count_renewal_tasks[link_id] = asyncio.create_task(_refresh_ttl())
-
-    def _cancel_spectator_count_ttl_renewal(self, link_id: str) -> None:
-        task = self.spectator_count_renewal_tasks.pop(link_id, None)
-        if task:
-            task.cancel()
-
     # ─── Dashboard connection ────────────────────────────────────────────────────
 
     async def connect_dashboard(self, websocket: WebSocket, auth_context: Dict[str, str]):
@@ -384,6 +384,15 @@ class RedisConnectionManager:
                 self.redis = None
                 self.pubsub = None
                 self._redis_failed = True
+        # In-memory fallback
+        local_group = self.local_connections.get(link_id)
+        if local_group:
+            for admin_ws in list(local_group["admins"]):
+                try:
+                    await admin_ws.send_json(message)
+                except Exception:
+                    pass
 
 
 manager = RedisConnectionManager()
+

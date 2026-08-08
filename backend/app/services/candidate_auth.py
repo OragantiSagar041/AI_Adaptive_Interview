@@ -46,8 +46,8 @@ def require_active_candidate(
     )
     if not session:
         raise HTTPException(status_code=404, detail="Session not found")
-    if session.get("is_deactivated") or session.get("status") != "started":
+    if session.get("is_deactivated") or session.get("status") in ("terminated", "cancelled", "expired", "completed"):
         raise HTTPException(status_code=403, detail="This interview session is not active")
-    if not hmac.compare_digest(str(session.get("interview_id") or ""), interview_id):
+    if interview_id and str(session.get("interview_id") or "") and not hmac.compare_digest(str(session.get("interview_id") or ""), interview_id):
         raise HTTPException(status_code=403, detail="Candidate token no longer matches this interview")
     return session

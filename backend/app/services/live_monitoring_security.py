@@ -87,7 +87,9 @@ def admin_can_receive_dashboard_event(current_admin: Dict[str, Any], event: Dict
         return str(current_admin.get("admin_id") or "") == str(event.get("created_by") or "")
     return True
 
+
 SPECTATOR_SCOPE = "interview_spectator"
+
 
 def create_spectator_token(
     secret: str,

@@ -30,7 +30,6 @@ export default function SuperAdminSidebar({
 
   const superNavItems = [
     { id: 'super-dashboard', label: 'Super Admin Dashboard', icon: BarChart2 },
-    { id: 'team', label: 'Team Management', icon: Users },
     { id: 'dashboard', label: 'Overview Dashboard', icon: LayoutDashboard },
     { id: 'interviews', label: 'Interviews', icon: Users, path: '/superadmin/interviews' },
     { id: 'qualified', label: 'Qualified Candidates', icon: CheckCircle },

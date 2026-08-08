@@ -9,6 +9,7 @@ import {
 import { Link } from "react-router-dom";
 import logoImg from "../assets/logo.png";
 import "../snake.css";
+import useSEO from "../hooks/useSEO";
 
 function useCountUp(target, start, duration = 1400) {
   const [v, setV] = useState(0);
@@ -44,29 +45,114 @@ function useInView() {
   return { ref, seen };
 }
 
+const FAQ_SCHEMA = {
+  "@context": "https://schema.org",
+  "@type": "FAQPage",
+  "mainEntity": [
+    {
+      "@type": "Question",
+      "name": "Why is HireIQ the top AI interview platform in India?",
+      "acceptedAnswer": {
+        "@type": "Answer",
+        "text": "HireIQ is India's leading AI interview platform, designed for modern talent acquisition teams. It combines conversational AI voice agents, video proctoring, resume parsing, and adaptive technical & HR questioning to screen candidates 10× faster with objective, unbiased scoring."
+      }
+    },
+    {
+      "@type": "Question",
+      "name": "How does HireIQ AI recruitment software automate bulk hiring in India?",
+      "acceptedAnswer": {
+        "@type": "Answer",
+        "text": "HireIQ's AI recruitment software and bulk hiring solution allows recruiters to upload candidate lists or sync with ATS. The AI calling agent calls hundreds of applicants simultaneously, conducts structured initial phone screening, evaluates answers in real-time, and surfaces top-tier shortlists automatically."
+      }
+    },
+    {
+      "@type": "Question",
+      "name": "What is HireIQ's automated HR screening tool and AI candidate screening software?",
+      "acceptedAnswer": {
+        "@type": "Answer",
+        "text": "HireIQ acts as an automated HR screening tool that scores resumes, assesses domain skills, evaluates communication fluency, and filters out unqualified applicants before hiring managers invest time in interviews."
+      }
+    },
+    {
+      "@type": "Question",
+      "name": "Can candidates practice with HireIQ AI mock interview platform?",
+      "acceptedAnswer": {
+        "@type": "Answer",
+        "text": "Yes. HireIQ features an AI mock interview platform that simulates realistic technical, behavioral, and system design interviews with instant feedback, scoring rubrics, and detailed improvement roadmaps."
+      }
+    },
+    {
+      "@type": "Question",
+      "name": "How does HireIQ's AI calling agent for recruitment work?",
+      "acceptedAnswer": {
+        "@type": "Answer",
+        "text": "HireIQ's AI calling agent conducts human-like phone calls with candidates, verifies availability and salary expectations, checks essential qualifications, answers candidate questions, and schedules follow-up technical rounds."
+      }
+    },
+    {
+      "@type": "Question",
+      "name": "Why choose HireIQ as your online interview platform in India?",
+      "acceptedAnswer": {
+        "@type": "Answer",
+        "text": "HireIQ offers a complete online interview platform with anti-cheat protection, automated transcription, rubric-based competency ratings, ATS integrations, and multi-language capabilities built specifically for Indian and international hiring."
+      }
+    }
+  ]
+};
+
 export default function LandingPage() {
+  useEffect(() => {
+    document.documentElement.setAttribute('data-theme', 'dark');
+    document.documentElement.classList.add('dark');
+  }, []);
+
+  useSEO({
+    title: "HireIQ — #1 AI Interview Platform & AI Recruitment Software India",
+    description: "HireIQ is India's leading AI interview platform & AI recruitment software. Features AI mock interviews, automated HR screening tool, AI calling agent for recruitment, and bulk hiring software.",
+    path: "/",
+    keywords: [
+      "AI interview platform India",
+      "AI recruitment software India",
+      "Automated HR screening tool",
+      "AI mock interview platform",
+      "Bulk hiring software India",
+      "AI calling agent for recruitment",
+      "Online interview platform India",
+      "AI candidate screening software",
+      "Hire IQ",
+      "HireIQ"
+    ],
+  });
+
   return (
-    <div className="min-h-screen bg-background text-foreground font-sans overflow-x-hidden">
-      <Nav />
-      <Hero />
-      <LogoStrip />
-      <Problem />
-      <Platform />
-      <HowItWorks />
-      <WhyChoose />
-      <AiThinks />
-      <Reports />
-      <Industries />
-      <Results />
-      <Testimonial />
-      <PricingSection />
-      <ConnectWithUs />
-      <FAQ />
-      {/* <FinalCTA /> */}
-      <Footer />
-      <StickyDemo />
-      <DemoModal />
-    </div>
+    <>
+      {/* FAQ Structured Data */}
+      <script
+        type="application/ld+json"
+        dangerouslySetInnerHTML={{ __html: JSON.stringify(FAQ_SCHEMA) }}
+      />
+      <div className="min-h-screen bg-background text-foreground font-sans overflow-x-hidden">
+        <Nav />
+        <Hero />
+        <LogoStrip />
+        <Problem />
+        <Platform />
+        <HowItWorks />
+        <WhyChoose />
+        <AiThinks />
+        <Reports />
+        <Industries />
+        <Results />
+        <Testimonial />
+        <PricingSection />
+        <ConnectWithUs />
+        <FAQ />
+        {/* <FinalCTA /> */}
+        <Footer />
+        <StickyDemo />
+        <DemoModal />
+      </div>
+    </>
   );
 }
 
@@ -125,10 +211,11 @@ function Logo() {
 function Hero() {
   return (
     <section id="top" className="relative pt-32 pb-24 bg-[radial-gradient(ellipse_at_top,_var(--tw-gradient-stops))] from-primary/10 via-background to-background">
+
       {/* grid + noise */}
       <div
         aria-hidden="true"
-        className="absolute inset-0 opacity-[0.06]"
+        className="absolute inset-0 opacity-[0.06] pointer-events-none"
         style={{
           backgroundImage:
             "linear-gradient(oklch(1 0 0 / 0.6) 1px, transparent 1px), linear-gradient(90deg, oklch(1 0 0 / 0.6) 1px, transparent 1px)",
@@ -137,21 +224,17 @@ function Hero() {
           WebkitMaskImage: "radial-gradient(ellipse at top, black 40%, transparent 75%)"
         }}
       />
-      <div className="relative mx-auto max-w-7xl px-6 grid lg:grid-cols-12 gap-12 items-center">
+      <div className="relative mx-auto max-w-7xl px-6 grid lg:grid-cols-12 gap-12 items-center z-10">
         <div className="lg:col-span-7">
           <div className="inline-flex items-center gap-2 rounded-full glass px-3 py-1 text-xs text-muted-foreground">
             <span className="h-1.5 w-1.5 rounded-full bg-cyan-400 animate-pulse-glow" />
-            AI Recruitment Intelligence Platform
+            #1 AI Recruitment & Interview Intelligence Platform India
           </div>
           <h1 className="mt-6 text-5xl sm:text-6xl lg:text-7xl font-extrabold tracking-tighter leading-[1.02]">
-            The Future of Hiring
-            <br />
-            Starts with <span className="text-gradient">AI</span>.
+            India’s #1 <span className="text-gradient">AI Interview Platform</span> & Recruitment Software.
           </h1>
           <p className="mt-6 text-lg text-muted-foreground max-w-2xl leading-relaxed">
-            AI agents that call, interview and identify your best candidates—automatically.
-            HireIQ automates outreach, resume screening, interviews and evaluation so hiring
-            teams make faster decisions and hire top talent with confidence.
+            HireIQ is the leading <strong>AI mock interview platform</strong>, <strong>automated HR screening tool</strong>, and <strong>AI calling agent for recruitment</strong>. Automate candidate outreach, resume screening, live technical assessments, and <strong>bulk hiring in India</strong> 10× faster with predictive AI scoring.
           </p>
           <div className="mt-8 flex flex-wrap gap-3">
             <a
@@ -803,28 +886,28 @@ function Testimonial() {
 function FAQ() {
   const faqs = [
     {
-      q: "How does HireIQ's AI voice screening work?",
-      a: "Our AI voice agents call every qualified candidate, ask structured, role-specific questions, capture and transcribe responses, and update the candidate profile in real time. Recruiters review only the top scoring shortlists.",
+      q: "Why is HireIQ the best AI interview platform in India?",
+      a: "HireIQ is built specifically to address high-volume talent challenges in India and globally. It combines AI voice calling agents, automated technical assessments, AI mock interviews, and ATS integrations to deliver 10× faster recruitment cycles with unbiased candidate scoring.",
     },
     {
-      q: "Will HireIQ integrate with our existing ATS?",
-      a: "Yes. HireIQ integrates with leading ATS and HRIS platforms via secure APIs, so screening, interview data and scores flow directly into your existing hiring workflow.",
+      q: "How does the AI calling agent for recruitment work?",
+      a: "Our AI calling agent calls qualified applicants automatically, conducts interactive phone screening interviews, asks role-specific questions, transcribes conversations in real time, and provides recruiters with prioritized candidate scores.",
     },
     {
-      q: "How does HireIQ ensure fair and unbiased evaluation?",
-      a: "Every candidate goes through the same structured interview and scoring rubric. Evaluation is based on measurable signals—communication, technical accuracy, behavioral responses—not subjective notes.",
+      q: "How does HireIQ AI recruitment software accelerate bulk hiring in India?",
+      a: "For high-volume hiring (BPO, campus drives, IT services, retail), HireIQ can interview thousands of candidates simultaneously 24/7, reducing screening turnaround from weeks to minutes.",
     },
     {
-      q: "Is HireIQ secure and enterprise-ready?",
-      a: "HireIQ is built with enterprise-grade security: encryption in transit and at rest, SSO, role-based access, audit logs, and support for regional data residency.",
+      q: "Can job seekers use HireIQ as an AI mock interview platform?",
+      a: "Yes. HireIQ offers comprehensive AI mock interview practice modules covering software engineering, data science, product management, and HR rounds with instant performance analytics.",
     },
     {
-      q: "How quickly can we get started?",
-      a: "Most teams go live within days. We help you configure job templates, evaluation rubrics and integrations during onboarding, with dedicated support throughout.",
+      q: "What makes HireIQ an effective automated HR screening tool?",
+      a: "HireIQ automatically parses resumes against job criteria, verifies core qualifications, checks communication ability, and flags top matches so HR teams only interview pre-vetted, high-potential talent.",
     },
     {
-      q: "Can HireIQ handle high-volume hiring?",
-      a: "Yes. HireIQ can screen and interview thousands of candidates in parallel, making it ideal for BPO, retail, campus, and enterprise-scale hiring.",
+      q: "Will HireIQ integrate with our existing ATS and HRIS?",
+      a: "Yes. HireIQ offers seamless API integrations with Greenhouse, Lever, Workday, BambooHR, Slack, and other enterprise HR tools.",
     },
   ];
   const [open, setOpen] = useState(0);
@@ -867,10 +950,61 @@ function FAQ() {
 
 /* ---------------- CONNECT WITH US ---------------- */
 function ConnectWithUs() {
+  const [formData, setFormData] = useState({
+    first_name: '',
+    last_name: '',
+    company_email: '',
+    company_name: '',
+    message: ''
+  });
+  const [loading, setLoading] = useState(false);
+  const [submitted, setSubmitted] = useState(false);
+  const [errorMessage, setErrorMessage] = useState('');
+
+  const handleChange = (e) => {
+    setFormData({ ...formData, [e.target.name]: e.target.value });
+    if (errorMessage) setErrorMessage('');
+  };
+
+  const handleSubmit = async (e) => {
+    e.preventDefault();
+    if (!formData.first_name.trim() || !formData.last_name.trim() || !formData.company_email.trim() || !formData.company_name.trim() || !formData.message.trim()) {
+      setErrorMessage('Please fill in all required fields.');
+      return;
+    }
+
+    setLoading(true);
+    setErrorMessage('');
+    try {
+      const response = await fetch(`${API_BASE_URL}/contact-request`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(formData)
+      });
+      if (response.ok) {
+        setSubmitted(true);
+        setFormData({
+          first_name: '',
+          last_name: '',
+          company_email: '',
+          company_name: '',
+          message: ''
+        });
+      } else {
+        const data = await response.json().catch(() => ({}));
+        setErrorMessage(data.detail || 'Failed to send message. Please try again.');
+      }
+    } catch (err) {
+      setErrorMessage('Network error. Please check your connection and try again.');
+    } finally {
+      setLoading(false);
+    }
+  };
+
   return (
     <section id="about" className="py-24 relative overflow-hidden">
       <div className="mx-auto max-w-7xl px-6">
-        <div className="grid lg:grid-cols-2 gap-16 lg:gap-8 bg-gradient-to-br from-zinc-800/90 to-zinc-900/90 backdrop-blur-2xl border border-white/10 rounded-3xl p-8 lg:p-12 shadow-[0_8px_30px_rgb(0,0,0,0.5)]">
+        <div className="grid lg:grid-cols-2 gap-16 lg:gap-8 bg-card border border-border backdrop-blur-2xl rounded-3xl p-8 lg:p-12 shadow-xl">
           {/* Left Side */}
           <div>
             <SectionEyebrow>Connect</SectionEyebrow>
@@ -884,71 +1018,123 @@ function ConnectWithUs() {
             <div className="mt-10 space-y-6">
               <div>
                 <h4 className="text-sm font-semibold tracking-wider uppercase text-cyan-500">Email</h4>
-                <p className="mt-1 text-foreground">hello@hireiq.ai</p>
+                <p className="mt-1 text-foreground font-medium">hello@hireiq.co.in</p>
               </div>
               <div>
-                <h4 className="text-sm font-semibold tracking-wider uppercase text-cyan-500">Phone</h4>
-                <p className="mt-1 text-foreground">+1 (555) 012-3456</p>
+                <h4 className="text-sm font-semibold tracking-wider uppercase text-cyan-500">Support</h4>
+                <p className="mt-1 text-foreground font-medium">support@hireiq.co.in</p>
               </div>
               <div>
                 <h4 className="text-sm font-semibold tracking-wider uppercase text-cyan-500">Location</h4>
-                <p className="mt-1 text-foreground">San Francisco, CA</p>
+                <p className="mt-1 text-foreground font-medium">India (Serving Pan-India & Global Enterprise Hiring)</p>
               </div>
             </div>
           </div>
 
           {/* Right Side - Form */}
-          <div className="bg-background rounded-2xl p-6 lg:p-8 border border-border">
-            <form className="space-y-4" onSubmit={(e) => e.preventDefault()}>
-              <div className="grid sm:grid-cols-2 gap-4">
-                <div className="space-y-2">
-                  <label className="text-sm font-medium">First Name *</label>
+          <div className="bg-background rounded-2xl p-6 lg:p-8 border border-border flex flex-col justify-center">
+            {submitted ? (
+              <div className="text-center py-8 animate-in fade-in zoom-in-95 duration-300">
+                <div className="w-16 h-16 bg-cyan-500/20 text-cyan-400 rounded-full flex items-center justify-center mx-auto mb-5 border border-cyan-500/30 shadow-[0_0_20px_rgba(6,182,212,0.2)]">
+                  <Check className="w-8 h-8" />
+                </div>
+                <h3 className="text-2xl font-bold text-foreground mb-2">Message Received!</h3>
+                <p className="text-muted-foreground text-sm max-w-sm mx-auto mb-6">
+                  Thank you for reaching out to HireIQ. Our team will review your inquiry and get back to you shortly.
+                </p>
+                <button
+                  type="button"
+                  onClick={() => setSubmitted(false)}
+                  className="px-6 py-2.5 rounded-full bg-cyan-500/10 text-cyan-400 hover:bg-cyan-500/20 font-medium text-sm border border-cyan-500/30 transition duration-200"
+                >
+                  Send another message
+                </button>
+              </div>
+            ) : (
+              <form className="space-y-4" onSubmit={handleSubmit}>
+                {errorMessage && (
+                  <div className="p-3 rounded-lg bg-red-500/10 border border-red-500/30 text-red-400 text-xs font-medium animate-in fade-in">
+                    {errorMessage}
+                  </div>
+                )}
+                <div className="grid sm:grid-cols-2 gap-4">
+                  <div className="space-y-1.5 text-left">
+                    <label className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">First Name *</label>
+                    <input
+                      required
+                      type="text"
+                      name="first_name"
+                      value={formData.first_name}
+                      onChange={handleChange}
+                      placeholder="Enter your first name"
+                      className="w-full bg-muted/50 border border-border rounded-lg px-4 py-3 text-sm focus:outline-none focus:ring-2 focus:ring-cyan-500/50 transition"
+                    />
+                  </div>
+                  <div className="space-y-1.5 text-left">
+                    <label className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">Last Name *</label>
+                    <input
+                      required
+                      type="text"
+                      name="last_name"
+                      value={formData.last_name}
+                      onChange={handleChange}
+                      placeholder="Enter your last name"
+                      className="w-full bg-muted/50 border border-border rounded-lg px-4 py-3 text-sm focus:outline-none focus:ring-2 focus:ring-cyan-500/50 transition"
+                    />
+                  </div>
+                </div>
+                <div className="space-y-1.5 text-left">
+                  <label className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">Company Email *</label>
                   <input
-                    type="text"
-                    placeholder="Enter your first name"
-                    className="w-full bg-muted/50 border border-border rounded-lg px-4 py-3 text-sm focus:outline-none focus:ring-2 focus:ring-cyan-500/50"
+                    required
+                    type="email"
+                    name="company_email"
+                    value={formData.company_email}
+                    onChange={handleChange}
+                    placeholder="email@company.com"
+                    className="w-full bg-muted/50 border border-border rounded-lg px-4 py-3 text-sm focus:outline-none focus:ring-2 focus:ring-cyan-500/50 transition"
                   />
                 </div>
-                <div className="space-y-2">
-                  <label className="text-sm font-medium">Last Name *</label>
+                <div className="space-y-1.5 text-left">
+                  <label className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">Company Name *</label>
                   <input
+                    required
                     type="text"
-                    placeholder="Enter your last name"
-                    className="w-full bg-muted/50 border border-border rounded-lg px-4 py-3 text-sm focus:outline-none focus:ring-2 focus:ring-cyan-500/50"
+                    name="company_name"
+                    value={formData.company_name}
+                    onChange={handleChange}
+                    placeholder="Enter your company name"
+                    className="w-full bg-muted/50 border border-border rounded-lg px-4 py-3 text-sm focus:outline-none focus:ring-2 focus:ring-cyan-500/50 transition"
                   />
                 </div>
-              </div>
-              <div className="space-y-2">
-                <label className="text-sm font-medium">Company Email *</label>
-                <input
-                  type="email"
-                  placeholder="email@company.com"
-                  className="w-full bg-muted/50 border border-border rounded-lg px-4 py-3 text-sm focus:outline-none focus:ring-2 focus:ring-cyan-500/50"
-                />
-              </div>
-              <div className="space-y-2">
-                <label className="text-sm font-medium">Company Name *</label>
-                <input
-                  type="text"
-                  placeholder="Enter your company name"
-                  className="w-full bg-muted/50 border border-border rounded-lg px-4 py-3 text-sm focus:outline-none focus:ring-2 focus:ring-cyan-500/50"
-                />
-              </div>
-              <div className="space-y-2">
-                <label className="text-sm font-medium">Message</label>
-                <textarea
-                  rows={4}
-                  placeholder="How can we help you?"
-                  className="w-full bg-muted/50 border border-border rounded-lg px-4 py-3 text-sm focus:outline-none focus:ring-2 focus:ring-cyan-500/50 resize-none"
-                />
-              </div>
-              <button
-                type="submit"
-                className="w-full bg-cyan-500 hover:bg-cyan-600 text-white font-semibold py-3.5 rounded-lg transition-colors duration-200 mt-4"
-              >
-                Send Message
-              </button>
-            </form>
+                <div className="space-y-1.5 text-left">
+                  <label className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">Message *</label>
+                  <textarea
+                    required
+                    rows={4}
+                    name="message"
+                    value={formData.message}
+                    onChange={handleChange}
+                    placeholder="How can we help you?"
+                    className="w-full bg-muted/50 border border-border rounded-lg px-4 py-3 text-sm focus:outline-none focus:ring-2 focus:ring-cyan-500/50 resize-none transition"
+                  />
+                </div>
+                <button
+                  type="submit"
+                  disabled={loading}
+                  className="w-full bg-cyan-500 hover:bg-cyan-600 disabled:opacity-50 text-white font-semibold py-3.5 rounded-lg transition-colors duration-200 mt-4 flex items-center justify-center gap-2"
+                >
+                  {loading ? (
+                    <>
+                      <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin"></div>
+                      <span>Sending Message...</span>
+                    </>
+                  ) : (
+                    <span>Send Message</span>
+                  )}
+                </button>
+              </form>
+            )}
           </div>
         </div>
       </div>
@@ -998,26 +1184,26 @@ function PricingSection() {
               const isPopular = plan.plan_name?.toLowerCase() === "basic" || plan.plan_name?.toLowerCase() === "pro";
               return (
                 <div key={plan.id} className="relative group">
-                  <div className={`h-full bg-zinc-800/80 backdrop-blur-xl border ${isPopular ? "border-primary/50 shadow-[0_0_30px_rgba(124,58,237,0.3)]" : "border-white/10 shadow-[0_8px_30px_rgb(0,0,0,0.5)]"} rounded-3xl p-8 flex flex-col hover:border-primary/50 transition-colors duration-300`}>
+                  <div className={`h-full bg-card text-card-foreground backdrop-blur-xl border ${isPopular ? "border-primary/60 shadow-[0_0_35px_rgba(124,58,237,0.18)] ring-2 ring-primary/40" : "border-border shadow-lg"} rounded-3xl p-8 flex flex-col hover:border-primary/50 transition-all duration-300`}>
                     {isPopular && (
-                      <div className="absolute -top-4 left-1/2 -translate-x-1/2 px-4 py-1 bg-gradient-to-r from-primary to-purple-500 rounded-full text-xs font-bold uppercase tracking-widest shadow-lg">
+                      <div className="absolute -top-4 left-1/2 -translate-x-1/2 px-4 py-1 bg-gradient-to-r from-primary to-purple-600 text-white rounded-full text-xs font-bold uppercase tracking-widest shadow-lg">
                         Most Popular
                       </div>
                     )}
-                    <h3 className="text-2xl font-bold">{plan.plan_name}</h3>
+                    <h3 className="text-2xl font-bold text-foreground">{plan.plan_name}</h3>
                     <p className="text-muted-foreground mt-2 text-sm h-10">{plan.summary || "All the essential features you need to get started."}</p>
 
                     <div className="mt-6 mb-8 flex items-baseline gap-1">
-                      <span className="text-4xl font-extrabold">₹{plan.price || 0}</span>
-                      <span className="text-muted-foreground">/mo</span>
+                      <span className="text-4xl font-extrabold text-foreground">₹{plan.price || 0}</span>
+                      <span className="text-muted-foreground font-medium">/mo</span>
                     </div>
 
                     <div className="mb-8 flex-1">
-                      <p className="text-sm font-semibold text-primary mb-4 border-b border-white/10 pb-4">Includes {plan.credits || 0} AI interview credits</p>
+                      <p className="text-sm font-semibold text-primary mb-4 border-b border-border pb-4">Includes {plan.credits || 0} AI interview credits</p>
                       <ul className="space-y-3">
                         {(plan.features && plan.features.length > 0 ? plan.features : ["AI Resume Screening", "Automated Voice Calls", "Comprehensive Evaluation Reports"]).map((feature, idx) => (
-                          <li key={idx} className="flex items-start gap-3 text-sm text-muted-foreground">
-                            <Check className="w-5 h-5 text-emerald-400 shrink-0" />
+                          <li key={idx} className="flex items-start gap-3 text-sm text-foreground/80">
+                            <Check className="w-5 h-5 text-emerald-500 shrink-0 mt-0.5" />
                             <span>{feature}</span>
                           </li>
                         ))}
@@ -1025,7 +1211,7 @@ function PricingSection() {
                     </div>
 
                     <div className="mt-auto pt-6">
-                      <Link to="/register" className={`flex items-center justify-center w-full py-3 rounded-full transition font-medium ${isPopular ? "bg-gradient-to-r from-primary to-purple-600 hover:opacity-90 shadow-lg" : "bg-white/5 hover:bg-white/10 border border-white/10"}`}>
+                      <Link to="/register" className={`flex items-center justify-center w-full py-3 rounded-full transition font-semibold text-sm ${isPopular ? "bg-gradient-to-r from-primary to-purple-600 text-white hover:opacity-95 shadow-lg shadow-primary/25" : "bg-primary/10 text-primary hover:bg-primary/20 border border-primary/20"}`}>
                         Get Started
                       </Link>
                     </div>
@@ -1202,24 +1388,24 @@ function DemoModal() {
 
   return (
     <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 sm:p-6 backdrop-blur-md bg-black/60 animate-in fade-in duration-300">
-      <div className="bg-zinc-900/90 w-full max-w-lg rounded-3xl border border-white/10 p-8 shadow-2xl relative animate-in zoom-in-95 duration-300">
+      <div className="bg-card text-card-foreground w-full max-w-lg rounded-3xl border border-border p-8 shadow-2xl relative animate-in zoom-in-95 duration-300">
         <button
           onClick={() => setIsOpen(false)}
-          className="absolute top-4 right-4 p-2 rounded-full hover:bg-white/10 text-muted-foreground hover:text-white transition"
+          className="absolute top-4 right-4 p-2 rounded-full hover:bg-muted text-muted-foreground hover:text-foreground transition"
         >
           <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M6 18L18 6M6 6l12 12"></path></svg>
         </button>
 
         {submitted ? (
           <div className="text-center py-10">
-            <div className="w-16 h-16 bg-emerald-500/20 text-emerald-400 rounded-full flex items-center justify-center mx-auto mb-6">
+            <div className="w-16 h-16 bg-emerald-500/20 text-emerald-500 rounded-full flex items-center justify-center mx-auto mb-6">
               <Check className="w-8 h-8" />
             </div>
-            <h3 className="text-2xl font-bold text-white mb-2">Request Received!</h3>
+            <h3 className="text-2xl font-bold text-foreground mb-2">Request Received!</h3>
             <p className="text-muted-foreground">Thank you for your interest. Our team will reach out to schedule your personalized demo shortly.</p>
             <button
               onClick={() => setIsOpen(false)}
-              className="mt-8 px-6 py-3 rounded-full glass font-semibold hover:bg-white/10 transition w-full"
+              className="mt-8 px-6 py-3 rounded-full bg-secondary text-secondary-foreground hover:bg-secondary/80 border border-border font-semibold transition w-full"
             >
               Close
             </button>
@@ -1227,40 +1413,40 @@ function DemoModal() {
         ) : (
           <>
             <SectionEyebrow center={false}>Book Demo</SectionEyebrow>
-            <h3 className="text-3xl font-extrabold text-white mt-4 mb-2">See HireIQ in Action</h3>
+            <h3 className="text-3xl font-extrabold text-foreground mt-4 mb-2">See HireIQ in Action</h3>
             <p className="text-muted-foreground mb-8">Fill out the form below and we'll be in touch to schedule a personalized walkthrough.</p>
 
             <form className="space-y-4" onSubmit={handleSubmit}>
               <div className="grid grid-cols-2 gap-4">
                 <div className="space-y-1.5 text-left">
                   <label className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">First Name</label>
-                  <input required name="first_name" value={formData.first_name} onChange={handleChange} type="text" className="w-full bg-black/40 border border-white/10 rounded-xl px-4 py-3 text-white placeholder-muted-foreground/50 focus:outline-none focus:border-primary/50 focus:ring-1 focus:ring-primary/50 transition" placeholder="John" />
+                  <input required name="first_name" value={formData.first_name} onChange={handleChange} type="text" className="w-full bg-muted/50 border border-border rounded-xl px-4 py-3 text-foreground placeholder:text-muted-foreground/50 focus:outline-none focus:border-primary focus:ring-1 focus:ring-primary transition" placeholder="John" />
                 </div>
                 <div className="space-y-1.5 text-left">
                   <label className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">Last Name</label>
-                  <input required name="last_name" value={formData.last_name} onChange={handleChange} type="text" className="w-full bg-black/40 border border-white/10 rounded-xl px-4 py-3 text-white placeholder-muted-foreground/50 focus:outline-none focus:border-primary/50 focus:ring-1 focus:ring-primary/50 transition" placeholder="Doe" />
+                  <input required name="last_name" value={formData.last_name} onChange={handleChange} type="text" className="w-full bg-muted/50 border border-border rounded-xl px-4 py-3 text-foreground placeholder:text-muted-foreground/50 focus:outline-none focus:border-primary focus:ring-1 focus:ring-primary transition" placeholder="Doe" />
                 </div>
               </div>
 
               <div className="grid grid-cols-2 gap-4">
                 <div className="space-y-1.5 text-left">
                   <label className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">Work Email</label>
-                  <input required name="work_email" value={formData.work_email} onChange={handleChange} type="email" className="w-full bg-black/40 border border-white/10 rounded-xl px-4 py-3 text-white placeholder-muted-foreground/50 focus:outline-none focus:border-primary/50 focus:ring-1 focus:ring-primary/50 transition" placeholder="john@company.com" />
+                  <input required name="work_email" value={formData.work_email} onChange={handleChange} type="email" className="w-full bg-muted/50 border border-border rounded-xl px-4 py-3 text-foreground placeholder:text-muted-foreground/50 focus:outline-none focus:border-primary focus:ring-1 focus:ring-primary transition" placeholder="john@company.com" />
                 </div>
                 <div className="space-y-1.5 text-left">
                   <label className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">Mobile Number</label>
-                  <input required name="mobile_number" value={formData.mobile_number} onChange={handleChange} type="tel" className="w-full bg-black/40 border border-white/10 rounded-xl px-4 py-3 text-white placeholder-muted-foreground/50 focus:outline-none focus:border-primary/50 focus:ring-1 focus:ring-primary/50 transition" placeholder="+1 (555) 000-0000" />
+                  <input required name="mobile_number" value={formData.mobile_number} onChange={handleChange} type="tel" className="w-full bg-muted/50 border border-border rounded-xl px-4 py-3 text-foreground placeholder:text-muted-foreground/50 focus:outline-none focus:border-primary focus:ring-1 focus:ring-primary transition" placeholder="+1 (555) 000-0000" />
                 </div>
               </div>
 
               <div className="space-y-1.5 text-left">
                 <label className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">Company Name</label>
-                <input required name="company_name" value={formData.company_name} onChange={handleChange} type="text" className="w-full bg-black/40 border border-white/10 rounded-xl px-4 py-3 text-white placeholder-muted-foreground/50 focus:outline-none focus:border-primary/50 focus:ring-1 focus:ring-primary/50 transition" placeholder="Acme Corp" />
+                <input required name="company_name" value={formData.company_name} onChange={handleChange} type="text" className="w-full bg-muted/50 border border-border rounded-xl px-4 py-3 text-foreground placeholder:text-muted-foreground/50 focus:outline-none focus:border-primary focus:ring-1 focus:ring-primary transition" placeholder="Acme Corp" />
               </div>
 
               <div className="space-y-1.5 text-left">
                 <label className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">How can we help?</label>
-                <textarea required name="help_text" value={formData.help_text} onChange={handleChange} rows="3" className="w-full bg-black/40 border border-white/10 rounded-xl px-4 py-3 text-white placeholder-muted-foreground/50 focus:outline-none focus:border-primary/50 focus:ring-1 focus:ring-primary/50 transition resize-none" placeholder="Tell us about your hiring needs..."></textarea>
+                <textarea required name="help_text" value={formData.help_text} onChange={handleChange} rows="3" className="w-full bg-muted/50 border border-border rounded-xl px-4 py-3 text-foreground placeholder:text-muted-foreground/50 focus:outline-none focus:border-primary focus:ring-1 focus:ring-primary transition resize-none" placeholder="Tell us about your hiring needs..."></textarea>
               </div>
 
               <button

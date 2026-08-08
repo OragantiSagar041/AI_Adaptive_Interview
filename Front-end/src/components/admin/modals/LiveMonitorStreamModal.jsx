@@ -1,9 +1,9 @@
-import React, { useState, useEffect, useRef, useCallback } from 'react'
+import React, { useState, useEffect, useRef, useCallback, memo } from 'react'
 import { API_BASE_URL } from '../../../apiConfig'
 import { getIceServers } from '../../../utils/webrtcConfig'
 import Modal from '../../Modal'
 import { useSelector } from 'react-redux'
-import { Video, Mic, MicOff, MonitorOff, Activity, ShieldAlert, Code, MessageSquare, Briefcase, AlertTriangle, RefreshCw, Share2, Copy, CheckCircle2, Eye } from 'lucide-react'
+import { Video, Mic, MicOff, MonitorOff, Monitor, Camera, Activity, ShieldAlert, Code, MessageSquare, Briefcase, AlertTriangle, RefreshCw, Share2, Copy, CheckCircle2, Users } from 'lucide-react'
 
 // Maps violation_type values to a human-readable label + colour class
 const VIOLATION_META = {
@@ -40,39 +40,77 @@ const ICE_SERVERS = getIceServers()
 const STREAM_TIMEOUT_MS = 12000
 const MAX_OFFER_ATTEMPTS = 3
 
+function getTrackType(track) {
+  const label = (track.label || '').toLowerCase()
+  if (/screen|display|monitor|window|tab|share/.test(label)) return 'screen'
+  if (/camera|webcam|front|user|face/.test(label)) return 'camera'
+  return 'unknown'
+}
+
+const buildRemoteViewStream = (stream, mode) => {
+  if (!stream) return null
+  const videoTracks = [...stream.getVideoTracks()]
+  const audioTracks = [...stream.getAudioTracks()]
+  if (videoTracks.length === 0) return stream
+
+  let selectedVideoTrack = null
+
+  if (mode === 'camera') {
+    selectedVideoTrack = videoTracks.find(track => getTrackType(track) === 'camera') || videoTracks[0]
+  } else {
+    // Candidate publishers add camera to transceiver 0 and screen to transceiver 1.
+    // If track labels are obfuscated by the browser, fallback to the expected transceiver index order.
+    selectedVideoTrack = videoTracks.find(track => getTrackType(track) === 'screen') || (videoTracks.length > 1 ? videoTracks[1] : videoTracks[0])
+  }
+
+  if (!selectedVideoTrack) {
+    return stream
+  }
+
+  return new MediaStream([selectedVideoTrack, ...audioTracks])
+}
+
 export default function LiveMonitorStreamModal({ isOpen, onClose, session }) {
   const [status, setStatus] = useState('connecting')
   const [telemetry, setTelemetry] = useState(null)
   const [violations, setViolations] = useState([])
   const [retryCount, setRetryCount] = useState(0)
-  const [spectatorCount, setSpectatorCount] = useState(0)
+  const [viewMode, setViewMode] = useState('screen')
+  const [remoteStream, setRemoteStream] = useState(null)
+  const [trackAvailability, setTrackAvailability] = useState({ camera: false, screen: false })
   const [shareLink, setShareLink] = useState('')
+  const [generatingLink, setGeneratingLink] = useState(false)
   const [copied, setCopied] = useState(false)
+  const [spectatorCount, setSpectatorCount] = useState(0)
 
   const violationsPollRef = useRef(null)
   const videoRef = useRef(null)
   const wsRef = useRef(null)
   const pcRef = useRef(null)
-  const streamTimeoutRef = useRef(null)
+  const pendingIceCandidatesRef = useRef([])
+  const streamTimeoutRef = useRef(null)  // fire if no video track arrives in time
   const mountedRef = useRef(false)
-  const offerAttemptsRef = useRef(0)
-  const connectionIdRef = useRef(0)
-  const offerIdRef = useRef(null)
-  const sessionIdRef = useRef(null)
-  // Unique ID for this admin viewer — ensures ICE/answer routing only goes to this viewer
-  const viewerIdRef = useRef(Math.random().toString(36).substring(2, 10))
-  // Keep a stable ref to the current WS so sendOffer can always access it without stale closure
-  const wsReadyRef = useRef(false)
-  // Queue ICE candidates that arrive before remoteDescription is set
-  const iceCandidateQueue = useRef([])
-
+  // Keep a ref to the latest status so the setTimeout inside sendOffer always
+  // reads the current value without needing `status` in its dependency array.
+  // Without this the useCallback recreates on every status transition, which
+  // causes ws.onopen to capture a stale sendOffer reference.
+  const statusRef = useRef(status)
+  useEffect(() => { statusRef.current = status }, [status])
   const token = useSelector(state => state.auth.token)
+  const user = useSelector(state => state.auth.user)
+  // Generate a distinct tab/session-unique ID so multiple tabs/windows logged into the same admin do not conflict
+  const adminIdRef = useRef(null)
+  if (!adminIdRef.current) {
+    const base = (user?.email || user?._id || user?.id || 'admin').replace(/[^a-zA-Z0-9_]/g, '_')
+    adminIdRef.current = `${base}_tab_${Math.random().toString(36).substring(2, 9)}_${Date.now().toString(36)}`
+  }
+  const heartbeatTimerRef = useRef(null)
 
-  // ── Violations + spectator count polling ────────────────────────────────────
+  // ── Violations & Spectator Count polling ───────────────────────────────────
   useEffect(() => {
     if (!isOpen || !session) return
-    const linkId = session.link_id || session.session_id || session.id
-    if (!linkId) return
+    const linkId = typeof session === 'string' ? session : (session?.link_id || session?.session_id || session?.id || session?._id || session?.interview_id)
+    if (!linkId || linkId === 'undefined') return
 
     const fetchViolations = async () => {
       try {
@@ -81,11 +119,11 @@ export default function LiveMonitorStreamModal({ isOpen, onClose, session }) {
         })
         if (!res.ok) return
         const data = await res.json()
-        const raw = data?.violations ?? data?.proctoring_alerts ?? []
+        const raw = data?.violations ?? data?.alerts ?? data?.proctoring_alerts ?? []
         if (Array.isArray(raw)) {
           setViolations(raw.map(v => ({
-            type: v.violation_type || v.type || v.alert_type || 'unknown',
-            details: v.details || v.message || '',
+            type: v.violation_type || v.type || v.alert_type || 'warning',
+            details: v.details || v.message || (typeof v === 'string' ? v : ''),
             timestamp: v.timestamp || v.ts || '',
           })))
         }
@@ -97,10 +135,11 @@ export default function LiveMonitorStreamModal({ isOpen, onClose, session }) {
         const res = await fetch(`${API_BASE_URL}/admin/interview/${linkId}/spectator-count`, {
           headers: { Authorization: `Bearer ${token}` },
         })
-        if (!res.ok) return
-        const data = await res.json()
-        setSpectatorCount(data.spectator_count || 0)
-      } catch {}
+        if (res.ok) {
+          const data = await res.json()
+          setSpectatorCount(data.spectator_count || 0)
+        }
+      } catch { /* non-fatal */ }
     }
 
     fetchViolations()
@@ -108,33 +147,93 @@ export default function LiveMonitorStreamModal({ isOpen, onClose, session }) {
     violationsPollRef.current = setInterval(() => {
       fetchViolations()
       fetchSpectatorCount()
-    }, 5000)
-    
+    }, 3000)
+
     return () => {
       clearInterval(violationsPollRef.current)
       setViolations([])
       setSpectatorCount(0)
+      setShareLink('')
+      setCopied(false)
     }
   }, [isOpen, session, token])
 
-  // ── Peer Connection teardown helper ─────────────────────────────────────────
-  const closePc = useCallback(() => {
+  const handleGenerateShareLink = async () => {
+    try {
+      setGeneratingLink(true)
+      const linkId = typeof session === 'string' ? session : (session?.link_id || session?.session_id || session?.id || session?._id || session?.interview_id)
+      const res = await fetch(`${API_BASE_URL}/admin/interview/${linkId}/spectator-token`, {
+        method: 'POST',
+        headers: {
+          Authorization: `Bearer ${token}`,
+          'Content-Type': 'application/json',
+        },
+      })
+      if (!res.ok) {
+        const errorData = await res.json().catch(() => ({}))
+        throw new Error(errorData.detail || 'Failed to generate token')
+      }
+      const data = await res.json()
+      const spectatorUrl = `${window.location.origin}/spectate/${linkId}#token=${encodeURIComponent(data.token)}`
+      setShareLink(spectatorUrl)
+    } catch (err) {
+      console.error('Failed to generate spectator link', err)
+      alert(err.message || 'Failed to generate spectator link')
+    } finally {
+      setGeneratingLink(false)
+    }
+  }
+
+  const handleCopyLink = () => {
+    if (!shareLink) return
+    navigator.clipboard.writeText(shareLink)
+    setCopied(true)
+    setTimeout(() => setCopied(false), 2500)
+  }
+
+  // ── WebRTC / Signaling ──────────────────────────────────────────────────────
+  const cleanup = useCallback(() => {
     clearTimeout(streamTimeoutRef.current)
-    iceCandidateQueue.current = []
+    clearInterval(heartbeatTimerRef.current)
     if (pcRef.current) {
       try { pcRef.current.close() } catch (_) {}
       pcRef.current = null
     }
     if (videoRef.current) videoRef.current.srcObject = null
+    setRemoteStream(null)
   }, [])
 
-  // ── Full cleanup (PC + WS) ───────────────────────────────────────────────────
-  const cleanup = useCallback(() => {
-    closePc()
-    wsReadyRef.current = false
-    if (wsRef.current) {
-      try { wsRef.current.close() } catch (_) {}
-      wsRef.current = null
+  const updateRemoteStreamFromReceivers = useCallback(() => {
+    const pc = pcRef.current
+    if (!pc) return
+
+    const receiverTracks = pc.getReceivers()
+      .map(receiver => receiver.track)
+      .filter(Boolean)
+
+    if (receiverTracks.length === 0) return
+
+    const receiverStream = new MediaStream(receiverTracks)
+    setRemoteStream(receiverStream)
+    if (mountedRef.current) setStatus('streaming')
+  }, [])
+
+  /**
+   * sendOffer:
+   * (Re-)creates the RTCPeerConnection, attaches track listeners, creates an SDP offer,
+   * sets localDescription, and sends it over the WebSocket.
+   *
+   * Called once on socket open, and re-invoked on-demand if the stream doesn't arrive in time.
+   */
+  const sendOfferRef = useRef(null)
+
+  const sendOffer = useCallback(async (ws) => {
+    // Tear down any existing peer connection
+    clearTimeout(streamTimeoutRef.current)
+    pendingIceCandidatesRef.current = []
+    if (pcRef.current) {
+      pcRef.current.close()
+      pcRef.current = null
     }
   }, [closePc])
 
@@ -167,12 +266,13 @@ export default function LiveMonitorStreamModal({ isOpen, onClose, session }) {
       const offerId = `offer-${connectionId}-${nextOfferAttempt}`
       offerIdRef.current = offerId
 
-      const isCurrentPc = () => pcRef.current === pc
-      const closeOfferPc = () => {
-        if (pcRef.current === pc) {
-          closePc()
-        } else {
-          try { pc.close() } catch (_) {}
+      pc.onicecandidate = (e) => {
+        if (e.candidate && ws.readyState === WebSocket.OPEN) {
+          ws.send(JSON.stringify({
+            type: 'webrtc_ice_candidate',
+            candidate: e.candidate,
+            admin_id: adminIdRef.current
+          }))
         }
       }
 
@@ -195,69 +295,71 @@ export default function LiveMonitorStreamModal({ isOpen, onClose, session }) {
       }
 
       pc.ontrack = (e) => {
-        if (!isCurrentPc()) return
-        console.log('[AdminWebRTC] Track received:', e.track.kind)
-        if (videoRef.current && e.streams[0]) {
-          videoRef.current.srcObject = e.streams[0]
-          offerAttemptsRef.current = 0
-          clearTimeout(streamTimeoutRef.current)
-          if (mountedRef.current) setStatus('streaming')
+        console.log(`[AdminWebRTC] Remote track received: ${e.track.kind}`)
+        // Listen for track unmuting, which fires when media packets begin flowing
+        e.track.onunmute = () => {
+          console.log(`[AdminWebRTC] Remote track unmuted: ${e.track.kind}`)
+          updateRemoteStreamFromReceivers()
         }
+        updateRemoteStreamFromReceivers()
+        clearTimeout(streamTimeoutRef.current)
+        if (mountedRef.current) setStatus('streaming')
       }
 
       pc.onconnectionstatechange = () => {
         if (!isCurrentPc()) return
         console.log('[AdminWebRTC] PC state:', pc.connectionState)
-        if (!mountedRef.current) return
         if (pc.connectionState === 'connected') {
-          // Don't override 'streaming' if we already have a track
+          if (mountedRef.current) setStatus('streaming')
         } else if (pc.connectionState === 'failed') {
-          setStatus('disconnected')
-        } else if (pc.connectionState === 'disconnected') {
-          // Give it 5s to reconnect before declaring dead
-          streamTimeoutRef.current = setTimeout(() => {
-            if (mountedRef.current && pcRef.current?.connectionState !== 'connected') {
+          if (mountedRef.current) {
+            console.warn('[AdminWebRTC] PC state failed. Retrying offer...')
+            if (wsRef.current && wsRef.current.readyState === WebSocket.OPEN) {
+              sendOfferRef.current?.(wsRef.current)
+            } else {
               setStatus('disconnected')
             }
-          }, 5000)
+          }
+        } else if (pc.connectionState === 'disconnected') {
+          // Grace period for transient disconnects (window switch / background throttling)
+          setTimeout(() => {
+            if (mountedRef.current && pcRef.current?.connectionState === 'disconnected') {
+              console.warn('[AdminWebRTC] PC still disconnected. Retrying offer...')
+              if (wsRef.current && wsRef.current.readyState === WebSocket.OPEN) {
+                sendOfferRef.current?.(wsRef.current)
+              } else {
+                setStatus('disconnected')
+              }
+            }
+          }, 4000)
         }
       }
 
-      // Admin only receives — candidate pushes video/audio tracks
+      // The candidate publishes two video tracks: camera first, screen second.
+      // Advertise both receive slots so the screen track is negotiated instead
+      // of being dropped by the single-video offer.
+      pc.addTransceiver('video', { direction: 'recvonly' })
       pc.addTransceiver('video', { direction: 'recvonly' })
       pc.addTransceiver('audio', { direction: 'recvonly' })
 
       const offer = await pc.createOffer()
       await pc.setLocalDescription(offer)
-
-      if (connectionIdRef.current !== connectionId || wsRef.current !== ws || ws.readyState !== WebSocket.OPEN) {
-        console.warn('[AdminWebRTC] WS closed before offer could be sent')
-        closeOfferPc()
-        return
-      }
-
       ws.send(JSON.stringify({
         type: 'webrtc_offer',
         sdp: offer,
-        viewer_id: viewerIdRef.current,
-        offer_id: offerId,
+        admin_id: adminIdRef.current
       }))
 
       if (mountedRef.current) setStatus('negotiating')
       console.log('[AdminWebRTC] Offer sent, waiting for answer...')
 
-      // If no track arrives in STREAM_TIMEOUT_MS, retry until limit reached
-      const currentOfferId = offerId
+      // If no video track arrives within 8 s, retry the offer automatically.
       streamTimeoutRef.current = setTimeout(() => {
-        if (
-          !mountedRef.current ||
-          connectionIdRef.current !== connectionId ||
-          wsRef.current !== ws ||
-          pcRef.current !== pc ||
-          offerIdRef.current !== currentOfferId ||
-          pc.connectionState === 'connected'
-        ) {
-          return
+        if (mountedRef.current && statusRef.current !== 'streaming') {
+          console.warn('[AdminWebRTC] No stream in 8 s — retrying offer...')
+          if (sendOfferRef.current && wsRef.current?.readyState === WebSocket.OPEN) {
+            sendOfferRef.current(wsRef.current)
+          }
         }
         if (offerAttemptsRef.current >= MAX_OFFER_ATTEMPTS) {
           if (mountedRef.current) setStatus('disconnected')
@@ -271,40 +373,47 @@ export default function LiveMonitorStreamModal({ isOpen, onClose, session }) {
       console.error('[AdminWebRTC] sendOffer error:', err)
       if (mountedRef.current) setStatus('error')
     }
-  }, [closePc])  // note: NO 'status' dep — avoids stale closure on the retry timer
+  }, [])
+
+  useEffect(() => {
+    sendOfferRef.current = sendOffer
+  }, [sendOffer])
 
   // ── Main WebSocket Effect ────────────────────────────────────────────────────
   useEffect(() => {
     if (!isOpen || !session) return
     mountedRef.current = true
 
-    const sessionId = session.link_id || session.session_id || session.id
+    const sessionId = typeof session === 'string' ? session : (session?.link_id || session?.session_id || session?.id || session?._id || session?.interview_id)
+    if (!sessionId || sessionId === 'undefined') {
+      console.warn('[AdminWebRTC] No valid session ID provided to LiveMonitorStreamModal:', session)
+      setStatus('error')
+      return
+    }
+
+    const base = (user?.email || user?._id || user?.id || 'admin').replace(/[^a-zA-Z0-9_]/g, '_')
+    adminIdRef.current = `${base}_tab_${Math.random().toString(36).substring(2, 9)}_${Date.now().toString(36)}`
+
     const wsUrl =
       API_BASE_URL.replace(/^https/, 'wss').replace(/^http/, 'ws') +
-      `/ws/webrtc/admin/${sessionId}?token=${token}`
+      `/ws/webrtc/admin/${sessionId}?token=${token}&admin_id=${encodeURIComponent(adminIdRef.current)}`
 
-    console.log('[AdminWebRTC] Opening WS:', wsUrl)
+    console.log('[AdminWebRTC] Connecting with admin_id:', adminIdRef.current)
     setStatus('connecting')
 
     const ws = new WebSocket(wsUrl)
     wsRef.current = ws
 
-    const connectionId = connectionIdRef.current + 1
-    connectionIdRef.current = connectionId
-    sessionIdRef.current = sessionId
-    offerAttemptsRef.current = 0
-
-    ws.onopen = () => {
-      if (connectionIdRef.current !== connectionId || wsRef.current !== ws) return
-      console.log('[AdminWebRTC] WS open — waiting 500ms for candidate to register...')
-      wsReadyRef.current = true
-      // Small delay ensures backend has time to deliver admin_joined to candidate
-      // before we send the offer, preventing the offer from arriving before candidate is ready
-      setTimeout(() => {
-        if (connectionIdRef.current === connectionId && wsRef.current === ws) {
-          sendOffer(ws, connectionId)
+    ws.onopen = async () => {
+      console.log('[AdminWebRTC] WS open — starting heartbeat & sending initial offer')
+      clearInterval(heartbeatTimerRef.current)
+      heartbeatTimerRef.current = setInterval(() => {
+        if (ws.readyState === WebSocket.OPEN) {
+          ws.send(JSON.stringify({ type: 'ping' }))
         }
-      }, 500)
+      }, 15_000)
+
+      await sendOffer(ws)
     }
 
     ws.onmessage = async (event) => {
@@ -312,14 +421,63 @@ export default function LiveMonitorStreamModal({ isOpen, onClose, session }) {
       try {
         const msg = JSON.parse(event.data)
 
+        if (msg.type === 'pong' || msg.type === 'ping') {
+          return // Heartbeat response
+        }
+
         if (msg.type === 'admin_connected') {
-          // Server ack — offer already sent in ws.onopen
+          if (msg.admin_id) {
+            adminIdRef.current = msg.admin_id
+          }
+          return
+        }
+
+        if (msg.type === 'candidate_connected') {
+          console.log('[AdminWebRTC] Candidate reconnected/ready. Sending fresh offer...')
+          if (mountedRef.current && wsRef.current?.readyState === WebSocket.OPEN) {
+            sendOffer(wsRef.current)
+          }
           return
         }
 
         if (msg.type === 'telemetry') {
           if (mountedRef.current) setTelemetry(msg.data)
-          return
+
+        } else if (msg.type === 'webrtc_answer') {
+          // Strictly ignore SDP answers meant for other admin instances / tabs
+          if (msg.target_admin_id && msg.target_admin_id !== adminIdRef.current) {
+            return
+          }
+          if (mountedRef.current) setStatus('negotiating')
+          console.debug('[AdminWebRTC] Received answer — applying remote description')
+          if (pcRef.current && pcRef.current.signalingState !== 'stable') {
+            await pcRef.current.setRemoteDescription(new RTCSessionDescription(msg.sdp))
+          }
+          
+          // Flush any pending ICE candidates received before the remote description was set
+          const queued = pendingIceCandidatesRef.current || []
+          pendingIceCandidatesRef.current = []
+          for (const cand of queued) {
+            try { await pcRef.current.addIceCandidate(new RTCIceCandidate(cand)) } catch (_) {}
+          }
+          
+          // Try extracting tracks from receivers after applying remote description
+          updateRemoteStreamFromReceivers()
+
+        } else if (msg.type === 'webrtc_ice_candidate') {
+          // Strictly ignore ICE candidates meant for other admin instances / tabs
+          if (msg.target_admin_id && msg.target_admin_id !== adminIdRef.current) {
+            return
+          }
+          if (pcRef.current && pcRef.current.remoteDescription && pcRef.current.remoteDescription.type) {
+            try { await pcRef.current.addIceCandidate(new RTCIceCandidate(msg.candidate)) } catch (_) {}
+          } else {
+            // Remote description not set yet, queue the candidate
+            pendingIceCandidatesRef.current.push(msg.candidate)
+          }
+
+        } else if (msg.type === 'candidate_disconnected') {
+          if (mountedRef.current) setStatus('disconnected')
         }
 
         if (msg.type === 'webrtc_answer') {
@@ -388,17 +546,48 @@ export default function LiveMonitorStreamModal({ isOpen, onClose, session }) {
     }
 
     ws.onclose = (e) => {
-      if (connectionIdRef.current !== connectionId || wsRef.current !== ws) return
-      console.log(`[AdminWebRTC] WS closed (code=${e.code})`)
-      wsReadyRef.current = false
-      if (mountedRef.current) setStatus('disconnected')
+      console.log(`[AdminWebRTC] WS closed (${e.code})`)
+      clearInterval(heartbeatTimerRef.current)
+      if (mountedRef.current) {
+        if (sessionId && sessionId !== 'undefined') {
+          // Auto-reconnect on drop with exponential backoff
+          const delay = Math.min(2000 * Math.pow(1.5, retryCount), 15000)
+          console.log(`[AdminWebRTC] Auto-reconnecting in ${delay}ms...`)
+          setTimeout(() => {
+            if (mountedRef.current) {
+              setRetryCount(c => c + 1)
+            }
+          }, delay)
+        } else {
+          setStatus('disconnected')
+        }
+      }
     }
 
+    // Auto-recover stream when admin switches back to the tab/window
+    const handleVisibilityChange = () => {
+      if (document.visibilityState === 'visible' && mountedRef.current) {
+        if (wsRef.current?.readyState !== WebSocket.OPEN) {
+          console.log('[AdminWebRTC] Tab focused: socket closed. Reconnecting...')
+          setRetryCount(c => c + 1)
+        } else if (statusRef.current !== 'streaming') {
+          console.log('[AdminWebRTC] Tab focused: stream inactive. Retrying offer...')
+          if (sendOfferRef.current && wsRef.current) {
+            sendOfferRef.current(wsRef.current)
+          }
+        }
+      }
+    }
+    document.addEventListener('visibilitychange', handleVisibilityChange)
+    window.addEventListener('focus', handleVisibilityChange)
+
     return () => {
+      document.removeEventListener('visibilitychange', handleVisibilityChange)
+      window.removeEventListener('focus', handleVisibilityChange)
       mountedRef.current = false
       cleanup()
     }
-  }, [isOpen, session, token, retryCount])
+  }, [isOpen, session, token, retryCount])  // retryCount forces full reconnect
 
   const handleManualRetry = () => {
     offerAttemptsRef.current = 0
@@ -407,29 +596,54 @@ export default function LiveMonitorStreamModal({ isOpen, onClose, session }) {
     setRetryCount(c => c + 1)
   }
 
-  const handleGenerateShareLink = async () => {
-    const linkId = session?.link_id || session?.session_id || session?.id
-    if (!linkId) return
-    try {
-      const res = await fetch(`${API_BASE_URL}/admin/interview/${linkId}/spectator-token`, {
-        method: 'POST',
-        headers: { Authorization: `Bearer ${token}` }
-      })
-      if (!res.ok) throw new Error('Failed to generate token')
-      const data = await res.json()
-      const spectatorUrl = `${window.location.origin}/spectate/${linkId}#token=${encodeURIComponent(data.token)}`
-      setShareLink(spectatorUrl)
-    } catch (err) {
-      console.error('Failed to generate spectator link', err)
-    }
-  }
+  const videoTracks = remoteStream?.getVideoTracks() || []
+  const hasCameraTrack = trackAvailability.camera
+  const hasScreenTrack = trackAvailability.screen
 
-  const handleCopyLink = () => {
-    if (!shareLink) return
-    navigator.clipboard.writeText(shareLink)
-    setCopied(true)
-    setTimeout(() => setCopied(false), 2000)
-  }
+  useEffect(() => {
+    if (!remoteStream) {
+      setTrackAvailability({ camera: false, screen: false })
+      return
+    }
+
+    const cameraFound = videoTracks.some(track => getTrackType(track) === 'camera') || videoTracks.length >= 1
+    const screenFound = videoTracks.some(track => getTrackType(track) === 'screen') || videoTracks.length >= 2
+    setTrackAvailability({ camera: cameraFound, screen: screenFound })
+  }, [remoteStream, videoTracks.length])
+
+  useEffect(() => {
+    if (!videoRef.current) return
+    if (!remoteStream) {
+      videoRef.current.srcObject = null
+      return
+    }
+    const stream = buildRemoteViewStream(remoteStream, viewMode)
+    videoRef.current.srcObject = stream
+    videoRef.current.muted = true
+    videoRef.current.play().catch(() => {
+      // Autoplay may be blocked, but the video source is attached.
+    })
+  }, [remoteStream, viewMode])
+
+  useEffect(() => {
+    if (!isOpen) return
+    const interval = setInterval(() => {
+      if (!remoteStream) updateRemoteStreamFromReceivers()
+    }, 2500)
+    return () => clearInterval(interval)
+  }, [isOpen, remoteStream, updateRemoteStreamFromReceivers])
+
+  useEffect(() => {
+    if (isOpen && session) {
+      setViewMode('screen')
+    }
+  }, [isOpen, session])
+
+  useEffect(() => {
+    if (viewMode === 'camera' && !hasCameraTrack) {
+      setViewMode('screen')
+    }
+  }, [viewMode, hasCameraTrack])
 
   const getRoundIcon = (type) => {
     if (type === 'coding') return <Code size={16} />
@@ -437,77 +651,85 @@ export default function LiveMonitorStreamModal({ isOpen, onClose, session }) {
     return <MessageSquare size={16} />
   }
 
+  const candidateName = (typeof session === 'object' && session?.candidate_name) ? session.candidate_name : 'Live Candidate'
+  const candidateEmail = (typeof session === 'object' && session?.candidate_email) ? session.candidate_email : 'Active Stream'
+  const displaySessionId = (typeof session === 'object' && (session?.session_id || session?.link_id)) ? (session.session_id || session.link_id) : (typeof session === 'string' ? session : 'N/A')
+
   return (
     <Modal
       isOpen={isOpen}
       onClose={onClose}
       title={
-        <div className="flex items-center justify-between w-full pr-8">
-          <div className="flex items-center gap-2">
-            <span className={`w-2.5 h-2.5 rounded-full ${status === 'streaming' ? 'bg-success animate-pulse' : 'bg-amber-500'}`} />
-            Live Stream: <span className="font-bold">{session?.candidate_name}</span>
-          </div>
+        <div className="flex items-center gap-2">
+          <span className={`w-2.5 h-2.5 rounded-full ${status === 'streaming' ? 'bg-success animate-pulse' : 'bg-amber-500'}`} />
+          Live Stream: <span className="font-bold">{candidateName}</span>
           {spectatorCount > 0 && (
-            <div className="flex items-center gap-1.5 px-2.5 py-1 bg-indigo-50 text-indigo-600 rounded-full text-xs font-semibold border border-indigo-100">
-              <Eye size={14} />
+            <span className="ml-2 inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-xs font-semibold bg-indigo-50 text-indigo-700 border border-indigo-200">
+              <Users size={12} />
               {spectatorCount} Spectator{spectatorCount !== 1 ? 's' : ''}
-            </div>
+            </span>
           )}
         </div>
       }
-      subtitle={`Email: ${session?.candidate_email} | Session: ${session?.session_id}`}
+      subtitle={`Email: ${candidateEmail} | Session: ${displaySessionId}`}
       maxWidth="max-w-4xl"
     >
       <div className="flex flex-col gap-4 text-slate-800 bg-white">
 
-        {/* Controls Bar */}
-        <div className="flex items-center justify-between border border-slate-200 rounded-lg p-3 bg-slate-50">
-          <div className="flex items-center gap-4">
-            <div className="flex items-center gap-2">
-              <Mic size={16} className={telemetry?.audio_level > 5 ? 'text-indigo-500' : 'text-slate-400'} />
-              <div className="w-16 h-1.5 bg-slate-200 rounded-full overflow-hidden">
-                <div 
-                  className="h-full bg-indigo-500 transition-all duration-100 ease-linear"
-                  style={{ width: `${Math.min(100, Math.max(0, telemetry?.audio_level || 0))}%` }}
-                />
-              </div>
-            </div>
-
-            <div className="h-6 w-px bg-slate-300" />
-
-            <button 
+        {/* Action bar: Refresh & Share Spectator Link */}
+        <div className="flex flex-wrap items-center justify-between gap-3 p-3 bg-slate-50 border border-slate-200 rounded-lg">
+          <div className="flex items-center gap-2">
+            <button
+              type="button"
               onClick={handleManualRetry}
-              className="flex items-center gap-2 px-3 py-1.5 text-sm font-medium text-slate-700 hover:text-slate-900 bg-white border border-slate-300 rounded hover:bg-slate-50 transition-colors"
+              className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold rounded-md border border-slate-300 bg-white text-slate-700 hover:bg-slate-50 transition-colors shadow-sm"
             >
-              <RefreshCw size={14} className={status === 'connecting' || status === 'negotiating' ? 'animate-spin' : ''} />
-              Refresh Connection
+              <RefreshCw size={13} className={status === 'connecting' || status === 'negotiating' ? 'animate-spin' : ''} />
+              Refresh Stream
             </button>
           </div>
-          
+
           <div className="flex items-center gap-2">
             {!shareLink ? (
               <button
+                type="button"
                 onClick={handleGenerateShareLink}
-                className="flex items-center gap-1.5 px-3 py-1.5 text-sm font-medium text-indigo-700 bg-indigo-50 border border-indigo-200 rounded hover:bg-indigo-100 transition-colors"
+                disabled={generatingLink}
+                className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold rounded-md border border-indigo-300 bg-indigo-50 text-indigo-700 hover:bg-indigo-100 transition-colors shadow-sm disabled:opacity-50"
               >
-                <Share2 size={14} />
-                Share Spectator Link
+                <Share2 size={13} />
+                {generatingLink ? 'Generating...' : 'Share Spectator Link'}
               </button>
             ) : (
-              <div className="flex items-center gap-2">
+              <div className="flex items-center gap-1.5">
                 <input
                   type="text"
                   readOnly
                   value={shareLink}
-                  className="text-xs text-slate-500 bg-white border border-slate-300 rounded px-2 py-1 w-48 truncate outline-none"
+                  className="text-xs text-slate-600 bg-white border border-slate-300 rounded px-2.5 py-1 w-56 truncate outline-none select-all"
                   onFocus={e => e.target.select()}
                 />
                 <button
+                  type="button"
                   onClick={handleCopyLink}
-                  className="flex items-center justify-center p-1.5 text-slate-700 bg-white border border-slate-300 rounded hover:bg-slate-50 transition-colors"
+                  className={`inline-flex items-center gap-1 px-2.5 py-1 text-xs font-semibold rounded border transition-colors shadow-sm ${
+                    copied
+                      ? 'bg-emerald-50 border-emerald-300 text-emerald-700'
+                      : 'bg-white border-slate-300 text-slate-700 hover:bg-slate-50'
+                  }`}
                   title="Copy Link"
                 >
-                  {copied ? <CheckCircle2 size={14} className="text-success" /> : <Copy size={14} />}
+                  {copied ? (
+                    <>
+                      <CheckCircle2 size={13} className="text-emerald-600" />
+                      Copied
+                    </>
+                  ) : (
+                    <>
+                      <Copy size={13} />
+                      Copy
+                    </>
+                  )}
                 </button>
               </div>
             )}
@@ -549,13 +771,48 @@ export default function LiveMonitorStreamModal({ isOpen, onClose, session }) {
           <div className="bg-slate-50 border border-slate-200 rounded-lg p-3 flex flex-col justify-center">
             <span className="text-[0.65rem] font-bold text-slate-500 uppercase tracking-wider mb-1">Proctoring Alerts</span>
             <div className="flex items-center gap-1.5 font-bold text-sm">
-              <ShieldAlert size={16} className={telemetry?.proctoring_alerts > 0 ? "text-rose-500" : "text-emerald-500"} />
-              <span className={telemetry?.proctoring_alerts > 0 ? "text-rose-600" : "text-emerald-600"}>
-                {telemetry?.proctoring_alerts ?? violations.length} Alerts
+              <ShieldAlert size={16} className={(telemetry?.proctoring_alerts || violations.length) > 0 ? "text-rose-500" : "text-emerald-500"} />
+              <span className={(telemetry?.proctoring_alerts || violations.length) > 0 ? "text-rose-600" : "text-emerald-600"}>
+                {Math.max(telemetry?.proctoring_alerts || 0, violations.length)} Alerts
               </span>
             </div>
           </div>
         </div>
+
+        <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+          <div className="flex items-center gap-3 text-xs text-slate-500">
+            <div className="font-semibold text-slate-700 uppercase tracking-wide">Stream View</div>
+            <div>{viewMode === 'camera' ? 'Candidate Camera' : 'Screen Share'}</div>
+          </div>
+          <div className="inline-flex rounded-full border border-slate-200 bg-slate-50 overflow-hidden">
+            <button
+              type="button"
+              onClick={() => setViewMode('screen')}
+              disabled={!hasScreenTrack}
+              className={`px-3 py-1 text-xs font-semibold transition ${viewMode === 'screen' ? 'bg-white text-slate-900' : 'text-slate-500 hover:bg-slate-100'} ${!hasScreenTrack ? 'opacity-50 cursor-not-allowed' : ''}`}
+            >
+              <Monitor size={14} />
+              <span className="ml-1">Screen</span>
+            </button>
+            <button
+              type="button"
+              onClick={() => setViewMode('camera')}
+              disabled={!hasCameraTrack}
+              className={`px-3 py-1 text-xs font-semibold transition ${viewMode === 'camera' ? 'bg-white text-slate-900' : 'text-slate-500 hover:bg-slate-100'} ${!hasCameraTrack ? 'opacity-50 cursor-not-allowed' : ''}`}
+            >
+              <Camera size={14} />
+              <span className="ml-1">Camera</span>
+            </button>
+          </div>
+        </div>
+
+        {remoteStream && !hasCameraTrack && viewMode === 'camera' && (
+          <div className="text-xs text-amber-600">Camera feed not detected. Showing available stream data where possible.</div>
+        )}
+
+        {!remoteStream && (
+          <div className="text-xs text-slate-500">Waiting for the candidate stream to arrive...</div>
+        )}
 
         {/* Video Player Area */}
         <div className="relative w-full aspect-video bg-black rounded-xl overflow-hidden border border-slate-200 shadow-inner flex items-center justify-center">
@@ -565,10 +822,10 @@ export default function LiveMonitorStreamModal({ isOpen, onClose, session }) {
             autoPlay
             playsInline
             controls
-            className={`w-full h-full object-contain ${status === 'streaming' ? 'opacity-100' : 'opacity-0'}`}
+            className={`w-full h-full object-contain ${remoteStream ? 'opacity-100' : 'opacity-0'}`}
           />
 
-          {status !== 'streaming' && (
+          {!remoteStream && (
             <div className="absolute inset-0 flex flex-col items-center justify-center text-slate-400 bg-slate-900/90 z-10">
               {status === 'connecting' || status === 'negotiating' ? (
                 <div className="flex flex-col items-center gap-3">

@@ -1,7 +1,10 @@
 import React, { useState, useEffect } from 'react';
 import { useSelector } from 'react-redux';
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from 'recharts';
-import { Users, UserCheck, Video, MoreHorizontal, Search, Edit, Mail, Trash2, X, UserPlus, Coins, Download, Eye, EyeOff } from 'lucide-react';
+import { 
+  Users, UserCheck, Video, MoreHorizontal, Search, Edit, Mail, Trash2, 
+  X, UserPlus, Coins, Download, Eye, EyeOff, Filter, Plus, Shield, Calendar, Clock, Sparkles
+} from 'lucide-react';
 import Swal from 'sweetalert2';
 import 'sweetalert2/dist/sweetalert2.min.css';
 import axios from 'axios';
@@ -14,6 +17,8 @@ export default function RecruitersPage() {
   const [data, setData] = useState(null);
   const [loading, setLoading] = useState(true);
   const [searchTerm, setSearchTerm] = useState('');
+  const [roleFilter, setRoleFilter] = useState('all');
+  const [statusFilter, setStatusFilter] = useState('all');
   const [openDropdownId, setOpenDropdownId] = useState(null);
   
   // Modals state
@@ -101,26 +106,39 @@ export default function RecruitersPage() {
 
   const handleAddCreditsSubmit = async (e) => {
     e.preventDefault();
-    if (addCreditsAmount <= 0) return;
+    const amountNum = parseInt(addCreditsAmount);
+    if (!amountNum || amountNum <= 0) {
+      Swal.fire({
+        title: 'Invalid Amount',
+        text: 'Please enter a valid credit amount greater than 0.',
+        icon: 'warning',
+        background: '#161c2d',
+        color: '#fff'
+      });
+      return;
+    }
     try {
-      await api.post(`/api/superadmin/recruiters/${addingCreditsRecruiter.id}/add-credits`, { amount: parseInt(addCreditsAmount) }, {
+      await api.post(`/api/superadmin/recruiters/${addingCreditsRecruiter.id}/add-credits`, {
+        credits: amountNum,
+        amount: amountNum
+      }, {
         headers: { Authorization: `Bearer ${token}` }
       });
       Swal.fire({
         title: 'Credits Added',
-        text: `Successfully added ${addCreditsAmount} credits to ${addingCreditsRecruiter.name}!`,
+        text: `Successfully added ${amountNum} credits to ${addingCreditsRecruiter.name}!`,
         icon: 'success',
         background: '#161c2d',
         color: '#fff'
       });
       setAddingCreditsRecruiter(null);
       setAddCreditsAmount(0);
-      fetchStats();
+      await fetchStats();
     } catch (err) {
       console.error(err);
       Swal.fire({
         title: 'Error',
-        text: err.response?.data?.detail || err.message,
+        text: err.response?.data?.detail || err.message || 'Failed to add credits',
         icon: 'error',
         background: '#161c2d',
         color: '#fff'
@@ -182,10 +200,17 @@ export default function RecruitersPage() {
   const recruiters = data?.recruiters || [];
   const weeklyActivity = data?.weekly_activity || [];
 
-  const filteredRecruiters = recruiters.filter(r => 
-    r.name?.toLowerCase().includes(searchTerm.toLowerCase()) ||
-    r.email?.toLowerCase().includes(searchTerm.toLowerCase())
-  );
+  const filteredRecruiters = recruiters.filter(r => {
+    const matchesSearch = !searchTerm || 
+      r.name?.toLowerCase().includes(searchTerm.toLowerCase()) ||
+      r.email?.toLowerCase().includes(searchTerm.toLowerCase()) ||
+      r.username?.toLowerCase().includes(searchTerm.toLowerCase());
+      
+    const matchesRole = roleFilter === 'all' || r.role === roleFilter;
+    const matchesStatus = statusFilter === 'all' || r.status === statusFilter;
+    
+    return matchesSearch && matchesRole && matchesStatus;
+  });
 
   const handleDownloadCSV = () => {
     if (!filteredRecruiters || filteredRecruiters.length === 0) return;
@@ -218,143 +243,285 @@ export default function RecruitersPage() {
   };
 
   return (
-    <div
-      className="p-8 max-w-7xl mx-auto space-y-8"
-    >
-      <div className="flex justify-between items-center">
+    <div className="p-6 lg:p-8 w-full max-w-7xl mx-auto space-y-8">
+      {/* ── Page Header ── */}
+      <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 bg-white p-6 rounded-2xl shadow-xs border border-slate-100">
         <div>
-          <h1 className="text-3xl font-bold text-slate-900">Recruiters</h1>
-          <p className="text-slate-500 mt-1">Manage platform recruiters and monitor their activity.</p>
+          <div className="flex items-center gap-3">
+            <div className="w-11 h-11 rounded-2xl bg-indigo-50 flex items-center justify-center text-indigo-600 shadow-xs">
+              <Users className="w-6 h-6" />
+            </div>
+            <div>
+              <h1 className="text-2xl lg:text-3xl font-bold text-slate-900 tracking-tight">Recruiters Management</h1>
+              <p className="text-sm font-medium text-slate-500 mt-0.5">Manage platform recruiters, allocate interview credits, and monitor activity.</p>
+            </div>
+          </div>
         </div>
-        <button onClick={() => setIsAddAdminOpen(true)} className="flex items-center gap-2 px-4 py-2 bg-indigo-600 text-white font-semibold rounded-xl hover:bg-indigo-700 shadow-sm transition-colors">
-          <UserPlus className="w-5 h-5" />
+        <button 
+          onClick={() => setIsAddAdminOpen(true)} 
+          className="flex items-center gap-2 px-5 py-2.5 bg-indigo-600 hover:bg-indigo-700 text-white font-bold text-sm rounded-xl shadow-sm transition-all hover:shadow-indigo-500/20 active:translate-y-0"
+        >
+          <UserPlus className="w-4 h-4" />
           Add Recruiter
         </button>
       </div>
 
-      {/* KPI Cards */}
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-        <KPICard 
-          title="Total Recruiters" 
-          value={kpis.total_recruiters} 
-          icon={<Users className="w-6 h-6 text-indigo-500" />} 
-          delay={0.1}
-        />
-        <KPICard 
-          title="Active Now" 
-          value={kpis.active_now} 
-          icon={<UserCheck className="w-6 h-6 text-emerald-500" />} 
-          delay={0.2}
-        />
-        <KPICard 
-          title="Avg Interviews / Recruiter" 
-          value={kpis.avg_interviews} 
-          icon={<Video className="w-6 h-6 text-amber-500" />} 
-          delay={0.3}
-        />
-      </div>
+      {/* ── Top Analytics Grid (KPIs & Activity Chart) ── */}
+      <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 items-stretch">
+        {/* KPI Cards (5 columns) */}
+        <div className="lg:col-span-5 grid grid-cols-1 sm:grid-cols-3 lg:grid-cols-1 gap-4">
+          <KPICard 
+            title="Total Recruiters" 
+            value={kpis.total_recruiters ?? recruiters.length} 
+            subtitle="Registered platform accounts"
+            icon={<Users className="w-5 h-5 text-indigo-600" />} 
+            badge="Platform Total"
+            badgeColor="bg-indigo-50 text-indigo-700 border-indigo-100"
+          />
+          <KPICard 
+            title="Active Now" 
+            value={kpis.active_now ?? recruiters.filter(r => r.status === 'Active').length} 
+            subtitle="Enabled recruiter accounts"
+            icon={<UserCheck className="w-5 h-5 text-emerald-600" />} 
+            badge="Active"
+            badgeColor="bg-emerald-50 text-emerald-700 border-emerald-100"
+          />
+          <KPICard 
+            title="Avg Interviews / Recruiter" 
+            value={kpis.avg_interviews ?? 0} 
+            subtitle="Platform interview throughput"
+            icon={<Video className="w-5 h-5 text-amber-600" />} 
+            badge="Throughput"
+            badgeColor="bg-amber-50 text-amber-700 border-amber-100"
+          />
+        </div>
 
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
-        
-        {/* Recruiter Activity Chart */}
-        <div
-          className="lg:col-span-1 bg-white p-6 rounded-2xl shadow-sm border border-slate-100"
-        >
-          <h2 className="text-lg font-semibold text-slate-800 mb-6">Weekly Activity (Interviews)</h2>
-          <div className="h-64 w-full">
+        {/* Weekly Activity Chart (7 columns) */}
+        <div className="lg:col-span-7 bg-white p-6 rounded-2xl shadow-xs border border-slate-100 flex flex-col justify-between">
+          <div className="flex items-center justify-between mb-4">
+            <div>
+              <h2 className="text-base font-bold text-slate-800">Weekly Activity (Interviews)</h2>
+              <p className="text-xs text-slate-400 font-medium">Interview sessions completed across recent weeks</p>
+            </div>
+            <span className="px-2.5 py-1 bg-slate-50 border border-slate-200/80 rounded-lg text-xs font-semibold text-slate-600">
+              Last 8 Weeks
+            </span>
+          </div>
+          <div className="h-56 w-full">
             <ResponsiveContainer width="100%" height="100%">
-              <BarChart data={weeklyActivity}>
-                <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#e2e8f0" />
-                <XAxis dataKey="name" axisLine={false} tickLine={false} tick={{ fill: '#64748b', fontSize: 12 }} dy={10} />
+              <BarChart data={weeklyActivity} margin={{ top: 10, right: 10, left: -20, bottom: 0 }}>
+                <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#f1f5f9" />
+                <XAxis dataKey="name" axisLine={false} tickLine={false} tick={{ fill: '#94a3b8', fontSize: 12, fontWeight: 500 }} dy={8} />
+                <YAxis axisLine={false} tickLine={false} tick={{ fill: '#94a3b8', fontSize: 12 }} allowDecimals={false} />
                 <Tooltip 
                   cursor={{ fill: 'rgba(99, 102, 241, 0.05)' }}
-                  contentStyle={{ borderRadius: '12px', border: 'none', boxShadow: '0 10px 15px -3px rgb(0 0 0 / 0.1)' }}
+                  contentStyle={{ borderRadius: '12px', border: '1px solid #e2e8f0', boxShadow: '0 10px 25px -5px rgba(0,0,0,0.08)' }}
+                  formatter={(val) => [`${val} Interviews`, 'Conducted']}
                 />
-                <Bar dataKey="interviews" fill="#6366f1" radius={[4, 4, 0, 0]} barSize={30} />
+                <Bar dataKey="interviews" fill="#6366f1" radius={[6, 6, 0, 0]} barSize={28} />
               </BarChart>
             </ResponsiveContainer>
           </div>
         </div>
+      </div>
 
-        {/* Recruiters List */}
-        <div
-          className="lg:col-span-2 bg-white rounded-2xl shadow-sm border border-slate-100 flex flex-col overflow-hidden"
-        >
-          <div className="p-6 border-b border-slate-100 flex justify-between items-center bg-slate-50">
-            <h2 className="text-lg font-semibold text-slate-800">Directory</h2>
-            <div className="flex items-center gap-3">
-              <div className="relative">
-                <Search className="w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
-                <input 
-                  type="text"
-                  placeholder="Search recruiters..."
-                  value={searchTerm}
-                  onChange={e => setSearchTerm(e.target.value)}
-                  className="pl-9 pr-4 py-2 text-sm bg-white border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500 w-64 transition-all"
-                />
-              </div>
-              <button 
-                onClick={handleDownloadCSV}
-                className="flex items-center gap-2 px-4 py-2 bg-white border border-slate-200 text-slate-700 font-semibold rounded-lg hover:bg-slate-50 shadow-sm transition-colors text-sm"
-              >
-                <Download className="w-4 h-4" />
-                Export
-              </button>
-            </div>
+      {/* ── Recruiters Directory: 100% Full Width & Spacious ── */}
+      <div className="w-full bg-white rounded-2xl shadow-xs border border-slate-100 overflow-hidden">
+        {/* Controls Bar */}
+        <div className="p-5 border-b border-slate-100 flex flex-col md:flex-row justify-between items-stretch md:items-center gap-4 bg-slate-50/50">
+          <div className="flex items-center gap-3">
+            <h2 className="text-lg font-bold text-slate-800">Recruiters Directory</h2>
+            <span className="px-2.5 py-0.5 bg-indigo-50 border border-indigo-100 text-indigo-700 text-xs font-bold rounded-full">
+              {filteredRecruiters.length} {filteredRecruiters.length === 1 ? 'Recruiter' : 'Recruiters'}
+            </span>
           </div>
-          
-          <div className="flex-1 overflow-visible">
-            <table className="w-full text-left border-collapse">
-              <thead>
-                <tr className="bg-white text-slate-500 text-xs uppercase tracking-wider">
-                  <th className="px-6 py-4 font-medium">Recruiter</th>
-                  <th className="px-6 py-4 font-medium">Role</th>
-                  <th className="px-6 py-4 font-medium">Status</th>
-                  <th className="px-6 py-4 font-medium text-center">Interviews</th>
-                  <th className="px-6 py-4 font-medium text-center">Credits</th>
-                  <th className="w-12 px-2 py-4 font-medium"></th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-slate-100 text-sm">
-                {filteredRecruiters.map((recruiter, idx) => (
+
+          <div className="flex flex-wrap items-center gap-3">
+            {/* Search Input */}
+            <div className="relative flex-1 sm:w-64 min-w-[200px]">
+              <Search className="w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
+              <input 
+                type="text"
+                placeholder="Search by name, email..."
+                value={searchTerm}
+                onChange={e => setSearchTerm(e.target.value)}
+                className="w-full pl-9 pr-8 py-2 text-sm bg-white border border-slate-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 transition-all font-medium placeholder:text-slate-400"
+              />
+              {searchTerm && (
+                <button 
+                  onClick={() => setSearchTerm('')}
+                  className="absolute right-2.5 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600"
+                >
+                  <X className="w-3.5 h-3.5" />
+                </button>
+              )}
+            </div>
+
+            {/* Role Filter */}
+            <select
+              value={roleFilter}
+              onChange={e => setRoleFilter(e.target.value)}
+              className="px-3 py-2 text-sm bg-white border border-slate-200 rounded-xl text-slate-700 font-medium focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 cursor-pointer"
+            >
+              <option value="all">All Roles</option>
+              <option value="super_admin">Super Admin</option>
+              <option value="admin">Admin</option>
+            </select>
+
+            {/* Status Filter */}
+            <select
+              value={statusFilter}
+              onChange={e => setStatusFilter(e.target.value)}
+              className="px-3 py-2 text-sm bg-white border border-slate-200 rounded-xl text-slate-700 font-medium focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 cursor-pointer"
+            >
+              <option value="all">All Status</option>
+              <option value="Active">Active</option>
+              <option value="Inactive">Inactive</option>
+            </select>
+
+            {/* Export CSV */}
+            <button 
+              onClick={handleDownloadCSV}
+              className="flex items-center gap-2 px-3.5 py-2 bg-white border border-slate-200 text-slate-700 font-semibold rounded-xl hover:bg-slate-50 hover:border-slate-300 shadow-xs transition-colors text-sm"
+              title="Export recruiters list to CSV"
+            >
+              <Download className="w-4 h-4 text-slate-500" />
+              Export
+            </button>
+          </div>
+        </div>
+        
+        {/* Table Container with Horizontal Scroll support */}
+        <div className="w-full overflow-x-auto">
+          <table className="w-full text-left border-collapse min-w-[800px]">
+            <thead>
+              <tr className="bg-slate-50/70 text-slate-500 text-xs uppercase tracking-wider font-semibold border-b border-slate-100">
+                <th className="px-6 py-4">Recruiter</th>
+                <th className="px-6 py-4">Role</th>
+                <th className="px-6 py-4">Status</th>
+                <th className="px-6 py-4 text-center">Interviews Conducted</th>
+                <th className="px-6 py-4 text-center">Credits Balance</th>
+                <th className="px-6 py-4 text-center">Last Active</th>
+                <th className="px-6 py-4 text-right">Actions</th>
+              </tr>
+            </thead>
+            <tbody className="divide-y divide-slate-100 text-sm">
+              {filteredRecruiters.map((recruiter) => {
+                const isSuperAdmin = recruiter.role === 'super_admin';
+                return (
                   <tr
                     key={recruiter.id} 
-                    className="hover:bg-slate-50:bg-slate-700/30 transition-colors"
+                    className="hover:bg-indigo-50/30 transition-colors group"
                   >
+                    {/* Recruiter Avatar & Info */}
                     <td className="px-6 py-4 whitespace-nowrap">
-                      <div className="flex items-center gap-3">
-                        <div className="w-10 h-10 rounded-full bg-indigo-100 flex items-center justify-center text-indigo-600 font-bold">
-                          {recruiter.name.charAt(0).toUpperCase()}
+                      <div className="flex items-center gap-3.5">
+                        <div className={`w-10 h-10 rounded-2xl flex items-center justify-center font-bold text-sm shadow-xs ${
+                          isSuperAdmin 
+                            ? 'bg-gradient-to-br from-purple-500 to-indigo-600 text-white' 
+                            : 'bg-indigo-100 text-indigo-700'
+                        }`}>
+                          {recruiter.name ? recruiter.name.charAt(0).toUpperCase() : 'R'}
                         </div>
                         <div>
-                          <p className="font-semibold text-slate-900">{recruiter.name}</p>
-                          <p className="text-xs text-slate-500">{recruiter.email}</p>
+                          <p className="font-bold text-slate-900 group-hover:text-indigo-600 transition-colors">{recruiter.name}</p>
+                          <p className="text-xs text-slate-500 font-medium">{recruiter.email}</p>
                         </div>
                       </div>
                     </td>
-                    <td className="px-6 py-4 whitespace-nowrap text-slate-600 capitalize">{recruiter.role}</td>
+
+                    {/* Role */}
                     <td className="px-6 py-4 whitespace-nowrap">
-                      <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${
-                        recruiter.status === 'Active' 
-                          ? 'bg-emerald-100 text-emerald-800'
-                          : 'bg-slate-100 text-slate-800'
+                      <span className={`inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-xs font-bold ${
+                        isSuperAdmin 
+                          ? 'bg-purple-50 text-purple-700 border border-purple-200' 
+                          : 'bg-blue-50 text-blue-700 border border-blue-200'
                       }`}>
+                        {isSuperAdmin && <Shield className="w-3 h-3" />}
+                        {isSuperAdmin ? 'Super Admin' : 'Admin'}
+                      </span>
+                    </td>
+
+                    {/* Status */}
+                    <td className="px-6 py-4 whitespace-nowrap">
+                      <span className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-semibold ${
+                        recruiter.status === 'Active' 
+                          ? 'bg-emerald-50 text-emerald-700 border border-emerald-200' 
+                          : 'bg-slate-100 text-slate-600 border border-slate-200'
+                      }`}>
+                        <span className={`w-1.5 h-1.5 rounded-full ${recruiter.status === 'Active' ? 'bg-emerald-500 animate-pulse' : 'bg-slate-400'}`}></span>
                         {recruiter.status}
                       </span>
                     </td>
-                    <td className="px-6 py-4 whitespace-nowrap text-center font-medium text-slate-700">
-                      {recruiter.interviews_conducted}
+
+                    {/* Interviews */}
+                    <td className="px-6 py-4 whitespace-nowrap text-center">
+                      <span className="inline-flex items-center gap-1.5 text-sm font-bold text-slate-800 bg-slate-100/70 px-3 py-1 rounded-lg">
+                        <Video className="w-3.5 h-3.5 text-slate-400" />
+                        {recruiter.interviews_conducted || 0}
+                      </span>
                     </td>
-                    <td className="px-6 py-4 whitespace-nowrap text-center font-bold text-indigo-600">
-                      {recruiter.credits || 0}
+
+                    {/* Credits */}
+                    <td className="px-6 py-4 whitespace-nowrap text-center">
+                      <div className="inline-flex items-center gap-2">
+                        <span className="font-black text-indigo-600 text-base tabular-nums">
+                          {recruiter.credits || 0}
+                        </span>
+                        <button
+                          onClick={() => setAddingCreditsRecruiter(recruiter)}
+                          className="p-1 rounded-md text-slate-400 hover:text-indigo-600 hover:bg-indigo-50 transition-colors"
+                          title="Add Credits"
+                        >
+                          <Coins className="w-4 h-4" />
+                        </button>
+                      </div>
                     </td>
+
+                    {/* Last Active */}
+                    <td className="px-6 py-4 whitespace-nowrap text-center text-xs font-medium text-slate-500">
+                      {recruiter.last_active ? (
+                        <span className="inline-flex items-center gap-1">
+                          <Clock className="w-3 h-3 text-slate-400" />
+                          {new Date(recruiter.last_active).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}
+                        </span>
+                      ) : (
+                        <span className="text-slate-400 italic">Never</span>
+                      )}
+                    </td>
+
+                    {/* Actions */}
                     <td className="px-6 py-4 whitespace-nowrap text-right relative">
-                      <button 
-                        onClick={() => setOpenDropdownId(openDropdownId === recruiter.id ? null : recruiter.id)}
-                        className="text-slate-400 hover:text-indigo-600 transition-colors p-2 rounded-lg hover:bg-indigo-50"
-                      >
-                        <MoreHorizontal className="w-5 h-5" />
-                      </button>
+                      <div className="flex items-center justify-end gap-1">
+                        <button
+                          onClick={() => setAddingCreditsRecruiter(recruiter)}
+                          className="p-2 text-slate-400 hover:text-indigo-600 hover:bg-indigo-50 rounded-lg transition-colors"
+                          title="Add Credits"
+                        >
+                          <Coins className="w-4 h-4" />
+                        </button>
+                        <button
+                          onClick={() => { setMessagingRecruiter(recruiter); setMessageForm({ subject: '', body: '' }); }}
+                          className="p-2 text-slate-400 hover:text-indigo-600 hover:bg-indigo-50 rounded-lg transition-colors"
+                          title="Send Message"
+                        >
+                          <Mail className="w-4 h-4" />
+                        </button>
+                        <button
+                          onClick={() => setEditingRecruiter(recruiter)}
+                          className="p-2 text-slate-400 hover:text-indigo-600 hover:bg-indigo-50 rounded-lg transition-colors"
+                          title="Edit Recruiter"
+                        >
+                          <Edit className="w-4 h-4" />
+                        </button>
+                        <button 
+                          onClick={() => setOpenDropdownId(openDropdownId === recruiter.id ? null : recruiter.id)}
+                          className="p-2 text-slate-400 hover:text-indigo-600 hover:bg-indigo-50 rounded-lg transition-colors"
+                          title="More Actions"
+                        >
+                          <MoreHorizontal className="w-4 h-4" />
+                        </button>
+                      </div>
                       
                       {openDropdownId === recruiter.id && (
                         <>
@@ -362,29 +529,29 @@ export default function RecruitersPage() {
                             className="fixed inset-0 z-10" 
                             onClick={() => setOpenDropdownId(null)}
                           ></div>
-                          <div className="absolute right-8 top-12 w-48 bg-white rounded-xl shadow-lg border border-slate-100 py-2 z-20 animate-in fade-in slide-in-from-top-2 duration-200 text-left">
+                          <div className="absolute right-6 top-12 w-48 bg-white rounded-xl shadow-lg border border-slate-100 py-1.5 z-20 animate-in fade-in slide-in-from-top-2 duration-150 text-left">
                             <button 
                               onClick={() => { setEditingRecruiter(recruiter); setOpenDropdownId(null); }}
-                              className="w-full px-4 py-2 text-sm text-slate-700 hover:bg-slate-50 hover:text-indigo-600 flex items-center gap-3 transition-colors"
+                              className="w-full px-4 py-2 text-sm text-slate-700 hover:bg-slate-50 hover:text-indigo-600 flex items-center gap-2.5 transition-colors font-medium"
                             >
-                              <Edit className="w-4 h-4" /> Edit Recruiter
+                              <Edit className="w-4 h-4 text-slate-400" /> Edit Recruiter
                             </button>
                             <button 
                               onClick={() => { setAddingCreditsRecruiter(recruiter); setOpenDropdownId(null); }}
-                              className="w-full px-4 py-2 text-sm text-slate-700 hover:bg-slate-50 hover:text-indigo-600 flex items-center gap-3 transition-colors"
+                              className="w-full px-4 py-2 text-sm text-slate-700 hover:bg-slate-50 hover:text-indigo-600 flex items-center gap-2.5 transition-colors font-medium"
                             >
-                              <Coins className="w-4 h-4" /> Add Credits
+                              <Coins className="w-4 h-4 text-amber-500" /> Add Credits
                             </button>
                             <button 
                               onClick={() => { setMessagingRecruiter(recruiter); setOpenDropdownId(null); }}
-                              className="w-full px-4 py-2 text-sm text-slate-700 hover:bg-slate-50 hover:text-indigo-600 flex items-center gap-3 transition-colors"
+                              className="w-full px-4 py-2 text-sm text-slate-700 hover:bg-slate-50 hover:text-indigo-600 flex items-center gap-2.5 transition-colors font-medium"
                             >
-                              <Mail className="w-4 h-4" /> Send Message
+                              <Mail className="w-4 h-4 text-indigo-500" /> Send Message
                             </button>
                             <div className="h-px bg-slate-100 my-1"></div>
                             <button 
                               onClick={() => { setDeactivatingRecruiter(recruiter); setOpenDropdownId(null); }}
-                              className={`w-full px-4 py-2 text-sm ${recruiter.status === 'Active' ? 'text-rose-600 hover:bg-rose-50' : 'text-emerald-600 hover:bg-emerald-50'} flex items-center gap-3 transition-colors`}
+                              className={`w-full px-4 py-2 text-sm ${recruiter.status === 'Active' ? 'text-rose-600 hover:bg-rose-50' : 'text-emerald-600 hover:bg-emerald-50'} flex items-center gap-2.5 transition-colors font-medium`}
                             >
                               <Trash2 className="w-4 h-4" /> {recruiter.status === 'Active' ? 'Deactivate Account' : 'Activate Account'}
                             </button>
@@ -393,17 +560,25 @@ export default function RecruitersPage() {
                       )}
                     </td>
                   </tr>
-                ))}
-                {filteredRecruiters.length === 0 && (
-                  <tr>
-                    <td colSpan="5" className="px-6 py-12 text-center text-slate-500">
-                      No recruiters found matching "{searchTerm}"
-                    </td>
-                  </tr>
-                )}
-              </tbody>
-            </table>
-          </div>
+                );
+              })}
+              {filteredRecruiters.length === 0 && (
+                <tr>
+                  <td colSpan="7" className="px-6 py-16 text-center text-slate-500">
+                    <div className="flex flex-col items-center justify-center max-w-xs mx-auto">
+                      <div className="w-12 h-12 rounded-2xl bg-slate-100 flex items-center justify-center text-slate-400 mb-3">
+                        <Users className="w-6 h-6" />
+                      </div>
+                      <p className="font-bold text-slate-700">No recruiters found</p>
+                      <p className="text-xs text-slate-400 mt-1">
+                        {searchTerm ? `No results match "${searchTerm}"` : 'No recruiters match the selected filter criteria'}
+                      </p>
+                    </div>
+                  </td>
+                </tr>
+              )}
+            </tbody>
+          </table>
         </div>
       </div>
 
@@ -666,18 +841,24 @@ export default function RecruitersPage() {
   );
 }
 
-function KPICard({ title, value, icon, delay }) {
+function KPICard({ title, value, subtitle, icon, badge, badgeColor }) {
   return (
-    <div
-      className="bg-white p-6 rounded-2xl shadow-sm border border-slate-100 hover:shadow-md transition-shadow flex items-center gap-4"
-    >
-      <div className="p-4 rounded-2xl bg-slate-50">
-        {icon}
+    <div className="bg-white p-5 rounded-2xl shadow-xs border border-slate-100 hover:shadow-sm transition-all flex items-center justify-between gap-4">
+      <div className="flex items-center gap-4 min-w-0">
+        <div className="p-3.5 rounded-2xl bg-slate-50 border border-slate-100 shrink-0">
+          {icon}
+        </div>
+        <div className="min-w-0">
+          <p className="text-xs font-semibold text-slate-500 uppercase tracking-wider">{title}</p>
+          <h3 className="text-2xl lg:text-3xl font-black text-slate-900 tracking-tight mt-0.5">{value ?? 0}</h3>
+          {subtitle && <p className="text-xs text-slate-400 font-medium mt-0.5 truncate">{subtitle}</p>}
+        </div>
       </div>
-      <div>
-        <p className="text-sm font-medium text-slate-500 mb-1">{title}</p>
-        <h3 className="text-3xl font-bold text-slate-900">{value}</h3>
-      </div>
+      {badge && (
+        <span className={`text-[10px] font-bold px-2.5 py-1 rounded-full border shrink-0 hidden sm:inline-block ${badgeColor || 'bg-slate-100 text-slate-600 border-slate-200'}`}>
+          {badge}
+        </span>
+      )}
     </div>
   );
 }

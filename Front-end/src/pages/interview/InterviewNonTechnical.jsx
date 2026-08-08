@@ -9,6 +9,7 @@ import { candidateFetch } from '../../utils/candidateAuth'
 import api from '../../utils/api'
 import '../../Interview.css'
 import { motion } from 'framer-motion'
+import AccessDeniedScreen from '../../components/interview/AccessDeniedScreen'
 
 export const InterviewNonTechnical = () => {
   const interviewType = 'Non-Technical';
@@ -68,6 +69,7 @@ export const InterviewNonTechnical = () => {
     loading,
     showAllSet,
     error,
+    scheduledStart,
     isCompleted,
     isDisclaimerAccepted,
     agreeChecked,
@@ -216,14 +218,7 @@ export const InterviewNonTechnical = () => {
   }
 
   if (error) {
-    return (
-      <div className="flex justify-center items-center h-screen flex-col p-6 text-center">
-        <AlertTriangle className="text-danger mb-4" size={48} />
-        <h2 className="text-2xl font-bold text-slate-900 tracking-tight">Access Denied</h2>
-        <p className="text-slate-600 mt-2 max-w-md text-sm">{error}</p>
-        <Link to="/" className="inline-flex items-center justify-center gap-2 px-6 py-3 rounded-full font-semibold text-sm bg-primary hover:bg-primary-hover text-white transition-all shadow-[0_4px_14px_rgba(99,102,241,0.15)] mt-6 no-underline">Go to Platform Page</Link>
-      </div>
-    )
+    return <AccessDeniedScreen error={error} scheduledStart={scheduledStart || sessionDetail?.scheduled_start} />
   }
 
   if (isCompleted) {
@@ -738,12 +733,15 @@ export const InterviewNonTechnical = () => {
                       RECORDING
                     </div>
                   </div>
-                  <textarea
-                    className="bg-slate-50/50 border border-slate-200 p-5 text-[0.95rem] font-medium leading-relaxed text-slate-800 placeholder:text-slate-400 outline-none shadow-inner resize-none w-full flex-1 overflow-y-auto transition-all rounded-[24px] custom-scrollbar"
-                    placeholder="Your speech will appear here automatically..."
-                    readOnly
-                    value={transcriptionText + (interimTranscriptText ? interimTranscriptText : '')}
-                  />
+                  <div
+                    className="bg-slate-50/50 border border-slate-200 p-5 text-[0.95rem] font-medium leading-relaxed text-slate-800 shadow-inner resize-none w-full flex-1 overflow-y-auto transition-all rounded-[24px] custom-scrollbar"
+                    tabIndex={-1}
+                    aria-live="polite"
+                    aria-label="Live transcript"
+                    style={{ pointerEvents: 'none', userSelect: 'none', cursor: 'default', whiteSpace: 'pre-wrap', wordBreak: 'break-word' }}
+                  >
+                    {transcriptionText || <span style={{ color: '#94a3b8' }}>Your speech will appear here automatically...</span>}
+                  </div>
                 </div>
 
                 {/* Navigation buttons */}

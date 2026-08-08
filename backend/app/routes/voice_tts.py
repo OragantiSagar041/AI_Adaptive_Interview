@@ -337,7 +337,7 @@ async def stt_endpoint(
         file_size = len(audio_content)
         if file_size > 25 * 1024 * 1024:
             raise HTTPException(status_code=413, detail="Audio upload exceeds 25 MB")
-        if file_size < 12_000:
+        if file_size < 3000:
             return {"transcript": ""}
         header_hex = audio_content[:16].hex() if file_size >= 16 else ""
         print(f"📊 [STT CONCURRENCY TRACE - REQ #{req_id}] Started | In-Flight Requests: {current_inflight} | File: {file.filename} ({file_size} bytes)")
@@ -354,7 +354,10 @@ async def stt_endpoint(
             iso_lang = language or "en"
             if iso_lang not in {"en", "hi", "te", "ta", "ml", "kn"}:
                 raise HTTPException(status_code=422, detail="Unsupported transcription language")
-            sys_prompt = "The speaker has an Indian English accent. Transcribe technical terms, programming concepts, and software engineering terminology accurately." if iso_lang == "en" else ""
+            sys_prompt = (
+                "The speaker is giving a job interview with technical terms, programming concepts, algorithms, frameworks, and software engineering terminology. Transcribe accurately without omitting words."
+                if iso_lang == "en" else ""
+            )
             
             from app.ai.groq_manager import groq_key_manager
             from groq import AsyncGroq, RateLimitError
@@ -395,17 +398,21 @@ async def stt_endpoint(
                 avg_logprob = segment.get("avg_logprob", 0) if isinstance(segment, dict) else getattr(segment, "avg_logprob", 0)
                 compression = segment.get("compression_ratio", 0) if isinstance(segment, dict) else getattr(segment, "compression_ratio", 0)
                 segment_text = segment.get("text", "") if isinstance(segment, dict) else getattr(segment, "text", "")
-                if iso_lang == "en":
-                    if no_speech > 0.45 or avg_logprob < -1.0 or compression > 2.4:
-                        continue
-                elif no_speech > 0.75 or compression > 2.4:
+                
+                # Only drop definite silence or severe repetition loops
+                if no_speech > 0.85 or compression > 2.5:
                     continue
+                # If avg_logprob is extremely low (< -2.0) and no_speech > 0.5, skip unintelligible noise
+                if avg_logprob < -2.0 and no_speech > 0.5:
+                    continue
+                    
                 valid_segments.append(segment_text.strip())
 
             raw_text = str(getattr(transcript, "text", "") or "").strip()
             transcript_text = " ".join(value for value in valid_segments if value).strip()
-            if not getattr(transcript, "segments", None):
+            if not transcript_text and raw_text:
                 transcript_text = raw_text
+
             if transcript_text.lower() in {
                 "thank you",
                 "thank you.",
@@ -419,7 +426,7 @@ async def stt_endpoint(
             }:
                 transcript_text = ""
             dur = round(time.time() - t0, 3)
-            print(f"✅ [STT CONCURRENCY TRACE - REQ #{req_id}] HTTP 200 OK | Latency: {dur}s")
+            print(f"✅ [STT CONCURRENCY TRACE - REQ #{req_id}] HTTP 200 OK | Latency: {dur}s | Transcript: {transcript_text[:50]}...")
             return {"transcript": transcript_text}
         finally:
             if os.path.exists(temp_filename):

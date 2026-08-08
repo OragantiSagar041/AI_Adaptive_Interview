@@ -13,6 +13,9 @@ from collections import defaultdict
 from datetime import datetime, timedelta, timezone
 from typing import Any, Dict, List, Optional, Union
 
+_LOCAL_DASHBOARD_CACHE: Dict[str, tuple[float, Dict[str, Any]]] = {}
+_LOCAL_DASHBOARD_CACHE_TTL = 10.0
+
 # ---------------------------------------------------------------------------
 # Third-party
 # ---------------------------------------------------------------------------
@@ -94,6 +97,22 @@ logger = logging.getLogger(__name__)
 
 router = APIRouter()
 
+@router.get("/admin/widget-config")
+@router.get("/api/admin/widget-config")
+def get_widget_config(
+    omni_api_key: Optional[str] = Header(default=None, alias="X-Omni-Dimension-API-Key"),
+    current_admin: dict = Depends(get_current_admin_details)
+):
+    from app.core.config import get_omni_dimension_api_key
+    api_key = (omni_api_key or get_omni_dimension_api_key()).strip()
+    if not api_key:
+        return {"configured": False, "secret_key": None, "widget_url": None}
+    return {
+        "configured": True,
+        "secret_key": api_key,
+        "widget_url": f"https://omnidim.io/web_widget.js?secret_key={api_key}"
+    }
+
 @router.get("/admin/agent-flow")
 def get_agent_flow(omni_api_key: Optional[str] = Header(default=None, alias="X-Omni-Dimension-API-Key")):
     from app.core.config import get_omni_dimension_api_key, get_omni_agent_id
@@ -103,7 +122,10 @@ def get_agent_flow(omni_api_key: Optional[str] = Header(default=None, alias="X-O
         raise HTTPException(status_code=500, detail="OMNI_DIMENSION_API_KEY is not set.")
     headers = {"Authorization": f"Bearer {api_key}"}
     try:
-        from app.ai.omni_dimension_client import get_omni_account
+        from app.ai.omni_dimension_client import get_cached_omni_json, get_omni_account, set_cached_omni_json
+        cached_flow = get_cached_omni_json(api_key, "agent-flow")
+        if cached_flow is not None:
+            return {"success": True, "flow": cached_flow, "cached": True}
         _, _, resolved_agent_id = get_omni_account(api_key)
         agent_id = str(resolved_agent_id)
         res = requests.get(f"https://backend.omnidim.io/api/v1/agents/{agent_id}", headers=headers, timeout=10)
@@ -118,6 +140,7 @@ def get_agent_flow(omni_api_key: Optional[str] = Header(default=None, alias="X-O
             else:
                 flow_data = []
             normalized_flow = [normalize_agent_flow_read_item(item) for item in flow_data]
+            set_cached_omni_json(api_key, "agent-flow", normalized_flow)
             return {"success": True, "flow": normalized_flow}
         else:
             print(f"[Omnidimension] GET agent flow failed [status={res.status_code}]")
@@ -147,7 +170,7 @@ def update_agent_flow(req: UpdateAgentFlowRequest, omni_api_key: Optional[str] =
         return {"success": True, "message": "Local flow saved; Omnidimension sync skipped because OMNI_DIMENSION_API_KEY is not configured."}
 
     headers = {"Authorization": f"Bearer {api_key}", "Content-Type": "application/json"}
-    from app.ai.omni_dimension_client import get_omni_account
+    from app.ai.omni_dimension_client import get_omni_account, set_cached_omni_json
     _, _, resolved_agent_id = get_omni_account(api_key)
     agent_id = str(resolved_agent_id)
 
@@ -162,6 +185,7 @@ def update_agent_flow(req: UpdateAgentFlowRequest, omni_api_key: Optional[str] =
         logger.info("[agent-flow] OmniDimension response status: %s", res.status_code)
         logger.info("[agent-flow] OmniDimension response body: %s", res.text)
         if res.status_code == 200:
+            set_cached_omni_json(api_key, "agent-flow", payload.get('context_breakdown', []))
             # persist locally as well
             try:
                 local_path = Path(__file__).resolve().parents[1] / 'agent_flow.json'
@@ -175,6 +199,7 @@ def update_agent_flow(req: UpdateAgentFlowRequest, omni_api_key: Optional[str] =
             try:
                 local_path = Path(__file__).resolve().parents[1] / 'agent_flow.json'
                 local_path.write_text(json.dumps(payload.get('context_breakdown', []), indent=2, ensure_ascii=False), encoding='utf-8')
+                set_cached_omni_json(api_key, "agent-flow", payload.get('context_breakdown', []))
                 return {"success": True, "message": "Upstream failed but local flow updated."}
             except Exception:
                 raise HTTPException(status_code=res.status_code, detail="Failed to update agent flow on upstream API and failed to save locally.")
@@ -185,6 +210,7 @@ def update_agent_flow(req: UpdateAgentFlowRequest, omni_api_key: Optional[str] =
         try:
             local_path = Path(__file__).resolve().parents[1] / 'agent_flow.json'
             local_path.write_text(json.dumps(payload.get('context_breakdown', []), indent=2, ensure_ascii=False), encoding='utf-8')
+            set_cached_omni_json(api_key, "agent-flow", payload.get('context_breakdown', []))
             return {"success": True, "message": "Local flow updated (upstream error)."}
         except Exception:
             raise HTTPException(status_code=500, detail=str(e))
@@ -531,6 +557,26 @@ def get_interview_details(link_id: str, current_admin: dict = Depends(get_curren
         job_success_score = saved_job
         job_success_reasoning = saved_job_reason
         detected_accent = saved_accent or "Unknown"
+        if not detected_accent or detected_accent.strip().lower() in ["unknown", "none", ""]:
+            from app.services.language_accent_detector import detect_language_and_accent
+            lang_accent_res = detect_language_and_accent(
+                text_or_answers=results or session_data.get("answers", []),
+                candidate_profile=session_data,
+                interview_language=session_data.get("language") or "English"
+            )
+            detected_accent = lang_accent_res.get("detected_accent") or "English (Indian Accent)"
+            detected_language = lang_accent_res.get("language") or "English"
+            try:
+                interview_sessions_collection.update_one(
+                    {"link_id": link_id},
+                    {"$set": {
+                        "detected_accent": detected_accent,
+                        "detected_language": detected_language,
+                        "language": detected_language
+                    }}
+                )
+            except Exception as e:
+                print(f"Error updating detected accent: {e}")
     else:
         summary = generate_interview_summary(candidate_name or "Candidate", results)
         recommendation = summary.get("recommendation", "No Data")
@@ -552,6 +598,28 @@ def get_interview_details(link_id: str, current_admin: dict = Depends(get_curren
         detected_accent = summary.get("detected_accent")
         if not detected_accent or detected_accent == "Unknown":
             detected_accent = session_data.get("detected_accent") or "Unknown"
+
+        # Auto-detect language and accent if missing or Unknown
+        if not detected_accent or detected_accent.strip().lower() in ["unknown", "none", ""]:
+            from app.services.language_accent_detector import detect_language_and_accent
+            lang_accent_res = detect_language_and_accent(
+                text_or_answers=results or session_data.get("answers", []),
+                candidate_profile=session_data,
+                interview_language=session_data.get("language") or "English"
+            )
+            detected_accent = lang_accent_res.get("detected_accent") or "English (Indian Accent)"
+            detected_language = lang_accent_res.get("language") or "English"
+            try:
+                interview_sessions_collection.update_one(
+                    {"link_id": link_id},
+                    {"$set": {
+                        "detected_accent": detected_accent,
+                        "detected_language": detected_language,
+                        "language": detected_language
+                    }}
+                )
+            except Exception as e:
+                print(f"Error updating detected accent: {e}")
         
         # Only cache in DB if it's a real summary (not the fallback)
         if "Summary generation failed" not in strengths:
@@ -582,20 +650,102 @@ def get_interview_details(link_id: str, current_admin: dict = Depends(get_curren
                 print(f"Summary cache error: {e}")
             sync_session_to_application(link_id)
 
+    # ── Auto-enrich candidate profile via NLP from resume text if fields missing ──
+    resume_text_content = session_data.get("resume_text") or session_data.get("profile_text") or ""
+    if not resume_text_content and actual_interview_id:
+        iv_doc = interviews_collection.find_one({"id": actual_interview_id})
+        if iv_doc:
+            resume_text_content = iv_doc.get("profile_text", "")
+
+    phone_val = session_data.get("candidate_phone") or session_data.get("phone") or ""
+    exp_val = session_data.get("experience") or ""
+    comp_val = session_data.get("current_company") or ""
+    loc_val = session_data.get("location") or ""
+    np_val = session_data.get("notice_period") or ""
+    cctc_val = session_data.get("current_ctc") or ""
+    ectc_val = session_data.get("expected_ctc") or ""
+
+    if resume_text_content and (not phone_val or not exp_val or not comp_val or not loc_val or not np_val or not cctc_val or not ectc_val or not candidate_name or candidate_name == "Candidate"):
+        try:
+            from app.services.resume_nlp_extractor import extract_candidate_info_nlp, is_valid_company_name
+            nlp_profile = extract_candidate_info_nlp(resume_text_content)
+            db_updates = {}
+            if not phone_val and nlp_profile.get("phone"):
+                phone_val = nlp_profile["phone"]
+                db_updates["candidate_phone"] = phone_val
+                session_data["candidate_phone"] = phone_val
+            if not exp_val and nlp_profile.get("experience"):
+                exp_val = nlp_profile["experience"]
+                db_updates["experience"] = exp_val
+                session_data["experience"] = exp_val
+            if (not comp_val or comp_val in ("N/A", "Not specified") or not is_valid_company_name(comp_val)) and nlp_profile.get("current_company"):
+                comp_val = nlp_profile["current_company"]
+                db_updates["current_company"] = comp_val
+                session_data["current_company"] = comp_val
+            if not loc_val and nlp_profile.get("location"):
+                loc_val = nlp_profile["location"]
+                db_updates["location"] = loc_val
+                session_data["location"] = loc_val
+            if (not np_val or np_val in ("N/A", "Not specified")) and nlp_profile.get("notice_period"):
+                np_val = nlp_profile["notice_period"]
+                db_updates["notice_period"] = np_val
+                session_data["notice_period"] = np_val
+            if (not cctc_val or cctc_val in ("N/A", "Not specified")) and nlp_profile.get("current_ctc"):
+                cctc_val = nlp_profile["current_ctc"]
+                db_updates["current_ctc"] = cctc_val
+                session_data["current_ctc"] = cctc_val
+            if (not ectc_val or ectc_val in ("N/A", "Not specified")) and nlp_profile.get("expected_ctc"):
+                ectc_val = nlp_profile["expected_ctc"]
+                db_updates["expected_ctc"] = ectc_val
+                session_data["expected_ctc"] = ectc_val
+            if (not candidate_name or candidate_name == "Candidate") and nlp_profile.get("name"):
+                candidate_name = nlp_profile["name"]
+                db_updates["candidate_name"] = candidate_name
+                session_data["candidate_name"] = candidate_name
+
+            # If detected_accent is Unknown or generic, refine it with candidate location/phone/resume
+            if not detected_accent or detected_accent.strip().lower() in ["unknown", "none", "", "neutral english accent"]:
+                from app.services.language_accent_detector import detect_language_and_accent
+                l_res = detect_language_and_accent(
+                    text_or_answers=results or session_data.get("answers", []),
+                    candidate_profile={
+                        "candidate_phone": phone_val,
+                        "location": loc_val,
+                        "resume_text": resume_text_content
+                    },
+                    interview_language=session_data.get("language") or "English"
+                )
+                detected_accent = l_res.get("detected_accent") or "English (Indian Accent)"
+                det_lang = l_res.get("language") or "English"
+                db_updates["detected_accent"] = detected_accent
+                db_updates["detected_language"] = det_lang
+                db_updates["language"] = det_lang
+                session_data["detected_accent"] = detected_accent
+                session_data["detected_language"] = det_lang
+                session_data["language"] = det_lang
+
+            if db_updates:
+                interview_sessions_collection.update_one(
+                    {"link_id": link_id},
+                    {"$set": db_updates}
+                )
+        except Exception as nlp_err:
+            print(f"⚠️ Resume NLP extraction error in get_candidate_detail: {nlp_err}")
+
     response_payload = {
         "interview_id": link_id,
         "actual_interview_id": actual_interview_id,
         "candidate_id": session_data.get("candidate_id"),
         "candidate_name": candidate_name or "Candidate",
         "candidate_email": session_data.get("candidate_email") or session_data.get("email", ""),
-        "candidate_phone": session_data.get("candidate_phone") or session_data.get("phone", ""),
+        "candidate_phone": phone_val,
         "interview_title": session_data.get("interview_title") or session_data.get("job_title", ""),
-        "experience": session_data.get("experience", ""),
-        "location": session_data.get("location", ""),
-        "notice_period": session_data.get("notice_period", ""),
-        "current_ctc": session_data.get("current_ctc", ""),
-        "expected_ctc": session_data.get("expected_ctc", ""),
-        "current_company": session_data.get("current_company", ""),
+        "experience": exp_val,
+        "location": loc_val,
+        "notice_period": np_val,
+        "current_ctc": cctc_val,
+        "expected_ctc": ectc_val,
+        "current_company": comp_val,
         "status": sync_session_status(session_data),
         "decision": session_data.get("decision", ""),
         "resume_text": session_data.get("resume_text", ""),
@@ -619,6 +769,9 @@ def get_interview_details(link_id: str, current_admin: dict = Depends(get_curren
         "job_success_score": job_success_score,
         "job_success_reasoning": job_success_reasoning,
         "detected_accent": detected_accent,
+        "detected_language": session_data.get("detected_language") or (detected_accent.split("(")[0].strip() if "(" in detected_accent else detected_accent),
+        "language": session_data.get("language") or (detected_accent.split("(")[0].strip() if "(" in detected_accent else "English"),
+        "detected_language_accent": detected_accent,
         "recording_url": recording_url,
         "screen_recording_url": screen_recording_url,
         "completion_reason": session_data.get("completion_reason"),
@@ -628,6 +781,8 @@ def get_interview_details(link_id: str, current_admin: dict = Depends(get_curren
             "total_noise_alerts": total_noise_alerts,
             "total_time_minutes": round(total_time / 60, 1)
         },
+        "violations": session_data.get("violations", session_data.get("alerts", [])),
+        "proctoring_alerts": session_data.get("violations", session_data.get("alerts", [])),
         "alerts": session_data.get("violations", session_data.get("alerts", [])),
         "answers": results,
         "candidate_feedback": session_data.get("candidate_feedback", ""),
@@ -665,17 +820,20 @@ def get_interview_details(link_id: str, current_admin: dict = Depends(get_curren
         if max_answered_id > 0:
             response_payload["all_questions"] = [q for q in all_questions if _safe_int(q.get("id")) <= max_answered_id]
 
+    coding_round_data = session_data.get("coding_round")
+    case_study_data = session_data.get("case_study_round")
 
     if actual_interview_id:
         interview_record = interviews_collection.find_one({"id": actual_interview_id})
         if interview_record:
-            if interview_record.get("coding_round"):
-                response_payload["coding_round"] = interview_record.get("coding_round")
-            if interview_record.get("case_study_round"):
-                response_payload["case_study_round"] = interview_record.get("case_study_round")
+            if not coding_round_data and interview_record.get("coding_round"):
+                coding_round_data = interview_record.get("coding_round")
+            if not case_study_data and interview_record.get("case_study_round"):
+                case_study_data = interview_record.get("case_study_round")
             # Add profile/resume text and job description for ATS analysis
             response_payload["profile_text"] = interview_record.get("profile_text", "")
             response_payload["job_description"] = interview_record.get("job_description", "")
+            response_payload["source"] = interview_record.get("source", response_payload["source"])
             # Fill interview_title from interview record if not already set from session
             if not response_payload.get("interview_title"):
                 response_payload["interview_title"] = (
@@ -683,7 +841,11 @@ def get_interview_details(link_id: str, current_admin: dict = Depends(get_curren
                     interview_record.get("interview_title") or
                     interview_record.get("job_title", "")
                 )
-                
+
+    # ── Include coding/case-study round data so the admin transcript shows submitted code ──
+    response_payload["coding_round"] = coding_round_data
+    response_payload["case_study_round"] = case_study_data
+
     return response_payload
 
 class AnalyzeRequest(BaseModel):
@@ -785,7 +947,8 @@ def upload_full_recording(
                 "recording_truncated": bool(session.get(f"{path_key}_truncated")),
                 "saved_to_session": True,
             }
-    if file.content_type not in {"video/webm", "video/mp4", "application/octet-stream"}:
+    content_type = (file.content_type or "").lower().split(";")[0].strip()
+    if content_type not in {"video/webm", "video/mp4", "application/octet-stream", "video/x-matroska"}:
         raise HTTPException(status_code=415, detail="Only WebM or MP4 interview recordings are accepted")
     max_recording_bytes = 500 * 1024 * 1024
     if getattr(file, "size", 0) and file.size > max_recording_bytes:
@@ -1282,6 +1445,10 @@ async def get_dashboard_stats(admin_id: Optional[str] = None, current_admin: dic
         cached = await manager.redis.get(cache_key)
         if cached:
             return json.loads(cached)
+    else:
+        cached = _LOCAL_DASHBOARD_CACHE.get(cache_key)
+        if cached and time.monotonic() - cached[0] < _LOCAL_DASHBOARD_CACHE_TTL:
+            return cached[1]
 
     try:
         comp_id = current_admin.get("company_id")
@@ -1414,8 +1581,8 @@ async def get_dashboard_stats(admin_id: Optional[str] = None, current_admin: dic
             jobs_query = {"company_id": current_admin.get("company_id")}
             if current_admin.get("role") == "admin":
                 jobs_query["admin_id"] = current_admin["admin_id"]
-            elif admin_id:
-                jobs_query["admin_id"] = admin_id
+            elif current_admin.get("role") in ["super_admin", "superadmin"]:
+                jobs_query["admin_id"] = {"$in": _get_authorized_creator_ids(current_admin)}
             jobs = await asyncio.to_thread(lambda: list(jobs_collection.find(jobs_query)))
             job_ids = [j.get("job_id") for j in jobs if j.get("job_id")]
             
@@ -1557,6 +1724,11 @@ async def get_dashboard_stats(admin_id: Optional[str] = None, current_admin: dic
         
         if manager.redis:
             await manager.redis.setex(cache_key, 30, json.dumps(stats))
+        else:
+            _LOCAL_DASHBOARD_CACHE[cache_key] = (time.monotonic(), stats)
+            if len(_LOCAL_DASHBOARD_CACHE) > 100:
+                oldest_key = min(_LOCAL_DASHBOARD_CACHE, key=lambda key: _LOCAL_DASHBOARD_CACHE[key][0])
+                _LOCAL_DASHBOARD_CACHE.pop(oldest_key, None)
             
         return stats
     except Exception as e:
@@ -1908,6 +2080,31 @@ def send_otp_email(email: str, name: str, otp: str):
 
     else:
         raise HTTPException(status_code=401, detail="Invalid credentials")
+
+@router.get("/api/admin/profile")
+@router.get("/admin/profile")
+def get_admin_profile(current_admin: dict = Depends(get_current_admin_details)):
+    admin_id = current_admin.get("admin_id")
+    try:
+        admin_doc = admins_collection.find_one({"_id": ObjectId(admin_id)}, {"password": 0})
+    except Exception:
+        admin_doc = admins_collection.find_one({"_id": admin_id}, {"password": 0})
+        
+    if not admin_doc:
+        raise HTTPException(status_code=404, detail="Admin not found")
+        
+    admin_doc["id"] = str(admin_doc["_id"])
+    admin_doc["_id"] = str(admin_doc["_id"])
+    
+    if current_admin.get("role") in ["super_admin", "superadmin"] and admin_doc.get("company_id"):
+        try:
+            company = companies_collection.find_one({"_id": ObjectId(admin_doc["company_id"])})
+            if company and "credits" in company:
+                admin_doc["credits"] = company["credits"]
+        except Exception:
+            pass
+            
+    return admin_doc
 
 @router.post("/admin/profile")
 def update_profile(data: UpdateProfileRequest, current_admin: str = Depends(get_current_admin)):

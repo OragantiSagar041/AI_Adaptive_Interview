@@ -9,6 +9,7 @@ import loginHero from '../assets/login_hero.png'
 import Swal from 'sweetalert2'
 import 'sweetalert2/dist/sweetalert2.min.css'
 import axios from 'axios'
+import useSEO from '../hooks/useSEO'
 
 const CSS = `
   @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&display=swap');
@@ -317,6 +318,12 @@ const W2 = 'M0,80 C150,20 350,140 550,70 C750,0 950,120 1150,60 C1280,30 1380,90
 const W3 = 'M0,100 C180,50 380,150 580,90 C780,30 980,130 1180,75 C1310,45 1390,100 1440,90 L1440,160 L0,160 Z'
 
 export default function LoginPage() {
+  useSEO({
+    title: "Sign In | HireIQ",
+    description: "Sign in to your HireIQ account to manage AI-powered interviews and recruitment.",
+    path: "/login",
+    noIndex: true,
+  })
   const navigate = useNavigate()
   const dispatch = useDispatch()
   const [username, setUsername] = useState('')
@@ -334,7 +341,11 @@ export default function LoginPage() {
   const [resetLoading, setResetLoading] = useState(false)
   const [resetError, setResetError] = useState('')
 
-  useEffect(() => { document.documentElement.setAttribute('data-theme', 'dark') }, [])
+  useEffect(() => {
+    document.documentElement.setAttribute('data-theme', 'dark')
+    document.documentElement.classList.add('dark')
+  }, [])
+
 
   const handleLogin = async (e) => {
     e.preventDefault()

@@ -33,7 +33,6 @@ import {
   TrendingUp,
   TrendingDown,
   Users,
-  MoreVertical,
   ArrowRight,
   Eye
 } from "lucide-react";
@@ -236,7 +235,6 @@ export default function SuperDashboardPage() {
                 </div>
                 <span className="text-xs font-semibold text-slate-700">Total AI Interviews</span>
               </div>
-              <MoreVertical className="w-4 h-4 text-slate-400 cursor-pointer" />
             </div>
             <div className="mt-4 flex items-end justify-between">
               <div className="text-3xl font-bold text-slate-900">{formatNum(dbStats?.total) || "0"}</div>
@@ -276,7 +274,6 @@ export default function SuperDashboardPage() {
                 </div>
                 <span className="text-xs font-semibold text-slate-700">Active Today</span>
               </div>
-              <MoreVertical className="w-4 h-4 text-slate-400 cursor-pointer" />
             </div>
             <div className="mt-4 flex items-end justify-between">
               <div className="text-3xl font-bold text-slate-900">{formatNum(dbStats?.today) || "0"}</div>
@@ -342,7 +339,7 @@ export default function SuperDashboardPage() {
                           onClick={() => {
                             setShowLivePicker(false);
                             if (handleOpenLiveStreamAction) {
-                              handleOpenLiveStreamAction(session.link_id || session.id);
+                              handleOpenLiveStreamAction(session);
                             }
                           }}
                         >
@@ -387,7 +384,6 @@ export default function SuperDashboardPage() {
                 </div>
                 <span className="text-xs font-semibold text-slate-700">Completed Interviews</span>
               </div>
-              <MoreVertical className="w-4 h-4 text-slate-400 cursor-pointer" />
             </div>
             <div className="mt-4 flex items-end justify-between">
               <div className="text-3xl font-bold text-slate-900">{formatNum(dbStats?.completed) || "0"}</div>
@@ -422,7 +418,6 @@ export default function SuperDashboardPage() {
                 </div>
                 <span className="text-xs font-semibold text-slate-700">Pending Interviews</span>
               </div>
-              <MoreVertical className="w-4 h-4 text-slate-400 cursor-pointer" />
             </div>
             <div className="mt-4 flex items-end justify-between">
               <div className="text-3xl font-bold text-slate-900">{formatNum(dbStats?.pending) || "0"}</div>
@@ -470,7 +465,6 @@ export default function SuperDashboardPage() {
                 </div>
                 <span className="text-xs font-semibold text-slate-700">Avg AI Score</span>
               </div>
-              <MoreVertical className="w-4 h-4 text-slate-400 cursor-pointer" />
             </div>
             <div className="mt-4 flex items-end justify-between">
               <div className="flex items-baseline gap-1">
@@ -513,7 +507,6 @@ export default function SuperDashboardPage() {
                 </div>
                 <span className="text-xs font-semibold text-slate-700">Candidates Hired</span>
               </div>
-              <MoreVertical className="w-4 h-4 text-slate-400 cursor-pointer" />
             </div>
             <div className="mt-4 flex items-end justify-between">
               <div className="text-3xl font-bold text-slate-900">{formatNum(dbStats?.selected) || "0"}</div>
@@ -557,7 +550,6 @@ export default function SuperDashboardPage() {
                 </div>
                 <span className="text-xs font-semibold text-slate-700">Candidates Rejected</span>
               </div>
-              <MoreVertical className="w-4 h-4 text-slate-400 cursor-pointer" />
             </div>
             <div className="mt-4 flex items-end justify-between">
               <div className="text-3xl font-bold text-slate-900">{formatNum(dbStats?.rejected) || "0"}</div>
@@ -601,7 +593,6 @@ export default function SuperDashboardPage() {
                 </div>
                 <span className="text-xs font-semibold text-slate-700">Expired Links</span>
               </div>
-              <MoreVertical className="w-4 h-4 text-slate-400 cursor-pointer" />
             </div>
             <div className="mt-4 flex items-end justify-between">
               <div className="text-3xl font-bold text-slate-900">{formatNum(dbStats?.expired) || "0"}</div>
@@ -761,7 +752,7 @@ export default function SuperDashboardPage() {
                     </td>
                     <td className="py-3 text-right whitespace-nowrap">
                       <button 
-                        onClick={() => handleOpenLiveStreamAction && handleOpenLiveStreamAction(session.link_id || session.id)}
+                        onClick={() => handleOpenLiveStreamAction && handleOpenLiveStreamAction(session)}
                         className="inline-flex items-center justify-center gap-1.5 px-3 py-1.5 text-xs font-semibold bg-white border border-slate-200 rounded hover:bg-slate-50 text-slate-700 cursor-pointer"
                       >
                         <Eye className="w-3.5 h-3.5" /> Monitor

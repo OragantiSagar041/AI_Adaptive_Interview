@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from "react";
+import React, { useEffect, useState, useMemo, useCallback } from "react";
 import { useSelector, useDispatch } from "react-redux";
 import { useNavigate, useOutletContext } from "react-router-dom";
 import { loadDashboardData } from "../../store/slices/dashboardSlice";
@@ -118,7 +118,7 @@ export default function OverviewDashboardPage() {
   const [positionFilter, setPositionFilter] = useState("all");
   const [sortBy, setSortBy] = useState("score");
 
-  const handleOpenRecordsModal = async (filterType, title) => {
+  const handleOpenRecordsModal = useCallback(async (filterType, title) => {
     setListModalFilterType(filterType);
     setListModalTitle(title);
     setListModalOpen(true);
@@ -147,12 +147,12 @@ export default function OverviewDashboardPage() {
     } finally {
       setLoadingModalRecords(false);
     }
-  };
+  }, [dispatch]);
 
-  const handleViewCandidateFromModal = (candidate) => {
+  const handleViewCandidateFromModal = useCallback((candidate) => {
     setSelectedCandidate(candidate);
     setListModalOpen(false);
-  };
+  }, []);
 
   const { role: authRole, API_BASE_URL, token } = useSelector((state) => state.auth);
   const dbStats = useSelector((state) => state.dashboard.dbStats);
@@ -169,90 +169,74 @@ export default function OverviewDashboardPage() {
 
   const activeFilter = activeActionFilter || activeRecFilter || activeActivityFilter;
 
-  const filteredTableCandidates = (candidates ? candidates.filter((c) => {
-    let matchesSearch = true;
-    if (searchQuery) {
-      const q = searchQuery.toLowerCase();
-      const matchName = (c.candidate_name || c.name || "").toLowerCase().includes(q);
-      const matchTitle = (c.interview_title || c.job_title || "").toLowerCase().includes(q);
-      matchesSearch = matchName || matchTitle;
-    }
+  // ── Memoized derived data ─────────────────────────────────────────────────
+  // These computations run over the full candidates array. Without useMemo they
+  // recalculate on every state change (modal open, search input, etc.).
 
-    if (!activeFilter && !startDate && !endDate && statusFilter === "all" && pipelineFilter === "all" && positionFilter === "all") return matchesSearch;
-    if (!matchesSearch) return false;
+  const filteredTableCandidates = useMemo(() => {
+    if (!candidates) return []
+    return candidates.filter((c) => {
+      let matchesSearch = true;
+      if (searchQuery) {
+        const q = searchQuery.toLowerCase();
+        const matchName = (c.candidate_name || c.name || "").toLowerCase().includes(q);
+        const matchTitle = (c.interview_title || c.job_title || "").toLowerCase().includes(q);
+        matchesSearch = matchName || matchTitle;
+      }
 
-    // Additional filters
-    if (statusFilter !== "all") {
+      if (!activeFilter && !startDate && !endDate && statusFilter === "all" && pipelineFilter === "all" && positionFilter === "all") return matchesSearch;
+      if (!matchesSearch) return false;
+
+      if (statusFilter !== "all") {
+        const computedStatus = (c.status || "").toLowerCase();
+        if (statusFilter === "completed" && computedStatus !== "completed") return false;
+        if (statusFilter === "pending" && computedStatus !== "pending") return false;
+        if (statusFilter === "started" && computedStatus !== "started") return false;
+        if (statusFilter === "expired" && computedStatus !== "expired") return false;
+      }
+
+      if (pipelineFilter !== "all") {
+        if ((c.pipeline_type || "hireiq").toLowerCase() !== pipelineFilter.toLowerCase()) return false;
+      }
+
+      if (positionFilter !== "all") {
+        if (c.interview_title !== positionFilter && c.job_title !== positionFilter) return false;
+      }
+
+      if (startDate) {
+        const cDate = new Date(c.created_at || c.updated_at);
+        if (cDate < new Date(startDate)) return false;
+      }
+
+      if (endDate) {
+        const cDate = new Date(c.created_at || c.updated_at);
+        const endD = new Date(endDate);
+        endD.setHours(23, 59, 59, 999);
+        if (cDate > endD) return false;
+      }
+
       const computedStatus = (c.status || "").toLowerCase();
       const decision = (c.decision || "").toLowerCase();
-      if (statusFilter === "completed" && computedStatus !== "completed") return false;
-      if (statusFilter === "pending" && computedStatus !== "pending") return false;
-      if (statusFilter === "started" && computedStatus !== "started") return false;
-      if (statusFilter === "expired" && computedStatus !== "expired") return false;
-    }
+      const alerts = parseInt(c.proctoring_alerts || 0);
 
-    if (pipelineFilter !== "all") {
-      if ((c.pipeline_type || "hireiq").toLowerCase() !== pipelineFilter.toLowerCase()) return false;
-    }
+      if (activeFilter === "pending") return computedStatus === "pending";
+      if (activeFilter === "live") return computedStatus === "started" || c.online;
+      if (activeFilter === "started") return computedStatus === "started";
+      if (activeFilter === "completed") return computedStatus === "completed";
+      if (activeFilter === "expired") return computedStatus === "expired";
+      if (activeFilter === "alerts") return alerts > 0;
+      if (activeFilter === "rejected") return decision === "rejected";
+      if (activeFilter === "high_scores") return parseFloat(c.score || c.avg_score || 0) >= 80;
+      return true;
+    }).sort((a, b) => {
+      if (sortBy === 'score') {
+        return parseFloat(b.score || b.avg_score || 0) - parseFloat(a.score || a.avg_score || 0);
+      }
+      return new Date(b.created_at || b.updated_at || 0) - new Date(a.created_at || a.updated_at || 0);
+    });
+  }, [candidates, searchQuery, activeFilter, startDate, endDate, statusFilter, pipelineFilter, positionFilter, sortBy]);
 
-    if (positionFilter !== "all") {
-      if (c.interview_title !== positionFilter && c.job_title !== positionFilter) return false;
-    }
-
-    if (startDate) {
-      const cDate = new Date(c.created_at || c.updated_at);
-      if (cDate < new Date(startDate)) return false;
-    }
-
-    if (endDate) {
-      const cDate = new Date(c.created_at || c.updated_at);
-      const endD = new Date(endDate);
-      endD.setHours(23, 59, 59, 999);
-      if (cDate > endD) return false;
-    }
-
-    const computedStatus = (c.status || "").toLowerCase();
-    const decision = (c.decision || "").toLowerCase();
-    const alerts = parseInt(c.proctoring_alerts || 0);
-
-    if (activeFilter === "pending") {
-      return computedStatus === "pending";
-    }
-    if (activeFilter === "live") {
-      return computedStatus === "started" || c.online;
-    }
-    if (activeFilter === "started") {
-      return computedStatus === "started";
-    }
-    if (activeFilter === "completed") {
-      return computedStatus === "completed";
-    }
-    if (activeFilter === "expired") {
-      return computedStatus === "expired";
-    }
-    if (activeFilter === "alerts") {
-      return alerts > 0;
-    }
-    if (activeFilter === "rejected") {
-      return decision === "rejected";
-    }
-    if (activeFilter === "high_scores") {
-      return parseFloat(c.score || c.avg_score || 0) >= 80;
-    }
-    return true;
-  }) : []).sort((a, b) => {
-    if (sortBy === 'score') {
-      const scoreA = parseFloat(a.score || a.avg_score || 0);
-      const scoreB = parseFloat(b.score || b.avg_score || 0);
-      return scoreB - scoreA;
-    } else {
-      const dateA = new Date(a.created_at || a.updated_at || 0);
-      const dateB = new Date(b.created_at || b.updated_at || 0);
-      return dateB - dateA;
-    }
-  });
-
-  const kpis = [
+  const kpis = useMemo(() => [
     { label: "Total Candidates", value: dbStats?.total || "0", icon: Users, tint: "primary", delta: "", filterType: null, navPath: null },
     { label: "Candidates Selected", value: dbStats?.selected || "0", icon: Target, tint: "success", delta: "", filterType: null, navPath: "/admin/qualified-candidates" },
     { label: "AI Interviews Completed", value: dbStats?.completed || "0", icon: Mic, tint: "accent", delta: "", filterType: "completed", navPath: "/admin/interviews" },
@@ -261,20 +245,23 @@ export default function OverviewDashboardPage() {
     { label: "Started", value: dbStats?.started || "0", icon: Activity, tint: "primary", delta: "", filterType: "live", navPath: null },
     { label: "Rejected Candidates", value: dbStats?.rejected || "0", icon: XCircle, tint: "destructive", delta: "", filterType: "rejected", navPath: "/admin/rejected-candidates" },
     { label: "Expired", value: dbStats?.expired || "0", icon: AlertCircle, tint: "warning", delta: "", filterType: "expired", navPath: null },
-  ];
+  ], [dbStats]);
 
-  const pipeline = [
+  const pipeline = useMemo(() => [
     { stage: "Total Assigned", count: parseInt(dbStats?.total) || 0, color: "oklch(0.75 0.05 250)" },
     { stage: "Started", count: parseInt(dbStats?.started) || 0, color: "oklch(0.7 0.12 240)" },
     { stage: "Completed", count: parseInt(dbStats?.completed) || 0, color: "oklch(0.65 0.16 220)" },
     { stage: "Pending Review", count: parseInt(dbStats?.pending) || 0, color: "oklch(0.6 0.18 260)" },
     { stage: "Selected", count: parseInt(dbStats?.selected) || 0, color: "oklch(0.68 0.18 320)" },
     { stage: "Rejected", count: parseInt(dbStats?.rejected) || 0, color: "oklch(0.72 0.17 45)" },
-  ];
+  ], [dbStats]);
 
-  const topCandidates = candidates ? candidates.filter(c => parseFloat(c.score || c.avg_score || 0) >= 80) : [];
+  const topCandidates = useMemo(
+    () => candidates ? candidates.filter(c => parseFloat(c.score || c.avg_score || 0) >= 80) : [],
+    [candidates]
+  );
 
-  const dashboardSummary = {
+  const dashboardSummary = useMemo(() => ({
     pendingReviews: parseInt(dbStats?.pending) || 0,
     liveInterviews: ongoingLiveCount || 0,
     alertsCount: ongoingAlertCount || 0,
@@ -283,45 +270,54 @@ export default function OverviewDashboardPage() {
     completedCount: parseInt(dbStats?.completed) || 0,
     expiredCount: parseInt(dbStats?.expired) || 0,
     highScoreCount: topCandidates.length
-  };
+  }), [dbStats, ongoingLiveCount, ongoingAlertCount, topCandidates.length]);
 
-  const todaysTasks = [
+  const todaysTasks = useMemo(() => [
     { label: "Candidates Awaiting Review", count: dashboardSummary.pendingReviews, icon: UserCheck, tone: "info" },
     { label: "Interviews In Progress", count: dashboardSummary.liveInterviews, icon: Activity, tone: "primary" },
     { label: "Alerts Requiring Attention", count: dashboardSummary.alertsCount, icon: AlertCircle, tone: "warning" },
     { label: "Rejected Candidates", count: dashboardSummary.rejectedCount, icon: XCircle, tone: "destructive" },
-  ];
+  ], [dashboardSummary]);
 
-  const interviewStatus = [
+  const interviewStatus = useMemo(() => [
     { label: "Live Interviews", count: dashboardSummary.liveInterviews, dot: "bg-success", pulse: true },
     { label: "Started", count: dashboardSummary.startedCount, dot: "bg-info", pulse: false },
     { label: "Completed", count: dashboardSummary.completedCount, dot: "bg-primary", pulse: false },
     { label: "Expired", count: dashboardSummary.expiredCount, dot: "bg-destructive", pulse: false },
-  ];
+  ], [dashboardSummary]);
 
-  const recommendations = [
+  const recommendations = useMemo(() => [
     { text: `${dashboardSummary.highScoreCount} candidates with high AI Scores (>= 80%)`, icon: Sparkles, priority: "High", type: "high_scores" },
     { text: `${dashboardSummary.pendingReviews} candidates awaiting recruiter approval`, icon: UserCheck, priority: "High", type: "pending" },
     { text: `${dashboardSummary.alertsCount} alerts from ongoing interviews`, icon: AlertCircle, priority: "Medium", type: "alerts" },
-  ];
+  ], [dashboardSummary]);
 
-  const analyticsKpis = [
+  const analyticsKpis = useMemo(() => [
     { label: "Candidates Screened", value: dbStats?.total || "0", trend: "" },
     { label: "AI Interviews Completed", value: dbStats?.completed || "0", trend: "" },
     { label: "Candidates Selected", value: dbStats?.selected || "0", trend: "" },
     { label: "Candidates Rejected", value: dbStats?.rejected || "0", trend: "" },
-  ];
+  ], [dbStats]);
 
-  const sortedCandidates = candidates ? [...candidates].sort((a, b) => new Date(b.created_at || b.updated_at) - new Date(a.created_at || a.updated_at)).slice(0, 6) : [];
-  const activity = sortedCandidates.map(c => ({
-    icon: c.decision === "selected" ? Award : (c.decision === "rejected" ? XCircle : CheckCircle2),
-    text: `${c.candidate_name || "Candidate"} - ${c.interview_title || "Role"} (${c.status || "Assigned"})`,
-    time: new Date(c.created_at || c.updated_at || new Date()).toLocaleDateString(),
-    tone: c.decision === "selected" ? "success" : (c.decision === "rejected" ? "destructive" : "info")
-  }));
+  const sortedCandidates = useMemo(
+    () => candidates ? [...candidates].sort((a, b) => new Date(b.created_at || b.updated_at) - new Date(a.created_at || a.updated_at)).slice(0, 6) : [],
+    [candidates]
+  );
 
+  const activity = useMemo(
+    () => sortedCandidates.map(c => ({
+      icon: c.decision === "selected" ? Award : (c.decision === "rejected" ? XCircle : CheckCircle2),
+      text: `${c.candidate_name || "Candidate"} - ${c.interview_title || "Role"} (${c.status || "Assigned"})`,
+      time: new Date(c.created_at || c.updated_at || new Date()).toLocaleDateString(),
+      tone: c.decision === "selected" ? "success" : (c.decision === "rejected" ? "destructive" : "info")
+    })),
+    [sortedCandidates]
+  );
 
-  const maxPipeline = Math.max(...pipeline.map((p) => p.count), 1);
+  const maxPipeline = useMemo(
+    () => Math.max(...pipeline.map((p) => p.count), 1),
+    [pipeline]
+  );
 
   return (
     <div className="min-h-screen bg-slate-50">
@@ -837,7 +833,12 @@ export default function OverviewDashboardPage() {
               <p className="mt-1.5 text-sm opacity-90">
                 You have {topCandidates.length} high-scoring candidates waiting. Review them to speed up your conversion rates.
               </p>
-              <Button size="sm" variant="secondary" className="mt-4 bg-white text-primary hover:bg-white/90">
+              <Button 
+                size="sm" 
+                variant="secondary" 
+                className="mt-4 bg-white text-primary hover:bg-white/90"
+                onClick={() => handleOpenRecordsModal('high_scores', 'High-Scoring Candidates')}
+              >
                 Explore cohort
               </Button>
             </Card>

@@ -173,8 +173,8 @@ async def get_dashboard_aggregated_data(
                 jobs_query["company_id"] = current_admin.get("company_id")
             if current_admin.get("role") == "admin":
                 jobs_query["admin_id"] = current_admin["admin_id"]
-            elif admin_id:
-                jobs_query["admin_id"] = admin_id
+            elif current_admin.get("role") in ["super_admin", "superadmin"]:
+                jobs_query["admin_id"] = {"$in": _get_authorized_creator_ids(current_admin)}
             jobs = [] if summary_only else await asyncio.to_thread(lambda: list(jobs_collection.find(jobs_query)))
             job_ids = [j.get("job_id") for j in jobs if j.get("job_id")]
             
@@ -426,7 +426,7 @@ async def get_dashboard_aggregated_data(
         
         if has_live or current_admin.get("role") in ["master", "super_admin"]:
             query_filter = {
-                "status": {"$in": ["started", "pending"]},
+                "status": {"$in": ["started", "completed"]},
                 "$or": [{"is_deactivated": False}, {"is_deactivated": {"$exists": False}}]
             }
             if current_admin.get("role") != "master":
@@ -439,10 +439,25 @@ async def get_dashboard_aggregated_data(
             rows = await asyncio.to_thread(
                 lambda: list(interview_sessions_collection.find(
                     query_filter,
-                    {"link_id": 1, "candidate_name": 1, "candidate_email": 1, "created_at": 1, "interview_id": 1, "interview_title": 1, "started_at": 1, "interview_duration": 1, "status": 1},
+                    {"link_id": 1, "candidate_name": 1, "candidate_email": 1, "created_at": 1, "interview_id": 1, "interview_title": 1, "started_at": 1, "interview_duration": 1, "status": 1, "completed_at": 1},
                 ).sort("created_at", -1))
             )
-            rows = [row for row in rows if sync_session_status(row) in ("started", "pending")]
+            rows = [
+                row for row in rows
+                if not row.get("completed_at") and sync_session_status(row) == "started"
+            ]
+            unique_rows = {}
+            for row in rows:
+                link_id = row.get("link_id")
+                if link_id and link_id not in unique_rows:
+                    unique_rows[link_id] = row
+            rows = list(unique_rows.values())
+            unique_candidates = {}
+            for row in rows:
+                candidate_key = (row.get("candidate_email") or row.get("candidate_name") or "").strip().lower()
+                if candidate_key and candidate_key not in unique_candidates:
+                    unique_candidates[candidate_key] = row
+            rows = list(unique_candidates.values()) if unique_candidates else rows
             
             ongoing_monitored_count = len(rows)
             snapshots = await _load_live_snapshots([row.get("link_id", "") for row in rows])

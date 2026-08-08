@@ -283,15 +283,15 @@ def _offline_coding_fallback(profile_text: str) -> Dict[str, Any]:
                 {"id": 1, "input": [[2, 7, 11, 15], 9], "expected": [0, 1], "visible": True},
                 {"id": 2, "input": [[3, 2, 4], 6], "expected": [1, 2], "visible": True},
                 {"id": 3, "input": [[3, 3], 6], "expected": [0, 1], "visible": True},
-                {"id": 4, "input": [[1, 5, 3, 7], 8], "expected": [0, 3], "visible": False},
+                {"id": 4, "input": [[1, 5, 2, 7], 8], "expected": [0, 3], "visible": False},
                 {"id": 5, "input": [[-1, -2, -3, -4, -5], -8], "expected": [2, 4], "visible": False},
-                {"id": 6, "input": [[10, 20, 30, 40], 50], "expected": [1, 2], "visible": False},
+                {"id": 6, "input": [[10, 25, 35, 40], 50], "expected": [0, 3], "visible": False},
                 {"id": 7, "input": [[0, 4, 3, 0], 0], "expected": [0, 3], "visible": False},
                 {"id": 8, "input": [[-3, 4, 3, 90], 0], "expected": [0, 2], "visible": False},
                 {"id": 9, "input": [[1, 2], 3], "expected": [0, 1], "visible": False},
                 {"id": 10, "input": [[5, 75, 25], 100], "expected": [1, 2], "visible": False},
-                {"id": 11, "input": [[1, 9, 3, 7], 10], "expected": [0, 1], "visible": False},
-                {"id": 12, "input": [[2, 4, 6, 8], 10], "expected": [0, 3], "visible": False},
+                {"id": 11, "input": [[1, 9, 4, 8], 10], "expected": [0, 1], "visible": False},
+                {"id": 12, "input": [[2, 5, 7, 8], 10], "expected": [0, 3], "visible": False},
                 {"id": 13, "input": [[100, 200, 300], 500], "expected": [1, 2], "visible": False},
                 {"id": 14, "input": [[4, 4], 8], "expected": [0, 1], "visible": False},
             ],
@@ -412,21 +412,26 @@ def _prepare_context(state: CodingRoundState) -> CodingRoundState:
 
 def _coach_candidate(state: CodingRoundState) -> CodingRoundState:
     fallback = {
-        "coach_message": "Keep your explanation tightly aligned with the code you just wrote.",
-        "strengths": ["You are making progress."],
-        "risks": ["The draft could not be analyzed fully."],
-        "next_steps": ["Run through one example manually and explain the data flow."],
+        "coach_message": "Keep your implementation focused on solving the problem step-by-step and handling boundary conditions.",
+        "strengths": ["Good attempt at structuring the core logic."],
+        "risks": ["Check potential edge cases and input boundary conditions."],
+        "next_steps": ["Walk through the algorithm with sample inputs to verify edge cases."],
         "scorecard": {
-            "problem_understanding": 50,
-            "implementation": 50,
-            "communication": 50,
-            "overall": 50,
+            "problem_understanding": 65,
+            "implementation": 60,
+            "communication": 60,
+            "overall": 62,
         },
     }
     system_prompt = """
-You are an expert live-coding interviewer.
-Give concise, practical coaching based only on the compact context packet.
-Do not reveal a full solution unless the candidate is completely blocked.
+You are an expert technical interviewer and coding coach.
+Review the candidate's currently written code for the given problem.
+Analyze:
+1. Logic correctness & approach.
+2. Potential bugs, syntax/runtime issues, or missed edge cases.
+3. Time & space complexity.
+4. Suggestions to improve without giving away the full solution code.
+
 Return strict JSON only.
 """.strip()
     final_mode = state.get("feedback_mode") == "final"
@@ -435,15 +440,13 @@ Compact context packet:
 {state.get("context_packet", "")}
 
 Return JSON with:
-- coach_message: short paragraph
-- strengths: array of 2-3 short bullets
-- risks: array of 2-3 short bullets
-- next_steps: array of 2-4 concrete actions
-- scorecard: object with problem_understanding, implementation, communication, overall (0-100)
+- coach_message: A clear, encouraging, and direct code review paragraph (max 120 words) analyzing what the candidate wrote so far.
+- strengths: array of 2-3 specific positive observations about their written code or logic.
+- risks: array of 2-3 specific bugs, edge cases missed, or performance bottlenecks in their code.
+- next_steps: array of 2-3 actionable hints or steps they should take to fix/complete their code.
+- scorecard: object with problem_understanding (0-100), implementation (0-100), communication (0-100), overall (0-100)
 {"- hiring_signal: short assessment" if final_mode else ""}
 {"- final_recommendation: one of Strong Hire, Hire, Borderline, No Hire" if final_mode else ""}
-
-Keep checkpoint feedback under 120 words in coach_message.
 """
     state["response"] = _llm_json(system_prompt, user_prompt, fallback)
     return state

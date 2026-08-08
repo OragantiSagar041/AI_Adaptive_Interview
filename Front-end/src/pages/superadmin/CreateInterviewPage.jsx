@@ -82,14 +82,33 @@ export default function CreateInterviewPage() {
 
     // Override with incoming data from navigation if present
     if (location.state && location.state.candidateData) {
-      const { name, resumeText, jobDescription } = location.state.candidateData;
-      if (name) defaultState.name = name;
-      if (resumeText) defaultState.resumeText = resumeText;
-      if (jobDescription) defaultState.jobDescription = jobDescription;
+      const cd = location.state.candidateData;
+      if (cd.name) defaultState.name = cd.name;
+      if (cd.email) defaultState.email = cd.email;
+      if (cd.phone) defaultState.phone = cd.phone;
+      if (cd.resumeText) defaultState.resumeText = cd.resumeText;
+      if (cd.jobDescription) defaultState.jobDescription = cd.jobDescription;
+      if (cd.applicationId) defaultState.applicationId = cd.applicationId;
     }
 
     return defaultState;
   })
+
+  useEffect(() => {
+    if (location.state && location.state.candidateData) {
+      const cd = location.state.candidateData;
+      setSingleCandidate(prev => ({
+        ...prev,
+        name: cd.name || prev.name || '',
+        email: cd.email || prev.email || '',
+        phone: cd.phone || prev.phone || '',
+        resumeText: cd.resumeText || prev.resumeText || '',
+        jobDescription: cd.jobDescription || prev.jobDescription || '',
+        applicationId: cd.applicationId || prev.applicationId || ''
+      }));
+      setCreateTab('single');
+    }
+  }, [location.state]);
 
   useEffect(() => {
     sessionStorage.setItem('createInterview_singleCandidate', JSON.stringify(singleCandidate))
@@ -312,15 +331,23 @@ export default function CreateInterviewPage() {
     }
   }
 
+  const lastCheckedEmailRef = useRef('')
+  const emailDebounceRef = useRef(null)
+
   // Check if candidate already has a profile/resume on file
-  const handleCheckCandidate = async (email) => {
+  const handleCheckCandidate = async (email, force = false) => {
     if (!email || !email.includes('@')) return
+    const cleanEmail = email.trim().toLowerCase()
+    if (!force && lastCheckedEmailRef.current === cleanEmail) return
+
     try {
-      const response = await axios.get(`${API_BASE_URL}/admin/candidate/check?email=${encodeURIComponent(email)}`, {
+      const response = await axios.get(`${API_BASE_URL}/admin/candidate/check?email=${encodeURIComponent(cleanEmail)}`, {
         headers: { 'Authorization': `Bearer ${token}` }
       })
       const data = response.data
       if (data.exists) {
+        lastCheckedEmailRef.current = cleanEmail
+        const hasResume = Boolean(data.resume_text && data.resume_text.trim().length > 10)
         const result = await Swal.fire({
           title: 'Candidate Profile Found',
           html: `
@@ -328,13 +355,16 @@ export default function CreateInterviewPage() {
               <div class="w-14 h-14 rounded-2xl bg-indigo-50 border border-indigo-100 flex items-center justify-center text-indigo-600 shadow-inner mb-1">
                 <i class="fas fa-user-check text-2xl animate-pulse"></i>
               </div>
-              <p class="text-[0.9rem] text-slate-500 leading-relaxed px-1 font-medium">
-                An existing profile was found for <strong class="text-indigo-600 font-bold">${email}</strong>. Would you like to automatically fill the name and resume details?
+              <p class="text-[0.9rem] text-slate-600 leading-relaxed px-1 font-medium">
+                An existing profile was found for <strong class="text-indigo-600 font-bold">${cleanEmail}</strong>${data.candidate_name ? ` (${data.candidate_name})` : ''}.
+              </p>
+              <p class="text-xs text-slate-500 font-normal">
+                ${hasResume ? '📄 A saved resume is available on file. Would you like to automatically fill the candidate details and resume?' : 'Would you like to automatically fill the saved candidate details?'}
               </p>
             </div>
           `,
           showCancelButton: true,
-          confirmButtonText: 'Yes, Autofill',
+          confirmButtonText: hasResume ? 'Yes, Autofill Profile & Resume' : 'Yes, Autofill Details',
           cancelButtonText: 'No, Keep Blank',
           confirmButtonColor: '#6366f1',
           cancelButtonColor: '#94a3b8',
@@ -350,15 +380,32 @@ export default function CreateInterviewPage() {
           setSingleCandidate(prev => ({
             ...prev,
             name: data.candidate_name || prev.name,
-            resumeText: data.resume_text || prev.resumeText
+            email: cleanEmail,
+            resumeText: data.resume_text || prev.resumeText,
+            resumeFileName: hasResume ? 'Existing candidate resume profile' : prev.resumeFileName,
+            phone: data.candidate_phone || prev.phone,
+            jobDescription: prev.jobDescription || data.job_description || ''
           }))
-          if (singleCandidate.jobDescription && data.resume_text) {
-            handleCalculateAts(data.resume_text, singleCandidate.jobDescription)
+
+          Swal.fire({
+            toast: true,
+            position: 'top-end',
+            icon: 'success',
+            title: hasResume ? 'Profile & resume autofilled!' : 'Candidate details autofilled!',
+            showConfirmButton: false,
+            timer: 2500,
+            timerProgressBar: true
+          })
+
+          const effectiveResume = data.resume_text || singleCandidate.resumeText
+          const effectiveJd = singleCandidate.jobDescription || data.job_description
+          if (effectiveResume && effectiveJd) {
+            handleCalculateAts(effectiveResume, effectiveJd)
           }
         }
       }
     } catch (e) {
-      console.error(e)
+      console.error('Candidate check error:', e)
     }
   }
 
@@ -1076,8 +1123,17 @@ Congratulations! You have been selected for an AI-powered interview. Please revi
                     type="email"
                     placeholder="e.g. john@example.com"
                     value={singleCandidate.email}
-                    onChange={(e) => handleSingleChange('email', e.target.value)}
-                    onBlur={() => handleCheckCandidate(singleCandidate.email)}
+                    onChange={(e) => {
+                      const val = e.target.value
+                      handleSingleChange('email', val)
+                      if (val && /\S+@\S+\.\S+/.test(val.trim())) {
+                        if (emailDebounceRef.current) clearTimeout(emailDebounceRef.current)
+                        emailDebounceRef.current = setTimeout(() => {
+                          handleCheckCandidate(val.trim())
+                        }, 600)
+                      }
+                    }}
+                    onBlur={() => handleCheckCandidate(singleCandidate.email, true)}
                   />
                 </div>
               </Card>
@@ -1096,7 +1152,14 @@ Congratulations! You have been selected for an AI-powered interview. Please revi
 
                 {/* Upload Resume */}
                 <div className="flex flex-col gap-2">
-                  <label className="text-xs font-bold uppercase tracking-wider text-slate-500">Upload Resume (PDF / DOCX / TXT)</label>
+                  <div className="flex justify-between items-center">
+                    <label className="text-xs font-bold uppercase tracking-wider text-slate-500">Upload Resume (PDF / DOCX / TXT)</label>
+                    {singleCandidate.resumeText && (
+                      <span className="text-[10px] bg-emerald-100 text-emerald-700 font-semibold px-2 py-0.5 rounded-full flex items-center gap-1">
+                        <i className="fas fa-check"></i> {singleCandidate.resumeFileName || 'Resume Attached'}
+                      </span>
+                    )}
+                  </div>
                   <div
                     className={`border-2 border-dashed rounded-2xl p-6 text-center cursor-pointer transition-all duration-300 flex flex-col items-center justify-center gap-2.5 group relative overflow-hidden ${singleCandidate.resumeText
                         ? 'border-emerald-200 bg-emerald-50/20 hover:bg-emerald-50/40 shadow-sm shadow-emerald-500/5'
@@ -1112,9 +1175,11 @@ Congratulations! You have been selected for an AI-powered interview. Please revi
                     </div>
                     <div>
                       <p className="font-bold text-slate-700 text-sm">
-                        {singleCandidate.resumeText ? "Resume Loaded & Parsed" : "Click to upload or drag & drop"}
+                        {singleCandidate.resumeText ? "Resume Loaded & Ready" : "Click to upload or drag & drop"}
                       </p>
-                      <p className="text-xs text-slate-400 font-medium mt-0.5">PDF, DOCX, TXT - Max 5MB</p>
+                      <p className="text-xs text-slate-400 font-medium mt-0.5">
+                        {singleCandidate.resumeText ? (singleCandidate.resumeFileName || "Candidate profile resume loaded") : "PDF, DOCX, TXT - Max 5MB"}
+                      </p>
                     </div>
                   </div>
                   <input
@@ -1140,6 +1205,7 @@ Congratulations! You have been selected for an AI-powered interview. Please revi
                             name: data.name || prev.name,
                             email: data.email || prev.email,
                             resumeText: data.text || '',
+                            resumeFileName: file.name,
                             phone: data.phone || prev.phone,
                             experience: data.experience || prev.experience,
                             location: data.location || prev.location,
@@ -1149,7 +1215,7 @@ Congratulations! You have been selected for an AI-powered interview. Please revi
                             notice_period: data.notice_period || prev.notice_period
                           }))
                           if (data.email) {
-                            handleCheckCandidate(data.email)
+                            handleCheckCandidate(data.email, true)
                           }
                         }
                       }, setResumeParsing)
@@ -1159,12 +1225,15 @@ Congratulations! You have been selected for an AI-powered interview. Please revi
                   {singleCandidate.resumeText && !resumeParsing && (
                     <div className="flex justify-between items-center mt-1">
                       <span className="text-xs text-success font-semibold flex items-center gap-1">
-                        <i className="fas fa-check-circle"></i> Parsed successfully
+                        <i className="fas fa-check-circle"></i> {singleCandidate.resumeFileName || 'Resume ready for AI questions'}
                       </span>
                       <button
                         type="button"
                         className="bg-transparent border-none text-rose-500 text-xs font-semibold cursor-pointer hover:underline flex items-center gap-1"
-                        onClick={() => handleSingleChange('resumeText', '')}
+                        onClick={() => {
+                          handleSingleChange('resumeText', '')
+                          handleSingleChange('resumeFileName', '')
+                        }}
                       >
                         <i className="fas fa-trash"></i> Remove
                       </button>
@@ -1727,8 +1796,8 @@ Congratulations! You have been selected for an AI-powered interview. Please revi
               <div className="bg-white/82 backdrop-blur-md border border-[#e5edf7] rounded-2xl p-5 text-slate-800 flex flex-col gap-4 shadow-[0_18px_40px_rgba(17,24,39,0.06)] hover:border-slate-300 transition-all duration-200">
                 <div className="flex justify-between items-center">
                   <div className="flex items-center gap-3.5">
-                    <div className="w-10 h-10 rounded-xl flex items-center justify-center bg-violet-50 border border-violet-100 text-violet-600 shadow-inner">
-                      <i className="fas fa-waveform-lines text-sm"></i>
+                    <div className="w-10 h-10 rounded-xl flex items-center justify-center bg-transparent border-none overflow-hidden shrink-0">
+                      <img src="/voice-cloning-logo.svg" alt="Voice Cloning Logo" className="w-full h-full object-contain" />
                     </div>
                     <div className="flex flex-col gap-0.5">
                       <label htmlFor="singleVoiceCloning" className="text-xs font-extrabold uppercase tracking-wider text-slate-700 cursor-pointer">
@@ -2334,8 +2403,8 @@ Congratulations! You have been selected for an AI-powered interview. Please revi
               <div className="bg-white/82 backdrop-blur-md border border-[#e5edf7] rounded-2xl p-5 text-slate-800 flex flex-col gap-4 shadow-[0_18px_40px_rgba(17,24,39,0.06)] hover:border-slate-300 transition-all duration-200">
                 <div className="flex justify-between items-center">
                   <div className="flex items-center gap-3.5">
-                    <div className="w-10 h-10 rounded-xl flex items-center justify-center bg-violet-50 border border-violet-100 text-violet-600 shadow-inner">
-                      <i className="fas fa-waveform-lines text-sm"></i>
+                    <div className="w-10 h-10 rounded-xl flex items-center justify-center bg-transparent border-none overflow-hidden shrink-0">
+                      <img src="/voice-cloning-logo.svg" alt="Voice Cloning Logo" className="w-full h-full object-contain" />
                     </div>
                     <div className="flex flex-col gap-0.5">
                       <label htmlFor="bulkVoiceCloning" className="text-xs font-extrabold uppercase tracking-wider text-slate-700 cursor-pointer">

@@ -406,7 +406,16 @@ def detect_spoken_language(text: str) -> str:
             return detected
     except Exception as e:
         print(f"Language detection failed: {e}")
-    return "Unknown"
+        
+    # Offline linguistic & script fallback
+    try:
+        from app.services.language_accent_detector import detect_language_and_accent
+        l_res = detect_language_and_accent(text)
+        return l_res.get("language") or "English"
+    except Exception as e:
+        print(f"Language detection offline fallback error: {e}")
+        
+    return "English"
 
 
 print("[OK] typed_ai_layer.py loaded | Type-safe AI layer active")

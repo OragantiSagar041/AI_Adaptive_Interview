@@ -16,7 +16,7 @@ import QualifiedCandidatesPage from './admin/QualifiedCandidatesPage'
 import RejectedCandidatesPage from './admin/RejectedCandidatesPage'
 import CreateInterviewPage from './admin/CreateInterviewPage'
 
-import { logout, updateCredits } from '../store/slices/authSlice'
+import { logout, updateCredits, loadAdminProfile } from '../store/slices/authSlice'
 import { persistor } from '../store/store'
 import { loadDashboardData } from '../store/slices/dashboardSlice'
 import {
@@ -172,15 +172,61 @@ export default function AdminPage({ role: initialRole = 'admin' }) {
     }
   }, [tabParam, dispatch])
 
-  // Accent color state
-  const [accentName, setAccentName] = useState('indigo')
+  // Accent color state & definition
+  const accentColors = {
+    teal: { primary: '#0d9488', hover: '#0f766e', glow: 'rgba(13, 148, 136, 0.15)' },
+    indigo: { primary: '#6366f1', hover: '#4f46e5', glow: 'rgba(99, 102, 241, 0.15)' },
+    purple: { primary: '#9333ea', hover: '#7e22ce', glow: 'rgba(147, 51, 234, 0.15)' },
+    red: { primary: '#e11d48', hover: '#be123c', glow: 'rgba(225, 29, 72, 0.15)' },
+    green: { primary: '#16a34a', hover: '#15803d', glow: 'rgba(22, 163, 74, 0.15)' },
+    blue: { primary: '#2563eb', hover: '#1d4ed8', glow: 'rgba(37, 99, 237, 0.15)' }
+  }
+
+  const [accentName, setAccentNameState] = useState(() => {
+    try {
+      return localStorage.getItem('theme_accent') || 'indigo'
+    } catch {
+      return 'indigo'
+    }
+  })
+
+  const setAccentName = (color) => {
+    setAccentNameState(color)
+    try {
+      localStorage.setItem('theme_accent', color)
+      window.dispatchEvent(new CustomEvent('accent_changed', { detail: color }))
+    } catch (e) {
+      console.error(e)
+    }
+  }
+
+  const currentAccent = accentColors[accentName] || accentColors.indigo
+
+  // Inject CSS variables so the entire Recruiter layout reflects the chosen accent color
+  useEffect(() => {
+    document.documentElement.style.setProperty('--accent-theme-color', currentAccent.primary)
+    document.documentElement.style.setProperty('--primary-color', currentAccent.primary)
+    document.documentElement.style.setProperty('--primary-hover', currentAccent.hover)
+    document.documentElement.style.setProperty('--primary-glow', currentAccent.glow)
+  }, [accentName])
 
   // Live Stream WebRTC State
   const [isLiveStreamOpen, setIsLiveStreamOpen] = useState(false)
   const [liveStreamSession, setLiveStreamSession] = useState(null)
 
-  const handleOpenLiveStreamAction = (session) => {
-    setLiveStreamSession(session)
+  const handleOpenLiveStreamAction = (sessionData) => {
+    if (!sessionData) return
+    let resolvedSession = sessionData
+    if (typeof sessionData === 'string') {
+      const found = liveSessions?.find(s => s.link_id === sessionData || s.session_id === sessionData || s.id === sessionData || s._id === sessionData)
+      resolvedSession = found || {
+        link_id: sessionData,
+        session_id: sessionData,
+        candidate_name: 'Live Candidate',
+        candidate_email: 'Active Session'
+      }
+    }
+    setLiveStreamSession(resolvedSession)
     setIsLiveStreamOpen(true)
   }
 
@@ -278,17 +324,6 @@ export default function AdminPage({ role: initialRole = 'admin' }) {
   const [bulkResultsModalOpen, setBulkResultsModalOpen] = useState(false)
   const [bulkResultsData, setBulkResultsData] = useState(null)
 
-  const accentColors = {
-    teal: { primary: '#0d9488', hover: '#0f766e', glow: 'rgba(13, 148, 136, 0.15)' },
-    indigo: { primary: '#6366f1', hover: '#4f46e5', glow: 'rgba(99, 102, 241, 0.15)' },
-    purple: { primary: '#9333ea', hover: '#7e22ce', glow: 'rgba(147, 51, 234, 0.15)' },
-    red: { primary: '#e11d48', hover: '#be123c', glow: 'rgba(225, 29, 72, 0.15)' },
-    green: { primary: '#16a34a', hover: '#15803d', glow: 'rgba(22, 163, 74, 0.15)' },
-    blue: { primary: '#2563eb', hover: '#1d4ed8', glow: 'rgba(37, 99, 237, 0.15)' }
-  }
-
-  const currentAccent = accentColors[accentName] || accentColors.indigo
-
   // Inject CSS override variables
   useEffect(() => {
     document.documentElement.style.setProperty('--accent-theme-color', currentAccent.primary)
@@ -304,6 +339,8 @@ export default function AdminPage({ role: initialRole = 'admin' }) {
   useEffect(() => {
     if (!token) return
 
+    dispatch(loadAdminProfile())
+
     const poll = () => {
       if (document.visibilityState === 'visible') {
         dispatch(loadDashboardData(selectedAdminId))
@@ -311,7 +348,7 @@ export default function AdminPage({ role: initialRole = 'admin' }) {
     }
 
     poll() // immediate first fetch
-    const statsInterval = setInterval(poll, 60000) // was 12 000ms
+    const statsInterval = setInterval(poll, 60000)
 
     return () => clearInterval(statsInterval)
   }, [dispatch, token, selectedAdminId])

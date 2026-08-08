@@ -19,6 +19,7 @@ from typing import Any, Dict, List, Optional, Union
 import bcrypt, jwt, requests
 import cloudinary, cloudinary.uploader, cloudinary.api, cloudinary.utils
 import edge_tts
+# pyrefly: ignore [missing-import]
 import pypdf
 from bson import ObjectId
 from bson.errors import InvalidId
@@ -163,23 +164,65 @@ def get_superadmin_org_stats(current_admin: dict = Depends(get_current_admin_det
 
 @router.get("/api/superadmin/recruiters/stats")
 def get_superadmin_recruiter_stats(current_admin: dict = Depends(get_current_admin_details)):
-    if current_admin.get("role") not in ["master", "super_admin"]:
+    if current_admin.get("role") not in ["master", "super_admin", "superadmin"]:
         raise HTTPException(status_code=403, detail="Not authorized")
     
     company_id = current_admin.get("company_id")
-    query = {"company_id": company_id} if company_id else {}
+    company_ids = [company_id]
+    try:
+        if company_id:
+            company_ids.append(ObjectId(company_id))
+    except Exception:
+        pass
+
+    query = {"company_id": {"$in": company_ids}} if company_id else {}
     admins = list(admins_collection.find(query, {"password": 0}))
     recruiters = []
     total_interviews = 0
+
     for a in admins:
-        interviews_count = interview_sessions_collection.count_documents({"admin_id": str(a.get("_id"))})
+        admin_obj_id = a.get("_id")
+        admin_str_id = str(admin_obj_id) if admin_obj_id else ""
+        email = a.get("email")
+        username = a.get("username")
+        
+        identifiers = [x for x in [admin_str_id, admin_obj_id, email, username] if x]
+        
+        # Check interviews templates created by this admin
+        created_interviews = list(interviews_collection.find({
+            "$or": [
+                {"admin_id": {"$in": identifiers}},
+                {"created_by": {"$in": identifiers}},
+                {"user_id": {"$in": identifiers}}
+            ]
+        }, {"_id": 1, "id": 1}))
+        
+        interview_keys = []
+        for it in created_interviews:
+            if "_id" in it:
+                interview_keys.append(str(it["_id"]))
+                interview_keys.append(it["_id"])
+            if "id" in it:
+                interview_keys.append(str(it["id"]))
+                
+        session_query = {
+            "$or": [
+                {"admin_id": {"$in": identifiers}},
+                {"created_by": {"$in": identifiers}},
+                {"interviewer_id": {"$in": identifiers}}
+            ]
+        }
+        if interview_keys:
+            session_query["$or"].append({"interview_id": {"$in": interview_keys}})
+            
+        interviews_count = interview_sessions_collection.count_documents(session_query)
         total_interviews += interviews_count
         
         last_interview = interview_sessions_collection.find_one(
-            {"admin_id": str(a.get("_id"))},
+            session_query,
             sort=[("created_at", -1)]
         )
-        last_active = last_interview.get("created_at") if last_interview else a.get("created_at", datetime.now(timezone.utc).isoformat())
+        last_active = last_interview.get("created_at") if last_interview and last_interview.get("created_at") else a.get("created_at", datetime.now(timezone.utc).isoformat())
         
         recruiters.append({
             "id": str(a.get("_id")),
@@ -206,7 +249,7 @@ def get_superadmin_recruiter_stats(current_admin: dict = Depends(get_current_adm
             }
         }
         if company_id:
-            date_query["company_id"] = company_id
+            date_query["company_id"] = {"$in": company_ids}
             
         count = interview_sessions_collection.count_documents(date_query)
         weekly_activity.append({
@@ -648,6 +691,21 @@ def send_recruiter_message(admin_id: str, data: RecruiterMessage, current_admin:
         "body": data.body,
         "timestamp": datetime.now(timezone.utc).isoformat()
     })
+
+    try:
+        notifications_collection.insert_one({
+            "title": f"Message: {data.subject}",
+            "message": data.body[:200] if data.body else "You have received a new direct message.",
+            "type": "message",
+            "recipient_role": "admin",
+            "recipient_id": str(obj_id),
+            "admin_id": str(obj_id),
+            "company_id": str(current_admin.get("company_id") or ""),
+            "read": False,
+            "created_at": datetime.now(timezone.utc).isoformat()
+        })
+    except Exception as notif_err:
+        logger.warning(f"Failed to create recruiter message notification: {notif_err}")
     
     return {"status": "success", "message": "Message sent successfully"}
 

@@ -1,14 +1,21 @@
 import React, { useEffect, useState } from 'react'
 import { useSearchParams, useNavigate } from 'react-router-dom'
-import { RefreshCw, AlertTriangle } from 'lucide-react'
+import { RefreshCw } from 'lucide-react'
 import api from '../utils/api'
+import AccessDeniedScreen from '../components/interview/AccessDeniedScreen'
 
 export default function Interview() {
   const [searchParams] = useSearchParams()
   const navigate = useNavigate()
   const sessionId = searchParams.get('session_id') || searchParams.get('session')
   const [error, setError] = useState(null)
+  const [scheduledStart, setScheduledStart] = useState(null)
   const [loading, setLoading] = useState(true)
+
+  useEffect(() => {
+    document.documentElement.setAttribute('data-theme', 'light')
+    document.documentElement.classList.remove('dark')
+  }, [])
 
   useEffect(() => {
     if (!sessionId) {
@@ -24,11 +31,19 @@ export default function Interview() {
         if (payload.status !== 'success') {
           throw new Error(payload.detail || payload.message || "Failed to load session details.")
         }
+        if (payload.scheduled_start) {
+          setScheduledStart(payload.scheduled_start)
+        }
         if (payload.is_deactivated) {
           throw new Error("This interview link has been temporarily deactivated by the recruiter.")
         }
         if (payload.is_expired) {
           throw new Error("This interview link has expired. Please contact the recruiter for a new link.")
+        }
+        if (payload.is_before_schedule && payload.scheduled_start) {
+          setScheduledStart(payload.scheduled_start)
+          const startTime = new Date(payload.scheduled_start.endsWith('Z') || payload.scheduled_start.includes('+') ? payload.scheduled_start : payload.scheduled_start + 'Z')
+          throw new Error(`This interview is scheduled to start on ${startTime.toLocaleString('en-IN', { timeZone: 'Asia/Kolkata', dateStyle: 'short', timeStyle: 'short' })}. Please try again at the scheduled time.`)
         }
         if (payload.session_status === 'completed') {
           throw new Error("This interview session has already been completed.")
@@ -66,14 +81,7 @@ export default function Interview() {
   }
 
   if (error) {
-    return (
-      <div className="flex justify-center items-center h-screen flex-col p-6 text-center">
-        <AlertTriangle className="text-danger mb-4" size={48} />
-        <h2 className="text-2xl font-bold text-slate-900 tracking-tight">Access Denied</h2>
-        <p className="text-slate-600 mt-2 max-w-md text-sm">{error}</p>
-        <a href="/" className="inline-flex items-center justify-center gap-2 px-6 py-3 rounded-full font-semibold text-sm bg-primary hover:bg-primary-hover text-white transition-all shadow-[0_4px_14px_rgba(99,102,241,0.15)] mt-6 no-underline">Go to Platform Page</a>
-      </div>
-    )
+    return <AccessDeniedScreen error={error} scheduledStart={scheduledStart} />
   }
 
   return null

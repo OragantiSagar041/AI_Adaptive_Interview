@@ -19,6 +19,7 @@ from typing import Any, Dict, List, Optional, Union
 import bcrypt, jwt, requests
 import cloudinary, cloudinary.uploader, cloudinary.api, cloudinary.utils
 import edge_tts
+# pyrefly: ignore [missing-import]
 import pypdf
 from bson import ObjectId
 from bson.errors import InvalidId
@@ -244,17 +245,23 @@ def complete_session(
                                 admin = admins_collection.find_one({"_id": ObjectId(admin_id)})
                                 if admin: 
                                     admin_email = admin.get("email", "")
-                                    admin_company_id = admin.get("company_id")
+                                    admin_company_id = str(admin.get("company_id") or "")
+                                    admin_role = admin.get("role", "admin")
+                                    is_super = admin_role in ["super_admin", "superadmin"]
                                     notifications_collection.insert_one({
                                         "title": "Interview Complete",
                                         "message": f"Candidate '{candidate_name}' has completed their interview. Avg score: {round(avg_score, 1)}/10.",
                                         "type": "candidate",
-                                        "recipient_role": "admin",
+                                        "recipient_role": "superadmin" if is_super else "admin",
+                                        "recipient_id": str(admin_id),
+                                        "admin_id": str(admin_id),
+                                        "interview_id": str(interview_id),
                                         "company_id": admin_company_id,
                                         "read": False,
                                         "created_at": datetime.now(timezone.utc).isoformat()
                                     })
-                            except: pass
+                            except Exception as notif_e:
+                                logger.warning(f"Failed to insert completion notification: {notif_e}")
                             
                         if candidate_email:
                             send_submission_notification(
@@ -613,57 +620,6 @@ async def get_ongoing_interviews(admin_id: Optional[str] = None, current_admin: 
 
     return {"sessions": sessions, "count": len(sessions)}
 
-# ─────────────────────────────────────────────────────────────────────────────
-# SPECTATOR TOKEN ENDPOINT  —  Admin generates a shareable read-only invite
-# ─────────────────────────────────────────────────────────────────────────────
-
-@router.post("/admin/interview/{link_id}/spectator-token")
-async def generate_spectator_token(
-    link_id: str,
-    current_admin: dict = Depends(get_current_admin_details),
-):
-    """Generate a short-lived spectator token for a specific live interview session.
-    
-    The token is valid for 4 hours and grants read-only WebRTC access.
-    Spectators can watch the live video feed but cannot interact in any way.
-    """
-    # Only admins with live_monitoring access can create spectator links
-    if current_admin.get("role") != "master":
-        require_admin_capability(
-            current_admin["admin_id"],
-            "live_monitoring",
-            "Live monitoring is required to create spectator links.",
-        )
-    
-    # Verify the session exists and belongs to this admin's company
-    session = _get_authorized_live_session(link_id, current_admin)
-    if session.get("status") != "started":
-        raise HTTPException(status_code=403, detail="Spectator access is only allowed for started sessions")
-    
-    token = create_spectator_token(
-        secret=JWT_SECRET_KEY,
-        algorithm=ALGORITHM,
-        link_id=link_id,
-        issued_by_admin_id=str(current_admin.get("admin_id") or ""),
-        ttl_hours=4,
-    )
-    return {
-        "token": token,
-        "expires_in_hours": 4,
-        "link_id": link_id,
-    }
-
-
-@router.get("/admin/interview/{link_id}/spectator-count")
-async def get_spectator_count(
-    link_id: str,
-    current_admin: dict = Depends(get_current_admin_details),
-):
-    """Return the current number of active spectators watching this session."""
-    _get_authorized_live_session(link_id, current_admin)
-    count = await manager.get_spectator_count(link_id)
-    return {"link_id": link_id, "spectator_count": count}
-
 
 @router.websocket("/ws/webrtc/{role}/{link_id}")
 async def webrtc_endpoint(websocket: WebSocket, role: str, link_id: str, token: Optional[str] = None):
@@ -672,6 +628,9 @@ async def webrtc_endpoint(websocket: WebSocket, role: str, link_id: str, token: 
     with open(webrtc_log_path, "a") as f:
         f.write(f"\n--- New Connection ---\nRole: {role}, Link ID: {link_id}\nToken supplied: {bool(token)}\n")
     
+    admin_id: Optional[str] = None
+    spectator_id: Optional[str] = None
+
     if role == "candidate":
         if not token:
             await websocket.close(code=1008)
@@ -682,6 +641,11 @@ async def webrtc_endpoint(websocket: WebSocket, role: str, link_id: str, token: 
             await websocket.close(code=1008)
             return
         await manager.connect_candidate(websocket, link_id)
+        # Notify watching admins immediately that candidate stream is active/ready
+        try:
+            await manager.send_to_admins(link_id, {"type": "candidate_connected"})
+        except Exception:
+            pass
     elif role == "admin":
         if not token:
             with open(webrtc_log_path, "a") as f:
@@ -691,9 +655,22 @@ async def webrtc_endpoint(websocket: WebSocket, role: str, link_id: str, token: 
         try:
             auth_context = _decode_dashboard_websocket_admin(token)
             _get_authorized_live_session(link_id, auth_context)
-            await manager.connect_admin(websocket, link_id)
+            # Use client-provided unique admin_id or generate unique instance identifier
+            client_admin_id = websocket.query_params.get("admin_id")
+            if client_admin_id and client_admin_id != "undefined":
+                admin_id = client_admin_id
+            else:
+                base = auth_context.get("email") or auth_context.get("user_id") or "admin"
+                admin_id = f"{base}_{uuid.uuid4().hex[:8]}"
+
+            await manager.connect_admin(websocket, link_id, admin_id=admin_id)
             with open(webrtc_log_path, "a") as f:
-                f.write("Admin connected successfully.\n")
+                f.write(f"Admin ({admin_id}) connected successfully.\n")
+            # Also notify candidate that a new admin connected
+            try:
+                await manager.send_to_candidate(link_id, {"type": "admin_connected", "admin_id": admin_id})
+            except Exception:
+                pass
         except HTTPException as e:
             with open(webrtc_log_path, "a") as f:
                 f.write(f"Admin authorization error: {e.detail}\n")
@@ -709,42 +686,16 @@ async def webrtc_endpoint(websocket: WebSocket, role: str, link_id: str, token: 
                 f.write(f"Other Error: {str(e)}\n{traceback.format_exc()}\n")
             await websocket.close(code=1011)
             return
-    elif role == "spectator":
-        if not token:
-            await websocket.close(code=1008)
-            return
-        try:
-            decode_spectator_token(JWT_SECRET_KEY, ALGORITHM, token, link_id)
-        except (jwt.PyJWTError, ValueError) as e:
-            with open(webrtc_log_path, "a") as f:
-                f.write(f"Spectator auth error: {str(e)}\n")
-            await websocket.close(code=1008)
-            return
-        # Verify session is still active before allowing spectator in
-        session_check = interview_sessions_collection.find_one(
-            {"link_id": link_id},
-            {"status": 1, "is_deactivated": 1}
-        )
-        if not session_check or session_check.get("status") != "started" or session_check.get("is_deactivated"):
-            await websocket.close(code=1008)
-            return
-        spectator_id = str(uuid.uuid4())
-        await manager.connect_spectator(websocket, link_id)
-        try:
-            await websocket.send_json({"type": "spectator_connected", "spectator_id": spectator_id})
-        except Exception:
-            pass
     else:
         await websocket.close()
         return
 
     last_telemetry_at = 0.0
     try:
-        # Notify admin immediately that they are connected so the frontend
-        # can start the WebRTC offer right away without waiting for a message.
+        # Notify admin immediately that they are connected with their assigned admin_id
         if role == "admin":
             try:
-                await websocket.send_json({"type": "admin_connected"})
+                await websocket.send_json({"type": "admin_connected", "admin_id": admin_id})
             except Exception:
                 pass
 
@@ -752,15 +703,17 @@ async def webrtc_endpoint(websocket: WebSocket, role: str, link_id: str, token: 
             data = await websocket.receive_json()
             msg_type = data.get("type", "")
 
-            if role == "candidate":
-                # Heartbeat ping — just pong back, never relay to admins
-                if msg_type == "ping":
-                    try:
-                        await websocket.send_json({"type": "pong"})
-                    except Exception:
-                        pass
-                    continue
+            # Heartbeat ping/pong from any role to keep load balancer alive
+            if msg_type == "ping":
+                try:
+                    await websocket.send_json({"type": "pong"})
+                except Exception:
+                    pass
+                continue
+            if msg_type == "pong":
+                continue
 
+            if role == "candidate":
                 # Throttle telemetry: at most one per second
                 if msg_type == "telemetry":
                     now_monotonic = time.monotonic()
@@ -768,11 +721,10 @@ async def webrtc_endpoint(websocket: WebSocket, role: str, link_id: str, token: 
                         continue
                     last_telemetry_at = now_monotonic
 
-                # Relay all signaling messages (offer/answer/ICE) to admins
-                await manager.send_to_admins(link_id, data)
+                    # Broadcast telemetry to all watching admins & spectators
+                    await manager.send_to_admins(link_id, data)
 
-                # Persist telemetry snapshot to MongoDB / Redis for the dashboard
-                if msg_type == "telemetry":
+                    # Persist telemetry snapshot to MongoDB / Redis for the dashboard
                     telemetry_payload = data.get("data", {}) or {}
                     proctoring_status = telemetry_payload.get("proctoring_status", {}) or {}
                     updates = {
@@ -790,29 +742,17 @@ async def webrtc_endpoint(websocket: WebSocket, role: str, link_id: str, token: 
                         "eye_contact_lost": _optional_bool(proctoring_status.get("eyeContactLost")),
                     }
                     await _store_live_snapshot(link_id, updates, candidate_session)
+                else:
+                    # WebRTC signaling (answer, ice candidate) - target specific admin/spectator if specified
+                    target_admin = data.get("target_admin_id") or data.get("viewer_id") or data.get("spectator_id")
+                    if target_admin:
+                        await manager.send_to_specific_admin(link_id, target_admin, data)
+                    else:
+                        await manager.send_to_admins(link_id, data)
 
             elif role == "admin":
                 # Forward all admin signaling (offer/answer/ICE) directly to the candidate
                 await manager.send_to_candidate(link_id, data)
-
-            elif role == "spectator":
-                # Spectators are strictly receive-only.
-                # They can send WebRTC offers/ICE to the candidate for their OWN stream,
-                # but they CANNOT send any action messages.
-                allowed_spectator_types = {"webrtc_offer", "webrtc_ice_candidate", "ping"}
-                if msg_type == "ping":
-                    try:
-                        await websocket.send_json({"type": "pong"})
-                    except Exception:
-                        pass
-                elif msg_type in allowed_spectator_types:
-                    # Route spectator's WebRTC signaling to candidate so candidate
-                    # can set up a separate P2P connection for the spectator.
-                    # We tag the sender as a spectator so candidate can handle it.
-                    data["spectator_id"] = spectator_id
-                    data["role"] = "spectator"
-                    await manager.send_to_candidate(link_id, data)
-                # All other message types from spectators are silently dropped.
     except WebSocketDisconnect:
         webrtc_log_path = os.path.join(tempfile.gettempdir(), "webrtc_debug.log")
         with open(webrtc_log_path, "a") as f:
@@ -822,12 +762,30 @@ async def webrtc_endpoint(websocket: WebSocket, role: str, link_id: str, token: 
             await manager.send_to_admins(link_id, {"type": "candidate_disconnected"})
         elif role == "admin":
             manager.disconnect_admin(websocket, link_id)
-        elif role == "spectator":
-            await manager.disconnect_spectator(websocket, link_id)
     except Exception as e:
         webrtc_log_path = os.path.join(tempfile.gettempdir(), "webrtc_debug.log")
         with open(webrtc_log_path, "a") as f:
             f.write(f"Exception in while loop: {str(e)}\n{traceback.format_exc()}\n")
+    finally:
+        if role == "candidate":
+            manager.disconnect_candidate(link_id)
+            try:
+                await manager.send_to_admins(link_id, {"type": "candidate_disconnected"})
+            except Exception:
+                pass
+        elif role == "admin":
+            manager.disconnect_admin(websocket, link_id, admin_id=admin_id)
+            try:
+                await manager.send_to_candidate(link_id, {"type": "admin_disconnected", "admin_id": admin_id})
+            except Exception:
+                pass
+        elif role == "spectator":
+            await manager.disconnect_spectator(websocket, link_id, spectator_id=spectator_id)
+            try:
+                await manager.send_to_candidate(link_id, {"type": "admin_disconnected", "admin_id": spectator_id})
+            except Exception:
+                pass
+
 
 
 # --------------------------------------------------------------------------------

@@ -1,5 +1,12 @@
 import React, { useState, useEffect, useCallback, useMemo } from 'react';
-import { Briefcase, Plus, MapPin, Clock, FileText, X, Target, Trash2, Pencil, Wallet, Users, LayoutGrid, LayoutList, ArrowRight, ChevronRight, Zap, Building2, BookOpen, CheckCircle2, Mail, Phone, ExternalLink, RefreshCw, ChevronDown } from 'lucide-react';
+import { useNavigate } from 'react-router-dom';
+import { 
+  Briefcase, Plus, MapPin, Clock, FileText, X, Target, Trash2, Pencil, 
+  Wallet, Users, LayoutGrid, LayoutList, ArrowRight, ChevronRight, Zap, 
+  Building2, BookOpen, CheckCircle2, Mail, Phone, ExternalLink, RefreshCw, 
+  ChevronDown, Copy, Calendar, Eye, Download, FileCheck, Check, Sparkles,
+  User, UserCheck, History, ShieldCheck
+} from 'lucide-react';
 import Card from '../../components/Card';
 import Button from '../../components/Button';
 import JobApplicationModal from '../../components/JobApplicationModal';
@@ -8,6 +15,7 @@ import { loadSuperAdminDashboard } from '../../store/slices/dashboardSlice';
 import { getComputedStatus } from '../../utils/adminFormatters';
 import axios from 'axios';
 import { API_BASE_URL } from '../../apiConfig';
+import Swal from 'sweetalert2';
 const WORK_MODE_STYLES = {
   Remote: 'bg-emerald-50 text-emerald-700 border-emerald-200',
   Hybrid: 'bg-blue-50 text-blue-700 border-blue-200',
@@ -25,6 +33,7 @@ const GRADIENT_ACCENTS = [
 
 export default function SuperAdminJobsPage() {
   const dispatch = useDispatch();
+  const navigate = useNavigate();
   // Read the JWT token from Redux state — exactly how every other page does it.
   // Login stores it in Redux (auth.token) + sessionStorage('adminToken').
   // sessionStorage is never written, so reading from there always returns null.
@@ -46,6 +55,7 @@ export default function SuperAdminJobsPage() {
 
   const [selectedJobForCandidates, setSelectedJobForCandidates] = useState(null);
   const [selectedJobDetails, setSelectedJobDetails] = useState(null);
+  const [selectedResumeApp, setSelectedResumeApp] = useState(null);
   const [viewMode, setViewMode] = useState('grid');
   const [jobsLoading, setJobsLoading] = useState(true);
 
@@ -90,16 +100,84 @@ export default function SuperAdminJobsPage() {
         }
       );
       if (res.ok) {
+        const data = await res.json().catch(() => ({}));
+        const lastActionName = data.last_action_by_name || 'Admin';
+        const lastActionRole = data.last_action_by_role || '';
+        const lastActionAt = data.last_action_at || new Date().toISOString();
+
+        const updatedAppMapper = (a) => {
+          if (a._id !== app._id) return a;
+          const newHistoryItem = {
+            status: newStatus,
+            action: `Status changed to ${newStatus}`,
+            action_by_name: lastActionName,
+            action_by_role: lastActionRole,
+            timestamp: lastActionAt,
+          };
+          return {
+            ...a,
+            status: newStatus,
+            last_action_by_name: lastActionName,
+            last_action_by_role: lastActionRole,
+            last_action_at: lastActionAt,
+            action_history: [...(a.action_history || []), newHistoryItem],
+          };
+        };
+
         setApplicationData(prev => ({
           ...prev,
-          list: prev.list.map(a =>
-            a._id === app._id ? { ...a, status: newStatus } : a
-          ),
+          list: prev.list.map(updatedAppMapper),
         }));
+
+        setSelectedResumeApp(prev =>
+          prev && prev._id === app._id ? updatedAppMapper(prev) : prev
+        );
+
+        Swal.fire({
+          title: 'Status Updated',
+          text: `Candidate marked as "${newStatus}" by ${lastActionName}`,
+          icon: 'success',
+          toast: true,
+          position: 'top-end',
+          showConfirmButton: false,
+          timer: 2200,
+        });
       }
     } catch (err) {
       console.error('Error updating status:', err);
     }
+  };
+
+  const handleScheduleInterview = async (app) => {
+    if (app.status !== 'Interview Scheduled') {
+      try {
+        await handleStatusChange(app, 'Interview Scheduled');
+      } catch (e) {
+        console.error("Failed to update status before scheduling:", e);
+      }
+    }
+    const isSuperAdmin = window.location.pathname.startsWith('/superadmin');
+    const targetRoute = isSuperAdmin ? '/superadmin/create-interview' : '/admin/create-interview';
+    navigate(targetRoute, {
+      state: {
+        fromJobApplication: true,
+        candidateData: {
+          name: app.name || '',
+          email: app.candidate_email || app.email || '',
+          phone: app.phone || '',
+          resumeText: app.resume_text || '',
+          resumeUrl: app.resume_url || '',
+          resumeFilename: app.resume_filename || '',
+          coverLetter: app.cover_letter || '',
+          coverLetterUrl: app.cover_letter_url || '',
+          jobDescription: applicationData.job?.description || '',
+          jobTitle: applicationData.job?.title || '',
+          jobSkills: applicationData.job?.skills || '',
+          jobId: applicationData.job?.job_id || '',
+          applicationId: app._id
+        }
+      }
+    });
   };
 
   const [jobs, setJobs] = useState([]);
@@ -274,7 +352,9 @@ export default function SuperAdminJobsPage() {
         headers: { ...authHeaders },
       });
       if (res.ok) {
-        if (selectedJobDetails?.job_id === job_id) setSelectedJobDetails(null);
+        if (selectedJobDetails?.job_id === job_id || selectedJobDetails?._id === job_id) {
+          setSelectedJobDetails(null);
+        }
         // Refetch: if this was the last job on the page, go back one page
         const newPage = jobs.length === 1 && currentPage > 1 ? currentPage - 1 : currentPage;
         setCurrentPage(newPage);
@@ -285,6 +365,52 @@ export default function SuperAdminJobsPage() {
     } catch (err) {
       console.error('Error deleting job:', err);
     }
+  };
+
+  const confirmDeleteJob = (job, e) => {
+    if (e) e.stopPropagation();
+    const jobId = job.job_id || job._id;
+    Swal.fire({
+      title: 'Delete Job Opening?',
+      text: `Are you sure you want to delete "${job.title}"? This cannot be undone.`,
+      icon: 'warning',
+      showCancelButton: true,
+      confirmButtonColor: '#ef4444',
+      cancelButtonColor: '#64748b',
+      confirmButtonText: 'Yes, Delete',
+      cancelButtonText: 'Cancel',
+      customClass: {
+        popup: 'rounded-3xl shadow-2xl',
+        confirmButton: 'rounded-xl px-5 py-2.5 font-bold',
+        cancelButton: 'rounded-xl px-5 py-2.5 font-bold'
+      }
+    }).then(async (result) => {
+      if (result.isConfirmed) {
+        await removeJob(jobId);
+        Swal.fire({
+          title: 'Deleted!',
+          text: 'Job posting has been removed.',
+          icon: 'success',
+          timer: 1800,
+          showConfirmButton: false,
+        });
+      }
+    });
+  };
+
+  const handleCopyJobLink = (job, e) => {
+    if (e) e.stopPropagation();
+    const link = `${window.location.origin}/apply/${job.job_id || job._id}`;
+    navigator.clipboard.writeText(link);
+    Swal.fire({
+      title: 'Link Copied!',
+      text: 'Public job application link copied to clipboard.',
+      icon: 'success',
+      toast: true,
+      position: 'top-end',
+      showConfirmButton: false,
+      timer: 2000,
+    });
   };
 
   const handleApplyJob = (job) => {
@@ -382,42 +508,48 @@ export default function SuperAdminJobsPage() {
               {/* Accent gradient bar */}
               <div className={`h-1.5 w-full bg-gradient-to-r ${GRADIENT_ACCENTS[idx % GRADIENT_ACCENTS.length]}`} />
 
-              <div className="p-6 flex flex-col gap-4 flex-1">
+              <div className="p-5 sm:p-6 flex flex-col gap-4 flex-1">
                 {/* Top row: title + action icons */}
-                <div className="flex items-start justify-between gap-3">
-                  <div className="flex items-center gap-3 overflow-hidden">
+                <div className="flex items-start justify-between gap-2">
+                  <div className="flex items-center gap-3 overflow-hidden flex-1 min-w-0">
                     <div className={`w-11 h-11 rounded-xl flex items-center justify-center bg-gradient-to-br ${GRADIENT_ACCENTS[idx % GRADIENT_ACCENTS.length]} text-white shrink-0 shadow-md`}>
                       <Briefcase size={20} />
                     </div>
-                    <div className="overflow-hidden">
+                    <div className="overflow-hidden flex-1 min-w-0">
                       <div className="flex items-center gap-2">
-                        <h3 className="font-black text-slate-800 text-base leading-tight truncate">{job.title}</h3>
-                        <span className="text-[9px] font-bold text-slate-400 uppercase tracking-wider bg-slate-100 px-1.5 py-0.5 rounded">{job.custom_id || job.job_id || 'JOB'}</span>
+                        <h3 className="font-black text-slate-800 text-base leading-tight truncate" title={job.title}>{job.title}</h3>
+                        <span className="text-[9px] font-bold text-slate-400 uppercase tracking-wider bg-slate-100 px-1.5 py-0.5 rounded shrink-0">{job.custom_id || job.job_id || 'JOB'}</span>
                       </div>
-                      <p className="text-xs text-slate-400 font-medium mt-0.5 flex items-center gap-1">
-                        <Building2 size={11} /> {job.location}
-                      </p>
+                      <div className="flex items-center gap-2 mt-1 text-xs text-slate-400 font-medium truncate">
+                        <span className="flex items-center gap-1 shrink-0"><Building2 size={11} /> {job.location}</span>
+                        <span>•</span>
+                        <span className="flex items-center gap-1 text-slate-500 font-semibold truncate" title={`Created by ${job.created_by_name || job.created_by || 'Admin'} (${job.created_by_role || 'Admin'})`}>
+                          <User size={11} className="text-indigo-500 shrink-0" /> {job.created_by_name || job.created_by || 'Admin'}
+                        </span>
+                      </div>
                     </div>
                   </div>
-                  <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity shrink-0">
+
+                  {/* Top Action Icons - ALWAYS VISIBLE */}
+                  <div className="flex items-center gap-1.5 shrink-0 ml-1">
                     <button
-                      onClick={(e) => { e.stopPropagation(); openApplications(job); }}
-                      className="p-1.5 bg-teal-50 text-teal-600 hover:bg-teal-100 rounded-lg border-none cursor-pointer transition-colors"
-                      title="View Applications"
+                      onClick={(e) => handleCopyJobLink(job, e)}
+                      className="p-2 bg-slate-50 hover:bg-indigo-50 text-slate-500 hover:text-indigo-600 rounded-xl border border-slate-200/80 hover:border-indigo-200 cursor-pointer transition-all shadow-xs"
+                      title="Copy Public Apply Link"
                     >
-                      <Users size={14} />
+                      <Copy size={14} />
                     </button>
                     <button
                       onClick={(e) => { e.stopPropagation(); handleEditJob(job); }}
-                      className="p-1.5 bg-indigo-50 text-indigo-600 hover:bg-indigo-100 rounded-lg border-none cursor-pointer transition-colors"
-                      title="Edit Job"
+                      className="p-2 bg-indigo-50 text-indigo-600 hover:bg-indigo-600 hover:text-white rounded-xl border border-indigo-100 cursor-pointer transition-all shadow-xs"
+                      title="Edit Job Details"
                     >
                       <Pencil size={14} />
                     </button>
                     <button
-                      onClick={(e) => { e.stopPropagation(); removeJob(job.job_id || job._id); }}
-                      className="p-1.5 bg-rose-50 text-rose-500 hover:bg-rose-100 rounded-lg border-none cursor-pointer transition-colors"
-                      title="Delete Job"
+                      onClick={(e) => confirmDeleteJob(job, e)}
+                      className="p-2 bg-rose-50 text-rose-500 hover:bg-rose-600 hover:text-white rounded-xl border border-rose-100 cursor-pointer transition-all shadow-xs"
+                      title="Delete Job Opening"
                     >
                       <Trash2 size={14} />
                     </button>
@@ -463,13 +595,29 @@ export default function SuperAdminJobsPage() {
                   )}
                 </div>
 
-                {/* Apply CTA */}
-                <button
-                  onClick={(e) => { e.stopPropagation(); handleApplyJob(job); }}
-                  className="w-full mt-auto flex items-center justify-center gap-2 py-2.5 rounded-xl bg-gradient-to-r from-indigo-600 to-indigo-700 hover:from-indigo-500 hover:to-indigo-600 text-white font-bold text-sm border-none cursor-pointer shadow-md shadow-indigo-400/25 transition-all hover:-translate-y-0.5 active:translate-y-0"
-                >
-                  <Zap size={15} /> Apply for Job <ArrowRight size={14} />
-                </button>
+                {/* Card Action Buttons (View Applications + Preview/Apply) */}
+                <div className="mt-auto pt-2 flex flex-col gap-2">
+                  <button
+                    onClick={(e) => { e.stopPropagation(); openApplications(job); }}
+                    className="w-full flex items-center justify-center gap-2 py-2.5 px-4 rounded-xl bg-gradient-to-r from-teal-600 to-cyan-600 hover:from-teal-500 hover:to-cyan-500 text-white font-bold text-sm border-none cursor-pointer shadow-md shadow-teal-500/20 transition-all hover:-translate-y-0.5 active:translate-y-0"
+                  >
+                    <Users size={16} /> View Applications <ArrowRight size={14} />
+                  </button>
+                  <div className="flex items-center gap-2">
+                    <button
+                      onClick={(e) => { e.stopPropagation(); setSelectedJobDetails(job); }}
+                      className="flex-1 flex items-center justify-center gap-1.5 py-2 px-3 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-700 font-semibold text-xs border border-slate-200/60 cursor-pointer transition-colors"
+                    >
+                      <Eye size={13} /> Details
+                    </button>
+                    <button
+                      onClick={(e) => { e.stopPropagation(); handleApplyJob(job); }}
+                      className="flex-1 flex items-center justify-center gap-1.5 py-2 px-3 rounded-xl bg-indigo-50 hover:bg-indigo-100 text-indigo-700 font-semibold text-xs border border-indigo-100 cursor-pointer transition-colors"
+                    >
+                      <Zap size={13} /> Apply <ExternalLink size={11} className="opacity-70" />
+                    </button>
+                  </div>
+                </div>
               </div>
             </div>
           ))}
@@ -508,7 +656,12 @@ export default function SuperAdminJobsPage() {
                             <p className="font-black text-slate-800 text-sm">{job.title}</p>
                             <span className="text-[9px] font-bold text-slate-400 uppercase tracking-wider bg-slate-100 px-1.5 py-0.5 rounded">{job.custom_id || job.job_id || 'JOB'}</span>
                           </div>
-                          <p className="text-xs text-slate-400 mt-0.5 line-clamp-1 max-w-[200px]">{job.description}</p>
+                          <div className="flex items-center gap-2 mt-0.5">
+                            <p className="text-xs text-slate-400 line-clamp-1 max-w-[180px]">{job.description}</p>
+                            <span className="text-[0.65rem] text-slate-500 font-semibold flex items-center gap-1 bg-slate-100/80 px-1.5 py-0.5 rounded border border-slate-200/60" title={`Created by ${job.created_by_name || job.created_by || 'Admin'}`}>
+                              <User size={10} className="text-indigo-500" /> {job.created_by_name || job.created_by || 'Admin'}
+                            </span>
+                          </div>
                         </div>
                       </div>
                     </td>
@@ -543,33 +696,42 @@ export default function SuperAdminJobsPage() {
                       </div>
                     </td>
                     <td className="p-4 text-right">
-                      <div className="flex items-center justify-end gap-2">
-                        <button
-                          onClick={(e) => { e.stopPropagation(); handleApplyJob(job); }}
-                          className="flex items-center gap-1.5 px-4 py-2 rounded-xl bg-gradient-to-r from-indigo-600 to-indigo-700 hover:from-indigo-500 hover:to-indigo-600 text-white font-bold text-xs border-none cursor-pointer shadow-md shadow-indigo-400/20 transition-all hover:-translate-y-0.5"
-                        >
-                          <Zap size={13} /> Apply
-                        </button>
+                      <div className="flex items-center justify-end gap-1.5">
                         <button
                           onClick={(e) => { e.stopPropagation(); openApplications(job); }}
-                          className="p-2 bg-teal-50 text-teal-600 hover:bg-teal-100 rounded-xl border-none cursor-pointer transition-colors"
+                          className="flex items-center gap-1.5 px-3 py-1.5 bg-teal-50 text-teal-700 hover:bg-teal-600 hover:text-white rounded-xl border border-teal-200 font-bold text-xs cursor-pointer transition-all shadow-xs"
                           title="View Applications"
                         >
-                          <Users size={15} />
+                          <Users size={14} />
+                          <span>Applications</span>
+                        </button>
+                        <button
+                          onClick={(e) => handleCopyJobLink(job, e)}
+                          className="p-2 bg-slate-50 text-slate-600 hover:bg-indigo-50 hover:text-indigo-600 rounded-xl border border-slate-200 cursor-pointer transition-all shadow-xs"
+                          title="Copy Public Apply Link"
+                        >
+                          <Copy size={14} />
                         </button>
                         <button
                           onClick={(e) => { e.stopPropagation(); handleEditJob(job); }}
-                          className="p-2 bg-indigo-50 text-indigo-600 hover:bg-indigo-100 rounded-xl border-none cursor-pointer transition-colors"
-                          title="Edit"
+                          className="p-2 bg-indigo-50 text-indigo-600 hover:bg-indigo-600 hover:text-white rounded-xl border border-indigo-100 cursor-pointer transition-all shadow-xs"
+                          title="Edit Job"
                         >
-                          <Pencil size={15} />
+                          <Pencil size={14} />
                         </button>
                         <button
-                          onClick={(e) => { e.stopPropagation(); removeJob(job.job_id || job._id); }}
-                          className="p-2 bg-rose-50 text-rose-500 hover:bg-rose-100 rounded-xl border-none cursor-pointer transition-colors"
-                          title="Delete"
+                          onClick={(e) => confirmDeleteJob(job, e)}
+                          className="p-2 bg-rose-50 text-rose-500 hover:bg-rose-600 hover:text-white rounded-xl border border-rose-100 cursor-pointer transition-all shadow-xs"
+                          title="Delete Job"
                         >
-                          <Trash2 size={15} />
+                          <Trash2 size={14} />
+                        </button>
+                        <button
+                          onClick={(e) => { e.stopPropagation(); handleApplyJob(job); }}
+                          className="p-2 bg-purple-50 text-purple-600 hover:bg-purple-600 hover:text-white rounded-xl border border-purple-100 cursor-pointer transition-all shadow-xs"
+                          title="Apply / Preview"
+                        >
+                          <Zap size={14} />
                         </button>
                       </div>
                     </td>
@@ -771,15 +933,32 @@ export default function SuperAdminJobsPage() {
                   <Users size={24} />
                 </div>
                 <div>
-                  <h2 className="text-xl font-black text-slate-800 tracking-tight">Job Applications</h2>
-                  <p className="text-sm text-slate-500 font-semibold mt-0.5">
-                    {applicationData.job?.title}
+                  <div className="flex items-center gap-2">
+                    <h2 className="text-xl font-black text-slate-800 tracking-tight">{applicationData.job?.title}</h2>
                     {!applicationData.loading && (
-                      <span className="ml-2 px-2 py-0.5 bg-teal-100 text-teal-700 text-xs font-bold rounded-full">
+                      <span className="px-2.5 py-0.5 bg-teal-100 text-teal-800 text-xs font-bold rounded-full border border-teal-200">
                         {applicationData.list.length} applicant{applicationData.list.length !== 1 ? 's' : ''}
                       </span>
                     )}
-                  </p>
+                  </div>
+                  <div className="flex items-center gap-3 mt-1 text-xs text-slate-500 font-medium flex-wrap">
+                    <span className="flex items-center gap-1">
+                      <Building2 size={12} className="text-slate-400" /> {applicationData.job?.location || 'Remote'}
+                    </span>
+                    <span>•</span>
+                    <span className="flex items-center gap-1.5 bg-white/90 text-slate-700 font-bold px-2 py-0.5 rounded-lg border border-slate-200 shadow-xs">
+                      <User size={11} className="text-indigo-600" />
+                      Created by: <span className="text-indigo-600 font-extrabold">{applicationData.job?.created_by_name || applicationData.job?.created_by || 'Admin'}</span>
+                      {applicationData.job?.created_by_role && (
+                        <span className="text-[0.62rem] text-slate-400 uppercase font-bold">({applicationData.job?.created_by_role})</span>
+                      )}
+                    </span>
+                    {applicationData.job?.created_at && (
+                      <span className="text-slate-400 flex items-center gap-1">
+                        <Calendar size={11} /> Posted {new Date(applicationData.job.created_at).toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' })}
+                      </span>
+                    )}
+                  </div>
                 </div>
               </div>
               <div className="flex items-center gap-2">
@@ -815,9 +994,26 @@ export default function SuperAdminJobsPage() {
                     No one has applied for <span className="font-bold">{applicationData.job?.title}</span> yet.
                     Share the job link to start receiving applications.
                   </p>
-                  <div className="mt-6 px-4 py-2.5 bg-slate-50 border border-slate-200 rounded-xl flex items-center gap-2 text-sm text-slate-500 font-mono">
-                    <ExternalLink size={13} className="text-indigo-400" />
-                    /apply/{applicationData.job?.job_id}
+                  <div className="mt-6 flex items-center justify-center gap-2">
+                    <a
+                      href={`${window.location.origin}/apply/${applicationData.job?.job_id}`}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="px-4 py-2.5 bg-slate-50 hover:bg-indigo-50 border border-slate-200 hover:border-indigo-200 rounded-xl flex items-center gap-2 text-sm text-slate-600 hover:text-indigo-700 font-mono transition-colors cursor-pointer"
+                    >
+                      <ExternalLink size={14} className="text-indigo-400" />
+                      {window.location.origin}/apply/{applicationData.job?.job_id}
+                    </a>
+                    <button
+                      onClick={() => {
+                        navigator.clipboard.writeText(`${window.location.origin}/apply/${applicationData.job?.job_id}`);
+                        Swal.fire({ title: 'Copied!', text: 'Job link copied to clipboard.', icon: 'success', toast: true, position: 'top-end', showConfirmButton: false, timer: 2000 });
+                      }}
+                      className="p-2.5 bg-white border border-slate-200 hover:bg-slate-50 hover:border-indigo-200 text-slate-500 hover:text-indigo-600 rounded-xl cursor-pointer transition-colors"
+                      title="Copy Link"
+                    >
+                      <Copy size={16} />
+                    </button>
                   </div>
                 </div>
               ) : (
@@ -872,19 +1068,17 @@ export default function SuperAdminJobsPage() {
                               </div>
                             </td>
                             <td className="py-4 px-5">
-                              {app.resume_url ? (
-                                app.resume_url.startsWith('http') ? (
-                                  <a href={app.resume_url} target="_blank" rel="noreferrer"
-                                    className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-indigo-50 hover:bg-indigo-100 text-indigo-600 text-xs font-bold rounded-lg transition-colors">
-                                    <FileText size={12} /> View
-                                  </a>
-                                ) : (
-                                  <span className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-slate-50 text-slate-500 text-xs font-medium rounded-lg border border-slate-200">
-                                    <FileText size={12} /> {app.resume_url}
-                                  </span>
-                                )
+                              {app.resume_url || app.resume_text ? (
+                                <button
+                                  type="button"
+                                  onClick={() => setSelectedResumeApp(app)}
+                                  className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-indigo-50 hover:bg-indigo-100 text-indigo-700 text-xs font-bold rounded-xl border border-indigo-100 transition-all cursor-pointer shadow-sm hover:scale-[1.02]"
+                                  title="View Candidate Resume"
+                                >
+                                  <FileText size={13} className="text-indigo-600" /> View Resume
+                                </button>
                               ) : (
-                                <span className="text-xs text-slate-400">Not provided</span>
+                                <span className="text-xs text-slate-400 font-medium">Not provided</span>
                               )}
                             </td>
                             <td className="py-4 px-5">
@@ -895,20 +1089,58 @@ export default function SuperAdminJobsPage() {
                               </span>
                             </td>
                             <td className="py-4 px-5">
-                              <span className={`inline-flex items-center px-2.5 py-1 rounded-full text-[0.68rem] font-bold border ${statusStyles[st] || 'bg-slate-50 text-slate-600 border-slate-200'}`}>
-                                {st}
-                              </span>
+                              <div className="flex flex-col gap-1 items-start">
+                                <span className={`inline-flex items-center px-2.5 py-1 rounded-full text-[0.68rem] font-bold border ${statusStyles[st] || 'bg-slate-50 text-slate-600 border-slate-200'}`}>
+                                  {st}
+                                </span>
+                                {app.last_action_by_name ? (
+                                  <div className="flex flex-col text-[0.68rem] text-slate-500 bg-slate-50/80 px-2 py-0.5 rounded-md border border-slate-200/60 max-w-[170px]" title={`Action taken by ${app.last_action_by_name} (${app.last_action_by_role || 'Admin'})`}>
+                                    <span className="font-semibold text-slate-700 flex items-center gap-1 truncate">
+                                      <UserCheck size={11} className="text-indigo-600 shrink-0" />
+                                      <span>by {app.last_action_by_name}</span>
+                                      {app.last_action_by_role && (
+                                        <span className="text-[0.6rem] text-slate-400 uppercase font-bold">({app.last_action_by_role})</span>
+                                      )}
+                                    </span>
+                                    {app.last_action_at && (
+                                      <span className="text-[0.6rem] text-slate-400 font-mono">
+                                        {new Date(app.last_action_at).toLocaleDateString('en-IN', { day: '2-digit', month: 'short', hour: '2-digit', minute: '2-digit' })}
+                                      </span>
+                                    )}
+                                  </div>
+                                ) : (
+                                  <span className="text-[0.62rem] text-slate-400 italic">No action yet</span>
+                                )}
+                              </div>
                             </td>
                             <td className="py-4 px-5 text-right">
-                              <select
-                                value={st}
-                                onChange={e => handleStatusChange(app, e.target.value)}
-                                className="text-xs font-bold px-3 py-2 rounded-xl border border-slate-200 bg-white text-slate-700 cursor-pointer focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-400 transition-all hover:border-indigo-300"
-                              >
-                                {['Pending Review', 'Shortlisted', 'Interview Scheduled', 'Rejected', 'Hired'].map(s => (
-                                  <option key={s} value={s}>{s}</option>
-                                ))}
-                              </select>
+                              <div className="flex items-center justify-end gap-2">
+                                <button
+                                  type="button"
+                                  onClick={() => handleScheduleInterview(app)}
+                                  className="inline-flex items-center gap-1.5 px-3 py-2 bg-gradient-to-r from-indigo-600 to-purple-600 hover:from-indigo-500 hover:to-purple-500 text-white text-xs font-bold rounded-xl shadow-sm hover:shadow-indigo-500/25 transition-all cursor-pointer whitespace-nowrap active:scale-95"
+                                  title="Schedule interview for candidate"
+                                >
+                                  <Calendar size={13} /> Schedule
+                                </button>
+                                <select
+                                  value={st}
+                                  onChange={e => {
+                                    if (e.target.value === '__SCHEDULE__') {
+                                      handleScheduleInterview(app);
+                                    } else {
+                                      handleStatusChange(app, e.target.value);
+                                    }
+                                  }}
+                                  className="text-xs font-bold px-3 py-2 rounded-xl border border-slate-200 bg-white text-slate-700 cursor-pointer focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-400 transition-all hover:border-indigo-300"
+                                >
+                                  <option value="__SCHEDULE__">📅 Schedule Interview...</option>
+                                  <option disabled>──────────</option>
+                                  {['Pending Review', 'Shortlisted', 'Interview Scheduled', 'Rejected', 'Hired'].map(s => (
+                                    <option key={s} value={s}>{s}</option>
+                                  ))}
+                                </select>
+                              </div>
                             </td>
                           </tr>
                         );
@@ -921,9 +1153,30 @@ export default function SuperAdminJobsPage() {
 
             {/* Footer */}
             <div className="px-8 py-5 border-t border-slate-100 flex items-center justify-between bg-slate-50/40">
-              <p className="text-xs text-slate-400 font-medium">
-                Job ID: <span className="font-mono font-bold text-slate-500">{applicationData.job?.job_id}</span>
-              </p>
+              <div className="flex items-center gap-4">
+                <p className="text-xs text-slate-400 font-medium">
+                  Job ID: <span className="font-mono font-bold text-slate-500">{applicationData.job?.job_id}</span>
+                </p>
+                <div className="h-4 w-px bg-slate-200"></div>
+                <a
+                  href={`${window.location.origin}/apply/${applicationData.job?.job_id}`}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="flex items-center gap-1.5 text-xs text-indigo-500 hover:text-indigo-700 font-mono font-medium transition-colors"
+                >
+                  <ExternalLink size={12} /> {window.location.origin}/apply/{applicationData.job?.job_id}
+                </a>
+                <button
+                  onClick={() => {
+                    navigator.clipboard.writeText(`${window.location.origin}/apply/${applicationData.job?.job_id}`);
+                    Swal.fire({ title: 'Copied!', text: 'Job link copied to clipboard.', icon: 'success', toast: true, position: 'top-end', showConfirmButton: false, timer: 2000 });
+                  }}
+                  className="p-1.5 text-slate-400 hover:text-indigo-600 hover:bg-indigo-50 rounded-lg transition-colors cursor-pointer"
+                  title="Copy Link"
+                >
+                  <Copy size={14} />
+                </button>
+              </div>
               <button
                 onClick={closeApplications}
                 className="px-6 py-2.5 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-600 font-bold text-sm border-none cursor-pointer transition-colors"
@@ -951,10 +1204,15 @@ export default function SuperAdminJobsPage() {
                 </div>
                 <div className="overflow-hidden">
                   <h2 className="text-xl font-black text-slate-800 tracking-tight truncate">{selectedJobDetails.title}</h2>
-                  <div className="flex items-center gap-3 mt-0.5">
+                  <div className="flex items-center gap-3 mt-0.5 flex-wrap">
                     <span className="text-xs text-slate-500 flex items-center gap-1"><MapPin size={11} /> {selectedJobDetails.location}</span>
                     <span className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[0.65rem] font-bold border ${WORK_MODE_STYLES[selectedJobDetails.workMode] || 'bg-slate-50 text-slate-600 border-slate-200'}`}>
                       <Clock size={10} /> {selectedJobDetails.workMode}
+                    </span>
+                    <span className="inline-flex items-center gap-1 text-xs font-semibold text-slate-500 bg-slate-100/80 px-2 py-0.5 rounded-lg border border-slate-200">
+                      <User size={11} className="text-indigo-500" />
+                      Created by <strong className="text-slate-700">{selectedJobDetails.created_by_name || selectedJobDetails.created_by || 'Admin'}</strong>
+                      {selectedJobDetails.created_by_role && <span className="text-[0.62rem] text-slate-400 uppercase">({selectedJobDetails.created_by_role})</span>}
                     </span>
                   </div>
                 </div>
@@ -1004,24 +1262,50 @@ export default function SuperAdminJobsPage() {
               </div>
             </div>
 
-            <div className="p-7 border-t border-slate-100 flex gap-3 relative z-10">
+            <div className="p-6 sm:p-7 border-t border-slate-100 flex flex-wrap items-center gap-3 relative z-10">
               <button
-                onClick={() => { setSelectedJobDetails(null); handleEditJob(selectedJobDetails); }}
-                className="flex items-center gap-2 px-5 py-3 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold text-sm border-none cursor-pointer transition-colors"
+                onClick={() => {
+                  const job = selectedJobDetails;
+                  setSelectedJobDetails(null);
+                  openApplications(job);
+                }}
+                className="flex items-center gap-2 px-5 py-3 rounded-xl bg-teal-600 hover:bg-teal-500 text-white font-bold text-sm border-none cursor-pointer shadow-md shadow-teal-500/25 transition-all hover:-translate-y-0.5 active:translate-y-0"
+              >
+                <Users size={16} /> View Applications
+              </button>
+              <button
+                onClick={() => handleCopyJobLink(selectedJobDetails)}
+                className="flex items-center gap-2 px-4 py-3 rounded-xl bg-slate-100 hover:bg-indigo-50 text-slate-700 hover:text-indigo-600 font-bold text-sm border-none cursor-pointer transition-colors"
+                title="Copy Public Apply Link"
+              >
+                <Copy size={15} /> Copy Link
+              </button>
+              <button
+                onClick={() => {
+                  const job = selectedJobDetails;
+                  setSelectedJobDetails(null);
+                  handleEditJob(job);
+                }}
+                className="flex items-center gap-2 px-4 py-3 rounded-xl bg-indigo-50 hover:bg-indigo-100 text-indigo-700 font-bold text-sm border-none cursor-pointer transition-colors"
               >
                 <Pencil size={15} /> Edit
               </button>
               <button
-                onClick={() => setSelectedJobDetails(null)}
-                className="px-5 py-3 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-600 font-bold text-sm border-none cursor-pointer transition-colors"
+                onClick={(e) => {
+                  const job = selectedJobDetails;
+                  confirmDeleteJob(job, e);
+                }}
+                className="p-3 rounded-xl bg-rose-50 hover:bg-rose-100 text-rose-600 font-bold text-sm border-none cursor-pointer transition-colors"
+                title="Delete Job"
               >
-                Close
+                <Trash2 size={16} />
               </button>
+
               <button
                 onClick={() => setShowApplyModal(true)}
-                className="ml-auto flex items-center gap-2 px-8 py-3 rounded-xl bg-gradient-to-r from-indigo-600 to-purple-600 hover:from-indigo-500 hover:to-purple-500 text-white font-bold text-sm border-none cursor-pointer shadow-lg shadow-indigo-500/30 transition-all hover:-translate-y-0.5 active:translate-y-0"
+                className="ml-auto flex items-center gap-2 px-6 py-3 rounded-xl bg-gradient-to-r from-indigo-600 to-purple-600 hover:from-indigo-500 hover:to-purple-500 text-white font-bold text-sm border-none cursor-pointer shadow-lg shadow-indigo-500/30 transition-all hover:-translate-y-0.5 active:translate-y-0"
               >
-                <Zap size={16} /> Apply for this Job <ChevronRight size={15} />
+                <Zap size={16} /> Apply for Job <ChevronRight size={15} />
               </button>
             </div>
           </div>
@@ -1035,6 +1319,423 @@ export default function SuperAdminJobsPage() {
           onClose={() => setShowApplyModal(false)}
         />
       )}
+
+      {/* ── Resume & Application Viewer Modal ────────────── */}
+      {selectedResumeApp && (
+        <ResumeViewerModal
+          application={selectedResumeApp}
+          job={applicationData.job}
+          onClose={() => setSelectedResumeApp(null)}
+          onStatusChange={(newStatus) => handleStatusChange(selectedResumeApp, newStatus)}
+          onSchedule={() => {
+            const app = selectedResumeApp;
+            setSelectedResumeApp(null);
+            handleScheduleInterview(app);
+          }}
+          API_BASE_URL={API_BASE_URL}
+        />
+      )}
     </div>
   );
 }
+
+// ─── Component: ResumeViewerModal ──────────────────────────────────────────
+function ResumeViewerModal({ application, job, onClose, onSchedule, onStatusChange, API_BASE_URL }) {
+  const [activeTab, setActiveTab] = useState(
+    application.resume_url || application.resume_text ? 'resume' : 'coverLetter'
+  );
+  const [copied, setCopied] = useState(false);
+
+  const getFullUrl = (rawUrl) => {
+    if (!rawUrl) return '';
+    if (rawUrl.startsWith('http://') || rawUrl.startsWith('https://') || rawUrl.startsWith('blob:')) {
+      return rawUrl;
+    }
+    const cleanPath = rawUrl.replace(/^\/+/, '');
+    return `${API_BASE_URL}/${cleanPath}`;
+  };
+
+  const resumeFullUrl = getFullUrl(application.resume_url);
+  const coverLetterFullUrl = getFullUrl(application.cover_letter_url);
+  const isPdf = application.resume_url && (
+    application.resume_url.toLowerCase().endsWith('.pdf') || 
+    application.resume_filename?.toLowerCase().endsWith('.pdf')
+  );
+
+  const handleCopy = (text) => {
+    if (!text) return;
+    navigator.clipboard.writeText(text);
+    setCopied(true);
+    setTimeout(() => setCopied(false), 2000);
+  };
+
+  const statusStyles = {
+    'Pending Review': 'bg-amber-50 text-amber-700 border-amber-200',
+    'Shortlisted': 'bg-indigo-50 text-indigo-700 border-indigo-200',
+    'Interview Scheduled': 'bg-blue-50 text-blue-700 border-blue-200',
+    'Rejected': 'bg-rose-50 text-rose-600 border-rose-200',
+    'Hired': 'bg-emerald-50 text-emerald-700 border-emerald-200',
+  };
+
+  const historyList = application.action_history && application.action_history.length > 0
+    ? application.action_history
+    : application.last_action_by_name
+    ? [{
+        status: application.status || 'Updated',
+        action: `Status changed to ${application.status || 'Updated'}`,
+        action_by_name: application.last_action_by_name,
+        action_by_role: application.last_action_by_role || 'Admin',
+        timestamp: application.last_action_at,
+      }]
+    : [];
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-md animate-fadeIn">
+      <div className="bg-white rounded-3xl shadow-2xl border border-slate-100 w-full max-w-4xl max-h-[90vh] flex flex-col overflow-hidden animate-scaleUp">
+        {/* Header */}
+        <div className="px-7 py-5 border-b border-slate-100 flex items-center justify-between bg-gradient-to-r from-slate-50 to-white">
+          <div className="flex items-center gap-4">
+            <div className="w-12 h-12 rounded-2xl bg-gradient-to-tr from-indigo-600 to-purple-600 flex items-center justify-center text-white font-extrabold text-lg shadow-md shadow-indigo-500/20">
+              {(application.name || '?')[0].toUpperCase()}
+            </div>
+            <div>
+              <div className="flex items-center gap-2.5 flex-wrap">
+                <h3 className="text-xl font-extrabold text-slate-800 tracking-tight">{application.name || 'Candidate'}</h3>
+                <span className={`px-2.5 py-0.5 rounded-full text-[0.7rem] font-bold border ${statusStyles[application.status] || 'bg-indigo-50 text-indigo-700 border-indigo-100'}`}>
+                  {application.status || 'Pending Review'}
+                </span>
+                {application.last_action_by_name && (
+                  <span className="inline-flex items-center gap-1 text-[0.68rem] bg-indigo-50/80 text-indigo-800 font-semibold px-2 py-0.5 rounded-md border border-indigo-100">
+                    <UserCheck size={11} className="text-indigo-600" />
+                    Last Action by <strong className="font-bold">{application.last_action_by_name}</strong>
+                    {application.last_action_by_role && <span className="text-[0.6rem] uppercase text-indigo-500">({application.last_action_by_role})</span>}
+                  </span>
+                )}
+              </div>
+              <div className="flex items-center gap-4 mt-1 text-xs text-slate-500 font-medium flex-wrap">
+                <span className="flex items-center gap-1"><Mail size={12} className="text-indigo-400" /> {application.candidate_email || application.email || '—'}</span>
+                {application.phone && <span className="flex items-center gap-1"><Phone size={12} className="text-teal-400" /> {application.phone}</span>}
+                {job?.title && <span className="flex items-center gap-1 text-slate-400 font-semibold">• Applied for <span className="text-indigo-600">{job.title}</span></span>}
+              </div>
+            </div>
+          </div>
+          <button
+            type="button"
+            onClick={onClose}
+            className="w-9 h-9 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-500 hover:text-slate-700 flex items-center justify-center transition-colors cursor-pointer border-none"
+          >
+            <X size={18} />
+          </button>
+        </div>
+
+        {/* Tab Switcher & Actions */}
+        <div className="px-7 pt-3 border-b border-slate-100 flex items-center justify-between bg-slate-50/50 flex-wrap gap-2">
+          <div className="flex items-center gap-2">
+            {(application.resume_url || application.resume_text) && (
+              <button
+                type="button"
+                onClick={() => setActiveTab('resume')}
+                className={`flex items-center gap-2 px-4 py-2.5 text-xs font-bold rounded-t-xl transition-all cursor-pointer border-b-2 ${
+                  activeTab === 'resume'
+                    ? 'border-indigo-600 text-indigo-700 bg-white shadow-sm'
+                    : 'border-transparent text-slate-500 hover:text-slate-800'
+                }`}
+              >
+                <FileText size={14} /> Resume Document
+              </button>
+            )}
+            {application.resume_text && (
+              <button
+                type="button"
+                onClick={() => setActiveTab('parsedText')}
+                className={`flex items-center gap-2 px-4 py-2.5 text-xs font-bold rounded-t-xl transition-all cursor-pointer border-b-2 ${
+                  activeTab === 'parsedText'
+                    ? 'border-indigo-600 text-indigo-700 bg-white shadow-sm'
+                    : 'border-transparent text-slate-500 hover:text-slate-800'
+                }`}
+              >
+                <FileCheck size={14} /> Extracted Text
+              </button>
+            )}
+            {(application.cover_letter || application.cover_letter_url) && (
+              <button
+                type="button"
+                onClick={() => setActiveTab('coverLetter')}
+                className={`flex items-center gap-2 px-4 py-2.5 text-xs font-bold rounded-t-xl transition-all cursor-pointer border-b-2 ${
+                  activeTab === 'coverLetter'
+                    ? 'border-indigo-600 text-indigo-700 bg-white shadow-sm'
+                    : 'border-transparent text-slate-500 hover:text-slate-800'
+                }`}
+              >
+                <BookOpen size={14} /> Cover Letter
+              </button>
+            )}
+            <button
+              type="button"
+              onClick={() => setActiveTab('history')}
+              className={`flex items-center gap-2 px-4 py-2.5 text-xs font-bold rounded-t-xl transition-all cursor-pointer border-b-2 ${
+                activeTab === 'history'
+                  ? 'border-indigo-600 text-indigo-700 bg-white shadow-sm'
+                  : 'border-transparent text-slate-500 hover:text-slate-800'
+              }`}
+            >
+              <History size={14} /> Action History
+              {historyList.length > 0 && (
+                <span className="px-1.5 py-0.2 bg-indigo-100 text-indigo-700 rounded-full text-[0.62rem] font-bold">
+                  {historyList.length}
+                </span>
+              )}
+            </button>
+          </div>
+
+          <div className="flex items-center gap-2 pb-2">
+            {activeTab === 'parsedText' && application.resume_text && (
+              <button
+                type="button"
+                onClick={() => handleCopy(application.resume_text)}
+                className="flex items-center gap-1 px-3 py-1.5 bg-white border border-slate-200 hover:bg-slate-50 text-slate-700 text-xs font-bold rounded-lg shadow-sm transition-all cursor-pointer"
+              >
+                {copied ? <Check size={12} className="text-emerald-600" /> : <Copy size={12} />}
+                {copied ? 'Copied' : 'Copy Text'}
+              </button>
+            )}
+            {application.resume_url && (
+              <a
+                href={resumeFullUrl}
+                target="_blank"
+                rel="noreferrer"
+                download
+                className="flex items-center gap-1 px-3 py-1.5 bg-indigo-50 hover:bg-indigo-100 text-indigo-700 text-xs font-bold rounded-lg transition-all"
+              >
+                <Download size={12} /> Download Original
+              </a>
+            )}
+          </div>
+        </div>
+
+        {/* Modal Body */}
+        <div className="flex-1 overflow-y-auto p-6 bg-slate-50/30">
+          {activeTab === 'resume' && (
+            <div>
+              {resumeFullUrl && isPdf ? (
+                <div className="w-full rounded-2xl overflow-hidden border border-slate-200 shadow-inner bg-white">
+                  <iframe
+                    src={resumeFullUrl}
+                    title="Candidate Resume"
+                    className="w-full h-[540px] border-none"
+                  />
+                </div>
+              ) : resumeFullUrl ? (
+                <div className="p-8 text-center bg-white rounded-2xl border border-slate-200 shadow-sm space-y-4">
+                  <div className="w-16 h-16 rounded-2xl bg-indigo-50 text-indigo-600 flex items-center justify-center mx-auto shadow-inner">
+                    <FileText size={32} />
+                  </div>
+                  <div>
+                    <h4 className="font-extrabold text-slate-800 text-base">Resume File Attached</h4>
+                    <p className="text-xs text-slate-500 mt-1 font-mono">{application.resume_filename || application.resume_url}</p>
+                  </div>
+                  <div className="flex justify-center gap-3 pt-2">
+                    <a
+                      href={resumeFullUrl}
+                      target="_blank"
+                      rel="noreferrer"
+                      className="px-5 py-2.5 bg-indigo-600 hover:bg-indigo-700 text-white text-xs font-bold rounded-xl shadow-md transition-all flex items-center gap-2"
+                    >
+                      <ExternalLink size={14} /> Open in New Tab
+                    </a>
+                    <a
+                      href={resumeFullUrl}
+                      download
+                      className="px-5 py-2.5 bg-slate-100 hover:bg-slate-200 text-slate-700 text-xs font-bold rounded-xl transition-all flex items-center gap-2"
+                    >
+                      <Download size={14} /> Download Document
+                    </a>
+                  </div>
+                  {application.resume_text && (
+                    <div className="mt-6 text-left border-t border-slate-100 pt-5">
+                      <div className="text-xs font-bold uppercase tracking-wider text-slate-400 mb-2 flex items-center gap-1.5">
+                        <FileCheck size={13} className="text-indigo-500" /> Extracted Resume Content
+                      </div>
+                      <pre className="whitespace-pre-wrap font-sans text-xs text-slate-700 bg-slate-50 p-4 rounded-xl border border-slate-200 max-h-[250px] overflow-y-auto leading-relaxed">
+                        {application.resume_text}
+                      </pre>
+                    </div>
+                  )}
+                </div>
+              ) : application.resume_text ? (
+                <div className="bg-white p-6 rounded-2xl border border-slate-200 shadow-sm">
+                  <div className="text-xs font-bold uppercase tracking-wider text-slate-400 mb-3 flex items-center gap-1.5">
+                    <FileText size={14} className="text-indigo-500" /> Candidate Resume Content
+                  </div>
+                  <pre className="whitespace-pre-wrap font-sans text-xs text-slate-800 bg-slate-50 p-5 rounded-xl border border-slate-100 max-h-[500px] overflow-y-auto leading-relaxed shadow-inner font-medium">
+                    {application.resume_text}
+                  </pre>
+                </div>
+              ) : (
+                <div className="text-center py-16 text-slate-400 text-sm">
+                  No resume file or text available for this candidate.
+                </div>
+              )}
+            </div>
+          )}
+
+          {activeTab === 'parsedText' && (
+            <div className="bg-white p-6 rounded-2xl border border-slate-200 shadow-sm">
+              <div className="flex items-center justify-between mb-3">
+                <span className="text-xs font-bold uppercase tracking-wider text-slate-400 flex items-center gap-1.5">
+                  <Sparkles size={14} className="text-indigo-500" /> AI Parsed Text
+                </span>
+                <span className="text-[0.7rem] text-slate-400 font-mono font-semibold">
+                  {application.resume_text?.length || 0} characters
+                </span>
+              </div>
+              <pre className="whitespace-pre-wrap font-sans text-xs text-slate-800 bg-slate-50 p-5 rounded-xl border border-slate-100 max-h-[520px] overflow-y-auto leading-relaxed shadow-inner font-medium">
+                {application.resume_text}
+              </pre>
+            </div>
+          )}
+
+          {activeTab === 'coverLetter' && (
+            <div className="bg-white p-6 rounded-2xl border border-slate-200 shadow-sm space-y-4">
+              <div className="text-xs font-bold uppercase tracking-wider text-slate-400 flex items-center gap-1.5">
+                <BookOpen size={14} className="text-indigo-500" /> Cover Letter
+              </div>
+              {application.cover_letter ? (
+                <div className="text-sm text-slate-700 bg-slate-50 p-5 rounded-xl border border-slate-100 leading-relaxed whitespace-pre-wrap">
+                  {application.cover_letter}
+                </div>
+              ) : coverLetterFullUrl ? (
+                <div className="p-6 text-center space-y-3">
+                  <p className="text-sm font-semibold text-slate-700">Cover letter file attached.</p>
+                  <a
+                    href={coverLetterFullUrl}
+                    target="_blank"
+                    rel="noreferrer"
+                    className="inline-flex items-center gap-2 px-5 py-2.5 bg-indigo-600 text-white text-xs font-bold rounded-xl"
+                  >
+                    <Download size={14} /> Download Cover Letter
+                  </a>
+                </div>
+              ) : (
+                <div className="text-center py-12 text-slate-400 text-sm">
+                  No cover letter provided.
+                </div>
+              )}
+            </div>
+          )}
+
+          {activeTab === 'history' && (
+            <div className="space-y-6">
+              <div className="bg-white p-6 rounded-2xl border border-slate-200/80 shadow-sm">
+                <div className="flex items-center justify-between mb-4 border-b border-slate-100 pb-3">
+                  <div>
+                    <h4 className="text-sm font-black text-slate-800 flex items-center gap-2">
+                      <History size={16} className="text-indigo-600" />
+                      Candidate Audit Trail & Action History
+                    </h4>
+                    <p className="text-xs text-slate-400 mt-0.5">
+                      Log of all actions (shortlisting, scheduling, hiring, rejection) performed on this candidate.
+                    </p>
+                  </div>
+                  <span className="px-2.5 py-1 bg-indigo-50 text-indigo-700 text-xs font-bold rounded-lg border border-indigo-100">
+                    {historyList.length} Action{historyList.length !== 1 ? 's' : ''} Logged
+                  </span>
+                </div>
+
+                {historyList.length === 0 ? (
+                  <div className="text-center py-12 text-slate-400">
+                    <UserCheck size={32} className="mx-auto text-slate-300 mb-2" />
+                    <p className="text-xs font-semibold">No status changes or recruiter actions logged yet.</p>
+                    <p className="text-[0.7rem] text-slate-400 mt-1">Actions taken via the buttons below will appear here automatically.</p>
+                  </div>
+                ) : (
+                  <div className="relative pl-6 space-y-6 before:absolute before:left-2.5 before:top-2 before:bottom-2 before:w-0.5 before:bg-slate-200">
+                    {historyList.map((item, idx) => (
+                      <div key={idx} className="relative flex items-start gap-4">
+                        <div className="absolute -left-6 top-0.5 w-5 h-5 rounded-full bg-white border-2 border-indigo-600 flex items-center justify-center shadow-xs">
+                          <div className="w-2 h-2 rounded-full bg-indigo-600" />
+                        </div>
+                        <div className="flex-1 bg-slate-50 rounded-xl p-4 border border-slate-200/70">
+                          <div className="flex items-center justify-between gap-2 flex-wrap mb-1">
+                            <span className={`px-2 py-0.5 rounded-md text-xs font-extrabold border ${statusStyles[item.status] || 'bg-slate-100 text-slate-700 border-slate-200'}`}>
+                              {item.status || item.action || 'Action Taken'}
+                            </span>
+                            {item.timestamp && (
+                              <span className="text-[0.7rem] font-mono text-slate-400">
+                                {new Date(item.timestamp).toLocaleDateString('en-IN', {
+                                  day: '2-digit', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit'
+                                })}
+                              </span>
+                            )}
+                          </div>
+                          <div className="text-xs text-slate-600 mt-2 flex items-center gap-2 flex-wrap">
+                            <span className="flex items-center gap-1 font-bold text-slate-700">
+                              <UserCheck size={13} className="text-indigo-600" />
+                              {item.action_by_name || 'Admin'}
+                            </span>
+                            {item.action_by_role && (
+                              <span className="text-[0.65rem] bg-indigo-50 text-indigo-700 px-1.5 py-0.2 rounded font-bold uppercase border border-indigo-100">
+                                {item.action_by_role}
+                              </span>
+                            )}
+                            {item.action_by_email && (
+                              <span className="text-[0.7rem] text-slate-400">({item.action_by_email})</span>
+                            )}
+                          </div>
+                          {item.notes && (
+                            <p className="text-xs text-slate-500 mt-2 italic bg-white p-2 rounded-lg border border-slate-100">
+                              Note: {item.notes}
+                            </p>
+                          )}
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
+            </div>
+          )}
+        </div>
+
+        {/* Footer with Quick Action Controls */}
+        <div className="px-7 py-4 border-t border-slate-100 flex items-center justify-between bg-white flex-wrap gap-3">
+          <div className="flex items-center gap-2 flex-wrap">
+            <span className="text-xs font-bold text-slate-400 uppercase tracking-wider mr-1">Change Status:</span>
+            {['Shortlisted', 'Hired', 'Rejected'].map((s) => (
+              <button
+                key={s}
+                type="button"
+                onClick={() => onStatusChange && onStatusChange(s)}
+                className={`px-3 py-1.5 text-xs font-bold rounded-xl border transition-all cursor-pointer ${
+                  application.status === s
+                    ? 'bg-indigo-600 text-white border-indigo-600 shadow-sm'
+                    : 'bg-white text-slate-700 border-slate-200 hover:bg-slate-50'
+                }`}
+              >
+                {s}
+              </button>
+            ))}
+          </div>
+
+          <div className="flex items-center gap-3">
+            <button
+              type="button"
+              onClick={onClose}
+              className="px-5 py-2.5 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-700 text-xs font-bold transition-all cursor-pointer border-none"
+            >
+              Close
+            </button>
+            <button
+              type="button"
+              onClick={onSchedule}
+              className="flex items-center gap-2 px-6 py-2.5 rounded-xl bg-gradient-to-r from-indigo-600 to-purple-600 hover:from-indigo-500 hover:to-purple-500 text-white text-xs font-extrabold shadow-lg shadow-indigo-500/25 transition-all hover:scale-[1.02] active:scale-95 cursor-pointer border-none"
+            >
+              <Calendar size={14} /> Schedule Interview for {application.name?.split(' ')[0] || 'Candidate'} <ArrowRight size={14} />
+            </button>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+

@@ -188,8 +188,21 @@ async def initiate_manual_ai_call(
     """
     Initiates an outbound AI call via Omni Dimension manually, without requiring an existing session.
     """
-    if not phone_number:
-        raise HTTPException(status_code=400, detail="Phone number is required")
+    import re
+    raw_phone = (phone_number or "").strip()
+    digits_only = re.sub(r'\D', '', raw_phone)
+    if len(digits_only) == 12 and digits_only.startswith("91"):
+        digits_only = digits_only[2:]
+    elif len(digits_only) == 11 and digits_only.startswith("0"):
+        digits_only = digits_only[1:]
+
+    if not digits_only or len(digits_only) != 10 or not digits_only.isdigit():
+        raise HTTPException(
+            status_code=400,
+            detail="Invalid phone number. Phone number must be a valid 10-digit mobile number."
+        )
+
+    phone_number = digits_only
 
     try:
         from app.ai import omni_dimension_client
@@ -208,14 +221,26 @@ async def initiate_manual_ai_call(
                     resume_text = app_doc.get("resume_text") or ""
                     if not resume_text and app_doc.get("resume_url"):
                         r_url = app_doc.get("resume_url")
+                        text = None
                         if os.path.exists(r_url):
                             with open(r_url, "rb") as f:
-                                resume_text = extract_text_from_file(f.read(), r_url)
-                                if resume_text:
-                                    job_applications_collection.update_one(
-                                        {"_id": ObjectId(application_id)},
-                                        {"$set": {"resume_text": resume_text}}
-                                    )
+                                text = extract_text_from_file(f.read(), r_url)
+                        elif r_url.startswith("http://") or r_url.startswith("https://"):
+                            resp = requests.get(r_url, timeout=10)
+                            if resp.status_code == 200:
+                                text = extract_text_from_file(resp.content, r_url)
+                        elif r_url.startswith("/api/public/resumes/"):
+                            local_fname = os.path.basename(r_url)
+                            local_fpath = os.path.join(os.getcwd(), "uploads", "resumes", local_fname)
+                            if os.path.exists(local_fpath):
+                                with open(local_fpath, "rb") as f:
+                                    text = extract_text_from_file(f.read(), local_fpath)
+                        if text:
+                            resume_text = text
+                            job_applications_collection.update_one(
+                                {"_id": ObjectId(application_id)},
+                                {"$set": {"resume_text": text}}
+                            )
             except Exception as e:
                 print(f"Error loading resume in manual AI call: {e}")
             
@@ -325,9 +350,13 @@ async def initiate_manual_ai_call(
 @router.get("/api/calls/agent-settings")
 def get_omni_agent_settings(omni_api_key: Optional[str] = Header(default=None, alias="X-Omni-Dimension-API-Key")):
     """Fetch the Omni Dimension Agent settings."""
-    from app.ai.omni_dimension_client import get_omni_account
+    from app.ai.omni_dimension_client import get_cached_omni_json, get_omni_account, set_cached_omni_json
     try:
+        cached = get_cached_omni_json(omni_api_key, "agent-settings")
+        if cached is not None:
+            return {"settings": cached}
         _, agent, _ = get_omni_account(omni_api_key)
+        set_cached_omni_json(omni_api_key, "agent-settings", agent)
         return {"settings": agent}
     except Exception as e:
         return JSONResponse(status_code=500, content={"detail": f"Failed to fetch agent settings: {str(e)}"})
@@ -336,12 +365,17 @@ def get_omni_agent_settings(omni_api_key: Optional[str] = Header(default=None, a
 @router.get("/api/calls/knowledge-base")
 def get_omni_knowledge_base(omni_api_key: Optional[str] = Header(default=None, alias="X-Omni-Dimension-API-Key")):
     """Fetch the Knowledge Base files from Omni Dimension."""
-    from app.ai.omni_dimension_client import get_omni_client
+    from app.ai.omni_dimension_client import get_cached_omni_json, get_omni_client, set_cached_omni_json
     try:
+        cached = get_cached_omni_json(omni_api_key, "knowledge-base")
+        if cached is not None:
+            return {"files": cached, "success": True}
         client = get_omni_client(omni_api_key)
         res = client.knowledge_base.list()
         data = res.get('json', res)
-        return {"files": data.get("files", []), "success": True}
+        files = data.get("files", [])
+        set_cached_omni_json(omni_api_key, "knowledge-base", files)
+        return {"files": files, "success": True}
     except Exception as e:
         return JSONResponse(status_code=500, content={"detail": str(e)})
 
@@ -349,12 +383,17 @@ def get_omni_knowledge_base(omni_api_key: Optional[str] = Header(default=None, a
 @router.get("/api/calls/integrations")
 def get_omni_integrations(omni_api_key: Optional[str] = Header(default=None, alias="X-Omni-Dimension-API-Key")):
     """Fetch integrations for the agent from Omni Dimension."""
-    from app.ai.omni_dimension_client import get_omni_account
+    from app.ai.omni_dimension_client import get_cached_omni_json, get_omni_account, set_cached_omni_json
     try:
+        cached = get_cached_omni_json(omni_api_key, "integrations")
+        if cached is not None:
+            return {"integrations": cached, "success": True}
         client, _, agent_id = get_omni_account(omni_api_key)
         res = client.integrations.get_agent_integrations(agent_id=agent_id)
         data = res.get('json', res)
-        return {"integrations": data.get("integrations", []), "success": True}
+        integrations = data.get("integrations", [])
+        set_cached_omni_json(omni_api_key, "integrations", integrations)
+        return {"integrations": integrations, "success": True}
     except Exception as e:
         return JSONResponse(status_code=500, content={"detail": str(e)})
 
@@ -609,25 +648,23 @@ def get_omni_recent_calls(current_admin: dict = Depends(get_current_admin_detail
             page += 1
             
         role = current_admin.get("role")
-        allowed_sessions = []
-        allowed_manuals = []
+        company_id = current_admin.get("company_id")
+        admin_id = current_admin.get("admin_id")
         
-        if role != "master":
-            company_id = current_admin.get("company_id")
-            admin_id = current_admin.get("admin_id")
-            
-        # 1. Fetch all calls for this company to identify creators
-        session_query = {
-            "omni_call_id": {"$exists": True, "$ne": None},
-            "company_id": company_id
-        }
-        all_sessions = list(interview_sessions_collection.find(session_query, {"omni_call_id": 1, "created_by": 1, "candidate_name": 1, "name": 1}))
+        # 1. Fetch all calls for this company to identify creators and decisions
+        session_query = {"omni_call_id": {"$exists": True, "$ne": None}}
+        manual_query = {"call_id": {"$exists": True, "$ne": None}}
         
-        manual_query = {
-            "company_id": company_id,
-            "call_id": {"$exists": True, "$ne": None}
-        }
-        all_manuals = list(omni_call_logs_collection.find(manual_query, {"call_id": 1, "admin_id": 1, "candidate_name": 1, "name": 1}))
+        if role != "master" and company_id:
+            session_query["company_id"] = company_id
+            manual_query["$or"] = [
+                {"company_id": company_id},
+                {"company_id": {"$exists": False}},
+                {"company_id": None}
+            ]
+        
+        all_sessions = list(interview_sessions_collection.find(session_query, {"omni_call_id": 1, "created_by": 1, "candidate_name": 1, "name": 1, "decision": 1}))
+        all_manuals = list(omni_call_logs_collection.find(manual_query, {"call_id": 1, "admin_id": 1, "candidate_name": 1, "name": 1, "decision": 1}))
 
         session_map = {str(s.get("omni_call_id")): s for s in all_sessions if s.get("omni_call_id")}
         manual_map = {str(m.get("call_id")): m for m in all_manuals if m.get("call_id")}
@@ -780,6 +817,19 @@ def get_omni_recent_calls(current_admin: dict = Depends(get_current_admin_detail
             rec["metric_score_coherence"]     = ev.get("metric_score_coherence")     or rec.get("metric_score_coherence")
             rec["p50_latency"]                = rec.get("p50_latency")
             rec["p99_latency"]                = rec.get("p99_latency")
+            
+            # Decision mapping (selected / rejected / pending)
+            dec = None
+            if call_id in manual_map:
+                dec = manual_map[call_id].get("decision")
+            elif req_id in manual_map:
+                dec = manual_map[req_id].get("decision")
+            elif call_id in session_map:
+                dec = session_map[call_id].get("decision")
+            elif req_id in session_map:
+                dec = session_map[req_id].get("decision")
+            rec["decision"] = dec or rec.get("decision") or "pending"
+
             normalised.append(rec)
             
         return {"calls": normalised, "success": True, "total": len(normalised)}
@@ -793,35 +843,96 @@ def get_omni_recent_calls(current_admin: dict = Depends(get_current_admin_detail
 @router.get("/api/calls/logs/{call_id}")
 def get_omni_call_log_details(call_id: str):
     """
-    Fetches the detailed log for a specific call directly from Omni Dimension.
+    Fetches the detailed log for a specific call directly from Omni Dimension with DB fallback,
+    normalizing all evaluation metrics, sentiment, CQS scores, summaries, and extracted profile variables.
     """
     from app.ai import omni_dimension_client
+    log_data = None
     try:
-        response = omni_dimension_client.get_omni_call_status(call_id)
-        if response and response.get('json') and response['json'].get('call_log_data'):
-            log_data = response['json']['call_log_data'][0]
-            
-            # Flatten evaluation fields for the call itself
-            ev = log_data.get("evaluation") or {}
-            log_data["sentiment_score"]            = ev.get("sentiment_score")            or log_data.get("sentiment_score")
-            log_data["sentiment_analysis_details"] = ev.get("sentiment_analysis_details") or log_data.get("sentiment_analysis_details")
-            log_data["cqs_score"]                  = ev.get("cqs_score")                  or log_data.get("cqs_score")
-            log_data["cqs_score_message"]          = ev.get("cqs_score_message")          or log_data.get("cqs_score_message")
-            
-            # Flatten interaction evaluation scores
-            if "interactions" in log_data and isinstance(log_data["interactions"], list):
-                for interaction in log_data["interactions"]:
-                    int_ev = interaction.get("evaluation") or {}
-                    interaction["metric_score_intent"]    = int_ev.get("metric_score_intent")    or interaction.get("metric_score_intent")
-                    interaction["metric_score_relevance"] = int_ev.get("metric_score_relevance") or interaction.get("metric_score_relevance")
-                    interaction["metric_score_latency"]   = int_ev.get("metric_score_latency")   or interaction.get("metric_score_latency")
-                    interaction["metric_score_coherence"] = int_ev.get("metric_score_coherence") or interaction.get("metric_score_coherence")
-            
-            return {"log": log_data}
-        raise HTTPException(status_code=404, detail="Call log details not found in Omni Dimension.")
+        response = omni_dimension_client.get_omni_call_status(str(call_id))
+        data = response.get('json', response) if isinstance(response, dict) else {}
+        if isinstance(data, dict):
+            calls = (
+                data.get("call_log_data")
+                or data.get("calls")
+                or data.get("call_logs")
+                or data.get("data")
+                or data.get("results")
+                or []
+            )
+            if isinstance(calls, list) and len(calls) > 0:
+                log_data = calls[0]
+            elif isinstance(data, dict) and (data.get("id") or data.get("call_id") or data.get("call_status")):
+                log_data = data
     except Exception as e:
-        print(f"Error fetching detailed call log {call_id}: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
+        print(f"[get_omni_call_log_details] Omni API fetch warning for {call_id}: {e}")
+
+    # Fallback to local MongoDB collections if log_data not retrieved from Omni API
+    if not log_data:
+        call_ids = [str(call_id)]
+        if str(call_id).isdigit():
+            call_ids.append(int(call_id))
+        db_log = omni_call_logs_collection.find_one({"call_id": {"$in": call_ids}}) or interview_sessions_collection.find_one({"omni_call_id": {"$in": call_ids}})
+        if db_log:
+            db_log["_id"] = str(db_log["_id"])
+            log_data = db_log
+
+    if not log_data:
+        raise HTTPException(status_code=404, detail="Call log details not found in Omni Dimension or Database.")
+
+    # Flatten top-level evaluation fields
+    ev = log_data.get("evaluation") or {}
+    if isinstance(ev, str):
+        try:
+            import json as _json
+            ev = _json.loads(ev)
+        except Exception:
+            ev = {}
+
+    extracted = log_data.get("extracted_variables") or {}
+    if isinstance(extracted, str):
+        try:
+            import json as _json
+            extracted = _json.loads(extracted)
+        except Exception:
+            extracted = {}
+
+    log_data["sentiment_score"]            = ev.get("sentiment_score")            or log_data.get("sentiment_score") or log_data.get("interest")
+    log_data["sentiment_analysis_details"] = ev.get("sentiment_analysis_details") or log_data.get("sentiment_analysis_details")
+    log_data["cqs_score"]                  = ev.get("cqs_score")                  or log_data.get("cqs_score")
+    log_data["cqs_score_message"]          = ev.get("cqs_score_message")          or log_data.get("cqs_score_message")
+    log_data["summary"]                    = ev.get("summary")                    or log_data.get("summary") or log_data.get("transcript")
+    log_data["evaluation_remarks"]         = ev.get("evaluation_remarks")         or ev.get("remarks") or log_data.get("evaluation_remarks")
+    log_data["metric_score_intent"]        = ev.get("metric_score_intent")        or log_data.get("metric_score_intent")
+    log_data["metric_score_relevance"]     = ev.get("metric_score_relevance")     or log_data.get("metric_score_relevance")
+    log_data["metric_score_latency"]       = ev.get("metric_score_latency")       or log_data.get("metric_score_latency")
+    log_data["metric_score_coherence"]     = ev.get("metric_score_coherence")     or log_data.get("metric_score_coherence")
+
+    # Extracted profile details
+    log_data["extracted_role"]           = extracted.get("current_role")          or log_data.get("extracted_role")
+    log_data["extracted_experience"]     = extracted.get("years_experience")      or log_data.get("extracted_experience")
+    log_data["extracted_city"]           = extracted.get("current_city")          or log_data.get("extracted_city")
+    log_data["extracted_qualification"]  = extracted.get("highest_qualification") or log_data.get("extracted_qualification")
+    log_data["extracted_company"]        = extracted.get("current_company")       or log_data.get("extracted_company")
+    log_data["extracted_salary"]         = extracted.get("current_salary")        or log_data.get("extracted_salary")
+
+    # Flatten interaction metrics
+    if "interactions" in log_data and isinstance(log_data["interactions"], list):
+        for interaction in log_data["interactions"]:
+            if isinstance(interaction, dict):
+                int_ev = interaction.get("evaluation") or {}
+                if isinstance(int_ev, str):
+                    try:
+                        import json as _json
+                        int_ev = _json.loads(int_ev)
+                    except Exception:
+                        int_ev = {}
+                interaction["metric_score_intent"]    = int_ev.get("metric_score_intent")    or interaction.get("metric_score_intent")
+                interaction["metric_score_relevance"] = int_ev.get("metric_score_relevance") or interaction.get("metric_score_relevance")
+                interaction["metric_score_latency"]   = int_ev.get("metric_score_latency")   or interaction.get("metric_score_latency")
+                interaction["metric_score_coherence"] = int_ev.get("metric_score_coherence") or interaction.get("metric_score_coherence")
+
+    return {"log": log_data}
 
 def sync_call_status_helper(call_id: str, app_id: str = None):
     """

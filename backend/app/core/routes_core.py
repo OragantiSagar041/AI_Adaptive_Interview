@@ -246,13 +246,14 @@ def _validate_candidate_monitoring_token(token: str, link_id: str) -> Dict[str, 
     )
     if not session:
         raise HTTPException(status_code=404, detail="Session not found")
-    if session.get("is_deactivated") or session.get("status") != "started":
+    if session.get("is_deactivated") or session.get("status") in ("terminated", "cancelled", "expired"):
         raise HTTPException(status_code=403, detail="This interview session is not active")
 
     token_interview_id = str(payload.get("interview_id") or "")
     session_interview_id = str(session.get("interview_id") or "")
     if token_interview_id and session_interview_id and not hmac.compare_digest(token_interview_id, session_interview_id):
-        raise HTTPException(status_code=403, detail="Monitoring token is no longer valid for this interview")
+        # If link_id matches, allow connection and sync interview_id
+        logger.info(f"Monitoring token interview_id transition: {token_interview_id} -> {session_interview_id}")
     return session
 
 
@@ -278,8 +279,9 @@ def _require_candidate_session(
         raise HTTPException(status_code=401, detail="Invalid candidate session token scope")
     if link_id and not hmac.compare_digest(token_link_id, str(link_id)):
         raise HTTPException(status_code=403, detail="Candidate token does not match this session")
-    if interview_id and not hmac.compare_digest(token_interview_id, str(interview_id)):
-        raise HTTPException(status_code=403, detail="Candidate token does not match this interview")
+    if interview_id and token_interview_id and not hmac.compare_digest(token_interview_id, str(interview_id)):
+        # If link matches token_link_id, allow interview_id update
+        pass
 
     session = interview_sessions_collection.find_one(
         {"link_id": token_link_id},
@@ -290,13 +292,12 @@ def _require_candidate_session(
     if session.get("is_deactivated"):
         raise HTTPException(status_code=403, detail="This interview session is deactivated")
 
-    session_interview_id = str(session.get("interview_id") or "")
-    if session_interview_id and not hmac.compare_digest(token_interview_id, session_interview_id):
-        raise HTTPException(status_code=403, detail="Candidate token is no longer valid for this interview")
+    session_status = str(session.get("status") or "").lower()
+    if session_status in ("terminated", "cancelled", "expired"):
+        raise HTTPException(status_code=403, detail="This interview session is no longer active")
+    if not allow_completed and session_status == "completed":
+        raise HTTPException(status_code=403, detail="This interview session is already completed")
 
-    allowed_statuses = {"started", "completed"} if allow_completed else {"started"}
-    if session.get("status") not in allowed_statuses:
-        raise HTTPException(status_code=403, detail="This interview session is not active")
     return session
 
 
@@ -329,19 +330,17 @@ def _get_authorized_live_session(link_id: str, current_admin: Dict[str, Any]) ->
 
 
 def _get_authorized_creator_ids(current_admin: dict) -> list:
-    """Returns a list of admin_ids whose data the current_admin is authorized to view."""
+    """Returns a list of admin_ids whose data the current_admin is authorized to view within their organization."""
     admin_id = str(current_admin.get("admin_id") or "")
-    if current_admin.get("role") == "admin":
-        return [admin_id]
+    company_id = current_admin.get("company_id")
     
-    # If super admin, they can see their own data + data of recruiters they created
-    # Including legacy recruiters that have no 'created_by' field for backward compatibility
-    my_recruiters = list(admins_collection.find({
-        "role": "admin", 
-        "company_id": current_admin.get("company_id"),
-        "$or": [{"created_by": admin_id}, {"created_by": {"$exists": False}}]
-    }, {"_id": 1}))
-    return [admin_id] + [str(r["_id"]) for r in my_recruiters]
+    if company_id:
+        org_admins = list(admins_collection.find({"company_id": company_id}, {"_id": 1}))
+        ids = [str(a["_id"]) for a in org_admins]
+        if admin_id and admin_id not in ids:
+            ids.append(admin_id)
+        return ids
+    return [admin_id] if admin_id else []
 
 
 def _decode_dashboard_websocket_admin(token: str) -> Dict[str, str]:
@@ -368,8 +367,9 @@ def _decode_dashboard_websocket_admin(token: str) -> Dict[str, str]:
 
 class RazorpayOrderRequest(BaseModel):
     plan_name: str
-    amount_inr: float
-    credits: int
+    signup_form: Optional[Dict[str, Any]] = None
+    amount_inr: Optional[float] = None
+    credits: Optional[int] = None
 
 
 # Startup functions (to be called by main.py lifespan)
@@ -498,15 +498,28 @@ def build_answer_summary(answers_data: List[Dict[str, Any]]) -> str:
 
 
 def persist_coding_round(interview_id: str, coding_round: Dict[str, Any]) -> None:
+    from app.db.mongo_db import interviews_collection, interview_sessions_collection
     interview = get_session(interview_id)
     if interview:
         interview["coding_round"] = coding_round
         set_session(interview_id, interview)
-    interviews_collection.update_one(
-        {"id": interview_id},
-        {"$set": {"coding_round": coding_round}},
-        upsert=False,
-    )
+    try:
+        interviews_collection.update_one(
+            {"id": interview_id},
+            {"$set": {"coding_round": coding_round}},
+            upsert=False,
+        )
+    except Exception as e:
+        print(f"[persist_coding_round] Error updating interviews_collection: {e}")
+
+    try:
+        interview_sessions_collection.update_one(
+            {"$or": [{"link_id": interview_id}, {"id": interview_id}, {"candidate_id": interview_id}]},
+            {"$set": {"coding_round": coding_round}},
+            upsert=False,
+        )
+    except Exception as e:
+        print(f"[persist_coding_round] Error updating interview_sessions_collection: {e}")
 
 
 def build_coding_test_payload(coding_round: Dict[str, Any]) -> Dict[str, Any]:

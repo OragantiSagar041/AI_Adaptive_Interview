@@ -6,7 +6,7 @@ Auto-split from routes.py lines 4010–6464.
 # ---------------------------------------------------------------------------
 # Standard library
 # ---------------------------------------------------------------------------
-import os, sys, io, json, hmac, math, uuid, html, time, random
+import os, sys, io, json, hmac, math, uuid, html, time, random, re
 import base64, shutil, hashlib, textwrap, asyncio, subprocess, tempfile
 import threading, traceback, logging
 from collections import defaultdict
@@ -19,6 +19,7 @@ from typing import Any, Dict, List, Optional, Union
 import bcrypt, jwt, requests
 import cloudinary, cloudinary.uploader, cloudinary.api, cloudinary.utils
 import edge_tts
+# pyrefly: ignore [missing-import]
 import pypdf
 from bson import ObjectId
 from bson.errors import InvalidId
@@ -50,9 +51,9 @@ from app.data.coding_graph import generate_coding_task, observe_coding_intent, r
 from app.data.industry_fallback_data import INDUSTRY_TECHNICAL_QUESTIONS, INDUSTRY_CASE_STUDIES
 from app.db.redis_manager import manager
 import app.services.transcription as transcription
-from app.db.mongo_db import client as mongo_client
+from app.db.mongo_db import client as mongo_client, omni_call_logs_collection
 from app.services.services import *
-from app.services.services import parse_iso_datetime
+from app.services.services import require_role
 from app.core.session_store import get_session, set_session, delete_session as delete_cached_session
 from app.schemas.models import *
 from app.db.database import *
@@ -85,14 +86,23 @@ from app.core.routes_core import (
     RazorpayOrderRequest, MAIN_LOOP,
 )
 
-from app.routes.admin_dashboard import DecisionRequest, extract_info_from_resume
-from app.routes.interview import sync_session_to_application
+
 
 load_dotenv()
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
 router = APIRouter()
+
+INTEGRATION_CATALOG = [
+    {"id": "greenhouse", "name": "Greenhouse", "category": "ATS"},
+    {"id": "lever", "name": "Lever", "category": "ATS"},
+    {"id": "workday", "name": "Workday", "category": "HRIS"},
+    {"id": "bamboohr", "name": "BambooHR", "category": "HRIS"},
+    {"id": "slack", "name": "Slack", "category": "Communication"},
+    {"id": "teams", "name": "Microsoft Teams", "category": "Communication"},
+    {"id": "zapier", "name": "Zapier", "category": "Automation"}
+]
 
 @router.post("/admin/parse-resume")
 async def parse_resume(
@@ -222,51 +232,10 @@ Return a pure JSON object with these keys. If not found, return empty string for
             if lines:
                 title = lines[0][:50]
     else:
-        info = extract_info_from_resume(text)
-        name = info.get("name")
-        email = info.get("email")
-        
-        from app.services.services import chat_completion
-        from starlette.concurrency import run_in_threadpool
-        try:
-            prompt = f"""Extract the following fields from this candidate resume:
-1. name (string)
-2. email (string)
-3. phone (string)
-4. experience (string, e.g., '2 Years' or '0 Years')
-5. location (string)
-6. current_company (string, e.g. 'Google' or 'N/A')
-7. current_ctc (string, e.g. '5 LPA' or 'N/A')
-8. expected_ctc (string, e.g. '8 LPA' or 'N/A')
-9. notice_period (string, e.g. '30 Days' or 'N/A')
-
-Return a pure JSON object with these keys. If not found, return empty string for that key. Do not use markdown. Resume: {text[:20000]}"""
-            
-            resp = await run_in_threadpool(
-                chat_completion,
-                messages=[{"role": "user", "content": prompt}],
-                model="openai/gpt-4o-mini",
-                temperature=0.0,
-                timeout=15.0
-            )
-            import json, re
-            if resp:
-                resp_clean = re.sub(r"```(?:json)?", "", resp).strip()
-                try:
-                    data = json.loads(resp_clean)
-                    info["name"] = data.get("name") or name
-                    info["email"] = data.get("email") or email
-                    info["phone"] = data.get("phone") or ""
-                    info["experience"] = data.get("experience") or ""
-                    info["location"] = data.get("location") or ""
-                    info["current_company"] = data.get("current_company") or ""
-                    info["current_ctc"] = data.get("current_ctc") or ""
-                    info["expected_ctc"] = data.get("expected_ctc") or ""
-                    info["notice_period"] = data.get("notice_period") or ""
-                except Exception as parse_e:
-                    print("Error parsing JSON for Resume details:", parse_e)
-        except Exception as e:
-            print("Error extracting Resume info:", e)
+        from app.services.resume_nlp_extractor import extract_candidate_info_nlp
+        info = extract_candidate_info_nlp(text)
+        if isinstance(info.get("skills"), list):
+            skills_str = ", ".join(info.get("skills", []))
         
     res_dict = {
         "status": "success",   
@@ -295,21 +264,88 @@ Return a pure JSON object with these keys. If not found, return empty string for
 @router.get("/admin/candidate/check")
 def check_candidate(email: str, current_admin: dict = Depends(get_current_admin_details)):
     try:
-        # Check if candidate exists for this company (or globally if super admin)
-        query = {"candidate_email": email}
+        clean_email = (email or "").strip().lower()
+        if not clean_email or "@" not in clean_email:
+            return {"exists": False}
+
+        # 1. Search in interview_sessions_collection (with case-insensitive match)
+        query = {
+            "candidate_email": {"$regex": f"^{re.escape(clean_email)}$", "$options": "i"}
+        }
         if current_admin.get("role") not in ["super_admin", "master"]:
             query["company_id"] = current_admin.get("company_id")
             
-        session = interview_sessions_collection.find_one(
-            query,
-            sort=[("created_at", -1)]
+        sessions = list(interview_sessions_collection.find(query).sort("created_at", -1).limit(5))
+        for s in sessions:
+            resume_text = (s.get("resume_text") or "").strip()
+            cand_name = (s.get("candidate_name") or "").strip()
+            if resume_text:
+                return {
+                    "exists": True,
+                    "resume_text": resume_text,
+                    "candidate_name": cand_name,
+                    "job_description": s.get("job_description", "")
+                }
+
+        # 2. Search in job_applications_collection
+        app_doc = job_applications_collection.find_one(
+            {
+                "email": {"$regex": f"^{re.escape(clean_email)}$", "$options": "i"},
+                "resume_text": {"$exists": True, "$ne": ""}
+            },
+            sort=[("applied_at", -1)]
         )
-        if session:
+        if app_doc and (app_doc.get("resume_text") or "").strip():
             return {
                 "exists": True,
-                "resume_text": session.get("resume_text", ""),
-                "candidate_name": session.get("candidate_name", "")
+                "resume_text": app_doc.get("resume_text", "").strip(),
+                "candidate_name": app_doc.get("name", "") or app_doc.get("candidate_name", ""),
+                "candidate_phone": app_doc.get("phone", ""),
+                "job_description": app_doc.get("job_description", "")
             }
+
+        # 3. Search in omni_call_logs_collection
+        call_doc = omni_call_logs_collection.find_one(
+            {
+                "$or": [
+                    {"email": {"$regex": f"^{re.escape(clean_email)}$", "$options": "i"}},
+                    {"candidate_email": {"$regex": f"^{re.escape(clean_email)}$", "$options": "i"}}
+                ]
+            },
+            sort=[("created_at", -1)]
+        )
+        if call_doc:
+            r_text = (call_doc.get("resume_text") or call_doc.get("parsed_resume") or "").strip()
+            if r_text:
+                return {
+                    "exists": True,
+                    "resume_text": r_text,
+                    "candidate_name": call_doc.get("candidate_name") or call_doc.get("name", ""),
+                    "candidate_phone": call_doc.get("phone_number") or call_doc.get("phone", "")
+                }
+
+        # 4. Search candidates_collection
+        cand_doc = candidates_collection.find_one(
+            {"email": {"$regex": f"^{re.escape(clean_email)}$", "$options": "i"}},
+            sort=[("created_at", -1)]
+        )
+        if cand_doc and (cand_doc.get("resume_text") or "").strip():
+            return {
+                "exists": True,
+                "resume_text": cand_doc.get("resume_text", "").strip(),
+                "candidate_name": cand_doc.get("name", "") or cand_doc.get("candidate_name", "")
+            }
+
+        # 5. If sessions found with candidate name even if resume_text is blank
+        if sessions:
+            first_s = sessions[0]
+            return {
+                "exists": True,
+                "resume_text": first_s.get("resume_text", ""),
+                "candidate_name": first_s.get("candidate_name", ""),
+                "job_description": first_s.get("job_description", "")
+            }
+
         return {"exists": False}
     except Exception as e:
         return {"exists": False, "error": str(e)}
@@ -1459,39 +1495,109 @@ def log_proctoring_violation(
 def update_decision(data: DecisionRequest, current_admin: dict = Depends(require_role("admin", "super_admin"))):
     print(f" Decision Update Request: link_id={data.link_id}, decision={data.decision}")
     try:
+        admin_name = current_admin.get("name") or current_admin.get("username") or "Admin"
+        admin_role = current_admin.get("role") or "admin"
+        admin_id = current_admin.get("admin_id")
+        now_iso = datetime.now(timezone.utc).isoformat()
+        
         if data.link_id.startswith("ai_call_"):
-            app_id = data.link_id.replace("ai_call_", "")
+            raw_id = data.link_id.replace("ai_call_", "")
+            omni_call_id = raw_id.replace("omni_", "").strip()
+            
+            # 1. Search job_applications_collection
+            app = None
             from bson import ObjectId
             try:
-                app = job_applications_collection.find_one({"_id": ObjectId(app_id)})
+                app = job_applications_collection.find_one({"_id": ObjectId(raw_id)})
             except Exception:
                 app = None
-            if not app:
-                app = job_applications_collection.find_one({"omni_call_id": app_id})
-            if not app:
-                raise HTTPException(status_code=404, detail="AI Call candidate not found")
 
-            job = jobs_collection.find_one({"job_id": app.get("job_id")})
-            if not job:
-                raise HTTPException(status_code=403, detail="Unable to verify candidate ownership")
-            if current_admin.get("role") != "master" and job.get("company_id") != current_admin.get("company_id"):
-                raise HTTPException(status_code=403, detail="Access denied")
-            if current_admin.get("role") == "admin" and str(job.get("admin_id") or "") != str(current_admin.get("admin_id") or ""):
-                raise HTTPException(status_code=403, detail="Access denied to another recruiter's candidate")
-                
-            job_applications_collection.update_one({"_id": app["_id"]}, {"$set": {"decision": data.decision}})
-            
-            name = app.get("name") or "Candidate"
-            email = app.get("email")
-            jd = app.get("job_description") or ""
-            
+            if not app:
+                call_ids_to_try = [omni_call_id]
+                if omni_call_id.isdigit():
+                    call_ids_to_try.append(int(omni_call_id))
+                app = job_applications_collection.find_one({"omni_call_id": {"$in": call_ids_to_try}})
+
+            log = None
+            session = None
+            call_ids_to_try = [omni_call_id]
+            if omni_call_id.isdigit():
+                call_ids_to_try.append(int(omni_call_id))
+
+            log = omni_call_logs_collection.find_one({"call_id": {"$in": call_ids_to_try}})
+            session = interview_sessions_collection.find_one({"omni_call_id": {"$in": call_ids_to_try}})
+
+            if app and not log and not session:
+                linked_app_id = str(app["_id"])
+            elif log and not app:
+                linked_app_id = log.get("application_id")
+                if linked_app_id:
+                    try:
+                        app = job_applications_collection.find_one({"_id": ObjectId(linked_app_id)})
+                    except Exception:
+                        app = job_applications_collection.find_one({"application_id": linked_app_id})
+
+            # Update job_applications_collection if app exists
+            if app:
+                job_applications_collection.update_one(
+                    {"_id": app["_id"]},
+                    {"$set": {
+                        "decision": data.decision,
+                        "last_action_by_name": admin_name,
+                        "last_action_by_role": admin_role,
+                        "last_action_by_id": admin_id,
+                        "last_action_status": data.decision,
+                        "last_action_at": now_iso,
+                        "decision_by_name": admin_name,
+                        "decision_by_role": admin_role,
+                        "decision_at": now_iso
+                    }}
+                )
+
+            # Always update or upsert omni_call_logs_collection
+            company_id = current_admin.get("company_id")
+            omni_update = {
+                "call_id": omni_call_id,
+                "decision": data.decision,
+                "last_action_status": data.decision,
+                "decision_by_name": admin_name,
+                "decision_by_role": admin_role,
+                "decision_at": now_iso
+            }
+            if company_id:
+                omni_update["company_id"] = company_id
+            if admin_id:
+                omni_update["admin_id"] = admin_id
+
+            omni_call_logs_collection.update_one(
+                {"call_id": {"$in": call_ids_to_try}},
+                {"$set": omni_update},
+                upsert=True
+            )
+
+            # Update interview_sessions_collection if present
+            if session:
+                interview_sessions_collection.update_one(
+                    {"_id": session["_id"]},
+                    {"$set": {
+                        "decision": data.decision,
+                        "decision_by_name": admin_name,
+                        "decision_by_role": admin_role,
+                        "decision_at": now_iso
+                    }}
+                )
+
+            name = (app.get("name") if app else None) or (log.get("candidate_name") if log else None) or (session.get("candidate_name") if session else None) or "Candidate"
+            email = (app.get("email") if app else None) or (log.get("email") if log else None) or (session.get("candidate_email") if session else None)
+            jd = (app.get("job_description") if app else None) or (session.get("job_description") if session else None) or ""
+
             load_dotenv(override=False)
             email_sent = False
             email_reason = "No candidate email found"
             if email:
                 email_sent = send_decision_email(email, name, data.decision, jd)
                 email_reason = "Success" if email_sent else "Email service error (Brevo API failed)"
-            
+
             return {"status": "success", "decision": data.decision, "email_sent": email_sent, "email_reason": email_reason}
 
         # 1. Fetch candidate details for email
@@ -1507,9 +1613,24 @@ def update_decision(data: DecisionRequest, current_admin: dict = Depends(require
         jd = row.get("job_description")
         print(f" Candidate: {name}, Email: {email}")
         
+        admin_name = current_admin.get("name") or current_admin.get("username") or "Admin"
+        admin_role = current_admin.get("role") or "admin"
+        admin_id = current_admin.get("admin_id")
+        now_iso = datetime.now(timezone.utc).isoformat()
+        
         # 2. Update DB
-        interview_sessions_collection.update_one({"link_id": data.link_id}, {"$set": {"decision": data.decision}})
+        interview_sessions_collection.update_one(
+            {"link_id": data.link_id},
+            {"$set": {
+                "decision": data.decision,
+                "decision_by_name": admin_name,
+                "decision_by_role": admin_role,
+                "decision_by_id": admin_id,
+                "decision_at": now_iso
+            }}
+        )
         print(f" DB Updated for {data.link_id}")
+        from app.routes.interview import sync_session_to_application
         sync_session_to_application(data.link_id)
         
         # 3. Send Email
@@ -1593,11 +1714,29 @@ def admin_copilot_chat(request: CopilotRequest, raw_request: Request, current_ad
     try:
         from app.ai.ai_client import chat_completion
         from app.db.mongo_db import db
+        from app.services.subscription_service import get_subscription_stats
         
         role = current_admin.get("role", "admin")
         admin_id = current_admin.get("admin_id")
         company_id = current_admin.get("company_id")
         
+        is_master = bool(current_admin.get("is_master") or role == "master" or current_admin.get("role") == "master")
+        is_super_admin = not is_master and (role in ["super_admin", "tenant"] or current_admin.get("role") in ["super_admin", "tenant"])
+        is_recruiter = not is_master and not is_super_admin
+
+        if is_master:
+            role_type = "master"
+            user_name = current_admin.get("name") or current_admin.get("username") or "master"
+            copilot_title = "Hire IQ Master Copilot"
+        elif is_super_admin:
+            role_type = "super_admin"
+            user_name = current_admin.get("name") or current_admin.get("company_name") or current_admin.get("username") or "Super Admin"
+            copilot_title = "Hire IQ Super Admin Copilot"
+        else:
+            role_type = "recruiter"
+            user_name = current_admin.get("name") or current_admin.get("username") or "Recruiter"
+            copilot_title = "Hire IQ Recruiter Copilot"
+
         def strip_markdown(text: str) -> str:
             if not text:
                 return ""
@@ -1605,194 +1744,156 @@ def admin_copilot_chat(request: CopilotRequest, raw_request: Request, current_ad
             t = re.sub(r'```[a-zA-Z0-9]*', '', text)
             t = re.sub(r'\*\*|__|\*|_|#', '', t)
             return t.strip()
-        
-        # 1. Dynamic platform routing metadata (Filtered and capped to save tokens)
-        dynamic_endpoints = []
-        for r in getattr(raw_request.app, "routes", []):
-            if hasattr(r, "path") and hasattr(r, "methods") and ("/admin" in r.path or "/api/plans" in r.path):
-                if "notification" in r.path or "ws" in r.path:
-                    continue
-                methods_str = ", ".join(r.methods - {"HEAD", "OPTIONS"})
-                if methods_str:
-                    endpoint_name = r.endpoint.__name__ if hasattr(r, "endpoint") else ""
-                    docstring = ""
-                    if hasattr(r, "endpoint") and r.endpoint.__doc__:
-                        docstring = r.endpoint.__doc__.strip().split('\n')[0].strip()
-                    doc_suffix = f" -> {docstring}" if docstring else ""
-                    dynamic_endpoints.append(f"- Endpoint `{r.path}` ({methods_str}) [Handler: {endpoint_name}]{doc_suffix}")
-        endpoints_context = "\n".join(dynamic_endpoints[:5])
- 
-        # 2. Dynamic database collections and records count (Filtered to essential collections)
-        dynamic_collections = []
-        try:
-            coll_names = db.list_collection_names()
-            important_colls = {"jobs", "job_applications", "interview_sessions", "admins"}
-            for col in coll_names:
-                if col in important_colls:
-                    doc_count = db[col].count_documents({})
-                    dynamic_collections.append(f"- Collection '{col}': {doc_count} documents")
-        except Exception as db_err:
-            dynamic_collections.append(f"- Database query failed: {db_err}")
-        db_context_meta = "\n".join(dynamic_collections)
- 
-        # 3. Dynamic subscription plans (Capped)
+
+        # Dynamic subscription plans
         dynamic_plans = []
         try:
             plans = list(plans_collection.find({}, {"_id": 0}))
-            for p in plans[:3]:
-                dynamic_plans.append(f"- Plan: {p.get('name', 'N/A')} (Key: {p.get('plan_key', 'N/A')}) | Price: {p.get('price_monthly', 0)} USD/mo | Credits: {p.get('credits_granted', 0)}")
+            for p in plans:
+                p_name = p.get('plan_name') or p.get('name') or 'Custom'
+                p_price = p.get('price', 0)
+                p_credits = p.get('credits_granted', 0)
+                p_feats = ", ".join(p.get('features', [])[:4])
+                dynamic_plans.append(f"- Plan: {p_name} | Price: Rs. {p_price:,} | Credits Granted: {p_credits} | Key Features: {p_feats}")
         except Exception:
             pass
         plans_context = "\n".join(dynamic_plans)
 
-        system_prompt = f"""You are the 'Hire IQ Admin Copilot', a specialized AI assistant embedded within the Admin Dashboard of the Hire IQ Adaptive Interview platform.
-You are currently talking to a user with the role: {role.upper()}.
+        # Build Role-Specific System Prompts
+        if is_master:
+            system_prompt = f"""You are the '{copilot_title}', the dedicated executive AI assistant in the Master Control Panel of the Hire IQ platform.
+You are interacting directly with the Master Platform Administrator: {user_name}.
 
-YOUR PURPOSE:
-Your purpose is to help the admin understand and navigate this website, AND to perform specific administrative actions when requested.
+YOUR ROLE & AUTHORITY:
+You assist the Master Admin with platform governance, subscription revenue analytics, subscribed tenant organizations oversight, plan configurations, and global usage metrics.
 
-DYNAMIC MODULE & FEATURE RECOGNITION:
-Do not rely on hardcoded feature or module names. You must dynamically inspect the platform structure using the context details provided below:
-1. "DYNAMIC PLATFORM MODULES & ROUTING METADATA": Outlines all available API routes, endpoints, HTTP methods, and module descriptions.
-2. "DYNAMIC DATABASE SCHEMA & COLLECTIONS METADATA": Outlines MongoDB tables and count of records, reflecting available features.
-3. "ACTIVE SUBSCRIPTION PLANS": Outlines all plans, credit grants, and prices.
-Use this information to answer user questions about any module, view, or functionality of the platform, even if new ones are added dynamically.
+STRICT SCOPE FOR MASTER PANEL:
+1. Master Analytics & Revenue: Answer questions about total platform revenue, Monthly Recurring Revenue (MRR), total subscribed organizations (active, trial, expired), and credits issued across all tenants using the PLATFORM METRICS below.
+2. Tenant & Subscriber Management: Answer queries about subscriber companies, tenant status (active/deactivated), demo requests, and global subscriber counts.
+3. Subscription Plans: Explain all subscription plans, pricing, credit limits, and configured features.
+4. Global Metrics: Provide platform-wide statistics (total interviews conducted, global credit usage).
+5. If the Master asks any question regarding revenue, tenant counts, or plans, answer with precise live data from the context.
+"""
+        elif is_super_admin:
+            company_name = current_admin.get("company_name") or user_name
+            system_prompt = f"""You are the '{copilot_title}', the organization AI assistant in the Super Admin Dashboard of the Hire IQ platform.
+You are interacting with the Super Admin: {user_name} (Company: {company_name}).
 
-YOU MUST SUPPORT:
-1. General HireIQ conversations (e.g. greetings, role explanations, HireIQ small talk).
-2. Platform questions (answering how any module, endpoint, or system feature works by mapping them to the active routes and database context).
-3. Navigation help (guiding the admin to pages by mapping their query to the listed Admin / Tenant routes).
-4. Job and application queries (using the static context data below to answer basic questions about active jobs).
-5. Email drafting (drafting feedback, rejection, or selection emails for candidates).
-6. Email sending (routing to the 'send_feedback' action).
-7. Admin creation (routing to the 'create_admin' action).
-8. Credit management (routing to 'request_credits', 'transfer_credits', or 'buy_credits' actions).
-9. Interview creation (routing to the 'create_interview' action by extracting candidate details from resume and JD).
-10. Dynamic candidate querying (routing to the 'query_candidates' action). You MUST use this action whenever the user asks to find a candidate by name (e.g. "Deekshitha"), view a candidate profile, or filter/search candidates (by dates, scores, decision, or status).
-11. Job creation (routing to the 'create_job' action).
-12. Automated integrations (routing to the 'integrate_platform' action) when the user asks to integrate an external platform (like ATS, Slack, Workday, etc.). You must provide the manual process steps inside the JSON.
-13. Platform security & firewall queries (answering questions about security IP whitelist addresses using the context data below).
+YOUR ROLE & AUTHORITY:
+You assist the Super Admin in managing company-wide hiring operations, team recruiters, company credit balances, job postings, candidate pipelines, and organization settings.
 
+STRICT SCOPE FOR SUPER ADMIN PANEL:
+1. Team & Recruiter Management: Answer questions about your sub-admin recruiters, their assigned credits, and recruiter statuses.
+2. Credit Balance & Recharge: Check and manage your company's credit balance, purchase new credits, or transfer credits to your recruiters.
+3. Organization Pipeline: View candidate interviews, overall hiring scores, and active job postings across your company.
+4. Integrations & Settings: Assist with ATS integrations, security whitelist IPs, and company profile.
+"""
+        else:
+            system_prompt = f"""You are the '{copilot_title}', the dedicated recruitment assistant in the Recruiter Dashboard of the Hire IQ platform.
+You are interacting with the Recruiter: {user_name}.
+
+YOUR ROLE & AUTHORITY:
+You assist the Recruiter in creating candidate interviews, reviewing candidate scorecard metrics, drafting candidate feedback/invitation emails, and evaluating candidate responses.
+
+STRICT SCOPE FOR RECRUITER PANEL:
+1. Candidate Evaluation: Review candidate interview results, scores, strengths, and areas for improvement.
+2. Interview Workflows: Guide on creating single or bulk interviews, configuring job descriptions, and setting up questions.
+3. Candidate Email Drafting: Draft professional selection, rejection, or feedback emails for candidates.
+4. ATS & Scoring: Explain adaptive interview scoring, proctoring anti-cheat flags, and interview rubrics.
+5. Credits: Help request credits from your Super Admin.
+"""
+
+        # Append common rules
+        system_prompt += """
 CRITICAL RULES:
-1. Direct LLM Responses: For HireIQ-related queries (categories 1 to 5, and 13), you must answer the user directly. Keep your answers concise, accurate, and professional.
-2. Action Responses: For action requests (categories 6 to 12), you must output exactly one short sentence confirming the action, followed IMMEDIATELY by a JSON block.
-   The JSON block MUST be exactly in this format:
+1. Direct LLM Responses: For general platform questions, metrics, explanations, and advice, answer concisely and directly.
+2. Action Responses: When the user explicitly requests an action, output one short confirmation sentence followed IMMEDIATELY by a JSON block:
    ```json
-   {{
+   {
        "action": "action_name",
-       ... (other required fields)
-   }}
+       ...
+   }
    ```
-   Supported actions and roles:
-   - send_feedback: Available for admin and super_admin. Schema: `{{"action": "send_feedback", "candidate_email": "...", "content": "..."}}`
-   - request_credits: Available for admin only. Schema: `{{"action": "request_credits", "amount": ..., "reason": "..."}}`
-   - transfer_credits: Available for super_admin only. Schema: `{{"action": "transfer_credits", "admin_username": "...", "amount": ...}}`
-   - buy_credits: Available for super_admin only. Schema: `{{"action": "buy_credits", "amount": ...}}`
-   - create_admin: Available for super_admin only. Schema: `{{"action": "create_admin", "username": "...", "email": "..."}}`
-   - create_interview: Available for admin and super_admin. Schema: `{{"action": "create_interview", "candidate_name": "...", "candidate_email": "...", "resume_text": "...", "job_description": "...", "experience": "...", "location": "...", "current_ctc": "...", "expected_ctc": "..."}}`
-   - query_candidates: Available for admin and super_admin. Schema: `{{"action": "query_candidates", "candidate_name": "...", "start_date": "YYYY-MM-DD", "end_date": "YYYY-MM-DD", "status": "completed/pending", "decision": "qualified/rejected", "min_score": 50}}`. Omit any filters the user didn't specify.
-   - create_job: Available for admin and super_admin. Schema: `{{"action": "create_job", "title": "...", "experience": "...", "skills": "...", "description": "..."}}`
-   - integrate_platform: Available for admin and super_admin. Schema: `{{"action": "integrate_platform", "platform_name": "...", "process_steps": "1. step 1\n2. step 2..."}}`
-   - connect_app: Available for admin and super_admin. Schema: `{{"action": "connect_app", "platform_name": "..."}}`
-   - disconnect_app: Available for admin and super_admin. Schema: `{{"action": "disconnect_app", "platform_name": "..."}}`
-3. Formatting Rules:
-   - You MUST format all responses as clean, structured, numbered or bulleted lists.
-   - You MUST NOT use any Markdown formatting such as **bold**, *italics*, _underscores_, or code blocks in your responses unless the user explicitly requests them (or for the required JSON action blocks).
-   - Responses should be plain, professional, clean, and easy to read while preserving the same information.
-4. Unrelated Topics: For any topic unrelated to HireIQ (such as general knowledge, coding help, non-HireIQ conversation, general assistant questions), you MUST politely decline. Use this fallback response: "I'm sorry, I can only help you with questions related to the HireIQ platform, its dashboard, candidate data, and standard admin actions."
-5. Do NOT echo or repeat the user's question. Provide the answer or the action directly.
+   Supported actions:
+   - send_feedback (recruiter & super_admin): {"action": "send_feedback", "candidate_email": "...", "content": "..."}
+   - request_credits (recruiter only): {"action": "request_credits", "amount": 50, "reason": "..."}
+   - transfer_credits (super_admin only): {"action": "transfer_credits", "admin_username": "...", "amount": 50}
+   - buy_credits (super_admin only): {"action": "buy_credits", "amount": 100}
+   - create_admin (super_admin only): {"action": "create_admin", "username": "...", "email": "..."}
+   - create_interview (recruiter & super_admin): {"action": "create_interview", "candidate_name": "...", "candidate_email": "...", "resume_text": "...", "job_description": "..."}
+   - query_candidates (recruiter & super_admin): {"action": "query_candidates", "candidate_name": "..."}
+   - create_job (recruiter & super_admin): {"action": "create_job", "title": "...", "skills": "...", "description": "..."}
+3. Formatting Rules: Keep responses clean, concise, well-structured with bullet points.
+4. Unrelated Topics: For any non-HireIQ questions, politely state that you are specialized in HireIQ platform features for their panel.
 """
 
         context_data = ""
-        context_data += "\n--- DYNAMIC PLATFORM MODULES & ROUTING METADATA ---\n"
-        context_data += endpoints_context + "\n"
-        
-        context_data += "\n--- DYNAMIC DATABASE SCHEMA & COLLECTIONS METADATA ---\n"
-        context_data += db_context_meta + "\n"
-        
+
         if plans_context:
-            context_data += "\n--- ACTIVE SUBSCRIPTION PLANS ---\n"
-            context_data += plans_context + "\n"
+            context_data += "\n--- ACTIVE SUBSCRIPTION PLANS ---\n" + plans_context + "\n"
 
-        context_data += "\n--- SECURITY & WHITELIST IP ADDRESSES ---\n"
-        context_data += "When asked about platform security, firewalls, or IP whitelist addresses, provide these exact IPs:\n"
-        context_data += "- Primary Production IP: 34.202.15.91\n"
-        context_data += "- Secondary Failover IP: 3.15.82.204\n"
-        context_data += "- Webhook Outbound IP: 52.14.73.11\n"
-        context_data += "- API Gateway IP: 18.216.45.10\n"
-
-        # Fetch recent jobs and applications
-        recent_jobs = []
-        recent_apps = []
-        
-        if role in ["admin", "super_admin"]:
-            # Query jobs
-            jobs_query = {}
-            if role == "admin":
-                jobs_query["admin_id"] = admin_id
-            else:  # super_admin
-                jobs_query["company_id"] = company_id
-            
-            recent_jobs = list(jobs_collection.find(
-                jobs_query, 
-                {"job_id": 1, "title": 1, "department": 1, "location": 1, "_id": 0}
-            ).sort("created_at", -1).limit(3))
-            
-            if recent_jobs:
-                job_ids = [j.get("job_id") for j in recent_jobs if j.get("job_id")]
-                recent_apps = list(job_applications_collection.find(
-                    {"job_id": {"$in": job_ids}}, 
-                    {"name": 1, "email": 1, "score": 1, "status": 1, "applied_at": 1, "job_id": 1, "_id": 0}
-                ).sort("applied_at", -1).limit(3))
-
-        if role == "admin":
-            recent_sessions = list(interview_sessions_collection.find(
-                {"created_by": admin_id, "status": "completed"},
-                {"candidate_name": 1, "candidate_email": 1, "avg_score": 1, "decision": 1, "_id": 0}
-            ).sort("created_at", -1).limit(3))
-            if recent_sessions:
-                context_data += "\n--- YOUR RECENT CANDIDATE INTERVIEWS ---\n"
-                for s in recent_sessions:
-                    context_data += f"- Candidate: {s.get('candidate_name', 'Unknown')} | Email: {s.get('candidate_email', 'Unknown')} | Score: {s.get('avg_score', 'N/A')}/100 | Decision: {s.get('decision', 'None')}\n"
-
-        elif role == "super_admin":
-            sub_admins = list(admins_collection.find({"created_by": admin_id}, {"username": 1, "name": 1, "email": 1, "credits": 1, "_id": 0}).limit(50))
-            if sub_admins:
-                context_data += "\n--- YOUR SUB-ADMINS ---\n"
-                for sa in sub_admins:
-                    context_data += f"- Name: {sa.get('name', 'Unknown')} | Username: {sa.get('username')} | Email: {sa.get('email')} | Credits: {sa.get('credits')}\n"
-                    
-            recent_sessions = list(interview_sessions_collection.find(
-                {"company_id": company_id, "status": "completed"},
-                {"candidate_name": 1, "candidate_email": 1, "avg_score": 1, "decision": 1, "created_by": 1, "_id": 0}
-            ).sort("created_at", -1).limit(20))
-            if recent_sessions:
-                context_data += "\n--- COMPANY CANDIDATE INTERVIEWS ---\n"
-                for s in recent_sessions:
-                    context_data += f"- Candidate: {s.get('candidate_name')} | Email: {s.get('candidate_email')} | Score: {s.get('avg_score')} | Created By ID: {s.get('created_by')}\n"
-
-
-        if recent_jobs:
-            context_data += "\n--- ACTIVE/RECENT JOBS ---\n"
-            for j in recent_jobs:
-                context_data += f"- Job ID: {j.get('job_id')} | Title: {j.get('title')} | Dept: {j.get('department', 'N/A')} | Loc: {j.get('location', 'N/A')}\n"
+        if is_master:
+            try:
+                stats = get_subscription_stats()
+                total_interviews = interview_sessions_collection.count_documents({})
+                completed_interviews = interview_sessions_collection.count_documents({"status": "completed"})
+                total_tenants = admins_collection.count_documents({"$or": [{"role": "tenant"}, {"is_master": False}]})
+                active_tenants = admins_collection.count_documents({"login_enabled": {"$ne": False}, "$or": [{"role": "tenant"}, {"role": "super_admin"}]})
                 
-        if recent_apps:
-            context_data += "\n--- RECENT JOB APPLICATIONS ---\n"
-            for a in recent_apps:
-                context_data += f"- Applicant: {a.get('name')} | Email: {a.get('email')} | Job ID: {a.get('job_id')} | Score: {a.get('score', 'N/A')} | Status: {a.get('status', 'N/A')} | Applied At: {a.get('applied_at', 'N/A')}\n"
+                context_data += f"\n--- MASTER PLATFORM METRICS ---\n"
+                context_data += f"- Total Platform MRR / Revenue: Rs. {stats.total_mrr:,.2f}\n"
+                context_data += f"- Total Subscribed Organizations: {stats.total_organisations}\n"
+                context_data += f"- Active Subscriptions: {stats.active_subscriptions}\n"
+                context_data += f"- Trial Subscriptions: {stats.trial_subscriptions}\n"
+                context_data += f"- Expired Subscriptions: {stats.expired_subscriptions}\n"
+                context_data += f"- Total Platform Super Admins: {active_tenants}\n"
+                context_data += f"- Total Credits Issued: {stats.total_credits_issued:,}\n"
+                context_data += f"- Total Credits Consumed: {stats.total_credits_consumed:,}\n"
+                context_data += f"- Total Platform Interviews: {total_interviews:,}\n"
+                context_data += f"- Total Completed Interviews: {completed_interviews:,}\n"
+            except Exception as e:
+                context_data += f"\n--- MASTER METRICS (Fallback) ---\n- Error loading stats: {e}\n"
 
-        if role == "master":
-            total_super_admins = admins_collection.count_documents({"role": "tenant"})
-            total_admins = admins_collection.count_documents({})
-            total_interviews = interview_sessions_collection.count_documents({})
-            completed_interviews = interview_sessions_collection.count_documents({"status": "completed"})
+        elif is_super_admin:
+            # Query super admin organization info
+            admin_record = admins_collection.find_one({"_id": ObjectId(admin_id)}) if admin_id else None
+            company_credits = admin_record.get("credits", 0) if admin_record else 0
             
-            context_data += f"\n--- PLATFORM METRICS ---\n"
-            context_data += f"- Total Super Admins (Tenants): {total_super_admins}\n"
-            context_data += f"- Total Sub-Admins: {total_admins}\n"
-            context_data += f"- Total Interviews Created: {total_interviews}\n"
-            context_data += f"- Total Interviews Completed: {completed_interviews}\n"
+            sub_admins = list(admins_collection.find({"created_by": admin_id}, {"username": 1, "name": 1, "email": 1, "credits": 1, "_id": 0}).limit(20))
+            recent_sessions = list(interview_sessions_collection.find(
+                {"$or": [{"company_id": company_id}, {"created_by": admin_id}], "status": "completed"},
+                {"candidate_name": 1, "candidate_email": 1, "avg_score": 1, "decision": 1, "_id": 0}
+            ).sort("created_at", -1).limit(10))
+
+            context_data += f"\n--- YOUR COMPANY METRICS ---\n"
+            context_data += f"- Company Name: {current_admin.get('company_name', 'Your Company')}\n"
+            context_data += f"- Available Credit Balance: {company_credits} credits\n"
+            context_data += f"- Team Sub-Admins / Recruiters: {len(sub_admins)}\n"
+            if sub_admins:
+                context_data += "Recruiter Team Members:\n"
+                for sa in sub_admins:
+                    context_data += f"  • {sa.get('name') or sa.get('username')} ({sa.get('email')}) - {sa.get('credits', 0)} credits\n"
+            if recent_sessions:
+                context_data += "Recent Company Candidate Interviews:\n"
+                for s in recent_sessions:
+                    context_data += f"  • Candidate: {s.get('candidate_name')} | Score: {s.get('avg_score', 'N/A')}/100 | Decision: {s.get('decision', 'Pending')}\n"
+
+        else: # Recruiter
+            admin_record = admins_collection.find_one({"_id": ObjectId(admin_id)}) if admin_id else None
+            recruiter_credits = admin_record.get("credits", 0) if admin_record else 0
+            
+            recent_sessions = list(interview_sessions_collection.find(
+                {"created_by": admin_id},
+                {"candidate_name": 1, "candidate_email": 1, "avg_score": 1, "decision": 1, "status": 1, "_id": 0}
+            ).sort("created_at", -1).limit(10))
+
+            context_data += f"\n--- RECRUITER METRICS ---\n"
+            context_data += f"- Recruiter Name: {user_name}\n"
+            context_data += f"- Available Credits: {recruiter_credits}\n"
+            if recent_sessions:
+                context_data += "Your Recent Candidate Interviews:\n"
+                for s in recent_sessions:
+                    context_data += f"  • Candidate: {s.get('candidate_name')} | Score: {s.get('avg_score', 'N/A')}/100 | Status: {s.get('status')} | Decision: {s.get('decision', 'Pending')}\n"
 
         system_prompt += f"\n{context_data}"
         
@@ -1966,6 +2067,20 @@ def get_admin_copilot_sessions(current_admin: dict = Depends(get_current_admin_d
 @router.post("/api/admin/copilot/sessions")
 def create_admin_copilot_session(current_admin: dict = Depends(get_current_admin_details)):
     admin_id = current_admin.get("admin_id")
+    role = current_admin.get("role", "admin")
+    is_master = bool(current_admin.get("is_master") or role == "master" or current_admin.get("role") == "master")
+    is_super_admin = not is_master and (role in ["super_admin", "tenant"] or current_admin.get("role") in ["super_admin", "tenant"])
+
+    if is_master:
+        user_name = current_admin.get("name") or current_admin.get("username") or "master"
+        initial_greeting = f"Hello {user_name}! I'm the Hire IQ Master Copilot. How can I help you manage the platform, plans, and tenants today?"
+    elif is_super_admin:
+        user_name = current_admin.get("name") or current_admin.get("company_name") or current_admin.get("username") or "Super Admin"
+        initial_greeting = f"Hello {user_name}! I'm the Hire IQ Super Admin Copilot. How can I assist you with your company's team, interviews, and credits today?"
+    else:
+        user_name = current_admin.get("name") or current_admin.get("username") or "Recruiter"
+        initial_greeting = f"Hello {user_name}! I'm the Hire IQ Recruiter Copilot. How can I help you with candidate evaluations and interviews today?"
+
     import uuid
     session_id = f"session_{uuid.uuid4().hex[:12]}"
     now_iso = datetime.now(timezone.utc).isoformat()
@@ -1976,7 +2091,7 @@ def create_admin_copilot_session(current_admin: dict = Depends(get_current_admin
         "messages": [
             {
                 "role": "assistant",
-                "content": f"Hello {current_admin.get('name') or current_admin.get('username') or 'Admin'}! I'm the Hire IQ Copilot. How can I help you today?"
+                "content": initial_greeting
             }
         ],
         "created_at": now_iso,
@@ -1989,9 +2104,35 @@ def create_admin_copilot_session(current_admin: dict = Depends(get_current_admin
 @router.get("/api/admin/copilot/sessions/{session_id}")
 def get_admin_copilot_session_detail(session_id: str, current_admin: dict = Depends(get_current_admin_details)):
     admin_id = current_admin.get("admin_id")
+    role = current_admin.get("role", "admin")
+    is_master = bool(current_admin.get("is_master") or role == "master" or current_admin.get("role") == "master")
+    is_super_admin = not is_master and (role in ["super_admin", "tenant"] or current_admin.get("role") in ["super_admin", "tenant"])
+
+    if is_master:
+        user_name = current_admin.get("name") or current_admin.get("username") or "master"
+        initial_greeting = f"Hello {user_name}! I'm the Hire IQ Master Copilot. How can I help you manage the platform, plans, and tenants today?"
+    elif is_super_admin:
+        user_name = current_admin.get("name") or current_admin.get("company_name") or current_admin.get("username") or "Super Admin"
+        initial_greeting = f"Hello {user_name}! I'm the Hire IQ Super Admin Copilot. How can I assist you with your company's team, interviews, and credits today?"
+    else:
+        user_name = current_admin.get("name") or current_admin.get("username") or "Recruiter"
+        initial_greeting = f"Hello {user_name}! I'm the Hire IQ Recruiter Copilot. How can I help you with candidate evaluations and interviews today?"
+
     doc = copilot_sessions_collection.find_one({"session_id": session_id, "admin_id": admin_id}, {"_id": 0})
     if not doc:
         raise HTTPException(status_code=404, detail="Session not found")
+
+    msgs = doc.get("messages", [])
+    if msgs and len(msgs) > 0 and msgs[0].get("role") == "assistant":
+        first_content = msgs[0].get("content", "")
+        if "Hello Admin!" in first_content or "I'm the Hire IQ Copilot" in first_content or first_content.startswith("Hello "):
+            msgs[0]["content"] = initial_greeting
+            copilot_sessions_collection.update_one(
+                {"session_id": session_id, "admin_id": admin_id},
+                {"$set": {"messages.0.content": initial_greeting}}
+            )
+            doc["messages"] = msgs
+
     return {"status": "success", "session": doc}
 
 @router.delete("/api/admin/copilot/sessions/{session_id}")
@@ -2479,8 +2620,8 @@ Return this EXACT JSON (all score fields are integers 0-100, weighted_total is t
         import re
         try:
             from app.data.offline_skills_dict import COMMON_SKILLS
-        except ImportError:
-            COMMON_SKILLS = set()
+        except Exception:
+            COMMON_SKILLS = {"python", "javascript", "react", "node", "java", "c++", "sql", "aws", "docker", "kubernetes", "git", "html", "css", "typescript", "mongodb", "fastapi", "django", "flask", "rest", "api"}
             
         resume_lower = resume_text.lower()
         jd_lower = jd_text.lower()
@@ -2552,4 +2693,3 @@ Return this EXACT JSON (all score fields are integers 0-100, weighted_total is t
 
 class CandidateFeedbackRequest(BaseModel):
     feedback_text: str
-

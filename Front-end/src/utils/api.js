@@ -853,6 +853,15 @@ export const getCompanies = async () => {
   }
 };
 
+export const getCompanyRevenueMaster = async (params = {}) => {
+  try {
+    const response = await api.get("/master/company-revenue", { params });
+    return response.data;
+  } catch (error) {
+    throw error.response?.data?.detail || error.response?.data?.message || "Failed to fetch company revenue analytics";
+  }
+};
+
 export const createTenant = async (data) => {
   try {
     const response = await api.post("/master/tenants", data);
