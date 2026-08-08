@@ -315,14 +315,17 @@ export default function AdminPage({ role: initialRole = 'admin' }) {
     document.documentElement.style.setProperty('--primary-hover', currentAccent.hover)
     document.documentElement.style.setProperty('--primary-glow', currentAccent.glow)
 
+    let link = document.querySelector("link[rel~='icon']");
+    if (!link) {
+      link = document.createElement('link');
+      link.rel = 'icon';
+      document.head.appendChild(link);
+    }
+    
     if (layoutConfig?.favicon) {
-      let link = document.querySelector("link[rel~='icon']");
-      if (!link) {
-        link = document.createElement('link');
-        link.rel = 'icon';
-        document.head.appendChild(link);
-      }
       link.href = layoutConfig.favicon;
+    } else {
+      link.href = '/hireiq.png';
     }
   }, [accentName, currentAccent, layoutConfig])
 
