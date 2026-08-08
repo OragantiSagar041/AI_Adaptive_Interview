@@ -297,7 +297,7 @@ def score_answer_task(
                                     admin = admins_collection.find_one({"_id": ObjectId(admin_id)})
                                     if admin:
                                         admin_email = admin.get("email", "")
-                                except: pass
+                                except Exception: pass
                             
                             if candidate_email:
                                 from app.routes import send_submission_notification

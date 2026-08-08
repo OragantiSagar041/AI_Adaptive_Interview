@@ -7,6 +7,7 @@ sys.path.insert(0, os.path.dirname(__file__))
 backend_path = os.path.join(os.path.dirname(__file__), 'backend')
 sys.path.insert(0, backend_path)
 
+# pyrefly: ignore [missing-import]
 from a2wsgi import ASGIMiddleware
 from backend.main import app
 

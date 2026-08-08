@@ -13,18 +13,29 @@ import { getIceServers } from '../utils/webrtcConfig'
  *  - Handles the race condition where the admin connects before the candidate's
  *    WS is fully open by flushing a queued answer once the socket re-opens
  */
-export default function useCandidateWebRTC(linkId, mediaStreamRef, telemetryData, monitoringToken) {
+export default function useCandidateWebRTC(linkId, mediaStreamRef, telemetryData, monitoringToken, secondaryMediaStreamRef = null) {
   const wsRef = useRef(null)
-  const pcsRef = useRef({})                 // adminId → RTCPeerConnection
+  const pcsRef = useRef({})                         // adminId → RTCPeerConnection
+  const pendingIceCandidatesRef = useRef({})        // adminId → Array of RTCIceCandidateInit
   const latestTelemetryRef = useRef(telemetryData)
   const reconnectTimerRef = useRef(null)
-  const reconnectDelayRef = useRef(2000)    // starts at 2 s, doubles up to 30 s
-  const destroyedRef = useRef(false)        // set true on hook unmount → stop reconnecting
+  const reconnectDelayRef = useRef(2000)            // starts at 2 s, doubles up to 30 s
+  const destroyedRef = useRef(false)                // set true on hook unmount → stop reconnecting
   const heartbeatTimerRef = useRef(null)
 
   useEffect(() => {
     latestTelemetryRef.current = telemetryData
   }, [telemetryData])
+
+  // Broadcast streams update when screen stream changes so all watching admins renegotiate
+  useEffect(() => {
+    if (wsRef.current && wsRef.current.readyState === WebSocket.OPEN && secondaryMediaStreamRef?.current) {
+      console.log('[CandidateWebRTC] Screen stream active/updated — notifying watching admins')
+      try {
+        wsRef.current.send(JSON.stringify({ type: 'candidate_connected' }))
+      } catch (_) {}
+    }
+  }, [secondaryMediaStreamRef?.current])
 
   // ─── WebSocket factory with auto-reconnect ──────────────────────────────────
   useEffect(() => {
@@ -45,7 +56,7 @@ export default function useCandidateWebRTC(linkId, mediaStreamRef, telemetryData
           // Send a lightweight ping so the server-side idle timeout never fires
           ws.send(JSON.stringify({ type: 'ping' }))
         }
-      }, 20_000)
+      }, 15_000)
     }
 
     function connect() {
@@ -74,6 +85,7 @@ export default function useCandidateWebRTC(linkId, mediaStreamRef, telemetryData
           try { pc.close() } catch (_) {}
         })
         pcsRef.current = {}
+        pendingIceCandidatesRef.current = {}
 
         if (!destroyedRef.current) {
           const delay = reconnectDelayRef.current
@@ -86,16 +98,28 @@ export default function useCandidateWebRTC(linkId, mediaStreamRef, telemetryData
       ws.onmessage = async (event) => {
         try {
           const msg = JSON.parse(event.data)
-          const adminId = msg.admin_id || 'admin'
+          const adminId = msg.admin_id || msg.spectator_id || msg.viewer_id || 'admin'
 
           if (msg.type === 'pong' || msg.type === 'ping') return  // heartbeat reply — ignore
 
-          if (msg.type === 'webrtc_offer') {
-            console.log(`[CandidateWebRTC] Received offer from admin: ${adminId}`)
+          if (msg.type === 'admin_connected') {
+            console.log(`[CandidateWebRTC] Admin connected: ${adminId}`)
+            return
+          }
 
-            const stream = mediaStreamRef.current
-            if (!stream) {
-              console.warn('[CandidateWebRTC] No media stream yet — cannot answer offer.')
+          if (msg.type === 'webrtc_offer') {
+            console.log(`[CandidateWebRTC] Received offer from ${msg.role === 'spectator' ? 'spectator' : 'admin'}: ${adminId}`)
+
+            const cameraStream = mediaStreamRef.current
+            const screenStream = secondaryMediaStreamRef?.current
+
+            const cameraVideoTrack = cameraStream?.getVideoTracks()?.find(t => t.readyState === 'live')
+            const screenVideoTrack = screenStream?.getVideoTracks()?.find(t => t.readyState === 'live')
+            const audioTrack = (screenStream?.getAudioTracks()?.find(t => t.readyState === 'live')) ||
+                               (cameraStream?.getAudioTracks()?.find(t => t.readyState === 'live'))
+
+            if (!cameraVideoTrack && !screenVideoTrack) {
+              console.warn('[CandidateWebRTC] No live video tracks available — cannot answer offer yet.')
               return
             }
 
@@ -109,11 +133,22 @@ export default function useCandidateWebRTC(linkId, mediaStreamRef, telemetryData
             })
             pcsRef.current[adminId] = pc
 
-            // Add all live tracks to the peer connection
-            stream.getTracks().forEach(track => {
-              console.log(`[CandidateWebRTC] Adding track: ${track.kind}`)
-              pc.addTrack(track, stream)
-            })
+            // Deterministic track mapping:
+            // Transceiver 0 (video) -> Camera
+            // Transceiver 1 (video) -> Screen
+            // Transceiver 2 (audio) -> Mic / Mixed audio
+            if (cameraVideoTrack) {
+              console.log('[CandidateWebRTC] Adding camera track to PC')
+              pc.addTrack(cameraVideoTrack, cameraStream || new MediaStream([cameraVideoTrack]))
+            }
+            if (screenVideoTrack) {
+              console.log('[CandidateWebRTC] Adding screen track to PC')
+              pc.addTrack(screenVideoTrack, screenStream || new MediaStream([screenVideoTrack]))
+            }
+            if (audioTrack) {
+              console.log('[CandidateWebRTC] Adding audio track to PC')
+              pc.addTrack(audioTrack, new MediaStream([audioTrack]))
+            }
 
             pc.onicecandidate = (e) => {
               if (e.candidate && ws.readyState === WebSocket.OPEN) {
@@ -121,6 +156,9 @@ export default function useCandidateWebRTC(linkId, mediaStreamRef, telemetryData
                   type: 'webrtc_ice_candidate',
                   candidate: e.candidate,
                   target_admin_id: adminId,
+                  viewer_id: adminId,
+                  spectator_id: adminId,
+                  offer_id: msg.offer_id,
                 }))
               }
             }
@@ -130,20 +168,54 @@ export default function useCandidateWebRTC(linkId, mediaStreamRef, telemetryData
             }
 
             await pc.setRemoteDescription(new RTCSessionDescription(msg.sdp))
+
+            // Flush any ICE candidates queued before remoteDescription was set
+            const queued = pendingIceCandidatesRef.current[adminId] || []
+            delete pendingIceCandidatesRef.current[adminId]
+            for (const cand of queued) {
+              try {
+                await pc.addIceCandidate(new RTCIceCandidate(cand))
+              } catch (iceErr) {
+                console.warn('[CandidateWebRTC] Error adding queued ICE candidate:', iceErr)
+              }
+            }
+
             const answer = await pc.createAnswer()
             await pc.setLocalDescription(answer)
 
-            console.log(`[CandidateWebRTC] Sending answer to admin: ${adminId}`)
+            console.log(`[CandidateWebRTC] Sending answer to viewer: ${adminId}`)
             ws.send(JSON.stringify({
               type: 'webrtc_answer',
               sdp: pc.localDescription,
               target_admin_id: adminId,
+              viewer_id: adminId,
+              spectator_id: adminId,
+              offer_id: msg.offer_id,
             }))
 
           } else if (msg.type === 'webrtc_ice_candidate') {
             const pc = pcsRef.current[adminId]
-            if (pc && pc.remoteDescription) {
-              await pc.addIceCandidate(new RTCIceCandidate(msg.candidate))
+            if (pc && pc.remoteDescription && pc.remoteDescription.type) {
+              try {
+                await pc.addIceCandidate(new RTCIceCandidate(msg.candidate))
+              } catch (iceErr) {
+                console.warn('[CandidateWebRTC] addIceCandidate error:', iceErr)
+              }
+            } else {
+              // Queue candidate until remoteDescription is ready
+              if (!pendingIceCandidatesRef.current[adminId]) {
+                pendingIceCandidatesRef.current[adminId] = []
+              }
+              pendingIceCandidatesRef.current[adminId].push(msg.candidate)
+            }
+
+          } else if (msg.type === 'admin_disconnected') {
+            const disconnectedAdminId = msg.admin_id
+            if (disconnectedAdminId && pcsRef.current[disconnectedAdminId]) {
+              console.log(`[CandidateWebRTC] Admin disconnected: ${disconnectedAdminId}, closing PC`)
+              try { pcsRef.current[disconnectedAdminId].close() } catch (_) {}
+              delete pcsRef.current[disconnectedAdminId]
+              delete pendingIceCandidatesRef.current[disconnectedAdminId]
             }
           }
         } catch (err) {
@@ -154,16 +226,31 @@ export default function useCandidateWebRTC(linkId, mediaStreamRef, telemetryData
 
     connect()
 
+    const handleVisibilityChange = () => {
+      if (document.visibilityState === 'visible' && !destroyedRef.current) {
+        if (!wsRef.current || wsRef.current.readyState === WebSocket.CLOSED || wsRef.current.readyState === WebSocket.CLOSING) {
+          console.log('[CandidateWebRTC] Candidate tab focused: socket closed. Reconnecting immediately...')
+          clearTimeout(reconnectTimerRef.current)
+          connect()
+        }
+      }
+    }
+    document.addEventListener('visibilitychange', handleVisibilityChange)
+    window.addEventListener('focus', handleVisibilityChange)
+
     return () => {
       destroyedRef.current = true
+      document.removeEventListener('visibilitychange', handleVisibilityChange)
+      window.removeEventListener('focus', handleVisibilityChange)
       clearTimeout(reconnectTimerRef.current)
       clearInterval(heartbeatTimerRef.current)
       if (wsRef.current) wsRef.current.close()
       Object.values(pcsRef.current).forEach(pc => {
         try { pc.close() } catch (_) {}
       })
+      pendingIceCandidatesRef.current = {}
     }
-  }, [linkId, mediaStreamRef, monitoringToken])
+  }, [linkId, mediaStreamRef, monitoringToken, secondaryMediaStreamRef])
 
   // ─── Telemetry heartbeat ────────────────────────────────────────────────────
   useEffect(() => {

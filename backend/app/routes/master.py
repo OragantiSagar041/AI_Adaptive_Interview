@@ -209,7 +209,7 @@ def get_companies(
         
         result.append({
             "id": company_id,
-            "company_name": c.get("name", "Unknown"),
+            "company_name": c.get("company_name") or c.get("name") or "Unknown",
             "username": username,
             "email": email,
             "subscription_plan": plan_context["plan_key"],
@@ -228,6 +228,8 @@ def get_companies(
             "pending_sessions": pending_sessions,
             "deactivated_sessions": deactivated_sessions,
             "credits": c.get("credits", 0),
+            "features": c.get("features", None),
+            "layout_config": c.get("layout_config", None),
         })
     return {"status": "success", "data": result}
 
@@ -505,6 +507,7 @@ def create_tenant(data: TenantCreate, master_id: str = Depends(get_current_admin
         
     new_company = {
         "name": data.company_name,
+        "company_name": data.company_name,
         "subscription_plan": data.subscription_plan,
         "subscription_start": start.isoformat(),
         "subscription_expiry": expiry.isoformat(),
@@ -520,6 +523,7 @@ def create_tenant(data: TenantCreate, master_id: str = Depends(get_current_admin
         "email": data.email,
         "role": "super_admin",
         "company_id": company_id,
+        "company_name": data.company_name,
         "login_enabled": True,
         "created_at": start.isoformat()
     }
@@ -639,13 +643,32 @@ async def _process_company_subscription_update(company_id: str, payload_data: di
         except Exception:
             update_fields["subscription_expiry"] = (now + timedelta(days=days)).isoformat()
             
-    if raw_credits is not None and str(raw_credits).strip() != "":
+    if add_credits > 0:
+        current_credits = company.get("credits", 0)
+        update_fields["credits"] = current_credits + add_credits
+    elif raw_credits is not None:
         update_fields["credits"] = int(raw_credits)
-    elif add_credits and int(add_credits) > 0:
-        update_fields["credits"] = company.get("credits", 0) + int(add_credits)
+
+    co_name = payload_data.get("company_name") or payload_data.get("name")
+    if co_name:
+        update_fields["company_name"] = str(co_name).strip()
+        update_fields["name"] = str(co_name).strip()
+        
+    if payload_data.get("features") is not None:
+        update_fields["features"] = payload_data.get("features")
+        
+    if payload_data.get("layout_config") is not None:
+        update_fields["layout_config"] = payload_data.get("layout_config")
+
+    if payload_data.get("status") is not None:
+        update_fields["status"] = payload_data.get("status")
+
+    if payload_data.get("login_enabled") is not None:
+        update_fields["login_enabled"] = bool(payload_data.get("login_enabled"))
             
     if update_fields:
-        companies_collection.update_one({"_id": company["_id"]}, {"$set": update_fields})
+        from app.services.services import sync_company_and_admins
+        sync_company_and_admins(comp_id, update_fields)
         
         # Sync immediately to linked Super Admin accounts (plan, features, and credits).
         # Standard Admin accounts get updated plan & features ONLY so their credit balances remain unchanged.
@@ -1027,12 +1050,8 @@ def get_company_revenue(
 def set_company_login(company_id: str, payload: Dict[str, bool], master_id: str = Depends(get_current_admin)):
     require_master_user(master_id)
     enabled = bool(payload.get("login_enabled", True))
-    result = admins_collection.update_many(
-        {"company_id": company_id},
-        {"$set": {"login_enabled": enabled}}
-    )
-    if result.matched_count == 0:
-        raise HTTPException(status_code=404, detail="Tenant not found")
+    from app.services.services import sync_company_and_admins
+    sync_company_and_admins(company_id, {"login_enabled": enabled, "status": "blocked" if not enabled else "active"})
     return {"status": "success", "message": "Tenant login updated", "login_enabled": enabled}
 
 @router.delete("/master/companies/{company_id}")

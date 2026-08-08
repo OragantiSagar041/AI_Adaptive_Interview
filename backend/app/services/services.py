@@ -101,6 +101,7 @@ def cloudinary_cleanup_loop():
                     os.getenv("REDIS_URL", "redis://localhost:6379/0"),
                     socket_connect_timeout=2,
                     socket_timeout=2,
+                    protocol=2,
                 )
                 cleanup_lock = cleanup_redis.lock(
                     "maintenance:cloudinary-recording-cleanup",
@@ -271,11 +272,103 @@ def get_subscription_status(expiry: Optional[str]) -> Dict[str, Any]:
             "warning_message": "",
         }
 
+def sync_company_and_admins(company_id: str, updates: Dict[str, Any]) -> Optional[str]:
+    """
+    Synchronizes company-level tenant data across companies_collection and linked admins_collection documents.
+    Handles ObjectId conversion, name/company_name aliasing, subscription, credits, status, features, layout_config, etc.
+    """
+    if not company_id:
+        return None
+
+    comp_obj_id = None
+    try:
+        if ObjectId.is_valid(str(company_id)):
+            comp_obj_id = ObjectId(str(company_id))
+    except Exception:
+        pass
+
+    company = None
+    if comp_obj_id:
+        company = companies_collection.find_one({"_id": comp_obj_id})
+    if not company:
+        company = companies_collection.find_one({"_id": str(company_id)}) or companies_collection.find_one({"company_id": str(company_id)})
+
+    if not company:
+        return None
+
+    actual_comp_id = str(company["_id"])
+    comp_id_str = company.get("company_id") or actual_comp_id
+
+    co_updates = {}
+    c_name = updates.get("company_name") or updates.get("name")
+    if c_name:
+        co_updates["name"] = str(c_name).strip()
+        co_updates["company_name"] = str(c_name).strip()
+
+    shared_keys = [
+        "subscription_plan", "subscription_start", "subscription_expiry",
+        "credits", "status", "login_enabled", "is_active", "plan_features",
+        "features", "layout_config", "integrations"
+    ]
+    for k in shared_keys:
+        if k in updates and updates[k] is not None:
+            co_updates[k] = updates[k]
+
+    if co_updates:
+        co_updates["updated_at"] = datetime.now(timezone.utc).isoformat()
+        companies_collection.update_one({"_id": company["_id"]}, {"$set": co_updates})
+
+    admin_updates = {}
+    if "company_name" in co_updates:
+        admin_updates["company_name"] = co_updates["company_name"]
+    if "subscription_plan" in co_updates:
+        admin_updates["subscription_plan"] = co_updates["subscription_plan"]
+    if "subscription_expiry" in co_updates:
+        admin_updates["subscription_expiry"] = co_updates["subscription_expiry"]
+    if "credits" in co_updates:
+        admin_updates["credits"] = co_updates["credits"]
+    if "login_enabled" in co_updates:
+        admin_updates["login_enabled"] = co_updates["login_enabled"]
+    if "status" in co_updates:
+        admin_updates["status"] = co_updates["status"]
+    if "plan_features" in co_updates:
+        admin_updates["plan_features"] = co_updates["plan_features"]
+
+    comp_query_ids = list(set([actual_comp_id, comp_id_str]))
+    if admin_updates:
+        admins_collection.update_many(
+            {"company_id": {"$in": comp_query_ids}},
+            {"$set": admin_updates}
+        )
+
+    try:
+        from app.core.routes_core import broadcast_profile_update
+        linked_admins = list(admins_collection.find({"company_id": {"$in": comp_query_ids}}, {"_id": 1}))
+        for adm in linked_admins:
+            broadcast_profile_update(
+                admin_id=str(adm["_id"]),
+                company_id=actual_comp_id,
+                credits=co_updates.get("credits"),
+                login_enabled=co_updates.get("login_enabled"),
+                extra=admin_updates
+            )
+    except Exception as e:
+        print(f"[sync_company_and_admins] Broadcast info: {e}")
+
+    return actual_comp_id
+
 def get_admin_plan_context(user: Dict[str, Any]) -> Dict[str, Any]:
     # Default fallback
     company = None
-    if user.get("company_id"):
-        company = companies_collection.find_one({"_id": ObjectId(user["company_id"])})
+    comp_id = user.get("company_id")
+    if comp_id:
+        try:
+            if ObjectId.is_valid(str(comp_id)):
+                company = companies_collection.find_one({"_id": ObjectId(str(comp_id))})
+        except Exception:
+            pass
+        if not company:
+            company = companies_collection.find_one({"_id": str(comp_id)}) or companies_collection.find_one({"company_id": str(comp_id)})
         
     subscription_plan = company.get("subscription_plan") if company else user.get("subscription_plan")
     subscription_expiry = company.get("subscription_expiry") if company else user.get("subscription_expiry")
@@ -295,17 +388,20 @@ def get_admin_plan_context(user: Dict[str, Any]) -> Dict[str, Any]:
     warning = not is_expired and credits <= 5
     warning_message = "Your plan credits are running low (5 or fewer left). Please renew your subscription to avoid interruption." if warning else ""
 
+    custom_features = company.get("features") if company and company.get("features") is not None else definition["features"]
+
     return {
         "plan_key": definition["plan_key"],
         "plan_label": definition["label"],
         "capabilities": definition["capabilities"],
-        "features": definition["features"],
+        "features": custom_features,
         "summary": definition["summary"],
         "credits": credits,
         "is_expired": is_expired,
         "warning": warning,
         "warning_message": warning_message,
         "days_remaining": None,
+        "layout_config": company.get("layout_config") if company else None,
     }
 
 def require_admin_capability(admin_id: str, capability: str, detail: str):
@@ -2658,8 +2754,15 @@ def build_default_interview_email_html(candidate_name: str, duration: int, job_d
                     {expiry_message}
                 </div>
                 
+                <!-- Recommended Browser Notice -->
+                <div style="background-color: #eff6ff; border: 1px solid #bfdbfe; border-left: 4px solid #3b82f6; border-radius: 8px; padding: 14px 18px; margin: 24px 0 20px 0; text-align: left;">
+                    <p style="margin: 0; color: #1e40af; font-size: 14px; line-height: 1.5;">
+                        🌐 <b>Recommended Browser:</b> Kindly use <b>Google Chrome</b> (on a laptop or desktop) for the best interview experience, smooth live speech transcription, and camera proctoring.
+                    </p>
+                </div>
+
                 <!-- CTA Button -->
-                <div style="text-align: center; margin: 40px 0;">
+                <div style="text-align: center; margin: 36px 0;">
                     <a href="{full_link}" style="background-color: #4f46e5; background-image: linear-gradient(135deg, #4f46e5 0%, #6366f1 100%); color: #ffffff; padding: 16px 40px; text-decoration: none; border-radius: 50px; font-weight: 700; font-size: 16px; display: inline-block; box-shadow: 0 4px 15px rgba(79, 70, 229, 0.3); text-transform: uppercase; letter-spacing: 0.02em;">
                         Start Interview
                     </a>
@@ -2669,6 +2772,7 @@ def build_default_interview_email_html(candidate_name: str, duration: int, job_d
                 <div style="background-color: #fff1f2; border-radius: 12px; padding: 24px; margin: 30px 0 0 0; border: 1px solid #fecaca; border-left: 5px solid #e11d48;">
                     <h3 style="margin: 0 0 16px; font-size: 15px; color: #9f1239; font-weight: 700; text-transform: uppercase; letter-spacing: 0.05em;">⚠️ Important Guidelines</h3>
                     <ul style="margin: 0; padding-left: 20px; color: #be123c; font-size: 14px; line-height: 1.6;">
+                        <li style="margin-bottom: 8px;"><b>Browser Requirement:</b> Kindly use <b>Google Chrome</b> (or Microsoft Edge) on a desktop/laptop with a working camera and microphone.</li>
                         <li style="margin-bottom: 8px;"><b>Full-Screen Mode:</b> Must be maintained at all times. Tab switching is recorded as a violation.</li>
                         <li style="margin-bottom: 8px;"><b>Video Proctoring:</b> Your camera remains active for face tracking and integrity checks.</li>
                         <li style="margin-bottom: 8px;"><b>Environment:</b> Join from a quiet, well-lit room. Background noise or voices may affect your evaluation.</li>

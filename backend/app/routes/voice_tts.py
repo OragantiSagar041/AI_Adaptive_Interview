@@ -317,12 +317,53 @@ async def generate_tts(
 
 
 
+from difflib import SequenceMatcher
+
+def similarity(a: str, b: str) -> float:
+    return SequenceMatcher(None, a.lower(), b.lower()).ratio()
+
+def fix_candidate_name(text: str, candidate_name: str) -> str:
+    if not text or not candidate_name or candidate_name.lower() in {"candidate", "user", "unknown"}:
+        return text
+    
+    clean_name = candidate_name.strip()
+    name_parts = [p for p in clean_name.split() if len(p) >= 2]
+    if not name_parts:
+        return text
+    
+    words = text.split()
+    n_words = len(words)
+    k = len(name_parts)
+    
+    # 1. Multi-word phrase window match
+    i = 0
+    while i <= n_words - k:
+        window = " ".join(words[i:i+k])
+        if similarity(window, clean_name) >= 0.75:
+            words[i:i+k] = [clean_name]
+            n_words = len(words)
+            i += 1
+            continue
+        i += 1
+
+    # 2. Match individual name tokens
+    for p in name_parts:
+        for idx, w in enumerate(words):
+            stripped_w = "".join(c for c in w if c.isalnum())
+            if len(stripped_w) >= 3 and similarity(stripped_w, p) >= 0.80:
+                prefix_punct = w[:len(w) - len(w.lstrip(".,!?;:\"'"))]
+                suffix_punct = w[len(w.rstrip(".,!?;:\"'")):]
+                words[idx] = f"{prefix_punct}{p}{suffix_punct}"
+
+    return " ".join(words)
+
 stt_inflight_counter = 0
 
 @router.post("/stt")
 async def stt_endpoint(
     file: UploadFile = File(...),
     language: Optional[str] = None,
+    known_terms: Optional[str] = Form(None),
     candidate_session: dict = Depends(require_active_candidate),
 ):
     """Transcribe audio via Groq Whisper with concurrency & rate limit tracking"""
@@ -337,7 +378,7 @@ async def stt_endpoint(
         file_size = len(audio_content)
         if file_size > 25 * 1024 * 1024:
             raise HTTPException(status_code=413, detail="Audio upload exceeds 25 MB")
-        if file_size < 12_000:
+        if file_size < 3000:
             return {"transcript": ""}
         header_hex = audio_content[:16].hex() if file_size >= 16 else ""
         print(f"📊 [STT CONCURRENCY TRACE - REQ #{req_id}] Started | In-Flight Requests: {current_inflight} | File: {file.filename} ({file_size} bytes)")
@@ -354,72 +395,187 @@ async def stt_endpoint(
             iso_lang = language or "en"
             if iso_lang not in {"en", "hi", "te", "ta", "ml", "kn"}:
                 raise HTTPException(status_code=422, detail="Unsupported transcription language")
-            sys_prompt = "The speaker has an Indian English accent. Transcribe technical terms, programming concepts, and software engineering terminology accurately." if iso_lang == "en" else ""
             
+            candidate_name = str(candidate_session.get("candidate_name") or "").strip()
+            name_hint = f"The candidate's name is {candidate_name}. When introducing themselves ('myself {candidate_name}', 'I am {candidate_name}', 'my name is {candidate_name}'), accurately transcribe their name verbatim. " if candidate_name else ""
+
+            known_terms_hint = ""
+            if known_terms:
+                clean_terms = [t.strip() for t in (known_terms.split(",") if isinstance(known_terms, str) else known_terms) if t.strip()]
+                if clean_terms:
+                    known_terms_hint = f"The candidate may mention these specific proper nouns, companies, technologies, or terms: {', '.join(clean_terms)}. "
+
+            # NOTE: the prompt only steers terminology and the candidate name.
+            # Avoid mentioning interview roles or common phrases inside the
+            # prompt because Whisper uses them as "seeds" for hallucinations
+            # on silence.
+            sys_prompt = (
+                f"{name_hint}{known_terms_hint}"
+                "Transcribe verbatim. Do not fabricate content if audio is silent or unclear."
+                if iso_lang == "en" else ""
+            )
+
+            # ── Quick audio-energy gate: reject flat-line audio before sending to Whisper ──
+            try:
+                import wave, struct, contextlib
+                with contextlib.closing(wave.open(temp_filename, 'rb')) as wf:
+                    n_frames = wf.getnframes()
+                    n_channels = wf.getnchannels()
+                    samp_width = wf.getsampwidth()
+                    raw = wf.readframes(n_frames)
+                if samp_width == 2 and raw:
+                    n_samples = len(raw) // 2
+                    samples = struct.unpack(f"<{n_samples}h", raw[:n_samples * 2])
+                    peak = max(abs(s) for s in samples) if samples else 0
+                    mean_sq = sum(s * s for s in samples) / len(samples) if samples else 0
+                    rms = (mean_sq ** 0.5) / 32768.0
+                    peak_norm = peak / 32768.0
+                    # If the audio is essentially silent, skip Whisper entirely.
+                    # 0.01 RMS = roughly -40 dBFS, below typical speech floor.
+                    if rms < 0.01 or peak_norm < 0.05:
+                        dur = round(time.time() - t0, 3)
+                        print(f"🔇 [STT SILENCE GATE] Rejected silent audio | rms={rms:.4f} peak={peak_norm:.4f} | Latency: {dur}s")
+                        return {"transcript": ""}
+            except Exception as e:
+                # If audio probing fails, continue to Whisper (don't break the request)
+                pass
+
             from app.ai.groq_manager import groq_key_manager
-            from groq import AsyncGroq, RateLimitError
-            
+            from groq import AsyncGroq, RateLimitError, AuthenticationError
+
             max_attempts = groq_key_manager.get_total_keys() or 1
             transcript = None
             last_error = None
-            
+
             for _ in range(max_attempts):
                 api_key = groq_key_manager.get_next_key()
                 if not api_key:
-                    raise HTTPException(status_code=503, detail="Voice transcription is temporarily unavailable.")
-                
+                    raise HTTPException(status_code=503, detail="Voice transcription is temporarily unavailable — no valid Groq API keys.")
+
                 groq_client = AsyncGroq(api_key=api_key)
                 try:
                     with open(temp_filename, "rb") as f:
                         transcript = await groq_client.audio.transcriptions.create(
-                            model="whisper-large-v3-turbo",
+                            # whisper-large-v3 (not -turbo) — turbo hallucinates ~3× more
+                            model="whisper-large-v3",
                             file=f,
                             language=iso_lang,
                             prompt=sys_prompt,
                             response_format="verbose_json",
                             temperature=0.0,
                         )
-                    break
+                    break  # success
+                except AuthenticationError:
+                    # Key is invalid/expired — blacklist it permanently and try next
+                    groq_key_manager.mark_invalid(api_key)
+                    continue
                 except RateLimitError as e:
                     last_error = e
                     continue
-                    
+
             if transcript is None:
                 if last_error:
                     raise last_error
                 raise HTTPException(status_code=503, detail="Transcription failed after exhausting all API keys.")
-                
+
+
             valid_segments = []
+            hallucinated_segments = 0
+            dropped_segment_texts = []
             for segment in getattr(transcript, "segments", []) or []:
                 no_speech = segment.get("no_speech_prob", 0) if isinstance(segment, dict) else getattr(segment, "no_speech_prob", 0)
                 avg_logprob = segment.get("avg_logprob", 0) if isinstance(segment, dict) else getattr(segment, "avg_logprob", 0)
                 compression = segment.get("compression_ratio", 0) if isinstance(segment, dict) else getattr(segment, "compression_ratio", 0)
                 segment_text = segment.get("text", "") if isinstance(segment, dict) else getattr(segment, "text", "")
-                if iso_lang == "en":
-                    if no_speech > 0.45 or avg_logprob < -1.0 or compression > 2.4:
-                        continue
-                elif no_speech > 0.75 or compression > 2.4:
+
+                # ── Aggressive hallucination filters ──
+                # Whisper marks high-confidence hallucinations with:
+                #   • avg_logprob < -0.7   (the strongest signal — real speech is usually > -0.4)
+                #   • compression > 1.6     (repetition loops)
+                #   • no_speech > 0.4       (silence with phantom text)
+                # Drop aggressively, recover nothing on doubt.
+                if avg_logprob < -0.7:
+                    hallucinated_segments += 1
+                    dropped_segment_texts.append(segment_text.strip())
                     continue
-                valid_segments.append(segment_text.strip())
+                if compression > 1.6:
+                    hallucinated_segments += 1
+                    dropped_segment_texts.append(segment_text.strip())
+                    continue
+                if no_speech > 0.4:
+                    hallucinated_segments += 1
+                    dropped_segment_texts.append(segment_text.strip())
+                    continue
+                # Pure single-token segments with no context are 90%+ hallucinations
+                cleaned = segment_text.strip()
+                if not cleaned:
+                    continue
+                if len(cleaned.split()) == 1 and len(cleaned) < 6:
+                    # Common 1-5 char "phantom" tokens Whisper loves to emit
+                    if cleaned.lower().rstrip(".,!?") in {
+                        "you", "bye", "um", "uh", "hmm", "mm", "tsh",
+                        "okay", "ok", "so", "and", "the", "a", "i",
+                    }:
+                        hallucinated_segments += 1
+                        dropped_segment_texts.append(cleaned)
+                        continue
+
+                valid_segments.append(cleaned)
 
             raw_text = str(getattr(transcript, "text", "") or "").strip()
             transcript_text = " ".join(value for value in valid_segments if value).strip()
-            if not getattr(transcript, "segments", None):
-                transcript_text = raw_text
-            if transcript_text.lower() in {
-                "thank you",
-                "thank you.",
-                "thanks",
-                "thanks.",
-                "okay",
-                "okay.",
-                "you",
-                "bye",
-                "bye.",
-            }:
-                transcript_text = ""
+
+            # ── Sentence-level / global hallucination filter ──
+            # Strip the well-known phantom phrases and short interjections Whisper
+            # emits on silence or noise.
+            HALLUCINATIONS = {
+                "thank you", "thanks", "okay", "you", "bye",
+                "um", "uh", "hmm", "mm", "go to next slide",
+                "go to the next slide", "next slide", "thank you for watching",
+                "subscribe", "i am not spoken", "am i not spoken", "i am not",
+                "tsh", "thanks for watching", "the end", "goodbye", "see you",
+                "thank you for listening", "like and subscribe", "please subscribe",
+                "click the bell", "see you next time", "have a nice day",
+                "thank you for your time", "i'll see you in the next video",
+                "thanks for watching", "see you in the next video", "thank you so much",
+                "thank you very much", "have a good day", "take care",
+                "see you soon", "bye bye", "good night", "good morning",
+                "thank you for joining", "thanks for joining", "please like",
+                "don't forget to subscribe", "hit the like", "comment below",
+                "thank you for your attention",
+            }
+
+            if transcript_text:
+                cleaned_lower = transcript_text.lower().rstrip(".,!? ")
+                # Drop the transcript entirely if it's a known hallucination
+                if cleaned_lower in HALLUCINATIONS or transcript_text.strip() == "":
+                    transcript_text = ""
+                else:
+                    # Drop hallucinated leading/trailing fragments while keeping
+                    # any real words the candidate actually said.
+                    words = transcript_text.split()
+                    while words and words[0].lower().rstrip(".,!?") in HALLUCINATIONS:
+                        words.pop(0)
+                    while words and words[-1].lower().rstrip(".,!?") in HALLUCINATIONS:
+                        words.pop()
+                    transcript_text = " ".join(words).strip()
+
+                    # If majority of segments were hallucinations, drop everything.
+                    if valid_segments and hallucinated_segments > len(valid_segments):
+                        transcript_text = ""
+                    # If transcript is < 4 characters after cleaning, treat as noise
+                    elif len(transcript_text) < 4:
+                        transcript_text = ""
+
+            # If a hallucinated segment contained real-looking text we dropped
+            # (e.g. candidate name), still apply the candidate-name fix.
+            if iso_lang == "en" and candidate_name and transcript_text:
+                transcript_text = fix_candidate_name(transcript_text, candidate_name)
+
             dur = round(time.time() - t0, 3)
-            print(f"✅ [STT CONCURRENCY TRACE - REQ #{req_id}] HTTP 200 OK | Latency: {dur}s")
+            if dropped_segment_texts:
+                print(f"🚫 [STT HALLUCINATION FILTER] Rejected {len(dropped_segment_texts)} segments: {dropped_segment_texts[:3]}")
+            print(f"✅ [STT CONCURRENCY TRACE - REQ #{req_id}] HTTP 200 OK | Latency: {dur}s | Transcript: {transcript_text[:50]}...")
             return {"transcript": transcript_text}
         finally:
             if os.path.exists(temp_filename):

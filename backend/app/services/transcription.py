@@ -3,6 +3,7 @@ import asyncio
 import tempfile
 from functools import lru_cache
 from difflib import SequenceMatcher
+from typing import Optional
 from fastapi import APIRouter, UploadFile, File, Form, HTTPException, Depends
 from groq import Groq, RateLimitError
 from app.services.candidate_auth import require_active_candidate
@@ -13,11 +14,39 @@ router = APIRouter()
 def similarity(a, b):
     return SequenceMatcher(None, a.lower(), b.lower()).ratio()
 
-def fix_name(text, name):
+def fix_candidate_name(text: str, candidate_name: str) -> str:
+    if not text or not candidate_name or candidate_name.lower() in {"candidate", "user", "unknown"}:
+        return text
+    
+    clean_name = candidate_name.strip()
+    name_parts = [p for p in clean_name.split() if len(p) >= 2]
+    if not name_parts:
+        return text
+    
     words = text.split()
-    for i, w in enumerate(words):
-        if similarity(w, name) > 0.75:
-            words[i] = name
+    n_words = len(words)
+    k = len(name_parts)
+    
+    # 1. Multi-word phrase window match
+    i = 0
+    while i <= n_words - k:
+        window = " ".join(words[i:i+k])
+        if similarity(window, clean_name) >= 0.75:
+            words[i:i+k] = [clean_name]
+            n_words = len(words)
+            i += 1
+            continue
+        i += 1
+
+    # 2. Match individual name tokens
+    for p in name_parts:
+        for idx, w in enumerate(words):
+            stripped_w = "".join(c for c in w if c.isalnum())
+            if len(stripped_w) >= 3 and similarity(stripped_w, p) >= 0.80:
+                prefix_punct = w[:len(w) - len(w.lstrip(".,!?;:\"'"))]
+                suffix_punct = w[len(w.rstrip(".,!?;:\"'")):]
+                words[idx] = f"{prefix_punct}{p}{suffix_punct}"
+
     return " ".join(words)
 
 @router.post("/transcribe")
@@ -25,6 +54,7 @@ async def transcribe_audio(
     audio: UploadFile = File(...),
     candidate_name: str = Form(...),
     language: str = Form("English"),
+    known_terms: Optional[str] = Form(None),
     candidate_session: dict = Depends(require_active_candidate),
 ):
     candidate_name = candidate_name.strip()[:200] or "Candidate"
@@ -42,10 +72,8 @@ async def transcribe_audio(
     if ext not in ('webm', 'ogg', 'mp4', 'wav', 'm4a', 'mp3'):
         ext = 'webm'
 
-    # Reject tiny audio blobs — they're almost always silence or background noise
-    # and are the #1 cause of Whisper hallucination. A valid utterance in any language
-    # takes at least ~0.8 seconds which at typical webm bitrates is > 10 KB.
-    MIN_AUDIO_BYTES = 12000
+    # Reject tiny audio blobs under 3KB (headers only, no actual speech data)
+    MIN_AUDIO_BYTES = 3000
     if len(data) < MIN_AUDIO_BYTES:
         return {"text": ""}
 
@@ -74,7 +102,12 @@ async def transcribe_audio(
             "kn": "ನಮಸ್ಕಾರ. ನಾನು ಒಂದು ಸಂದರ್ಶನದಲ್ಲಿ ಭಾಗವಹಿಸುತ್ತಿದ್ದೇನೆ.",
         }
         if iso_lang == "en":
-            sys_prompt = f"The speaker has an Indian English accent. This is a highly technical software engineering job interview. The candidate's name is {candidate_name}. Transcribe technical terms, acronyms, and programming concepts accurately."
+            known_terms_hint = ""
+            if known_terms:
+                clean_terms = [t.strip() for t in (known_terms.split(",") if isinstance(known_terms, str) else known_terms) if t.strip()]
+                if clean_terms:
+                    known_terms_hint = f" The candidate may mention these specific proper nouns, companies, technologies, or terms: {', '.join(clean_terms)}."
+            sys_prompt = f"Technical software engineering job interview with Indian and international English accents. Candidate name is {candidate_name}.{known_terms_hint} Accurately transcribe all programming concepts (Python, Java, JavaScript, TypeScript, C++, SQL), frameworks (React, Node.js, FastAPI, Django), databases (MongoDB, PostgreSQL, Redis), cloud tools (AWS, Docker, Kubernetes), APIs, and system design terms verbatim."
         else:
             sys_prompt = native_prompts.get(iso_lang, "")
 
@@ -117,45 +150,42 @@ async def transcribe_audio(
 
         valid_texts = []
         segments = getattr(transcription, 'segments', [])
+        raw_text = str(getattr(transcription, "text", "") or "").strip()
         if segments:
             for seg in segments:
-                # Handle both dict and object access safely based on SDK version
                 no_speech_prob = seg.get('no_speech_prob', 0) if isinstance(seg, dict) else getattr(seg, 'no_speech_prob', 0)
                 avg_logprob = seg.get('avg_logprob', 0) if isinstance(seg, dict) else getattr(seg, 'avg_logprob', 0)
                 compression_ratio = seg.get('compression_ratio', 0) if isinstance(seg, dict) else getattr(seg, 'compression_ratio', 0)
                 seg_text = seg.get('text', '') if isinstance(seg, dict) else getattr(seg, 'text', '')
                 
-                # Filter thresholds are relaxed for non-English languages because:
-                # - Regional scripts (Telugu, Hindi, etc.) naturally have lower avg_logprob
-                # - Using English-tuned thresholds silently drops all valid segments
-                if iso_lang == "en":
-                    if no_speech_prob > 0.45 or avg_logprob < -1.0 or compression_ratio > 2.4:
-                        continue
-                else:
-                    # For regional languages: only discard definite silence or
-                    # severe repetition loops. avg_logprob is intentionally NOT
-                    # checked here — it's naturally lower for regional scripts.
-                    if no_speech_prob > 0.75 or compression_ratio > 2.4:
-                        continue
+                # Only drop definite silence or severe repetition loops
+                if no_speech_prob > 0.85 or compression_ratio > 2.5:
+                    continue
+                # If avg_logprob is extremely low (< -2.0) and no_speech > 0.5, skip unintelligible noise
+                if avg_logprob < -2.0 and no_speech_prob > 0.5:
+                    continue
                     
                 valid_texts.append(seg_text.strip())
-            # If every segment was filtered out, treat it as silence. Falling back
-            # to raw text here reintroduces Whisper's common silence hallucinations.
+
             text = " ".join(valid_texts).strip()
+            if not text and raw_text:
+                text = raw_text
         else:
-            text = transcription.text.strip()
+            text = raw_text
 
         # Only fix name for English – fix_name splits on spaces, which corrupts
         # native scripts (Telugu, Hindi, etc.) and injects the English name.
         if iso_lang == "en":
-            text = fix_name(text, candidate_name)
+            text = fix_candidate_name(text, candidate_name)
         
         # Filter common Whisper hallucinations on silent/background noise
-        hallucinations = [
-            "thank you.", "thank you", "i am not spoken.", "am i not spoken?",
-            "i am not.", "bye.", "okay.", "okay", "you", "thanks.", "thanks", "tsh."
-        ]
-        if text.lower() in hallucinations:
+        hallucinations = {
+            "thank you", "i am not spoken", "am i not spoken",
+            "i am not", "bye", "okay", "you", "thanks", "tsh",
+            "go to next slide", "go to the next slide",
+            "thank you for watching", "subscribe", "next slide"
+        }
+        if text.lower().rstrip(".,!?") in hallucinations:
             text = ""
 
         import re

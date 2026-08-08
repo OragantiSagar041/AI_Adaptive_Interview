@@ -21,6 +21,7 @@ const CaseStudyPage = React.lazy(() => import('./pages/CaseStudyPage'))
 const VoiceInterviewPage = React.lazy(() => import('./pages/VoiceInterviewPage'))
 const HireIQCaseStudyPage = React.lazy(() => import('./pages/HireIQCaseStudyPage'))
 const JobApplicationPage = React.lazy(() => import('./pages/JobApplicationPage'))
+const SpectatorPage = React.lazy(() => import('./pages/SpectatorPage'))
 
 // Admin / master routes (were already lazy — keep them)
 const MasterLayout = React.lazy(() => import('./components/master/MasterLayout'))
@@ -32,6 +33,8 @@ const CreateTenant = React.lazy(() => import('./pages/master/CreateTenant'))
 const DemoRequests = React.lazy(() => import('./pages/master/DemoRequests'))
 const MasterProfile = React.lazy(() => import('./pages/master/MasterProfile'))
 const MasterNotifications = React.lazy(() => import('./pages/master/MasterNotifications'))
+const Customize = React.lazy(() => import('./pages/master/Customize'))
+const CustomizingAdmin = React.lazy(() => import('./pages/master/CustomizingAdmin'))
 
 const AdminPage = React.lazy(() => import('./pages/AdminPage'))
 const OverviewDashboardPage = React.lazy(() => import('./pages/admin/OverviewDashboardPage'))
@@ -75,7 +78,7 @@ import ErrorBoundary from './components/ErrorBoundary'
 function App() {
   return (
     <BrowserRouter>
-      <React.Suspense fallback={<div className="flex h-screen items-center justify-center bg-gray-900 text-white font-semibold text-lg tracking-wide">Loading Interface...</div>}>
+      <React.Suspense fallback={<div className="flex h-screen items-center justify-center bg-slate-50 text-slate-900 font-semibold text-lg tracking-wide">Loading Interface...</div>}>
         <ErrorBoundary>
           <Routes>
           <Route path="/" element={<LandingPage />} />
@@ -90,6 +93,7 @@ function App() {
           <Route path="/customer-story/:id" element={<HireIQCaseStudyPage />} />
           <Route path="/voice-interview/:linkId" element={<VoiceInterviewPage />} />
           <Route path="/apply/:jobId" element={<JobApplicationPage />} />
+          <Route path="/spectate/:linkId" element={<SpectatorPage />} />
           {/* Master routes */}
           <Route
             path="/master"
@@ -106,6 +110,8 @@ function App() {
             <Route path="subscribers" element={<Subscribers />} />
             <Route path="create-tenant" element={<CreateTenant />} />
             <Route path="demo-requests" element={<DemoRequests />} />
+            <Route path="customize" element={<Customize />} />
+            <Route path="customizing-admin/:id" element={<CustomizingAdmin />} />
             <Route path="profile" element={<MasterProfile />} />
             <Route path="notifications" element={<MasterNotifications />} />
           </Route>

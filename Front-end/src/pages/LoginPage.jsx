@@ -341,7 +341,10 @@ export default function LoginPage() {
   const [resetLoading, setResetLoading] = useState(false)
   const [resetError, setResetError] = useState('')
 
-  useEffect(() => { document.documentElement.setAttribute('data-theme', 'dark') }, [])
+  useEffect(() => {
+    document.documentElement.setAttribute('data-theme', 'dark')
+    document.documentElement.classList.add('dark')
+  }, [])
 
 
   const handleLogin = async (e) => {

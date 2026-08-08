@@ -31,6 +31,11 @@ function RegisterPage() {
   }
 
   useEffect(() => {
+    document.documentElement.setAttribute('data-theme', 'dark')
+    document.documentElement.classList.add('dark')
+  }, [])
+
+  useEffect(() => {
     async function loadPlans() {
       try {
         const response = await fetch(`${API_BASE_URL}/api/plans`)

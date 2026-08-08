@@ -113,7 +113,7 @@ async def superadmin_live_sessions(
         ongoing_alert_count = 0
 
         query_filter = {
-            "status": "started",
+            "status": {"$in": ["started", "completed"]},
             "$or": [{"is_deactivated": False}, {"is_deactivated": {"$exists": False}}]
         }
         if current_admin.get("role") != "master":
@@ -125,8 +125,28 @@ async def superadmin_live_sessions(
 
         rows = list(interview_sessions_collection.find(
             query_filter,
-            {"link_id": 1, "candidate_name": 1, "candidate_email": 1, "created_at": 1, "interview_title": 1, "started_at": 1}
+            {"link_id": 1, "candidate_name": 1, "candidate_email": 1, "created_at": 1, "interview_title": 1, "started_at": 1, "status": 1, "completed_at": 1, "interview_duration": 1}
         ).sort("created_at", -1).limit(50))
+
+        rows = [
+            row for row in rows
+            if not row.get("completed_at") and sync_session_status(row) == "started"
+        ]
+        unique_rows = {}
+        for row in rows:
+            link_id = row.get("link_id")
+            if link_id and link_id not in unique_rows:
+                unique_rows[link_id] = row
+        rows = list(unique_rows.values())
+
+        # A candidate can have duplicate started records after refreshing or
+        # reopening the same invitation. Keep only the newest record per email.
+        unique_candidates = {}
+        for row in rows:
+            candidate_key = (row.get("candidate_email") or row.get("candidate_name") or "").strip().lower()
+            if candidate_key and candidate_key not in unique_candidates:
+                unique_candidates[candidate_key] = row
+        rows = list(unique_candidates.values()) if unique_candidates else rows
 
         snapshots = await _load_live_snapshots([row.get("link_id", "") for row in rows])
         now = datetime.now(timezone.utc)
@@ -887,11 +907,14 @@ def get_superadmin_profile(current_admin: dict = Depends(get_current_admin_detai
     if company_id:
         company = None
         try:
-            company = companies_collection.find_one({"_id": ObjectId(company_id)})
+            if ObjectId.is_valid(str(company_id)):
+                company = companies_collection.find_one({"_id": ObjectId(str(company_id))})
         except Exception:
-            company = companies_collection.find_one({"_id": str(company_id)})
+            pass
+        if not company:
+            company = companies_collection.find_one({"_id": str(company_id)}) or companies_collection.find_one({"company_id": str(company_id)})
         if company:
-            admin_doc["company_name"] = company.get("name", "")
+            admin_doc["company_name"] = company.get("company_name") or company.get("name") or admin_doc.get("company_name", "")
 
     plan_context = get_admin_plan_context(admin_doc)
     admin_doc["is_expired"] = plan_context["is_expired"]
@@ -911,10 +934,8 @@ def update_superadmin_subscription(data: SuperAdminPlanUpdate, current_admin: di
     company_id = current_admin.get("company_id")
     if not company_id:
         raise HTTPException(status_code=400, detail="No company associated with this admin")
-    companies_collection.update_one(
-        {"_id": ObjectId(company_id)},
-        {"$set": {"subscription_plan": data.subscription_plan}}
-    )
+    from app.services.services import sync_company_and_admins
+    sync_company_and_admins(company_id, {"subscription_plan": data.subscription_plan})
     return {"status": "success", "message": "Subscription plan updated successfully"}
 
 @router.delete("/api/superadmin/candidates/bulk")

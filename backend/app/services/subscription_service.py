@@ -127,7 +127,7 @@ def _build_row(company: Dict[str, Any]) -> SubscriptionRow:
 
     return SubscriptionRow(
         company_id=company_id,
-        company_name=company.get("name", "Unknown"),
+        company_name=company.get("company_name") or company.get("name") or "Unknown",
         plan_key=plan_key,
         plan_label=ctx.get("plan_label", plan_def.get("label", plan_key)),
         subscription_start=company.get("subscription_start"),

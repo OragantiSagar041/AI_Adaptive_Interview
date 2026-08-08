@@ -217,7 +217,7 @@ export default function VoiceCaseStudy({
   const submittingRef    = useRef(false)
   const isTransitioningRef = useRef(false)
   const playingAudioRef  = useRef(null)
-  const langMap = { 'Hindi':'hi-IN','Telugu':'te-IN','Tamil':'ta-IN','Malayalam':'ml-IN','Kannada':'kn-IN','English':'en-US' }
+  const langMap = { 'Hindi':'hi-IN','Telugu':'te-IN','Tamil':'ta-IN','Malayalam':'ml-IN','Kannada':'kn-IN','English':'en-IN' }
 
   const scenarios = allQuestions?.length ? allQuestions : [question]
 

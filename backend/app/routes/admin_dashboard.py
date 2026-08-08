@@ -13,6 +13,9 @@ from collections import defaultdict
 from datetime import datetime, timedelta, timezone
 from typing import Any, Dict, List, Optional, Union
 
+_LOCAL_DASHBOARD_CACHE: Dict[str, tuple[float, Dict[str, Any]]] = {}
+_LOCAL_DASHBOARD_CACHE_TTL = 10.0
+
 # ---------------------------------------------------------------------------
 # Third-party
 # ---------------------------------------------------------------------------
@@ -119,7 +122,10 @@ def get_agent_flow(omni_api_key: Optional[str] = Header(default=None, alias="X-O
         raise HTTPException(status_code=500, detail="OMNI_DIMENSION_API_KEY is not set.")
     headers = {"Authorization": f"Bearer {api_key}"}
     try:
-        from app.ai.omni_dimension_client import get_omni_account
+        from app.ai.omni_dimension_client import get_cached_omni_json, get_omni_account, set_cached_omni_json
+        cached_flow = get_cached_omni_json(api_key, "agent-flow")
+        if cached_flow is not None:
+            return {"success": True, "flow": cached_flow, "cached": True}
         _, _, resolved_agent_id = get_omni_account(api_key)
         agent_id = str(resolved_agent_id)
         res = requests.get(f"https://backend.omnidim.io/api/v1/agents/{agent_id}", headers=headers, timeout=10)
@@ -134,6 +140,7 @@ def get_agent_flow(omni_api_key: Optional[str] = Header(default=None, alias="X-O
             else:
                 flow_data = []
             normalized_flow = [normalize_agent_flow_read_item(item) for item in flow_data]
+            set_cached_omni_json(api_key, "agent-flow", normalized_flow)
             return {"success": True, "flow": normalized_flow}
         else:
             print(f"[Omnidimension] GET agent flow failed [status={res.status_code}]")
@@ -163,7 +170,7 @@ def update_agent_flow(req: UpdateAgentFlowRequest, omni_api_key: Optional[str] =
         return {"success": True, "message": "Local flow saved; Omnidimension sync skipped because OMNI_DIMENSION_API_KEY is not configured."}
 
     headers = {"Authorization": f"Bearer {api_key}", "Content-Type": "application/json"}
-    from app.ai.omni_dimension_client import get_omni_account
+    from app.ai.omni_dimension_client import get_omni_account, set_cached_omni_json
     _, _, resolved_agent_id = get_omni_account(api_key)
     agent_id = str(resolved_agent_id)
 
@@ -178,6 +185,7 @@ def update_agent_flow(req: UpdateAgentFlowRequest, omni_api_key: Optional[str] =
         logger.info("[agent-flow] OmniDimension response status: %s", res.status_code)
         logger.info("[agent-flow] OmniDimension response body: %s", res.text)
         if res.status_code == 200:
+            set_cached_omni_json(api_key, "agent-flow", payload.get('context_breakdown', []))
             # persist locally as well
             try:
                 local_path = Path(__file__).resolve().parents[1] / 'agent_flow.json'
@@ -191,6 +199,7 @@ def update_agent_flow(req: UpdateAgentFlowRequest, omni_api_key: Optional[str] =
             try:
                 local_path = Path(__file__).resolve().parents[1] / 'agent_flow.json'
                 local_path.write_text(json.dumps(payload.get('context_breakdown', []), indent=2, ensure_ascii=False), encoding='utf-8')
+                set_cached_omni_json(api_key, "agent-flow", payload.get('context_breakdown', []))
                 return {"success": True, "message": "Upstream failed but local flow updated."}
             except Exception:
                 raise HTTPException(status_code=res.status_code, detail="Failed to update agent flow on upstream API and failed to save locally.")
@@ -201,6 +210,7 @@ def update_agent_flow(req: UpdateAgentFlowRequest, omni_api_key: Optional[str] =
         try:
             local_path = Path(__file__).resolve().parents[1] / 'agent_flow.json'
             local_path.write_text(json.dumps(payload.get('context_breakdown', []), indent=2, ensure_ascii=False), encoding='utf-8')
+            set_cached_omni_json(api_key, "agent-flow", payload.get('context_breakdown', []))
             return {"success": True, "message": "Local flow updated (upstream error)."}
         except Exception:
             raise HTTPException(status_code=500, detail=str(e))
@@ -773,6 +783,8 @@ def get_interview_details(link_id: str, current_admin: dict = Depends(get_curren
             "total_noise_alerts": total_noise_alerts,
             "total_time_minutes": round(total_time / 60, 1)
         },
+        "violations": session_data.get("violations", session_data.get("alerts", [])),
+        "proctoring_alerts": session_data.get("violations", session_data.get("alerts", [])),
         "alerts": session_data.get("violations", session_data.get("alerts", [])),
         "answers": results,
         "candidate_feedback": session_data.get("candidate_feedback", ""),
@@ -1437,6 +1449,10 @@ async def get_dashboard_stats(admin_id: Optional[str] = None, current_admin: dic
         cached = await manager.redis.get(cache_key)
         if cached:
             return json.loads(cached)
+    else:
+        cached = _LOCAL_DASHBOARD_CACHE.get(cache_key)
+        if cached and time.monotonic() - cached[0] < _LOCAL_DASHBOARD_CACHE_TTL:
+            return cached[1]
 
     try:
         comp_id = current_admin.get("company_id")
@@ -1712,6 +1728,11 @@ async def get_dashboard_stats(admin_id: Optional[str] = None, current_admin: dic
         
         if manager.redis:
             await manager.redis.setex(cache_key, 30, json.dumps(stats))
+        else:
+            _LOCAL_DASHBOARD_CACHE[cache_key] = (time.monotonic(), stats)
+            if len(_LOCAL_DASHBOARD_CACHE) > 100:
+                oldest_key = min(_LOCAL_DASHBOARD_CACHE, key=lambda key: _LOCAL_DASHBOARD_CACHE[key][0])
+                _LOCAL_DASHBOARD_CACHE.pop(oldest_key, None)
             
         return stats
     except Exception as e:
@@ -2113,13 +2134,22 @@ def get_admin_profile(current_admin: dict = Depends(get_current_admin_details)):
     admin_doc["id"] = str(admin_doc["_id"])
     admin_doc["_id"] = str(admin_doc["_id"])
     
-    if current_admin.get("role") in ["super_admin", "superadmin"] and admin_doc.get("company_id"):
+    comp_id = admin_doc.get("company_id")
+    if comp_id:
+        company = None
         try:
-            company = companies_collection.find_one({"_id": ObjectId(admin_doc["company_id"])})
-            if company and "credits" in company:
-                admin_doc["credits"] = company["credits"]
+            if ObjectId.is_valid(str(comp_id)):
+                company = companies_collection.find_one({"_id": ObjectId(str(comp_id))})
         except Exception:
             pass
+        if not company:
+            company = companies_collection.find_one({"_id": str(comp_id)}) or companies_collection.find_one({"company_id": str(comp_id)})
+        if company:
+            co_name = company.get("company_name") or company.get("name")
+            if co_name:
+                admin_doc["company_name"] = co_name
+            if "credits" in company and current_admin.get("role") in ["super_admin", "superadmin"]:
+                admin_doc["credits"] = company["credits"]
             
     return admin_doc
 
@@ -2127,6 +2157,7 @@ def get_admin_profile(current_admin: dict = Depends(get_current_admin_details)):
 def update_profile(data: UpdateProfileRequest, current_admin: str = Depends(get_current_admin)):
     try:
         from bson import ObjectId
+        from app.services.services import sync_company_and_admins
         
         admin_id_obj = ObjectId(str(data.admin_id))
         admin = admins_collection.find_one({"_id": admin_id_obj})
@@ -2152,6 +2183,11 @@ def update_profile(data: UpdateProfileRequest, current_admin: str = Depends(get_
             return {"status": "success", "message": "No changes made."}
             
         admins_collection.update_one({"_id": admin_id_obj}, {"$set": update_fields})
+        
+        # If company_name was updated, sync to companies_collection and all linked admin docs
+        comp_id = admin.get("company_id")
+        if data.company_name and comp_id:
+            sync_company_and_admins(comp_id, {"company_name": data.company_name})
         
         # Broadcast updated profile details
         admin_doc = admins_collection.find_one({"_id": admin_id_obj})

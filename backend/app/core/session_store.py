@@ -10,7 +10,7 @@ _fallback_store = {}
 _use_fallback = False
 
 try:
-    _redis = redis.Redis.from_url(_redis_url, decode_responses=True)
+    _redis = redis.Redis.from_url(_redis_url, decode_responses=True, protocol=2)
     _redis.ping()
 except redis.exceptions.ConnectionError:
     print("WARNING: Redis not found! Falling back to in-memory session store (Not scalable, dev only)")

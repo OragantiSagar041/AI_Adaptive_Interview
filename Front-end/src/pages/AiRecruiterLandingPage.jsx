@@ -1147,6 +1147,11 @@ function RecruiterContact() {
 // ==========================================
 
 function AiRecruiterLandingPage() {
+  useEffect(() => {
+    document.documentElement.setAttribute('data-theme', 'dark');
+    document.documentElement.classList.add('dark');
+  }, []);
+
   useSEO({
     title: "AI Calling Agent for Recruitment & AI Voice Recruiter | HireIQ India",
     description: "HireIQ's AI calling agent for recruitment automates candidate phone screening, AI candidate screening software, and bulk hiring across India with human-like AI agents.",

@@ -57,6 +57,8 @@ class TenantUpdate(BaseModel):
     subscription_plan: str
     add_days: int = 0
     add_credits: int = 0
+    features: Optional[List[str]] = None
+    layout_config: Optional[Dict[str, Any]] = None
 
 class HRScreening(BaseModel):
     model_config = ConfigDict(populate_by_name=True)
@@ -163,3 +165,13 @@ class DemoRequestSendEmail(BaseModel):
     recipient_name: Optional[str] = ""
     subject: str
     message: str
+
+class ContactRequestCreate(BaseModel):
+    first_name: str
+    last_name: str
+    company_email: str
+    company_name: str
+    message: str
+
+class ContactRequestUpdate(BaseModel):
+    status: str

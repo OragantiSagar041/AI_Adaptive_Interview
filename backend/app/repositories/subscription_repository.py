@@ -207,10 +207,8 @@ def apply_recharge(
     if not company.get("subscription_start"):
         update["subscription_start"] = now.isoformat()
 
-    companies_collection.update_one(
-        {"_id": ObjectId(company_id)},
-        {"$set": update},
-    )
+    from app.services.services import sync_company_and_admins
+    sync_company_and_admins(company_id, update)
 
     return final_plan, final_credits, new_expiry_iso
 

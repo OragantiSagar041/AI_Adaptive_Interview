@@ -38,7 +38,8 @@ class AsyncPubSub:
                     REDIS_URL, 
                     decode_responses=True,
                     socket_connect_timeout=2.0,
-                    socket_timeout=2.0
+                    socket_timeout=2.0,
+                    protocol=2,
                 )
                 await self.redis.ping()
                 self.pubsub = self.redis.pubsub()
