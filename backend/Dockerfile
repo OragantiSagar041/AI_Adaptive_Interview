@@ -7,8 +7,9 @@ RUN python -m pip install --no-cache-dir --upgrade \
     pip==26.1.2 \
     setuptools==83.0.0
 
-# Build tools are only needed for Python packages without prebuilt wheels.
-RUN apt-get update && apt-get install -y \
+# Audio processing and build tools
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    ffmpeg \
     build-essential \
     gcc \
     && rm -rf /var/lib/apt/lists/*
