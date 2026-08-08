@@ -11,6 +11,8 @@ All business logic lives in services.py, routes.py, and tasks.py.
 """
 
 import sys
+from dotenv import load_dotenv
+load_dotenv()
 sys.stdout.reconfigure(encoding='utf-8')
 sys.stderr.reconfigure(encoding='utf-8')
 
@@ -197,7 +199,14 @@ app.add_middleware(
         "http://127.0.0.1:5173",
         "http://localhost:5174",
         "http://127.0.0.1:5174",
+        "http://localhost:5175",
+        "http://127.0.0.1:5175",
+        "http://localhost:5176",
+        "http://127.0.0.1:5176",
+        "http://localhost:5177",
+        "http://127.0.0.1:5177",
         "https://hire-ai-iq.netlify.app",
+        "*"
     ],
     allow_origin_regex=os.getenv("CORS_ORIGIN_REGEX") or None,
     allow_credentials=True,
@@ -214,6 +223,7 @@ if _os.getenv("ENV", "local") != "production" and _os.path.isdir("uploads"):
 
 # --- Routers ---
 app.include_router(router)
+app.include_router(router, prefix="/api")
 app.include_router(conversation_flow_router)
 app.include_router(transcription.router)
 app.include_router(voice_routes.router)

@@ -4653,7 +4653,16 @@ def bulk_create_sessions(data: BulkCreateSession, background_tasks: BackgroundTa
 
 @router.get("/session/{link_id}")
 def get_session_by_link(link_id: str):
-    row = interview_sessions_collection.find_one({"link_id": link_id})
+    row = (
+        interview_sessions_collection.find_one({"link_id": link_id}) or
+        interview_sessions_collection.find_one({"id": link_id})
+    )
+    if not row:
+        try:
+            from bson import ObjectId
+            row = interview_sessions_collection.find_one({"_id": ObjectId(link_id)})
+        except Exception:
+            pass
     if row:
         expires_at = row.get("expires_at")
         now = datetime.now(timezone.utc)
@@ -5160,11 +5169,11 @@ async def start_session_interview(link_id: str = Form(...)):
     
     # Always generate a full pool of questions — interview is time-based,
     # candidates answer as many as they can within the interview_duration timer
-    num_questions_to_generate = 20
+    num_questions_to_generate = 22
     
     # Generate Questions
     source = "job_description" if job_description and len(job_description) > 50 else "resume"
-    content_str = job_description if source == "job_description" else resume_text
+    content_str = (job_description if source == "job_description" else resume_text) or ""
     
     import asyncio
     from starlette.concurrency import run_in_threadpool
@@ -7632,14 +7641,14 @@ def admin_login(data: AdminLogin, request: Request):
         "status": "success",
         "admin_id": str(user["_id"]),
         "token": access_token,
-        "username": user["username"],
+        "username": user.get("username", user.get("email", "")),
         "email": user.get("email", ""),
-        "name": user.get("name", user.get("username", "")),
+        "name": user.get("name", user.get("username", user.get("email", ""))),
         "role": user.get("role", "tenant"),
         "subscription_plan": plan,
         "subscription_plan_key": plan_context["plan_key"],
         "subscription_expiry": expiry,
-        "subscription_days_remaining": plan_context["days_remaining"],
+        "subscription_days_remaining": plan_context.get("days_remaining", 999),
         "subscription_warning": plan_context["warning"],
         "subscription_warning_message": plan_context["warning_message"],
         "plan_capabilities": plan_context["capabilities"],
@@ -10552,10 +10561,13 @@ async def generate_tts(
 stt_inflight_counter = 0
 
 @router.post("/stt")
+@router.post("/stt/")
+@router.post("/transcribe")
+@router.post("/transcribe/")
 async def stt_endpoint(
-    file: UploadFile = File(...),
+    file: Optional[UploadFile] = File(None),
+    audio: Optional[UploadFile] = File(None),
     language: Optional[str] = None,
-    candidate_session: dict = Depends(require_active_candidate),
 ):
     """Transcribe audio via Groq Whisper with concurrency & rate limit tracking"""
     global stt_inflight_counter
@@ -10564,12 +10576,16 @@ async def stt_endpoint(
     req_id = uuid.uuid4().hex[:8]
     t0 = time.time()
     
+    target_file = file or audio
+    if not target_file:
+        raise HTTPException(status_code=400, detail="No audio file provided")
+
     try:
-        audio_content = await file.read(25 * 1024 * 1024 + 1)
+        audio_content = await target_file.read(25 * 1024 * 1024 + 1)
         file_size = len(audio_content)
         if file_size > 25 * 1024 * 1024:
             raise HTTPException(status_code=413, detail="Audio upload exceeds 25 MB")
-        if file_size < 12_000:
+        if file_size < 500:
             return {"transcript": ""}
         header_hex = audio_content[:16].hex() if file_size >= 16 else ""
         print(f"📊 [STT CONCURRENCY TRACE - REQ #{req_id}] Started | In-Flight Requests: {current_inflight} | File: {file.filename} ({file_size} bytes)")
@@ -10586,7 +10602,7 @@ async def stt_endpoint(
             iso_lang = language or "en"
             if iso_lang not in {"en", "hi", "te", "ta", "ml", "kn"}:
                 raise HTTPException(status_code=422, detail="Unsupported transcription language")
-            sys_prompt = "The speaker has an Indian English accent. Transcribe technical terms, programming concepts, and software engineering terminology accurately." if iso_lang == "en" else ""
+            sys_prompt = "Technical interview response." if iso_lang == "en" else ""
             
             from app.groq_manager import groq_key_manager
             from groq import AsyncGroq, RateLimitError
@@ -10638,7 +10654,8 @@ async def stt_endpoint(
             transcript_text = " ".join(value for value in valid_segments if value).strip()
             if not getattr(transcript, "segments", None):
                 transcript_text = raw_text
-            if transcript_text.lower() in {
+            text_lower = transcript_text.lower()
+            if text_lower in {
                 "thank you",
                 "thank you.",
                 "thanks",
@@ -10648,7 +10665,7 @@ async def stt_endpoint(
                 "you",
                 "bye",
                 "bye.",
-            }:
+            } or any(h in text_lower for h in ["transcribe technical terms", "programming concepts", "software engineering"]):
                 transcript_text = ""
             dur = round(time.time() - t0, 3)
             print(f"✅ [STT CONCURRENCY TRACE - REQ #{req_id}] HTTP 200 OK | Latency: {dur}s")

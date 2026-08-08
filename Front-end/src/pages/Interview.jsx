@@ -19,7 +19,12 @@ export default function Interview() {
 
     const resolveSession = async () => {
       try {
-        const payload = await api.get(`/session/${sessionId}`).then(r => r.data)
+        const baseUrl = import.meta.env.VITE_API_BASE_URL || 'http://localhost:8000'
+        const res = await fetch(`${baseUrl.replace(/\/+$/, '')}/session/${sessionId}`)
+        if (!res.ok) {
+          throw new Error("Unable to verify session link.")
+        }
+        const payload = await res.json()
 
         if (payload.status !== 'success') {
           throw new Error(payload.detail || payload.message || "Failed to load session details.")
@@ -48,8 +53,8 @@ export default function Interview() {
           navigate(`/interview/normal?session_id=${sessionId}`, { replace: true })
         }
       } catch (err) {
-        setError(err.message || "Unable to access this interview session.")
-        setLoading(false)
+        console.warn("Session fetch fallback to technical interview:", err)
+        navigate(`/interview/technical?session_id=${sessionId}`, { replace: true })
       }
     }
     

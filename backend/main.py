@@ -21,6 +21,9 @@ To run Celery worker:
     celery -A app.celery_app.celery_app worker --loglevel=info
 """
 
+from dotenv import load_dotenv
+load_dotenv()
+
 from app.main import app  # noqa: F401
 
 if __name__ == "__main__":

@@ -241,6 +241,7 @@ export const useInterviewSession = (sessionId, interviewType, startRoundTwo) => 
   const whisperMediaRecorderRef = useRef(null)
   const interimTextRef = useRef('')
   const currentAudioRef = useRef(null)
+  const currentUtteranceRef = useRef(null)
   const speakRequestIdRef = useRef(0)
 
   const whisperAudioChunksRef = useRef([])
@@ -918,15 +919,110 @@ export const useInterviewSession = (sessionId, interviewType, startRoundTwo) => 
   const initSpeechRecognition = () => {
     if (!('webkitSpeechRecognition' in window || 'SpeechRecognition' in window)) {
       console.warn("Speech recognition not supported in this browser.")
-      return
+    } else {
+      if (recognitionRef.current) {
+        try { recognitionRef.current.abort() } catch (_) {}
+        try { recognitionRef.current.stop() } catch (_) {}
+        recognitionRef.current = null
+      }
+      const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition
+      const rec = new SpeechRecognition()
+      rec.continuous = true
+      rec.interimResults = true
+      rec.maxAlternatives = 3
+      const targetLang = (sessionDetail?.language && langMap[sessionDetail.language]) ? langMap[sessionDetail.language] : (navigator.language || 'en-IN')
+      rec.lang = targetLang
+      console.log(`[STT Engine] Initialized with language: ${rec.lang}`)
+
+      rec.onstart = () => {
+        console.log("[STT Engine] Speech recognition started cleanly")
+      }
+
+      rec.onend = () => {
+        // Abandon old instance if superseded by a new question
+        if (recognitionRef.current && recognitionRef.current !== rec) {
+          console.log("[STT Engine] Old instance onend ignored (superseded)")
+          return
+        }
+
+        if (interimTextRef.current) {
+          const leftover = interimTextRef.current
+          interimTextRef.current = ''
+          setInterimTranscriptText('')
+          setTranscriptionText(prev => prev + leftover + ' ')
+        }
+
+        if (isSpeechRecordingRef.current && !isTTSPlayingRef.current) {
+          setTimeout(() => {
+            if (!isSpeechRecordingRef.current || isTTSPlayingRef.current) return
+            if (recognitionRef.current && recognitionRef.current !== rec) return
+            try {
+              rec.start()
+            } catch (e) {
+              if (e.name !== 'InvalidStateError') {
+                console.warn("Speech auto-restart retry error:", e)
+              }
+            }
+          }, 250)
+        }
+      }
+
+      rec.onresult = (event) => {
+        let interimText = ''
+        let finalText = ''
+        for (let i = event.resultIndex; i < event.results.length; i++) {
+          if (event.results[i].isFinal) {
+            let bestTranscript = event.results[i][0].transcript
+            let bestConfidence = event.results[i][0].confidence || 0
+            for (let j = 1; j < event.results[i].length; j++) {
+              const alt = event.results[i][j]
+              if ((alt.confidence || 0) > bestConfidence) {
+                bestConfidence = alt.confidence
+                bestTranscript = alt.transcript
+              }
+            }
+            finalText += bestTranscript + ' '
+          } else {
+            interimText += event.results[i][0].transcript
+          }
+        }
+        if (interimText || finalText) {
+          console.log("[STT Engine] Captured speech:", { interimText, finalText })
+        }
+        interimTextRef.current = interimText
+        setInterimTranscriptText(interimText)
+        if (finalText) {
+          interimTextRef.current = ''
+          setInterimTranscriptText('')
+          setTranscriptionText(prev => {
+            const cleanFinal = finalText.trim()
+            if (!cleanFinal) return prev
+            if (prev.toLowerCase().endsWith(cleanFinal.toLowerCase())) return prev
+            return (prev.trim() ? prev.trim() + ' ' : '') + cleanFinal
+          })
+        }
+      }
+
+      rec.onerror = (e) => {
+        if (e.error === 'not-allowed' || e.error === 'service-not-allowed') {
+          console.error("Microphone permission denied:", e.error)
+          return
+        }
+        if (e.error === 'no-speech') {
+          return
+        }
+        console.warn("SpeechRecognition engine error:", e?.error || e)
+        const delay = e.error === 'network' ? 2000 : 500
+        if (isSpeechRecordingRef.current && !isTTSPlayingRef.current) {
+          setTimeout(() => {
+            if (recognitionRef.current && recognitionRef.current !== rec) return
+            try { rec.start() } catch (_) {}
+          }, delay)
+        }
+      }
+
+      recognitionRef.current = rec
     }
-    const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition
-    const rec = new SpeechRecognition()
-    rec.continuous = true  // Keep listening continuously without restarting
-    rec.interimResults = true
-    rec.maxAlternatives = 3  // Consider top 3 alternatives for better accuracy
-    const targetLang = langMap[sessionDetail?.language] || 'en-IN'
-    rec.lang = targetLang
 
     // Helper to (re)start the Whisper MediaRecorder cleanly
     const ensureWhisperRunning = () => {
@@ -942,14 +1038,11 @@ export const useInterviewSession = (sessionId, interviewType, startRoundTwo) => 
       try {
         const audioStream = new MediaStream(audioTracks)
 
-        // Detect supported MIME type at runtime
         const mimeTypes = [
           'audio/webm;codecs=opus',
           'audio/webm',
-          'audio/ogg;codecs=opus',
-          'audio/ogg',
           'audio/mp4',
-          ''  // browser default
+          ''
         ]
         const supportedMime = mimeTypes.find(m => {
           try { return !m || MediaRecorder.isTypeSupported(m) } catch { return false }
@@ -957,154 +1050,62 @@ export const useInterviewSession = (sessionId, interviewType, startRoundTwo) => 
 
         const mrOptions = supportedMime ? { mimeType: supportedMime } : {}
         const mr = new MediaRecorder(audioStream, mrOptions)
-        whisperAudioChunksRef.current = []
+        const chunks = []
 
         mr.ondataavailable = (e) => {
-          if (e.data.size > 0) whisperAudioChunksRef.current.push(e.data)
+          if (e.data && e.data.size > 0) chunks.push(e.data)
         }
+
         mr.onstop = async () => {
-          const chunks = [...whisperAudioChunksRef.current]
-          whisperAudioChunksRef.current = []
-          const actualMime = mr.mimeType || supportedMime || 'audio/webm'
-          const blob = new Blob(chunks, { type: actualMime })
+          if (isSpeechRecordingRef.current && !isTTSPlayingRef.current) {
+            setTimeout(ensureWhisperRunning, 300)
+          }
 
-          // VAD handles restarting; we no longer automatically restart here.
+          if (chunks.length === 0 || isTTSPlayingRef.current) return
+          const blob = new Blob(chunks, { type: supportedMime || 'audio/webm' })
+          if (blob.size < 1500) return
 
-          if (blob.size > 1000) {
-            // Only send to Whisper for English interviews.
-            // For regional languages (Telugu, Hindi, etc.) the browser Web Speech API
-            // (Google) handles transcription directly in onresult — it's far more
-            // accurate than Whisper for Indian languages. Sending audio to Whisper
-            // for Telugu causes heavy hallucination.
-            const currentLang = interviewLanguageRef.current || 'English'
-            if (currentLang === 'English') {
-              const ext = actualMime.includes('ogg') ? 'ogg' : actualMime.includes('mp4') ? 'mp4' : 'webm'
-              const formData = new FormData()
-              formData.append('audio', blob, `audio.${ext}`)
-              formData.append('candidate_name', candidateNameRef.current)
-              formData.append('language', currentLang)
-              transcribeInFlightRef.current = true
-              try {
-                const res = await api.post('/transcribe', formData, {
-                  headers: { 'Content-Type': 'multipart/form-data' },
-                  timeout: 10000
-                })
-                if (res.data && res.data.text && res.data.text.trim()) {
-                  setTranscriptionText(prev => prev + res.data.text.trim() + ' ')
-                }
-              } catch (err) {
-                console.error('Whisper transcription failed:', err)
-              } finally {
-                transcribeInFlightRef.current = false
-              }
+          const currentLang = sessionDetail?.language || interviewLanguageRef.current || 'English'
+          const ext = supportedMime.includes('mp4') ? 'mp4' : 'webm'
+          const formData = new FormData()
+          formData.append('file', blob, `audio.${ext}`)
+          formData.append('audio', blob, `audio.${ext}`)
+          formData.append('candidate_name', candidateNameRef.current || 'Candidate')
+          formData.append('language', currentLang)
+          try {
+            const res = await api.post('/transcribe', formData, {
+              headers: { 'Content-Type': 'multipart/form-data' },
+              timeout: 10000
+            })
+            const returnedText = (res.data?.transcript || res.data?.text || '').trim()
+            if (returnedText) {
+              setTranscriptionText(prev => {
+                // If Web Speech API is actively capturing text, don't double-append Whisper background chunks
+                if (prev.trim() && recognitionRef.current) return prev
+                if (!prev.trim()) return returnedText
+                if (prev.toLowerCase().includes(returnedText.toLowerCase())) return prev
+                return `${prev} ${returnedText}`
+              })
             }
+          } catch (err) {
+            console.warn('Whisper STT chunk failed:', err)
           }
         }
+
         whisperMediaRecorderRef.current = mr
-        // Do NOT start automatically. The VAD logic in tick() will start it on speech.
+        mr.start()
+        setTimeout(() => {
+          if (mr.state === 'recording') {
+            try { mr.stop() } catch (_) {}
+          }
+        }, 3000)
       } catch(e) {
         console.error('Failed to start Whisper MediaRecorder:', e)
         whisperMediaRecorderRef.current = null
       }
     }
 
-    rec.onstart = () => {
-      // Intentionally left blank. We now set isSpeechRecordingRef.current = true 
-      // immediately before calling start(), to avoid async race conditions.
-      // Note: Whisper path is disabled — Web Speech API is used as the sole
-      // transcript source for all languages. It is real-time, accurate, and
-      // avoids Whisper hallucination + latency issues.
-    }
-
-    rec.onend = () => {
-      // Commit any leftover interim text so we don't lose the last few words if it stopped abruptly
-      if (interimTextRef.current) {
-        const leftover = interimTextRef.current
-        interimTextRef.current = ''
-        setInterimTranscriptText('')
-        setTranscriptionText(prev => prev + leftover + ' ')
-      }
-
-      // With continuous=true this fires only on error/abort — restart with a small delay
-      // to avoid rapid restart storms and InvalidStateError exceptions in Chrome.
-      // IMPORTANT: Do NOT restart during TTS playback (isTTSPlayingRef guards this).
-      if (isSpeechRecordingRef.current && !isTTSPlayingRef.current) {
-        setTimeout(() => {
-          if (!isSpeechRecordingRef.current || isTTSPlayingRef.current) return
-          try {
-            rec.start()
-          } catch (e) {
-            // InvalidStateError or similar — start a fresh recognition instance
-            if (isSpeechRecordingRef.current) {
-              initSpeechRecognition()
-              try { recognitionRef.current?.start() } catch (_) {}
-            }
-          }
-        }, 150)
-      }
-    }
-
-    rec.onresult = (event) => {
-      let interimText = ''
-      let finalText = ''
-      for (let i = event.resultIndex; i < event.results.length; i++) {
-        if (event.results[i].isFinal) {
-          // Pick the highest-confidence alternative for best accuracy
-          let bestTranscript = event.results[i][0].transcript
-          let bestConfidence = event.results[i][0].confidence || 0
-          for (let j = 1; j < event.results[i].length; j++) {
-            const alt = event.results[i][j]
-            if ((alt.confidence || 0) > bestConfidence) {
-              bestConfidence = alt.confidence
-              bestTranscript = alt.transcript
-            }
-          }
-          finalText += bestTranscript + ' '
-        } else {
-          interimText += event.results[i][0].transcript
-        }
-      }
-      // Show interim text in real time (visible while speaking)
-      interimTextRef.current = interimText
-      setInterimTranscriptText(interimText)
-      if (finalText) {
-        interimTextRef.current = ''
-        setInterimTranscriptText('')
-        // Use Web Speech API final results for ALL languages (English + regional).
-        // The browser's Google speech engine is real-time, zero-latency, and highly
-        // accurate — far superior to Whisper for live transcription. Whisper's
-        // batch approach (fires after 2.5s silence) caused mismatches, duplications,
-        // and hallucinations that made transcription appear inaccurate.
-        setTranscriptionText(prev => prev + finalText)
-      }
-    }
-
-    rec.onerror = (e) => {
-      if (e.error === 'not-allowed' || e.error === 'service-not-allowed') {
-        console.error("Microphone permission denied:", e.error)
-        return
-      }
-      if (e.error === 'no-speech') {
-        // Not a failure — browser detected silence. Do NOT immediately restart;
-        // the onend handler will fire and handle the restart with a delay.
-        return
-      }
-      if (e.error === 'network') {
-        // Network blip — restart after a longer pause
-        if (isSpeechRecordingRef.current) {
-          setTimeout(() => { 
-            if (isSpeechRecordingRef.current) {
-              initSpeechRecognition()
-              try { recognitionRef.current?.start() } catch (_) {}
-            }
-          }, 1000)
-        }
-        return
-      }
-      // Other transient errors — restart via onend (which fires after onerror)
-    }
-
-    recognitionRef.current = rec
+    ensureWhisperRunning()
   }
 
   useEffect(() => {
@@ -1756,6 +1757,24 @@ export const useInterviewSession = (sessionId, interviewType, startRoundTwo) => 
     if (silenceTimeoutRef.current) clearTimeout(silenceTimeoutRef.current)
   }
 
+  const ensureSpeechRecordingActive = () => {
+    isTTSPlayingRef.current = false
+    isSpeechRecordingRef.current = true
+    
+    if (recognitionRef.current) {
+      try { recognitionRef.current.abort() } catch (_) {}
+      try { recognitionRef.current.stop() } catch (_) {}
+      recognitionRef.current = null
+    }
+
+    initSpeechRecognition()
+    try {
+      recognitionRef.current?.start()
+    } catch (e) {
+      console.log("[STT Engine] ensureSpeechRecordingActive status:", e?.name || e)
+    }
+  }
+
   const speakAIQuestion = async (text) => {
     // The silence timer is started in audio.onended (after TTS finishes playing)
     // so the candidate gets exactly 10 seconds of silence before auto-advancing.
@@ -1780,12 +1799,11 @@ export const useInterviewSession = (sessionId, interviewType, startRoundTwo) => 
     // the auto-restart logic is blocked. Without this flag, rec.onend would
     // restart the mic 150ms later right in the middle of TTS audio.
     isTTSPlayingRef.current = true
-    if (recognitionRef.current) {
-      try { recognitionRef.current.stop() } catch (_) {}
-    }
+
     // Clear any gibberish that got captured while recognition was still on
     setTranscriptionText('')
     setInterimTranscriptText('')
+    whisperAudioChunksRef.current = []
 
     // --- High-Quality TTS (Backend: Cartesia or Edge TTS) ---
     try {
@@ -1795,11 +1813,10 @@ export const useInterviewSession = (sessionId, interviewType, startRoundTwo) => 
         voice: 'shimmer', 
         language: sessionDetail?.language || 'English',
         use_custom_voice: !!sessionDetail?.voice_clone
-
       }
       if (clonedVoiceIdRef.current) bodyPayload.voice_id = clonedVoiceIdRef.current
 
-      // Check TTS cache first — same question text + voice doesn't need a new network call.
+      // Check TTS cache first
       const ttsCacheKey = `${text}::${clonedVoiceIdRef.current || 'default'}`
       let url = ttsCacheRef.current.get(ttsCacheKey)
 
@@ -1812,58 +1829,62 @@ export const useInterviewSession = (sessionId, interviewType, startRoundTwo) => 
         if (!res.ok) throw new Error('TTS failed')
         const blob = await res.blob()
         url = URL.createObjectURL(blob)
-        // Store in cache with FIFO eviction
         if (ttsCacheRef.current.size >= TTS_CACHE_MAX) {
           const firstKey = ttsCacheRef.current.keys().next().value
-          URL.revokeObjectURL(ttsCacheRef.current.get(firstKey)) // free evicted blob
+          URL.revokeObjectURL(ttsCacheRef.current.get(firstKey))
           ttsCacheRef.current.delete(firstKey)
         }
         ttsCacheRef.current.set(ttsCacheKey, url)
       }
 
-      // If user clicked 'Next' again while we were fetching, discard this stale audio!
       if (speakRequestIdRef.current !== reqId) return
 
       const audio = new Audio(url)
       currentAudioRef.current = audio
       
-      // --- Web Audio Mixer Routing ---
       if (audioMixerCtxRef.current && audioMixerDestRef.current) {
         audio.crossOrigin = "anonymous"
         const source = audioMixerCtxRef.current.createMediaElementSource(audio)
-        source.connect(audioMixerCtxRef.current.destination) // Play to speakers
-        source.connect(audioMixerDestRef.current) // Send to screen recorder mixer
+        source.connect(audioMixerCtxRef.current.destination)
+        source.connect(audioMixerDestRef.current)
       }
 
-      audio.onended = () => {
-        // Revoke object URL after playback to free browser memory.
-        // Only revoke if not in the cache (cached URLs must stay valid for replay).
-        if (!ttsCacheRef.current.has(ttsCacheKey)) {
-          URL.revokeObjectURL(url)
+      // Backend TTS Watchdog: If audio gets stuck or pauses, force-resume candidate speech recognition
+      const ttsMaxDurationMs = Math.min(12000, Math.max(3500, text.length * 90))
+      setTimeout(() => {
+        if (isTTSPlayingRef.current && speakRequestIdRef.current === reqId) {
+          console.warn("[TTS Watchdog] Safety timeout reached, unlocking candidate microphone")
+          ensureSpeechRecordingActive()
         }
-        // ── RESTART speech recognition now that the AI has finished speaking ──
-        // Clear the TTS flag first so rec.onend won't block the restart.
-        isTTSPlayingRef.current = false
-        isSpeechRecordingRef.current = true
-        initSpeechRecognition()
-        try { recognitionRef.current?.start() } catch (_) {}
-        startSilenceTimer(4000)
+      }, ttsMaxDurationMs)
+
+      audio.onended = () => {
+        if (speakRequestIdRef.current === reqId) {
+          if (!ttsCacheRef.current.has(ttsCacheKey)) {
+            URL.revokeObjectURL(url)
+          }
+          ensureSpeechRecordingActive()
+        }
+      }
+      audio.onerror = () => {
+        if (speakRequestIdRef.current === reqId) {
+          ensureSpeechRecordingActive()
+        }
       }
       
-      // Double check reqId before playing just in case
       if (speakRequestIdRef.current === reqId) {
-        audio.play()
+        audio.play().catch(err => {
+          console.warn("Audio autoplay blocked or failed:", err)
+          ensureSpeechRecordingActive()
+        })
       }
-      return // Successfully used backend high-quality TTS
+      return
     } catch (err) {
       console.error("Backend TTS failed, falling back to browser TTS", err)
     }
 
-    // --- Browser TTS (Fallback/Default) ---
-    // If browser speechSynthesis is also missing, set a 15s fallback silence timer
-    // so the interview never gets permanently stuck.
     if (!window.speechSynthesis) {
-      startSilenceTimer(15000)
+      ensureSpeechRecordingActive()
       return
     }
     
@@ -1872,10 +1893,29 @@ export const useInterviewSession = (sessionId, interviewType, startRoundTwo) => 
 
     window.speechSynthesis.cancel()
     const utterance = new SpeechSynthesisUtterance(text)
+    currentUtteranceRef.current = utterance // Store ref so Chrome GC won't collect it mid-speech
 
     const targetLang = langMap[sessionDetail?.language] || 'en-IN'
     const targetLangPrefix = targetLang.split('-')[0]
     utterance.lang = targetLang
+
+    const resumeMicAfterTTS = () => {
+      if (speakRequestIdRef.current !== reqId) return
+      ensureSpeechRecordingActive()
+      startSilenceTimer(4000)
+    }
+
+    utterance.onend = resumeMicAfterTTS
+    utterance.onerror = resumeMicAfterTTS
+
+    // Chrome SpeechSynthesisUtterance GC Bug Watchdog:
+    // If Chrome fails to fire .onend, force-resume mic after estimated speaking duration
+    const maxSpeakingTimeMs = Math.min(15000, Math.max(3000, text.length * 80))
+    setTimeout(() => {
+      if (isTTSPlayingRef.current && speakRequestIdRef.current === reqId) {
+        resumeMicAfterTTS()
+      }
+    }, maxSpeakingTimeMs)
 
     const setVoiceAndSpeak = () => {
       let voices = window.speechSynthesis.getVoices()
@@ -1885,15 +1925,6 @@ export const useInterviewSession = (sessionId, interviewType, startRoundTwo) => 
       )
       if (preferredVoice) {
         utterance.voice = preferredVoice
-      }
-
-      utterance.onend = () => {
-        // ── RESTART recognition after browser TTS fallback finishes ──
-        isTTSPlayingRef.current = false
-        isSpeechRecordingRef.current = true
-        initSpeechRecognition()
-        try { recognitionRef.current?.start() } catch (_) {}
-        startSilenceTimer(4000)
       }
 
       window.speechSynthesis.speak(utterance)
@@ -2129,9 +2160,23 @@ export const useInterviewSession = (sessionId, interviewType, startRoundTwo) => 
             behavioralStatsRef.current = { wordCount: 0, fillerCount: 0, pauseCount: 0, faceAlerts: 0, tabSwitches: 0, noiseAlerts: 0 }
             setCurrentQuestionIndex(nextIdx)
             questionStartTimeRef.current = Date.now()
-            const nextQ = questions[nextIdx] || batch[0]
+
+            // Stop previous audio/TTS completely before question switch
+            if (currentAudioRef.current) {
+              try { currentAudioRef.current.pause(); currentAudioRef.current.src = '' } catch (_) {}
+            }
+            try { window.speechSynthesis?.cancel() } catch (_) {}
+
+            isTTSPlayingRef.current = false
+            isSpeechRecordingRef.current = true
+            initSpeechRecognition()
+            try { recognitionRef.current?.start() } catch (_) {}
+
+            const nextQ = batch[0] || questions[nextIdx]
             if (nextQ && nextQ.type !== 'coding') {
               speakAIQuestion(nextQ.text || nextQ.question || nextQ.prompt || '')
+            } else {
+              startSilenceTimer(4000)
             }
           } else {
             handleSubmitInterview()
@@ -2147,10 +2192,10 @@ export const useInterviewSession = (sessionId, interviewType, startRoundTwo) => 
           fd.append('interview_id', iid)
           fd.append('asked_question_ids', alreadyAskedIds)
           fd.append('count', '5')
-          fetch(`${import.meta.env.VITE_API_URL || ''}/generate-more-questions`, { method: 'POST', body: fd })
-            .then(r => r.json())
-            .then(data => {
-              if (data.questions && data.questions.length > 0) {
+          api.post('/generate-more-questions', fd)
+            .then(res => {
+              const data = res.data
+              if (data && data.questions && data.questions.length > 0) {
                 prefetchedQuestionsRef.current = data.questions
               }
             })
@@ -2168,8 +2213,21 @@ export const useInterviewSession = (sessionId, interviewType, startRoundTwo) => 
         setCurrentQuestionIndex(nextIdx)
         questionStartTimeRef.current = Date.now()
 
-        if (questions[nextIdx] && questions[nextIdx].type !== 'coding') {
-          speakAIQuestion(questions[nextIdx].text || questions[nextIdx].question || questions[nextIdx].prompt || '')
+        // Stop previous audio/TTS completely before question switch
+        if (currentAudioRef.current) {
+          try { currentAudioRef.current.pause(); currentAudioRef.current.src = '' } catch (_) {}
+        }
+        try { window.speechSynthesis?.cancel() } catch (_) {}
+
+        isTTSPlayingRef.current = false
+        isSpeechRecordingRef.current = true
+        ensureSpeechRecordingActive()
+
+        const targetQ = questions[nextIdx]
+        if (targetQ && targetQ.type !== 'coding') {
+          speakAIQuestion(targetQ.text || targetQ.question || targetQ.prompt || '')
+        } else {
+          startSilenceTimer(4000)
         }
       }
     } catch (e) {
@@ -2192,6 +2250,18 @@ export const useInterviewSession = (sessionId, interviewType, startRoundTwo) => 
       isNextingRef.current = false  // release lock so user can click Next again
     }
   }
+
+  useEffect(() => {
+    // Automatically ensure Speech Recognition is active on EVERY question transition (questions 1 to 22)
+    if (questions.length > 0 && currentQuestionIndex < questions.length) {
+      isTTSPlayingRef.current = false
+      isSpeechRecordingRef.current = true
+      initSpeechRecognition()
+      try {
+        recognitionRef.current?.start()
+      } catch (_) {}
+    }
+  }, [currentQuestionIndex, questions.length])
 
   useEffect(() => {
     handleNextQuestionRef.current = handleNextQuestion
@@ -2478,6 +2548,11 @@ export const useInterviewSession = (sessionId, interviewType, startRoundTwo) => 
     showSkipButton,
     transcriptionText,
     setTranscriptionText,
+    interimTranscriptText,
+    initSpeechRecognition,
+    recognitionRef,
+    isTTSPlayingRef,
+    isSpeechRecordingRef,
     codeAnswer,
     setCodeAnswer,
     selectedLanguage,

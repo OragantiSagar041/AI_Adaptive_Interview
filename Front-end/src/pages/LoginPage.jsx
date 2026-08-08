@@ -340,8 +340,16 @@ export default function LoginPage() {
     e.preventDefault()
     if (!username || !password) { setLoginError('Please enter both username and password.'); return }
     setLoginLoading(true); setLoginError('')
+    const cleanUsername = username.trim()
     try {
-      const response = await axios.post(API_BASE_URL + '/admin/login', { username, password }, { timeout: 10000 })
+      let response
+      try {
+        const baseUrl = import.meta.env.VITE_API_BASE_URL || 'http://localhost:8000'
+        const cleanBase = baseUrl.replace(/\/+$/, '').replace(/\/api$/, '')
+        response = await axios.post(`${cleanBase}/admin/login`, { username: cleanUsername, password }, { timeout: 10000 })
+      } catch (err1) {
+        response = await axios.post('http://localhost:8000/admin/login', { username: cleanUsername, password }, { timeout: 10000 })
+      }
       const data = response.data
       if (data.status === 'expired' || data.status === 'blocked') { setLoginError(data.message || 'Subscription expired.'); setLoginLoading(false); return }
       const adminId = data.admin_id || data.master_id

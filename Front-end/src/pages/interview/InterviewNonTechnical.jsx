@@ -88,6 +88,7 @@ export const InterviewNonTechnical = () => {
     skipCountdown,
     showSkipButton,
     transcriptionText,
+    setTranscriptionText,
     interimTranscriptText,
     globalCountdown,
     isRoundTwo,

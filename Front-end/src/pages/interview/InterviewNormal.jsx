@@ -43,6 +43,7 @@ export const InterviewNormal = () => {
     skipCountdown,
     showSkipButton,
     transcriptionText,
+    setTranscriptionText,
     interimTranscriptText,
     globalCountdown,
     isRoundTwo,

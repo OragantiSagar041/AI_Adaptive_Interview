@@ -193,6 +193,11 @@ RATE_LIMIT_EXEMPT_PATHS = {
     "/live-heartbeat",
 }
 RATE_LIMIT_EXEMPT_PREFIXES = (
+    "/session/",
+    "/interview/",
+    "/stt",
+    "/transcribe",
+    "/tts",
     "/superadmin/profile",
     "/api/notifications",
 )

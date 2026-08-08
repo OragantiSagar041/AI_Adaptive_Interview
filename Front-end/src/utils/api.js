@@ -8,7 +8,7 @@ const api = axios.create({
   timeout: 50000,
   headers: { "Content-Type": "application/json" },
 });
-const CANDIDATE_ROUTE_RE = /^\/?(?:transcribe|stt|tts|voice-clone-instant|save-answer|save-behavioral-data|coding-round|case-study|upload-full-recording|recording-upload-failure|complete-session|submit-feedback|proctoring\/violation|session\/[^/]+\/violation|interview\/[^/]+\/(?:summary|ai-summary|alert)|generate-next-question|generate-more-questions|live-heartbeat)(?:\/|\?|$)/
+const CANDIDATE_ROUTE_RE = /^\/?(?:start-session-interview|start-interview|session\/[^/]+|transcribe|stt|tts|voice-clone-instant|save-answer|save-behavioral-data|coding-round|case-study|upload-full-recording|recording-upload-failure|complete-session|submit-feedback|proctoring\/violation|session\/[^/]+\/violation|interview\/[^/]+\/(?:summary|ai-summary|alert)|generate-next-question|generate-more-questions|live-heartbeat)(?:\/|\?|$)/
 
 /* =============================================================================
    REQUEST INTERCEPTOR → attaches token from sessionStorage

@@ -99,7 +99,12 @@ export const InterviewTechnical = () => {
       codingTask,
       codingRoundData,
       transcriptionText,
+      setTranscriptionText,
       interimTranscriptText,
+      initSpeechRecognition,
+      recognitionRef,
+      isTTSPlayingRef,
+      isSpeechRecordingRef,
       interviewId,
       sessionDetail,
       sessionId,
@@ -307,7 +312,7 @@ export const InterviewTechnical = () => {
         }
         setConsoleOutput(simulatedConsoleOutput)
       } catch (e) {
-        errorText = e.message || "Network request failed."
+        const errorText = e.message || "Network request failed."
         setCodeOutputState(`Code Execution Result:\n❌ Execution Failed\n\nError:\n${errorText}`)
         let simulatedConsoleOutput = `Current Output:\n${userStdout || ''}`
         if (errorText) {
@@ -1337,16 +1342,27 @@ export const InterviewTechnical = () => {
                     <div className="flex items-center gap-2 text-sm font-extrabold text-slate-800 tracking-wide uppercase">
                       <span>🎙</span> Live Transcript
                     </div>
-                    <div className="flex items-center gap-1.5 bg-red-50 border border-red-200 text-red-500 text-[10px] font-bold tracking-wider px-3 py-1 rounded-full">
-                      <span className="w-1.5 h-1.5 bg-red-500 rounded-full animate-ping" />
-                      RECORDING
-                    </div>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        if (isTTSPlayingRef) isTTSPlayingRef.current = false
+                        if (isSpeechRecordingRef) isSpeechRecordingRef.current = true
+                        if (initSpeechRecognition) initSpeechRecognition()
+                        if (recognitionRef?.current) {
+                          try { recognitionRef.current.start() } catch (_) {}
+                        }
+                      }}
+                      className="flex items-center gap-1.5 bg-emerald-50 hover:bg-emerald-100 border border-emerald-200 text-emerald-600 text-[10px] font-bold tracking-wider px-3 py-1 rounded-full cursor-pointer transition-all active:scale-95"
+                    >
+                      <span className="w-1.5 h-1.5 bg-emerald-500 rounded-full animate-ping" />
+                      MIC ACTIVE (CLICK TO RESTART)
+                    </button>
                   </div>
                   <textarea
                     className="bg-slate-50/50 border border-slate-200 p-5 text-[0.95rem] font-medium leading-relaxed text-slate-800 placeholder:text-slate-400 outline-none shadow-inner resize-none w-full flex-1 overflow-y-auto transition-all rounded-[24px] custom-scrollbar"
                     placeholder="Your speech will appear here automatically..."
-                    readOnly
                     value={transcriptionText + (interimTranscriptText ? interimTranscriptText : '')}
+                    onChange={(e) => setTranscriptionText(e.target.value)}
                   />
                 </div>
 
