@@ -228,6 +228,8 @@ def get_companies(
             "pending_sessions": pending_sessions,
             "deactivated_sessions": deactivated_sessions,
             "credits": c.get("credits", 0),
+            "features": c.get("features", None),
+            "layout_config": c.get("layout_config", None),
         })
     return {"status": "success", "data": result}
 
@@ -615,6 +617,12 @@ def update_company(company_id: str, data: TenantUpdate, master_id: str = Depends
     if data.add_credits > 0:
         current_credits = company.get("credits", 0)
         update_fields["credits"] = current_credits + data.add_credits
+        
+    if data.features is not None:
+        update_fields["features"] = data.features
+        
+    if data.layout_config is not None:
+        update_fields["layout_config"] = data.layout_config
             
     if update_fields:
         companies_collection.update_one({"_id": ObjectId(company_id)}, {"$set": update_fields})

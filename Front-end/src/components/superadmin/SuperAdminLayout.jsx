@@ -334,14 +334,35 @@ export default function SuperAdminLayout() {
     blue: { primary: '#2563eb', hover: '#1d4ed8', glow: 'rgba(37, 99, 237, 0.15)' }
   }
 
-  const currentAccent = accentColors[accentName] || accentColors.indigo
+  const layoutConfig = adminUser?.layout_config;
+
+  const currentAccent = layoutConfig?.primary_color 
+    ? { primary: layoutConfig.primary_color, hover: layoutConfig.primary_color, glow: 'rgba(0, 0, 0, 0.15)' } 
+    : (accentColors[accentName] || accentColors.indigo);
+
+  const sidebarBg = layoutConfig?.sidebar_bg_color 
+    ? layoutConfig.sidebar_bg_color 
+    : `linear-gradient(180deg, ${hexToRgba(currentAccent.primary, 0.22)} 0%, white 30%, ${hexToRgba(currentAccent.primary, 0.12)} 100%)`;
 
   useEffect(() => {
     document.documentElement.style.setProperty('--accent-theme-color', currentAccent.primary)
     document.documentElement.style.setProperty('--primary-color', currentAccent.primary)
     document.documentElement.style.setProperty('--primary-hover', currentAccent.hover)
     document.documentElement.style.setProperty('--primary-glow', currentAccent.glow)
-  }, [accentName])
+
+    let link = document.querySelector("link[rel~='icon']");
+    if (!link) {
+      link = document.createElement('link');
+      link.rel = 'icon';
+      document.head.appendChild(link);
+    }
+    
+    if (layoutConfig?.favicon) {
+      link.href = layoutConfig.favicon;
+    } else {
+      link.href = '/hireiq.png';
+    }
+  }, [accentName, layoutConfig])
 
   // Initial load and WebSocket setup
   useEffect(() => {
@@ -519,13 +540,14 @@ export default function SuperAdminLayout() {
         </div>
 
         {/* NEW SHADCN SIDEBAR */}
-        <Sidebar
-          className="border-r border-slate-200/50 z-20 overflow-hidden"
-          style={{
-            background: `linear-gradient(180deg, ${hexToRgba(currentAccent.primary, 0.22)} 0%, white 30%, ${hexToRgba(currentAccent.primary, 0.12)} 100%)`
-          }}
-          collapsible="icon"
-        >
+        {layoutConfig?.layout_type !== "navbar" && (
+          <Sidebar
+            className="border-r border-slate-200/50 z-20 overflow-hidden"
+            style={{
+              background: sidebarBg
+            }}
+            collapsible="icon"
+          >
           {/* Accent top strip */}
           <div
             className="absolute top-0 left-0 right-0 h-0.5 z-10 transition-all duration-700"
@@ -653,6 +675,7 @@ export default function SuperAdminLayout() {
             </button>
           </SidebarFooter>
         </Sidebar>
+        )}
 
         {/* Main Content Wrapper */}
         <div className="flex-1 flex flex-col min-w-0 h-screen overflow-hidden relative z-10">
@@ -660,7 +683,25 @@ export default function SuperAdminLayout() {
           <header className="sticky top-0 z-30 border-b border-slate-200/60 bg-white/60 backdrop-blur-xl flex items-center justify-between px-6 h-16 shadow-sm shrink-0">
             {/* Left Side: Brand & Toggles */}
             <div className="flex items-center gap-6">
-              <SidebarTrigger className="-ml-2 md:mr-2 text-slate-500 hover:text-slate-800 transition-colors" />
+              {layoutConfig?.layout_type !== "navbar" && (
+                <SidebarTrigger className="-ml-2 md:mr-2 text-slate-500 hover:text-slate-800 transition-colors" />
+              )}
+              
+              {layoutConfig?.layout_type === "navbar" && (
+                <div className="flex items-center gap-3 border-r border-slate-200/60 pr-6 mr-2">
+                  <div
+                    className="grid h-8 w-8 place-items-center rounded-lg text-white shadow-sm transition-all duration-500"
+                    style={{ background: `linear-gradient(135deg, ${currentAccent.primary}, ${currentAccent.hover})` }}
+                  >
+                    <Zap className="h-4 w-4" />
+                  </div>
+                  <div className="leading-tight hidden sm:block">
+                    <div className="text-sm font-semibold text-slate-800">HireIQ</div>
+                    <div className="text-[11px] font-medium" style={{ color: currentAccent.primary }}>Super Admin</div>
+                  </div>
+                </div>
+              )}
+
               <h2 className="text-[17px] font-bold text-slate-800 hidden sm:block">SuperAdmin Management</h2>
 
               {/* Theme Toggle — single button + popover */}
@@ -777,6 +818,67 @@ export default function SuperAdminLayout() {
               </div>
             </div>
           </header>
+
+          {/* Horizontal Navbar (Navbar Layout) */}
+          {layoutConfig?.layout_type === "navbar" && (
+            <div 
+              className="flex items-center gap-1 px-6 h-14 border-t border-slate-200/40 overflow-x-auto hide-scrollbar z-30 sticky top-[64px]" 
+              style={{ background: sidebarBg }}
+            >
+              {navItems.map((item) => {
+                const isActive = location.pathname.startsWith(item.path);
+                return (
+                  <NavLink
+                    key={item.id}
+                    to={item.path}
+                    className={`flex items-center gap-2 rounded-lg px-3 py-2 text-sm font-medium transition-all duration-200 whitespace-nowrap shrink-0 ${
+                      isActive
+                        ? '!text-white text-white font-semibold shadow-md'
+                        : 'text-slate-600 hover:text-slate-900'
+                    }`}
+                    style={{
+                      background: isActive
+                        ? `linear-gradient(135deg, ${currentAccent.primary} 0%, ${currentAccent.hover} 100%)`
+                        : 'transparent',
+                      boxShadow: isActive ? `0 4px 14px ${hexToRgba(currentAccent.primary, 0.35)}` : 'none',
+                      color: isActive ? '#ffffff' : undefined,
+                    }}
+                    onMouseEnter={(e) => {
+                      if (!isActive) {
+                        e.currentTarget.style.background = hexToRgba(currentAccent.primary, 0.10)
+                        e.currentTarget.style.color = currentAccent.primary
+                      }
+                    }}
+                    onMouseLeave={(e) => {
+                      if (!isActive) {
+                        e.currentTarget.style.background = 'transparent'
+                        e.currentTarget.style.color = ''
+                      }
+                    }}
+                  >
+                    {item.icon && <item.icon size={15} className={`shrink-0 ${isActive ? '!text-white text-white' : ''}`} />}
+                    <span>{item.label}</span>
+                  </NavLink>
+                );
+              })}
+              <div className="ml-auto flex items-center gap-2 pl-4 border-l border-slate-200/50">
+                <button
+                  onClick={() => dispatch(setLiveResultsModalOpen(true))}
+                  className="flex items-center gap-2 rounded-lg px-3 py-2 text-sm font-medium transition-all duration-200 text-slate-500 hover:bg-slate-100 hover:text-slate-800 whitespace-nowrap shrink-0"
+                >
+                  <Radio size={15} />
+                  Live Results
+                </button>
+                <button
+                  onClick={() => setShowCreditsModal(true)}
+                  className="flex items-center gap-2 rounded-lg px-3 py-2 text-sm font-medium transition-all duration-200 text-slate-500 hover:bg-slate-100 hover:text-slate-800 whitespace-nowrap shrink-0"
+                >
+                  <Coins size={15} />
+                  Available Credits
+                </button>
+              </div>
+            </div>
+          )}
 
           {/* Main Content */}
           <main className="flex-1 overflow-y-auto bg-transparent relative">
