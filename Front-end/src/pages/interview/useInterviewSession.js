@@ -269,6 +269,7 @@ export const useInterviewSession = (sessionId, interviewType, startRoundTwo) => 
 
   // Speech Recognition Reference
   const recognitionRef = useRef(null)
+  const isRecognitionActiveRef = useRef(false)
   const isSpeechRecordingRef = useRef(false)
   const isTTSPlayingRef = useRef(false) // blocks rec.onend auto-restart during TTS playback
   const lastSpeechActivityRef = useRef(Date.now())
@@ -282,6 +283,20 @@ export const useInterviewSession = (sessionId, interviewType, startRoundTwo) => 
 
   const whisperAudioChunksRef = useRef([])
   const whisperPauseTimeoutRef = useRef(null)
+
+  // ── Real-time segmented Whisper transcription ──
+  const whisperFinalizedTranscriptRef = useRef('')   // committed, Whisper-verified text
+  const segmentRecorderRef = useRef(null)
+  const segmentChunksRef = useRef([])
+  const segmentHasSpeechRef = useRef(false)
+  const segmentPeakRmsRef = useRef(0)
+  const segmentStartTimeRef = useRef(0)
+  const segmentCuttingRef = useRef(false)             // prevents overlapping cut operations
+  const segmentTranscribeChainRef = useRef(Promise.resolve()) // serializes Whisper calls in order
+  const liveInterimGhostRef = useRef('')              // Web Speech "ghost" text, not committed
+  const MIN_SEGMENT_MS = 700       // don't cut segments shorter than this
+  const SEGMENT_SILENCE_MS = 900   // silence duration that triggers a cut
+  const SEGMENT_MIN_PEAK_RMS = 0.015 // below this, it's just room noise — never transcribe
   // Refs that hold session-data values used in async transcription callbacks.
   // Using refs (not state) prevents the stale-closure / race-condition where
   // sessionDetail state is not yet populated when the MediaRecorder onstop fires.
@@ -957,62 +972,293 @@ export const useInterviewSession = (sessionId, interviewType, startRoundTwo) => 
     setFullscreenWarning(false)
   }
 
-  const startWhisperRecorder = (stream) => {
-    if (!stream || stream.getAudioTracks().length === 0) return
-    try {
-      if (whisperMediaRecorderRef.current && whisperMediaRecorderRef.current.state !== 'inactive') {
-        try { whisperMediaRecorderRef.current.stop() } catch (_) { }
+  // ── Robust Non-Duplicating Transcript Merger ──
+  const mergeTranscripts = (accumulated, sessionFinal, sessionInterim) => {
+    const acc = (accumulated || '').trim()
+    const sFinal = (sessionFinal || '').trim()
+    const sInterim = (sessionInterim || '').trim()
+
+    let committed = acc
+
+    if (sFinal) {
+      if (!committed) {
+        committed = sFinal
+      } else if (sFinal.toLowerCase().startsWith(committed.toLowerCase())) {
+        committed = sFinal
+      } else if (committed.toLowerCase().endsWith(sFinal.toLowerCase())) {
+        // already includes sFinal
+      } else {
+        // Find longest matching suffix of committed with prefix of sFinal
+        const accWords = committed.split(/\s+/)
+        const finalWords = sFinal.split(/\s+/)
+        let overlap = 0
+        for (let len = Math.min(accWords.length, finalWords.length); len > 0; len--) {
+          const suffix = accWords.slice(-len).join(' ').toLowerCase()
+          const prefix = finalWords.slice(0, len).join(' ').toLowerCase()
+          if (suffix === prefix) {
+            overlap = len
+            break
+          }
+        }
+        if (overlap > 0) {
+          committed = [...accWords, ...finalWords.slice(overlap)].join(' ')
+        } else {
+          committed = `${committed} ${sFinal}`
+        }
       }
-      whisperAudioChunksRef.current = []
+    }
+
+    let full = committed
+    if (sInterim) {
+      if (!full.toLowerCase().endsWith(sInterim.toLowerCase())) {
+        full = full ? `${full} ${sInterim}` : sInterim
+      }
+    }
+
+    return { committed: committed.trim(), full: full.trim() }
+  }
+
+  const formatCandidateName = (text, candidateName) => {
+    if (!text || !candidateName || candidateName.toLowerCase() === 'candidate') return text
+    const cleanName = candidateName.trim()
+    if (!cleanName) return text
+
+    let formatted = text
+    // 1. Full name case-insensitive match
+    const escapedFull = cleanName.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
+    formatted = formatted.replace(new RegExp(`\\b${escapedFull}\\b`, 'gi'), cleanName)
+
+    // 2. Individual parts (e.g. first/last name)
+    const parts = cleanName.split(/\s+/).filter(p => p.length >= 2)
+    parts.forEach(p => {
+      const escaped = p.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
+      formatted = formatted.replace(new RegExp(`\\b${escaped}\\b`, 'gi'), p)
+    })
+
+    // 3. Normalize introductory phrases
+    formatted = formatted.replace(/\bmyself\s+/gi, 'Myself ')
+    formatted = formatted.replace(/\bmy name is\s+/gi, 'My name is ')
+    formatted = formatted.replace(/\bi am\s+/gi, 'I am ')
+
+    return formatted
+  }
+
+  // ── Segmented Whisper Capture System ──
+  const startSegmentedWhisperCapture = (stream) => {
+    if (!stream || stream.getAudioTracks().length === 0) return
+    whisperFinalizedTranscriptRef.current = ''
+    liveInterimGhostRef.current = ''
+    segmentHasSpeechRef.current = false
+    segmentPeakRmsRef.current = 0
+    beginNewSegment(stream)
+  }
+
+  const beginNewSegment = (stream) => {
+    try {
+      if (segmentRecorderRef.current && segmentRecorderRef.current.state !== 'inactive') {
+        try { segmentRecorderRef.current.stop() } catch (_) { }
+      }
+      segmentChunksRef.current = []
+      segmentHasSpeechRef.current = false
+      segmentPeakRmsRef.current = 0
+      segmentStartTimeRef.current = Date.now()
+
       const audioStream = new MediaStream(stream.getAudioTracks())
       const mimeCandidates = ['audio/webm;codecs=opus', 'audio/webm', 'audio/ogg;codecs=opus', 'audio/mp4']
-      const mime = mimeCandidates.find(value => {
-        try { return MediaRecorder.isTypeSupported(value) } catch (_) { return false }
+      const mime = mimeCandidates.find(v => {
+        try { return MediaRecorder.isTypeSupported(v) } catch (_) { return false }
       }) || ''
       const mr = new MediaRecorder(audioStream, mime ? { mimeType: mime } : undefined)
       mr.ondataavailable = e => {
-        if (e.data && e.data.size > 0) {
-          whisperAudioChunksRef.current.push(e.data)
-        }
+        if (e.data && e.data.size > 0) segmentChunksRef.current.push(e.data)
       }
-      mr.start(1000)
-      whisperMediaRecorderRef.current = mr
+      mr.start(250) // small timeslice so cuts are near-instant
+      segmentRecorderRef.current = mr
     } catch (err) {
-      console.warn("Standard interview whisper recorder start error:", err)
+      console.warn('[STT] Failed to start segment recorder:', err)
     }
+  }
+
+  // Called by the VAD tick() when candidate speaks (marks segment as non-empty)
+  const markSegmentHasSpeech = () => {
+    segmentHasSpeechRef.current = true
+  }
+
+  // Called by the VAD tick() after SEGMENT_SILENCE_MS of silence following speech
+  const cutCurrentSegment = (stream) => {
+    if (segmentCuttingRef.current) return
+    if (!segmentHasSpeechRef.current) return // nothing to send
+    if (Date.now() - segmentStartTimeRef.current < MIN_SEGMENT_MS) return
+    if (!segmentRecorderRef.current || segmentRecorderRef.current.state === 'inactive') return
+
+    segmentCuttingRef.current = true
+    const recorder = segmentRecorderRef.current
+    const chunksSnapshot = segmentChunksRef.current
+
+    const finish = () => {
+      segmentCuttingRef.current = false
+      // Immediately start the next segment so we never miss audio
+      if (isSpeechRecordingRef.current) beginNewSegment(stream)
+    }
+
+    recorder.onstop = () => {
+      const blob = new Blob(chunksSnapshot, { type: 'audio/webm' })
+      const hadRealSpeech = segmentPeakRmsRef.current >= SEGMENT_MIN_PEAK_RMS
+      if (blob.size < 2500 || !hadRealSpeech) { finish(); return } // silence/noise — never send to Whisper
+      // Serialize transcription calls so results commit in spoken order
+      segmentTranscribeChainRef.current = segmentTranscribeChainRef.current
+        .then(() => transcribeSegment(blob))
+        .catch(err => console.warn('[STT] Segment transcription failed:', err))
+      finish()
+    }
+    try { recorder.stop() } catch (_) { finish() }
+  }
+
+  const transcribeSegment = async (blob) => {
+    // Hard gate: if TTS is playing by the time this resolves, discard the segment
+    // This catches segments that were queued just before TTS started
+    if (isTTSPlayingRef.current) return
+    try {
+      const fd = new FormData()
+      fd.append('file', blob, 'segment.webm')
+      const currentLangName = sessionDetail?.language || interviewLanguageRef.current || 'English'
+      const langCode = (langMap[currentLangName] || 'en-US').split('-')[0]
+      const rawTerms = [
+        sessionDetail?.company_name,
+        sessionDetail?.company,
+        sessionDetail?.role,
+        sessionDetail?.job_role,
+        sessionDetail?.interview_title,
+        ...(Array.isArray(sessionDetail?.skills) ? sessionDetail.skills : (sessionDetail?.skills ? sessionDetail.skills.split(',') : [])),
+        ...(Array.isArray(sessionDetail?.known_terms) ? sessionDetail.known_terms : [])
+      ].filter(Boolean).map(s => String(s).trim()).filter(s => s.length > 1)
+      const cleanKnownTerms = Array.from(new Set(rawTerms)).join(', ')
+      if (cleanKnownTerms) {
+        fd.append('known_terms', cleanKnownTerms)
+      }
+      const res = await api.post(`/stt?language=${langCode}`, fd, {
+        headers: { 'Content-Type': 'multipart/form-data' },
+        timeout: 10000
+      })
+      // Second check: discard result if TTS fired while we were waiting for Whisper
+      if (isTTSPlayingRef.current) return
+      const text = res.data?.transcript?.trim()
+      if (!text) return
+
+      const cName = sessionDetail?.candidate_name || sessionDetail?.name || ''
+      const prev = whisperFinalizedTranscriptRef.current
+      const merged = mergeSegmentChunks(prev, text)
+      whisperFinalizedTranscriptRef.current = merged
+
+      // Clear the ghost text for this segment now that the real text landed
+      liveInterimGhostRef.current = ''
+      setTranscriptionText(formatCandidateName(merged, cName))
+    } catch (err) {
+      console.warn('[STT] transcribeSegment error:', err)
+    }
+  }
+
+  // ── Merge consecutive Whisper segment chunks ──
+  // Each Whisper call covers a 700ms-3s audio slice. Consecutive slices
+  // OVERLAP at the silence boundary — naive concat would double-count the
+  // overlap. Detect the overlap word-prefix and append only the new tail.
+  const mergeSegmentChunks = (previous, fresh) => {
+    const prev = (previous || '').trim()
+    const next = (fresh || '').trim()
+    if (!prev) return next
+    if (!next) return prev
+
+    // Fresh chunk fully contains previous (rare, but happens when the
+    // previous chunk was a short fragment)
+    if (next.toLowerCase().includes(prev.toLowerCase())) {
+      return next
+    }
+
+    // Exact word-suffix / word-prefix overlap
+    const prevWords = prev.split(/\s+/)
+    const nextWords = next.split(/\s+/)
+    const maxOverlap = Math.min(prevWords.length, nextWords.length, 30)
+
+    for (let len = maxOverlap; len > 0; len--) {
+      const suffix = prevWords.slice(-len).join(' ').toLowerCase()
+      const prefix = nextWords.slice(0, len).join(' ').toLowerCase()
+      if (suffix === prefix) {
+        const newTail = nextWords.slice(len).join(' ')
+        if (!newTail) return prev
+        return prev + ' ' + newTail
+      }
+    }
+
+    // Fuzzy fallback — tolerate a couple of mismatches at the boundary
+    for (let len = maxOverlap; len >= 3; len--) {
+      const suffixWords = prevWords.slice(-len)
+      const prefixWords = nextWords.slice(0, len)
+      let matches = 0
+      for (let i = 0; i < len; i++) {
+        if (suffixWords[i].toLowerCase() === prefixWords[i].toLowerCase()) matches++
+      }
+      if (matches >= Math.max(2, Math.floor(len * 0.8))) {
+        const newTail = nextWords.slice(matches).join(' ')
+        if (!newTail) return prev
+        return prev + ' ' + newTail
+      }
+    }
+
+    // No overlap detected — plain append with a space
+    return prev + ' ' + next
+  }
+
+  // Flushes any in-progress segment and waits for all pending Whisper calls
+  // to finish. Call this before saving an answer (Next / Submit / Round transition).
+  const flushWhisperTranscription = async () => {
+    if (segmentRecorderRef.current && segmentRecorderRef.current.state !== 'inactive') {
+      const recorder = segmentRecorderRef.current
+      const chunksSnapshot = segmentChunksRef.current
+      const hadSpeech = segmentHasSpeechRef.current && (segmentPeakRmsRef.current >= SEGMENT_MIN_PEAK_RMS)
+      await new Promise(resolve => {
+        recorder.onstop = () => {
+          if (hadSpeech) {
+            const blob = new Blob(chunksSnapshot, { type: 'audio/webm' })
+            if (blob.size >= 2500) {
+              segmentTranscribeChainRef.current = segmentTranscribeChainRef.current
+                .then(() => transcribeSegment(blob))
+                .catch(() => {})
+            }
+          }
+          resolve()
+        }
+        try { recorder.stop() } catch (_) { resolve() }
+      })
+    }
+    await segmentTranscribeChainRef.current
+    return whisperFinalizedTranscriptRef.current.trim()
   }
 
   const commitSpeechSessionToAccumulator = () => {
-    const finalChunk = (currentSessionFinalRef.current || '').trim()
-    if (finalChunk) {
-      if (!accumulatedTranscriptRef.current) {
-        accumulatedTranscriptRef.current = finalChunk
-      } else if (!accumulatedTranscriptRef.current.endsWith(finalChunk)) {
-        accumulatedTranscriptRef.current = `${accumulatedTranscriptRef.current} ${finalChunk}`.trim()
-      }
-      currentSessionFinalRef.current = ''
-    }
-    const interimChunk = (interimTextRef.current || '').trim()
-    if (interimChunk) {
-      if (!accumulatedTranscriptRef.current) {
-        accumulatedTranscriptRef.current = interimChunk
-      } else if (!accumulatedTranscriptRef.current.endsWith(interimChunk)) {
-        accumulatedTranscriptRef.current = `${accumulatedTranscriptRef.current} ${interimChunk}`.trim()
-      }
-      interimTextRef.current = ''
-    }
+    const { committed } = mergeTranscripts(
+      accumulatedTranscriptRef.current,
+      currentSessionFinalRef.current,
+      interimTextRef.current
+    )
+    accumulatedTranscriptRef.current = committed
+    currentSessionFinalRef.current = ''
+    interimTextRef.current = ''
   }
 
-  const initSpeechRecognition = () => {
+  const startOrRestartSpeechRecognition = () => {
+    if (isTTSPlayingRef.current || !isSpeechRecordingRef.current) return null
+
+    // If recognition is already active and healthy, return existing instance
+    if (isRecognitionActiveRef.current && recognitionRef.current) {
+      return recognitionRef.current
+    }
+
     if (!('webkitSpeechRecognition' in window || 'SpeechRecognition' in window)) {
       console.warn("Speech recognition not supported in this browser.")
       return null
     }
 
-    // Always commit any captured speech before replacing old recognizer instance!
-    commitSpeechSessionToAccumulator()
-
-    // Clean up previous instance cleanly before creating a new one
+    // Clean up previous instance cleanly
     if (recognitionRef.current) {
       const oldRec = recognitionRef.current
       recognitionRef.current = null
@@ -1025,110 +1271,160 @@ export const useInterviewSession = (sessionId, interviewType, startRoundTwo) => 
       } catch (_) { }
     }
 
-    const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition
-    const rec = new SpeechRecognition()
-    rec.continuous = true  // Keep listening continuously without restarting
-    rec.interimResults = true
-    rec.maxAlternatives = 1
-    const currentLangName = sessionDetail?.language || interviewLanguageRef.current || 'English'
-    const targetLang = langMap[currentLangName] || 'en-IN'
-    rec.lang = targetLang
+    try {
+      const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition
+      const rec = new SpeechRecognition()
+      rec.continuous = true  // Keep listening continuously
+      rec.interimResults = true
+      rec.maxAlternatives = 1
+      const currentLangName = sessionDetail?.language || interviewLanguageRef.current || 'English'
+      const targetLang = langMap[currentLangName] || 'en-IN'
+      rec.lang = targetLang
 
-    rec.onstart = () => {
-      lastSpeechActivityRef.current = Date.now()
-      lastSpeechTimeRef.current = Date.now()
-    }
-
-    rec.onend = () => {
-      // Commit the current session's final text into accumulated transcript
-      commitSpeechSessionToAccumulator()
-      setInterimTranscriptText('')
-      if (accumulatedTranscriptRef.current) {
-        setTranscriptionText(accumulatedTranscriptRef.current)
+      rec.onstart = () => {
+        isRecognitionActiveRef.current = true
+        lastSpeechActivityRef.current = Date.now()
+        lastSpeechTimeRef.current = Date.now()
       }
 
-      // Continuous auto-restart when listening is active and AI is not speaking
-      if (isSpeechRecordingRef.current && !isTTSPlayingRef.current) {
-        setTimeout(() => {
-          if (!isSpeechRecordingRef.current || isTTSPlayingRef.current) return
-          try {
-            if (!recognitionRef.current || recognitionRef.current === rec) {
-              const freshRec = initSpeechRecognition()
-              freshRec?.start()
-            }
-          } catch (e) {
-            console.warn('[Speech] auto-restart start failed:', e)
+      rec.onend = () => {
+        isRecognitionActiveRef.current = false
+        // Don't restore text if TTS is playing — the display was intentionally cleared
+        if (!isTTSPlayingRef.current) {
+          commitSpeechSessionToAccumulator()
+          setInterimTranscriptText('')
+          liveInterimGhostRef.current = ''
+          // Whisper is the persistent source of truth. Only fall back to the
+          // Web Speech accumulator when Whisper hasn't produced anything yet.
+          const whisperVal = whisperFinalizedTranscriptRef.current.trim()
+          const fallback = accumulatedTranscriptRef.current.trim()
+          if (whisperVal) {
+            setTranscriptionText(formatCandidateName(whisperVal, sessionDetail?.candidate_name || sessionDetail?.name || ''))
+          } else if (fallback) {
+            setTranscriptionText(formatCandidateName(fallback, sessionDetail?.candidate_name || sessionDetail?.name || ''))
           }
-        }, 150)
-      }
-    }
-
-    rec.onresult = (event) => {
-      const now = Date.now()
-      lastSpeechActivityRef.current = now
-      lastSpeechTimeRef.current = now
-
-      let sessionFinal = ''
-      let sessionInterim = ''
-      for (let i = 0; i < event.results.length; i++) {
-        const res = event.results[i]
-        if (res.isFinal) {
-          sessionFinal += (res[0].transcript || '').trim() + ' '
         } else {
-          sessionInterim += (res[0].transcript || '')
+          setInterimTranscriptText('')
+          liveInterimGhostRef.current = ''
         }
-      }
 
-      currentSessionFinalRef.current = sessionFinal.trim()
-      interimTextRef.current = sessionInterim.trim()
-      setInterimTranscriptText('')
-
-      const fullCommitted = [accumulatedTranscriptRef.current, currentSessionFinalRef.current].filter(Boolean).join(' ').trim()
-      const fullDisplay = [fullCommitted, interimTextRef.current].filter(Boolean).join(' ').trim()
-
-      if (fullDisplay) {
-        setTranscriptionText(fullDisplay)
-      }
-    }
-
-    rec.onerror = (e) => {
-      if (e.error === 'not-allowed' || e.error === 'service-not-allowed') {
-        console.error("Microphone permission denied:", e.error)
-        return
-      }
-      if (e.error === 'no-speech' || e.error === 'aborted') {
-        return
-      }
-      if (e.error === 'network') {
+        // Seamless auto-revive after silence or Chrome continuous audio timeout
         if (isSpeechRecordingRef.current && !isTTSPlayingRef.current) {
           setTimeout(() => {
-            if (isSpeechRecordingRef.current && !isTTSPlayingRef.current) {
-              const freshRec = initSpeechRecognition()
-              try { freshRec?.start() } catch (_) { }
+            if (isSpeechRecordingRef.current && !isTTSPlayingRef.current && !isRecognitionActiveRef.current) {
+              startOrRestartSpeechRecognition()
             }
-          }, 1000)
+          }, 60)
         }
       }
-    }
 
-    recognitionRef.current = rec
-    return rec
+      rec.onresult = (event) => {
+        // ── CRITICAL: If AI is reading the question, ignore computer audio echo! ──
+        if (isTTSPlayingRef.current) return
+
+        isRecognitionActiveRef.current = true
+        const now = Date.now()
+        lastSpeechActivityRef.current = now
+        lastSpeechTimeRef.current = now
+
+        let sessionFinal = ''
+        let sessionInterim = ''
+        for (let i = 0; i < event.results.length; i++) {
+          const res = event.results[i]
+          if (res.isFinal) {
+            sessionFinal += (res[0].transcript || '').trim() + ' '
+          } else {
+            sessionInterim += (res[0].transcript || '')
+          }
+        }
+
+        currentSessionFinalRef.current = sessionFinal.trim()
+        interimTextRef.current = sessionInterim.trim()
+        setInterimTranscriptText('')
+
+        // Web Speech is display-only "ghost" text for the *current* in-progress segment.
+        // Gate: ignore Web Speech hallucination if no real acoustic energy occurred
+        if (segmentPeakRmsRef.current < 0.02 && audioRmsRef.current < 0.02) {
+          return
+        }
+
+        const ghost = (sessionFinal + ' ' + sessionInterim).trim()
+        liveInterimGhostRef.current = ghost
+        const cName = sessionDetail?.candidate_name || sessionDetail?.name || ''
+        // Show Web Speech ghost as a LIVE PREVIEW only — it should NOT
+        // modify Whisper's committed transcript (that's done in
+        // `mergeSegmentChunks` when the next Whisper chunk arrives).
+        // We just append it for the user to see, and tolerate that it may
+        // overlap with the Whisper text (Whisper is the persistent source).
+        const whisperVal = whisperFinalizedTranscriptRef.current.trim()
+        let display
+        if (!whisperVal) {
+          display = ghost
+        } else if (!ghost) {
+          display = whisperVal
+        } else {
+          // Show Whisper committed text plus a preview hint for any words
+          // that Web Speech is hearing RIGHT NOW that Whisper hasn't yet
+          // transcribed. Only append ghost words not already in Whisper.
+          const ghostWords = ghost.split(/\s+/).filter(Boolean)
+          const existing = whisperVal.toLowerCase()
+          const newWords = []
+          for (const w of ghostWords) {
+            if (!existing.includes(w.toLowerCase().replace(/[^a-z0-9]/g, ''))) {
+              newWords.push(w)
+            }
+          }
+          display = newWords.length ? `${whisperVal} ${newWords.join(' ')}` : whisperVal
+        }
+        if (display) {
+          setTranscriptionText(formatCandidateName(display, cName))
+        }
+      }
+
+      rec.onerror = (e) => {
+        isRecognitionActiveRef.current = false
+        if (e.error === 'not-allowed' || e.error === 'service-not-allowed') {
+          console.error("Microphone permission denied:", e.error)
+          return
+        }
+        // 'no-speech' and 'aborted' are normal on long pauses — let the
+        // watchdog/onend cycle handle restart, don't double-restart here.
+        if (e.error === 'no-speech' || e.error === 'aborted') return
+        // Transient errors — restart after a brief delay
+        if (isSpeechRecordingRef.current && !isTTSPlayingRef.current) {
+          setTimeout(() => {
+            if (isSpeechRecordingRef.current && !isTTSPlayingRef.current && !isRecognitionActiveRef.current) {
+              startOrRestartSpeechRecognition()
+            }
+          }, 250)
+        }
+      }
+
+      recognitionRef.current = rec
+      rec.start()
+      return rec
+    } catch (err) {
+      isRecognitionActiveRef.current = false
+      // If recognition.start() threw because browser audio channel was busy, retry in 200ms
+      setTimeout(() => {
+        if (isSpeechRecordingRef.current && !isTTSPlayingRef.current && !isRecognitionActiveRef.current) {
+          startOrRestartSpeechRecognition()
+        }
+      }, 200)
+      return null
+    }
   }
 
   // Speech Recognition Watchdog — safely ensures recognition is running without killing active sessions
   useEffect(() => {
     speechWatchdogRef.current = setInterval(() => {
       if (isSpeechRecordingRef.current && !isTTSPlayingRef.current) {
-        // If recognition reference was lost or dropped, safely revive it without wiping accumulator
-        if (!recognitionRef.current) {
-          lastSpeechActivityRef.current = Date.now()
-          const freshRec = initSpeechRecognition()
-          try {
-            freshRec?.start()
-          } catch (_) { }
+        if (!isRecognitionActiveRef.current || !recognitionRef.current) {
+          startOrRestartSpeechRecognition()
         }
       }
-    }, 5_000)
+    }, 10000)  // 10s is enough — Chrome continuous audio limit is ~60s and we
+               // don't want to restart STT during a perfectly healthy session
 
     return () => {
       clearInterval(speechWatchdogRef.current)
@@ -1176,26 +1472,31 @@ export const useInterviewSession = (sessionId, interviewType, startRoundTwo) => 
         // Treat RMS > 0.03 as speech and bump the silence timer
         if (rms > 0.03) {
           lastSpeechTimeRef.current = now
+          if (isSpeechRecordingRef.current && !isTTSPlayingRef.current) {
+            markSegmentHasSpeech()
+            if (rms > segmentPeakRmsRef.current) segmentPeakRmsRef.current = rms
+          }
+        } else if (
+          isSpeechRecordingRef.current &&
+          !isTTSPlayingRef.current &&
+          segmentHasSpeechRef.current &&
+          now - lastSpeechTimeRef.current >= SEGMENT_SILENCE_MS
+        ) {
+          cutCurrentSegment(stream)
         }
 
-        // VAD (Voice Activity Detection) — used only for proctoring noise alerts.
-        // Whisper MediaRecorder path is disabled: Web Speech API is now the sole
-        // transcript source. This eliminates the hallucination and latency issues
-        // that made transcription appear inaccurate.
+        // Background noise detection (only when AI is not speaking AND candidate is not actively talking)
+        const isCandidateSpeaking = (now - lastSpeechActivityRef.current < 3500)
 
-        if (rms > 0.18 && now > noiseCooldownRef.current) {
+        if (!isTTSPlayingRef.current && !isCandidateSpeaking && rms > 0.14 && now > noiseCooldownRef.current) {
           noiseFrameCountRef.current++
         } else {
           noiseFrameCountRef.current = Math.max(0, noiseFrameCountRef.current - 2)
         }
 
-        if (noiseFrameCountRef.current >= 18) {
-          noiseCooldownRef.current = now + 5000
+        if (noiseFrameCountRef.current >= 35) {
+          noiseCooldownRef.current = now + 8000
           noiseFrameCountRef.current = 0
-          // recordAlertMetric must be called OUTSIDE the setState updater.
-          // setState updaters must be pure/synchronous; calling an async function
-          // inside one causes the promise to be silently dropped and React may
-          // invoke the updater multiple times (strict mode), duplicating the call.
           recordAlertMetric("noise_alert")
           setNoiseAlertCount(prev => {
             const next = prev + 1
@@ -1480,7 +1781,11 @@ export const useInterviewSession = (sessionId, interviewType, startRoundTwo) => 
       try {
         stream = await navigator.mediaDevices.getUserMedia({
           video: { width: { ideal: 720 }, height: { ideal: 1280 }, frameRate: 15 },
-          audio: true
+          audio: {
+            echoCancellation: true,
+            noiseSuppression: true,
+            autoGainControl: true
+          }
         })
       } catch (err) {
         console.error("Camera/Mic getUserMedia error:", err)
@@ -1624,11 +1929,8 @@ export const useInterviewSession = (sessionId, interviewType, startRoundTwo) => 
         elem.requestFullscreen().catch(err => console.log(err));
       }
 
-      initSpeechRecognition()
-      if (recognitionRef.current) {
-        isSpeechRecordingRef.current = true
-        recognitionRef.current.start()
-      }
+      isSpeechRecordingRef.current = true
+      startOrRestartSpeechRecognition()
 
       startBackgroundNoiseMonitor(stream)
 
@@ -1787,12 +2089,12 @@ export const useInterviewSession = (sessionId, interviewType, startRoundTwo) => 
     }
   }
 
-  const startSilenceTimer = (delayMs = 10000) => {
+  const startSilenceTimer = (delayMs = 60000) => {
     if (!isRoundTwoRef.current) {
       if (silenceIntervalRef.current) clearInterval(silenceIntervalRef.current)
       lastSpeechTimeRef.current = Date.now()
       silenceIntervalRef.current = setInterval(() => {
-        // Only trigger if no speech (RMS > 0.15) was detected in the last delayMs
+        // Only trigger if no speech was detected for the full delayMs duration (default 60s)
         if (Date.now() - lastSpeechTimeRef.current >= delayMs) {
           clearInterval(silenceIntervalRef.current)
           if (handleNextQuestionRef.current) handleNextQuestionRef.current()
@@ -1827,10 +2129,22 @@ export const useInterviewSession = (sessionId, interviewType, startRoundTwo) => 
 
     // ── PAUSE speech recognition so the AI's own voice is NOT transcribed ──
     isTTSPlayingRef.current = true
-    commitSpeechSessionToAccumulator()
+    isSpeechRecordingRef.current = false
+    accumulatedTranscriptRef.current = ''
+    currentSessionFinalRef.current = ''
+    interimTextRef.current = ''
+    whisperAudioChunksRef.current = []
+    whisperFinalizedTranscriptRef.current = ''
+    liveInterimGhostRef.current = ''
+    segmentHasSpeechRef.current = false
+    segmentPeakRmsRef.current = 0
+    setTranscriptionText('')
+    setInterimTranscriptText('')
+    // Stop Web Speech recognizer
     if (recognitionRef.current) {
       const oldRec = recognitionRef.current
       recognitionRef.current = null
+      isRecognitionActiveRef.current = false
       try {
         oldRec.onstart = null
         oldRec.onend = null
@@ -1839,7 +2153,28 @@ export const useInterviewSession = (sessionId, interviewType, startRoundTwo) => 
         oldRec.abort()
       } catch (_) { }
     }
-    setInterimTranscriptText('')
+    // Stop the Whisper segment recorder — critical to prevent TTS audio being sent to Whisper
+    if (segmentRecorderRef.current && segmentRecorderRef.current.state !== 'inactive') {
+      const oldSegRec = segmentRecorderRef.current
+      segmentRecorderRef.current = null
+      try {
+        oldSegRec.ondataavailable = null
+        oldSegRec.onstop = null
+        oldSegRec.stop()
+      } catch (_) { }
+    }
+    // Reset the transcription chain — discard any in-flight segments from the previous question
+    segmentCuttingRef.current = false
+    segmentChunksRef.current = []
+    segmentTranscribeChainRef.current = Promise.resolve()
+    // ── NUCLEAR MIC MUTE: disable the audio track itself so TTS speaker output
+    // CANNOT physically reach the Web Speech engine or any recorder, regardless
+    // of whether software AEC is working (critical for speaker users) ──
+    if (mediaStreamRef.current) {
+      mediaStreamRef.current.getAudioTracks().forEach(track => {
+        track.enabled = false
+      })
+    }
 
     // --- High-Quality TTS (Backend: Cartesia or Edge TTS) ---
     try {
@@ -1889,28 +2224,62 @@ export const useInterviewSession = (sessionId, interviewType, startRoundTwo) => 
         source.connect(audioMixerDestRef.current) // Send to screen recorder mixer
       }
 
-      audio.onended = () => {
+      let audioEnded = false
+      const handleAudioFinished = () => {
+        if (audioEnded) return
+        audioEnded = true
         // Revoke object URL after playback to free browser memory.
         if (!ttsCacheRef.current.has(ttsCacheKey)) {
           URL.revokeObjectURL(url)
         }
-        // ── RESTART speech recognition cleanly with fresh instance after AI finishes speaking ──
+        // ── Clean transcript & restart speech recognition freshly for candidate response ──
+        accumulatedTranscriptRef.current = ''
+        currentSessionFinalRef.current = ''
+        interimTextRef.current = ''
+        whisperAudioChunksRef.current = []
+        whisperFinalizedTranscriptRef.current = ''
+        liveInterimGhostRef.current = ''
+        segmentHasSpeechRef.current = false
+        setTranscriptionText('')
         isTTSPlayingRef.current = false
-        isSpeechRecordingRef.current = true
-        lastSpeechActivityRef.current = Date.now()
-        const freshRec = initSpeechRecognition()
-        try {
-          freshRec?.start()
-        } catch (_) { }
-        startSilenceTimer(10000)
-        if (mediaStreamRef.current) {
-          startWhisperRecorder(mediaStreamRef.current)
-        }
+        // 500ms grace period — lets speaker echo/reverb tail die out before we
+        // start listening again, so the AI's own voice doesn't get transcribed
+        // as the candidate's answer.
+        setTimeout(() => {
+          if (isTTSPlayingRef.current || speakRequestIdRef.current !== reqId) return
+          // Re-enable the microphone track now that the echo tail has died
+          if (mediaStreamRef.current) {
+            mediaStreamRef.current.getAudioTracks().forEach(track => {
+              track.enabled = true
+            })
+          }
+          isSpeechRecordingRef.current = true
+          lastSpeechActivityRef.current = Date.now()
+          startOrRestartSpeechRecognition()
+          startSilenceTimer(60000)
+          if (mediaStreamRef.current) {
+            startSegmentedWhisperCapture(mediaStreamRef.current)
+          }
+        }, 500)
       }
+
+      audio.onended = handleAudioFinished
+      audio.onerror = handleAudioFinished
+
+      // Safety timeout: unlock recognition if audio playback stalls
+      const maxAudioMs = Math.max(6000, (text.split(' ').length * 500) + 3000)
+      setTimeout(() => {
+        if (speakRequestIdRef.current === reqId && isTTSPlayingRef.current) {
+          handleAudioFinished()
+        }
+      }, maxAudioMs)
 
       // Double check reqId before playing just in case
       if (speakRequestIdRef.current === reqId) {
-        audio.play()
+        audio.play().catch((playErr) => {
+          console.warn("Audio autoplay blocked or failed, resuming recognition immediately:", playErr)
+          handleAudioFinished()
+        })
       }
       return // Successfully used backend high-quality TTS
     } catch (err) {
@@ -1921,6 +2290,15 @@ export const useInterviewSession = (sessionId, interviewType, startRoundTwo) => 
     // If browser speechSynthesis is also missing, set a 15s fallback silence timer
     // so the interview never gets permanently stuck.
     if (!window.speechSynthesis) {
+      isTTSPlayingRef.current = false
+      isSpeechRecordingRef.current = true
+      if (mediaStreamRef.current) {
+        mediaStreamRef.current.getAudioTracks().forEach(track => { track.enabled = true })
+      }
+      startOrRestartSpeechRecognition()
+      if (mediaStreamRef.current) {
+        startSegmentedWhisperCapture(mediaStreamRef.current)
+      }
       startSilenceTimer(15000)
       return
     }
@@ -1945,26 +2323,53 @@ export const useInterviewSession = (sessionId, interviewType, startRoundTwo) => 
         utterance.voice = preferredVoice
       }
 
-      utterance.onend = () => {
-        // ── RESTART recognition after browser TTS fallback finishes ──
+      let utteranceEnded = false
+      const handleUtteranceFinished = () => {
+        if (utteranceEnded) return
+        utteranceEnded = true
         isTTSPlayingRef.current = false
-        isSpeechRecordingRef.current = true
-        lastSpeechActivityRef.current = Date.now()
-        const freshRec = initSpeechRecognition()
-        try {
-          freshRec?.start()
-        } catch (_) { }
-        startSilenceTimer(10000)
-        if (mediaStreamRef.current) {
-          startWhisperRecorder(mediaStreamRef.current)
-        }
+        // 500ms grace period — lets speaker echo/reverb tail die out before we
+        // start listening again, so the AI's own voice doesn't get transcribed
+        // as the candidate's answer.
+        setTimeout(() => {
+          if (isTTSPlayingRef.current || speakRequestIdRef.current !== reqId) return
+          // Re-enable the microphone track now that the echo tail has died
+          if (mediaStreamRef.current) {
+            mediaStreamRef.current.getAudioTracks().forEach(track => {
+              track.enabled = true
+            })
+          }
+          isSpeechRecordingRef.current = true
+          lastSpeechActivityRef.current = Date.now()
+          whisperFinalizedTranscriptRef.current = ''
+          liveInterimGhostRef.current = ''
+          segmentHasSpeechRef.current = false
+          startOrRestartSpeechRecognition()
+          startSilenceTimer(60000)
+          if (mediaStreamRef.current) {
+            startSegmentedWhisperCapture(mediaStreamRef.current)
+          }
+        }, 500)
       }
+
+      utterance.onend = handleUtteranceFinished
+      utterance.onerror = handleUtteranceFinished
+
+      // Safety timeout for browser speech synthesis GC bug
+      const maxUtteranceMs = Math.max(6000, (text.split(' ').length * 500) + 3000)
+      setTimeout(() => {
+        if (speakRequestIdRef.current === reqId && isTTSPlayingRef.current) {
+          handleUtteranceFinished()
+        }
+      }, maxUtteranceMs)
 
       window.speechSynthesis.speak(utterance)
     }
 
     if (window.speechSynthesis.getVoices().length === 0) {
       window.speechSynthesis.onvoiceschanged = setVoiceAndSpeak
+      // Fallback in case onvoiceschanged never fires
+      setTimeout(setVoiceAndSpeak, 250)
     } else {
       setVoiceAndSpeak()
     }
@@ -2034,26 +2439,9 @@ export const useInterviewSession = (sessionId, interviewType, startRoundTwo) => 
 
     let safeTranscript = (accumulatedTranscriptRef.current || transcriptionText || '').trim()
 
-    // Whisper STT fallback if Web Speech produced nothing
-    if (!safeTranscript && whisperAudioChunksRef.current.length > 0 && activeQuestion?.type !== 'coding') {
-      try {
-        const audioBlob = new Blob(whisperAudioChunksRef.current, { type: 'audio/webm' })
-        if (audioBlob.size > 3000) {
-          const fd = new FormData()
-          fd.append('file', audioBlob, 'answer.webm')
-          const currentLangName = sessionDetail?.language || interviewLanguageRef.current || 'English'
-          const langCode = (langMap[currentLangName] || 'en-US').split('-')[0]
-          const sttRes = await api.post(`/stt?language=${langCode}`, fd, {
-            headers: { 'Content-Type': 'multipart/form-data' },
-            timeout: 7000
-          })
-          if (sttRes.data?.transcript?.trim()) {
-            safeTranscript = sttRes.data.transcript.trim()
-          }
-        }
-      } catch (sttErr) {
-        console.warn("Groq Whisper STT fallback failed:", sttErr)
-      }
+    if (activeQuestion?.type !== 'coding') {
+      const flushed = await flushWhisperTranscription()
+      if (flushed) safeTranscript = flushed
     }
 
     // ── Save the final verbal answer before transitioning ────────────────────
@@ -2107,6 +2495,9 @@ export const useInterviewSession = (sessionId, interviewType, startRoundTwo) => 
     currentSessionFinalRef.current = ''
     interimTextRef.current = ''
     whisperAudioChunksRef.current = []
+    whisperFinalizedTranscriptRef.current = ''
+    liveInterimGhostRef.current = ''
+    segmentHasSpeechRef.current = false
     setTranscriptionText('')
     setInterimTranscriptText('')
     setCodeAnswer('')
@@ -2142,26 +2533,9 @@ export const useInterviewSession = (sessionId, interviewType, startRoundTwo) => 
 
       let safeTranscript = (accumulatedTranscriptRef.current || transcriptionText || '').trim()
 
-      // Whisper STT fallback if Web Speech produced nothing
-      if (!safeTranscript && whisperAudioChunksRef.current.length > 0 && currentQuestion.type !== 'coding') {
-        try {
-          const audioBlob = new Blob(whisperAudioChunksRef.current, { type: 'audio/webm' })
-          if (audioBlob.size > 3000) {
-            const fd = new FormData()
-            fd.append('file', audioBlob, 'answer.webm')
-            const currentLangName = sessionDetail?.language || interviewLanguageRef.current || 'English'
-            const langCode = (langMap[currentLangName] || 'en-US').split('-')[0]
-            const sttRes = await api.post(`/stt?language=${langCode}`, fd, {
-              headers: { 'Content-Type': 'multipart/form-data' },
-              timeout: 7000
-            })
-            if (sttRes.data?.transcript?.trim()) {
-              safeTranscript = sttRes.data.transcript.trim()
-            }
-          }
-        } catch (sttErr) {
-          console.warn("Groq Whisper STT fallback failed:", sttErr)
-        }
+      if (currentQuestion.type !== 'coding') {
+        const flushed = await flushWhisperTranscription()
+        if (flushed) safeTranscript = flushed
       }
 
       const timeSpent = Math.round((Date.now() - (questionStartTimeRef.current || Date.now())) / 1000)
@@ -2225,6 +2599,9 @@ export const useInterviewSession = (sessionId, interviewType, startRoundTwo) => 
           currentSessionFinalRef.current = ''
           interimTextRef.current = ''
           whisperAudioChunksRef.current = []
+          whisperFinalizedTranscriptRef.current = ''
+          liveInterimGhostRef.current = ''
+          segmentHasSpeechRef.current = false
           setTranscriptionText('')
           setInterimTranscriptText('')
           setCodeAnswer('')
@@ -2263,6 +2640,9 @@ export const useInterviewSession = (sessionId, interviewType, startRoundTwo) => 
             currentSessionFinalRef.current = ''
             interimTextRef.current = ''
             whisperAudioChunksRef.current = []
+            whisperFinalizedTranscriptRef.current = ''
+            liveInterimGhostRef.current = ''
+            segmentHasSpeechRef.current = false
             setTranscriptionText('')
             setInterimTranscriptText('')
             setCodeAnswer('')
@@ -2303,6 +2683,9 @@ export const useInterviewSession = (sessionId, interviewType, startRoundTwo) => 
         currentSessionFinalRef.current = ''
         interimTextRef.current = ''
         whisperAudioChunksRef.current = []
+        whisperFinalizedTranscriptRef.current = ''
+        liveInterimGhostRef.current = ''
+        segmentHasSpeechRef.current = false
         setTranscriptionText('')
         setInterimTranscriptText('')
         setCodeAnswer('')
@@ -2368,6 +2751,10 @@ export const useInterviewSession = (sessionId, interviewType, startRoundTwo) => 
       try { recognitionRef.current.stop() } catch (e) { }
     }
 
+    if (segmentRecorderRef.current && segmentRecorderRef.current.state !== 'inactive') {
+      try { segmentRecorderRef.current.stop() } catch (e) { }
+      segmentRecorderRef.current = null
+    }
     if (whisperMediaRecorderRef.current && whisperMediaRecorderRef.current.state !== 'inactive') {
       try { whisperMediaRecorderRef.current.stop() } catch (e) { }
       whisperMediaRecorderRef.current = null
@@ -2508,14 +2895,19 @@ export const useInterviewSession = (sessionId, interviewType, startRoundTwo) => 
       const wpm = timeSpent > 0 ? Math.round((words / timeSpent) * 60) : 0
       const currentQuestion = questions[currentQuestionIndex] || {}
 
-      // If forced termination (e.g., proctoring alert), save the answer first!
+      // If forced termination (e.g., proctoring alert or timeout), save the answer first!
       if (forceClose && currentQuestion) {
+        let finalAnswer = (transcriptionText || '').trim()
+        if (currentQuestion.type !== 'coding') {
+          const flushed = await flushWhisperTranscription()
+          if (flushed) finalAnswer = flushed
+        }
         const iid = interviewIdRef.current || sessionId
         const answerForm = new FormData()
         answerForm.append('interview_id', iid)
         answerForm.append('question_id', currentQuestion.id || (currentQuestionIndex + 1))
         answerForm.append('question_text', currentQuestion.text || currentQuestion.question || '')
-        answerForm.append('answer_text', currentQuestion.type === 'coding' ? (codeAnswer || 'No code submitted') : (transcriptionText.trim() || 'No answer provided'))
+        answerForm.append('answer_text', currentQuestion.type === 'coding' ? (codeAnswer || 'No code submitted') : (finalAnswer || 'No answer provided'))
         answerForm.append('candidate_name', sessionDetail?.candidate_name || 'Candidate')
         answerForm.append('time_spent_seconds', timeSpent.toString())
         answerForm.append('time_limit_seconds', '120')
@@ -2531,7 +2923,7 @@ export const useInterviewSession = (sessionId, interviewType, startRoundTwo) => 
               interview_id: iid,
               question_id: currentQuestion.id || (currentQuestionIndex + 1),
               question_text: currentQuestion.text || currentQuestion.question || '',
-              answer_text: currentQuestion.type === 'coding' ? (codeAnswer || 'No code submitted') : (transcriptionText.trim() || 'No answer provided'),
+              answer_text: currentQuestion.type === 'coding' ? (codeAnswer || 'No code submitted') : (finalAnswer || 'No answer provided'),
               time_spent_seconds: timeSpent
             }
             sessionStorage.setItem(failedKey, JSON.stringify(answerData))

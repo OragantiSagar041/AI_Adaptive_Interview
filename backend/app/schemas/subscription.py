@@ -58,6 +58,12 @@ class SubscriptionRow(BaseModel):
     primary_username: Optional[str] = None
     owner_name: Optional[str] = None          # Full name of the company owner
 
+    # Custom configuration
+    features: Optional[List[str]] = None
+    layout_config: Optional[Dict[str, Any]] = None
+    branding: Optional[Dict[str, Any]] = None
+
+
 
 class SubscriptionListResponse(BaseModel):
     status: str = "success"

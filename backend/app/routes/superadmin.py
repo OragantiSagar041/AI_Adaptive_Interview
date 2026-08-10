@@ -807,17 +807,32 @@ def get_superadmin_profile(current_admin: dict = Depends(get_current_admin_detai
         raise HTTPException(status_code=404, detail="Super Admin not found")
     admin_doc["id"] = str(admin_doc["_id"])
     admin_doc["_id"] = str(admin_doc["_id"])
+    
+    company = None
     if admin_doc.get("company_id"):
-        company = companies_collection.find_one({"_id": ObjectId(admin_doc["company_id"])})
+        try:
+            company = companies_collection.find_one({"_id": ObjectId(str(admin_doc["company_id"]))})
+        except Exception:
+            company = None
         if company:
-            admin_doc["company_name"] = company.get("name", "")
+            admin_doc["company_name"] = company.get("name", admin_doc.get("company_name", ""))
             if "credits" in company:
                 admin_doc["credits"] = company["credits"]
+            admin_doc["status"] = company.get("status", "active" if admin_doc.get("login_enabled", True) else "blocked")
+            admin_doc["login_enabled"] = admin_doc.get("login_enabled", True) and company.get("login_enabled", True)
+
     plan_context = get_admin_plan_context(admin_doc)
     admin_doc["is_expired"] = plan_context["is_expired"]
     admin_doc["subscription_plan_key"] = plan_context["plan_key"]
     admin_doc["subscription_plan"] = plan_context["plan_label"]
     admin_doc["plan_features"] = plan_context["features"]
+    admin_doc["features"] = plan_context["features"]
+    admin_doc["capabilities"] = plan_context["capabilities"]
+    admin_doc["days_remaining"] = plan_context.get("days_remaining")
+    admin_doc["subscription_start"] = plan_context.get("subscription_start")
+    admin_doc["subscription_expiry"] = plan_context.get("subscription_expiry")
+    admin_doc["layout_config"] = plan_context.get("layout_config")
+    admin_doc["branding"] = plan_context.get("branding")
     return admin_doc
 
 class SuperAdminPlanUpdate(BaseModel):
@@ -831,11 +846,17 @@ def update_superadmin_subscription(data: SuperAdminPlanUpdate, current_admin: di
     company_id = current_admin.get("company_id")
     if not company_id:
         raise HTTPException(status_code=400, detail="No company associated with this admin")
+    now_iso = datetime.now(timezone.utc).isoformat()
     companies_collection.update_one(
         {"_id": ObjectId(company_id)},
-        {"$set": {"subscription_plan": data.subscription_plan}}
+        {"$set": {"subscription_plan": data.subscription_plan, "updated_at": now_iso}}
+    )
+    admins_collection.update_many(
+        {"company_id": str(company_id), "role": {"$in": ["super_admin", "superadmin"]}},
+        {"$set": {"subscription_plan": data.subscription_plan, "updated_at": now_iso}}
     )
     return {"status": "success", "message": "Subscription plan updated successfully"}
+
 
 @router.delete("/api/superadmin/candidates/bulk")
 @router.delete("/superadmin/candidates/bulk")

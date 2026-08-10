@@ -276,10 +276,14 @@ def get_admin_plan_context(user: Dict[str, Any]) -> Dict[str, Any]:
     # Default fallback
     company = None
     if user.get("company_id"):
-        company = companies_collection.find_one({"_id": ObjectId(user["company_id"])})
+        try:
+            company = companies_collection.find_one({"_id": ObjectId(str(user["company_id"]))})
+        except Exception:
+            company = None
         
     subscription_plan = company.get("subscription_plan") if company else user.get("subscription_plan")
     subscription_expiry = company.get("subscription_expiry") if company else user.get("subscription_expiry")
+    subscription_start = company.get("subscription_start") if company else user.get("subscription_start")
     
     definition = get_plan_definition(subscription_plan)
     if user.get("role") == "admin":
@@ -287,12 +291,29 @@ def get_admin_plan_context(user: Dict[str, Any]) -> Dict[str, Any]:
             credits = user.get("credits", 0)
         else:
             # `user` is already the admin document from admins_collection!
-            admin_doc = admins_collection.find_one({"_id": ObjectId(user.get("_id"))})
+            admin_doc = admins_collection.find_one({"_id": ObjectId(user.get("_id"))}) if user.get("_id") else None
             credits = admin_doc.get("credits", 0) if admin_doc else 0
     else:
         credits = company.get("credits", 0) if company else user.get("credits", 0)
         
     is_expired = credits <= 0
+    
+    # Calculate days remaining from subscription_expiry if present
+    days_remaining = None
+    if subscription_expiry:
+        try:
+            exp_str = str(subscription_expiry).replace("Z", "+00:00")
+            exp_dt = datetime.fromisoformat(exp_str)
+            if exp_dt.tzinfo is None:
+                exp_dt = exp_dt.replace(tzinfo=timezone.utc)
+            now_dt = datetime.now(timezone.utc)
+            delta = exp_dt - now_dt
+            days_remaining = max(0, delta.days)
+            if delta.total_seconds() <= 0:
+                is_expired = True
+        except Exception:
+            days_remaining = None
+
     warning = not is_expired and credits <= 5
     warning_message = "Your plan credits are running low (5 or fewer left). Please renew your subscription to avoid interruption." if warning else ""
 
@@ -308,9 +329,13 @@ def get_admin_plan_context(user: Dict[str, Any]) -> Dict[str, Any]:
         "is_expired": is_expired,
         "warning": warning,
         "warning_message": warning_message,
-        "days_remaining": None,
+        "days_remaining": days_remaining,
+        "subscription_start": subscription_start,
+        "subscription_expiry": subscription_expiry,
         "layout_config": company.get("layout_config") if company else None,
+        "branding": company.get("branding") if company else None,
     }
+
 
 def require_admin_capability(admin_id: str, capability: str, detail: str):
     try:
@@ -2662,8 +2687,15 @@ def build_default_interview_email_html(candidate_name: str, duration: int, job_d
                     {expiry_message}
                 </div>
                 
+                <!-- Recommended Browser Notice -->
+                <div style="background-color: #eff6ff; border: 1px solid #bfdbfe; border-left: 4px solid #3b82f6; border-radius: 8px; padding: 14px 18px; margin: 24px 0 20px 0; text-align: left;">
+                    <p style="margin: 0; color: #1e40af; font-size: 14px; line-height: 1.5;">
+                        🌐 <b>Recommended Browser:</b> Kindly use <b>Google Chrome</b> (on a laptop or desktop) for the best interview experience, smooth live speech transcription, and camera proctoring.
+                    </p>
+                </div>
+
                 <!-- CTA Button -->
-                <div style="text-align: center; margin: 40px 0;">
+                <div style="text-align: center; margin: 36px 0;">
                     <a href="{full_link}" style="background-color: #4f46e5; background-image: linear-gradient(135deg, #4f46e5 0%, #6366f1 100%); color: #ffffff; padding: 16px 40px; text-decoration: none; border-radius: 50px; font-weight: 700; font-size: 16px; display: inline-block; box-shadow: 0 4px 15px rgba(79, 70, 229, 0.3); text-transform: uppercase; letter-spacing: 0.02em;">
                         Start Interview
                     </a>
@@ -2673,6 +2705,7 @@ def build_default_interview_email_html(candidate_name: str, duration: int, job_d
                 <div style="background-color: #fff1f2; border-radius: 12px; padding: 24px; margin: 30px 0 0 0; border: 1px solid #fecaca; border-left: 5px solid #e11d48;">
                     <h3 style="margin: 0 0 16px; font-size: 15px; color: #9f1239; font-weight: 700; text-transform: uppercase; letter-spacing: 0.05em;">⚠️ Important Guidelines</h3>
                     <ul style="margin: 0; padding-left: 20px; color: #be123c; font-size: 14px; line-height: 1.6;">
+                        <li style="margin-bottom: 8px;"><b>Browser Requirement:</b> Kindly use <b>Google Chrome</b> (or Microsoft Edge) on a desktop/laptop with a working camera and microphone.</li>
                         <li style="margin-bottom: 8px;"><b>Full-Screen Mode:</b> Must be maintained at all times. Tab switching is recorded as a violation.</li>
                         <li style="margin-bottom: 8px;"><b>Video Proctoring:</b> Your camera remains active for face tracking and integrity checks.</li>
                         <li style="margin-bottom: 8px;"><b>Environment:</b> Join from a quiet, well-lit room. Background noise or voices may affect your evaluation.</li>

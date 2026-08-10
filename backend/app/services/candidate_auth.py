@@ -39,6 +39,7 @@ def require_active_candidate(
         {
             "link_id": 1,
             "interview_id": 1,
+            "candidate_name": 1,
             "status": 1,
             "is_deactivated": 1,
             "cloned_voice_id": 1,

@@ -395,32 +395,10 @@ export default function AdminLayout({
               <h2 className="text-[17px] font-bold text-slate-800 hidden md:block">Recruiter Management</h2>
 
               {/* Theme Toggle — single button that opens color picker */}
-            <div ref={themeRef} className="relative">
-              <button
-                onClick={() => setThemeOpen(prev => !prev)}
-                className="flex items-center gap-1.5 px-3 py-1.5 rounded-full border cursor-pointer transition-all duration-200 text-sm font-semibold"
-                style={{
-                  background: hexToRgba(currentAccent.primary, 0.08),
-                  borderColor: hexToRgba(currentAccent.primary, 0.25),
-                  color: currentAccent.primary,
-                }}
-                title="Change theme color"
-              >
-                <span
-                  className="w-3 h-3 rounded-full border-2 border-white shadow-sm flex-shrink-0 transition-all duration-500"
-                  style={{ background: currentAccent.primary }}
-                />
-                <ChevronDown
-                  size={13}
-                  className="transition-transform duration-200"
-                  style={{ transform: themeOpen ? 'rotate(180deg)' : 'rotate(0deg)' }}
-                />
-              </button>
-
-              {/* Color Picker Popover */}
-              {themeOpen && (
-                <div
-                  className="absolute top-full left-0 mt-2 z-50 rounded-2xl shadow-xl border border-slate-200/60 p-3"
+              <div ref={themeRef} className="relative">
+                <button
+                  onClick={() => setThemeOpen(prev => !prev)}
+                  className="flex items-center gap-1.5 px-3 py-1.5 rounded-full border cursor-pointer transition-all duration-200 text-sm font-semibold"
                   style={{
                     background: hexToRgba(currentAccent.primary, 0.08),
                     borderColor: hexToRgba(currentAccent.primary, 0.25),

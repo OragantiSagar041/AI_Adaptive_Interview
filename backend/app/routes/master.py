@@ -576,22 +576,45 @@ def create_tenant(data: TenantCreate, master_id: str = Depends(get_current_admin
     return {"status": "success", "message": "Tenant created successfully"}
 
 @router.put("/master/companies/{company_id}")
+@router.post("/master/companies/{company_id}")
+@router.patch("/master/companies/{company_id}")
 def update_company(company_id: str, data: TenantUpdate, master_id: str = Depends(get_current_admin)):
     require_master_user(master_id)
         
-    company = companies_collection.find_one({"_id": ObjectId(company_id)})
+    try:
+        company = companies_collection.find_one({"_id": ObjectId(company_id)})
+    except Exception:
+        company = None
     if not company:
         raise HTTPException(status_code=404, detail="Company not found")
         
     update_fields = {}
+    admin_update_fields = {}
     now = datetime.now(timezone.utc)
-    old_plan = company.get("subscription_plan", "trial")
     
-    if data.subscription_plan and data.subscription_plan != old_plan:
-        update_fields["subscription_plan"] = data.subscription_plan
+    # 1. Company Name Sync
+    new_company_name = data.company_name or data.name
+    if new_company_name:
+        update_fields["name"] = new_company_name
+        admin_update_fields["company_name"] = new_company_name
+        
+    # 2. Email & Username Sync
+    if data.email:
+        update_fields["email"] = data.email
+        admin_update_fields["email"] = data.email
+    if data.username:
+        admin_update_fields["username"] = data.username
+        admin_update_fields["name"] = data.username
+
+    # 3. Subscription Plan
+    req_plan = data.subscription_plan or data.plan_name or data.plan_key
+    old_plan = company.get("subscription_plan", "trial")
+    if req_plan and req_plan != old_plan:
+        update_fields["subscription_plan"] = req_plan
+        admin_update_fields["subscription_plan"] = req_plan
         history_entry = {
             "plan_name": old_plan,
-            "replaced_by": data.subscription_plan,
+            "replaced_by": req_plan,
             "changed_at": now.isoformat(),
             "changed_by": "master"
         }
@@ -599,34 +622,98 @@ def update_company(company_id: str, data: TenantUpdate, master_id: str = Depends
             {"_id": ObjectId(company_id)},
             {"$push": {"plan_history": history_entry}}
         )
-    elif data.subscription_plan:
-        update_fields["subscription_plan"] = data.subscription_plan
-    
-    if data.add_days > 0:
+    elif req_plan:
+        update_fields["subscription_plan"] = req_plan
+        admin_update_fields["subscription_plan"] = req_plan
+
+    # 4. Expiry / Extension Days
+    days_to_add = data.add_days or data.extend_days or data.days_to_add or 0
+    if days_to_add > 0:
         current_expiry = company.get("subscription_expiry")
         try:
-            exp_dt = datetime.fromisoformat(current_expiry) if current_expiry else now
+            exp_dt = datetime.fromisoformat(str(current_expiry).replace("Z", "+00:00")) if current_expiry else now
+            if exp_dt.tzinfo is None:
+                exp_dt = exp_dt.replace(tzinfo=timezone.utc)
             if exp_dt < now:
                 exp_dt = now # If already expired, start from today
             
-            new_expiry = exp_dt + timedelta(days=data.add_days)
+            new_expiry = exp_dt + timedelta(days=days_to_add)
             update_fields["subscription_expiry"] = new_expiry.isoformat()
         except Exception:
-            update_fields["subscription_expiry"] = (now + timedelta(days=data.add_days)).isoformat()
+            update_fields["subscription_expiry"] = (now + timedelta(days=days_to_add)).isoformat()
             
-    if data.add_credits > 0:
+    # 5. Credits
+    if data.credits is not None:
+        update_fields["credits"] = max(0, data.credits)
+    elif data.add_credits > 0:
         current_credits = company.get("credits", 0)
         update_fields["credits"] = current_credits + data.add_credits
         
+    # 6. Features & Layout / Branding
     if data.features is not None:
         update_fields["features"] = data.features
-        
     if data.layout_config is not None:
         update_fields["layout_config"] = data.layout_config
-            
-    if update_fields:
-        companies_collection.update_one({"_id": ObjectId(company_id)}, {"$set": update_fields})
-    return {"status": "success", "message": "Company updated successfully"}
+    if data.branding is not None:
+        update_fields["branding"] = data.branding
+
+    # 7. Status & Login Access
+    login_val = data.login_enabled if data.login_enabled is not None else data.is_active
+    if data.status is not None and login_val is None:
+        login_val = (data.status != "blocked")
+        
+    if login_val is not None:
+        update_fields["login_enabled"] = login_val
+        update_fields["is_active"] = login_val
+        update_fields["status"] = "active" if login_val else "blocked"
+        admins_collection.update_many(
+            {"company_id": str(company_id)},
+            {"$set": {"login_enabled": login_val, "updated_at": now.isoformat()}}
+        )
+
+    # 8. Persist to MongoDB
+    update_fields["updated_at"] = now.isoformat()
+    companies_collection.update_one({"_id": ObjectId(company_id)}, {"$set": update_fields})
+    
+    if admin_update_fields:
+        admin_update_fields["updated_at"] = now.isoformat()
+        admins_collection.update_many(
+            {"company_id": str(company_id), "role": {"$in": ["super_admin", "superadmin"]}},
+            {"$set": admin_update_fields}
+        )
+
+    # Broadcast real-time profile update
+    try:
+        broadcast_profile_update(
+            company_id=str(company_id),
+            credits=update_fields.get("credits", company.get("credits", 0)),
+            login_enabled=update_fields.get("login_enabled", company.get("login_enabled", True))
+        )
+    except Exception:
+        pass
+
+    return {"status": "success", "message": "Company updated successfully", "data": update_fields}
+
+
+@router.patch("/master/companies/{company_id}/subscription")
+def patch_company_subscription(company_id: str, data: MasterSubscriptionPatch, master_id: str = Depends(get_current_admin)):
+    require_master_user(master_id)
+    try:
+        company = companies_collection.find_one({"_id": ObjectId(company_id)})
+    except Exception:
+        company = None
+    if not company:
+        raise HTTPException(status_code=404, detail="Company not found")
+
+    tenant_update = TenantUpdate(
+        plan_key=data.plan_key,
+        plan_name=data.plan_name,
+        days_to_add=data.days_to_add or data.extend_days,
+        credits=data.credits,
+        add_credits=data.add_credits,
+    )
+    return update_company(company_id=company_id, data=tenant_update, master_id=master_id)
+
 
 @router.get("/master/company-revenue")
 def get_company_revenue(

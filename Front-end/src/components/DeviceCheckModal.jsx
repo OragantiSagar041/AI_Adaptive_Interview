@@ -29,7 +29,11 @@ const DeviceCheckModal = ({ onSuccess, onCancel }) => {
       try {
         const stream = await navigator.mediaDevices.getUserMedia({
           video: { width: { ideal: 640 }, height: { ideal: 480 }, frameRate: 15 },
-          audio: true
+          audio: {
+            echoCancellation: true,
+            noiseSuppression: true,
+            autoGainControl: true
+          }
         });
 
         if (!active) {
@@ -168,7 +172,11 @@ const DeviceCheckModal = ({ onSuccess, onCancel }) => {
 
         <div className="mb-6 text-center">
           <h2 className="text-2xl font-bold mb-2">Hardware Check</h2>
-          <p className="text-slate-400 text-sm">Let's make sure your camera and microphone are working properly before we begin.</p>
+          <p className="text-slate-400 text-sm mb-3">Let's make sure your camera and microphone are working properly before we begin.</p>
+          <div className="inline-flex items-center gap-2 px-3 py-1 bg-blue-500/10 border border-blue-500/20 rounded-full text-xs font-medium text-blue-400">
+            <i className="fab fa-chrome"></i>
+            <span>Google Chrome is recommended for the best interview experience</span>
+          </div>
         </div>
 
         <div className="relative w-full aspect-video bg-black rounded-3xl overflow-hidden mb-8 flex items-center justify-center">
