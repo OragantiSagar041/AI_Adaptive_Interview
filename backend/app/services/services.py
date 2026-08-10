@@ -360,18 +360,15 @@ def sync_company_and_admins(company_id: str, updates: Dict[str, Any]) -> Optiona
 def get_admin_plan_context(user: Dict[str, Any]) -> Dict[str, Any]:
     # Default fallback
     company = None
-    comp_id = user.get("company_id")
-    if comp_id:
+    if user.get("company_id"):
         try:
-            if ObjectId.is_valid(str(comp_id)):
-                company = companies_collection.find_one({"_id": ObjectId(str(comp_id))})
+            company = companies_collection.find_one({"_id": ObjectId(str(user["company_id"]))})
         except Exception:
-            pass
-        if not company:
-            company = companies_collection.find_one({"_id": str(comp_id)}) or companies_collection.find_one({"company_id": str(comp_id)})
+            company = None
         
     subscription_plan = company.get("subscription_plan") if company else user.get("subscription_plan")
     subscription_expiry = company.get("subscription_expiry") if company else user.get("subscription_expiry")
+    subscription_start = company.get("subscription_start") if company else user.get("subscription_start")
     
     definition = get_plan_definition(subscription_plan)
     if user.get("role") == "admin":
@@ -379,12 +376,29 @@ def get_admin_plan_context(user: Dict[str, Any]) -> Dict[str, Any]:
             credits = user.get("credits", 0)
         else:
             # `user` is already the admin document from admins_collection!
-            admin_doc = admins_collection.find_one({"_id": ObjectId(user.get("_id"))})
+            admin_doc = admins_collection.find_one({"_id": ObjectId(user.get("_id"))}) if user.get("_id") else None
             credits = admin_doc.get("credits", 0) if admin_doc else 0
     else:
         credits = company.get("credits", 0) if company else user.get("credits", 0)
         
     is_expired = credits <= 0
+    
+    # Calculate days remaining from subscription_expiry if present
+    days_remaining = None
+    if subscription_expiry:
+        try:
+            exp_str = str(subscription_expiry).replace("Z", "+00:00")
+            exp_dt = datetime.fromisoformat(exp_str)
+            if exp_dt.tzinfo is None:
+                exp_dt = exp_dt.replace(tzinfo=timezone.utc)
+            now_dt = datetime.now(timezone.utc)
+            delta = exp_dt - now_dt
+            days_remaining = max(0, delta.days)
+            if delta.total_seconds() <= 0:
+                is_expired = True
+        except Exception:
+            days_remaining = None
+
     warning = not is_expired and credits <= 5
     warning_message = "Your plan credits are running low (5 or fewer left). Please renew your subscription to avoid interruption." if warning else ""
 
@@ -400,9 +414,13 @@ def get_admin_plan_context(user: Dict[str, Any]) -> Dict[str, Any]:
         "is_expired": is_expired,
         "warning": warning,
         "warning_message": warning_message,
-        "days_remaining": None,
+        "days_remaining": days_remaining,
+        "subscription_start": subscription_start,
+        "subscription_expiry": subscription_expiry,
         "layout_config": company.get("layout_config") if company else None,
+        "branding": company.get("branding") if company else None,
     }
+
 
 def require_admin_capability(admin_id: str, capability: str, detail: str):
     try:

@@ -142,6 +142,9 @@ def _build_row(company: Dict[str, Any]) -> SubscriptionRow:
         primary_email=admin.get("email"),
         primary_username=admin.get("username"),
         owner_name=admin.get("name") or admin.get("full_name") or admin.get("username"),
+        features=company.get("features") or ctx.get("features"),
+        layout_config=company.get("layout_config"),
+        branding=company.get("branding"),
     )
 
 
@@ -177,15 +180,17 @@ def get_subscription_detail(company_id: str) -> SubscriptionDetail:
 
     session_counts = get_session_counts(company_id)
     recharge_history = get_recharge_history(company_id, limit=10)
+    features_list = company.get("features") if company.get("features") is not None else plan_def.get("features", [])
 
     return SubscriptionDetail(
         **row.model_dump(),
-        plan_features=plan_def.get("features", []),
+        plan_features=features_list,
         plan_capabilities=plan_def.get("capabilities", {}),
         recharge_history=recharge_history,
         total_sessions=session_counts["total"],
         completed_sessions=session_counts["completed"],
     )
+
 
 
 # ---------------------------------------------------------------------------

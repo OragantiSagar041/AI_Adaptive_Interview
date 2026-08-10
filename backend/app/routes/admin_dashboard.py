@@ -2134,22 +2134,31 @@ def get_admin_profile(current_admin: dict = Depends(get_current_admin_details)):
     admin_doc["id"] = str(admin_doc["_id"])
     admin_doc["_id"] = str(admin_doc["_id"])
     
-    comp_id = admin_doc.get("company_id")
-    if comp_id:
-        company = None
+    company = None
+    if admin_doc.get("company_id"):
         try:
-            if ObjectId.is_valid(str(comp_id)):
-                company = companies_collection.find_one({"_id": ObjectId(str(comp_id))})
+            company = companies_collection.find_one({"_id": ObjectId(str(admin_doc["company_id"]))})
         except Exception:
-            pass
-        if not company:
-            company = companies_collection.find_one({"_id": str(comp_id)}) or companies_collection.find_one({"company_id": str(comp_id)})
+            company = None
         if company:
-            co_name = company.get("company_name") or company.get("name")
-            if co_name:
-                admin_doc["company_name"] = co_name
-            if "credits" in company and current_admin.get("role") in ["super_admin", "superadmin"]:
+            admin_doc["company_name"] = company.get("name", admin_doc.get("company_name", ""))
+            if "credits" in company:
                 admin_doc["credits"] = company["credits"]
+            admin_doc["status"] = company.get("status", "active" if admin_doc.get("login_enabled", True) else "blocked")
+            admin_doc["login_enabled"] = admin_doc.get("login_enabled", True) and company.get("login_enabled", True)
+            
+    plan_context = get_admin_plan_context(admin_doc)
+    admin_doc["is_expired"] = plan_context["is_expired"]
+    admin_doc["subscription_plan_key"] = plan_context["plan_key"]
+    admin_doc["subscription_plan"] = plan_context["plan_label"]
+    admin_doc["plan_features"] = plan_context["features"]
+    admin_doc["features"] = plan_context["features"]
+    admin_doc["capabilities"] = plan_context["capabilities"]
+    admin_doc["days_remaining"] = plan_context.get("days_remaining")
+    admin_doc["subscription_start"] = plan_context.get("subscription_start")
+    admin_doc["subscription_expiry"] = plan_context.get("subscription_expiry")
+    admin_doc["layout_config"] = plan_context.get("layout_config")
+    admin_doc["branding"] = plan_context.get("branding")
             
     return admin_doc
 
@@ -2165,6 +2174,8 @@ def update_profile(data: UpdateProfileRequest, current_admin: str = Depends(get_
             raise HTTPException(status_code=404, detail="Admin not found")
             
         update_fields = {}
+        now_iso = datetime.now(timezone.utc).isoformat()
+        update_fields["updated_at"] = now_iso
         
         if data.old_password and data.new_password:
             if not verify_password(data.old_password, admin["password"]):
@@ -2179,15 +2190,26 @@ def update_profile(data: UpdateProfileRequest, current_admin: str = Depends(get_
         if data.company_name:
             update_fields["company_name"] = data.company_name
             
-        if not update_fields:
+        if len(update_fields) <= 1:  # only updated_at
             return {"status": "success", "message": "No changes made."}
             
         admins_collection.update_one({"_id": admin_id_obj}, {"$set": update_fields})
         
-        # If company_name was updated, sync to companies_collection and all linked admin docs
-        comp_id = admin.get("company_id")
-        if data.company_name and comp_id:
-            sync_company_and_admins(comp_id, {"company_name": data.company_name})
+        # Sync company collection if company_id is associated with this admin
+        if admin.get("company_id"):
+            company_update = {"updated_at": now_iso}
+            if data.company_name:
+                company_update["name"] = data.company_name
+            if data.email:
+                company_update["email"] = data.email
+            if len(company_update) > 1:
+                try:
+                    companies_collection.update_one(
+                        {"_id": ObjectId(str(admin["company_id"]))},
+                        {"$set": company_update}
+                    )
+                except Exception as comp_err:
+                    print(f"Error syncing company record: {comp_err}")
         
         # Broadcast updated profile details
         admin_doc = admins_collection.find_one({"_id": admin_id_obj})
@@ -2211,6 +2233,7 @@ def update_profile(data: UpdateProfileRequest, current_admin: str = Depends(get_
             
         return {
             "status": "success", 
+
             "message": "Profile updated successfully.",
             "updated_fields": update_fields
         }

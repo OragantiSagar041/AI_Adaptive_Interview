@@ -151,21 +151,63 @@ def get_all_admins(master_id: str = Depends(get_current_admin)):
 
 @router.put("/master/admins/{admin_id}/toggle-login")
 def toggle_admin_login(admin_id: str, master_id: str = Depends(get_current_admin)):
-    """Master-only: Enable/disable an admin's login access"""
+    """Master-only: Enable/disable an admin's login access and sync with company status."""
     master = admins_collection.find_one({"_id": ObjectId(master_id), "role": "master"})
     if not master:
         raise HTTPException(status_code=401, detail="Unauthorized")
     
-    admin = admins_collection.find_one({"_id": ObjectId(admin_id)})
+    admin = None
+    company = None
+    try:
+        admin = admins_collection.find_one({"_id": ObjectId(admin_id)})
+    except Exception:
+        pass
+        
     if not admin:
-        raise HTTPException(status_code=404, detail="Admin not found")
+        try:
+            company = companies_collection.find_one({"_id": ObjectId(admin_id)})
+        except Exception:
+            pass
+        if not company:
+            raise HTTPException(status_code=404, detail="Admin or Company not found")
+        
+    current = admin.get("login_enabled", True) if admin else company.get("login_enabled", True)
+    new_state = not current
+    now_iso = datetime.now(timezone.utc).isoformat()
     
-    current = admin.get("login_enabled", True)
-    admins_collection.update_one(
-        {"_id": ObjectId(admin_id)},
-        {"$set": {"login_enabled": not current}}
-    )
-    return {"status": "success", "login_enabled": not current}
+    company_id = admin.get("company_id") if admin else str(company["_id"])
+    
+    if admin:
+        admins_collection.update_one(
+            {"_id": ObjectId(admin_id)},
+            {"$set": {"login_enabled": new_state, "updated_at": now_iso}}
+        )
+        
+    if company_id:
+        companies_collection.update_one(
+            {"_id": ObjectId(company_id)},
+            {"$set": {
+                "login_enabled": new_state,
+                "is_active": new_state,
+                "status": "active" if new_state else "blocked",
+                "updated_at": now_iso
+            }}
+        )
+        # If this is a super admin being toggled, toggle all company recruiters too
+        admins_collection.update_many(
+            {"company_id": str(company_id)},
+            {"$set": {"login_enabled": new_state, "updated_at": now_iso}}
+        )
+        try:
+            broadcast_profile_update(
+                company_id=str(company_id),
+                login_enabled=new_state
+            )
+        except Exception:
+            pass
+            
+    return {"status": "success", "login_enabled": new_state}
+
 
 # --------------------------------------------------------------------------------
 # SUPER ADMIN APIs

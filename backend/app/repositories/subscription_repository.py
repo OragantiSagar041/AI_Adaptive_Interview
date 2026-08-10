@@ -10,7 +10,9 @@ All MongoDB queries for subscriptions live here so that:
 """
 from __future__ import annotations
 
+import logging
 from datetime import datetime, timedelta, timezone
+
 from typing import Any, Dict, List, Optional, Tuple
 
 from bson import ObjectId
@@ -22,8 +24,10 @@ from app.db.mongo_db import (
     payment_orders_collection,
 )
 
+logger = logging.getLogger(__name__)
 
 # ---------------------------------------------------------------------------
+
 # Internal helpers
 # ---------------------------------------------------------------------------
 
@@ -210,7 +214,16 @@ def apply_recharge(
     from app.services.services import sync_company_and_admins
     sync_company_and_admins(company_id, update)
 
+    try:
+        admins_collection.update_many(
+            {"company_id": str(company_id), "role": {"$in": ["super_admin", "superadmin"]}},
+            {"$set": {"subscription_plan": final_plan, "updated_at": now.isoformat()}}
+        )
+    except Exception as err:
+        logger.warning(f"Failed to sync plan to admins_collection: {err}")
+
     return final_plan, final_credits, new_expiry_iso
+
 
 
 # ---------------------------------------------------------------------------
