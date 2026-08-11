@@ -28,7 +28,11 @@ def _llm_json(system_prompt: str, user_prompt: str, schema_class=None, fallback=
             data = _extract_json_robust(raw)
             return data if data else fallback
     except Exception as e:
+        err_msg = str(e).lower()
         print(f"Graph LLM Error: {e}")
+        # Propagate quota exhaustion so offline fallback can catch it
+        if "quota" in err_msg or "rate limit" in err_msg or "offline" in err_msg:
+            raise e
         return fallback.to_dict() if hasattr(fallback, "to_dict") else fallback
 
 # ─── 1. ANSWER SCORING GRAPH ────────────────────────────────────────────────
