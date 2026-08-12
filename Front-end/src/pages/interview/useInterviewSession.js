@@ -1213,7 +1213,7 @@ export const useInterviewSession = (sessionId, interviewType, startRoundTwo) => 
             if (blob.size >= 2500) {
               segmentTranscribeChainRef.current = segmentTranscribeChainRef.current
                 .then(() => transcribeSegment(blob))
-                .catch(() => {})
+                .catch(() => { })
             }
           }
           resolve()
@@ -1249,28 +1249,6 @@ export const useInterviewSession = (sessionId, interviewType, startRoundTwo) => 
       return null
     }
 
-<<<<<<< HEAD
-    rec.onend = () => {
-      // Never flush leftover text that may have been captured while the AI
-      // was speaking (see the onresult guard above for why this can happen).
-      if (isTTSPlayingRef.current) {
-        interimTextRef.current = ''
-        setInterimTranscriptText('')
-        return
-      }
-      // Flush leftover interim text to transcriptionText
-      if (interimTextRef.current) {
-        const leftover = interimTextRef.current.trim()
-        interimTextRef.current = ''
-        setInterimTranscriptText('')
-        if (leftover) {
-          setTranscriptionText(prev => {
-            const p = prev.trim()
-            if (p.endsWith(leftover)) return prev
-            return (p ? p + ' ' : '') + leftover
-          })
-        }
-=======
     // Clean up previous instance cleanly
     if (recognitionRef.current) {
       const oldRec = recognitionRef.current
@@ -1298,7 +1276,6 @@ export const useInterviewSession = (sessionId, interviewType, startRoundTwo) => 
         isRecognitionActiveRef.current = true
         lastSpeechActivityRef.current = Date.now()
         lastSpeechTimeRef.current = Date.now()
->>>>>>> 1cec93f9ee6d5bf0ab38b25864d26532267222f7
       }
 
       rec.onend = () => {
@@ -1308,8 +1285,6 @@ export const useInterviewSession = (sessionId, interviewType, startRoundTwo) => 
           commitSpeechSessionToAccumulator()
           setInterimTranscriptText('')
           liveInterimGhostRef.current = ''
-          // Whisper is the persistent source of truth. Only fall back to the
-          // Web Speech accumulator when Whisper hasn't produced anything yet.
           const whisperVal = whisperFinalizedTranscriptRef.current.trim()
           const fallback = accumulatedTranscriptRef.current.trim()
           if (whisperVal) {
@@ -1317,41 +1292,7 @@ export const useInterviewSession = (sessionId, interviewType, startRoundTwo) => 
           } else if (fallback) {
             setTranscriptionText(formatCandidateName(fallback, sessionDetail?.candidate_name || sessionDetail?.name || ''))
           }
-<<<<<<< HEAD
-        }, 100)
-      }
-    }
-
-    rec.onresult = (event) => {
-      // ── HARD GUARD: never accept recognition results while the AI is speaking ──
-      // rec.stop() is asynchronous, so a browser can still deliver a few queued
-      // onresult events after TTS playback has already started. Dropping every
-      // result while isTTSPlayingRef is true guarantees the AI's own voice can
-      // never reach the transcript, regardless of any stop/start timing race.
-      if (isTTSPlayingRef.current) return
-
-      let interimText = ''
-      let finalText = ''
-      for (let i = event.resultIndex; i < event.results.length; i++) {
-        const res = event.results[i]
-        if (res.isFinal) {
-          // Select highest confidence alternative
-          let bestTranscript = res[0].transcript
-          let bestConfidence = res[0].confidence || 0
-          for (let j = 1; j < res.length; j++) {
-            if ((res[j].confidence || 0) > bestConfidence) {
-              bestConfidence = res[j].confidence
-              bestTranscript = res[j].transcript
-            }
-          }
-          finalText += (bestTranscript || '').trim() + ' '
-=======
->>>>>>> 1cec93f9ee6d5bf0ab38b25864d26532267222f7
-        } else {
-          setInterimTranscriptText('')
-          liveInterimGhostRef.current = ''
         }
-
         // Seamless auto-revive after silence or Chrome continuous audio timeout
         if (isSpeechRecordingRef.current && !isTTSPlayingRef.current) {
           setTimeout(() => {
@@ -1468,7 +1409,7 @@ export const useInterviewSession = (sessionId, interviewType, startRoundTwo) => 
         }
       }
     }, 10000)  // 10s is enough — Chrome continuous audio limit is ~60s and we
-               // don't want to restart STT during a perfectly healthy session
+    // don't want to restart STT during a perfectly healthy session
 
     return () => {
       clearInterval(speechWatchdogRef.current)
@@ -1973,7 +1914,6 @@ export const useInterviewSession = (sessionId, interviewType, startRoundTwo) => 
         elem.requestFullscreen().catch(err => console.log(err));
       }
 
-<<<<<<< HEAD
       // ── Prepare (but do NOT start) speech recognition here ──
       // Starting the mic immediately and then having speakAIQuestion() stop it
       // a moment later created a race window where recognition could be live
@@ -1982,12 +1922,8 @@ export const useInterviewSession = (sessionId, interviewType, startRoundTwo) => 
       // once we know TTS is NOT about to play right away (see below); if TTS
       // IS about to play, speakAIQuestion() itself starts recognition only
       // after playback finishes (in audio.onended).
-      initSpeechRecognition()
-      isSpeechRecordingRef.current = true
-=======
-      isSpeechRecordingRef.current = true
       startOrRestartSpeechRecognition()
->>>>>>> 1cec93f9ee6d5bf0ab38b25864d26532267222f7
+      isSpeechRecordingRef.current = true
 
       startBackgroundNoiseMonitor(stream)
 

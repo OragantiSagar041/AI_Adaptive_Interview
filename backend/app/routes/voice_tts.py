@@ -438,8 +438,27 @@ async def stt_endpoint(
                         print(f"🔇 [STT SILENCE GATE] Rejected silent audio | rms={rms:.4f} peak={peak_norm:.4f} | Latency: {dur}s")
                         return {"transcript": ""}
             except Exception as e:
-                # If audio probing fails, continue to Whisper (don't break the request)
+                # If audio probing fails, continue to STT engines (don't break the request)
                 pass
+
+            HALLUCINATIONS = {
+                "thank you", "thanks", "okay", "you", "bye",
+                "um", "uh", "hmm", "mm", "go to next slide",
+                "go to the next slide", "next slide", "thank you for watching",
+                "subscribe", "i am not spoken", "am i not spoken", "i am not",
+                "tsh", "thanks for watching", "the end", "goodbye", "see you",
+                "thank you for listening", "like and subscribe", "please subscribe",
+                "click the bell", "see you next time", "have a nice day",
+                "thank you for your time", "i'll see you in the next video",
+                "thanks for watching", "see you in the next video", "thank you so much",
+                "thank you very much", "have a good day", "take care",
+                "see you soon", "bye bye", "good night", "good morning",
+                "thank you for joining", "thanks for joining", "please like",
+                "don't forget to subscribe", "hit the like", "comment below",
+                "thank you for your attention", "blank_audio", "silence",
+            }
+
+
 
             from app.ai.groq_manager import groq_key_manager
             from groq import AsyncGroq, RateLimitError, AuthenticationError
@@ -576,6 +595,7 @@ async def stt_endpoint(
             dur = round(time.time() - t0, 3)
             if dropped_segment_texts:
                 print(f"🚫 [STT HALLUCINATION FILTER] Rejected {len(dropped_segment_texts)} segments: {dropped_segment_texts[:3]}")
+            print("[STT] Provider: Groq Whisper (fallback)")
             print(f"✅ [STT CONCURRENCY TRACE - REQ #{req_id}] HTTP 200 OK | Latency: {dur}s | Transcript: {transcript_text[:50]}...")
             return {"transcript": transcript_text}
         finally:
@@ -591,8 +611,7 @@ async def stt_endpoint(
         else:
             print(f"❌ [STT CONCURRENCY ERROR - REQ #{req_id}] HTTP {status_code} | Latency: {dur}s | Error: {err_str}")
             raise HTTPException(status_code=status_code, detail=err_str)
-    finally:
-        stt_inflight_counter = max(0, stt_inflight_counter - 1)
+
 
 # ─── Omni Dimension AI Calling Endpoints ──────────────────────────────────────
 

@@ -355,4 +355,6 @@ async def transcribe_audio(
             except Exception:
                 pass
 
+    print("[STT] Provider: Groq Whisper (fallback)")
+    logger.info("[STT] Provider: Groq Whisper (fallback)")
     return {"text": text}

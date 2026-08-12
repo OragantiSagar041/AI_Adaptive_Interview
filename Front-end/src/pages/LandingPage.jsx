@@ -1360,7 +1360,16 @@ function DemoModal() {
   }, []);
 
   const handleChange = (e) => {
-    setFormData({ ...formData, [e.target.name]: e.target.value });
+    const { name, value } = e.target;
+    if (name === 'first_name' || name === 'last_name') {
+      const cleaned = value.replace(/[^\p{L}\s]/gu, '');
+      setFormData(prev => ({ ...prev, [name]: cleaned }));
+    } else if (name === 'mobile_number') {
+      const cleaned = value.replace(/[^\d+\s\-()]/g, '');
+      setFormData(prev => ({ ...prev, [name]: cleaned }));
+    } else {
+      setFormData(prev => ({ ...prev, [name]: value }));
+    }
   };
 
   const handleSubmit = async (e) => {

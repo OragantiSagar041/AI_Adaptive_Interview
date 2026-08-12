@@ -58,3 +58,36 @@ export function formatDateTimeMedium(value) {
 export function formatScore(score) {
   return `${Number(score || 0).toFixed(1)}/100`
 }
+
+export function formatPhoneNumber(phone, defaultCountryCode = '91') {
+  if (!phone || phone === 'N/A' || phone === '—' || phone === 'None' || phone === 'Not specified') return 'N/A';
+  
+  const rawStr = String(phone).trim();
+  const digits = rawStr.replace(/\D/g, '');
+  if (!digits) return rawStr;
+  
+  if (digits.length === 10) {
+    return `+${defaultCountryCode}-${digits}`;
+  }
+  
+  if (digits.length === 11 && digits.startsWith('0')) {
+    return `+${defaultCountryCode}-${digits.slice(1)}`;
+  }
+
+  if (digits.length === 12 && digits.startsWith('91')) {
+    return `+91-${digits.slice(2)}`;
+  }
+
+  if (digits.length === 11 && digits.startsWith('1')) {
+    return `+1-${digits.slice(1)}`;
+  }
+
+  if (digits.length > 10) {
+    const ccLen = digits.length - 10;
+    const cc = digits.slice(0, ccLen);
+    const mainNum = digits.slice(ccLen);
+    return `+${cc}-${mainNum}`;
+  }
+
+  return `+${defaultCountryCode}-${digits}`;
+}

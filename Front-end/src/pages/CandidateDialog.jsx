@@ -4,6 +4,7 @@ import { useNavigate } from 'react-router-dom'
 import Swal from 'sweetalert2'
 import axios from 'axios'
 import { handleUpdateDecision } from '../../store/slices/interviewSlice'
+import { formatPhoneNumber } from '../utils/adminFormatters'
 import ScheduleModal from './ScheduleModal'
 import {
   Mail, Phone, MapPin, Building2, IndianRupee, Clock, Download,
@@ -298,6 +299,43 @@ export default function CandidateDialog({ candidate, open, onOpenChange }) {
   const recordingUrl = formatMediaUrl(c.recording_url)
   const screenRecordingUrl = formatMediaUrl(c.screen_recording_url)
 
+  const downloadMediaFile = async (url, filename) => {
+    if (!url) return;
+    try {
+      const response = await fetch(url, { mode: 'cors' });
+      if (!response.ok) throw new Error(`HTTP ${response.status}`);
+      const blob = await response.blob();
+      const blobUrl = window.URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = blobUrl;
+      a.download = filename;
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+      setTimeout(() => window.URL.revokeObjectURL(blobUrl), 1000);
+    } catch (error) {
+      console.warn("Direct blob download failed, fallback to anchor download:", error);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = filename;
+      a.target = '_blank';
+      a.rel = 'noopener noreferrer';
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+    }
+  };
+
+  const handleDownloadRecording = async () => {
+    const candidateName = (c.candidate_name || candidate.name || 'Candidate').replace(/\s+/g, '_');
+    if (recordingUrl) {
+      await downloadMediaFile(recordingUrl, `${candidateName}_camera_recording.mp4`);
+    }
+    if (screenRecordingUrl) {
+      await downloadMediaFile(screenRecordingUrl, `${candidateName}_screen_recording.mp4`);
+    }
+  };
+
   const handleDecision = async (newDecision) => {
     if (!candidate) return;
     const linkId = candidate.link_id || candidate.id || candidate._id;
@@ -511,7 +549,7 @@ export default function CandidateDialog({ candidate, open, onOpenChange }) {
                 <h3 className="text-sm font-black text-slate-800 mb-4">Candidate Information</h3>
                 <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-x-6 gap-y-5">
                   <InfoRow icon={Mail} label="Email" value={email} />
-                  <InfoRow icon={Phone} label="Mobile" value={phone} />
+                  <InfoRow icon={Phone} label="Mobile" value={formatPhoneNumber(phone)} />
                   <InfoRow icon={Clock} label="Experience" value={c.experience} />
                   <InfoRow icon={Building2} label="Current Company" value={(() => {
                     const comp = c.current_company;
@@ -684,7 +722,24 @@ export default function CandidateDialog({ candidate, open, onOpenChange }) {
 
               {/* Recordings */}
               <section className="bg-white rounded-xl border border-slate-200/60 p-5 shadow-sm">
-                <h3 className="text-sm font-black text-slate-800 mb-4">Recordings</h3>
+                <div className="flex items-center justify-between mb-4">
+                  <div>
+                    <h3 className="text-sm font-black text-slate-800">Recordings</h3>
+                    <p className="text-xs text-slate-400 font-medium mt-0.5">
+                      {recordingUrl || screenRecordingUrl ? 'Camera & screen recording available' : 'No recordings available'}
+                    </p>
+                  </div>
+                  {(recordingUrl || screenRecordingUrl) && (
+                    <button
+                      type="button"
+                      onClick={handleDownloadRecording}
+                      className="flex items-center gap-2 px-4 py-2 text-sm font-bold text-indigo-700 bg-indigo-50 border border-indigo-200 rounded-xl hover:bg-indigo-100 transition-colors shadow-sm cursor-pointer"
+                      title="Download Recording File"
+                    >
+                      <Download size={16} /> Download Recording
+                    </button>
+                  )}
+                </div>
                 <div className="grid sm:grid-cols-2 gap-4">
                   {/* Camera Recording */}
                   <div className="rounded-xl border border-slate-200 bg-slate-50 p-4">

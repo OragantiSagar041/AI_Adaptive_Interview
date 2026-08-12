@@ -13,18 +13,21 @@ class GroqKeyManager:
         self.lock = threading.Lock()
 
     def _load_keys(self):
-        # Allow multiple keys separated by comma
+        found_keys = []
+        # Check GROQ_API_KEYS comma separated
         keys_str = os.getenv("GROQ_API_KEYS")
         if keys_str:
-            self._all_keys = [k.strip() for k in keys_str.split(",") if k.strip()]
-        else:
-            # Fallback to single key if GROQ_API_KEYS isn't set
-            single_key = os.getenv("GROQ_API_KEY")
-            if single_key:
-                self._all_keys = [single_key.strip()]
+            found_keys.extend([k.strip() for k in keys_str.split(",") if k.strip()])
+        
+        # Check GROQ_API_KEY, GROQ_API_KEY_2, GROQ_API_KEY_3, etc.
+        for env_var in ["GROQ_API_KEY", "GROQ_API_KEY_2", "GROQ_API_KEY_3", "GROQ_API_KEY_4"]:
+            val = os.getenv(env_var)
+            if val and val.strip() and val.strip() not in found_keys:
+                found_keys.append(val.strip())
 
+        self._all_keys = found_keys
         if not self._all_keys:
-            logger.warning("No Groq API keys found in environment variables (GROQ_API_KEYS or GROQ_API_KEY).")
+            logger.warning("No Groq API keys found in environment variables (GROQ_API_KEYS, GROQ_API_KEY, GROQ_API_KEY_2, etc.).")
 
     @property
     def keys(self):

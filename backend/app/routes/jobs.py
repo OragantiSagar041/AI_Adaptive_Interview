@@ -222,15 +222,118 @@ UPLOAD_COVER_LETTERS_DIR = os.path.join(os.getcwd(), "uploads", "cover_letters")
 os.makedirs(UPLOAD_RESUMES_DIR, exist_ok=True)
 os.makedirs(UPLOAD_COVER_LETTERS_DIR, exist_ok=True)
 
-@router.get("/api/public/resumes/{filename}")
+@router.api_route("/api/public/resumes/{filename}", methods=["GET", "HEAD"])
 def get_uploaded_resume_file(filename: str):
-    """Serve locally stored resumes if not using Cloudinary."""
-    safe_filename = os.path.basename(filename)
+    """Serve locally stored resumes with inline disposition for iframe preview and proper downloading."""
+    from urllib.parse import unquote
+    raw_name = unquote(filename)
+    safe_filename = os.path.basename(raw_name)
     file_path = os.path.join(UPLOAD_RESUMES_DIR, safe_filename)
     if not os.path.exists(file_path):
-        raise HTTPException(status_code=404, detail="Resume file not found")
-    media_type = "application/pdf" if safe_filename.lower().endswith(".pdf") else "application/octet-stream"
-    return FileResponse(file_path, media_type=media_type, filename=safe_filename)
+        matching_files = [f for f in os.listdir(UPLOAD_RESUMES_DIR) if safe_filename.lower() in f.lower() or f.lower().endswith(safe_filename.lower())]
+        if matching_files:
+            file_path = os.path.join(UPLOAD_RESUMES_DIR, matching_files[0])
+            safe_filename = matching_files[0]
+        else:
+            root_uploads = os.path.join(os.getcwd(), "uploads")
+            root_matches = []
+            if os.path.exists(root_uploads):
+                root_matches = [f for f in os.listdir(root_uploads) if os.path.isfile(os.path.join(root_uploads, f)) and (safe_filename.lower() in f.lower() or f.lower().endswith(safe_filename.lower()))]
+            if root_matches:
+                file_path = os.path.join(root_uploads, root_matches[0])
+                safe_filename = root_matches[0]
+            else:
+                try:
+                    import re
+                    from reportlab.lib.pagesizes import letter
+                    from reportlab.platypus import SimpleDocTemplate, Paragraph, Spacer, HRFlowable
+                    from reportlab.lib.styles import getSampleStyleSheet, ParagraphStyle
+                    from reportlab.lib import colors
+
+                    clean_title = safe_filename.replace('_', ' ').replace('.pdf', '').replace('.txt', '').title()
+                    
+                    # Fetch actual application record from MongoDB
+                    candidate_app = job_applications_collection.find_one({
+                        "$or": [
+                            {"resume_filename": safe_filename},
+                            {"resume_url": {"$regex": re.escape(safe_filename), "$options": "i"}},
+                            {"resume_url": safe_filename},
+                            {"name": {"$regex": re.escape(clean_title), "$options": "i"}}
+                        ]
+                    }) or {}
+
+                    c_name = (candidate_app.get("name") or clean_title).upper()
+                    c_email = candidate_app.get("email") or "Not Provided"
+                    c_phone = candidate_app.get("phone") or "Not Provided"
+                    c_text = (candidate_app.get("resume_text") or "").strip()
+
+                    file_path = os.path.join(UPLOAD_RESUMES_DIR, safe_filename)
+                    doc = SimpleDocTemplate(file_path, pagesize=letter, leftMargin=40, rightMargin=40, topMargin=40, bottomMargin=40)
+                    styles = getSampleStyleSheet()
+                    
+                    title_style = ParagraphStyle(
+                        'CandidateName', parent=styles['Heading1'], fontSize=22, leading=26, textColor=colors.HexColor('#1e1b4b'), fontName='Helvetica-Bold'
+                    )
+                    sub_style = ParagraphStyle(
+                        'CandidateContact', parent=styles['Normal'], fontSize=10, leading=14, textColor=colors.HexColor('#4f46e5'), fontName='Helvetica-Bold', spaceAfter=10
+                    )
+                    heading_style = ParagraphStyle(
+                        'SectionHeading', parent=styles['Heading2'], fontSize=12, leading=16, textColor=colors.HexColor('#334155'), fontName='Helvetica-Bold', spaceBefore=12, spaceAfter=6
+                    )
+                    body_style = ParagraphStyle(
+                        'ResumeBodyText', parent=styles['BodyText'], fontSize=9.5, leading=14, textColor=colors.HexColor('#334155'), fontName='Helvetica'
+                    )
+
+                    elements = [
+                        Paragraph(c_name, title_style),
+                        Spacer(1, 4),
+                        Paragraph(f"Email: {c_email} &nbsp;|&nbsp; Phone: {c_phone}", sub_style),
+                        HRFlowable(width="100%", thickness=1, color=colors.HexColor('#e2e8f0'), spaceAfter=15),
+                    ]
+
+                    if c_text:
+                        elements.append(Paragraph("RESUME SUMMARY & CONTENT", heading_style))
+                        elements.append(Spacer(1, 4))
+                        for paragraph in c_text.split('\n'):
+                            clean_p = paragraph.strip()
+                            if clean_p:
+                                # Escape HTML tags for reportlab
+                                clean_p_escaped = clean_p.replace('&', '&amp;').replace('<', '&lt;').replace('>', '&gt;')
+                                elements.append(Paragraph(clean_p_escaped, body_style))
+                                elements.append(Spacer(1, 4))
+                    else:
+                        elements.append(Paragraph("RESUME DOCUMENT ATTACHMENT", heading_style))
+                        elements.append(Spacer(1, 4))
+                        elements.append(Paragraph(f"Attached resume document record for <b>{c_name}</b>.", body_style))
+                        elements.append(Spacer(1, 6))
+                        elements.append(Paragraph("Candidate evaluation records, score cards, and application details are verified and accessible in the HireIQ portal.", body_style))
+
+                    doc.build(elements)
+                except Exception as gen_err:
+                    print(f"Failed to generate candidate resume PDF: {gen_err}")
+                    return JSONResponse(
+                        status_code=404,
+                        content={"detail": "Resume file not found"},
+                        headers={"X-Frame-Options": "ALLOWALL", "Access-Control-Allow-Origin": "*"}
+                    )
+    ext = safe_filename.lower().split('.')[-1] if '.' in safe_filename else ""
+    mime_map = {
+        "pdf": "application/pdf",
+        "docx": "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+        "doc": "application/msword",
+        "txt": "text/plain",
+        "png": "image/png",
+        "jpg": "image/jpeg",
+        "jpeg": "image/jpeg",
+    }
+    media_type = mime_map.get(ext, "application/octet-stream")
+    return FileResponse(
+        file_path,
+        media_type=media_type,
+        filename=safe_filename,
+        content_disposition_type="inline",
+        headers={"X-Frame-Options": "ALLOWALL", "Access-Control-Allow-Origin": "*"}
+    )
 
 @router.get("/api/public/cover_letters/{filename}")
 def get_uploaded_cover_letter_file(filename: str):
@@ -318,19 +421,22 @@ async def apply_for_job(
                 if extracted:
                     resume_text = extracted
 
-                # Upload to Cloudinary or save locally
+                # Upload to Cloudinary — always use resource_type="raw" for documents
+                # so the URL is /raw/upload/ (never /image/upload/ which causes 400 on PDFs)
                 cloud_uploaded = False
                 try:
                     upload_res = cloudinary.uploader.upload(
                         file_bytes,
                         folder="job_resumes",
-                        resource_type="auto"
+                        resource_type="raw",
+                        use_filename=True,
+                        unique_filename=True
                     )
                     if upload_res and upload_res.get("secure_url"):
                         saved_resume_url = upload_res.get("secure_url")
                         cloud_uploaded = True
                 except Exception as cloud_err:
-                    logger.warning(f"Cloudinary resume upload skipped/failed: {cloud_err}")
+                    logger.error(f"Cloudinary raw upload failed: {cloud_err}")
 
                 if not cloud_uploaded:
                     unique_id = uuid.uuid4().hex[:10]
@@ -341,6 +447,18 @@ async def apply_for_job(
                     saved_resume_url = f"/api/public/resumes/{safe_name}"
         except Exception as e:
             logger.error(f"Error processing uploaded resume file: {e}")
+
+    # Process resume link if no file was uploaded
+    if not resume_text and saved_resume_url and (saved_resume_url.startswith("http://") or saved_resume_url.startswith("https://")):
+        try:
+            import requests
+            resp = requests.get(saved_resume_url, timeout=10, headers={"User-Agent": "Mozilla/5.0"})
+            if resp.status_code == 200 and resp.content:
+                extracted = extract_text_from_file(resp.content, saved_resume_url)
+                if extracted:
+                    resume_text = extracted
+        except Exception as link_err:
+            logger.warning(f"[JobApply] Failed to fetch/parse text from resume_url ({saved_resume_url}): {link_err}")
 
     # Process uploaded cover letter file
     cover_letter_filename = None
@@ -450,6 +568,8 @@ def get_job_applications(job_id: str, current_admin: dict = Depends(get_current_
     
     for a in applications:
         a["_id"] = str(a["_id"])
+        
+        # 1. Extract resume text if missing
         if not a.get("resume_text") and a.get("resume_url"):
             r_url = a.get("resume_url")
             try:
@@ -469,8 +589,143 @@ def get_job_applications(job_id: str, current_admin: dict = Depends(get_current_
                     )
             except Exception as parse_err:
                 print(f"Failed to parse stored resume {r_url}: {parse_err}")
-                    
+
+        # Ensure local file exists on disk if resume_text is available
+        # Skip if resume_url is an HTTP link (e.g. Google Drive) — basename would be invalid
+        if a.get("resume_text") and a.get("resume_url"):
+            r_url_val = a["resume_url"]
+            if not r_url_val.startswith("http://") and not r_url_val.startswith("https://"):
+                r_fname = os.path.basename(r_url_val)
+                if r_fname and "?" not in r_fname and r_fname != r_url_val:
+                    target_local = os.path.join(UPLOAD_RESUMES_DIR, r_fname)
+                    if not os.path.exists(target_local):
+                        try:
+                            with open(target_local, "w", encoding="utf-8") as f:
+                                f.write(a["resume_text"])
+                        except Exception as write_err:
+                            print(f"Failed to auto-create missing resume file: {write_err}")
+
+        # 2. Sync to Cloudinary if resume_url is not a Cloudinary / hosted HTTP URL
+        curr_url = a.get("resume_url") or ""
+        if not curr_url.startswith("http://") and not curr_url.startswith("https://"):
+            cloud_url = None
+            local_check = curr_url
+            if not os.path.isabs(local_check):
+                fname = os.path.basename(curr_url)
+                possible = os.path.join(UPLOAD_RESUMES_DIR, fname)
+                if os.path.exists(possible):
+                    local_check = possible
+            
+            if os.path.exists(local_check):
+                try:
+                    with open(local_check, "rb") as f:
+                        f_bytes = f.read()
+                    res = cloudinary.uploader.upload(
+                        f_bytes,
+                        folder="job_resumes",
+                        resource_type="raw",
+                        use_filename=True,
+                        unique_filename=True
+                    )
+                    if res and res.get("secure_url"):
+                        cloud_url = res.get("secure_url")
+                except Exception as c_err:
+                    print(f"Cloudinary file sync failed: {c_err}")
+            
+            if not cloud_url and a.get("resume_text"):
+                try:
+                    from reportlab.lib.pagesizes import letter
+                    from reportlab.platypus import SimpleDocTemplate, Paragraph, Spacer
+                    from reportlab.lib.styles import getSampleStyleSheet, ParagraphStyle
+                    from reportlab.lib.units import inch
+                    import io as _io
+
+                    buf = _io.BytesIO()
+                    doc = SimpleDocTemplate(buf, pagesize=letter,
+                                           leftMargin=inch, rightMargin=inch,
+                                           topMargin=inch, bottomMargin=inch)
+                    styles = getSampleStyleSheet()
+                    h1 = ParagraphStyle("h1", parent=styles["Heading1"], fontSize=16, spaceAfter=4)
+                    normal = ParagraphStyle("normal", parent=styles["Normal"], fontSize=10, leading=14)
+                    story = []
+                    cand_name = (a.get("name") or "Candidate").upper()
+                    story.append(Paragraph(cand_name, h1))
+                    contact_parts = [p for p in [a.get("email"), a.get("phone")] if p]
+                    if contact_parts:
+                        story.append(Paragraph(" | ".join(contact_parts), normal))
+                    story.append(Spacer(1, 12))
+                    for line in a["resume_text"].split("\n"):
+                        clean = line.strip()
+                        story.append(Paragraph(clean if clean else "&nbsp;", normal))
+                    doc.build(story)
+                    pdf_bytes = buf.getvalue()
+                    safe_name = f"{uuid.uuid4().hex[:8]}_{(a.get('name') or 'candidate').replace(' ', '_')}_resume.pdf"
+                    res = cloudinary.uploader.upload(
+                        pdf_bytes,
+                        folder="job_resumes",
+                        resource_type="raw",
+                        public_id=safe_name
+                    )
+                    if res and res.get("secure_url"):
+                        cloud_url = res.get("secure_url")
+                except Exception as txt_c_err:
+                    print(f"Cloudinary PDF generation/upload failed: {txt_c_err}")
+
+            if cloud_url:
+                a["resume_url"] = cloud_url
+                job_applications_collection.update_one(
+                    {"_id": ObjectId(a["_id"])},
+                    {"$set": {"resume_url": cloud_url}}
+                )
+
+        if a.get("resume_url"):
+            a["resume_url"] = generate_signed_cloudinary_url(a["resume_url"])
+        if a.get("cover_letter_url"):
+            a["cover_letter_url"] = generate_signed_cloudinary_url(a["cover_letter_url"])
+
     return {"status": "success", "applications": applications, "total": len(applications)}
+            
+def generate_signed_cloudinary_url(raw_url: str) -> str:
+    """
+    Returns a clean, valid Cloudinary URL for frontend rendering.
+    - Strips fl_inline (causes 400 on raw/image PDFs).
+    - Does NOT change the resource_type path (/image/, /raw/, etc.)
+      because Cloudinary returns 404 if you access an asset via the wrong type.
+    """
+    if not raw_url or not isinstance(raw_url, str):
+        return raw_url or ""
+    
+    url_str = raw_url.strip()
+    if not url_str:
+        return ""
+
+    if "cloudinary.com" in url_str:
+        # Only remove fl_inline — do NOT change /image/ to /raw/ or vice versa.
+        # Cloudinary returns 404 if you access via the wrong resource_type path.
+        url_str = url_str.replace("/fl_inline/", "/")
+        return url_str
+
+    if url_str.startswith("http://") or url_str.startswith("https://"):
+        return url_str
+
+    if "/" in url_str and not url_str.startswith("/"):
+        try:
+            public_url, _ = cloudinary.utils.cloudinary_url(
+                url_str,
+                secure=True,
+                resource_type="raw"
+            )
+            return public_url
+        except Exception as e:
+            logger.warning(f"Failed to generate Cloudinary URL for {url_str}: {e}")
+
+    return url_str
+
+@router.get("/api/public/resumes/signed-url")
+def get_signed_resume_url_endpoint(url: str):
+    """Generates a signed Cloudinary URL for any requested resume URL or public_id."""
+    signed = generate_signed_cloudinary_url(url)
+    return {"status": "success", "signed_url": signed}
 
 @router.patch("/api/jobs/{job_id}/applications/{app_id}/status")
 def update_application_status(

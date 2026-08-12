@@ -12,7 +12,7 @@ import Button from '../../components/Button';
 import JobApplicationModal from '../../components/JobApplicationModal';
 import { useSelector, useDispatch } from 'react-redux';
 import { loadSuperAdminDashboard } from '../../store/slices/dashboardSlice';
-import { getComputedStatus } from '../../utils/adminFormatters';
+import { getComputedStatus, formatPhoneNumber } from '../../utils/adminFormatters';
 import axios from 'axios';
 import { API_BASE_URL } from '../../apiConfig';
 import Swal from 'sweetalert2';
@@ -1063,7 +1063,7 @@ export default function SuperAdminJobsPage() {
                                   <Mail size={11} className="text-indigo-400 shrink-0" />{app.candidate_email || app.email || '—'}
                                 </span>
                                 <span className="flex items-center gap-1.5 text-xs text-slate-500">
-                                  <Phone size={11} className="text-teal-400 shrink-0" />{app.phone || '—'}
+                                  <Phone size={11} className="text-teal-400 shrink-0" />{app.phone ? formatPhoneNumber(app.phone) : '—'}
                                 </span>
                               </div>
                             </td>
@@ -1345,22 +1345,85 @@ function ResumeViewerModal({ application, job, onClose, onSchedule, onStatusChan
     application.resume_url || application.resume_text ? 'resume' : 'coverLetter'
   );
   const [copied, setCopied] = useState(false);
+  const [iframeError, setIframeError] = useState(false);
+  const [fileAvailable, setFileAvailable] = useState(true);
 
   const getFullUrl = (rawUrl) => {
     if (!rawUrl) return '';
-    if (rawUrl.startsWith('http://') || rawUrl.startsWith('https://') || rawUrl.startsWith('blob:')) {
-      return rawUrl;
+    const str = String(rawUrl).trim();
+    if (str.startsWith('http://') || str.startsWith('https://') || str.startsWith('blob:')) {
+      return str;
     }
-    const cleanPath = rawUrl.replace(/^\/+/, '');
-    return `${API_BASE_URL}/${cleanPath}`;
+    const cleanPath = str.replace(/^\/+/, '');
+    let filename = cleanPath;
+    if (filename.includes('resumes/')) {
+      filename = filename.split('resumes/').pop();
+    } else if (filename.includes('/')) {
+      filename = filename.split('/').pop();
+    }
+    return `${API_BASE_URL}/api/public/resumes/${encodeURIComponent(filename)}`;
   };
 
   const resumeFullUrl = getFullUrl(application.resume_url);
   const coverLetterFullUrl = getFullUrl(application.cover_letter_url);
-  const isPdf = application.resume_url && (
-    application.resume_url.toLowerCase().endsWith('.pdf') || 
-    application.resume_filename?.toLowerCase().endsWith('.pdf')
-  );
+  // Check PDF: match .pdf anywhere in path (Cloudinary raw URLs may have .pdf before query params)
+  const isPdf = !!((
+    application.resume_url && /\.pdf(\?|$|\/)/i.test(application.resume_url)
+  ) || (
+    application.resume_filename && /\.pdf$/i.test(application.resume_filename)
+  ));
+
+  useEffect(() => {
+    setIframeError(false);
+    setFileAvailable(true);
+  }, [resumeFullUrl]);
+
+  const handleDownloadFile = async (url, fallbackName) => {
+    const targetUrl = url || resumeFullUrl;
+    const filename = application.resume_filename || fallbackName || `${(application.name || 'Candidate').replace(/\s+/g, '_')}_resume`;
+    
+    if (targetUrl) {
+      try {
+        const response = await fetch(targetUrl, { mode: 'cors' });
+        if (response.ok) {
+          const blob = await response.blob();
+          const blobUrl = window.URL.createObjectURL(blob);
+          const a = document.createElement('a');
+          a.href = blobUrl;
+          a.download = filename;
+          document.body.appendChild(a);
+          a.click();
+          a.remove();
+          setTimeout(() => window.URL.revokeObjectURL(blobUrl), 1000);
+          return;
+        }
+      } catch (err) {
+        console.warn("Direct blob fetch failed, falling back to text blob download:", err);
+      }
+    }
+
+    if (application.resume_text) {
+      const textBlob = new Blob([application.resume_text], { type: 'text/plain;charset=utf-8' });
+      const blobUrl = window.URL.createObjectURL(textBlob);
+      const a = document.createElement('a');
+      a.href = blobUrl;
+      const downloadName = filename.toLowerCase().endsWith('.txt') || filename.toLowerCase().endsWith('.pdf') ? filename : `${filename}.txt`;
+      a.download = downloadName;
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+      setTimeout(() => window.URL.revokeObjectURL(blobUrl), 1000);
+    } else if (targetUrl) {
+      const a = document.createElement('a');
+      a.href = targetUrl;
+      a.download = filename;
+      a.target = '_blank';
+      a.rel = 'noopener noreferrer';
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+    }
+  };
 
   const handleCopy = (text) => {
     if (!text) return;
@@ -1414,7 +1477,7 @@ function ResumeViewerModal({ application, job, onClose, onSchedule, onStatusChan
               </div>
               <div className="flex items-center gap-4 mt-1 text-xs text-slate-500 font-medium flex-wrap">
                 <span className="flex items-center gap-1"><Mail size={12} className="text-indigo-400" /> {application.candidate_email || application.email || '—'}</span>
-                {application.phone && <span className="flex items-center gap-1"><Phone size={12} className="text-teal-400" /> {application.phone}</span>}
+                {application.phone && <span className="flex items-center gap-1"><Phone size={12} className="text-teal-400" /> {formatPhoneNumber(application.phone)}</span>}
                 {job?.title && <span className="flex items-center gap-1 text-slate-400 font-semibold">• Applied for <span className="text-indigo-600">{job.title}</span></span>}
               </div>
             </div>
@@ -1500,15 +1563,13 @@ function ResumeViewerModal({ application, job, onClose, onSchedule, onStatusChan
               </button>
             )}
             {application.resume_url && (
-              <a
-                href={resumeFullUrl}
-                target="_blank"
-                rel="noreferrer"
-                download
-                className="flex items-center gap-1 px-3 py-1.5 bg-indigo-50 hover:bg-indigo-100 text-indigo-700 text-xs font-bold rounded-lg transition-all"
+              <button
+                type="button"
+                onClick={() => handleDownloadFile(resumeFullUrl, application.resume_filename)}
+                className="flex items-center gap-1 px-3 py-1.5 bg-indigo-50 hover:bg-indigo-100 text-indigo-700 text-xs font-bold rounded-lg transition-all cursor-pointer border-none"
               >
                 <Download size={12} /> Download Original
-              </a>
+              </button>
             )}
           </div>
         </div>
@@ -1517,15 +1578,29 @@ function ResumeViewerModal({ application, job, onClose, onSchedule, onStatusChan
         <div className="flex-1 overflow-y-auto p-6 bg-slate-50/30">
           {activeTab === 'resume' && (
             <div>
-              {resumeFullUrl && isPdf ? (
+              {resumeFullUrl && isPdf && fileAvailable && !iframeError ? (
                 <div className="w-full rounded-2xl overflow-hidden border border-slate-200 shadow-inner bg-white">
-                  <iframe
+                  {/* Header bar with open-in-tab for Cloudinary URLs */}
+                  <div className="flex items-center justify-between px-4 py-2 bg-indigo-50 border-b border-indigo-100">
+                    <span className="text-xs text-indigo-700 font-semibold">📄 {application.resume_filename || 'Resume Document'}</span>
+                    <a
+                      href={resumeFullUrl}
+                      target="_blank"
+                      rel="noreferrer"
+                      className="px-3 py-1.5 bg-indigo-600 hover:bg-indigo-700 text-white text-xs font-bold rounded-lg shadow transition-all flex items-center gap-1.5"
+                    >
+                      <ExternalLink size={12} /> Open in New Tab
+                    </a>
+                  </div>
+                  <embed
                     src={resumeFullUrl}
-                    title="Candidate Resume"
-                    className="w-full h-[540px] border-none"
+                    type="application/pdf"
+                    className="w-full border-none"
+                    style={{ height: '520px' }}
+                    onError={() => setIframeError(true)}
                   />
                 </div>
-              ) : resumeFullUrl ? (
+              ) : (application.resume_url || application.resume_filename) ? (
                 <div className="p-8 text-center bg-white rounded-2xl border border-slate-200 shadow-sm space-y-4">
                   <div className="w-16 h-16 rounded-2xl bg-indigo-50 text-indigo-600 flex items-center justify-center mx-auto shadow-inner">
                     <FileText size={32} />
@@ -1534,23 +1609,25 @@ function ResumeViewerModal({ application, job, onClose, onSchedule, onStatusChan
                     <h4 className="font-extrabold text-slate-800 text-base">Resume File Attached</h4>
                     <p className="text-xs text-slate-500 mt-1 font-mono">{application.resume_filename || application.resume_url}</p>
                   </div>
-                  <div className="flex justify-center gap-3 pt-2">
-                    <a
-                      href={resumeFullUrl}
-                      target="_blank"
-                      rel="noreferrer"
-                      className="px-5 py-2.5 bg-indigo-600 hover:bg-indigo-700 text-white text-xs font-bold rounded-xl shadow-md transition-all flex items-center gap-2"
-                    >
-                      <ExternalLink size={14} /> Open in New Tab
-                    </a>
-                    <a
-                      href={resumeFullUrl}
-                      download
-                      className="px-5 py-2.5 bg-slate-100 hover:bg-slate-200 text-slate-700 text-xs font-bold rounded-xl transition-all flex items-center gap-2"
-                    >
-                      <Download size={14} /> Download Document
-                    </a>
-                  </div>
+                  {resumeFullUrl && (
+                    <div className="flex justify-center gap-3 pt-2">
+                      <a
+                        href={resumeFullUrl}
+                        target="_blank"
+                        rel="noreferrer"
+                        className="px-5 py-2.5 bg-indigo-600 hover:bg-indigo-700 text-white text-xs font-bold rounded-xl shadow-md transition-all flex items-center gap-2"
+                      >
+                        <ExternalLink size={14} /> Open in New Tab
+                      </a>
+                      <button
+                        type="button"
+                        onClick={() => handleDownloadFile(resumeFullUrl, application.resume_filename)}
+                        className="px-5 py-2.5 bg-slate-100 hover:bg-slate-200 text-slate-700 text-xs font-bold rounded-xl transition-all flex items-center gap-2 cursor-pointer border-none"
+                      >
+                        <Download size={14} /> Download Document
+                      </button>
+                    </div>
+                  )}
                   {application.resume_text && (
                     <div className="mt-6 text-left border-t border-slate-100 pt-5">
                       <div className="text-xs font-bold uppercase tracking-wider text-slate-400 mb-2 flex items-center gap-1.5">

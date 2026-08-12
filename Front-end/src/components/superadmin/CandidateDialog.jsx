@@ -4,6 +4,7 @@ import { useNavigate } from 'react-router-dom'
 import Swal from 'sweetalert2'
 import axios from 'axios'
 import { handleUpdateDecision } from '../../store/slices/interviewSlice'
+import { formatPhoneNumber } from '../../utils/adminFormatters'
 import ScheduleModal from './ScheduleModal'
 import {
   Mail, Phone, MapPin, Building2, IndianRupee, Clock, Download,
@@ -301,27 +302,36 @@ export default function CandidateDialog({ candidate, open, onOpenChange, onStatu
   const screenRecordingUrl = formatMediaUrl(c.screen_recording_url)
 
   const handleDownloadRecording = async () => {
+    const candidateName = (c.candidate_name || candidate?.name || 'Candidate').replace(/\s+/g, '_');
     const urlsToDownload = [];
-    if (recordingUrl) urlsToDownload.push({ url: recordingUrl, name: 'camera_recording.mp4' });
-    if (screenRecordingUrl) urlsToDownload.push({ url: screenRecordingUrl, name: 'screen_recording.mp4' });
+    if (recordingUrl) urlsToDownload.push({ url: recordingUrl, name: `${candidateName}_camera_recording.mp4` });
+    if (screenRecordingUrl) urlsToDownload.push({ url: screenRecordingUrl, name: `${candidateName}_screen_recording.mp4` });
 
     if (urlsToDownload.length === 0) return;
 
     for (const { url, name } of urlsToDownload) {
       try {
-        const response = await fetch(url);
+        const response = await fetch(url, { mode: 'cors' });
+        if (!response.ok) throw new Error(`HTTP ${response.status}`);
         const blob = await response.blob();
         const blobUrl = window.URL.createObjectURL(blob);
         const a = document.createElement('a');
         a.href = blobUrl;
-        a.download = `${c.candidate_name?.replace(/\s+/g, '_') || 'Candidate'}_${name}`;
+        a.download = name;
         document.body.appendChild(a);
         a.click();
         a.remove();
-        window.URL.revokeObjectURL(blobUrl);
+        setTimeout(() => window.URL.revokeObjectURL(blobUrl), 1000);
       } catch (error) {
-        console.error("Direct download failed, falling back to new tab:", error);
-        window.open(url, '_blank');
+        console.warn("Direct blob download failed, fallback to anchor download:", error);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = name;
+        a.target = '_blank';
+        a.rel = 'noopener noreferrer';
+        document.body.appendChild(a);
+        a.click();
+        a.remove();
       }
     }
   };
@@ -636,7 +646,7 @@ export default function CandidateDialog({ candidate, open, onOpenChange, onStatu
                   <h3 className="text-sm font-black text-slate-800 mb-4">Candidate Information</h3>
                   <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-x-6 gap-y-5">
                     <InfoRow icon={Mail} label="Email" value={email} />
-                    <InfoRow icon={Phone} label="Mobile" value={phone} />
+                    <InfoRow icon={Phone} label="Mobile" value={formatPhoneNumber(phone)} />
                     <InfoRow icon={Clock} label="Experience" value={c.experience} />
                     <InfoRow icon={Building2} label="Current Company" value={(() => {
                       const comp = c.current_company;

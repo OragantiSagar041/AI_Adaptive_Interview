@@ -4,6 +4,7 @@ import Swal from 'sweetalert2';
 import 'sweetalert2/dist/sweetalert2.min.css';
 import { useSelector } from 'react-redux';
 import { API_BASE_URL } from '../../apiConfig';
+import { formatPhoneNumber } from '../../utils/adminFormatters';
 
 export default function DemoRequests() {
   const [activeTab, setActiveTab] = useState('demos'); // 'demos' | 'contacts'
@@ -345,7 +346,7 @@ HireIQ Client Relations Team`
                         </div>
                         {req.mobile_number && (
                           <div className="text-[11px] text-slate-400 mt-0.5">
-                            📞 {req.mobile_number}
+                            📞 {formatPhoneNumber(req.mobile_number)}
                           </div>
                         )}
                       </td>
