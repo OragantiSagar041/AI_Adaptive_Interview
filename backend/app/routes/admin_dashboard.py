@@ -867,14 +867,33 @@ class DecisionRequest(BaseModel):
 def analyze(req: AnalyzeRequest):
     context = ""
     language = "English"
+    time_spent_seconds = 0
+    time_limit_seconds = 120
+    
     # Retrieve Resume/JD context from the CURRENT in-memory session (not historical DB data)
     if req.interview_id and get_session(req.interview_id):
          profile_text = get_session(req.interview_id).get("profile_text", "")
          source = get_session(req.interview_id).get("source", "Resume")
          language = get_session(req.interview_id).get("language", "English")
          context = f"Candidate's {source}: {profile_text}"
+         
+    # Fetch existing time metrics from DB so offline re-evaluation calculates WPM and time_score correctly
+    existing_ans = answers_collection.find_one({"interview_id": req.interview_id, "question_id": req.question_id})
+    if existing_ans:
+        try:
+            time_spent_seconds = int(existing_ans.get("time_spent_seconds") or 0)
+            time_limit_seconds = int(existing_ans.get("time_limit_seconds") or 120)
+        except (ValueError, TypeError):
+            pass
     
-    result = analyze_answer(req.question, req.answer, context, language=language)
+    result = analyze_answer(
+        req.question, 
+        req.answer, 
+        context, 
+        language=language,
+        time_spent_seconds=time_spent_seconds,
+        time_limit_seconds=time_limit_seconds
+    )
 
     # Delete existing to avoid duplicates
     answers_collection.delete_many({"interview_id": req.interview_id, "question_id": req.question_id})
@@ -886,10 +905,19 @@ def analyze(req: AnalyzeRequest):
             "question_id": req.question_id,
             "question_text": req.question,
             "answer_text": req.answer,
+            "time_spent_seconds": time_spent_seconds,
+            "time_limit_seconds": time_limit_seconds,
             "ai_score": result.get("overall_score", 0),
+            "content_score": result.get("content_score", 0),
+            "relevance_score": result.get("relevance_score", 0),
+            "time_score": result.get("time_score", 0),
+            "clarity_score": result.get("clarity_score", 50),
+            "technical_depth_score": result.get("technical_depth_score", 50),
+            "confidence_score": result.get("confidence_score", 50),
             "ai_feedback": result.get("feedback", ""),
             "ai_keywords": json.dumps(result.get("keywords", [])),
             "corrected_answer": result.get("corrected_answer", ""),
+            "scoring_status": "completed",
             "created_at": datetime.now(timezone.utc).isoformat()
         })
     except Exception as e:
