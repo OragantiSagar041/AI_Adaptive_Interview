@@ -595,6 +595,7 @@ class SecurityPoliciesUpdate(BaseModel):
     require_2fa: bool
     strict_session_timeout: bool
     restrict_ip: bool
+    allowed_ips: Optional[List[str]] = None
 
 @router.get("/api/superadmin/security/policies")
 def get_security_policies(current_admin: dict = Depends(get_current_admin_details)):
@@ -606,7 +607,8 @@ def get_security_policies(current_admin: dict = Depends(get_current_admin_detail
         policies = {
             "require_2fa": True,
             "strict_session_timeout": True,
-            "restrict_ip": False
+            "restrict_ip": False,
+            "allowed_ips": []
         }
     else:
         policies.pop("_id", None)
@@ -614,9 +616,27 @@ def get_security_policies(current_admin: dict = Depends(get_current_admin_detail
     return {"status": "success", "policies": policies}
 
 @router.put("/api/superadmin/security/policies")
-def update_security_policies(data: SecurityPoliciesUpdate, current_admin: dict = Depends(get_current_admin_details)):
+def update_security_policies(data: SecurityPoliciesUpdate, request: Request, current_admin: dict = Depends(get_current_admin_details)):
     if current_admin.get("role") not in ["master", "super_admin"]:
         raise HTTPException(status_code=403, detail="Not authorized")
+        
+    x_forwarded_for = request.headers.get("x-forwarded-for")
+    client_ip = x_forwarded_for.split(",")[0].strip() if x_forwarded_for else (request.client.host if request.client else "unknown")
+    
+    # Fetch existing policies to get the current allowed_ips array
+    existing = security_policies_collection.find_one({"_id": "global_policies"}) or {}
+    
+    if data.allowed_ips is not None:
+        allowed_ips = data.allowed_ips
+    else:
+        allowed_ips = existing.get("allowed_ips", [])
+    
+    # Only auto-whitelist if restrict_ip is being turned on for the first time
+    # OR if the allowed_ips list is completely empty when restrict_ip is on
+    was_restricted = existing.get("restrict_ip", False)
+    if data.restrict_ip and (not was_restricted or len(allowed_ips) == 0):
+        if client_ip not in allowed_ips and client_ip != "unknown":
+            allowed_ips.append(client_ip)
         
     security_policies_collection.update_one(
         {"_id": "global_policies"},
@@ -624,6 +644,7 @@ def update_security_policies(data: SecurityPoliciesUpdate, current_admin: dict =
             "require_2fa": data.require_2fa,
             "strict_session_timeout": data.strict_session_timeout,
             "restrict_ip": data.restrict_ip,
+            "allowed_ips": allowed_ips,
             "updated_at": datetime.now(timezone.utc).isoformat(),
             "updated_by": current_admin.get("username")
         }},
