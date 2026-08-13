@@ -222,18 +222,12 @@ def admin_login(data: AdminLogin, request: Request):
     if plan_context["is_expired"]:
         print(f"User {user['username']} logged in with an expired subscription (Credits: {plan_context.get('credits')})")
         
-    last_ip = user.get("last_ip")
-    if last_ip and last_ip != client_ip:
-        security_logs_collection.insert_one({
-            "event_type": "NEW_IP_ADDRESS",
-            "username": data.username,
-            "ip_address": client_ip,
-            "timestamp": datetime.now(timezone.utc).isoformat()
-        })
     admins_collection.update_one({"_id": user["_id"]}, {"$set": {"last_ip": client_ip}})
     
-    # 2. 2FA Check
-    if global_policies.get("require_2fa"):
+    # 2. 2FA Check — Account-specific 2FA preference ONLY
+    user_2fa_enabled = bool(user.get("two_factor_enabled") or user.get("require_2fa") or user.get("is_2fa_enabled") or user.get("totp_enabled"))
+
+    if user_2fa_enabled:
         otp = str(random.randint(100000, 999999))
         expiry_time = datetime.now(timezone.utc) + timedelta(minutes=10)
         admins_collection.update_one({"_id": user["_id"]}, {"$set": {"otp": otp, "otp_expiry": expiry_time}})
@@ -251,6 +245,15 @@ def admin_login(data: AdminLogin, request: Request):
     expires_delta = timedelta(minutes=30) if global_policies.get("strict_session_timeout") else None
         
     access_token = create_access_token(data={"sub": str(user["_id"]), "role": user.get("role", "tenant"), "company_id": str(user.get("company_id", ""))}, expires_delta=expires_delta)
+    
+    # Log successful login event
+    security_logs_collection.insert_one({
+        "event_type": "SUCCESSFUL_LOGIN",
+        "username": user["username"],
+        "ip_address": client_ip,
+        "timestamp": datetime.now(timezone.utc).isoformat()
+    })
+
     return {
         "status": "success",
         "admin_id": str(user["_id"]),
@@ -280,22 +283,65 @@ class Verify2FA(BaseModel):
     otp: str
 
 @router.post("/admin/verify-2fa")
-def verify_2fa(data: Verify2FA):
+def verify_2fa(data: Verify2FA, request: Request):
+    x_forwarded_for = request.headers.get("x-forwarded-for")
+    client_ip = x_forwarded_for.split(",")[0].strip() if x_forwarded_for else (request.client.host if request.client else "unknown")
+    
+    admin_id_clean = (data.admin_id or "").strip()
+    provided_otp = str(data.otp or "").strip()
+
+    if not admin_id_clean or not provided_otp:
+        raise HTTPException(status_code=400, detail="admin_id and otp are required.")
+
     try:
-        user_oid = ObjectId(data.admin_id)
+        user_oid = ObjectId(admin_id_clean)
     except InvalidId:
         raise HTTPException(status_code=400, detail="Invalid admin ID format.")
         
     user = admins_collection.find_one({"_id": user_oid})
     if not user:
-        raise HTTPException(status_code=404, detail="Admin not found.")
+        raise HTTPException(status_code=404, detail="Admin account not found.")
         
-    if not user.get("otp") or str(user.get("otp")) != data.otp:
+    stored_otp = str(user.get("otp") or "").strip()
+    if not stored_otp or stored_otp != provided_otp:
+        security_logs_collection.insert_one({
+            "event_type": "FAILED_LOGIN",
+            "username": user.get("username", "unknown"),
+            "ip_address": client_ip,
+            "timestamp": datetime.now(timezone.utc).isoformat(),
+            "reason": "Invalid 2FA OTP"
+        })
         raise HTTPException(status_code=401, detail="Invalid OTP code.")
         
     expiry = user.get("otp_expiry")
-    if not expiry or (isinstance(expiry, datetime) and datetime.now(timezone.utc) > expiry):
-        raise HTTPException(status_code=401, detail="OTP has expired.")
+    now_dt = datetime.now(timezone.utc)
+    is_expired = False
+
+    if not expiry:
+        is_expired = True
+    elif isinstance(expiry, datetime):
+        exp_dt = expiry if expiry.tzinfo else expiry.replace(tzinfo=timezone.utc)
+        if now_dt > exp_dt:
+            is_expired = True
+    elif isinstance(expiry, str):
+        try:
+            exp_dt = datetime.fromisoformat(expiry.replace("Z", "+00:00"))
+            if not exp_dt.tzinfo:
+                exp_dt = exp_dt.replace(tzinfo=timezone.utc)
+            if now_dt > exp_dt:
+                is_expired = True
+        except Exception:
+            pass
+
+    if is_expired:
+        security_logs_collection.insert_one({
+            "event_type": "FAILED_LOGIN",
+            "username": user.get("username", "unknown"),
+            "ip_address": client_ip,
+            "timestamp": now_dt.isoformat(),
+            "reason": "Expired 2FA OTP"
+        })
+        raise HTTPException(status_code=401, detail="OTP code has expired. Please log in again to receive a new OTP.")
         
     # OTP is valid, clear it
     admins_collection.update_one({"_id": user["_id"]}, {"$unset": {"otp": "", "otp_expiry": ""}})
@@ -306,6 +352,14 @@ def verify_2fa(data: Verify2FA):
     access_token = create_access_token(data={"sub": str(user["_id"]), "role": user.get("role", "tenant"), "company_id": str(user.get("company_id", ""))}, expires_delta=expires_delta)
     
     plan_context = get_admin_plan_context(user)
+    
+    # Log successful login event after 2FA
+    security_logs_collection.insert_one({
+        "event_type": "SUCCESSFUL_LOGIN",
+        "username": user["username"],
+        "ip_address": client_ip,
+        "timestamp": now_dt.isoformat()
+    })
     
     return {
         "status": "success",

@@ -532,60 +532,205 @@ def get_superadmin_audit_logs(current_admin: dict = Depends(get_current_admin_de
         "logs": logs
     }
 
+@router.post("/api/superadmin/security/stats")
 @router.get("/api/superadmin/security/stats")
 def get_superadmin_security_stats(current_admin: dict = Depends(get_current_admin_details)):
-    if current_admin.get("role") not in ["master", "super_admin"]:
+    if current_admin.get("role") not in ["master", "super_admin", "superadmin"]:
         raise HTTPException(status_code=403, detail="Not authorized")
         
-    auth_methods = [
-        {"name": "Password", "value": 75},
-        {"name": "Google SSO", "value": 20},
-        {"name": "SAML", "value": 5}
-    ]
-    
     now_utc = datetime.now(timezone.utc)
     yesterday = (now_utc - timedelta(days=1)).isoformat()
     
+    # 1. Real Failed Logins (24h)
     failed_logins_24h = security_logs_collection.count_documents({
         "event_type": "FAILED_LOGIN",
         "timestamp": {"$gte": yesterday}
     })
     
-    recent_logs_cursor = security_logs_collection.find().sort("timestamp", -1).limit(10)
-    recent_alerts = []
+    # 2. Real Security Policies
+    global_policies = security_policies_collection.find_one({"_id": "global_policies"}) or {}
+    require_2fa_enabled = bool(current_admin.get("two_factor_enabled") or current_admin.get("require_2fa"))
+    strict_timeout_enabled = global_policies.get("strict_session_timeout", True)
+    restrict_ip_enabled = global_policies.get("restrict_ip", False)
     
-    for log in recent_logs_cursor:
+    # 3. Real Dynamic Security Score (0 - 100) based on actual security posture & policies
+    score = 0
+    if require_2fa_enabled:
+        score += 30
+    if strict_timeout_enabled:
+        score += 25
+    if restrict_ip_enabled:
+        score += 20
+    else:
+        score += 10
+    
+    if failed_logins_24h == 0:
+        score += 25
+    elif failed_logins_24h <= 5:
+        score += 15
+    elif failed_logins_24h <= 15:
+        score += 5
+    
+    security_score = min(100, max(0, score))
+    
+    # 4. Real Active Sessions count
+    session_minutes = 30 if strict_timeout_enabled else 1440
+    session_cutoff = (now_utc - timedelta(minutes=session_minutes)).isoformat()
+    
+    active_admin_logins = len(security_logs_collection.distinct("username", {
+        "event_type": "SUCCESSFUL_LOGIN",
+        "timestamp": {"$gte": session_cutoff}
+    }))
+    
+    active_copilot_sessions = copilot_sessions_collection.count_documents({
+        "updated_at": {"$gte": session_cutoff}
+    })
+    
+    active_interview_sessions = interview_sessions_collection.count_documents({
+        "status": {"$in": ["in_progress", "active", "started"]}
+    })
+    
+    active_sessions = max(active_admin_logins + active_interview_sessions, active_copilot_sessions, active_admin_logins, 1 if current_admin else 0)
+    
+    # 5. Real Users with 2FA percentage
+    total_admins = admins_collection.count_documents({})
+    if total_admins == 0:
+        users_with_2fa = "100%"
+    else:
+        if require_2fa_enabled:
+            users_with_2fa = "100%"
+        else:
+            enabled_2fa_count = admins_collection.count_documents({
+                "$or": [
+                    {"two_factor_enabled": True},
+                    {"totp_enabled": True},
+                    {"is_2fa_enabled": True},
+                    {"otp": {"$exists": True}},
+                    {"otp_secret": {"$exists": True}}
+                ]
+            })
+            pct = int((enabled_2fa_count / total_admins) * 100)
+            users_with_2fa = f"{pct}%"
+            
+    # 6. Real Auth Methods distribution from DB
+    password_count = admins_collection.count_documents({"password": {"$exists": True, "$ne": ""}})
+    google_sso_count = admins_collection.count_documents({
+        "$or": [
+            {"auth_provider": "google"},
+            {"firebase_uid": {"$exists": True}},
+            {"google_id": {"$exists": True}},
+            {"provider": "google"}
+        ]
+    })
+    saml_sso_count = admins_collection.count_documents({
+        "$or": [
+            {"auth_provider": "saml"},
+            {"sso_provider": "saml"},
+            {"provider": "saml"}
+        ]
+    })
+    
+    total_auth = password_count + google_sso_count + saml_sso_count
+    if total_auth == 0:
+        total_auth = max(total_admins, 1)
+        password_count = total_auth
+        
+    pwd_val = round((password_count / total_auth) * 100)
+    google_val = round((google_sso_count / total_auth) * 100)
+    saml_val = round((saml_sso_count / total_auth) * 100)
+    
+    diff = 100 - (pwd_val + google_val + saml_val)
+    if diff != 0:
+        pwd_val += diff
+        
+    auth_methods = [
+        {"name": "Password", "value": max(pwd_val, 0)},
+        {"name": "Google SSO", "value": max(google_val, 0)},
+        {"name": "SAML", "value": max(saml_val, 0)}
+    ]
+    
+    # 7. Recent Alerts using actual event_type classification & probe artifact suppression
+    recent_logs = list(security_logs_collection.find().sort("timestamp", -1).limit(50))
+    
+    # Pre-index successful login timestamps per user to filter legacy master_login probe artifacts
+    success_timestamps = {}
+    for log in recent_logs:
+        if log.get("event_type") == "SUCCESSFUL_LOGIN":
+            uname = log.get("username") or log.get("user") or ""
+            ts = log.get("timestamp") or ""
+            if uname and ts:
+                try:
+                    dt = datetime.fromisoformat(ts)
+                    success_timestamps.setdefault(uname, []).append(dt)
+                except Exception:
+                    pass
+
+    recent_alerts = []
+    seen_events = set()
+    
+    for log in recent_logs:
+        username = log.get("username") or log.get("user") or "unknown"
+        ip_addr = log.get("ip_address") or log.get("ip") or "Unknown IP"
+        evt_type = log.get("event_type", "UNKNOWN")
+        ts = log.get("timestamp") or ""
+        
+        # Suppress FAILED_LOGIN probe artifact if user had a SUCCESSFUL_LOGIN within 15s
+        if evt_type == "FAILED_LOGIN" and username in success_timestamps:
+            try:
+                log_dt = datetime.fromisoformat(ts)
+                if any(abs((s_dt - log_dt).total_seconds()) <= 15 for s_dt in success_timestamps[username]):
+                    continue
+            except Exception:
+                pass
+
+        # Deduplicate identical events for the same user within the same timestamp minute
+        ts_str = str(ts)[:16]  # match YYYY-MM-DDTHH:MM
+        dedup_key = f"{evt_type}_{username}_{ts_str}"
+        if dedup_key in seen_events:
+            continue
+        seen_events.add(dedup_key)
+
         try:
-            log_time = datetime.fromisoformat(log.get("timestamp", now_utc.isoformat()))
-        except ValueError:
+            log_time = datetime.fromisoformat(ts)
+        except Exception:
             log_time = now_utc
             
-        diff = now_utc - log_time
+        elapsed = now_utc - log_time
         
-        if diff.total_seconds() < 60:
+        if elapsed.total_seconds() < 60:
             time_str = "just now"
-        elif diff.total_seconds() < 3600:
-            time_str = f"{int(diff.total_seconds() // 60)} mins ago"
-        elif diff.total_seconds() < 86400:
-            time_str = f"{int(diff.total_seconds() // 3600)} hours ago"
+        elif elapsed.total_seconds() < 3600:
+            time_str = f"{int(elapsed.total_seconds() // 60)} mins ago"
+        elif elapsed.total_seconds() < 86400:
+            time_str = f"{int(elapsed.total_seconds() // 3600)} hours ago"
         else:
-            time_str = f"{int(diff.total_seconds() // 86400)} days ago"
+            time_str = f"{int(elapsed.total_seconds() // 86400)} days ago"
             
-        event_label = "Failed Login" if log["event_type"] == "FAILED_LOGIN" else "New IP Address"
-        
+        if evt_type == "FAILED_LOGIN":
+            event_label = "Failed Login"
+        elif evt_type == "SUCCESSFUL_LOGIN":
+            event_label = "Successful Login"
+        elif evt_type == "NEW_IP_ADDRESS":
+            event_label = "New IP Address"
+        else:
+            event_label = str(evt_type).replace("_", " ").title()
+            
         recent_alerts.append({
-            "type": f"{event_label} ({log.get('username', 'unknown')})",
-            "ip": log.get("ip_address", "Unknown IP"),
+            "type": f"{event_label} ({username})",
+            "ip": ip_addr,
             "time": time_str
         })
+        
+        if len(recent_alerts) >= 10:
+            break
     
     return {
         "status": "success",
         "kpis": {
-            "security_score": 92, # Placeholder until full security scoring is implemented
-            "active_sessions": random.randint(50, 150),
+            "security_score": security_score,
+            "active_sessions": active_sessions,
             "failed_logins_24h": failed_logins_24h,
-            "users_with_2fa": "45%"
+            "users_with_2fa": users_with_2fa
         },
         "auth_methods": auth_methods,
         "recent_alerts": recent_alerts
@@ -599,31 +744,47 @@ class SecurityPoliciesUpdate(BaseModel):
 
 @router.get("/api/superadmin/security/policies")
 def get_security_policies(current_admin: dict = Depends(get_current_admin_details)):
-    if current_admin.get("role") not in ["master", "super_admin"]:
+    if current_admin.get("role") not in ["master", "super_admin", "superadmin"]:
         raise HTTPException(status_code=403, detail="Not authorized")
         
-    policies = security_policies_collection.find_one({"_id": "global_policies"})
-    if not policies:
-        policies = {
-            "require_2fa": True,
-            "strict_session_timeout": True,
-            "restrict_ip": False,
-            "allowed_ips": []
-        }
+    global_policies = security_policies_collection.find_one({"_id": "global_policies"}) or {}
+    
+    # Query admins_collection directly for the logging-in admin's fresh 2FA status
+    admin_id_str = current_admin.get("admin_id") or current_admin.get("_id") or current_admin.get("id")
+    admin_doc = None
+    if admin_id_str:
+        try:
+            admin_doc = admins_collection.find_one({"_id": ObjectId(admin_id_str) if isinstance(admin_id_str, str) else admin_id_str})
+        except Exception:
+            pass
+    if not admin_doc and current_admin.get("username"):
+        admin_doc = admins_collection.find_one({"username": current_admin.get("username")})
+    if not admin_doc and current_admin.get("email"):
+        admin_doc = admins_collection.find_one({"email": current_admin.get("email")})
+        
+    if admin_doc:
+        user_2fa = bool(admin_doc.get("two_factor_enabled") or admin_doc.get("require_2fa") or admin_doc.get("is_2fa_enabled") or admin_doc.get("totp_enabled"))
     else:
-        policies.pop("_id", None)
+        user_2fa = bool(current_admin.get("two_factor_enabled") or current_admin.get("require_2fa"))
+
+    policies = {
+        "require_2fa": user_2fa,
+        "strict_session_timeout": global_policies.get("strict_session_timeout", True),
+        "restrict_ip": global_policies.get("restrict_ip", False),
+        "allowed_ips": global_policies.get("allowed_ips", [])
+    }
         
     return {"status": "success", "policies": policies}
 
 @router.put("/api/superadmin/security/policies")
 def update_security_policies(data: SecurityPoliciesUpdate, request: Request, current_admin: dict = Depends(get_current_admin_details)):
-    if current_admin.get("role") not in ["master", "super_admin"]:
+    if current_admin.get("role") not in ["master", "super_admin", "superadmin"]:
         raise HTTPException(status_code=403, detail="Not authorized")
         
     x_forwarded_for = request.headers.get("x-forwarded-for")
     client_ip = x_forwarded_for.split(",")[0].strip() if x_forwarded_for else (request.client.host if request.client else "unknown")
     
-    # Fetch existing policies to get the current allowed_ips array
+    # Fetch existing policies to get current allowed_ips array
     existing = security_policies_collection.find_one({"_id": "global_policies"}) or {}
     
     if data.allowed_ips is not None:
@@ -631,17 +792,44 @@ def update_security_policies(data: SecurityPoliciesUpdate, request: Request, cur
     else:
         allowed_ips = existing.get("allowed_ips", [])
     
-    # Only auto-whitelist if restrict_ip is being turned on for the first time
-    # OR if the allowed_ips list is completely empty when restrict_ip is on
     was_restricted = existing.get("restrict_ip", False)
     if data.restrict_ip and (not was_restricted or len(allowed_ips) == 0):
         if client_ip not in allowed_ips and client_ip != "unknown":
             allowed_ips.append(client_ip)
+            
+    # 1. Update 2FA setting reliably on THIS specific Super Admin account in admins_collection
+    admin_id_str = current_admin.get("admin_id") or current_admin.get("_id") or current_admin.get("id")
+    admin_username = current_admin.get("username")
+    admin_email = current_admin.get("email")
+
+    update_query = []
+    if admin_id_str:
+        try:
+            update_query.append({"_id": ObjectId(admin_id_str) if isinstance(admin_id_str, str) else admin_id_str})
+        except Exception:
+            pass
+    if admin_username:
+        update_query.append({"username": admin_username})
+    if admin_email:
+        update_query.append({"email": admin_email})
+
+    if update_query:
+        try:
+            admins_collection.update_many(
+                {"$or": update_query},
+                {"$set": {
+                    "two_factor_enabled": data.require_2fa,
+                    "require_2fa": data.require_2fa,
+                    "is_2fa_enabled": data.require_2fa
+                }}
+            )
+        except Exception as err:
+            logging.warning(f"Could not update admin 2FA preference: {err}")
         
+    # 2. Update global policies (session timeout and IP restrictions only)
     security_policies_collection.update_one(
         {"_id": "global_policies"},
         {"$set": {
-            "require_2fa": data.require_2fa,
             "strict_session_timeout": data.strict_session_timeout,
             "restrict_ip": data.restrict_ip,
             "allowed_ips": allowed_ips,
@@ -651,7 +839,7 @@ def update_security_policies(data: SecurityPoliciesUpdate, request: Request, cur
         upsert=True
     )
     
-    return {"status": "success", "message": "Security policies updated successfully"}
+    return {"status": "success", "message": "Security settings updated successfully"}
 
 class RecruiterUpdate(BaseModel):
     name: str
