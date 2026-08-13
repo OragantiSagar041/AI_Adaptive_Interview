@@ -74,7 +74,12 @@ export default function JobApplicationPage() {
     setFormData(prev => ({ ...prev, [name]: value }));
   };
 
-  const handleResumeFileSelect = (file) => {
+  // Parsing state
+  const [parsingResume, setParsingResume] = useState(false);
+  const [parsedSkills, setParsedSkills] = useState([]);
+  const [parseSuccessMsg, setParseSuccessMsg] = useState('');
+
+  const handleResumeFileSelect = async (file) => {
     if (!file) return;
     const allowed = ['.pdf', '.doc', '.docx', '.txt'];
     const ext = '.' + file.name.split('.').pop().toLowerCase();
@@ -88,6 +93,40 @@ export default function JobApplicationPage() {
     }
     setError('');
     setResumeFile(file);
+    setParseSuccessMsg('');
+
+    try {
+      setParsingResume(true);
+      const parseData = new FormData();
+      parseData.append('resume', file);
+      const res = await axios.post(`${API_BASE_URL}/api/public/jobs/parse-resume`, parseData, {
+        headers: { 'Content-Type': 'multipart/form-data' }
+      });
+
+      if (res.data && res.data.status === 'success' && res.data.data) {
+        const info = res.data.data;
+
+        let cleanName = (info.name || '').replace(/[^A-Za-z\s]/g, '').trim();
+        let cleanPhone = (info.phone || '').replace(/\D/g, '');
+
+        setFormData(prev => ({
+          ...prev,
+          name: cleanName || prev.name,
+          email: info.email || prev.email,
+          phone: cleanPhone || prev.phone,
+          linkedin_url: info.linkedin_url || prev.linkedin_url,
+        }));
+
+        if (Array.isArray(info.skills) && info.skills.length > 0) {
+          setParsedSkills(info.skills);
+        }
+        setParseSuccessMsg('Resume parsed successfully! Details populated below.');
+      }
+    } catch (parseErr) {
+      console.warn("Resume auto-parse skipped or failed:", parseErr);
+    } finally {
+      setParsingResume(false);
+    }
   };
 
   const handleCoverLetterFileSelect = (file) => {
@@ -461,6 +500,33 @@ export default function JobApplicationPage() {
                             <p className="text-xs font-medium text-slate-400">
                               Supports PDF, DOCX, DOC (Max 10MB)
                             </p>
+                          </div>
+                        )}
+
+                        {parsingResume && (
+                          <div className="mt-3 p-3 bg-indigo-50/80 border border-indigo-100 rounded-xl flex items-center gap-2.5 text-xs text-indigo-700 font-semibold animate-pulse">
+                            <div className="w-4 h-4 border-2 border-indigo-300 border-t-indigo-600 rounded-full animate-spin shrink-0" />
+                            Parsing resume & auto-populating applicant details...
+                          </div>
+                        )}
+                        {!parsingResume && parseSuccessMsg && (
+                          <div className="mt-3 p-3 bg-emerald-50 border border-emerald-200 rounded-xl flex items-center justify-between text-xs text-emerald-700 font-bold">
+                            <div className="flex items-center gap-2">
+                              <CheckCircle2 size={16} className="text-emerald-600 shrink-0" />
+                              <span>{parseSuccessMsg}</span>
+                            </div>
+                          </div>
+                        )}
+                        {parsedSkills.length > 0 && (
+                          <div className="mt-3 pt-2">
+                            <p className="text-[11px] font-bold text-slate-500 uppercase tracking-wider mb-2">Extracted Skills:</p>
+                            <div className="flex flex-wrap gap-1.5">
+                              {parsedSkills.map((skill, idx) => (
+                                <span key={idx} className="px-2.5 py-1 bg-indigo-50 text-indigo-700 border border-indigo-200/60 rounded-md text-xs font-semibold">
+                                  {skill}
+                                </span>
+                              ))}
+                            </div>
                           </div>
                         )}
                       </div>

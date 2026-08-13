@@ -181,17 +181,31 @@ export default function SecurityPage() {
           
           <div className="space-y-4">
             {alerts.length > 0 ? (
-              alerts.map((alert, idx) => (
-                <div key={idx} className="p-4 bg-rose-50 rounded-xl border border-rose-200 flex justify-between items-center">
-                  <div>
-                    <h4 className="font-semibold text-rose-800">{alert.type}</h4>
-                    <p className="text-sm text-rose-600">IP: {alert.ip}</p>
+              alerts.map((alert, idx) => {
+                const isFailed = alert.type?.toLowerCase().includes("failed");
+                const isSuccess = alert.type?.toLowerCase().includes("successful");
+                const cardStyle = isFailed
+                  ? "bg-rose-50 border-rose-200 text-rose-800"
+                  : isSuccess
+                  ? "bg-emerald-50 border-emerald-200 text-emerald-800"
+                  : "bg-indigo-50 border-indigo-200 text-indigo-800";
+                const badgeStyle = isFailed
+                  ? "text-rose-600"
+                  : isSuccess
+                  ? "text-emerald-600"
+                  : "text-indigo-600";
+                return (
+                  <div key={idx} className={`p-4 rounded-xl border flex justify-between items-center ${cardStyle}`}>
+                    <div>
+                      <h4 className="font-semibold">{alert.type}</h4>
+                      <p className="text-sm opacity-80">IP: {alert.ip}</p>
+                    </div>
+                    <span className={`text-xs font-medium bg-white px-2 py-1 rounded-md shadow-sm ${badgeStyle}`}>
+                      {alert.time}
+                    </span>
                   </div>
-                  <span className="text-xs font-medium text-rose-500 bg-white px-2 py-1 rounded-md shadow-sm">
-                    {alert.time}
-                  </span>
-                </div>
-              ))
+                );
+              })
             ) : (
               <div className="p-8 text-center text-slate-500 bg-slate-50 rounded-xl border border-dashed border-slate-300">
                 <ShieldCheck className="w-12 h-12 text-emerald-400 mx-auto mb-3 opacity-50" />
@@ -236,7 +250,7 @@ export default function SecurityPage() {
                     <div className="flex items-center justify-between p-4 bg-white rounded-xl border border-slate-200 shadow-sm hover:border-indigo-200 transition-colors">
                       <div>
                         <p className="font-semibold text-slate-800">Require Two-Factor Authentication</p>
-                        <p className="text-sm text-slate-500 mt-1">Enforce 2FA for all Super Admin accounts</p>
+                        <p className="text-sm text-slate-500 mt-1">Enforce 2FA for Super Admin account</p>
                       </div>
                       <ToggleSwitch checked={policies.require_2fa} onChange={() => handleTogglePolicy('require_2fa')} />
                     </div>

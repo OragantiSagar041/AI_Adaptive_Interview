@@ -172,16 +172,22 @@ def update_job(job_id: str, job_update: JobCreate, current_admin: dict = Depends
         raise HTTPException(status_code=404, detail="Job not found")
 
     allowed_ids = _get_authorized_creator_ids(current_admin)
-    if job.get("admin_id") not in allowed_ids:
+    if job.get("admin_id") and job.get("admin_id") not in allowed_ids and current_admin.get("role") != "master":
         raise HTTPException(status_code=403, detail="Access denied")
 
-    update_data = job_update.dict()
+    update_data = {k: v for k, v in job_update.dict().items() if v is not None}
     update_data["updated_at"] = datetime.now(timezone.utc).isoformat()
-    result = jobs_collection.update_one({"job_id": job_id}, {"$set": update_data})
+    
+    # Preserve original creator ownership (admin_id & company_id) so job is not disowned or hidden
+    if not update_data.get("admin_id"):
+        update_data["admin_id"] = job.get("admin_id") or current_admin.get("admin_id")
+    if not update_data.get("company_id") and job.get("company_id"):
+        update_data["company_id"] = job.get("company_id")
+
+    result = jobs_collection.update_one({"_id": job["_id"]}, {"$set": update_data})
     if result.matched_count == 0:
-        from bson import ObjectId
-        if ObjectId.is_valid(job_id):
-            result = jobs_collection.update_one({"_id": ObjectId(job_id)}, {"$set": update_data})
+        jobs_collection.update_one({"job_id": job_id}, {"$set": update_data})
+        
     return {"status": "success", "message": "Job updated"}
 
 @router.delete("/api/jobs/{job_id}")
@@ -495,6 +501,14 @@ async def apply_for_job(
         except Exception as e:
             logger.error(f"Error processing uploaded cover letter file: {e}")
 
+    parsed_info = {}
+    if resume_text:
+        try:
+            from app.services.resume_nlp_extractor import extract_candidate_info_nlp
+            parsed_info = extract_candidate_info_nlp(resume_text) or {}
+        except Exception as p_err:
+            logger.warning(f"[JobApply] NLP info extraction error: {p_err}")
+
     app_dict = {
         "job_id": actual_job_id,
         "job_title": job.get("title"),
@@ -505,7 +519,12 @@ async def apply_for_job(
         "resume_url": saved_resume_url,
         "resume_filename": resume_filename,
         "resume_text": resume_text,
-        "linkedin_url": linkedin_url or "",
+        "linkedin_url": linkedin_url or (parsed_info.get("linkedin_url") if isinstance(parsed_info, dict) else "") or "",
+        "skills": parsed_info.get("skills", []) if isinstance(parsed_info, dict) else [],
+        "experience": parsed_info.get("experience", "") if isinstance(parsed_info, dict) else "",
+        "location": parsed_info.get("location", "") if isinstance(parsed_info, dict) else "",
+        "current_company": parsed_info.get("current_company", "") if isinstance(parsed_info, dict) else "",
+        "notice_period": parsed_info.get("notice_period", "") if isinstance(parsed_info, dict) else "",
         "cover_letter": cover_letter or "",
         "cover_letter_url": cover_letter_url,
         "cover_letter_filename": cover_letter_filename,
@@ -816,39 +835,43 @@ import io
 @router.post("/api/public/jobs/parse-resume")
 def parse_resume(resume: UploadFile = File(...)):
     try:
+        allowed_extensions = {".pdf", ".docx", ".doc", ".txt"}
+        filename = (resume.filename or "").lower()
+        ext = os.path.splitext(filename)[1]
+        
         allowed_types = {
             "application/pdf",
+            "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+            "application/msword",
             "text/plain",
+            "application/octet-stream",
         }
-        if resume.content_type and resume.content_type not in allowed_types:
-            raise HTTPException(status_code=415, detail="Only PDF and plain-text resumes are supported")
-        if getattr(resume, "size", 0) and resume.size > 5 * 1024 * 1024:
-            raise HTTPException(status_code=413, detail="Resume exceeds the 5 MB limit")
+        if ext not in allowed_extensions and resume.content_type and resume.content_type not in allowed_types:
+            raise HTTPException(status_code=415, detail="Only PDF, DOCX, DOC, and TXT resumes are supported")
 
-        # Read the file content
-        content = resume.file.read(5 * 1024 * 1024 + 1)
-        if len(content) > 5 * 1024 * 1024:
-            raise HTTPException(status_code=413, detail="Resume exceeds the 5 MB limit")
+        if getattr(resume, "size", 0) and resume.size > 10 * 1024 * 1024:
+            raise HTTPException(status_code=413, detail="Resume exceeds the 10 MB limit")
+
+        content = resume.file.read()
+        if len(content) > 10 * 1024 * 1024:
+            raise HTTPException(status_code=413, detail="Resume exceeds the 10 MB limit")
         
-        # We'll just handle PDFs for now as an example, but we can easily extend this
-        extracted_text = ""
-        if resume.filename.lower().endswith(".pdf"):
-            pdf_reader = pypdf.PdfReader(io.BytesIO(content))
-            for page in pdf_reader.pages:
-                extracted_text += page.extract_text() + "\n"
-        else:
-            # If not PDF, just decode assuming txt or string (we can add docx later if needed)
-            # Or just take a best effort for other text-based
-            try:
-                extracted_text = content.decode('utf-8', errors='ignore')
-            except:
-                extracted_text = ""
+        from app.services.services import extract_text_from_file
+        extracted_text = extract_text_from_file(content, resume.filename or "resume.pdf") or ""
 
         if not extracted_text.strip():
-            return {"status": "success", "data": {"name": "", "email": "", "phone": "", "linkedin_url": "", "skills": [], "experience": "", "location": ""}}
+            return {
+                "status": "success",
+                "data": {
+                    "name": "", "email": "", "phone": "", "linkedin_url": "",
+                    "skills": [], "experience": "", "location": "", "resume_text": ""
+                }
+            }
 
         from app.services.resume_nlp_extractor import extract_candidate_info_nlp
         parsed_data = extract_candidate_info_nlp(extracted_text)
+        if isinstance(parsed_data, dict):
+            parsed_data["resume_text"] = extracted_text
 
         return {
             "status": "success", 
@@ -857,8 +880,8 @@ def parse_resume(resume: UploadFile = File(...)):
     except HTTPException:
         raise
     except Exception as e:
-        print(f"Error parsing resume: {e}")
-        return {"status": "error", "data": {"name": "", "email": "", "phone": "", "linkedin_url": ""}}
+        logger.error(f"Error parsing resume: {e}")
+        return {"status": "error", "message": str(e), "data": {"name": "", "email": "", "phone": "", "linkedin_url": "", "skills": [], "resume_text": ""}}
 
 # ---------------------------------------------------------------------------
 # Demo Requests
