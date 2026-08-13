@@ -54,11 +54,33 @@ class TenantCreate(BaseModel):
     credits: int = 10  # Default initial credits
 
 class TenantUpdate(BaseModel):
-    subscription_plan: str
+    subscription_plan: Optional[str] = None
+    plan_name: Optional[str] = None
+    plan_key: Optional[str] = None
+    company_name: Optional[str] = None
+    name: Optional[str] = None
+    email: Optional[str] = None
+    username: Optional[str] = None
     add_days: int = 0
+    extend_days: int = 0
+    days_to_add: int = 0
     add_credits: int = 0
+    credits: Optional[int] = None
     features: Optional[List[str]] = None
     layout_config: Optional[Dict[str, Any]] = None
+    branding: Optional[Dict[str, Any]] = None
+    login_enabled: Optional[bool] = None
+    is_active: Optional[bool] = None
+    status: Optional[str] = None
+
+class MasterSubscriptionPatch(BaseModel):
+    plan_key: Optional[str] = None
+    plan_name: Optional[str] = None
+    days_to_add: int = 0
+    extend_days: int = 0
+    credits: Optional[int] = None
+    add_credits: int = 0
+
 
 class HRScreening(BaseModel):
     model_config = ConfigDict(populate_by_name=True)
