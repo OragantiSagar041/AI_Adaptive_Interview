@@ -164,7 +164,22 @@ def firebase_auth(data: FirebaseAuthRequest):
 
 @router.post("/admin/login")
 def admin_login(data: AdminLogin, request: Request):
-    client_ip = request.client.host if request.client else "unknown"
+    x_forwarded_for = request.headers.get("x-forwarded-for")
+    client_ip = x_forwarded_for.split(",")[0].strip() if x_forwarded_for else (request.client.host if request.client else "unknown")
+    global_policies = security_policies_collection.find_one({"_id": "global_policies"}) or {}
+    
+    # 1. IP Restriction Check
+    if global_policies.get("restrict_ip"):
+        allowed_ips = global_policies.get("allowed_ips", [])
+        if client_ip not in allowed_ips and client_ip != "unknown":
+            security_logs_collection.insert_one({
+                "event_type": "FAILED_LOGIN",
+                "username": data.username,
+                "ip_address": client_ip,
+                "timestamp": datetime.now(timezone.utc).isoformat(),
+                "reason": "IP Restricted"
+            })
+            raise HTTPException(status_code=403, detail="Login from this IP address is restricted.")
     # Try username match first, then email match (for self-registered users)
     user = admins_collection.find_one({"username": data.username, "role": {"$ne": "master"}})
     if not user:
@@ -216,8 +231,26 @@ def admin_login(data: AdminLogin, request: Request):
             "timestamp": datetime.now(timezone.utc).isoformat()
         })
     admins_collection.update_one({"_id": user["_id"]}, {"$set": {"last_ip": client_ip}})
+    
+    # 2. 2FA Check
+    if global_policies.get("require_2fa"):
+        otp = str(random.randint(100000, 999999))
+        expiry_time = datetime.now(timezone.utc) + timedelta(minutes=10)
+        admins_collection.update_one({"_id": user["_id"]}, {"$set": {"otp": otp, "otp_expiry": expiry_time}})
         
-    access_token = create_access_token(data={"sub": str(user["_id"]), "role": user.get("role", "tenant"), "company_id": str(user.get("company_id", ""))})
+        # Send OTP email
+        from app.routes.admin_dashboard import send_otp_email # Re-using existing brevo sender
+        send_otp_email(user.get("email", user["username"]), user.get("name", user["username"]), otp)
+        
+        return {
+            "status": "2fa_required",
+            "admin_id": str(user["_id"])
+        }
+        
+    # 3. Strict Session Timeout (30 mins if enabled, else default 7 days)
+    expires_delta = timedelta(minutes=30) if global_policies.get("strict_session_timeout") else None
+        
+    access_token = create_access_token(data={"sub": str(user["_id"]), "role": user.get("role", "tenant"), "company_id": str(user.get("company_id", ""))}, expires_delta=expires_delta)
     return {
         "status": "success",
         "admin_id": str(user["_id"]),
@@ -229,6 +262,62 @@ def admin_login(data: AdminLogin, request: Request):
         "subscription_plan": plan,
         "subscription_plan_key": plan_context["plan_key"],
         "subscription_expiry": expiry,
+        "subscription_days_remaining": plan_context["days_remaining"],
+        "subscription_warning": plan_context["warning"],
+        "subscription_warning_message": plan_context["warning_message"],
+        "plan_capabilities": plan_context["capabilities"],
+        "plan_features": plan_context["features"],
+        "layout_config": plan_context.get("layout_config"),
+        "credits": plan_context.get("credits", 0),
+    }
+
+# --------------------------------------------------------------------------------
+# 2FA VERIFICATION API
+# --------------------------------------------------------------------------------
+
+class Verify2FA(BaseModel):
+    admin_id: str
+    otp: str
+
+@router.post("/admin/verify-2fa")
+def verify_2fa(data: Verify2FA):
+    try:
+        user_oid = ObjectId(data.admin_id)
+    except InvalidId:
+        raise HTTPException(status_code=400, detail="Invalid admin ID format.")
+        
+    user = admins_collection.find_one({"_id": user_oid})
+    if not user:
+        raise HTTPException(status_code=404, detail="Admin not found.")
+        
+    if not user.get("otp") or str(user.get("otp")) != data.otp:
+        raise HTTPException(status_code=401, detail="Invalid OTP code.")
+        
+    expiry = user.get("otp_expiry")
+    if not expiry or (isinstance(expiry, datetime) and datetime.now(timezone.utc) > expiry):
+        raise HTTPException(status_code=401, detail="OTP has expired.")
+        
+    # OTP is valid, clear it
+    admins_collection.update_one({"_id": user["_id"]}, {"$unset": {"otp": "", "otp_expiry": ""}})
+    
+    global_policies = security_policies_collection.find_one({"_id": "global_policies"}) or {}
+    expires_delta = timedelta(minutes=30) if global_policies.get("strict_session_timeout") else None
+    
+    access_token = create_access_token(data={"sub": str(user["_id"]), "role": user.get("role", "tenant"), "company_id": str(user.get("company_id", ""))}, expires_delta=expires_delta)
+    
+    plan_context = get_admin_plan_context(user)
+    
+    return {
+        "status": "success",
+        "admin_id": str(user["_id"]),
+        "token": access_token,
+        "username": user["username"],
+        "email": user.get("email", ""),
+        "name": user.get("name", user.get("username", "")),
+        "role": user.get("role", "tenant"),
+        "subscription_plan": plan_context["plan_label"],
+        "subscription_plan_key": plan_context["plan_key"],
+        "subscription_expiry": user.get("subscription_expiry"),
         "subscription_days_remaining": plan_context["days_remaining"],
         "subscription_warning": plan_context["warning"],
         "subscription_warning_message": plan_context["warning_message"],

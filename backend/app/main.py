@@ -165,7 +165,8 @@ class RateLimitMiddleware(BaseHTTPMiddleware):
         if request.url.path in config.RATE_LIMIT_EXEMPT_PATHS or request.url.path.startswith(config.RATE_LIMIT_EXEMPT_PREFIXES):
             return await call_next(request)
 
-        client_ip = request.client.host if request.client else "unknown"
+        x_forwarded_for = request.headers.get("x-forwarded-for")
+        client_ip = x_forwarded_for.split(",")[0].strip() if x_forwarded_for else (request.client.host if request.client else "unknown")
         if _TRUST_PROXY_HEADERS:
             real_ip = request.headers.get("x-real-ip", "").strip()
             forwarded_for = request.headers.get("x-forwarded-for", "")

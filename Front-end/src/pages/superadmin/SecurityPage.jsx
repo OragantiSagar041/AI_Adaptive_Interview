@@ -21,8 +21,10 @@ export default function SecurityPage() {
   const [policies, setPolicies] = useState({
     require_2fa: true,
     strict_session_timeout: true,
-    restrict_ip: false
+    restrict_ip: false,
+    allowed_ips: []
   });
+  const [ipInput, setIpInput] = useState("");
 
   useEffect(() => {
     const fetchSecurityData = async () => {
@@ -39,6 +41,7 @@ export default function SecurityPage() {
         setData(statsRes.data);
         if (policiesRes.data.policies) {
           setPolicies(policiesRes.data.policies);
+          setIpInput((policiesRes.data.policies.allowed_ips || []).join(", "));
         }
       } catch (error) {
         console.error("Failed to fetch security data", error);
@@ -61,6 +64,23 @@ export default function SecurityPage() {
     }).catch((error) => {
       console.error("Failed to update policy", error);
       setPolicies(prevPolicies); // revert on failure
+    });
+  };
+
+  const handleSaveIps = () => {
+    const ips = ipInput.split(',').map(ip => ip.trim()).filter(ip => ip.length > 0);
+    const newPolicies = { ...policies, allowed_ips: ips };
+    setPolicies(newPolicies);
+    
+    api.put(`/api/superadmin/security/policies`, newPolicies, {
+      headers: { Authorization: `Bearer ${token}` }
+    }).then(() => {
+      // Re-fetch to confirm or just rely on state
+      setIpInput(ips.join(", "));
+    }).catch((error) => {
+      console.error("Failed to update IPs", error);
+      // Revert input on error
+      setIpInput((policies.allowed_ips || []).join(", "));
     });
   };
 
@@ -233,12 +253,31 @@ export default function SecurityPage() {
                 <div>
                   <h3 className="text-xs font-bold text-slate-400 uppercase tracking-wider mb-3 ml-1">Access Control</h3>
                   <div className="space-y-3">
-                    <div className="flex items-center justify-between p-4 bg-white rounded-xl border border-slate-200 shadow-sm hover:border-indigo-200 transition-colors">
-                      <div>
-                        <p className="font-semibold text-slate-800">Restrict by IP Address</p>
-                        <p className="text-sm text-slate-500 mt-1">Only allow dashboard logins from recognized corporate IP addresses</p>
+                    <div className="flex flex-col p-4 bg-white rounded-xl border border-slate-200 shadow-sm hover:border-indigo-200 transition-colors space-y-4">
+                      <div className="flex items-center justify-between">
+                        <div>
+                          <p className="font-semibold text-slate-800">Restrict by IP Address</p>
+                          <p className="text-sm text-slate-500 mt-1">Only allow dashboard logins from recognized corporate IP addresses</p>
+                        </div>
+                        <ToggleSwitch checked={policies.restrict_ip} onChange={() => handleTogglePolicy('restrict_ip')} />
                       </div>
-                      <ToggleSwitch checked={policies.restrict_ip} onChange={() => handleTogglePolicy('restrict_ip')} />
+                      {policies.restrict_ip && (
+                        <div className="pt-3 border-t border-slate-100 flex gap-3">
+                          <input
+                            type="text"
+                            value={ipInput}
+                            onChange={(e) => setIpInput(e.target.value)}
+                            placeholder="e.g., 192.168.1.1, 10.0.0.5"
+                            className="flex-1 px-4 py-2 border border-slate-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                          />
+                          <button
+                            onClick={handleSaveIps}
+                            className="px-4 py-2 bg-indigo-600 hover:bg-indigo-700 text-white rounded-lg text-sm font-medium transition-colors"
+                          >
+                            Save IPs
+                          </button>
+                        </div>
+                      )}
                     </div>
                   </div>
                 </div>
